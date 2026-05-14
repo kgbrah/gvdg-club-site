@@ -243,6 +243,13 @@ body::before{
 .no-events { text-align: center; padding: 3rem 2rem; color: var(--text-muted); background: var(--bg-primary); border-radius: 15px; border: 2px dashed var(--border-color); }
 .event-item.tbd-event .event-date.tbd { background: linear-gradient(135deg, var(--accent), #e5a600); }
 .event-date.tbd .event-day { font-size: 1.2rem; letter-spacing: 0.05em; }
+.event-item.hidden-extra { display: none; }
+.event-list.expanded .event-item.hidden-extra { display: flex; }
+.event-toggle { text-align: center; margin-top: 1.5rem; }
+.event-toggle .toggle-btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; background: transparent; border: 2px solid var(--primary); border-radius: 8px; color: var(--primary); font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease; -webkit-tap-highlight-color: transparent; }
+.event-toggle .toggle-btn:hover { background: var(--primary); color: white; }
+.event-toggle .toggle-btn .toggle-icon { transition: transform 0.3s ease; }
+.event-toggle .toggle-btn.expanded .toggle-icon { transform: rotate(180deg); }
 .event-date.tbd { display: flex; align-items: center; justify-content: center; }
 @media (max-width: 480px) { .event-date.tbd { height: 60px; } .event-date.tbd .event-day { font-size: 1.5rem; } }
         .tournament-feed { margin-top: 3rem; padding-top: 2rem; border-top: 2px solid var(--border-color); }
@@ -597,8 +604,14 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
 
     <section id="events">
         <h2 class="section-title fade-in">Upcoming Events</h2>
-       <div class="event-list" id="eventList"><div class="event-loading"><div class="spinner"></div><p>Loading events...</p></div></div>
-<div class="events-footer" style="text-align: center; margin-top: 2rem;"><p style="color: var(--text-muted); font-size: 0.9rem;">Want to host an event? <a href="#contact" style="color: var(--primary);">Contact us!</a></p></div>
+        <div class="event-list" id="eventList"><div class="event-loading"><div class="spinner"></div><p>Loading events...</p></div></div>
+        <div id="event-toggle-container" class="event-toggle" style="display: none;">
+            <button id="event-toggle-btn" class="toggle-btn">
+                <span class="toggle-text">Show All Events</span>
+                <svg class="toggle-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+        </div>
+        <div class="events-footer" style="text-align: center; margin-top: 2rem;"><p style="color: var(--text-muted); font-size: 0.9rem;">Want to host an event? <a href="#contact" style="color: var(--primary);">Contact us!</a></p></div>
     </section>
 
 <section id="area-tournaments" class="section">
@@ -701,15 +714,16 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
     </script>
     <script>
     (function(){const U='https://docs.google.com/spreadsheets/d/e/2PACX-1vRz6V6BAwII4eoqITz4MW5zmM_3mYJqrtqtZl9xB87lAZgDT1E0Do1r2cp2aa1tvEKWevnPhb2zQu4s/pub?gid=0&single=true&output=csv',L=5,c=document.getElementById('tournament-list'),tc=document.getElementById('tournament-toggle'),tb=document.getElementById('toggle-btn');let ex=false,tot=0;function pCSV(csv){const ls=csv.trim().split('\n');if(ls.length<2)return[];const ts=[];for(let i=1;i<ls.length;i++){const v=pLine(ls[i]);if(v.length>=2&&v[1])ts.push({date:v[0]||'',name:v[1]||'',location:v[2]||'',tier:v[3]||'',url:v[4]||''})}return ts}function pLine(l){const v=[];let cu='',iq=false;for(let i=0;i<l.length;i++){const ch=l[i];if(ch==='"')iq=!iq;else if(ch===','&&!iq){v.push(cu.trim());cu=''}else cu+=ch}v.push(cu.trim());return v}function pDate(s){if(!s)return null;const m=s.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s*(\d{4})?/i);if(!m)return null;return{month:m[1].substring(0,3),day:parseInt(m[2]),year:m[3]||new Date().getFullYear()}}function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}function render(t,i){const di=pDate(t.date),h=i>=L,it=document.createElement('a');it.className='tournament-item'+(h?' hidden-mobile':'');it.href=t.url||'#';it.target='_blank';it.rel='noopener';let dH=di?`<div class="tournament-date"><span class="month">${di.month}</span><span class="day">${di.day}</span></div>`:`<div class="tournament-date"><span class="month">TBD</span><span class="day">--</span></div>`;let tH=t.tier?`<span class="tournament-tier">${esc(t.tier)}</span>`:'';let lH=t.location?`<span class="tournament-location">📍 ${esc(t.location)}</span>`:'';it.innerHTML=`${dH}<div class="tournament-info"><h4 class="tournament-name">${esc(t.name)}</h4><div class="tournament-meta">${lH}${tH}</div></div><svg class="tournament-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>`;return it}function toggle(){ex=!ex;c.classList.toggle('expanded',ex);tb.classList.toggle('expanded',ex);tb.querySelector('.toggle-text').textContent=ex?'Show Less':`Show All ${tot} Tournaments`}async function load(){try{const r=await fetch(U);if(!r.ok)throw new Error('fail');const csv=await r.text(),ts=pCSV(csv);if(ts.length===0){c.innerHTML='<div class="no-tournaments"><p>No upcoming tournaments found.</p></div>';return}tot=ts.length;c.innerHTML='';ts.forEach((t,i)=>c.appendChild(render(t,i)));if(ts.length>L){tc.style.display='block';tb.querySelector('.toggle-text').textContent=`Show All ${tot} Tournaments`;tb.addEventListener('click',toggle)}}catch(e){console.error('Error:',e);c.innerHTML='<div class="no-tournaments"><p>Unable to load tournaments.</p></div>'}}document.readyState==='loading'?document.addEventListener('DOMContentLoaded',load):load()})();
-    (
     </script>
     <script>
 (function(){
   const U='https://docs.google.com/spreadsheets/d/e/2PACX-1vTLTq17Bwgy6uW_9pG7dQODTmahv7vjxo9Y5EShHaeQYo9xPB2m7Nf5de8EcZvKgcrTbBLb97msMg4Q/pub?output=csv',
-        MX=5,
+        L=5,
         SP=false,
         el=document.getElementById('eventList');
   if(!el)return;
+
+  let ex=false,tot=0;
 
   function pCSV(csv){
     const ls=csv.trim().split(/\r?\n/);
@@ -735,93 +749,45 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
     return v;
   }
 
-  // ===== ROBUST DATE PARSER =====
-  // Handles: 5/14, 5/14/2026, 5/14/26, 2026-05-14, May 14 2026,
-  //          May 14, 2026, 14 May 2026, Google Sheets serial numbers
-  // For year-less dates (e.g. "5/14"), assumes current year. If that date
-  // is more than 60 days in the past, rolls forward to next year so a
-  // late-December update for "1/5" correctly means January of next year.
   function fmtDate(s){
     if(!s||typeof s!=='string')return tbd();
     s=s.trim();
     if(!s||s.toUpperCase()==='TBD')return tbd();
-
     const MS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const MN={jan:0,january:0,feb:1,february:1,mar:2,march:2,apr:3,april:3,may:4,jun:5,june:5,jul:6,july:6,aug:7,august:7,sep:8,sept:8,september:8,oct:9,october:9,nov:10,november:10,dec:11,december:11};
     let d=null;
-
-    // ISO: YYYY-MM-DD or YYYY/MM/DD
     let m=s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
     if(m){d=new Date(+m[1],+m[2]-1,+m[3]);}
-
-    // US with year: M/D/YYYY or M/D/YY or M-D-YYYY
     if(!d){
       m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
-      if(m){
-        let y=+m[3];
-        if(y<100)y+=y<50?2000:1900;
-        d=new Date(y,+m[1]-1,+m[2]);
-      }
+      if(m){let y=+m[3];if(y<100)y+=y<50?2000:1900;d=new Date(y,+m[1]-1,+m[2]);}
     }
-
-    // US without year: M/D or M-D  -> assume current year (or next if >60 days past)
     if(!d){
       m=s.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
       if(m){
-        const now=new Date(),
-              cy=now.getFullYear(),
-              mo=+m[1]-1,
-              da=+m[2];
+        const now=new Date(),cy=now.getFullYear(),mo=+m[1]-1,da=+m[2];
         let cand=new Date(cy,mo,da);
         const sixtyAgo=new Date();sixtyAgo.setDate(sixtyAgo.getDate()-60);
         if(cand<sixtyAgo)cand=new Date(cy+1,mo,da);
         d=cand;
       }
     }
-
-    // "Mon DD, YYYY" / "Month DD YYYY"
     if(!d){
       m=s.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})/);
-      if(m){
-        const mi=MN[m[1].toLowerCase()];
-        if(mi!==undefined)d=new Date(+m[3],mi,+m[2]);
-      }
+      if(m){const mi=MN[m[1].toLowerCase()];if(mi!==undefined)d=new Date(+m[3],mi,+m[2]);}
     }
-
-    // "DD Mon YYYY"
     if(!d){
       m=s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/);
-      if(m){
-        const mi=MN[m[2].toLowerCase()];
-        if(mi!==undefined)d=new Date(+m[3],mi,+m[1]);
-      }
+      if(m){const mi=MN[m[2].toLowerCase()];if(mi!==undefined)d=new Date(+m[3],mi,+m[1]);}
     }
-
-    // Google Sheets serial number (days since 1899-12-30)
     if(!d&&/^\d+(\.\d+)?$/.test(s)){
       const n=parseFloat(s);
-      if(n>1&&n<100000){
-        d=new Date(Date.UTC(1899,11,30)+n*86400000);
-      }
+      if(n>1&&n<100000)d=new Date(Date.UTC(1899,11,30)+n*86400000);
     }
-
-    // Last-resort
-    if(!d||isNaN(d.getTime())){
-      const t=new Date(s);
-      if(!isNaN(t.getTime()))d=t;
-    }
-
+    if(!d||isNaN(d.getTime())){const t=new Date(s);if(!isNaN(t.getTime()))d=t;}
     if(!d||isNaN(d.getTime()))return tbd();
-
     const td=new Date();td.setHours(0,0,0,0);
-    return{
-      day:d.getDate(),
-      month:MS[d.getMonth()],
-      year:d.getFullYear(),
-      isPast:d<td,
-      isTBD:false,
-      dateObj:d
-    };
+    return{day:d.getDate(),month:MS[d.getMonth()],year:d.getFullYear(),isPast:d<td,isTBD:false,dateObj:d};
   }
 
   function tbd(){return{day:'TBD',month:'',year:'',isPast:false,isTBD:true,dateObj:new Date(9999,11,31)};}
@@ -832,15 +798,27 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
     const di=fmtDate(ev.date),
           hl=ev.url&&ev.url.trim()!=='',
           tb=di.isTBD,
-          cls=['event-item','fade-in'];
+          h=i>=L,
+          cls=['event-item','fade-in','visible'];
     if(hl)cls.push('has-link');
     if(tb)cls.push('tbd-event');
+    if(h)cls.push('hidden-extra');
     const tag=hl?'a':'div',
           la=hl?` href="${esc(ev.url)}" target="_blank" rel="noopener noreferrer"`:'';
     let dH=tb
       ?'<div class="event-date tbd"><div class="event-day">TBD</div></div>'
       :`<div class="event-date"><div class="event-day">${di.day}</div><div class="event-month">${di.month}</div></div>`;
-    return`<${tag}${la} class="${cls.join(' ')}" style="animation-delay: ${i*0.1}s;">${dH}<div class="event-info"><h3 class="event-title">${esc(ev.title)}</h3><p class="event-description">${esc(ev.description||'')}</p></div></${tag}>`;
+    return`<${tag}${la} class="${cls.join(' ')}">${dH}<div class="event-info"><h3 class="event-title">${esc(ev.title)}</h3><p class="event-description">${esc(ev.description||'')}</p></div></${tag}>`;
+  }
+
+  function toggle(){
+    ex=!ex;
+    el.classList.toggle('expanded',ex);
+    const tb=document.getElementById('event-toggle-btn');
+    if(tb){
+      tb.classList.toggle('expanded',ex);
+      tb.querySelector('.toggle-text').textContent=ex?'Show Less':`Show All ${tot} Events`;
+    }
   }
 
   async function load(){
@@ -851,12 +829,20 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
       let evs=pCSV(csv);
       if(!SP)evs=evs.filter(e=>!fmtDate(e.date).isPast);
       evs.sort((a,b)=>(fmtDate(a.date).dateObj||new Date(9999,0,1))-(fmtDate(b.date).dateObj||new Date(9999,0,1)));
-      if(MX>0)evs=evs.slice(0,MX);
+      tot=evs.length;
       if(evs.length===0){
         el.innerHTML='<div class="no-events"><h3>No Upcoming Events</h3><p>Check back soon for new events!</p></div>';
-      }else{
-        el.innerHTML=evs.map((e,i)=>renderEv(e,i)).join('');
-        setTimeout(()=>el.querySelectorAll('.event-item').forEach(i=>i.classList.add('visible')),100);
+        return;
+      }
+      el.innerHTML=evs.map((e,i)=>renderEv(e,i)).join('');
+      const tc=document.getElementById('event-toggle-container');
+      if(tc&&evs.length>L){
+        tc.style.display='block';
+        const tb=document.getElementById('event-toggle-btn');
+        tb.querySelector('.toggle-text').textContent=`Show All ${tot} Events`;
+        tb.addEventListener('click',toggle);
+      }else if(tc){
+        tc.style.display='none';
       }
     }catch(e){
       console.error('Error:',e);
