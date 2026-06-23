@@ -384,27 +384,43 @@
     </header>
 
     <!-- Login Gate -->
-    <div class="login-gate" id="loginGate">
+    <div class="login-gate" id="loginGate" data-auth-base="https://auth.greenvillediscgolf.com">
         <div class="login-card">
             <div class="login-icon">🔐</div>
             <h1 class="login-title">Members Only</h1>
-            <p class="login-subtitle">This directory is exclusive to GVDG club members.<br>Enter your credentials to access.</p>
-            <div class="login-form">
+            <p class="login-subtitle">Log in with your PDGA&nbsp;# or UDisc username and your PIN.</p>
+
+            <!-- Login -->
+            <div class="login-form" id="loginForm">
                 <div class="form-group">
-                    <label class="form-label">Password</label>
-                    <input type="password" class="form-input" id="passwordInput" placeholder="Enter member password">
-                    <p class="form-hint">Provided when you joined the club</p>
+                    <label class="form-label" for="identifierInput">PDGA # or UDisc Username</label>
+                    <input type="text" class="form-input" id="identifierInput" autocomplete="username" placeholder="e.g. 12345 or your UDisc handle">
+                    <p class="form-hint">Whichever you registered with the club</p>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Code Phrase</label>
-                    <input type="text" class="form-input" id="codeInput" placeholder="Enter the code phrase">
-                    <p class="form-hint">Hint: Ask a GVDG Memeber 🥏</p>
+                    <label class="form-label" for="pinInput">PIN</label>
+                    <input type="password" class="form-input" id="pinInput" inputmode="numeric" autocomplete="current-password" maxlength="4" placeholder="4-digit PIN">
+                    <p class="form-hint">New members: use the temporary PIN from an admin</p>
                 </div>
-                <button class="login-btn" id="loginBtn">Access Directory</button>
-                <div class="login-error" id="loginError">
-                    ❌ Incorrect credentials. Please try again.
-                </div>
+                <button class="login-btn" id="loginBtn">Log In</button>
+                <div class="login-error" id="loginError"></div>
             </div>
+
+            <!-- Forced PIN change on first login -->
+            <div class="login-form" id="pinChangeForm" style="display:none;">
+                <p class="login-subtitle">You're using a temporary PIN. Choose your own to continue.</p>
+                <div class="form-group">
+                    <label class="form-label" for="newPinInput">New PIN</label>
+                    <input type="password" class="form-input" id="newPinInput" inputmode="numeric" autocomplete="new-password" maxlength="4" placeholder="Choose a 4-digit PIN">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="confirmPinInput">Confirm PIN</label>
+                    <input type="password" class="form-input" id="confirmPinInput" inputmode="numeric" autocomplete="new-password" maxlength="4" placeholder="Re-enter your PIN">
+                </div>
+                <button class="login-btn" id="setPinBtn">Save PIN &amp; Continue</button>
+                <div class="login-error" id="pinChangeError"></div>
+            </div>
+
             <a href="index.html" class="back-link">← Back to main site</a>
         </div>
     </div>
@@ -700,52 +716,145 @@
 
     <script>
     (function() {
-        const VALID_PASSWORD = 'gvdg2026';
-        const VALID_CODE = '2004';
-        const SESSION_KEY = 'gvdg_member_auth';
+        // Member auth backed by the Cloudflare Worker (auth-worker/). The endpoint is
+        // read from #loginGate[data-auth-base] so it's configured in one place per deploy.
+        const AUTH_BASE = (document.getElementById('loginGate').dataset.authBase || '').replace(/\/+$/, '');
+        const TOKEN_KEY = 'gvdg_member_token';
+        const NAME_KEY = 'gvdg_member_name';
+        const $ = (id) => document.getElementById(id);
 
-        function checkSession() {
-            const session = sessionStorage.getItem(SESSION_KEY);
-            if (session === 'authenticated') { showMembersContent(); }
+        function showError(el, msg) { el.textContent = '❌ ' + msg; el.classList.add('show'); }
+        function clearError(el) { el.textContent = ''; el.classList.remove('show'); }
+        function setBusy(btn, busy) {
+            if (!btn.dataset.label) btn.dataset.label = btn.textContent;
+            btn.disabled = busy;
+            btn.textContent = busy ? 'Please wait…' : btn.dataset.label;
         }
 
-        function showMembersContent() {
-            document.getElementById('loginGate').style.display = 'none';
-            document.getElementById('membersContent').classList.add('active');
-            sessionStorage.setItem(SESSION_KEY, 'authenticated');
-            initMembersPage();
-            initDoublesLeague();
+        function api(path, { method = 'GET', token, body } = {}) {
+            const headers = {};
+            if (body) headers['Content-Type'] = 'application/json';
+            if (token) headers['Authorization'] = 'Bearer ' + token;
+            return fetch(AUTH_BASE + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+        }
+
+        function showLogin() {
+            $('loginGate').style.display = 'flex';
+            $('membersContent').classList.remove('active');
+            $('loginForm').style.display = '';
+            $('pinChangeForm').style.display = 'none';
+        }
+        function showPinChange() {
+            $('loginGate').style.display = 'flex';
+            $('membersContent').classList.remove('active');
+            $('loginForm').style.display = 'none';
+            $('pinChangeForm').style.display = '';
+            $('newPinInput').focus();
+        }
+
+        let membersInitialized = false;
+        function showMembersContent(name) {
+            $('loginGate').style.display = 'none';
+            $('membersContent').classList.add('active');
+            const banner = document.querySelector('.welcome-text strong');
+            if (banner && name) banner.textContent = 'Welcome back, ' + name + '!';
+            if (!membersInitialized) { initMembersPage(); initDoublesLeague(); membersInitialized = true; }
         }
 
         function logout() {
-            sessionStorage.removeItem(SESSION_KEY);
-            document.getElementById('membersContent').classList.remove('active');
-            document.getElementById('loginGate').style.display = 'flex';
-            document.getElementById('passwordInput').value = '';
-            document.getElementById('codeInput').value = '';
+            sessionStorage.removeItem(TOKEN_KEY);
+            sessionStorage.removeItem(NAME_KEY);
+            $('pinInput').value = '';
+            showLogin();
         }
 
-        document.getElementById('loginBtn').addEventListener('click', function() {
-            const password = document.getElementById('passwordInput').value.trim().toLowerCase();
-            const code = document.getElementById('codeInput').value.trim();
-            const errorEl = document.getElementById('loginError');
-            if (password === VALID_PASSWORD.toLowerCase() && code === VALID_CODE) {
-                errorEl.classList.remove('show');
-                showMembersContent();
-            } else {
-                errorEl.classList.add('show');
-                setTimeout(() => errorEl.classList.remove('show'), 3000);
+        async function handleLogin() {
+            const identifier = $('identifierInput').value.trim();
+            const pin = $('pinInput').value.trim();
+            const errEl = $('loginError');
+            clearError(errEl);
+            if (!AUTH_BASE) { showError(errEl, 'Login is not configured yet — contact an admin.'); return; }
+            if (!identifier || !pin) { showError(errEl, 'Enter your PDGA #/UDisc and PIN.'); return; }
+            const btn = $('loginBtn');
+            setBusy(btn, true);
+            try {
+                const res = await api('/login', { method: 'POST', body: { identifier, pin } });
+                if (res.status === 200) {
+                    const data = await res.json();
+                    sessionStorage.setItem(TOKEN_KEY, data.token);
+                    if (data.name) sessionStorage.setItem(NAME_KEY, data.name);
+                    $('pinInput').value = '';
+                    if (data.mustChangePin) showPinChange();
+                    else showMembersContent(data.name);
+                } else if (res.status === 423) {
+                    const data = await res.json().catch(() => ({}));
+                    const mins = Math.ceil((data.retryAfterSec || 900) / 60);
+                    showError(errEl, 'Too many attempts. Try again in ~' + mins + ' min.');
+                } else if (res.status === 401) {
+                    showError(errEl, 'Invalid PDGA #/UDisc or PIN.');
+                } else {
+                    showError(errEl, 'Something went wrong. Please try again.');
+                }
+            } catch (e) {
+                showError(errEl, 'Network error. Please check your connection.');
+            } finally {
+                setBusy(btn, false);
             }
-        });
+        }
 
-        document.getElementById('passwordInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') document.getElementById('codeInput').focus();
-        });
-        document.getElementById('codeInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') document.getElementById('loginBtn').click();
-        });
+        async function handleSetPin() {
+            const newPin = $('newPinInput').value.trim();
+            const confirmPin = $('confirmPinInput').value.trim();
+            const errEl = $('pinChangeError');
+            clearError(errEl);
+            if (!/^\d{4}$/.test(newPin)) { showError(errEl, 'PIN must be exactly 4 digits.'); return; }
+            if (newPin !== confirmPin) { showError(errEl, 'PINs do not match.'); return; }
+            const token = sessionStorage.getItem(TOKEN_KEY);
+            if (!token) { showLogin(); return; }
+            const btn = $('setPinBtn');
+            setBusy(btn, true);
+            try {
+                const res = await api('/set-pin', { method: 'POST', token, body: { newPin } });
+                if (res.status === 200) {
+                    const data = await res.json();
+                    sessionStorage.setItem(TOKEN_KEY, data.token);
+                    $('newPinInput').value = ''; $('confirmPinInput').value = '';
+                    showMembersContent(sessionStorage.getItem(NAME_KEY));
+                } else if (res.status === 401) {
+                    showLogin();
+                } else {
+                    showError(errEl, 'Could not update PIN. Please try again.');
+                }
+            } catch (e) {
+                showError(errEl, 'Network error. Please try again.');
+            } finally {
+                setBusy(btn, false);
+            }
+        }
 
-        document.getElementById('logoutBtn').addEventListener('click', logout);
+        async function checkSession() {
+            const token = sessionStorage.getItem(TOKEN_KEY);
+            if (!token || !AUTH_BASE) { showLogin(); return; }
+            try {
+                const res = await api('/me', { token });
+                if (res.status === 200) {
+                    const data = await res.json();
+                    if (data.mustChangePin) showPinChange();
+                    else showMembersContent(sessionStorage.getItem(NAME_KEY));
+                } else {
+                    logout();
+                }
+            } catch (e) {
+                showLogin();
+            }
+        }
+
+        $('loginBtn').addEventListener('click', handleLogin);
+        $('setPinBtn').addEventListener('click', handleSetPin);
+        $('identifierInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') $('pinInput').focus(); });
+        $('pinInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLogin(); });
+        $('confirmPinInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') handleSetPin(); });
+        $('logoutBtn').addEventListener('click', logout);
 
         document.querySelector('.menu-toggle').addEventListener('click', function() {
             document.querySelector('.nav-links').classList.toggle('active');
