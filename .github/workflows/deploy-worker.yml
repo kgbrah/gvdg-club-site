@@ -1,0 +1,52 @@
+name: Deploy club Worker (Crotts + auth + D1)
+
+# Deploys auth-worker/ to Cloudflare and syncs its runtime secrets from GitHub Secrets.
+# The OpenRouter key is stored ONLY as an encrypted GitHub Secret and injected into the
+# Cloudflare Worker's secret store at deploy time — it is never committed to the repo and
+# never reaches the browser (the Worker proxies all AI calls server-side).
+#
+# Required GitHub repo secrets (Settings -> Secrets and variables -> Actions):
+#   CLOUDFLARE_API_TOKEN  - Cloudflare token with "Edit Cloudflare Workers" (covers Workers AI, D1, KV)
+#   JWT_SECRET            - member-auth signing secret (>= 32 chars)
+#   OPENROUTER_API_KEY    - OpenRouter key for Crotts' primary brain (free key at openrouter.ai);
+#                           if omitted, Crotts falls back to Cloudflare Workers AI.
+#
+# Before the first deploy, fill the real KV/D1 ids in auth-worker/wrangler.toml
+# (the REPLACE_WITH_* placeholders) so wrangler can bind them.
+
+on:
+  push:
+    branches: [main]
+    paths: ["auth-worker/**", ".github/workflows/deploy-worker.yml"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: auth-worker/package-lock.json
+      - name: Install dependencies
+        working-directory: auth-worker
+        run: npm ci
+      - name: Type-check + tests (gate the deploy)
+        working-directory: auth-worker
+        run: |
+          npx tsc --noEmit
+          npx vitest run
+      - name: Deploy to Cloudflare + sync secrets
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: auth-worker
+          # wrangler-action runs `wrangler secret put` for each name using the matching env var below.
+          secrets: |
+            JWT_SECRET
+            OPENROUTER_API_KEY
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
