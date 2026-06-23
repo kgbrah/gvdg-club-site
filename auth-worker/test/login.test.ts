@@ -17,12 +17,19 @@ function makeKV(): KVLike {
   };
 }
 
+// These auth tests don't touch D1; a no-op stub satisfies the binding.
+function makeDB() {
+  const stmt = { bind: () => stmt, all: async () => ({ results: [], success: true }), first: async () => null, run: async () => ({ results: [], success: true }) };
+  return { prepare: () => stmt };
+}
+
 let env: Env;
 
 beforeEach(async () => {
   env = {
     ROSTER: makeKV(),
     RATELIMIT: makeKV(),
+    DB: makeDB() as unknown as Env["DB"],
     JWT_SECRET: "unit-test-secret-at-least-32-bytes-long!!",
     ALLOWED_ORIGINS: `${ORIGIN},https://greenvillediscgolf.com`,
     SESSION_TTL_SEC: "900",
@@ -54,6 +61,7 @@ describe("POST /login", () => {
     expect(json.mustChangePin).toBe(true);
     expect(json.name).toBe("Jane Doe");
     expect(json.pdgaNo).toBe("12345");
+    expect(json.isAdmin).toBe(false);
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe(ORIGIN);
   });
 
@@ -105,6 +113,7 @@ describe("GET /me", () => {
     expect(json.mustChangePin).toBe(true);
     expect(json.pdgaNo).toBe("12345");
     expect(json.name).toBe("Jane Doe");
+    expect(json.isAdmin).toBe(false);
   });
 
   it("401s without a token", async () => {
@@ -200,6 +209,24 @@ describe("POST /profile", () => {
     });
     const t = await token();
     expect((await worker.fetch(post("/profile", { pdgaNo: "77777" }, auth(t)), env)).status).toBe(409);
+  });
+});
+
+describe("admin role", () => {
+  it("reports isAdmin true for an admin member (login + /me)", async () => {
+    await putMember(env.ROSTER as KVLike, {
+      memberId: "m_admin", name: "Admin Person", udisc: "adminuser",
+      pinHash: await hashPin("4821"), mustChangePin: false, isAdmin: true,
+    });
+    const login = await worker.fetch(post("/login", { identifier: "adminuser", pin: "4821" }), env);
+    expect(login.status).toBe(200);
+    const lj = (await login.json()) as any;
+    expect(lj.isAdmin).toBe(true);
+    const me = await worker.fetch(
+      new Request("https://auth.example/me", { headers: { Origin: ORIGIN, Authorization: `Bearer ${lj.token}` } }),
+      env,
+    );
+    expect(((await me.json()) as any).isAdmin).toBe(true);
   });
 });
 
