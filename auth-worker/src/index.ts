@@ -14,6 +14,10 @@ import {
 import type { RegistrationResponseJSON, AuthenticationResponseJSON } from "@simplewebauthn/server";
 import * as db from "./db.js";
 import { EVENT_TYPES, EVENT_STATUSES, EVENT_FORMATS, type D1Like } from "./db.js";
+import { safeFetch, normalizeDgs, normalizeCsvEvents, parseCsvRows, parseUdiscCourse, ImportError } from "./imports.js";
+
+// Default discgolfscene feed = the club scraper's committed tournaments.json.
+const DEFAULT_DGS_FEED = "https://raw.githubusercontent.com/mostlysober252/GVDG-DGS-Scraper-2.0/main/tournaments.json";
 
 export interface Env {
   ROSTER: KVLike;
@@ -364,6 +368,37 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
       return json({ league: row }, 201, origin);
     }
     if (method === "DELETE" && id != null) { await db.deleteLeague(env.DB, id); return json({ ok: true }, 200, origin); }
+  }
+
+  if (sub === "import" && method === "POST") {
+    const kind = seg[2];
+    const b = (await readJson(request)) ?? {};
+    try {
+      if (kind === "dgs") {
+        const url = asStr(b.feedUrl, 500) ?? DEFAULT_DGS_FEED;
+        const text = await safeFetch(url, ["raw.githubusercontent.com", "discgolfscene.com"]);
+        let feed: unknown;
+        try { feed = JSON.parse(text); } catch { return json({ error: "import_parse_failed" }, 422, origin); }
+        return json({ source: "dgs", candidates: normalizeDgs(feed) }, 200, origin);
+      }
+      if (kind === "csv") {
+        let csvText = typeof b.csv === "string" ? b.csv : null;
+        if (csvText && csvText.length > 500_000) return json({ error: "csv_too_large" }, 413, origin);
+        if (!csvText && typeof b.url === "string") csvText = await safeFetch(b.url, ["docs.google.com"]);
+        if (!csvText) return json({ error: "invalid_request" }, 400, origin);
+        return json({ source: "csv", candidates: normalizeCsvEvents(parseCsvRows(csvText)) }, 200, origin);
+      }
+      if (kind === "udisc") {
+        const url = asStr(b.url, 500);
+        if (!url) return json({ error: "invalid_request" }, 400, origin);
+        const html = await safeFetch(url, ["udisc.com"]);
+        return json({ source: "udisc", candidate: parseUdiscCourse(html, url) }, 200, origin);
+      }
+      return json({ error: "not_found" }, 404, origin);
+    } catch (e) {
+      if (e instanceof ImportError) return json({ error: "import_failed", reason: e.message }, 400, origin);
+      throw e;
+    }
   }
 
   if (sub === "layouts") {
