@@ -69,6 +69,30 @@ This sets `mustChangePin: true` again, so the member is forced to choose a new P
    clears `mustChangePin` (handled by `setPin()` in `src/roster.ts`). The default PIN is now dead.
 5. Once all PINs are handed out, **delete `default-pins.csv`**.
 
+## Membership trust model — what actually proves a member
+
+This portal uses **closed enrollment**: there is no self-signup. An account exists only if an admin
+provisions it from the club roster, and first login requires the **admin-issued default PIN**. So
+*"is this person a GVDG member?"* is answered by *the admin put them on the roster and handed them
+their PIN*. The strength of that guarantee depends entirely on two things:
+
+- **An accurate roster** — only provision real members.
+- **Secure, 1:1 PIN delivery.** PDGA #s are **public** (pdga.com / the member directory), so the
+  4-digit default PIN is the *only* secret protecting first login. Whoever logs in with it first
+  "claims" the account by setting their own PIN (a pre-takeover risk). Therefore:
+  - Hand each default PIN only to that specific member, over a channel only they control.
+  - Never post PINs publicly, read them aloud, bulk-email them, or commit `default-pins.csv`.
+  - Distribute close to when members will sign up, and `--reset` any PIN you suspect leaked.
+  - Server-side lockout (5 tries / 15 min, `src/ratelimit.ts`) slows online guessing, but 4 digits
+    is low entropy — **secure delivery is what carries the guarantee**.
+
+Note: the profile step lets a member set their own PDGA #/UDisc; the Worker blocks claiming an
+identifier already linked to another account, but does not independently prove they own that PDGA #
+(a low-stakes vanity/data concern, not a membership one).
+
+Stronger options that fit this model, if ever wanted: a one-time high-entropy setup code (+ expiry)
+instead of the 4-digit default, a verified email/SMS setup link, or admin approval of each account.
+
 ## SECURITY — keep these out of git
 
 The repo `.gitignore` already ignores `seed.local.json`. The provisioning outputs must be treated
@@ -81,6 +105,5 @@ The repo `.gitignore` already ignores `seed.local.json`. The provisioning output
   brute-forceable offline, so keep this private too. The real defenses are never leaking the KV
   roster and the Worker's server-side rate-limiting / lockout (`src/ratelimit.ts`).
 
-> This note intentionally does **not** edit `.gitignore` (out of scope for slice B2). An operator
-> should add `out/`, `kv-bulk.json`, and `default-pins.csv` to `.gitignore` (alongside the existing
-> `seed.local.json`) before running the tool in a real checkout.
+> The repo's `auth-worker/.gitignore` already ignores `out/`, `default-pins.csv`, `kv-bulk.json`, and
+> `seed-*.json`, so these provisioning outputs won't be committed by accident.
