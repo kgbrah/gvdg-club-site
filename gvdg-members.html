@@ -483,6 +483,16 @@
                 .dash-event-name { font-weight: 600; color: var(--text-primary); }
                 .dash-event-date { font-size: 0.8rem; color: var(--text-muted); }
                 .dash-event-ratings { font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; color: var(--secondary); }
+                .club-register { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; }
+                .register-card { border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem 1.25rem; margin-top: 0.75rem; background: var(--bg-secondary); }
+                .register-head { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
+                .register-name { font-weight: 700; color: var(--text-primary); }
+                .register-date { font-size: 0.8rem; color: var(--text-muted); }
+                .register-fee { font-size: 0.85rem; color: var(--text-secondary); margin: 0.25rem 0 0.5rem; }
+                .register-status { color: #2e9e44; font-weight: 600; margin-bottom: 0.5rem; }
+                .register-form, .register-actions { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+                .register-form select, .register-form input { padding: 0.4rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
+                .register-addon { font-size: 0.85rem; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 0.3rem; }
                 .club-meetings { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; }
                 .meeting-card { border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem 1.25rem; margin-top: 0.75rem; background: var(--bg-secondary); }
                 .meeting-head { display: flex; gap: 0.75rem; align-items: baseline; flex-wrap: wrap; margin-bottom: 0.5rem; }
@@ -554,6 +564,11 @@
                     <h4 class="dash-subtitle">🥏 GVDG Event History</h4>
                     <div id="clubHistoryList"></div>
                 </div>
+            </div>
+
+            <div id="clubRegister" class="club-register" style="display:none;">
+                <h3 class="my-dashboard-title">📝 Register for Events</h3>
+                <div id="registerList"></div>
             </div>
 
             <div id="clubMeetings" class="club-meetings" style="display:none;">
@@ -1032,6 +1047,62 @@
             wrap.style.display = '';
         }
 
+        // ---- Event registration (Track G) — sign up, pick division/add-ons, check in ----
+        function regToken() { return sessionStorage.getItem(TOKEN_KEY); }
+        async function loadRegister() {
+            const wrap = $('clubRegister'), list = $('registerList');
+            const token = regToken();
+            if (!token) { wrap.style.display = 'none'; return; }
+            let events = [], myRegs = [];
+            try { const r = await api('/registration/open'); if (r.ok) events = (await r.json()).events || []; } catch (_e) {}
+            try { const r = await api('/my-registrations', { token }); if (r.ok) myRegs = (await r.json()).registrations || []; } catch (_e) {}
+            if (!events.length) { wrap.style.display = 'none'; return; }
+            const byEvent = new Map(myRegs.map((r) => [r.event_id, r]));
+            list.replaceChildren();
+            events.forEach((ev) => list.appendChild(registerCard(ev, byEvent.get(ev.id))));
+            wrap.style.display = '';
+        }
+        function dollars(c) { return '$' + (c / 100).toLocaleString(undefined, { minimumFractionDigits: (c % 100 ? 2 : 0) }); }
+        function registerCard(ev, myReg) {
+            const card = elNode('div', 'register-card');
+            const head = elNode('div', 'register-head');
+            head.appendChild(elNode('span', 'register-name', ev.name));
+            if (ev.date) head.appendChild(elNode('span', 'register-date', ev.date));
+            card.appendChild(head);
+            card.appendChild(elNode('div', 'register-fee', (ev.entry_fee_cents ? dollars(ev.entry_fee_cents) + ' entry' : 'Free entry') + (ev.play_format ? ' · ' + ev.play_format : '')));
+            if (myReg) {
+                card.appendChild(elNode('div', 'register-status', '✅ Registered' + (myReg.division ? ' — ' + myReg.division : '') + (myReg.checked_in ? ' · checked in' : '') + (myReg.paid_entry ? ' · paid' : '')));
+                const actions = elNode('div', 'register-actions');
+                if (!myReg.checked_in) {
+                    const ci = elNode('button', 'passkey-btn', 'Check in'); ci.type = 'button';
+                    ci.addEventListener('click', async () => { const r = await api('/events/' + ev.id + '/checkin', { method: 'POST', token: regToken() }); if (r.ok) loadRegister(); });
+                    actions.appendChild(ci);
+                }
+                const wd = elNode('button', 'board-link danger', 'Withdraw'); wd.type = 'button';
+                wd.addEventListener('click', async () => { if (!confirm('Withdraw from ' + ev.name + '?')) return; const r = await api('/events/' + ev.id + '/register', { method: 'DELETE', token: regToken() }); if (r.ok) loadRegister(); });
+                actions.appendChild(wd);
+                card.appendChild(actions);
+            } else {
+                const form = elNode('div', 'register-form');
+                let divs = []; try { divs = JSON.parse(ev.divisions || '[]'); } catch (_e) {}
+                let divSel = null;
+                if (divs.length) { divSel = document.createElement('select'); divs.forEach((d) => { const o = document.createElement('option'); o.value = d; o.textContent = d; divSel.appendChild(o); }); form.appendChild(divSel); }
+                let ctpCb = null, aceCb = null;
+                const addon = (label) => { const l = elNode('label', 'register-addon'); const cb = document.createElement('input'); cb.type = 'checkbox'; l.appendChild(cb); l.appendChild(document.createTextNode(' ' + label)); form.appendChild(l); return cb; };
+                if (ev.ctp_fee_cents) ctpCb = addon('CTP pot ' + dollars(ev.ctp_fee_cents));
+                if (ev.ace_fee_cents) aceCb = addon('Ace pot ' + dollars(ev.ace_fee_cents));
+                const reg = elNode('button', 'passkey-btn', 'Register'); reg.type = 'button';
+                reg.addEventListener('click', async () => {
+                    const body = { division: divSel ? divSel.value : null, addons: { ctp: !!(ctpCb && ctpCb.checked), ace: !!(aceCb && aceCb.checked) } };
+                    const r = await api('/events/' + ev.id + '/register', { method: 'POST', token: regToken(), body });
+                    if (r.ok) loadRegister(); else alert('Registration could not be completed.');
+                });
+                form.appendChild(reg);
+                card.appendChild(form);
+            }
+            return card;
+        }
+
         // ---- Members message board (Track M) — members-only, flat feed + replies ----
         function myMemberId() {
             try { const t = sessionStorage.getItem(TOKEN_KEY); const p = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); return p.sub || null; } catch (_e) { return null; }
@@ -1096,6 +1167,7 @@
             const loading = $('dashLoading'), empty = $('dashEmpty'), body = $('dashBody');
             $('myDashboard').style.display = '';
             loadClubHistory(); // GVDG results are keyed by memberId, so they show even without a PDGA#
+            loadRegister();
             loadMeetings();
             loadBoard();
             loading.style.display = ''; empty.style.display = 'none'; body.style.display = 'none';

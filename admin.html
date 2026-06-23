@@ -212,6 +212,7 @@
                 <button type="button" class="admin-tab" data-atab="leagues-mgmt">Leagues</button>
                 <button type="button" class="admin-tab" data-atab="fundraisers">Fundraisers</button>
                 <button type="button" class="admin-tab" data-atab="meetings">Meetings</button>
+                <button type="button" class="admin-tab" data-atab="registration">Registration</button>
             </div>
             <div class="admin-msg" id="adminMsg"></div>
             <div class="admin-pane active" id="apane-events"><div id="adminEventsList">Loading…</div></div>
@@ -341,6 +342,26 @@
                     <button type="submit" class="admin-btn">Add meeting</button>
                 </form>
                 <div id="adminMeetingsList" style="margin-top:1rem;"></div>
+            </div>
+            <div class="admin-pane" id="apane-registration">
+                <div><label for="rgEvent">Event</label>
+                    <select id="rgEvent"><option value="">— select an event —</option></select></div>
+                <div id="rgBody" style="display:none;margin-top:1rem;">
+                    <div class="al-section">
+                        <h4 class="al-h">Registration settings</h4>
+                        <label class="register-addon"><input type="checkbox" id="rgOpen"> Registration open</label>
+                        <div class="al-row" style="margin-top:0.5rem;">
+                            <span>Entry $<input id="rgEntry" type="number" min="0" step="1" size="5"></span>
+                            <span>CTP $<input id="rgCtp" type="number" min="0" step="1" size="5"></span>
+                            <span>Ace $<input id="rgAce" type="number" min="0" step="1" size="5"></span>
+                            <select id="rgFormat"><option value="">format…</option><option value="singles">Singles</option><option value="doubles">Doubles</option><option value="teams">Teams</option></select>
+                        </div>
+                        <div class="al-row" style="margin-top:0.5rem;"><span>Divisions (comma-separated)<input id="rgDivisions" maxlength="400" size="40" placeholder="MA1, MA40, FA1, Rec"></span></div>
+                        <button type="button" class="admin-btn" id="rgSaveBtn" style="margin-top:0.5rem;">Save settings</button>
+                    </div>
+                    <h4 class="al-h">Registered players (<span id="rgCount">0</span>) <span class="al-note">— check in, assign division/starting hole</span></h4>
+                    <div style="overflow-x:auto;"><table class="al-holes" id="rgRoster"></table></div>
+                </div>
             </div>
         </div>
 
@@ -484,6 +505,7 @@
             if (tab === 'leagues-mgmt') adminLoadLeagues();
             if (tab === 'fundraisers') adminLoadFundraisers();
             if (tab === 'meetings') adminLoadMeetings();
+            if (tab === 'registration') rgLoadEvents();
         }
 
         async function adminLoadCourses() {
@@ -968,6 +990,69 @@
             else adminMsg('Add failed (' + r.status + ')', false);
         }
 
+        // ---- Registration management (Track G) ----
+        let rgEventId = null;
+        async function rgLoadEvents() {
+            let events = [];
+            try { const r = await api('/events'); if (r.ok) events = (await r.json()).events || []; } catch (e) {}
+            const sel = $('rgEvent'); sel.length = 1;
+            events.filter((e) => e.status === 'scheduled' || e.status === 'live').forEach((e) => { const o = document.createElement('option'); o.value = e.id; o.textContent = e.name + ' [' + e.status + ']'; sel.appendChild(o); });
+        }
+        async function rgOnSelect() {
+            rgEventId = $('rgEvent').value ? Number($('rgEvent').value) : null;
+            $('rgBody').style.display = rgEventId ? '' : 'none';
+            if (!rgEventId) return;
+            // config (the member endpoint returns config for any authed user)
+            let cfg = null;
+            try { const r = await adminApi('/events/' + rgEventId + '/registration'); if (r.ok) cfg = (await r.json()).config; } catch (e) {}
+            $('rgOpen').checked = !!(cfg && cfg.registration_open);
+            $('rgEntry').value = cfg && cfg.entry_fee_cents != null ? cfg.entry_fee_cents / 100 : '';
+            $('rgCtp').value = cfg && cfg.ctp_fee_cents != null ? cfg.ctp_fee_cents / 100 : '';
+            $('rgAce').value = cfg && cfg.ace_fee_cents != null ? cfg.ace_fee_cents / 100 : '';
+            $('rgFormat').value = (cfg && cfg.play_format) || '';
+            let divs = []; try { divs = JSON.parse((cfg && cfg.divisions) || '[]'); } catch (e) {}
+            $('rgDivisions').value = divs.join(', ');
+            rgLoadRoster();
+        }
+        const cents = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? Math.round(n * 100) : null; };
+        async function rgSaveConfig() {
+            const divisions = $('rgDivisions').value.split(',').map((s) => s.trim()).filter(Boolean);
+            const body = { registration_open: $('rgOpen').checked, entry_fee_cents: cents($('rgEntry').value), ctp_fee_cents: cents($('rgCtp').value), ace_fee_cents: cents($('rgAce').value), play_format: $('rgFormat').value || null, divisions };
+            const r = await adminApi('/admin/events/' + rgEventId + '/config', { method: 'PUT', body });
+            adminMsg(r.ok ? 'Registration settings saved' : 'Save failed (' + r.status + ')', r.ok);
+        }
+        async function rgLoadRoster() {
+            let regs = [];
+            try { const r = await adminApi('/admin/events/' + rgEventId + '/registrations'); if (r.ok) regs = (await r.json()).registrations || []; } catch (e) {}
+            $('rgCount').textContent = String(regs.length);
+            const grid = $('rgRoster'); grid.replaceChildren();
+            const thead = document.createElement('thead'); const htr = document.createElement('tr');
+            ['Player', 'Division', 'Start hole', 'In?', 'Paid?', ''].forEach((h) => htr.appendChild(elx('th', null, h)));
+            thead.appendChild(htr); grid.appendChild(thead);
+            const tbody = document.createElement('tbody');
+            if (!regs.length) { const tr = document.createElement('tr'); const td = elx('td', null, 'No registrations yet.'); td.colSpan = 6; tr.appendChild(td); tbody.appendChild(tr); }
+            regs.forEach((rg) => {
+                const tr = document.createElement('tr');
+                tr.appendChild(elx('td', 'lb-name', rg.name));
+                tr.appendChild(elx('td', null, rg.division || '—'));
+                const shTd = document.createElement('td'); const sh = document.createElement('input'); sh.type = 'number'; sh.min = '1'; sh.style.width = '3.5rem'; if (rg.starting_hole != null) sh.value = rg.starting_hole; sh.addEventListener('change', () => rgPatch(rg.id, { starting_hole: parseInt(sh.value, 10) || null })); shTd.appendChild(sh); tr.appendChild(shTd);
+                tr.appendChild(rgToggleCell(rg.checked_in, (v) => rgPatch(rg.id, { checked_in: v })));
+                tr.appendChild(rgToggleCell(rg.paid_entry, (v) => rgPatch(rg.id, { paid_entry: v })));
+                tr.appendChild(document.createElement('td'));
+                tbody.appendChild(tr);
+            });
+            grid.appendChild(tbody);
+        }
+        function rgToggleCell(on, onChange) {
+            const td = document.createElement('td'); const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!on;
+            cb.addEventListener('change', () => onChange(cb.checked)); td.appendChild(cb); return td;
+        }
+        async function rgPatch(rid, patch) {
+            const r = await adminApi('/admin/events/' + rgEventId + '/registrations/' + rid, { method: 'PATCH', body: patch });
+            adminMsg(r.ok ? 'Updated' : 'Update failed', r.ok);
+            if (r.ok) rgLoadRoster();
+        }
+
         function initAdmin() {
             if (adminInited) { adminLoadEvents(); adminLoadCourses(); return; }
             adminInited = true;
@@ -988,6 +1073,8 @@
             $('adminLeagueForm').addEventListener('submit', adminAddLeague);
             $('adminFundraiserForm').addEventListener('submit', adminAddFundraiser);
             $('adminMeetingForm').addEventListener('submit', adminAddMeeting);
+            $('rgEvent').addEventListener('change', rgOnSelect);
+            $('rgSaveBtn').addEventListener('click', rgSaveConfig);
             adminLoadEvents();
             adminLoadCourses();
             adminLoadLeagues();
