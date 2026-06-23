@@ -4,7 +4,7 @@
 import { hashPin, verifyPin } from "./crypto.js";
 import { signSession, verifySession } from "./jwt.js";
 import { checkLockout, recordFailure, clearAttempts, type KVLike } from "./ratelimit.js";
-import { resolveMember, setPin } from "./roster.js";
+import { resolveMember, getMember, setPin } from "./roster.js";
 
 export interface Env {
   ROSTER: KVLike;
@@ -111,14 +111,21 @@ async function handleLogin(request: Request, env: Env, origin: string | null): P
 
   await clearAttempts(env.RATELIMIT, rk);
   const token = await signSession({ sub: member.memberId, mustChangePin: member.mustChangePin }, env.JWT_SECRET, ttl(env));
-  return json({ token, mustChangePin: member.mustChangePin, name: member.name }, 200, origin);
+  return json({ token, mustChangePin: member.mustChangePin, name: member.name, pdgaNo: member.pdgaNo ?? null }, 200, origin);
 }
 
 async function handleMe(request: Request, env: Env, origin: string | null): Promise<Response> {
   const token = bearer(request);
   const claims = token ? await verifySession(token, env.JWT_SECRET) : null;
   if (!claims) return json({ error: "unauthorized" }, 401, origin);
-  return json({ sub: claims.sub, mustChangePin: claims.mustChangePin }, 200, origin);
+  // Load the member so /me is authoritative (reflects PIN resets / profile changes), not just the token.
+  const member = await getMember(env.ROSTER, claims.sub);
+  if (!member) return json({ error: "unauthorized" }, 401, origin);
+  return json(
+    { sub: member.memberId, mustChangePin: member.mustChangePin, name: member.name, pdgaNo: member.pdgaNo ?? null },
+    200,
+    origin,
+  );
 }
 
 async function handleSetPin(request: Request, env: Env, origin: string | null): Promise<Response> {

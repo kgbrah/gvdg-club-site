@@ -53,6 +53,7 @@ describe("POST /login", () => {
     expect(typeof json.token).toBe("string");
     expect(json.mustChangePin).toBe(true);
     expect(json.name).toBe("Jane Doe");
+    expect(json.pdgaNo).toBe("12345");
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe(ORIGIN);
   });
 
@@ -102,6 +103,8 @@ describe("GET /me", () => {
     const json = (await res.json()) as any;
     expect(json.sub).toBe("m_jane");
     expect(json.mustChangePin).toBe(true);
+    expect(json.pdgaNo).toBe("12345");
+    expect(json.name).toBe("Jane Doe");
   });
 
   it("401s without a token", async () => {
