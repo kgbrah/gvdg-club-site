@@ -180,6 +180,11 @@
         .fundraiser-body p { margin: 0.5rem 0; } .fundraiser-body ul { margin: 0.5rem 0 0.5rem 1.25rem; }
         .donate-btn { display: inline-block; margin-top: 0.75rem; background: #2e9e44; color: #fff; padding: 0.6rem 1.25rem; border-radius: 10px; font-weight: 700; text-decoration: none; }
         .donate-btn:hover { background: #25883a; }
+        .fr-share { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.85rem; }
+        .fr-share-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; }
+        .fr-share-btn { font: inherit; font-size: 0.8rem; font-weight: 600; padding: 0.35rem 0.7rem; border-radius: 999px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-secondary); text-decoration: none; cursor: pointer; }
+        .fr-share-btn:hover { border-color: var(--secondary); color: var(--text-primary); }
+        .fr-share-btn.fb { color: #1877f2; } .fr-share-btn.tw { color: var(--text-primary); }
         @keyframes lbflash { from { background: rgba(255,107,53,0.18); } to { background: transparent; } }
         .lb-table tbody tr.lb-upd td { animation: lbflash 0.9s ease-out; }
 
@@ -541,6 +546,31 @@
             });
         }
 
+        // Social share buttons -> the donation page. URLs are app-controlled with encodeURIComponent'd
+        // params (no injection); links open in a new tab. Copy uses the clipboard API.
+        function shareRow(donateUrl, title) {
+            const wrap = el('div', 'fr-share');
+            wrap.appendChild(el('span', 'fr-share-label', 'Share:'));
+            const eu = encodeURIComponent(donateUrl);
+            const et = encodeURIComponent(`Support ${title} — Greenville Disc Golf Club`);
+            const mk = (cls, label, href, newTab) => {
+                const a = el('a', 'fr-share-btn ' + cls, label);
+                a.href = href; a.rel = 'noopener noreferrer'; if (newTab) a.target = '_blank';
+                return a;
+            };
+            wrap.appendChild(mk('fb', 'Facebook', `https://www.facebook.com/sharer/sharer.php?u=${eu}`, true));
+            wrap.appendChild(mk('tw', 'X', `https://twitter.com/intent/tweet?url=${eu}&text=${et}`, true));
+            wrap.appendChild(mk('em', 'Email', `mailto:?subject=${et}&body=${et}%0A%0A${eu}`, false));
+            const copy = el('button', 'fr-share-btn copy', 'Copy link'); copy.type = 'button';
+            copy.addEventListener('click', async () => {
+                try { await navigator.clipboard.writeText(donateUrl); copy.textContent = 'Copied!'; }
+                catch (_e) { copy.textContent = 'Copy failed'; }
+                setTimeout(() => { copy.textContent = 'Copy link'; }, 1600);
+            });
+            wrap.appendChild(copy);
+            return wrap;
+        }
+
         // ---------- FUNDRAISERS (Phase 4, public) ----------
         async function loadFundraisers() {
             let items = [];
@@ -562,6 +592,7 @@
                 const url = sanitizeUrl(f.paypal_url) ? f.paypal_url : 'https://paypal.me/greenvillediscgolf';
                 const donate = safeLink(url, '💚 Donate'); donate.className = 'donate-btn';
                 card.appendChild(donate);
+                card.appendChild(shareRow(url, f.title));
                 fundraisersEl.appendChild(card);
             });
         }
