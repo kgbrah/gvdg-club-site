@@ -43,11 +43,21 @@ function corsHeaders(origin: string | null): Record<string, string> {
   };
 }
 
-function json(data: unknown, status: number, origin: string | null): Response {
+function json(
+  data: unknown,
+  status: number,
+  origin: string | null,
+  extraHeaders: Record<string, string> = {},
+): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json", ...SECURITY_HEADERS, ...corsHeaders(origin) },
+    headers: { "Content-Type": "application/json", ...SECURITY_HEADERS, ...corsHeaders(origin), ...extraHeaders },
   });
+}
+
+/** Fail closed: a missing/short signing secret must never produce a weakly-signed token. */
+function secretOk(env: Env): boolean {
+  return typeof env.JWT_SECRET === "string" && env.JWT_SECRET.length >= 32;
 }
 
 function ttl(env: Env): number {
@@ -85,14 +95,8 @@ async function handleLogin(request: Request, env: Env, origin: string | null): P
 
   const lock = await checkLockout(env.RATELIMIT, rk, now);
   if (lock.locked) {
-    return new Response(JSON.stringify({ error: "locked_out", retryAfterSec: lock.retryAfterSec }), {
-      status: 423,
-      headers: {
-        "Content-Type": "application/json",
-        "Retry-After": String(lock.retryAfterSec),
-        ...SECURITY_HEADERS,
-        ...corsHeaders(origin),
-      },
+    return json({ error: "locked_out", retryAfterSec: lock.retryAfterSec }, 423, origin, {
+      "Retry-After": String(lock.retryAfterSec),
     });
   }
 
@@ -140,6 +144,7 @@ export default {
     if (method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders(origin) });
     }
+    if (!secretOk(env)) return json({ error: "server_misconfigured" }, 500, origin);
     if (pathname === "/login" && method === "POST") return handleLogin(request, env, origin);
     if (pathname === "/me" && method === "GET") return handleMe(request, env, origin);
     if (pathname === "/set-pin" && method === "POST") return handleSetPin(request, env, origin);
