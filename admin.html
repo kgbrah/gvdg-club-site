@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | Greenville Disc Golf Club</title>
+    <link rel="icon" type="image/png" href="img/logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #FF6B35;
+            --secondary: #004E89;
+            --accent: #F7B801;
+            --dark: #1A1A2E;
+            --light: #F4F4F9;
+            --green: #2D5016;
+            --bg-primary: #F4F4F9;
+            --bg-secondary: #FFFFFF;
+            --bg-tertiary: #F4F4F9;
+            --text-primary: #1A1A2E;
+            --text-secondary: #333333;
+            --text-tertiary: #555555;
+            --text-muted: #666666;
+            --border-color: #F4F4F9;
+            --card-shadow: rgba(0, 0, 0, 0.1);
+            --card-shadow-hover: rgba(0, 0, 0, 0.15);
+        }
+        [data-theme="dark"] {
+            --bg-primary: #0F0F1E;
+            --bg-secondary: #1A1A2E;
+            --bg-tertiary: #252538;
+            --text-primary: #F4F4F9;
+            --text-secondary: #E0E0E0;
+            --text-tertiary: #C0C0C0;
+            --text-muted: #A0A0A0;
+            --border-color: #2A2A3E;
+            --card-shadow: rgba(0, 0, 0, 0.3);
+            --card-shadow-hover: rgba(0, 0, 0, 0.5);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Archivo', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            min-height: 100vh;
+            color: var(--text-primary);
+            position: relative;
+        }
+        body::before {
+            content: ""; position: fixed; inset: 0; z-index: -1;
+            background: linear-gradient(to bottom, rgba(244,244,249,0.25), rgba(244,244,249,0.15)), url("img/bg/forest-bg.png");
+            background-repeat: no-repeat; background-position: center bottom; background-size: cover; opacity: 1;
+        }
+        [data-theme="dark"] body::before {
+            background: linear-gradient(to bottom, rgba(15,15,30,0.25), rgba(15,15,30,0.15)), url("img/bg/forest-bg.png");
+            background-repeat: no-repeat; background-position: center bottom; background-size: cover;
+        }
+
+        /* ---- Header / nav (mirrors index.html) ---- */
+        header { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: rgba(26, 26, 46, 0.95); backdrop-filter: blur(10px); padding: 1rem 1.5rem; transition: all 0.3s ease; }
+        [data-theme="dark"] header { background: rgba(15, 15, 30, 0.95); }
+        header.scrolled { box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2); padding: 0.75rem 1.5rem; }
+        nav { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem; color: white; letter-spacing: 0.05em; text-decoration: none; transition: transform 0.3s ease; display: flex; align-items: center; }
+        .logo-image { height: 50px; width: auto; transition: transform 0.3s ease; }
+        header.scrolled .logo-image { height: 40px; }
+        .logo:active { transform: scale(0.95); }
+        .logo:hover .logo-image { transform: scale(1.05); }
+        .nav-right { display: flex; align-items: center; gap: 1.5rem; }
+        .theme-toggle { background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.3); color: white; width: 44px; height: 44px; min-width: 44px; min-height: 44px; border-radius: 50%; cursor: pointer; font-size: 1.3rem; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; backdrop-filter: blur(5px); -webkit-tap-highlight-color: transparent; }
+        .theme-toggle:hover { background: rgba(255, 255, 255, 0.2); transform: rotate(20deg) scale(1.1); }
+        .theme-toggle:active { transform: rotate(20deg) scale(0.95); }
+        .nav-links { display: flex; gap: 2.5rem; list-style: none; }
+        .nav-links a { color: white; text-decoration: none; font-weight: 600; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; position: relative; transition: color 0.3s ease; -webkit-tap-highlight-color: transparent; }
+        .nav-links a::after { content: ''; position: absolute; bottom: -5px; left: 0; width: 0; height: 2px; background: var(--primary); transition: width 0.3s ease; }
+        .nav-links a:hover::after, .nav-links a:active::after, .nav-links a.active::after { width: 100%; }
+        .nav-links a:hover, .nav-links a.active { color: var(--primary); }
+        .menu-toggle { display: none; background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 0.5rem; min-width: 44px; min-height: 44px; -webkit-tap-highlight-color: transparent; transition: transform 0.2s ease; }
+        .menu-toggle:active { transform: scale(0.9); }
+        @media (max-width: 768px) {
+            header { padding: 1rem; }
+            .logo-image { height: 40px; }
+            header.scrolled .logo-image { height: 35px; }
+            .menu-toggle { display: flex; align-items: center; justify-content: center; }
+            .nav-right { gap: 1rem; }
+            .nav-links { position: fixed; top: 70px; left: 0; right: 0; background: rgba(26, 26, 46, 0.98); flex-direction: column; gap: 0; padding: 2rem; transform: translateY(-100%); opacity: 0; transition: all 0.3s ease; pointer-events: none; max-height: calc(100vh - 70px); overflow-y: auto; }
+            [data-theme="dark"] .nav-links { background: rgba(15, 15, 30, 0.98); }
+            .nav-links.active { transform: translateY(0); opacity: 1; pointer-events: all; }
+            .nav-links li { padding: 1.25rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+            .nav-links li:last-child { border-bottom: none; }
+            .nav-links a { font-size: 1.1rem; display: block; padding: 0.5rem 0; }
+        }
+
+        /* ---- Page body ---- */
+        main { padding-top: 110px; max-width: 1200px; margin: 0 auto; padding-left: 1.5rem; padding-right: 1.5rem; padding-bottom: 4rem; }
+        .page-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(2.4rem, 7vw, 4rem); text-align: center; letter-spacing: 0.05em; color: var(--text-primary); margin: 1rem 0 0.25rem; }
+        .page-subtitle { text-align: center; color: var(--text-muted); font-size: 1rem; margin-bottom: 2rem; }
+
+        /* ---- States ---- */
+        .status-box { text-align: center; padding: 3rem 1.5rem; color: var(--text-muted); }
+        .status-box .spinner { width: 42px; height: 42px; border: 4px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; margin: 0 auto 1rem; animation: spin 0.9s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .back-link { display: inline-block; margin-top: 0.5rem; color: var(--text-muted); text-decoration: none; font-size: 0.95rem; background: none; border: none; cursor: pointer; font: inherit; }
+        .back-link:hover { color: var(--primary); }
+
+        /* ---- Admin gate (sign-in / access states) ---- */
+        .admin-gate { max-width: 560px; margin: 1rem auto 0; background: var(--bg-secondary); border: 2px solid var(--border-color); border-radius: 14px; padding: 2rem; text-align: center; box-shadow: 0 8px 30px var(--card-shadow); }
+        .admin-gate .gate-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+        .admin-gate .gate-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem; letter-spacing: 0.03em; color: var(--text-primary); margin-bottom: 0.5rem; }
+        .admin-gate .gate-msg { color: var(--text-secondary); font-size: 1rem; line-height: 1.5; margin-bottom: 1.25rem; }
+        .gate-btn { display: inline-block; background: var(--primary); color: #fff; text-decoration: none; padding: 0.75rem 1.75rem; min-height: 44px; border-radius: 50px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; transition: all 0.3s ease; }
+        .gate-btn:hover { background: #ff7f4d; transform: translateY(-2px); }
+
+        /* ---- Header account row (log out / back to members) ---- */
+        .nav-account { display: flex; align-items: center; gap: 0.75rem; }
+        .nav-account a { color: white; text-decoration: none; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; padding: 0.4rem 0.8rem; transition: all 0.2s ease; -webkit-tap-highlight-color: transparent; }
+        .nav-account a:hover { background: rgba(255,255,255,0.15); }
+
+        /* ---- Admin panel (copied verbatim from gvdg-members.html) ---- */
+        .admin-panel { background: var(--bg-primary); border: 2px solid var(--primary); border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; }
+        .admin-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; color: var(--primary); margin-bottom: 1rem; letter-spacing: 0.03em; }
+        .admin-tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+        .admin-tab { background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; }
+        .admin-tab.active { background: var(--secondary); border-color: var(--secondary); color: #fff; }
+        .admin-pane { display: none; }
+        .admin-pane.active { display: block; }
+        .admin-form { display: grid; gap: 0.75rem; max-width: 520px; }
+        .admin-form label { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 0.2rem; }
+        .admin-form input, .admin-form select, .admin-form textarea { width: 100%; padding: 0.6rem 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95rem; }
+        .admin-btn { background: var(--primary); color: #fff; border: none; padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
+        .admin-btn.secondary { background: transparent; border: 1px solid var(--secondary); color: var(--secondary); }
+        .admin-btn.danger { background: transparent; border: 1px solid #dc3545; color: #dc3545; padding: 0.35rem 0.7rem; font-size: 0.8rem; }
+        .admin-msg { font-size: 0.9rem; margin-bottom: 0.75rem; min-height: 1.2em; }
+        .admin-msg.ok { color: var(--green); } .admin-msg.err { color: #dc3545; }
+        .admin-evrow { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); margin-bottom: 0.5rem; }
+        .admin-evrow .ev-name { font-weight: 600; flex: 1; min-width: 140px; }
+        .admin-badge { font-size: 0.7rem; text-transform: uppercase; padding: 0.15rem 0.5rem; border-radius: 4px; background: var(--secondary); color: #fff; letter-spacing: 0.04em; }
+        .admin-badge.live { background: #dc3545; } .admin-badge.final { background: var(--text-muted); } .admin-badge.scheduled { background: var(--green); }
+        .admin-cand { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--border-color); }
+        /* Helper classes referenced by the copied admin JS */
+        .dash-note { color: var(--text-muted); font-size: 0.95rem; padding: 0.5rem 0; }
+        .dash-event-date { font-size: 0.8rem; color: var(--text-muted); }
+
+        /* ---- Footer (mirrors index.html) ---- */
+        footer { background: linear-gradient(135deg, var(--dark) 0%, #0d1a0d 100%); color: white; text-align: center; padding: 2.5rem 2rem; font-size: 0.95rem; border-top: 3px solid var(--accent); }
+        [data-theme="dark"] footer { background: linear-gradient(135deg, var(--bg-secondary) 0%, #0a0a14 100%); }
+        @media print { header, footer { display: none; } }
+    </style>
+</head>
+<body data-auth-base="https://auth.greenvillediscgolf.com">
+    <header>
+    <nav>
+        <a href="index.html" class="logo">
+            <img src="img/logo.png" alt="Greenville DGC Logo" class="logo-image">
+        </a>
+        <ul class="nav-links">
+            <li><a href="index.html">Home</a></li>
+            <li><a href="events.html">Club Events</a></li>
+            <li><a href="gvdg-members.html">Members</a></li>
+            <li><a href="admin.html" class="active" aria-current="page">Admin</a></li>
+        </ul>
+       <div class="nav-right">
+            <div class="nav-account">
+                <a href="gvdg-members.html">Back to Members</a>
+                <a href="gvdg-members.html" id="logoutLink">Log out</a>
+            </div>
+            <button class="menu-toggle" aria-label="Toggle menu">☰</button>
+            <button class="theme-toggle" aria-label="Toggle dark mode">
+                <span class="theme-icon">🌙</span>
+            </button>
+        </div>
+    </nav>
+</header>
+
+    <main>
+        <h1 class="page-title">Admin</h1>
+        <p class="page-subtitle">Event management for club admins</p>
+
+        <!-- Loading / auth-check state -->
+        <div id="adminStatus" class="status-box">
+            <div class="spinner"></div>
+            <div>Checking your session&hellip;</div>
+        </div>
+
+        <!-- Auth gate: shown when not signed in / not admin / session expired -->
+        <div id="adminGate" class="admin-gate" hidden></div>
+
+        <!-- Admin panel (copied verbatim from gvdg-members.html) -->
+        <div id="adminPanel" class="admin-panel" style="display:none;">
+            <h3 class="admin-title">🛠 Admin — Event Management</h3>
+            <div class="admin-tabs">
+                <button type="button" class="admin-tab active" data-atab="events">Events</button>
+                <button type="button" class="admin-tab" data-atab="create">New Event</button>
+                <button type="button" class="admin-tab" data-atab="import">Import</button>
+                <button type="button" class="admin-tab" data-atab="courses">Courses</button>
+            </div>
+            <div class="admin-msg" id="adminMsg"></div>
+            <div class="admin-pane active" id="apane-events"><div id="adminEventsList">Loading…</div></div>
+            <div class="admin-pane" id="apane-create">
+                <form class="admin-form" id="adminCreateForm">
+                    <div><label for="aeType">Type</label><select id="aeType"><option value="tournament">Tournament</option><option value="league_round">League round</option><option value="fundraiser">Fundraiser</option><option value="meeting">Meeting</option></select></div>
+                    <div><label for="aeName">Name</label><input id="aeName" maxlength="200" required></div>
+                    <div><label for="aeDate">Date</label><input id="aeDate" type="date"></div>
+                    <div><label for="aeFormat">Format</label><select id="aeFormat"><option value="">—</option><option value="stroke">Stroke</option><option value="matchplay">Matchplay</option><option value="doubles">Doubles</option></select></div>
+                    <div><label for="aeCourse">Course</label><select id="aeCourse"><option value="">—</option></select></div>
+                    <button type="submit" class="admin-btn">Create event</button>
+                </form>
+            </div>
+            <div class="admin-pane" id="apane-import">
+                <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:0.5rem;">Import candidates appear below; click <em>Create</em> to add an event.</p>
+                <button type="button" class="admin-btn secondary" id="dgsImportBtn">⬇ Import from DiscGolfScene feed</button>
+                <div style="margin-top:1rem;">
+                    <label for="csvImportText" style="font-size:0.8rem;font-weight:600;">Paste CSV (header: name,date,type,format)</label>
+                    <textarea id="csvImportText" rows="4" placeholder="name,date,type,format&#10;Fall Open,2026-09-12,tournament,stroke"></textarea>
+                    <button type="button" class="admin-btn secondary" id="csvImportBtn" style="margin-top:0.5rem;">Preview CSV</button>
+                </div>
+                <div id="importCandidates" style="margin-top:1rem;"></div>
+            </div>
+            <div class="admin-pane" id="apane-courses">
+                <form class="admin-form" id="adminCourseForm">
+                    <div><label for="acName">Course name</label><input id="acName" maxlength="200" required></div>
+                    <div><label for="acLoc">Location</label><input id="acLoc" maxlength="200"></div>
+                    <div><label for="acUdisc">UDisc URL (https)</label><input id="acUdisc" type="url" maxlength="1000"></div>
+                    <button type="submit" class="admin-btn">Add course</button>
+                </form>
+                <div id="adminCoursesList" style="margin-top:1rem;"></div>
+            </div>
+        </div>
+
+        <div style="text-align:center;">
+            <a href="index.html" class="back-link">&larr; Back to home</a>
+        </div>
+    </main>
+
+    <footer><p>&copy; 2026 Greenville Disc Golf Club. All rights reserved. | Greenville, NC</p></footer>
+
+    <script>
+        // --- Theme toggle (mirrors index.html / events.html) ---
+        const themeToggle = document.querySelector('.theme-toggle');
+        const themeIcon = document.querySelector('.theme-icon');
+        const htmlEl = document.documentElement;
+        const currentTheme = localStorage.getItem('theme') || 'light';
+        htmlEl.setAttribute('data-theme', currentTheme);
+        themeIcon.textContent = currentTheme === 'dark' ? '☀️' : '🌙';
+        themeToggle.addEventListener('click', () => {
+            const t = htmlEl.getAttribute('data-theme');
+            const n = t === 'dark' ? 'light' : 'dark';
+            htmlEl.setAttribute('data-theme', n);
+            localStorage.setItem('theme', n);
+            themeIcon.textContent = n === 'dark' ? '☀️' : '🌙';
+        });
+
+        // --- Mobile menu (mirrors index.html / events.html) ---
+        const menuToggle = document.querySelector('.menu-toggle');
+        const navLinks = document.querySelector('.nav-links');
+        menuToggle.addEventListener('click', () => {
+            navLinks.classList.toggle('active');
+            menuToggle.textContent = navLinks.classList.contains('active') ? '✕' : '☰';
+        });
+        document.querySelectorAll('.nav-links a').forEach((l) =>
+            l.addEventListener('click', () => {
+                navLinks.classList.remove('active');
+                menuToggle.textContent = '☰';
+            })
+        );
+
+        // --- Scrolled header shadow (mirrors index.html / events.html) ---
+        const headerEl = document.querySelector('header');
+        window.addEventListener('scroll', () => {
+            window.scrollY > 100 ? headerEl.classList.add('scrolled') : headerEl.classList.remove('scrolled');
+        });
+
+        // ============================================================
+        //  Config + auth — admin.html relies on the session the member
+        //  established on the Members page. The session token lives in
+        //  sessionStorage under 'gvdg_member_token' and is preserved
+        //  across same-origin, same-tab navigation.
+        // ============================================================
+        const AUTH_BASE = (document.body.dataset.authBase || 'https://auth.greenvillediscgolf.com')
+            .trim()
+            .replace(/\/+$/, ''); // strip trailing slashes
+        const TOKEN_KEY = 'gvdg_member_token';
+        const NAME_KEY = 'gvdg_member_name';
+        const PDGA_KEY = 'gvdg_member_pdga';
+        const $ = (id) => document.getElementById(id);
+
+        // Shared fetch helper (mirrors gvdg-members.html `api()`).
+        function api(path, { method = 'GET', token, body } = {}) {
+            const headers = {};
+            if (body) headers['Content-Type'] = 'application/json';
+            if (token) headers['Authorization'] = 'Bearer ' + token;
+            return fetch(AUTH_BASE + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+        }
+
+        // "Log out" in the header: drop the session keys, then go back to
+        // the Members page (where the user can sign in again).
+        $('logoutLink').addEventListener('click', () => {
+            sessionStorage.removeItem(TOKEN_KEY);
+            sessionStorage.removeItem(NAME_KEY);
+            sessionStorage.removeItem(PDGA_KEY);
+            // Let the link's default navigation to gvdg-members.html proceed.
+        });
+
+        // --- Gate rendering (XSS-safe: textContent + createElement only) ---
+        function showAdminPanel() {
+            $('adminStatus').hidden = true;
+            $('adminGate').hidden = true;
+            $('adminPanel').style.display = '';
+            initAdmin();
+        }
+
+        // Render the gate with a message and (optionally) a link back to the
+        // Members page so the user can sign in. Never injects API data.
+        function showGate(message, withMembersLink) {
+            $('adminStatus').hidden = true;
+            $('adminPanel').style.display = 'none';
+            const gate = $('adminGate');
+            gate.replaceChildren();
+            gate.appendChild(elx('div', 'gate-icon', '🔒'));
+            gate.appendChild(elx('div', 'gate-title', 'Admin'));
+            gate.appendChild(elx('p', 'gate-msg', message));
+            if (withMembersLink) {
+                const a = elx('a', 'gate-btn', 'Go to Members page');
+                a.href = 'gvdg-members.html';
+                gate.appendChild(a);
+            }
+            gate.hidden = false;
+        }
+
+        // On load: verify the session token grants admin, then show the panel.
+        async function checkAdminSession() {
+            const token = sessionStorage.getItem(TOKEN_KEY);
+            if (!token) {
+                showGate('Admin sign-in required — please log in on the Members page first.', true);
+                return;
+            }
+            try {
+                const res = await api('/me', { token });
+                if (res.status === 200) {
+                    const data = await res.json();
+                    if (data && data.isAdmin === true) {
+                        showAdminPanel();
+                    } else {
+                        showGate("You don't have admin access.", false);
+                    }
+                } else {
+                    showGate('Session expired — log in again.', true);
+                }
+            } catch (e) {
+                showGate('Session expired — log in again.', true);
+            }
+        }
+
+        // ============================================================
+        //  Admin panel (events / courses / imports) — copied verbatim
+        //  from gvdg-members.html. Wired to the club Worker; XSS-safe via
+        //  createElement/textContent (never innerHTML with API data).
+        // ============================================================
+        let adminInited = false;
+        const elx = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        function adminMsg(text, ok) { const m = $('adminMsg'); m.textContent = text || ''; m.className = 'admin-msg' + (text ? (ok ? ' ok' : ' err') : ''); }
+        function adminApi(path, opts) { return api(path, { ...(opts || {}), token: sessionStorage.getItem(TOKEN_KEY) }); }
+        function adminSwitch(tab) {
+            document.querySelectorAll('.admin-tab').forEach((t) => t.classList.toggle('active', t.dataset.atab === tab));
+            document.querySelectorAll('.admin-pane').forEach((p) => p.classList.toggle('active', p.id === 'apane-' + tab));
+        }
+
+        async function adminLoadCourses() {
+            let courses = [];
+            try { const r = await api('/courses'); if (r.ok) courses = (await r.json()).courses || []; } catch (e) {}
+            const sel = $('aeCourse'); sel.length = 1;
+            const list = $('adminCoursesList'); list.textContent = '';
+            courses.forEach((c) => {
+                const label = c.name + (c.location ? ' — ' + c.location : '');
+                const o = document.createElement('option'); o.value = c.id; o.textContent = label; sel.appendChild(o);
+                list.appendChild(elx('div', 'admin-cand', label));
+            });
+        }
+
+        async function adminLoadEvents() {
+            const wrap = $('adminEventsList'); wrap.textContent = 'Loading…';
+            let events = [];
+            try { const r = await api('/events'); if (r.ok) events = (await r.json()).events || []; } catch (e) {}
+            wrap.textContent = '';
+            if (!events.length) { wrap.appendChild(elx('p', 'dash-note', 'No events yet — create or import one.')); return; }
+            events.forEach((ev) => {
+                const row = elx('div', 'admin-evrow');
+                row.appendChild(elx('span', 'ev-name', ev.name));
+                row.appendChild(elx('span', 'admin-badge ' + (ev.status || ''), ev.status || ''));
+                if (ev.date) row.appendChild(elx('span', 'dash-event-date', ev.date));
+                const sel = document.createElement('select');
+                ['scheduled', 'live', 'final', 'cancelled'].forEach((s) => { const o = document.createElement('option'); o.value = s; o.textContent = s; if (s === ev.status) o.selected = true; sel.appendChild(o); });
+                sel.addEventListener('change', async () => {
+                    const r = await adminApi('/admin/events/' + ev.id, { method: 'PATCH', body: { status: sel.value } });
+                    adminMsg(r.ok ? 'Updated “' + ev.name + '” → ' + sel.value : 'Update failed', r.ok);
+                    if (r.ok) adminLoadEvents();
+                });
+                row.appendChild(sel);
+                const del = elx('button', 'admin-btn danger', 'Delete');
+                del.addEventListener('click', async () => {
+                    if (!confirm('Delete event “' + ev.name + '”?')) return;
+                    const r = await adminApi('/admin/events/' + ev.id, { method: 'DELETE' });
+                    adminMsg(r.ok ? 'Deleted “' + ev.name + '”' : 'Delete failed', r.ok);
+                    if (r.ok) adminLoadEvents();
+                });
+                row.appendChild(del);
+                wrap.appendChild(row);
+            });
+        }
+
+        async function adminCreateEvent(e) {
+            e.preventDefault();
+            const body = { type: $('aeType').value, name: $('aeName').value.trim(), date: $('aeDate').value || null, format: $('aeFormat').value || null, course_id: $('aeCourse').value ? Number($('aeCourse').value) : null, source: 'manual' };
+            if (!body.name) { adminMsg('Name required', false); return; }
+            const r = await adminApi('/admin/events', { method: 'POST', body });
+            if (r.ok) { adminMsg('Created “' + body.name + '”', true); $('adminCreateForm').reset(); adminSwitch('events'); adminLoadEvents(); }
+            else { adminMsg('Create failed (' + r.status + ')', false); }
+        }
+
+        async function adminAddCourse(e) {
+            e.preventDefault();
+            const body = { name: $('acName').value.trim(), location: $('acLoc').value.trim() || null, udisc_url: $('acUdisc').value.trim() || null };
+            if (!body.name) { adminMsg('Course name required', false); return; }
+            const r = await adminApi('/admin/courses', { method: 'POST', body });
+            if (r.ok) { adminMsg('Added course “' + body.name + '”', true); $('adminCourseForm').reset(); adminLoadCourses(); }
+            else { adminMsg('Add course failed (' + r.status + ')', false); }
+        }
+
+        function renderCandidates(cands) {
+            const wrap = $('importCandidates'); wrap.textContent = '';
+            if (!cands || !cands.length) { wrap.appendChild(elx('p', 'dash-note', 'No candidates found.')); return; }
+            cands.forEach((c) => {
+                const row = elx('div', 'admin-cand');
+                row.appendChild(elx('span', null, (c.name || '?') + (c.date ? ' (' + c.date + ')' : '') + ' [' + (c.type || 'event') + ']'));
+                const btn = elx('button', 'admin-btn secondary', 'Create');
+                btn.addEventListener('click', async () => {
+                    btn.disabled = true;
+                    const r = await adminApi('/admin/events', { method: 'POST', body: { type: c.type || 'tournament', name: c.name, date: c.date || null, format: c.format || null, source: c.source || 'manual', external_url: c.external_url || null } });
+                    btn.textContent = r.ok ? '✓ Created' : 'Failed';
+                    if (r.ok) adminLoadEvents();
+                });
+                row.appendChild(btn);
+                wrap.appendChild(row);
+            });
+        }
+
+        async function adminDgsImport() {
+            adminMsg('Importing from DiscGolfScene…', true);
+            const r = await adminApi('/admin/import/dgs', { method: 'POST', body: {} });
+            if (r.ok) { const d = await r.json(); renderCandidates(d.candidates); adminMsg((d.candidates || []).length + ' candidates loaded', true); }
+            else { adminMsg('DGS import failed (' + r.status + ')', false); }
+        }
+        async function adminCsvImport() {
+            const csv = $('csvImportText').value;
+            if (!csv.trim()) { adminMsg('Paste CSV first', false); return; }
+            const r = await adminApi('/admin/import/csv', { method: 'POST', body: { csv } });
+            if (r.ok) { const d = await r.json(); renderCandidates(d.candidates); adminMsg((d.candidates || []).length + ' rows parsed', true); }
+            else { adminMsg('CSV import failed (' + r.status + ')', false); }
+        }
+
+        function initAdmin() {
+            if (adminInited) { adminLoadEvents(); adminLoadCourses(); return; }
+            adminInited = true;
+            document.querySelectorAll('.admin-tab').forEach((t) => t.addEventListener('click', () => adminSwitch(t.dataset.atab)));
+            $('adminCreateForm').addEventListener('submit', adminCreateEvent);
+            $('adminCourseForm').addEventListener('submit', adminAddCourse);
+            $('dgsImportBtn').addEventListener('click', adminDgsImport);
+            $('csvImportBtn').addEventListener('click', adminCsvImport);
+            adminLoadEvents();
+            adminLoadCourses();
+        }
+
+        // Kick off the auth gate on load.
+        checkAdminSession();
+    </script>
+</body>
+</html>
