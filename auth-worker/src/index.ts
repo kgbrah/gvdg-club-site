@@ -5,6 +5,13 @@ import { hashPin, verifyPin } from "./crypto.js";
 import { signSession, verifySession } from "./jwt.js";
 import { checkLockout, recordFailure, clearAttempts, type KVLike } from "./ratelimit.js";
 import { resolveMember, getMember, setPin } from "./roster.js";
+import {
+  registrationOptions,
+  registrationVerify,
+  authenticationOptions,
+  authenticationVerify,
+} from "./webauthn.js";
+import type { RegistrationResponseJSON, AuthenticationResponseJSON } from "@simplewebauthn/server";
 
 export interface Env {
   ROSTER: KVLike;
@@ -13,6 +20,10 @@ export interface Env {
   /** Comma-separated allowlist of browser origins permitted to call the API. */
   ALLOWED_ORIGINS: string;
   SESSION_TTL_SEC?: string;
+  // WebAuthn / passkeys relying-party config.
+  RP_ID?: string;
+  RP_NAME?: string;
+  EXPECTED_ORIGIN?: string;
 }
 
 // A well-formed but unmatchable hash. Verifying a submitted PIN against this when the
@@ -73,6 +84,11 @@ function bearer(request: Request): string | null {
   const h = request.headers.get("Authorization") ?? "";
   const m = h.match(/^Bearer (.+)$/);
   return m ? m[1]! : null;
+}
+
+async function requireAuth(request: Request, env: Env) {
+  const token = bearer(request);
+  return token ? verifySession(token, env.JWT_SECRET) : null;
 }
 
 async function readJson(request: Request): Promise<Record<string, unknown> | null> {
@@ -155,6 +171,38 @@ export default {
     if (pathname === "/login" && method === "POST") return handleLogin(request, env, origin);
     if (pathname === "/me" && method === "GET") return handleMe(request, env, origin);
     if (pathname === "/set-pin" && method === "POST") return handleSetPin(request, env, origin);
+
+    // --- passkeys / WebAuthn ---
+    if (pathname === "/webauthn/register/options" && method === "POST") {
+      const claims = await requireAuth(request, env);
+      if (!claims) return json({ error: "unauthorized" }, 401, origin);
+      const { status, data } = await registrationOptions(env, claims.sub);
+      return json(data, status, origin);
+    }
+    if (pathname === "/webauthn/register/verify" && method === "POST") {
+      const claims = await requireAuth(request, env);
+      if (!claims) return json({ error: "unauthorized" }, 401, origin);
+      const body = await readJson(request);
+      if (!body) return json({ error: "invalid_request" }, 400, origin);
+      const { status, data } = await registrationVerify(env, claims.sub, body as unknown as RegistrationResponseJSON);
+      return json(data, status, origin);
+    }
+    if (pathname === "/webauthn/auth/options" && method === "POST") {
+      const { status, data } = await authenticationOptions(env);
+      return json(data, status, origin);
+    }
+    if (pathname === "/webauthn/auth/verify" && method === "POST") {
+      const body = await readJson(request);
+      if (!body) return json({ error: "invalid_request" }, 400, origin);
+      const signToken = (claims: { sub: string; mustChangePin: boolean }) =>
+        signSession(claims, env.JWT_SECRET, ttl(env));
+      const { status, data } = await authenticationVerify(
+        env,
+        body as { flowId?: unknown; response?: AuthenticationResponseJSON },
+        signToken,
+      );
+      return json(data, status, origin);
+    }
 
     return json({ error: "not_found" }, 404, origin);
   },
