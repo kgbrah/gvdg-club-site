@@ -258,6 +258,42 @@ export async function removeEventPlayer(db: D1Like, eventId: number, playerId: n
   await db.prepare("DELETE FROM event_players WHERE id = ? AND event_id = ?").bind(playerId, eventId).run();
 }
 
+// ---------------- members message board ----------------
+export interface BoardPostInput {
+  parent_id?: number | null;
+  member_id: string;
+  author_name: string;
+  body: string;
+}
+/** Recent top-level posts (newest first) with their replies (oldest first) nested under `replies`. */
+export async function getBoardFeed(db: D1Like, limit = 50): Promise<Record<string, unknown>[]> {
+  const posts = (await db.prepare("SELECT * FROM board_posts WHERE parent_id IS NULL ORDER BY id DESC LIMIT ?").bind(limit).all()).results;
+  const ids = posts.map((p) => p.id as number);
+  let replies: Record<string, unknown>[] = [];
+  if (ids.length) {
+    const placeholders = ids.map(() => "?").join(",");
+    replies = (await db.prepare(`SELECT * FROM board_posts WHERE parent_id IN (${placeholders}) ORDER BY id ASC`).bind(...ids).all()).results;
+  }
+  const byParent = new Map<number, Record<string, unknown>[]>();
+  for (const r of replies) {
+    const pid = r.parent_id as number;
+    (byParent.get(pid) ?? byParent.set(pid, []).get(pid)!).push(r);
+  }
+  return posts.map((p) => ({ ...p, replies: byParent.get(p.id as number) ?? [] }));
+}
+export async function getBoardPost(db: D1Like, id: number) {
+  return db.prepare("SELECT * FROM board_posts WHERE id = ?").bind(id).first();
+}
+export async function createBoardPost(db: D1Like, p: BoardPostInput) {
+  return db
+    .prepare("INSERT INTO board_posts (parent_id, member_id, author_name, body) VALUES (?, ?, ?, ?) RETURNING *")
+    .bind(p.parent_id ?? null, p.member_id, p.author_name, p.body)
+    .first();
+}
+export async function deleteBoardPost(db: D1Like, id: number) {
+  await db.prepare("DELETE FROM board_posts WHERE id = ?").bind(id).run();
+}
+
 // ---------------- fundraisers ----------------
 export interface FundraiserInput {
   title: string;

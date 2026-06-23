@@ -492,6 +492,21 @@
                 .meeting-body p { margin: 0.4rem 0; } .meeting-body ul { margin: 0.4rem 0 0.4rem 1.25rem; }
                 .meeting-actions-h { font-weight: 700; color: var(--text-primary); margin-top: 0.6rem; font-size: 0.9rem; }
                 .meeting-actions { margin: 0.25rem 0 0 1.25rem; color: var(--text-secondary); }
+                .club-board { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; }
+                .board-compose { display: flex; gap: 0.6rem; align-items: flex-start; margin-bottom: 1rem; }
+                .board-compose textarea, .board-replybox textarea { flex: 1; resize: vertical; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.6rem; font: inherit; font-size: 0.9rem; background: var(--bg-secondary); color: var(--text-primary); }
+                .board-post { border: 1px solid var(--border-color); border-radius: 10px; padding: 0.85rem 1.1rem; margin-bottom: 0.75rem; background: var(--bg-secondary); }
+                .board-head { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
+                .board-author { font-weight: 700; color: var(--text-primary); }
+                .board-when { font-size: 0.75rem; color: var(--text-muted); }
+                .board-body { color: var(--text-secondary); line-height: 1.55; margin: 0.35rem 0; }
+                .board-body p { margin: 0.3rem 0; } .board-body ul { margin: 0.3rem 0 0.3rem 1.25rem; }
+                .board-actions { display: flex; gap: 0.75rem; }
+                .board-link { background: none; border: none; color: var(--secondary); cursor: pointer; font: inherit; font-size: 0.8rem; font-weight: 600; padding: 0; }
+                .board-link.danger { color: var(--primary); }
+                .board-replies { margin: 0.5rem 0 0 1.25rem; border-left: 2px solid var(--border-color); padding-left: 0.85rem; }
+                .board-reply { padding: 0.5rem 0; }
+                .board-replybox { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
                 .passkey-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
                 .passkey-btn { background: transparent; border: 1px solid var(--secondary); color: var(--secondary); padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background 0.15s ease, color 0.15s ease; }
                 .passkey-btn:hover { background: var(--secondary); color: #fff; }
@@ -544,6 +559,15 @@
             <div id="clubMeetings" class="club-meetings" style="display:none;">
                 <h3 class="my-dashboard-title">📋 Club Meetings &amp; Minutes</h3>
                 <div id="clubMeetingsList"></div>
+            </div>
+
+            <div id="clubBoard" class="club-board" style="display:none;">
+                <h3 class="my-dashboard-title">💬 Members Message Board</h3>
+                <div class="board-compose">
+                    <textarea id="boardInput" rows="3" maxlength="4000" placeholder="Share something with the club… (markdown: **bold**, - bullets, https links)"></textarea>
+                    <button type="button" class="passkey-btn" id="boardPostBtn">Post</button>
+                </div>
+                <div id="boardFeed"></div>
             </div>
 
             <div class="members-stats-grid">
@@ -835,10 +859,10 @@
         const PDGA_KEY = 'gvdg_member_pdga';
         const $ = (id) => document.getElementById(id);
 
-        let memberProfile = { pdgaNo: null, udisc: null, photo: null, isAdmin: false };
+        let memberProfile = { pdgaNo: null, udisc: null, photo: null, isAdmin: false, sub: null, name: null };
         let pendingPhoto = null; // a chosen-but-unsaved uploaded photo (data URL)
         function applyProfile(data) {
-            memberProfile = { pdgaNo: data.pdgaNo || null, udisc: data.udisc || null, photo: data.photo || null, isAdmin: data.isAdmin === true };
+            memberProfile = { pdgaNo: data.pdgaNo || null, udisc: data.udisc || null, photo: data.photo || null, isAdmin: data.isAdmin === true, sub: data.sub || memberProfile.sub || null, name: data.name || memberProfile.name || null };
             if (data.name) sessionStorage.setItem(NAME_KEY, data.name);
             if (data.pdgaNo) sessionStorage.setItem(PDGA_KEY, data.pdgaNo); else sessionStorage.removeItem(PDGA_KEY);
         }
@@ -1008,11 +1032,72 @@
             wrap.style.display = '';
         }
 
+        // ---- Members message board (Track M) — members-only, flat feed + replies ----
+        function myMemberId() {
+            try { const t = sessionStorage.getItem(TOKEN_KEY); const p = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); return p.sub || null; } catch (_e) { return null; }
+        }
+        async function loadBoard() {
+            const wrap = $('clubBoard'), feed = $('boardFeed');
+            const token = sessionStorage.getItem(TOKEN_KEY);
+            if (!token) { wrap.style.display = 'none'; return; }
+            let posts = [];
+            try { const r = await api('/board', { token }); if (r.ok) posts = (await r.json()).posts || []; } catch (_e) {}
+            wrap.style.display = '';
+            feed.replaceChildren();
+            if (!posts.length) { feed.appendChild(elNode('p', 'dash-note', 'No posts yet — start the conversation!')); return; }
+            posts.forEach((p) => feed.appendChild(boardCard(p, false)));
+        }
+        function elNode(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+        function boardCard(post, isReply) {
+            const card = elNode('div', isReply ? 'board-reply' : 'board-post');
+            const head = elNode('div', 'board-head');
+            head.appendChild(elNode('span', 'board-author', post.author_name || 'Member'));
+            head.appendChild(elNode('span', 'board-when', post.created_at || ''));
+            card.appendChild(head);
+            const body = elNode('div', 'board-body'); mdRender(post.body, body); card.appendChild(body);
+            const actions = elNode('div', 'board-actions');
+            if (!isReply) {
+                const reply = elNode('button', 'board-link', 'Reply'); reply.type = 'button';
+                reply.addEventListener('click', () => toggleReplyBox(card, post.id));
+                actions.appendChild(reply);
+            }
+            if (post.member_id === myMemberId() || memberProfile.isAdmin) {
+                const del = elNode('button', 'board-link danger', 'Delete'); del.type = 'button';
+                del.addEventListener('click', async () => { if (!confirm('Delete this post?')) return; const r = await api('/board/' + post.id, { method: 'DELETE', token: sessionStorage.getItem(TOKEN_KEY) }); if (r.ok) loadBoard(); });
+                actions.appendChild(del);
+            }
+            card.appendChild(actions);
+            if (!isReply && post.replies && post.replies.length) {
+                const rwrap = elNode('div', 'board-replies');
+                post.replies.forEach((r) => rwrap.appendChild(boardCard(r, true)));
+                card.appendChild(rwrap);
+            }
+            return card;
+        }
+        function toggleReplyBox(card, parentId) {
+            const existing = [...card.children].find((c) => c.classList && c.classList.contains('board-replybox'));
+            if (existing) { existing.remove(); return; }
+            const box = elNode('div', 'board-replybox');
+            const ta = document.createElement('textarea'); ta.rows = 2; ta.maxLength = 4000; ta.placeholder = 'Write a reply…';
+            const btn = elNode('button', 'passkey-btn', 'Reply'); btn.type = 'button';
+            btn.addEventListener('click', () => submitPost(ta.value, parentId, ta));
+            box.appendChild(ta); box.appendChild(btn); card.appendChild(box); ta.focus();
+        }
+        async function submitPost(text, parentId, inputEl) {
+            text = (text || '').trim();
+            if (!text) return;
+            const r = await api('/board', { method: 'POST', token: sessionStorage.getItem(TOKEN_KEY), body: { body: text, parent_id: parentId || null } });
+            if (r.ok) { if (inputEl) inputEl.value = ''; loadBoard(); }
+            else if (r.status === 429) { alert("You're posting too fast — give it a minute and try again."); }
+            else { alert('Sorry, your post could not be saved.'); }
+        }
+
         async function loadDashboard() {
             const loading = $('dashLoading'), empty = $('dashEmpty'), body = $('dashBody');
             $('myDashboard').style.display = '';
             loadClubHistory(); // GVDG results are keyed by memberId, so they show even without a PDGA#
             loadMeetings();
+            loadBoard();
             loading.style.display = ''; empty.style.display = 'none'; body.style.display = 'none';
             const avatar = $('dashAvatar');
             const showAvatar = (url) => {
@@ -1308,6 +1393,7 @@
         $('passkeyBtn').addEventListener('click', loginWithPasskey);
         $('enablePasskeyBtn').addEventListener('click', enablePasskey);
         $('editProfileBtn').addEventListener('click', showProfileSetup);
+        $('boardPostBtn').addEventListener('click', () => submitPost($('boardInput').value, null, $('boardInput')));
         $('logoutBtn').addEventListener('click', logout);
 
         document.querySelector('.menu-toggle').addEventListener('click', function() {

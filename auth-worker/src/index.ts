@@ -191,6 +191,52 @@ async function handleMyResults(request: Request, env: Env, origin: string | null
   return json({ results: await db.listMemberResults(env.DB, claims.sub) }, 200, origin);
 }
 
+// Members message board — members-only (read + post require a valid member JWT). Flat feed + replies.
+const BOARD_LIMIT = 15; // posts per member per minute
+async function boardRateLimited(env: Env, memberId: string): Promise<boolean> {
+  const key = "board:" + memberId;
+  const cur = parseInt((await env.RATELIMIT.get(key)) || "0", 10) || 0;
+  if (cur >= BOARD_LIMIT) return true;
+  await env.RATELIMIT.put(key, String(cur + 1), { expirationTtl: 60 });
+  return false;
+}
+async function handleBoard(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const claims = await requireAuth(request, env);
+  if (!claims) return json({ error: "unauthorized" }, 401, origin); // members-only, incl. reads
+  const seg = new URL(request.url).pathname.split("/").filter(Boolean); // ["board"] | ["board", id]
+  const method = request.method.toUpperCase();
+
+  if (method === "GET" && seg.length === 1) {
+    return json({ posts: await db.getBoardFeed(env.DB, 50) }, 200, origin);
+  }
+  if (method === "POST" && seg.length === 1) {
+    if (await boardRateLimited(env, claims.sub)) return json({ error: "rate_limited" }, 429, origin);
+    const b = await readJson(request);
+    const body = b && typeof b.body === "string" ? b.body.trim() : "";
+    if (!body) return json({ error: "empty_post" }, 400, origin);
+    if (body.length > 4000) return json({ error: "post_too_long" }, 413, origin);
+    const parentId = b!.parent_id == null ? null : asInt(b!.parent_id);
+    if (parentId != null) {
+      const parent = (await db.getBoardPost(env.DB, parentId)) as { parent_id?: number | null } | null;
+      if (!parent || parent.parent_id != null) return json({ error: "bad_parent" }, 400, origin); // replies only on top-level posts
+    }
+    const member = await getMember(env.ROSTER, claims.sub);
+    const row = await db.createBoardPost(env.DB, { parent_id: parentId, member_id: claims.sub, author_name: member?.name ?? "Member", body });
+    return json({ post: row }, 201, origin);
+  }
+  if (method === "DELETE" && seg.length === 2) {
+    const id = asInt(seg[1]);
+    if (id == null) return json({ error: "not_found" }, 404, origin);
+    const post = (await db.getBoardPost(env.DB, id)) as { member_id?: string } | null;
+    if (!post) return json({ error: "not_found" }, 404, origin);
+    const member = await getMember(env.ROSTER, claims.sub);
+    if (post.member_id !== claims.sub && member?.isAdmin !== true) return json({ error: "forbidden" }, 403, origin); // author or admin
+    await db.deleteBoardPost(env.DB, id);
+    return json({ ok: true }, 200, origin);
+  }
+  return json({ error: "not_found" }, 404, origin);
+}
+
 // Self-service profile fields a member may add when they couldn't be auto-matched.
 const MAX_PHOTO_LEN = 200_000; // ~150KB of base64 — small avatar only
 function validPhoto(p: string): boolean {
@@ -747,6 +793,7 @@ export default {
     if (pathname === "/login" && method === "POST") return handleLogin(request, env, origin);
     if (pathname === "/me" && method === "GET") return handleMe(request, env, origin);
     if (pathname === "/my-results" && method === "GET") return handleMyResults(request, env, origin);
+    if (pathname === "/board" || pathname.startsWith("/board/")) return handleBoard(request, env, origin);
     if (pathname === "/set-pin" && method === "POST") return handleSetPin(request, env, origin);
     if (pathname === "/profile" && method === "POST") return handleProfile(request, env, origin);
     if (pathname === "/assistant" && method === "POST") return handleAssistant(request, env, origin);
