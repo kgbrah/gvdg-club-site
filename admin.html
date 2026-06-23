@@ -209,6 +209,7 @@
                 <button type="button" class="admin-tab" data-atab="courses">Courses</button>
                 <button type="button" class="admin-tab" data-atab="layouts">Layouts</button>
                 <button type="button" class="admin-tab" data-atab="scoring">Live Scoring</button>
+                <button type="button" class="admin-tab" data-atab="leagues-mgmt">Leagues</button>
             </div>
             <div class="admin-msg" id="adminMsg"></div>
             <div class="admin-pane active" id="apane-events"><div id="adminEventsList">Loading…</div></div>
@@ -219,6 +220,7 @@
                     <div><label for="aeDate">Date</label><input id="aeDate" type="date"></div>
                     <div><label for="aeFormat">Format</label><select id="aeFormat"><option value="">—</option><option value="stroke">Stroke</option><option value="matchplay">Matchplay</option><option value="doubles">Doubles</option></select></div>
                     <div><label for="aeCourse">Course</label><select id="aeCourse"><option value="">—</option></select></div>
+                    <div><label for="aeLeague">League (for league rounds)</label><select id="aeLeague"><option value="">—</option></select></div>
                     <button type="submit" class="admin-btn">Create event</button>
                 </form>
             </div>
@@ -307,6 +309,16 @@
                         <span class="al-note">Writes final places + breakdown to each player's record and closes the event.</span>
                     </div>
                 </div>
+            </div>
+            <div class="admin-pane" id="apane-leagues-mgmt">
+                <form class="admin-form" id="adminLeagueForm">
+                    <div><label for="lgName">League name</label><input id="lgName" maxlength="120" required></div>
+                    <div><label for="lgSeason">Season</label><input id="lgSeason" maxlength="40" placeholder="2026"></div>
+                    <div><label for="lgFormat">Format</label><select id="lgFormat"><option value="">—</option><option value="doubles">Doubles</option><option value="stroke">Singles/Stroke</option><option value="matchplay">Matchplay</option></select></div>
+                    <button type="submit" class="admin-btn">Add league</button>
+                </form>
+                <p class="al-note" style="margin-top:0.5rem;">Assign <strong>league round</strong> events to a league on the New Event tab; finalized rounds roll up into the league standings automatically.</p>
+                <div id="adminLeaguesList" style="margin-top:1rem;"></div>
             </div>
         </div>
 
@@ -447,6 +459,7 @@
             document.querySelectorAll('.admin-tab').forEach((t) => t.classList.toggle('active', t.dataset.atab === tab));
             document.querySelectorAll('.admin-pane').forEach((p) => p.classList.toggle('active', p.id === 'apane-' + tab));
             if (tab === 'scoring') scLoadEvents();
+            if (tab === 'leagues-mgmt') adminLoadLeagues();
         }
 
         async function adminLoadCourses() {
@@ -496,7 +509,7 @@
 
         async function adminCreateEvent(e) {
             e.preventDefault();
-            const body = { type: $('aeType').value, name: $('aeName').value.trim(), date: $('aeDate').value || null, format: $('aeFormat').value || null, course_id: $('aeCourse').value ? Number($('aeCourse').value) : null, source: 'manual' };
+            const body = { type: $('aeType').value, name: $('aeName').value.trim(), date: $('aeDate').value || null, format: $('aeFormat').value || null, course_id: $('aeCourse').value ? Number($('aeCourse').value) : null, league_id: $('aeLeague').value ? Number($('aeLeague').value) : null, source: 'manual' };
             if (!body.name) { adminMsg('Name required', false); return; }
             const r = await adminApi('/admin/events', { method: 'POST', body });
             if (r.ok) { adminMsg('Created “' + body.name + '”', true); $('adminCreateForm').reset(); adminSwitch('events'); adminLoadEvents(); }
@@ -852,6 +865,32 @@
             else { adminMsg('Finalize failed (' + r.status + ')', false); }
         }
 
+        // ---- Leagues management (Phase 4) ----
+        async function adminLoadLeagues() {
+            let leagues = [];
+            try { const r = await api('/leagues'); if (r.ok) leagues = (await r.json()).leagues || []; } catch (e) {}
+            const sel = $('aeLeague'); sel.length = 1;
+            const list = $('adminLeaguesList'); list.textContent = '';
+            if (!leagues.length) { list.appendChild(elx('p', 'al-note', 'No leagues yet.')); }
+            leagues.forEach((l) => {
+                const o = document.createElement('option'); o.value = l.id; o.textContent = l.name + (l.season ? ' (' + l.season + ')' : ''); sel.appendChild(o);
+                const row = elx('div', 'admin-evrow');
+                row.appendChild(elx('span', 'ev-name', l.name + (l.season ? ' · ' + l.season : '') + (l.format ? ' · ' + l.format : '')));
+                const del = elx('button', 'admin-btn danger', 'Delete');
+                del.addEventListener('click', async () => { if (!confirm('Delete league “' + l.name + '”?')) return; const r = await adminApi('/admin/leagues/' + l.id, { method: 'DELETE' }); if (r.ok) { adminMsg('Deleted league', true); adminLoadLeagues(); } });
+                row.appendChild(del);
+                list.appendChild(row);
+            });
+        }
+        async function adminAddLeague(e) {
+            e.preventDefault();
+            const body = { name: $('lgName').value.trim(), season: $('lgSeason').value.trim() || null, format: $('lgFormat').value || null };
+            if (!body.name) { adminMsg('League name required', false); return; }
+            const r = await adminApi('/admin/leagues', { method: 'POST', body });
+            if (r.ok) { adminMsg('Added league “' + body.name + '”', true); $('adminLeagueForm').reset(); adminLoadLeagues(); }
+            else adminMsg('Add league failed (' + r.status + ')', false);
+        }
+
         function initAdmin() {
             if (adminInited) { adminLoadEvents(); adminLoadCourses(); return; }
             adminInited = true;
@@ -869,8 +908,10 @@
             $('scEvent').addEventListener('change', scOnEventChange);
             $('scStartBtn').addEventListener('click', scStart);
             $('scFinalizeBtn').addEventListener('click', scFinalize);
+            $('adminLeagueForm').addEventListener('submit', adminAddLeague);
             adminLoadEvents();
             adminLoadCourses();
+            adminLoadLeagues();
         }
 
         // Kick off the auth gate on load.

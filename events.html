@@ -164,6 +164,12 @@
         .lb-topar.over { color: var(--primary); }
         .lb-empty { color: var(--text-muted); padding: 0.75rem 0; font-style: italic; }
         .res-chips { font-size: 0.8rem; color: var(--text-muted); }
+        #leaguesSection { margin-bottom: 1.5rem; }
+        .leagues-grid { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); margin-top: 0.75rem; }
+        .league-card { text-align: left; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; cursor: pointer; display: flex; flex-direction: column; gap: 0.25rem; transition: border-color .15s, transform .15s; font: inherit; }
+        .league-card:hover { border-color: var(--secondary); transform: translateY(-2px); }
+        .league-name { font-weight: 700; color: var(--text-primary); }
+        .league-meta { font-size: 0.8rem; color: var(--text-muted); }
         @keyframes lbflash { from { background: rgba(255,107,53,0.18); } to { background: transparent; } }
         .lb-table tbody tr.lb-upd td { animation: lbflash 0.9s ease-out; }
 
@@ -229,6 +235,9 @@
             <div class="spinner"></div>
             <div>Loading events&hellip;</div>
         </div>
+
+        <!-- Leagues & standings (shown with the hub) -->
+        <div id="leaguesSection" hidden></div>
 
         <!-- Hub view (live / upcoming / past sections) -->
         <div id="hub" hidden></div>
@@ -301,6 +310,7 @@
 
         const statusEl = document.getElementById('status');
         const hubEl = document.getElementById('hub');
+        const leaguesEl = document.getElementById('leaguesSection');
         const detailEl = document.getElementById('detail');
         const lastUpdatedEl = document.getElementById('lastUpdated');
 
@@ -344,6 +354,7 @@
         function setView(which) {
             statusEl.hidden = which !== 'status';
             hubEl.hidden = which !== 'hub';
+            leaguesEl.hidden = which !== 'hub';
             detailEl.hidden = which !== 'detail';
         }
 
@@ -476,11 +487,109 @@
                 await ensureCourses();
                 const data = await fetchJson('/events');
                 renderHub(data && data.events);
+                loadLeaguesList(); // best-effort; standings live behind each league
             } catch (_err) {
                 hubEl.replaceChildren();
                 lastUpdatedEl.hidden = true;
                 showStatus('We couldn’t load events right now. Please try again.', true, loadHub);
             }
+        }
+
+        // ---------- LEAGUES & STANDINGS (Phase 4) ----------
+        async function loadLeaguesList() {
+            let leagues = [];
+            try { const d = await fetchJson('/leagues'); leagues = (d && d.leagues) || []; } catch (_e) {}
+            leaguesEl.replaceChildren();
+            if (!leagues.length) return; // no leagues -> nothing shown
+            leaguesEl.appendChild(el('h2', 'events-section-title', 'Leagues & Standings'));
+            const wrap = el('div', 'leagues-grid');
+            leagues.forEach((l) => {
+                const card = el('button', 'league-card');
+                card.type = 'button';
+                card.appendChild(el('span', 'league-name', l.name));
+                const meta = [l.season, l.format].filter(Boolean).join(' · ');
+                if (meta) card.appendChild(el('span', 'league-meta', meta));
+                card.addEventListener('click', () => { window.location.hash = `#league/${encodeURIComponent(l.id)}`; });
+                wrap.appendChild(card);
+            });
+            leaguesEl.appendChild(wrap);
+        }
+
+        async function loadLeague(id) {
+            teardownLive();
+            showStatus('Loading league…', false);
+            try {
+                await ensureCourses();
+                const data = await fetchJson(`/leagues/${encodeURIComponent(id)}`);
+                if (!data || !data.league) { showStatus('That league could not be found.', true, () => { window.location.hash = ''; }); return; }
+                renderLeague(data);
+            } catch (_e) {
+                showStatus('We couldn’t load that league right now.', true, () => loadLeague(id));
+            }
+        }
+
+        function renderLeague(data) {
+            const lg = data.league, standings = data.standings || [], rounds = data.events || [];
+            detailEl.replaceChildren();
+            const backBtn = el('button', 'back-link', '← All events');
+            backBtn.type = 'button';
+            backBtn.addEventListener('click', () => { window.location.hash = ''; });
+            detailEl.appendChild(backBtn);
+
+            const card = el('div', 'detail-card');
+            const head = el('div', 'detail-head');
+            head.appendChild(el('h2', 'detail-title', lg.name));
+            const meta = [lg.season, lg.format].filter(Boolean).join(' · ');
+            if (meta) head.appendChild(badge(meta, 'type-badge'));
+            card.appendChild(head);
+            if (lg.description) card.appendChild(el('div', 'detail-notes', lg.description));
+
+            card.appendChild(el('h3', 'roster-title', 'Standings'));
+            if (!standings.length) {
+                card.appendChild(el('p', 'lb-empty', 'No finalized rounds yet — standings appear once rounds are scored.'));
+            } else {
+                const table = el('table', 'lb-table');
+                const thead = el('thead'); const htr = el('tr');
+                ['Pos', 'Player', 'Pts', 'Played', 'Wins', 'To Par'].forEach((h) => htr.appendChild(el('th', null, h)));
+                thead.appendChild(htr); table.appendChild(thead);
+                const tbody = el('tbody');
+                standings.forEach((s, i) => {
+                    const tr = el('tr');
+                    tr.appendChild(el('td', 'lb-pos', String(i + 1)));
+                    tr.appendChild(el('td', 'lb-name', s.name != null ? String(s.name) : 'Player'));
+                    tr.appendChild(el('td', null, String(s.points)));
+                    tr.appendChild(el('td', null, String(s.events)));
+                    tr.appendChild(el('td', null, String(s.wins)));
+                    const tp = el('td', 'lb-topar', fmtToPar(s.total_to_par));
+                    if (s.total_to_par < 0) tp.classList.add('under'); else if (s.total_to_par > 0) tp.classList.add('over');
+                    tr.appendChild(tp);
+                    tbody.appendChild(tr);
+                });
+                table.appendChild(tbody); card.appendChild(table);
+            }
+
+            const finals = rounds.filter((r) => r.status === 'final');
+            if (rounds.length) {
+                card.appendChild(el('h3', 'roster-title', `Rounds (${rounds.length})`));
+                const list = el('div', 'player-list');
+                rounds.forEach((ev) => {
+                    const row = el('button', 'player-row');
+                    row.type = 'button';
+                    row.style.cursor = 'pointer';
+                    row.appendChild(el('span', 'player-name', ev.name));
+                    if (ev.date) row.appendChild(el('span', 'player-pdga', ev.date));
+                    row.appendChild(el('span', 'player-team', statusLabel(ev.status)));
+                    row.addEventListener('click', () => { window.location.hash = `#event/${encodeURIComponent(ev.id)}`; });
+                    list.appendChild(row);
+                });
+                card.appendChild(list);
+                void finals;
+            }
+
+            detailEl.appendChild(card);
+            setView('detail');
+            lastUpdatedEl.hidden = true;
+            window.scrollTo(0, 0);
         }
 
         // ---------- DETAIL ----------
@@ -683,21 +792,20 @@
         }
 
         // ---------- ROUTING ----------
-        // Hash route: "#event/:id" -> detail; anything else -> hub.
+        // Hash route: "#event/:id" -> event detail; "#league/:id" -> league standings; else hub.
         function parseHash() {
-            const m = (window.location.hash || '').match(/^#event\/(.+)$/);
-            return m ? decodeURIComponent(m[1]) : null;
+            const h = window.location.hash || '';
+            let m = h.match(/^#event\/(.+)$/); if (m) return { view: 'event', id: decodeURIComponent(m[1]) };
+            m = h.match(/^#league\/(.+)$/); if (m) return { view: 'league', id: decodeURIComponent(m[1]) };
+            return null;
         }
 
         function route() {
             stopRefresh();
-            const id = parseHash();
-            if (id) {
-                loadDetail(id);
-            } else {
-                loadHub();
-                startRefresh();
-            }
+            const r = parseHash();
+            if (r && r.view === 'event') loadDetail(r.id);
+            else if (r && r.view === 'league') loadLeague(r.id);
+            else { loadHub(); startRefresh(); }
         }
 
         // Quiet ~60s background refresh while on the hub. Keeps current content
