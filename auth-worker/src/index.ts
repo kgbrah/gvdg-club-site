@@ -16,6 +16,7 @@ import * as db from "./db.js";
 import { EVENT_TYPES, EVENT_STATUSES, EVENT_FORMATS, type D1Like } from "./db.js";
 import { safeFetch, normalizeDgs, normalizeCsvEvents, parseCsvRows, parseUdiscLayout, ImportError } from "./imports.js";
 import { enrichHoles, type LayoutHole } from "./layouts.js";
+import { buildMessages, MAX_HISTORY, type ChatTurn } from "./assistant.js";
 
 // Default discgolfscene feed = the club scraper's committed tournaments.json.
 const DEFAULT_DGS_FEED = "https://raw.githubusercontent.com/mostlysober252/GVDG-DGS-Scraper-2.0/main/tournaments.json";
@@ -32,6 +33,9 @@ export interface Env {
   RP_ID?: string;
   RP_NAME?: string;
   EXPECTED_ORIGIN?: string;
+  // Cloudflare Workers AI binding (powers the "Crotts" assistant). Absent in local dev → stubbed.
+  AI?: { run(model: string, opts: { messages: { role: string; content: string }[]; max_tokens?: number }): Promise<{ response?: string }> };
+  ASSISTANT_MODEL?: string;
 }
 
 // A well-formed but unmatchable hash. Verifying a submitted PIN against this when the
@@ -311,6 +315,58 @@ function validEventInput(b: Record<string, unknown>): db.EventInput | null {
   };
 }
 
+// "Crotts" assistant. Public (no auth) but IP-throttled to bound Workers AI cost/abuse.
+const ASSISTANT_LIMIT = 20; // requests per IP per window
+const ASSISTANT_WINDOW = 60; // seconds
+const DEFAULT_MODEL = "@cf/meta/llama-3.1-8b-instruct";
+
+async function assistantRateLimited(env: Env, ip: string): Promise<boolean> {
+  const key = "asst:" + ip;
+  const cur = parseInt((await env.RATELIMIT.get(key)) || "0", 10) || 0;
+  if (cur >= ASSISTANT_LIMIT) return true;
+  await env.RATELIMIT.put(key, String(cur + 1), { expirationTtl: ASSISTANT_WINDOW });
+  return false;
+}
+
+async function handleAssistant(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const body = await readJson(request);
+  const message = typeof body?.message === "string" ? body.message.trim() : "";
+  if (!message) return json({ error: "invalid_request" }, 400, origin);
+  if (message.length > 2000) return json({ error: "message_too_long" }, 413, origin);
+
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  if (await assistantRateLimited(env, ip)) return json({ error: "rate_limited" }, 429, origin);
+
+  const history: ChatTurn[] = Array.isArray(body?.history)
+    ? body.history.slice(-MAX_HISTORY).filter((t: unknown): t is ChatTurn => !!t && typeof t === "object" && typeof (t as ChatTurn).content === "string")
+    : [];
+
+  // Live club context (best-effort — never fail the chat if D1 is unavailable).
+  let events: Record<string, unknown>[] = [];
+  let courses: Record<string, unknown>[] = [];
+  try { events = (await db.listEvents(env.DB, {})) as Record<string, unknown>[]; } catch { /* ignore */ }
+  try { courses = (await db.listCourses(env.DB)) as Record<string, unknown>[]; } catch { /* ignore */ }
+
+  const messages = buildMessages({
+    userMessage: message,
+    history,
+    events: events.map((e) => ({ name: String(e.name ?? ""), date: (e.date as string) ?? null, status: (e.status as string) ?? null })),
+    courses: courses.map((c) => ({ name: String(c.name ?? ""), location: (c.location as string) ?? null })),
+  });
+
+  if (!env.AI) {
+    // Local dev / no Workers AI binding: deterministic stub so the UI + plumbing are verifiable.
+    return json({ reply: "🥏 (dev stub) Hi, I'm Crotts! Workers AI isn't bound in this environment, so I can't think for real yet — but your message reached the worker and the club context loaded fine.", stub: true }, 200, origin);
+  }
+  try {
+    const out = await env.AI.run(env.ASSISTANT_MODEL || DEFAULT_MODEL, { messages, max_tokens: 512 });
+    const reply = (out && typeof out.response === "string" && out.response.trim()) || "Sorry, I couldn't come up with an answer just now.";
+    return json({ reply }, 200, origin);
+  } catch {
+    return json({ error: "assistant_unavailable" }, 502, origin);
+  }
+}
+
 /** Handles /courses, /events, /leagues (public reads) and /admin/* (admin writes). Returns null if not a club route. */
 async function clubApi(request: Request, env: Env, origin: string | null, pathname: string, method: string): Promise<Response | null> {
   const seg = pathname.split("/").filter(Boolean);
@@ -515,6 +571,7 @@ export default {
     if (pathname === "/me" && method === "GET") return handleMe(request, env, origin);
     if (pathname === "/set-pin" && method === "POST") return handleSetPin(request, env, origin);
     if (pathname === "/profile" && method === "POST") return handleProfile(request, env, origin);
+    if (pathname === "/assistant" && method === "POST") return handleAssistant(request, env, origin);
 
     // --- passkeys / WebAuthn ---
     if (pathname === "/webauthn/register/options" && method === "POST") {

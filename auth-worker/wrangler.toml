@@ -24,9 +24,16 @@ database_name = "gvdg"
 database_id = "REPLACE_WITH_D1_DATABASE_ID"
 migrations_dir = "migrations"
 
+# Workers AI powers the "Crotts" assistant (POST /assistant). No id needed — just the binding.
+# mostlysober252: this binding is free to declare; usage bills to the account's Workers AI quota.
+[ai]
+binding = "AI"
+
 [vars]
 ALLOWED_ORIGINS = "https://www.greenvillediscgolf.com,https://greenvillediscgolf.com"
 SESSION_TTL_SEC = "900"
+# Workers AI model for the Crotts assistant (override if desired).
+ASSISTANT_MODEL = "@cf/meta/llama-3.1-8b-instruct"
 # Passkeys / WebAuthn. RP_ID must be the registrable domain (covers the www subdomain);
 # EXPECTED_ORIGIN must exactly match the page origin the browser reports.
 RP_ID = "greenvillediscgolf.com"

@@ -1,0 +1,69 @@
+// "Crotts" — the GVDG club assistant. Pure prompt assembly (no AI/DOM/D1 here) so it's unit-testable.
+// The Worker route fetches club context (events/courses) from D1 and calls Workers AI with these messages.
+
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+export interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
+export const MAX_HISTORY = 8; // most-recent conversation turns kept (excludes the new user message)
+export const MAX_CONTENT = 1500; // per-message character cap
+const MAX_CTX_EVENTS = 8;
+const MAX_CTX_COURSES = 30;
+
+const PERSONA = [
+  "You are Crotts, the friendly assistant for the Greenville Disc Golf Club (GVDG) in Greenville, NC.",
+  "You are named after Max Crotts, a longtime club officer. Be warm, concise, and helpful, with a little disc-golf enthusiasm.",
+  "Help visitors with club info, disc golf questions, and using the website. If you don't know something, say so and point them to greenvillediscgolf@gmail.com.",
+  "Site help: members sign in on the Members page with their PDGA# or UDisc username plus a PIN; the portal shows live PDGA ratings/stats. Donations go through PayPal to @greenvillediscgolf. The Ryder Cup page tracks the club's signature event.",
+  "Keep answers short (a few sentences). Never invent events, dates, or results that aren't in the context below.",
+].join(" ");
+
+function clip(s: string): string {
+  return s.length > MAX_CONTENT ? s.slice(0, MAX_CONTENT) : s;
+}
+
+function clubContext(
+  events: { name: string; date?: string | null; status?: string | null }[],
+  courses: { name: string; location?: string | null }[],
+): string {
+  const lines: string[] = [];
+  const upcoming = (events ?? []).filter((e) => e && e.name && e.status !== "cancelled").slice(0, MAX_CTX_EVENTS);
+  if (upcoming.length) {
+    lines.push("Upcoming/recent club events:");
+    upcoming.forEach((e) => lines.push(`- ${e.name}${e.date ? " (" + e.date + ")" : ""}${e.status ? " [" + e.status + "]" : ""}`));
+  } else {
+    lines.push("There are no upcoming club events currently scheduled in the system.");
+  }
+  const cs = (courses ?? []).filter((c) => c && c.name).slice(0, MAX_CTX_COURSES);
+  if (cs.length) {
+    lines.push("", "Courses the club plays:");
+    cs.forEach((c) => lines.push(`- ${c.name}${c.location ? " — " + c.location : ""}`));
+  }
+  return lines.join("\n");
+}
+
+/** Assemble the Workers AI `messages` array: Crotts system prompt (persona + live club context),
+ *  then the capped/sanitized prior turns, then the new user message last. */
+export function buildMessages(opts: {
+  userMessage: string;
+  history?: ChatTurn[];
+  events?: { name: string; date?: string | null; status?: string | null }[];
+  courses?: { name: string; location?: string | null }[];
+}): ChatMessage[] {
+  const system = `${PERSONA}\n\n--- Current club context ---\n${clubContext(opts.events ?? [], opts.courses ?? [])}`;
+  const msgs: ChatMessage[] = [{ role: "system", content: system }];
+
+  const clean = (opts.history ?? [])
+    .filter((t): t is ChatTurn => !!t && (t.role === "user" || t.role === "assistant") && typeof t.content === "string" && t.content.trim() !== "")
+    .slice(-MAX_HISTORY)
+    .map((t) => ({ role: t.role, content: clip(t.content.trim()) }));
+  msgs.push(...clean);
+
+  msgs.push({ role: "user", content: clip(opts.userMessage.trim()) });
+  return msgs;
+}
