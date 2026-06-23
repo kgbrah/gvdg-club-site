@@ -170,6 +170,16 @@
         .league-card:hover { border-color: var(--secondary); transform: translateY(-2px); }
         .league-name { font-weight: 700; color: var(--text-primary); }
         .league-meta { font-size: 0.8rem; color: var(--text-muted); }
+        #fundraisersSection { margin-bottom: 1.5rem; }
+        .fundraiser-card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.25rem 1.5rem; margin-top: 0.75rem; }
+        .fundraiser-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 0.03em; color: var(--text-primary); margin-bottom: 0.5rem; }
+        .fr-bar { height: 12px; background: var(--bg-tertiary); border-radius: 999px; overflow: hidden; margin: 0.25rem 0; }
+        .fr-bar-fill { height: 100%; background: linear-gradient(90deg, #2e9e44, #25c05a); border-radius: 999px; }
+        .fr-progress { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem; }
+        .fundraiser-body { color: var(--text-secondary); line-height: 1.6; }
+        .fundraiser-body p { margin: 0.5rem 0; } .fundraiser-body ul { margin: 0.5rem 0 0.5rem 1.25rem; }
+        .donate-btn { display: inline-block; margin-top: 0.75rem; background: #2e9e44; color: #fff; padding: 0.6rem 1.25rem; border-radius: 10px; font-weight: 700; text-decoration: none; }
+        .donate-btn:hover { background: #25883a; }
         @keyframes lbflash { from { background: rgba(255,107,53,0.18); } to { background: transparent; } }
         .lb-table tbody tr.lb-upd td { animation: lbflash 0.9s ease-out; }
 
@@ -236,7 +246,8 @@
             <div>Loading events&hellip;</div>
         </div>
 
-        <!-- Leagues & standings (shown with the hub) -->
+        <!-- Fundraisers + Leagues & standings (shown with the hub) -->
+        <div id="fundraisersSection" hidden></div>
         <div id="leaguesSection" hidden></div>
 
         <!-- Hub view (live / upcoming / past sections) -->
@@ -311,6 +322,7 @@
         const statusEl = document.getElementById('status');
         const hubEl = document.getElementById('hub');
         const leaguesEl = document.getElementById('leaguesSection');
+        const fundraisersEl = document.getElementById('fundraisersSection');
         const detailEl = document.getElementById('detail');
         const lastUpdatedEl = document.getElementById('lastUpdated');
 
@@ -355,6 +367,7 @@
             statusEl.hidden = which !== 'status';
             hubEl.hidden = which !== 'hub';
             leaguesEl.hidden = which !== 'hub';
+            fundraisersEl.hidden = which !== 'hub';
             detailEl.hidden = which !== 'detail';
         }
 
@@ -488,11 +501,69 @@
                 const data = await fetchJson('/events');
                 renderHub(data && data.events);
                 loadLeaguesList(); // best-effort; standings live behind each league
+                loadFundraisers();
             } catch (_err) {
                 hubEl.replaceChildren();
                 lastUpdatedEl.hidden = true;
                 showStatus('We couldn’t load events right now. Please try again.', true, loadHub);
             }
+        }
+
+        // ---------- Safe markdown (XSS-safe: textContent + createElement only; http(s) links only) ----------
+        function appendInline(parent, text) {
+            const re = /\*\*([^*]+)\*\*|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g;
+            let last = 0, m;
+            while ((m = re.exec(text)) !== null) {
+                if (m.index > last) parent.appendChild(document.createTextNode(text.slice(last, m.index)));
+                if (m[1] != null) { const s = document.createElement('strong'); s.textContent = m[1]; parent.appendChild(s); }
+                else { const a = document.createElement('a'); a.href = m[3]; a.textContent = m[2]; a.target = '_blank'; a.rel = 'noopener noreferrer'; parent.appendChild(a); }
+                last = re.lastIndex;
+            }
+            if (last < text.length) parent.appendChild(document.createTextNode(text.slice(last)));
+        }
+        function safeMd(md, container) {
+            container.replaceChildren();
+            String(md || '').split(/\n\s*\n/).forEach((block) => {
+                const lines = block.split('\n').filter((l) => l.trim() !== '');
+                if (!lines.length) return;
+                if (lines.every((l) => /^\s*-\s+/.test(l))) {
+                    const ul = document.createElement('ul');
+                    lines.forEach((l) => { const li = document.createElement('li'); appendInline(li, l.replace(/^\s*-\s+/, '')); ul.appendChild(li); });
+                    container.appendChild(ul);
+                } else if (/^#{1,3}\s+/.test(lines[0])) {
+                    const h = document.createElement('h4'); appendInline(h, lines[0].replace(/^#{1,3}\s+/, '')); container.appendChild(h);
+                    if (lines.length > 1) { const p = document.createElement('p'); appendInline(p, lines.slice(1).join('\n')); container.appendChild(p); }
+                } else {
+                    const p = document.createElement('p');
+                    lines.forEach((l, i) => { if (i) p.appendChild(document.createElement('br')); appendInline(p, l); });
+                    container.appendChild(p);
+                }
+            });
+        }
+
+        // ---------- FUNDRAISERS (Phase 4, public) ----------
+        async function loadFundraisers() {
+            let items = [];
+            try { const d = await fetchJson('/fundraisers'); items = (d && d.fundraisers) || []; } catch (_e) {}
+            const active = items.filter((f) => f.status === 'active');
+            fundraisersEl.replaceChildren();
+            if (!active.length) return;
+            fundraisersEl.appendChild(el('h2', 'events-section-title', 'Fundraisers'));
+            active.forEach((f) => {
+                const card = el('div', 'fundraiser-card');
+                card.appendChild(el('h3', 'fundraiser-title', f.title));
+                if (f.goal_cents) {
+                    const pct = Math.max(0, Math.min(100, Math.round(((f.raised_cents || 0) / f.goal_cents) * 100)));
+                    const bar = el('div', 'fr-bar'); const fill = el('div', 'fr-bar-fill'); fill.style.width = pct + '%'; bar.appendChild(fill);
+                    card.appendChild(bar);
+                    card.appendChild(el('div', 'fr-progress', '$' + ((f.raised_cents || 0) / 100).toLocaleString() + ' of $' + (f.goal_cents / 100).toLocaleString() + ' (' + pct + '%)'));
+                }
+                if (f.body_md) { const body = el('div', 'fundraiser-body'); safeMd(f.body_md, body); card.appendChild(body); }
+                const url = sanitizeUrl(f.paypal_url) ? f.paypal_url : 'https://paypal.me/greenvillediscgolf';
+                const donate = safeLink(url, '💚 Donate'); donate.className = 'donate-btn';
+                card.appendChild(donate);
+                fundraisersEl.appendChild(card);
+            });
         }
 
         // ---------- LEAGUES & STANDINGS (Phase 4) ----------

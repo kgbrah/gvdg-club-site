@@ -210,6 +210,8 @@
                 <button type="button" class="admin-tab" data-atab="layouts">Layouts</button>
                 <button type="button" class="admin-tab" data-atab="scoring">Live Scoring</button>
                 <button type="button" class="admin-tab" data-atab="leagues-mgmt">Leagues</button>
+                <button type="button" class="admin-tab" data-atab="fundraisers">Fundraisers</button>
+                <button type="button" class="admin-tab" data-atab="meetings">Meetings</button>
             </div>
             <div class="admin-msg" id="adminMsg"></div>
             <div class="admin-pane active" id="apane-events"><div id="adminEventsList">Loading…</div></div>
@@ -319,6 +321,26 @@
                 </form>
                 <p class="al-note" style="margin-top:0.5rem;">Assign <strong>league round</strong> events to a league on the New Event tab; finalized rounds roll up into the league standings automatically.</p>
                 <div id="adminLeaguesList" style="margin-top:1rem;"></div>
+            </div>
+            <div class="admin-pane" id="apane-fundraisers">
+                <form class="admin-form" id="adminFundraiserForm">
+                    <div><label for="frTitle">Title</label><input id="frTitle" maxlength="200" required></div>
+                    <div><label for="frGoal">Goal ($)</label><input id="frGoal" type="number" min="0" step="1"></div>
+                    <div><label for="frPaypal">PayPal URL (https)</label><input id="frPaypal" type="url" maxlength="1000" placeholder="https://paypal.me/greenvillediscgolf"></div>
+                    <div style="grid-column:1/-1;"><label for="frBody">Description (markdown: **bold**, - bullets, [link](https://…))</label><textarea id="frBody" rows="4"></textarea></div>
+                    <button type="submit" class="admin-btn">Add fundraiser</button>
+                </form>
+                <div id="adminFundraisersList" style="margin-top:1rem;"></div>
+            </div>
+            <div class="admin-pane" id="apane-meetings">
+                <form class="admin-form" id="adminMeetingForm">
+                    <div><label for="mtDate">Date</label><input id="mtDate" type="date" required></div>
+                    <div><label for="mtTitle">Title</label><input id="mtTitle" maxlength="200" required></div>
+                    <div style="grid-column:1/-1;"><label for="mtMinutes">Minutes (markdown)</label><textarea id="mtMinutes" rows="5"></textarea></div>
+                    <div style="grid-column:1/-1;"><label for="mtActions">Action items (one per line)</label><textarea id="mtActions" rows="3"></textarea></div>
+                    <button type="submit" class="admin-btn">Add meeting</button>
+                </form>
+                <div id="adminMeetingsList" style="margin-top:1rem;"></div>
             </div>
         </div>
 
@@ -460,6 +482,8 @@
             document.querySelectorAll('.admin-pane').forEach((p) => p.classList.toggle('active', p.id === 'apane-' + tab));
             if (tab === 'scoring') scLoadEvents();
             if (tab === 'leagues-mgmt') adminLoadLeagues();
+            if (tab === 'fundraisers') adminLoadFundraisers();
+            if (tab === 'meetings') adminLoadMeetings();
         }
 
         async function adminLoadCourses() {
@@ -891,6 +915,59 @@
             else adminMsg('Add league failed (' + r.status + ')', false);
         }
 
+        // ---- Fundraisers management (Phase 4) ----
+        async function adminLoadFundraisers() {
+            let items = [];
+            try { const r = await api('/fundraisers'); if (r.ok) items = (await r.json()).fundraisers || []; } catch (e) {}
+            const list = $('adminFundraisersList'); list.textContent = '';
+            if (!items.length) { list.appendChild(elx('p', 'al-note', 'No fundraisers yet.')); }
+            items.forEach((f) => {
+                const row = elx('div', 'admin-evrow');
+                const goal = f.goal_cents != null ? ' · goal $' + (f.goal_cents / 100) : '';
+                row.appendChild(elx('span', 'ev-name', f.title + ' [' + f.status + ']' + goal));
+                const close = elx('button', 'admin-btn secondary', f.status === 'active' ? 'Close' : 'Reopen');
+                close.addEventListener('click', async () => { const r = await adminApi('/admin/fundraisers/' + f.id, { method: 'PATCH', body: { status: f.status === 'active' ? 'closed' : 'active' } }); if (r.ok) { adminMsg('Updated', true); adminLoadFundraisers(); } });
+                const del = elx('button', 'admin-btn danger', 'Delete');
+                del.addEventListener('click', async () => { if (!confirm('Delete fundraiser “' + f.title + '”?')) return; const r = await adminApi('/admin/fundraisers/' + f.id, { method: 'DELETE' }); if (r.ok) { adminMsg('Deleted', true); adminLoadFundraisers(); } });
+                row.appendChild(close); row.appendChild(del);
+                list.appendChild(row);
+            });
+        }
+        async function adminAddFundraiser(e) {
+            e.preventDefault();
+            const goal = $('frGoal').value ? Math.round(Number($('frGoal').value) * 100) : null;
+            const body = { title: $('frTitle').value.trim(), body_md: $('frBody').value.trim() || null, goal_cents: goal, paypal_url: $('frPaypal').value.trim() || null, status: 'active' };
+            if (!body.title) { adminMsg('Title required', false); return; }
+            const r = await adminApi('/admin/fundraisers', { method: 'POST', body });
+            if (r.ok) { adminMsg('Added fundraiser', true); $('adminFundraiserForm').reset(); adminLoadFundraisers(); }
+            else adminMsg('Add failed (' + r.status + ')', false);
+        }
+
+        // ---- Meetings management (Phase 4) ----
+        async function adminLoadMeetings() {
+            let items = [];
+            try { const r = await api('/meetings'); if (r.ok) items = (await r.json()).meetings || []; } catch (e) {}
+            const list = $('adminMeetingsList'); list.textContent = '';
+            if (!items.length) { list.appendChild(elx('p', 'al-note', 'No meetings yet.')); }
+            items.forEach((m) => {
+                const row = elx('div', 'admin-evrow');
+                row.appendChild(elx('span', 'ev-name', (m.date || '') + ' · ' + m.title));
+                const del = elx('button', 'admin-btn danger', 'Delete');
+                del.addEventListener('click', async () => { if (!confirm('Delete meeting “' + m.title + '”?')) return; const r = await adminApi('/admin/meetings/' + m.id, { method: 'DELETE' }); if (r.ok) { adminMsg('Deleted', true); adminLoadMeetings(); } });
+                row.appendChild(del);
+                list.appendChild(row);
+            });
+        }
+        async function adminAddMeeting(e) {
+            e.preventDefault();
+            const actions = $('mtActions').value.split('\n').map((s) => s.trim()).filter(Boolean);
+            const body = { date: $('mtDate').value, title: $('mtTitle').value.trim(), minutes_md: $('mtMinutes').value.trim() || null, action_items: actions };
+            if (!body.date || !body.title) { adminMsg('Date and title required', false); return; }
+            const r = await adminApi('/admin/meetings', { method: 'POST', body });
+            if (r.ok) { adminMsg('Added meeting', true); $('adminMeetingForm').reset(); adminLoadMeetings(); }
+            else adminMsg('Add failed (' + r.status + ')', false);
+        }
+
         function initAdmin() {
             if (adminInited) { adminLoadEvents(); adminLoadCourses(); return; }
             adminInited = true;
@@ -909,6 +986,8 @@
             $('scStartBtn').addEventListener('click', scStart);
             $('scFinalizeBtn').addEventListener('click', scFinalize);
             $('adminLeagueForm').addEventListener('submit', adminAddLeague);
+            $('adminFundraiserForm').addEventListener('submit', adminAddFundraiser);
+            $('adminMeetingForm').addEventListener('submit', adminAddMeeting);
             adminLoadEvents();
             adminLoadCourses();
             adminLoadLeagues();
