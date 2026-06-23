@@ -526,6 +526,10 @@
                         <div id="dashEventsList"></div>
                     </div>
                 </div>
+                <div id="clubHistory" style="display:none;">
+                    <h4 class="dash-subtitle">🥏 GVDG Event History</h4>
+                    <div id="clubHistoryList"></div>
+                </div>
             </div>
 
             <div class="members-stats-grid">
@@ -911,9 +915,36 @@
             wrap.style.display = '';
         }
 
+        // ---- Club event history (Phase 3 R1): the member's finalized GVDG results ----
+        function fmtClubToPar(n) { n = n || 0; return n === 0 ? 'E' : (n > 0 ? '+' + n : String(n)); }
+        async function loadClubHistory() {
+            const wrap = $('clubHistory'), list = $('clubHistoryList');
+            const token = sessionStorage.getItem(TOKEN_KEY);
+            if (!token) { wrap.style.display = 'none'; return; }
+            let results = [];
+            try { const r = await api('/my-results', { token }); if (r.ok) results = (await r.json()).results || []; } catch (_e) {}
+            list.textContent = '';
+            if (!results.length) { wrap.style.display = 'none'; return; }
+            results.forEach((res) => {
+                const row = document.createElement('div'); row.className = 'dash-event';
+                const left = document.createElement('div');
+                const name = document.createElement('div'); name.className = 'dash-event-name';
+                name.textContent = (res.place != null ? '#' + res.place + ' · ' : '') + (res.event_name || 'Event');
+                const date = document.createElement('div'); date.className = 'dash-event-date';
+                date.textContent = (res.event_date || '') + (res.total != null ? ' • ' + res.total + ' (' + fmtClubToPar(res.to_par) + ')' : '');
+                left.appendChild(name); left.appendChild(date);
+                const score = document.createElement('div'); score.className = 'dash-event-ratings';
+                score.textContent = res.to_par != null ? fmtClubToPar(res.to_par) : '—';
+                row.appendChild(left); row.appendChild(score);
+                list.appendChild(row);
+            });
+            wrap.style.display = '';
+        }
+
         async function loadDashboard() {
             const loading = $('dashLoading'), empty = $('dashEmpty'), body = $('dashBody');
             $('myDashboard').style.display = '';
+            loadClubHistory(); // GVDG results are keyed by memberId, so they show even without a PDGA#
             loading.style.display = ''; empty.style.display = 'none'; body.style.display = 'none';
             const avatar = $('dashAvatar');
             const showAvatar = (url) => {

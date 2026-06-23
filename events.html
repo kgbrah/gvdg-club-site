@@ -163,6 +163,7 @@
         .lb-topar.under { color: #2e9e44; }
         .lb-topar.over { color: var(--primary); }
         .lb-empty { color: var(--text-muted); padding: 0.75rem 0; font-style: italic; }
+        .res-chips { font-size: 0.8rem; color: var(--text-muted); }
         @keyframes lbflash { from { background: rgba(255,107,53,0.18); } to { background: transparent; } }
         .lb-table tbody tr.lb-upd td { animation: lbflash 0.9s ease-out; }
 
@@ -544,6 +545,39 @@
             } catch (_e) { startPolling(); }
         }
 
+        // ---- Final results (R2 / club archive): rendered for finalized events ----
+        function fmtBreakdown(raw) {
+            let b = {}; try { b = JSON.parse(raw || '{}') || {}; } catch (_e) {}
+            const parts = [];
+            const add = (n, label) => { if (b[n]) parts.push(b[n] + ' ' + label + (b[n] > 1 ? 's' : '')); };
+            add('aces', 'ace'); add('eagles', 'eagle'); add('birdies', 'birdie'); add('pars', 'par'); add('bogeys', 'bogey'); add('doubles_plus', 'dbl+');
+            return parts.join(' · ');
+        }
+        async function renderFinalResults(eventId, container) {
+            let results = [];
+            try { const d = await fetchJson(`/events/${encodeURIComponent(eventId)}/results`); results = (d && d.results) || []; } catch (_e) {}
+            container.replaceChildren();
+            container.appendChild(el('h3', 'roster-title', 'Final results'));
+            if (!results.length) { container.appendChild(el('p', 'lb-empty', 'Results not posted yet.')); return; }
+            const table = el('table', 'lb-table');
+            const thead = el('thead'); const htr = el('tr');
+            ['Pos', 'Player', 'Total', 'To Par', 'Scoring'].forEach((h) => htr.appendChild(el('th', null, h)));
+            thead.appendChild(htr); table.appendChild(thead);
+            const tbody = el('tbody');
+            results.forEach((r) => {
+                const tr = el('tr');
+                tr.appendChild(el('td', 'lb-pos', r.place != null ? String(r.place) : '—'));
+                tr.appendChild(el('td', 'lb-name', r.name != null ? String(r.name) : 'Player'));
+                tr.appendChild(el('td', null, r.total != null ? String(r.total) : '—'));
+                const tp = el('td', 'lb-topar', r.to_par != null ? fmtToPar(r.to_par) : '—');
+                if (r.to_par < 0) tp.classList.add('under'); else if (r.to_par > 0) tp.classList.add('over');
+                tr.appendChild(tp);
+                tr.appendChild(el('td', 'res-chips', fmtBreakdown(r.breakdown)));
+                tbody.appendChild(tr);
+            });
+            table.appendChild(tbody); container.appendChild(table);
+        }
+
         function renderDetail(rawEvent) {
             const ev = normalizeEvent(rawEvent);
             detailEl.replaceChildren();
@@ -572,6 +606,10 @@
                 const lb = el('div', 'lb-wrap');
                 card.appendChild(lb);
                 mountLiveLeaderboard(ev.id, lb, conn);
+            } else if (ev.status === 'final') {
+                const rwrap = el('div', 'lb-wrap');
+                card.appendChild(rwrap);
+                renderFinalResults(ev.id, rwrap);
             }
 
             const facts = el('div', 'detail-facts');

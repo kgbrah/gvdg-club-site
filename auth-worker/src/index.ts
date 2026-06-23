@@ -183,6 +183,13 @@ async function handleMe(request: Request, env: Env, origin: string | null): Prom
   );
 }
 
+// A member's own GVDG event history (results from finalized club events) — for the dashboard.
+async function handleMyResults(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const claims = await requireAuth(request, env);
+  if (!claims) return json({ error: "unauthorized" }, 401, origin);
+  return json({ results: await db.listMemberResults(env.DB, claims.sub) }, 200, origin);
+}
+
 // Self-service profile fields a member may add when they couldn't be auto-matched.
 const MAX_PHOTO_LEN = 200_000; // ~150KB of base64 — small avatar only
 function validPhoto(p: string): boolean {
@@ -468,6 +475,10 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
     }
     return json({ error: "not_found" }, 404, origin);
   }
+  if (method === "GET" && seg[0] === "events" && seg.length === 3 && seg[2] === "results") {
+    const eid = asInt(seg[1]); // public: final results for a past event (club archive)
+    return eid == null ? json({ error: "not_found" }, 404, origin) : json({ results: await db.listResults(env.DB, eid) }, 200, origin);
+  }
   if (method === "GET" && seg[0] === "courses" && seg.length === 3 && (seg[2] === "layouts" || seg[2] === "positions")) {
     const cid = asInt(seg[1]);
     if (cid == null) return json({ error: "not_found" }, 404, origin);
@@ -664,6 +675,7 @@ export default {
     if (!secretOk(env)) return json({ error: "server_misconfigured" }, 500, origin);
     if (pathname === "/login" && method === "POST") return handleLogin(request, env, origin);
     if (pathname === "/me" && method === "GET") return handleMe(request, env, origin);
+    if (pathname === "/my-results" && method === "GET") return handleMyResults(request, env, origin);
     if (pathname === "/set-pin" && method === "POST") return handleSetPin(request, env, origin);
     if (pathname === "/profile" && method === "POST") return handleProfile(request, env, origin);
     if (pathname === "/assistant" && method === "POST") return handleAssistant(request, env, origin);
