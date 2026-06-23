@@ -394,35 +394,37 @@
             <p class="login-subtitle">Log in with your PDGA&nbsp;# or UDisc username and your PIN.</p>
 
             <!-- Login -->
-            <div class="login-form" id="loginForm">
+            <form class="login-form" id="loginForm" autocomplete="on">
                 <div class="form-group">
                     <label class="form-label" for="identifierInput">PDGA # or UDisc Username</label>
-                    <input type="text" class="form-input" id="identifierInput" autocomplete="username" placeholder="e.g. 12345 or your UDisc handle">
+                    <input type="text" class="form-input" id="identifierInput" name="identifier" autocomplete="username" placeholder="e.g. 12345 or your UDisc handle">
                     <p class="form-hint">Whichever you registered with the club</p>
                 </div>
                 <div class="form-group">
                     <label class="form-label" for="pinInput">PIN</label>
-                    <input type="password" class="form-input" id="pinInput" inputmode="numeric" autocomplete="current-password" maxlength="4" placeholder="4-digit PIN">
+                    <input type="password" class="form-input" id="pinInput" name="pin" inputmode="numeric" autocomplete="current-password" maxlength="4" placeholder="4-digit PIN">
                     <p class="form-hint">New members: use the temporary PIN from an admin</p>
                 </div>
-                <button class="login-btn" id="loginBtn">Log In</button>
+                <button type="submit" class="login-btn" id="loginBtn">Log In</button>
                 <div class="login-error" id="loginError"></div>
-            </div>
+                <div class="login-divider"><span>or</span></div>
+                <button type="button" class="login-btn login-btn-secondary" id="passkeyBtn">🔑 Log in with a passkey</button>
+            </form>
 
             <!-- Forced PIN change on first login -->
-            <div class="login-form" id="pinChangeForm" style="display:none;">
+            <form class="login-form" id="pinChangeForm" autocomplete="on" style="display:none;">
                 <p class="login-subtitle">You're using a temporary PIN. Choose your own to continue.</p>
                 <div class="form-group">
                     <label class="form-label" for="newPinInput">New PIN</label>
-                    <input type="password" class="form-input" id="newPinInput" inputmode="numeric" autocomplete="new-password" maxlength="4" placeholder="Choose a 4-digit PIN">
+                    <input type="password" class="form-input" id="newPinInput" name="new-pin" inputmode="numeric" autocomplete="new-password" maxlength="4" placeholder="Choose a 4-digit PIN">
                 </div>
                 <div class="form-group">
                     <label class="form-label" for="confirmPinInput">Confirm PIN</label>
-                    <input type="password" class="form-input" id="confirmPinInput" inputmode="numeric" autocomplete="new-password" maxlength="4" placeholder="Re-enter your PIN">
+                    <input type="password" class="form-input" id="confirmPinInput" name="confirm-pin" inputmode="numeric" autocomplete="new-password" maxlength="4" placeholder="Re-enter your PIN">
                 </div>
-                <button class="login-btn" id="setPinBtn">Save PIN &amp; Continue</button>
+                <button type="submit" class="login-btn" id="setPinBtn">Save PIN &amp; Continue</button>
                 <div class="login-error" id="pinChangeError"></div>
-            </div>
+            </form>
 
             <a href="index.html" class="back-link">← Back to main site</a>
         </div>
@@ -459,9 +461,23 @@
                 .dash-event-name { font-weight: 600; color: var(--text-primary); }
                 .dash-event-date { font-size: 0.8rem; color: var(--text-muted); }
                 .dash-event-ratings { font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; color: var(--secondary); }
+                .passkey-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+                .passkey-btn { background: transparent; border: 1px solid var(--secondary); color: var(--secondary); padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background 0.15s ease, color 0.15s ease; }
+                .passkey-btn:hover { background: var(--secondary); color: #fff; }
+                .passkey-btn:disabled { opacity: 0.6; cursor: default; }
+                .passkey-status { font-size: 0.85rem; color: var(--text-muted); }
+                .login-divider { display: flex; align-items: center; text-align: center; color: var(--text-muted); font-size: 0.8rem; margin: 0.75rem 0; }
+                .login-divider::before, .login-divider::after { content: ''; flex: 1; border-bottom: 1px solid var(--border-color); }
+                .login-divider span { padding: 0 0.75rem; }
+                .login-btn-secondary { background: transparent; border: 1px solid var(--secondary); color: var(--secondary); margin-top: 0; }
+                .login-btn-secondary:hover { background: var(--secondary); color: #fff; }
             </style>
             <div id="myDashboard" class="my-dashboard" style="display:none;">
                 <h3 class="my-dashboard-title">📊 My Player Dashboard</h3>
+                <div class="passkey-row" id="passkeyRow" style="display:none;">
+                    <button type="button" class="passkey-btn" id="enablePasskeyBtn">🔑 Add a passkey for faster login</button>
+                    <span class="passkey-status" id="passkeyStatus"></span>
+                </div>
                 <div id="dashLoading" class="dash-note">Loading your stats…</div>
                 <div id="dashEmpty" class="dash-note" style="display:none;"></div>
                 <div id="dashBody" style="display:none;">
@@ -787,6 +803,11 @@
             $('membersContent').classList.remove('active');
             $('loginForm').style.display = '';
             $('pinChangeForm').style.display = 'none';
+            // Hide the passkey login option (and its divider) where WebAuthn isn't available.
+            const show = passkeysSupported();
+            $('passkeyBtn').style.display = show ? '' : 'none';
+            const divider = document.querySelector('#loginForm .login-divider');
+            if (divider) divider.style.display = show ? '' : 'none';
         }
         function showPinChange() {
             $('loginGate').style.display = 'flex';
@@ -804,6 +825,10 @@
             if (banner && name) banner.textContent = 'Welcome back, ' + name + '!';
             if (!membersInitialized) { initMembersPage(); initDoublesLeague(); membersInitialized = true; }
             loadDashboard();
+            if (passkeysSupported()) {
+                $('passkeyRow').style.display = '';
+                $('passkeyStatus').textContent = '';
+            }
         }
 
         function logout() {
@@ -875,6 +900,101 @@
             setText('dashDelta', delta != null ? (delta >= 0 ? '+' + delta + ' vs official' : delta + ' vs official') : '');
             renderEvents(events);
             loading.style.display = 'none'; body.style.display = '';
+        }
+
+        // ---- Passkeys / WebAuthn (opt-in) ----
+        const passkeysSupported = () => typeof window.PublicKeyCredential !== 'undefined';
+
+        function b64urlToBuf(s) {
+            s = String(s).replace(/-/g, '+').replace(/_/g, '/');
+            const pad = '='.repeat((4 - (s.length % 4)) % 4);
+            const bin = atob(s + pad);
+            const u = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+            return u.buffer;
+        }
+        function bufToB64url(buf) {
+            const u = new Uint8Array(buf); let s = '';
+            for (const b of u) s += String.fromCharCode(b);
+            return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+
+        async function enablePasskey() {
+            const status = $('passkeyStatus'), btn = $('enablePasskeyBtn');
+            const token = sessionStorage.getItem(TOKEN_KEY);
+            if (!token || !passkeysSupported()) return;
+            status.textContent = ''; btn.disabled = true;
+            try {
+                const r = await api('/webauthn/register/options', { method: 'POST', token });
+                if (!r.ok) throw new Error('options');
+                const options = await r.json();
+                options.challenge = b64urlToBuf(options.challenge);
+                options.user.id = b64urlToBuf(options.user.id);
+                if (options.excludeCredentials)
+                    options.excludeCredentials = options.excludeCredentials.map((c) => ({ ...c, id: b64urlToBuf(c.id) }));
+                const cred = await navigator.credentials.create({ publicKey: options });
+                const body = {
+                    id: cred.id, rawId: bufToB64url(cred.rawId), type: cred.type,
+                    response: {
+                        clientDataJSON: bufToB64url(cred.response.clientDataJSON),
+                        attestationObject: bufToB64url(cred.response.attestationObject),
+                        transports: cred.response.getTransports ? cred.response.getTransports() : [],
+                    },
+                    clientExtensionResults: cred.getClientExtensionResults ? cred.getClientExtensionResults() : {},
+                };
+                const v = await api('/webauthn/register/verify', { method: 'POST', token, body });
+                status.textContent = v.ok
+                    ? '✓ Passkey added — use it to log in next time.'
+                    : 'Could not add passkey. Please try again.';
+            } catch (e) {
+                status.textContent = e && e.name === 'NotAllowedError' ? 'Passkey setup cancelled.' : 'Could not add passkey.';
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function loginWithPasskey() {
+            const errEl = $('loginError'); clearError(errEl);
+            if (!AUTH_BASE) { showError(errEl, 'Login is not configured yet — contact an admin.'); return; }
+            if (!passkeysSupported()) { showError(errEl, 'Passkeys are not supported on this device.'); return; }
+            const btn = $('passkeyBtn'); setBusy(btn, true);
+            try {
+                const r = await api('/webauthn/auth/options', { method: 'POST' });
+                if (!r.ok) throw new Error('options');
+                const { options, flowId } = await r.json();
+                options.challenge = b64urlToBuf(options.challenge);
+                if (options.allowCredentials)
+                    options.allowCredentials = options.allowCredentials.map((c) => ({ ...c, id: b64urlToBuf(c.id) }));
+                const a = await navigator.credentials.get({ publicKey: options });
+                const body = {
+                    flowId,
+                    response: {
+                        id: a.id, rawId: bufToB64url(a.rawId), type: a.type,
+                        response: {
+                            clientDataJSON: bufToB64url(a.response.clientDataJSON),
+                            authenticatorData: bufToB64url(a.response.authenticatorData),
+                            signature: bufToB64url(a.response.signature),
+                            userHandle: a.response.userHandle ? bufToB64url(a.response.userHandle) : undefined,
+                        },
+                        clientExtensionResults: a.getClientExtensionResults ? a.getClientExtensionResults() : {},
+                    },
+                };
+                const v = await api('/webauthn/auth/verify', { method: 'POST', body });
+                if (v.status === 200) {
+                    const data = await v.json();
+                    sessionStorage.setItem(TOKEN_KEY, data.token);
+                    if (data.name) sessionStorage.setItem(NAME_KEY, data.name);
+                    if (data.pdgaNo) sessionStorage.setItem(PDGA_KEY, data.pdgaNo); else sessionStorage.removeItem(PDGA_KEY);
+                    if (data.mustChangePin) showPinChange();
+                    else showMembersContent(data.name);
+                } else {
+                    showError(errEl, 'Passkey sign-in failed. Use your PIN instead.');
+                }
+            } catch (e) {
+                showError(errEl, e && e.name === 'NotAllowedError' ? 'Passkey sign-in cancelled.' : 'Passkey sign-in failed. Use your PIN instead.');
+            } finally {
+                setBusy(btn, false);
+            }
         }
 
         async function handleLogin() {
@@ -961,11 +1081,10 @@
             }
         }
 
-        $('loginBtn').addEventListener('click', handleLogin);
-        $('setPinBtn').addEventListener('click', handleSetPin);
-        $('identifierInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') $('pinInput').focus(); });
-        $('pinInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLogin(); });
-        $('confirmPinInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') handleSetPin(); });
+        $('loginForm').addEventListener('submit', (e) => { e.preventDefault(); handleLogin(); });
+        $('pinChangeForm').addEventListener('submit', (e) => { e.preventDefault(); handleSetPin(); });
+        $('passkeyBtn').addEventListener('click', loginWithPasskey);
+        $('enablePasskeyBtn').addEventListener('click', enablePasskey);
         $('logoutBtn').addEventListener('click', logout);
 
         document.querySelector('.menu-toggle').addEventListener('click', function() {

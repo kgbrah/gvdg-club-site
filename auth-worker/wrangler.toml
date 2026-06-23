@@ -18,4 +18,9 @@ id = "REPLACE_WITH_RATELIMIT_KV_ID"
 [vars]
 ALLOWED_ORIGINS = "https://www.greenvillediscgolf.com,https://greenvillediscgolf.com"
 SESSION_TTL_SEC = "900"
+# Passkeys / WebAuthn. RP_ID must be the registrable domain (covers the www subdomain);
+# EXPECTED_ORIGIN must exactly match the page origin the browser reports.
+RP_ID = "greenvillediscgolf.com"
+RP_NAME = "Greenville Disc Golf Club"
+EXPECTED_ORIGIN = "https://www.greenvillediscgolf.com"
 # JWT_SECRET is set as a secret, NOT here:  wrangler secret put JWT_SECRET
