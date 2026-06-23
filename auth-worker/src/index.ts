@@ -12,10 +12,13 @@ import {
   authenticationVerify,
 } from "./webauthn.js";
 import type { RegistrationResponseJSON, AuthenticationResponseJSON } from "@simplewebauthn/server";
+import * as db from "./db.js";
+import { EVENT_TYPES, EVENT_STATUSES, EVENT_FORMATS, type D1Like } from "./db.js";
 
 export interface Env {
   ROSTER: KVLike;
   RATELIMIT: KVLike;
+  DB: D1Like; // Cloudflare D1 — club operations (events, courses, leagues, results, …)
   JWT_SECRET: string;
   /** Comma-separated allowlist of browser origins permitted to call the API. */
   ALLOWED_ORIGINS: string;
@@ -47,7 +50,7 @@ function corsHeaders(origin: string | null): Record<string, string> {
   if (!origin) return {};
   return {
     "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
@@ -135,6 +138,7 @@ async function handleLogin(request: Request, env: Env, origin: string | null): P
       pdgaNo: member.pdgaNo ?? null,
       udisc: member.udisc ?? null,
       photo: member.photo ?? null,
+      isAdmin: member.isAdmin === true,
     },
     200,
     origin,
@@ -156,6 +160,7 @@ async function handleMe(request: Request, env: Env, origin: string | null): Prom
       pdgaNo: member.pdgaNo ?? null,
       udisc: member.udisc ?? null,
       photo: member.photo ?? null,
+      isAdmin: member.isAdmin === true,
     },
     200,
     origin,
@@ -221,6 +226,168 @@ async function handleSetPin(request: Request, env: Env, origin: string | null): 
   return json({ token: fresh, mustChangePin: false }, 200, origin);
 }
 
+// ============================ club API (D1) ============================
+function asInt(v: unknown): number | null {
+  if (typeof v === "number" && Number.isInteger(v)) return v;
+  if (typeof v === "string" && /^\d+$/.test(v.trim())) return parseInt(v, 10);
+  return null;
+}
+function asStr(v: unknown, max = 500): string | null {
+  return typeof v === "string" && v.trim().length > 0 && v.length <= max ? v.trim() : null;
+}
+function asNum(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+const inSet = (arr: readonly string[], v: unknown): v is string => typeof v === "string" && arr.includes(v);
+
+/** Authenticated AND admin. Returns the admin's memberId, or a 401/403 Response. */
+async function adminGate(request: Request, env: Env, origin: string | null): Promise<{ adminId: string } | Response> {
+  const claims = await requireAuth(request, env);
+  if (!claims) return json({ error: "unauthorized" }, 401, origin);
+  const member = await getMember(env.ROSTER, claims.sub);
+  if (!member || member.isAdmin !== true) return json({ error: "forbidden" }, 403, origin);
+  return { adminId: member.memberId };
+}
+
+function validEventInput(b: Record<string, unknown>): db.EventInput | null {
+  const name = asStr(b.name, 200);
+  if (!inSet(EVENT_TYPES, b.type) || !name) return null;
+  const status = b.status == null ? "scheduled" : b.status;
+  if (!inSet(EVENT_STATUSES, status)) return null;
+  let format: string | null = null;
+  if (b.format != null && b.format !== "") {
+    if (!inSet(EVENT_FORMATS, b.format)) return null;
+    format = b.format;
+  }
+  const source = b.source == null ? "manual" : b.source;
+  if (!inSet(["manual", "dgs", "csv", "udisc"], source)) return null;
+  const ext = b.external_url == null ? null : asStr(b.external_url, 1000);
+  if (b.external_url != null && (!ext || !/^https?:\/\//.test(ext))) return null;
+  return {
+    type: b.type as string, name, status, format,
+    date: b.date == null ? null : asStr(b.date, 40),
+    course_id: b.course_id == null ? null : asInt(b.course_id),
+    layout_id: b.layout_id == null ? null : asInt(b.layout_id),
+    league_id: b.league_id == null ? null : asInt(b.league_id),
+    source, external_url: ext,
+    notes: b.notes == null ? null : asStr(b.notes, 5000),
+  };
+}
+
+/** Handles /courses, /events, /leagues (public reads) and /admin/* (admin writes). Returns null if not a club route. */
+async function clubApi(request: Request, env: Env, origin: string | null, pathname: string, method: string): Promise<Response | null> {
+  const seg = pathname.split("/").filter(Boolean);
+
+  // ---- public reads ----
+  if (method === "GET" && pathname === "/courses") return json({ courses: await db.listCourses(env.DB) }, 200, origin);
+  if (method === "GET" && pathname === "/leagues") return json({ leagues: await db.listLeagues(env.DB) }, 200, origin);
+  if (method === "GET" && pathname === "/events") {
+    const p = new URL(request.url).searchParams;
+    return json({ events: await db.listEvents(env.DB, { status: p.get("status") ?? undefined, type: p.get("type") ?? undefined }) }, 200, origin);
+  }
+  if (method === "GET" && seg[0] === "events" && seg.length === 2) {
+    const id = asInt(seg[1]);
+    const ev = id == null ? null : await db.getEvent(env.DB, id);
+    return ev ? json({ event: ev }, 200, origin) : json({ error: "not_found" }, 404, origin);
+  }
+
+  // ---- admin writes ----
+  if (seg[0] !== "admin") return null;
+  const gate = await adminGate(request, env, origin);
+  if (gate instanceof Response) return gate;
+  const adminId = gate.adminId;
+  const sub = seg[1];
+  const id = seg[2] != null ? asInt(seg[2]) : null;
+
+  if (sub === "courses") {
+    if (method === "POST") {
+      const b = await readJson(request);
+      const name = b && asStr(b.name, 200);
+      if (!b || !name) return json({ error: "invalid_course" }, 400, origin);
+      const udisc = b.udisc_url == null ? null : asStr(b.udisc_url, 1000);
+      if (b.udisc_url != null && (!udisc || !/^https?:\/\//.test(udisc))) return json({ error: "invalid_course" }, 400, origin);
+      const row = await db.createCourse(env.DB, { name, location: asStr(b.location, 200), udisc_url: udisc, lat: asNum(b.lat), lng: asNum(b.lng), created_by: adminId });
+      return json({ course: row }, 201, origin);
+    }
+    if (method === "PATCH" && id != null) {
+      const b = (await readJson(request)) ?? {};
+      const row = await db.updateCourse(env.DB, id, { name: asStr(b.name, 200), location: asStr(b.location, 200), udisc_url: asStr(b.udisc_url, 1000), lat: asNum(b.lat), lng: asNum(b.lng) });
+      return row ? json({ course: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
+    }
+    if (method === "DELETE" && id != null) { await db.deleteCourse(env.DB, id); return json({ ok: true }, 200, origin); }
+  }
+
+  if (sub === "events") {
+    if (seg[3] === "players" && id != null) {
+      if (method === "POST") {
+        const b = await readJson(request);
+        const name = b && asStr(b.name, 100);
+        if (!b || !name) return json({ error: "invalid_player" }, 400, origin);
+        const row = await db.addEventPlayer(env.DB, { event_id: id, member_id: asStr(b.member_id, 64), name, pdga_no: asStr(b.pdga_no, 20), division: asStr(b.division, 40), team: asStr(b.team, 40) });
+        return json({ player: row }, 201, origin);
+      }
+      if (method === "DELETE" && seg[4] != null) {
+        const pid = asInt(seg[4]);
+        if (pid == null) return json({ error: "not_found" }, 404, origin);
+        await db.removeEventPlayer(env.DB, id, pid);
+        return json({ ok: true }, 200, origin);
+      }
+    }
+    if (method === "POST" && seg.length === 2) {
+      const b = await readJson(request);
+      const v = b && validEventInput(b);
+      if (!v) return json({ error: "invalid_event" }, 400, origin);
+      const row = await db.createEvent(env.DB, { ...v, created_by: adminId });
+      return json({ event: row }, 201, origin);
+    }
+    if (method === "PATCH" && id != null) {
+      const b = (await readJson(request)) ?? {};
+      if (b.status != null && !inSet(EVENT_STATUSES, b.status)) return json({ error: "invalid_event" }, 400, origin);
+      if (b.format != null && b.format !== "" && !inSet(EVENT_FORMATS, b.format)) return json({ error: "invalid_event" }, 400, origin);
+      const row = await db.updateEvent(env.DB, id, {
+        name: asStr(b.name, 200), status: asStr(b.status), format: asStr(b.format),
+        date: asStr(b.date, 40), course_id: b.course_id == null ? null : asInt(b.course_id),
+        layout_id: b.layout_id == null ? null : asInt(b.layout_id), league_id: b.league_id == null ? null : asInt(b.league_id),
+        notes: asStr(b.notes, 5000),
+      });
+      return row ? json({ event: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
+    }
+    if (method === "DELETE" && id != null) { await db.deleteEvent(env.DB, id); return json({ ok: true }, 200, origin); }
+  }
+
+  if (sub === "leagues") {
+    if (method === "POST") {
+      const b = await readJson(request);
+      const name = b && asStr(b.name, 120);
+      if (!b || !name) return json({ error: "invalid_league" }, 400, origin);
+      const row = await db.createLeague(env.DB, { name, season: asStr(b.season, 40), format: asStr(b.format, 20), description: asStr(b.description, 2000), created_by: adminId });
+      return json({ league: row }, 201, origin);
+    }
+    if (method === "DELETE" && id != null) { await db.deleteLeague(env.DB, id); return json({ ok: true }, 200, origin); }
+  }
+
+  if (sub === "layouts") {
+    if (method === "POST") {
+      const b = await readJson(request);
+      const courseId = b && asInt(b.course_id);
+      const holes = b && Array.isArray(b.holes) ? b.holes : null;
+      if (!b || courseId == null || !holes || holes.length === 0) return json({ error: "invalid_layout" }, 400, origin);
+      let totalPar = 0;
+      for (const h of holes) {
+        const hn = asInt((h as Record<string, unknown>)?.hole);
+        const par = asInt((h as Record<string, unknown>)?.par);
+        if (hn == null || par == null) return json({ error: "invalid_layout" }, 400, origin);
+        totalPar += par;
+      }
+      const row = await db.createLayout(env.DB, { course_id: courseId, name: asStr(b.name, 60) ?? "Main", holes, total_par: totalPar });
+      return json({ layout: row }, 201, origin);
+    }
+    if (method === "DELETE" && id != null) { await db.deleteLayout(env.DB, id); return json({ ok: true }, 200, origin); }
+  }
+
+  return json({ error: "not_found" }, 404, origin);
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = allowedOrigin(env, request);
@@ -267,6 +434,10 @@ export default {
       );
       return json(data, status, origin);
     }
+
+    // --- club operations (events / courses / leagues / layouts) ---
+    const club = await clubApi(request, env, origin, pathname, method);
+    if (club) return club;
 
     return json({ error: "not_found" }, 404, origin);
   },

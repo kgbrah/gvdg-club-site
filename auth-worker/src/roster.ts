@@ -14,6 +14,8 @@ export interface Member {
   udisc?: string;
   /** Profile photo: a pdga.com URL (auto) or a small data-URL (member upload). */
   photo?: string;
+  /** Club admin — may manage events/courses/leagues/etc. Granted by an admin via provisioning. */
+  isAdmin?: boolean;
   pinHash: string;
   mustChangePin: boolean;
 }

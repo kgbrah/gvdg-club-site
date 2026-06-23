@@ -116,6 +116,7 @@ export async function buildEntries(member) {
     name: member.name ?? "",
     ...(member.pdgaNo ? { pdgaNo: String(member.pdgaNo) } : {}),
     ...(member.udisc ? { udisc: String(member.udisc) } : {}),
+    ...(member.admin === true ? { isAdmin: true } : {}),
     pinHash,
     mustChangePin: true,
   };
