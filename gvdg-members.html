@@ -426,6 +426,27 @@
                 <div class="login-error" id="pinChangeError"></div>
             </form>
 
+            <!-- Complete-your-profile step (first login, skippable; also reused for editing) -->
+            <form class="login-form" id="profileForm" autocomplete="on" style="display:none;">
+                <p class="login-subtitle">Add your details so your ratings, stats and photo show up. All optional — you can do this later.</p>
+                <div class="profile-photo-row">
+                    <img id="profilePhotoPreview" class="profile-photo-preview" alt="">
+                    <label class="passkey-btn" for="photoInput">📷 Add / change photo</label>
+                    <input type="file" id="photoInput" accept="image/png,image/jpeg,image/webp" style="display:none;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="profilePdgaInput">PDGA # (optional)</label>
+                    <input type="text" class="form-input" id="profilePdgaInput" inputmode="numeric" placeholder="e.g. 167210">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="profileUdiscInput">UDisc username (optional)</label>
+                    <input type="text" class="form-input" id="profileUdiscInput" placeholder="your UDisc handle">
+                </div>
+                <button type="submit" class="login-btn" id="profileSaveBtn">Save &amp; Continue</button>
+                <button type="button" class="login-btn login-btn-secondary" id="profileSkipBtn">Skip for now</button>
+                <div class="login-error" id="profileError"></div>
+            </form>
+
             <a href="index.html" class="back-link">← Back to main site</a>
         </div>
     </div>
@@ -471,11 +492,20 @@
                 .login-divider span { padding: 0 0.75rem; }
                 .login-btn-secondary { background: transparent; border: 1px solid var(--secondary); color: var(--secondary); margin-top: 0; }
                 .login-btn-secondary:hover { background: var(--secondary); color: #fff; }
+                .dash-head { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+                .dash-head .my-dashboard-title { margin-bottom: 0; }
+                .dash-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary); }
+                .profile-photo-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+                .profile-photo-preview { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border-color); display: none; }
             </style>
             <div id="myDashboard" class="my-dashboard" style="display:none;">
-                <h3 class="my-dashboard-title">📊 My Player Dashboard</h3>
+                <div class="dash-head">
+                    <img id="dashAvatar" class="dash-avatar" alt="" style="display:none;">
+                    <h3 class="my-dashboard-title">📊 My Player Dashboard</h3>
+                </div>
                 <div class="passkey-row" id="passkeyRow" style="display:none;">
                     <button type="button" class="passkey-btn" id="enablePasskeyBtn">🔑 Add a passkey for faster login</button>
+                    <button type="button" class="passkey-btn" id="editProfileBtn">✏️ Edit profile</button>
                     <span class="passkey-status" id="passkeyStatus"></span>
                 </div>
                 <div id="dashLoading" class="dash-note">Loading your stats…</div>
@@ -783,6 +813,14 @@
         const PDGA_KEY = 'gvdg_member_pdga';
         const $ = (id) => document.getElementById(id);
 
+        let memberProfile = { pdgaNo: null, udisc: null, photo: null };
+        let pendingPhoto = null; // a chosen-but-unsaved uploaded photo (data URL)
+        function applyProfile(data) {
+            memberProfile = { pdgaNo: data.pdgaNo || null, udisc: data.udisc || null, photo: data.photo || null };
+            if (data.name) sessionStorage.setItem(NAME_KEY, data.name);
+            if (data.pdgaNo) sessionStorage.setItem(PDGA_KEY, data.pdgaNo); else sessionStorage.removeItem(PDGA_KEY);
+        }
+
         function showError(el, msg) { el.textContent = '❌ ' + msg; el.classList.add('show'); }
         function clearError(el) { el.textContent = ''; el.classList.remove('show'); }
         function setBusy(btn, busy) {
@@ -872,6 +910,12 @@
             const loading = $('dashLoading'), empty = $('dashEmpty'), body = $('dashBody');
             $('myDashboard').style.display = '';
             loading.style.display = ''; empty.style.display = 'none'; body.style.display = 'none';
+            const avatar = $('dashAvatar');
+            const showAvatar = (url) => {
+                if (url) { avatar.src = url; avatar.style.display = ''; }
+                else { avatar.removeAttribute('src'); avatar.style.display = 'none'; }
+            };
+            showAvatar(memberProfile.photo); // member's uploaded photo wins; pdga photo filled in below
             const pdga = sessionStorage.getItem(PDGA_KEY);
             if (!pdga) {
                 loading.style.display = 'none';
@@ -892,6 +936,7 @@
             const official = p ? p.official_rating : null;
             const peak = s && s.summary ? s.summary.peak_rating : null;
             const events = s ? s.events : null;
+            if (!memberProfile.photo) showAvatar(p && p.photo ? p.photo : null); // fall back to pdga.com photo
             setText('dashLive', live != null ? live : '—');
             setText('dashOfficial', official != null ? official : '—');
             setText('dashPeak', peak != null ? peak : '—');
@@ -983,8 +1028,7 @@
                 if (v.status === 200) {
                     const data = await v.json();
                     sessionStorage.setItem(TOKEN_KEY, data.token);
-                    if (data.name) sessionStorage.setItem(NAME_KEY, data.name);
-                    if (data.pdgaNo) sessionStorage.setItem(PDGA_KEY, data.pdgaNo); else sessionStorage.removeItem(PDGA_KEY);
+                    applyProfile(data);
                     if (data.mustChangePin) showPinChange();
                     else showMembersContent(data.name);
                 } else {
@@ -1011,8 +1055,7 @@
                 if (res.status === 200) {
                     const data = await res.json();
                     sessionStorage.setItem(TOKEN_KEY, data.token);
-                    if (data.name) sessionStorage.setItem(NAME_KEY, data.name);
-                    if (data.pdgaNo) sessionStorage.setItem(PDGA_KEY, data.pdgaNo); else sessionStorage.removeItem(PDGA_KEY);
+                    applyProfile(data);
                     $('pinInput').value = '';
                     if (data.mustChangePin) showPinChange();
                     else showMembersContent(data.name);
@@ -1049,7 +1092,7 @@
                     const data = await res.json();
                     sessionStorage.setItem(TOKEN_KEY, data.token);
                     $('newPinInput').value = ''; $('confirmPinInput').value = '';
-                    showMembersContent(sessionStorage.getItem(NAME_KEY));
+                    showProfileSetup(); // first-login: offer to complete profile before entering
                 } else if (res.status === 401) {
                     showLogin();
                 } else {
@@ -1069,8 +1112,7 @@
                 const res = await api('/me', { token });
                 if (res.status === 200) {
                     const data = await res.json();
-                    if (data.name) sessionStorage.setItem(NAME_KEY, data.name);
-                    if (data.pdgaNo) sessionStorage.setItem(PDGA_KEY, data.pdgaNo); else sessionStorage.removeItem(PDGA_KEY);
+                    applyProfile(data);
                     if (data.mustChangePin) showPinChange();
                     else showMembersContent(data.name || sessionStorage.getItem(NAME_KEY));
                 } else {
@@ -1081,10 +1123,87 @@
             }
         }
 
+        // ---- Complete-your-profile (PDGA #, UDisc, photo) ----
+        function showProfileSetup() {
+            $('loginGate').style.display = 'flex';
+            $('membersContent').classList.remove('active');
+            $('loginForm').style.display = 'none';
+            $('pinChangeForm').style.display = 'none';
+            $('profileForm').style.display = '';
+            clearError($('profileError'));
+            $('profilePdgaInput').value = memberProfile.pdgaNo || '';
+            $('profileUdiscInput').value = memberProfile.udisc || '';
+            pendingPhoto = null;
+            const prev = $('profilePhotoPreview');
+            if (memberProfile.photo) { prev.src = memberProfile.photo; prev.style.display = 'block'; }
+            else { prev.removeAttribute('src'); prev.style.display = 'none'; }
+        }
+
+        function resizeImageFile(file, maxPx) {
+            return new Promise((resolve) => {
+                const url = URL.createObjectURL(file);
+                const img = new Image();
+                img.onload = () => {
+                    URL.revokeObjectURL(url);
+                    const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+                    const w = Math.max(1, Math.round(img.width * scale));
+                    const h = Math.max(1, Math.round(img.height * scale));
+                    const c = document.createElement('canvas'); c.width = w; c.height = h;
+                    c.getContext('2d').drawImage(img, 0, 0, w, h);
+                    resolve(c.toDataURL('image/jpeg', 0.85));
+                };
+                img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+                img.src = url;
+            });
+        }
+
+        async function onPhotoChosen(e) {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            const dataUrl = await resizeImageFile(file, 256);
+            if (!dataUrl || dataUrl.length > 190000) { showError($('profileError'), 'That image is too large — please pick a smaller one.'); return; }
+            clearError($('profileError'));
+            pendingPhoto = dataUrl;
+            const prev = $('profilePhotoPreview'); prev.src = dataUrl; prev.style.display = 'block';
+        }
+
+        async function saveProfile() {
+            const errEl = $('profileError'); clearError(errEl);
+            const token = sessionStorage.getItem(TOKEN_KEY);
+            if (!token) { showLogin(); return; }
+            const pdga = $('profilePdgaInput').value.trim();
+            const udisc = $('profileUdiscInput').value.trim();
+            if (pdga && !/^\d+$/.test(pdga)) { showError(errEl, 'PDGA # must be digits only.'); return; }
+            const body = { pdgaNo: pdga, udisc: udisc };
+            if (pendingPhoto) body.photo = pendingPhoto;
+            const btn = $('profileSaveBtn'); setBusy(btn, true);
+            try {
+                const r = await api('/profile', { method: 'POST', token, body });
+                if (r.status === 200) {
+                    applyProfile(await r.json());
+                    pendingPhoto = null;
+                    showMembersContent(sessionStorage.getItem(NAME_KEY));
+                } else if (r.status === 409) {
+                    const d = await r.json().catch(() => ({}));
+                    showError(errEl, (d.field === 'udisc' ? 'That UDisc username' : 'That PDGA #') + ' is already linked to another member.');
+                } else {
+                    showError(errEl, 'Could not save your profile. Please check the values and try again.');
+                }
+            } catch (e) {
+                showError(errEl, 'Network error. Please try again.');
+            } finally {
+                setBusy(btn, false);
+            }
+        }
+
         $('loginForm').addEventListener('submit', (e) => { e.preventDefault(); handleLogin(); });
         $('pinChangeForm').addEventListener('submit', (e) => { e.preventDefault(); handleSetPin(); });
+        $('profileForm').addEventListener('submit', (e) => { e.preventDefault(); saveProfile(); });
+        $('profileSkipBtn').addEventListener('click', () => showMembersContent(sessionStorage.getItem(NAME_KEY)));
+        $('photoInput').addEventListener('change', onPhotoChosen);
         $('passkeyBtn').addEventListener('click', loginWithPasskey);
         $('enablePasskeyBtn').addEventListener('click', enablePasskey);
+        $('editProfileBtn').addEventListener('click', showProfileSetup);
         $('logoutBtn').addEventListener('click', logout);
 
         document.querySelector('.menu-toggle').addEventListener('click', function() {

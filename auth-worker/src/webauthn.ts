@@ -197,5 +197,15 @@ export async function authenticationVerify(
 
   await updateCredentialCounter(env.ROSTER, memberId, stored.id, verification.authenticationInfo.newCounter);
   const token = await signToken({ sub: member.memberId, mustChangePin: member.mustChangePin });
-  return { status: 200, data: { token, mustChangePin: member.mustChangePin, name: member.name, pdgaNo: member.pdgaNo ?? null } };
+  return {
+    status: 200,
+    data: {
+      token,
+      mustChangePin: member.mustChangePin,
+      name: member.name,
+      pdgaNo: member.pdgaNo ?? null,
+      udisc: member.udisc ?? null,
+      photo: member.photo ?? null,
+    },
+  };
 }
