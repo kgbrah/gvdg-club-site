@@ -67,3 +67,26 @@ export function buildMessages(opts: {
   msgs.push({ role: "user", content: clip(opts.userMessage.trim()) });
   return msgs;
 }
+
+// A pluggable text generator (OpenRouter, Workers AI, …). `generate` throws on failure.
+export interface ReplyProvider {
+  name: string;
+  generate(messages: ChatMessage[]): Promise<string>;
+}
+
+/** Try each provider in order; return the first non-empty reply (trimmed) with its provider name,
+ *  falling through on any throw or empty result. Returns null if every provider fails. */
+export async function generateReply(
+  providers: ReplyProvider[],
+  messages: ChatMessage[],
+): Promise<{ reply: string; provider: string } | null> {
+  for (const p of providers) {
+    try {
+      const r = (await p.generate(messages))?.trim();
+      if (r) return { reply: r, provider: p.name };
+    } catch {
+      /* provider unavailable — fall back to the next */
+    }
+  }
+  return null;
+}

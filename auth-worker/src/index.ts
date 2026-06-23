@@ -16,7 +16,7 @@ import * as db from "./db.js";
 import { EVENT_TYPES, EVENT_STATUSES, EVENT_FORMATS, type D1Like } from "./db.js";
 import { safeFetch, normalizeDgs, normalizeCsvEvents, parseCsvRows, parseUdiscLayout, ImportError } from "./imports.js";
 import { enrichHoles, type LayoutHole } from "./layouts.js";
-import { buildMessages, MAX_HISTORY, type ChatTurn } from "./assistant.js";
+import { buildMessages, generateReply, MAX_HISTORY, type ChatTurn, type ChatMessage, type ReplyProvider } from "./assistant.js";
 
 // Default discgolfscene feed = the club scraper's committed tournaments.json.
 const DEFAULT_DGS_FEED = "https://raw.githubusercontent.com/mostlysober252/GVDG-DGS-Scraper-2.0/main/tournaments.json";
@@ -33,7 +33,10 @@ export interface Env {
   RP_ID?: string;
   RP_NAME?: string;
   EXPECTED_ORIGIN?: string;
-  // Cloudflare Workers AI binding (powers the "Crotts" assistant). Absent in local dev → stubbed.
+  // "Crotts" assistant brains. Primary = OpenRouter (free models); fallback = Cloudflare Workers AI.
+  // OPENROUTER_API_KEY is a SECRET (wrangler secret put OPENROUTER_API_KEY); absent → skip OpenRouter.
+  OPENROUTER_API_KEY?: string;
+  OPENROUTER_MODEL?: string;
   AI?: { run(model: string, opts: { messages: { role: string; content: string }[]; max_tokens?: number }): Promise<{ response?: string }> };
   ASSISTANT_MODEL?: string;
 }
@@ -315,10 +318,45 @@ function validEventInput(b: Record<string, unknown>): db.EventInput | null {
   };
 }
 
-// "Crotts" assistant. Public (no auth) but IP-throttled to bound Workers AI cost/abuse.
+// "Crotts" assistant. Public (no auth) but IP-throttled to bound AI cost/abuse.
 const ASSISTANT_LIMIT = 20; // requests per IP per window
 const ASSISTANT_WINDOW = 60; // seconds
-const DEFAULT_MODEL = "@cf/meta/llama-3.1-8b-instruct";
+const DEFAULT_MODEL = "@cf/meta/llama-3.1-8b-instruct"; // Cloudflare Workers AI fallback
+const DEFAULT_OR_MODEL = "meta-llama/llama-3.3-70b-instruct:free"; // OpenRouter free-tier primary
+
+// Primary brain: OpenRouter (OpenAI-compatible). Uses a free model by default; the call throws on
+// any non-2xx (e.g. the free model is unavailable/rate-limited) so the chain falls back to Workers AI.
+function openRouterProvider(env: Env): ReplyProvider {
+  return {
+    name: "openrouter",
+    async generate(messages: ChatMessage[]): Promise<string> {
+      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + env.OPENROUTER_API_KEY,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://greenvillediscgolf.com",
+          "X-Title": "GVDG Crotts",
+        },
+        body: JSON.stringify({ model: env.OPENROUTER_MODEL || DEFAULT_OR_MODEL, messages, max_tokens: 512 }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) throw new Error("openrouter_" + res.status);
+      const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+      return data?.choices?.[0]?.message?.content ?? "";
+    },
+  };
+}
+// Fallback brain: Cloudflare Workers AI.
+function workersAiProvider(env: Env): ReplyProvider {
+  return {
+    name: "workers-ai",
+    async generate(messages: ChatMessage[]): Promise<string> {
+      const out = await env.AI!.run(env.ASSISTANT_MODEL || DEFAULT_MODEL, { messages, max_tokens: 512 });
+      return (out && out.response) || "";
+    },
+  };
+}
 
 async function assistantRateLimited(env: Env, ip: string): Promise<boolean> {
   const key = "asst:" + ip;
@@ -354,17 +392,17 @@ async function handleAssistant(request: Request, env: Env, origin: string | null
     courses: courses.map((c) => ({ name: String(c.name ?? ""), location: (c.location as string) ?? null })),
   });
 
-  if (!env.AI) {
-    // Local dev / no Workers AI binding: deterministic stub so the UI + plumbing are verifiable.
-    return json({ reply: "🥏 (dev stub) Hi, I'm Crotts! Workers AI isn't bound in this environment, so I can't think for real yet — but your message reached the worker and the club context loaded fine.", stub: true }, 200, origin);
+  // Provider chain: OpenRouter (free model) first, then Cloudflare Workers AI.
+  const providers: ReplyProvider[] = [];
+  if (env.OPENROUTER_API_KEY) providers.push(openRouterProvider(env));
+  if (env.AI) providers.push(workersAiProvider(env));
+
+  if (!providers.length) {
+    // Local dev / no brain configured: deterministic stub so the UI + plumbing are verifiable.
+    return json({ reply: "🥏 (dev stub) Hi, I'm Crotts! No AI provider is configured in this environment, so I can't think for real yet — but your message reached the worker and the club context loaded fine.", stub: true }, 200, origin);
   }
-  try {
-    const out = await env.AI.run(env.ASSISTANT_MODEL || DEFAULT_MODEL, { messages, max_tokens: 512 });
-    const reply = (out && typeof out.response === "string" && out.response.trim()) || "Sorry, I couldn't come up with an answer just now.";
-    return json({ reply }, 200, origin);
-  } catch {
-    return json({ error: "assistant_unavailable" }, 502, origin);
-  }
+  const out = await generateReply(providers, messages);
+  return out ? json({ reply: out.reply, provider: out.provider }, 200, origin) : json({ error: "assistant_unavailable" }, 502, origin);
 }
 
 /** Handles /courses, /events, /leagues (public reads) and /admin/* (admin writes). Returns null if not a club route. */

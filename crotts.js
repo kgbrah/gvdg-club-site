@@ -25,11 +25,11 @@
   var busy = false, greeted = false;
 
   var css = [
-    '#crotts-fab{position:fixed;right:18px;bottom:18px;width:60px;height:60px;border-radius:50%;border:3px solid var(--secondary,#2e7d32);background:#fff;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.28);z-index:9998;padding:0;overflow:hidden;transition:transform .15s}',
+    '#crotts-fab{position:fixed;left:18px;bottom:18px;width:60px;height:60px;border-radius:50%;border:3px solid var(--secondary,#2e7d32);background:#fff;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.28);z-index:9998;padding:0;overflow:hidden;transition:transform .15s}',
     '#crotts-fab:hover{transform:scale(1.06)}',
     '#crotts-fab img{width:100%;height:100%;object-fit:cover;object-position:center 28%;display:block}',
     '#crotts-badge{position:absolute;top:-3px;right:-3px;background:var(--secondary,#2e7d32);color:#fff;font-size:11px;font-weight:700;border-radius:999px;padding:1px 6px;border:2px solid #fff}',
-    '#crotts-panel{position:fixed;right:18px;bottom:88px;width:340px;max-width:calc(100vw - 36px);height:460px;max-height:calc(100vh - 120px);background:var(--bg-primary,#fff);color:var(--text-primary,#1a1a1a);border:1px solid var(--border-color,#e0e0e0);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.3);z-index:9999;display:none;flex-direction:column;overflow:hidden;font-family:inherit}',
+    '#crotts-panel{position:fixed;left:18px;bottom:88px;width:340px;max-width:calc(100vw - 36px);height:460px;max-height:calc(100vh - 120px);background:var(--bg-primary,#fff);color:var(--text-primary,#1a1a1a);border:1px solid var(--border-color,#e0e0e0);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.3);z-index:9999;display:none;flex-direction:column;overflow:hidden;font-family:inherit}',
     '#crotts-panel.open{display:flex}',
     '#crotts-head{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--secondary,#2e7d32);color:#fff}',
     '#crotts-head img{width:36px;height:36px;border-radius:50%;object-fit:cover;object-position:center 28%;border:2px solid rgba(255,255,255,.6)}',

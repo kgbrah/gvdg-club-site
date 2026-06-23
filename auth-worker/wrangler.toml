@@ -24,15 +24,19 @@ database_name = "gvdg"
 database_id = "REPLACE_WITH_D1_DATABASE_ID"
 migrations_dir = "migrations"
 
-# Workers AI powers the "Crotts" assistant (POST /assistant). No id needed — just the binding.
-# mostlysober252: this binding is free to declare; usage bills to the account's Workers AI quota.
+# Cloudflare Workers AI — the FALLBACK brain for "Crotts" (POST /assistant). Free to declare;
+# usage bills to the account's Workers AI quota. Primary brain is OpenRouter (see below).
 [ai]
 binding = "AI"
 
 [vars]
 ALLOWED_ORIGINS = "https://www.greenvillediscgolf.com,https://greenvillediscgolf.com"
 SESSION_TTL_SEC = "900"
-# Workers AI model for the Crotts assistant (override if desired).
+# Crotts brains: OpenRouter free model is tried first, then Workers AI if it fails/unavailable.
+# Override either model id here. OPENROUTER_API_KEY is a SECRET, NOT a var:
+#   wrangler secret put OPENROUTER_API_KEY      (get a free key at openrouter.ai)
+# If the key is unset, Crotts uses Workers AI only.
+OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
 ASSISTANT_MODEL = "@cf/meta/llama-3.1-8b-instruct"
 # Passkeys / WebAuthn. RP_ID must be the registrable domain (covers the www subdomain);
 # EXPECTED_ORIGIN must exactly match the page origin the browser reports.
