@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Members Directory | Greenville Disc Golf Club</title>
+    <link rel="icon" type="image/png" href="img/logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
@@ -498,68 +499,8 @@
                 .profile-photo-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
                 .profile-photo-preview { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border-color); display: none; }
             </style>
-            <style>
-                .admin-panel { background: var(--bg-primary); border: 2px solid var(--primary); border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; }
-                .admin-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; color: var(--primary); margin-bottom: 1rem; letter-spacing: 0.03em; }
-                .admin-tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
-                .admin-tab { background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; }
-                .admin-tab.active { background: var(--secondary); border-color: var(--secondary); color: #fff; }
-                .admin-pane { display: none; }
-                .admin-pane.active { display: block; }
-                .admin-form { display: grid; gap: 0.75rem; max-width: 520px; }
-                .admin-form label { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 0.2rem; }
-                .admin-form input, .admin-form select, .admin-form textarea { width: 100%; padding: 0.6rem 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95rem; }
-                .admin-btn { background: var(--primary); color: #fff; border: none; padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
-                .admin-btn.secondary { background: transparent; border: 1px solid var(--secondary); color: var(--secondary); }
-                .admin-btn.danger { background: transparent; border: 1px solid #dc3545; color: #dc3545; padding: 0.35rem 0.7rem; font-size: 0.8rem; }
-                .admin-msg { font-size: 0.9rem; margin-bottom: 0.75rem; min-height: 1.2em; }
-                .admin-msg.ok { color: var(--green); } .admin-msg.err { color: #dc3545; }
-                .admin-evrow { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); margin-bottom: 0.5rem; }
-                .admin-evrow .ev-name { font-weight: 600; flex: 1; min-width: 140px; }
-                .admin-badge { font-size: 0.7rem; text-transform: uppercase; padding: 0.15rem 0.5rem; border-radius: 4px; background: var(--secondary); color: #fff; letter-spacing: 0.04em; }
-                .admin-badge.live { background: #dc3545; } .admin-badge.final { background: var(--text-muted); } .admin-badge.scheduled { background: var(--green); }
-                .admin-cand { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--border-color); }
-            </style>
-            <div id="adminPanel" class="admin-panel" style="display:none;">
-                <h3 class="admin-title">🛠 Admin — Event Management</h3>
-                <div class="admin-tabs">
-                    <button type="button" class="admin-tab active" data-atab="events">Events</button>
-                    <button type="button" class="admin-tab" data-atab="create">New Event</button>
-                    <button type="button" class="admin-tab" data-atab="import">Import</button>
-                    <button type="button" class="admin-tab" data-atab="courses">Courses</button>
-                </div>
-                <div class="admin-msg" id="adminMsg"></div>
-                <div class="admin-pane active" id="apane-events"><div id="adminEventsList">Loading…</div></div>
-                <div class="admin-pane" id="apane-create">
-                    <form class="admin-form" id="adminCreateForm">
-                        <div><label for="aeType">Type</label><select id="aeType"><option value="tournament">Tournament</option><option value="league_round">League round</option><option value="fundraiser">Fundraiser</option><option value="meeting">Meeting</option></select></div>
-                        <div><label for="aeName">Name</label><input id="aeName" maxlength="200" required></div>
-                        <div><label for="aeDate">Date</label><input id="aeDate" type="date"></div>
-                        <div><label for="aeFormat">Format</label><select id="aeFormat"><option value="">—</option><option value="stroke">Stroke</option><option value="matchplay">Matchplay</option><option value="doubles">Doubles</option></select></div>
-                        <div><label for="aeCourse">Course</label><select id="aeCourse"><option value="">—</option></select></div>
-                        <button type="submit" class="admin-btn">Create event</button>
-                    </form>
-                </div>
-                <div class="admin-pane" id="apane-import">
-                    <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:0.5rem;">Import candidates appear below; click <em>Create</em> to add an event.</p>
-                    <button type="button" class="admin-btn secondary" id="dgsImportBtn">⬇ Import from DiscGolfScene feed</button>
-                    <div style="margin-top:1rem;">
-                        <label for="csvImportText" style="font-size:0.8rem;font-weight:600;">Paste CSV (header: name,date,type,format)</label>
-                        <textarea id="csvImportText" rows="4" placeholder="name,date,type,format&#10;Fall Open,2026-09-12,tournament,stroke"></textarea>
-                        <button type="button" class="admin-btn secondary" id="csvImportBtn" style="margin-top:0.5rem;">Preview CSV</button>
-                    </div>
-                    <div id="importCandidates" style="margin-top:1rem;"></div>
-                </div>
-                <div class="admin-pane" id="apane-courses">
-                    <form class="admin-form" id="adminCourseForm">
-                        <div><label for="acName">Course name</label><input id="acName" maxlength="200" required></div>
-                        <div><label for="acLoc">Location</label><input id="acLoc" maxlength="200"></div>
-                        <div><label for="acUdisc">UDisc URL (https)</label><input id="acUdisc" type="url" maxlength="1000"></div>
-                        <button type="submit" class="admin-btn">Add course</button>
-                    </form>
-                    <div id="adminCoursesList" style="margin-top:1rem;"></div>
-                </div>
-            </div>
+            <style>.admin-portal-link{display:inline-block;margin-bottom:1.5rem;background:var(--primary);color:#fff;padding:0.6rem 1.25rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.9rem;}.admin-portal-link:hover{background:#e55a2b;}</style>
+            <a id="adminPortalLink" href="admin.html" class="admin-portal-link" style="display:none;">🛠 Admin Portal — manage events &amp; courses →</a>
 
             <div id="myDashboard" class="my-dashboard" style="display:none;">
                 <div class="dash-head">
@@ -930,8 +871,7 @@
                 $('passkeyRow').style.display = '';
                 $('passkeyStatus').textContent = '';
             }
-            if (memberProfile.isAdmin) { $('adminPanel').style.display = ''; initAdmin(); }
-            else { $('adminPanel').style.display = 'none'; }
+            $('adminPortalLink').style.display = memberProfile.isAdmin ? '' : 'none';
         }
 
         function logout() {
@@ -1259,121 +1199,6 @@
             } finally {
                 setBusy(btn, false);
             }
-        }
-
-        // ---- Admin panel (events / courses / imports) — admin-only, wired to the club Worker ----
-        let adminInited = false;
-        const elx = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
-        function adminMsg(text, ok) { const m = $('adminMsg'); m.textContent = text || ''; m.className = 'admin-msg' + (text ? (ok ? ' ok' : ' err') : ''); }
-        function adminApi(path, opts) { return api(path, { ...(opts || {}), token: sessionStorage.getItem(TOKEN_KEY) }); }
-        function adminSwitch(tab) {
-            document.querySelectorAll('.admin-tab').forEach((t) => t.classList.toggle('active', t.dataset.atab === tab));
-            document.querySelectorAll('.admin-pane').forEach((p) => p.classList.toggle('active', p.id === 'apane-' + tab));
-        }
-
-        async function adminLoadCourses() {
-            let courses = [];
-            try { const r = await api('/courses'); if (r.ok) courses = (await r.json()).courses || []; } catch (e) {}
-            const sel = $('aeCourse'); sel.length = 1;
-            const list = $('adminCoursesList'); list.textContent = '';
-            courses.forEach((c) => {
-                const label = c.name + (c.location ? ' — ' + c.location : '');
-                const o = document.createElement('option'); o.value = c.id; o.textContent = label; sel.appendChild(o);
-                list.appendChild(elx('div', 'admin-cand', label));
-            });
-        }
-
-        async function adminLoadEvents() {
-            const wrap = $('adminEventsList'); wrap.textContent = 'Loading…';
-            let events = [];
-            try { const r = await api('/events'); if (r.ok) events = (await r.json()).events || []; } catch (e) {}
-            wrap.textContent = '';
-            if (!events.length) { wrap.appendChild(elx('p', 'dash-note', 'No events yet — create or import one.')); return; }
-            events.forEach((ev) => {
-                const row = elx('div', 'admin-evrow');
-                row.appendChild(elx('span', 'ev-name', ev.name));
-                row.appendChild(elx('span', 'admin-badge ' + (ev.status || ''), ev.status || ''));
-                if (ev.date) row.appendChild(elx('span', 'dash-event-date', ev.date));
-                const sel = document.createElement('select');
-                ['scheduled', 'live', 'final', 'cancelled'].forEach((s) => { const o = document.createElement('option'); o.value = s; o.textContent = s; if (s === ev.status) o.selected = true; sel.appendChild(o); });
-                sel.addEventListener('change', async () => {
-                    const r = await adminApi('/admin/events/' + ev.id, { method: 'PATCH', body: { status: sel.value } });
-                    adminMsg(r.ok ? 'Updated “' + ev.name + '” → ' + sel.value : 'Update failed', r.ok);
-                    if (r.ok) adminLoadEvents();
-                });
-                row.appendChild(sel);
-                const del = elx('button', 'admin-btn danger', 'Delete');
-                del.addEventListener('click', async () => {
-                    if (!confirm('Delete event “' + ev.name + '”?')) return;
-                    const r = await adminApi('/admin/events/' + ev.id, { method: 'DELETE' });
-                    adminMsg(r.ok ? 'Deleted “' + ev.name + '”' : 'Delete failed', r.ok);
-                    if (r.ok) adminLoadEvents();
-                });
-                row.appendChild(del);
-                wrap.appendChild(row);
-            });
-        }
-
-        async function adminCreateEvent(e) {
-            e.preventDefault();
-            const body = { type: $('aeType').value, name: $('aeName').value.trim(), date: $('aeDate').value || null, format: $('aeFormat').value || null, course_id: $('aeCourse').value ? Number($('aeCourse').value) : null, source: 'manual' };
-            if (!body.name) { adminMsg('Name required', false); return; }
-            const r = await adminApi('/admin/events', { method: 'POST', body });
-            if (r.ok) { adminMsg('Created “' + body.name + '”', true); $('adminCreateForm').reset(); adminSwitch('events'); adminLoadEvents(); }
-            else { adminMsg('Create failed (' + r.status + ')', false); }
-        }
-
-        async function adminAddCourse(e) {
-            e.preventDefault();
-            const body = { name: $('acName').value.trim(), location: $('acLoc').value.trim() || null, udisc_url: $('acUdisc').value.trim() || null };
-            if (!body.name) { adminMsg('Course name required', false); return; }
-            const r = await adminApi('/admin/courses', { method: 'POST', body });
-            if (r.ok) { adminMsg('Added course “' + body.name + '”', true); $('adminCourseForm').reset(); adminLoadCourses(); }
-            else { adminMsg('Add course failed (' + r.status + ')', false); }
-        }
-
-        function renderCandidates(cands) {
-            const wrap = $('importCandidates'); wrap.textContent = '';
-            if (!cands || !cands.length) { wrap.appendChild(elx('p', 'dash-note', 'No candidates found.')); return; }
-            cands.forEach((c) => {
-                const row = elx('div', 'admin-cand');
-                row.appendChild(elx('span', null, (c.name || '?') + (c.date ? ' (' + c.date + ')' : '') + ' [' + (c.type || 'event') + ']'));
-                const btn = elx('button', 'admin-btn secondary', 'Create');
-                btn.addEventListener('click', async () => {
-                    btn.disabled = true;
-                    const r = await adminApi('/admin/events', { method: 'POST', body: { type: c.type || 'tournament', name: c.name, date: c.date || null, format: c.format || null, source: c.source || 'manual', external_url: c.external_url || null } });
-                    btn.textContent = r.ok ? '✓ Created' : 'Failed';
-                    if (r.ok) adminLoadEvents();
-                });
-                row.appendChild(btn);
-                wrap.appendChild(row);
-            });
-        }
-
-        async function adminDgsImport() {
-            adminMsg('Importing from DiscGolfScene…', true);
-            const r = await adminApi('/admin/import/dgs', { method: 'POST', body: {} });
-            if (r.ok) { const d = await r.json(); renderCandidates(d.candidates); adminMsg((d.candidates || []).length + ' candidates loaded', true); }
-            else { adminMsg('DGS import failed (' + r.status + ')', false); }
-        }
-        async function adminCsvImport() {
-            const csv = $('csvImportText').value;
-            if (!csv.trim()) { adminMsg('Paste CSV first', false); return; }
-            const r = await adminApi('/admin/import/csv', { method: 'POST', body: { csv } });
-            if (r.ok) { const d = await r.json(); renderCandidates(d.candidates); adminMsg((d.candidates || []).length + ' rows parsed', true); }
-            else { adminMsg('CSV import failed (' + r.status + ')', false); }
-        }
-
-        function initAdmin() {
-            if (adminInited) { adminLoadEvents(); adminLoadCourses(); return; }
-            adminInited = true;
-            document.querySelectorAll('.admin-tab').forEach((t) => t.addEventListener('click', () => adminSwitch(t.dataset.atab)));
-            $('adminCreateForm').addEventListener('submit', adminCreateEvent);
-            $('adminCourseForm').addEventListener('submit', adminAddCourse);
-            $('dgsImportBtn').addEventListener('click', adminDgsImport);
-            $('csvImportBtn').addEventListener('click', adminCsvImport);
-            adminLoadEvents();
-            adminLoadCourses();
         }
 
         $('loginForm').addEventListener('submit', (e) => { e.preventDefault(); handleLogin(); });
