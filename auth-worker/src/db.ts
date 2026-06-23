@@ -258,6 +258,94 @@ export async function removeEventPlayer(db: D1Like, eventId: number, playerId: n
   await db.prepare("DELETE FROM event_players WHERE id = ? AND event_id = ?").bind(playerId, eventId).run();
 }
 
+// ---------------- event registration config + registrations (Track G) ----------------
+export interface EventConfigPatch {
+  registration_open?: number | null;
+  entry_fee_cents?: number | null;
+  ctp_fee_cents?: number | null;
+  ace_fee_cents?: number | null;
+  divisions?: string | null; // JSON array
+  play_format?: string | null;
+  notes?: string | null;
+}
+export async function getEventConfig(db: D1Like, eventId: number) {
+  return db.prepare("SELECT * FROM event_config WHERE event_id = ?").bind(eventId).first();
+}
+export async function upsertEventConfig(db: D1Like, eventId: number, c: EventConfigPatch) {
+  return db
+    .prepare(
+      `INSERT INTO event_config (event_id, registration_open, entry_fee_cents, ctp_fee_cents, ace_fee_cents, divisions, play_format, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(event_id) DO UPDATE SET registration_open=excluded.registration_open, entry_fee_cents=excluded.entry_fee_cents,
+         ctp_fee_cents=excluded.ctp_fee_cents, ace_fee_cents=excluded.ace_fee_cents, divisions=excluded.divisions,
+         play_format=excluded.play_format, notes=excluded.notes RETURNING *`,
+    )
+    .bind(eventId, c.registration_open ?? 0, c.entry_fee_cents ?? null, c.ctp_fee_cents ?? null, c.ace_fee_cents ?? null, c.divisions ?? null, c.play_format ?? null, c.notes ?? null)
+    .first();
+}
+/** Open events (scheduled, registration_open) joined with their config — for the member sign-up list. */
+export async function listOpenRegistrationEvents(db: D1Like) {
+  return (
+    await db
+      .prepare(
+        `SELECT e.id, e.name, e.date, e.type, e.format AS event_format, c.entry_fee_cents, c.ctp_fee_cents, c.ace_fee_cents, c.divisions, c.play_format
+         FROM events e JOIN event_config c ON c.event_id = e.id
+         WHERE c.registration_open = 1 AND e.status IN ('scheduled','live') ORDER BY e.date, e.id`,
+      )
+      .all()
+  ).results;
+}
+
+export interface RegistrationInput {
+  event_id: number;
+  member_id: string;
+  name: string;
+  division?: string | null;
+  team?: string | null;
+  addons?: string | null;
+}
+export async function getMyRegistration(db: D1Like, eventId: number, memberId: string) {
+  return db.prepare("SELECT * FROM registrations WHERE event_id = ? AND member_id = ?").bind(eventId, memberId).first();
+}
+export async function listMyRegistrations(db: D1Like, memberId: string) {
+  return (await db.prepare("SELECT * FROM registrations WHERE member_id = ? ORDER BY event_id DESC").bind(memberId).all()).results;
+}
+export async function listRegistrations(db: D1Like, eventId: number) {
+  return (await db.prepare("SELECT * FROM registrations WHERE event_id = ? ORDER BY division, name").bind(eventId).all()).results;
+}
+export async function registerForEvent(db: D1Like, r: RegistrationInput) {
+  return db
+    .prepare(
+      `INSERT INTO registrations (event_id, member_id, name, division, team, addons) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(event_id, member_id) DO UPDATE SET name=excluded.name, division=excluded.division, team=excluded.team, addons=excluded.addons
+       RETURNING *`,
+    )
+    .bind(r.event_id, r.member_id, r.name, r.division ?? null, r.team ?? null, r.addons ?? null)
+    .first();
+}
+export async function withdrawRegistration(db: D1Like, eventId: number, memberId: string) {
+  await db.prepare("DELETE FROM registrations WHERE event_id = ? AND member_id = ?").bind(eventId, memberId).run();
+}
+export async function setCheckedIn(db: D1Like, eventId: number, memberId: string, val: boolean) {
+  return db.prepare("UPDATE registrations SET checked_in = ? WHERE event_id = ? AND member_id = ? RETURNING *").bind(val ? 1 : 0, eventId, memberId).first();
+}
+export async function getRegistration(db: D1Like, id: number) {
+  return db.prepare("SELECT * FROM registrations WHERE id = ?").bind(id).first();
+}
+export async function adminUpdateRegistration(
+  db: D1Like,
+  id: number,
+  p: { division?: string | null; team?: string | null; starting_hole?: number | null; checked_in?: number | null; paid_entry?: number | null },
+) {
+  return db
+    .prepare(
+      `UPDATE registrations SET division=COALESCE(?,division), team=COALESCE(?,team), starting_hole=COALESCE(?,starting_hole),
+        checked_in=COALESCE(?,checked_in), paid_entry=COALESCE(?,paid_entry) WHERE id=? RETURNING *`,
+    )
+    .bind(p.division ?? null, p.team ?? null, p.starting_hole ?? null, p.checked_in ?? null, p.paid_entry ?? null, id)
+    .first();
+}
+
 // ---------------- members message board ----------------
 export interface BoardPostInput {
   parent_id?: number | null;

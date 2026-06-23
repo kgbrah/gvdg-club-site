@@ -191,6 +191,13 @@ async function handleMyResults(request: Request, env: Env, origin: string | null
   return json({ results: await db.listMemberResults(env.DB, claims.sub) }, 200, origin);
 }
 
+// A member's own event registrations (across events) — for the dashboard sign-up section.
+async function handleMyRegistrations(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const claims = await requireAuth(request, env);
+  if (!claims) return json({ error: "unauthorized" }, 401, origin);
+  return json({ registrations: await db.listMyRegistrations(env.DB, claims.sub) }, 200, origin);
+}
+
 // Members message board — members-only (read + post require a valid member JWT). Flat feed + replies.
 const BOARD_LIMIT = 15; // posts per member per minute
 async function boardRateLimited(env: Env, memberId: string): Promise<boolean> {
@@ -491,6 +498,7 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
     const f = fid == null ? null : await db.getFundraiser(env.DB, fid);
     return f ? json({ fundraiser: f }, 200, origin) : json({ error: "not_found" }, 404, origin);
   }
+  if (method === "GET" && pathname === "/registration/open") return json({ events: await db.listOpenRegistrationEvents(env.DB) }, 200, origin);
   if (method === "GET" && pathname === "/meetings") return json({ meetings: await db.listMeetings(env.DB) }, 200, origin);
   if (method === "GET" && seg[0] === "meetings" && seg.length === 2) {
     const mid = asInt(seg[1]);
@@ -551,6 +559,40 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
     return seg[2] === "layouts"
       ? json({ layouts: await db.listLayouts(env.DB, cid) }, 200, origin)
       : json({ positions: await db.listPositions(env.DB, cid) }, 200, origin);
+  }
+
+  // ---- member-authed event registration (Track G): /events/:id/{registration,register,checkin} ----
+  if (seg[0] === "events" && (seg[2] === "registration" || seg[2] === "register" || seg[2] === "checkin")) {
+    const claims = await requireAuth(request, env);
+    if (!claims) return json({ error: "unauthorized" }, 401, origin);
+    const eid = asInt(seg[1]);
+    if (eid == null) return json({ error: "not_found" }, 404, origin);
+
+    if (seg[2] === "registration" && method === "GET") {
+      return json({ config: await db.getEventConfig(env.DB, eid), registration: await db.getMyRegistration(env.DB, eid, claims.sub) }, 200, origin);
+    }
+    if (seg[2] === "register" && method === "POST") {
+      const cfg = (await db.getEventConfig(env.DB, eid)) as { registration_open?: number; divisions?: string } | null;
+      if (!cfg || cfg.registration_open !== 1) return json({ error: "registration_closed" }, 403, origin);
+      const b = (await readJson(request)) ?? {};
+      const division = asStr(b.division, 60);
+      let divs: string[] = [];
+      try { divs = JSON.parse(cfg.divisions || "[]"); } catch { divs = []; }
+      if (division && divs.length && !divs.includes(division)) return json({ error: "invalid_division" }, 400, origin);
+      const member = await getMember(env.ROSTER, claims.sub);
+      const addons = b.addons && typeof b.addons === "object" ? JSON.stringify({ ctp: !!(b.addons as Record<string, unknown>).ctp, ace: !!(b.addons as Record<string, unknown>).ace }) : null;
+      const row = await db.registerForEvent(env.DB, { event_id: eid, member_id: claims.sub, name: member?.name ?? "Member", division, team: asStr(b.team, 40), addons });
+      return json({ registration: row }, 201, origin);
+    }
+    if (seg[2] === "register" && method === "DELETE") {
+      await db.withdrawRegistration(env.DB, eid, claims.sub);
+      return json({ ok: true }, 200, origin);
+    }
+    if (seg[2] === "checkin" && method === "POST") {
+      const row = await db.setCheckedIn(env.DB, eid, claims.sub, true);
+      return row ? json({ registration: row }, 200, origin) : json({ error: "not_registered" }, 404, origin);
+    }
+    return json({ error: "not_found" }, 404, origin);
   }
 
   // ---- admin writes ----
@@ -634,6 +676,32 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
         if (pid == null) return json({ error: "not_found" }, 404, origin);
         await db.removeEventPlayer(env.DB, id, pid);
         return json({ ok: true }, 200, origin);
+      }
+    }
+    // registration config: PUT /admin/events/:id/config
+    if (seg[3] === "config" && id != null && method === "PUT") {
+      const b = (await readJson(request)) ?? {};
+      const divs = Array.isArray(b.divisions) ? JSON.stringify((b.divisions as unknown[]).filter((d) => typeof d === "string").slice(0, 40)) : null;
+      const fmt = b.play_format == null ? null : (inSet(["singles", "doubles", "teams"], b.play_format) ? (b.play_format as string) : undefined);
+      if (fmt === undefined) return json({ error: "invalid_config" }, 400, origin);
+      const row = await db.upsertEventConfig(env.DB, id, {
+        registration_open: b.registration_open ? 1 : 0, entry_fee_cents: asInt(b.entry_fee_cents), ctp_fee_cents: asInt(b.ctp_fee_cents),
+        ace_fee_cents: asInt(b.ace_fee_cents), divisions: divs, play_format: fmt, notes: asStr(b.notes, 2000),
+      });
+      return json({ config: row }, 200, origin);
+    }
+    // registrations roster: GET /admin/events/:id/registrations ; PATCH .../:rid
+    if (seg[3] === "registrations" && id != null) {
+      if (method === "GET" && seg[4] == null) return json({ registrations: await db.listRegistrations(env.DB, id) }, 200, origin);
+      if (method === "PATCH" && seg[4] != null) {
+        const rid = asInt(seg[4]);
+        if (rid == null) return json({ error: "not_found" }, 404, origin);
+        const b = (await readJson(request)) ?? {};
+        const row = await db.adminUpdateRegistration(env.DB, rid, {
+          division: asStr(b.division, 60), team: asStr(b.team, 40), starting_hole: asInt(b.starting_hole),
+          checked_in: b.checked_in == null ? null : (b.checked_in ? 1 : 0), paid_entry: b.paid_entry == null ? null : (b.paid_entry ? 1 : 0),
+        });
+        return row ? json({ registration: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
       }
     }
     if (method === "POST" && seg.length === 2) {
@@ -794,6 +862,7 @@ export default {
     if (pathname === "/me" && method === "GET") return handleMe(request, env, origin);
     if (pathname === "/my-results" && method === "GET") return handleMyResults(request, env, origin);
     if (pathname === "/board" || pathname.startsWith("/board/")) return handleBoard(request, env, origin);
+    if (pathname === "/my-registrations" && method === "GET") return handleMyRegistrations(request, env, origin);
     if (pathname === "/set-pin" && method === "POST") return handleSetPin(request, env, origin);
     if (pathname === "/profile" && method === "POST") return handleProfile(request, env, origin);
     if (pathname === "/assistant" && method === "POST") return handleAssistant(request, env, origin);
