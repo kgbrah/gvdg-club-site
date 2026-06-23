@@ -1,5 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import worker from "../src/index.js";
+
+afterEach(() => vi.unstubAllGlobals());
 
 // Minimal Map-backed KV + no-op D1 so we can exercise the /assistant route end-to-end in-process,
 // without wrangler or a real Workers AI binding (which needs a Cloudflare account).
@@ -49,5 +51,22 @@ describe("POST /assistant", () => {
     const AI = { run: async () => { throw new Error("no account"); } };
     const res = await worker.fetch(req({ message: "hi" }), makeEnv({ AI }));
     expect(res.status).toBe(502);
+  });
+
+  it("uses OpenRouter as the primary brain when a key is set", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ choices: [{ message: { content: "From OpenRouter!" } }] }), { status: 200 })));
+    const res = await worker.fetch(req({ message: "hi" }), makeEnv({ OPENROUTER_API_KEY: "sk-or-test" }));
+    const j = await res.json();
+    expect(j.reply).toBe("From OpenRouter!");
+    expect(j.provider).toBe("openrouter");
+  });
+
+  it("falls back to Workers AI when the free OpenRouter model is unavailable", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("rate limited", { status: 429 })));
+    const AI = { run: async () => ({ response: "From Workers AI fallback" }) };
+    const res = await worker.fetch(req({ message: "hi" }), makeEnv({ OPENROUTER_API_KEY: "sk-or-test", AI }));
+    const j = await res.json();
+    expect(j.reply).toBe("From Workers AI fallback");
+    expect(j.provider).toBe("workers-ai");
   });
 });
