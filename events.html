@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Events | Greenville Disc Golf Club</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #FF6B35;
+            --secondary: #004E89;
+            --accent: #F7B801;
+            --dark: #1A1A2E;
+            --light: #F4F4F9;
+            --green: #2D5016;
+            --bg-primary: #F4F4F9;
+            --bg-secondary: #FFFFFF;
+            --bg-tertiary: #F4F4F9;
+            --text-primary: #1A1A2E;
+            --text-secondary: #333333;
+            --text-tertiary: #555555;
+            --text-muted: #666666;
+            --border-color: #F4F4F9;
+            --card-shadow: rgba(0, 0, 0, 0.1);
+            --card-shadow-hover: rgba(0, 0, 0, 0.15);
+        }
+        [data-theme="dark"] {
+            --bg-primary: #0F0F1E;
+            --bg-secondary: #1A1A2E;
+            --bg-tertiary: #252538;
+            --text-primary: #F4F4F9;
+            --text-secondary: #E0E0E0;
+            --text-tertiary: #C0C0C0;
+            --text-muted: #A0A0A0;
+            --border-color: #2A2A3E;
+            --card-shadow: rgba(0, 0, 0, 0.3);
+            --card-shadow-hover: rgba(0, 0, 0, 0.5);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Archivo', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            min-height: 100vh;
+            color: var(--text-primary);
+            position: relative;
+        }
+        body::before {
+            content: ""; position: fixed; inset: 0; z-index: -1;
+            background: linear-gradient(to bottom, rgba(244,244,249,0.25), rgba(244,244,249,0.15)), url("img/bg/forest-bg.png");
+            background-repeat: no-repeat; background-position: center bottom; background-size: cover; opacity: 1;
+        }
+        [data-theme="dark"] body::before {
+            background: linear-gradient(to bottom, rgba(15,15,30,0.25), rgba(15,15,30,0.15)), url("img/bg/forest-bg.png");
+            background-repeat: no-repeat; background-position: center bottom; background-size: cover;
+        }
+
+        /* ---- Header / nav (mirrors index.html) ---- */
+        header { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: rgba(26, 26, 46, 0.95); backdrop-filter: blur(10px); padding: 1rem 1.5rem; transition: all 0.3s ease; }
+        [data-theme="dark"] header { background: rgba(15, 15, 30, 0.95); }
+        header.scrolled { box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2); padding: 0.75rem 1.5rem; }
+        nav { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem; color: white; letter-spacing: 0.05em; text-decoration: none; transition: transform 0.3s ease; display: flex; align-items: center; }
+        .logo-image { height: 50px; width: auto; transition: transform 0.3s ease; }
+        header.scrolled .logo-image { height: 40px; }
+        .logo:active { transform: scale(0.95); }
+        .logo:hover .logo-image { transform: scale(1.05); }
+        .nav-right { display: flex; align-items: center; gap: 1.5rem; }
+        .theme-toggle { background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.3); color: white; width: 44px; height: 44px; min-width: 44px; min-height: 44px; border-radius: 50%; cursor: pointer; font-size: 1.3rem; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; backdrop-filter: blur(5px); -webkit-tap-highlight-color: transparent; }
+        .theme-toggle:hover { background: rgba(255, 255, 255, 0.2); transform: rotate(20deg) scale(1.1); }
+        .theme-toggle:active { transform: rotate(20deg) scale(0.95); }
+        .nav-links { display: flex; gap: 2.5rem; list-style: none; }
+        .nav-links a { color: white; text-decoration: none; font-weight: 600; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; position: relative; transition: color 0.3s ease; -webkit-tap-highlight-color: transparent; }
+        .nav-links a::after { content: ''; position: absolute; bottom: -5px; left: 0; width: 0; height: 2px; background: var(--primary); transition: width 0.3s ease; }
+        .nav-links a:hover::after, .nav-links a:active::after { width: 100%; }
+        .nav-links a:hover { color: var(--primary); }
+        .menu-toggle { display: none; background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 0.5rem; min-width: 44px; min-height: 44px; -webkit-tap-highlight-color: transparent; transition: transform 0.2s ease; }
+        .menu-toggle:active { transform: scale(0.9); }
+        @media (max-width: 768px) {
+            header { padding: 1rem; }
+            .logo-image { height: 40px; }
+            header.scrolled .logo-image { height: 35px; }
+            .menu-toggle { display: flex; align-items: center; justify-content: center; }
+            .nav-right { gap: 1rem; }
+            .nav-links { position: fixed; top: 70px; left: 0; right: 0; background: rgba(26, 26, 46, 0.98); flex-direction: column; gap: 0; padding: 2rem; transform: translateY(-100%); opacity: 0; transition: all 0.3s ease; pointer-events: none; max-height: calc(100vh - 70px); overflow-y: auto; }
+            [data-theme="dark"] .nav-links { background: rgba(15, 15, 30, 0.98); }
+            .nav-links.active { transform: translateY(0); opacity: 1; pointer-events: all; }
+            .nav-links li { padding: 1.25rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+            .nav-links li:last-child { border-bottom: none; }
+            .nav-links a { font-size: 1.1rem; display: block; padding: 0.5rem 0; }
+        }
+
+        /* ---- Page body ---- */
+        main { padding-top: 110px; max-width: 1200px; margin: 0 auto; padding-left: 1.5rem; padding-right: 1.5rem; padding-bottom: 4rem; }
+        .page-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(2.4rem, 7vw, 4rem); text-align: center; letter-spacing: 0.05em; color: var(--text-primary); margin: 1rem 0 0.25rem; }
+        .page-subtitle { text-align: center; color: var(--text-muted); font-size: 1rem; margin-bottom: 2rem; }
+
+        /* ---- Event sections ---- */
+        .events-section { margin-bottom: 2.75rem; }
+        .events-section-head { display: flex; align-items: baseline; gap: 0.75rem; margin-bottom: 1.25rem; padding-bottom: 0.6rem; border-bottom: 2px solid var(--border-color); }
+        .events-section-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(1.6rem, 4vw, 2.2rem); letter-spacing: 0.04em; color: var(--text-primary); }
+        .events-section.live .events-section-title { color: var(--primary); }
+        .events-section-count { color: var(--text-muted); font-size: 0.85rem; font-weight: 600; }
+        .live-dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--primary); display: inline-block; box-shadow: 0 0 0 0 rgba(255,107,53,0.6); animation: pulse 1.8s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,107,53,0.6); } 70% { box-shadow: 0 0 0 10px rgba(255,107,53,0); } 100% { box-shadow: 0 0 0 0 rgba(255,107,53,0); } }
+
+        .events-grid { display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+        @media (max-width: 560px) { .events-grid { grid-template-columns: 1fr; } }
+
+        .event-card { background: var(--bg-secondary); border-radius: 15px; overflow: hidden; border: 2px solid var(--border-color); transition: all 0.3s ease; cursor: pointer; text-align: left; width: 100%; font: inherit; color: inherit; display: flex; flex-direction: column; padding: 1.4rem; gap: 0.7rem; box-shadow: 0 6px 24px var(--card-shadow); }
+        .event-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px var(--card-shadow-hover); border-color: var(--primary); }
+        .event-card:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+        .event-card.live { border-color: var(--primary); box-shadow: 0 8px 30px rgba(255, 107, 53, 0.25); }
+        .event-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+        .event-name { font-family: 'Bebas Neue', sans-serif; font-size: 1.45rem; line-height: 1.1; color: var(--text-primary); letter-spacing: 0.02em; }
+        .event-meta { font-size: 0.9rem; color: var(--text-tertiary); display: flex; flex-direction: column; gap: 0.3rem; }
+        .event-meta .meta-row { display: flex; align-items: center; gap: 0.4rem; }
+        .event-meta .meta-icon { opacity: 0.8; }
+
+        /* ---- Badges ---- */
+        .badge { padding: 0.3rem 0.7rem; border-radius: 20px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+        .type-badge { background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border-color); }
+        [data-theme="dark"] .type-badge { background: var(--bg-primary); }
+        .type-badge.tournament { background: linear-gradient(135deg, var(--primary), #cc4a1a); color: white; border: none; }
+        .type-badge.league_round { background: linear-gradient(135deg, var(--secondary), var(--green)); color: white; border: none; }
+        .type-badge.fundraiser { background: linear-gradient(135deg, var(--accent), #e5a600); color: var(--dark); border: none; }
+        .type-badge.meeting { background: var(--bg-tertiary); color: var(--text-secondary); }
+        .status-badge { font-size: 0.68rem; }
+        .status-badge.live { background: var(--primary); color: white; }
+        .status-badge.scheduled { background: rgba(0, 78, 137, 0.15); color: var(--secondary); }
+        [data-theme="dark"] .status-badge.scheduled { background: rgba(47, 127, 196, 0.25); color: #7fb3e0; }
+        .status-badge.final { background: var(--bg-tertiary); color: var(--text-muted); border: 1px solid var(--border-color); }
+        .status-badge.cancelled { background: rgba(200, 16, 46, 0.15); color: #c8102e; text-decoration: line-through; }
+        [data-theme="dark"] .status-badge.cancelled { color: #e63950; }
+
+        /* ---- Detail view ---- */
+        .detail-card { background: var(--bg-secondary); border-radius: 18px; padding: clamp(1.5rem, 4vw, 2.5rem); box-shadow: 0 10px 40px var(--card-shadow); border: 1px solid rgba(0, 78, 137, 0.08); margin-bottom: 1.5rem; }
+        [data-theme="dark"] .detail-card { border-color: rgba(255, 255, 255, 0.05); }
+        .detail-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-bottom: 0.75rem; }
+        .detail-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(2rem, 6vw, 3rem); letter-spacing: 0.03em; color: var(--text-primary); flex: 1 1 100%; }
+        .detail-facts { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin: 1.5rem 0; }
+        .detail-fact { background: var(--bg-tertiary); border-radius: 12px; padding: 1rem; }
+        [data-theme="dark"] .detail-fact { background: var(--bg-primary); }
+        .detail-fact .label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.35rem; }
+        .detail-fact .value { font-size: 1rem; color: var(--text-secondary); font-weight: 600; word-break: break-word; }
+        .detail-fact .value a { color: var(--primary); text-decoration: none; }
+        .detail-fact .value a:hover { text-decoration: underline; }
+        .detail-notes { background: var(--bg-tertiary); border-left: 4px solid var(--accent); border-radius: 8px; padding: 1rem 1.25rem; margin: 1.25rem 0; color: var(--text-secondary); line-height: 1.6; white-space: pre-wrap; }
+        [data-theme="dark"] .detail-notes { background: var(--bg-primary); }
+        .live-banner { display: flex; align-items: center; gap: 0.6rem; background: linear-gradient(135deg, var(--primary), #cc4a1a); color: white; border-radius: 12px; padding: 1rem 1.25rem; margin: 1.25rem 0; font-weight: 700; }
+        .live-banner .leaderboard-link { margin-left: auto; color: white; text-decoration: underline; font-size: 0.9rem; font-weight: 600; }
+
+        .roster-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; letter-spacing: 0.03em; color: var(--text-primary); margin: 1.75rem 0 1rem; }
+        .division-group { margin-bottom: 1.5rem; }
+        .division-name { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--primary); font-weight: 700; margin-bottom: 0.6rem; }
+        .player-list { display: grid; gap: 0.5rem; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+        .player-row { background: var(--bg-tertiary); border-radius: 10px; padding: 0.65rem 0.85rem; display: flex; align-items: baseline; gap: 0.5rem; border: 1px solid var(--border-color); }
+        [data-theme="dark"] .player-row { background: var(--bg-primary); }
+        .player-name { font-weight: 600; color: var(--text-secondary); }
+        .player-pdga { font-size: 0.78rem; color: var(--text-muted); }
+        .player-team { margin-left: auto; font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+        /* ---- States ---- */
+        .status-box { text-align: center; padding: 3rem 1.5rem; color: var(--text-muted); }
+        .status-box .spinner { width: 42px; height: 42px; border: 4px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; margin: 0 auto 1rem; animation: spin 0.9s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .status-box.error { color: #c8102e; }
+        [data-theme="dark"] .status-box.error { color: #e63950; }
+        .status-box .empty-icon { font-size: 2.5rem; opacity: 0.6; margin-bottom: 0.5rem; }
+        .retry-btn { margin-top: 1rem; background: var(--primary); color: white; border: none; padding: 0.75rem 1.75rem; min-height: 44px; border-radius: 50px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer; transition: all 0.3s ease; }
+        .retry-btn:hover { background: #ff7f4d; transform: translateY(-2px); }
+        .last-updated { text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-top: 1.5rem; }
+        .back-link { display: inline-block; margin-top: 0.5rem; color: var(--text-muted); text-decoration: none; font-size: 0.95rem; background: none; border: none; cursor: pointer; font: inherit; }
+        .back-link:hover { color: var(--primary); }
+
+        /* ---- Footer (mirrors index.html) ---- */
+        footer { background: linear-gradient(135deg, var(--dark) 0%, #0d1a0d 100%); color: white; text-align: center; padding: 2.5rem 2rem; font-size: 0.95rem; border-top: 3px solid var(--accent); }
+        [data-theme="dark"] footer { background: linear-gradient(135deg, var(--bg-secondary) 0%, #0a0a14 100%); }
+        @media print { header, footer { display: none; } }
+    </style>
+</head>
+<body data-api-base="https://auth.greenvillediscgolf.com">
+    <header>
+    <nav>
+        <a href="index.html" class="logo">
+            <img src="img/logo.png" alt="Greenville DGC Logo" class="logo-image">
+        </a>
+        <ul class="nav-links">
+            <li><a href="index.html#about">About</a></li>
+            <li><a href="index.html#courses">Courses</a></li>
+            <li><a href="events.html">Events</a></li>
+            <li><a href="gvdg-blog.html">Blog</a></li>
+            <li><a href="gvdg-members.html">Members</a></li>
+            <li><a href="ryder-cup.html">Ryder Cup</a></li>
+            <li><a href="index.html#contact">Contact</a></li>
+        </ul>
+       <div class="nav-right">
+            <button class="menu-toggle" aria-label="Toggle menu">☰</button>
+            <button class="theme-toggle" aria-label="Toggle dark mode">
+                <span class="theme-icon">🌙</span>
+            </button>
+        </div>
+    </nav>
+</header>
+
+    <main>
+        <h1 class="page-title">Events</h1>
+        <p class="page-subtitle">Tournaments, league rounds &amp; club happenings</p>
+
+        <!-- Loading / error / content -->
+        <div id="status" class="status-box">
+            <div class="spinner"></div>
+            <div>Loading events&hellip;</div>
+        </div>
+
+        <!-- Hub view (live / upcoming / past sections) -->
+        <div id="hub" hidden></div>
+
+        <!-- Detail view (single event) -->
+        <div id="detail" hidden></div>
+
+        <p id="lastUpdated" class="last-updated" hidden></p>
+        <div style="text-align:center;">
+            <a href="index.html" class="back-link">&larr; Back to home</a>
+        </div>
+    </main>
+
+    <footer><p>&copy; 2026 Greenville Disc Golf Club. All rights reserved. | Greenville, NC</p></footer>
+
+    <script type="module">
+        import {
+            bucketEvents,
+            normalizeEvent,
+            groupPlayersByDivision,
+            buildCourseIndex,
+            courseNameFor,
+            formatEventDate,
+            typeLabel,
+            statusLabel,
+        } from './events.js';
+
+        // --- Theme toggle (mirrors index.html) ---
+        const themeToggle = document.querySelector('.theme-toggle');
+        const themeIcon = document.querySelector('.theme-icon');
+        const html = document.documentElement;
+        const currentTheme = localStorage.getItem('theme') || 'light';
+        html.setAttribute('data-theme', currentTheme);
+        themeIcon.textContent = currentTheme === 'dark' ? '☀️' : '🌙';
+        themeToggle.addEventListener('click', () => {
+            const t = html.getAttribute('data-theme');
+            const n = t === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', n);
+            localStorage.setItem('theme', n);
+            themeIcon.textContent = n === 'dark' ? '☀️' : '🌙';
+        });
+
+        // --- Mobile menu (mirrors index.html) ---
+        const menuToggle = document.querySelector('.menu-toggle');
+        const navLinks = document.querySelector('.nav-links');
+        menuToggle.addEventListener('click', () => {
+            navLinks.classList.toggle('active');
+            menuToggle.textContent = navLinks.classList.contains('active') ? '✕' : '☰';
+        });
+        document.querySelectorAll('.nav-links a').forEach((l) =>
+            l.addEventListener('click', () => {
+                navLinks.classList.remove('active');
+                menuToggle.textContent = '☰';
+            })
+        );
+
+        // --- Scrolled header shadow (mirrors index.html) ---
+        const header = document.querySelector('header');
+        window.addEventListener('scroll', () => {
+            window.scrollY > 100 ? header.classList.add('scrolled') : header.classList.remove('scrolled');
+        });
+
+        // --- API wiring ---
+        // Public read endpoints on the club Worker. Base is configurable on <body>
+        // so the senior engineer can repoint it at a local Worker for testing.
+        const API_BASE = (document.body.dataset.apiBase || 'https://auth.greenvillediscgolf.com')
+            .trim()
+            .replace(/\/+$/, ''); // strip trailing slashes
+        const REFRESH_MS = 60 * 1000; // ~60s background refresh on the hub
+
+        const statusEl = document.getElementById('status');
+        const hubEl = document.getElementById('hub');
+        const detailEl = document.getElementById('detail');
+        const lastUpdatedEl = document.getElementById('lastUpdated');
+
+        // In-memory caches so navigating hub <-> detail doesn't refetch needlessly.
+        let courseIndex = new Map();
+        let coursesLoaded = false;
+        let refreshTimer = null;
+
+        // --- XSS-safe DOM helper (mirrors ryder-cup.html) ---
+        // Every piece of API data lands here as a text node; we NEVER assign
+        // innerHTML with API data anywhere in this file.
+        function el(tag, className, text) {
+            const node = document.createElement(tag);
+            if (className) node.className = className;
+            if (text != null) node.textContent = text;
+            return node;
+        }
+
+        // Build a safe external anchor. href is sanitized to http(s) only so a
+        // hostile external_url/udisc_url can't inject a javascript: URL.
+        function safeLink(href, text) {
+            const a = el('a', null, text);
+            const clean = sanitizeUrl(href);
+            if (clean) {
+                a.href = clean;
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+            }
+            return a;
+        }
+        function sanitizeUrl(raw) {
+            if (!raw) return '';
+            try {
+                const u = new URL(String(raw), window.location.href);
+                return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : '';
+            } catch (_e) {
+                return '';
+            }
+        }
+
+        function setView(which) {
+            statusEl.hidden = which !== 'status';
+            hubEl.hidden = which !== 'hub';
+            detailEl.hidden = which !== 'detail';
+        }
+
+        function showStatus(message, isError, onRetry) {
+            setView('status');
+            statusEl.className = 'status-box' + (isError ? ' error' : '');
+            statusEl.replaceChildren();
+            if (isError) {
+                statusEl.appendChild(el('div', null, message));
+                const btn = el('button', 'retry-btn', 'Retry');
+                btn.type = 'button';
+                btn.addEventListener('click', onRetry || route);
+                statusEl.appendChild(btn);
+            } else {
+                statusEl.appendChild(el('div', 'spinner'));
+                statusEl.appendChild(el('div', null, message));
+            }
+        }
+
+        function showEmpty(message) {
+            setView('status');
+            statusEl.className = 'status-box';
+            statusEl.replaceChildren();
+            statusEl.appendChild(el('div', 'empty-icon', '🥏'));
+            statusEl.appendChild(el('div', null, message));
+        }
+
+        async function fetchJson(path) {
+            const res = await fetch(`${API_BASE}${path}`, {
+                cache: 'no-store',
+                headers: { Accept: 'application/json' },
+            });
+            if (!res.ok) throw new Error(`Request failed (${res.status})`);
+            return res.json();
+        }
+
+        // Lazily load /courses once so cards/detail can show a course name.
+        async function ensureCourses() {
+            if (coursesLoaded) return;
+            try {
+                const data = await fetchJson('/courses');
+                courseIndex = buildCourseIndex(data && data.courses);
+            } catch (_e) {
+                // Course names are a nicety — never block events on this.
+                courseIndex = new Map();
+            }
+            coursesLoaded = true;
+        }
+
+        // ---------- HUB ----------
+        function badge(text, classes) {
+            const b = el('span', 'badge ' + classes, text);
+            return b;
+        }
+
+        function eventCard(ev) {
+            // Use a <button> so the card is keyboard-focusable + screen-reader friendly.
+            const card = el('button', 'event-card' + (ev.status === 'live' ? ' live' : ''));
+            card.type = 'button';
+            card.addEventListener('click', () => {
+                window.location.hash = `#event/${encodeURIComponent(ev.id)}`;
+            });
+
+            const top = el('div', 'event-card-top');
+            top.appendChild(el('h3', 'event-name', ev.name));
+            if (ev.type) top.appendChild(badge(typeLabel(ev.type), 'type-badge ' + ev.type));
+            card.appendChild(top);
+
+            const meta = el('div', 'event-meta');
+            const dateRow = el('div', 'meta-row');
+            dateRow.appendChild(el('span', 'meta-icon', '📅'));
+            dateRow.appendChild(el('span', null, formatEventDate(ev.date)));
+            meta.appendChild(dateRow);
+
+            const courseName = courseNameFor(courseIndex, ev.course_id);
+            if (courseName) {
+                const courseRow = el('div', 'meta-row');
+                courseRow.appendChild(el('span', 'meta-icon', '📍'));
+                courseRow.appendChild(el('span', null, courseName));
+                meta.appendChild(courseRow);
+            }
+            card.appendChild(meta);
+
+            if (ev.status) {
+                const statusRow = el('div', 'event-card-top');
+                statusRow.appendChild(badge(statusLabel(ev.status), 'status-badge ' + ev.status));
+                card.appendChild(statusRow);
+            }
+            return card;
+        }
+
+        function section(title, events, opts = {}) {
+            const wrap = el('section', 'events-section' + (opts.live ? ' live' : ''));
+            const head = el('div', 'events-section-head');
+            if (opts.live) head.appendChild(el('span', 'live-dot'));
+            head.appendChild(el('h2', 'events-section-title', title));
+            head.appendChild(el('span', 'events-section-count', `${events.length} event${events.length === 1 ? '' : 's'}`));
+            wrap.appendChild(head);
+
+            const grid = el('div', 'events-grid');
+            for (const ev of events) grid.appendChild(eventCard(ev));
+            wrap.appendChild(grid);
+            return wrap;
+        }
+
+        function renderHub(rawEvents) {
+            const { live, upcoming, past } = bucketEvents(rawEvents);
+
+            if (!live.length && !upcoming.length && !past.length) {
+                showEmpty('No events posted yet — check back soon!');
+                return;
+            }
+
+            hubEl.replaceChildren();
+            if (live.length) hubEl.appendChild(section('Live Now', live, { live: true }));
+            if (upcoming.length) hubEl.appendChild(section('Upcoming', upcoming));
+            if (past.length) hubEl.appendChild(section('Past Events', past));
+            setView('hub');
+
+            lastUpdatedEl.hidden = false;
+            lastUpdatedEl.textContent =
+                'Last updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        async function loadHub() {
+            showStatus('Loading events…', false);
+            try {
+                // Courses first (best-effort) so cards can show names on first paint.
+                await ensureCourses();
+                const data = await fetchJson('/events');
+                renderHub(data && data.events);
+            } catch (_err) {
+                hubEl.replaceChildren();
+                lastUpdatedEl.hidden = true;
+                showStatus('We couldn’t load events right now. Please try again.', true, loadHub);
+            }
+        }
+
+        // ---------- DETAIL ----------
+        function fact(label, valueNode) {
+            const f = el('div', 'detail-fact');
+            f.appendChild(el('div', 'label', label));
+            const v = el('div', 'value');
+            if (typeof valueNode === 'string') v.textContent = valueNode;
+            else v.appendChild(valueNode);
+            f.appendChild(v);
+            return f;
+        }
+
+        function renderDetail(rawEvent) {
+            const ev = normalizeEvent(rawEvent);
+            detailEl.replaceChildren();
+
+            const backBtn = el('button', 'back-link', '← All events');
+            backBtn.type = 'button';
+            backBtn.addEventListener('click', () => { window.location.hash = ''; });
+            detailEl.appendChild(backBtn);
+
+            const card = el('div', 'detail-card');
+
+            const head = el('div', 'detail-head');
+            head.appendChild(el('h2', 'detail-title', ev.name));
+            if (ev.type) head.appendChild(badge(typeLabel(ev.type), 'type-badge ' + ev.type));
+            if (ev.status) head.appendChild(badge(statusLabel(ev.status), 'status-badge ' + ev.status));
+            card.appendChild(head);
+
+            // Live scoring placeholder (real leaderboard is a later phase).
+            if (ev.status === 'live') {
+                const banner = el('div', 'live-banner');
+                banner.appendChild(el('span', 'live-dot'));
+                banner.appendChild(el('span', null, 'Live scoring in progress'));
+                banner.appendChild(el('span', 'leaderboard-link', 'Live leaderboard coming soon'));
+                card.appendChild(banner);
+            }
+
+            const facts = el('div', 'detail-facts');
+            facts.appendChild(fact('Date', formatEventDate(ev.date)));
+            if (ev.format) facts.appendChild(fact('Format', ev.format));
+
+            const courseName = courseNameFor(courseIndex, ev.course_id);
+            const course = courseIndex.get(String(ev.course_id));
+            if (courseName) {
+                const udiscLink = course && sanitizeUrl(course.udisc_url);
+                if (udiscLink) {
+                    const wrap = el('span');
+                    wrap.appendChild(el('span', null, courseName + ' '));
+                    wrap.appendChild(safeLink(course.udisc_url, '(UDisc ↗)'));
+                    facts.appendChild(fact('Course', wrap));
+                } else {
+                    facts.appendChild(fact('Course', courseName));
+                }
+            }
+            if (ev.external_url && sanitizeUrl(ev.external_url)) {
+                facts.appendChild(fact('More info', safeLink(ev.external_url, 'External link ↗')));
+            }
+            card.appendChild(facts);
+
+            if (ev.notes) {
+                card.appendChild(el('div', 'detail-notes', ev.notes));
+            }
+
+            // Roster, grouped by division when present.
+            const grouped = groupPlayersByDivision(ev.players);
+            if (grouped.length) {
+                card.appendChild(el('h3', 'roster-title', `Players (${ev.players.length})`));
+                // If everyone is in the single synthetic 'Open' group, skip the heading.
+                const showDivisionHeads = !(grouped.length === 1 && grouped[0].division === 'Open');
+                for (const group of grouped) {
+                    const groupWrap = el('div', 'division-group');
+                    if (showDivisionHeads) groupWrap.appendChild(el('div', 'division-name', group.division));
+                    const listEl = el('div', 'player-list');
+                    for (const p of group.players) {
+                        const row = el('div', 'player-row');
+                        row.appendChild(el('span', 'player-name', p && p.name != null ? String(p.name) : 'Unnamed'));
+                        if (p && p.pdga_no) row.appendChild(el('span', 'player-pdga', '#' + p.pdga_no));
+                        if (p && p.team) row.appendChild(el('span', 'player-team', String(p.team)));
+                        listEl.appendChild(row);
+                    }
+                    groupWrap.appendChild(listEl);
+                    card.appendChild(groupWrap);
+                }
+            }
+
+            detailEl.appendChild(card);
+            setView('detail');
+            lastUpdatedEl.hidden = true;
+            window.scrollTo(0, 0);
+        }
+
+        async function loadDetail(id) {
+            showStatus('Loading event…', false);
+            try {
+                await ensureCourses(); // for course name + UDisc link
+                const data = await fetchJson(`/events/${encodeURIComponent(id)}`);
+                if (!data || !data.event) {
+                    showStatus('That event could not be found.', true, () => { window.location.hash = ''; });
+                    return;
+                }
+                renderDetail(data.event);
+            } catch (_err) {
+                showStatus('We couldn’t load that event right now. Please try again.', true, () => loadDetail(id));
+            }
+        }
+
+        // ---------- ROUTING ----------
+        // Hash route: "#event/:id" -> detail; anything else -> hub.
+        function parseHash() {
+            const m = (window.location.hash || '').match(/^#event\/(.+)$/);
+            return m ? decodeURIComponent(m[1]) : null;
+        }
+
+        function route() {
+            stopRefresh();
+            const id = parseHash();
+            if (id) {
+                loadDetail(id);
+            } else {
+                loadHub();
+                startRefresh();
+            }
+        }
+
+        // Quiet ~60s background refresh while on the hub. Keeps current content
+        // on screen and only swaps it in once the new payload parses cleanly.
+        function startRefresh() {
+            stopRefresh();
+            refreshTimer = setInterval(async () => {
+                if (!hubEl.hidden) {
+                    try {
+                        const data = await fetchJson('/events');
+                        renderHub(data && data.events);
+                    } catch (_e) {
+                        // Silent on background refresh; visible content stays put.
+                    }
+                }
+            }, REFRESH_MS);
+        }
+        function stopRefresh() {
+            if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+        }
+
+        window.addEventListener('hashchange', route);
+        route();
+    </script>
+</body>
+</html>
