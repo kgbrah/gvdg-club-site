@@ -140,6 +140,14 @@ describe("POST /set-pin", () => {
   });
 });
 
+describe("misconfiguration (fail closed)", () => {
+  it("returns 500 — not a weakly-signed token — when JWT_SECRET is missing/short", async () => {
+    const badEnv = { ...env, JWT_SECRET: "" };
+    const res = await worker.fetch(post("/login", { identifier: "12345", pin: PIN }), badEnv);
+    expect(res.status).toBe(500);
+  });
+});
+
 describe("CORS", () => {
   it("answers preflight from an allowed origin with the ACAO header", async () => {
     const res = await worker.fetch(
