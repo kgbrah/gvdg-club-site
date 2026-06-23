@@ -151,6 +151,20 @@
         [data-theme="dark"] .detail-notes { background: var(--bg-primary); }
         .live-banner { display: flex; align-items: center; gap: 0.6rem; background: linear-gradient(135deg, var(--primary), #cc4a1a); color: white; border-radius: 12px; padding: 1rem 1.25rem; margin: 1.25rem 0; font-weight: 700; }
         .live-banner .leaderboard-link { margin-left: auto; color: white; text-decoration: underline; font-size: 0.9rem; font-weight: 600; }
+        .lb-conn { margin-left: auto; font-size: 0.78rem; font-weight: 700; opacity: 0.9; }
+        .lb-wrap { margin: 0.25rem 0 1.25rem; }
+        .lb-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+        .lb-table th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); padding: 0.4rem 0.6rem; border-bottom: 2px solid var(--border-color); }
+        .lb-table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary); }
+        .lb-table tbody tr:first-child td { font-weight: 700; color: var(--text-primary); }
+        .lb-pos { width: 2.5rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+        .lb-name { font-weight: 600; color: var(--text-primary); }
+        .lb-topar { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+        .lb-topar.under { color: #2e9e44; }
+        .lb-topar.over { color: var(--primary); }
+        .lb-empty { color: var(--text-muted); padding: 0.75rem 0; font-style: italic; }
+        @keyframes lbflash { from { background: rgba(255,107,53,0.18); } to { background: transparent; } }
+        .lb-table tbody tr.lb-upd td { animation: lbflash 0.9s ease-out; }
 
         .roster-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; letter-spacing: 0.03em; color: var(--text-primary); margin: 1.75rem 0 1rem; }
         .division-group { margin-bottom: 1.5rem; }
@@ -454,6 +468,7 @@
         }
 
         async function loadHub() {
+            teardownLive(); // close any live socket from a detail view
             showStatus('Loading events…', false);
             try {
                 // Courses first (best-effort) so cards can show names on first paint.
@@ -478,6 +493,57 @@
             return f;
         }
 
+        // ---- Live leaderboard (S3): WebSocket viewer with polling fallback ----
+        let activeLive = null;
+        function teardownLive() {
+            if (!activeLive) return;
+            try { if (activeLive.ws) activeLive.ws.close(); } catch (_e) {}
+            if (activeLive.poll) clearInterval(activeLive.poll);
+            activeLive = null;
+        }
+        function fmtToPar(n) { n = n || 0; return n === 0 ? 'E' : (n > 0 ? '+' + n : String(n)); }
+        function renderStandings(container, snap) {
+            const standings = (snap && snap.standings) || [];
+            container.replaceChildren();
+            if (!standings.length) { container.appendChild(el('p', 'lb-empty', 'Waiting for the first scores…')); return; }
+            const table = el('table', 'lb-table');
+            const thead = el('thead'); const htr = el('tr');
+            ['Pos', 'Player', 'Thru', 'Total', 'To Par'].forEach((h) => htr.appendChild(el('th', null, h)));
+            thead.appendChild(htr); table.appendChild(thead);
+            const tbody = el('tbody');
+            standings.forEach((s, i) => {
+                const tr = el('tr');
+                tr.appendChild(el('td', 'lb-pos', String(i + 1)));
+                tr.appendChild(el('td', 'lb-name', s && s.name != null ? String(s.name) : 'Player'));
+                tr.appendChild(el('td', null, s && s.thru ? String(s.thru) : '—'));
+                tr.appendChild(el('td', null, s && s.total != null && s.thru ? String(s.total) : '—'));
+                const tp = el('td', 'lb-topar', s && s.thru ? fmtToPar(s.toPar) : '—');
+                if (s && s.thru) { if ((s.toPar || 0) < 0) tp.classList.add('under'); else if ((s.toPar || 0) > 0) tp.classList.add('over'); }
+                tr.appendChild(tp);
+                tbody.appendChild(tr);
+            });
+            table.appendChild(tbody);
+            container.appendChild(table);
+        }
+        function mountLiveLeaderboard(eventId, container, statusEl) {
+            teardownLive();
+            const ctx = { ws: null, poll: null, gotWs: false };
+            activeLive = ctx;
+            const setConn = (t) => { if (statusEl) statusEl.textContent = t; };
+            const pollOnce = async () => { try { const d = await fetchJson(`/events/${encodeURIComponent(eventId)}/live`); if (activeLive === ctx) renderStandings(container, d); } catch (_e) {} };
+            const startPolling = () => { if (ctx.poll || activeLive !== ctx) return; setConn('live (auto-refresh)'); pollOnce(); ctx.poll = setInterval(pollOnce, 5000); };
+            try {
+                const wsUrl = API_BASE.replace(/^http/, 'ws') + `/events/${encodeURIComponent(eventId)}/live/ws`;
+                const ws = new WebSocket(wsUrl);
+                ctx.ws = ws;
+                ws.onopen = () => { ctx.gotWs = true; setConn('● live'); };
+                ws.onmessage = (e) => { try { if (activeLive === ctx) renderStandings(container, JSON.parse(e.data)); } catch (_e) {} };
+                ws.onerror = () => { if (!ctx.gotWs) startPolling(); };
+                ws.onclose = () => { if (!ctx.gotWs && activeLive === ctx) startPolling(); };
+                setTimeout(() => { if (!ctx.gotWs) startPolling(); }, 4000); // fallback if the upgrade stalls
+            } catch (_e) { startPolling(); }
+        }
+
         function renderDetail(rawEvent) {
             const ev = normalizeEvent(rawEvent);
             detailEl.replaceChildren();
@@ -495,13 +561,17 @@
             if (ev.status) head.appendChild(badge(statusLabel(ev.status), 'status-badge ' + ev.status));
             card.appendChild(head);
 
-            // Live scoring placeholder (real leaderboard is a later phase).
+            // Live scoring: real-time leaderboard over WebSocket (polling fallback).
             if (ev.status === 'live') {
                 const banner = el('div', 'live-banner');
                 banner.appendChild(el('span', 'live-dot'));
                 banner.appendChild(el('span', null, 'Live scoring in progress'));
-                banner.appendChild(el('span', 'leaderboard-link', 'Live leaderboard coming soon'));
+                const conn = el('span', 'lb-conn', 'connecting…');
+                banner.appendChild(conn);
                 card.appendChild(banner);
+                const lb = el('div', 'lb-wrap');
+                card.appendChild(lb);
+                mountLiveLeaderboard(ev.id, lb, conn);
             }
 
             const facts = el('div', 'detail-facts');
@@ -559,6 +629,7 @@
         }
 
         async function loadDetail(id) {
+            teardownLive(); // close any prior live socket before re-rendering
             showStatus('Loading event…', false);
             try {
                 await ensureCourses(); // for course name + UDisc link
