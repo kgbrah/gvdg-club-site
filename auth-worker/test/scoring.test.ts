@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { countScores, computeLeaderboard, finalizeStandings, type PlayerState } from "../src/scoring.js";
+import { countScores, computeLeaderboard, finalizeStandings, computeLeagueStandings, type PlayerState } from "../src/scoring.js";
 
 describe("countScores (UDisc-style breakdown)", () => {
   it("buckets holes by score-to-par and tallies aces separately", () => {
@@ -58,5 +58,31 @@ describe("finalizeStandings (placements + breakdown for results)", () => {
     const fs = finalizeStandings(holes, [{ memberId: "x", name: "X", scores: { 1: 4 } }]);
     expect(fs[0]).toMatchObject({ place: 1, thru: 1, total: 4, toPar: 1 });
     expect(fs[0]!.breakdown).toMatchObject({ bogeys: 1 });
+  });
+});
+
+describe("computeLeagueStandings (season table across a league's events)", () => {
+  it("aggregates per member into points/wins, sorts with tiebreaks", () => {
+    const rows = [
+      { member_id: "a", name: "Ann", place: 1, to_par: -3 }, // round 1
+      { member_id: "b", name: "Bo", place: 2, to_par: -1 },
+      { member_id: "a", name: "Ann", place: 2, to_par: -1 }, // round 2
+      { member_id: "b", name: "Bo", place: 1, to_par: -4 },
+      { member_id: "c", name: "Cy", place: 3, to_par: 1 },
+    ];
+    const st = computeLeagueStandings(rows);
+    // Ann & Bo both 17 pts / 1 win → tiebreak total_to_par asc → Bo (-5) ahead of Ann (-4)
+    expect(st.map((s) => s.name)).toEqual(["Bo", "Ann", "Cy"]);
+    expect(st[0]).toMatchObject({ name: "Bo", events: 2, wins: 1, points: 17, total_to_par: -5, best_place: 1 });
+    expect(st.find((s) => s.name === "Cy")).toMatchObject({ events: 1, wins: 0, points: 5, best_place: 3 });
+  });
+
+  it("groups guests (null member_id) by name", () => {
+    const st = computeLeagueStandings([
+      { member_id: null, name: "Guest", place: 1, to_par: -2 },
+      { member_id: null, name: "Guest", place: 1, to_par: -1 },
+    ]);
+    expect(st).toHaveLength(1);
+    expect(st[0]).toMatchObject({ name: "Guest", events: 2, wins: 2 });
   });
 });

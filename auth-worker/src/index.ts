@@ -17,6 +17,7 @@ import { EVENT_TYPES, EVENT_STATUSES, EVENT_FORMATS, type D1Like } from "./db.js
 import { safeFetch, normalizeDgs, normalizeCsvEvents, parseCsvRows, parseUdiscLayout, ImportError } from "./imports.js";
 import { enrichHoles, type LayoutHole } from "./layouts.js";
 import { buildMessages, generateReply, MAX_HISTORY, type ChatTurn, type ChatMessage, type ReplyProvider } from "./assistant.js";
+import { computeLeagueStandings } from "./scoring.js";
 
 // Default discgolfscene feed = the club scraper's committed tournaments.json.
 const DEFAULT_DGS_FEED = "https://raw.githubusercontent.com/mostlysober252/GVDG-DGS-Scraper-2.0/main/tournaments.json";
@@ -431,6 +432,13 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
   // ---- public reads ----
   if (method === "GET" && pathname === "/courses") return json({ courses: await db.listCourses(env.DB) }, 200, origin);
   if (method === "GET" && pathname === "/leagues") return json({ leagues: await db.listLeagues(env.DB) }, 200, origin);
+  if (method === "GET" && seg[0] === "leagues" && seg.length === 2) {
+    const lid = asInt(seg[1]);
+    const league = lid == null ? null : await db.getLeague(env.DB, lid);
+    if (!league) return json({ error: "not_found" }, 404, origin);
+    const standings = computeLeagueStandings((await db.leagueResultRows(env.DB, lid!)) as { member_id: string | null; name: string; place: number | null; to_par: number | null }[]);
+    return json({ league, standings, events: await db.listLeagueEvents(env.DB, lid!) }, 200, origin);
+  }
   if (method === "GET" && pathname === "/events") {
     const p = new URL(request.url).searchParams;
     return json({ events: await db.listEvents(env.DB, { status: p.get("status") ?? undefined, type: p.get("type") ?? undefined }) }, 200, origin);
@@ -599,6 +607,11 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
       if (!b || !name) return json({ error: "invalid_league" }, 400, origin);
       const row = await db.createLeague(env.DB, { name, season: asStr(b.season, 40), format: asStr(b.format, 20), description: asStr(b.description, 2000), created_by: adminId });
       return json({ league: row }, 201, origin);
+    }
+    if (method === "PATCH" && id != null) {
+      const b = (await readJson(request)) ?? {};
+      const row = await db.updateLeague(env.DB, id, { name: asStr(b.name, 120), season: asStr(b.season, 40), format: asStr(b.format, 20), description: asStr(b.description, 2000) });
+      return row ? json({ league: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
     }
     if (method === "DELETE" && id != null) { await db.deleteLeague(env.DB, id); return json({ ok: true }, 200, origin); }
   }

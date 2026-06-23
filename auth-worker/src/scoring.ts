@@ -107,3 +107,45 @@ export function finalizeStandings(holes: { hole: number; par: number }[], player
     return { ...r, place };
   });
 }
+
+// ---------------- league standings ----------------
+export interface LeagueStanding {
+  member_id: string | null;
+  name: string;
+  events: number;
+  wins: number;
+  podiums: number;
+  total_to_par: number;
+  best_place: number | null;
+  points: number;
+}
+
+// Season points by finishing place (tunable).
+const placePoints = (place: number | null): number =>
+  place == null ? 0 : place === 1 ? 10 : place === 2 ? 7 : place === 3 ? 5 : place === 4 ? 3 : place <= 10 ? 1 : 0;
+
+/** Aggregate a league's per-event result rows into a season standings table: points/wins/podiums/
+ *  cumulative to-par per player. Members keyed by member_id; guests grouped by name. */
+export function computeLeagueStandings(
+  rows: { member_id: string | null; name: string; place: number | null; to_par: number | null }[],
+): LeagueStanding[] {
+  const map = new Map<string, LeagueStanding>();
+  for (const r of rows) {
+    const key = r.member_id || "name:" + r.name;
+    let s = map.get(key);
+    if (!s) {
+      s = { member_id: r.member_id ?? null, name: r.name, events: 0, wins: 0, podiums: 0, total_to_par: 0, best_place: null, points: 0 };
+      map.set(key, s);
+    }
+    s.name = r.name; // keep the most recent display name
+    s.events++;
+    if (r.place === 1) s.wins++;
+    if (r.place != null && r.place <= 3) s.podiums++;
+    if (r.to_par != null) s.total_to_par += r.to_par;
+    if (r.place != null && (s.best_place == null || r.place < s.best_place)) s.best_place = r.place;
+    s.points += placePoints(r.place);
+  }
+  return [...map.values()].sort(
+    (a, b) => b.points - a.points || b.wins - a.wins || a.total_to_par - b.total_to_par || a.name.localeCompare(b.name),
+  );
+}

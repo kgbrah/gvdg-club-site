@@ -150,8 +150,38 @@ export async function createLeague(
     .bind(l.name, l.season ?? null, l.format ?? null, l.description ?? null, l.created_by ?? null)
     .first();
 }
+export async function getLeague(db: D1Like, id: number) {
+  return db.prepare("SELECT * FROM leagues WHERE id = ?").bind(id).first();
+}
+export async function updateLeague(
+  db: D1Like,
+  id: number,
+  l: { name?: string | null; season?: string | null; format?: string | null; description?: string | null },
+) {
+  return db
+    .prepare(
+      "UPDATE leagues SET name=COALESCE(?,name), season=COALESCE(?,season), format=COALESCE(?,format), description=COALESCE(?,description) WHERE id=? RETURNING *",
+    )
+    .bind(l.name ?? null, l.season ?? null, l.format ?? null, l.description ?? null, id)
+    .first();
+}
 export async function deleteLeague(db: D1Like, id: number) {
   await db.prepare("DELETE FROM leagues WHERE id = ?").bind(id).run();
+}
+/** A league's events (most recent first). */
+export async function listLeagueEvents(db: D1Like, leagueId: number) {
+  return (await db.prepare("SELECT * FROM events WHERE league_id = ? ORDER BY date DESC, id DESC").bind(leagueId).all()).results;
+}
+/** Result rows across a league's FINALIZED events — fed to computeLeagueStandings. */
+export async function leagueResultRows(db: D1Like, leagueId: number) {
+  return (
+    await db
+      .prepare(
+        "SELECT r.member_id, r.name, r.place, r.to_par FROM results r JOIN events e ON e.id = r.event_id WHERE e.league_id = ? AND e.status = 'final'",
+      )
+      .bind(leagueId)
+      .all()
+  ).results;
 }
 
 // ---------------- events ----------------
