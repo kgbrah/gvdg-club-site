@@ -208,6 +208,7 @@
                 <button type="button" class="admin-tab" data-atab="import">Import</button>
                 <button type="button" class="admin-tab" data-atab="courses">Courses</button>
                 <button type="button" class="admin-tab" data-atab="layouts">Layouts</button>
+                <button type="button" class="admin-tab" data-atab="scoring">Live Scoring</button>
             </div>
             <div class="admin-msg" id="adminMsg"></div>
             <div class="admin-pane active" id="apane-events"><div id="adminEventsList">Loading…</div></div>
@@ -282,6 +283,28 @@
                     <div class="al-section">
                         <h4 class="al-h">Existing layouts</h4>
                         <div id="alLayoutsList" class="al-note">None yet.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="admin-pane" id="apane-scoring">
+                <div><label for="scEvent">Event</label>
+                    <select id="scEvent"><option value="">— select a scheduled or live event —</option></select></div>
+                <div id="scStart" style="display:none;margin-top:1rem;">
+                    <div class="al-row">
+                        <label for="scLayout" style="margin:0;">Layout</label>
+                        <select id="scLayout"><option value="">— event's current layout —</option></select>
+                        <button type="button" class="admin-btn" id="scStartBtn">▶ Start live scoring</button>
+                    </div>
+                    <p class="al-note">An event needs a layout (with pars) to score. Pick one here, or set it on the Layouts tab.</p>
+                </div>
+                <div id="scLive" style="display:none;margin-top:1rem;">
+                    <h4 class="al-h">Scorecard <span class="al-note">(enter strokes — saves + pushes live instantly)</span></h4>
+                    <div style="overflow-x:auto;"><table class="al-holes" id="scGrid"></table></div>
+                    <h4 class="al-h" style="margin-top:1rem;">Live leaderboard</h4>
+                    <div id="scBoard" class="al-note"></div>
+                    <div class="al-row" style="margin-top:0.75rem;">
+                        <button type="button" class="admin-btn danger" id="scFinalizeBtn">🏁 Finalize results</button>
+                        <span class="al-note">Writes final places + breakdown to each player's record and closes the event.</span>
                     </div>
                 </div>
             </div>
@@ -423,6 +446,7 @@
         function adminSwitch(tab) {
             document.querySelectorAll('.admin-tab').forEach((t) => t.classList.toggle('active', t.dataset.atab === tab));
             document.querySelectorAll('.admin-pane').forEach((p) => p.classList.toggle('active', p.id === 'apane-' + tab));
+            if (tab === 'scoring') scLoadEvents();
         }
 
         async function adminLoadCourses() {
@@ -706,6 +730,128 @@
             $('alName').scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
+        // ============================================================
+        //  Live Scoring (S2) — admin scorekeeper. Start an event, enter
+        //  hole-by-hole strokes (saved + pushed live via the DO), finalize
+        //  -> results to D1. XSS-safe DOM building.
+        // ============================================================
+        let scEventId = null, scSnap = null;
+        const scToPar = (n) => { n = n || 0; return n === 0 ? 'E' : (n > 0 ? '+' + n : String(n)); };
+
+        async function scLoadEvents() {
+            let events = [];
+            try { const r = await api('/events'); if (r.ok) events = (await r.json()).events || []; } catch (e) {}
+            const sel = $('scEvent'); sel.length = 1;
+            events.filter((e) => e.status === 'scheduled' || e.status === 'live').forEach((e) => {
+                const o = document.createElement('option'); o.value = e.id;
+                o.textContent = e.name + ' [' + e.status + ']' + (e.date ? ' — ' + e.date : '');
+                o.dataset.status = e.status; o.dataset.courseId = e.course_id || ''; o.dataset.layoutId = e.layout_id || '';
+                sel.appendChild(o);
+            });
+        }
+
+        async function scOnEventChange() {
+            scEventId = $('scEvent').value ? Number($('scEvent').value) : null;
+            $('scStart').style.display = 'none'; $('scLive').style.display = 'none';
+            if (!scEventId) return;
+            const opt = $('scEvent').selectedOptions[0];
+            if (opt.dataset.status === 'live') { await scRefresh(); return; }
+            // scheduled: show start controls + layout options for the event's course
+            const lsel = $('scLayout'); lsel.length = 1;
+            const courseId = opt.dataset.courseId;
+            if (courseId) {
+                try { const r = await api('/courses/' + courseId + '/layouts'); if (r.ok) (await r.json()).layouts.forEach((l) => { const o = document.createElement('option'); o.value = l.id; o.textContent = l.name + ' (par ' + (l.total_par != null ? l.total_par : '?') + ')'; if (String(l.id) === opt.dataset.layoutId) o.selected = true; lsel.appendChild(o); }); } catch (e) {}
+            }
+            $('scStart').style.display = '';
+        }
+
+        async function scStart() {
+            const layoutId = $('scLayout').value ? Number($('scLayout').value) : null;
+            if (layoutId) await adminApi('/admin/events/' + scEventId, { method: 'PATCH', body: { layout_id: layoutId } });
+            const r = await adminApi('/events/' + scEventId + '/live/start', { method: 'POST' });
+            if (r.ok) { adminMsg('Live scoring started', true); $('scEvent').selectedOptions[0].dataset.status = 'live'; await scRefresh(); }
+            else { const e = await r.json().catch(() => ({})); adminMsg(e.error === 'no_layout_holes' ? 'That event has no layout with pars — pick one above (or build one on the Layouts tab).' : 'Start failed (' + r.status + ')', false); }
+        }
+
+        async function scRefresh() {
+            const r = await api('/events/' + scEventId + '/live');
+            if (!r.ok) { $('scLive').style.display = 'none'; return; }
+            scSnap = await r.json();
+            if (scSnap.status !== 'live' && scSnap.status !== 'final') { $('scLive').style.display = 'none'; return; }
+            $('scStart').style.display = 'none'; $('scLive').style.display = '';
+            scRenderGrid(); scRenderBoard();
+        }
+
+        function scRenderGrid() {
+            const grid = $('scGrid'); grid.replaceChildren();
+            const holes = scSnap.holes || [], players = scSnap.players || [];
+            const thead = document.createElement('thead'); const htr = document.createElement('tr');
+            htr.appendChild(elx('th', null, 'Player'));
+            holes.forEach((h) => htr.appendChild(elx('th', null, h.hole + ' (' + h.par + ')')));
+            htr.appendChild(elx('th', null, 'Tot'));
+            thead.appendChild(htr); grid.appendChild(thead);
+            const tbody = document.createElement('tbody');
+            players.forEach((p) => {
+                const tr = document.createElement('tr');
+                tr.appendChild(elx('td', 'lb-name', p.name));
+                let tot = 0;
+                holes.forEach((h) => {
+                    const td = document.createElement('td');
+                    const inp = document.createElement('input'); inp.type = 'number'; inp.min = '1'; inp.max = '30'; inp.style.width = '3rem';
+                    const v = p.scores ? p.scores[h.hole] : null; if (v != null) { inp.value = v; tot += v; }
+                    inp.addEventListener('change', () => scPostScore(p.index, h.hole, inp.value));
+                    td.appendChild(inp); tr.appendChild(td);
+                });
+                tr.appendChild(elx('td', null, tot ? String(tot) : '—'));
+                tbody.appendChild(tr);
+            });
+            grid.appendChild(tbody);
+        }
+
+        async function scPostScore(index, hole, value) {
+            const strokes = parseInt(value, 10);
+            if (!(strokes >= 1 && strokes <= 30)) { adminMsg('Strokes must be 1–30', false); return; }
+            const r = await adminApi('/events/' + scEventId + '/live/score', { method: 'POST', body: { index, hole, strokes } });
+            if (r.ok) { scSnap = await r.json(); scUpdateTotals(); scRenderBoard(); } else { adminMsg('Score save failed', false); }
+        }
+        // Update each grid row's running Total cell without re-rendering inputs (keeps focus).
+        function scUpdateTotals() {
+            const rows = $('scGrid').querySelectorAll('tbody tr');
+            (scSnap.players || []).forEach((p) => {
+                const tr = rows[p.index]; if (!tr) return;
+                const tot = Object.values(p.scores || {}).reduce((a, b) => a + (b || 0), 0);
+                tr.lastElementChild.textContent = tot ? String(tot) : '—';
+            });
+        }
+
+        function scRenderBoard() {
+            const wrap = $('scBoard'); wrap.replaceChildren();
+            const standings = (scSnap && scSnap.standings) || [];
+            if (!standings.length) { wrap.textContent = 'No scores yet.'; return; }
+            const table = document.createElement('table'); table.className = 'al-holes';
+            const thead = document.createElement('thead'); const htr = document.createElement('tr');
+            ['Pos', 'Player', 'Thru', 'Total', 'To Par'].forEach((h) => htr.appendChild(elx('th', null, h)));
+            thead.appendChild(htr); table.appendChild(thead);
+            const tbody = document.createElement('tbody');
+            standings.forEach((s, i) => {
+                const tr = document.createElement('tr');
+                tr.appendChild(elx('td', null, String(i + 1)));
+                tr.appendChild(elx('td', 'lb-name', s.name));
+                tr.appendChild(elx('td', null, s.thru ? String(s.thru) : '—'));
+                tr.appendChild(elx('td', null, s.thru ? String(s.total) : '—'));
+                tr.appendChild(elx('td', null, s.thru ? scToPar(s.toPar) : '—'));
+                tbody.appendChild(tr);
+            });
+            table.appendChild(tbody); wrap.appendChild(table);
+        }
+
+        async function scFinalize() {
+            if (!confirm('Finalize this event? This writes final results and closes scoring.')) return;
+            const r = await adminApi('/events/' + scEventId + '/live/finalize', { method: 'POST' });
+            if (r.ok) { adminMsg('Event finalized — results saved.', true); $('scLive').style.display = 'none'; scLoadEvents(); $('scEvent').value = ''; adminLoadEvents(); }
+            else { adminMsg('Finalize failed (' + r.status + ')', false); }
+        }
+
         function initAdmin() {
             if (adminInited) { adminLoadEvents(); adminLoadCourses(); return; }
             adminInited = true;
@@ -720,6 +866,9 @@
             $('alAddHole').addEventListener('click', () => addHoleRow());
             $('alSaveLayout').addEventListener('click', alSaveLayout);
             $('alResetLayout').addEventListener('click', alResetLayout);
+            $('scEvent').addEventListener('change', scOnEventChange);
+            $('scStartBtn').addEventListener('click', scStart);
+            $('scFinalizeBtn').addEventListener('click', scFinalize);
             adminLoadEvents();
             adminLoadCourses();
         }
