@@ -1,0 +1,53 @@
+import { describe, it, expect } from "vitest";
+import worker from "../src/index.js";
+
+// Minimal Map-backed KV + no-op D1 so we can exercise the /assistant route end-to-end in-process,
+// without wrangler or a real Workers AI binding (which needs a Cloudflare account).
+function mockKV() {
+  const m = new Map<string, string>();
+  return { get: async (k: string) => m.get(k) ?? null, put: async (k: string, v: string) => void m.set(k, v), delete: async (k: string) => void m.delete(k) };
+}
+const mockDB = { prepare: () => ({ bind() { return this; }, all: async () => ({ results: [], success: true }), first: async () => null, run: async () => ({ results: [], success: true }) }) };
+function makeEnv(extra: Record<string, unknown> = {}) {
+  return { ROSTER: mockKV(), RATELIMIT: mockKV(), DB: mockDB, JWT_SECRET: "x".repeat(40), ALLOWED_ORIGINS: "http://localhost:8080", ...extra } as unknown as Parameters<typeof worker.fetch>[1];
+}
+function req(body: unknown, ip = "1.2.3.4") {
+  return new Request("https://w/assistant", { method: "POST", headers: { "content-type": "application/json", Origin: "http://localhost:8080", "CF-Connecting-IP": ip }, body: JSON.stringify(body) });
+}
+
+describe("POST /assistant", () => {
+  it("returns a dev stub reply when no AI binding is present", async () => {
+    const res = await worker.fetch(req({ message: "hi" }), makeEnv());
+    expect(res.status).toBe(200);
+    const j = await res.json();
+    expect(j.stub).toBe(true);
+    expect(j.reply).toMatch(/Crotts/);
+  });
+
+  it("passes the model reply through when AI is bound", async () => {
+    const AI = { run: async (_m: string, opts: { messages: unknown[] }) => ({ response: "Fall Open is the next event! (" + opts.messages.length + " msgs)" }) };
+    const res = await worker.fetch(req({ message: "what's next?" }), makeEnv({ AI }));
+    expect(res.status).toBe(200);
+    const j = await res.json();
+    expect(j.reply).toMatch(/Fall Open is the next event/);
+    expect(j.stub).toBeUndefined();
+  });
+
+  it("rejects an empty message with 400", async () => {
+    const res = await worker.fetch(req({ message: "   " }), makeEnv());
+    expect(res.status).toBe(400);
+  });
+
+  it("rate-limits a flooding IP with 429", async () => {
+    const env = makeEnv();
+    let last = 200;
+    for (let i = 0; i < 25; i++) last = (await worker.fetch(req({ message: "spam " + i }, "9.9.9.9"), env)).status;
+    expect(last).toBe(429);
+  });
+
+  it("returns 502 (not a crash) when the AI call throws", async () => {
+    const AI = { run: async () => { throw new Error("no account"); } };
+    const res = await worker.fetch(req({ message: "hi" }), makeEnv({ AI }));
+    expect(res.status).toBe(502);
+  });
+});
