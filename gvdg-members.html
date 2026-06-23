@@ -483,6 +483,15 @@
                 .dash-event-name { font-weight: 600; color: var(--text-primary); }
                 .dash-event-date { font-size: 0.8rem; color: var(--text-muted); }
                 .dash-event-ratings { font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; color: var(--secondary); }
+                .club-meetings { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; }
+                .meeting-card { border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem 1.25rem; margin-top: 0.75rem; background: var(--bg-secondary); }
+                .meeting-head { display: flex; gap: 0.75rem; align-items: baseline; flex-wrap: wrap; margin-bottom: 0.5rem; }
+                .meeting-date { font-size: 0.8rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+                .meeting-title { font-weight: 700; color: var(--text-primary); }
+                .meeting-body { color: var(--text-secondary); line-height: 1.6; }
+                .meeting-body p { margin: 0.4rem 0; } .meeting-body ul { margin: 0.4rem 0 0.4rem 1.25rem; }
+                .meeting-actions-h { font-weight: 700; color: var(--text-primary); margin-top: 0.6rem; font-size: 0.9rem; }
+                .meeting-actions { margin: 0.25rem 0 0 1.25rem; color: var(--text-secondary); }
                 .passkey-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
                 .passkey-btn { background: transparent; border: 1px solid var(--secondary); color: var(--secondary); padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background 0.15s ease, color 0.15s ease; }
                 .passkey-btn:hover { background: var(--secondary); color: #fff; }
@@ -530,6 +539,11 @@
                     <h4 class="dash-subtitle">🥏 GVDG Event History</h4>
                     <div id="clubHistoryList"></div>
                 </div>
+            </div>
+
+            <div id="clubMeetings" class="club-meetings" style="display:none;">
+                <h3 class="my-dashboard-title">📋 Club Meetings &amp; Minutes</h3>
+                <div id="clubMeetingsList"></div>
             </div>
 
             <div class="members-stats-grid">
@@ -941,10 +955,64 @@
             wrap.style.display = '';
         }
 
+        // ---- Club meetings & minutes (Phase 4) — XSS-safe markdown ----
+        function mdInline(parent, text) {
+            const re = /\*\*([^*]+)\*\*|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g;
+            let last = 0, m;
+            while ((m = re.exec(text)) !== null) {
+                if (m.index > last) parent.appendChild(document.createTextNode(text.slice(last, m.index)));
+                if (m[1] != null) { const s = document.createElement('strong'); s.textContent = m[1]; parent.appendChild(s); }
+                else { const a = document.createElement('a'); a.href = m[3]; a.textContent = m[2]; a.target = '_blank'; a.rel = 'noopener noreferrer'; parent.appendChild(a); }
+                last = re.lastIndex;
+            }
+            if (last < text.length) parent.appendChild(document.createTextNode(text.slice(last)));
+        }
+        function mdRender(md, container) {
+            container.replaceChildren();
+            String(md || '').split(/\n\s*\n/).forEach((block) => {
+                const lines = block.split('\n').filter((l) => l.trim() !== '');
+                if (!lines.length) return;
+                if (lines.every((l) => /^\s*-\s+/.test(l))) {
+                    const ul = document.createElement('ul');
+                    lines.forEach((l) => { const li = document.createElement('li'); mdInline(li, l.replace(/^\s*-\s+/, '')); ul.appendChild(li); });
+                    container.appendChild(ul);
+                } else {
+                    const p = document.createElement('p');
+                    lines.forEach((l, i) => { if (i) p.appendChild(document.createElement('br')); mdInline(p, l); });
+                    container.appendChild(p);
+                }
+            });
+        }
+        async function loadMeetings() {
+            const wrap = $('clubMeetings'), list = $('clubMeetingsList');
+            let items = [];
+            try { const r = await api('/meetings'); if (r.ok) items = (await r.json()).meetings || []; } catch (_e) {}
+            list.textContent = '';
+            if (!items.length) { wrap.style.display = 'none'; return; }
+            items.forEach((m) => {
+                const card = document.createElement('div'); card.className = 'meeting-card';
+                const head = document.createElement('div'); head.className = 'meeting-head';
+                const d = document.createElement('span'); d.className = 'meeting-date'; d.textContent = m.date || ''; head.appendChild(d);
+                const t = document.createElement('span'); t.className = 'meeting-title'; t.textContent = m.title || 'Meeting'; head.appendChild(t);
+                card.appendChild(head);
+                if (m.minutes_md) { const body = document.createElement('div'); body.className = 'meeting-body'; mdRender(m.minutes_md, body); card.appendChild(body); }
+                let actions = []; try { actions = JSON.parse(m.action_items || '[]') || []; } catch (_e) {}
+                if (actions.length) {
+                    const h = document.createElement('div'); h.className = 'meeting-actions-h'; h.textContent = 'Action items'; card.appendChild(h);
+                    const ul = document.createElement('ul'); ul.className = 'meeting-actions';
+                    actions.forEach((a) => { const li = document.createElement('li'); li.textContent = String(a); ul.appendChild(li); });
+                    card.appendChild(ul);
+                }
+                list.appendChild(card);
+            });
+            wrap.style.display = '';
+        }
+
         async function loadDashboard() {
             const loading = $('dashLoading'), empty = $('dashEmpty'), body = $('dashBody');
             $('myDashboard').style.display = '';
             loadClubHistory(); // GVDG results are keyed by memberId, so they show even without a PDGA#
+            loadMeetings();
             loading.style.display = ''; empty.style.display = 'none'; body.style.display = 'none';
             const avatar = $('dashAvatar');
             const showAvatar = (url) => {

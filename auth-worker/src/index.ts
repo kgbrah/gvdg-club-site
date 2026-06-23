@@ -439,6 +439,18 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
     const standings = computeLeagueStandings((await db.leagueResultRows(env.DB, lid!)) as { member_id: string | null; name: string; place: number | null; to_par: number | null }[]);
     return json({ league, standings, events: await db.listLeagueEvents(env.DB, lid!) }, 200, origin);
   }
+  if (method === "GET" && pathname === "/fundraisers") return json({ fundraisers: await db.listFundraisers(env.DB) }, 200, origin);
+  if (method === "GET" && seg[0] === "fundraisers" && seg.length === 2) {
+    const fid = asInt(seg[1]);
+    const f = fid == null ? null : await db.getFundraiser(env.DB, fid);
+    return f ? json({ fundraiser: f }, 200, origin) : json({ error: "not_found" }, 404, origin);
+  }
+  if (method === "GET" && pathname === "/meetings") return json({ meetings: await db.listMeetings(env.DB) }, 200, origin);
+  if (method === "GET" && seg[0] === "meetings" && seg.length === 2) {
+    const mid = asInt(seg[1]);
+    const m = mid == null ? null : await db.getMeeting(env.DB, mid);
+    return m ? json({ meeting: m }, 200, origin) : json({ error: "not_found" }, 404, origin);
+  }
   if (method === "GET" && pathname === "/events") {
     const p = new URL(request.url).searchParams;
     return json({ events: await db.listEvents(env.DB, { status: p.get("status") ?? undefined, type: p.get("type") ?? undefined }) }, 200, origin);
@@ -614,6 +626,52 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
       return row ? json({ league: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
     }
     if (method === "DELETE" && id != null) { await db.deleteLeague(env.DB, id); return json({ ok: true }, 200, origin); }
+  }
+
+  if (sub === "fundraisers") {
+    const fr = (b: Record<string, unknown>) => {
+      const paypal = b.paypal_url == null ? null : asStr(b.paypal_url, 1000);
+      if (b.paypal_url != null && paypal && !/^https:\/\//.test(paypal)) return null; // https only
+      const status = b.status == null ? null : (b.status === "active" || b.status === "closed" ? (b.status as string) : undefined);
+      if (status === undefined) return null;
+      return {
+        title: asStr(b.title, 200), body_md: asStr(b.body_md, 20000), goal_cents: b.goal_cents == null ? null : asInt(b.goal_cents),
+        raised_cents: b.raised_cents == null ? null : asInt(b.raised_cents), paypal_url: paypal, status,
+        starts_at: asStr(b.starts_at, 40), ends_at: asStr(b.ends_at, 40),
+      };
+    };
+    if (method === "POST") {
+      const b = await readJson(request);
+      const v = b && fr(b);
+      if (!v || !v.title) return json({ error: "invalid_fundraiser" }, 400, origin);
+      const row = await db.createFundraiser(env.DB, { ...v, title: v.title, status: v.status ?? "active", created_by: adminId });
+      return json({ fundraiser: row }, 201, origin);
+    }
+    if (method === "PATCH" && id != null) {
+      const b = (await readJson(request)) ?? {};
+      const v = fr(b);
+      if (!v) return json({ error: "invalid_fundraiser" }, 400, origin);
+      const row = await db.updateFundraiser(env.DB, id, v);
+      return row ? json({ fundraiser: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
+    }
+    if (method === "DELETE" && id != null) { await db.deleteFundraiser(env.DB, id); return json({ ok: true }, 200, origin); }
+  }
+
+  if (sub === "meetings") {
+    const asJsonArr = (v: unknown) => (Array.isArray(v) ? JSON.stringify(v.filter((x) => typeof x === "string").slice(0, 100)) : null);
+    if (method === "POST") {
+      const b = await readJson(request);
+      const date = b && asStr(b.date, 40), title = b && asStr(b.title, 200);
+      if (!b || !date || !title) return json({ error: "invalid_meeting" }, 400, origin);
+      const row = await db.createMeeting(env.DB, { date, title, minutes_md: asStr(b.minutes_md, 50000), action_items: asJsonArr(b.action_items), attendees: asJsonArr(b.attendees), created_by: adminId });
+      return json({ meeting: row }, 201, origin);
+    }
+    if (method === "PATCH" && id != null) {
+      const b = (await readJson(request)) ?? {};
+      const row = await db.updateMeeting(env.DB, id, { date: asStr(b.date, 40), title: asStr(b.title, 200), minutes_md: asStr(b.minutes_md, 50000), action_items: b.action_items === undefined ? null : asJsonArr(b.action_items), attendees: b.attendees === undefined ? null : asJsonArr(b.attendees) });
+      return row ? json({ meeting: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
+    }
+    if (method === "DELETE" && id != null) { await db.deleteMeeting(env.DB, id); return json({ ok: true }, 200, origin); }
   }
 
   if (sub === "import" && method === "POST") {
