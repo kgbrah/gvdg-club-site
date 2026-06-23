@@ -14,7 +14,8 @@ import {
 import type { RegistrationResponseJSON, AuthenticationResponseJSON } from "@simplewebauthn/server";
 import * as db from "./db.js";
 import { EVENT_TYPES, EVENT_STATUSES, EVENT_FORMATS, type D1Like } from "./db.js";
-import { safeFetch, normalizeDgs, normalizeCsvEvents, parseCsvRows, parseUdiscCourse, ImportError } from "./imports.js";
+import { safeFetch, normalizeDgs, normalizeCsvEvents, parseCsvRows, parseUdiscLayout, ImportError } from "./imports.js";
+import { enrichHoles, type LayoutHole } from "./layouts.js";
 
 // Default discgolfscene feed = the club scraper's committed tournaments.json.
 const DEFAULT_DGS_FEED = "https://raw.githubusercontent.com/mostlysober252/GVDG-DGS-Scraper-2.0/main/tournaments.json";
@@ -243,6 +244,38 @@ function asNum(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 const inSet = (arr: readonly string[], v: unknown): v is string => typeof v === "string" && arr.includes(v);
+const validLat = (n: number | null): number | null => (n != null && n >= -90 && n <= 90 ? n : null);
+const validLng = (n: number | null): number | null => (n != null && n >= -180 && n <= 180 ? n : null);
+
+/** Sanitize a tee/target position object ({label, lat?, lng?}); null if no usable label. */
+function cleanPosition(raw: unknown): { label: string; lat: number | null; lng: number | null } | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const label = asStr(o.label, 80);
+  if (!label) return null;
+  return { label, lat: validLat(asNum(o.lat)), lng: validLng(asNum(o.lng)) };
+}
+
+/** Sanitize a layout's holes (incl. SAFARI tee/target + manual distance). Returns null if any
+ *  hole is malformed, so the admin gets a clear 400 rather than silently dropped holes. */
+function sanitizeHoles(raw: unknown[]): LayoutHole[] | null {
+  const out: LayoutHole[] = [];
+  for (const r of raw) {
+    if (!r || typeof r !== "object") return null;
+    const o = r as Record<string, unknown>;
+    const hole = asInt(o.hole);
+    const par = asInt(o.par);
+    if (hole == null || par == null || par < 1 || par > 15) return null;
+    const md = asNum(o.manual_distance);
+    out.push({
+      hole, par,
+      tee: cleanPosition(o.tee),
+      target: cleanPosition(o.target),
+      manual_distance: md != null && md > 0 ? md : null,
+    });
+  }
+  return out;
+}
 
 /** Authenticated AND admin. Returns the admin's memberId, or a 401/403 Response. */
 async function adminGate(request: Request, env: Env, origin: string | null): Promise<{ adminId: string } | Response> {
@@ -294,6 +327,13 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
     const ev = id == null ? null : await db.getEvent(env.DB, id);
     return ev ? json({ event: ev }, 200, origin) : json({ error: "not_found" }, 404, origin);
   }
+  if (method === "GET" && seg[0] === "courses" && seg.length === 3 && (seg[2] === "layouts" || seg[2] === "positions")) {
+    const cid = asInt(seg[1]);
+    if (cid == null) return json({ error: "not_found" }, 404, origin);
+    return seg[2] === "layouts"
+      ? json({ layouts: await db.listLayouts(env.DB, cid) }, 200, origin)
+      : json({ positions: await db.listPositions(env.DB, cid) }, 200, origin);
+  }
 
   // ---- admin writes ----
   if (seg[0] !== "admin") return null;
@@ -304,6 +344,37 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
   const id = seg[2] != null ? asInt(seg[2]) : null;
 
   if (sub === "courses") {
+    // tee/target position pool: /admin/courses/:id/positions[/:posId]
+    if (seg[3] === "positions" && id != null) {
+      if (method === "GET") return json({ positions: await db.listPositions(env.DB, id) }, 200, origin);
+      if (method === "POST") {
+        const b = await readJson(request);
+        const kind = b && asStr(b.kind, 10);
+        const pos = b && cleanPosition(b);
+        if (!b || (kind !== "tee" && kind !== "target") || !pos) return json({ error: "invalid_position" }, 400, origin);
+        const row = await db.createPosition(env.DB, { course_id: id, kind, label: pos.label, lat: pos.lat, lng: pos.lng });
+        return json({ position: row }, 201, origin);
+      }
+      if (method === "PUT") {
+        // bulk replace the pool (e.g. from a UDisc import)
+        const b = (await readJson(request)) ?? {};
+        const raw = Array.isArray(b.positions) ? b.positions : [];
+        const positions: db.PositionInput[] = [];
+        for (const r of raw) {
+          const o = r as Record<string, unknown>;
+          const kind = asStr(o?.kind, 10);
+          const pos = cleanPosition(o);
+          if ((kind === "tee" || kind === "target") && pos) positions.push({ course_id: id, kind, label: pos.label, lat: pos.lat, lng: pos.lng });
+        }
+        return json({ positions: await db.replacePositions(env.DB, id, positions) }, 200, origin);
+      }
+      if (method === "DELETE" && seg[4] != null) {
+        const pid = asInt(seg[4]);
+        if (pid == null) return json({ error: "not_found" }, 404, origin);
+        await db.deletePosition(env.DB, id, pid);
+        return json({ ok: true }, 200, origin);
+      }
+    }
     if (method === "POST") {
       const b = await readJson(request);
       const name = b && asStr(b.name, 200);
@@ -392,7 +463,8 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
         const url = asStr(b.url, 500);
         if (!url) return json({ error: "invalid_request" }, 400, origin);
         const html = await safeFetch(url, ["udisc.com"]);
-        return json({ source: "udisc", candidate: parseUdiscCourse(html, url) }, 200, origin);
+        // Best-effort layout (pars + tee/target coords + position pool); falls back to name-only.
+        return json({ source: "udisc", candidate: parseUdiscLayout(html, url) }, 200, origin);
       }
       return json({ error: "not_found" }, 404, origin);
     } catch (e) {
@@ -405,17 +477,23 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
     if (method === "POST") {
       const b = await readJson(request);
       const courseId = b && asInt(b.course_id);
-      const holes = b && Array.isArray(b.holes) ? b.holes : null;
-      if (!b || courseId == null || !holes || holes.length === 0) return json({ error: "invalid_layout" }, 400, origin);
-      let totalPar = 0;
-      for (const h of holes) {
-        const hn = asInt((h as Record<string, unknown>)?.hole);
-        const par = asInt((h as Record<string, unknown>)?.par);
-        if (hn == null || par == null) return json({ error: "invalid_layout" }, 400, origin);
-        totalPar += par;
-      }
-      const row = await db.createLayout(env.DB, { course_id: courseId, name: asStr(b.name, 60) ?? "Main", holes, total_par: totalPar });
+      const clean = b && Array.isArray(b.holes) ? sanitizeHoles(b.holes) : null;
+      if (!b || courseId == null || !clean || clean.length === 0) return json({ error: "invalid_layout" }, 400, origin);
+      const { holes, total_par } = enrichHoles(clean); // compute distances (geo/par/manual) + total par
+      const row = await db.createLayout(env.DB, { course_id: courseId, name: asStr(b.name, 60) ?? "Main", holes, total_par });
       return json({ layout: row }, 201, origin);
+    }
+    if (method === "PATCH" && id != null) {
+      const b = (await readJson(request)) ?? {};
+      let holes: LayoutHole[] | undefined;
+      let total_par: number | undefined;
+      if (Array.isArray(b.holes)) {
+        const clean = sanitizeHoles(b.holes);
+        if (!clean || clean.length === 0) return json({ error: "invalid_layout" }, 400, origin);
+        ({ holes, total_par } = enrichHoles(clean));
+      }
+      const row = await db.updateLayout(env.DB, id, { name: asStr(b.name, 60), holes, total_par });
+      return row ? json({ layout: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
     }
     if (method === "DELETE" && id != null) { await db.deleteLayout(env.DB, id); return json({ ok: true }, 200, origin); }
   }
