@@ -1,0 +1,21 @@
+# GVDG member auth Worker.
+# mostlysober252: replace the KV `id` values with real namespace IDs
+# (`wrangler kv namespace create ROSTER` / `... RATELIMIT`) and set the JWT secret
+# with `wrangler secret put JWT_SECRET` before deploying.
+
+name = "gvdg-member-auth"
+main = "src/index.ts"
+compatibility_date = "2026-06-01"
+
+[[kv_namespaces]]
+binding = "ROSTER"
+id = "REPLACE_WITH_ROSTER_KV_ID"
+
+[[kv_namespaces]]
+binding = "RATELIMIT"
+id = "REPLACE_WITH_RATELIMIT_KV_ID"
+
+[vars]
+ALLOWED_ORIGINS = "https://www.greenvillediscgolf.com,https://greenvillediscgolf.com"
+SESSION_TTL_SEC = "900"
+# JWT_SECRET is set as a secret, NOT here:  wrangler secret put JWT_SECRET
