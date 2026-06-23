@@ -29,6 +29,15 @@ migrations_dir = "migrations"
 [ai]
 binding = "AI"
 
+# Durable Object for live UDisc-style scoring (one instance per in-progress event).
+[[durable_objects.bindings]]
+name = "LIVE"
+class_name = "LiveEventDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LiveEventDO"]
+
 [vars]
 ALLOWED_ORIGINS = "https://www.greenvillediscgolf.com,https://greenvillediscgolf.com"
 SESSION_TTL_SEC = "900"

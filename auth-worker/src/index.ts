@@ -39,7 +39,11 @@ export interface Env {
   OPENROUTER_MODEL?: string;
   AI?: { run(model: string, opts: { messages: { role: string; content: string }[]; max_tokens?: number }): Promise<{ response?: string }> };
   ASSISTANT_MODEL?: string;
+  // Durable Object namespace for live scoring (one instance per in-progress event).
+  LIVE: DurableObjectNamespace;
 }
+
+export { LiveEventDO } from "./live.js";
 
 // A well-formed but unmatchable hash. Verifying a submitted PIN against this when the
 // identifier is unknown keeps login timing ~constant, preventing user enumeration via timing.
@@ -405,6 +409,13 @@ async function handleAssistant(request: Request, env: Env, origin: string | null
   return out ? json({ reply: out.reply, provider: out.provider }, 200, origin) : json({ error: "assistant_unavailable" }, 502, origin);
 }
 
+// Forward a JSON request to the live-event Durable Object and re-emit its response with CORS.
+async function liveProxy(stub: DurableObjectStub, path: string, init: RequestInit | undefined, origin: string | null): Promise<Response> {
+  const r = await stub.fetch("https://do" + path, init);
+  const data = await r.json().catch(() => ({}));
+  return json(data, r.status, origin);
+}
+
 /** Handles /courses, /events, /leagues (public reads) and /admin/* (admin writes). Returns null if not a club route. */
 async function clubApi(request: Request, env: Env, origin: string | null, pathname: string, method: string): Promise<Response | null> {
   const seg = pathname.split("/").filter(Boolean);
@@ -420,6 +431,41 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
     const id = asInt(seg[1]);
     const ev = id == null ? null : await db.getEvent(env.DB, id);
     return ev ? json({ event: ev }, 200, origin) : json({ error: "not_found" }, 404, origin);
+  }
+
+  // ---- live scoring (Durable Object): /events/:id/live[/{start,score,finalize,ws}] ----
+  if (seg[0] === "events" && seg[2] === "live") {
+    const eid = asInt(seg[1]);
+    if (eid == null) return json({ error: "not_found" }, 404, origin);
+    const sub = seg[3]; // undefined (snapshot) | start | score | finalize | ws
+    const stub = env.LIVE.get(env.LIVE.idFromName("event:" + eid));
+
+    if (method === "GET" && !sub) return liveProxy(stub, "/snapshot", undefined, origin); // public leaderboard
+    if (sub === "ws") return stub.fetch(request); // public WebSocket viewer — forward the upgrade
+
+    if (method === "POST" && (sub === "start" || sub === "score" || sub === "finalize")) {
+      const gate = await adminGate(request, env, origin); // scorekeeping is admin-gated (Track G adds delegation)
+      if (gate instanceof Response) return gate;
+
+      if (sub === "start") {
+        const ev = (await db.getEvent(env.DB, eid)) as (Record<string, unknown> & { layout_id?: number | null; players?: Record<string, unknown>[] }) | null;
+        if (!ev) return json({ error: "not_found" }, 404, origin);
+        let holes: { hole: number; par: number }[] = [];
+        if (ev.layout_id) {
+          const layout = (await db.getLayout(env.DB, Number(ev.layout_id))) as { holes?: string } | null;
+          try { holes = JSON.parse(layout?.holes ?? "[]").map((h: Record<string, unknown>) => ({ hole: Number(h.hole), par: Number(h.par) })); } catch { holes = []; }
+        }
+        if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin); // event needs a layout with pars
+        const players = (Array.isArray(ev.players) ? ev.players : []).map((p) => ({ memberId: (p.member_id as string) ?? null, name: String(p.name ?? "Player"), division: (p.division as string) ?? null }));
+        const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, holes, players, startedAt: new Date().toISOString() }) });
+        const data = await r.json().catch(() => ({}));
+        if (r.status === 200) await db.updateEvent(env.DB, eid, { status: "live" });
+        return json(data, r.status, origin);
+      }
+      const body = (await readJson(request)) ?? {};
+      return liveProxy(stub, "/" + sub, { method: "POST", body: JSON.stringify(body) }, origin);
+    }
+    return json({ error: "not_found" }, 404, origin);
   }
   if (method === "GET" && seg[0] === "courses" && seg.length === 3 && (seg[2] === "layouts" || seg[2] === "positions")) {
     const cid = asInt(seg[1]);

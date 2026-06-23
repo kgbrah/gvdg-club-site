@@ -64,3 +64,46 @@ export function computeLeaderboard(holes: { hole: number; par: number }[], playe
   standings.sort((a, b) => a.toPar - b.toPar || a.total - b.total || a.name.localeCompare(b.name));
   return standings;
 }
+
+export interface FinalStanding extends Standing {
+  place: number;
+  breakdown: Breakdown;
+}
+
+/** Final results for an event: sorted standings with competition ranks (ties share a place, e.g.
+ *  1,2,2,4) and each player's score breakdown over the holes they played. Used at finalize. */
+export function finalizeStandings(holes: { hole: number; par: number }[], players: PlayerState[]): FinalStanding[] {
+  const rows = players.map((p) => {
+    const pars: number[] = [];
+    const strokes: number[] = [];
+    let thru = 0;
+    let total = 0;
+    let toPar = 0;
+    for (const h of holes) {
+      const s = p.scores?.[h.hole];
+      if (s == null) continue;
+      pars.push(h.par);
+      strokes.push(s);
+      thru++;
+      total += s;
+      toPar += s - h.par;
+    }
+    return {
+      memberId: p.memberId,
+      name: p.name,
+      division: p.division ?? null,
+      thru,
+      total,
+      toPar,
+      breakdown: countScores(pars, strokes),
+    };
+  });
+  rows.sort((a, b) => a.toPar - b.toPar || a.total - b.total || a.name.localeCompare(b.name));
+  let place = 0;
+  let prevKey = "";
+  return rows.map((r, i) => {
+    const key = r.toPar + "/" + r.total;
+    if (key !== prevKey) { place = i + 1; prevKey = key; } // competition ranking: ties share, gaps after
+    return { ...r, place };
+  });
+}

@@ -227,3 +227,42 @@ export async function addEventPlayer(
 export async function removeEventPlayer(db: D1Like, eventId: number, playerId: number) {
   await db.prepare("DELETE FROM event_players WHERE id = ? AND event_id = ?").bind(playerId, eventId).run();
 }
+
+// ---------------- results (written when a live event is finalized) ----------------
+export interface ResultInput {
+  event_id: number;
+  member_id?: string | null;
+  name: string;
+  place?: number | null;
+  total?: number | null;
+  to_par?: number | null;
+  rating?: number | null;
+  breakdown?: string | null; // JSON {aces,eagles,birdies,pars,bogeys,doubles_plus}
+}
+export async function createResult(db: D1Like, r: ResultInput) {
+  return db
+    .prepare(
+      "INSERT INTO results (event_id, member_id, name, place, total, to_par, rating, breakdown) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
+    )
+    .bind(r.event_id, r.member_id ?? null, r.name, r.place ?? null, r.total ?? null, r.to_par ?? null, r.rating ?? null, r.breakdown ?? null)
+    .first();
+}
+export async function clearResults(db: D1Like, eventId: number) {
+  await db.prepare("DELETE FROM results WHERE event_id = ?").bind(eventId).run();
+}
+export async function listResults(db: D1Like, eventId: number) {
+  return (await db.prepare("SELECT * FROM results WHERE event_id = ? ORDER BY place, total").bind(eventId).all()).results;
+}
+/** A member's GVDG event history (for the profile/dashboard) — joins results to event names/dates. */
+export async function listMemberResults(db: D1Like, memberId: string) {
+  return (
+    await db
+      .prepare(
+        `SELECT r.*, e.name AS event_name, e.date AS event_date, e.type AS event_type
+         FROM results r JOIN events e ON e.id = r.event_id
+         WHERE r.member_id = ? ORDER BY e.date DESC, r.id DESC`,
+      )
+      .bind(memberId)
+      .all()
+  ).results;
+}

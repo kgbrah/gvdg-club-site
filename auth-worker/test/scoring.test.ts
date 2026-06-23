@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { countScores, computeLeaderboard, type PlayerState } from "../src/scoring.js";
+import { countScores, computeLeaderboard, finalizeStandings, type PlayerState } from "../src/scoring.js";
 
 describe("countScores (UDisc-style breakdown)", () => {
   it("buckets holes by score-to-par and tallies aces separately", () => {
@@ -31,5 +31,32 @@ describe("computeLeaderboard", () => {
     const bo = lb[0]!;
     expect(bo).toMatchObject({ name: "Bo", thru: 2, total: 6, toPar: -1 });
     expect(lb.find((s) => s.name === "Ann")).toMatchObject({ thru: 3, total: 11, toPar: 1 });
+  });
+});
+
+describe("finalizeStandings (placements + breakdown for results)", () => {
+  const holes = [
+    { hole: 1, par: 3 },
+    { hole: 2, par: 4 },
+    { hole: 3, par: 3 },
+  ];
+  it("sorts, assigns competition ranks (ties share a place), and includes each player's breakdown", () => {
+    const players: PlayerState[] = [
+      { memberId: "a", name: "Ann", scores: { 1: 3, 2: 4, 3: 3 } }, // E, 10
+      { memberId: "b", name: "Bo", scores: { 1: 2, 2: 4, 3: 3 } }, //  -1, 9
+      { memberId: "c", name: "Cy", scores: { 1: 3, 2: 4, 3: 3 } }, //  E, 10 (ties Ann)
+    ];
+    const fs = finalizeStandings(holes, players);
+    expect(fs.map((s) => s.name)).toEqual(["Bo", "Ann", "Cy"]);
+    expect(fs[0]).toMatchObject({ name: "Bo", place: 1, total: 9, toPar: -1 });
+    expect(fs[1]!.place).toBe(2);
+    expect(fs[2]!.place).toBe(2); // tie shares place 2 (next would be 4)
+    expect(fs[0]!.breakdown).toMatchObject({ birdies: 1, pars: 2, bogeys: 0 });
+  });
+
+  it("only counts played holes (partial cards)", () => {
+    const fs = finalizeStandings(holes, [{ memberId: "x", name: "X", scores: { 1: 4 } }]);
+    expect(fs[0]).toMatchObject({ place: 1, thru: 1, total: 4, toPar: 1 });
+    expect(fs[0]!.breakdown).toMatchObject({ bogeys: 1 });
   });
 });
