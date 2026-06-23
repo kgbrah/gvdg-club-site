@@ -384,7 +384,10 @@
     </header>
 
     <!-- Login Gate -->
-    <div class="login-gate" id="loginGate" data-auth-base="https://auth.greenvillediscgolf.com">
+    <div class="login-gate" id="loginGate"
+         data-auth-base="https://auth.greenvillediscgolf.com"
+         data-players-url="https://raw.githubusercontent.com/mostlysober252/GVDG-DGS-Scraper-2.0/main/players.json"
+         data-stats-url="https://raw.githubusercontent.com/mostlysober252/GVDG-DGS-Scraper-2.0/main/stats.json">
         <div class="login-card">
             <div class="login-icon">🔐</div>
             <h1 class="login-title">Members Only</h1>
@@ -436,6 +439,43 @@
                     You're viewing the exclusive GVDG member directory.
                 </div>
                 <button class="logout-btn" id="logoutBtn">Log Out</button>
+            </div>
+
+            <style>
+                .my-dashboard { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; }
+                .my-dashboard-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; color: var(--primary); margin-bottom: 1rem; letter-spacing: 0.03em; }
+                .dash-note { color: var(--text-muted); font-size: 0.95rem; padding: 0.5rem 0; }
+                .dash-rating-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+                @media (min-width: 680px) { .dash-rating-row { grid-template-columns: repeat(4, 1fr); } }
+                .dash-tile { background: var(--secondary); color: #fff; border-radius: 10px; padding: 1rem; text-align: center; }
+                .dash-tile:nth-child(2) { background: var(--green); }
+                .dash-tile:nth-child(3) { background: var(--primary); }
+                .dash-tile:nth-child(4) { background: #5a4a78; }
+                .dash-tile-num { font-family: 'Bebas Neue', sans-serif; font-size: 2.4rem; line-height: 1; }
+                .dash-tile-delta { font-size: 0.8rem; opacity: 0.9; margin-top: 0.2rem; }
+                .dash-tile-label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.95; margin-top: 0.35rem; }
+                .dash-subtitle { font-weight: 700; color: var(--secondary); margin: 0.5rem 0 0.75rem; font-size: 1rem; }
+                .dash-event { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); margin-bottom: 0.5rem; flex-wrap: wrap; }
+                .dash-event-name { font-weight: 600; color: var(--text-primary); }
+                .dash-event-date { font-size: 0.8rem; color: var(--text-muted); }
+                .dash-event-ratings { font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; color: var(--secondary); }
+            </style>
+            <div id="myDashboard" class="my-dashboard" style="display:none;">
+                <h3 class="my-dashboard-title">📊 My Player Dashboard</h3>
+                <div id="dashLoading" class="dash-note">Loading your stats…</div>
+                <div id="dashEmpty" class="dash-note" style="display:none;"></div>
+                <div id="dashBody" style="display:none;">
+                    <div class="dash-rating-row">
+                        <div class="dash-tile"><div class="dash-tile-num" id="dashLive">—</div><div class="dash-tile-delta" id="dashDelta"></div><div class="dash-tile-label">Live Rating</div></div>
+                        <div class="dash-tile"><div class="dash-tile-num" id="dashOfficial">—</div><div class="dash-tile-label">Official</div></div>
+                        <div class="dash-tile"><div class="dash-tile-num" id="dashPeak">—</div><div class="dash-tile-label">Peak</div></div>
+                        <div class="dash-tile"><div class="dash-tile-num" id="dashEvents">—</div><div class="dash-tile-label">Events</div></div>
+                    </div>
+                    <div id="dashEventsWrap" style="display:none;">
+                        <h4 class="dash-subtitle">Recent Tournaments</h4>
+                        <div id="dashEventsList"></div>
+                    </div>
+                </div>
             </div>
 
             <div class="members-stats-grid">
@@ -718,9 +758,13 @@
     (function() {
         // Member auth backed by the Cloudflare Worker (auth-worker/). The endpoint is
         // read from #loginGate[data-auth-base] so it's configured in one place per deploy.
-        const AUTH_BASE = (document.getElementById('loginGate').dataset.authBase || '').replace(/\/+$/, '');
+        const _gate = document.getElementById('loginGate');
+        const AUTH_BASE = (_gate.dataset.authBase || '').replace(/\/+$/, '');
+        const PLAYERS_URL = (_gate.dataset.playersUrl || '').trim();
+        const STATS_URL = (_gate.dataset.statsUrl || '').trim();
         const TOKEN_KEY = 'gvdg_member_token';
         const NAME_KEY = 'gvdg_member_name';
+        const PDGA_KEY = 'gvdg_member_pdga';
         const $ = (id) => document.getElementById(id);
 
         function showError(el, msg) { el.textContent = '❌ ' + msg; el.classList.add('show'); }
@@ -759,13 +803,78 @@
             const banner = document.querySelector('.welcome-text strong');
             if (banner && name) banner.textContent = 'Welcome back, ' + name + '!';
             if (!membersInitialized) { initMembersPage(); initDoublesLeague(); membersInitialized = true; }
+            loadDashboard();
         }
 
         function logout() {
             sessionStorage.removeItem(TOKEN_KEY);
             sessionStorage.removeItem(NAME_KEY);
+            sessionStorage.removeItem(PDGA_KEY);
             $('pinInput').value = '';
             showLogin();
+        }
+
+        // ---- My Player Dashboard (players.json + stats.json, keyed by PDGA#) ----
+        function setText(id, v) { const el = $(id); if (el) el.textContent = v; }
+
+        async function fetchJson(url) {
+            if (!url) return null;
+            try { const r = await fetch(url, { cache: 'no-store' }); return r.ok ? await r.json() : null; }
+            catch (e) { return null; }
+        }
+
+        function renderEvents(events) {
+            const wrap = $('dashEventsWrap'), list = $('dashEventsList');
+            list.textContent = '';
+            if (!events || !events.length) { wrap.style.display = 'none'; return; }
+            events.slice(0, 6).forEach((ev) => {
+                const row = document.createElement('div'); row.className = 'dash-event';
+                const left = document.createElement('div');
+                const name = document.createElement('div'); name.className = 'dash-event-name'; name.textContent = ev.tournament || 'Event';
+                const date = document.createElement('div'); date.className = 'dash-event-date';
+                date.textContent = (ev.date || '') + (ev.division ? ' • ' + ev.division : '');
+                left.appendChild(name); left.appendChild(date);
+                const ratings = document.createElement('div'); ratings.className = 'dash-event-ratings';
+                const rounds = (ev.rounds || []).map((r) => r.rating).filter((x) => x != null);
+                ratings.textContent = rounds.length ? rounds.join(' · ') : '—';
+                row.appendChild(left); row.appendChild(ratings);
+                list.appendChild(row);
+            });
+            wrap.style.display = '';
+        }
+
+        async function loadDashboard() {
+            const loading = $('dashLoading'), empty = $('dashEmpty'), body = $('dashBody');
+            $('myDashboard').style.display = '';
+            loading.style.display = ''; empty.style.display = 'none'; body.style.display = 'none';
+            const pdga = sessionStorage.getItem(PDGA_KEY);
+            if (!pdga) {
+                loading.style.display = 'none';
+                empty.textContent = 'No PDGA # is linked to your account yet — your ratings & tournament history will appear here once it is.';
+                empty.style.display = '';
+                return;
+            }
+            const [players, stats] = await Promise.all([fetchJson(PLAYERS_URL), fetchJson(STATS_URL)]);
+            const p = players && players.players ? players.players[pdga] : null;
+            const s = stats && stats.players ? stats.players[pdga] : null;
+            if (!p && !s) {
+                loading.style.display = 'none';
+                empty.textContent = "We couldn't find live data for PDGA #" + pdga + ' yet — check back after the next sync.';
+                empty.style.display = '';
+                return;
+            }
+            const live = p ? p.live_rating : (s && s.summary ? s.summary.latest_rating : null);
+            const official = p ? p.official_rating : null;
+            const peak = s && s.summary ? s.summary.peak_rating : null;
+            const events = s ? s.events : null;
+            setText('dashLive', live != null ? live : '—');
+            setText('dashOfficial', official != null ? official : '—');
+            setText('dashPeak', peak != null ? peak : '—');
+            setText('dashEvents', s && s.summary ? s.summary.events_count : (events ? events.length : '—'));
+            const delta = (live != null && official != null) ? live - official : null;
+            setText('dashDelta', delta != null ? (delta >= 0 ? '+' + delta + ' vs official' : delta + ' vs official') : '');
+            renderEvents(events);
+            loading.style.display = 'none'; body.style.display = '';
         }
 
         async function handleLogin() {
@@ -783,6 +892,7 @@
                     const data = await res.json();
                     sessionStorage.setItem(TOKEN_KEY, data.token);
                     if (data.name) sessionStorage.setItem(NAME_KEY, data.name);
+                    if (data.pdgaNo) sessionStorage.setItem(PDGA_KEY, data.pdgaNo); else sessionStorage.removeItem(PDGA_KEY);
                     $('pinInput').value = '';
                     if (data.mustChangePin) showPinChange();
                     else showMembersContent(data.name);
@@ -839,8 +949,10 @@
                 const res = await api('/me', { token });
                 if (res.status === 200) {
                     const data = await res.json();
+                    if (data.name) sessionStorage.setItem(NAME_KEY, data.name);
+                    if (data.pdgaNo) sessionStorage.setItem(PDGA_KEY, data.pdgaNo); else sessionStorage.removeItem(PDGA_KEY);
                     if (data.mustChangePin) showPinChange();
-                    else showMembersContent(sessionStorage.getItem(NAME_KEY));
+                    else showMembersContent(data.name || sessionStorage.getItem(NAME_KEY));
                 } else {
                     logout();
                 }
