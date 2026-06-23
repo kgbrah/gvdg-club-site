@@ -15,6 +15,15 @@ id = "REPLACE_WITH_ROSTER_KV_ID"
 binding = "RATELIMIT"
 id = "REPLACE_WITH_RATELIMIT_KV_ID"
 
+# Club operations data (events, leagues, courses, layouts, results, meetings, fundraisers).
+# mostlysober252: `wrangler d1 create gvdg`, paste the database_id, then apply migrations with
+# `wrangler d1 migrations apply DB` (remote) — add `--local` for dev.
+[[d1_databases]]
+binding = "DB"
+database_name = "gvdg"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
 [vars]
 ALLOWED_ORIGINS = "https://www.greenvillediscgolf.com,https://greenvillediscgolf.com"
 SESSION_TTL_SEC = "900"
