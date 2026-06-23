@@ -123,6 +123,19 @@
         .admin-tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
         .admin-tab { background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; }
         .admin-tab.active { background: var(--secondary); border-color: var(--secondary); color: #fff; }
+        .al-section { border: 1px solid var(--border-color); border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 1rem; }
+        .al-h { margin: 0 0 0.5rem; font-size: 0.95rem; }
+        .al-note { font-size: 0.8rem; color: var(--text-muted); }
+        .al-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+        .al-row input, .al-row select { padding: 0.4rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
+        .al-holes { width: 100%; border-collapse: collapse; margin-top: 0.5rem; font-size: 0.85rem; }
+        .al-holes th, .al-holes td { padding: 0.3rem 0.4rem; text-align: left; border-bottom: 1px solid var(--border-color); }
+        .al-holes input, .al-holes select { width: 100%; padding: 0.3rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); box-sizing: border-box; }
+        .al-holes input[type=number] { width: 4rem; }
+        .al-est { white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .al-est .src { font-size: 0.7rem; color: var(--text-muted); }
+        .al-poolitem { display: inline-flex; align-items: center; gap: 0.35rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 999px; padding: 0.2rem 0.6rem; margin: 0.15rem; font-size: 0.78rem; }
+        .al-poolitem button { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.9rem; line-height: 1; }
         .admin-pane { display: none; }
         .admin-pane.active { display: block; }
         .admin-form { display: grid; gap: 0.75rem; max-width: 520px; }
@@ -194,6 +207,7 @@
                 <button type="button" class="admin-tab" data-atab="create">New Event</button>
                 <button type="button" class="admin-tab" data-atab="import">Import</button>
                 <button type="button" class="admin-tab" data-atab="courses">Courses</button>
+                <button type="button" class="admin-tab" data-atab="layouts">Layouts</button>
             </div>
             <div class="admin-msg" id="adminMsg"></div>
             <div class="admin-pane active" id="apane-events"><div id="adminEventsList">Loading…</div></div>
@@ -225,6 +239,51 @@
                     <button type="submit" class="admin-btn">Add course</button>
                 </form>
                 <div id="adminCoursesList" style="margin-top:1rem;"></div>
+            </div>
+            <div class="admin-pane" id="apane-layouts">
+                <div><label for="alCourse">Course</label>
+                    <select id="alCourse"><option value="">— select a course —</option></select></div>
+                <div id="alBody" style="display:none;margin-top:1rem;">
+                    <!-- UDisc import (best-effort) -->
+                    <div class="al-section">
+                        <h4 class="al-h">Import layout from UDisc <span class="al-note">(best-effort — review before saving)</span></h4>
+                        <div class="al-row">
+                            <input id="alUdiscUrl" type="url" placeholder="https://udisc.com/courses/..." maxlength="1000">
+                            <button type="button" class="admin-btn secondary" id="alUdiscBtn">Fetch</button>
+                        </div>
+                        <div id="alUdiscResult" class="al-note"></div>
+                    </div>
+                    <!-- Tee / target pool -->
+                    <div class="al-section">
+                        <h4 class="al-h">Tee &amp; target pool <span class="al-note">(Safari mode links any of these)</span></h4>
+                        <div id="alPoolList" class="al-note">No positions yet.</div>
+                        <div class="al-row" style="margin-top:0.5rem;">
+                            <select id="alPosKind"><option value="tee">Tee pad</option><option value="target">Target</option></select>
+                            <input id="alPosLabel" placeholder="Label e.g. Hole 5 (Blue)" maxlength="80">
+                            <input id="alPosLat" placeholder="lat" inputmode="decimal" size="8">
+                            <input id="alPosLng" placeholder="lng" inputmode="decimal" size="8">
+                            <button type="button" class="admin-btn secondary" id="alPosAddBtn">Add</button>
+                        </div>
+                    </div>
+                    <!-- Layout / Safari builder -->
+                    <div class="al-section">
+                        <h4 class="al-h">🦁 Layout / Safari builder</h4>
+                        <p class="al-note">Link <strong>any</strong> tee to <strong>any</strong> target and set <strong>any</strong> par. Distance is auto-estimated (GPS when both have coordinates, else by par) — override any hole manually.</p>
+                        <div><label for="alName">Layout name</label><input id="alName" maxlength="60" placeholder="Main / Safari / Blue"></div>
+                        <table class="al-holes"><thead><tr><th>#</th><th>Par</th><th>Tee</th><th>Target</th><th>Manual ft</th><th>Est.</th><th></th></tr></thead>
+                            <tbody id="alHoles"></tbody></table>
+                        <div class="al-row" style="margin-top:0.5rem;">
+                            <button type="button" class="admin-btn secondary" id="alAddHole">+ Add hole</button>
+                            <button type="button" class="admin-btn" id="alSaveLayout">Save layout</button>
+                            <button type="button" class="admin-btn secondary" id="alResetLayout" style="display:none;">New (clear)</button>
+                        </div>
+                    </div>
+                    <!-- Existing layouts -->
+                    <div class="al-section">
+                        <h4 class="al-h">Existing layouts</h4>
+                        <div id="alLayoutsList" class="al-note">None yet.</div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -370,10 +429,12 @@
             let courses = [];
             try { const r = await api('/courses'); if (r.ok) courses = (await r.json()).courses || []; } catch (e) {}
             const sel = $('aeCourse'); sel.length = 1;
+            const lsel = $('alCourse'); lsel.length = 1;
             const list = $('adminCoursesList'); list.textContent = '';
             courses.forEach((c) => {
                 const label = c.name + (c.location ? ' — ' + c.location : '');
                 const o = document.createElement('option'); o.value = c.id; o.textContent = label; sel.appendChild(o);
+                const o2 = document.createElement('option'); o2.value = c.id; o2.textContent = label; lsel.appendChild(o2);
                 list.appendChild(elx('div', 'admin-cand', label));
             });
         }
@@ -459,6 +520,192 @@
             else { adminMsg('CSV import failed (' + r.status + ')', false); }
         }
 
+        // ============================================================
+        //  Layouts / SAFARI editor. Mirrors the server's distance model
+        //  (auth-worker/src/distance.ts) for live preview; the server
+        //  re-computes authoritatively on save. XSS-safe DOM building.
+        // ============================================================
+        let alCourseId = null, alPool = [], alEditing = null;
+        const PAR_FT = { 2: 120, 3: 250, 4: 400, 5: 600, 6: 800 };
+        function haversineFt(a, b) {
+            const R = 6371000, rad = (d) => d * Math.PI / 180;
+            const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+            const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+            return Math.round(2 * R * Math.asin(Math.min(1, Math.sqrt(h))) * 3.28084);
+        }
+        function estJS(tee, target, par, manual) {
+            if (manual != null && manual > 0) return { ft: Math.round(manual), src: 'manual' };
+            const ok = (p) => p && typeof p.lat === 'number' && typeof p.lng === 'number';
+            if (ok(tee) && ok(target)) return { ft: haversineFt(tee, target), src: 'geo' };
+            if (par > 0) return { ft: PAR_FT[par] != null ? PAR_FT[par] : Math.max(250, (par - 2) * 200), src: 'par' };
+            return { ft: null, src: null };
+        }
+        const numOrNull = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
+
+        async function alOnCourseChange() {
+            alCourseId = $('alCourse').value ? Number($('alCourse').value) : null;
+            $('alBody').style.display = alCourseId ? '' : 'none';
+            alResetLayout();
+            if (alCourseId) { await alLoadPool(); await alLoadLayouts(); }
+        }
+        async function alLoadPool() {
+            alPool = [];
+            try { const r = await api('/courses/' + alCourseId + '/positions'); if (r.ok) alPool = (await r.json()).positions || []; } catch (e) {}
+            const wrap = $('alPoolList'); wrap.textContent = '';
+            if (!alPool.length) { wrap.textContent = 'No positions yet — add tees/targets or import from UDisc.'; }
+            else alPool.forEach((p) => {
+                const chip = elx('span', 'al-poolitem', (p.kind === 'tee' ? '⛳ ' : '🎯 ') + p.label + (p.lat != null ? '' : ' (no GPS)'));
+                const x = elx('button', null, '✕'); x.title = 'Remove';
+                x.addEventListener('click', () => alDeletePosition(p.id));
+                chip.appendChild(x); wrap.appendChild(chip);
+            });
+            document.querySelectorAll('#alHoles tr').forEach(refreshRowSelects);
+        }
+        async function alAddPosition() {
+            const kind = $('alPosKind').value, label = $('alPosLabel').value.trim();
+            if (!label) { adminMsg('Position label required', false); return; }
+            const body = { kind, label, lat: numOrNull($('alPosLat').value), lng: numOrNull($('alPosLng').value) };
+            const r = await adminApi('/admin/courses/' + alCourseId + '/positions', { method: 'POST', body });
+            if (r.ok) { $('alPosLabel').value = ''; $('alPosLat').value = ''; $('alPosLng').value = ''; adminMsg('Added ' + kind, true); alLoadPool(); }
+            else adminMsg('Add position failed (' + r.status + ')', false);
+        }
+        async function alDeletePosition(id) {
+            const r = await adminApi('/admin/courses/' + alCourseId + '/positions/' + id, { method: 'DELETE' });
+            if (r.ok) alLoadPool(); else adminMsg('Remove failed', false);
+        }
+
+        async function alUdiscFetch() {
+            const url = $('alUdiscUrl').value.trim();
+            if (!url) { adminMsg('Paste a UDisc course URL', false); return; }
+            adminMsg('Fetching from UDisc…', true);
+            const r = await adminApi('/admin/import/udisc', { method: 'POST', body: { url } });
+            const out = $('alUdiscResult'); out.textContent = '';
+            if (!r.ok) { adminMsg('UDisc import failed (' + r.status + ')', false); return; }
+            const c = (await r.json()).candidate || {};
+            out.appendChild(elx('div', null, (c.note || '') + ' — ' + (c.holes ? c.holes.length : 0) + ' holes, ' + (c.positions ? c.positions.length : 0) + ' positions.'));
+            if ((c.positions && c.positions.length) || (c.holes && c.holes.length)) {
+                const apply = elx('button', 'admin-btn secondary', 'Apply to course (replace pool + prefill holes)');
+                apply.style.marginTop = '0.4rem';
+                apply.addEventListener('click', async () => {
+                    apply.disabled = true;
+                    if (c.positions && c.positions.length) await adminApi('/admin/courses/' + alCourseId + '/positions', { method: 'PUT', body: { positions: c.positions } });
+                    await alLoadPool();
+                    if (c.holes && c.holes.length) { $('alName').value = c.name || 'Main'; renderHoleRows(c.holes); }
+                    adminMsg('Applied UDisc import — review and Save.', true);
+                });
+                out.appendChild(apply);
+            }
+            adminMsg('UDisc fetched', true);
+        }
+
+        function posOptions(kind, selLabel, selPos) {
+            // <select> of pool positions for `kind`, value=label, coords on dataset.
+            const sel = document.createElement('select');
+            sel.appendChild(new Option('— none —', ''));
+            const labels = new Set();
+            alPool.filter((p) => p.kind === kind).forEach((p) => {
+                const o = new Option(p.label, p.label); o.dataset.lat = p.lat == null ? '' : p.lat; o.dataset.lng = p.lng == null ? '' : p.lng;
+                sel.appendChild(o); labels.add(p.label);
+            });
+            // keep an embedded position that isn't (or no longer) in the pool
+            if (selLabel && !labels.has(selLabel)) {
+                const o = new Option(selLabel + ' (saved)', selLabel);
+                if (selPos) { o.dataset.lat = selPos.lat == null ? '' : selPos.lat; o.dataset.lng = selPos.lng == null ? '' : selPos.lng; }
+                sel.appendChild(o);
+            }
+            if (selLabel) sel.value = selLabel;
+            return sel;
+        }
+        function selToPos(sel) {
+            if (!sel.value) return null;
+            const o = sel.selectedOptions[0];
+            return { label: sel.value, lat: o && o.dataset.lat !== '' ? Number(o.dataset.lat) : null, lng: o && o.dataset.lng !== '' ? Number(o.dataset.lng) : null };
+        }
+        function refreshRowSelects(tr) {
+            const teeTd = tr.querySelector('.al-tee'), tgtTd = tr.querySelector('.al-target');
+            if (!teeTd || !tgtTd) return;
+            const curTee = teeTd.querySelector('select').value, curTgt = tgtTd.querySelector('select').value;
+            const t = posOptions('tee', curTee), g = posOptions('target', curTgt);
+            t.addEventListener('change', () => recalcRow(tr)); g.addEventListener('change', () => recalcRow(tr));
+            teeTd.replaceChildren(t); tgtTd.replaceChildren(g);
+            recalcRow(tr);
+        }
+        function recalcRow(tr) {
+            const par = parseInt(tr.querySelector('.al-par').value, 10) || 0;
+            const manual = numOrNull(tr.querySelector('.al-manual').value);
+            const tee = selToPos(tr.querySelector('.al-tee select')), target = selToPos(tr.querySelector('.al-target select'));
+            const e = estJS(tee, target, par, manual);
+            const cell = tr.querySelector('.al-est');
+            cell.replaceChildren();
+            cell.appendChild(elx('span', null, e.ft == null ? '—' : e.ft + ' ft'));
+            if (e.src) cell.appendChild(elx('span', 'src', ' ' + e.src));
+        }
+        function addHoleRow(hole) {
+            const tbody = $('alHoles');
+            const n = tbody.children.length + 1;
+            const tr = document.createElement('tr');
+            tr.appendChild(elx('td', null, String((hole && hole.hole) || n)));
+            const parTd = document.createElement('td'); const par = document.createElement('input'); par.type = 'number'; par.min = '1'; par.max = '15'; par.className = 'al-par'; par.value = (hole && hole.par) || 3; par.addEventListener('input', () => recalcRow(tr)); parTd.appendChild(par); tr.appendChild(parTd);
+            const teeTd = document.createElement('td'); teeTd.className = 'al-tee'; tr.appendChild(teeTd);
+            const tgtTd = document.createElement('td'); tgtTd.className = 'al-target'; tr.appendChild(tgtTd);
+            const manTd = document.createElement('td'); const man = document.createElement('input'); man.type = 'number'; man.min = '0'; man.className = 'al-manual'; man.placeholder = 'auto'; if (hole && hole.manual_distance != null) man.value = hole.manual_distance; man.addEventListener('input', () => recalcRow(tr)); manTd.appendChild(man); tr.appendChild(manTd);
+            const estTd = document.createElement('td'); estTd.className = 'al-est'; tr.appendChild(estTd);
+            const delTd = document.createElement('td'); const del = elx('button', 'al-poolitem', '✕'); del.addEventListener('click', () => { tr.remove(); renumberHoles(); }); delTd.appendChild(del); tr.appendChild(delTd);
+            tbody.appendChild(tr);
+            // populate selects, preselecting any embedded tee/target
+            const teeSel = posOptions('tee', hole && hole.tee ? hole.tee.label : '', hole && hole.tee);
+            const tgtSel = posOptions('target', hole && hole.target ? hole.target.label : '', hole && hole.target);
+            teeSel.addEventListener('change', () => recalcRow(tr)); tgtSel.addEventListener('change', () => recalcRow(tr));
+            teeTd.appendChild(teeSel); tgtTd.appendChild(tgtSel);
+            recalcRow(tr);
+        }
+        function renumberHoles() { [...$('alHoles').children].forEach((tr, i) => { tr.firstChild.textContent = String(i + 1); }); }
+        function renderHoleRows(holes) { $('alHoles').replaceChildren(); (holes || []).forEach((h) => addHoleRow(h)); }
+        function gatherHoles() {
+            return [...$('alHoles').children].map((tr, i) => {
+                const par = parseInt(tr.querySelector('.al-par').value, 10);
+                return { hole: i + 1, par, tee: selToPos(tr.querySelector('.al-tee select')), target: selToPos(tr.querySelector('.al-target select')), manual_distance: numOrNull(tr.querySelector('.al-manual').value) };
+            });
+        }
+        async function alSaveLayout() {
+            const holes = gatherHoles();
+            if (!holes.length) { adminMsg('Add at least one hole', false); return; }
+            if (holes.some((h) => !(h.par >= 1 && h.par <= 15))) { adminMsg('Every hole needs a par 1–15', false); return; }
+            const name = $('alName').value.trim() || 'Main';
+            const r = alEditing
+                ? await adminApi('/admin/layouts/' + alEditing, { method: 'PATCH', body: { name, holes } })
+                : await adminApi('/admin/layouts', { method: 'POST', body: { course_id: alCourseId, name, holes } });
+            if (r.ok) { adminMsg((alEditing ? 'Updated' : 'Saved') + ' layout “' + name + '”', true); alResetLayout(); alLoadLayouts(); }
+            else adminMsg('Save layout failed (' + r.status + ')', false);
+        }
+        function alResetLayout() {
+            alEditing = null; $('alName').value = ''; $('alHoles').replaceChildren();
+            $('alResetLayout').style.display = 'none'; $('alSaveLayout').textContent = 'Save layout';
+        }
+        async function alLoadLayouts() {
+            let layouts = [];
+            try { const r = await api('/courses/' + alCourseId + '/layouts'); if (r.ok) layouts = (await r.json()).layouts || []; } catch (e) {}
+            const wrap = $('alLayoutsList'); wrap.textContent = '';
+            if (!layouts.length) { wrap.textContent = 'None yet.'; return; }
+            layouts.forEach((l) => {
+                const holes = (() => { try { return JSON.parse(l.holes || '[]'); } catch (e) { return []; } })();
+                const row = elx('div', 'admin-evrow');
+                row.appendChild(elx('span', 'ev-name', l.name + ' — ' + holes.length + ' holes, par ' + (l.total_par != null ? l.total_par : '?')));
+                const edit = elx('button', 'admin-btn secondary', 'Edit');
+                edit.addEventListener('click', () => alEditLayout(l, holes));
+                const del = elx('button', 'admin-btn danger', 'Delete');
+                del.addEventListener('click', async () => { if (!confirm('Delete layout “' + l.name + '”?')) return; const r = await adminApi('/admin/layouts/' + l.id, { method: 'DELETE' }); if (r.ok) { adminMsg('Deleted layout', true); if (alEditing === l.id) alResetLayout(); alLoadLayouts(); } });
+                row.appendChild(edit); row.appendChild(del);
+                wrap.appendChild(row);
+            });
+        }
+        function alEditLayout(l, holes) {
+            alEditing = l.id; $('alName').value = l.name || '';
+            renderHoleRows(holes);
+            $('alResetLayout').style.display = ''; $('alSaveLayout').textContent = 'Update layout';
+            $('alName').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
         function initAdmin() {
             if (adminInited) { adminLoadEvents(); adminLoadCourses(); return; }
             adminInited = true;
@@ -467,6 +714,12 @@
             $('adminCourseForm').addEventListener('submit', adminAddCourse);
             $('dgsImportBtn').addEventListener('click', adminDgsImport);
             $('csvImportBtn').addEventListener('click', adminCsvImport);
+            $('alCourse').addEventListener('change', alOnCourseChange);
+            $('alPosAddBtn').addEventListener('click', alAddPosition);
+            $('alUdiscBtn').addEventListener('click', alUdiscFetch);
+            $('alAddHole').addEventListener('click', () => addHoleRow());
+            $('alSaveLayout').addEventListener('click', alSaveLayout);
+            $('alResetLayout').addEventListener('click', alResetLayout);
             adminLoadEvents();
             adminLoadCourses();
         }
