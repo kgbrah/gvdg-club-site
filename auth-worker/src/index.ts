@@ -255,6 +255,7 @@ function asNum(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 const inSet = (arr: readonly string[], v: unknown): v is string => typeof v === "string" && arr.includes(v);
+const isUniqueViolation = (e: unknown): boolean => /UNIQUE constraint failed/i.test(String(e));
 const validLat = (n: number | null): number | null => (n != null && n >= -90 && n <= 90 ? n : null);
 const validLng = (n: number | null): number | null => (n != null && n >= -180 && n <= 180 ? n : null);
 
@@ -521,13 +522,23 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
       if (!b || !name) return json({ error: "invalid_course" }, 400, origin);
       const udisc = b.udisc_url == null ? null : asStr(b.udisc_url, 1000);
       if (b.udisc_url != null && (!udisc || !/^https?:\/\//.test(udisc))) return json({ error: "invalid_course" }, 400, origin);
-      const row = await db.createCourse(env.DB, { name, location: asStr(b.location, 200), udisc_url: udisc, lat: asNum(b.lat), lng: asNum(b.lng), created_by: adminId });
-      return json({ course: row }, 201, origin);
+      try {
+        const row = await db.createCourse(env.DB, { name, location: asStr(b.location, 200), udisc_url: udisc, lat: asNum(b.lat), lng: asNum(b.lng), created_by: adminId });
+        return json({ course: row }, 201, origin);
+      } catch (e) {
+        if (isUniqueViolation(e)) return json({ error: "course_exists" }, 409, origin); // courses.name is UNIQUE
+        throw e;
+      }
     }
     if (method === "PATCH" && id != null) {
       const b = (await readJson(request)) ?? {};
-      const row = await db.updateCourse(env.DB, id, { name: asStr(b.name, 200), location: asStr(b.location, 200), udisc_url: asStr(b.udisc_url, 1000), lat: asNum(b.lat), lng: asNum(b.lng) });
-      return row ? json({ course: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
+      try {
+        const row = await db.updateCourse(env.DB, id, { name: asStr(b.name, 200), location: asStr(b.location, 200), udisc_url: asStr(b.udisc_url, 1000), lat: asNum(b.lat), lng: asNum(b.lng) });
+        return row ? json({ course: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
+      } catch (e) {
+        if (isUniqueViolation(e)) return json({ error: "course_exists" }, 409, origin);
+        throw e;
+      }
     }
     if (method === "DELETE" && id != null) { await db.deleteCourse(env.DB, id); return json({ ok: true }, 200, origin); }
   }

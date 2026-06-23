@@ -75,6 +75,9 @@ export class LiveEventDO {
       status: this.meta?.status ?? "none",
       eventId: this.meta?.eventId ?? null,
       holes,
+      // players (with per-hole scores + their stable index) drive the scorekeeper grid;
+      // standings drive the public leaderboard.
+      players: this.players.map((p, index) => ({ index, memberId: p.memberId, name: p.name, division: p.division ?? null, scores: p.scores })),
       standings: computeLeaderboard(holes, this.players),
       updatedAt: this.meta?.startedAt ?? null,
     };
