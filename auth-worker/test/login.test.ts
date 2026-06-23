@@ -151,6 +151,58 @@ describe("misconfiguration (fail closed)", () => {
   });
 });
 
+describe("POST /profile", () => {
+  async function token(): Promise<string> {
+    const res = await worker.fetch(post("/login", { identifier: "12345", pin: PIN }), env);
+    return ((await res.json()) as any).token;
+  }
+  const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
+
+  it("401s without a token", async () => {
+    expect((await worker.fetch(post("/profile", { udisc: "x" }), env)).status).toBe(401);
+  });
+
+  it("updates UDisc + photo and /me reflects it", async () => {
+    const t = await token();
+    const res = await worker.fetch(
+      post("/profile", { udisc: "JaneThrows", photo: "data:image/png;base64,iVBORw0KGgo=" }, auth(t)),
+      env,
+    );
+    expect(res.status).toBe(200);
+    const me = await worker.fetch(
+      new Request("https://auth.example/me", { headers: { Origin: ORIGIN, Authorization: `Bearer ${t}` } }),
+      env,
+    );
+    const mj = (await me.json()) as any;
+    expect(mj.udisc).toBe("JaneThrows");
+    expect(mj.photo).toBe("data:image/png;base64,iVBORw0KGgo=");
+  });
+
+  it("rejects a non-numeric PDGA # (400)", async () => {
+    const t = await token();
+    expect((await worker.fetch(post("/profile", { pdgaNo: "ABC12" }, auth(t)), env)).status).toBe(400);
+  });
+
+  it("rejects a non-image / oversized photo (400)", async () => {
+    const t = await token();
+    expect((await worker.fetch(post("/profile", { photo: "data:text/html;base64,PHNjcmlwdD4=" }, auth(t)), env)).status).toBe(400);
+    const huge = "data:image/png;base64," + "A".repeat(300000);
+    expect((await worker.fetch(post("/profile", { photo: huge }, auth(t)), env)).status).toBe(400);
+  });
+
+  it("409s when claiming a PDGA # owned by another member", async () => {
+    await putMember(env.ROSTER as KVLike, {
+      memberId: "m_other",
+      name: "Other",
+      pdgaNo: "77777",
+      pinHash: await hashPin("0000"),
+      mustChangePin: false,
+    });
+    const t = await token();
+    expect((await worker.fetch(post("/profile", { pdgaNo: "77777" }, auth(t)), env)).status).toBe(409);
+  });
+});
+
 describe("CORS", () => {
   it("answers preflight from an allowed origin with the ACAO header", async () => {
     const res = await worker.fetch(

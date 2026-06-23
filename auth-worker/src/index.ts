@@ -4,7 +4,7 @@
 import { hashPin, verifyPin } from "./crypto.js";
 import { signSession, verifySession } from "./jwt.js";
 import { checkLockout, recordFailure, clearAttempts, type KVLike } from "./ratelimit.js";
-import { resolveMember, getMember, setPin } from "./roster.js";
+import { resolveMember, getMember, setPin, updateProfile, type ProfilePatch } from "./roster.js";
 import {
   registrationOptions,
   registrationVerify,
@@ -127,7 +127,18 @@ async function handleLogin(request: Request, env: Env, origin: string | null): P
 
   await clearAttempts(env.RATELIMIT, rk);
   const token = await signSession({ sub: member.memberId, mustChangePin: member.mustChangePin }, env.JWT_SECRET, ttl(env));
-  return json({ token, mustChangePin: member.mustChangePin, name: member.name, pdgaNo: member.pdgaNo ?? null }, 200, origin);
+  return json(
+    {
+      token,
+      mustChangePin: member.mustChangePin,
+      name: member.name,
+      pdgaNo: member.pdgaNo ?? null,
+      udisc: member.udisc ?? null,
+      photo: member.photo ?? null,
+    },
+    200,
+    origin,
+  );
 }
 
 async function handleMe(request: Request, env: Env, origin: string | null): Promise<Response> {
@@ -138,7 +149,59 @@ async function handleMe(request: Request, env: Env, origin: string | null): Prom
   const member = await getMember(env.ROSTER, claims.sub);
   if (!member) return json({ error: "unauthorized" }, 401, origin);
   return json(
-    { sub: member.memberId, mustChangePin: member.mustChangePin, name: member.name, pdgaNo: member.pdgaNo ?? null },
+    {
+      sub: member.memberId,
+      mustChangePin: member.mustChangePin,
+      name: member.name,
+      pdgaNo: member.pdgaNo ?? null,
+      udisc: member.udisc ?? null,
+      photo: member.photo ?? null,
+    },
+    200,
+    origin,
+  );
+}
+
+// Self-service profile fields a member may add when they couldn't be auto-matched.
+const MAX_PHOTO_LEN = 200_000; // ~150KB of base64 — small avatar only
+function validPhoto(p: string): boolean {
+  return p.length <= MAX_PHOTO_LEN && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(p);
+}
+
+async function handleProfile(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const claims = await requireAuth(request, env);
+  if (!claims) return json({ error: "unauthorized" }, 401, origin);
+  const body = await readJson(request);
+  if (!body) return json({ error: "invalid_request" }, 400, origin);
+
+  const patch: ProfilePatch = {};
+  if ("pdgaNo" in body) {
+    const v = body.pdgaNo;
+    if (v !== null && v !== "" && !(typeof v === "string" && /^\d+$/.test(v.trim()))) {
+      return json({ error: "invalid_pdga" }, 400, origin);
+    }
+    patch.pdgaNo = v === null ? null : String(v).trim();
+  }
+  if ("udisc" in body) {
+    const v = body.udisc;
+    if (v !== null && v !== "" && !(typeof v === "string" && /^[A-Za-z0-9._-]{1,50}$/.test(v.trim()))) {
+      return json({ error: "invalid_udisc" }, 400, origin);
+    }
+    patch.udisc = v === null ? null : String(v).trim();
+  }
+  if ("photo" in body) {
+    const v = body.photo;
+    if (v !== null && v !== "" && !(typeof v === "string" && validPhoto(v))) {
+      return json({ error: "invalid_photo" }, 400, origin);
+    }
+    patch.photo = v === null || v === "" ? null : (v as string);
+  }
+
+  const result = await updateProfile(env.ROSTER, claims.sub, patch);
+  if (!result.ok) return json({ error: "conflict", field: result.conflict }, 409, origin);
+  const m = result.member;
+  return json(
+    { pdgaNo: m.pdgaNo ?? null, udisc: m.udisc ?? null, photo: m.photo ?? null, name: m.name, mustChangePin: m.mustChangePin },
     200,
     origin,
   );
@@ -171,6 +234,7 @@ export default {
     if (pathname === "/login" && method === "POST") return handleLogin(request, env, origin);
     if (pathname === "/me" && method === "GET") return handleMe(request, env, origin);
     if (pathname === "/set-pin" && method === "POST") return handleSetPin(request, env, origin);
+    if (pathname === "/profile" && method === "POST") return handleProfile(request, env, origin);
 
     // --- passkeys / WebAuthn ---
     if (pathname === "/webauthn/register/options" && method === "POST") {

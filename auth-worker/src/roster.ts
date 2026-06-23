@@ -12,9 +12,14 @@ export interface Member {
   name: string;
   pdgaNo?: string;
   udisc?: string;
+  /** Profile photo: a pdga.com URL (auto) or a small data-URL (member upload). */
+  photo?: string;
   pinHash: string;
   mustChangePin: boolean;
 }
+
+export type ProfilePatch = { pdgaNo?: string | null; udisc?: string | null; photo?: string | null };
+export type UpdateResult = { ok: true; member: Member } | { ok: false; conflict: "pdga" | "udisc" };
 
 const RECORD = (id: string) => `member:${id}`;
 const IDX_PDGA = (n: string) => `idx:pdga:${normPdga(n)}`;
@@ -70,4 +75,54 @@ export async function setPin(kv: KVLike, memberId: string, pinHash: string): Pro
   m.pinHash = pinHash;
   m.mustChangePin = false;
   await kv.put(RECORD(memberId), JSON.stringify(m));
+}
+
+/**
+ * Update a member's self-service profile fields (PDGA #, UDisc username, photo) and keep
+ * the login indexes in sync. A field left `undefined` is unchanged; `null`/"" clears it.
+ * Refuses to claim a PDGA #/UDisc already owned by a DIFFERENT member (identity-hijack guard);
+ * conflicts are checked before any mutation so updates are all-or-nothing.
+ */
+export async function updateProfile(kv: KVLike, memberId: string, patch: ProfilePatch): Promise<UpdateResult> {
+  const m = await getMember(kv, memberId);
+  if (!m) throw new Error(`unknown member: ${memberId}`);
+
+  const newPdga = patch.pdgaNo === undefined ? undefined : normPdga(String(patch.pdgaNo ?? "")) || null;
+  // UDisc: keep the member's display casing on the record; index by lowercase (IDX_UDISC normalizes).
+  const newUdisc = patch.udisc === undefined ? undefined : String(patch.udisc ?? "").trim() || null;
+
+  if (newPdga) {
+    const owner = await kv.get(IDX_PDGA(newPdga));
+    if (owner && owner !== memberId) return { ok: false, conflict: "pdga" };
+  }
+  if (newUdisc) {
+    const owner = await kv.get(IDX_UDISC(newUdisc));
+    if (owner && owner !== memberId) return { ok: false, conflict: "udisc" };
+  }
+
+  if (newPdga !== undefined) {
+    if (m.pdgaNo && normPdga(m.pdgaNo) !== newPdga) await kv.delete(IDX_PDGA(m.pdgaNo));
+    if (newPdga) {
+      m.pdgaNo = newPdga;
+      await kv.put(IDX_PDGA(newPdga), memberId);
+    } else {
+      delete m.pdgaNo;
+    }
+  }
+  if (newUdisc !== undefined) {
+    if (m.udisc && normUdisc(m.udisc) !== normUdisc(newUdisc ?? "")) await kv.delete(IDX_UDISC(m.udisc));
+    if (newUdisc) {
+      m.udisc = newUdisc;
+      await kv.put(IDX_UDISC(newUdisc), memberId);
+    } else {
+      delete m.udisc;
+    }
+  }
+  if (patch.photo !== undefined) {
+    if (patch.photo) m.photo = patch.photo;
+    else delete m.photo;
+  }
+
+  await kv.put(RECORD(memberId), JSON.stringify(m));
+  return { ok: true, member: m };
 }
