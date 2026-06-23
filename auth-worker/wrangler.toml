@@ -36,7 +36,8 @@ SESSION_TTL_SEC = "900"
 # Override either model id here. OPENROUTER_API_KEY is a SECRET, NOT a var:
 #   wrangler secret put OPENROUTER_API_KEY      (get a free key at openrouter.ai)
 # If the key is unset, Crotts uses Workers AI only.
-OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
+# (gpt-oss-120b:free verified working 2026-06-23; llama-3.3-70b:free was rate-limited upstream then.)
+OPENROUTER_MODEL = "openai/gpt-oss-120b:free"
 ASSISTANT_MODEL = "@cf/meta/llama-3.1-8b-instruct"
 # Passkeys / WebAuthn. RP_ID must be the registrable domain (covers the www subdomain);
 # EXPECTED_ORIGIN must exactly match the page origin the browser reports.
