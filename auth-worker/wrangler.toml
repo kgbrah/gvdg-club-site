@@ -24,6 +24,11 @@ database_name = "gvdg"
 database_id = "REPLACE_WITH_D1_DATABASE_ID"
 migrations_dir = "migrations"
 
+# Tee-sign photos (T1). mostlysober252: `wrangler r2 bucket create gvdg-photos` then deploy.
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "gvdg-photos"
+
 # Cloudflare Workers AI — the FALLBACK brain for "Crotts" (POST /assistant). Free to declare;
 # usage bills to the account's Workers AI quota. Primary brain is OpenRouter (see below).
 [ai]
