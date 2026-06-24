@@ -22,6 +22,17 @@ const db = { prepare: (sql: string) => ({
   },
   run: async () => ({ results: [], success: true }),
 }) };
+// variant where the registration is already paid (payment_ref ORDER123)
+const dbPaid = { prepare: (sql: string) => ({
+  bind() { return this; },
+  all: async () => ({ results: [], success: true }),
+  first: async () => {
+    if (/FROM registrations WHERE event_id/i.test(sql)) return { id: 1, addons: '{"ctp":true}', paid_entry: 1, payment_ref: "ORDER123" };
+    if (/FROM event_config/i.test(sql)) return { entry_fee_cents: 1000, ctp_fee_cents: 500, ace_fee_cents: 300 };
+    return null;
+  },
+  run: async () => ({ results: [], success: true }),
+}) };
 const envBase = { ROSTER: kv({ "member:m_jane": MEMBER }), RATELIMIT: kv(), DB: db, JWT_SECRET: SECRET, ALLOWED_ORIGINS: "http://localhost:8080", LIVE: undefined };
 const env = (extra: Record<string, unknown> = {}) => ({ ...envBase, ...extra } as unknown as Parameters<typeof worker.fetch>[1]);
 const tok = () => signSession({ sub: "m_jane", mustChangePin: false }, SECRET, 900);
@@ -70,5 +81,16 @@ describe("Track G G2 — PayPal Checkout", () => {
   });
   it("requires auth", async () => {
     expect((await call("/events/5/pay/create-order", "POST")).status).toBe(401);
+  });
+  it("refuses to start a 2nd order once already paid (409) — prevents double-charge", async () => {
+    stubPayPal();
+    const e = env({ PAYPAL_CLIENT_ID: "cid", PAYPAL_SECRET: "sec", DB: dbPaid });
+    expect((await call("/events/5/pay/create-order", "POST", await tok(), {}, e)).status).toBe(409);
+  });
+  it("capture is idempotent for the same order, refuses a different order when already paid", async () => {
+    stubPayPal();
+    const e = env({ PAYPAL_CLIENT_ID: "cid", PAYPAL_SECRET: "sec", DB: dbPaid });
+    expect((await call("/events/5/pay/capture", "POST", await tok(), { orderId: "ORDER123" }, e)).status).toBe(200); // same order -> idempotent ok
+    expect((await call("/events/5/pay/capture", "POST", await tok(), { orderId: "OTHER" }, e)).status).toBe(409); // different order -> refuse
   });
 });

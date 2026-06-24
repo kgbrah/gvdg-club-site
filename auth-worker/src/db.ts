@@ -317,6 +317,10 @@ export interface RegistrationInput {
 export async function getMyRegistration(db: D1Like, eventId: number, memberId: string) {
   return db.prepare("SELECT * FROM registrations WHERE event_id = ? AND member_id = ?").bind(eventId, memberId).first();
 }
+export async function getEventStatus(db: D1Like, id: number): Promise<string | null> {
+  const r = (await db.prepare("SELECT status FROM events WHERE id = ?").bind(id).first()) as { status?: string } | null;
+  return r?.status ?? null;
+}
 export async function listMyRegistrations(db: D1Like, memberId: string) {
   return (await db.prepare("SELECT * FROM registrations WHERE member_id = ? ORDER BY event_id DESC").bind(memberId).all()).results;
 }
@@ -342,10 +346,12 @@ export async function setCheckedIn(db: D1Like, eventId: number, memberId: string
 export async function getRegistration(db: D1Like, id: number) {
   return db.prepare("SELECT * FROM registrations WHERE id = ?").bind(id).first();
 }
-/** Mark a registration paid after a verified PayPal capture (records the order id + captured amount). */
+/** Mark a registration paid after a verified PayPal capture (records the order id + captured amount).
+ *  Writes only when still unpaid (`paid_entry = 0`) so concurrent captures can't double-credit; returns
+ *  null if it was already paid (caller re-reads). */
 export async function markRegistrationPaid(db: D1Like, id: number, paymentRef: string, amountCents: number) {
   return db
-    .prepare("UPDATE registrations SET paid_entry = 1, payment_ref = ?, amount_paid_cents = ? WHERE id = ? RETURNING *")
+    .prepare("UPDATE registrations SET paid_entry = 1, payment_ref = ?, amount_paid_cents = ? WHERE id = ? AND paid_entry = 0 RETURNING *")
     .bind(paymentRef, amountCents, id)
     .first();
 }

@@ -323,7 +323,8 @@ async function handleSetPin(request: Request, env: Env, origin: string | null): 
 
 // ============================ club API (D1) ============================
 function asInt(v: unknown): number | null {
-  if (typeof v === "number" && Number.isInteger(v)) return v;
+  // non-negative integers only (ids, fees-in-cents, hole numbers, counts — none are legitimately negative)
+  if (typeof v === "number" && Number.isInteger(v) && v >= 0) return v;
   if (typeof v === "string" && /^\d+$/.test(v.trim())) return parseInt(v, 10);
   return null;
 }
@@ -613,6 +614,7 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
       const creds = { clientId: env.PAYPAL_CLIENT_ID, secret: env.PAYPAL_SECRET, base: paypalBase(env.PAYPAL_ENV, env.PAYPAL_API_BASE) };
       try {
         if (seg[3] === "create-order") {
+          if (reg.paid_entry === 1) return json({ error: "already_paid" }, 409, origin); // don't start a 2nd charge
           const orderId = await ppCreateOrder(creds, owed, "GVDG event entry");
           return json({ orderId }, 200, origin);
         }
@@ -620,11 +622,15 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
           const b = (await readJson(request)) ?? {};
           const orderId = asStr(b.orderId, 100);
           if (!orderId) return json({ error: "invalid_request" }, 400, origin);
-          if (reg.paid_entry === 1 && reg.payment_ref === orderId) return json({ registration: reg }, 200, origin); // idempotent
+          if (reg.paid_entry === 1) {
+            // already paid: replaying the SAME order is an idempotent success; a DIFFERENT order is refused
+            return reg.payment_ref === orderId ? json({ registration: reg }, 200, origin) : json({ error: "already_paid" }, 409, origin);
+          }
           const cap = await ppCaptureOrder(creds, orderId);
           if (cap.status !== "COMPLETED" || cap.amountCents < owed) return json({ error: "payment_incomplete" }, 402, origin); // verify amount server-side
+          // markRegistrationPaid only writes when paid_entry is still 0 (atomic) — closes the concurrent-capture race.
           const updated = await db.markRegistrationPaid(env.DB, reg.id, orderId, cap.amountCents);
-          return json({ registration: updated }, 200, origin);
+          return json({ registration: updated ?? (await db.getRegistration(env.DB, reg.id)) }, 200, origin);
         }
       } catch (e) {
         return json({ error: "paypal_error", reason: String(e instanceof Error ? e.message : e) }, 502, origin);
@@ -636,6 +642,8 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
       return json({ config: await db.getEventConfig(env.DB, eid), registration: await db.getMyRegistration(env.DB, eid, claims.sub) }, 200, origin);
     }
     if (seg[2] === "register" && method === "POST") {
+      const status = await db.getEventStatus(env.DB, eid);
+      if (status !== "scheduled" && status !== "live") return json({ error: "registration_closed" }, 403, origin); // can't register for a cancelled/final/missing event
       const cfg = (await db.getEventConfig(env.DB, eid)) as { registration_open?: number; divisions?: string } | null;
       if (!cfg || cfg.registration_open !== 1) return json({ error: "registration_closed" }, 403, origin);
       const b = (await readJson(request)) ?? {};
@@ -649,6 +657,8 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
       return json({ registration: row }, 201, origin);
     }
     if (seg[2] === "register" && method === "DELETE") {
+      const reg = (await db.getMyRegistration(env.DB, eid, claims.sub)) as { paid_entry?: number } | null;
+      if (reg?.paid_entry === 1) return json({ error: "paid_contact_admin" }, 403, origin); // don't self-withdraw a paid spot (refund is an admin action)
       await db.withdrawRegistration(env.DB, eid, claims.sub);
       return json({ ok: true }, 200, origin);
     }
@@ -968,6 +978,8 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders(origin) });
     }
     if (!secretOk(env)) return json({ error: "server_misconfigured" }, 500, origin);
+
+    try {
     if (pathname === "/login" && method === "POST") return handleLogin(request, env, origin);
     if (pathname === "/me" && method === "GET") return handleMe(request, env, origin);
     if (pathname === "/my-results" && method === "GET") return handleMyResults(request, env, origin);
@@ -1014,5 +1026,11 @@ export default {
     if (club) return club;
 
     return json({ error: "not_found" }, 404, origin);
+    } catch (e) {
+      // Any unhandled error (e.g. a D1 outage) -> a clean, CORS-bearing 500 so the browser sees the real
+      // failure instead of a CORS/network error, and the cause is logged.
+      console.error("worker_error", method, pathname, String(e instanceof Error ? e.stack : e));
+      return json({ error: "server_error" }, 500, origin);
+    }
   },
 };
