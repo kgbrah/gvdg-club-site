@@ -338,6 +338,7 @@ async function handleTeeSignUpload(request: Request, env: Env, origin: string | 
   if (courseId == null || hole == null || hole < 1 || hole > 99) return json({ error: "invalid_request" }, 400, origin);
   const img = decodeDataUrl(body?.image);
   if (!img) return json({ error: "invalid_image" }, 400, origin);
+  if (!(await db.getCourse(env.DB, courseId))) return json({ error: "invalid_course" }, 400, origin); // no orphan rows/blobs (D1 FKs aren't enforced)
   const key = teeSignKey(courseId, hole, img.ext, crypto.randomUUID());
   await env.PHOTOS.put(key, img.bytes, { httpMetadata: { contentType: img.contentType } });
   let row;

@@ -44,6 +44,7 @@ function mockDb() {
       return { results: [], success: true };
     },
     first: async () => {
+      if (/SELECT \* FROM courses WHERE id/i.test(sql)) return { id: 3, name: "Test Course" };
       if (/INSERT INTO tee_signs/i.test(sql)) return { id: 1, status: "candidate", r2_key: "tee-signs/3/5/u.png" };
       if (/SELECT \* FROM tee_signs WHERE id/i.test(sql)) return { id: 1, course_id: 3, hole_number: 5, status: "candidate", r2_key: "tee-signs/3/5/u.png", content_type: "image/png", uploaded_by: "m_jane", extracted_json: null, extract_source: null };
       if (/INSERT INTO course_layouts/i.test(sql)) return { id: 99, course_id: 3, name: "Long", holes: "[]", total_par: null };
