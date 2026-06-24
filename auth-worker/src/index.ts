@@ -21,6 +21,8 @@ import { computeLeagueStandings } from "./scoring.js";
 import { computeOwed, paypalBase, createOrder as ppCreateOrder, captureOrder as ppCaptureOrder } from "./payments.js";
 import { assignShotgun, assignTeams } from "./assign.js";
 import { type R2BucketLike, decodeDataUrl, teeSignKey } from "./photos.js";
+import { extractTeeSign, parseVisionJson } from "./vision.js";
+import type { ExecutionContext } from "./cf.js";
 
 // Fisher-Yates shuffle (Workers runtime permits Math.random) — used for random shotgun/team assignment.
 function shuffle<T>(arr: T[]): T[] {
@@ -53,8 +55,12 @@ export interface Env {
   // OPENROUTER_API_KEY is a SECRET (wrangler secret put OPENROUTER_API_KEY); absent → skip OpenRouter.
   OPENROUTER_API_KEY?: string;
   OPENROUTER_MODEL?: string;
-  AI?: { run(model: string, opts: { messages: { role: string; content: string }[]; max_tokens?: number }): Promise<{ response?: string }> };
+  AI?: { run(model: string, opts: { messages?: { role: string; content: string }[]; image?: number[]; prompt?: string; max_tokens?: number }): Promise<{ response?: string }> };
   ASSISTANT_MODEL?: string;
+  // Crotts vision (T2): tee-sign OCR. Override model ids here; key is the same OPENROUTER_API_KEY secret.
+  OPENROUTER_VISION_MODEL?: string;
+  VISION_MODEL?: string;
+  VISION_DEV_STUB?: string;
   // Durable Object namespace for live scoring (one instance per in-progress event).
   LIVE: DurableObjectNamespace;
   // PayPal Checkout (Track G). Payments activate only when BOTH client-id + secret are configured;
@@ -321,7 +327,7 @@ async function handleProfile(request: Request, env: Env, origin: string | null):
   );
 }
 
-async function handleTeeSignUpload(request: Request, env: Env, origin: string | null): Promise<Response> {
+async function handleTeeSignUpload(request: Request, env: Env, origin: string | null, ctx?: ExecutionContext): Promise<Response> {
   const who = await requireMember(request, env, origin);
   if (who instanceof Response) return who;
   if (await kvRateLimited(env, "teesign:" + who.sub, 10, 60)) return json({ error: "rate_limited" }, 429, origin);
@@ -336,6 +342,14 @@ async function handleTeeSignUpload(request: Request, env: Env, origin: string | 
   const row = await db.insertTeeSign(env.DB, {
     course_id: courseId, hole_number: hole, r2_key: key, content_type: img.contentType, bytes: img.bytes.length, uploaded_by: who.sub,
   });
+  const signId = (row as { id: number }).id;
+  const p = (async () => {
+    try {
+      const v = await extractTeeSign(env, img.bytes, img.contentType);
+      await db.setTeeSignExtraction(env.DB, signId, JSON.stringify({ hole: v.hole, layouts: v.layouts }), v.source ?? null);
+    } catch (e) { console.error("vision_extract_failed", signId, String(e)); }
+  })();
+  if (ctx?.waitUntil) ctx.waitUntil(p); else void p; // tests have no ctx -> fire-and-forget
   return json({ teeSign: row }, 201, origin);
 }
 
@@ -1073,7 +1087,7 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
     const origin = allowedOrigin(env, request);
     const { pathname } = new URL(request.url);
     const method = request.method.toUpperCase();
@@ -1126,7 +1140,7 @@ export default {
     }
 
     // --- tee-sign member routes ---
-    if (pathname === "/tee-signs" && method === "POST") return handleTeeSignUpload(request, env, origin);
+    if (pathname === "/tee-signs" && method === "POST") return handleTeeSignUpload(request, env, origin, ctx);
     if (pathname === "/my-tee-signs" && method === "GET") return handleMyTeeSigns(request, env, origin);
 
     // --- club operations (events / courses / leagues / layouts) ---
