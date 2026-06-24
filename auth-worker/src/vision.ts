@@ -95,7 +95,12 @@ async function openRouterVision(env: VisionEnv, bytes: Uint8Array, contentType: 
 
 async function workersAiVision(env: VisionEnv, bytes: Uint8Array): Promise<VisionResult> {
   const model = env.VISION_MODEL || DEFAULT_WAI_VISION;
-  const out = await env.AI!.run(model, { image: Array.from(bytes), prompt: VISION_PROMPT, max_tokens: 700 });
+  // env.AI.run takes no abort signal, so race it against a timeout (matches OpenRouter's 30s cap):
+  // a hung model rejects and the chain falls through instead of blocking the request indefinitely.
+  const out = await Promise.race([
+    env.AI!.run(model, { image: Array.from(bytes), prompt: VISION_PROMPT, max_tokens: 700 }),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("workers_ai_timeout")), 30000)),
+  ]);
   return { ...parseVisionJson(out?.response ?? ""), source: "workers-ai:" + model };
 }
 

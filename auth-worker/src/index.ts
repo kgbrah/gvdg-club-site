@@ -1066,6 +1066,7 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
       return json({ teeSigns }, 200, origin);
     }
     if (id != null && seg[3] === "extract" && method === "POST") {
+      if (await kvRateLimited(env, "extract:" + adminId, 30, 60)) return json({ error: "rate_limited" }, 429, origin);
       const sign = await db.getTeeSign(env.DB, id);
       if (!sign) return json({ error: "not_found" }, 404, origin);
       const obj = await env.PHOTOS.get(sign.r2_key);
