@@ -20,6 +20,7 @@ import { buildMessages, generateReply, MAX_HISTORY, type ChatTurn, type ChatMess
 import { computeLeagueStandings } from "./scoring.js";
 import { computeOwed, paypalBase, createOrder as ppCreateOrder, captureOrder as ppCaptureOrder } from "./payments.js";
 import { assignShotgun, assignTeams } from "./assign.js";
+import { type R2BucketLike } from "./photos.js";
 
 // Fisher-Yates shuffle (Workers runtime permits Math.random) — used for random shotgun/team assignment.
 function shuffle<T>(arr: T[]): T[] {
@@ -38,6 +39,8 @@ export interface Env {
   ROSTER: KVLike;
   RATELIMIT: KVLike;
   DB: D1Like; // Cloudflare D1 — club operations (events, courses, leagues, results, …)
+  /** Cloudflare R2 — tee-sign photo storage (T1). */
+  PHOTOS: R2BucketLike;
   JWT_SECRET: string;
   /** Comma-separated allowlist of browser origins permitted to call the API. */
   ALLOWED_ORIGINS: string;
