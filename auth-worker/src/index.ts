@@ -126,7 +126,12 @@ function bearer(request: Request): string | null {
 
 async function requireAuth(request: Request, env: Env) {
   const token = bearer(request);
-  return token ? verifySession(token, env.JWT_SECRET) : null;
+  const claims = token ? await verifySession(token, env.JWT_SECRET) : null;
+  // Enforce the PIN-change gate server-side too (not just in the UI): a member still on their admin-issued
+  // default PIN can't reach protected routes until they set their own PIN via /set-pin (which is exempt —
+  // it uses bearer()+verifySession directly, as does /me).
+  if (!claims || claims.mustChangePin) return null;
+  return claims;
 }
 
 async function readJson(request: Request): Promise<Record<string, unknown> | null> {

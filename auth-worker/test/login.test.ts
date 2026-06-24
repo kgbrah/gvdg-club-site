@@ -163,13 +163,23 @@ describe("misconfiguration (fail closed)", () => {
 
 describe("POST /profile", () => {
   async function token(): Promise<string> {
+    // Mirror the real flow: members must change their default PIN (via /set-pin) before protected routes
+    // like /profile — so a usable profile token is the fresh one returned by set-pin (mustChangePin:false).
     const res = await worker.fetch(post("/login", { identifier: "12345", pin: PIN }), env);
-    return ((await res.json()) as any).token;
+    const loginToken = ((await res.json()) as any).token;
+    const sp = await worker.fetch(post("/set-pin", { newPin: "9999" }, { Authorization: `Bearer ${loginToken}` }), env);
+    return ((await sp.json()) as any).token;
   }
   const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
 
   it("401s without a token", async () => {
     expect((await worker.fetch(post("/profile", { udisc: "x" }), env)).status).toBe(401);
+  });
+
+  it("rejects a still-must-change-PIN token on protected routes (server-side gate, not just UI)", async () => {
+    const res = await worker.fetch(post("/login", { identifier: "12345", pin: PIN }), env);
+    const loginToken = ((await res.json()) as { token: string }).token; // mustChangePin: true
+    expect((await worker.fetch(post("/profile", { udisc: "x" }, { Authorization: `Bearer ${loginToken}` }), env)).status).toBe(401);
   });
 
   it("updates UDisc + photo and /me reflects it", async () => {
