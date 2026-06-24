@@ -77,6 +77,7 @@ export function normalizeEvent(raw) {
     format: ev.format != null ? String(ev.format) : '',
     date: ev.date != null ? String(ev.date) : null,
     course_id: ev.course_id != null ? String(ev.course_id) : '',
+    layout_id: ev.layout_id != null ? String(ev.layout_id) : '', // selected scoring layout (T4 tee-sign render)
     league_id: ev.league_id != null ? String(ev.league_id) : '',
     source: ev.source != null ? String(ev.source) : '',
     external_url: ev.external_url != null ? String(ev.external_url) : '',

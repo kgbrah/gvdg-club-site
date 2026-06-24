@@ -667,6 +667,15 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
       ? json({ layouts: await db.listLayouts(env.DB, cid) }, 200, origin)
       : json({ positions: await db.listPositions(env.DB, cid) }, 200, origin);
   }
+  // Official tee signs per hole for render (T4); a logged-in member also sees candidates (members-only).
+  if (method === "GET" && seg[0] === "courses" && seg.length === 3 && seg[2] === "tee-signs") {
+    const cid = asInt(seg[1]);
+    if (cid == null) return json({ error: "not_found" }, 404, origin);
+    const token = bearer(request);
+    const claims = token ? await verifySession(token, env.JWT_SECRET) : null;
+    const statuses = claims ? ["official", "candidate"] : ["official"];
+    return json({ teeSigns: await db.listTeeSignsByCourse(env.DB, cid, statuses) }, 200, origin);
+  }
 
   // ---- tee-sign image serve: /tee-signs/:id/image ----
   if (method === "GET" && seg[0] === "tee-signs" && seg.length === 3 && seg[2] === "image") {

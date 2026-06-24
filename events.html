@@ -216,6 +216,23 @@
         footer { background: linear-gradient(135deg, var(--dark) 0%, #0d1a0d 100%); color: white; text-align: center; padding: 2.5rem 2rem; font-size: 0.95rem; border-top: 3px solid var(--accent); }
         [data-theme="dark"] footer { background: linear-gradient(135deg, var(--bg-secondary) 0%, #0a0a14 100%); }
         @media print { header, footer { display: none; } }
+
+        /* ---- Tee signs (T4): per-hole official photo or SVG fallback ---- */
+        .tee-signs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.75rem; margin-top: 0.5rem; }
+        .ts-hole-card { border: 1px solid var(--border-color); border-radius: 12px; padding: 0.6rem; background: var(--bg-primary); display: flex; flex-direction: column; gap: 0.4rem; }
+        .ts-hole-photo { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; background: var(--bg-tertiary); }
+        .ts-hole-svg { display: flex; justify-content: center; }
+        .ts-hole-svg svg { width: 100%; height: auto; max-width: 100%; }
+        .ts-hole-meta { font-size: 0.85rem; color: var(--text-secondary); font-weight: 600; }
+        .ts-hole-num { color: var(--primary); font-weight: 700; }
+        /* tee-sign.js SVG classes (mirrors tee-sign-preview.html), theme-aware */
+        .tee-sign { color: var(--text-primary); }
+        .tee-sign-bg { fill: var(--bg-secondary); stroke: var(--border-color); stroke-opacity: 0.7; }
+        .tee-sign-hole { font: 700 44px 'Bebas Neue', system-ui, sans-serif; fill: currentColor; }
+        .tee-sign-course { font: 600 14px system-ui, sans-serif; fill: currentColor; opacity: 0.7; }
+        .tee-sign-rule { stroke: currentColor; stroke-opacity: 0.2; }
+        .tee-sign-label, .tee-sign-par { font: 600 14px system-ui, sans-serif; fill: currentColor; }
+        .tee-sign-dist { font: 600 14px system-ui, sans-serif; fill: currentColor; opacity: 0.8; }
     </style>
 </head>
 <body data-api-base="https://auth.greenvillediscgolf.com">
@@ -281,6 +298,7 @@
             typeLabel,
             statusLabel,
         } from './events.js';
+        import { teeSignSvg } from './tee-sign.js';
 
         // --- Theme toggle (mirrors index.html) ---
         const themeToggle = document.querySelector('.theme-toggle');
@@ -817,6 +835,56 @@
             }
         }
 
+        // T4: per-hole tee signs for the event's selected layout. Viewer is public → official photos only;
+        // holes without a photo fall back to the SVG tee sign rendered from the confirmed layout data.
+        async function renderTeeSigns(ev, card) {
+            if (!ev.course_id) return;
+            const [ld, td] = await Promise.all([
+                fetchJson(`/courses/${encodeURIComponent(ev.course_id)}/layouts`).catch(() => null),
+                fetchJson(`/courses/${encodeURIComponent(ev.course_id)}/tee-signs`).catch(() => null),
+            ]);
+            const layouts = (ld && ld.layouts) || [];
+            const signs = (td && td.teeSigns) || [];
+            const layout = layouts.find((l) => String(l.id) === ev.layout_id) || layouts[0] || null;
+            let holes = [];
+            if (layout) { try { holes = JSON.parse(layout.holes || '[]'); } catch (_e) { holes = []; } }
+            const officialByHole = new Map();
+            signs.forEach((s) => { if (s.status === 'official') officialByHole.set(Number(s.hole_number), s.id); });
+            const holeData = new Map(holes.map((h) => [Number(h.hole), h]));
+            const holeNums = new Set([...holeData.keys(), ...officialByHole.keys()]);
+            if (!holeNums.size) return; // nothing confirmed yet → no section (capture CTA lives on the members page)
+            card.appendChild(el('h3', 'roster-title', '🪧 Tee Signs' + (layout ? ' — ' + layout.name : '')));
+            const grid = el('div', 'tee-signs-grid');
+            const courseName = courseNameFor(courseIndex, ev.course_id) || '';
+            for (const hn of [...holeNums].sort((a, b) => a - b)) {
+                const h = holeData.get(hn) || { hole: hn };
+                const holeCard = el('div', 'ts-hole-card');
+                const signId = officialByHole.get(hn);
+                if (signId != null) {
+                    const img = el('img', 'ts-hole-photo');
+                    img.loading = 'lazy';
+                    img.alt = `Tee sign, hole ${hn}`;
+                    img.src = `${API_BASE}/tee-signs/${encodeURIComponent(signId)}/image`;
+                    holeCard.appendChild(img);
+                } else {
+                    const wrap = el('div', 'ts-hole-svg');
+                    const svg = teeSignSvg({ hole: hn, courseName, layouts: [{ label: layout ? layout.name : 'Layout', color: h.color || (h.tee && h.tee.color) || null, par: h.par != null ? h.par : null, distance_ft: h.distance_ft != null ? h.distance_ft : null }] });
+                    const doc = new DOMParser().parseFromString(svg, 'image/svg+xml'); // inert parse — no script execution
+                    if (doc.documentElement && doc.documentElement.nodeName.toLowerCase() === 'svg') wrap.appendChild(doc.documentElement);
+                    holeCard.appendChild(wrap);
+                }
+                const meta = el('div', 'ts-hole-meta');
+                meta.appendChild(el('span', 'ts-hole-num', 'Hole ' + hn));
+                const bits = [];
+                if (h.par != null) bits.push('Par ' + h.par);
+                if (h.distance_ft != null) bits.push(h.distance_ft + ' ft');
+                if (bits.length) meta.appendChild(document.createTextNode(' · ' + bits.join(' · ')));
+                holeCard.appendChild(meta);
+                grid.appendChild(holeCard);
+            }
+            card.appendChild(grid);
+        }
+
         function renderDetail(rawEvent) {
             const ev = normalizeEvent(rawEvent);
             detailEl.replaceChildren();
@@ -900,6 +968,7 @@
             }
 
             renderEventExtras(ev.id, card); // CTPs + ace pot (Track G G3), filled in async
+            renderTeeSigns(ev, card);       // T4: per-hole tee signs (official photo / SVG fallback), filled in async
 
             detailEl.appendChild(card);
             setView('detail');
