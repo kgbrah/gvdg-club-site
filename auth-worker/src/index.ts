@@ -552,6 +552,7 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
       if (gate instanceof Response) return gate;
 
       if (sub === "start") {
+        const startBody = (await readJson(request)) ?? {};
         const ev = (await db.getEvent(env.DB, eid)) as (Record<string, unknown> & { layout_id?: number | null; players?: Record<string, unknown>[] }) | null;
         if (!ev) return json({ error: "not_found" }, 404, origin);
         let holes: { hole: number; par: number }[] = [];
@@ -560,7 +561,13 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
           try { holes = JSON.parse(layout?.holes ?? "[]").map((h: Record<string, unknown>) => ({ hole: Number(h.hole), par: Number(h.par) })); } catch { holes = []; }
         }
         if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin); // event needs a layout with pars
-        const players = (Array.isArray(ev.players) ? ev.players : []).map((p) => ({ memberId: (p.member_id as string) ?? null, name: String(p.name ?? "Player"), division: (p.division as string) ?? null }));
+        // G4: seed the live scorecard from event REGISTRATIONS (division + assigned starting hole) when any
+        // exist — connecting register/check-in/assign straight into scoring. Fall back to manual event_players.
+        const regs = (await db.listRegistrations(env.DB, eid)) as { member_id?: string; name?: string; division?: string | null; starting_hole?: number | null }[];
+        const players =
+          regs.length && startBody!.from !== "players"
+            ? regs.map((r) => ({ memberId: r.member_id ?? null, name: String(r.name ?? "Player"), division: r.division ?? null, startingHole: r.starting_hole ?? null }))
+            : (Array.isArray(ev.players) ? ev.players : []).map((p) => ({ memberId: (p.member_id as string) ?? null, name: String(p.name ?? "Player"), division: (p.division as string) ?? null, startingHole: null }));
         const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, holes, players, startedAt: new Date().toISOString() }) });
         const data = await r.json().catch(() => ({}));
         if (r.status === 200) await db.updateEvent(env.DB, eid, { status: "live" });

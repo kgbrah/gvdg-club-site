@@ -20,7 +20,7 @@ interface LiveMeta {
 interface StartBody {
   eventId: number;
   holes: { hole: number; par: number }[];
-  players: { memberId?: string | null; name: string; division?: string | null }[];
+  players: { memberId?: string | null; name: string; division?: string | null; startingHole?: number | null }[];
   startedAt?: string;
 }
 interface ScoreBody {
@@ -77,7 +77,7 @@ export class LiveEventDO {
       holes,
       // players (with per-hole scores + their stable index) drive the scorekeeper grid;
       // standings drive the public leaderboard.
-      players: this.players.map((p, index) => ({ index, memberId: p.memberId, name: p.name, division: p.division ?? null, scores: p.scores })),
+      players: this.players.map((p, index) => ({ index, memberId: p.memberId, name: p.name, division: p.division ?? null, startingHole: p.startingHole ?? null, scores: p.scores })),
       standings: computeLeaderboard(holes, this.players),
       updatedAt: this.meta?.startedAt ?? null,
     };
@@ -93,6 +93,7 @@ export class LiveEventDO {
       memberId: p.memberId ?? null,
       name: String(p.name ?? "Player"),
       division: p.division ?? null,
+      startingHole: p.startingHole ?? null,
       scores: {},
     }));
     await this.persist();
