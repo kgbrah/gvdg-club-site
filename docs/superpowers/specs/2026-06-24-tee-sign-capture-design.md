@@ -83,7 +83,8 @@ go through `requireAuth`, all approval/layout writes through `adminGate`.
 
 ### Data model
 
-New migration `auth-worker/migrations/0007_tee_signs.sql`:
+New migration `auth-worker/migrations/0008_tee_signs.sql` (0007 is taken by the parallel
+`feat/live-cards-scoring` track's `0007_casual_rounds.sql` — see Coordination below):
 
 ```sql
 CREATE TABLE tee_signs (
@@ -240,7 +241,7 @@ Admin (`adminGate`):
   layout with the tee's color swatch from a sanitized palette) + render it in event detail and a layout/hole
   preview from existing data. No backend.
   *Live-verify:* light+dark, XSS-safe (incl. color sanitization), correct for seeded multi-layout courses.
-- **T1 — Storage + upload backbone.** R2 binding, `0007` migration (tee_signs + `course_positions.color`),
+- **T1 — Storage + upload backbone.** R2 binding, `0008` migration (tee_signs + `course_positions.color`),
   `ensureDefaultLayouts` (Long/Short), `src/photos.ts`, `POST /tee-signs`, image serve, `GET /my-tee-signs`,
   admin list/approve(manual rows incl. color)/reject/delete + `applyTeeSignRows` writing multiple layouts +
   position colors. **No AI yet.** *Live-verify:* upload → R2 → D1 → serve (official public / candidate
@@ -261,7 +262,20 @@ Admin (`adminGate`):
 - `wrangler r2 bucket create gvdg-photos`; paste the `[[r2_buckets]]` binding (already in `wrangler.toml`).
 - Vision works on the existing `AI` binding (Workers AI) with no new secret; optionally set
   `OPENROUTER_VISION_MODEL` to a free VL id (the existing `OPENROUTER_API_KEY` secret covers OpenRouter).
-- D1: `0007` migration applied with the others. No new DB or paid plan needed.
+- D1: `0008` migration applied with the others. No new DB or paid plan needed.
+
+## Coordination with the `feat/live-cards-scoring` track
+
+A parallel effort ("Track N1 — UDisc-style multi-card live scoring") is being built on
+`feat/live-cards-scoring`, also stacked on `feat/events-d1-schema`. This tee-sign program is **independent**
+and lives in its own worktree (`/home/kg/gvdg-wt-teesign`, branch `feat/tee-sign-capture`) to avoid
+shared-file collisions. Known overlaps to reconcile at merge time:
+
+- **Migrations:** they took `0007_casual_rounds.sql`; we use `0008_tee_signs.sql` (+ the
+  `course_positions.color` ALTER). Renumber if their PR lands with a different number.
+- **Shared files** (`src/index.ts`, `src/db.ts`, `src/live.ts`, `admin.html`, `events.html`): both tracks
+  touch these. Whoever merges second rebases. Our T4 (render-in-scoring) consumes the live scorecard the
+  N1 track is reshaping, so **T4 should rebase onto the merged scoring surface** before its PR.
 
 ## Verification (per CLAUDE.md — live, not just unit tests)
 
