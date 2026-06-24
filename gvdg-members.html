@@ -1091,8 +1091,17 @@
                 if (!window.paypal) return;
                 window.paypal.Buttons({
                     style: { layout: 'horizontal', height: 36 },
-                    createOrder: () => api('/events/' + eventId + '/pay/create-order', { method: 'POST', token: regToken() }).then((r) => r.json()).then((d) => d.orderId),
+                    createOrder: async () => {
+                        const r = await api('/events/' + eventId + '/pay/create-order', { method: 'POST', token: regToken() });
+                        const d = await r.json().catch(() => ({}));
+                        if (!r.ok || !d.orderId) {
+                            alert(d.error === 'already_paid' ? "You're already paid for this event." : d.error === 'nothing_owed' ? "There's nothing left to pay." : "We couldn't start the payment — please try again or pay at the event.");
+                            throw new Error(d.error || 'create_order_failed');
+                        }
+                        return d.orderId;
+                    },
                     onApprove: (data) => api('/events/' + eventId + '/pay/capture', { method: 'POST', token: regToken(), body: { orderId: data.orderID } }).then((r) => { if (r.ok) loadRegister(); else alert('We could not confirm your payment. Please contact the club.'); }),
+                    onError: () => alert('Payment could not be completed — please try again, or pay at the event.'),
                 }).render(container);
             }).catch(() => { container.appendChild(elNode('div', 'register-fee', 'Online payment is temporarily unavailable — pay at the event.')); });
         }
@@ -1121,11 +1130,17 @@
                 const actions = elNode('div', 'register-actions');
                 if (!myReg.checked_in) {
                     const ci = elNode('button', 'passkey-btn', 'Check in'); ci.type = 'button';
-                    ci.addEventListener('click', async () => { const r = await api('/events/' + ev.id + '/checkin', { method: 'POST', token: regToken() }); if (r.ok) loadRegister(); });
+                    ci.addEventListener('click', async () => { const r = await api('/events/' + ev.id + '/checkin', { method: 'POST', token: regToken() }); if (r.ok) loadRegister(); else alert('Check-in failed — please try again or see an admin.'); });
                     actions.appendChild(ci);
                 }
                 const wd = elNode('button', 'board-link danger', 'Withdraw'); wd.type = 'button';
-                wd.addEventListener('click', async () => { if (!confirm('Withdraw from ' + ev.name + '?')) return; const r = await api('/events/' + ev.id + '/register', { method: 'DELETE', token: regToken() }); if (r.ok) loadRegister(); });
+                wd.addEventListener('click', async () => {
+                    if (!confirm('Withdraw from ' + ev.name + '?')) return;
+                    const r = await api('/events/' + ev.id + '/register', { method: 'DELETE', token: regToken() });
+                    if (r.ok) { loadRegister(); return; }
+                    const e = await r.json().catch(() => ({}));
+                    alert(e.error === 'paid_contact_admin' ? "You've already paid — please contact an admin to withdraw and arrange a refund." : 'Withdraw failed — please try again.');
+                });
                 actions.appendChild(wd);
                 card.appendChild(actions);
             } else {
