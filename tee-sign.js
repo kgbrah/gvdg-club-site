@@ -30,3 +30,31 @@ export function sanitizeColor(raw) {
   if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/.test(c)) return c;
   return null;
 }
+
+function clampInt(value, min, max) {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n) || n < min || n > max) return null;
+  return n;
+}
+
+// Normalize raw inputs into a vetted model: ints clamped, colors sanitized,
+// strings coerced. This is the pure logic the unit tests pin down.
+export function teeSignModel(input) {
+  const src = input && typeof input === 'object' ? input : {};
+  const layoutsIn = Array.isArray(src.layouts) ? src.layouts : [];
+  const layouts = layoutsIn.map((l) => {
+    const row = l && typeof l === 'object' ? l : {};
+    return {
+      label: row.label != null ? String(row.label) : '',
+      color: sanitizeColor(row.color),
+      par: clampInt(row.par, 1, 10),
+      distance_ft: clampInt(row.distance_ft, 20, 2000),
+      distance_source: row.distance_source != null ? String(row.distance_source) : null,
+    };
+  });
+  return {
+    hole: clampInt(src.hole, 1, 99),
+    courseName: src.courseName != null ? String(src.courseName) : '',
+    layouts,
+  };
+}
