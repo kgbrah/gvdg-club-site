@@ -19,6 +19,17 @@ import { enrichHoles, type LayoutHole } from "./layouts.js";
 import { buildMessages, generateReply, MAX_HISTORY, type ChatTurn, type ChatMessage, type ReplyProvider } from "./assistant.js";
 import { computeLeagueStandings } from "./scoring.js";
 import { computeOwed, paypalBase, createOrder as ppCreateOrder, captureOrder as ppCaptureOrder } from "./payments.js";
+import { assignShotgun, assignTeams } from "./assign.js";
+
+// Fisher-Yates shuffle (Workers runtime permits Math.random) — used for random shotgun/team assignment.
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j]!, a[i]!];
+  }
+  return a;
+}
 
 // Default discgolfscene feed = the club scraper's committed tournaments.json.
 const DEFAULT_DGS_FEED = "https://raw.githubusercontent.com/mostlysober252/GVDG-DGS-Scraper-2.0/main/tournaments.json";
@@ -564,6 +575,20 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
     const eid = asInt(seg[1]); // public: final results for a past event (club archive)
     return eid == null ? json({ error: "not_found" }, 404, origin) : json({ results: await db.listResults(env.DB, eid) }, 200, origin);
   }
+  if (method === "GET" && seg[0] === "events" && seg.length === 3 && seg[2] === "ctps") {
+    const eid = asInt(seg[1]);
+    return eid == null ? json({ error: "not_found" }, 404, origin) : json({ ctps: await db.listCtps(env.DB, eid) }, 200, origin);
+  }
+  if (method === "GET" && seg[0] === "events" && seg.length === 3 && seg[2] === "ace-pot") {
+    const eid = asInt(seg[1]);
+    if (eid == null) return json({ error: "not_found" }, 404, origin);
+    const pot = (await db.getAcePot(env.DB, eid)) as Record<string, unknown> | null;
+    const cfg = (await db.getEventConfig(env.DB, eid)) as { ace_fee_cents?: number } | null;
+    const contributors = await db.aceContributors(env.DB, eid);
+    const aceFee = cfg?.ace_fee_cents || 0;
+    const carryIn = Number(pot?.carryover_in_cents || 0);
+    return json({ ace_pot: { ...(pot || {}), contributors, ace_fee_cents: aceFee, total_cents: carryIn + contributors * aceFee } }, 200, origin);
+  }
   if (method === "GET" && seg[0] === "courses" && seg.length === 3 && (seg[2] === "layouts" || seg[2] === "positions")) {
     const cid = asInt(seg[1]);
     if (cid == null) return json({ error: "not_found" }, 404, origin);
@@ -746,6 +771,57 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
         });
         return row ? json({ registration: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
       }
+    }
+    // CTPs: POST /admin/events/:id/ctps ; PATCH .../ctps/:cid (winner) ; DELETE .../ctps/:cid
+    if (seg[3] === "ctps" && id != null) {
+      if (method === "POST" && seg[4] == null) {
+        const b = await readJson(request);
+        const hole = b && asInt(b.hole);
+        if (!b || hole == null) return json({ error: "invalid_ctp" }, 400, origin);
+        const row = await db.createCtp(env.DB, { event_id: id, hole, division: asStr(b.division, 60), prize: asStr(b.prize, 200) });
+        return json({ ctp: row }, 201, origin);
+      }
+      const cid = seg[4] != null ? asInt(seg[4]) : null;
+      if (method === "PATCH" && cid != null) {
+        const b = (await readJson(request)) ?? {};
+        const row = await db.setCtpWinner(env.DB, cid, id, asStr(b.winner_member_id, 64), asStr(b.winner_name, 100));
+        return row ? json({ ctp: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
+      }
+      if (method === "DELETE" && cid != null) { await db.deleteCtp(env.DB, id, cid); return json({ ok: true }, 200, origin); }
+    }
+    // Ace pot: PUT /admin/events/:id/ace-pot (carryover + resolve)
+    if (seg[3] === "ace-pot" && id != null && method === "PUT") {
+      const b = (await readJson(request)) ?? {};
+      const status = b.status == null ? "active" : (inSet(["active", "paid_out", "carried"], b.status) ? (b.status as string) : undefined);
+      if (status === undefined) return json({ error: "invalid_ace_pot" }, 400, origin);
+      const row = await db.upsertAcePot(env.DB, id, {
+        carryover_in_cents: asInt(b.carryover_in_cents), status, winner_member_id: asStr(b.winner_member_id, 64),
+        winner_name: asStr(b.winner_name, 100), payout_cents: asInt(b.payout_cents), resolved_at: status === "active" ? null : new Date().toISOString(),
+      });
+      return json({ ace_pot: row }, 200, origin);
+    }
+    // Assign starting holes (shotgun) / teams — random (default) or keep order
+    if ((seg[3] === "assign-starting-holes" || seg[3] === "assign-teams") && id != null && method === "POST") {
+      const b = (await readJson(request)) ?? {};
+      const regs = (await db.listRegistrations(env.DB, id)) as { id: number }[];
+      let order = regs.map((r) => r.id);
+      if (b.shuffle !== false) order = shuffle(order); // random by default
+      if (seg[3] === "assign-starting-holes") {
+        let holes: number[] = [];
+        const ev = (await db.getEvent(env.DB, id)) as { layout_id?: number | null } | null;
+        if (ev?.layout_id) {
+          const layout = (await db.getLayout(env.DB, Number(ev.layout_id))) as { holes?: string } | null;
+          try { holes = JSON.parse(layout?.holes ?? "[]").map((h: { hole: number }) => Number(h.hole)); } catch { holes = []; }
+        }
+        if (!holes.length) holes = Array.from({ length: asInt(b.holeCount) || 18 }, (_, i) => i + 1);
+        const assigned = assignShotgun(order.map(String), holes, asInt(b.groupSize) || 4);
+        for (let i = 0; i < order.length; i++) await db.adminUpdateRegistration(env.DB, order[i]!, { starting_hole: assigned[i]!.hole });
+      } else {
+        const opts = asInt(b.size) ? { size: asInt(b.size)! } : { count: asInt(b.count) || 2 };
+        const assigned = assignTeams(order.map(String), opts);
+        for (let i = 0; i < order.length; i++) await db.adminUpdateRegistration(env.DB, order[i]!, { team: assigned[i]!.team });
+      }
+      return json({ registrations: await db.listRegistrations(env.DB, id) }, 200, origin);
     }
     if (method === "POST" && seg.length === 2) {
       const b = await readJson(request);

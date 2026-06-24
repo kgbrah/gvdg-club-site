@@ -164,6 +164,7 @@
         .lb-topar.over { color: var(--primary); }
         .lb-empty { color: var(--text-muted); padding: 0.75rem 0; font-style: italic; }
         .res-chips { font-size: 0.8rem; color: var(--text-muted); }
+        .extras-list { margin: 0.25rem 0 1rem 1.25rem; color: var(--text-secondary); line-height: 1.7; }
         #leaguesSection { margin-bottom: 1.5rem; }
         .leagues-grid { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); margin-top: 0.75rem; }
         .league-card { text-align: left; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; cursor: pointer; display: flex; flex-direction: column; gap: 0.25rem; transition: border-color .15s, transform .15s; font: inherit; }
@@ -789,6 +790,28 @@
             table.appendChild(tbody); container.appendChild(table);
         }
 
+        // ---- CTPs + ace pot (Track G G3, public on the event detail) ----
+        async function renderEventExtras(eventId, card) {
+            let ctps = [], pot = null;
+            try { const d = await fetchJson(`/events/${encodeURIComponent(eventId)}/ctps`); ctps = (d && d.ctps) || []; } catch (_e) {}
+            try { const d = await fetchJson(`/events/${encodeURIComponent(eventId)}/ace-pot`); pot = d && d.ace_pot; } catch (_e) {}
+            if (ctps.length) {
+                card.appendChild(el('h3', 'roster-title', 'CTPs (closest to pin)'));
+                const ul = el('ul', 'extras-list');
+                ctps.forEach((c) => ul.appendChild(el('li', null, 'Hole ' + c.hole + (c.division ? ' (' + c.division + ')' : '') + (c.prize ? ' — ' + c.prize : '') + (c.winner_name ? ' · 🏆 ' + c.winner_name : ''))));
+                card.appendChild(ul);
+            }
+            if (pot && (pot.total_cents > 0 || (pot.status && pot.status !== 'active'))) {
+                card.appendChild(el('h3', 'roster-title', 'Ace pot'));
+                const money = (c) => '$' + ((c || 0) / 100).toLocaleString();
+                let txt;
+                if (pot.status === 'paid_out') txt = 'Paid out' + (pot.winner_name ? ' to ' + pot.winner_name + ' 🏆' : '');
+                else if (pot.status === 'carried') txt = money(pot.total_cents) + ' carried to the next event';
+                else txt = money(pot.total_cents) + ' in the pot' + (pot.contributors ? ' (' + pot.contributors + ' in)' : '');
+                card.appendChild(el('p', 'detail-notes', txt));
+            }
+        }
+
         function renderDetail(rawEvent) {
             const ev = normalizeEvent(rawEvent);
             detailEl.replaceChildren();
@@ -870,6 +893,8 @@
                     card.appendChild(groupWrap);
                 }
             }
+
+            renderEventExtras(ev.id, card); // CTPs + ace pot (Track G G3), filled in async
 
             detailEl.appendChild(card);
             setView('detail');

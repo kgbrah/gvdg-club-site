@@ -359,8 +359,34 @@
                         <div class="al-row" style="margin-top:0.5rem;"><span>Divisions (comma-separated)<input id="rgDivisions" maxlength="400" size="40" placeholder="MA1, MA40, FA1, Rec"></span></div>
                         <button type="button" class="admin-btn" id="rgSaveBtn" style="margin-top:0.5rem;">Save settings</button>
                     </div>
-                    <h4 class="al-h">Registered players (<span id="rgCount">0</span>) <span class="al-note">— check in, assign division/starting hole</span></h4>
+                    <h4 class="al-h">Registered players (<span id="rgCount">0</span>) <span class="al-note">— check in, assign division/starting hole/team</span></h4>
                     <div style="overflow-x:auto;"><table class="al-holes" id="rgRoster"></table></div>
+                    <div class="al-row" style="margin-top:0.6rem;">
+                        <button type="button" class="admin-btn secondary" id="rgAssignHoles">🎯 Assign starting holes (shotgun)</button>
+                        <button type="button" class="admin-btn secondary" id="rgAssignTeams">👥 Assign teams</button>
+                        <span class="al-note">players/team <input id="rgTeamSize" type="number" min="1" value="2" style="width:3rem"></span>
+                    </div>
+                    <div class="al-section" style="margin-top:1rem;">
+                        <h4 class="al-h">CTPs (closest to pin)</h4>
+                        <div class="al-row">
+                            <span>Hole <input id="rgCtpHole" type="number" min="1" style="width:4rem"></span>
+                            <input id="rgCtpDivision" placeholder="division (optional)" maxlength="60" size="12">
+                            <input id="rgCtpPrize" placeholder="prize" maxlength="200" size="16">
+                            <button type="button" class="admin-btn secondary" id="rgCtpAdd">Add CTP</button>
+                        </div>
+                        <div id="rgCtpList" style="margin-top:0.5rem;"></div>
+                    </div>
+                    <div class="al-section">
+                        <h4 class="al-h">Ace pot</h4>
+                        <div id="rgAceInfo" class="al-note"></div>
+                        <div class="al-row" style="margin-top:0.5rem;">
+                            <span>Carryover in $<input id="rgAceCarry" type="number" min="0" style="width:5rem"></span>
+                            <button type="button" class="admin-btn secondary" id="rgAceSave">Save carryover</button>
+                            <input id="rgAceWinner" placeholder="ace winner name" maxlength="100" size="14">
+                            <button type="button" class="admin-btn" id="rgAcePayout">Pay out</button>
+                            <button type="button" class="admin-btn secondary" id="rgAceCarryNext">Carry to next</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1013,6 +1039,8 @@
             let divs = []; try { divs = JSON.parse((cfg && cfg.divisions) || '[]'); } catch (e) {}
             $('rgDivisions').value = divs.join(', ');
             rgLoadRoster();
+            rgLoadCtps();
+            rgLoadAcePot();
         }
         const cents = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? Math.round(n * 100) : null; };
         async function rgSaveConfig() {
@@ -1027,14 +1055,15 @@
             $('rgCount').textContent = String(regs.length);
             const grid = $('rgRoster'); grid.replaceChildren();
             const thead = document.createElement('thead'); const htr = document.createElement('tr');
-            ['Player', 'Division', 'Start hole', 'In?', 'Paid?', ''].forEach((h) => htr.appendChild(elx('th', null, h)));
+            ['Player', 'Division', 'Team', 'Start hole', 'In?', 'Paid?', ''].forEach((h) => htr.appendChild(elx('th', null, h)));
             thead.appendChild(htr); grid.appendChild(thead);
             const tbody = document.createElement('tbody');
-            if (!regs.length) { const tr = document.createElement('tr'); const td = elx('td', null, 'No registrations yet.'); td.colSpan = 6; tr.appendChild(td); tbody.appendChild(tr); }
+            if (!regs.length) { const tr = document.createElement('tr'); const td = elx('td', null, 'No registrations yet.'); td.colSpan = 7; tr.appendChild(td); tbody.appendChild(tr); }
             regs.forEach((rg) => {
                 const tr = document.createElement('tr');
                 tr.appendChild(elx('td', 'lb-name', rg.name));
                 tr.appendChild(elx('td', null, rg.division || '—'));
+                tr.appendChild(elx('td', null, rg.team || '—'));
                 const shTd = document.createElement('td'); const sh = document.createElement('input'); sh.type = 'number'; sh.min = '1'; sh.style.width = '3.5rem'; if (rg.starting_hole != null) sh.value = rg.starting_hole; sh.addEventListener('change', () => rgPatch(rg.id, { starting_hole: parseInt(sh.value, 10) || null })); shTd.appendChild(sh); tr.appendChild(shTd);
                 tr.appendChild(rgToggleCell(rg.checked_in, (v) => rgPatch(rg.id, { checked_in: v })));
                 tr.appendChild(rgToggleCell(rg.paid_entry, (v) => rgPatch(rg.id, { paid_entry: v })));
@@ -1051,6 +1080,50 @@
             const r = await adminApi('/admin/events/' + rgEventId + '/registrations/' + rid, { method: 'PATCH', body: patch });
             adminMsg(r.ok ? 'Updated' : 'Update failed', r.ok);
             if (r.ok) rgLoadRoster();
+        }
+        // Assignment (shotgun starting holes / teams) — random
+        async function rgAssign(kind, body) {
+            const r = await adminApi('/admin/events/' + rgEventId + '/' + kind, { method: 'POST', body });
+            adminMsg(r.ok ? 'Assigned' : 'Assign failed (' + r.status + ')', r.ok);
+            if (r.ok) rgLoadRoster();
+        }
+        // CTPs
+        async function rgLoadCtps() {
+            let ctps = [];
+            try { const r = await api('/events/' + rgEventId + '/ctps'); if (r.ok) ctps = (await r.json()).ctps || []; } catch (e) {}
+            const list = $('rgCtpList'); list.replaceChildren();
+            if (!ctps.length) { list.appendChild(elx('p', 'al-note', 'No CTPs yet.')); }
+            ctps.forEach((c) => {
+                const row = elx('div', 'admin-evrow');
+                row.appendChild(elx('span', 'ev-name', 'Hole ' + c.hole + (c.division ? ' · ' + c.division : '') + (c.prize ? ' · ' + c.prize : '') + (c.winner_name ? ' · 🏆 ' + c.winner_name : '')));
+                const win = document.createElement('input'); win.placeholder = 'winner'; win.style.width = '8rem'; if (c.winner_name) win.value = c.winner_name;
+                const setW = elx('button', 'admin-btn secondary', 'Set winner');
+                setW.addEventListener('click', async () => { const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + c.id, { method: 'PATCH', body: { winner_name: win.value.trim() || null } }); if (r.ok) { adminMsg('CTP winner set', true); rgLoadCtps(); } });
+                const del = elx('button', 'admin-btn danger', 'Delete');
+                del.addEventListener('click', async () => { const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + c.id, { method: 'DELETE' }); if (r.ok) rgLoadCtps(); });
+                row.appendChild(win); row.appendChild(setW); row.appendChild(del);
+                list.appendChild(row);
+            });
+        }
+        async function rgAddCtp() {
+            const hole = parseInt($('rgCtpHole').value, 10);
+            if (!(hole >= 1)) { adminMsg('CTP needs a hole', false); return; }
+            const r = await adminApi('/admin/events/' + rgEventId + '/ctps', { method: 'POST', body: { hole, division: $('rgCtpDivision').value.trim() || null, prize: $('rgCtpPrize').value.trim() || null } });
+            if (r.ok) { adminMsg('CTP added', true); $('rgCtpHole').value = ''; $('rgCtpDivision').value = ''; $('rgCtpPrize').value = ''; rgLoadCtps(); }
+            else adminMsg('Add CTP failed', false);
+        }
+        // Ace pot
+        async function rgLoadAcePot() {
+            let pot = null;
+            try { const r = await api('/events/' + rgEventId + '/ace-pot'); if (r.ok) pot = (await r.json()).ace_pot; } catch (e) {}
+            const d = (c) => '$' + ((c || 0) / 100).toLocaleString();
+            $('rgAceInfo').textContent = pot ? ('Total pot ' + d(pot.total_cents) + ' = carryover ' + d(pot.carryover_in_cents) + ' + ' + (pot.contributors || 0) + ' paid × ' + d(pot.ace_fee_cents) + ' · status: ' + (pot.status || 'active') + (pot.winner_name ? ' · 🏆 ' + pot.winner_name : '')) : 'No ace pot data.';
+            if (pot && pot.carryover_in_cents != null) $('rgAceCarry').value = pot.carryover_in_cents / 100;
+        }
+        async function rgAcePut(body) {
+            const r = await adminApi('/admin/events/' + rgEventId + '/ace-pot', { method: 'PUT', body });
+            adminMsg(r.ok ? 'Ace pot updated' : 'Ace pot failed', r.ok);
+            if (r.ok) rgLoadAcePot();
         }
 
         function initAdmin() {
@@ -1075,6 +1148,12 @@
             $('adminMeetingForm').addEventListener('submit', adminAddMeeting);
             $('rgEvent').addEventListener('change', rgOnSelect);
             $('rgSaveBtn').addEventListener('click', rgSaveConfig);
+            $('rgAssignHoles').addEventListener('click', () => rgAssign('assign-starting-holes', { shuffle: true, groupSize: 4 }));
+            $('rgAssignTeams').addEventListener('click', () => rgAssign('assign-teams', { shuffle: true, size: parseInt($('rgTeamSize').value, 10) || 2 }));
+            $('rgCtpAdd').addEventListener('click', rgAddCtp);
+            $('rgAceSave').addEventListener('click', () => rgAcePut({ carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100), status: 'active' }));
+            $('rgAcePayout').addEventListener('click', () => rgAcePut({ status: 'paid_out', winner_name: $('rgAceWinner').value.trim() || null, carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100) }));
+            $('rgAceCarryNext').addEventListener('click', () => rgAcePut({ status: 'carried', carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100) }));
             adminLoadEvents();
             adminLoadCourses();
             adminLoadLeagues();
