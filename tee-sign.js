@@ -58,3 +58,42 @@ export function teeSignModel(input) {
     layouts,
   };
 }
+
+// Build the SVG string from raw or pre-normalized input. Always re-normalizes,
+// so callers can never bypass the escaping/sanitizing. Colors are emitted only
+// after sanitizeColor; all text is escapeXml'd. Themed via CSS classes the host
+// page styles (currentColor inherits the page text color for light/dark).
+export function teeSignSvg(input) {
+  const m = teeSignModel(input);
+  // For SVG text content, also encode '=' to neutralize any residual event-handler
+  // patterns (e.g. onload=) that survive XML escaping (= is not an XML metachar).
+  const esc = (v) => escapeXml(v).replace(/=/g, '&#61;');
+  const W = 320;
+  const rowH = 30;
+  const headH = 96;
+  const H = headH + Math.max(1, m.layouts.length) * rowH + 16;
+  const holeText = m.hole == null ? '—' : String(m.hole); // em dash when unknown
+
+  const rows = m.layouts.map((l, i) => {
+    const y = headH + i * rowH;
+    const swatch = l.color
+      ? `<rect x="16" y="${y + 6}" width="16" height="16" rx="3" fill="${escapeXml(l.color)}" stroke="currentColor" stroke-opacity="0.3"/>`
+      : '';
+    const labelX = l.color ? 40 : 16;
+    const par = l.par == null ? '–' : String(l.par);       // en dash when unknown
+    const dist = l.distance_ft == null ? '' : `${l.distance_ft} ft`;
+    return `<g class="tee-sign-row">${swatch}` +
+      `<text x="${labelX}" y="${y + 19}" class="tee-sign-label">${esc(l.label)}</text>` +
+      `<text x="${W - 96}" y="${y + 19}" text-anchor="end" class="tee-sign-par">Par ${esc(par)}</text>` +
+      `<text x="${W - 16}" y="${y + 19}" text-anchor="end" class="tee-sign-dist">${esc(dist)}</text>` +
+      `</g>`;
+  }).join('');
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" ` +
+    `class="tee-sign" role="img" aria-label="Tee sign for hole ${esc(holeText)}">` +
+    `<rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="16" class="tee-sign-bg"/>` +
+    `<text x="16" y="58" class="tee-sign-hole">${esc(holeText)}</text>` +
+    `<text x="${W - 16}" y="40" text-anchor="end" class="tee-sign-course">${esc(m.courseName)}</text>` +
+    `<line x1="16" y1="${headH - 14}" x2="${W - 16}" y2="${headH - 14}" class="tee-sign-rule"/>` +
+    `${rows}</svg>`;
+}

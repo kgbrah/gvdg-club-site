@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { escapeXml, sanitizeColor, teeSignModel } from '../tee-sign.js';
+import { escapeXml, sanitizeColor, teeSignModel, teeSignSvg } from '../tee-sign.js';
 
 test('escapeXml escapes the five XML metacharacters', () => {
   assert.equal(escapeXml(`<a href="x">&'`), '&lt;a href=&quot;x&quot;&gt;&amp;&#39;');
@@ -46,4 +46,42 @@ test('teeSignModel is null-safe and defaults empty', () => {
   assert.equal(m.hole, null);
   assert.equal(m.courseName, '');
   assert.deepEqual(m.layouts, []);
+});
+
+test('teeSignSvg renders a row per layout with hole, par, distance, swatch', () => {
+  const svg = teeSignSvg({
+    hole: 5,
+    courseName: 'Battle Park',
+    layouts: [
+      { label: 'Long', color: 'blue', par: 4, distance_ft: 420 },
+      { label: 'Short', par: 3, distance_ft: 280 },
+    ],
+  });
+  assert.match(svg, /^<svg[\s\S]*<\/svg>$/);
+  assert.ok(svg.includes('>5<'));            // hole number
+  assert.ok(svg.includes('Battle Park'));
+  assert.ok(svg.includes('Long'));
+  assert.ok(svg.includes('Short'));
+  assert.ok(svg.includes('Par 4'));
+  assert.ok(svg.includes('420 ft'));
+  assert.ok(svg.includes('fill="blue"'));    // sanitized swatch present
+});
+
+test('teeSignSvg renders a placeholder hole and no swatch when data is missing', () => {
+  const svg = teeSignSvg({ hole: null, courseName: '', layouts: [{ label: 'Main', par: null, distance_ft: null }] });
+  assert.ok(svg.includes('>—<'));            // em-dash hole placeholder
+  assert.ok(svg.includes('Par –'));          // en-dash par placeholder
+  assert.ok(!svg.includes('<rect x="16" y'));// no color swatch rect for the row
+});
+
+test('teeSignSvg escapes injection attempts in every dynamic field', () => {
+  const svg = teeSignSvg({
+    hole: 1,
+    courseName: '</text><script>alert(1)</script>',
+    layouts: [{ label: '"><rect onload=alert(1)>', color: 'red"/><script>', par: 3, distance_ft: 200 }],
+  });
+  assert.ok(!svg.includes('<script>'));
+  assert.ok(!svg.includes('onload=alert'));
+  assert.ok(svg.includes('&lt;script&gt;'));
+  assert.ok(!svg.includes('red"/>'));        // bogus color dropped, never hits a fill attr
 });
