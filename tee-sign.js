@@ -49,7 +49,6 @@ export function teeSignModel(input) {
       color: sanitizeColor(row.color),
       par: clampInt(row.par, 1, 10),
       distance_ft: clampInt(row.distance_ft, 20, 2000),
-      distance_source: row.distance_source != null ? String(row.distance_source) : null,
     };
   });
   return {
@@ -93,4 +92,12 @@ export function teeSignSvg(input) {
     `<text x="${W - 16}" y="40" text-anchor="end" class="tee-sign-course">${escapeXml(m.courseName)}</text>` +
     `<line x1="16" y1="${headH - 14}" x2="${W - 16}" y2="${headH - 14}" class="tee-sign-rule"/>` +
     `${rows}</svg>`;
+}
+
+// Browser-only: parse the tee-sign SVG string into an INERT <svg> element (image/svg+xml never executes
+// script) ready to appendChild — returns null if parsing fails. Centralizes the DOMParser parse+validate
+// step shared by every page that renders a tee sign. Not used under node --test (no DOMParser there).
+export function teeSignNode(input) {
+  const root = new DOMParser().parseFromString(teeSignSvg(input), 'image/svg+xml').documentElement;
+  return root && root.nodeName.toLowerCase() === 'svg' ? root : null;
 }

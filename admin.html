@@ -429,8 +429,8 @@
 
     <!-- T4: expose the shared (pure, XSS-safe) tee-sign SVG renderer to the classic script below. -->
     <script type="module">
-        import { teeSignSvg } from './tee-sign.js';
-        window.teeSignSvg = teeSignSvg;
+        import { teeSignNode } from './tee-sign.js';
+        window.teeSignNode = teeSignNode;
     </script>
     <script>
         // --- Theme toggle (mirrors index.html / events.html) ---
@@ -795,7 +795,8 @@
             const tbody = $('alHoles');
             const n = tbody.children.length + 1;
             const tr = document.createElement('tr');
-            // Verified (tee-sign) record on the hole, if any (tolerate legacy flat tee_sign fields).
+            // Verified (tee-sign) record on the hole, if any. Mirrors the server's verifiedOf() (layouts.ts) to
+            // tolerate legacy rows that predate the `verified` object — the TS helper can't be imported here.
             tr._verified = (hole && hole.verified) || (hole && hole.distance_source === 'tee_sign' && hole.tee_sign_key
                 ? { par: hole.par, distance_ft: hole.distance_ft, tee_sign_key: hole.tee_sign_key } : null);
             if (tr._verified) { tr.className = 'al-row-verified'; if (hole) hole.par = tr._verified.par; }
@@ -987,11 +988,10 @@
                     scLoadCandidateThumb(candId, img); // members-only → authed blob fetch
                     cardEl.appendChild(img);
                     cardEl.appendChild(elx('span', 'ts-unverified', '⚠ unverified'));
-                } else if (typeof window.teeSignSvg === 'function') {
+                } else if (typeof window.teeSignNode === 'function') {
                     const sv = elx('div', 'ts-strip-svg');
-                    const svg = window.teeSignSvg({ hole: hn, courseName: '', layouts: [{ label: layout ? layout.name : 'Layout', color: hd.color || null, par: h.par != null ? h.par : null, distance_ft: dist }] });
-                    const doc = new DOMParser().parseFromString(svg, 'image/svg+xml'); // inert
-                    if (doc.documentElement && doc.documentElement.nodeName.toLowerCase() === 'svg') sv.appendChild(doc.documentElement);
+                    const node = window.teeSignNode({ hole: hn, courseName: '', layouts: [{ label: layout ? layout.name : 'Layout', color: hd.color || null, par: h.par != null ? h.par : null, distance_ft: dist }] });
+                    if (node) sv.appendChild(node);
                     cardEl.appendChild(sv);
                 }
                 if (h.overridden) cardEl.appendChild(elx('span', 'ts-temp', '⏱ temporary'));
