@@ -20,7 +20,7 @@ import { buildMessages, generateReply, MAX_HISTORY, type ChatTurn, type ChatMess
 import { computeLeagueStandings } from "./scoring.js";
 import { computeOwed, paypalBase, createOrder as ppCreateOrder, captureOrder as ppCaptureOrder } from "./payments.js";
 import { assignShotgun, assignTeams } from "./assign.js";
-import { type R2BucketLike } from "./photos.js";
+import { type R2BucketLike, decodeDataUrl, teeSignKey } from "./photos.js";
 
 // Fisher-Yates shuffle (Workers runtime permits Math.random) — used for random shotgun/team assignment.
 function shuffle<T>(arr: T[]): T[] {
@@ -135,6 +135,12 @@ async function requireAuth(request: Request, env: Env) {
   // it uses bearer()+verifySession directly, as does /me).
   if (!claims || claims.mustChangePin) return null;
   return claims;
+}
+
+async function requireMember(request: Request, env: Env, origin: string | null): Promise<{ sub: string } | Response> {
+  const claims = await requireAuth(request, env);
+  if (!claims) return json({ error: "unauthorized" }, 401, origin);
+  return { sub: claims.sub };
 }
 
 async function readJson(request: Request): Promise<Record<string, unknown> | null> {
@@ -313,6 +319,52 @@ async function handleProfile(request: Request, env: Env, origin: string | null):
     200,
     origin,
   );
+}
+
+async function handleTeeSignUpload(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const who = await requireMember(request, env, origin);
+  if (who instanceof Response) return who;
+  if (await kvRateLimited(env, "teesign:" + who.sub, 10, 60)) return json({ error: "rate_limited" }, 429, origin);
+  const body = await readJson(request);
+  const courseId = asInt(body?.courseId);
+  const hole = asInt(body?.hole);
+  if (courseId == null || hole == null || hole < 1 || hole > 99) return json({ error: "invalid_request" }, 400, origin);
+  const img = decodeDataUrl(body?.image);
+  if (!img) return json({ error: "invalid_image" }, 400, origin);
+  const key = teeSignKey(courseId, hole, img.ext, crypto.randomUUID());
+  await env.PHOTOS.put(key, img.bytes, { httpMetadata: { contentType: img.contentType } });
+  const row = await db.insertTeeSign(env.DB, {
+    course_id: courseId, hole_number: hole, r2_key: key, content_type: img.contentType, bytes: img.bytes.length, uploaded_by: who.sub,
+  });
+  return json({ teeSign: row }, 201, origin);
+}
+
+async function handleMyTeeSigns(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const who = await requireMember(request, env, origin);
+  if (who instanceof Response) return who;
+  return json({ teeSigns: await db.listMyTeeSigns(env.DB, who.sub) }, 200, origin);
+}
+
+async function handleTeeSignImage(request: Request, env: Env, origin: string | null, id: number | null): Promise<Response> {
+  if (id == null) return json({ error: "not_found" }, 404, origin);
+  const sign = await db.getTeeSign(env.DB, id);
+  if (!sign) return json({ error: "not_found" }, 404, origin);
+  // Official photos are public; candidates require a logged-in member.
+  if (sign.status !== "official") {
+    const who = await requireMember(request, env, origin);
+    if (who instanceof Response) return who;
+  }
+  const obj = await env.PHOTOS.get(sign.r2_key);
+  if (!obj) return json({ error: "not_found" }, 404, origin);
+  return new Response(obj.body, {
+    status: 200,
+    headers: {
+      "Content-Type": sign.content_type,
+      "Cache-Control": sign.status === "official" ? "public, max-age=86400" : "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+      ...corsHeaders(origin),
+    },
+  });
 }
 
 async function handleSetPin(request: Request, env: Env, origin: string | null): Promise<Response> {
@@ -600,6 +652,12 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
     return seg[2] === "layouts"
       ? json({ layouts: await db.listLayouts(env.DB, cid) }, 200, origin)
       : json({ positions: await db.listPositions(env.DB, cid) }, 200, origin);
+  }
+
+  // ---- tee-sign image serve: /tee-signs/:id/image ----
+  if (method === "GET" && seg[0] === "tee-signs" && seg.length === 3 && seg[2] === "image") {
+    const tsId = asInt(seg[1]);
+    return handleTeeSignImage(request, env, origin, tsId ?? null);
   }
 
   // ---- member-authed event registration (Track G): /events/:id/{registration,register,checkin,pay} ----
@@ -973,6 +1031,44 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
     if (method === "DELETE" && id != null) { await db.deleteLayout(env.DB, id); return json({ ok: true }, 200, origin); }
   }
 
+  if (sub === "tee-signs") {
+    if (method === "GET" && id == null) {
+      const status = new URL(request.url).searchParams.get("status") || "candidate";
+      return json({ teeSigns: await db.listTeeSignsByStatus(env.DB, status) }, 200, origin);
+    }
+    if (id != null && seg[3] === "approve" && method === "POST") {
+      const b = (await readJson(request)) ?? {};
+      const rawRows = Array.isArray(b.rows) ? b.rows : [];
+      const rows: db.ApproveRow[] = [];
+      for (const r of rawRows) {
+        const o = r as Record<string, unknown>;
+        const par = asInt(o.par);
+        if (par == null || par < 1 || par > 10) continue;
+        rows.push({
+          layoutId: o.layoutId == null ? null : asInt(o.layoutId),
+          newLayoutName: o.newLayoutName == null ? null : asStr(o.newLayoutName, 80),
+          par,
+          distance_ft: o.distance_ft == null ? null : asInt(o.distance_ft),
+          tee: o.tee == null ? null : asStr(o.tee, 80),
+          target: o.target == null ? null : asStr(o.target, 80),
+          color: o.color == null ? null : asStr(o.color, 24),
+        });
+      }
+      if (!rows.length) return json({ error: "no_valid_rows" }, 400, origin);
+      const sign = await db.getTeeSign(env.DB, id);
+      if (!sign) return json({ error: "not_found" }, 404, origin);
+      const affected = await db.applyTeeSignRows(env.DB, sign.course_id, sign.hole_number, rows, sign.r2_key);
+      await db.setTeeSignStatus(env.DB, id, "official", adminId);
+      await db.demoteOtherOfficial(env.DB, sign.course_id, sign.hole_number, id);
+      return json({ ok: true, affectedLayouts: affected }, 200, origin);
+    }
+    if (id != null && seg[3] === "reject" && method === "POST") {
+      await db.setTeeSignStatus(env.DB, id, "rejected", adminId);
+      return json({ ok: true }, 200, origin);
+    }
+    if (id != null && method === "DELETE") { await db.deleteTeeSign(env.DB, id); return json({ ok: true }, 200, origin); }
+  }
+
   return json({ error: "not_found" }, 404, origin);
 }
 
@@ -1028,6 +1124,10 @@ export default {
       );
       return json(data, status, origin);
     }
+
+    // --- tee-sign member routes ---
+    if (pathname === "/tee-signs" && method === "POST") return handleTeeSignUpload(request, env, origin);
+    if (pathname === "/my-tee-signs" && method === "GET") return handleMyTeeSigns(request, env, origin);
 
     // --- club operations (events / courses / leagues / layouts) ---
     const club = await clubApi(request, env, origin, pathname, method);
