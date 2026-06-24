@@ -35,6 +35,12 @@ test('normalizeEvent is null-safe', () => {
   assert.equal(ev.name, 'Untitled Event');
   assert.equal(ev.notes, '');
   assert.deepEqual(ev.players, []);
+  assert.equal(ev.layout_id, ''); // T4: layout_id default is the empty string
+});
+
+test('normalizeEvent passes through the selected layout_id as a string (T4 tee-sign render)', () => {
+  assert.equal(normalizeEvent({ id: 1, layout_id: 99 }).layout_id, '99');
+  assert.equal(normalizeEvent({ id: 1 }).layout_id, '');
 });
 
 test('normalizeEvent preserves an unknown status verbatim', () => {

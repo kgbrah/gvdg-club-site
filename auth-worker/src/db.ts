@@ -594,6 +594,16 @@ export async function listTeeSignsByStatus(db: D1Like, status: string) {
   ).bind(status).all()).results;
 }
 
+/** Tee signs for a course, restricted to the given statuses (T4 render). Only the columns the UI needs.
+ *  `statuses` is a code-controlled allowlist (never user input) so the inlined IN-list is injection-safe. */
+export async function listTeeSignsByCourse(db: D1Like, courseId: number, statuses: string[]) {
+  if (!statuses.length) return [];
+  const placeholders = statuses.map(() => "?").join(",");
+  return (await db.prepare(
+    `SELECT id, hole_number, status FROM tee_signs WHERE course_id = ? AND status IN (${placeholders}) ORDER BY hole_number, created_at`,
+  ).bind(courseId, ...statuses).all()).results;
+}
+
 export async function setTeeSignStatus(db: D1Like, id: number, status: string, reviewedBy: string) {
   return db.prepare(
     "UPDATE tee_signs SET status = ?, reviewed_by = ?, reviewed_at = datetime('now') WHERE id = ? RETURNING *",

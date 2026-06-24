@@ -35,6 +35,12 @@ function mockDb() {
       if (/SELECT id, name FROM course_layouts WHERE course_id/i.test(sql)) {
         return { results: [], success: true };
       }
+      // T4 render route: official-only uses IN (?), authed (official+candidate) uses IN (?,?).
+      if (/SELECT id, hole_number, status FROM tee_signs WHERE course_id/i.test(sql)) {
+        const official = { id: 1, hole_number: 7, status: "official" };
+        const candidate = { id: 2, hole_number: 8, status: "candidate" };
+        return { results: /IN \(\?,\?\)/.test(sql) ? [official, candidate] : [official], success: true };
+      }
       return { results: [], success: true };
     },
     first: async () => {
@@ -97,6 +103,21 @@ describe("admin tee-signs list with suggestedRows", () => {
     expect(sign.suggestedRows[0]!.label).toBe("Long");
     expect(sign.suggestedRows[0]!.layoutId).toBeNull(); // no layout in mock DB
     expect(sign.suggestedRows[0]!.suggestedLayoutName).toBe("Long"); // defaultLayoutName("Long")
+  });
+});
+
+describe("GET /courses/:id/tee-signs (T4 render)", () => {
+  it("unauthed sees official tee signs only", async () => {
+    const res = await call("/courses/3/tee-signs", "GET", undefined);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { teeSigns: { id: number; hole_number: number; status: string }[] };
+    expect(body.teeSigns.map((t) => t.status)).toEqual(["official"]);
+  });
+  it("a logged-in member also sees candidates", async () => {
+    const res = await call("/courses/3/tee-signs", "GET", tok("m_jane"));
+    expect(res.status).toBe(200);
+    const body = await res.json() as { teeSigns: { status: string }[] };
+    expect(body.teeSigns.map((t) => t.status).sort()).toEqual(["candidate", "official"]);
   });
 });
 
