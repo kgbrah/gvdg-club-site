@@ -1,6 +1,8 @@
 // D1 data-access layer for club operations (Phase 1).
 // ALL queries are parameterized via .bind() — never string-interpolate user input.
 
+import { enrichHoles, type LayoutHole } from "./layouts.js";
+
 export interface D1ResultLike<T = Record<string, unknown>> {
   results: T[];
   success: boolean;
@@ -672,10 +674,12 @@ export async function applyTeeSignRows(
     const layout = (await getLayout(db, layoutId)) as { holes?: string } | null;
     const holes: Record<string, unknown>[] = JSON.parse(layout?.holes ?? "[]");
     const idx = holes.findIndex((h) => Number(h.hole) === hole);
+    // The confirmed sign becomes the hole's VERIFIED (sticky) par + distance. Clearing manual_distance
+    // reverts any earlier manual stopgap — verified now owns the value (enrichHoles resolves it).
     const entry: Record<string, unknown> = {
       hole, par: row.par,
-      distance_ft: row.distance_ft ?? null,
-      distance_source: row.distance_ft != null ? "tee_sign" : null,
+      verified: { par: row.par, distance_ft: row.distance_ft ?? null, tee_sign_key: teeSignKey },
+      manual_distance: null,
       tee: row.tee ? { label: String(row.tee).slice(0, 80) } : null,
       target: row.target ? { label: String(row.target).slice(0, 80) } : null,
       color: row.color ?? null,
@@ -683,7 +687,8 @@ export async function applyTeeSignRows(
     };
     if (idx >= 0) holes[idx] = { ...holes[idx], ...entry }; else holes.push(entry);
     holes.sort((a, b) => Number(a.hole) - Number(b.hole));
-    await updateLayout(db, layoutId, { holes });
+    const enriched = enrichHoles(holes as unknown as LayoutHole[]); // resolves verified → distance_ft/source + total_par
+    await updateLayout(db, layoutId, { holes: enriched.holes, total_par: enriched.total_par });
     affected.push(layoutId);
   }
   return affected;

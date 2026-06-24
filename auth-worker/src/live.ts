@@ -16,6 +16,10 @@ interface LiveMeta {
   holes: { hole: number; par: number }[];
   status: "live" | "final";
   startedAt: string;
+  // Single-use, ROUND-SCOPED hole overrides (e.g. short baskets today). They live only here, in the
+  // live round — the course layout is never touched, so the hole reverts to its verified value after
+  // the round. Keyed by hole number (string for JSON safety).
+  overrides?: Record<string, { par?: number; distance_ft?: number }>;
 }
 interface StartBody {
   eventId: number;
@@ -29,6 +33,12 @@ interface ScoreBody {
   name?: string;
   hole: number;
   strokes: number;
+}
+interface OverrideBody {
+  hole: number;
+  par?: number | null;
+  distance_ft?: number | null;
+  clear?: boolean;
 }
 
 const j = (o: unknown, status = 200): Response => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json" } });
@@ -65,16 +75,27 @@ export class LiveEventDO {
     const body = await request.json().catch(() => ({}));
     if (action === "start") return this.start(body as StartBody);
     if (action === "score") return this.score(body as ScoreBody);
+    if (action === "override") return this.override(body as OverrideBody);
     if (action === "finalize") return this.finalize();
     return j({ error: "not_found" }, 404);
   }
 
+  /** meta.holes with any round-scoped overrides applied — the par the scorecard/leaderboard use, plus
+   *  an optional temporary distance + an `overridden` flag for the tee-sign render. */
+  private resolvedHoles(): { hole: number; par: number; distance_ft: number | null; overridden: boolean }[] {
+    const ov = this.meta?.overrides ?? {};
+    return (this.meta?.holes ?? []).map((h) => {
+      const o = ov[String(h.hole)];
+      return { hole: h.hole, par: o?.par ?? h.par, distance_ft: o?.distance_ft ?? null, overridden: !!o };
+    });
+  }
+
   private snapshot() {
-    const holes = this.meta?.holes ?? [];
+    const holes = this.resolvedHoles();
     return {
       status: this.meta?.status ?? "none",
       eventId: this.meta?.eventId ?? null,
-      holes,
+      holes, // {hole, par, distance_ft, overridden} — par/distance reflect any round override
       // players (with per-hole scores + their stable index) drive the scorekeeper grid;
       // standings drive the public leaderboard.
       players: this.players.map((p, index) => ({ index, memberId: p.memberId, name: p.name, division: p.division ?? null, startingHole: p.startingHole ?? null, scores: p.scores })),
@@ -88,7 +109,7 @@ export class LiveEventDO {
       .filter((h) => h && typeof h.hole === "number" && typeof h.par === "number")
       .map((h) => ({ hole: h.hole, par: h.par }));
     if (!b.eventId || holes.length === 0) return j({ error: "invalid_start" }, 400);
-    this.meta = { eventId: b.eventId, holes, status: "live", startedAt: b.startedAt ?? "" };
+    this.meta = { eventId: b.eventId, holes, status: "live", startedAt: b.startedAt ?? "", overrides: {} };
     this.players = (Array.isArray(b.players) ? b.players : []).map((p) => ({
       memberId: p.memberId ?? null,
       name: String(p.name ?? "Player"),
@@ -122,9 +143,32 @@ export class LiveEventDO {
     return j(this.snapshot());
   }
 
+  // Round-scoped single-use override of a hole's par/distance. Admin-gated at the Worker. The layout
+  // is never mutated, so the hole reverts to its verified value once this round ends.
+  private async override(b: OverrideBody): Promise<Response> {
+    if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
+    const hole = Number(b.hole);
+    if (!this.meta.holes.some((h) => h.hole === hole)) return j({ error: "bad_hole" }, 400);
+    const overrides = this.meta.overrides ?? (this.meta.overrides = {});
+    if (b.clear) {
+      delete overrides[String(hole)];
+    } else {
+      const entry: { par?: number; distance_ft?: number } = {};
+      const par = Number(b.par);
+      const dist = Number(b.distance_ft);
+      if (b.par != null && Number.isInteger(par) && par >= 1 && par <= 15) entry.par = par;
+      if (b.distance_ft != null && Number.isFinite(dist) && dist >= 20 && dist <= 2000) entry.distance_ft = Math.round(dist);
+      if (entry.par == null && entry.distance_ft == null) return j({ error: "empty_override" }, 400);
+      overrides[String(hole)] = entry;
+    }
+    await this.persist();
+    this.broadcast();
+    return j(this.snapshot());
+  }
+
   private async finalize(): Promise<Response> {
     if (!this.meta) return j({ error: "not_started" }, 409);
-    const standings = finalizeStandings(this.meta.holes, this.players);
+    const standings = finalizeStandings(this.resolvedHoles(), this.players);
     // Idempotent: clear any prior results for this event, then write fresh (inserts run concurrently).
     await db.clearResults(this.env.DB, this.meta.eventId);
     const eventId = this.meta.eventId;

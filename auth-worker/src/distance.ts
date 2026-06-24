@@ -1,13 +1,14 @@
 // Distance estimation for course layouts (incl. SAFARI holes) — pure, unit-testable.
-// Precedence: an admin's manual override wins; else a geodesic distance between the
-// tee pad and target when both have GPS coords; else a par-based heuristic; else unknown.
+// Precedence: a VERIFIED tee-sign distance wins (admin-confirmed from a real sign photo); else an
+// admin's manual override; else a geodesic distance between the tee pad and target when both have
+// GPS coords; else a par-based heuristic; else unknown.
 
 export interface LatLng {
   lat?: number | null;
   lng?: number | null;
 }
 
-export type DistanceSource = "manual" | "geo" | "par_estimate";
+export type DistanceSource = "tee_sign" | "manual" | "geo" | "par_estimate";
 
 export interface DistanceResult {
   distance_ft: number | null;
@@ -43,11 +44,15 @@ function hasCoords(p?: LatLng | null): p is { lat: number; lng: number } {
 
 /** Best-estimate distance for a (possibly custom/safari) hole — see precedence above. */
 export function estimateDistance(opts: {
+  verified?: number | null;
   manual?: number | null;
   tee?: LatLng | null;
   target?: LatLng | null;
   par?: number | null;
 }): DistanceResult {
+  if (typeof opts.verified === "number" && opts.verified > 0) {
+    return { distance_ft: Math.round(opts.verified), source: "tee_sign" };
+  }
   if (typeof opts.manual === "number" && opts.manual > 0) {
     return { distance_ft: Math.round(opts.manual), source: "manual" };
   }

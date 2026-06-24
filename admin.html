@@ -129,6 +129,8 @@
         .ts-strip-meta { font-size: 0.8rem; color: var(--text-secondary); font-weight: 600; }
         .ts-strip-hole { color: var(--primary); font-weight: 700; }
         .ts-unverified { display: inline-block; font-size: 0.7rem; font-weight: 700; color: #b7791f; background: rgba(214,158,46,0.18); border-radius: 999px; padding: 0.05rem 0.45rem; align-self: flex-start; }
+        .ts-temp { display: inline-block; font-size: 0.7rem; font-weight: 700; color: #2563eb; background: rgba(37,99,235,0.16); border-radius: 999px; padding: 0.05rem 0.45rem; align-self: flex-start; }
+        .al-holes th.th-temp { color: #2563eb; }
         .tee-sign { color: var(--text-primary); }
         .tee-sign-bg { fill: var(--bg-tertiary); stroke: var(--border-color); stroke-opacity: 0.8; }
         .tee-sign-hole { font: 700 40px 'Bebas Neue', system-ui, sans-serif; fill: currentColor; }
@@ -149,6 +151,8 @@
         .al-holes input[type=number] { width: 4rem; }
         .al-est { white-space: nowrap; font-variant-numeric: tabular-nums; }
         .al-est .src { font-size: 0.7rem; color: var(--text-muted); }
+        .al-verified { font-size: 0.7rem; font-weight: 700; color: #2e9e44; background: rgba(46,158,68,0.16); border-radius: 999px; padding: 0.05rem 0.45rem; white-space: nowrap; }
+        tr.al-row-verified .al-par, tr.al-row-verified .al-manual { opacity: 0.6; }
         .al-poolitem { display: inline-flex; align-items: center; gap: 0.35rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 999px; padding: 0.2rem 0.6rem; margin: 0.15rem; font-size: 0.78rem; }
         .al-poolitem button { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.9rem; line-height: 1; }
         .admin-pane { display: none; }
@@ -320,6 +324,14 @@
                 <div id="scLive" style="display:none;margin-top:1rem;">
                     <h4 class="al-h">Scorecard <span class="al-note">(enter strokes — saves + pushes live instantly)</span></h4>
                     <div style="overflow-x:auto;"><table class="al-holes" id="scGrid"></table></div>
+                    <div class="al-row" id="scOverride" style="margin-top:0.75rem;align-items:flex-end;flex-wrap:wrap;">
+                        <div><label for="scOvHole">⏱ Temporary hole override</label><select id="scOvHole"></select></div>
+                        <div><label for="scOvPar">Par</label><input id="scOvPar" type="number" min="1" max="15" placeholder="—" style="width:4rem;"></div>
+                        <div><label for="scOvDist">Distance ft</label><input id="scOvDist" type="number" min="20" max="2000" placeholder="—" style="width:6rem;"></div>
+                        <button type="button" class="admin-btn" id="scOvApply">Apply (this round only)</button>
+                        <button type="button" class="admin-btn secondary" id="scOvClear">Clear</button>
+                    </div>
+                    <p class="al-note">A temporary override changes par/distance for THIS live round only — the course layout stays verified and the hole reverts after the round.</p>
                     <h4 class="al-h" style="margin-top:1rem;">🪧 Tee signs <span class="al-note">(official, or ⚠ unverified candidates awaiting review)</span></h4>
                     <div id="scTeeSigns" class="al-note"></div>
                     <h4 class="al-h" style="margin-top:1rem;">Live leaderboard</h4>
@@ -762,12 +774,20 @@
             recalcRow(tr);
         }
         function recalcRow(tr) {
+            const cell = tr.querySelector('.al-est');
+            cell.replaceChildren();
+            // A verified (tee-sign) hole is authoritative & sticky: show the verified value, not a local
+            // estimate. An admin can still type, but the server reverts it to verified on save.
+            if (tr._verified) {
+                const v = tr._verified;
+                cell.appendChild(elx('span', 'al-verified', '✓ verified'));
+                cell.appendChild(elx('span', null, ' ' + (v.distance_ft != null ? v.distance_ft + ' ft' : '—')));
+                return;
+            }
             const par = parseInt(tr.querySelector('.al-par').value, 10) || 0;
             const manual = numOrNull(tr.querySelector('.al-manual').value);
             const tee = selToPos(tr.querySelector('.al-tee select')), target = selToPos(tr.querySelector('.al-target select'));
             const e = estJS(tee, target, par, manual);
-            const cell = tr.querySelector('.al-est');
-            cell.replaceChildren();
             cell.appendChild(elx('span', null, e.ft == null ? '—' : e.ft + ' ft'));
             if (e.src) cell.appendChild(elx('span', 'src', ' ' + e.src));
         }
@@ -775,6 +795,10 @@
             const tbody = $('alHoles');
             const n = tbody.children.length + 1;
             const tr = document.createElement('tr');
+            // Verified (tee-sign) record on the hole, if any (tolerate legacy flat tee_sign fields).
+            tr._verified = (hole && hole.verified) || (hole && hole.distance_source === 'tee_sign' && hole.tee_sign_key
+                ? { par: hole.par, distance_ft: hole.distance_ft, tee_sign_key: hole.tee_sign_key } : null);
+            if (tr._verified) { tr.className = 'al-row-verified'; if (hole) hole.par = tr._verified.par; }
             tr.appendChild(elx('td', null, String((hole && hole.hole) || n)));
             const parTd = document.createElement('td'); const par = document.createElement('input'); par.type = 'number'; par.min = '1'; par.max = '15'; par.className = 'al-par'; par.value = (hole && hole.par) || 3; par.addEventListener('input', () => recalcRow(tr)); parTd.appendChild(par); tr.appendChild(parTd);
             const teeTd = document.createElement('td'); teeTd.className = 'al-tee'; tr.appendChild(teeTd);
@@ -793,6 +817,8 @@
         function renumberHoles() { [...$('alHoles').children].forEach((tr, i) => { tr.firstChild.textContent = String(i + 1); }); }
         function renderHoleRows(holes) { $('alHoles').replaceChildren(); (holes || []).forEach((h) => addHoleRow(h)); }
         function gatherHoles() {
+            // Note: `verified` is intentionally NOT sent — the Worker owns it and re-attaches it from the
+            // stored layout (it can't be set/forged from here), so a manual edit reverts to verified on save.
             return [...$('alHoles').children].map((tr, i) => {
                 const par = parseInt(tr.querySelector('.al-par').value, 10);
                 return { hole: i + 1, par, tee: selToPos(tr.querySelector('.al-tee select')), target: selToPos(tr.querySelector('.al-target select')), manual_distance: numOrNull(tr.querySelector('.al-manual').value) };
@@ -886,7 +912,37 @@
             scSnap = await r.json();
             if (scSnap.status !== 'live' && scSnap.status !== 'final') { $('scLive').style.display = 'none'; return; }
             $('scStart').style.display = 'none'; $('scLive').style.display = '';
-            scRenderGrid(); scRenderBoard(); scRenderTeeSigns();
+            const live = scSnap.status === 'live';
+            $('scOverride').style.display = live ? '' : 'none'; // overrides only make sense mid-round
+            scRenderGrid(); scRenderBoard(); scRenderTeeSigns(); scPopulateOverrideHoles();
+        }
+
+        // Part 2: single-use, round-scoped temporary override of a hole's par/distance.
+        function scPopulateOverrideHoles() {
+            const sel = $('scOvHole'); if (!sel) return;
+            const prev = sel.value;
+            sel.replaceChildren();
+            (scSnap.holes || []).forEach((h) => {
+                const o = document.createElement('option'); o.value = h.hole;
+                o.textContent = 'Hole ' + h.hole + (h.overridden ? ' ⏱ temp' : '');
+                sel.appendChild(o);
+            });
+            if (prev) sel.value = prev;
+        }
+        async function scApplyOverride(clear) {
+            const hole = Number($('scOvHole').value);
+            if (!hole) { adminMsg('Pick a hole to override', false); return; }
+            const body = { hole, clear };
+            if (!clear) {
+                const par = parseInt($('scOvPar').value, 10);
+                const dist = parseInt($('scOvDist').value, 10);
+                if (Number.isFinite(par)) body.par = par;
+                if (Number.isFinite(dist)) body.distance_ft = dist;
+                if (body.par == null && body.distance_ft == null) { adminMsg('Enter a temporary par and/or distance', false); return; }
+            }
+            const r = await adminApi('/events/' + scEventId + '/live/override', { method: 'POST', body });
+            if (r.ok) { adminMsg(clear ? 'Override cleared — hole reverted' : 'Temporary override applied (this round only)', true); $('scOvPar').value = ''; $('scOvDist').value = ''; await scRefresh(); }
+            else { const e = await r.json().catch(() => ({})); adminMsg(e.error === 'empty_override' ? 'Enter a temporary par and/or distance' : 'Override failed (' + r.status + ')', false); }
         }
 
         // T4: per-hole tee-sign reference for the scorekeeper. As an authed admin we also surface
@@ -918,6 +974,8 @@
             const strip = elx('div', 'ts-strip');
             holes.forEach((h) => {
                 const hn = h.hole, hd = holeData.get(hn) || {};
+                // A round override (Part 2) wins for THIS round's display; else the layout's verified/estimated value.
+                const dist = (h.overridden && h.distance_ft != null) ? h.distance_ft : (hd.distance_ft != null ? hd.distance_ft : null);
                 const cardEl = elx('div', 'ts-strip-card');
                 const officialId = officialByHole.get(hn), candId = candidateByHole.get(hn);
                 if (officialId != null) {
@@ -931,15 +989,16 @@
                     cardEl.appendChild(elx('span', 'ts-unverified', '⚠ unverified'));
                 } else if (typeof window.teeSignSvg === 'function') {
                     const sv = elx('div', 'ts-strip-svg');
-                    const svg = window.teeSignSvg({ hole: hn, courseName: '', layouts: [{ label: layout ? layout.name : 'Layout', color: hd.color || null, par: h.par != null ? h.par : null, distance_ft: hd.distance_ft != null ? hd.distance_ft : null }] });
+                    const svg = window.teeSignSvg({ hole: hn, courseName: '', layouts: [{ label: layout ? layout.name : 'Layout', color: hd.color || null, par: h.par != null ? h.par : null, distance_ft: dist }] });
                     const doc = new DOMParser().parseFromString(svg, 'image/svg+xml'); // inert
                     if (doc.documentElement && doc.documentElement.nodeName.toLowerCase() === 'svg') sv.appendChild(doc.documentElement);
                     cardEl.appendChild(sv);
                 }
+                if (h.overridden) cardEl.appendChild(elx('span', 'ts-temp', '⏱ temporary'));
                 const meta = elx('div', 'ts-strip-meta');
                 meta.appendChild(elx('span', 'ts-strip-hole', 'H' + hn));
                 const bits = ['Par ' + h.par];
-                if (hd.distance_ft != null) bits.push(hd.distance_ft + ' ft');
+                if (dist != null) bits.push(dist + ' ft');
                 meta.appendChild(document.createTextNode(' · ' + bits.join(' · ')));
                 cardEl.appendChild(meta);
                 strip.appendChild(cardEl);
@@ -960,7 +1019,7 @@
             const holes = scSnap.holes || [], players = scSnap.players || [];
             const thead = document.createElement('thead'); const htr = document.createElement('tr');
             ['Player', 'Div', 'Start'].forEach((h) => htr.appendChild(elx('th', null, h)));
-            holes.forEach((h) => htr.appendChild(elx('th', null, h.hole + ' (' + h.par + ')')));
+            holes.forEach((h) => htr.appendChild(elx('th', h.overridden ? 'th-temp' : null, h.hole + ' (' + h.par + ')' + (h.overridden ? ' ⏱' : ''))));
             htr.appendChild(elx('th', null, 'Tot'));
             thead.appendChild(htr); grid.appendChild(thead);
             const tbody = document.createElement('tbody');
@@ -1233,6 +1292,8 @@
             $('scEvent').addEventListener('change', scOnEventChange);
             $('scStartBtn').addEventListener('click', scStart);
             $('scFinalizeBtn').addEventListener('click', scFinalize);
+            $('scOvApply').addEventListener('click', () => scApplyOverride(false));
+            $('scOvClear').addEventListener('click', () => scApplyOverride(true));
             $('adminLeagueForm').addEventListener('submit', adminAddLeague);
             $('adminFundraiserForm').addEventListener('submit', adminAddFundraiser);
             $('adminMeetingForm').addEventListener('submit', adminAddMeeting);
