@@ -6,7 +6,7 @@ export const MAX_PHOTO_BYTES = 3_000_000; // ~3 MB after client-side resize
 
 export interface R2BucketLike {
   put(key: string, value: ArrayBuffer | Uint8Array, opts?: { httpMetadata?: { contentType?: string } }): Promise<unknown>;
-  get(key: string): Promise<{ body: ReadableStream; httpMetadata?: { contentType?: string } } | null>;
+  get(key: string): Promise<{ body: ReadableStream; arrayBuffer(): Promise<ArrayBuffer>; httpMetadata?: { contentType?: string } } | null>;
   delete(key: string): Promise<void>;
 }
 

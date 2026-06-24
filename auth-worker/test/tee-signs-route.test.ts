@@ -15,7 +15,11 @@ const r2 = () => {
   const store = new Map<string, Uint8Array>();
   return {
     put: async (k: string, v: Uint8Array) => void store.set(k, v),
-    get: async (k: string) => store.has(k) ? { body: null, httpMetadata: { contentType: "image/jpeg" } } : null,
+    get: async (k: string) => store.has(k) ? {
+      body: null,
+      httpMetadata: { contentType: "image/jpeg" },
+      arrayBuffer: async () => new Uint8Array([0x89, 0x50, 0x4e, 0x47]).buffer,
+    } : null,
     delete: async (k: string) => void store.delete(k),
     _store: store,
   };
@@ -24,10 +28,18 @@ const PNG_DATAURL = "data:image/png;base64," + btoa(String.fromCharCode(0x89,0x5
 function mockDb() {
   return { prepare: (sql: string) => ({
     bind() { return this; },
-    all: async () => ({ results: [], success: true }),
+    all: async () => {
+      if (/SELECT \* FROM tee_signs WHERE status/i.test(sql)) {
+        return { results: [{ id: 1, course_id: 3, hole_number: 5, status: "candidate", r2_key: "tee-signs/3/5/u.png", content_type: "image/png", uploaded_by: "m_jane", extracted_json: '{"hole":7,"layouts":[{"label":"Long","par":4,"distance_ft":420}]}', extract_source: "dev-stub" }], success: true };
+      }
+      if (/SELECT id, name FROM course_layouts WHERE course_id/i.test(sql)) {
+        return { results: [], success: true };
+      }
+      return { results: [], success: true };
+    },
     first: async () => {
       if (/INSERT INTO tee_signs/i.test(sql)) return { id: 1, status: "candidate", r2_key: "tee-signs/3/5/u.png" };
-      if (/SELECT \* FROM tee_signs WHERE id/i.test(sql)) return { id: 1, course_id: 3, hole_number: 5, status: "candidate", r2_key: "tee-signs/3/5/u.png", content_type: "image/png", uploaded_by: "m_jane" };
+      if (/SELECT \* FROM tee_signs WHERE id/i.test(sql)) return { id: 1, course_id: 3, hole_number: 5, status: "candidate", r2_key: "tee-signs/3/5/u.png", content_type: "image/png", uploaded_by: "m_jane", extracted_json: null, extract_source: null };
       if (/INSERT INTO course_layouts/i.test(sql)) return { id: 99, course_id: 3, name: "Long", holes: "[]", total_par: null };
       if (/SELECT \* FROM course_layouts WHERE id/i.test(sql)) return { id: 99, course_id: 3, name: "Long", holes: "[]", total_par: null };
       if (/UPDATE course_layouts/i.test(sql)) return { id: 99 };
@@ -37,14 +49,14 @@ function mockDb() {
     run: async () => ({ success: true }),
   }) };
 }
-const env = () => ({ ROSTER: kv(members), RATELIMIT: kv(), DB: mockDb(), PHOTOS: r2(), JWT_SECRET: SECRET, ALLOWED_ORIGINS: "http://localhost:8080" } as unknown as Parameters<typeof worker.fetch>[1]);
+const env = (photos?: ReturnType<typeof r2>) => ({ ROSTER: kv(members), RATELIMIT: kv(), DB: mockDb(), PHOTOS: photos ?? r2(), JWT_SECRET: SECRET, ALLOWED_ORIGINS: "http://localhost:8080" } as unknown as Parameters<typeof worker.fetch>[1]);
 const tok = (sub: string) => signSession({ sub, mustChangePin: false }, SECRET, 900);
-async function call(path: string, method: string, token: string | Promise<string> | undefined, body?: unknown) {
+async function call(path: string, method: string, token: string | Promise<string> | undefined, body?: unknown, photos?: ReturnType<typeof r2>) {
   const h: Record<string, string> = { Origin: "http://localhost:8080" };
   const resolved = token ? await token : undefined;
   if (resolved) h.authorization = "Bearer " + resolved;
   if (body) h["content-type"] = "application/json";
-  return worker.fetch(new Request("https://w" + path, { method, headers: h, body: body ? JSON.stringify(body) : undefined }), env());
+  return worker.fetch(new Request("https://w" + path, { method, headers: h, body: body ? JSON.stringify(body) : undefined }), env(photos));
 }
 
 describe("POST /tee-signs", () => {
@@ -69,5 +81,39 @@ describe("admin approve/reject", () => {
   it("approves with manual rows (admin)", async () => {
     const res = await call("/admin/tee-signs/1/approve", "POST", tok("m_admin"), { rows: [{ newLayoutName: "Long", par: 4, distance_ft: 420 }] });
     expect(res.status).toBe(200);
+  });
+});
+
+describe("admin tee-signs list with suggestedRows", () => {
+  it("GET /admin/tee-signs?status=candidate returns suggestedRows from extracted_json", async () => {
+    const res = await call("/admin/tee-signs?status=candidate", "GET", tok("m_admin"));
+    expect(res.status).toBe(200);
+    const body = await res.json() as { teeSigns: { suggestedRows: { label: string; layoutId: null; suggestedLayoutName: string }[] }[] };
+    expect(Array.isArray(body.teeSigns)).toBe(true);
+    expect(body.teeSigns.length).toBeGreaterThan(0);
+    const sign = body.teeSigns[0]!;
+    expect(Array.isArray(sign.suggestedRows)).toBe(true);
+    expect(sign.suggestedRows.length).toBe(1);
+    expect(sign.suggestedRows[0]!.label).toBe("Long");
+    expect(sign.suggestedRows[0]!.layoutId).toBeNull(); // no layout in mock DB
+    expect(sign.suggestedRows[0]!.suggestedLayoutName).toBe("Long"); // defaultLayoutName("Long")
+  });
+});
+
+describe("POST /admin/tee-signs/:id/extract", () => {
+  it("403 for non-admin", async () => {
+    const photos = r2();
+    photos._store.set("tee-signs/3/5/u.png", new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+    expect((await call("/admin/tee-signs/1/extract", "POST", tok("m_jane"), undefined, photos)).status).toBe(403);
+  });
+  it("200 for admin re-extracts and returns extracted vision result", async () => {
+    const photos = r2();
+    photos._store.set("tee-signs/3/5/u.png", new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+    const res = await call("/admin/tee-signs/1/extract", "POST", tok("m_admin"), undefined, photos);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { ok: boolean; extracted: { hole: unknown; layouts: unknown[] } };
+    expect(body.ok).toBe(true);
+    expect(body.extracted).toBeDefined();
+    expect(Array.isArray(body.extracted.layouts)).toBe(true);
   });
 });
