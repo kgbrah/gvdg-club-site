@@ -34,6 +34,7 @@ beforeEach(async () => {
     ALLOWED_ORIGINS: `${ORIGIN},https://greenvillediscgolf.com`,
     SESSION_TTL_SEC: "900",
     LIVE: undefined as unknown as Env["LIVE"], // login tests never hit live routes
+    PHOTOS: undefined as unknown as Env["PHOTOS"], // login tests never upload photos
   };
   await putMember(env.ROSTER as KVLike, {
     memberId: "m_jane",
