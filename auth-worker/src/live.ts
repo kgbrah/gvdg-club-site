@@ -125,19 +125,22 @@ export class LiveEventDO {
   private async finalize(): Promise<Response> {
     if (!this.meta) return j({ error: "not_started" }, 409);
     const standings = finalizeStandings(this.meta.holes, this.players);
-    // Idempotent: clear any prior results for this event, then write fresh.
+    // Idempotent: clear any prior results for this event, then write fresh (inserts run concurrently).
     await db.clearResults(this.env.DB, this.meta.eventId);
-    for (const s of standings) {
-      await db.createResult(this.env.DB, {
-        event_id: this.meta.eventId,
-        member_id: s.memberId,
-        name: s.name,
-        place: s.place,
-        total: s.total,
-        to_par: s.toPar,
-        breakdown: JSON.stringify(s.breakdown),
-      });
-    }
+    const eventId = this.meta.eventId;
+    await Promise.all(
+      standings.map((s) =>
+        db.createResult(this.env.DB, {
+          event_id: eventId,
+          member_id: s.memberId,
+          name: s.name,
+          place: s.place,
+          total: s.total,
+          to_par: s.toPar,
+          breakdown: JSON.stringify(s.breakdown),
+        }),
+      ),
+    );
     await db.updateEvent(this.env.DB, this.meta.eventId, { status: "final" });
     this.meta.status = "final";
     await this.persist();

@@ -80,6 +80,16 @@ export async function createLayout(
 export async function getLayout(db: D1Like, id: number) {
   return db.prepare("SELECT * FROM course_layouts WHERE id = ?").bind(id).first();
 }
+/** A layout's hole list as {hole,par}[] (parses the stored JSON), or [] for none/invalid/missing layout. */
+export async function getLayoutHoles(db: D1Like, layoutId: number | null | undefined): Promise<{ hole: number; par: number }[]> {
+  if (!layoutId) return [];
+  const layout = (await getLayout(db, Number(layoutId))) as { holes?: string } | null;
+  try {
+    return JSON.parse(layout?.holes ?? "[]").map((h: { hole: number; par: number }) => ({ hole: Number(h.hole), par: Number(h.par) }));
+  } catch {
+    return [];
+  }
+}
 export async function updateLayout(
   db: D1Like,
   id: number,
@@ -412,7 +422,8 @@ export async function getBoardFeed(db: D1Like, limit = 50): Promise<Record<strin
   const byParent = new Map<number, Record<string, unknown>[]>();
   for (const r of replies) {
     const pid = r.parent_id as number;
-    (byParent.get(pid) ?? byParent.set(pid, []).get(pid)!).push(r);
+    if (!byParent.has(pid)) byParent.set(pid, []);
+    byParent.get(pid)!.push(r);
   }
   return posts.map((p) => ({ ...p, replies: byParent.get(p.id as number) ?? [] }));
 }

@@ -218,11 +218,11 @@ async function handleMyRegistrations(request: Request, env: Env, origin: string 
 
 // Members message board — members-only (read + post require a valid member JWT). Flat feed + replies.
 const BOARD_LIMIT = 15; // posts per member per minute
-async function boardRateLimited(env: Env, memberId: string): Promise<boolean> {
-  const key = "board:" + memberId;
+// Fixed-window per-key rate limiter backed by the RATELIMIT KV (shared by the board + assistant).
+async function kvRateLimited(env: Env, key: string, limit: number, windowSec: number): Promise<boolean> {
   const cur = parseInt((await env.RATELIMIT.get(key)) || "0", 10) || 0;
-  if (cur >= BOARD_LIMIT) return true;
-  await env.RATELIMIT.put(key, String(cur + 1), { expirationTtl: 60 });
+  if (cur >= limit) return true;
+  await env.RATELIMIT.put(key, String(cur + 1), { expirationTtl: windowSec });
   return false;
 }
 async function handleBoard(request: Request, env: Env, origin: string | null): Promise<Response> {
@@ -235,7 +235,7 @@ async function handleBoard(request: Request, env: Env, origin: string | null): P
     return json({ posts: await db.getBoardFeed(env.DB, 50) }, 200, origin);
   }
   if (method === "POST" && seg.length === 1) {
-    if (await boardRateLimited(env, claims.sub)) return json({ error: "rate_limited" }, 429, origin);
+    if (await kvRateLimited(env, "board:" + claims.sub, BOARD_LIMIT, 60)) return json({ error: "rate_limited" }, 429, origin);
     const b = await readJson(request);
     const body = b && typeof b.body === "string" ? b.body.trim() : "";
     if (!body) return json({ error: "empty_post" }, 400, origin);
@@ -335,6 +335,9 @@ function asNum(v: unknown): number | null {
 }
 const inSet = (arr: readonly string[], v: unknown): v is string => typeof v === "string" && arr.includes(v);
 const isUniqueViolation = (e: unknown): boolean => /UNIQUE constraint failed/i.test(String(e));
+// Sanitize a JSON array column input: keep only strings, cap length, stringify (null if not an array).
+const jsonStringArray = (v: unknown, max: number): string | null =>
+  Array.isArray(v) ? JSON.stringify(v.filter((x) => typeof x === "string").slice(0, max)) : null;
 const validLat = (n: number | null): number | null => (n != null && n >= -90 && n <= 90 ? n : null);
 const validLng = (n: number | null): number | null => (n != null && n >= -180 && n <= 180 ? n : null);
 
@@ -442,14 +445,6 @@ function workersAiProvider(env: Env): ReplyProvider {
   };
 }
 
-async function assistantRateLimited(env: Env, ip: string): Promise<boolean> {
-  const key = "asst:" + ip;
-  const cur = parseInt((await env.RATELIMIT.get(key)) || "0", 10) || 0;
-  if (cur >= ASSISTANT_LIMIT) return true;
-  await env.RATELIMIT.put(key, String(cur + 1), { expirationTtl: ASSISTANT_WINDOW });
-  return false;
-}
-
 async function handleAssistant(request: Request, env: Env, origin: string | null): Promise<Response> {
   const body = await readJson(request);
   const message = typeof body?.message === "string" ? body.message.trim() : "";
@@ -457,7 +452,7 @@ async function handleAssistant(request: Request, env: Env, origin: string | null
   if (message.length > 2000) return json({ error: "message_too_long" }, 413, origin);
 
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
-  if (await assistantRateLimited(env, ip)) return json({ error: "rate_limited" }, 429, origin);
+  if (await kvRateLimited(env, "asst:" + ip, ASSISTANT_LIMIT, ASSISTANT_WINDOW)) return json({ error: "rate_limited" }, 429, origin);
 
   const history: ChatTurn[] = Array.isArray(body?.history)
     ? body.history.slice(-MAX_HISTORY).filter((t: unknown): t is ChatTurn => !!t && typeof t === "object" && typeof (t as ChatTurn).content === "string")
@@ -555,11 +550,7 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
         const startBody = (await readJson(request)) ?? {};
         const ev = (await db.getEvent(env.DB, eid)) as (Record<string, unknown> & { layout_id?: number | null; players?: Record<string, unknown>[] }) | null;
         if (!ev) return json({ error: "not_found" }, 404, origin);
-        let holes: { hole: number; par: number }[] = [];
-        if (ev.layout_id) {
-          const layout = (await db.getLayout(env.DB, Number(ev.layout_id))) as { holes?: string } | null;
-          try { holes = JSON.parse(layout?.holes ?? "[]").map((h: Record<string, unknown>) => ({ hole: Number(h.hole), par: Number(h.par) })); } catch { holes = []; }
-        }
+        const holes = await db.getLayoutHoles(env.DB, ev.layout_id);
         if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin); // event needs a layout with pars
         // G4: seed the live scorecard from event REGISTRATIONS (division + assigned starting hole) when any
         // exist — connecting register/check-in/assign straight into scoring. Fall back to manual event_players.
@@ -589,9 +580,7 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
   if (method === "GET" && seg[0] === "events" && seg.length === 3 && seg[2] === "ace-pot") {
     const eid = asInt(seg[1]);
     if (eid == null) return json({ error: "not_found" }, 404, origin);
-    const pot = (await db.getAcePot(env.DB, eid)) as Record<string, unknown> | null;
-    const cfg = (await db.getEventConfig(env.DB, eid)) as { ace_fee_cents?: number } | null;
-    const contributors = await db.aceContributors(env.DB, eid);
+    const [pot, cfg, contributors] = (await Promise.all([db.getAcePot(env.DB, eid), db.getEventConfig(env.DB, eid), db.aceContributors(env.DB, eid)])) as [Record<string, unknown> | null, { ace_fee_cents?: number } | null, number];
     const aceFee = cfg?.ace_fee_cents || 0;
     const carryIn = Number(pot?.carryover_in_cents || 0);
     return json({ ace_pot: { ...(pot || {}), contributors, ace_fee_cents: aceFee, total_cents: carryIn + contributors * aceFee } }, 200, origin);
@@ -756,7 +745,7 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
     // registration config: PUT /admin/events/:id/config
     if (seg[3] === "config" && id != null && method === "PUT") {
       const b = (await readJson(request)) ?? {};
-      const divs = Array.isArray(b.divisions) ? JSON.stringify((b.divisions as unknown[]).filter((d) => typeof d === "string").slice(0, 40)) : null;
+      const divs = jsonStringArray(b.divisions, 40);
       const fmt = b.play_format == null ? null : (inSet(["singles", "doubles", "teams"], b.play_format) ? (b.play_format as string) : undefined);
       if (fmt === undefined) return json({ error: "invalid_config" }, 400, origin);
       const row = await db.upsertEventConfig(env.DB, id, {
@@ -814,19 +803,15 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
       let order = regs.map((r) => r.id);
       if (b.shuffle !== false) order = shuffle(order); // random by default
       if (seg[3] === "assign-starting-holes") {
-        let holes: number[] = [];
         const ev = (await db.getEvent(env.DB, id)) as { layout_id?: number | null } | null;
-        if (ev?.layout_id) {
-          const layout = (await db.getLayout(env.DB, Number(ev.layout_id))) as { holes?: string } | null;
-          try { holes = JSON.parse(layout?.holes ?? "[]").map((h: { hole: number }) => Number(h.hole)); } catch { holes = []; }
-        }
+        let holes = (await db.getLayoutHoles(env.DB, ev?.layout_id)).map((h) => h.hole);
         if (!holes.length) holes = Array.from({ length: asInt(b.holeCount) || 18 }, (_, i) => i + 1);
         const assigned = assignShotgun(order.map(String), holes, asInt(b.groupSize) || 4);
-        for (let i = 0; i < order.length; i++) await db.adminUpdateRegistration(env.DB, order[i]!, { starting_hole: assigned[i]!.hole });
+        await Promise.all(order.map((rid, i) => db.adminUpdateRegistration(env.DB, rid, { starting_hole: assigned[i]!.hole })));
       } else {
         const opts = asInt(b.size) ? { size: asInt(b.size)! } : { count: asInt(b.count) || 2 };
         const assigned = assignTeams(order.map(String), opts);
-        for (let i = 0; i < order.length; i++) await db.adminUpdateRegistration(env.DB, order[i]!, { team: assigned[i]!.team });
+        await Promise.all(order.map((rid, i) => db.adminUpdateRegistration(env.DB, rid, { team: assigned[i]!.team })));
       }
       return json({ registrations: await db.listRegistrations(env.DB, id) }, 200, origin);
     }
@@ -898,17 +883,16 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
   }
 
   if (sub === "meetings") {
-    const asJsonArr = (v: unknown) => (Array.isArray(v) ? JSON.stringify(v.filter((x) => typeof x === "string").slice(0, 100)) : null);
     if (method === "POST") {
       const b = await readJson(request);
       const date = b && asStr(b.date, 40), title = b && asStr(b.title, 200);
       if (!b || !date || !title) return json({ error: "invalid_meeting" }, 400, origin);
-      const row = await db.createMeeting(env.DB, { date, title, minutes_md: asStr(b.minutes_md, 50000), action_items: asJsonArr(b.action_items), attendees: asJsonArr(b.attendees), created_by: adminId });
+      const row = await db.createMeeting(env.DB, { date, title, minutes_md: asStr(b.minutes_md, 50000), action_items: jsonStringArray(b.action_items, 100), attendees: jsonStringArray(b.attendees, 100), created_by: adminId });
       return json({ meeting: row }, 201, origin);
     }
     if (method === "PATCH" && id != null) {
       const b = (await readJson(request)) ?? {};
-      const row = await db.updateMeeting(env.DB, id, { date: asStr(b.date, 40), title: asStr(b.title, 200), minutes_md: asStr(b.minutes_md, 50000), action_items: b.action_items === undefined ? null : asJsonArr(b.action_items), attendees: b.attendees === undefined ? null : asJsonArr(b.attendees) });
+      const row = await db.updateMeeting(env.DB, id, { date: asStr(b.date, 40), title: asStr(b.title, 200), minutes_md: asStr(b.minutes_md, 50000), action_items: b.action_items === undefined ? null : jsonStringArray(b.action_items, 100), attendees: b.attendees === undefined ? null : jsonStringArray(b.attendees, 100) });
       return row ? json({ meeting: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
     }
     if (method === "DELETE" && id != null) { await db.deleteMeeting(env.DB, id); return json({ ok: true }, 200, origin); }

@@ -1056,8 +1056,12 @@
             if (!token) { wrap.style.display = 'none'; return; }
             if (paymentsCfg === null) { try { const r = await api('/payments/config'); paymentsCfg = r.ok ? await r.json() : { enabled: false }; } catch (_e) { paymentsCfg = { enabled: false }; } }
             let events = [], myRegs = [];
-            try { const r = await api('/registration/open'); if (r.ok) events = (await r.json()).events || []; } catch (_e) {}
-            try { const r = await api('/my-registrations', { token }); if (r.ok) myRegs = (await r.json()).registrations || []; } catch (_e) {}
+            const [er, mr] = await Promise.all([
+                api('/registration/open').catch(() => null),
+                api('/my-registrations', { token }).catch(() => null),
+            ]);
+            if (er && er.ok) events = (await er.json()).events || [];
+            if (mr && mr.ok) myRegs = (await mr.json()).registrations || [];
             if (!events.length) { wrap.style.display = 'none'; return; }
             const byEvent = new Map(myRegs.map((r) => [r.event_id, r]));
             list.replaceChildren();
