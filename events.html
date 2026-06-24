@@ -671,7 +671,6 @@
                 table.appendChild(tbody); card.appendChild(table);
             }
 
-            const finals = rounds.filter((r) => r.status === 'final');
             if (rounds.length) {
                 card.appendChild(el('h3', 'roster-title', `Rounds (${rounds.length})`));
                 const list = el('div', 'player-list');
@@ -686,7 +685,6 @@
                     list.appendChild(row);
                 });
                 card.appendChild(list);
-                void finals;
             }
 
             detailEl.appendChild(card);
@@ -796,8 +794,12 @@
         // ---- CTPs + ace pot (Track G G3, public on the event detail) ----
         async function renderEventExtras(eventId, card) {
             let ctps = [], pot = null;
-            try { const d = await fetchJson(`/events/${encodeURIComponent(eventId)}/ctps`); ctps = (d && d.ctps) || []; } catch (_e) {}
-            try { const d = await fetchJson(`/events/${encodeURIComponent(eventId)}/ace-pot`); pot = d && d.ace_pot; } catch (_e) {}
+            const [cd, pd] = await Promise.all([
+                fetchJson(`/events/${encodeURIComponent(eventId)}/ctps`).catch(() => null),
+                fetchJson(`/events/${encodeURIComponent(eventId)}/ace-pot`).catch(() => null),
+            ]);
+            ctps = (cd && cd.ctps) || [];
+            pot = pd && pd.ace_pot;
             if (ctps.length) {
                 card.appendChild(el('h3', 'roster-title', 'CTPs (closest to pin)'));
                 const ul = el('ul', 'extras-list');
