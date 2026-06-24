@@ -65,9 +65,6 @@ export function teeSignModel(input) {
 // page styles (currentColor inherits the page text color for light/dark).
 export function teeSignSvg(input) {
   const m = teeSignModel(input);
-  // For SVG text content, also encode '=' to neutralize any residual event-handler
-  // patterns (e.g. onload=) that survive XML escaping (= is not an XML metachar).
-  const esc = (v) => escapeXml(v).replace(/=/g, '&#61;');
   const W = 320;
   const rowH = 30;
   const headH = 96;
@@ -83,17 +80,17 @@ export function teeSignSvg(input) {
     const par = l.par == null ? '–' : String(l.par);       // en dash when unknown
     const dist = l.distance_ft == null ? '' : `${l.distance_ft} ft`;
     return `<g class="tee-sign-row">${swatch}` +
-      `<text x="${labelX}" y="${y + 19}" class="tee-sign-label">${esc(l.label)}</text>` +
-      `<text x="${W - 96}" y="${y + 19}" text-anchor="end" class="tee-sign-par">Par ${esc(par)}</text>` +
-      `<text x="${W - 16}" y="${y + 19}" text-anchor="end" class="tee-sign-dist">${esc(dist)}</text>` +
+      `<text x="${labelX}" y="${y + 19}" class="tee-sign-label">${escapeXml(l.label)}</text>` +
+      `<text x="${W - 96}" y="${y + 19}" text-anchor="end" class="tee-sign-par">Par ${escapeXml(par)}</text>` +
+      `<text x="${W - 16}" y="${y + 19}" text-anchor="end" class="tee-sign-dist">${escapeXml(dist)}</text>` +
       `</g>`;
   }).join('');
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" ` +
-    `class="tee-sign" role="img" aria-label="Tee sign for hole ${esc(holeText)}">` +
+    `class="tee-sign" role="img" aria-label="Tee sign for hole ${escapeXml(holeText)}">` +
     `<rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="16" class="tee-sign-bg"/>` +
-    `<text x="16" y="58" class="tee-sign-hole">${esc(holeText)}</text>` +
-    `<text x="${W - 16}" y="40" text-anchor="end" class="tee-sign-course">${esc(m.courseName)}</text>` +
+    `<text x="16" y="58" class="tee-sign-hole">${escapeXml(holeText)}</text>` +
+    `<text x="${W - 16}" y="40" text-anchor="end" class="tee-sign-course">${escapeXml(m.courseName)}</text>` +
     `<line x1="16" y1="${headH - 14}" x2="${W - 16}" y2="${headH - 14}" class="tee-sign-rule"/>` +
     `${rows}</svg>`;
 }

@@ -81,7 +81,8 @@ test('teeSignSvg escapes injection attempts in every dynamic field', () => {
     layouts: [{ label: '"><rect onload=alert(1)>', color: 'red"/><script>', par: 3, distance_ft: 200 }],
   });
   assert.ok(!svg.includes('<script>'));
-  assert.ok(!svg.includes('onload=alert'));
+  assert.ok(!svg.includes('<rect onload'));                // injected tag is NOT a live element
+  assert.ok(svg.includes('&lt;rect onload=alert(1)&gt;')); // it survives only as escaped text
   assert.ok(svg.includes('&lt;script&gt;'));
   assert.ok(!svg.includes('red"/>'));        // bogus color dropped, never hits a fill attr
 });
