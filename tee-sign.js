@@ -5,8 +5,8 @@
 //
 // Public API: escapeXml, sanitizeColor, teeSignModel, teeSignSvg.
 
-// Disc-golf tee/target colors allowed as-is (lowercased). Anything outside this set
-// OR a #RGB / #RRGGBB hex is dropped (no swatch) — prevents CSS/markup injection.
+// Disc-golf tee/target colors allowed as-is (lowercased). A value that is neither a
+// known color name NOR a #RGB / #RRGGBB hex is dropped (no swatch) — blocks CSS/markup injection.
 const NAMED_COLORS = new Set([
   'blue', 'white', 'red', 'gold', 'yellow', 'green', 'black', 'silver', 'gray',
   'grey', 'orange', 'purple', 'pink', 'brown', 'teal', 'navy',
