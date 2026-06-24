@@ -630,11 +630,19 @@ export function defaultLayoutName(label: unknown): string {
 }
 
 /** Find an existing layout for the course whose name matches the label (normalized), else null. */
-export async function matchLayout(db: D1Like, courseId: number, label: unknown): Promise<{ id: number; name: string } | null> {
+/** The (id,name) of every layout on a course — small projection used for label matching. */
+export async function listLayoutNames(db: D1Like, courseId: number): Promise<{ id: number; name: string }[]> {
+  return (await db.prepare("SELECT id, name FROM course_layouts WHERE course_id = ?").bind(courseId).all()).results as { id: number; name: string }[];
+}
+/** Pure label→layout match over already-fetched rows, so a caller looping many labels for one course can
+ *  fetch that course's layouts once (via listLayoutNames) instead of re-querying per label. */
+export function matchLayoutIn(rows: { id: number; name: string }[], label: unknown): { id: number; name: string } | null {
   const want = normalizeLayoutLabel(label) || normalizeLayoutLabel(defaultLayoutName(label));
-  const rows = (await db.prepare("SELECT id, name FROM course_layouts WHERE course_id = ?").bind(courseId).all()).results as { id: number; name: string }[];
   for (const r of rows) if (normalizeLayoutLabel(r.name) === want) return { id: r.id, name: r.name };
   return null;
+}
+export async function matchLayout(db: D1Like, courseId: number, label: unknown): Promise<{ id: number; name: string } | null> {
+  return matchLayoutIn(await listLayoutNames(db, courseId), label);
 }
 
 /** Ensure the course has Long + Short layouts; returns nothing (idempotent). */

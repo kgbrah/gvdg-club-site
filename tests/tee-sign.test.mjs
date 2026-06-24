@@ -27,14 +27,14 @@ test('teeSignModel clamps par/distance, sanitizes color, coerces strings', () =>
     hole: '7',
     courseName: 'Battle Park',
     layouts: [
-      { label: 'Long', color: 'Blue', par: '4', distance_ft: '420', distance_source: 'geo' },
+      { label: 'Long', color: 'Blue', par: '4', distance_ft: '420' },
       { label: 'Short', color: 'bogus', par: 99, distance_ft: 5 },
     ],
   });
   assert.equal(m.hole, 7);
   assert.equal(m.courseName, 'Battle Park');
   assert.deepEqual(m.layouts[0], {
-    label: 'Long', color: 'blue', par: 4, distance_ft: 420, distance_source: 'geo',
+    label: 'Long', color: 'blue', par: 4, distance_ft: 420,
   });
   assert.equal(m.layouts[1].color, null);        // bogus name dropped
   assert.equal(m.layouts[1].par, null);          // 99 out of [1,10]

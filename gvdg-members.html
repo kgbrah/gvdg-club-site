@@ -1236,15 +1236,22 @@
             await refreshMyTeeSigns();
         }
 
-        async function refreshMyTeeSigns() {
-            if (!regToken()) return;
+        async function fetchMyTeeSigns() {
+            if (!regToken()) return [];
+            try { const r = await api('/my-tee-signs', { token: regToken() }); if (r.ok) return (await r.json()).teeSigns || []; } catch (_e) {}
+            return [];
+        }
+        function renderMyTeeSignList(rows) {
             const list = $('tsMyList');
-            let rows = [];
-            try { const r = await api('/my-tee-signs', { token: regToken() }); if (r.ok) rows = (await r.json()).teeSigns || []; } catch (_e) {}
             tsThumbUrls.forEach((u) => URL.revokeObjectURL(u)); tsThumbUrls = [];
             list.replaceChildren();
             if (!rows.length) { list.appendChild(elNode('div', 'dash-note', 'No tee signs captured yet — pick a course and hole above to add your first one.')); return; }
             rows.forEach((row) => list.appendChild(renderMyTeeSign(row)));
+        }
+        async function refreshMyTeeSigns() {
+            const rows = await fetchMyTeeSigns();
+            renderMyTeeSignList(rows);
+            return rows;
         }
 
         function tsStatus(msg, isError) { const el = $('tsStatus'); el.textContent = msg || ''; el.classList.toggle('error', !!isError); }
@@ -1294,15 +1301,15 @@
             }
         }
 
-        // After upload, Crotts runs server-side (ctx.waitUntil); poll our own list until the row gets its extraction.
+        // After upload, Crotts runs server-side (ctx.waitUntil); poll our own list until the row gets its
+        // extraction. One fetch per tick; re-render only once the guess is in (the pending card is already shown).
         function pollTeeSignExtraction(id, attempt) {
             if (id == null || attempt >= 6) { return; }
             setTimeout(async () => {
-                let rows = [];
-                try { const r = await api('/my-tee-signs', { token: regToken() }); if (r.ok) rows = (await r.json()).teeSigns || []; } catch (_e) {}
+                const rows = await fetchMyTeeSigns();
                 const row = rows.find((x) => x.id === id);
-                await refreshMyTeeSigns();
                 if (row && (row.extract_source || row.extracted_json)) {
+                    renderMyTeeSignList(rows);
                     tsStatus('✅ Crotts read the sign — see your capture below. An admin will confirm it before it counts.');
                     return;
                 }

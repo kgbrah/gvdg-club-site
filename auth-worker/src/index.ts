@@ -1065,12 +1065,16 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
     if (method === "GET" && id == null) {
       const status = new URL(request.url).searchParams.get("status") || "candidate";
       const teeSigns = (await db.listTeeSignsByStatus(env.DB, status)) as (Record<string, unknown> & { extracted_json?: string | null; course_id?: number; suggestedRows?: unknown[] })[];
+      const layoutsByCourse = new Map<number, { id: number; name: string }[]>(); // fetch each course's layouts once
       for (const row of teeSigns) {
         let layouts: { label?: unknown; color?: unknown; par?: unknown; distance_ft?: unknown; tee?: unknown; target?: unknown }[] = [];
         try { layouts = (JSON.parse(row.extracted_json || "{}") as { layouts?: typeof layouts }).layouts || []; } catch { /* leave empty */ }
+        const cid = Number(row.course_id);
+        let courseLayouts = layoutsByCourse.get(cid);
+        if (!courseLayouts) { courseLayouts = await db.listLayoutNames(env.DB, cid); layoutsByCourse.set(cid, courseLayouts); }
         row.suggestedRows = [];
         for (const l of layouts) {
-          const matched = await db.matchLayout(env.DB, Number(row.course_id), l.label);
+          const matched = db.matchLayoutIn(courseLayouts, l.label);
           row.suggestedRows.push({
             label: l.label, color: l.color ?? null, par: l.par ?? null, distance_ft: l.distance_ft ?? null,
             tee: l.tee ?? null, target: l.target ?? null,

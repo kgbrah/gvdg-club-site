@@ -298,7 +298,7 @@
             typeLabel,
             statusLabel,
         } from './events.js';
-        import { teeSignSvg } from './tee-sign.js';
+        import { teeSignNode } from './tee-sign.js';
 
         // --- Theme toggle (mirrors index.html) ---
         const themeToggle = document.querySelector('.theme-toggle');
@@ -868,9 +868,8 @@
                     holeCard.appendChild(img);
                 } else {
                     const wrap = el('div', 'ts-hole-svg');
-                    const svg = teeSignSvg({ hole: hn, courseName, layouts: [{ label: layout ? layout.name : 'Layout', color: h.color || (h.tee && h.tee.color) || null, par: h.par != null ? h.par : null, distance_ft: h.distance_ft != null ? h.distance_ft : null }] });
-                    const doc = new DOMParser().parseFromString(svg, 'image/svg+xml'); // inert parse — no script execution
-                    if (doc.documentElement && doc.documentElement.nodeName.toLowerCase() === 'svg') wrap.appendChild(doc.documentElement);
+                    const node = teeSignNode({ hole: hn, courseName, layouts: [{ label: layout ? layout.name : 'Layout', color: h.color || (h.tee && h.tee.color) || null, par: h.par != null ? h.par : null, distance_ft: h.distance_ft != null ? h.distance_ft : null }] });
+                    if (node) wrap.appendChild(node);
                     holeCard.appendChild(wrap);
                 }
                 const meta = el('div', 'ts-hole-meta');
