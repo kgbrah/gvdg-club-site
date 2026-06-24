@@ -1048,7 +1048,32 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
   if (sub === "tee-signs") {
     if (method === "GET" && id == null) {
       const status = new URL(request.url).searchParams.get("status") || "candidate";
-      return json({ teeSigns: await db.listTeeSignsByStatus(env.DB, status) }, 200, origin);
+      const teeSigns = (await db.listTeeSignsByStatus(env.DB, status)) as (Record<string, unknown> & { extracted_json?: string | null; course_id?: number; suggestedRows?: unknown[] })[];
+      for (const row of teeSigns) {
+        let layouts: { label?: unknown; color?: unknown; par?: unknown; distance_ft?: unknown; tee?: unknown; target?: unknown }[] = [];
+        try { layouts = (JSON.parse(row.extracted_json || "{}") as { layouts?: typeof layouts }).layouts || []; } catch { /* leave empty */ }
+        row.suggestedRows = [];
+        for (const l of layouts) {
+          const matched = await db.matchLayout(env.DB, Number(row.course_id), l.label);
+          row.suggestedRows.push({
+            label: l.label, color: l.color ?? null, par: l.par ?? null, distance_ft: l.distance_ft ?? null,
+            tee: l.tee ?? null, target: l.target ?? null,
+            layoutId: matched ? matched.id : null,
+            suggestedLayoutName: matched ? matched.name : db.defaultLayoutName(l.label),
+          });
+        }
+      }
+      return json({ teeSigns }, 200, origin);
+    }
+    if (id != null && seg[3] === "extract" && method === "POST") {
+      const sign = await db.getTeeSign(env.DB, id);
+      if (!sign) return json({ error: "not_found" }, 404, origin);
+      const obj = await env.PHOTOS.get(sign.r2_key);
+      if (!obj) return json({ error: "not_found" }, 404, origin);
+      const bytes = new Uint8Array(await obj.arrayBuffer());
+      const v = await extractTeeSign(env, bytes, sign.content_type);
+      await db.setTeeSignExtraction(env.DB, id, JSON.stringify({ hole: v.hole, layouts: v.layouts }), v.source ?? null);
+      return json({ ok: true, extracted: v }, 200, origin);
     }
     if (id != null && seg[3] === "approve" && method === "POST") {
       const b = (await readJson(request)) ?? {};
