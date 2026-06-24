@@ -332,6 +332,13 @@ export async function setCheckedIn(db: D1Like, eventId: number, memberId: string
 export async function getRegistration(db: D1Like, id: number) {
   return db.prepare("SELECT * FROM registrations WHERE id = ?").bind(id).first();
 }
+/** Mark a registration paid after a verified PayPal capture (records the order id + captured amount). */
+export async function markRegistrationPaid(db: D1Like, id: number, paymentRef: string, amountCents: number) {
+  return db
+    .prepare("UPDATE registrations SET paid_entry = 1, payment_ref = ?, amount_paid_cents = ? WHERE id = ? RETURNING *")
+    .bind(paymentRef, amountCents, id)
+    .first();
+}
 export async function adminUpdateRegistration(
   db: D1Like,
   id: number,

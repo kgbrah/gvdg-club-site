@@ -1047,12 +1047,14 @@
             wrap.style.display = '';
         }
 
-        // ---- Event registration (Track G) — sign up, pick division/add-ons, check in ----
+        // ---- Event registration (Track G) — sign up, pick division/add-ons, check in, pay ----
         function regToken() { return sessionStorage.getItem(TOKEN_KEY); }
+        let paymentsCfg = null, paypalSdkPromise = null;
         async function loadRegister() {
             const wrap = $('clubRegister'), list = $('registerList');
             const token = regToken();
             if (!token) { wrap.style.display = 'none'; return; }
+            if (paymentsCfg === null) { try { const r = await api('/payments/config'); paymentsCfg = r.ok ? await r.json() : { enabled: false }; } catch (_e) { paymentsCfg = { enabled: false }; } }
             let events = [], myRegs = [];
             try { const r = await api('/registration/open'); if (r.ok) events = (await r.json()).events || []; } catch (_e) {}
             try { const r = await api('/my-registrations', { token }); if (r.ok) myRegs = (await r.json()).registrations || []; } catch (_e) {}
@@ -1063,6 +1065,33 @@
             wrap.style.display = '';
         }
         function dollars(c) { return '$' + (c / 100).toLocaleString(undefined, { minimumFractionDigits: (c % 100 ? 2 : 0) }); }
+        function clientOwed(ev, addons) {
+            let t = ev.entry_fee_cents || 0;
+            if (addons && addons.ctp && ev.ctp_fee_cents) t += ev.ctp_fee_cents;
+            if (addons && addons.ace && ev.ace_fee_cents) t += ev.ace_fee_cents;
+            return t;
+        }
+        function ensurePayPalSdk() {
+            if (window.paypal) return Promise.resolve();
+            if (paypalSdkPromise) return paypalSdkPromise;
+            paypalSdkPromise = new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = 'https://www.paypal.com/sdk/js?client-id=' + encodeURIComponent(paymentsCfg.clientId) + '&currency=USD&intent=capture';
+                s.onload = resolve; s.onerror = () => reject(new Error('paypal_sdk_load_failed'));
+                document.head.appendChild(s);
+            });
+            return paypalSdkPromise;
+        }
+        function renderPayPal(eventId, container) {
+            ensurePayPalSdk().then(() => {
+                if (!window.paypal) return;
+                window.paypal.Buttons({
+                    style: { layout: 'horizontal', height: 36 },
+                    createOrder: () => api('/events/' + eventId + '/pay/create-order', { method: 'POST', token: regToken() }).then((r) => r.json()).then((d) => d.orderId),
+                    onApprove: (data) => api('/events/' + eventId + '/pay/capture', { method: 'POST', token: regToken(), body: { orderId: data.orderID } }).then((r) => { if (r.ok) loadRegister(); else alert('We could not confirm your payment. Please contact the club.'); }),
+                }).render(container);
+            }).catch(() => { container.appendChild(elNode('div', 'register-fee', 'Online payment is temporarily unavailable — pay at the event.')); });
+        }
         function registerCard(ev, myReg) {
             const card = elNode('div', 'register-card');
             const head = elNode('div', 'register-head');
@@ -1071,7 +1100,20 @@
             card.appendChild(head);
             card.appendChild(elNode('div', 'register-fee', (ev.entry_fee_cents ? dollars(ev.entry_fee_cents) + ' entry' : 'Free entry') + (ev.play_format ? ' · ' + ev.play_format : '')));
             if (myReg) {
-                card.appendChild(elNode('div', 'register-status', '✅ Registered' + (myReg.division ? ' — ' + myReg.division : '') + (myReg.checked_in ? ' · checked in' : '') + (myReg.paid_entry ? ' · paid' : '')));
+                card.appendChild(elNode('div', 'register-status', '✅ Registered' + (myReg.division ? ' — ' + myReg.division : '') + (myReg.checked_in ? ' · checked in' : '')));
+                let regAddons = {}; try { regAddons = JSON.parse(myReg.addons || '{}'); } catch (_e) {}
+                const owed = clientOwed(ev, regAddons);
+                if (myReg.paid_entry) {
+                    card.appendChild(elNode('div', 'register-status', '💳 Paid'));
+                } else if (owed > 0) {
+                    if (paymentsCfg && paymentsCfg.enabled) {
+                        card.appendChild(elNode('div', 'register-fee', 'Amount due: ' + dollars(owed)));
+                        const pp = elNode('div', 'paypal-buttons'); card.appendChild(pp);
+                        renderPayPal(ev.id, pp);
+                    } else {
+                        card.appendChild(elNode('div', 'register-fee', 'Amount due: ' + dollars(owed) + ' — pay at the event (an admin will mark you paid).'));
+                    }
+                }
                 const actions = elNode('div', 'register-actions');
                 if (!myReg.checked_in) {
                     const ci = elNode('button', 'passkey-btn', 'Check in'); ci.type = 'button';

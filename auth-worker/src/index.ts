@@ -18,6 +18,7 @@ import { safeFetch, normalizeDgs, normalizeCsvEvents, parseCsvRows, parseUdiscLa
 import { enrichHoles, type LayoutHole } from "./layouts.js";
 import { buildMessages, generateReply, MAX_HISTORY, type ChatTurn, type ChatMessage, type ReplyProvider } from "./assistant.js";
 import { computeLeagueStandings } from "./scoring.js";
+import { computeOwed, paypalBase, createOrder as ppCreateOrder, captureOrder as ppCaptureOrder } from "./payments.js";
 
 // Default discgolfscene feed = the club scraper's committed tournaments.json.
 const DEFAULT_DGS_FEED = "https://raw.githubusercontent.com/mostlysober252/GVDG-DGS-Scraper-2.0/main/tournaments.json";
@@ -42,6 +43,12 @@ export interface Env {
   ASSISTANT_MODEL?: string;
   // Durable Object namespace for live scoring (one instance per in-progress event).
   LIVE: DurableObjectNamespace;
+  // PayPal Checkout (Track G). Payments activate only when BOTH client-id + secret are configured;
+  // otherwise the club uses the manual "paid" flag. CLIENT_ID is public; SECRET is a wrangler secret.
+  PAYPAL_CLIENT_ID?: string;
+  PAYPAL_SECRET?: string;
+  PAYPAL_ENV?: string; // "sandbox" (default) | "live"
+  PAYPAL_API_BASE?: string; // optional override (local testing against a mock)
 }
 
 export { LiveEventDO } from "./live.js";
@@ -499,6 +506,10 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
     return f ? json({ fundraiser: f }, 200, origin) : json({ error: "not_found" }, 404, origin);
   }
   if (method === "GET" && pathname === "/registration/open") return json({ events: await db.listOpenRegistrationEvents(env.DB) }, 200, origin);
+  if (method === "GET" && pathname === "/payments/config") {
+    // public: tells the frontend whether to show PayPal Checkout (client-id is public) or the manual flow.
+    return json({ enabled: !!(env.PAYPAL_CLIENT_ID && env.PAYPAL_SECRET), clientId: env.PAYPAL_CLIENT_ID ?? null, env: env.PAYPAL_ENV ?? "sandbox" }, 200, origin);
+  }
   if (method === "GET" && pathname === "/meetings") return json({ meetings: await db.listMeetings(env.DB) }, 200, origin);
   if (method === "GET" && seg[0] === "meetings" && seg.length === 2) {
     const mid = asInt(seg[1]);
@@ -561,12 +572,44 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
       : json({ positions: await db.listPositions(env.DB, cid) }, 200, origin);
   }
 
-  // ---- member-authed event registration (Track G): /events/:id/{registration,register,checkin} ----
-  if (seg[0] === "events" && (seg[2] === "registration" || seg[2] === "register" || seg[2] === "checkin")) {
+  // ---- member-authed event registration (Track G): /events/:id/{registration,register,checkin,pay} ----
+  if (seg[0] === "events" && (seg[2] === "registration" || seg[2] === "register" || seg[2] === "checkin" || seg[2] === "pay")) {
     const claims = await requireAuth(request, env);
     if (!claims) return json({ error: "unauthorized" }, 401, origin);
     const eid = asInt(seg[1]);
     if (eid == null) return json({ error: "not_found" }, 404, origin);
+
+    // PayPal Checkout: /events/:id/pay/{create-order,capture} (only when credentials are configured)
+    if (seg[2] === "pay" && method === "POST") {
+      if (!(env.PAYPAL_CLIENT_ID && env.PAYPAL_SECRET)) return json({ error: "payments_not_configured" }, 503, origin);
+      const reg = (await db.getMyRegistration(env.DB, eid, claims.sub)) as { id: number; addons?: string; paid_entry?: number; payment_ref?: string } | null;
+      if (!reg) return json({ error: "not_registered" }, 400, origin);
+      const cfg = (await db.getEventConfig(env.DB, eid)) as { entry_fee_cents?: number; ctp_fee_cents?: number; ace_fee_cents?: number } | null;
+      let addons: { ctp?: boolean; ace?: boolean } = {};
+      try { addons = JSON.parse(reg.addons || "{}"); } catch { addons = {}; }
+      const owed = computeOwed(cfg ?? {}, addons);
+      if (owed <= 0) return json({ error: "nothing_owed" }, 400, origin);
+      const creds = { clientId: env.PAYPAL_CLIENT_ID, secret: env.PAYPAL_SECRET, base: paypalBase(env.PAYPAL_ENV, env.PAYPAL_API_BASE) };
+      try {
+        if (seg[3] === "create-order") {
+          const orderId = await ppCreateOrder(creds, owed, "GVDG event entry");
+          return json({ orderId }, 200, origin);
+        }
+        if (seg[3] === "capture") {
+          const b = (await readJson(request)) ?? {};
+          const orderId = asStr(b.orderId, 100);
+          if (!orderId) return json({ error: "invalid_request" }, 400, origin);
+          if (reg.paid_entry === 1 && reg.payment_ref === orderId) return json({ registration: reg }, 200, origin); // idempotent
+          const cap = await ppCaptureOrder(creds, orderId);
+          if (cap.status !== "COMPLETED" || cap.amountCents < owed) return json({ error: "payment_incomplete" }, 402, origin); // verify amount server-side
+          const updated = await db.markRegistrationPaid(env.DB, reg.id, orderId, cap.amountCents);
+          return json({ registration: updated }, 200, origin);
+        }
+      } catch (e) {
+        return json({ error: "paypal_error", reason: String(e instanceof Error ? e.message : e) }, 502, origin);
+      }
+      return json({ error: "not_found" }, 404, origin);
+    }
 
     if (seg[2] === "registration" && method === "GET") {
       return json({ config: await db.getEventConfig(env.DB, eid), registration: await db.getMyRegistration(env.DB, eid, claims.sub) }, 200, origin);

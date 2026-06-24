@@ -48,6 +48,12 @@ SESSION_TTL_SEC = "900"
 # (gpt-oss-120b:free verified working 2026-06-23; llama-3.3-70b:free was rate-limited upstream then.)
 OPENROUTER_MODEL = "openai/gpt-oss-120b:free"
 ASSISTANT_MODEL = "@cf/meta/llama-3.1-8b-instruct"
+# PayPal Checkout for event entry/add-ons (Track G). Payments stay OFF (manual "paid" flag, no downtime)
+# until the club adds BOTH secrets below; then PayPal Checkout auto-activates. CLIENT_ID is public.
+#   wrangler secret put PAYPAL_CLIENT_ID    (your PayPal app's client id)
+#   wrangler secret put PAYPAL_SECRET       (your PayPal app's secret)
+# Set PAYPAL_ENV = "live" to switch from the sandbox to production.
+PAYPAL_ENV = "sandbox"
 # Passkeys / WebAuthn. RP_ID must be the registrable domain (covers the www subdomain);
 # EXPECTED_ORIGIN must exactly match the page origin the browser reports.
 RP_ID = "greenvillediscgolf.com"
