@@ -107,15 +107,17 @@ function devStub(): VisionResult {
   ] };
 }
 
-/** Provider chain: OpenRouter (if key) → Workers AI (if bound) → dev-stub (only if VISION_DEV_STUB) → empty.
+/** Provider chain: dev-stub (only if VISION_DEV_STUB) → OpenRouter (if key) → Workers AI (if bound) → empty.
  *  Never throws — returns an empty result if every path fails, so the candidate just awaits manual entry. */
 export async function extractTeeSign(env: VisionEnv, bytes: Uint8Array, contentType: string): Promise<VisionResult> {
+  // VISION_DEV_STUB forces the deterministic local stub (set ONLY in .dev.vars, never in deploy) so the
+  // pipeline is verifiable without AI creds and without attempting — and hanging on — a real provider call.
+  if (env.VISION_DEV_STUB) return devStub();
   if (env.OPENROUTER_API_KEY) {
     try { const r = await openRouterVision(env, bytes, contentType); if (r.layouts.length || r.hole != null) return r; } catch { /* fall through */ }
   }
   if (env.AI) {
     try { const r = await workersAiVision(env, bytes); if (r.layouts.length || r.hole != null) return r; } catch { /* fall through */ }
   }
-  if (env.VISION_DEV_STUB) return devStub();
   return { hole: null, layouts: [], source: null };
 }
