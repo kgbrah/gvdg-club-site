@@ -668,6 +668,7 @@ export async function applyTeeSignRows(
       distance_source: row.distance_ft != null ? "tee_sign" : null,
       tee: row.tee ? { label: String(row.tee).slice(0, 80) } : null,
       target: row.target ? { label: String(row.target).slice(0, 80) } : null,
+      color: row.color ?? null,
       tee_sign_key: teeSignKey,
     };
     if (idx >= 0) holes[idx] = { ...holes[idx], ...entry }; else holes.push(entry);
