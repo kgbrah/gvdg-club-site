@@ -34,4 +34,32 @@ describe("enrichHoles (compute per-hole distance + total par)", () => {
   it("returns total_par 0 and empty holes for no input", () => {
     expect(enrichHoles([])).toEqual({ holes: [], total_par: 0 });
   });
+
+  it("a verified (tee-sign) hole is STICKY: par+distance survive re-enrichment and beat a manual override", () => {
+    const verified = { par: 4, distance_ft: 420, tee_sign_key: "tee-signs/1/7/x.jpg" };
+    // Even with a conflicting manual_distance and a different stored par, verified wins.
+    const { holes, total_par } = enrichHoles([
+      { hole: 7, par: 3, manual_distance: 250, verified },
+    ]);
+    expect(holes[0]).toMatchObject({ par: 4, distance_ft: 420, distance_source: "tee_sign" });
+    expect(holes[0]!.verified).toEqual(verified);
+    expect(total_par).toBe(4); // total uses the verified par, not the stored 3
+  });
+
+  it("treats a legacy tee_sign hole (no `verified` object) as verified", () => {
+    const { holes } = enrichHoles([
+      { hole: 5, par: 3, distance_ft: 285, distance_source: "tee_sign", tee_sign_key: "k" } as never,
+    ]);
+    expect(holes[0]).toMatchObject({ par: 3, distance_ft: 285, distance_source: "tee_sign" });
+    expect(holes[0]!.verified).toMatchObject({ par: 3, distance_ft: 285 });
+  });
+
+  it("a verified hole with no distance keeps verified par but estimates distance from par", () => {
+    const { holes } = enrichHoles([
+      { hole: 2, par: 5, verified: { par: 5, distance_ft: null, tee_sign_key: "k" } },
+    ]);
+    expect(holes[0]!.par).toBe(5);
+    expect(holes[0]!.distance_source).toBe("par_estimate"); // no verified distance → falls through
+    expect(holes[0]!.distance_ft).toBe(600);
+  });
 });

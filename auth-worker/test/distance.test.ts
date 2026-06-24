@@ -20,10 +20,18 @@ describe("parEstimateFeet", () => {
   });
 });
 
-describe("estimateDistance (precedence: manual → geo → par → none)", () => {
+describe("estimateDistance (precedence: tee_sign → manual → geo → par → none)", () => {
   const tee = { lat: 35.0, lng: -82.4 };
   const target = { lat: 35.001, lng: -82.4 };
 
+  it("a verified tee-sign distance beats manual, geo, and par", () => {
+    const r = estimateDistance({ verified: 420, manual: 312, tee, target, par: 3 });
+    expect(r).toEqual({ distance_ft: 420, source: "tee_sign" });
+  });
+  it("ignores a non-positive verified value and falls through to manual", () => {
+    const r = estimateDistance({ verified: 0, manual: 312, par: 3 });
+    expect(r).toEqual({ distance_ft: 312, source: "manual" });
+  });
   it("uses a manual override even when coords and par exist", () => {
     const r = estimateDistance({ manual: 312, tee, target, par: 3 });
     expect(r).toEqual({ distance_ft: 312, source: "manual" });

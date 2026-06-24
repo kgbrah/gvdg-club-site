@@ -15,7 +15,7 @@ import type { RegistrationResponseJSON, AuthenticationResponseJSON } from "@simp
 import * as db from "./db.js";
 import { EVENT_TYPES, EVENT_STATUSES, EVENT_FORMATS, type D1Like } from "./db.js";
 import { safeFetch, normalizeDgs, normalizeCsvEvents, parseCsvRows, parseUdiscLayout, ImportError } from "./imports.js";
-import { enrichHoles, type LayoutHole } from "./layouts.js";
+import { enrichHoles, verifiedOf, type LayoutHole } from "./layouts.js";
 import { buildMessages, generateReply, MAX_HISTORY, type ChatTurn, type ChatMessage, type ReplyProvider } from "./assistant.js";
 import { computeLeagueStandings } from "./scoring.js";
 import { computeOwed, paypalBase, createOrder as ppCreateOrder, captureOrder as ppCaptureOrder } from "./payments.js";
@@ -617,7 +617,7 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
     if (method === "GET" && !sub) return liveProxy(stub, "/snapshot", undefined, origin); // public leaderboard
     if (sub === "ws") return stub.fetch(request); // public WebSocket viewer — forward the upgrade
 
-    if (method === "POST" && (sub === "start" || sub === "score" || sub === "finalize")) {
+    if (method === "POST" && (sub === "start" || sub === "score" || sub === "finalize" || sub === "override")) {
       const gate = await adminGate(request, env, origin); // scorekeeping is admin-gated (Track G adds delegation)
       if (gate instanceof Response) return gate;
 
@@ -1046,6 +1046,13 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
       if (Array.isArray(b.holes)) {
         const clean = sanitizeHoles(b.holes);
         if (!clean || clean.length === 0) return json({ error: "invalid_layout" }, 400, origin);
+        // Verified (tee-sign) data is STICKY and server-owned: re-attach each hole's verified record
+        // from the stored row (sanitizeHoles drops any client-supplied `verified`, so it can't be forged).
+        // A normal layout edit therefore can't erase or downgrade a verified hole — it reverts to verified.
+        const existing = (await db.getLayout(env.DB, id)) as { holes?: string } | null;
+        const verifiedByHole = new Map<number, ReturnType<typeof verifiedOf>>();
+        try { for (const h of JSON.parse(existing?.holes ?? "[]") as LayoutHole[]) { const v = verifiedOf(h); if (v) verifiedByHole.set(Number(h.hole), v); } } catch { /* ignore */ }
+        for (const h of clean) { const v = verifiedByHole.get(Number(h.hole)); if (v) h.verified = v; }
         ({ holes, total_par } = enrichHoles(clean));
       }
       const row = await db.updateLayout(env.DB, id, { name: asStr(b.name, 60), holes, total_par });
