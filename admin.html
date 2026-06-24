@@ -937,8 +937,8 @@
             if (!clear) {
                 const par = parseInt($('scOvPar').value, 10);
                 const dist = parseInt($('scOvDist').value, 10);
-                if (Number.isFinite(par)) body.par = par;
-                if (Number.isFinite(dist)) body.distance_ft = dist;
+                if (Number.isFinite(par)) { if (par < 1 || par > 15) { adminMsg('Par must be 1–15', false); return; } body.par = par; }
+                if (Number.isFinite(dist)) { if (dist < 20 || dist > 2000) { adminMsg('Distance must be 20–2000 ft', false); return; } body.distance_ft = dist; }
                 if (body.par == null && body.distance_ft == null) { adminMsg('Enter a temporary par and/or distance', false); return; }
             }
             const r = await adminApi('/events/' + scEventId + '/live/override', { method: 'POST', body });
@@ -1010,7 +1010,9 @@
             try {
                 const r = await fetch(AUTH_BASE + '/tee-signs/' + id + '/image', { headers: { Authorization: 'Bearer ' + sessionStorage.getItem(TOKEN_KEY) } });
                 if (!r.ok) return;
-                const url = URL.createObjectURL(await r.blob()); scTeeThumbUrls.push(url); img.src = url;
+                const url = URL.createObjectURL(await r.blob());
+                // If a re-render detached this <img> while the fetch was in flight, revoke now (don't leak).
+                if (img.isConnected) { scTeeThumbUrls.push(url); img.src = url; } else { URL.revokeObjectURL(url); }
             } catch (e) { /* leave the placeholder */ }
         }
 

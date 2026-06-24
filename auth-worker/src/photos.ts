@@ -34,7 +34,7 @@ export function decodeDataUrl(dataUrl: unknown): DecodedImage | null {
   if (typeof dataUrl !== "string") return null;
   const m = /^data:(image\/[a-z+]+);base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl.trim());
   if (!m) return null;
-  const declared = m[1];
+  const declared = m[1] === "image/jpg" ? "image/jpeg" : m[1]; // accept the common jpg alias
   let bytes: Uint8Array;
   try {
     const bin = atob(m[2]!);

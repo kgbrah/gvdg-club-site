@@ -1217,7 +1217,7 @@
         let pendingTeeSign = null;          // chosen-but-unuploaded photo (resized + EXIF-stripped data URL)
         let tsCoursesById = new Map();      // course id -> name, for labeling my-list rows
         let tsThumbUrls = [];               // object URLs to revoke before each re-render
-        const TS_MAX_DATAURL = 3_900_000;   // ~3 MB decoded (server MAX_PHOTO_BYTES) after base64 inflation
+        const TS_MAX_DATAURL = 4_100_000;   // server MAX_PHOTO_BYTES (3 MB) × 4/3 base64 inflation + header
 
         async function loadTeeSigns() {
             const wrap = $('teeCapture');
@@ -1284,9 +1284,9 @@
                     pendingTeeSign = null;
                     $('tsPhotoInput').value = '';
                     const prev = $('tsPreview'); prev.removeAttribute('src'); prev.style.display = 'none';
-                    tsStatus('✅ Uploaded! 🔍 Crotts is reading the sign…');
                     await refreshMyTeeSigns();
-                    pollTeeSignExtraction(id, 0);
+                    if (id != null) { tsStatus('✅ Uploaded! 🔍 Crotts is reading the sign…'); pollTeeSignExtraction(id, 0); }
+                    else tsStatus('✅ Uploaded — see your capture below. An admin will confirm it.');
                 } else if (r.status === 429) {
                     tsStatus("You're uploading a lot quickly — please wait a minute and try again.", true);
                 } else {
@@ -1344,8 +1344,8 @@
                 const r = await fetch(AUTH_BASE + '/tee-signs/' + row.id + '/image', { headers });
                 if (!r.ok) return;
                 const url = URL.createObjectURL(await r.blob());
-                tsThumbUrls.push(url);
-                img.src = url;
+                // If a re-render detached this <img> while the fetch was in flight, revoke now (don't leak).
+                if (img.isConnected) { tsThumbUrls.push(url); img.src = url; } else { URL.revokeObjectURL(url); }
             } catch (_e) { /* leave the placeholder */ }
         }
 

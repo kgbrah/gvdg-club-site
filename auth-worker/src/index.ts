@@ -330,6 +330,7 @@ async function handleProfile(request: Request, env: Env, origin: string | null):
 async function handleTeeSignUpload(request: Request, env: Env, origin: string | null, ctx?: ExecutionContext): Promise<Response> {
   const who = await requireMember(request, env, origin);
   if (who instanceof Response) return who;
+  if (!env.PHOTOS) return json({ error: "storage_unavailable" }, 503, origin); // R2 bucket not bound yet
   if (await kvRateLimited(env, "teesign:" + who.sub, 10, 60)) return json({ error: "rate_limited" }, 429, origin);
   const body = await readJson(request);
   const courseId = asInt(body?.courseId);
@@ -339,9 +340,15 @@ async function handleTeeSignUpload(request: Request, env: Env, origin: string | 
   if (!img) return json({ error: "invalid_image" }, 400, origin);
   const key = teeSignKey(courseId, hole, img.ext, crypto.randomUUID());
   await env.PHOTOS.put(key, img.bytes, { httpMetadata: { contentType: img.contentType } });
-  const row = await db.insertTeeSign(env.DB, {
-    course_id: courseId, hole_number: hole, r2_key: key, content_type: img.contentType, bytes: img.bytes.length, uploaded_by: who.sub,
-  });
+  let row;
+  try {
+    row = await db.insertTeeSign(env.DB, {
+      course_id: courseId, hole_number: hole, r2_key: key, content_type: img.contentType, bytes: img.bytes.length, uploaded_by: who.sub,
+    });
+  } catch (e) {
+    await env.PHOTOS.delete(key).catch(() => {}); // don't orphan the blob if the row insert fails
+    throw e;
+  }
   const signId = (row as { id: number }).id;
   const p = (async () => {
     try {
@@ -1051,7 +1058,16 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
         // A normal layout edit therefore can't erase or downgrade a verified hole — it reverts to verified.
         const existing = (await db.getLayout(env.DB, id)) as { holes?: string } | null;
         const verifiedByHole = new Map<number, ReturnType<typeof verifiedOf>>();
-        try { for (const h of JSON.parse(existing?.holes ?? "[]") as LayoutHole[]) { const v = verifiedOf(h); if (v) verifiedByHole.set(Number(h.hole), v); } } catch { /* ignore */ }
+        const storedHoleNums = new Set<number>();
+        try { for (const h of JSON.parse(existing?.holes ?? "[]") as LayoutHole[]) { storedHoleNums.add(Number(h.hole)); const v = verifiedOf(h); if (v) verifiedByHole.set(Number(h.hole), v); } } catch { /* ignore */ }
+        // Verified records are keyed by hole NUMBER, but the editor renumbers holes by position — so
+        // adding/removing/reordering a hole on a verified layout would silently misattribute verified
+        // par/distance to the wrong hole. Refuse a structural change here; re-approve a sign instead.
+        if (verifiedByHole.size > 0) {
+          const submitted = new Set(clean.map((h) => Number(h.hole)));
+          const sameHoleSet = submitted.size === storedHoleNums.size && [...storedHoleNums].every((n) => submitted.has(n));
+          if (!sameHoleSet) return json({ error: "verified_layout_locked" }, 409, origin);
+        }
         for (const h of clean) { const v = verifiedByHole.get(Number(h.hole)); if (v) h.verified = v; }
         ({ holes, total_par } = enrichHoles(clean));
       }
@@ -1103,7 +1119,7 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
       for (const r of rawRows) {
         const o = r as Record<string, unknown>;
         const par = asInt(o.par);
-        if (par == null || par < 1 || par > 10) continue;
+        if (par == null || par < 1 || par > 15) continue; // match the layout par range (sanitizeHoles)
         rows.push({
           layoutId: o.layoutId == null ? null : asInt(o.layoutId),
           newLayoutName: o.newLayoutName == null ? null : asStr(o.newLayoutName, 80),
@@ -1118,8 +1134,9 @@ async function clubApi(request: Request, env: Env, origin: string | null, pathna
       const sign = await db.getTeeSign(env.DB, id);
       if (!sign) return json({ error: "not_found" }, 404, origin);
       const affected = await db.applyTeeSignRows(env.DB, sign.course_id, sign.hole_number, rows, sign.r2_key);
-      await db.setTeeSignStatus(env.DB, id, "official", adminId);
+      // Demote the prior official BEFORE promoting this one, so a concurrent read never sees two officials.
       await db.demoteOtherOfficial(env.DB, sign.course_id, sign.hole_number, id);
+      await db.setTeeSignStatus(env.DB, id, "official", adminId);
       return json({ ok: true, affectedLayouts: affected }, 200, origin);
     }
     if (id != null && seg[3] === "reject" && method === "POST") {

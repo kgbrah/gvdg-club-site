@@ -47,7 +47,7 @@ export function teeSignModel(input) {
     return {
       label: row.label != null ? String(row.label) : '',
       color: sanitizeColor(row.color),
-      par: clampInt(row.par, 1, 10),
+      par: clampInt(row.par, 1, 15), // matches the layout par range (sanitizeHoles)
       distance_ft: clampInt(row.distance_ft, 20, 2000),
     };
   });
