@@ -2,6 +2,11 @@
 // @cloudflare/workers-types package). Covers Durable Objects + the WebSocket upgrade extensions.
 export {};
 
+export interface ExecutionContext {
+  waitUntil(p: Promise<unknown>): void;
+  passThroughOnException(): void;
+}
+
 declare global {
   interface DurableObjectStorage {
     get<T = unknown>(key: string): Promise<T | undefined>;

@@ -685,3 +685,9 @@ export async function demoteOtherOfficial(db: D1Like, courseId: number, hole: nu
     "UPDATE tee_signs SET status = 'rejected' WHERE course_id = ? AND hole_number = ? AND status = 'official' AND id != ?",
   ).bind(courseId, hole, keepId).run();
 }
+
+/** Store the vision extraction result on a tee sign row (T2). */
+export async function setTeeSignExtraction(db: D1Like, id: number, extractedJson: string, source: string | null) {
+  await db.prepare("UPDATE tee_signs SET extracted_json = ?, extract_source = ? WHERE id = ?")
+    .bind(extractedJson, source, id).run();
+}
