@@ -33,6 +33,7 @@ export interface PlayerState {
   memberId: string | null;
   name: string;
   division?: string | null;
+  startingHole?: number | null; // assigned shotgun start (Track G G4); display-only, doesn't affect scoring
   scores: Record<number, number>; // hole -> strokes
 }
 

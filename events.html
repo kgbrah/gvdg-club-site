@@ -719,15 +719,18 @@
             const standings = (snap && snap.standings) || [];
             container.replaceChildren();
             if (!standings.length) { container.appendChild(el('p', 'lb-empty', 'Waiting for the first scores…')); return; }
+            const hasDiv = standings.some((s) => s && s.division);
             const table = el('table', 'lb-table');
             const thead = el('thead'); const htr = el('tr');
-            ['Pos', 'Player', 'Thru', 'Total', 'To Par'].forEach((h) => htr.appendChild(el('th', null, h)));
+            const cols = hasDiv ? ['Pos', 'Player', 'Div', 'Thru', 'Total', 'To Par'] : ['Pos', 'Player', 'Thru', 'Total', 'To Par'];
+            cols.forEach((h) => htr.appendChild(el('th', null, h)));
             thead.appendChild(htr); table.appendChild(thead);
             const tbody = el('tbody');
             standings.forEach((s, i) => {
                 const tr = el('tr');
                 tr.appendChild(el('td', 'lb-pos', String(i + 1)));
                 tr.appendChild(el('td', 'lb-name', s && s.name != null ? String(s.name) : 'Player'));
+                if (hasDiv) tr.appendChild(el('td', null, (s && s.division) || '—'));
                 tr.appendChild(el('td', null, s && s.thru ? String(s.thru) : '—'));
                 tr.appendChild(el('td', null, s && s.total != null && s.thru ? String(s.total) : '—'));
                 const tp = el('td', 'lb-topar', s && s.thru ? fmtToPar(s.toPar) : '—');

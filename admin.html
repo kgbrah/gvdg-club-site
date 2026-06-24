@@ -871,7 +871,7 @@
             const grid = $('scGrid'); grid.replaceChildren();
             const holes = scSnap.holes || [], players = scSnap.players || [];
             const thead = document.createElement('thead'); const htr = document.createElement('tr');
-            htr.appendChild(elx('th', null, 'Player'));
+            ['Player', 'Div', 'Start'].forEach((h) => htr.appendChild(elx('th', null, h)));
             holes.forEach((h) => htr.appendChild(elx('th', null, h.hole + ' (' + h.par + ')')));
             htr.appendChild(elx('th', null, 'Tot'));
             thead.appendChild(htr); grid.appendChild(thead);
@@ -879,6 +879,8 @@
             players.forEach((p) => {
                 const tr = document.createElement('tr');
                 tr.appendChild(elx('td', 'lb-name', p.name));
+                tr.appendChild(elx('td', null, p.division || '—'));
+                tr.appendChild(elx('td', null, p.startingHole != null ? String(p.startingHole) : '—'));
                 let tot = 0;
                 holes.forEach((h) => {
                     const td = document.createElement('td');
