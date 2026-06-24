@@ -117,6 +117,7 @@ export interface PositionInput {
   label: string;
   lat?: number | null;
   lng?: number | null;
+  color?: string | null;
 }
 
 export async function listPositions(db: D1Like, courseId: number, kind?: PositionKind) {
@@ -128,8 +129,8 @@ export async function listPositions(db: D1Like, courseId: number, kind?: Positio
 }
 export async function createPosition(db: D1Like, p: PositionInput) {
   return db
-    .prepare("INSERT INTO course_positions (course_id, kind, label, lat, lng) VALUES (?, ?, ?, ?, ?) RETURNING *")
-    .bind(p.course_id, p.kind, p.label, p.lat ?? null, p.lng ?? null)
+    .prepare("INSERT INTO course_positions (course_id, kind, label, lat, lng, color) VALUES (?, ?, ?, ?, ?, ?) RETURNING *")
+    .bind(p.course_id, p.kind, p.label, p.lat ?? null, p.lng ?? null, p.color ?? null)
     .first();
 }
 export async function deletePosition(db: D1Like, courseId: number, id: number) {
@@ -558,4 +559,128 @@ export async function listMemberResults(db: D1Like, memberId: string) {
       .bind(memberId)
       .all()
   ).results;
+}
+
+// ---- Tee signs (T1) ----
+export interface TeeSignRow {
+  id: number; course_id: number; hole_number: number; r2_key: string;
+  content_type: string; bytes: number; uploaded_by: string; created_at: string;
+  status: string; extracted_json: string | null; extract_source: string | null;
+  reviewed_by: string | null; reviewed_at: string | null;
+}
+
+export async function insertTeeSign(db: D1Like, t: {
+  course_id: number; hole_number: number; r2_key: string; content_type: string; bytes: number; uploaded_by: string;
+}) {
+  return db.prepare(
+    "INSERT INTO tee_signs (course_id, hole_number, r2_key, content_type, bytes, uploaded_by, status) " +
+    "VALUES (?, ?, ?, ?, ?, ?, 'candidate') RETURNING *",
+  ).bind(t.course_id, t.hole_number, t.r2_key, t.content_type, t.bytes, t.uploaded_by).first();
+}
+
+export async function getTeeSign(db: D1Like, id: number) {
+  return db.prepare("SELECT * FROM tee_signs WHERE id = ?").bind(id).first() as Promise<TeeSignRow | null>;
+}
+
+export async function listMyTeeSigns(db: D1Like, memberId: string) {
+  return (await db.prepare(
+    "SELECT * FROM tee_signs WHERE uploaded_by = ? ORDER BY created_at DESC",
+  ).bind(memberId).all()).results;
+}
+
+export async function listTeeSignsByStatus(db: D1Like, status: string) {
+  return (await db.prepare(
+    "SELECT * FROM tee_signs WHERE status = ? ORDER BY course_id, hole_number, created_at",
+  ).bind(status).all()).results;
+}
+
+export async function setTeeSignStatus(db: D1Like, id: number, status: string, reviewedBy: string) {
+  return db.prepare(
+    "UPDATE tee_signs SET status = ?, reviewed_by = ?, reviewed_at = datetime('now') WHERE id = ? RETURNING *",
+  ).bind(status, reviewedBy, id).first();
+}
+
+export async function deleteTeeSign(db: D1Like, id: number) {
+  await db.prepare("DELETE FROM tee_signs WHERE id = ?").bind(id).run();
+}
+
+// ---- Layout matching / defaults ----
+export function normalizeLayoutLabel(label: unknown): string {
+  return String(label ?? "").toLowerCase().replace(/\b(tees?|layout|pads?)\b/g, "").replace(/\s+/g, " ").trim();
+}
+
+export function defaultLayoutName(label: unknown): string {
+  const n = normalizeLayoutLabel(label);
+  if (n === "long") return "Long";
+  if (n === "short") return "Short";
+  if (!n) return "Main";
+  return n.charAt(0).toUpperCase() + n.slice(1); // title-cased echo of an unknown label (e.g. "Blue")
+}
+
+/** Find an existing layout for the course whose name matches the label (normalized), else null. */
+export async function matchLayout(db: D1Like, courseId: number, label: unknown): Promise<{ id: number; name: string } | null> {
+  const want = normalizeLayoutLabel(label) || normalizeLayoutLabel(defaultLayoutName(label));
+  const rows = (await db.prepare("SELECT id, name FROM course_layouts WHERE course_id = ?").bind(courseId).all()).results as { id: number; name: string }[];
+  for (const r of rows) if (normalizeLayoutLabel(r.name) === want) return { id: r.id, name: r.name };
+  return null;
+}
+
+/** Ensure the course has Long + Short layouts; returns nothing (idempotent). */
+export async function ensureDefaultLayouts(db: D1Like, courseId: number) {
+  for (const name of ["Long", "Short"]) {
+    if (!(await matchLayout(db, courseId, name))) {
+      await createLayout(db, { course_id: courseId, name, holes: [], total_par: null });
+    }
+  }
+}
+
+export interface ApproveRow {
+  layoutId?: number | null;
+  newLayoutName?: string | null;
+  par: number;
+  distance_ft?: number | null;
+  tee?: string | null;
+  target?: string | null;
+  color?: string | null;
+}
+
+/** Apply confirmed tee-sign rows: for each row resolve/create a layout and write hole `hole` with
+ *  {par, distance_ft, tee_sign_key, (tee/target labels)}, then stamp the official photo key on it.
+ *  Returns the list of affected layout ids. The official-photo bookkeeping (status flip / demote prior)
+ *  is done by the caller via setTeeSignStatus + demoteOtherOfficial. */
+export async function applyTeeSignRows(
+  db: D1Like, courseId: number, hole: number, rows: ApproveRow[], teeSignKey: string,
+): Promise<number[]> {
+  const affected: number[] = [];
+  for (const row of rows) {
+    let layoutId = row.layoutId ?? null;
+    if (layoutId == null) {
+      const name = (row.newLayoutName && String(row.newLayoutName).slice(0, 80)) || "Main";
+      const created = (await createLayout(db, { course_id: courseId, name, holes: [], total_par: null })) as { id: number };
+      layoutId = created.id;
+    }
+    const layout = (await getLayout(db, layoutId)) as { holes?: string } | null;
+    const holes: Record<string, unknown>[] = JSON.parse(layout?.holes ?? "[]");
+    const idx = holes.findIndex((h) => Number(h.hole) === hole);
+    const entry: Record<string, unknown> = {
+      hole, par: row.par,
+      distance_ft: row.distance_ft ?? null,
+      distance_source: row.distance_ft != null ? "tee_sign" : null,
+      tee: row.tee ? { label: String(row.tee).slice(0, 80) } : null,
+      target: row.target ? { label: String(row.target).slice(0, 80) } : null,
+      tee_sign_key: teeSignKey,
+    };
+    if (idx >= 0) holes[idx] = { ...holes[idx], ...entry }; else holes.push(entry);
+    holes.sort((a, b) => Number(a.hole) - Number(b.hole));
+    await updateLayout(db, layoutId, { holes });
+    affected.push(layoutId);
+  }
+  return affected;
+}
+
+/** Demote any OTHER official tee sign for the same (course, hole) to 'rejected' so there is one official. */
+export async function demoteOtherOfficial(db: D1Like, courseId: number, hole: number, keepId: number) {
+  await db.prepare(
+    "UPDATE tee_signs SET status = 'rejected' WHERE course_id = ? AND hole_number = ? AND status = 'official' AND id != ?",
+  ).bind(courseId, hole, keepId).run();
 }
