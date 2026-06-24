@@ -532,6 +532,31 @@
                 .dash-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary); }
                 .profile-photo-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
                 .profile-photo-preview { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border-color); display: none; }
+                .tee-capture { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; }
+                .tee-capture-note { color: var(--text-muted); font-size: 0.9rem; line-height: 1.55; margin-bottom: 1rem; }
+                .ts-controls { display: flex; gap: 0.6rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 0.85rem; }
+                .ts-field { display: flex; flex-direction: column; gap: 0.25rem; }
+                .ts-field label { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+                .ts-field select { padding: 0.5rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font: inherit; min-width: 8rem; }
+                .ts-filelabel { display: inline-block; cursor: pointer; background: transparent; border: 1px solid var(--secondary); color: var(--secondary); padding: 0.55rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; transition: background 0.15s ease, color 0.15s ease; }
+                .ts-filelabel:hover { background: var(--secondary); color: #fff; }
+                .ts-preview { display: none; max-width: 100%; width: 220px; border-radius: 8px; border: 1px solid var(--border-color); margin: 0.25rem 0 0.85rem; }
+                .ts-status { font-size: 0.9rem; color: var(--text-secondary); margin: 0.5rem 0; min-height: 1.2em; }
+                .ts-status.error { color: var(--primary); }
+                .ts-mylist-title { font-weight: 700; color: var(--text-primary); margin: 1.25rem 0 0.5rem; font-size: 0.95rem; }
+                .ts-card { display: flex; gap: 0.85rem; border: 1px solid var(--border-color); border-radius: 10px; padding: 0.85rem 1rem; margin-top: 0.6rem; background: var(--bg-secondary); }
+                .ts-thumb { width: 64px; height: 64px; flex: 0 0 auto; border-radius: 8px; object-fit: cover; border: 1px solid var(--border-color); background: var(--bg-primary); }
+                .ts-card-body { flex: 1; min-width: 0; }
+                .ts-card-head { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
+                .ts-where { font-weight: 700; color: var(--text-primary); }
+                .ts-when { font-size: 0.75rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+                .ts-badge { font-size: 0.72rem; font-weight: 700; padding: 0.1rem 0.5rem; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.03em; }
+                .ts-badge.candidate { background: rgba(214, 158, 46, 0.18); color: #b7791f; }
+                .ts-badge.official { background: rgba(46, 158, 68, 0.18); color: #2e9e44; }
+                .ts-badge.rejected { background: rgba(229, 62, 62, 0.16); color: #c53030; }
+                .ts-guess { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+                .ts-chip { font-size: 0.78rem; color: var(--text-secondary); background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.2rem 0.5rem; }
+                .ts-guess-pending { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.4rem; }
             </style>
             <style>.admin-portal-link{display:inline-block;margin-bottom:1.5rem;background:var(--primary);color:#fff;padding:0.6rem 1.25rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.9rem;}.admin-portal-link:hover{background:#e55a2b;}</style>
             <a id="adminPortalLink" href="admin.html" class="admin-portal-link" style="display:none;">🛠 Admin Portal — manage events &amp; courses →</a>
@@ -583,6 +608,30 @@
                     <button type="button" class="passkey-btn" id="boardPostBtn">Post</button>
                 </div>
                 <div id="boardFeed"></div>
+            </div>
+
+            <div id="teeCapture" class="tee-capture" style="display:none;">
+                <h3 class="my-dashboard-title">📸 Capture a Tee Sign</h3>
+                <p class="tee-capture-note">Snap a photo of a tee sign while you play and Crotts will read the par &amp; distance for every layout on it. An admin reviews each photo before it counts — your shot helps document every course.</p>
+                <div class="ts-controls">
+                    <div class="ts-field">
+                        <label for="tsCourse">Course</label>
+                        <select id="tsCourse"></select>
+                    </div>
+                    <div class="ts-field">
+                        <label for="tsHole">Hole</label>
+                        <select id="tsHole"></select>
+                    </div>
+                    <label class="ts-filelabel" for="tsPhotoInput">📷 Take / choose photo</label>
+                    <input type="file" id="tsPhotoInput" accept="image/png,image/jpeg,image/webp" capture="environment" style="display:none;">
+                </div>
+                <img id="tsPreview" class="ts-preview" alt="Tee-sign photo preview">
+                <div>
+                    <button type="button" class="passkey-btn" id="tsUploadBtn" disabled>Upload tee sign</button>
+                </div>
+                <div class="ts-status" id="tsStatus"></div>
+                <div class="ts-mylist-title">My captured signs</div>
+                <div id="tsMyList"></div>
             </div>
 
             <div class="members-stats-grid">
@@ -1164,6 +1213,162 @@
             return card;
         }
 
+        // ---- Tee-sign capture (T3) — photograph a sign; Crotts reads its layouts; an admin confirms ----
+        let pendingTeeSign = null;          // chosen-but-unuploaded photo (resized + EXIF-stripped data URL)
+        let tsCoursesById = new Map();      // course id -> name, for labeling my-list rows
+        let tsThumbUrls = [];               // object URLs to revoke before each re-render
+        const TS_MAX_DATAURL = 3_900_000;   // ~3 MB decoded (server MAX_PHOTO_BYTES) after base64 inflation
+
+        async function loadTeeSigns() {
+            const wrap = $('teeCapture');
+            if (!regToken()) { wrap.style.display = 'none'; return; }
+            let courses = [];
+            try { const r = await api('/courses'); if (r.ok) courses = (await r.json()).courses || []; } catch (_e) {}
+            if (!courses.length) { wrap.style.display = 'none'; return; }
+            tsCoursesById = new Map(courses.map((c) => [c.id, c.name]));
+            const sel = $('tsCourse');
+            if (!sel.options.length) {
+                courses.forEach((c) => { const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; sel.appendChild(o); });
+                const hsel = $('tsHole');
+                for (let h = 1; h <= 24; h++) { const o = document.createElement('option'); o.value = h; o.textContent = 'Hole ' + h; hsel.appendChild(o); }
+            }
+            wrap.style.display = '';
+            await refreshMyTeeSigns();
+        }
+
+        async function refreshMyTeeSigns() {
+            if (!regToken()) return;
+            const list = $('tsMyList');
+            let rows = [];
+            try { const r = await api('/my-tee-signs', { token: regToken() }); if (r.ok) rows = (await r.json()).teeSigns || []; } catch (_e) {}
+            tsThumbUrls.forEach((u) => URL.revokeObjectURL(u)); tsThumbUrls = [];
+            list.replaceChildren();
+            if (!rows.length) { list.appendChild(elNode('div', 'dash-note', 'No tee signs captured yet — pick a course and hole above to add your first one.')); return; }
+            rows.forEach((row) => list.appendChild(renderMyTeeSign(row)));
+        }
+
+        function tsStatus(msg, isError) { const el = $('tsStatus'); el.textContent = msg || ''; el.classList.toggle('error', !!isError); }
+
+        async function onTeeSignChosen(e) {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            tsStatus('Preparing photo…');
+            const dataUrl = await resizeImageFile(file, 1024); // re-encode strips EXIF (drops GPS); 1024px keeps OCR detail
+            if (!dataUrl) { tsStatus('That file is not a readable image — try a JPEG, PNG, or WebP photo.', true); return; }
+            if (dataUrl.length > TS_MAX_DATAURL) { tsStatus('That photo is too large even after resizing — try another one.', true); return; }
+            pendingTeeSign = dataUrl;
+            const prev = $('tsPreview'); prev.src = dataUrl; prev.style.display = 'block';
+            $('tsUploadBtn').disabled = false;
+            tsStatus('');
+        }
+
+        async function uploadTeeSign() {
+            if (!regToken()) { showLogin(); return; }
+            if (!pendingTeeSign) { tsStatus('Choose a photo first.', true); return; }
+            const courseId = parseInt($('tsCourse').value, 10);
+            const hole = parseInt($('tsHole').value, 10);
+            if (!courseId || !hole) { tsStatus('Pick a course and hole first.', true); return; }
+            const btn = $('tsUploadBtn'); setBusy(btn, true);
+            try {
+                const r = await api('/tee-signs', { method: 'POST', token: regToken(), body: { courseId, hole, image: pendingTeeSign } });
+                if (r.status === 201) {
+                    const d = await r.json().catch(() => ({}));
+                    const id = d.teeSign && d.teeSign.id;
+                    pendingTeeSign = null;
+                    $('tsPhotoInput').value = '';
+                    const prev = $('tsPreview'); prev.removeAttribute('src'); prev.style.display = 'none';
+                    tsStatus('✅ Uploaded! 🔍 Crotts is reading the sign…');
+                    await refreshMyTeeSigns();
+                    pollTeeSignExtraction(id, 0);
+                } else if (r.status === 429) {
+                    tsStatus("You're uploading a lot quickly — please wait a minute and try again.", true);
+                } else {
+                    const d = await r.json().catch(() => ({}));
+                    tsStatus(d.error === 'invalid_image' ? 'That image could not be read — try a JPEG, PNG, or WebP photo.' : 'Upload failed — please check the course and hole, then try again.', true);
+                }
+            } catch (_e) {
+                tsStatus('Network error — please try again.', true);
+            } finally {
+                setBusy(btn, false);
+                $('tsUploadBtn').disabled = !pendingTeeSign; // stay disabled after a successful upload clears the picker
+            }
+        }
+
+        // After upload, Crotts runs server-side (ctx.waitUntil); poll our own list until the row gets its extraction.
+        function pollTeeSignExtraction(id, attempt) {
+            if (id == null || attempt >= 6) { return; }
+            setTimeout(async () => {
+                let rows = [];
+                try { const r = await api('/my-tee-signs', { token: regToken() }); if (r.ok) rows = (await r.json()).teeSigns || []; } catch (_e) {}
+                const row = rows.find((x) => x.id === id);
+                await refreshMyTeeSigns();
+                if (row && (row.extract_source || row.extracted_json)) {
+                    tsStatus('✅ Crotts read the sign — see your capture below. An admin will confirm it before it counts.');
+                    return;
+                }
+                pollTeeSignExtraction(id, attempt + 1);
+            }, 1500);
+        }
+
+        function tsBadge(status) {
+            const map = { candidate: ['candidate', '⚠ Pending review'], official: ['official', '✅ Official'], rejected: ['rejected', '✕ Not used'] };
+            const m = map[status] || ['candidate', String(status || '')];
+            return elNode('span', 'ts-badge ' + m[0], m[1]);
+        }
+
+        function teeSignChipText(l) {
+            const label = l.label ? String(l.label) : 'Layout';
+            const rest = [];
+            if (l.par != null) rest.push('Par ' + l.par);
+            if (l.distance_ft != null) rest.push(l.distance_ft + ' ft');
+            if (l.color) rest.push(String(l.color));
+            return rest.length ? label + ' — ' + rest.join(' · ') : label;
+        }
+
+        function tsWhen(iso) {
+            try { const d = new Date(String(iso).replace(' ', 'T') + 'Z'); if (!isNaN(d)) return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); } catch (_e) {}
+            return String(iso || '');
+        }
+
+        // Candidate images are members-only → fetch with the Bearer token, then show as an object URL.
+        async function loadTeeSignThumb(row, img) {
+            try {
+                const headers = regToken() ? { Authorization: 'Bearer ' + regToken() } : {};
+                const r = await fetch(AUTH_BASE + '/tee-signs/' + row.id + '/image', { headers });
+                if (!r.ok) return;
+                const url = URL.createObjectURL(await r.blob());
+                tsThumbUrls.push(url);
+                img.src = url;
+            } catch (_e) { /* leave the placeholder */ }
+        }
+
+        function renderMyTeeSign(row) {
+            const card = elNode('div', 'ts-card');
+            const thumb = elNode('img', 'ts-thumb'); thumb.alt = 'Tee sign photo';
+            loadTeeSignThumb(row, thumb);
+            card.appendChild(thumb);
+            const body = elNode('div', 'ts-card-body');
+            const head = elNode('div', 'ts-card-head');
+            head.appendChild(elNode('span', 'ts-where', (tsCoursesById.get(row.course_id) || ('Course #' + row.course_id)) + ' · Hole ' + row.hole_number));
+            head.appendChild(tsBadge(row.status));
+            if (row.created_at) head.appendChild(elNode('span', 'ts-when', tsWhen(row.created_at)));
+            body.appendChild(head);
+            let extracted = null;
+            try { extracted = row.extracted_json ? JSON.parse(row.extracted_json) : null; } catch (_e) {}
+            const layouts = extracted && Array.isArray(extracted.layouts) ? extracted.layouts : [];
+            if (layouts.length) {
+                const g = elNode('div', 'ts-guess');
+                layouts.forEach((l) => g.appendChild(elNode('span', 'ts-chip', teeSignChipText(l)))); // plain text only — sign text never becomes markup
+                body.appendChild(g);
+            } else if (row.extract_source) {
+                body.appendChild(elNode('div', 'ts-guess-pending', "Crotts couldn't read the layouts — an admin will enter them."));
+            } else if (row.status === 'candidate') {
+                body.appendChild(elNode('div', 'ts-guess-pending', '🔍 Crotts is reading this sign…'));
+            }
+            card.appendChild(body);
+            return card;
+        }
+
         // ---- Members message board (Track M) — members-only, flat feed + replies ----
         function myMemberId() {
             try { const t = sessionStorage.getItem(TOKEN_KEY); const p = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); return p.sub || null; } catch (_e) { return null; }
@@ -1231,6 +1436,7 @@
             loadRegister();
             loadMeetings();
             loadBoard();
+            loadTeeSigns();
             loading.style.display = ''; empty.style.display = 'none'; body.style.display = 'none';
             const avatar = $('dashAvatar');
             const showAvatar = (url) => {
@@ -1527,6 +1733,8 @@
         $('enablePasskeyBtn').addEventListener('click', enablePasskey);
         $('editProfileBtn').addEventListener('click', showProfileSetup);
         $('boardPostBtn').addEventListener('click', () => submitPost($('boardInput').value, null, $('boardInput')));
+        $('tsPhotoInput').addEventListener('change', onTeeSignChosen);
+        $('tsUploadBtn').addEventListener('click', uploadTeeSign);
         $('logoutBtn').addEventListener('click', logout);
 
         document.querySelector('.menu-toggle').addEventListener('click', function() {
