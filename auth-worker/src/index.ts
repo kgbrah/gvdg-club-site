@@ -21,7 +21,7 @@ import { computeLeagueStandings } from "./scoring.js";
 import { computeOwed, paypalBase, createOrder as ppCreateOrder, captureOrder as ppCaptureOrder } from "./payments.js";
 import { assignShotgun, assignTeams } from "./assign.js";
 import { type R2BucketLike, decodeDataUrl, teeSignKey } from "./photos.js";
-import { extractTeeSign, parseVisionJson } from "./vision.js";
+import { extractTeeSign } from "./vision.js";
 import type { ExecutionContext } from "./cf.js";
 
 // Fisher-Yates shuffle (Workers runtime permits Math.random) — used for random shotgun/team assignment.
