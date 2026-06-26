@@ -1,5 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { isAllowedUrl, parseCsvRows, normalizeDgs } from "../src/imports.js";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import { isAllowedUrl, parseCsvRows, normalizeDgs, safeFetch } from "../src/imports.js";
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("isAllowedUrl — SSRF guard", () => {
   const allow = ["udisc.com", "discgolfscene.com"];
@@ -43,6 +45,34 @@ describe("parseCsvRows", () => {
   it("returns [] for empty/headers-only input", () => {
     expect(parseCsvRows("")).toEqual([]);
     expect(parseCsvRows("name,date")).toEqual([]);
+  });
+});
+
+describe("safeFetch", () => {
+  it("rejects a declared oversized response before buffering it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("ignored", { headers: { "content-length": "99" } })),
+    );
+
+    await expect(safeFetch("https://docs.google.com/sheet.csv", ["docs.google.com"], { maxBytes: 10 })).rejects.toThrow("response_too_large");
+  });
+
+  it("stops streaming an undeclared oversized response once the byte cap is crossed", async () => {
+    let pulls = 0;
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        if (pulls > 3) throw new Error("read_too_far");
+        controller.enqueue(encoder.encode("abcd"));
+      },
+      cancel() {},
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(body)));
+
+    await expect(safeFetch("https://docs.google.com/sheet.csv", ["docs.google.com"], { maxBytes: 8 })).rejects.toThrow("response_too_large");
+    expect(pulls).toBeLessThanOrEqual(4);
   });
 });
 

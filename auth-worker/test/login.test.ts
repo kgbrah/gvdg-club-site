@@ -27,15 +27,15 @@ let env: Env;
 
 beforeEach(async () => {
   env = {
-    ROSTER: makeKV(),
-    RATELIMIT: makeKV(),
+    ROSTER: makeKV() as unknown as Env["ROSTER"],
+    RATELIMIT: makeKV() as unknown as Env["RATELIMIT"],
     DB: makeDB() as unknown as Env["DB"],
     JWT_SECRET: "unit-test-secret-at-least-32-bytes-long!!",
     ALLOWED_ORIGINS: `${ORIGIN},https://greenvillediscgolf.com`,
     SESSION_TTL_SEC: "900",
     LIVE: undefined as unknown as Env["LIVE"], // login tests never hit live routes
     PHOTOS: undefined as unknown as Env["PHOTOS"], // login tests never upload photos
-  };
+  } as unknown as Env;
   await putMember(env.ROSTER as KVLike, {
     memberId: "m_jane",
     name: "Jane Doe",
@@ -98,6 +98,24 @@ describe("POST /login", () => {
       body: "{not json",
     });
     expect((await worker.fetch(req, env)).status).toBe(400);
+  });
+
+  it("rejects an oversized login body before credential verification", async () => {
+    const res = await worker.fetch(post("/login", { identifier: "12345", pin: PIN, padding: "x".repeat(5000) }), env);
+    expect(res.status).toBe(413);
+  });
+
+  it("rate-limits repeated login failures from one client IP even across different identifiers", async () => {
+    let status = 401;
+    for (let i = 0; i < 25; i++) {
+      const res = await worker.fetch(
+        post("/login", { identifier: `unknown-${i}`, pin: "0000" }, { "CF-Connecting-IP": "203.0.113.10" }),
+        env,
+      );
+      status = res.status;
+      if (status === 429) break;
+    }
+    expect(status).toBe(429);
   });
 });
 

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import worker from "../src/index.js";
 import { signSession } from "../src/jwt.js";
+import { jsonObject } from "./json.js";
 
 // Regression: live testing showed POST /admin/courses with a duplicate name threw an unhandled 500
 // (UNIQUE constraint failed: courses.name). It must return a clean 409 instead.
@@ -28,7 +29,7 @@ describe("POST /admin/courses duplicate-name handling", () => {
   it("returns 409 course_exists (not a 500) on a UNIQUE name collision", async () => {
     const res = await worker.fetch(await postCourse("Dup"), makeEnv(dbDupName));
     expect(res.status).toBe(409);
-    expect((await res.json()).error).toBe("course_exists");
+    expect((await jsonObject(res)).error).toBe("course_exists");
   });
   it("creates a course normally (201) when the name is free", async () => {
     const res = await worker.fetch(await postCourse("Fresh"), makeEnv(dbOk));

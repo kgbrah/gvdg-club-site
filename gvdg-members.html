@@ -373,8 +373,8 @@
                     <li><a href="index.html#about">About</a></li>
                     <li><a href="index.html#courses">Courses</a></li>
                     <li><a href="index.html#events">Events</a></li>
-                    <li><a href="index.html">Blog</a></li>
-                    <li><a href="index.html" class="active">Members</a></li>
+                    <li><a href="gvdg-blog.html">Blog</a></li>
+                    <li><a href="gvdg-members.html" class="active">Members</a></li>
                     <li><a href="index.html#contact">Contact</a></li>
                 </ul>
                 <button class="theme-toggle" aria-label="Toggle dark mode">
@@ -895,8 +895,8 @@
                                 </ul>
                             </div>
 
-                            <a href="docs/GVDG_Meeting_Minutes_January_2026.docx" class="meeting-minutes-download" download>
-                                📄 Download Full Minutes (DOCX)
+                            <a href="docs/GVDG_Meeting_Minutes_January_2026.md" class="meeting-minutes-download" download>
+                                📄 Download Full Minutes (Markdown)
                             </a>
                         </div>
                     </div>
@@ -906,7 +906,7 @@
         </section>
 
         <footer>
-            <p>© 2025 Greenville Disc Golf Club | <a href="gvdg-site.html">Return to Main Site</a></p>
+            <p>© 2026 Greenville Disc Golf Club | <a href="index.html">Return to Main Site</a></p>
         </footer>
     </div>
 
@@ -915,7 +915,10 @@
         // Member auth backed by the Cloudflare Worker (auth-worker/). The endpoint is
         // read from #loginGate[data-auth-base] so it's configured in one place per deploy.
         const _gate = document.getElementById('loginGate');
-        const AUTH_BASE = (_gate.dataset.authBase || '').replace(/\/+$/, '');
+        const LOCAL_AUTH_BASE = ['127.0.0.1', 'localhost'].includes(location.hostname)
+            ? 'http://127.0.0.1:8788'
+            : '';
+        const AUTH_BASE = (LOCAL_AUTH_BASE || _gate.dataset.authBase || '').replace(/\/+$/, '');
         const PLAYERS_URL = (_gate.dataset.playersUrl || '').trim();
         const STATS_URL = (_gate.dataset.statsUrl || '').trim();
         const TOKEN_KEY = 'gvdg_member_token';
@@ -2050,4 +2053,3 @@
     <script src="crotts.js" defer></script>
 </body>
 </html>
-
