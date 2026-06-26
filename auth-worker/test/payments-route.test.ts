@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import worker from "../src/index.js";
 import { signSession } from "../src/jwt.js";
+import { jsonObject, objectField } from "./json.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -55,8 +56,8 @@ function stubPayPal(captureValue = "15.00", captureStatus = "COMPLETED") {
 
 describe("Track G G2 — PayPal Checkout", () => {
   it("GET /payments/config reflects whether credentials are configured", async () => {
-    expect((await (await call("/payments/config", "GET", undefined, undefined, env())).json()).enabled).toBe(false);
-    const on = await (await call("/payments/config", "GET")).json();
+    expect((await jsonObject(await call("/payments/config", "GET", undefined, undefined, env()))).enabled).toBe(false);
+    const on = await jsonObject(await call("/payments/config", "GET"));
     expect(on.enabled).toBe(true);
     expect(on.clientId).toBe("cid");
   });
@@ -67,13 +68,13 @@ describe("Track G G2 — PayPal Checkout", () => {
     stubPayPal();
     const res = await call("/events/5/pay/create-order", "POST", await tok(), {});
     expect(res.status).toBe(200);
-    expect((await res.json()).orderId).toBe("ORDER123");
+    expect((await jsonObject(res)).orderId).toBe("ORDER123");
   });
   it("capture verifies amount server-side and marks the registration paid", async () => {
     stubPayPal("15.00"); // owed is 1500 -> 15.00 USD ok
     const res = await call("/events/5/pay/capture", "POST", await tok(), { orderId: "ORDER123" });
     expect(res.status).toBe(200);
-    expect((await res.json()).registration.paid_entry).toBe(1);
+    expect(objectField(await jsonObject(res), "registration").paid_entry).toBe(1);
   });
   it("rejects an underpaid capture (402) — does not mark paid", async () => {
     stubPayPal("5.00"); // 500 cents < 1500 owed

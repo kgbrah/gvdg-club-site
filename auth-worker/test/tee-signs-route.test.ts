@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import worker from "../src/index.js";
 import { signSession } from "../src/jwt.js";
+import { jsonObject, objectField } from "./json.js";
 
 const SECRET = "x".repeat(40);
 const members = {
@@ -77,7 +78,7 @@ describe("POST /tee-signs", () => {
   it("201 stores a candidate for a valid png", async () => {
     const res = await call("/tee-signs", "POST", tok("m_jane"), { courseId: 3, hole: 5, image: PNG_DATAURL });
     expect(res.status).toBe(201);
-    expect((await res.json()).teeSign.status).toBe("candidate");
+    expect(objectField(await jsonObject(res), "teeSign").status).toBe("candidate");
   });
 });
 

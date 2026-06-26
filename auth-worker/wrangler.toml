@@ -5,7 +5,21 @@
 
 name = "gvdg-member-auth"
 main = "src/index.ts"
-compatibility_date = "2026-06-01"
+compatibility_date = "2026-06-26"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.01
+persist = true
 
 [[kv_namespaces]]
 binding = "ROSTER"

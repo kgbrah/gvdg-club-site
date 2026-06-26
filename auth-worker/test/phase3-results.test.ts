@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import worker from "../src/index.js";
 import { signSession } from "../src/jwt.js";
+import { arrayField, jsonObject } from "./json.js";
 
 const SECRET = "x".repeat(40);
 const MEMBER = JSON.stringify({ memberId: "m_jane", name: "Jane", isAdmin: false, pinHash: "x", mustChangePin: false });
@@ -26,12 +27,12 @@ describe("Phase 3 result routes", () => {
     const token = await signSession({ sub: "m_jane", mustChangePin: false }, SECRET, 900);
     const res = await get("/my-results", token);
     expect(res.status).toBe(200);
-    const j = await res.json();
-    expect(j.results[0]).toMatchObject({ event_name: "Fall Open", place: 1, to_par: -3 });
+    const j = await jsonObject(res);
+    expect(arrayField(j, "results")[0]).toMatchObject({ event_name: "Fall Open", place: 1, to_par: -3 });
   });
   it("GET /events/:id/results is public (club archive)", async () => {
     const res = await get("/events/5/results");
     expect(res.status).toBe(200);
-    expect((await res.json()).results.length).toBe(1);
+    expect(arrayField(await jsonObject(res), "results").length).toBe(1);
   });
 });

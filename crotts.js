@@ -44,7 +44,8 @@
     '#crotts-input{flex:1;resize:none;border:1px solid var(--border-color,#ccc);border-radius:9px;padding:8px;font:inherit;font-size:14px;background:var(--bg-secondary,#fff);color:var(--text-primary,#1a1a1a)}',
     '#crotts-send{background:var(--secondary,#2e7d32);color:#fff;border:none;border-radius:9px;padding:0 14px;font-weight:700;cursor:pointer}',
     '#crotts-send:disabled{opacity:.5;cursor:default}',
-    '.crotts-typing{font-size:12px;color:var(--text-muted,#888);align-self:flex-start;padding:2px 4px}'
+    '.crotts-typing{font-size:12px;color:var(--text-muted,#888);align-self:flex-start;padding:2px 4px}',
+    '@media (max-width:768px){#crotts-fab{width:54px;height:54px;left:14px;bottom:calc(82px + env(safe-area-inset-bottom,0px))}#crotts-panel{left:12px;bottom:calc(148px + env(safe-area-inset-bottom,0px));max-width:calc(100vw - 24px);max-height:calc(100vh - 172px)}}'
   ].join('');
 
   function el(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }

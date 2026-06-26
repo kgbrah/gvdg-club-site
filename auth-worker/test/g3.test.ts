@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import worker from "../src/index.js";
 import { signSession } from "../src/jwt.js";
+import { jsonObject, objectField } from "./json.js";
 
 const SECRET = "x".repeat(40);
 const members = {
@@ -51,9 +52,9 @@ describe("Track G G3 — CTPs, ace pots, assignment", () => {
   });
   it("ace pot: admin sets carryover; public total = carryover + paid contributors * fee", async () => {
     expect((await call("/admin/events/5/ace-pot", "PUT", await tok("m_admin"), { carryover_in_cents: 1000 })).status).toBe(200);
-    const pot = await (await call("/events/5/ace-pot")).json();
-    expect(pot.ace_pot.total_cents).toBe(1600); // 1000 + 2 contributors * 300
-    expect(pot.ace_pot.contributors).toBe(2);
+    const pot = objectField(await jsonObject(await call("/events/5/ace-pot")), "ace_pot");
+    expect(pot.total_cents).toBe(1600); // 1000 + 2 contributors * 300
+    expect(pot.contributors).toBe(2);
   });
   it("admin assigns shotgun starting holes + teams", async () => {
     expect((await call("/admin/events/5/assign-starting-holes", "POST", await tok("m_admin"), { groupSize: 4, holeCount: 18 })).status).toBe(200);

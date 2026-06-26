@@ -11,6 +11,14 @@ import { computeLeaderboard, finalizeStandings, type PlayerState } from "./scori
 interface LiveEnv {
   DB: db.D1Like;
 }
+interface LiveState {
+  storage: {
+    get<T = unknown>(key: string): Promise<T | undefined>;
+    put(key: string, value: unknown): Promise<void>;
+  };
+  acceptWebSocket(socket: WebSocket): void;
+  getWebSockets(): WebSocket[];
+}
 interface LiveMeta {
   eventId: number;
   holes: { hole: number; par: number }[];
@@ -44,14 +52,13 @@ interface OverrideBody {
 const j = (o: unknown, status = 200): Response => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json" } });
 
 export class LiveEventDO {
-  private state: DurableObjectState;
+  private state: LiveState;
   private env: LiveEnv;
-  private sockets = new Set<WebSocket>();
   private loaded = false;
   private meta: LiveMeta | null = null;
   private players: PlayerState[] = [];
 
-  constructor(state: DurableObjectState, env: LiveEnv) {
+  constructor(state: LiveState, env: LiveEnv) {
     this.state = state;
     this.env = env;
   }
@@ -196,18 +203,15 @@ export class LiveEventDO {
     const pair = new WebSocketPair();
     const client = pair[0];
     const server = pair[1];
-    server.accept();
-    this.sockets.add(server);
-    server.addEventListener("close", () => this.sockets.delete(server));
-    server.addEventListener("error", () => this.sockets.delete(server));
+    this.state.acceptWebSocket(server);
     try { server.send(JSON.stringify({ type: "snapshot", ...this.snapshot() })); } catch { /* ignore */ }
     return new Response(null, { status: 101, webSocket: client });
   }
 
   private broadcast(): void {
     const msg = JSON.stringify({ type: "snapshot", ...this.snapshot() });
-    for (const ws of [...this.sockets]) {
-      try { ws.send(msg); } catch { this.sockets.delete(ws); }
+    for (const ws of this.state.getWebSockets()) {
+      try { ws.send(msg); } catch { /* ignore */ }
     }
   }
 }

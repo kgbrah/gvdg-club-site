@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import worker from "../src/index.js";
+import { jsonObject } from "./json.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -21,7 +22,7 @@ describe("POST /assistant", () => {
   it("returns a dev stub reply when no AI binding is present", async () => {
     const res = await worker.fetch(req({ message: "hi" }), makeEnv());
     expect(res.status).toBe(200);
-    const j = await res.json();
+    const j = await jsonObject(res);
     expect(j.stub).toBe(true);
     expect(j.reply).toMatch(/Crotts/);
   });
@@ -30,7 +31,7 @@ describe("POST /assistant", () => {
     const AI = { run: async (_m: string, opts: { messages: unknown[] }) => ({ response: "Fall Open is the next event! (" + opts.messages.length + " msgs)" }) };
     const res = await worker.fetch(req({ message: "what's next?" }), makeEnv({ AI }));
     expect(res.status).toBe(200);
-    const j = await res.json();
+    const j = await jsonObject(res);
     expect(j.reply).toMatch(/Fall Open is the next event/);
     expect(j.stub).toBeUndefined();
   });
@@ -38,6 +39,11 @@ describe("POST /assistant", () => {
   it("rejects an empty message with 400", async () => {
     const res = await worker.fetch(req({ message: "   " }), makeEnv());
     expect(res.status).toBe(400);
+  });
+
+  it("rejects an oversized assistant body before model selection", async () => {
+    const res = await worker.fetch(req({ message: "hi", padding: "x".repeat(70_000) }), makeEnv());
+    expect(res.status).toBe(413);
   });
 
   it("rate-limits a flooding IP with 429", async () => {
@@ -56,7 +62,7 @@ describe("POST /assistant", () => {
   it("uses OpenRouter as the primary brain when a key is set", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ choices: [{ message: { content: "From OpenRouter!" } }] }), { status: 200 })));
     const res = await worker.fetch(req({ message: "hi" }), makeEnv({ OPENROUTER_API_KEY: "sk-or-test" }));
-    const j = await res.json();
+    const j = await jsonObject(res);
     expect(j.reply).toBe("From OpenRouter!");
     expect(j.provider).toBe("openrouter");
   });
@@ -65,7 +71,7 @@ describe("POST /assistant", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("rate limited", { status: 429 })));
     const AI = { run: async () => ({ response: "From Workers AI fallback" }) };
     const res = await worker.fetch(req({ message: "hi" }), makeEnv({ OPENROUTER_API_KEY: "sk-or-test", AI }));
-    const j = await res.json();
+    const j = await jsonObject(res);
     expect(j.reply).toBe("From Workers AI fallback");
     expect(j.provider).toBe("workers-ai");
   });
