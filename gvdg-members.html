@@ -42,6 +42,7 @@
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { overflow-x: hidden; }
 
         body {
             font-family: 'Archivo', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -49,6 +50,7 @@
             min-height: 100vh;
             color: var(--text-primary);
             position: relative;
+            overflow-x: hidden;
         }
 
         body::before {
@@ -483,6 +485,10 @@
                 .dash-event-name { font-weight: 600; color: var(--text-primary); }
                 .dash-event-date { font-size: 0.8rem; color: var(--text-muted); }
                 .dash-event-ratings { font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; color: var(--secondary); }
+                .dashboard-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 0 0 1.25rem; }
+                .dashboard-action { display: inline-flex; align-items: center; min-height: 40px; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.45rem 0.85rem; background: var(--bg-secondary); color: var(--text-primary); text-decoration: none; font-size: 0.85rem; font-weight: 700; transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease; }
+                .dashboard-action:hover { border-color: var(--secondary); color: var(--secondary); transform: translateY(-1px); }
+                .dashboard-action.primary { background: var(--green); border-color: var(--green); color: #fff; }
                 .club-register { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; }
                 .register-card { border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem 1.25rem; margin-top: 0.75rem; background: var(--bg-secondary); }
                 .register-head { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
@@ -502,7 +508,14 @@
                 .meeting-body p { margin: 0.4rem 0; } .meeting-body ul { margin: 0.4rem 0 0.4rem 1.25rem; }
                 .meeting-actions-h { font-weight: 700; color: var(--text-primary); margin-top: 0.6rem; font-size: 0.9rem; }
                 .meeting-actions { margin: 0.25rem 0 0 1.25rem; color: var(--text-secondary); }
-                .club-board { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; }
+                .club-board { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; scroll-margin-top: 110px; }
+                .board-title-row { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; flex-wrap: wrap; margin-bottom: 0.85rem; }
+                .board-title-row .my-dashboard-title { margin-bottom: 0.25rem; }
+                .board-note { color: var(--text-muted); font-size: 0.9rem; line-height: 1.5; margin: 0; }
+                .board-count { color: var(--text-muted); font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding-top: 0.2rem; }
+                .board-status { min-height: 1.25rem; color: var(--text-muted); font-size: 0.85rem; margin: 0.35rem 0 0.85rem; }
+                .board-status.error { color: var(--primary); font-weight: 700; }
+                .board-status.success { color: var(--green); font-weight: 700; }
                 .board-compose { display: flex; gap: 0.6rem; align-items: flex-start; margin-bottom: 1rem; }
                 .board-compose textarea, .board-replybox textarea { flex: 1; resize: vertical; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.6rem; font: inherit; font-size: 0.9rem; background: var(--bg-secondary); color: var(--text-primary); }
                 .board-post { border: 1px solid var(--border-color); border-radius: 10px; padding: 0.85rem 1.1rem; margin-bottom: 0.75rem; background: var(--bg-secondary); }
@@ -517,6 +530,7 @@
                 .board-replies { margin: 0.5rem 0 0 1.25rem; border-left: 2px solid var(--border-color); padding-left: 0.85rem; }
                 .board-reply { padding: 0.5rem 0; }
                 .board-replybox { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+                @media (max-width: 600px) { .board-compose, .board-replybox { flex-direction: column; } .board-compose textarea, .board-replybox textarea { width: 100%; } .board-compose .passkey-btn, .board-replybox .passkey-btn { width: 100%; } }
                 .passkey-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
                 .passkey-btn { background: transparent; border: 1px solid var(--secondary); color: var(--secondary); padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background 0.15s ease, color 0.15s ease; }
                 .passkey-btn:hover { background: var(--secondary); color: #fff; }
@@ -571,6 +585,11 @@
                     <button type="button" class="passkey-btn" id="editProfileBtn">✏️ Edit profile</button>
                     <span class="passkey-status" id="passkeyStatus"></span>
                 </div>
+                <div class="dashboard-actions" aria-label="Member tools">
+                    <a class="dashboard-action primary" href="#clubBoard">Message board</a>
+                    <a class="dashboard-action" href="#clubRegister">Register</a>
+                    <a class="dashboard-action" href="#teeCapture">Tee signs</a>
+                </div>
                 <div id="dashLoading" class="dash-note">Loading your stats…</div>
                 <div id="dashEmpty" class="dash-note" style="display:none;"></div>
                 <div id="dashBody" style="display:none;">
@@ -602,11 +621,18 @@
             </div>
 
             <div id="clubBoard" class="club-board" style="display:none;">
-                <h3 class="my-dashboard-title">💬 Members Message Board</h3>
+                <div class="board-title-row">
+                    <div>
+                        <h3 class="my-dashboard-title">Members Message Board</h3>
+                        <p class="board-note">Ask questions, coordinate rounds, share updates, and reply to other members.</p>
+                    </div>
+                    <span id="boardCount" class="board-count"></span>
+                </div>
                 <div class="board-compose">
                     <textarea id="boardInput" rows="3" maxlength="4000" placeholder="Share something with the club… (markdown: **bold**, - bullets, https links)"></textarea>
                     <button type="button" class="passkey-btn" id="boardPostBtn">Post</button>
                 </div>
+                <div id="boardStatus" class="board-status" role="status" aria-live="polite"></div>
                 <div id="boardFeed"></div>
             </div>
 
@@ -1383,14 +1409,38 @@
         function myMemberId() {
             try { const t = sessionStorage.getItem(TOKEN_KEY); const p = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); return p.sub || null; } catch (_e) { return null; }
         }
+        function setBoardStatus(message, tone) {
+            const status = $('boardStatus');
+            if (!status) return;
+            status.textContent = message || '';
+            status.className = 'board-status' + (tone ? ' ' + tone : '');
+        }
+        function setBoardCount(posts) {
+            const count = $('boardCount');
+            if (!count) return;
+            const n = Array.isArray(posts) ? posts.length : 0;
+            count.textContent = n === 1 ? '1 thread' : n ? n + ' threads' : 'No threads yet';
+        }
         async function loadBoard() {
             const wrap = $('clubBoard'), feed = $('boardFeed');
             const token = sessionStorage.getItem(TOKEN_KEY);
             if (!token) { wrap.style.display = 'none'; return; }
-            let posts = [];
-            try { const r = await api('/board', { token }); if (r.ok) posts = (await r.json()).posts || []; } catch (_e) {}
             wrap.style.display = '';
             feed.replaceChildren();
+            setBoardCount([]);
+            setBoardStatus('Loading board…');
+            let posts = [];
+            try {
+                const r = await api('/board', { token });
+                if (!r.ok) throw new Error('board_load_failed');
+                posts = (await r.json()).posts || [];
+            } catch (_e) {
+                setBoardStatus('Could not load the board. Please refresh or try again in a minute.', 'error');
+                feed.appendChild(elNode('p', 'dash-note', 'Board posts are temporarily unavailable.'));
+                return;
+            }
+            setBoardCount(posts);
+            setBoardStatus('');
             if (!posts.length) { feed.appendChild(elNode('p', 'dash-note', 'No posts yet — start the conversation!')); return; }
             posts.forEach((p) => feed.appendChild(boardCard(p, false)));
         }
@@ -1410,7 +1460,12 @@
             }
             if (post.member_id === myMemberId() || memberProfile.isAdmin) {
                 const del = elNode('button', 'board-link danger', 'Delete'); del.type = 'button';
-                del.addEventListener('click', async () => { if (!confirm('Delete this post?')) return; const r = await api('/board/' + post.id, { method: 'DELETE', token: sessionStorage.getItem(TOKEN_KEY) }); if (r.ok) loadBoard(); });
+                del.addEventListener('click', async () => {
+                    if (!confirm('Delete this post?')) return;
+                    const r = await api('/board/' + post.id, { method: 'DELETE', token: sessionStorage.getItem(TOKEN_KEY) });
+                    if (r.ok) loadBoard();
+                    else setBoardStatus('Could not delete that post. Please try again.', 'error');
+                });
                 actions.appendChild(del);
             }
             card.appendChild(actions);
@@ -1433,10 +1488,23 @@
         async function submitPost(text, parentId, inputEl) {
             text = (text || '').trim();
             if (!text) return;
-            const r = await api('/board', { method: 'POST', token: sessionStorage.getItem(TOKEN_KEY), body: { body: text, parent_id: parentId || null } });
-            if (r.ok) { if (inputEl) inputEl.value = ''; loadBoard(); }
-            else if (r.status === 429) { alert("You're posting too fast — give it a minute and try again."); }
-            else { alert('Sorry, your post could not be saved.'); }
+            setBoardStatus(parentId ? 'Saving reply…' : 'Saving post…');
+            let r;
+            try {
+                r = await api('/board', { method: 'POST', token: sessionStorage.getItem(TOKEN_KEY), body: { body: text, parent_id: parentId || null } });
+            } catch (_e) {
+                setBoardStatus('Network error. Please try again.', 'error');
+                return;
+            }
+            if (r.ok) {
+                if (inputEl) inputEl.value = '';
+                setBoardStatus(parentId ? 'Reply posted.' : 'Post added.', 'success');
+                loadBoard();
+            } else if (r.status === 429) {
+                setBoardStatus("You're posting too fast. Give it a minute and try again.", 'error');
+            } else {
+                setBoardStatus('Sorry, your post could not be saved.', 'error');
+            }
         }
 
         async function loadDashboard() {
