@@ -135,17 +135,18 @@
 
         .match-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.85rem; }
         .match-card { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 0.5rem; background: var(--bg-tertiary); border-radius: 10px; padding: 0.85rem 0.9rem; border: 1px solid var(--border-color); position: relative; }
+        .match-card.has-winner { border-color: var(--green); }
         [data-theme="dark"] .match-card { background: var(--bg-primary); }
         .match-num { position: absolute; top: -8px; left: 10px; background: var(--dark); color: white; font-size: 0.7rem; font-weight: 700; padding: 0.1rem 0.5rem; border-radius: 8px; letter-spacing: 0.05em; }
         [data-theme="dark"] .match-num { background: var(--accent); color: var(--dark); }
         .player { font-size: 0.92rem; font-weight: 600; color: var(--text-secondary); padding: 0.35rem 0.4rem; border-radius: 6px; min-width: 0; word-break: break-word; }
         .player.red { text-align: left; }
         .player.blue { text-align: right; }
-        .player.winner-red { background: rgba(200, 16, 46, 0.14); color: var(--team-red); font-weight: 700; }
-        .player.winner-blue { background: rgba(0, 78, 137, 0.14); color: var(--team-blue); font-weight: 700; }
+        .player.winner { background: var(--green); color: #fff; font-weight: 800; }
         .match-result { text-align: center; font-family: 'Bebas Neue', sans-serif; font-size: 1.05rem; letter-spacing: 0.04em; color: var(--text-primary); min-width: 46px; }
         .match-result.unplayed { color: var(--text-muted); font-weight: 400; }
         .match-result .res-tie { color: var(--accent); font-size: 0.85rem; font-family: 'Archivo', sans-serif; font-weight: 700; }
+        .match-result .res-winner { display: inline-block; background: var(--green); color: #fff; border-radius: 999px; padding: 0.15rem 0.45rem; font-family: 'Archivo', sans-serif; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.06em; }
 
         /* ---- States ---- */
         .status-box { text-align: center; padding: 3rem 1.5rem; color: var(--text-muted); }
@@ -197,8 +198,8 @@
         <div id="scoreboard" class="scoreboard" hidden></div>
 
         <p class="scoring-note" id="scoringNote" hidden>
-            Scores shown as <strong>A&amp;B</strong> &mdash; the leader is up A holes
-            with B holes remaining. A win is worth 2 points; a tie awards 1 point each.
+            Players highlighted green match the winners marked green on the live sheet.
+            Scores shown as <strong>A&amp;B</strong>; a win is worth 2 points and a tie awards 1 point each.
         </p>
 
         <!-- Loading / error / content -->
@@ -218,7 +219,7 @@
     <footer><p>&copy; 2026 Greenville Disc Golf Club. All rights reserved. | Greenville, NC</p></footer>
 
     <script type="module">
-        import { parseMatchGrid, parseScoreboard } from './ryder-cup.js';
+        import { parseMatchGrid, parseRyderWorkbook, parseScoreboard } from './ryder-cup.js';
 
         // --- Theme toggle (mirrors index.html) ---
         const themeToggle = document.querySelector('.theme-toggle');
@@ -267,6 +268,8 @@
         const _ds = document.body.dataset;
         const GRID_CSV_URL = (_ds.gridCsv || '').trim() || gvizUrl('2109671762');
         const SCOREBOARD_CSV_URL = (_ds.scoreboardCsv || '').trim() || gvizUrl('932426467');
+        const WORKBOOK_URL = (_ds.workbookUrl || '').trim() ||
+            `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=xlsx&id=${SHEET_ID}`;
         const REFRESH_MS = 3 * 60 * 1000; // ~3 minutes
 
         const statusEl = document.getElementById('status');
@@ -337,6 +340,8 @@
             const wrap = el('div', 'match-result');
             if (match.winner === 'tie') {
                 wrap.appendChild(el('span', 'res-tie', 'TIE'));
+            } else if (match.winner && !match.score) {
+                wrap.appendChild(el('span', 'res-winner', 'WIN'));
             } else if (match.score) {
                 wrap.textContent = match.score;
             } else {
@@ -353,9 +358,7 @@
             head.appendChild(el('h2', 'week-title', week.label || 'Week'));
             if (week.dates) head.appendChild(el('span', 'week-date', week.dates));
 
-            // A match is "played" when it has a recorded score (the winning color
-            // isn't derivable from the sheet, so winner is usually null even when played).
-            const played = week.matches.filter((m) => (m.score || '').length > 0).length;
+            const played = week.matches.filter((m) => (m.score || '').length > 0 || !!m.winner).length;
             head.appendChild(
                 el('span', 'week-tally', played ? `${played} of ${week.matches.length} played` : 'Upcoming')
             );
@@ -363,15 +366,15 @@
 
             const grid = el('div', 'match-grid');
             for (const match of week.matches) {
-                const card = el('div', 'match-card');
+                const card = el('div', 'match-card' + (match.winner && match.winner !== 'tie' ? ' has-winner' : ''));
                 card.appendChild(el('span', 'match-num', `#${match.num}`));
 
-                const redClass = 'player red' + (match.winner === 'red' ? ' winner-red' : '');
+                const redClass = 'player red' + (match.winner === 'red' ? ' winner' : '');
                 card.appendChild(el('div', redClass, match.red || '—'));
 
                 card.appendChild(renderMatchResult(match));
 
-                const blueClass = 'player blue' + (match.winner === 'blue' ? ' winner-blue' : '');
+                const blueClass = 'player blue' + (match.winner === 'blue' ? ' winner' : '');
                 card.appendChild(el('div', blueClass, match.blue || '—'));
 
                 grid.appendChild(card);
@@ -386,32 +389,48 @@
             return res.text();
         }
 
+        async function fetchWorkbook(url) {
+            const res = await fetch(url, { cache: 'no-store' });
+            if (!res.ok) throw new Error(`Workbook request failed (${res.status})`);
+            return res.arrayBuffer();
+        }
+
+        async function fetchRyderData() {
+            try {
+                const workbook = await fetchWorkbook(WORKBOOK_URL);
+                return await parseRyderWorkbook(workbook);
+            } catch (_workbookErr) {
+                const [gridCsv, scoreboardCsv] = await Promise.all([
+                    fetchCsv(GRID_CSV_URL),
+                    fetchCsv(SCOREBOARD_CSV_URL),
+                ]);
+                const { weeks, teamPoints } = parseMatchGrid(gridCsv);
+                const scoreboard = parseScoreboard(scoreboardCsv);
+                return { weeks, teamPoints, scoreboard };
+            }
+        }
+
+        function renderData({ weeks, teamPoints, scoreboard }) {
+            renderScoreboard(scoreboard, teamPoints);
+
+            weeksEl.replaceChildren();
+            if (!weeks.length) {
+                weeksEl.appendChild(el('p', 'status-box', 'No matchups posted yet.'));
+            } else {
+                for (const week of weeks) weeksEl.appendChild(renderWeek(week));
+            }
+
+            lastUpdatedEl.hidden = false;
+            lastUpdatedEl.textContent =
+                'Last updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
         let refreshTimer = null;
 
         async function load() {
             showStatus('Loading the latest results…', false);
             try {
-                const [gridCsv, scoreboardCsv] = await Promise.all([
-                    fetchCsv(GRID_CSV_URL),
-                    fetchCsv(SCOREBOARD_CSV_URL),
-                ]);
-
-                const { weeks, teamPoints } = parseMatchGrid(gridCsv);
-                const scoreboard = parseScoreboard(scoreboardCsv);
-
-                renderScoreboard(scoreboard, teamPoints);
-
-                weeksEl.replaceChildren();
-                if (!weeks.length) {
-                    weeksEl.appendChild(el('p', 'status-box', 'No matchups posted yet.'));
-                } else {
-                    for (const week of weeks) weeksEl.appendChild(renderWeek(week));
-                }
-
-                lastUpdatedEl.hidden = false;
-                lastUpdatedEl.textContent =
-                    'Last updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
+                renderData(await fetchRyderData());
                 hideStatus();
             } catch (err) {
                 weeksEl.replaceChildren();
@@ -429,18 +448,7 @@
         load();
         refreshTimer = setInterval(async () => {
             try {
-                const [gridCsv, scoreboardCsv] = await Promise.all([
-                    fetchCsv(GRID_CSV_URL),
-                    fetchCsv(SCOREBOARD_CSV_URL),
-                ]);
-                const { weeks, teamPoints } = parseMatchGrid(gridCsv);
-                const scoreboard = parseScoreboard(scoreboardCsv);
-                renderScoreboard(scoreboard, teamPoints);
-                weeksEl.replaceChildren();
-                for (const week of weeks) weeksEl.appendChild(renderWeek(week));
-                lastUpdatedEl.hidden = false;
-                lastUpdatedEl.textContent =
-                    'Last updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                renderData(await fetchRyderData());
             } catch (_err) {
                 // Silent on background refresh; the visible content stays put.
             }

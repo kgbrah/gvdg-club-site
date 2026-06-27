@@ -12,6 +12,7 @@ import { dirname, join } from 'node:path';
 import {
   parseCsv,
   parseMatchGrid,
+  parseMatchGridRows,
   parseScoreboard,
 } from '../ryder-cup.js';
 
@@ -68,6 +69,13 @@ test('parseMatchGrid: known matchup 1 (Juan Martinez vs Jesus, 1&0, winner not d
   assert.equal(m1.score, '1&0');
   // The A&B score does not encode the winning color, so winner stays null.
   assert.equal(m1.winner, null);
+});
+
+test('parseMatchGridRows: green-filled player cells mark the winning side', () => {
+  const rows = parseCsv(gridCsv);
+  rows[5][3] = { text: rows[5][3], fill: 'FF00FF00' };
+  const { weeks } = parseMatchGridRows(rows);
+  assert.equal(weeks[0].matches[0].winner, 'blue');
 });
 
 test('parseMatchGrid: unplayed matchups have empty score and null winner', () => {
