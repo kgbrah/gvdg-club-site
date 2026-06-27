@@ -87,8 +87,8 @@
             .menu-toggle { display: flex; align-items: center; justify-content: center; }
             .nav-right { gap: 1rem; }
             .nav-account { display: none !important; }
-            .nav-links { position: fixed; top: 70px; left: 0; right: 0; background: rgba(26, 26, 46, 0.98); flex-direction: column; gap: 0; padding: 2rem; transform: translateY(-100%); opacity: 0; transition: all 0.3s ease; pointer-events: none; max-height: calc(100vh - 70px); overflow-y: auto; }
-            [data-theme="dark"] .nav-links { background: rgba(15, 15, 30, 0.98); }
+            .nav-links { position: fixed; top: 70px; left: 0; right: 0; background: rgba(26, 26, 46, 0.995); flex-direction: column; gap: 0; padding: 2rem; transform: translateY(-100%); opacity: 0; transition: all 0.3s ease; pointer-events: none; max-height: calc(100vh - 70px); overflow-y: auto; border-top: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 18px 36px rgba(15, 15, 30, 0.32); z-index: 999; }
+            [data-theme="dark"] .nav-links { background: rgba(15, 15, 30, 0.995); }
             .nav-links.active { transform: translateY(0); opacity: 1; pointer-events: all; }
             .nav-links li { padding: 1.25rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
             .nav-links li:last-child { border-bottom: none; }
