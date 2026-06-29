@@ -471,7 +471,7 @@
             </div>
             <div class="admin-pane" id="apane-wallets">
                 <form class="admin-form" id="adminWalletForm">
-                    <div><label for="waMemberId">Member ID</label><input id="waMemberId" maxlength="80" placeholder="m_jane" required></div>
+                    <div><label for="waMemberId">Member</label><input id="waMemberId" maxlength="80" placeholder="Name, PDGA#, or UDisc" required></div>
                     <div><label for="waAmount">Adjustment ($)</label><input id="waAmount" type="number" step="0.01" required></div>
                     <div style="grid-column:1/-1;"><label for="waNote">Note</label><input id="waNote" maxlength="300" placeholder="League payout, correction, volunteer credit"></div>
                     <button type="submit" class="admin-btn">Post wallet adjustment</button>
@@ -1400,10 +1400,16 @@
             e.preventDefault();
             const amount = dollarsToCents($('waAmount').value);
             const body = { member_id: $('waMemberId').value.trim(), amount_cents: amount, note: $('waNote').value.trim() || null };
-            if (!body.member_id || amount == null || amount === 0) { adminMsg('Member ID and non-zero amount are required', false); return; }
+            if (!body.member_id || amount == null || amount === 0) { adminMsg('Member and non-zero amount are required', false); return; }
             const r = await adminApi('/admin/wallets/credit', { method: 'POST', body });
             if (r.ok) { const d = await r.json(); adminMsg('Wallet updated. Balance: ' + dollarsFromCents(d.balance_cents || 0), true); $('adminWalletForm').reset(); adminLoadWalletRecent(); }
-            else { const d = await r.json().catch(() => ({})); adminMsg(d.error === 'member_not_found' ? 'Member ID not found' : 'Wallet update failed (' + r.status + ')', false); }
+            else {
+                const d = await r.json().catch(() => ({}));
+                const msg = d.error === 'member_not_found' ? 'No member matches that — try their PDGA#, UDisc, or exact name'
+                    : d.error === 'member_ambiguous' ? 'More than one member has that name — use their PDGA# or UDisc instead'
+                    : 'Wallet update failed (' + r.status + ')';
+                adminMsg(msg, false);
+            }
         }
 
         // ---- Registration management (Track G) ----

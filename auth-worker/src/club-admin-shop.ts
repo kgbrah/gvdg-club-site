@@ -1,6 +1,6 @@
 import type { Env } from "./env.js";
 import * as shopDb from "./shop-db.js";
-import { getMember } from "./roster.js";
+import { resolveMemberFlexible, type KVListLike } from "./roster.js";
 import { json, readJson } from "./http.js";
 import { asInt, asStr, inSet } from "./input.js";
 
@@ -134,13 +134,19 @@ export async function handleAdminShop(
     }
     if (method === "POST" && seg[2] === "credit") {
       const body = (await readJson(request)) ?? {};
-      const memberId = asStr(body.member_id, 80);
+      // Accept any member identifier (name / PDGA# / UDisc / internal id), then store the canonical id.
+      const identifier = asStr(body.member_id, 80);
       const amount = asSignedInt(body.amount_cents);
-      if (!memberId || amount == null) return json({ error: "invalid_wallet_adjustment" }, 400, origin);
-      const member = await getMember(env.ROSTER, memberId);
-      if (!member) return json({ error: "member_not_found" }, 404, origin);
+      if (!identifier || amount == null) return json({ error: "invalid_wallet_adjustment" }, 400, origin);
+      const resolved = await resolveMemberFlexible(env.ROSTER as unknown as KVListLike, identifier);
+      if (!resolved.ok) {
+        return resolved.reason === "ambiguous"
+          ? json({ error: "member_ambiguous" }, 409, origin)
+          : json({ error: "member_not_found" }, 404, origin);
+      }
+      const member = resolved.member;
       const tx = await shopDb.createWalletTransaction(env.DB, {
-        member_id: memberId,
+        member_id: member.memberId,
         member_name: member.name,
         amount_cents: amount,
         transaction_type: amount > 0 ? "credit" : "debit",
@@ -148,7 +154,7 @@ export async function handleAdminShop(
         note: asStr(body.note, 300),
         created_by: adminId,
       });
-      return json({ transaction: tx, balance_cents: await shopDb.walletBalance(env.DB, memberId) }, 201, origin);
+      return json({ transaction: tx, balance_cents: await shopDb.walletBalance(env.DB, member.memberId) }, 201, origin);
     }
   }
 
