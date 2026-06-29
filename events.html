@@ -103,6 +103,10 @@
         .events-section { margin-bottom: 2.75rem; }
         .events-section-head { display: flex; align-items: baseline; gap: 0.75rem; margin-bottom: 1.25rem; padding-bottom: 0.6rem; border-bottom: 2px solid var(--border-color); }
         .events-section-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(1.6rem, 4vw, 2.2rem); letter-spacing: 0.04em; color: var(--text-primary); }
+        .events-group-head { margin: 2.25rem 0 0.85rem; padding-bottom: 0.4rem; border-bottom: 2px solid var(--border-color); }
+        .events-group-head .events-section-title { font-size: clamp(1.9rem, 5vw, 2.6rem); }
+        .events-group-sub { margin: 0.15rem 0 0; color: var(--text-muted); font-size: 0.95rem; }
+        .events-empty { color: var(--text-muted); padding: 0.4rem 0 1rem; }
         .events-section.live .events-section-title { color: var(--primary); }
         .events-section-count { color: var(--text-muted); font-size: 0.85rem; font-weight: 600; }
         .live-dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--primary); display: inline-block; box-shadow: 0 0 0 0 rgba(255,107,53,0.6); animation: pulse 1.8s infinite; }
@@ -263,21 +267,24 @@
 </header>
 
     <main>
-        <h1 class="page-title">Events</h1>
-        <p class="page-subtitle">Tournaments, league rounds &amp; club happenings</p>
+        <h1 class="page-title">Events &amp; Club Events</h1>
+        <p class="page-subtitle">Disc golf tournaments &amp; league rounds, plus club fundraisers, meetings &amp; minutes</p>
 
-        <!-- Loading / error / content -->
+        <!-- Loading / error -->
         <div id="status" class="status-box">
             <div class="spinner"></div>
-            <div>Loading events&hellip;</div>
+            <div>Loading&hellip;</div>
         </div>
 
-        <!-- Fundraisers + Leagues & standings (shown with the hub) -->
-        <div id="fundraisersSection" hidden></div>
+        <!-- EVENTS: disc golf tournaments & league rounds (schedule feed + any club-scored events) -->
+        <div id="calendarEvents" hidden></div>
+        <div id="hub" hidden></div>
         <div id="leaguesSection" hidden></div>
 
-        <!-- Hub view (live / upcoming / past sections) -->
-        <div id="hub" hidden></div>
+        <!-- CLUB EVENTS: fundraisers, meetings & minutes -->
+        <div id="clubEventsSection" hidden></div>
+        <div id="fundraisersSection" hidden></div>
+        <div id="meetingsSection" hidden></div>
 
         <!-- Detail view (single event) -->
         <div id="detail" hidden></div>
@@ -357,9 +364,12 @@
         const REFRESH_MS = 60 * 1000; // ~60s background refresh on the hub
 
         const statusEl = document.getElementById('status');
+        const calendarEl = document.getElementById('calendarEvents');
         const hubEl = document.getElementById('hub');
         const leaguesEl = document.getElementById('leaguesSection');
+        const clubEl = document.getElementById('clubEventsSection');
         const fundraisersEl = document.getElementById('fundraisersSection');
+        const meetingsEl = document.getElementById('meetingsSection');
         const detailEl = document.getElementById('detail');
         const lastUpdatedEl = document.getElementById('lastUpdated');
 
@@ -402,10 +412,48 @@
 
         function setView(which) {
             statusEl.hidden = which !== 'status';
+            calendarEl.hidden = which !== 'hub';
             hubEl.hidden = which !== 'hub';
             leaguesEl.hidden = which !== 'hub';
+            clubEl.hidden = which !== 'hub';
             fundraisersEl.hidden = which !== 'hub';
+            meetingsEl.hidden = which !== 'hub';
             detailEl.hidden = which !== 'detail';
+        }
+
+        // A group heading (e.g. "Events", "Club Events") with a one-line description.
+        function groupHeading(title, sub) {
+            const wrap = el('div', 'events-group-head');
+            wrap.appendChild(el('h2', 'events-section-title', title));
+            if (sub) wrap.appendChild(el('p', 'events-group-sub', sub));
+            return wrap;
+        }
+
+        // Render a schedule-feed list (Google Sheet items: {name, date, detail, url}) as linked cards.
+        function feedList(items) {
+            const grid = el('div', 'events-grid');
+            for (const it of items) {
+                const clean = sanitizeUrl(it.url);
+                const card = el(clean ? 'a' : 'div', 'event-card');
+                if (clean) { card.href = clean; card.target = '_blank'; card.rel = 'noopener noreferrer'; }
+                const top = el('div', 'event-card-top');
+                top.appendChild(el('h3', 'event-name', it.name));
+                card.appendChild(top);
+                const meta = el('div', 'event-meta');
+                const dateRow = el('div', 'meta-row');
+                dateRow.appendChild(el('span', 'meta-icon', '📅'));
+                dateRow.appendChild(el('span', null, it.date || 'TBD'));
+                meta.appendChild(dateRow);
+                if (it.detail) {
+                    const dRow = el('div', 'meta-row');
+                    dRow.appendChild(el('span', 'meta-icon', '📍'));
+                    dRow.appendChild(el('span', null, it.detail));
+                    meta.appendChild(dRow);
+                }
+                card.appendChild(meta);
+                grid.appendChild(card);
+            }
+            return grid;
         }
 
         function showStatus(message, isError, onRetry) {
@@ -510,20 +558,30 @@
             return wrap;
         }
 
-        function renderHub(rawEvents) {
-            const { live, upcoming, past } = bucketEvents(rawEvents);
+        // Render the two club categories: Events (schedule feed + any club-scored D1 events) and the
+        // Club Events heading (fundraisers/meetings render into their own sections just below).
+        function renderPage(feed, d1events) {
+            const feedEvents = (feed && feed.events) || [];
+            const { live, upcoming, past } = bucketEvents(d1events || []);
 
-            if (!live.length && !upcoming.length && !past.length) {
-                showEmpty('No events posted yet — check back soon!');
-                return;
-            }
+            calendarEl.replaceChildren();
+            calendarEl.appendChild(groupHeading('Events', 'Disc golf tournaments & league rounds'));
+            if (feedEvents.length) calendarEl.appendChild(feedList(feedEvents));
 
             hubEl.replaceChildren();
             if (live.length) hubEl.appendChild(section('Live Now', live, { live: true }));
-            if (upcoming.length) hubEl.appendChild(section('Upcoming', upcoming));
-            if (past.length) hubEl.appendChild(section('Past Events', past));
-            setView('hub');
+            if (upcoming.length) hubEl.appendChild(section('Club-scored — Upcoming', upcoming));
+            if (past.length) hubEl.appendChild(section('Club-scored — Past', past));
+            if (!feedEvents.length && !live.length && !upcoming.length && !past.length) {
+                calendarEl.appendChild(el('p', 'events-empty', 'No tournaments or league rounds are on the schedule right now.'));
+            }
 
+            clubEl.replaceChildren();
+            clubEl.appendChild(groupHeading('Club Events', 'Fundraisers, meetings & minutes'));
+            const feedClub = (feed && feed.clubEvents) || [];
+            if (feedClub.length) clubEl.appendChild(feedList(feedClub));
+
+            setView('hub');
             lastUpdatedEl.hidden = false;
             lastUpdatedEl.textContent =
                 'Last updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -531,18 +589,21 @@
 
         async function loadHub() {
             teardownLive(); // close any live socket from a detail view
-            showStatus('Loading events…', false);
+            showStatus('Loading…', false);
             try {
                 // Courses first (best-effort) so cards can show names on first paint.
                 await ensureCourses();
-                const data = await fetchJson('/events');
-                renderHub(data && data.events);
+                const [feed, d1] = await Promise.all([
+                    fetchJson('/club-feed').catch(() => ({ events: [], clubEvents: [] })),
+                    fetchJson('/events').catch(() => ({ events: [] })),
+                ]);
+                renderPage(feed, (d1 && d1.events) || []);
                 loadLeaguesList(); // best-effort; standings live behind each league
                 loadFundraisers();
+                loadMeetings();
             } catch (_err) {
-                hubEl.replaceChildren();
                 lastUpdatedEl.hidden = true;
-                showStatus('We couldn’t load events right now. Please try again.', true, loadHub);
+                showStatus('We couldn’t load the calendar right now. Please try again.', true, loadHub);
             }
         }
 
@@ -626,6 +687,21 @@
                 card.appendChild(donate);
                 card.appendChild(shareRow(url, f.title));
                 fundraisersEl.appendChild(card);
+            });
+        }
+
+        // ---------- MEETINGS & MINUTES (club events) ----------
+        async function loadMeetings() {
+            let items = [];
+            try { const d = await fetchJson('/meetings'); items = (d && d.meetings) || []; } catch (_e) {}
+            meetingsEl.replaceChildren();
+            if (!items.length) return;
+            meetingsEl.appendChild(el('h2', 'events-section-title', 'Meetings & Minutes'));
+            items.forEach((m) => {
+                const card = el('div', 'fundraiser-card');
+                card.appendChild(el('h3', 'fundraiser-title', (m.title || 'Meeting') + (m.date ? ' — ' + m.date : '')));
+                if (m.minutes_md) { const body = el('div', 'fundraiser-body'); safeMd(m.minutes_md, body); card.appendChild(body); }
+                meetingsEl.appendChild(card);
             });
         }
 
@@ -1028,8 +1104,11 @@
             refreshTimer = setInterval(async () => {
                 if (!hubEl.hidden) {
                     try {
-                        const data = await fetchJson('/events');
-                        renderHub(data && data.events);
+                        const [feed, d1] = await Promise.all([
+                            fetchJson('/club-feed').catch(() => ({ events: [], clubEvents: [] })),
+                            fetchJson('/events').catch(() => ({ events: [] })),
+                        ]);
+                        renderPage(feed, (d1 && d1.events) || []);
                     } catch (_e) {
                         // Silent on background refresh; visible content stays put.
                     }
