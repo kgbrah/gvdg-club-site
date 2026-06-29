@@ -389,7 +389,7 @@
 
     <!-- Login Gate -->
     <div class="login-gate" id="loginGate"
-         data-auth-base="https://auth.greenvillediscgolf.com"
+         data-auth-base=""
          data-players-url="https://raw.githubusercontent.com/mostlysober252/GVDG-DGS-Scraper-2.0/main/players.json"
          data-stats-url="https://raw.githubusercontent.com/mostlysober252/GVDG-DGS-Scraper-2.0/main/stats.json">
         <div class="login-card">
@@ -967,7 +967,15 @@
         const LOCAL_AUTH_BASE = ['127.0.0.1', 'localhost'].includes(location.hostname)
             ? 'http://127.0.0.1:8788'
             : '';
-        const AUTH_BASE = (LOCAL_AUTH_BASE || _gate.dataset.authBase || '').replace(/\/+$/, '');
+        // Explicit data-auth-base wins; else resolve by host so one codebase serves prod, the
+        // gvdgclub.com dev site, Cloudflare Pages previews, and localhost.
+        const _h = location.hostname;
+        const AUTH_BASE = (
+            LOCAL_AUTH_BASE ||
+            (_gate.dataset.authBase || '').trim() ||
+            ((_h === 'greenvillediscgolf.com' || _h === 'www.greenvillediscgolf.com')
+                ? 'https://auth.greenvillediscgolf.com' : 'https://auth.gvdgclub.com')
+        ).replace(/\/+$/, '');
         const PLAYERS_URL = (_gate.dataset.playersUrl || '').trim();
         const STATS_URL = (_gate.dataset.statsUrl || '').trim();
         const TOKEN_KEY = 'gvdg_member_token';
