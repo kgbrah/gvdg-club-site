@@ -123,6 +123,19 @@
         .event-name { font-family: 'Bebas Neue', sans-serif; font-size: 1.45rem; line-height: 1.1; color: var(--text-primary); letter-spacing: 0.02em; }
         .event-meta { font-size: 0.9rem; color: var(--text-tertiary); display: flex; flex-direction: column; gap: 0.3rem; }
         .event-meta .meta-row { display: flex; align-items: center; gap: 0.4rem; }
+        /* External "register" CTA on schedule-feed (linked) cards */
+        .event-cta { margin-top: auto; font-weight: 800; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--primary); }
+        /* In-house sign-up cards (members or guests) */
+        .register-card { cursor: default; }
+        .register-card .register-fee { font-size: 0.9rem; color: var(--text-secondary); }
+        .register-card .register-status { font-weight: 700; color: var(--green, #2e7d32); }
+        .register-form { display: flex; flex-direction: column; gap: 0.55rem; margin-top: 0.2rem; }
+        .reg-input { padding: 0.55rem 0.65rem; border: 1px solid var(--border-color); border-radius: 8px; font: inherit; font-size: 0.9rem; background: var(--bg-primary); color: var(--text-primary); }
+        .register-addon { display: flex; align-items: center; gap: 0.45rem; font-size: 0.88rem; color: var(--text-secondary); cursor: pointer; }
+        .reg-btn { margin-top: 0.35rem; background: var(--primary); color: #fff; border: none; padding: 0.6rem 1.4rem; min-height: 42px; border-radius: 50px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; cursor: pointer; align-self: flex-start; transition: filter 0.2s ease; }
+        .reg-btn:hover { filter: brightness(1.07); }
+        .reg-btn:disabled { opacity: 0.6; cursor: default; }
+        .reg-btn.secondary { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
         .event-meta .meta-icon { opacity: 0.8; }
 
         /* ---- Badges ---- */
@@ -268,6 +281,9 @@
             <div>Loading&hellip;</div>
         </div>
 
+        <!-- REGISTER: club events open for sign-up (members or guests) -->
+        <div id="registerSection" hidden></div>
+
         <!-- EVENTS: disc golf tournaments & league rounds (schedule feed + any club-scored events) -->
         <div id="calendarEvents" hidden></div>
         <div id="hub" hidden></div>
@@ -356,6 +372,7 @@
         const REFRESH_MS = 60 * 1000; // ~60s background refresh on the hub
 
         const statusEl = document.getElementById('status');
+        const registerEl = document.getElementById('registerSection');
         const calendarEl = document.getElementById('calendarEvents');
         const hubEl = document.getElementById('hub');
         const leaguesEl = document.getElementById('leaguesSection');
@@ -404,6 +421,7 @@
 
         function setView(which) {
             statusEl.hidden = which !== 'status';
+            registerEl.hidden = which !== 'hub';
             calendarEl.hidden = which !== 'hub';
             hubEl.hidden = which !== 'hub';
             leaguesEl.hidden = which !== 'hub';
@@ -443,6 +461,8 @@
                     meta.appendChild(dRow);
                 }
                 card.appendChild(meta);
+                // When the schedule row carries a link (Disc Golf Scene / PDGA), make registering explicit.
+                if (clean) card.appendChild(el('div', 'event-cta', 'Register / Details ↗'));
                 grid.appendChild(card);
             }
             return grid;
@@ -590,6 +610,7 @@
                     fetchJson('/events').catch(() => ({ events: [] })),
                 ]);
                 renderPage(feed, (d1 && d1.events) || []);
+                loadRegistration(); // best-effort; club events open for sign-up
                 loadLeaguesList(); // best-effort; standings live behind each league
                 loadFundraisers();
                 loadMeetings();
@@ -654,6 +675,123 @@
             });
             wrap.appendChild(copy);
             return wrap;
+        }
+
+        // ---------- REGISTER (club events open for sign-up; members or guests) ----------
+        function dollars(c) { return '$' + (Math.round(Number(c) || 0) / 100).toFixed(2).replace(/\.00$/, ''); }
+        function memberToken() { try { return sessionStorage.getItem('gvdg_member_token') || null; } catch (_e) { return null; } }
+        const GUEST_REG_KEY = 'gvdg_guest_regs'; // { [eventId]: { guestToken, name } } — lets a guest manage their sign-up
+        function guestRegs() { try { return JSON.parse(localStorage.getItem(GUEST_REG_KEY) || '{}'); } catch (_e) { return {}; } }
+        function setGuestReg(eventId, val) {
+            const all = guestRegs();
+            if (val) all[eventId] = val; else delete all[eventId];
+            try { localStorage.setItem(GUEST_REG_KEY, JSON.stringify(all)); } catch (_e) {}
+        }
+        async function regApi(path, opts) {
+            const o = opts || {};
+            const headers = { Accept: 'application/json' };
+            if (o.body) headers['Content-Type'] = 'application/json';
+            if (o.token) headers.Authorization = 'Bearer ' + o.token;
+            return fetch(API_BASE + path, { method: o.method || 'GET', cache: 'no-store', headers, body: o.body ? JSON.stringify(o.body) : undefined });
+        }
+        function clientOwed(ev, addons) {
+            let c = ev.entry_fee_cents || 0;
+            if (addons && addons.ctp && ev.ctp_fee_cents) c += ev.ctp_fee_cents;
+            if (addons && addons.ace && ev.ace_fee_cents) c += ev.ace_fee_cents;
+            return c;
+        }
+        function addonCheckbox(form, label) {
+            const l = el('label', 'register-addon');
+            const cb = document.createElement('input'); cb.type = 'checkbox';
+            l.appendChild(cb); l.appendChild(document.createTextNode(' ' + label));
+            form.appendChild(l);
+            return cb;
+        }
+        async function loadRegistration() {
+            registerEl.replaceChildren();
+            let events = [];
+            try { const d = await fetchJson('/registration/open'); events = (d && d.events) || []; } catch (_e) { return; }
+            if (!events.length) return; // nothing open — show nothing rather than an empty heading
+            let myRegs = {};
+            const tok = memberToken();
+            if (tok) {
+                try { const r = await regApi('/my-registrations', { token: tok }); if (r.ok) ((await r.json()).registrations || []).forEach((x) => { myRegs[x.event_id] = x; }); } catch (_e) {}
+            }
+            const gr = guestRegs();
+            registerEl.appendChild(groupHeading('Register', 'Sign up for upcoming club events — members or guests'));
+            const grid = el('div', 'events-grid');
+            events.forEach((ev) => grid.appendChild(regCard(ev, myRegs[ev.id] || null, gr[ev.id] || null)));
+            registerEl.appendChild(grid);
+        }
+        function regCard(ev, myReg, guestReg) {
+            const card = el('div', 'event-card register-card');
+            const top = el('div', 'event-card-top');
+            top.appendChild(el('h3', 'event-name', ev.name));
+            card.appendChild(top);
+            if (ev.date) { const meta = el('div', 'event-meta'); const r = el('div', 'meta-row'); r.appendChild(el('span', 'meta-icon', '📅')); r.appendChild(el('span', null, ev.date)); meta.appendChild(r); card.appendChild(meta); }
+            card.appendChild(el('div', 'register-fee', (ev.entry_fee_cents ? dollars(ev.entry_fee_cents) + ' entry' : 'Free entry') + (ev.play_format ? ' · ' + ev.play_format : '')));
+
+            const tok = memberToken();
+            if (myReg || guestReg) {
+                const who = myReg ? (myReg.division ? ' — ' + myReg.division : '') : (guestReg.name ? ' — ' + guestReg.name : '');
+                card.appendChild(el('div', 'register-status', '✅ Registered' + who));
+                let regAddons = {}; try { regAddons = JSON.parse((myReg && myReg.addons) || '{}'); } catch (_e) {}
+                const owed = clientOwed(ev, regAddons);
+                if (owed > 0 && !(myReg && myReg.paid_entry)) {
+                    card.appendChild(el('div', 'register-fee', 'Amount due: ' + dollars(owed) + ' — pay at the event' + (tok ? ' or in the Members area.' : '.')));
+                }
+                const wd = el('button', 'reg-btn secondary', 'Withdraw'); wd.type = 'button';
+                wd.addEventListener('click', async () => {
+                    if (!confirm('Withdraw from ' + ev.name + '?')) return;
+                    const path = '/events/' + ev.id + '/register' + (guestReg ? '?gt=' + encodeURIComponent(guestReg.guestToken) : '');
+                    const r = await regApi(path, { method: 'DELETE', token: myReg ? tok : undefined });
+                    if (r.ok) { if (guestReg) setGuestReg(ev.id, null); loadRegistration(); return; }
+                    const e = await r.json().catch(() => ({}));
+                    alert(e.error === 'paid_contact_admin' ? 'You have already paid — please contact an admin to withdraw.' : 'Withdraw failed — please try again.');
+                });
+                card.appendChild(wd);
+                return card;
+            }
+
+            const form = el('div', 'register-form');
+            let nameInput = null, emailInput = null;
+            if (!tok) {
+                nameInput = document.createElement('input'); nameInput.type = 'text'; nameInput.placeholder = 'Your name'; nameInput.maxLength = 80; nameInput.className = 'reg-input';
+                emailInput = document.createElement('input'); emailInput.type = 'email'; emailInput.placeholder = 'Email (optional)'; emailInput.maxLength = 120; emailInput.className = 'reg-input';
+                form.appendChild(nameInput); form.appendChild(emailInput);
+            }
+            let divs = []; try { divs = JSON.parse(ev.divisions || '[]'); } catch (_e) {}
+            let divSel = null;
+            if (divs.length) { divSel = document.createElement('select'); divSel.className = 'reg-input'; divs.forEach((d) => { const o = document.createElement('option'); o.value = d; o.textContent = d; divSel.appendChild(o); }); form.appendChild(divSel); }
+            const ctpCb = ev.ctp_fee_cents ? addonCheckbox(form, 'CTP pot ' + dollars(ev.ctp_fee_cents)) : null;
+            const aceCb = ev.ace_fee_cents ? addonCheckbox(form, 'Ace pot ' + dollars(ev.ace_fee_cents)) : null;
+            const btn = el('button', 'reg-btn', 'Register'); btn.type = 'button';
+            btn.addEventListener('click', async () => {
+                const body = { division: divSel ? divSel.value : null, addons: { ctp: !!(ctpCb && ctpCb.checked), ace: !!(aceCb && aceCb.checked) } };
+                if (!tok) {
+                    const nm = (nameInput.value || '').trim();
+                    if (!nm) { alert('Please enter your name.'); nameInput.focus(); return; }
+                    body.name = nm;
+                    const em = (emailInput.value || '').trim(); if (em) body.email = em;
+                }
+                btn.disabled = true;
+                const r = await regApi('/events/' + ev.id + '/register', { method: 'POST', token: tok || undefined, body });
+                btn.disabled = false;
+                if (!r.ok) {
+                    const e = await r.json().catch(() => ({}));
+                    alert(e.error === 'registration_closed' ? 'Registration is closed for this event.'
+                        : e.error === 'rate_limited' ? 'Too many sign-ups from your network — please try again in a minute.'
+                        : e.error === 'invalid_division' ? 'Please pick a valid division.'
+                        : 'Registration could not be completed.');
+                    return;
+                }
+                const d = await r.json().catch(() => ({}));
+                if (!tok && d.guestToken) setGuestReg(ev.id, { guestToken: d.guestToken, name: body.name });
+                loadRegistration();
+            });
+            form.appendChild(btn);
+            card.appendChild(form);
+            return card;
         }
 
         // ---------- FUNDRAISERS (Phase 4, public) ----------
