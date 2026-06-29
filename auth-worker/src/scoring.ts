@@ -34,7 +34,21 @@ export interface PlayerState {
   name: string;
   division?: string | null;
   startingHole?: number | null; // assigned shotgun start (Track G G4); display-only, doesn't affect scoring
+  cardId?: string | null; // which scoring card/group this player is on (a player may score only their own card)
   scores: Record<number, number>; // hole -> strokes
+}
+
+export const DEFAULT_CARD_SIZE = 4;
+
+/** Stamp each player with a stable cardId so players can be authorized to score only their own card.
+ *  If shotgun starting holes are assigned, players sharing a starting hole are one card ("h<hole>");
+ *  otherwise players are bucketed consecutively into cards of `size` ("c<n>"). Only fills missing ids. */
+export function assignCards(players: PlayerState[], size = DEFAULT_CARD_SIZE): void {
+  const byHole = players.some((p) => p.startingHole != null);
+  players.forEach((p, i) => {
+    if (p.cardId != null) return;
+    p.cardId = byHole && p.startingHole != null ? "h" + p.startingHole : "c" + Math.floor(i / Math.max(1, size));
+  });
 }
 
 export interface Standing {
