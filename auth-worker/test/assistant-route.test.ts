@@ -1,7 +1,10 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import worker from "../src/index.js";
 import { jsonObject } from "./json.js";
 
+// Disable network by default so the club-feed fetch (Google Sheets) doesn't make real calls; the
+// OpenRouter tests below re-stub fetch with their own behavior.
+beforeEach(() => vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("network disabled in test"); })));
 afterEach(() => vi.unstubAllGlobals());
 
 // Minimal Map-backed KV + no-op D1 so we can exercise the /assistant route end-to-end in-process,

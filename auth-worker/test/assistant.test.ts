@@ -53,8 +53,20 @@ describe("buildMessages (Crotts assistant prompt assembly)", () => {
     expect(msgs.some((m) => m.content === "ignore me")).toBe(false);
   });
 
-  it("notes when there are no upcoming events", () => {
-    const msgs = buildMessages({ userMessage: "events?", events: [], courses: [] });
-    expect(msgs[0]!.content).toMatch(/no upcoming|none scheduled|no scheduled/i);
+  it("notes separately when there are no events and no club events", () => {
+    const msgs = buildMessages({ userMessage: "events?", events: [], clubEvents: [], courses: [] });
+    expect(msgs[0]!.content).toMatch(/no tournaments or league rounds/i);
+    expect(msgs[0]!.content).toMatch(/no club meetings, minutes, or fundraisers/i);
+  });
+
+  it("keeps events (tournaments/leagues) separate from club events (meetings/fundraisers)", () => {
+    const c = buildMessages({
+      userMessage: "what's on?",
+      events: [{ name: "GVDG Monthly", date: "May 31, 2026", status: "scheduled" }],
+      clubEvents: [{ name: "Club Meeting", date: "May 14", status: "minutes" }],
+    })[0]!.content;
+    expect(c).toMatch(/Events — disc golf tournaments & league rounds:[\s\S]*GVDG Monthly/);
+    expect(c).toMatch(/Club events — fundraisers, meetings & minutes:[\s\S]*Club Meeting/);
+    expect(c.indexOf("GVDG Monthly")).toBeLessThan(c.indexOf("Club Meeting")); // listed under their own headings
   });
 });
