@@ -1,13 +1,34 @@
 import type { Env } from "./env.js";
 import * as db from "./db.js";
-import { adminGate } from "./authz.js";
+import { adminGate, requireAuth } from "./authz.js";
+import { getMember } from "./roster.js";
 import { json, readJson } from "./http.js";
-import { asInt } from "./input.js";
+import { kvRateLimited } from "./kv-rate-limit.js";
+import { asInt, asStr } from "./input.js";
+
+const LIVE_SCORE_IP_LIMIT = 180; // score writes per identity per minute (a card rarely exceeds a few)
 
 async function liveProxy(stub: DurableObjectStub, path: string, init: RequestInit | undefined, origin: string | null): Promise<Response> {
   const r = await stub.fetch("https://do" + path, init);
   const data = await r.json().catch(() => ({}));
   return json(data, r.status, origin);
+}
+
+/** Who is scoring: a signed-in member (admins get the all-cards bypass) or a guest registrant via their
+ *  registration token (?gt= or body.guestToken -> "g_<token>"). Returns null identity if neither. The
+ *  resolved identity is injected into the DO as a trusted header; the DO never trusts the body for authz. */
+async function scoreIdentity(
+  request: Request,
+  env: Env,
+  body: Record<string, unknown> | null,
+): Promise<{ authMember: string | null; authAdmin: boolean }> {
+  const claims = await requireAuth(request, env);
+  if (claims) {
+    const member = await getMember(env.ROSTER, claims.sub);
+    return { authMember: claims.sub, authAdmin: member?.isAdmin === true };
+  }
+  const t = asStr(new URL(request.url).searchParams.get("gt") ?? undefined, 64) || (body ? asStr(body.guestToken, 64) : null);
+  return { authMember: t ? "g_" + t : null, authAdmin: false };
 }
 
 export async function handleClubLive(
@@ -23,10 +44,34 @@ export async function handleClubLive(
   const sub = seg[3];
   const stub = env.LIVE.get(env.LIVE.idFromName("event:" + eid));
 
+  // Public reads: the live leaderboard/scorecard snapshot and the WebSocket. No identity, memberIds redacted.
   if (method === "GET" && !sub) return liveProxy(stub, "/snapshot", undefined, origin);
   if (sub === "ws") return stub.fetch(request);
 
-  if (method === "POST" && (sub === "start" || sub === "score" || sub === "finalize" || sub === "override")) {
+  // A player's own card (members via JWT, guests via ?gt= token) — tells the score app which card is theirs.
+  if (method === "GET" && sub === "mine") {
+    const id = await scoreIdentity(request, env, null);
+    if (!id.authMember) return json({ error: "unauthorized" }, 401, origin);
+    const r = await stub.fetch("https://do/mine", { headers: { "X-Auth-Member": id.authMember } });
+    return json(await r.json().catch(() => ({})), r.status, origin);
+  }
+
+  // Score submission: any player (or guest) may score; the DO enforces that the target is on THEIR card.
+  if (method === "POST" && sub === "score") {
+    const body = (await readJson(request)) ?? {};
+    const id = await scoreIdentity(request, env, body);
+    if (!id.authMember) return json({ error: "unauthorized" }, 401, origin);
+    if (await kvRateLimited(env, "live:" + id.authMember, LIVE_SCORE_IP_LIMIT, 60)) return json({ error: "rate_limited" }, 429, origin);
+    const r = await stub.fetch("https://do/score", {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "X-Auth-Member": id.authMember, "X-Auth-Admin": String(id.authAdmin) },
+    });
+    return json(await r.json().catch(() => ({})), r.status, origin);
+  }
+
+  // Round control stays admin-only: start, finalize, and the round-scoped hole override.
+  if (method === "POST" && (sub === "start" || sub === "finalize" || sub === "override")) {
     const gate = await adminGate(request, env, origin);
     if (gate instanceof Response) return gate;
 

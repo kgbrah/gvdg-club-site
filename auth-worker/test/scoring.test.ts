@@ -1,5 +1,24 @@
 import { describe, it, expect } from "vitest";
-import { countScores, computeLeaderboard, finalizeStandings, computeLeagueStandings, type PlayerState } from "../src/scoring.js";
+import { assignCards, countScores, computeLeaderboard, finalizeStandings, computeLeagueStandings, type PlayerState } from "../src/scoring.js";
+
+describe("assignCards", () => {
+  const mk = (over: Partial<PlayerState>): PlayerState => ({ memberId: null, name: "P", scores: {}, ...over });
+  it("buckets players into cards of 4 when no starting holes are assigned", () => {
+    const players = Array.from({ length: 9 }, (_, i) => mk({ memberId: "m" + i }));
+    assignCards(players);
+    expect(players.map((p) => p.cardId)).toEqual(["c0", "c0", "c0", "c0", "c1", "c1", "c1", "c1", "c2"]);
+  });
+  it("groups players by shotgun starting hole when assigned", () => {
+    const players = [mk({ startingHole: 5 }), mk({ startingHole: 5 }), mk({ startingHole: 9 })];
+    assignCards(players);
+    expect(players.map((p) => p.cardId)).toEqual(["h5", "h5", "h9"]);
+  });
+  it("never overwrites an explicit cardId", () => {
+    const players = [mk({ cardId: "x" }), mk({})];
+    assignCards(players);
+    expect(players[0]!.cardId).toBe("x");
+  });
+});
 
 describe("countScores (UDisc-style breakdown)", () => {
   it("buckets holes by score-to-par and tallies aces separately", () => {

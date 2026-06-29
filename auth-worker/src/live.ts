@@ -6,7 +6,7 @@
 // snapshot + ws reads are public). The DO trusts requests it receives.
 
 import * as db from "./db.js";
-import { computeLeaderboard, finalizeStandings, type PlayerState } from "./scoring.js";
+import { assignCards, computeLeaderboard, finalizeStandings, type PlayerState } from "./scoring.js";
 
 interface LiveEnv {
   DB: db.D1Like;
@@ -32,8 +32,9 @@ interface LiveMeta {
 interface StartBody {
   eventId: number;
   holes: { hole: number; par: number }[];
-  players: { memberId?: string | null; name: string; division?: string | null; startingHole?: number | null }[];
+  players: { memberId?: string | null; name: string; division?: string | null; startingHole?: number | null; cardId?: string | null }[];
   startedAt?: string;
+  cardSize?: number;
 }
 interface ScoreBody {
   memberId?: string | null;
@@ -77,11 +78,16 @@ export class LiveEventDO {
   async fetch(request: Request): Promise<Response> {
     await this.load();
     const action = new URL(request.url).pathname.split("/").filter(Boolean).pop();
+    // Identity is set by the Worker AFTER it authenticates the caller — the DO trusts these headers and
+    // never reads identity from the request body for authorization (the body is spoofable).
+    const authMember = request.headers.get("X-Auth-Member");
+    const authAdmin = request.headers.get("X-Auth-Admin") === "true";
     if (action === "ws") return this.handleWs(request);
-    if (request.method === "GET") return j(this.snapshot());
+    if (action === "mine") return this.mine(authMember); // a player's own card (authed read)
+    if (request.method === "GET") return j(this.snapshot()); // public leaderboard/scorecard (no identity)
     const body = await request.json().catch(() => ({}));
     if (action === "start") return this.start(body as StartBody);
-    if (action === "score") return this.score(body as ScoreBody);
+    if (action === "score") return this.score(body as ScoreBody, authMember, authAdmin);
     if (action === "override") return this.override(body as OverrideBody);
     if (action === "finalize") return this.finalize();
     return j({ error: "not_found" }, 404);
@@ -105,8 +111,11 @@ export class LiveEventDO {
       holes, // {hole, par, distance_ft, overridden} — par/distance reflect any round override
       // players (with per-hole scores + their stable index) drive the scorekeeper grid;
       // standings drive the public leaderboard.
-      players: this.players.map((p, index) => ({ index, memberId: p.memberId, name: p.name, division: p.division ?? null, startingHole: p.startingHole ?? null, scores: p.scores })),
-      standings: computeLeaderboard(holes, this.players),
+      // PUBLIC payload: identify players by their stable `index` and `cardId`. memberId is REDACTED here
+      // because guest member ids are "g_<token>" capability tokens — never expose them to ws/snapshot
+      // readers. The authed /mine endpoint is how a player learns which index/card is theirs.
+      players: this.players.map((p, index) => ({ index, cardId: p.cardId ?? null, name: p.name, division: p.division ?? null, startingHole: p.startingHole ?? null, scores: p.scores })),
+      standings: computeLeaderboard(holes, this.players).map((s) => ({ name: s.name, division: s.division, thru: s.thru, total: s.total, toPar: s.toPar })),
       updatedAt: this.meta?.startedAt ?? null,
     };
   }
@@ -122,8 +131,10 @@ export class LiveEventDO {
       name: String(p.name ?? "Player"),
       division: p.division ?? null,
       startingHole: p.startingHole ?? null,
+      cardId: p.cardId ?? null,
       scores: {},
     }));
+    assignCards(this.players, b.cardSize); // group into cards (by starting hole, else buckets of 4)
     await this.persist();
     this.broadcast();
     return j(this.snapshot());
@@ -136,7 +147,7 @@ export class LiveEventDO {
     return undefined;
   }
 
-  private async score(b: ScoreBody): Promise<Response> {
+  private async score(b: ScoreBody, authMember: string | null, authAdmin: boolean): Promise<Response> {
     if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
     const hole = Number(b.hole);
     const strokes = Number(b.strokes);
@@ -144,10 +155,30 @@ export class LiveEventDO {
     if (!Number.isInteger(strokes) || strokes < 1 || strokes > 30) return j({ error: "bad_strokes" }, 400);
     const player = this.findPlayer(b);
     if (!player) return j({ error: "no_player" }, 404);
+    // Authorize from the Worker-trusted identity ONLY: an admin may score anyone; otherwise the
+    // submitter must be a player on the SAME card as the target. Body identity is for targeting, not auth.
+    if (!authAdmin) {
+      const me = authMember ? this.players.find((p) => p.memberId === authMember) : undefined;
+      if (!me) return j({ error: "not_on_card" }, 403);
+      if ((me.cardId ?? null) !== (player.cardId ?? null)) return j({ error: "wrong_card" }, 403);
+    }
     player.scores[hole] = strokes;
     await this.persist();
     this.broadcast();
     return j(this.snapshot());
+  }
+
+  /** The authenticated caller's own card: which player they are, their cardmates, and the holes — so the
+   *  score app renders just their group. memberIds stay internal; cardmates are keyed by stable index. */
+  private mine(authMember: string | null): Response {
+    if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
+    const meIdx = authMember ? this.players.findIndex((p) => p.memberId === authMember) : -1;
+    if (meIdx < 0) return j({ cardId: null, playerIndex: null, holes: this.resolvedHoles(), cardmates: [] });
+    const cardId = this.players[meIdx]!.cardId ?? null;
+    const cardmates = this.players
+      .map((p, index) => ({ index, cardId: p.cardId ?? null, name: p.name, division: p.division ?? null, startingHole: p.startingHole ?? null, scores: p.scores, isMe: index === meIdx }))
+      .filter((p) => p.cardId === cardId);
+    return j({ cardId, playerIndex: meIdx, eventId: this.meta.eventId, status: this.meta.status, holes: this.resolvedHoles(), cardmates });
   }
 
   // Round-scoped single-use override of a hole's par/distance. Admin-gated at the Worker. The layout
