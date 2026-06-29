@@ -40,8 +40,21 @@ const OPEN = { registration_open: 1, divisions: '["MA1","MA40"]' };
 const CLOSED = { registration_open: 0, divisions: null };
 
 describe("Track G — event registration", () => {
-  it("registration requires auth", async () => {
-    expect((await call("/events/5/register", "POST", undefined, { division: "MA1" }, OPEN)).status).toBe(401);
+  it("a guest registration needs a name (400), then succeeds (201) with a returned guest token", async () => {
+    expect((await call("/events/5/register", "POST", undefined, { division: "MA1" }, OPEN)).status).toBe(400); // no name
+    const res = await call("/events/5/register", "POST", undefined, { division: "MA1", name: "Pat Guest", email: "pat@example.com" }, OPEN);
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { guestToken?: string };
+    expect(typeof body.guestToken).toBe("string");
+    expect((body.guestToken || "").length).toBeGreaterThan(8);
+  });
+  it("a guest can check in and withdraw with their token; members do not need one", async () => {
+    expect((await call("/events/5/checkin", "POST", undefined, { guestToken: "abc123" }, OPEN)).status).toBe(200);
+    expect((await call("/events/5/register?gt=abc123", "DELETE", undefined, null, OPEN)).status).toBe(200);
+    expect((await call("/events/5/checkin", "POST", undefined, {}, OPEN)).status).toBe(401); // no member, no token
+  });
+  it("paying entry online still requires a member (guests pay at the event)", async () => {
+    expect((await call("/events/5/pay/create-order", "POST", undefined, {}, OPEN)).status).toBe(401);
   });
   it("rejects registration when closed (403)", async () => {
     expect((await call("/events/5/register", "POST", await tok("m_jane"), {}, CLOSED)).status).toBe(403);

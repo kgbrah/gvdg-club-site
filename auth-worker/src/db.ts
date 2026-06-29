@@ -316,6 +316,7 @@ export interface RegistrationInput {
   division?: string | null;
   team?: string | null;
   addons?: string | null;
+  email?: string | null; // guest contact (members are reachable via their account)
 }
 export async function getMyRegistration(db: D1Like, eventId: number, memberId: string) {
   return db.prepare("SELECT * FROM registrations WHERE event_id = ? AND member_id = ?").bind(eventId, memberId).first();
@@ -333,11 +334,11 @@ export async function listRegistrations(db: D1Like, eventId: number) {
 export async function registerForEvent(db: D1Like, r: RegistrationInput) {
   return db
     .prepare(
-      `INSERT INTO registrations (event_id, member_id, name, division, team, addons) VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(event_id, member_id) DO UPDATE SET name=excluded.name, division=excluded.division, team=excluded.team, addons=excluded.addons
+      `INSERT INTO registrations (event_id, member_id, name, division, team, addons, email) VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(event_id, member_id) DO UPDATE SET name=excluded.name, division=excluded.division, team=excluded.team, addons=excluded.addons, email=COALESCE(excluded.email, registrations.email)
        RETURNING *`,
     )
-    .bind(r.event_id, r.member_id, r.name, r.division ?? null, r.team ?? null, r.addons ?? null)
+    .bind(r.event_id, r.member_id, r.name, r.division ?? null, r.team ?? null, r.addons ?? null, r.email ?? null)
     .first();
 }
 export async function withdrawRegistration(db: D1Like, eventId: number, memberId: string) {
