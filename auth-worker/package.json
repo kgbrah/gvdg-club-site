@@ -13,6 +13,9 @@
     "dev": "wrangler dev",
     "deploy": "node scripts/validate-wrangler-config.mjs && wrangler deploy",
     "deploy:dry-run": "node scripts/validate-wrangler-config.mjs --allow-placeholders && wrangler deploy --dry-run",
+    "deploy:staging": "node scripts/validate-wrangler-config.mjs --env staging && wrangler deploy --env staging",
+    "deploy:staging:dry-run": "node scripts/validate-wrangler-config.mjs --env staging --allow-placeholders && wrangler deploy --env staging --dry-run",
+    "migrate:staging": "wrangler d1 migrations apply DB --env staging --remote",
     "audit": "npm audit --audit-level=moderate"
   },
   "dependencies": {

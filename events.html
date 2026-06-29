@@ -237,7 +237,7 @@
         .tee-sign-dist { font: 600 14px system-ui, sans-serif; fill: currentColor; opacity: 0.8; }
     </style>
 </head>
-<body data-api-base="https://auth.greenvillediscgolf.com">
+<body data-api-base="">
     <header>
     <nav>
         <a href="index.html" class="logo">
@@ -344,7 +344,14 @@
         const LOCAL_API_BASE = ['127.0.0.1', 'localhost'].includes(location.hostname)
             ? 'http://127.0.0.1:8788'
             : '';
-        const API_BASE = (LOCAL_API_BASE || document.body.dataset.apiBase || 'https://auth.greenvillediscgolf.com')
+        // Explicit data-api-base wins; else resolve by host (prod vs the gvdgclub.com dev site / previews).
+        const _h = location.hostname;
+        const API_BASE = (
+            LOCAL_API_BASE ||
+            (document.body.dataset.apiBase || '').trim() ||
+            ((_h === 'greenvillediscgolf.com' || _h === 'www.greenvillediscgolf.com')
+                ? 'https://auth.greenvillediscgolf.com' : 'https://auth.gvdgclub.com')
+        )
             .trim()
             .replace(/\/+$/, ''); // strip trailing slashes
         const REFRESH_MS = 60 * 1000; // ~60s background refresh on the hub

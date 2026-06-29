@@ -92,3 +92,72 @@ EXPECTED_ORIGIN = "https://www.greenvillediscgolf.com"
 # then Workers AI. Override the model ids here.
 OPENROUTER_VISION_MODEL = "nvidia/nemotron-nano-12b-v2-vl:free"
 VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# STAGING / DEV ENVIRONMENT  →  gvdgclub.com   (live-drive PRs before merge)
+#   Deploy:     npm run deploy:staging          (= wrangler deploy --env staging)
+#   Secrets:    wrangler secret put JWT_SECRET --env staging
+#               wrangler secret put OPENROUTER_API_KEY --env staging   (optional PAYPAL_* too)
+#   Migrate:    wrangler d1 migrations apply DB --env staging --remote
+# This is a SEPARATE Worker (gvdg-member-auth-staging) with its OWN KV/D1/R2 so dev testing never
+# touches production data. Wrangler does NOT inherit top-level bindings/vars into a named env —
+# everything below is redeclared on purpose. PayPal stays in sandbox/manual mode here.
+# ═════════════════════════════════════════════════════════════════════════════
+[env.staging]
+name = "gvdg-member-auth-staging"
+
+[env.staging.observability]
+enabled = true
+
+[[env.staging.kv_namespaces]]
+binding = "ROSTER"
+id = "REPLACE_WITH_STAGING_ROSTER_KV_ID"
+
+[[env.staging.kv_namespaces]]
+binding = "RATELIMIT"
+id = "REPLACE_WITH_STAGING_RATELIMIT_KV_ID"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "gvdg-staging"
+database_id = "REPLACE_WITH_STAGING_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[[env.staging.r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "gvdg-photos-staging"
+
+[env.staging.ai]
+binding = "AI"
+
+[[env.staging.durable_objects.bindings]]
+name = "LIVE"
+class_name = "LiveEventDO"
+
+[[env.staging.migrations]]
+tag = "v1"
+new_sqlite_classes = ["LiveEventDO"]
+
+# Atomic rate limiter for /assistant — separate namespace from prod so counters don't collide.
+[[env.staging.unsafe.bindings]]
+name = "ASSISTANT_RL"
+type = "ratelimit"
+namespace_id = "2001"
+simple = { limit = 20, period = 60 }
+
+[env.staging.vars]
+ALLOWED_ORIGINS = "https://gvdgclub.com,https://www.gvdgclub.com"
+SESSION_TTL_SEC = "900"
+# Crotts brain on the dev site: best free NVIDIA Nemotron (550B MoE, 1M ctx) via OpenRouter,
+# Workers AI as the fallback. (Big free model = occasional latency; drop to
+# nvidia/nemotron-3-super-120b-a12b:free for snappier replies.)
+OPENROUTER_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
+ASSISTANT_MODEL = "@cf/meta/llama-3.1-8b-instruct"
+# Payments stay OFF (manual paid flag) on staging unless you add sandbox PayPal secrets; never live here.
+PAYPAL_ENV = "sandbox"
+# WebAuthn is bound to the dev domain — passkeys enrolled here are separate from production.
+RP_ID = "gvdgclub.com"
+RP_NAME = "GVDG Club (dev)"
+EXPECTED_ORIGIN = "https://gvdgclub.com"
+OPENROUTER_VISION_MODEL = "nvidia/nemotron-nano-12b-v2-vl:free"
+VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct"

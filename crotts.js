@@ -10,14 +10,21 @@
   if (window.__crottsLoaded) return; // guard against double-injection
   window.__crottsLoaded = true;
 
-  // Resolve the club API base from page data attributes, falling back to production.
+  // Resolve the club API base. An explicit data-api-base/data-auth-base wins; otherwise derive it from
+  // the host so ONE codebase serves prod, the gvdgclub.com dev site, Cloudflare Pages previews, and
+  // localhost without per-deploy edits.
   function apiBase() {
     var b = document.body && (document.body.dataset.apiBase || document.body.dataset.authBase);
     if (!b) {
       var el = document.querySelector('[data-auth-base],[data-api-base]');
       if (el) b = el.dataset.authBase || el.dataset.apiBase;
     }
-    return (b || 'https://auth.greenvillediscgolf.com').trim().replace(/\/+$/, '');
+    b = (b || '').trim();
+    if (b) return b.replace(/\/+$/, '');
+    var h = location.hostname;
+    if (h === '127.0.0.1' || h === 'localhost') return 'http://127.0.0.1:8788';
+    if (h === 'greenvillediscgolf.com' || h === 'www.greenvillediscgolf.com') return 'https://auth.greenvillediscgolf.com';
+    return 'https://auth.gvdgclub.com'; // gvdgclub.com + *.pages.dev previews + anything else = staging
   }
   var API = apiBase();
   var AVATAR = 'img/crotts.jpg';
