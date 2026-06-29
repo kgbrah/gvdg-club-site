@@ -3,8 +3,23 @@ import * as db from "./db.js";
 import { requireAuth } from "./authz.js";
 import { getMember } from "./roster.js";
 import { computeOwed, paypalBase, createOrder as ppCreateOrder, captureOrder as ppCaptureOrder, type OwedConfig } from "./payments.js";
-import { json, readJson } from "./http.js";
+import { clientIp, json, readJson } from "./http.js";
+import { kvRateLimited } from "./kv-rate-limit.js";
 import { asInt, asStr } from "./input.js";
+
+const GUEST_REGISTER_IP_LIMIT = 15; // guest sign-ups per IP per minute
+
+/** A guest manages their own registration with a random token (returned at register time): member_id
+ *  is "g_<token>". Read it from ?gt= (GET/DELETE) or the JSON body (POST). Members use their JWT sub. */
+function guestMemberId(request: Request, body?: Record<string, unknown> | null): string | null {
+  const fromQuery = asStr(new URL(request.url).searchParams.get("gt") ?? undefined, 64);
+  const fromBody = body ? asStr(body.guestToken, 64) : null;
+  const t = fromQuery || fromBody;
+  return t ? "g_" + t : null;
+}
+function genGuestToken(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 export async function handleClubRegistration(
   request: Request,
@@ -14,12 +29,13 @@ export async function handleClubRegistration(
   seg: string[],
 ): Promise<Response | null> {
   if (seg[0] !== "events" || !(seg[2] === "registration" || seg[2] === "register" || seg[2] === "checkin" || seg[2] === "pay")) return null;
-  const claims = await requireAuth(request, env);
-  if (!claims) return json({ error: "unauthorized" }, 401, origin);
   const eid = asInt(seg[1]);
   if (eid == null) return json({ error: "not_found" }, 404, origin);
+  // Auth is OPTIONAL: members act via their JWT, guests via a registration token. Only `pay` requires a member.
+  const claims = await requireAuth(request, env);
 
   if (seg[2] === "pay" && method === "POST") {
+    if (!claims) return json({ error: "unauthorized" }, 401, origin);
     if (!(env.PAYPAL_CLIENT_ID && env.PAYPAL_SECRET)) return json({ error: "payments_not_configured" }, 503, origin);
     const reg = (await db.getMyRegistration(env.DB, eid, claims.sub)) as { id: number; addons?: string; paid_entry?: number; payment_ref?: string } | null;
     if (!reg) return json({ error: "not_registered" }, 400, origin);
@@ -68,7 +84,9 @@ export async function handleClubRegistration(
   }
 
   if (seg[2] === "registration" && method === "GET") {
-    return json({ config: await db.getEventConfig(env.DB, eid), registration: await db.getMyRegistration(env.DB, eid, claims.sub) }, 200, origin);
+    const memberId = claims ? claims.sub : guestMemberId(request);
+    const registration = memberId ? await db.getMyRegistration(env.DB, eid, memberId) : null;
+    return json({ config: await db.getEventConfig(env.DB, eid), registration }, 200, origin);
   }
   if (seg[2] === "register" && method === "POST") {
     const status = await db.getEventStatus(env.DB, eid);
@@ -80,27 +98,46 @@ export async function handleClubRegistration(
     let divs: string[] = [];
     try { divs = JSON.parse(cfg.divisions || "[]"); } catch { divs = []; }
     if (division && divs.length && !divs.includes(division)) return json({ error: "invalid_division" }, 400, origin);
-    const member = await getMember(env.ROSTER, claims.sub);
+
+    // Resolve who is registering: a signed-in member, or a guest (name required; gets a token to manage it).
+    let memberId: string, name: string, email: string | null = null, guestToken: string | null = null;
+    if (claims) {
+      memberId = claims.sub;
+      name = (await getMember(env.ROSTER, claims.sub))?.name ?? "Member";
+    } else {
+      if (await kvRateLimited(env, "evreg:" + clientIp(request), GUEST_REGISTER_IP_LIMIT, 60)) return json({ error: "rate_limited" }, 429, origin);
+      name = asStr(b.name, 80) ?? "";
+      if (!name) return json({ error: "name_required" }, 400, origin);
+      email = asStr(b.email, 120);
+      guestToken = asStr(b.guestToken, 64) || genGuestToken(); // reuse the token to edit an existing guest reg
+      memberId = "g_" + guestToken;
+    }
+
     const addons = b.addons && typeof b.addons === "object" ? JSON.stringify({ ctp: !!(b.addons as Record<string, unknown>).ctp, ace: !!(b.addons as Record<string, unknown>).ace }) : null;
     // Once entry is paid, a re-registration must not silently add a paid add-on (ace pot / CTP) that was
-    // never charged — that would put the member into a real-cash pool for free. Block any change that
+    // never charged — that would put the registrant into a real-cash pool for free. Block any change that
     // raises the amount owed above what was actually captured (removing add-ons / editing division is fine).
-    const existing = (await db.getMyRegistration(env.DB, eid, claims.sub)) as { paid_entry?: number; amount_paid_cents?: number } | null;
+    const existing = (await db.getMyRegistration(env.DB, eid, memberId)) as { paid_entry?: number; amount_paid_cents?: number } | null;
     if (existing?.paid_entry === 1) {
       const owedNow = computeOwed(cfg as unknown as OwedConfig, addons ? (JSON.parse(addons) as { ctp?: boolean; ace?: boolean }) : {});
       if (owedNow > (existing.amount_paid_cents ?? 0)) return json({ error: "paid_addons_locked" }, 409, origin);
     }
-    const row = await db.registerForEvent(env.DB, { event_id: eid, member_id: claims.sub, name: member?.name ?? "Member", division, team: asStr(b.team, 40), addons });
-    return json({ registration: row }, 201, origin);
+    const row = await db.registerForEvent(env.DB, { event_id: eid, member_id: memberId, name, division, team: asStr(b.team, 40), addons, email });
+    return json(guestToken ? { registration: row, guestToken } : { registration: row }, 201, origin);
   }
   if (seg[2] === "register" && method === "DELETE") {
-    const reg = (await db.getMyRegistration(env.DB, eid, claims.sub)) as { paid_entry?: number } | null;
+    const memberId = claims ? claims.sub : guestMemberId(request);
+    if (!memberId) return json({ error: "unauthorized" }, 401, origin);
+    const reg = (await db.getMyRegistration(env.DB, eid, memberId)) as { paid_entry?: number } | null;
     if (reg?.paid_entry === 1) return json({ error: "paid_contact_admin" }, 403, origin);
-    await db.withdrawRegistration(env.DB, eid, claims.sub);
+    await db.withdrawRegistration(env.DB, eid, memberId);
     return json({ ok: true }, 200, origin);
   }
   if (seg[2] === "checkin" && method === "POST") {
-    const row = await db.setCheckedIn(env.DB, eid, claims.sub, true);
+    const b = (await readJson(request)) ?? {};
+    const memberId = claims ? claims.sub : guestMemberId(request, b);
+    if (!memberId) return json({ error: "unauthorized" }, 401, origin);
+    const row = await db.setCheckedIn(env.DB, eid, memberId, true);
     return row ? json({ registration: row }, 200, origin) : json({ error: "not_registered" }, 404, origin);
   }
   return json({ error: "not_found" }, 404, origin);
