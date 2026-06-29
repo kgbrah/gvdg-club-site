@@ -136,6 +136,9 @@
         .reg-btn:hover { filter: brightness(1.07); }
         .reg-btn:disabled { opacity: 0.6; cursor: default; }
         .reg-btn.secondary { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
+        /* Keep-score CTA on a live event */
+        .btn-keep-score { display: inline-block; margin: 0.25rem 0 0.75rem; background: var(--primary); color: #fff; text-decoration: none; font-weight: 800; padding: 0.7rem 1.3rem; border-radius: 50px; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.9rem; }
+        .btn-keep-score:hover { filter: brightness(1.07); }
         .event-meta .meta-icon { opacity: 0.8; }
 
         /* ---- Badges ---- */
@@ -1128,6 +1131,14 @@
                 const conn = el('span', 'lb-conn', 'connecting…');
                 banner.appendChild(conn);
                 card.appendChild(banner);
+                // Players keep their own card's scores in the mobile scorecard app (score.html). Members use
+                // their saved login; a guest registrant passes their registration token so they can score too.
+                const ks = el('a', 'btn-keep-score', '✏️ Keep score for my card');
+                let href = 'score.html?event=' + encodeURIComponent(ev.id);
+                const gr = (typeof guestRegs === 'function' ? guestRegs()[ev.id] : null);
+                if (!memberToken() && gr && gr.guestToken) href += '&gt=' + encodeURIComponent(gr.guestToken);
+                ks.href = href;
+                card.appendChild(ks);
                 const lb = el('div', 'lb-wrap');
                 card.appendChild(lb);
                 mountLiveLeaderboard(ev.id, lb, conn);
