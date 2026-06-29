@@ -23,11 +23,16 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # The deploy runs ONLY when production is configured (the CLOUDFLARE_API_TOKEN repo secret is set).
+    # Until then this is a CI gate — it type-checks + tests on every push to main and SKIPS the deploy,
+    # so an un-provisioned production no longer shows a red X on main.
+    env:
+      HAS_CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22 # wrangler 4.x requires Node >= 22
           cache: npm
           cache-dependency-path: auth-worker/package-lock.json
       - name: Static site tests
@@ -42,8 +47,15 @@ jobs:
           npm run audit
           npm run typecheck
           npm test
-          node scripts/validate-wrangler-config.mjs
+          # Placeholder resource ids are expected until production is provisioned; the strict no-placeholder
+          # check below guards the real deploy.
+          node scripts/validate-wrangler-config.mjs --allow-placeholders
+      - name: Validate production config (no placeholders) — only when deploying
+        if: ${{ env.HAS_CF_TOKEN == 'true' }}
+        working-directory: auth-worker
+        run: node scripts/validate-wrangler-config.mjs
       - name: Deploy to Cloudflare + sync secrets
+        if: ${{ env.HAS_CF_TOKEN == 'true' }}
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
