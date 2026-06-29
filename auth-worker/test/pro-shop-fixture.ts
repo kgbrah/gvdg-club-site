@@ -194,9 +194,9 @@ function capturePaymentSession(args: unknown[], state: MockState): Row | null {
 }
 
 function runSql(sql: string, args: unknown[], state: MockState) {
-  if (/UPDATE store_products SET stock_qty = stock_qty - \?/i.test(sql)) {
+  if (/UPDATE store_products SET stock_qty = MAX\(0, stock_qty - \?/i.test(sql)) {
     const row = state.products.find((p) => numberArg(p.id) === numberArg(args[1]));
-    if (row) row.stock_qty = numberArg(row.stock_qty) - numberArg(args[0]);
+    if (row) row.stock_qty = Math.max(0, numberArg(row.stock_qty) - numberArg(args[0]));
   }
   return { results: [], success: true };
 }
@@ -261,11 +261,11 @@ export async function call(path: string, method = "GET", bearerToken?: string, b
   );
 }
 
-export function stubPayPal(captureValue = "18.00", captureStatus = "COMPLETED") {
+export function stubPayPal(captureValue = "18.00", captureStatus = "COMPLETED", orderStatus = captureStatus) {
   vi.stubGlobal("fetch", vi.fn(async (url: string | URL) => {
     const u = String(url);
     if (u.includes("/oauth2/token")) return new Response(JSON.stringify({ access_token: "tok" }), { status: 200 });
-    if (u.includes("/capture")) return new Response(JSON.stringify({ status: captureStatus, purchase_units: [{ payments: { captures: [{ amount: { value: captureValue } }] } }] }), { status: 200 });
+    if (u.includes("/capture")) return new Response(JSON.stringify({ status: orderStatus, purchase_units: [{ payments: { captures: [{ status: captureStatus, amount: { value: captureValue, currency_code: "USD" } }] } }] }), { status: 200 });
     if (u.includes("/v2/checkout/orders")) return new Response(JSON.stringify({ id: "ORDER123" }), { status: 200 });
     return new Response("{}", { status: 404 });
   }));

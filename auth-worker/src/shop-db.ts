@@ -210,7 +210,8 @@ export async function createStoreOrderItem(db: D1Like, item: StoreOrderItemInput
 }
 
 export async function decrementStoreProductStock(db: D1Like, id: number, quantity: number) {
-  await db.prepare("UPDATE store_products SET stock_qty = stock_qty - ?, updated_at = datetime('now') WHERE id = ?").bind(quantity, id).run();
+  // MAX(0, …) keeps stock from going negative if two async (PayPal) checkouts race on the last unit.
+  await db.prepare("UPDATE store_products SET stock_qty = MAX(0, stock_qty - ?), updated_at = datetime('now') WHERE id = ?").bind(quantity, id).run();
 }
 
 /** Attach each order's line items in one IN-query, grouped in memory. Safe for an empty list. */
