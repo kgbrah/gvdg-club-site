@@ -74,6 +74,66 @@ describe("safeFetch", () => {
     await expect(safeFetch("https://docs.google.com/sheet.csv", ["docs.google.com"], { maxBytes: 8 })).rejects.toThrow("response_too_large");
     expect(pulls).toBeLessThanOrEqual(4);
   });
+
+  it("sends a browser-like User-Agent and Accept header", async () => {
+    let init: RequestInit | undefined;
+    vi.stubGlobal("fetch", vi.fn(async (_u: string, i: RequestInit) => {
+      init = i;
+      return new Response("ok");
+    }));
+
+    await safeFetch("https://udisc.com/courses/x", ["udisc.com"]);
+    const h = init!.headers as Record<string, string>;
+    expect(h["User-Agent"]).toMatch(/Mozilla\/5\.0/);
+    expect(h["Accept"]).toMatch(/text\/html/);
+  });
+
+  it("follows a redirect to another allowlisted URL", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+      seen.push(u);
+      if (u.endsWith("/courses/x")) {
+        return new Response(null, { status: 301, headers: { location: "https://udisc.com/courses/x-canonical" } });
+      }
+      return new Response("final body");
+    }));
+
+    const text = await safeFetch("https://udisc.com/courses/x", ["udisc.com"]);
+    expect(text).toBe("final body");
+    expect(seen).toEqual(["https://udisc.com/courses/x", "https://udisc.com/courses/x-canonical"]);
+  });
+
+  it("resolves a relative redirect Location against the current URL", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+      seen.push(u);
+      if (u.endsWith("/courses/x")) {
+        return new Response(null, { status: 302, headers: { location: "/courses/x/" } });
+      }
+      return new Response("ok");
+    }));
+
+    await safeFetch("https://udisc.com/courses/x", ["udisc.com"]);
+    expect(seen[1]).toBe("https://udisc.com/courses/x/");
+  });
+
+  it("refuses to follow a redirect off the allowlist (SSRF guard holds across hops)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 302, headers: { location: "https://evil.example/x" } })));
+
+    await expect(safeFetch("https://udisc.com/courses/x", ["udisc.com"])).rejects.toThrow("url_not_allowed");
+  });
+
+  it("gives up after too many redirects", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 302, headers: { location: "https://udisc.com/loop" } })));
+
+    await expect(safeFetch("https://udisc.com/start", ["udisc.com"])).rejects.toThrow("too_many_redirects");
+  });
+
+  it("rejects the initial URL when it is not allowlisted", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("should not be fetched")));
+
+    await expect(safeFetch("https://evil.example/x", ["udisc.com"])).rejects.toThrow("url_not_allowed");
+  });
 });
 
 describe("normalizeDgs", () => {
