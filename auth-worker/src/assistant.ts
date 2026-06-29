@@ -20,6 +20,7 @@ const PERSONA = [
   "You are named after Max Crotts, a longtime club officer. Be warm, concise, and helpful, with a little disc-golf enthusiasm.",
   "Help visitors with club info, disc golf questions, and using the website. If you don't know something, say so and point them to greenvillediscgolf@gmail.com.",
   "Site help: members sign in on the Members page with their PDGA# or UDisc username plus a PIN; the portal shows live PDGA ratings/stats. Donations go through PayPal to @greenvillediscgolf. The Ryder Cup page tracks the club's signature event.",
+  "The club's calendar has two distinct kinds, listed separately in the context below: \"Events\" are disc golf tournaments and league rounds; \"Club events\" are fundraisers, meetings, and minutes. Use those terms and keep them separate — don't call a tournament a club event or vice versa.",
   "Keep answers short (a few sentences). Never invent events, dates, or results that aren't in the context below.",
 ].join(" ");
 
@@ -27,18 +28,22 @@ function clip(s: string): string {
   return s.length > MAX_CONTENT ? s.slice(0, MAX_CONTENT) : s;
 }
 
-function clubContext(
-  events: { name: string; date?: string | null; status?: string | null }[],
-  courses: { name: string; location?: string | null }[],
-): string {
+type CtxItem = { name: string; date?: string | null; status?: string | null };
+const fmtItem = (e: CtxItem) => `- ${e.name}${e.date ? " (" + e.date + ")" : ""}${e.status ? " [" + e.status + "]" : ""}`;
+
+function clubContext(events: CtxItem[], clubEvents: CtxItem[], courses: { name: string; location?: string | null }[]): string {
   const lines: string[] = [];
-  const upcoming = (events ?? []).filter((e) => e && e.name && e.status !== "cancelled").slice(0, MAX_CTX_EVENTS);
-  if (upcoming.length) {
-    lines.push("Upcoming/recent club events:");
-    upcoming.forEach((e) => lines.push(`- ${e.name}${e.date ? " (" + e.date + ")" : ""}${e.status ? " [" + e.status + "]" : ""}`));
-  } else {
-    lines.push("There are no upcoming club events currently scheduled in the system.");
-  }
+
+  const ev = (events ?? []).filter((e) => e && e.name && e.status !== "cancelled").slice(0, MAX_CTX_EVENTS);
+  lines.push("Events — disc golf tournaments & league rounds:");
+  if (ev.length) ev.forEach((e) => lines.push(fmtItem(e)));
+  else lines.push("- (no tournaments or league rounds on the schedule right now)");
+
+  const ce = (clubEvents ?? []).filter((e) => e && e.name && e.status !== "cancelled").slice(0, MAX_CTX_EVENTS);
+  lines.push("", "Club events — fundraisers, meetings & minutes:");
+  if (ce.length) ce.forEach((e) => lines.push(fmtItem(e)));
+  else lines.push("- (no club meetings, minutes, or fundraisers posted right now)");
+
   const cs = (courses ?? []).filter((c) => c && c.name).slice(0, MAX_CTX_COURSES);
   if (cs.length) {
     lines.push("", "Courses the club plays:");
@@ -53,9 +58,10 @@ export function buildMessages(opts: {
   userMessage: string;
   history?: ChatTurn[];
   events?: { name: string; date?: string | null; status?: string | null }[];
+  clubEvents?: { name: string; date?: string | null; status?: string | null }[];
   courses?: { name: string; location?: string | null }[];
 }): ChatMessage[] {
-  const system = `${PERSONA}\n\n--- Current club context ---\n${clubContext(opts.events ?? [], opts.courses ?? [])}`;
+  const system = `${PERSONA}\n\n--- Current club context ---\n${clubContext(opts.events ?? [], opts.clubEvents ?? [], opts.courses ?? [])}`;
   const msgs: ChatMessage[] = [{ role: "system", content: system }];
 
   const clean = (opts.history ?? [])

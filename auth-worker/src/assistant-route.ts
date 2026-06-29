@@ -1,6 +1,7 @@
 import type { Env } from "./env.js";
 import * as db from "./db.js";
 import { buildMessages, generateReply, MAX_HISTORY, type ChatMessage, type ChatTurn, type ReplyProvider } from "./assistant.js";
+import { getClubCalendar, upcoming, type ClubFeeds, type FeedItem } from "./feeds.js";
 import { clientIp, json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 
@@ -61,23 +62,20 @@ export async function handleAssistant(request: Request, env: Env, origin: string
     ? body.history.slice(-MAX_HISTORY).filter((t: unknown): t is ChatTurn => !!t && typeof t === "object" && typeof (t as ChatTurn).content === "string")
     : [];
 
-  let events: Record<string, unknown>[] = [];
+  // Club calendar context, split into the club's two categories (see feeds.ts / assistant.ts):
+  //   events      = tournaments + league rounds      club events = fundraisers, meetings, minutes
+  const now = Date.now();
+  let cal: ClubFeeds = { events: [], clubEvents: [] };
   let courses: Record<string, unknown>[] = [];
-  try {
-    events = (await db.listEvents(env.DB, {})) as Record<string, unknown>[];
-  } catch {
-    events = [];
-  }
-  try {
-    courses = (await db.listCourses(env.DB)) as Record<string, unknown>[];
-  } catch {
-    courses = [];
-  }
+  try { cal = await getClubCalendar(env, now); } catch { /* calendar unavailable */ }
+  try { courses = (await db.listCourses(env.DB)) as Record<string, unknown>[]; } catch { /* empty */ }
 
+  const toCtx = (f: FeedItem) => ({ name: f.name, date: f.date, status: null as string | null });
   const messages = buildMessages({
     userMessage: message,
     history,
-    events: events.map((e) => ({ name: String(e.name ?? ""), date: (e.date as string) ?? null, status: (e.status as string) ?? null })),
+    events: upcoming(cal.events, now, 8).map(toCtx),
+    clubEvents: upcoming(cal.clubEvents, now, 8).map(toCtx),
     courses: courses.map((c) => ({ name: String(c.name ?? ""), location: (c.location as string) ?? null })),
   });
 
