@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#FF6B35">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="GVDG Score">
+    <title>Live Scoring · Greenville Disc Golf Club</title>
+    <link rel="icon" type="image/png" href="img/logo.png">
+    <link rel="manifest" href="site.webmanifest">
+    <link rel="apple-touch-icon" href="img/logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #FF6B35; --secondary: #004E89; --accent: #F7B801;
+            --bg-primary: #F4F4F9; --bg-secondary: #FFFFFF; --bg-tertiary: #EEEEF4;
+            --text-primary: #1A1A2E; --text-secondary: #444; --text-muted: #6A6A78;
+            --border-color: #E2E2EA; --shadow: rgba(0,0,0,0.10);
+            --under: #15743A; --over: #C8472E; --even: #6A6A78;
+            --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px);
+        }
+        [data-theme="dark"] {
+            --bg-primary: #0F0F1E; --bg-secondary: #1A1A2E; --bg-tertiary: #252538;
+            --text-primary: #F4F4F9; --text-secondary: #D8D8E0; --text-muted: #9A9AAC;
+            --border-color: #2C2C40; --shadow: rgba(0,0,0,0.4);
+            --under: #4FD37E; --over: #FF7A5C;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: 'Archivo', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary); color: var(--text-primary);
+            min-height: 100vh; min-height: 100dvh; overscroll-behavior-y: contain;
+        }
+        .wrap { max-width: 560px; margin: 0 auto; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+        /* ---- top bar ---- */
+        .topbar {
+            position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 0.6rem;
+            padding: calc(0.7rem + var(--safe-top)) 0.9rem 0.7rem; background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color); box-shadow: 0 1px 8px var(--shadow);
+        }
+        .topbar .logo { height: 30px; width: auto; }
+        .topbar h1 { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; letter-spacing: 0.5px; font-weight: 400; flex: 1; line-height: 1; }
+        .topbar h1 small { display: block; font-family: 'Archivo'; font-size: 0.62rem; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+        .iconbtn {
+            border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary);
+            width: 40px; height: 40px; border-radius: 11px; font-size: 1.1rem; cursor: pointer; display: grid; place-items: center;
+        }
+        .iconbtn:active { transform: scale(0.94); }
+        main { flex: 1; padding: 1rem 0.9rem calc(1.2rem + var(--safe-bottom)); }
+        /* ---- generic ---- */
+        .card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 16px; box-shadow: 0 2px 10px var(--shadow); padding: 1rem; margin-bottom: 0.85rem; }
+        .muted { color: var(--text-muted); }
+        .center { text-align: center; }
+        .stack > * + * { margin-top: 0.7rem; }
+        h2.section { font-family: 'Bebas Neue'; font-weight: 400; font-size: 1.5rem; letter-spacing: 0.5px; margin-bottom: 0.5rem; }
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; width: 100%;
+            min-height: 50px; padding: 0 1rem; border: none; border-radius: 13px; font-family: 'Archivo'; font-weight: 700;
+            font-size: 1rem; cursor: pointer; background: var(--primary); color: #fff; transition: transform .06s, filter .15s;
+        }
+        .btn:active { transform: scale(0.98); }
+        .btn.secondary { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); }
+        .btn.ghost { background: transparent; color: var(--primary); border: 1.5px solid var(--primary); }
+        .btn:disabled { opacity: 0.5; cursor: default; }
+        .btn.small { min-height: 40px; width: auto; font-size: 0.85rem; padding: 0 0.85rem; border-radius: 10px; }
+        input.field {
+            width: 100%; min-height: 50px; padding: 0 0.9rem; border: 1.5px solid var(--border-color);
+            border-radius: 12px; background: var(--bg-primary); color: var(--text-primary); font-size: 1rem; font-family: 'Archivo';
+        }
+        input.field:focus { outline: none; border-color: var(--primary); }
+        label.lbl { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); display: block; margin: 0 0 0.3rem 0.2rem; }
+        .pill { display: inline-block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 0.2rem 0.5rem; border-radius: 999px; background: var(--bg-tertiary); color: var(--text-secondary); }
+        .pill.live { background: var(--primary); color: #fff; }
+        .offline-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 60; background: var(--over); color: #fff; text-align: center; font-size: 0.78rem; font-weight: 700; padding: calc(0.3rem + var(--safe-top)) 0.5rem 0.3rem; }
+        .toast {
+            position: fixed; left: 50%; bottom: calc(1.2rem + var(--safe-bottom)); transform: translateX(-50%);
+            background: var(--text-primary); color: var(--bg-secondary); padding: 0.7rem 1.1rem; border-radius: 12px;
+            font-size: 0.9rem; font-weight: 600; box-shadow: 0 4px 16px var(--shadow); z-index: 50; max-width: 90%; text-align: center;
+        }
+        /* ---- event / card pickers ---- */
+        .tap-row {
+            display: flex; align-items: center; gap: 0.75rem; width: 100%; text-align: left;
+            background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 14px;
+            padding: 0.85rem; cursor: pointer; margin-bottom: 0.6rem;
+        }
+        .tap-row:active { transform: scale(0.99); }
+        .tap-row .grow { flex: 1; min-width: 0; }
+        .tap-row .title { font-weight: 700; font-size: 1.02rem; }
+        .tap-row .sub { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.1rem; }
+        .tap-row .chev { color: var(--text-muted); font-size: 1.3rem; }
+        .avatars { display: flex; }
+        .ava { width: 26px; height: 26px; border-radius: 50%; background: var(--secondary); color: #fff; display: grid; place-items: center; font-size: 0.7rem; font-weight: 700; margin-left: -6px; border: 2px solid var(--bg-secondary); }
+        .ava:first-child { margin-left: 0; }
+        /* ---- scorecard ---- */
+        .hole-head { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.8rem; }
+        .hole-head .hnum { font-family: 'Bebas Neue'; font-size: 2.6rem; line-height: 0.9; color: var(--primary); }
+        .hole-head .hmeta { text-align: right; }
+        .hole-head .hpar { font-size: 1.5rem; font-weight: 700; }
+        .navbtn { width: 46px; height: 46px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); font-size: 1.4rem; cursor: pointer; }
+        .navbtn:disabled { opacity: 0.35; }
+        .prow { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0; border-top: 1px solid var(--border-color); }
+        .prow:first-child { border-top: none; }
+        .prow .pinfo { flex: 1; min-width: 0; }
+        .prow .pname { font-weight: 700; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .prow .pmeta { font-size: 0.74rem; color: var(--text-muted); }
+        .stepper { display: flex; align-items: center; gap: 0.45rem; }
+        .stepper button { width: 44px; height: 44px; border-radius: 50%; border: none; font-size: 1.5rem; font-weight: 700; cursor: pointer; display: grid; place-items: center; }
+        .stepper button.minus { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); }
+        .stepper button.plus { background: var(--primary); color: #fff; }
+        .stepper button:active { transform: scale(0.9); }
+        .stepper .val { width: 50px; text-align: center; }
+        .stepper .val .n { font-size: 1.55rem; font-weight: 700; line-height: 1; }
+        .stepper .val .rel { font-size: 0.72rem; font-weight: 700; }
+        .rel.under { color: var(--under); } .rel.over { color: var(--over); } .rel.even { color: var(--even); }
+        .totbar { display: flex; justify-content: space-around; margin-top: 0.9rem; padding-top: 0.8rem; border-top: 2px solid var(--border-color); }
+        .totbar div { text-align: center; }
+        .totbar .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); font-weight: 700; }
+        .totbar .v { font-size: 1.3rem; font-weight: 700; }
+        .holegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; margin-top: 0.5rem; }
+        .holegrid button { min-height: 44px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-secondary); font-weight: 700; font-size: 0.9rem; cursor: pointer; color: var(--text-secondary); position: relative; }
+        .holegrid button.cur { background: var(--primary); color: #fff; border-color: var(--primary); }
+        .holegrid button.done::after { content: ""; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: var(--under); }
+        .holegrid button.cur.done::after { background: #fff; }
+        /* ---- leaderboard overlay ---- */
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; display: flex; flex-direction: column; justify-content: flex-end; }
+        .sheet { background: var(--bg-secondary); border-radius: 20px 20px 0 0; max-height: 82vh; overflow-y: auto; padding: 1rem 0.9rem calc(1.4rem + var(--safe-bottom)); }
+        .sheet .grab { width: 40px; height: 4px; border-radius: 4px; background: var(--border-color); margin: 0 auto 0.7rem; }
+        table.lb { width: 100%; border-collapse: collapse; }
+        table.lb th { text-align: left; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); padding: 0.4rem 0.4rem; border-bottom: 2px solid var(--border-color); }
+        table.lb td { padding: 0.5rem 0.4rem; border-bottom: 1px solid var(--border-color); font-size: 0.92rem; }
+        table.lb td.pos { font-weight: 700; color: var(--text-muted); width: 1.6rem; }
+        table.lb td.name { font-weight: 700; }
+        table.lb td.tp.under { color: var(--under); } table.lb td.tp.over { color: var(--over); }
+        .spin { width: 30px; height: 30px; border: 3px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; animation: sp 0.8s linear infinite; margin: 1.5rem auto; }
+        @keyframes sp { to { transform: rotate(360deg); } }
+        a.link { color: var(--primary); font-weight: 700; text-decoration: none; }
+    </style>
+</head>
+<body data-api-base="">
+    <div class="wrap">
+        <header class="topbar">
+            <img src="img/logo.png" alt="GVDG" class="logo">
+            <h1 id="barTitle">Live Scoring<small id="barSub">Greenville Disc Golf Club</small></h1>
+            <button class="iconbtn" id="lbBtn" title="Leaderboard" hidden>🏆</button>
+            <button class="iconbtn" id="themeBtn" title="Toggle theme">🌙</button>
+        </header>
+        <main id="app"><div class="spin"></div></main>
+    </div>
+    <script>
+    (function () {
+        "use strict";
+        // --- API base: explicit data-api-base wins; else resolve by host (prod vs gvdgclub.com dev/previews). ---
+        const _h = location.hostname;
+        const LOCAL = ['127.0.0.1', 'localhost'].includes(_h) ? 'http://127.0.0.1:8788' : '';
+        const API_BASE = (LOCAL || (document.body.dataset.apiBase || '').trim() ||
+            ((_h === 'greenvillediscgolf.com' || _h === 'www.greenvillediscgolf.com') ? 'https://auth.greenvillediscgolf.com' : 'https://auth.gvdgclub.com')).replace(/\/+$/, '');
+
+        const TOKEN_KEY = 'gvdg_member_token', NAME_KEY = 'gvdg_member_name', GUESTREG_KEY = 'gvdg_guest_regs';
+        const params = new URLSearchParams(location.search);
+        const EVENT_ID = (params.get('event') || '').replace(/[^0-9]/g, '');
+        // A guest scores via their event-registration token (from the URL ?gt= or saved at registration).
+        function guestTokenStored() { try { const a = JSON.parse(localStorage.getItem(GUESTREG_KEY) || '{}'); return (a[EVENT_ID] && a[EVENT_ID].guestToken) || null; } catch (e) { return null; } }
+        const GUEST_TOKEN = params.get('gt') || guestTokenStored();
+
+        const app = document.getElementById('app');
+        const S = { holes: [], cardId: null, myIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null };
+        const pending = new Set();            // "index:hole" optimistically set, awaiting confirm — don't clobber from snapshot
+        const QKEY = 'gvdg_score_queue:' + EVENT_ID;
+
+        // ---------- tiny helpers ----------
+        function el(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+        function memberToken() { try { return sessionStorage.getItem(TOKEN_KEY); } catch (e) { return null; } }
+        function relClass(d) { return d < 0 ? 'under' : d > 0 ? 'over' : 'even'; }
+        function relText(d) { return d === 0 ? 'E' : d > 0 ? '+' + d : String(d); }
+        function toast(msg) {
+            const t = el('div', 'toast', msg); document.body.appendChild(t);
+            setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; }, 1800);
+            setTimeout(() => t.remove(), 2200);
+        }
+
+        // ---------- theme ----------
+        if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+        document.getElementById('themeBtn').addEventListener('click', function () {
+            const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+            if (dark) { document.documentElement.removeAttribute('data-theme'); localStorage.setItem('theme', 'light'); }
+            else { document.documentElement.setAttribute('data-theme', 'dark'); localStorage.setItem('theme', 'dark'); }
+        });
+
+        // ---------- API (member Bearer token OR guest ?gt=/guestToken) ----------
+        async function api(path, opts) {
+            opts = opts || {};
+            const headers = {};
+            let url = path;
+            const tok = memberToken();
+            if (tok && opts.auth !== false) headers['Authorization'] = 'Bearer ' + tok;
+            else if (!tok && GUEST_TOKEN && opts.guest !== false) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'gt=' + encodeURIComponent(GUEST_TOKEN);
+            let body = opts.body;
+            if (body !== undefined) {
+                headers['Content-Type'] = 'application/json';
+                if (!tok && GUEST_TOKEN && body && typeof body === 'object') body = Object.assign({ guestToken: GUEST_TOKEN }, body);
+                body = JSON.stringify(body);
+            }
+            let r;
+            try { r = await fetch(API_BASE + url, { method: opts.method || 'GET', headers, body, cache: 'no-store' }); }
+            catch (e) { return { ok: false, status: 0, data: null, neterr: true }; }
+            let data = null; try { data = await r.json(); } catch (e) {}
+            return { ok: r.ok, status: r.status, data };
+        }
+
+        // ---------- offline score queue ----------
+        function qLoad() { try { return JSON.parse(localStorage.getItem(QKEY) || '[]'); } catch (e) { return []; } }
+        function qSave(q) { try { localStorage.setItem(QKEY, JSON.stringify(q)); } catch (e) {} }
+        function qAdd(item) { const q = qLoad(); q.push(item); qSave(q); }
+        async function flushQueue() {
+            let q = qLoad(); if (!q.length) return;
+            const remain = [];
+            for (const item of q) {
+                const r = await api('/events/' + EVENT_ID + '/live/score', { method: 'POST', body: { index: item.index, hole: item.hole, strokes: item.strokes } });
+                if (!r.ok && (r.neterr || r.status >= 500)) remain.push(item); // keep only transient failures
+            }
+            qSave(remain);
+            if (q.length && !remain.length) toast('Synced offline scores');
+        }
+
+        // ---------- offline bar ----------
+        let offlineBar = null;
+        function setOnline(on) {
+            if (on && offlineBar) { offlineBar.remove(); offlineBar = null; }
+            else if (!on && !offlineBar) { offlineBar = el('div', 'offline-bar', '⚠ Offline — scores save on your phone and sync when you reconnect'); document.body.appendChild(offlineBar); }
+        }
+        window.addEventListener('online', function () { setOnline(true); flushQueue(); connectWs(); });
+        window.addEventListener('offline', function () { setOnline(false); });
+
+        // ---------- score state access ----------
+        function strokesFor(index, hole) {
+            const cm = S.cardmates.find((p) => p.index === index);
+            const v = cm && cm.scores ? cm.scores[hole] : undefined;
+            return (typeof v === 'number') ? v : null;
+        }
+        function setLocal(index, hole, strokes) {
+            const cm = S.cardmates.find((p) => p.index === index);
+            if (cm) { cm.scores = cm.scores || {}; cm.scores[hole] = strokes; }
+        }
+
+        async function postScore(index, hole, strokes) {
+            const key = index + ':' + hole;
+            pending.add(key);
+            setLocal(index, hole, strokes);
+            renderHole();
+            const r = await api('/events/' + EVENT_ID + '/live/score', { method: 'POST', body: { index: index, hole: hole, strokes: strokes } });
+            pending.delete(key);
+            if (r.ok) { S.snap = r.data; mergeFromSnap(); }
+            else if (r.neterr) { qAdd({ index: index, hole: hole, strokes: strokes }); setOnline(false); }
+            else if (r.status === 403) toast('You can only score your own card');
+            else if (r.status === 401) toast('Session expired — sign in again');
+            else if (r.status === 429) toast('Easy there — one moment');
+            else if (r.status === 409) toast('Round isn’t live');
+            else toast('Could not save that score');
+        }
+
+        // ---------- merge a snapshot's scores into our cardmates (respecting pending optimistic edits) ----------
+        function mergeFromSnap() {
+            const snap = S.snap; if (!snap || !Array.isArray(snap.players)) return;
+            const byIndex = new Map(snap.players.map((p) => [p.index, p]));
+            S.cardmates.forEach((cm) => {
+                const sp = byIndex.get(cm.index); if (!sp) return;
+                cm.scores = cm.scores || {};
+                Object.keys(sp.scores || {}).forEach((h) => {
+                    if (!pending.has(cm.index + ':' + Number(h))) cm.scores[h] = sp.scores[h];
+                });
+            });
+            renderHole();
+            if (lbOpen) renderLeaderboard();
+        }
+
+        // ---------- WebSocket live sync ----------
+        function connectWs() {
+            if (!EVENT_ID) return;
+            try { if (S.ws) S.ws.close(); } catch (e) {}
+            let ws;
+            try { ws = new WebSocket(API_BASE.replace(/^http/, 'ws') + '/events/' + EVENT_ID + '/live/ws'); }
+            catch (e) { return; }
+            S.ws = ws;
+            ws.addEventListener('message', function (ev) {
+                let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
+                if (msg && msg.type === 'snapshot') { S.snap = msg; mergeFromSnap(); }
+            });
+            ws.addEventListener('close', function () { if (S.wsTimer) return; S.wsTimer = setTimeout(function () { S.wsTimer = null; connectWs(); }, 4000); });
+            ws.addEventListener('error', function () { try { ws.close(); } catch (e) {} });
+        }
+
+        // ---------- views ----------
+        function shell(node) { app.replaceChildren(node); }
+
+        function renderMessage(title, sub, withRetry) {
+            const c = el('div', 'card center stack');
+            c.appendChild(el('h2', 'section', title));
+            if (sub) c.appendChild(el('p', 'muted', sub));
+            if (withRetry) { const b = el('button', 'btn', 'Try again'); b.addEventListener('click', boot); c.appendChild(b); }
+            const lb = el('button', 'btn secondary', '🏆 View live leaderboard');
+            lb.addEventListener('click', openLeaderboard);
+            c.appendChild(lb);
+            shell(c);
+        }
+
+        function renderLogin(message) {
+            const c = el('div', 'card stack');
+            c.appendChild(el('h2', 'section', 'Sign in to keep score'));
+            if (message) c.appendChild(el('p', 'muted', message));
+            const idL = el('label', 'lbl', 'PDGA # or UDisc username'); const id = el('input', 'field'); id.id = 'idIn'; id.autocapitalize = 'none';
+            const pinL = el('label', 'lbl', 'PIN'); const pin = el('input', 'field'); pin.id = 'pinIn'; pin.type = 'password'; pin.inputMode = 'numeric';
+            const err = el('p', 'muted'); err.style.color = 'var(--over)'; err.style.minHeight = '1rem';
+            const btn = el('button', 'btn', 'Sign in');
+            btn.addEventListener('click', async function () {
+                const identifier = id.value.trim(), p = pin.value.trim();
+                if (!identifier || !p) { err.textContent = 'Enter your ID and PIN.'; return; }
+                btn.disabled = true; err.textContent = '';
+                const r = await api('/login', { method: 'POST', auth: false, guest: false, body: { identifier: identifier, pin: p } });
+                btn.disabled = false;
+                if (r.ok && r.data && r.data.token) {
+                    try { sessionStorage.setItem(TOKEN_KEY, r.data.token); if (r.data.name) sessionStorage.setItem(NAME_KEY, r.data.name); } catch (e) {}
+                    boot();
+                } else { err.textContent = r.status === 401 ? 'That ID/PIN didn’t match.' : 'Sign-in failed — try again.'; }
+            });
+            c.appendChild(idL); c.appendChild(id); c.appendChild(pinL); c.appendChild(pin); c.appendChild(err); c.appendChild(btn);
+            if (GUEST_TOKEN) { const note = el('p', 'muted center', 'Registered as a guest? You can keep your card without signing in.'); const gb = el('button', 'btn ghost', 'Keep score as a guest'); gb.addEventListener('click', function () { try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {} boot(); }); c.appendChild(note); c.appendChild(gb); }
+            shell(c);
+        }
+
+        function holeMeta(idx) { return S.holes[idx] || { hole: idx + 1, par: 3 }; }
+
+        function renderHole() {
+            if (!S.holes.length) return;
+            const h = holeMeta(S.holeIdx);
+            document.getElementById('lbBtn').hidden = false;
+            const c = el('div');
+
+            // hole header + nav
+            const head = el('div', 'hole-head');
+            const prev = el('button', 'navbtn', '‹'); prev.disabled = S.holeIdx === 0; prev.addEventListener('click', function () { S.holeIdx = Math.max(0, S.holeIdx - 1); renderHole(); });
+            const mid = el('div'); mid.style.flex = '1'; mid.style.textAlign = 'center';
+            mid.appendChild(el('div', 'hnum', 'Hole ' + h.hole));
+            mid.appendChild(el('div', 'hpar', 'Par ' + h.par + (h.distance_ft ? ' · ' + h.distance_ft + ' ft' : '') + (h.overridden ? ' (today)' : '')));
+            const next = el('button', 'navbtn', '›'); next.disabled = S.holeIdx >= S.holes.length - 1; next.addEventListener('click', function () { S.holeIdx = Math.min(S.holes.length - 1, S.holeIdx + 1); renderHole(); });
+            head.appendChild(prev); head.appendChild(mid); head.appendChild(next);
+            c.appendChild(head);
+
+            // player rows with steppers
+            const box = el('div', 'card');
+            S.cardmates.forEach((p) => {
+                const row = el('div', 'prow');
+                const info = el('div', 'pinfo');
+                info.appendChild(el('div', 'pname', p.name + (p.isMe ? ' (you)' : '')));
+                if (p.division) info.appendChild(el('div', 'pmeta', p.division));
+                const cur = strokesFor(p.index, h.hole);
+                const step = el('div', 'stepper');
+                const minus = el('button', 'minus', '−');
+                const val = el('div', 'val');
+                const n = el('div', 'n', cur == null ? '–' : String(cur)); val.appendChild(n);
+                if (cur != null) { const d = cur - h.par; const rel = el('div', 'rel ' + relClass(d), relText(d)); val.appendChild(rel); }
+                const plus = el('button', 'plus', '+');
+                minus.addEventListener('click', function () { const base = cur == null ? h.par : cur; const nv = Math.max(1, base - 1); postScore(p.index, h.hole, nv); });
+                plus.addEventListener('click', function () { const base = cur == null ? h.par - 1 : cur; const nv = Math.min(30, base + 1); postScore(p.index, h.hole, nv); });
+                step.appendChild(minus); step.appendChild(val); step.appendChild(plus);
+                row.appendChild(info); row.appendChild(step);
+                box.appendChild(row);
+            });
+
+            // my totals
+            const me = S.cardmates.find((p) => p.isMe);
+            if (me) {
+                let thru = 0, total = 0, toPar = 0;
+                S.holes.forEach((hh) => { const s = me.scores ? me.scores[hh.hole] : undefined; if (typeof s === 'number') { thru++; total += s; toPar += s - hh.par; } });
+                const tot = el('div', 'totbar');
+                [['Thru', String(thru) + '/' + S.holes.length], ['Total', total ? String(total) : '–'], ['To par', thru ? relText(toPar) : 'E']].forEach((kv) => {
+                    const d = el('div'); d.appendChild(el('div', 'k', kv[0])); d.appendChild(el('div', 'v', kv[1])); tot.appendChild(d);
+                });
+                box.appendChild(tot);
+            }
+            c.appendChild(box);
+
+            // hole jump grid
+            const grid = el('div', 'holegrid');
+            S.holes.forEach((hh, i) => {
+                const b = el('button', i === S.holeIdx ? 'cur' : '', String(hh.hole));
+                if (me && me.scores && typeof me.scores[hh.hole] === 'number') b.className += ' done';
+                b.addEventListener('click', function () { S.holeIdx = i; renderHole(); });
+                grid.appendChild(b);
+            });
+            c.appendChild(grid);
+
+            shell(c);
+        }
+
+        // ---------- leaderboard sheet ----------
+        let lbOpen = false, lbSheet = null;
+        document.getElementById('lbBtn').addEventListener('click', openLeaderboard);
+        function openLeaderboard() { lbOpen = true; renderLeaderboard(); }
+        function closeLeaderboard() { lbOpen = false; if (lbSheet) { lbSheet.remove(); lbSheet = null; } }
+        function renderLeaderboard() {
+            if (lbSheet) lbSheet.remove();
+            const overlay = el('div', 'overlay'); overlay.addEventListener('click', function (e) { if (e.target === overlay) closeLeaderboard(); });
+            const sheet = el('div', 'sheet'); sheet.appendChild(el('div', 'grab'));
+            sheet.appendChild(el('h2', 'section', 'Live Leaderboard'));
+            const standings = (S.snap && S.snap.standings) || [];
+            if (!standings.length) { sheet.appendChild(el('p', 'muted', 'No scores in yet.')); }
+            else {
+                const table = el('table', 'lb');
+                const thead = el('tr'); ['', 'Player', 'Thru', 'To par'].forEach((t) => thead.appendChild(el('th', null, t))); table.appendChild(thead);
+                standings.forEach((s, i) => {
+                    const tr = el('tr');
+                    tr.appendChild(el('td', 'pos', String(i + 1)));
+                    tr.appendChild(el('td', 'name', s.name + (s.division ? ' · ' + s.division : '')));
+                    tr.appendChild(el('td', null, (s.thru || 0) + ''));
+                    tr.appendChild(el('td', 'tp ' + relClass(s.toPar || 0), s.thru ? relText(s.toPar || 0) : 'E'));
+                    table.appendChild(tr);
+                });
+                sheet.appendChild(table);
+            }
+            const close = el('button', 'btn secondary', 'Close'); close.style.marginTop = '1rem'; close.addEventListener('click', closeLeaderboard);
+            sheet.appendChild(close);
+            overlay.appendChild(sheet); document.body.appendChild(overlay); lbSheet = overlay;
+        }
+
+        // ---------- boot ----------
+        async function loadMine() {
+            const r = await api('/events/' + EVENT_ID + '/live/mine');
+            if (r.status === 401) { renderLogin('Please sign in to keep score for this round.'); return; }
+            if (!r.ok || !r.data) { renderMessage('Couldn’t load your card', 'Check your connection and try again.', true); return; }
+            const d = r.data;
+            S.status = d.status || null;
+            if (d.cardId == null || !Array.isArray(d.cardmates) || !d.cardmates.length) {
+                renderMessage('No card yet', 'Either the round hasn’t started or you’re not on a card for this event. Ask an admin to start the round and assign cards.', true);
+                return;
+            }
+            S.holes = Array.isArray(d.holes) ? d.holes : [];
+            S.cardId = d.cardId; S.myIndex = d.playerIndex; S.cardmates = d.cardmates;
+            // start on the card's shotgun hole if set, else hole 1
+            const me = d.cardmates.find((p) => p.isMe);
+            const sh = me && me.startingHole;
+            const startIdx = sh ? S.holes.findIndex((h) => h.hole === sh) : 0;
+            S.holeIdx = startIdx >= 0 ? startIdx : 0;
+            document.getElementById('barTitle').firstChild.textContent = 'Card ' + (S.cardId || '');
+            renderHole();
+            connectWs();
+            flushQueue();
+        }
+
+        async function boot() {
+            setOnline(navigator.onLine);
+            if (!EVENT_ID) { renderMessage('Open from an event', 'Tap “Keep score” on a live event to start scoring.'); return; }
+            if (!memberToken() && !GUEST_TOKEN) { renderLogin(); return; }
+            shell((function () { const d = el('div', 'center'); d.appendChild(el('div', 'spin')); return d; })());
+            await loadMine();
+        }
+        if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('sw.js'); } catch (e) {} }
+        boot();
+    })();
+    </script>
+</body>
+</html>

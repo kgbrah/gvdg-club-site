@@ -629,6 +629,8 @@
                 </div>
             </div>
 
+            <div id="liveScoring" style="display:none;margin-bottom:1.5rem;"></div>
+
             <div id="clubRegister" class="club-register" style="display:none;">
                 <h3 class="my-dashboard-title">📝 Register for Events</h3>
                 <div id="registerList"></div>
@@ -1211,6 +1213,29 @@
         // ---- Event registration (Track G) — sign up, pick division/add-ons, check in, pay ----
         function regToken() { return sessionStorage.getItem(TOKEN_KEY); }
         let paymentsCfg = null, paypalSdkPromise = null;
+        // Surface any live event with a one-tap link into the scorecard app (members use their saved login).
+        async function loadLiveScoring() {
+            const wrap = $('liveScoring'); if (!wrap) return;
+            wrap.replaceChildren(); wrap.style.display = 'none';
+            let events = [];
+            try { const r = await api('/events'); if (r.ok) events = ((await r.json()).events) || []; } catch (_e) { return; }
+            const live = events.filter((e) => e && e.status === 'live');
+            if (!live.length) return;
+            wrap.style.display = '';
+            const card = elNode('div', 'club-board');
+            card.appendChild(elNode('h3', 'my-dashboard-title', '🟢 Live Now'));
+            live.forEach((ev) => {
+                const row = elNode('div', 'board-status');
+                row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;';
+                row.appendChild(elNode('span', null, ev.name + ' is being scored live.'));
+                const a = elNode('a', 'passkey-btn', '✏️ Keep score');
+                a.href = 'score.html?event=' + encodeURIComponent(ev.id);
+                row.appendChild(a);
+                card.appendChild(row);
+            });
+            wrap.appendChild(card);
+        }
+
         async function loadRegister() {
             const wrap = $('clubRegister'), list = $('registerList');
             const token = regToken();
@@ -1619,6 +1644,7 @@
             $('myDashboard').style.display = '';
             loadClubHistory(); // GVDG results are keyed by memberId, so they show even without a PDGA#
             loadWallet();
+            loadLiveScoring();
             loadRegister();
             loadMeetings();
             loadBoard();

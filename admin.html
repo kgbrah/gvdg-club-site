@@ -1071,6 +1071,26 @@
             const live = scSnap.status === 'live';
             $('scOverride').style.display = live ? '' : 'none'; // overrides only make sense mid-round
             scRenderGrid(); scRenderBoard(); scRenderTeeSigns(); scPopulateOverrideHoles();
+            if (live) scConnectWs(); // stream player/cardmate edits in real time
+        }
+
+        // Subscribe to the live event's WebSocket so scores entered by players on the course appear here
+        // as they happen. Updates totals + the leaderboard only (never rebuilds the admin's input grid,
+        // so it can't clobber a score the admin is mid-typing).
+        let scWs = null, scWsEvent = null, scWsTimer = null;
+        function scConnectWs() {
+            if (scWsEvent === scEventId && scWs && scWs.readyState <= 1) return;
+            try { if (scWs) scWs.close(); } catch (e) {}
+            scWsEvent = scEventId;
+            let ws;
+            try { ws = new WebSocket(AUTH_BASE.replace(/^http/, 'ws') + '/events/' + scEventId + '/live/ws'); } catch (e) { return; }
+            scWs = ws;
+            ws.addEventListener('message', (ev) => {
+                let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
+                if (msg && msg.type === 'snapshot' && scWsEvent === scEventId) { scSnap = msg; scUpdateTotals(); scRenderBoard(); }
+            });
+            ws.addEventListener('close', () => { if (scWsEvent === scEventId && !scWsTimer) scWsTimer = setTimeout(() => { scWsTimer = null; if (scWsEvent === scEventId) scConnectWs(); }, 4000); });
+            ws.addEventListener('error', () => { try { ws.close(); } catch (e) {} });
         }
 
         // Part 2: single-use, round-scoped temporary override of a hole's par/distance.
