@@ -106,21 +106,27 @@ VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct"
 [env.staging]
 name = "gvdg-member-auth-staging"
 
+# Bind the dev API subdomain to this Worker (gvdgclub.com zone is on Cloudflare). wrangler creates the
+# Custom Domain + DNS on deploy. The frontend resolves gvdgclub.com pages -> https://auth.gvdgclub.com.
+[[env.staging.routes]]
+pattern = "auth.gvdgclub.com"
+custom_domain = true
+
 [env.staging.observability]
 enabled = true
 
 [[env.staging.kv_namespaces]]
 binding = "ROSTER"
-id = "REPLACE_WITH_STAGING_ROSTER_KV_ID"
+id = "f608c9470e5e4853878e9e230bcb660b"
 
 [[env.staging.kv_namespaces]]
 binding = "RATELIMIT"
-id = "REPLACE_WITH_STAGING_RATELIMIT_KV_ID"
+id = "94664f864e76466ebe3d0f087526e00a"
 
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "gvdg-staging"
-database_id = "REPLACE_WITH_STAGING_D1_DATABASE_ID"
+database_id = "f276a1dd-a94d-4ca7-b83d-233d5e5c0eba"
 migrations_dir = "migrations"
 
 [[env.staging.r2_buckets]]
@@ -148,10 +154,11 @@ simple = { limit = 20, period = 60 }
 [env.staging.vars]
 ALLOWED_ORIGINS = "https://gvdgclub.com,https://www.gvdgclub.com"
 SESSION_TTL_SEC = "900"
-# Crotts brain on the dev site: best free NVIDIA Nemotron (550B MoE, 1M ctx) via OpenRouter,
-# Workers AI as the fallback. (Big free model = occasional latency; drop to
-# nvidia/nemotron-3-super-120b-a12b:free for snappier replies.)
-OPENROUTER_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
+# Crotts brain on the dev site: best WORKING free NVIDIA Nemotron — super-120b (12B active, ~1s, clean
+# answer in `content` with chain-of-thought in a separate `reasoning` field at 512 tokens). Verified live:
+# the 550b-ultra:free returns no usable response on the free tier and nano-9b returns empty content, so
+# 120b is the sweet spot. Workers AI is the fallback.
+OPENROUTER_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
 ASSISTANT_MODEL = "@cf/meta/llama-3.1-8b-instruct"
 # Payments stay OFF (manual paid flag) on staging unless you add sandbox PayPal secrets; never live here.
 PAYPAL_ENV = "sandbox"
