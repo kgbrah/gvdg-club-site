@@ -213,8 +213,23 @@ export async function decrementStoreProductStock(db: D1Like, id: number, quantit
   await db.prepare("UPDATE store_products SET stock_qty = stock_qty - ?, updated_at = datetime('now') WHERE id = ?").bind(quantity, id).run();
 }
 
+/** Attach each order's line items in one IN-query, grouped in memory. Safe for an empty list. */
+async function attachOrderItems(db: D1Like, orders: Record<string, unknown>[]) {
+  if (!orders.length) return orders;
+  const ids = orders.map((o) => o.id as number);
+  const res = await db.prepare(`SELECT * FROM store_order_items WHERE order_id IN (${ids.map(() => "?").join(",")}) ORDER BY id`).bind(...ids).all();
+  const items = (res?.results ?? []) as Record<string, unknown>[];
+  const byOrder = new Map<number, Record<string, unknown>[]>();
+  for (const it of items) {
+    const oid = it.order_id as number;
+    (byOrder.get(oid) ?? byOrder.set(oid, []).get(oid)!).push(it);
+  }
+  return orders.map((o) => ({ ...o, items: byOrder.get(o.id as number) ?? [] }));
+}
+
 export async function listStoreOrders(db: D1Like, memberId: string) {
-  return (await db.prepare("SELECT * FROM store_orders WHERE member_id = ? ORDER BY id DESC").bind(memberId).all()).results;
+  const orders = (await db.prepare("SELECT * FROM store_orders WHERE member_id = ? ORDER BY id DESC").bind(memberId).all()).results as Record<string, unknown>[];
+  return attachOrderItems(db, orders);
 }
 
 // ---- admin order fulfillment ----
@@ -233,18 +248,7 @@ export async function listAllStoreOrders(db: D1Like, opts: { status?: string; li
   const limit = opts.limit ?? 200;
   const sql = "SELECT * FROM store_orders" + (opts.status ? " WHERE status = ?" : "") + " ORDER BY id DESC LIMIT ?";
   const orders = (await db.prepare(sql).bind(...(opts.status ? [opts.status, limit] : [limit])).all()).results as Record<string, unknown>[];
-  if (!orders.length) return [];
-  const ids = orders.map((o) => o.id as number);
-  const items = (await db
-    .prepare(`SELECT * FROM store_order_items WHERE order_id IN (${ids.map(() => "?").join(",")}) ORDER BY id`)
-    .bind(...ids)
-    .all()).results as Record<string, unknown>[];
-  const byOrder = new Map<number, Record<string, unknown>[]>();
-  for (const it of items) {
-    const oid = it.order_id as number;
-    (byOrder.get(oid) ?? byOrder.set(oid, []).get(oid)!).push(it);
-  }
-  return orders.map((o) => ({ ...o, items: byOrder.get(o.id as number) ?? [] }));
+  return attachOrderItems(db, orders);
 }
 
 /** Count of orders still awaiting admin action — drives the in-app "new orders" badge. */
