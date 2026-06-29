@@ -162,11 +162,13 @@ OPENROUTER_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
 ASSISTANT_MODEL = "@cf/meta/llama-3.1-8b-instruct"
 # Payments stay OFF (manual paid flag) on staging unless you add sandbox PayPal secrets; never live here.
 PAYPAL_ENV = "sandbox"
-# Pro-shop new-order email. The admin Orders tab is the in-app notification; email is sent only once
-# RESEND_API_KEY is set as a secret (wrangler secret put RESEND_API_KEY --env staging). ORDER_NOTIFY_FROM
-# must be a Resend-verified sender; the onboarding default only delivers to the Resend account owner.
+# Transactional email via Resend. RESEND_API_KEY is a secret (wrangler secret put --env staging); the
+# senders below are on the Resend-verified gvdgclub.com domain so mail delivers to anyone. The admin
+# Orders tab + in-app flows work regardless; email just adds a push.
 ORDER_NOTIFY_EMAIL = "greenvillediscgolf@gmail.com"
-ORDER_NOTIFY_FROM = "GVDG Pro Shop <onboarding@resend.dev>"
+ORDER_NOTIFY_FROM = "GVDG Pro Shop <shop@gvdgclub.com>"
+# Guest event-registration confirmation + manage/cancel link (register-notify.ts).
+REGISTER_NOTIFY_FROM = "GVDG Events <events@gvdgclub.com>"
 # WebAuthn is bound to the dev domain — passkeys enrolled here are separate from production.
 RP_ID = "gvdgclub.com"
 RP_NAME = "GVDG Club (dev)"

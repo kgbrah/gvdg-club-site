@@ -5,6 +5,7 @@ import { getMember } from "./roster.js";
 import { computeOwed, paypalBase, createOrder as ppCreateOrder, captureOrder as ppCaptureOrder, type OwedConfig } from "./payments.js";
 import { clientIp, json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
+import { notifyRegistration } from "./register-notify.js";
 import { asInt, asStr } from "./input.js";
 
 const GUEST_REGISTER_IP_LIMIT = 15; // guest sign-ups per IP per minute
@@ -27,6 +28,7 @@ export async function handleClubRegistration(
   origin: string | null,
   method: string,
   seg: string[],
+  ctx?: ExecutionContext,
 ): Promise<Response | null> {
   if (seg[0] !== "events" || !(seg[2] === "registration" || seg[2] === "register" || seg[2] === "checkin" || seg[2] === "pay")) return null;
   const eid = asInt(seg[1]);
@@ -123,6 +125,14 @@ export async function handleClubRegistration(
       if (owedNow > (existing.amount_paid_cents ?? 0)) return json({ error: "paid_addons_locked" }, 409, origin);
     }
     const row = await db.registerForEvent(env.DB, { event_id: eid, member_id: memberId, name, division, team: asStr(b.team, 40), addons, email });
+    // Email a guest (who gave an address) a confirmation + manage/cancel link so they can withdraw from
+    // any device. Members manage via their account; this is a no-op unless RESEND_API_KEY is configured.
+    if (guestToken && email) {
+      const ev = (await db.getEvent(env.DB, eid)) as { name?: string; date?: string | null } | null;
+      const owedCents = computeOwed(cfg as unknown as OwedConfig, addons ? (JSON.parse(addons) as { ctp?: boolean; ace?: boolean }) : {});
+      const manageUrl = origin ? `${origin}/events.html#manage=${eid}-${guestToken}` : null;
+      ctx?.waitUntil(notifyRegistration(env, { to: email, name, eventName: ev?.name ?? "your event", eventDate: ev?.date ?? null, manageUrl, owedCents }));
+    }
     return json(guestToken ? { registration: row, guestToken } : { registration: row }, 201, origin);
   }
   if (seg[2] === "register" && method === "DELETE") {

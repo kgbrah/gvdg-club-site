@@ -1216,7 +1216,19 @@
             const h = window.location.hash || '';
             let m = h.match(/^#event\/(.+)$/); if (m) return { view: 'event', id: decodeURIComponent(m[1]) };
             m = h.match(/^#league\/(.+)$/); if (m) return { view: 'league', id: decodeURIComponent(m[1]) };
+            m = h.match(/^#manage=(\d+)-([a-f0-9]+)$/i); if (m) return { view: 'manage', id: m[1], token: m[2] };
             return null;
+        }
+
+        // A guest's emailed manage link (#manage=<eventId>-<token>): re-seed this browser from the token so
+        // the Register section shows their sign-up here (with Withdraw), then drop the token from the URL.
+        async function applyManage(eid, token) {
+            try {
+                const r = await regApi('/events/' + eid + '/registration?gt=' + encodeURIComponent(token));
+                if (r.ok) { const d = await r.json(); if (d && d.registration) setGuestReg(eid, { guestToken: token, name: d.registration.name }); }
+            } catch (_e) {}
+            history.replaceState(null, '', location.pathname + location.search);
+            loadHub(); startRefresh();
         }
 
         function route() {
@@ -1224,6 +1236,7 @@
             const r = parseHash();
             if (r && r.view === 'event') loadDetail(r.id);
             else if (r && r.view === 'league') loadLeague(r.id);
+            else if (r && r.view === 'manage') applyManage(r.id, r.token);
             else { loadHub(); startRefresh(); }
         }
 
