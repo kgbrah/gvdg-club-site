@@ -256,6 +256,7 @@
                 <button type="button" class="admin-tab" data-atab="registration">Registration</button>
                 <button type="button" class="admin-tab" data-atab="shop">Pro Shop</button>
                 <button type="button" class="admin-tab" data-atab="wallets">Wallets</button>
+                <button type="button" class="admin-tab" data-atab="members">Members</button>
             </div>
             <div class="admin-msg" id="adminMsg"></div>
             <div class="admin-pane active" id="apane-events"><div id="adminEventsList">Loading…</div></div>
@@ -480,6 +481,20 @@
                     <div id="adminWalletRecent" class="wallet-ledger">Loading…</div>
                 </div>
             </div>
+            <div class="admin-pane" id="apane-members">
+                <form class="admin-form" id="adminMemberForm">
+                    <div><label for="amName">Name</label><input id="amName" maxlength="80" required></div>
+                    <div><label for="amPdga">PDGA #</label><input id="amPdga" maxlength="12" inputmode="numeric" placeholder="optional if UDisc set"></div>
+                    <div><label for="amUdisc">UDisc username</label><input id="amUdisc" maxlength="50" placeholder="optional if PDGA# set"></div>
+                    <div style="display:flex;align-items:flex-end;"><label style="display:flex;align-items:center;gap:.5rem;"><input id="amAdmin" type="checkbox"> Make admin</label></div>
+                    <button type="submit" class="admin-btn">Create &amp; issue temp PIN</button>
+                </form>
+                <div id="amTempPin" style="display:none;"></div>
+                <div class="al-section" style="margin-top:1rem;">
+                    <h4 class="al-h">Members</h4>
+                    <div id="adminMembersList">Loading…</div>
+                </div>
+            </div>
         </div>
 
         <div style="text-align:center;">
@@ -642,6 +657,7 @@
             if (tab === 'registration') rgLoadEvents();
             if (tab === 'shop') adminLoadProducts();
             if (tab === 'wallets') adminLoadWalletRecent();
+            if (tab === 'members') adminLoadMembers();
         }
 
         async function adminLoadCourses() {
@@ -1243,6 +1259,55 @@
             else adminMsg('Add failed (' + r.status + ')', false);
         }
 
+        // --- Members: onboard / issue temporary PINs (XSS-safe: textContent + createElement only) ---
+        function showTempPin(member, tempPin) {
+            const box = $('amTempPin');
+            box.textContent = '';
+            box.style.cssText = 'display:block;margin-top:1rem;padding:1rem 1.25rem;border:2px solid var(--primary,#FF6B35);border-radius:12px;background:rgba(255,107,53,0.08);';
+            const idLabel = member.pdgaNo ? ('PDGA# ' + member.pdgaNo) : (member.udisc || member.memberId);
+            box.appendChild(elx('div', null, 'Temporary PIN for ' + member.name + ' (' + idLabel + ')'));
+            const row = elx('div'); row.style.cssText = 'display:flex;align-items:center;gap:1rem;margin:.5rem 0;';
+            const pin = elx('span', null, tempPin); pin.style.cssText = 'font-size:2rem;font-weight:800;letter-spacing:.3em;font-family:ui-monospace,monospace;';
+            row.appendChild(pin);
+            const copy = elx('button', 'admin-btn', 'Copy'); copy.type = 'button';
+            copy.addEventListener('click', () => { try { navigator.clipboard.writeText(tempPin); } catch (e) {} copy.textContent = 'Copied'; setTimeout(() => { copy.textContent = 'Copy'; }, 1200); });
+            row.appendChild(copy);
+            box.appendChild(row);
+            const note = elx('div', null, 'Give this to ' + member.name + '. They log in with their ' + (member.pdgaNo ? 'PDGA#' : 'UDisc') + ' + this PIN, then set their own PIN. Shown once.');
+            note.style.cssText = 'font-size:.85rem;opacity:.8;';
+            box.appendChild(note);
+        }
+        async function adminLoadMembers() {
+            const list = $('adminMembersList'); list.textContent = 'Loading…';
+            let members = [];
+            try { const r = await adminApi('/admin/members'); if (r.ok) members = (await r.json()).members || []; } catch (e) {}
+            list.textContent = '';
+            if (!members.length) { list.appendChild(elx('p', 'al-note', 'No members yet.')); return; }
+            members.forEach((m) => {
+                const id = m.pdgaNo || m.udisc || m.memberId;
+                const row = elx('div', 'admin-evrow');
+                row.appendChild(elx('span', 'ev-name', m.name + ' — ' + id + (m.isAdmin ? ' · admin' : '') + (m.mustChangePin ? ' · PIN not set' : '')));
+                const re = elx('button', 'admin-btn', 'Reissue PIN'); re.type = 'button';
+                re.addEventListener('click', async () => {
+                    if (!confirm('Issue a new temporary PIN for ' + m.name + '? Their current PIN stops working.')) return;
+                    const r = await adminApi('/admin/members/reset-pin', { method: 'POST', body: { identifier: id } });
+                    if (r.ok) { const j = await r.json(); showTempPin(j.member, j.tempPin); adminMsg('New temp PIN issued', true); adminLoadMembers(); }
+                    else adminMsg('Reissue failed (' + r.status + ')', false);
+                });
+                row.appendChild(re);
+                list.appendChild(row);
+            });
+        }
+        async function adminAddMember(e) {
+            e.preventDefault();
+            const body = { name: $('amName').value.trim(), pdgaNo: $('amPdga').value.trim() || null, udisc: $('amUdisc').value.trim() || null, isAdmin: $('amAdmin').checked };
+            if (!body.name) { adminMsg('Name is required', false); return; }
+            if (!body.pdgaNo && !body.udisc) { adminMsg('PDGA# or UDisc is required', false); return; }
+            const r = await adminApi('/admin/members', { method: 'POST', body });
+            if (r.ok) { const j = await r.json(); showTempPin(j.member, j.tempPin); adminMsg('Member created', true); $('adminMemberForm').reset(); adminLoadMembers(); }
+            else { let err = {}; try { err = await r.json(); } catch (e) {} adminMsg('Create failed: ' + (err.error || r.status), false); }
+        }
+
         function productThumb(product) {
             if (product.image_url) {
                 const img = elx('img', 'shop-admin-thumb');
@@ -1500,6 +1565,7 @@
             $('adminMeetingForm').addEventListener('submit', adminAddMeeting);
             $('adminProductForm').addEventListener('submit', adminAddProduct);
             $('adminWalletForm').addEventListener('submit', adminPostWalletAdjustment);
+            $('adminMemberForm').addEventListener('submit', adminAddMember);
             $('rgEvent').addEventListener('change', rgOnSelect);
             $('rgSaveBtn').addEventListener('click', rgSaveConfig);
             $('rgAssignHoles').addEventListener('click', () => rgAssign('assign-starting-holes', { shuffle: true, groupSize: 4 }));
