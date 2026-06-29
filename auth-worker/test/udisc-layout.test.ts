@@ -77,12 +77,35 @@ describe("parseUdiscLayouts — turbo-stream decode", () => {
     expect(layouts[1]!.positions).toHaveLength(2); // 1 hole → 1 tee + 1 target
   });
 
-  it("dedupes layouts by UDisc layoutId", () => {
-    // Same pool referenced twice from the root must not yield duplicate layouts.
+  it("does not double-count a single layout referenced twice (object identity)", () => {
+    // Same pool object referenced twice from the root must not yield duplicate layouts.
     const dupPool = POOL.slice();
     dupPool[0] = [34, 35, 34];
     const { layouts } = parseUdiscLayouts(turboStreamHtml(dupPool), "https://udisc.com/courses/x");
     expect(layouts).toHaveLength(2);
+  });
+
+  it("dedupes two DISTINCT layout objects that share the same UDisc layoutId", () => {
+    // Different layout objects (different names/holes) but an identical layoutId → keep only the first.
+    const pool = [
+      /* 0*/ [5, 6], // root: [layoutA, layoutB]
+      /* 1*/ "name",
+      /* 2*/ "layoutId",
+      /* 3*/ "holes",
+      /* 4*/ "par",
+      /* 5*/ { _1: 8, _2: 7, _3: 12 }, // layoutA {name:"Alpha", layoutId:"LID-1", holes:[hole]}
+      /* 6*/ { _1: 9, _2: 7, _3: 13 }, // layoutB {name:"Beta",  layoutId:"LID-1" (same), holes:[hole]}
+      /* 7*/ "LID-1", // shared layoutId value
+      /* 8*/ "Alpha",
+      /* 9*/ "Beta",
+      /*10*/ 3, // par
+      /*11*/ { _4: 10 }, // a hole {par:3}
+      /*12*/ [11], // layoutA holes
+      /*13*/ [11], // layoutB holes
+    ];
+    const { layouts } = parseUdiscLayouts(turboStreamHtml(pool), "https://udisc.com/courses/x");
+    expect(layouts).toHaveLength(1);
+    expect(layouts[0]!.name).toBe("Alpha");
   });
 
   it("parseUdiscLayout returns the first layout", () => {

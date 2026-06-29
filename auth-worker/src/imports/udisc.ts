@@ -46,9 +46,17 @@ export function parseUdiscCourse(html: string, url: string): CourseCandidate {
   };
 }
 
+// The title/og:title live in <head>; bound the regex input to it (capped) so a multi-MB or hostile
+// body can't turn these scans into a slow polynomial walk over the whole payload.
+function headSection(html: string): string {
+  const end = html.search(/<\/head>/i);
+  return end >= 0 ? html.slice(0, end) : html.slice(0, 50_000);
+}
+
 function titleFromHtml(html: string): string {
-  const og = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i);
-  const title = html.match(/<title>([^<]+)<\/title>/i);
+  const head = headSection(html);
+  const og = head.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i);
+  const title = head.match(/<title>([^<]+)<\/title>/i);
   let name = (og?.[1] ?? title?.[1] ?? "").trim();
   name = name.replace(/&middot;/gi, "·").replace(/&amp;/gi, "&");
   // UDisc titles look like "West Meadowbrook Park - Greenville, NC | UDisc …" — keep the course name.
@@ -90,15 +98,18 @@ function turboStreamValues(html: string): unknown[] {
 // Resolve the flat pool into a real object graph. Indices reference other entries; an object's keys
 // are themselves index references (`"_<idx>"`). Memoized + cycle-safe (the container is cached before
 // its children are filled). Negative indices are turbo-stream sentinels — mapped to null (NaN for -3).
+const MAX_HYDRATE_DEPTH = 1000; // backstop: real UDisc graphs are shallow; degrade rather than blow the stack
+
 function unflatten(values: unknown[]): unknown {
   const cache = new Array<unknown>(values.length);
   const done = new Array<boolean>(values.length).fill(false);
 
-  function hyd(i: unknown): unknown {
+  function hyd(i: unknown, depth: number): unknown {
     if (typeof i !== "number") return undefined;
     if (i < 0) return i === -3 ? NaN : null;
     if (i >= values.length) return null;
     if (done[i]) return cache[i];
+    if (depth > MAX_HYDRATE_DEPTH) return null; // explicit cap on a pathological reference chain
 
     const v = values[i];
     if (v === null || typeof v !== "object") {
@@ -116,19 +127,19 @@ function unflatten(values: unknown[]): unknown {
       const arr: unknown[] = [];
       done[i] = true;
       cache[i] = arr;
-      for (const el of v) arr.push(hyd(el));
+      for (const el of v) arr.push(hyd(el, depth + 1));
       return arr;
     }
     const obj: Record<string, unknown> = {};
     done[i] = true;
     cache[i] = obj;
     for (const k of Object.keys(v as Record<string, unknown>)) {
-      const keyName = k[0] === "_" ? hyd(parseInt(k.slice(1), 10)) : k;
-      obj[String(keyName)] = hyd((v as Record<string, unknown>)[k]);
+      const keyName = k[0] === "_" ? hyd(parseInt(k.slice(1), 10), depth + 1) : k;
+      obj[String(keyName)] = hyd((v as Record<string, unknown>)[k], depth + 1);
     }
     return obj;
   }
-  return hyd(0);
+  return hyd(0, 0);
 }
 
 function isLayout(o: unknown): o is { name?: unknown; layoutId?: unknown; holes: unknown[] } {
