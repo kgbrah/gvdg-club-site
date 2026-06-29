@@ -1227,26 +1227,25 @@
         // ---- Event registration (Track G) — sign up, pick division/add-ons, check in, pay ----
         function regToken() { return sessionStorage.getItem(TOKEN_KEY); }
         let paymentsCfg = null, paypalSdkPromise = null;
-        // Surface any live event with a one-tap link into the scorecard app (members use their saved login).
+        // Live-scoring entry: any live event (one tap into its card) + always an option to start/join a
+        // casual round. Members use their saved login in the scorecard app (score.html).
         async function loadLiveScoring() {
             const wrap = $('liveScoring'); if (!wrap) return;
-            wrap.replaceChildren(); wrap.style.display = 'none';
-            let events = [];
-            try { const r = await api('/events'); if (r.ok) events = ((await r.json()).events) || []; } catch (_e) { return; }
-            const live = events.filter((e) => e && e.status === 'live');
-            if (!live.length) return;
-            wrap.style.display = '';
+            wrap.replaceChildren();
             const card = elNode('div', 'club-board');
-            card.appendChild(elNode('h3', 'my-dashboard-title', '🟢 Live Now'));
-            live.forEach((ev) => {
+            card.appendChild(elNode('h3', 'my-dashboard-title', '🥏 Live Scoring'));
+            const mkRow = (text, label, href) => {
                 const row = elNode('div', 'board-status');
-                row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;';
-                row.appendChild(elNode('span', null, ev.name + ' is being scored live.'));
-                const a = elNode('a', 'passkey-btn', '✏️ Keep score');
-                a.href = 'score.html?event=' + encodeURIComponent(ev.id);
-                row.appendChild(a);
-                card.appendChild(row);
-            });
+                row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;margin-top:0.5rem;';
+                row.appendChild(elNode('span', null, text));
+                const a = elNode('a', 'passkey-btn', label); a.href = href;
+                row.appendChild(a); card.appendChild(row);
+            };
+            let events = [];
+            try { const r = await api('/events'); if (r.ok) events = ((await r.json()).events) || []; } catch (_e) {}
+            events.filter((e) => e && e.status === 'live').forEach((ev) => mkRow('🟢 ' + ev.name + ' is live', '✏️ Keep score', 'score.html?event=' + encodeURIComponent(ev.id)));
+            mkRow('Playing a casual round?', '⛳ Start / join a card', 'score.html');
+            wrap.style.display = '';
             wrap.appendChild(card);
         }
 

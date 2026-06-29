@@ -161,9 +161,13 @@
         const TOKEN_KEY = 'gvdg_member_token', NAME_KEY = 'gvdg_member_name', GUESTREG_KEY = 'gvdg_guest_regs';
         const params = new URLSearchParams(location.search);
         const EVENT_ID = (params.get('event') || '').replace(/[^0-9]/g, '');
-        // A guest scores via their event-registration token (from the URL ?gt= or saved at registration).
+        const ROUND_CODE = (params.get('round') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const MODE = ROUND_CODE ? 'round' : (EVENT_ID ? 'event' : 'home'); // event scoring · casual round · home
+        const LIVE = ROUND_CODE ? ('/rounds/' + ROUND_CODE + '/live') : ('/events/' + EVENT_ID + '/live');
+        // A guest scores an EVENT via their registration token (URL ?gt= or saved at registration); casual
+        // rounds are members-only, so there is no guest token there.
         function guestTokenStored() { try { const a = JSON.parse(localStorage.getItem(GUESTREG_KEY) || '{}'); return (a[EVENT_ID] && a[EVENT_ID].guestToken) || null; } catch (e) { return null; } }
-        const GUEST_TOKEN = params.get('gt') || guestTokenStored();
+        const GUEST_TOKEN = MODE === 'event' ? (params.get('gt') || guestTokenStored()) : null;
 
         const app = document.getElementById('app');
         const S = { holes: [], cardId: null, myIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null };
@@ -218,7 +222,7 @@
             let q = qLoad(); if (!q.length) return;
             const remain = [];
             for (const item of q) {
-                const r = await api('/events/' + EVENT_ID + '/live/score', { method: 'POST', body: { index: item.index, hole: item.hole, strokes: item.strokes } });
+                const r = await api(LIVE + '/score', { method: 'POST', body: { index: item.index, hole: item.hole, strokes: item.strokes } });
                 if (!r.ok && (r.neterr || r.status >= 500)) remain.push(item); // keep only transient failures
             }
             qSave(remain);
@@ -250,7 +254,7 @@
             pending.add(key);
             setLocal(index, hole, strokes);
             renderHole();
-            const r = await api('/events/' + EVENT_ID + '/live/score', { method: 'POST', body: { index: index, hole: hole, strokes: strokes } });
+            const r = await api(LIVE + '/score', { method: 'POST', body: { index: index, hole: hole, strokes: strokes } });
             pending.delete(key);
             if (r.ok) { S.snap = r.data; mergeFromSnap(); }
             else if (r.neterr) { qAdd({ index: index, hole: hole, strokes: strokes }); setOnline(false); }
@@ -281,7 +285,7 @@
             if (!EVENT_ID) return;
             try { if (S.ws) S.ws.close(); } catch (e) {}
             let ws;
-            try { ws = new WebSocket(API_BASE.replace(/^http/, 'ws') + '/events/' + EVENT_ID + '/live/ws'); }
+            try { ws = new WebSocket(API_BASE.replace(/^http/, 'ws') + LIVE + '/ws'); }
             catch (e) { return; }
             S.ws = ws;
             ws.addEventListener('message', function (ev) {
@@ -337,6 +341,21 @@
             const h = holeMeta(S.holeIdx);
             document.getElementById('lbBtn').hidden = false;
             const c = el('div');
+
+            // Casual round: share the code + add walk-on players to the card.
+            if (MODE === 'round') {
+                const bar = el('div', 'card');
+                bar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:0.5rem;padding:0.55rem 0.85rem;';
+                const left = el('div');
+                left.appendChild(el('span', 'muted', 'Code '));
+                const strong = document.createElement('strong'); strong.textContent = ROUND_CODE; strong.style.letterSpacing = '1.5px'; left.appendChild(strong);
+                const actions = el('div'); actions.style.cssText = 'display:flex;gap:0.4rem;';
+                const share = el('button', 'btn small secondary', 'Share'); share.addEventListener('click', shareRound);
+                const add = el('button', 'btn small secondary', '+ Player'); add.addEventListener('click', addGuestPrompt);
+                actions.appendChild(share); actions.appendChild(add);
+                bar.appendChild(left); bar.appendChild(actions);
+                c.appendChild(bar);
+            }
 
             // hole header + nav
             const head = el('div', 'hole-head');
@@ -427,13 +446,19 @@
 
         // ---------- boot ----------
         async function loadMine() {
-            const r = await api('/events/' + EVENT_ID + '/live/mine');
-            if (r.status === 401) { renderLogin('Please sign in to keep score for this round.'); return; }
+            let r = await api(LIVE + '/mine');
+            // Casual round: if we're not on it yet, join with the code, then re-load our card.
+            if (MODE === 'round' && r.ok && r.data && r.data.cardId == null && r.data.status === 'live') {
+                const jr = await api('/rounds/' + ROUND_CODE + '/join', { method: 'POST', body: {} });
+                if (jr.ok) r = await api(LIVE + '/mine');
+            }
+            if (r.status === 401) { renderLogin('Please sign in to keep score.'); return; }
             if (!r.ok || !r.data) { renderMessage('Couldn’t load your card', 'Check your connection and try again.', true); return; }
             const d = r.data;
             S.status = d.status || null;
             if (d.cardId == null || !Array.isArray(d.cardmates) || !d.cardmates.length) {
-                renderMessage('No card yet', 'Either the round hasn’t started or you’re not on a card for this event. Ask an admin to start the round and assign cards.', true);
+                if (MODE === 'round') renderMessage('Round not found', 'That round code isn’t active. Double-check it, or start a new round.', true);
+                else renderMessage('No card yet', 'Either the round hasn’t started or you’re not on a card for this event. Ask an admin to start the round and assign cards.', true);
                 return;
             }
             S.holes = Array.isArray(d.holes) ? d.holes : [];
@@ -443,17 +468,90 @@
             const sh = me && me.startingHole;
             const startIdx = sh ? S.holes.findIndex((h) => h.hole === sh) : 0;
             S.holeIdx = startIdx >= 0 ? startIdx : 0;
-            document.getElementById('barTitle').firstChild.textContent = 'Card ' + (S.cardId || '');
+            document.getElementById('barTitle').firstChild.textContent = MODE === 'round' ? ('Round ' + ROUND_CODE) : ('Card ' + (S.cardId || ''));
             renderHole();
             connectWs();
             flushQueue();
         }
 
+        // ---- casual round: home, course/layout pickers, create, add guest ----
+        function spinner() { return (function () { const d = el('div', 'center'); d.appendChild(el('div', 'spin')); return d; })(); }
+        function renderHome() {
+            const c = el('div', 'stack');
+            const h = el('div', 'card stack');
+            h.appendChild(el('h2', 'section', 'Keep score'));
+            h.appendChild(el('p', 'muted', 'Start a casual round and share the code with your card, or join a round someone already started.'));
+            const start = el('button', 'btn', '⛳ Start a casual round'); start.addEventListener('click', renderCoursePick);
+            h.appendChild(start);
+            h.appendChild(el('label', 'lbl', 'Join with a code'));
+            const ji = el('input', 'field'); ji.placeholder = 'e.g. K7M2QX'; ji.autocapitalize = 'characters'; ji.maxLength = 8;
+            const jb = el('button', 'btn secondary', 'Join round');
+            jb.addEventListener('click', function () { const code = (ji.value || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); if (code.length >= 4) location.search = '?round=' + code; else toast('Enter a valid code'); });
+            h.appendChild(ji); h.appendChild(jb);
+            c.appendChild(h);
+            const out = el('button', 'btn ghost', 'Sign out'); out.addEventListener('click', function () { try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {} renderLogin(); });
+            c.appendChild(out);
+            shell(c);
+        }
+        async function renderCoursePick() {
+            shell(spinner());
+            const r = await api('/courses', { auth: false });
+            const courses = (r.ok && r.data && r.data.courses) || [];
+            const c = el('div', 'stack');
+            const back = el('button', 'btn ghost small', '‹ Back'); back.addEventListener('click', renderHome); c.appendChild(back);
+            c.appendChild(el('h2', 'section', 'Pick a course'));
+            if (!courses.length) c.appendChild(el('p', 'muted', 'No courses found.'));
+            courses.forEach(function (co) {
+                const row = el('button', 'tap-row'); const g = el('div', 'grow');
+                g.appendChild(el('div', 'title', co.name)); if (co.location) g.appendChild(el('div', 'sub', co.location));
+                row.appendChild(g); row.appendChild(el('div', 'chev', '›'));
+                row.addEventListener('click', function () { renderLayoutPick(co); });
+                c.appendChild(row);
+            });
+            shell(c);
+        }
+        async function renderLayoutPick(course) {
+            shell(spinner());
+            const r = await api('/courses/' + encodeURIComponent(course.id) + '/layouts', { auth: false });
+            const layouts = (r.ok && r.data && r.data.layouts) || [];
+            const c = el('div', 'stack');
+            const back = el('button', 'btn ghost small', '‹ Back'); back.addEventListener('click', renderCoursePick); c.appendChild(back);
+            c.appendChild(el('h2', 'section', course.name));
+            if (!layouts.length) c.appendChild(el('p', 'muted', 'This course has no scorable layouts yet — an admin can add one (Admin → Layouts, or import from UDisc).'));
+            layouts.forEach(function (L) {
+                const row = el('button', 'tap-row'); const g = el('div', 'grow');
+                g.appendChild(el('div', 'title', L.name || 'Layout')); g.appendChild(el('div', 'sub', L.total_par != null ? ('Par ' + L.total_par) : ''));
+                row.appendChild(g); row.appendChild(el('div', 'chev', '›'));
+                row.addEventListener('click', function () { createRound(course, L); });
+                c.appendChild(row);
+            });
+            shell(c);
+        }
+        async function createRound(course, layout) {
+            shell(spinner());
+            const r = await api('/rounds', { method: 'POST', body: { course_id: course.id, layout_id: layout.id } });
+            if (r.ok && r.data && r.data.code) { location.search = '?round=' + r.data.code; return; }
+            renderMessage('Could not start round', (r.data && r.data.error === 'no_layout_holes') ? 'That layout has no holes/pars yet.' : 'Please try again.', false);
+        }
+        async function addGuestPrompt() {
+            const name = (window.prompt('Add a player to your card (their name):') || '').trim();
+            if (!name) return;
+            const r = await api('/rounds/' + ROUND_CODE + '/guest', { method: 'POST', body: { name: name } });
+            if (r.ok && r.data && Array.isArray(r.data.cardmates)) { S.cardmates = r.data.cardmates; renderHole(); toast(name + ' added'); }
+            else toast('Could not add player');
+        }
+        function shareRound() {
+            const url = location.origin + location.pathname + '?round=' + ROUND_CODE;
+            if (navigator.share) { navigator.share({ title: 'GVDG round ' + ROUND_CODE, text: 'Join my disc golf card — code ' + ROUND_CODE, url: url }).catch(function () {}); }
+            else if (navigator.clipboard) { navigator.clipboard.writeText(url).then(function () { toast('Link copied'); }).catch(function () { toast('Code: ' + ROUND_CODE); }); }
+            else toast('Code: ' + ROUND_CODE);
+        }
+
         async function boot() {
             setOnline(navigator.onLine);
-            if (!EVENT_ID) { renderMessage('Open from an event', 'Tap “Keep score” on a live event to start scoring.'); return; }
+            if (MODE === 'home') { if (!memberToken()) { renderLogin(); return; } renderHome(); return; }
             if (!memberToken() && !GUEST_TOKEN) { renderLogin(); return; }
-            shell((function () { const d = el('div', 'center'); d.appendChild(el('div', 'spin')); return d; })());
+            shell(spinner());
             await loadMine();
         }
         if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('sw.js'); } catch (e) {} }
