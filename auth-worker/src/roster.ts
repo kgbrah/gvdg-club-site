@@ -210,3 +210,26 @@ export async function listMembers(kv: KVListLike): Promise<AdminMember[]> {
   out.sort((a, b) => a.name.localeCompare(b.name));
   return out;
 }
+
+/** Resolve a member for admin tools by ANY of: internal memberId (`m_…`), PDGA# (digits), UDisc
+ *  username, or an exact (case-insensitive) display name. The name match must be unambiguous — two
+ *  members with the same name return `ambiguous` so an admin can't credit the wrong wallet. */
+export async function resolveMemberFlexible(
+  kv: KVListLike,
+  identifier: string,
+): Promise<{ ok: true; member: Member } | { ok: false; reason: "not_found" | "ambiguous" }> {
+  const id = identifier.trim();
+  if (!id) return { ok: false, reason: "not_found" };
+  const byId = await getMember(kv, id);
+  if (byId) return { ok: true, member: byId };
+  const resolved = await resolveMember(kv, id); // PDGA# or UDisc username
+  if (resolved) return { ok: true, member: resolved };
+  const lc = id.toLowerCase();
+  const named = (await listMembers(kv)).filter((m) => m.name.trim().toLowerCase() === lc);
+  if (named.length > 1) return { ok: false, reason: "ambiguous" };
+  if (named.length === 1) {
+    const full = await getMember(kv, named[0]!.memberId);
+    if (full) return { ok: true, member: full };
+  }
+  return { ok: false, reason: "not_found" };
+}

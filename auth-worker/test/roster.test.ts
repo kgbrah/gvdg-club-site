@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { putMember, resolveMember, getMember, setPin, updateProfile, type Member } from "../src/roster.js";
+import { putMember, resolveMember, getMember, setPin, updateProfile, resolveMemberFlexible, type KVListLike, type Member } from "../src/roster.js";
 import type { KVLike } from "../src/ratelimit.js";
 
 function makeKV(): KVLike {
@@ -92,5 +92,42 @@ describe("updateProfile", () => {
     await updateProfile(kv, "m_a", { pdgaNo: "333" });
     expect(await resolveMember(kv, "111")).toBeNull();
     expect((await resolveMember(kv, "333"))?.memberId).toBe("m_a");
+  });
+});
+
+describe("resolveMemberFlexible (admin member lookup by any identifier)", () => {
+  function makeListKV(): KVListLike {
+    const m = new Map<string, string>();
+    return {
+      get: async (k) => (m.has(k) ? m.get(k)! : null),
+      put: async (k, v) => void m.set(k, v),
+      delete: async (k) => void m.delete(k),
+      list: async ({ prefix = "" }: { prefix?: string; cursor?: string } = {}) => ({
+        keys: [...m.keys()].filter((k) => k.startsWith(prefix)).map((name) => ({ name })),
+        list_complete: true,
+      }),
+    };
+  }
+
+  it("resolves by internal id, PDGA#, UDisc, and exact (case-insensitive) name", async () => {
+    const kv = makeListKV();
+    await putMember(kv, SAMPLE);
+    for (const idf of ["m_abc123", "12345", "JaneD", "jane doe"]) {
+      const r = await resolveMemberFlexible(kv, idf);
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.member.memberId).toBe("m_abc123");
+    }
+  });
+
+  it("distinguishes not_found from an ambiguous name", async () => {
+    const kv = makeListKV();
+    await putMember(kv, SAMPLE);
+    await putMember(kv, { ...SAMPLE, memberId: "m_dup", pdgaNo: "67890", udisc: "JaneD2" }); // same display name
+    const nf = await resolveMemberFlexible(kv, "nobody");
+    expect(nf.ok).toBe(false);
+    if (!nf.ok) expect(nf.reason).toBe("not_found");
+    const amb = await resolveMemberFlexible(kv, "Jane Doe");
+    expect(amb.ok).toBe(false);
+    if (!amb.ok) expect(amb.reason).toBe("ambiguous");
   });
 });
