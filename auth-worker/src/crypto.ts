@@ -50,6 +50,19 @@ export function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
   return diff === 0;
 }
 
+/** Cryptographically-random 4-digit PIN (uniform 0000-9999), for admin-issued temporary PINs.
+ *  Rejection sampling (drop a byte in [200,255]) avoids the modulo bias `byte % 100` would introduce. */
+export function generatePin(): string {
+  const pair = (): number => {
+    const buf = new Uint8Array(1);
+    for (;;) {
+      crypto.getRandomValues(buf);
+      if (buf[0]! < 200) return buf[0]! % 100; // [0,199] is an exact 2x of the 100 buckets -> uniform
+    }
+  };
+  return String(pair()).padStart(2, "0") + String(pair()).padStart(2, "0");
+}
+
 /** Hash a PIN into the encoded form `pbkdf2$sha256$<iters>$<saltB64url>$<hashB64url>`. */
 export async function hashPin(pin: string): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));

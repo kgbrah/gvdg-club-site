@@ -7,6 +7,7 @@ import { handleAdminEvents } from "./club-admin-events.js";
 import { handleAdminFundraisers, handleAdminLeagues, handleAdminMeetings } from "./club-admin-content.js";
 import { handleAdminImport } from "./club-admin-imports.js";
 import { handleAdminLayouts } from "./club-admin-layouts.js";
+import { handleAdminMembers } from "./club-admin-members.js";
 import { handleAdminShop } from "./club-admin-shop.js";
 import { handleAdminTeeSigns } from "./club-admin-tee-signs.js";
 
@@ -33,6 +34,7 @@ export async function handleClubAdmin(
   else if (sub === "meetings") response = await handleAdminMeetings(request, env, origin, method, adminId, id);
   else if (sub === "import" && method === "POST") response = await handleAdminImport(request, env, origin);
   else if (sub === "layouts") response = await handleAdminLayouts(request, env, origin, method, id);
+  else if (sub === "members") response = await handleAdminMembers(request, env, origin, method, seg);
   else if (sub === "shop" || sub === "wallets") response = await handleAdminShop(request, env, origin, method, seg, adminId);
   else if (sub === "tee-signs") response = await handleAdminTeeSigns(request, env, origin, method, seg, adminId, id);
 

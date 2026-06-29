@@ -139,3 +139,74 @@ export async function updateProfile(kv: KVLike, memberId: string, patch: Profile
   await kv.put(RECORD(memberId), JSON.stringify(m));
   return { ok: true, member: m };
 }
+
+// ---------------- admin onboarding (issue temporary PINs) ----------------
+
+/** KVLike plus `list` — for enumerating member records in the admin members view. */
+export interface KVListLike extends KVLike {
+  list(opts?: { prefix?: string; cursor?: string; limit?: number }): Promise<{ keys: { name: string }[]; list_complete: boolean; cursor?: string }>;
+}
+
+/** Stable memberId from identity: prefers PDGA# (`m_<digits>`), else UDisc (`m_u_<lowercase>`). */
+export function memberIdFor(input: { pdgaNo?: string | null; udisc?: string | null }): string | null {
+  const pdga = input.pdgaNo ? normPdga(input.pdgaNo) : "";
+  if (pdga) return `m_${pdga}`;
+  const udisc = input.udisc ? normUdisc(input.udisc) : "";
+  if (udisc) return `m_u_${udisc}`;
+  return null;
+}
+
+export type CreateMemberInput = { name: string; pdgaNo?: string | null; udisc?: string | null; isAdmin?: boolean };
+export type CreateResult = { ok: true; member: Member } | { ok: false; reason: "exists" | "conflict" | "invalid" };
+export type AdminMember = Pick<Member, "memberId" | "name" | "pdgaNo" | "udisc" | "isAdmin" | "mustChangePin">;
+
+/** Create a NEW member with an admin-issued temporary PIN (mustChangePin: true). Fails with `exists`
+ *  if the member id is taken, or `conflict` if a PDGA#/UDisc index already points at someone else —
+ *  use resetMemberPin to reissue a PIN for an existing member instead. */
+export async function createMember(kv: KVLike, input: CreateMemberInput, pinHash: string): Promise<CreateResult> {
+  const memberId = memberIdFor(input);
+  if (!memberId || !input.name?.trim()) return { ok: false, reason: "invalid" };
+  if (await kv.get(RECORD(memberId))) return { ok: false, reason: "exists" };
+  const pdga = input.pdgaNo ? normPdga(input.pdgaNo) : "";
+  const udisc = input.udisc ? normUdisc(input.udisc) : "";
+  if (pdga) { const o = await kv.get(IDX_PDGA(pdga)); if (o && o !== memberId) return { ok: false, reason: "conflict" }; }
+  if (udisc) { const o = await kv.get(IDX_UDISC(udisc)); if (o && o !== memberId) return { ok: false, reason: "conflict" }; }
+  const m: Member = {
+    memberId,
+    name: input.name.trim(),
+    ...(pdga ? { pdgaNo: pdga } : {}),
+    ...(udisc ? { udisc: input.udisc!.trim() } : {}),
+    ...(input.isAdmin ? { isAdmin: true } : {}),
+    pinHash,
+    mustChangePin: true,
+  };
+  await putMember(kv, m);
+  return { ok: true, member: m };
+}
+
+/** Reissue a temporary PIN for an EXISTING member (resolved by PDGA#/UDisc): sets the new hash and
+ *  forces a change on next login; other fields are untouched. Returns the member, or null if not found. */
+export async function resetMemberPin(kv: KVLike, identifier: string, pinHash: string): Promise<Member | null> {
+  const m = await resolveMember(kv, identifier);
+  if (!m) return null;
+  m.pinHash = pinHash;
+  m.mustChangePin = true;
+  await kv.put(RECORD(m.memberId), JSON.stringify(m));
+  return m;
+}
+
+/** List all members for the admin view — public-safe fields only, NEVER the pinHash. */
+export async function listMembers(kv: KVListLike): Promise<AdminMember[]> {
+  const out: AdminMember[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await kv.list({ prefix: "member:", cursor });
+    for (const k of page.keys) {
+      const m = await getMember(kv, k.name.slice("member:".length));
+      if (m) out.push({ memberId: m.memberId, name: m.name, pdgaNo: m.pdgaNo, udisc: m.udisc, isAdmin: m.isAdmin === true, mustChangePin: m.mustChangePin });
+    }
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+  out.sort((a, b) => a.name.localeCompare(b.name));
+  return out;
+}
