@@ -39,6 +39,24 @@ function rowText(row: Record<string, unknown>, key: string): string {
   return typeof value === "string" ? value : "";
 }
 
+// Who may act on a PayPal session/order: a "guest" row is open (the PayPal payment verification is the
+// real control), a member's row only by that logged-in member.
+function buyerMatches(rowMemberId: string, auth: { sub: string } | null): boolean {
+  if (rowMemberId === "guest") return true;
+  return !!auth && auth.sub === rowMemberId;
+}
+
+// A checkout caller may see their order, but not admin-only fields. The guest path has no per-caller
+// auth, so never echo notes/tracking a third party holding the orderId could read.
+function safeOrder(row: unknown): unknown {
+  if (!row || typeof row !== "object") return row;
+  const o: Record<string, unknown> = { ...(row as Record<string, unknown>) };
+  delete o.admin_note;
+  delete o.tracking_carrier;
+  delete o.tracking_number;
+  return o;
+}
+
 function cartItems(body: Record<string, unknown> | null): CartItem[] | null {
   if (!Array.isArray(body?.items)) return null;
   const merged = new Map<number, number>();
@@ -49,6 +67,7 @@ function cartItems(body: Record<string, unknown> | null): CartItem[] | null {
     if (productId == null || quantity == null || quantity < 1 || quantity > 20) return null;
     merged.set(productId, (merged.get(productId) ?? 0) + quantity);
   }
+  if (merged.size > 50) return null; // bound the cart so a huge id list can't overflow the SQL IN(...) params
   const items = Array.from(merged.entries()).map(([productId, quantity]) => ({ productId, quantity }));
   return items.length ? items : null;
 }
@@ -177,8 +196,81 @@ export async function handleClubShop(
     }
     const contact = asStr(body.contact, 120);
     if (contact) await shopDb.updateStoreOrderFulfillment(env.DB, orderId, { admin_note: "Contact: " + contact });
-    ctx?.waitUntil(notifyNewOrder(env, order, priced.lines));
+    // No email here: this path is unauthenticated and payment isn't confirmed (paypal.me reconcile-later),
+    // so an email per call would be a spam/flood vector. The admin sees it in the in-app Orders tab; the
+    // new-order email fires only for PAID orders (store credit / captured PayPal) via submitStoreOrder.
     return json({ orderId, amount_cents: priced.total }, 201, origin);
+  }
+
+  // PayPal Checkout with AUTOMATIC confirmation — active whenever PAYPAL_CLIENT_ID/SECRET are set, for
+  // members AND guests. create-order prices the cart and opens a PayPal order; capture verifies the
+  // payment server-side (status COMPLETED + amount >= total) before the order is recorded and stock
+  // decremented. This supersedes the paypal.me redirect above once credentials are configured.
+  if (method === "POST" && seg[1] === "pay" && seg[2] === "create-order") {
+    if (!(env.PAYPAL_CLIENT_ID && env.PAYPAL_SECRET)) return json({ error: "payments_not_configured" }, 503, origin);
+    if (await kvRateLimited(env, "ppcreate:" + clientIp(request), 15, 60)) return json({ error: "rate_limited" }, 429, origin);
+    const body = (await readJson(request)) ?? {};
+    const items = cartItems(body);
+    if (!items) return json({ error: "invalid_order" }, 400, origin);
+    const auth = await requireAuth(request, env);
+    let buyerId = "guest";
+    let buyerName = asStr(body.name, 80) ?? "";
+    if (auth) { const m = await getMember(env.ROSTER, auth.sub); if (m) { buyerId = m.memberId; buyerName = m.name; } }
+    if (!buyerName) return json({ error: "name_required" }, 400, origin);
+    const priced = await priceCart(env.DB, items);
+    if (!priced.ok) return json(priced.body, priced.status, origin);
+    const creds = { clientId: env.PAYPAL_CLIENT_ID, secret: env.PAYPAL_SECRET, base: paypalBase(env.PAYPAL_ENV, env.PAYPAL_API_BASE) };
+    try {
+      const orderId = await ppCreateOrder(creds, priced.total, "GVDG pro shop order");
+      await shopDb.createStorePaymentSession(env.DB, { paypal_order_id: orderId, member_id: buyerId, member_name: buyerName, items_json: JSON.stringify(priced.lines), total_cents: priced.total });
+      return json({ orderId }, 200, origin);
+    } catch (e) {
+      return json({ error: "paypal_error" }, 502, origin);
+    }
+  }
+
+  if (method === "POST" && seg[1] === "pay" && seg[2] === "capture") {
+    if (!(env.PAYPAL_CLIENT_ID && env.PAYPAL_SECRET)) return json({ error: "payments_not_configured" }, 503, origin);
+    if (await kvRateLimited(env, "ppcapture:" + clientIp(request), 20, 60)) return json({ error: "rate_limited" }, 429, origin);
+    const body = (await readJson(request)) ?? {};
+    const orderId = rowText(body, "orderId");
+    if (!orderId) return json({ error: "invalid_request" }, 400, origin);
+    const auth = await requireAuth(request, env);
+    const balanceFor = async () => (auth ? shopDb.walletBalance(env.DB, auth.sub) : 0);
+    const existingOrder = await shopDb.getStoreOrderByPaymentRef(env.DB, orderId); // idempotent: already captured
+    if (existingOrder) {
+      if (!buyerMatches(rowText(existingOrder, "member_id"), auth)) return json({ error: "forbidden" }, 403, origin);
+      return json({ order: safeOrder(existingOrder), balance_cents: await balanceFor() }, 200, origin);
+    }
+    const session = await shopDb.getStorePaymentSession(env.DB, orderId);
+    if (!session) return json({ error: "payment_session_not_found" }, 404, origin);
+    if (!buyerMatches(rowText(session, "member_id"), auth)) return json({ error: "forbidden" }, 403, origin);
+    const lines = parseStoredLines(session.items_json);
+    const total = rowNumber(session, "total_cents");
+    if (!lines || total <= 0) return json({ error: "invalid_payment_session" }, 400, origin);
+    if (rowText(session, "status") === "captured") return json({ error: "capture_in_progress" }, 409, origin);
+    const stock = await validateStoredStock(env.DB, lines);
+    if (!stock.ok) return json(stock.body, stock.status, origin);
+    const creds = { clientId: env.PAYPAL_CLIENT_ID, secret: env.PAYPAL_SECRET, base: paypalBase(env.PAYPAL_ENV, env.PAYPAL_API_BASE) };
+    try {
+      const cap = await ppCaptureOrder(creds, orderId);
+      // Require the ORDER and the CAPTURE itself to be COMPLETED in the expected currency — a COMPLETED
+      // order can still carry a PENDING eCheck/bank capture (unsettled funds) that must not be fulfilled.
+      if (cap.status !== "COMPLETED" || cap.captureStatus !== "COMPLETED" || cap.currency !== "USD" || cap.amountCents < total) {
+        return json({ error: "payment_incomplete" }, 402, origin);
+      }
+      const afterCaptureOrder = await shopDb.getStoreOrderByPaymentRef(env.DB, orderId);
+      if (afterCaptureOrder) {
+        if (!buyerMatches(rowText(afterCaptureOrder, "member_id"), auth)) return json({ error: "forbidden" }, 403, origin);
+        return json({ order: safeOrder(afterCaptureOrder), balance_cents: await balanceFor() }, 200, origin);
+      }
+      const submitted = await submitStoreOrder(env, ctx, rowText(session, "member_id"), rowText(session, "member_name"), total, lines, { method: "paypal", ref: orderId });
+      if (!submitted) return json({ error: "order_failed" }, 500, origin);
+      await shopDb.markStorePaymentSessionCaptured(env.DB, orderId);
+      return json({ order: safeOrder(submitted.order), balance_cents: await balanceFor() }, 201, origin);
+    } catch (e) {
+      return json({ error: "paypal_error" }, 502, origin);
+    }
   }
 
   const claims = await requireAuth(request, env);
@@ -193,65 +285,6 @@ export async function handleClubShop(
       shopDb.listStoreOrders(env.DB, claims.sub),
     ]);
     return json({ balance_cents: balance, transactions, orders }, 200, origin);
-  }
-
-  if (method === "POST" && seg[1] === "pay" && seg[2] === "create-order") {
-    if (!(env.PAYPAL_CLIENT_ID && env.PAYPAL_SECRET)) return json({ error: "payments_not_configured" }, 503, origin);
-    const items = cartItems(await readJson(request));
-    if (!items) return json({ error: "invalid_order" }, 400, origin);
-    const priced = await priceCart(env.DB, items);
-    if (!priced.ok) return json(priced.body, priced.status, origin);
-    const creds = { clientId: env.PAYPAL_CLIENT_ID, secret: env.PAYPAL_SECRET, base: paypalBase(env.PAYPAL_ENV, env.PAYPAL_API_BASE) };
-    try {
-      const orderId = await ppCreateOrder(creds, priced.total, "GVDG pro shop order");
-      await shopDb.createStorePaymentSession(env.DB, {
-        paypal_order_id: orderId,
-        member_id: claims.sub,
-        member_name: member.name,
-        items_json: JSON.stringify(priced.lines),
-        total_cents: priced.total,
-      });
-      return json({ orderId }, 200, origin);
-    } catch (e) {
-      return json({ error: "paypal_error" }, 502, origin);
-    }
-  }
-
-  if (method === "POST" && seg[1] === "pay" && seg[2] === "capture") {
-    if (!(env.PAYPAL_CLIENT_ID && env.PAYPAL_SECRET)) return json({ error: "payments_not_configured" }, 503, origin);
-    const body = (await readJson(request)) ?? {};
-    const orderId = rowText(body, "orderId");
-    if (!orderId) return json({ error: "invalid_request" }, 400, origin);
-    const existingOrder = await shopDb.getStoreOrderByPaymentRef(env.DB, orderId);
-    if (existingOrder) {
-      if (rowText(existingOrder, "member_id") !== claims.sub) return json({ error: "forbidden" }, 403, origin);
-      return json({ order: existingOrder, balance_cents: await shopDb.walletBalance(env.DB, claims.sub) }, 200, origin);
-    }
-    const session = await shopDb.getStorePaymentSession(env.DB, orderId);
-    if (!session) return json({ error: "payment_session_not_found" }, 404, origin);
-    if (rowText(session, "member_id") !== claims.sub) return json({ error: "forbidden" }, 403, origin);
-    const lines = parseStoredLines(session.items_json);
-    const total = rowNumber(session, "total_cents");
-    if (!lines || total <= 0) return json({ error: "invalid_payment_session" }, 400, origin);
-    if (rowText(session, "status") === "captured") return json({ error: "capture_in_progress" }, 409, origin);
-    const stock = await validateStoredStock(env.DB, lines);
-    if (!stock.ok) return json(stock.body, stock.status, origin);
-    const creds = { clientId: env.PAYPAL_CLIENT_ID, secret: env.PAYPAL_SECRET, base: paypalBase(env.PAYPAL_ENV, env.PAYPAL_API_BASE) };
-    try {
-      const cap = await ppCaptureOrder(creds, orderId);
-      if (cap.status !== "COMPLETED" || cap.amountCents < total) return json({ error: "payment_incomplete" }, 402, origin);
-      const afterCaptureOrder = await shopDb.getStoreOrderByPaymentRef(env.DB, orderId);
-      if (afterCaptureOrder) {
-        if (rowText(afterCaptureOrder, "member_id") !== claims.sub) return json({ error: "forbidden" }, 403, origin);
-        return json({ order: afterCaptureOrder, balance_cents: await shopDb.walletBalance(env.DB, claims.sub) }, 200, origin);
-      }
-      const submitted = await submitStoreOrder(env, ctx, claims.sub, member.name, total, lines, { method: "paypal", ref: orderId });
-      if (!submitted) return json({ error: "order_failed" }, 500, origin);
-      await shopDb.markStorePaymentSessionCaptured(env.DB, orderId);
-      return json({ order: submitted.order, balance_cents: await shopDb.walletBalance(env.DB, claims.sub) }, 201, origin);
-    } catch (e) {
-      return json({ error: "paypal_error" }, 502, origin);
-    }
   }
 
   if (method === "POST" && seg[1] === "orders") {

@@ -54,8 +54,13 @@ export async function createOrder(c: PayPalCreds, amountCents: number, descripti
   return ((await res.json()) as { id: string }).id;
 }
 
-/** Capture an approved order. Returns the status + captured amount (cents) for server-side verification. */
-export async function captureOrder(c: PayPalCreds, orderId: string): Promise<{ status: string; amountCents: number }> {
+/** Capture an approved order. Returns the order status, the per-capture status (a COMPLETED order can
+ *  still hold a PENDING eCheck capture), the currency, and the captured amount (cents). The caller must
+ *  require order + capture both COMPLETED and the expected currency before treating it as paid. */
+export async function captureOrder(
+  c: PayPalCreds,
+  orderId: string,
+): Promise<{ status: string; captureStatus: string; currency: string; amountCents: number }> {
   const token = await accessToken(c);
   const res = await fetch(c.base + "/v2/checkout/orders/" + encodeURIComponent(orderId) + "/capture", {
     method: "POST",
@@ -63,7 +68,15 @@ export async function captureOrder(c: PayPalCreds, orderId: string): Promise<{ s
     signal: AbortSignal.timeout(12000),
   });
   if (!res.ok) throw new Error("paypal_capture_" + res.status);
-  const d = (await res.json()) as { status?: string; purchase_units?: { payments?: { captures?: { amount?: { value?: string } }[] } }[] };
-  const value = d.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value;
-  return { status: d.status ?? "", amountCents: Math.round(parseFloat(value || "0") * 100) };
+  const d = (await res.json()) as {
+    status?: string;
+    purchase_units?: { payments?: { captures?: { status?: string; amount?: { value?: string; currency_code?: string } }[] } }[];
+  };
+  const cap = d.purchase_units?.[0]?.payments?.captures?.[0];
+  return {
+    status: d.status ?? "",
+    captureStatus: cap?.status ?? "",
+    currency: cap?.amount?.currency_code ?? "",
+    amountCents: Math.round(parseFloat(cap?.amount?.value || "0") * 100),
+  };
 }

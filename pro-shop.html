@@ -221,16 +221,18 @@
         function updatePaymentControls() {
             const loggedIn = !!sessionStorage.getItem(TOKEN_KEY);
             const has = cart.size > 0;
-            // Store credit is members-only; PayPal redirect is open to anyone.
+            const sdk = !!(paymentsCfg && paymentsCfg.enabled); // automatic PayPal confirmation is configured
+            // Store credit is members-only.
             $('checkoutBtn').style.display = loggedIn ? '' : 'none';
             $('checkoutBtn').disabled = !has;
-            $('paypalRedirectBtn').style.display = has ? '' : 'none';
+            // PayPal, open to anyone: the auto-confirming SDK buttons when configured, else the paypal.me redirect.
+            $('paypalRedirectBtn').style.display = (!sdk && has) ? '' : 'none';
             $('paypalRedirectBtn').disabled = !has;
-            $('paypalFields').style.display = (!loggedIn && has) ? 'grid' : 'none'; // guests give a name; members are known
+            $('paypalButtons').style.display = (sdk && has) ? 'block' : 'none';
+            if (sdk && has) renderPayPalButtons();
+            // Guests give a name for either PayPal path; members are identified by their login.
+            $('paypalFields').style.display = (!loggedIn && has) ? 'grid' : 'none';
             $('paymentDivider').style.display = (loggedIn && has) ? 'flex' : 'none';
-            // The hosted PayPal SDK buttons only appear if PayPal API creds are configured (separate from the redirect).
-            const showSdk = !!(has && paymentsCfg && paymentsCfg.enabled);
-            $('paypalButtons').style.display = showSdk ? 'block' : 'none';
         }
         async function payWithPaypal() {
             if (!cart.size) { setStatus('Add an item before checking out.', 'error'); return; }
@@ -328,13 +330,15 @@
             paypalRendered = true;
             window.paypal.Buttons({
                 createOrder: async () => {
-                    const token = sessionStorage.getItem(TOKEN_KEY);
-                    if (!token) { setStatus('Log in on the Members page before checking out with PayPal.', 'error'); throw new Error('not_logged_in'); }
                     if (!cart.size) { setStatus('Add an item before checking out.', 'error'); throw new Error('empty_cart'); }
-                    const r = await api('/shop/pay/create-order', { method: 'POST', token, body: { items: cartItemsPayload() } });
+                    const token = sessionStorage.getItem(TOKEN_KEY);
+                    const name = ($('ppName').value || '').trim();
+                    if (!token && !name) { setStatus('Enter your name so the club can match your order.', 'error'); $('ppName').focus(); throw new Error('name_required'); }
+                    const r = await api('/shop/pay/create-order', { method: 'POST', token: token || undefined, body: { items: cartItemsPayload(), name: name || null } });
                     const data = await r.json().catch(() => ({}));
                     if (!r.ok || !data.orderId) {
                         if (data.error === 'insufficient_stock') setStatus('One item no longer has enough stock. Refreshing inventory.', 'error');
+                        else if (data.error === 'name_required') setStatus('Enter your name to check out.', 'error');
                         else setStatus('PayPal checkout could not start. Please try again.', 'error');
                         if (data.error === 'insufficient_stock') await loadProducts();
                         throw new Error(data.error || 'paypal_create_failed');

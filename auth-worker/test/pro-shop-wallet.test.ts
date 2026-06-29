@@ -87,4 +87,40 @@ describe("pro shop and player wallets", () => {
     expect(dbState.state.products[0]?.stock_qty).toBe(1);
     expect(dbState.state.paymentSessions[0]?.status).toBe("captured");
   });
+
+  it("lets a GUEST (no login) pay via PayPal with a name, and records a guest order", async () => {
+    stubPayPal();
+    const dbState = makeDb({ balanceCents: 0 });
+    const extra = { PAYPAL_CLIENT_ID: "cid", PAYPAL_SECRET: "sec" };
+    // a guest must supply a name
+    expect((await call("/shop/pay/create-order", "POST", undefined, { items: [{ product_id: 1, quantity: 1 }] }, dbState, extra)).status).toBe(400);
+    const created = await call("/shop/pay/create-order", "POST", undefined, { items: [{ product_id: 1, quantity: 1 }], name: "Guest Buyer" }, dbState, extra);
+    expect(created.status).toBe(200);
+    expect(dbState.state.paymentSessions[0]?.member_id).toBe("guest");
+    expect(dbState.state.paymentSessions[0]?.member_name).toBe("Guest Buyer");
+    const cap = await call("/shop/pay/capture", "POST", undefined, { orderId: "ORDER123" }, dbState, extra);
+    expect(cap.status).toBe(201);
+    expect(dbState.state.orders[0]?.member_id).toBe("guest");
+    expect(dbState.state.orders[0]?.payment_method).toBe("paypal");
+  });
+
+  it("rejects an underpaid PayPal capture (amount < order total)", async () => {
+    stubPayPal("0.01"); // PayPal reports a far smaller captured amount than the cart total
+    const dbState = makeDb({ balanceCents: 0 });
+    const extra = { PAYPAL_CLIENT_ID: "cid", PAYPAL_SECRET: "sec" };
+    expect((await call("/shop/pay/create-order", "POST", await token("m_jane"), { items: [{ product_id: 1, quantity: 1 }] }, dbState, extra)).status).toBe(200);
+    const cap = await call("/shop/pay/capture", "POST", await token("m_jane"), { orderId: "ORDER123" }, dbState, extra);
+    expect(cap.status).toBe(402); // payment_incomplete — no order created
+    expect(dbState.state.orders).toHaveLength(0);
+  });
+
+  it("rejects a COMPLETED order whose capture is still PENDING (unsettled eCheck)", async () => {
+    stubPayPal("18.00", "PENDING", "COMPLETED"); // order COMPLETED but the capture itself is PENDING
+    const dbState = makeDb({ balanceCents: 0 });
+    const extra = { PAYPAL_CLIENT_ID: "cid", PAYPAL_SECRET: "sec" };
+    expect((await call("/shop/pay/create-order", "POST", await token("m_jane"), { items: [{ product_id: 1, quantity: 1 }] }, dbState, extra)).status).toBe(200);
+    const cap = await call("/shop/pay/capture", "POST", await token("m_jane"), { orderId: "ORDER123" }, dbState, extra);
+    expect(cap.status).toBe(402); // not treated as paid; nothing fulfilled
+    expect(dbState.state.orders).toHaveLength(0);
+  });
 });
