@@ -8,7 +8,12 @@
 // Uses only WebCrypto (crypto.subtle), which is identical in the Workers runtime and in
 // Node 22 (test env) — no native deps, no hand-rolled crypto primitives.
 
-const ITERATIONS = 120_000;
+// The Cloudflare Workers runtime (workerd) hard-caps PBKDF2 at 100k iterations — a higher count
+// throws "iteration counts above 100000 are not supported" at runtime (Node has no such cap, so
+// the test suite never caught it). 100k is the max the runtime allows. PBKDF2 here is only
+// defense-in-depth for a 4-digit PIN (see header); the primary controls are rate-limiting + lockout
+// and not leaking the roster, so the difference between 100k and 120k is immaterial.
+const ITERATIONS = 100_000;
 const SALT_BYTES = 16;
 const HASH_BYTES = 32;
 

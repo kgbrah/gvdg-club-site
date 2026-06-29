@@ -9,8 +9,10 @@ import { requireAuth, ttl } from "./authz.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { asInt } from "./input.js";
 
+// Iteration count must stay <=100000 to match crypto.ts / the workerd PBKDF2 cap, so the
+// no-such-member path computes a real PBKDF2 (constant-time-ish) instead of throwing immediately.
 const DUMMY_HASH =
-  "pbkdf2$sha256$120000$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+  "pbkdf2$sha256$100000$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 const LOGIN_BODY_BYTES = 2_048;
 const PROFILE_BODY_BYTES = 350_000;
 const LOGIN_IP_LIMIT = 20;
