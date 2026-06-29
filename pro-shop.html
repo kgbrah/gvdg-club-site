@@ -89,6 +89,8 @@
         .cart-total span:last-child { font-family: 'Bebas Neue', sans-serif; color: var(--secondary); font-size: 1.7rem; }
         .payment-divider { display: none; align-items: center; gap: 0.6rem; color: var(--text-muted); font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; margin: 0.75rem 0; }
         .payment-divider::before, .payment-divider::after { content: ""; height: 1px; background: var(--border-color); flex: 1; }
+        .paypal-fields { display: grid; gap: 0.5rem; margin-bottom: 0.6rem; }
+        .paypal-fields input { width: 100%; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary); padding: 0.55rem 0.7rem; font: inherit; }
         .paypal-wrap { display: none; min-height: 44px; }
         .shop-status { min-height: 1.25rem; color: var(--text-muted); font-size: 0.88rem; line-height: 1.4; margin-top: 0.65rem; }
         .shop-status.error { color: #dc3545; font-weight: 700; }
@@ -163,6 +165,11 @@
                 <div class="cart-total"><span>Total</span><span id="cartTotal">$0</span></div>
                 <button id="checkoutBtn" type="button" class="shop-btn" disabled>Spend store credit</button>
                 <div id="paymentDivider" class="payment-divider">or</div>
+                <div id="paypalFields" class="paypal-fields" style="display:none;">
+                    <input id="ppName" type="text" maxlength="80" placeholder="Your name">
+                    <input id="ppContact" type="text" maxlength="120" placeholder="Email or phone (so we can reach you)">
+                </div>
+                <button id="paypalRedirectBtn" type="button" class="shop-btn secondary" disabled>Pay with PayPal</button>
                 <div id="paypalButtons" class="paypal-wrap"></div>
                 <div id="shopStatus" class="shop-status" role="status" aria-live="polite"></div>
             </aside>
@@ -212,10 +219,36 @@
             return Array.from(cart.entries()).map(([productId, quantity]) => ({ product_id: productId, quantity }));
         }
         function updatePaymentControls() {
-            $('checkoutBtn').disabled = !cart.size;
-            const showPaypal = !!(cart.size && paymentsCfg && paymentsCfg.enabled);
-            $('paymentDivider').style.display = showPaypal ? 'flex' : 'none';
-            $('paypalButtons').style.display = showPaypal ? 'block' : 'none';
+            const loggedIn = !!sessionStorage.getItem(TOKEN_KEY);
+            const has = cart.size > 0;
+            // Store credit is members-only; PayPal redirect is open to anyone.
+            $('checkoutBtn').style.display = loggedIn ? '' : 'none';
+            $('checkoutBtn').disabled = !has;
+            $('paypalRedirectBtn').style.display = has ? '' : 'none';
+            $('paypalRedirectBtn').disabled = !has;
+            $('paypalFields').style.display = (!loggedIn && has) ? 'grid' : 'none'; // guests give a name; members are known
+            $('paymentDivider').style.display = (loggedIn && has) ? 'flex' : 'none';
+            // The hosted PayPal SDK buttons only appear if PayPal API creds are configured (separate from the redirect).
+            const showSdk = !!(has && paymentsCfg && paymentsCfg.enabled);
+            $('paypalButtons').style.display = showSdk ? 'block' : 'none';
+        }
+        async function payWithPaypal() {
+            if (!cart.size) { setStatus('Add an item before checking out.', 'error'); return; }
+            const token = sessionStorage.getItem(TOKEN_KEY);
+            const name = ($('ppName').value || '').trim();
+            const contact = ($('ppContact').value || '').trim();
+            if (!token && !name) { setStatus('Enter your name so the club can match your PayPal payment to your order.', 'error'); $('ppName').focus(); return; }
+            const btn = $('paypalRedirectBtn'); btn.disabled = true;
+            try {
+                const r = await api('/shop/paypal-order', { method: 'POST', token: token || undefined, body: { items: cartItemsPayload(), name: name || null, contact: contact || null } });
+                const data = await r.json().catch(() => ({}));
+                if (r.status === 201 && data.amount_cents != null) {
+                    setStatus('Opening PayPal… complete your payment to @greenvillediscgolf to finish the order.', 'success');
+                    window.location.href = 'https://www.paypal.com/paypalme/greenvillediscgolf/' + (data.amount_cents / 100).toFixed(2);
+                } else if (data.error === 'insufficient_stock' || data.error === 'product_unavailable') {
+                    setStatus('An item just went out of stock. Refreshing the shop.', 'error'); await loadProducts(); btn.disabled = false;
+                } else { setStatus('Could not start PayPal checkout. Please try again.', 'error'); btn.disabled = false; }
+            } catch (e) { setStatus('Could not reach the store. Please try again.', 'error'); btn.disabled = false; }
         }
         async function loadWallet() {
             const token = sessionStorage.getItem(TOKEN_KEY);
@@ -548,6 +581,7 @@
         window.addEventListener('scroll', () => document.querySelector('header').classList.toggle('scrolled', window.scrollY > 100));
         ['shopSearch', 'brandFilter', 'colorFilter', 'weightFilter', 'typeFilter', 'sortSelect'].forEach((id) => $(id).addEventListener('input', renderProducts));
         $('checkoutBtn').addEventListener('click', checkout);
+        $('paypalRedirectBtn').addEventListener('click', payWithPaypal);
         loadWallet();
         loadPaymentsConfig().then(renderPayPalButtons);
         loadProducts().then(renderCart);

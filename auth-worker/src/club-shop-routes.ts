@@ -5,7 +5,8 @@ import { requireAuth } from "./authz.js";
 import { getMember } from "./roster.js";
 import { paypalBase, createOrder as ppCreateOrder, captureOrder as ppCaptureOrder } from "./payments.js";
 import { notifyNewOrder } from "./order-notify.js";
-import { json, readJson } from "./http.js";
+import { kvRateLimited } from "./kv-rate-limit.js";
+import { clientIp, json, readJson } from "./http.js";
 import { asInt, asStr } from "./input.js";
 
 type CartItem = {
@@ -151,6 +152,33 @@ export async function handleClubShop(
 
   if (method === "GET" && seg[1] === "products") {
     return json({ products: await shopDb.listStoreProducts(env.DB, productListOptions(request)) }, 200, origin);
+  }
+
+  // PayPal.me checkout — open to ANYONE (members or guests). Records a pending order so the admin can
+  // fulfill it, then the client redirects to paypal.me/greenvillediscgolf. Stock is NOT decremented:
+  // payment lands in PayPal and is reconciled by the admin (mark paid / shipped from the Orders tab).
+  if (method === "POST" && seg[1] === "paypal-order") {
+    if (await kvRateLimited(env, "ppintent:" + clientIp(request), 10, 60)) return json({ error: "rate_limited" }, 429, origin);
+    const body = (await readJson(request)) ?? {};
+    const items = cartItems(body);
+    if (!items) return json({ error: "invalid_order" }, 400, origin);
+    const auth = await requireAuth(request, env); // optional — a logged-in member gets their identity
+    let buyerId = "guest";
+    let buyerName = asStr(body.name, 80) ?? "";
+    if (auth) { const m = await getMember(env.ROSTER, auth.sub); if (m) { buyerId = m.memberId; buyerName = m.name; } }
+    if (!buyerName) return json({ error: "name_required" }, 400, origin);
+    const priced = await priceCart(env.DB, items);
+    if (!priced.ok) return json(priced.body, priced.status, origin);
+    const order = await shopDb.createStoreOrder(env.DB, { member_id: buyerId, member_name: buyerName, total_cents: priced.total, payment_method: "paypal_redirect", payment_ref: null });
+    const orderId = isRecord(order) ? rowNumber(order, "id") : 0;
+    if (!orderId) return json({ error: "order_failed" }, 500, origin);
+    for (const line of priced.lines) {
+      await shopDb.createStoreOrderItem(env.DB, { order_id: orderId, product_id: line.product_id, name_snapshot: line.name_snapshot, price_cents: line.price_cents, quantity: line.quantity });
+    }
+    const contact = asStr(body.contact, 120);
+    if (contact) await shopDb.updateStoreOrderFulfillment(env.DB, orderId, { admin_note: "Contact: " + contact });
+    ctx?.waitUntil(notifyNewOrder(env, order, priced.lines));
+    return json({ orderId, amount_cents: priced.total }, 201, origin);
   }
 
   const claims = await requireAuth(request, env);
