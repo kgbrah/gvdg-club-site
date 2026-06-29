@@ -175,6 +175,20 @@
         .admin-badge { font-size: 0.7rem; text-transform: uppercase; padding: 0.15rem 0.5rem; border-radius: 4px; background: var(--secondary); color: #fff; letter-spacing: 0.04em; }
         .admin-badge.live { background: #dc3545; } .admin-badge.final { background: var(--text-muted); } .admin-badge.scheduled { background: var(--green); }
         .admin-cand { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--border-color); }
+        .admin-split { display: grid; grid-template-columns: minmax(260px, 420px) 1fr; gap: 1.25rem; align-items: start; }
+        @media (max-width: 820px) { .admin-split { grid-template-columns: 1fr; } }
+        .shop-admin-list, .wallet-ledger { display: grid; gap: 0.65rem; }
+        .shop-admin-row { display: grid; grid-template-columns: 56px minmax(160px, 1fr) auto; gap: 0.75rem; align-items: center; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); padding: 0.65rem; }
+        .shop-admin-thumb { width: 56px; aspect-ratio: 1; border-radius: 8px; object-fit: cover; background: var(--bg-tertiary); border: 1px solid var(--border-color); }
+        .shop-admin-meta { font-size: 0.8rem; color: var(--text-muted); }
+        .shop-admin-controls { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; }
+        .shop-admin-controls input { width: 5rem; padding: 0.35rem 0.45rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
+        .wallet-row { display: flex; justify-content: space-between; gap: 0.75rem; align-items: baseline; flex-wrap: wrap; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); padding: 0.65rem 0.75rem; }
+        .wallet-row strong { color: var(--text-primary); }
+        .wallet-row .credit { color: var(--green); font-weight: 700; }
+        .wallet-row .debit { color: var(--primary); font-weight: 700; }
+        .credit-award { display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+        .credit-award input { width: 5rem; padding: 0.3rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
         /* Helper classes referenced by the copied admin JS */
         .dash-note { color: var(--text-muted); font-size: 0.95rem; padding: 0.5rem 0; }
         .dash-event-date { font-size: 0.8rem; color: var(--text-muted); }
@@ -195,6 +209,7 @@
             <li><a href="index.html">Home</a></li>
             <li><a href="events.html">Club Events</a></li>
             <li><a href="gvdg-members.html">Members</a></li>
+            <li><a href="pro-shop.html">Pro Shop</a></li>
             <li><a href="admin.html" class="active" aria-current="page">Admin</a></li>
             <li class="nav-mobile-account"><a href="gvdg-members.html">Back to Members</a></li>
             <li class="nav-mobile-account"><a href="gvdg-members.html" class="logout-link">Log out</a></li>
@@ -239,6 +254,8 @@
                 <button type="button" class="admin-tab" data-atab="fundraisers">Fundraisers</button>
                 <button type="button" class="admin-tab" data-atab="meetings">Meetings</button>
                 <button type="button" class="admin-tab" data-atab="registration">Registration</button>
+                <button type="button" class="admin-tab" data-atab="shop">Pro Shop</button>
+                <button type="button" class="admin-tab" data-atab="wallets">Wallets</button>
             </div>
             <div class="admin-msg" id="adminMsg"></div>
             <div class="admin-pane active" id="apane-events"><div id="adminEventsList">Loading…</div></div>
@@ -413,6 +430,11 @@
                         <div id="rgCtpList" style="margin-top:0.5rem;"></div>
                     </div>
                     <div class="al-section">
+                        <h4 class="al-h">Store credit payouts</h4>
+                        <p class="al-note">Award credit from the registered-player rows, or review the payout ledger here.</p>
+                        <div id="rgCreditList" style="margin-top:0.5rem;"></div>
+                    </div>
+                    <div class="al-section">
                         <h4 class="al-h">Ace pot</h4>
                         <div id="rgAceInfo" class="al-note"></div>
                         <div class="al-row" style="margin-top:0.5rem;">
@@ -423,6 +445,39 @@
                             <button type="button" class="admin-btn secondary" id="rgAceCarryNext">Carry to next</button>
                         </div>
                     </div>
+                </div>
+            </div>
+            <div class="admin-pane" id="apane-shop">
+                <div class="admin-split">
+                    <form class="admin-form" id="adminProductForm">
+                        <div><label for="psCategory">Category</label><select id="psCategory"><option value="disc">Disc</option><option value="accessory">Accessory</option></select></div>
+                        <div><label for="psName">Product name</label><input id="psName" maxlength="160" required></div>
+                        <div><label for="psBrand">Brand</label><input id="psBrand" maxlength="80" placeholder="Innova, Discraft, MVP"></div>
+                        <div><label for="psType">Type</label><select id="psType"><option value="distance_driver">Distance driver</option><option value="fairway_driver">Fairway driver</option><option value="midrange">Midrange</option><option value="putter">Putter</option><option value="approach">Approach</option><option value="bag">Bag</option><option value="apparel">Apparel</option><option value="accessory">Accessory</option></select></div>
+                        <div><label for="psColor">Color</label><input id="psColor" maxlength="60"></div>
+                        <div><label for="psWeight">Weight (g)</label><input id="psWeight" type="number" min="0" step="1"></div>
+                        <div><label for="psPrice">Price ($)</label><input id="psPrice" type="number" min="0" step="0.01" required></div>
+                        <div><label for="psStock">Stock</label><input id="psStock" type="number" min="0" step="1" value="1"></div>
+                        <div style="grid-column:1/-1;"><label for="psImage">Image URL</label><input id="psImage" type="url" maxlength="2000" placeholder="https://..."></div>
+                        <div style="grid-column:1/-1;"><label for="psDescription">Description</label><textarea id="psDescription" rows="3" maxlength="1000"></textarea></div>
+                        <button type="submit" class="admin-btn">Add product</button>
+                    </form>
+                    <div>
+                        <h4 class="al-h">Inventory</h4>
+                        <div id="adminProductsList" class="shop-admin-list">Loading…</div>
+                    </div>
+                </div>
+            </div>
+            <div class="admin-pane" id="apane-wallets">
+                <form class="admin-form" id="adminWalletForm">
+                    <div><label for="waMemberId">Member ID</label><input id="waMemberId" maxlength="80" placeholder="m_jane" required></div>
+                    <div><label for="waAmount">Adjustment ($)</label><input id="waAmount" type="number" step="0.01" required></div>
+                    <div style="grid-column:1/-1;"><label for="waNote">Note</label><input id="waNote" maxlength="300" placeholder="League payout, correction, volunteer credit"></div>
+                    <button type="submit" class="admin-btn">Post wallet adjustment</button>
+                </form>
+                <div class="al-section" style="margin-top:1rem;">
+                    <h4 class="al-h">Recent wallet ledger</h4>
+                    <div id="adminWalletRecent" class="wallet-ledger">Loading…</div>
                 </div>
             </div>
         </div>
@@ -568,6 +623,8 @@
         const elx = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
         function adminMsg(text, ok) { const m = $('adminMsg'); m.textContent = text || ''; m.className = 'admin-msg' + (text ? (ok ? ' ok' : ' err') : ''); }
         function adminApi(path, opts) { return api(path, { ...(opts || {}), token: sessionStorage.getItem(TOKEN_KEY) }); }
+        function dollarsFromCents(c) { const n = Number(c || 0); const abs = Math.abs(n); const out = '$' + (abs / 100).toLocaleString(undefined, { minimumFractionDigits: abs % 100 ? 2 : 0 }); return n < 0 ? '-' + out : out; }
+        function dollarsToCents(v) { const n = parseFloat(v); return Number.isFinite(n) ? Math.round(n * 100) : null; }
         function adminSwitch(tab) {
             document.querySelectorAll('.admin-tab').forEach((t) => t.classList.toggle('active', t.dataset.atab === tab));
             document.querySelectorAll('.admin-pane').forEach((p) => p.classList.toggle('active', p.id === 'apane-' + tab));
@@ -576,6 +633,8 @@
             if (tab === 'fundraisers') adminLoadFundraisers();
             if (tab === 'meetings') adminLoadMeetings();
             if (tab === 'registration') rgLoadEvents();
+            if (tab === 'shop') adminLoadProducts();
+            if (tab === 'wallets') adminLoadWalletRecent();
         }
 
         async function adminLoadCourses() {
@@ -1177,6 +1236,104 @@
             else adminMsg('Add failed (' + r.status + ')', false);
         }
 
+        function productThumb(product) {
+            if (product.image_url) {
+                const img = elx('img', 'shop-admin-thumb');
+                img.src = product.image_url;
+                img.alt = product.name || 'Product image';
+                img.loading = 'lazy';
+                return img;
+            }
+            const fallback = elx('div', 'shop-admin-thumb', (product.brand || product.name || '?').slice(0, 1).toUpperCase());
+            fallback.style.display = 'flex';
+            fallback.style.alignItems = 'center';
+            fallback.style.justifyContent = 'center';
+            fallback.style.fontWeight = '700';
+            return fallback;
+        }
+        async function adminLoadProducts() {
+            let products = [];
+            try { const r = await adminApi('/admin/shop/products'); if (r.ok) products = (await r.json()).products || []; } catch (e) {}
+            const list = $('adminProductsList'); list.replaceChildren();
+            if (!products.length) { list.appendChild(elx('p', 'al-note', 'No products yet.')); return; }
+            products.forEach((p) => {
+                const row = elx('div', 'shop-admin-row');
+                row.appendChild(productThumb(p));
+                const info = elx('div');
+                info.appendChild(elx('div', 'ev-name', p.name || 'Product'));
+                const meta = [p.brand, p.product_type, p.color, p.weight_g != null ? p.weight_g + 'g' : '', p.active ? 'active' : 'inactive'].filter(Boolean).join(' · ');
+                info.appendChild(elx('div', 'shop-admin-meta', meta || 'No metadata'));
+                row.appendChild(info);
+                const controls = elx('div', 'shop-admin-controls');
+                const price = document.createElement('input'); price.type = 'number'; price.min = '0'; price.step = '0.01'; price.value = p.price_cents != null ? String(p.price_cents / 100) : '';
+                const stock = document.createElement('input'); stock.type = 'number'; stock.min = '0'; stock.step = '1'; stock.value = p.stock_qty != null ? String(p.stock_qty) : '0';
+                const activeLabel = elx('label', 'register-addon'); const active = document.createElement('input'); active.type = 'checkbox'; active.checked = p.active !== 0; activeLabel.appendChild(active); activeLabel.appendChild(document.createTextNode(' active'));
+                const save = elx('button', 'admin-btn secondary', 'Save');
+                save.addEventListener('click', async () => {
+                    const r = await adminApi('/admin/shop/products/' + p.id, { method: 'PATCH', body: { price_cents: dollarsToCents(price.value), stock_qty: parseInt(stock.value, 10) || 0, active: active.checked } });
+                    adminMsg(r.ok ? 'Product updated' : 'Product update failed', r.ok);
+                    if (r.ok) adminLoadProducts();
+                });
+                const del = elx('button', 'admin-btn danger', 'Archive');
+                del.addEventListener('click', async () => {
+                    if (!confirm('Archive “' + p.name + '”?')) return;
+                    const r = await adminApi('/admin/shop/products/' + p.id, { method: 'DELETE' });
+                    adminMsg(r.ok ? 'Product archived' : 'Archive failed', r.ok);
+                    if (r.ok) adminLoadProducts();
+                });
+                controls.appendChild(price); controls.appendChild(stock); controls.appendChild(activeLabel); controls.appendChild(save); controls.appendChild(del);
+                row.appendChild(controls);
+                list.appendChild(row);
+            });
+        }
+        async function adminAddProduct(e) {
+            e.preventDefault();
+            const price = dollarsToCents($('psPrice').value);
+            const stock = parseInt($('psStock').value, 10);
+            const body = {
+                category: $('psCategory').value,
+                name: $('psName').value.trim(),
+                brand: $('psBrand').value.trim() || null,
+                product_type: $('psType').value || null,
+                color: $('psColor').value.trim() || null,
+                weight_g: parseInt($('psWeight').value, 10) || null,
+                price_cents: price,
+                stock_qty: Number.isFinite(stock) ? stock : 0,
+                image_url: $('psImage').value.trim() || null,
+                description: $('psDescription').value.trim() || null,
+            };
+            if (!body.name || price == null) { adminMsg('Product name and price are required', false); return; }
+            const r = await adminApi('/admin/shop/products', { method: 'POST', body });
+            if (r.ok) { adminMsg('Product added', true); $('adminProductForm').reset(); $('psStock').value = '1'; adminLoadProducts(); }
+            else adminMsg('Add product failed (' + r.status + ')', false);
+        }
+        function walletRow(tx) {
+            const row = elx('div', 'wallet-row');
+            const left = elx('div');
+            left.appendChild(elx('strong', null, (tx.member_name || tx.member_id || 'Member') + ' · ' + (tx.source || 'wallet')));
+            left.appendChild(elx('div', 'shop-admin-meta', (tx.note || '') + (tx.created_at ? ' · ' + tx.created_at : '')));
+            row.appendChild(left);
+            const amt = elx('span', tx.amount_cents >= 0 ? 'credit' : 'debit', (tx.amount_cents >= 0 ? '+' : '') + dollarsFromCents(tx.amount_cents || 0));
+            row.appendChild(amt);
+            return row;
+        }
+        async function adminLoadWalletRecent() {
+            let transactions = [];
+            try { const r = await adminApi('/admin/wallets/recent'); if (r.ok) transactions = (await r.json()).transactions || []; } catch (e) {}
+            const list = $('adminWalletRecent'); list.replaceChildren();
+            if (!transactions.length) { list.appendChild(elx('p', 'al-note', 'No wallet activity yet.')); return; }
+            transactions.forEach((tx) => list.appendChild(walletRow(tx)));
+        }
+        async function adminPostWalletAdjustment(e) {
+            e.preventDefault();
+            const amount = dollarsToCents($('waAmount').value);
+            const body = { member_id: $('waMemberId').value.trim(), amount_cents: amount, note: $('waNote').value.trim() || null };
+            if (!body.member_id || amount == null || amount === 0) { adminMsg('Member ID and non-zero amount are required', false); return; }
+            const r = await adminApi('/admin/wallets/credit', { method: 'POST', body });
+            if (r.ok) { const d = await r.json(); adminMsg('Wallet updated. Balance: ' + dollarsFromCents(d.balance_cents || 0), true); $('adminWalletForm').reset(); adminLoadWalletRecent(); }
+            else { const d = await r.json().catch(() => ({})); adminMsg(d.error === 'member_not_found' ? 'Member ID not found' : 'Wallet update failed (' + r.status + ')', false); }
+        }
+
         // ---- Registration management (Track G) ----
         let rgEventId = null;
         async function rgLoadEvents() {
@@ -1201,6 +1358,7 @@
             $('rgDivisions').value = divs.join(', ');
             rgLoadRoster();
             rgLoadCtps();
+            rgLoadCredits();
             rgLoadAcePot();
         }
         const cents = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? Math.round(n * 100) : null; };
@@ -1216,7 +1374,7 @@
             $('rgCount').textContent = String(regs.length);
             const grid = $('rgRoster'); grid.replaceChildren();
             const thead = document.createElement('thead'); const htr = document.createElement('tr');
-            ['Player', 'Division', 'Team', 'Start hole', 'In?', 'Paid?', ''].forEach((h) => htr.appendChild(elx('th', null, h)));
+            ['Player', 'Division', 'Team', 'Start hole', 'In?', 'Paid?', 'Credit'].forEach((h) => htr.appendChild(elx('th', null, h)));
             thead.appendChild(htr); grid.appendChild(thead);
             const tbody = document.createElement('tbody');
             if (!regs.length) { const tr = document.createElement('tr'); const td = elx('td', null, 'No registrations yet.'); td.colSpan = 7; tr.appendChild(td); tbody.appendChild(tr); }
@@ -1228,10 +1386,27 @@
                 const shTd = document.createElement('td'); const sh = document.createElement('input'); sh.type = 'number'; sh.min = '1'; sh.style.width = '3.5rem'; if (rg.starting_hole != null) sh.value = rg.starting_hole; sh.addEventListener('change', () => rgPatch(rg.id, { starting_hole: parseInt(sh.value, 10) || null })); shTd.appendChild(sh); tr.appendChild(shTd);
                 tr.appendChild(rgToggleCell(rg.checked_in, (v) => rgPatch(rg.id, { checked_in: v })));
                 tr.appendChild(rgToggleCell(rg.paid_entry, (v) => rgPatch(rg.id, { paid_entry: v })));
-                tr.appendChild(document.createElement('td'));
+                tr.appendChild(rgCreditCell(rg));
                 tbody.appendChild(tr);
             });
             grid.appendChild(tbody);
+        }
+        function rgCreditCell(rg) {
+            const td = document.createElement('td');
+            if (!rg.member_id) { td.textContent = '—'; return td; }
+            const wrap = elx('span', 'credit-award');
+            const amount = document.createElement('input'); amount.type = 'number'; amount.min = '0'; amount.step = '0.01'; amount.placeholder = '$';
+            const btn = elx('button', 'admin-btn secondary', 'Award'); btn.type = 'button';
+            btn.addEventListener('click', () => rgAwardCredit(rg.member_id, rg.name, amount));
+            wrap.appendChild(amount); wrap.appendChild(btn); td.appendChild(wrap);
+            return td;
+        }
+        async function rgAwardCredit(memberId, name, input) {
+            const amount = dollarsToCents(input.value);
+            if (amount == null || amount <= 0) { adminMsg('Enter a store credit amount', false); return; }
+            const r = await adminApi('/admin/events/' + rgEventId + '/store-credit', { method: 'POST', body: { member_id: memberId, member_name: name || null, amount_cents: amount, note: 'Event payout: ' + ($('rgEvent').selectedOptions[0]?.textContent || 'event') } });
+            if (r.ok) { const d = await r.json(); adminMsg('Awarded ' + dollarsFromCents(amount) + ' to ' + (name || memberId) + '. Balance: ' + dollarsFromCents(d.balance_cents || 0), true); input.value = ''; rgLoadCredits(); }
+            else adminMsg('Store credit award failed (' + r.status + ')', false);
         }
         function rgToggleCell(on, onChange) {
             const td = document.createElement('td'); const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!on;
@@ -1273,6 +1448,13 @@
             if (r.ok) { adminMsg('CTP added', true); $('rgCtpHole').value = ''; $('rgCtpDivision').value = ''; $('rgCtpPrize').value = ''; rgLoadCtps(); }
             else adminMsg('Add CTP failed', false);
         }
+        async function rgLoadCredits() {
+            let payouts = [];
+            try { const r = await adminApi('/admin/events/' + rgEventId + '/store-credit'); if (r.ok) payouts = (await r.json()).payouts || []; } catch (e) {}
+            const list = $('rgCreditList'); list.replaceChildren();
+            if (!payouts.length) { list.appendChild(elx('p', 'al-note', 'No store credit payouts yet.')); return; }
+            payouts.forEach((tx) => list.appendChild(walletRow(tx)));
+        }
         // Ace pot
         async function rgLoadAcePot() {
             let pot = null;
@@ -1309,6 +1491,8 @@
             $('adminLeagueForm').addEventListener('submit', adminAddLeague);
             $('adminFundraiserForm').addEventListener('submit', adminAddFundraiser);
             $('adminMeetingForm').addEventListener('submit', adminAddMeeting);
+            $('adminProductForm').addEventListener('submit', adminAddProduct);
+            $('adminWalletForm').addEventListener('submit', adminPostWalletAdjustment);
             $('rgEvent').addEventListener('change', rgOnSelect);
             $('rgSaveBtn').addEventListener('click', rgSaveConfig);
             $('rgAssignHoles').addEventListener('click', () => rgAssign('assign-starting-holes', { shuffle: true, groupSize: 4 }));

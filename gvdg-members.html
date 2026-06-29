@@ -376,6 +376,7 @@
                     <li><a href="index.html#courses">Courses</a></li>
                     <li><a href="index.html#events">Events</a></li>
                     <li><a href="gvdg-blog.html">Blog</a></li>
+                    <li><a href="pro-shop.html">Pro Shop</a></li>
                     <li><a href="gvdg-members.html" class="active">Members</a></li>
                     <li><a href="index.html#contact">Contact</a></li>
                 </ul>
@@ -489,6 +490,19 @@
                 .dashboard-action { display: inline-flex; align-items: center; min-height: 40px; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.45rem 0.85rem; background: var(--bg-secondary); color: var(--text-primary); text-decoration: none; font-size: 0.85rem; font-weight: 700; transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease; }
                 .dashboard-action:hover { border-color: var(--secondary); color: var(--secondary); transform: translateY(-1px); }
                 .dashboard-action.primary { background: var(--green); border-color: var(--green); color: #fff; }
+                .wallet-panel { display: grid; grid-template-columns: minmax(9rem, 1fr) auto; gap: 0.8rem 1rem; align-items: center; padding: 0.9rem 0 1rem; margin: 0 0 1.25rem; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); }
+                .wallet-label { color: var(--text-muted); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
+                .wallet-balance { font-family: 'Bebas Neue', sans-serif; color: var(--green); font-size: 2.3rem; line-height: 1; letter-spacing: 0.02em; }
+                .wallet-ledger { grid-column: 1 / -1; display: grid; gap: 0.45rem; }
+                .wallet-line { display: grid; grid-template-columns: 1fr auto; gap: 0.75rem; align-items: baseline; font-size: 0.9rem; color: var(--text-secondary); }
+                .wallet-line-main { min-width: 0; }
+                .wallet-source { font-weight: 700; color: var(--text-primary); }
+                .wallet-note { color: var(--text-muted); font-size: 0.82rem; overflow-wrap: anywhere; }
+                .wallet-amount { font-weight: 800; font-variant-numeric: tabular-nums; }
+                .wallet-amount.credit { color: var(--green); }
+                .wallet-amount.debit { color: var(--primary); }
+                .wallet-empty { color: var(--text-muted); font-size: 0.88rem; }
+                @media (max-width: 560px) { .wallet-panel { grid-template-columns: 1fr; } .wallet-line { grid-template-columns: 1fr; gap: 0.2rem; } }
                 .club-register { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; }
                 .register-card { border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem 1.25rem; margin-top: 0.75rem; background: var(--bg-secondary); }
                 .register-head { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
@@ -589,6 +603,15 @@
                     <a class="dashboard-action primary" href="#clubBoard">Message board</a>
                     <a class="dashboard-action" href="#clubRegister">Register</a>
                     <a class="dashboard-action" href="#teeCapture">Tee signs</a>
+                    <a class="dashboard-action" href="pro-shop.html">Pro Shop</a>
+                </div>
+                <div id="clubWallet" class="wallet-panel" style="display:none;">
+                    <div>
+                        <div class="wallet-label">Store credit wallet</div>
+                        <div id="walletBalanceMini" class="wallet-balance">$0</div>
+                    </div>
+                    <a class="dashboard-action primary" href="pro-shop.html">Shop with credit</a>
+                    <div id="walletLedger" class="wallet-ledger"></div>
                 </div>
                 <div id="dashLoading" class="dash-note">Loading your stats…</div>
                 <div id="dashEmpty" class="dash-note" style="display:none;"></div>
@@ -1072,6 +1095,63 @@
             wrap.style.display = '';
         }
 
+        function walletDate(value) {
+            const d = new Date(value || '');
+            return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        }
+        function walletSource(source) {
+            if (source === 'event_payout') return 'Event payout';
+            if (source === 'store_purchase') return 'Pro shop';
+            if (source === 'manual_adjustment') return 'Admin adjustment';
+            return 'Store credit';
+        }
+        function walletLine(tx) {
+            const row = document.createElement('div');
+            row.className = 'wallet-line';
+            const main = document.createElement('div');
+            main.className = 'wallet-line-main';
+            const source = document.createElement('div');
+            source.className = 'wallet-source';
+            const when = walletDate(tx.created_at);
+            source.textContent = walletSource(tx.source) + (when ? ' · ' + when : '');
+            const note = document.createElement('div');
+            note.className = 'wallet-note';
+            note.textContent = tx.note || '';
+            main.appendChild(source);
+            if (note.textContent) main.appendChild(note);
+            const amount = document.createElement('div');
+            const cents = Number(tx.amount_cents || 0);
+            amount.className = 'wallet-amount ' + (cents >= 0 ? 'credit' : 'debit');
+            amount.textContent = (cents >= 0 ? '+' : '') + dollars(cents);
+            row.appendChild(main);
+            row.appendChild(amount);
+            return row;
+        }
+        async function loadWallet() {
+            const wrap = $('clubWallet'), list = $('walletLedger'), balance = $('walletBalanceMini');
+            const token = sessionStorage.getItem(TOKEN_KEY);
+            if (!wrap || !token) { if (wrap) wrap.style.display = 'none'; return; }
+            try {
+                const r = await api('/shop/wallet', { token });
+                if (!r.ok) throw new Error('wallet');
+                const data = await r.json();
+                balance.textContent = dollars(data.balance_cents || 0);
+                list.replaceChildren();
+                const transactions = (data.transactions || []).slice(0, 4);
+                if (!transactions.length) {
+                    const empty = document.createElement('div');
+                    empty.className = 'wallet-empty';
+                    empty.textContent = 'Event payouts and shop purchases will appear here.';
+                    list.appendChild(empty);
+                } else {
+                    transactions.forEach((tx) => list.appendChild(walletLine(tx)));
+                }
+                wrap.style.display = '';
+            } catch (_e) {
+                wrap.style.display = 'none';
+            }
+        }
+
         // ---- Club meetings & minutes (Phase 4) — XSS-safe markdown ----
         function mdInline(parent, text) {
             const re = /\*\*([^*]+)\*\*|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g;
@@ -1146,7 +1226,11 @@
             events.forEach((ev) => list.appendChild(registerCard(ev, byEvent.get(ev.id))));
             wrap.style.display = '';
         }
-        function dollars(c) { return '$' + (c / 100).toLocaleString(undefined, { minimumFractionDigits: (c % 100 ? 2 : 0) }); }
+        function dollars(c) {
+            const n = Number(c || 0);
+            const abs = Math.abs(n);
+            return (n < 0 ? '-' : '') + '$' + (abs / 100).toLocaleString(undefined, { minimumFractionDigits: (abs % 100 ? 2 : 0) });
+        }
         function clientOwed(ev, addons) {
             let t = ev.entry_fee_cents || 0;
             if (addons && addons.ctp && ev.ctp_fee_cents) t += ev.ctp_fee_cents;
@@ -1511,6 +1595,7 @@
             const loading = $('dashLoading'), empty = $('dashEmpty'), body = $('dashBody');
             $('myDashboard').style.display = '';
             loadClubHistory(); // GVDG results are keyed by memberId, so they show even without a PDGA#
+            loadWallet();
             loadRegister();
             loadMeetings();
             loadBoard();
