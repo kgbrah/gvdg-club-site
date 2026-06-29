@@ -16,6 +16,15 @@ describe("buildMessages (Crotts assistant prompt assembly)", () => {
     expect(msgs[msgs.length - 1]).toEqual({ role: "user", content: "What events are coming up?" });
   });
 
+  it("injects North Carolina disc golf background knowledge into the system prompt", () => {
+    const sys = buildMessages({ userMessage: "tell me some NC disc golf history" })[0]!.content;
+    expect(sys).toMatch(/North Carolina disc golf background/i);
+    expect(sys).toMatch(/USDGC|Winthrop/);
+    expect(sys).toMatch(/Hornets Nest|Renaissance Park/);
+    // live club context still comes after the background and is flagged as taking priority
+    expect(sys.indexOf("background")).toBeLessThan(sys.indexOf("Current club context"));
+  });
+
   it("appends prior history (sanitized) before the new user message", () => {
     const msgs = buildMessages({
       userMessage: "and the one after?",
