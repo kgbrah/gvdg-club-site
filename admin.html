@@ -853,21 +853,33 @@
             const r = await adminApi('/admin/import/udisc', { method: 'POST', body: { url } });
             const out = $('alUdiscResult'); out.textContent = '';
             if (!r.ok) { adminMsg('UDisc import failed (' + r.status + ')', false); return; }
-            const c = (await r.json()).candidate || {};
-            out.appendChild(elx('div', null, (c.note || '') + ' — ' + (c.holes ? c.holes.length : 0) + ' holes, ' + (c.positions ? c.positions.length : 0) + ' positions.'));
-            if ((c.positions && c.positions.length) || (c.holes && c.holes.length)) {
-                const apply = elx('button', 'admin-btn secondary', 'Apply to course (replace pool + prefill holes)');
-                apply.style.marginTop = '0.4rem';
+            const data = await r.json();
+            const layouts = Array.isArray(data.layouts) ? data.layouts : [];
+            if (!layouts.length) {
+                out.appendChild(elx('div', null, 'No scorable layouts found on that UDisc page' + (data.name ? ' (“' + data.name + '”)' : '') + '. Enter pars manually below.'));
+                adminMsg('No layouts found', false);
+                return;
+            }
+            out.appendChild(elx('div', null, layouts.length + ' UDisc layout' + (layouts.length > 1 ? 's' : '') + ' found — choose one to apply:'));
+            layouts.forEach((L) => {
+                const holes = L.holes || [];
+                const totalPar = holes.reduce((a, h) => a + (Number(h.par) || 0), 0);
+                const row = elx('div', null);
+                row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;margin-top:0.4rem;flex-wrap:wrap;';
+                row.appendChild(elx('span', null, (L.name || 'Layout') + ' — ' + holes.length + ' holes · par ' + totalPar));
+                const apply = elx('button', 'admin-btn secondary', 'Apply');
                 apply.addEventListener('click', async () => {
                     apply.disabled = true;
-                    if (c.positions && c.positions.length) await adminApi('/admin/courses/' + alCourseId + '/positions', { method: 'PUT', body: { positions: c.positions } });
+                    if (L.positions && L.positions.length) await adminApi('/admin/courses/' + alCourseId + '/positions', { method: 'PUT', body: { positions: L.positions } });
                     await alLoadPool();
-                    if (c.holes && c.holes.length) { $('alName').value = c.name || 'Main'; renderHoleRows(c.holes); }
-                    adminMsg('Applied UDisc import — review and Save.', true);
+                    $('alName').value = L.name || 'Main';
+                    renderHoleRows(holes);
+                    adminMsg('Applied “' + (L.name || 'Layout') + '” — review and Save.', true);
                 });
-                out.appendChild(apply);
-            }
-            adminMsg('UDisc fetched', true);
+                row.appendChild(apply);
+                out.appendChild(row);
+            });
+            adminMsg(layouts.length + ' layout' + (layouts.length > 1 ? 's' : '') + ' loaded', true);
         }
 
         function posOptions(kind, selLabel, selPos) {
