@@ -240,6 +240,7 @@
         .tee-sign-label, .tee-sign-par { font: 600 14px system-ui, sans-serif; fill: currentColor; }
         .tee-sign-dist { font: 600 14px system-ui, sans-serif; fill: currentColor; opacity: 0.8; }
     </style>
+  <script src="nav.js" defer></script>
 </head>
 <body data-api-base="">
     <header>
@@ -247,16 +248,7 @@
         <a href="index.html" class="logo">
             <img src="img/logo.png" alt="Greenville DGC Logo" class="logo-image">
         </a>
-        <ul class="nav-links">
-            <li><a href="index.html#about">About</a></li>
-            <li><a href="index.html#courses">Courses</a></li>
-            <li><a href="events.html">Events</a></li>
-            <li><a href="gvdg-blog.html">Blog</a></li>
-            <li><a href="pro-shop.html">Pro Shop</a></li>
-            <li><a href="gvdg-members.html">Members</a></li>
-            <li><a href="ryder-cup.html">Ryder Cup</a></li>
-            <li><a href="index.html#contact">Contact</a></li>
-        </ul>
+        <ul class="nav-links" id="navLinks"></ul>
        <div class="nav-right">
             <button class="menu-toggle" aria-label="Toggle menu">☰</button>
             <button class="theme-toggle" aria-label="Toggle dark mode">
