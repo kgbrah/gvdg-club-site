@@ -113,3 +113,39 @@ describe("LiveEventDO card-scoped scoring", () => {
     expect(mine0.cardmates.map((c) => c.name)).toEqual(["A", "B", "C", "D"]);
   });
 });
+
+describe("LiveEventDO casual rounds (self-organizing cards)", () => {
+  const startCasual = (live: LiveEventDO, creator: string) =>
+    live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ casual: true, holes: [{ hole: 1, par: 3 }, { hole: 2, par: 3 }], players: [{ memberId: creator, name: "Creator" }] }) }));
+  const act = (live: LiveEventDO, path: string, member: string, body: unknown) =>
+    live.fetch(new Request("https://do/" + path, { method: "POST", headers: { "X-Auth-Member": member }, body: JSON.stringify(body) }));
+
+  it("a member joins and lands on the single shared card", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await startCasual(live, "m_a");
+    const joined = await act(live, "join", "m_b", { name: "Bee" });
+    expect(joined.status).toBe(200);
+    const mine = (await joined.json()) as { cardId: string; cardmates: { name: string }[] };
+    expect(mine.cardId).toBe("c0");
+    expect(mine.cardmates.map((c) => c.name).sort()).toEqual(["Bee", "Creator"]);
+  });
+
+  it("anyone on the round may score any cardmate; a stranger cannot", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await startCasual(live, "m_a");
+    await act(live, "join", "m_b", { name: "Bee" });
+    expect((await act(live, "score", "m_b", { index: 0, hole: 1, strokes: 3 })).status).toBe(200);
+    expect((await act(live, "score", "stranger", { index: 0, hole: 1, strokes: 5 })).status).toBe(403);
+  });
+
+  it("a member adds a guest; casual finalize writes nothing to D1", async () => {
+    let touchedDb = false;
+    const trackDb = { prepare: () => ({ bind() { return this; }, all: async () => ({ results: [], success: true }), first: async () => null, run: async () => { touchedDb = true; return { results: [], success: true }; } }) };
+    const live = new LiveEventDO(new FakeState({}), { DB: trackDb });
+    await startCasual(live, "m_a");
+    expect((await act(live, "guest", "m_a", { name: "Walk-on" })).status).toBe(200);
+    const fin = await act(live, "finalize", "m_a", {});
+    expect(fin.status).toBe(200);
+    expect(touchedDb).toBe(false);
+  });
+});

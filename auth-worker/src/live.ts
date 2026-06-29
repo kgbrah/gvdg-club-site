@@ -21,6 +21,7 @@ interface LiveState {
 }
 interface LiveMeta {
   eventId: number;
+  casual?: boolean; // self-organizing casual round (no admin event); finalize does not write D1 event results
   holes: { hole: number; par: number }[];
   status: "live" | "final";
   startedAt: string;
@@ -30,7 +31,8 @@ interface LiveMeta {
   overrides?: Record<string, { par?: number; distance_ft?: number }>;
 }
 interface StartBody {
-  eventId: number;
+  eventId?: number;
+  casual?: boolean;
   holes: { hole: number; par: number }[];
   players: { memberId?: string | null; name: string; division?: string | null; startingHole?: number | null; cardId?: string | null }[];
   startedAt?: string;
@@ -88,6 +90,8 @@ export class LiveEventDO {
     const body = await request.json().catch(() => ({}));
     if (action === "start") return this.start(body as StartBody);
     if (action === "score") return this.score(body as ScoreBody, authMember, authAdmin);
+    if (action === "join") return this.join(authMember, (body as { name?: string }).name); // casual round: caller joins
+    if (action === "guest") return this.addGuest(authMember, (body as { name?: string }).name); // add a non-member to my card
     if (action === "override") return this.override(body as OverrideBody);
     if (action === "finalize") return this.finalize();
     return j({ error: "not_found" }, 404);
@@ -124,8 +128,8 @@ export class LiveEventDO {
     const holes = (Array.isArray(b.holes) ? b.holes : [])
       .filter((h) => h && typeof h.hole === "number" && typeof h.par === "number")
       .map((h) => ({ hole: h.hole, par: h.par }));
-    if (!b.eventId || holes.length === 0) return j({ error: "invalid_start" }, 400);
-    this.meta = { eventId: b.eventId, holes, status: "live", startedAt: b.startedAt ?? "", overrides: {} };
+    if (holes.length === 0 || (!b.eventId && !b.casual)) return j({ error: "invalid_start" }, 400);
+    this.meta = { eventId: b.eventId ?? 0, casual: !!b.casual, holes, status: "live", startedAt: b.startedAt ?? "", overrides: {} };
     this.players = (Array.isArray(b.players) ? b.players : []).map((p) => ({
       memberId: p.memberId ?? null,
       name: String(p.name ?? "Player"),
@@ -170,15 +174,45 @@ export class LiveEventDO {
 
   /** The authenticated caller's own card: which player they are, their cardmates, and the holes — so the
    *  score app renders just their group. memberIds stay internal; cardmates are keyed by stable index. */
-  private mine(authMember: string | null): Response {
-    if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
+  private mineData(authMember: string | null): Record<string, unknown> {
     const meIdx = authMember ? this.players.findIndex((p) => p.memberId === authMember) : -1;
-    if (meIdx < 0) return j({ cardId: null, playerIndex: null, holes: this.resolvedHoles(), cardmates: [] });
+    const base = { eventId: this.meta?.eventId ?? 0, casual: !!this.meta?.casual, status: this.meta?.status ?? "none", holes: this.resolvedHoles() };
+    if (meIdx < 0) return { ...base, cardId: null, playerIndex: null, cardmates: [] };
     const cardId = this.players[meIdx]!.cardId ?? null;
     const cardmates = this.players
       .map((p, index) => ({ index, cardId: p.cardId ?? null, name: p.name, division: p.division ?? null, startingHole: p.startingHole ?? null, scores: p.scores, isMe: index === meIdx }))
       .filter((p) => p.cardId === cardId);
-    return j({ cardId, playerIndex: meIdx, eventId: this.meta.eventId, status: this.meta.status, holes: this.resolvedHoles(), cardmates });
+    return { ...base, cardId, playerIndex: meIdx, cardmates };
+  }
+  private mine(authMember: string | null): Response {
+    if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
+    return j(this.mineData(authMember));
+  }
+
+  /** Casual round: the authenticated caller joins (added once, on the single card "c0"). No-op if already in. */
+  private async join(authMember: string | null, name?: string): Promise<Response> {
+    if (!this.meta || this.meta.status !== "live") return j({ error: "round_not_live" }, 409);
+    if (!authMember) return j({ error: "unauthorized" }, 401);
+    if (!this.players.some((p) => p.memberId === authMember)) {
+      const cardId = this.meta.casual ? "c0" : (this.players[0]?.cardId ?? "c0");
+      this.players.push({ memberId: authMember, name: String(name || "Player").slice(0, 60), division: null, startingHole: null, cardId, scores: {} });
+      await this.persist();
+      this.broadcast();
+    }
+    return j(this.mineData(authMember));
+  }
+
+  /** Add a non-member guest to the caller's card (the caller must already be on the round). */
+  private async addGuest(authMember: string | null, name?: string): Promise<Response> {
+    if (!this.meta || this.meta.status !== "live") return j({ error: "round_not_live" }, 409);
+    const me = authMember ? this.players.find((p) => p.memberId === authMember) : undefined;
+    if (!me) return j({ error: "not_on_card" }, 403);
+    const nm = String(name || "").trim();
+    if (!nm) return j({ error: "name_required" }, 400);
+    this.players.push({ memberId: null, name: nm.slice(0, 60), division: null, startingHole: null, cardId: me.cardId ?? "c0", scores: {} });
+    await this.persist();
+    this.broadcast();
+    return j(this.mineData(authMember));
   }
 
   // Round-scoped single-use override of a hole's par/distance. Admin-gated at the Worker. The layout
@@ -214,6 +248,12 @@ export class LiveEventDO {
     }
     this.meta.status = "final";
     const standings = finalizeStandings(this.resolvedHoles(), this.players);
+    // A casual round has no admin event — just close it out; nothing is written to D1 event results.
+    if (this.meta.casual || !this.meta.eventId) {
+      await this.persist();
+      this.broadcast();
+      return j({ status: "final", standings });
+    }
     const eventId = this.meta.eventId;
     try {
       // Clear any prior results for this event, then write fresh (inserts run concurrently).
