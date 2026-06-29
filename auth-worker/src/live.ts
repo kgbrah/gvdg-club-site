@@ -166,8 +166,19 @@ export class LiveEventDO {
       if (!me) return j({ error: "not_on_card" }, 403);
       if ((me.cardId ?? null) !== (player.cardId ?? null)) return j({ error: "wrong_card" }, 403);
     }
+    // CONFLICT DETECTION: when this overwrites an existing value that a DIFFERENT scorer set, two people
+    // scoring the same card disagree — push an immediate alert to everyone watching so they reconcile.
+    const by = authAdmin ? "admin:" + (authMember ?? "?") : authMember ?? "?";
+    const prev = player.scores[hole];
+    const prevBy = player.scoredBy?.[hole] ?? null;
+    const conflict = prev != null && prev !== strokes && prevBy != null && prevBy !== by;
     player.scores[hole] = strokes;
+    player.scoredBy = player.scoredBy || {};
+    player.scoredBy[hole] = by;
     await this.persist();
+    if (conflict) {
+      this.sendAll({ type: "conflict", cardId: player.cardId ?? null, playerIndex: this.players.indexOf(player), playerName: player.name, hole, from: prev, to: strokes });
+    }
     this.broadcast();
     return j(this.snapshot());
   }
@@ -290,10 +301,13 @@ export class LiveEventDO {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  private broadcast(): void {
-    const msg = JSON.stringify({ type: "snapshot", ...this.snapshot() });
+  private sendAll(obj: unknown): void {
+    const msg = JSON.stringify(obj);
     for (const ws of this.state.getWebSockets()) {
       try { ws.send(msg); } catch { /* ignore */ }
     }
+  }
+  private broadcast(): void {
+    this.sendAll({ type: "snapshot", ...this.snapshot() });
   }
 }

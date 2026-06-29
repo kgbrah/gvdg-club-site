@@ -80,6 +80,7 @@
             background: var(--text-primary); color: var(--bg-secondary); padding: 0.7rem 1.1rem; border-radius: 12px;
             font-size: 0.9rem; font-weight: 600; box-shadow: 0 4px 16px var(--shadow); z-index: 50; max-width: 90%; text-align: center;
         }
+        .toast.conflict { bottom: auto; top: calc(0.8rem + var(--safe-top)); background: var(--over); color: #fff; font-weight: 700; max-width: 94%; cursor: pointer; transition: opacity .5s; z-index: 70; }
         /* ---- event / card pickers ---- */
         .tap-row {
             display: flex; align-items: center; gap: 0.75rem; width: 100%; text-align: left;
@@ -183,6 +184,16 @@
             const t = el('div', 'toast', msg); document.body.appendChild(t);
             setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; }, 1800);
             setTimeout(() => t.remove(), 2200);
+        }
+        // A loud, sticky, top-of-screen alert (with a buzz) when the card has a scoring conflict. Tap to dismiss.
+        function conflictAlert(msg) {
+            if (navigator.vibrate) { try { navigator.vibrate([120, 60, 120]); } catch (e) {} }
+            const text = '⚠️ Scoring conflict — Hole ' + msg.hole + ', ' + (msg.playerName || 'a player') + ': was ' + msg.from + ', now ' + msg.to + '. Confirm with your card.';
+            const t = el('div', 'toast conflict', text);
+            t.addEventListener('click', () => t.remove());
+            document.body.appendChild(t);
+            setTimeout(() => { t.style.opacity = '0'; }, 6500);
+            setTimeout(() => t.remove(), 7100);
         }
 
         // ---------- theme ----------
@@ -290,6 +301,8 @@
             S.ws = ws;
             ws.addEventListener('message', function (ev) {
                 let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
+                // Two scorers on the same card disagreed on a hole — alert this card immediately to reconcile.
+                if (msg && msg.type === 'conflict') { if (msg.cardId === S.cardId) conflictAlert(msg); return; }
                 if (msg && msg.type === 'snapshot') { S.snap = msg; mergeFromSnap(); }
             });
             ws.addEventListener('close', function () { if (S.wsTimer) return; S.wsTimer = setTimeout(function () { S.wsTimer = null; connectWs(); }, 4000); });
