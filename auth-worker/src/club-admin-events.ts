@@ -1,7 +1,9 @@
 import type { Env } from "./env.js";
 import * as db from "./db.js";
+import * as shopDb from "./shop-db.js";
 import { EVENT_FORMATS, EVENT_STATUSES } from "./db.js";
 import { assignShotgun, assignTeams } from "./assign.js";
+import { getMember } from "./roster.js";
 import { json, readJson } from "./http.js";
 import { asInt, asStr, inSet, jsonStringArray, validEventInput } from "./input.js";
 
@@ -60,6 +62,30 @@ export async function handleAdminEvents(
         checked_in: b.checked_in == null ? null : (b.checked_in ? 1 : 0), paid_entry: b.paid_entry == null ? null : (b.paid_entry ? 1 : 0),
       });
       return row ? json({ registration: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
+    }
+  }
+  if (seg[3] === "store-credit" && id != null) {
+    if (method === "GET") return json({ payouts: await shopDb.listEventStoreCreditPayouts(env.DB, id) }, 200, origin);
+    if (method === "POST") {
+      const body = (await readJson(request)) ?? {};
+      const memberId = asStr(body.member_id, 80);
+      const amount = asInt(body.amount_cents);
+      if (!memberId || amount == null || amount <= 0) return json({ error: "invalid_store_credit" }, 400, origin);
+      const event = await db.getEvent(env.DB, id);
+      if (!event) return json({ error: "not_found" }, 404, origin);
+      const member = await getMember(env.ROSTER, memberId);
+      if (!member) return json({ error: "member_not_found" }, 404, origin);
+      const tx = await shopDb.createWalletTransaction(env.DB, {
+        member_id: memberId,
+        member_name: member.name,
+        amount_cents: amount,
+        transaction_type: "credit",
+        source: "event_payout",
+        event_id: id,
+        note: asStr(body.note, 300) ?? "Store credit payout",
+        created_by: adminId,
+      });
+      return json({ transaction: tx, balance_cents: await shopDb.walletBalance(env.DB, memberId), payouts: await shopDb.listEventStoreCreditPayouts(env.DB, id) }, 201, origin);
     }
   }
   if (seg[3] === "ctps" && id != null) {
