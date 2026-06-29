@@ -362,6 +362,7 @@
 
         .doubles-table tbody tr.clickable-row { cursor: pointer; }
     </style>
+  <script src="nav.js" defer></script>
 </head>
 <body>
     <header>
@@ -371,15 +372,7 @@
             </a>
             <div class="nav-right">
                 <button class="menu-toggle" aria-label="Toggle menu">☰</button>
-                <ul class="nav-links">
-                    <li><a href="index.html#about">About</a></li>
-                    <li><a href="index.html#courses">Courses</a></li>
-                    <li><a href="index.html#events">Events</a></li>
-                    <li><a href="gvdg-blog.html">Blog</a></li>
-                    <li><a href="pro-shop.html">Pro Shop</a></li>
-                    <li><a href="gvdg-members.html" class="active">Members</a></li>
-                    <li><a href="index.html#contact">Contact</a></li>
-                </ul>
+                <ul class="nav-links" id="navLinks"></ul>
                 <button class="theme-toggle" aria-label="Toggle dark mode">
                     <span class="theme-icon">🌙</span>
                 </button>
