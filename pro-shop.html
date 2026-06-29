@@ -49,6 +49,18 @@
         .wallet-balance { font-family: 'Bebas Neue', sans-serif; color: var(--primary); font-size: 2.4rem; line-height: 1; margin: 0.2rem 0; letter-spacing: 0.03em; }
         .wallet-note { color: var(--text-muted); font-size: 0.85rem; line-height: 1.45; }
         .wallet-panel a { color: var(--secondary); font-weight: 700; }
+        .my-orders-panel { margin-bottom: 1.25rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem 1.1rem; }
+        .my-orders-title { font-size: 1.05rem; margin-bottom: 0.6rem; color: var(--text-primary); }
+        .my-orders-list { display: grid; gap: 0.6rem; }
+        .my-order { border: 1px solid var(--border-color); border-radius: 8px; padding: 0.6rem 0.75rem; background: var(--bg-primary); }
+        .my-order-head { display: flex; justify-content: space-between; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
+        .my-order-status { font-weight: 700; font-size: 0.78rem; padding: 0.1rem 0.5rem; border-radius: 999px; background: var(--bg-tertiary); color: var(--text-secondary); }
+        .my-order-status.status-shipped, .my-order-status.status-completed { background: rgba(40,167,69,0.16); color: var(--green); }
+        .my-order-status.status-cancelled { background: rgba(220,53,69,0.16); color: #dc3545; }
+        .my-order-meta { color: var(--text-muted); font-size: 0.82rem; margin: 0.25rem 0; }
+        .my-order-item { color: var(--text-secondary); font-size: 0.88rem; }
+        .my-order-tracking { margin-top: 0.4rem; font-size: 0.88rem; }
+        .my-order-tracking a { color: var(--secondary); font-weight: 700; }
         .shop-shell { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 1.25rem; align-items: start; }
         .filters { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem; margin-bottom: 1rem; display: grid; grid-template-columns: minmax(180px, 1fr) repeat(4, minmax(120px, 160px)); gap: 0.75rem; }
         .filters input, .filters select { width: 100%; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary); padding: 0.65rem 0.75rem; font: inherit; }
@@ -121,6 +133,10 @@
                 <div class="wallet-balance" id="walletBalance">Sign in</div>
                 <p class="wallet-note" id="walletNote"><a href="gvdg-members.html">Log in on the Members page</a> to use your player wallet.</p>
             </aside>
+        </div>
+        <div id="myOrdersPanel" class="my-orders-panel" hidden>
+            <h2 class="my-orders-title">My orders</h2>
+            <div id="myOrdersList" class="my-orders-list"></div>
         </div>
         <div class="shop-shell">
             <section>
@@ -211,7 +227,45 @@
                 walletBalance = data.balance_cents || 0;
                 $('walletBalance').textContent = money(walletBalance);
                 $('walletNote').textContent = 'Available for pro shop purchases.';
+                renderMyOrders(data.orders);
             } catch (e) {}
+        }
+        const ORDER_LABELS = { submitted: 'Order received', processing: 'Being prepared', ready: 'Ready for pickup', shipped: 'Shipped', completed: 'Completed', cancelled: 'Cancelled' };
+        function trackingUrl(carrier, num) {
+            if (!num) return '';
+            const c = String(carrier || '').toLowerCase();
+            if (c.includes('usps')) return 'https://tools.usps.com/go/TrackConfirmAction?tLabels=' + encodeURIComponent(num);
+            if (c.includes('ups')) return 'https://www.ups.com/track?tracknum=' + encodeURIComponent(num);
+            if (c.includes('fedex')) return 'https://www.fedex.com/fedextrack/?trknbr=' + encodeURIComponent(num);
+            return '';
+        }
+        function orderEl(o) {
+            const card = document.createElement('div'); card.className = 'my-order';
+            const head = document.createElement('div'); head.className = 'my-order-head';
+            const num = document.createElement('strong'); num.textContent = 'Order #' + o.id; head.appendChild(num);
+            const st = document.createElement('span'); st.className = 'my-order-status status-' + (o.status || 'submitted'); st.textContent = ORDER_LABELS[o.status] || o.status || 'Order received'; head.appendChild(st);
+            card.appendChild(head);
+            const meta = document.createElement('div'); meta.className = 'my-order-meta';
+            meta.textContent = (o.created_at ? String(o.created_at).split(' ')[0] + ' · ' : '') + money(o.total_cents);
+            card.appendChild(meta);
+            (o.items || []).forEach((it) => { const i = document.createElement('div'); i.className = 'my-order-item'; i.textContent = (it.quantity || 1) + ' × ' + it.name_snapshot; card.appendChild(i); });
+            if (o.tracking_number) {
+                const tw = document.createElement('div'); tw.className = 'my-order-tracking';
+                const label = (o.tracking_carrier ? o.tracking_carrier + ' ' : '') + o.tracking_number;
+                const url = trackingUrl(o.tracking_carrier, o.tracking_number);
+                if (url) { const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = '📦 Track: ' + label; tw.appendChild(a); }
+                else { tw.textContent = '📦 ' + label; }
+                card.appendChild(tw);
+            }
+            return card;
+        }
+        function renderMyOrders(orders) {
+            const panel = $('myOrdersPanel'); const list = $('myOrdersList');
+            if (!panel || !list) return;
+            list.replaceChildren();
+            if (!orders || !orders.length) { panel.hidden = true; return; }
+            orders.slice(0, 10).forEach((o) => list.appendChild(orderEl(o)));
+            panel.hidden = false;
         }
         async function loadPaymentsConfig() {
             try {
@@ -455,6 +509,7 @@
                     setStatus('Order submitted. The club will have it ready for pickup.', 'success');
                     await loadProducts();
                     renderCart();
+                    loadWallet(); // refresh balance + My Orders
                 } else if (data.error === 'insufficient_store_credit') {
                     setStatus('Not enough store credit. Balance: ' + money(data.balance_cents || 0) + ', cart: ' + money(data.total_cents || 0) + '.', 'error');
                 } else if (data.error === 'insufficient_stock') {
