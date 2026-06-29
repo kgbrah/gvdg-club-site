@@ -870,11 +870,18 @@
                 const apply = elx('button', 'admin-btn secondary', 'Apply');
                 apply.addEventListener('click', async () => {
                     apply.disabled = true;
-                    if (L.positions && L.positions.length) await adminApi('/admin/courses/' + alCourseId + '/positions', { method: 'PUT', body: { positions: L.positions } });
+                    if (L.positions && L.positions.length) {
+                        const pr = await adminApi('/admin/courses/' + alCourseId + '/positions', { method: 'PUT', body: { positions: L.positions } });
+                        if (!pr.ok) { adminMsg('Could not import tee/target positions (' + pr.status + ')', false); apply.disabled = false; return; }
+                    }
                     await alLoadPool();
                     $('alName').value = L.name || 'Main';
                     renderHoleRows(holes);
-                    adminMsg('Applied “' + (L.name || 'Layout') + '” — review and Save.', true);
+                    adminMsg('Applied “' + (L.name || 'Layout') + '” — review the pars below, then click Save layout.', true);
+                    // The holes prefill the builder further down the page; bring it into view so the
+                    // result is obvious (otherwise the click looks like it did nothing).
+                    $('alName').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    apply.disabled = false;
                 });
                 row.appendChild(apply);
                 out.appendChild(row);
