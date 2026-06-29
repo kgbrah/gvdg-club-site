@@ -358,6 +358,20 @@ export async function markRegistrationPaid(db: D1Like, id: number, paymentRef: s
     .bind(paymentRef, amountCents, id)
     .first();
 }
+/** Atomically reserve an unpaid registration for exactly one PayPal order id BEFORE capturing, so two
+ *  concurrently-approved orders can't both charge the card. Returns true if this caller won the slot
+ *  (or already holds it for this order id); false if another order id is mid-capture. */
+export async function reserveCapture(db: D1Like, id: number, paymentRef: string): Promise<boolean> {
+  const row = await db
+    .prepare("UPDATE registrations SET payment_ref = ? WHERE id = ? AND paid_entry = 0 AND (payment_ref IS NULL OR payment_ref = ?) RETURNING id")
+    .bind(paymentRef, id, paymentRef)
+    .first();
+  return row != null;
+}
+/** Release a capture reservation (call when the capture failed) so the member can retry. No-op once paid. */
+export async function releaseCapture(db: D1Like, id: number, paymentRef: string): Promise<void> {
+  await db.prepare("UPDATE registrations SET payment_ref = NULL WHERE id = ? AND paid_entry = 0 AND payment_ref = ?").bind(id, paymentRef).run();
+}
 export async function adminUpdateRegistration(
   db: D1Like,
   id: number,
@@ -612,8 +626,10 @@ export async function setTeeSignStatus(db: D1Like, id: number, status: string, r
   ).bind(status, reviewedBy, id).first();
 }
 
-export async function deleteTeeSign(db: D1Like, id: number) {
-  await db.prepare("DELETE FROM tee_signs WHERE id = ?").bind(id).run();
+/** Delete a tee-sign row and return its R2 key so the caller can reclaim the stored object. */
+export async function deleteTeeSign(db: D1Like, id: number): Promise<string | null> {
+  const row = await db.prepare("DELETE FROM tee_signs WHERE id = ? RETURNING r2_key").bind(id).first<{ r2_key: string }>();
+  return row?.r2_key ?? null;
 }
 
 // ---- Layout matching / defaults ----
@@ -702,11 +718,13 @@ export async function applyTeeSignRows(
   return affected;
 }
 
-/** Demote any OTHER official tee sign for the same (course, hole) to 'rejected' so there is one official. */
-export async function demoteOtherOfficial(db: D1Like, courseId: number, hole: number, keepId: number) {
-  await db.prepare(
-    "UPDATE tee_signs SET status = 'rejected' WHERE course_id = ? AND hole_number = ? AND status = 'official' AND id != ?",
-  ).bind(courseId, hole, keepId).run();
+/** Demote any OTHER official tee sign for the same (course, hole) to 'rejected' so there is one official.
+ *  Returns the R2 keys of the demoted signs (no longer referenced) so the caller can reclaim them. */
+export async function demoteOtherOfficial(db: D1Like, courseId: number, hole: number, keepId: number): Promise<string[]> {
+  const res = await db.prepare(
+    "UPDATE tee_signs SET status = 'rejected' WHERE course_id = ? AND hole_number = ? AND status = 'official' AND id != ? RETURNING r2_key",
+  ).bind(courseId, hole, keepId).all<{ r2_key: string }>();
+  return res.results.map((r) => r.r2_key);
 }
 
 /** Store the vision extraction result on a tee sign row (T2). */

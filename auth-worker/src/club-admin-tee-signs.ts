@@ -70,16 +70,23 @@ export async function handleAdminTeeSigns(
     const sign = await db.getTeeSign(env.DB, id);
     if (!sign) return json({ error: "not_found" }, 404, origin);
     const affected = await db.applyTeeSignRows(env.DB, sign.course_id, sign.hole_number, rows, sign.r2_key);
-    await db.demoteOtherOfficial(env.DB, sign.course_id, sign.hole_number, id);
+    const demotedKeys = await db.demoteOtherOfficial(env.DB, sign.course_id, sign.hole_number, id);
     await db.setTeeSignStatus(env.DB, id, "official", adminId);
+    // The superseded officials are no longer referenced — reclaim their R2 blobs.
+    for (const key of demotedKeys) await env.PHOTOS?.delete(key)?.catch(() => {});
     return json({ ok: true, affectedLayouts: affected }, 200, origin);
   }
   if (id != null && seg[3] === "reject" && method === "POST") {
+    const sign = await db.getTeeSign(env.DB, id);
+    if (!sign) return json({ error: "not_found" }, 404, origin);
     await db.setTeeSignStatus(env.DB, id, "rejected", adminId);
+    // A rejected sign's image is never served again — reclaim its R2 blob instead of orphaning it.
+    await env.PHOTOS?.delete(sign.r2_key)?.catch(() => {});
     return json({ ok: true }, 200, origin);
   }
   if (id != null && method === "DELETE") {
-    await db.deleteTeeSign(env.DB, id);
+    const r2Key = await db.deleteTeeSign(env.DB, id);
+    if (r2Key) await env.PHOTOS?.delete(r2Key)?.catch(() => {});
     return json({ ok: true }, 200, origin);
   }
   return null;

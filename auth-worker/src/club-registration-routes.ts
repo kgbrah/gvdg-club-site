@@ -2,7 +2,7 @@ import type { Env } from "./env.js";
 import * as db from "./db.js";
 import { requireAuth } from "./authz.js";
 import { getMember } from "./roster.js";
-import { computeOwed, paypalBase, createOrder as ppCreateOrder, captureOrder as ppCaptureOrder } from "./payments.js";
+import { computeOwed, paypalBase, createOrder as ppCreateOrder, captureOrder as ppCaptureOrder, type OwedConfig } from "./payments.js";
 import { json, readJson } from "./http.js";
 import { asInt, asStr } from "./input.js";
 
@@ -42,8 +42,22 @@ export async function handleClubRegistration(
         if (reg.paid_entry === 1) {
           return reg.payment_ref === orderId ? json({ registration: reg }, 200, origin) : json({ error: "already_paid" }, 409, origin);
         }
-        const cap = await ppCaptureOrder(creds, orderId);
-        if (cap.status !== "COMPLETED" || cap.amountCents < owed) return json({ error: "payment_incomplete" }, 402, origin);
+        // Reserve this registration for exactly one order id BEFORE charging PayPal, so two
+        // concurrently-approved orders can't both capture and double-charge the member.
+        if (!(await db.reserveCapture(env.DB, reg.id, orderId))) {
+          return json({ error: "capture_in_progress" }, 409, origin);
+        }
+        let cap: { status: string; amountCents: number };
+        try {
+          cap = await ppCaptureOrder(creds, orderId);
+        } catch (e) {
+          await db.releaseCapture(env.DB, reg.id, orderId);
+          throw e;
+        }
+        if (cap.status !== "COMPLETED" || cap.amountCents < owed) {
+          await db.releaseCapture(env.DB, reg.id, orderId);
+          return json({ error: "payment_incomplete" }, 402, origin);
+        }
         const updated = await db.markRegistrationPaid(env.DB, reg.id, orderId, cap.amountCents);
         return json({ registration: updated ?? (await db.getRegistration(env.DB, reg.id)) }, 200, origin);
       }
@@ -68,6 +82,14 @@ export async function handleClubRegistration(
     if (division && divs.length && !divs.includes(division)) return json({ error: "invalid_division" }, 400, origin);
     const member = await getMember(env.ROSTER, claims.sub);
     const addons = b.addons && typeof b.addons === "object" ? JSON.stringify({ ctp: !!(b.addons as Record<string, unknown>).ctp, ace: !!(b.addons as Record<string, unknown>).ace }) : null;
+    // Once entry is paid, a re-registration must not silently add a paid add-on (ace pot / CTP) that was
+    // never charged — that would put the member into a real-cash pool for free. Block any change that
+    // raises the amount owed above what was actually captured (removing add-ons / editing division is fine).
+    const existing = (await db.getMyRegistration(env.DB, eid, claims.sub)) as { paid_entry?: number; amount_paid_cents?: number } | null;
+    if (existing?.paid_entry === 1) {
+      const owedNow = computeOwed(cfg as unknown as OwedConfig, addons ? (JSON.parse(addons) as { ctp?: boolean; ace?: boolean }) : {});
+      if (owedNow > (existing.amount_paid_cents ?? 0)) return json({ error: "paid_addons_locked" }, 409, origin);
+    }
     const row = await db.registerForEvent(env.DB, { event_id: eid, member_id: claims.sub, name: member?.name ?? "Member", division, team: asStr(b.team, 40), addons });
     return json({ registration: row }, 201, origin);
   }

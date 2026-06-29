@@ -34,6 +34,17 @@ function normUdisc(s: string): string {
   return s.trim().toLowerCase();
 }
 
+/**
+ * Canonical lockout / rate-limit key for a login identifier, using the SAME normalization
+ * resolveMember applies. Every punctuation variant of one PDGA# ("1-2345", "1.2345", "12345x")
+ * collapses to a single `pdga:<digits>` key, and any casing of a UDisc name to one `udisc:<lc>` key —
+ * so an attacker can't reset the per-identifier lockout by mutating the raw identifier string.
+ */
+export function canonicalLoginKey(identifier: string): string {
+  const digits = normPdga(identifier);
+  return digits ? `pdga:${digits}` : `udisc:${normUdisc(identifier)}`;
+}
+
 /** Write a member record and its login indexes. Used by the admin seeding script. */
 export async function putMember(kv: KVLike, m: Member): Promise<void> {
   await kv.put(RECORD(m.memberId), JSON.stringify(m));

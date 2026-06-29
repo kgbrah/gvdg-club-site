@@ -48,7 +48,14 @@ export async function handleAssistant(request: Request, env: Env, origin: string
   if (!message) return json({ error: "invalid_request" }, 400, origin);
   if (message.length > 2000) return json({ error: "message_too_long" }, 413, origin);
 
-  if (await kvRateLimited(env, "asst:" + clientIp(request), ASSISTANT_LIMIT, ASSISTANT_WINDOW)) return json({ error: "rate_limited" }, 429, origin);
+  // Prefer the ATOMIC rate-limit binding on this unauthenticated endpoint — the KV counter is a
+  // non-atomic GET-then-PUT, so a concurrent burst can all read a stale count and slip past the cap to
+  // run up AI cost. Fall back to KV where the binding isn't configured (unit tests / local dev).
+  const ip = clientIp(request);
+  const limited = env.ASSISTANT_RL
+    ? !(await env.ASSISTANT_RL.limit({ key: "asst:" + ip })).success
+    : await kvRateLimited(env, "asst:" + ip, ASSISTANT_LIMIT, ASSISTANT_WINDOW);
+  if (limited) return json({ error: "rate_limited" }, 429, origin);
 
   const history: ChatTurn[] = Array.isArray(body?.history)
     ? body.history.slice(-MAX_HISTORY).filter((t: unknown): t is ChatTurn => !!t && typeof t === "object" && typeof (t as ChatTurn).content === "string")

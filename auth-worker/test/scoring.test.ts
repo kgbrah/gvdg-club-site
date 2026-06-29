@@ -54,10 +54,23 @@ describe("finalizeStandings (placements + breakdown for results)", () => {
     expect(fs[0]!.breakdown).toMatchObject({ birdies: 1, pars: 2, bogeys: 0 });
   });
 
-  it("only counts played holes (partial cards)", () => {
-    const fs = finalizeStandings(holes, [{ memberId: "x", name: "X", scores: { 1: 4 } }]);
-    expect(fs[0]).toMatchObject({ place: 1, thru: 1, total: 4, toPar: 1 });
+  it("marks an incomplete card DNF (place null) but still tallies its played holes", () => {
+    const fs = finalizeStandings(holes, [{ memberId: "x", name: "X", scores: { 1: 4 } }]); // thru 1 of 3
+    expect(fs[0]).toMatchObject({ place: null, thru: 1, total: 4, toPar: 1 });
     expect(fs[0]!.breakdown).toMatchObject({ bogeys: 1 });
+  });
+
+  it("ranks only finishers; no-shows/partials are DNF (null) and never outrank a real finisher", () => {
+    const players: PlayerState[] = [
+      { memberId: "f", name: "Finisher", scores: { 1: 4, 2: 5, 3: 4 } }, // +3, complete
+      { memberId: "n", name: "NoShow", scores: {} }, //                     thru 0
+      { memberId: "p", name: "Partial", scores: { 1: 3 } }, //             thru 1 of 3
+    ];
+    const fs = finalizeStandings(holes, players);
+    expect(fs[0]).toMatchObject({ name: "Finisher", place: 1 }); // ranked despite being +3
+    expect(fs.find((s) => s.name === "NoShow")!.place).toBeNull();
+    expect(fs.find((s) => s.name === "Partial")!.place).toBeNull();
+    expect(new Set([fs[1]!.name, fs[2]!.name])).toEqual(new Set(["Partial", "NoShow"])); // DNFs sort last
   });
 });
 

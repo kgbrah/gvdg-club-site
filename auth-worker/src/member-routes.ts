@@ -2,10 +2,10 @@ import type { Env } from "./env.js";
 import { hashPin, verifyPin } from "./crypto.js";
 import { signSession, verifySession } from "./jwt.js";
 import { checkLockout, clearAttempts, recordFailure } from "./ratelimit.js";
-import { getMember, resolveMember, setPin, updateProfile, type ProfilePatch } from "./roster.js";
+import { canonicalLoginKey, getMember, resolveMember, setPin, updateProfile, type ProfilePatch } from "./roster.js";
 import * as db from "./db.js";
 import { bearer, clientIp, json, readJson } from "./http.js";
-import { rateKey, requireAuth, ttl } from "./authz.js";
+import { requireAuth, ttl } from "./authz.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { asInt } from "./input.js";
 
@@ -16,6 +16,7 @@ const PROFILE_BODY_BYTES = 350_000;
 const LOGIN_IP_LIMIT = 20;
 const LOGIN_IDENTIFIER_IP_LIMIT = 10;
 const BOARD_LIMIT = 15;
+const SETPIN_LIMIT = 5;
 const MAX_PHOTO_LEN = 200_000;
 
 function validPhoto(p: string): boolean {
@@ -28,7 +29,7 @@ export async function handleLogin(request: Request, env: Env, origin: string | n
   const pin = typeof body?.pin === "string" ? body.pin : "";
   if (!identifier || !pin) return json({ error: "invalid_request" }, 400, origin);
 
-  const rk = rateKey(identifier);
+  const rk = canonicalLoginKey(identifier);
   const ip = clientIp(request);
   const now = Date.now();
 
@@ -181,9 +182,26 @@ export async function handleSetPin(request: Request, env: Env, origin: string | 
   const claims = token ? await verifySession(token, env.JWT_SECRET) : null;
   if (!claims) return json({ error: "unauthorized" }, 401, origin);
 
+  // Rate-limit the change-PIN path per member so a stolen token can't be used to grind PINs.
+  if (await kvRateLimited(env, "setpin:" + claims.sub, SETPIN_LIMIT, 60)) {
+    return json({ error: "rate_limited" }, 429, origin);
+  }
+
   const body = await readJson(request);
   const newPin = typeof body?.newPin === "string" ? body.newPin : "";
   if (!/^\d{4}$/.test(newPin)) return json({ error: "invalid_pin_format" }, 400, origin);
+
+  // An established member (not on a forced first-login change) must prove the CURRENT PIN before
+  // setting a new one, so a transiently-stolen 15-minute session token can't be turned into a
+  // permanent account takeover. The forced-change flow has no current PIN to verify, so it is exempt.
+  if (!claims.mustChangePin) {
+    const member = await getMember(env.ROSTER, claims.sub);
+    if (!member) return json({ error: "unauthorized" }, 401, origin);
+    const currentPin = typeof body?.currentPin === "string" ? body.currentPin : "";
+    if (!(await verifyPin(currentPin, member.pinHash))) {
+      return json({ error: "invalid_credentials" }, 401, origin);
+    }
+  }
 
   await setPin(env.ROSTER, claims.sub, await hashPin(newPin));
   const fresh = await signSession({ sub: claims.sub, mustChangePin: false }, env.JWT_SECRET, ttl(env));

@@ -51,6 +51,7 @@ function mockDb() {
       if (/INSERT INTO course_layouts/i.test(sql)) return { id: 99, course_id: 3, name: "Long", holes: "[]", total_par: null };
       if (/SELECT \* FROM course_layouts WHERE id/i.test(sql)) return { id: 99, course_id: 3, name: "Long", holes: "[]", total_par: null };
       if (/UPDATE course_layouts/i.test(sql)) return { id: 99 };
+      if (/DELETE FROM tee_signs/i.test(sql)) return { r2_key: "tee-signs/3/5/u.png" };
       if (/UPDATE tee_signs/i.test(sql)) return { id: 1, status: "official" };
       return null;
     },
@@ -89,6 +90,44 @@ describe("admin approve/reject", () => {
   it("approves with manual rows (admin)", async () => {
     const res = await call("/admin/tee-signs/1/approve", "POST", tok("m_admin"), { rows: [{ newLayoutName: "Long", par: 4, distance_ft: 420 }] });
     expect(res.status).toBe(200);
+  });
+});
+
+describe("admin reject/delete reclaim the R2 blob", () => {
+  it("reject deletes the stored object (admin)", async () => {
+    const photos = r2();
+    photos._store.set("tee-signs/3/5/u.png", new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+    const res = await call("/admin/tee-signs/1/reject", "POST", tok("m_admin"), {}, photos);
+    expect(res.status).toBe(200);
+    expect(photos._store.has("tee-signs/3/5/u.png")).toBe(false);
+  });
+  it("delete reclaims the stored object (admin)", async () => {
+    const photos = r2();
+    photos._store.set("tee-signs/3/5/u.png", new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+    const res = await call("/admin/tee-signs/1", "DELETE", tok("m_admin"), undefined, photos);
+    expect(res.status).toBe(200);
+    expect(photos._store.has("tee-signs/3/5/u.png")).toBe(false);
+  });
+});
+
+describe("GET /tee-signs/:id/image — rejected blobs are never served (IDOR)", () => {
+  it("404s a rejected sign even for a logged-in member", async () => {
+    const rejectedDb = { prepare: (sql: string) => ({
+      bind() { return this; },
+      all: async () => ({ results: [], success: true }),
+      first: async () => (/FROM tee_signs WHERE id/i.test(sql)
+        ? { id: 9, course_id: 3, hole_number: 5, status: "rejected", r2_key: "tee-signs/3/5/r.png", content_type: "image/png" }
+        : null),
+      run: async () => ({ success: true }),
+    }) };
+    const photos = r2();
+    photos._store.set("tee-signs/3/5/r.png", new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+    const e = { ROSTER: kv(members), RATELIMIT: kv(), DB: rejectedDb, PHOTOS: photos, JWT_SECRET: SECRET, ALLOWED_ORIGINS: "http://localhost:8080" } as unknown as Parameters<typeof worker.fetch>[1];
+    const res = await worker.fetch(
+      new Request("https://w/tee-signs/9/image", { headers: { Origin: "http://localhost:8080", authorization: "Bearer " + (await tok("m_jane")) } }),
+      e,
+    );
+    expect(res.status).toBe(404);
   });
 });
 

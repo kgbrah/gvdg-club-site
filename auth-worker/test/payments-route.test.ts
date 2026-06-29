@@ -18,7 +18,33 @@ const db = { prepare: (sql: string) => ({
   first: async () => {
     if (/FROM registrations WHERE event_id/i.test(sql)) return { id: 1, addons: '{"ctp":true}', paid_entry: 0, payment_ref: null };
     if (/FROM event_config/i.test(sql)) return { entry_fee_cents: 1000, ctp_fee_cents: 500, ace_fee_cents: 300 };
+    if (/UPDATE registrations SET payment_ref/i.test(sql)) return { id: 1 }; // reserveCapture wins the slot
     if (/UPDATE registrations SET paid_entry/i.test(sql)) return { id: 1, paid_entry: 1, payment_ref: "ORDER123", amount_paid_cents: 1500 };
+    return null;
+  },
+  run: async () => ({ results: [], success: true }),
+}) };
+// variant where a concurrent capture already holds the reservation (reserveCapture loses)
+const dbRaceLost = { prepare: (sql: string) => ({
+  bind() { return this; },
+  all: async () => ({ results: [], success: true }),
+  first: async () => {
+    if (/FROM registrations WHERE event_id/i.test(sql)) return { id: 1, addons: '{"ctp":true}', paid_entry: 0, payment_ref: null };
+    if (/FROM event_config/i.test(sql)) return { entry_fee_cents: 1000, ctp_fee_cents: 500, ace_fee_cents: 300 };
+    if (/UPDATE registrations SET payment_ref/i.test(sql)) return null; // another order id is mid-capture
+    return null;
+  },
+  run: async () => ({ results: [], success: true }),
+}) };
+// variant where entry is already PAID (1000c) — used to test the paid-add-on lock on re-register
+const dbPaidEntry = { prepare: (sql: string) => ({
+  bind() { return this; },
+  all: async () => ({ results: [], success: true }),
+  first: async () => {
+    if (/SELECT status FROM events/i.test(sql)) return { status: "scheduled" };
+    if (/FROM event_config/i.test(sql)) return { registration_open: 1, divisions: "[]", entry_fee_cents: 1000, ctp_fee_cents: 500, ace_fee_cents: 300 };
+    if (/FROM registrations WHERE event_id/i.test(sql)) return { id: 1, paid_entry: 1, amount_paid_cents: 1000, addons: "{}" };
+    if (/INSERT INTO registrations/i.test(sql)) return { id: 1, addons: '{"ace":true}', paid_entry: 1 };
     return null;
   },
   run: async () => ({ results: [], success: true }),
@@ -93,5 +119,26 @@ describe("Track G G2 — PayPal Checkout", () => {
     const e = env({ PAYPAL_CLIENT_ID: "cid", PAYPAL_SECRET: "sec", DB: dbPaid });
     expect((await call("/events/5/pay/capture", "POST", await tok(), { orderId: "ORDER123" }, e)).status).toBe(200); // same order -> idempotent ok
     expect((await call("/events/5/pay/capture", "POST", await tok(), { orderId: "OTHER" }, e)).status).toBe(409); // different order -> refuse
+  });
+  it("refuses a concurrent 2nd capture without charging PayPal (reservation closes the double-charge race)", async () => {
+    stubPayPal();
+    const e = env({ PAYPAL_CLIENT_ID: "cid", PAYPAL_SECRET: "sec", DB: dbRaceLost });
+    const res = await call("/events/5/pay/capture", "POST", await tok(), { orderId: "ORDER123" }, e);
+    expect(res.status).toBe(409); // capture_in_progress
+    const calls = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) => String(c[0]));
+    expect(calls.some((u) => u.includes("/capture"))).toBe(false); // never charged the card
+  });
+});
+
+describe("Track G — paid add-on lock (free ace-pot / CTP entry)", () => {
+  it("blocks adding a paid add-on after entry is paid (409 paid_addons_locked)", async () => {
+    const e = env({ DB: dbPaidEntry });
+    const res = await call("/events/5/register", "POST", await tok(), { addons: { ace: true } }, e);
+    expect(res.status).toBe(409);
+    expect((await jsonObject(res)).error).toBe("paid_addons_locked");
+  });
+  it("still allows a no-cost re-registration after paying (e.g. division edit)", async () => {
+    const e = env({ DB: dbPaidEntry });
+    expect((await call("/events/5/register", "POST", await tok(), { division: "MA1" }, e)).status).toBe(201);
   });
 });
