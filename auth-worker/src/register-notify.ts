@@ -10,9 +10,10 @@ export async function notifyRegistration(
   env: Env,
   opts: { to: string; name: string; eventName: string; eventDate?: string | null; manageUrl?: string | null; owedCents?: number },
 ): Promise<void> {
-  const cfg = env as unknown as { RESEND_API_KEY?: string; REGISTER_NOTIFY_FROM?: string };
+  const cfg = env as unknown as { RESEND_API_KEY?: string; REGISTER_NOTIFY_FROM?: string; EMAIL_REPLY_TO?: string };
   if (!cfg.RESEND_API_KEY || !opts.to || !isEmail(opts.to)) return; // not configured / no valid recipient
   const from = cfg.REGISTER_NOTIFY_FROM || "GVDG Events <events@gvdgclub.com>";
+  const replyTo = cfg.EMAIL_REPLY_TO || "greenvillediscgolf@gmail.com"; // the no-reply sender bounces; route replies to the club
 
   const lines = [
     `Hi ${opts.name},`,
@@ -27,7 +28,7 @@ export async function notifyRegistration(
     await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: "Bearer " + cfg.RESEND_API_KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({ from, to: [opts.to], subject: `You're registered — ${opts.eventName}`, text: lines.join("\n") }),
+      body: JSON.stringify({ from, to: [opts.to], reply_to: replyTo, subject: `You're registered — ${opts.eventName}`, text: lines.join("\n") }),
       signal: AbortSignal.timeout(8000),
     });
   } catch {

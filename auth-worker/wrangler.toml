@@ -169,6 +169,8 @@ ORDER_NOTIFY_EMAIL = "greenvillediscgolf@gmail.com"
 ORDER_NOTIFY_FROM = "GVDG Pro Shop <shop@gvdgclub.com>"
 # Guest event-registration confirmation + manage/cancel link (register-notify.ts).
 REGISTER_NOTIFY_FROM = "GVDG Events <events@gvdgclub.com>"
+# Replies to the no-reply senders above route here (the @gvdgclub.com addresses have no inbox).
+EMAIL_REPLY_TO = "greenvillediscgolf@gmail.com"
 # WebAuthn is bound to the dev domain — passkeys enrolled here are separate from production.
 RP_ID = "gvdgclub.com"
 RP_NAME = "GVDG Club (dev)"
