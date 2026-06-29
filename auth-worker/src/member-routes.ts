@@ -103,6 +103,27 @@ export async function handleMyRegistrations(request: Request, env: Env, origin: 
   return json({ registrations: await db.listMyRegistrations(env.DB, claims.sub) }, 200, origin);
 }
 
+/** Distinct board authors' profile photos (from KV), keyed by member_id, so the UI can render avatars.
+ *  Only authors who have set a photo are included; deduped across posts+replies and fetched in parallel. */
+async function boardAuthorPhotos(env: Env, posts: Record<string, unknown>[]): Promise<Record<string, string>> {
+  const ids = new Set<string>();
+  const collect = (p: Record<string, unknown>) => {
+    if (p && typeof p.member_id === "string") ids.add(p.member_id);
+  };
+  for (const p of posts) {
+    collect(p);
+    for (const r of (p.replies as Record<string, unknown>[]) ?? []) collect(r);
+  }
+  const out: Record<string, string> = {};
+  await Promise.all(
+    [...ids].map(async (id) => {
+      const m = await getMember(env.ROSTER, id);
+      if (m?.photo) out[id] = m.photo;
+    }),
+  );
+  return out;
+}
+
 export async function handleBoard(request: Request, env: Env, origin: string | null): Promise<Response> {
   const claims = await requireAuth(request, env);
   if (!claims) return json({ error: "unauthorized" }, 401, origin);
@@ -110,7 +131,8 @@ export async function handleBoard(request: Request, env: Env, origin: string | n
   const method = request.method.toUpperCase();
 
   if (method === "GET" && seg.length === 1) {
-    return json({ posts: await db.getBoardFeed(env.DB, 50) }, 200, origin);
+    const posts = await db.getBoardFeed(env.DB, 50);
+    return json({ posts, authors: await boardAuthorPhotos(env, posts) }, 200, origin);
   }
   if (method === "POST" && seg.length === 1) {
     if (await kvRateLimited(env, "board:" + claims.sub, BOARD_LIMIT, 60)) return json({ error: "rate_limited" }, 429, origin);
