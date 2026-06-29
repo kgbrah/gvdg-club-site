@@ -96,6 +96,83 @@ function findCourseName(node: unknown): string | null {
   return null;
 }
 
+// --- Embedded-JSON extraction across UDisc's rendering strategies ---
+// UDisc has moved from a Pages-Router `__NEXT_DATA__` blob to an App-Router build that streams its
+// data through `self.__next_f.push([n,"<escaped json>"])` chunks. To be resilient to both (and to
+// plain inline JSON), we gather hole arrays from three sources and keep the richest one.
+
+// Typed <script type="application/json"> / ld+json blocks (Pages Router __NEXT_DATA__, JSON-LD).
+function scriptJsonBlocks(html: string): string[] {
+  return [...html.matchAll(/<script[^>]*type=["']application\/(?:ld\+)?json["'][^>]*>([\s\S]*?)<\/script>/gi)].map((m) => m[1]!);
+}
+
+// Concatenate the unescaped string payloads of every `self.__next_f.push([n,"..."])` chunk back into
+// the original RSC flight text, which contains the course/holes JSON as ordinary substrings.
+function nextFlightText(html: string): string {
+  let out = "";
+  for (const m of html.matchAll(/self\.__next_f\.push\(\[\s*\d+\s*,\s*("(?:[^"\\]|\\.)*")\s*\]\)/g)) {
+    try {
+      out += JSON.parse(m[1]!) as string; // m[1] is a JSON string literal — parse unescapes it
+    } catch {
+      /* skip malformed chunk */
+    }
+  }
+  return out;
+}
+
+// Return the substring spanning the balanced [..] or {..} that starts at openIdx, respecting strings
+// and escapes. null if it never closes. Lets us pull a JSON array out of arbitrary surrounding text.
+function extractBalanced(text: string, openIdx: number): string | null {
+  const open = text[openIdx];
+  const close = open === "[" ? "]" : "}";
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = openIdx; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') inStr = false;
+    } else if (c === '"') {
+      inStr = true;
+    } else if (c === open) {
+      depth++;
+    } else if (c === close) {
+      depth--;
+      if (depth === 0) return text.slice(openIdx, i + 1);
+    }
+  }
+  return null;
+}
+
+function isHoleish(x: unknown): x is Record<string, unknown> {
+  if (!x || typeof x !== "object" || Array.isArray(x)) return false;
+  const o = x as Record<string, unknown>;
+  return typeof o.par === "number" || typeof o.holeNumber === "number" || typeof o.number === "number";
+}
+
+// Pull every plausible `"holes":[ ... ]` array out of a text blob (raw HTML or flight text). Accepts
+// an array only if it is mostly hole-shaped objects, so we don't grab an unrelated array named holes.
+function holeArraysFromText(text: string): Record<string, unknown>[][] {
+  const found: Record<string, unknown>[][] = [];
+  for (const m of text.matchAll(/"holes"\s*:\s*\[/g)) {
+    const bracket = text.indexOf("[", m.index! + m[0].length - 1);
+    if (bracket < 0) continue;
+    const arrStr = extractBalanced(text, bracket);
+    if (!arrStr) continue;
+    try {
+      const arr = JSON.parse(arrStr) as unknown[];
+      if (Array.isArray(arr) && arr.length > 0 && arr.length <= 40 && arr.filter(isHoleish).length >= Math.ceil(arr.length / 2)) {
+        found.push(arr as Record<string, unknown>[]);
+      }
+    } catch {
+      /* not valid JSON at this position — skip */
+    }
+  }
+  return found;
+}
+
 export function parseUdiscLayout(html: string, url: string): UdiscLayout {
   const name = titleFromHtml(html) || null;
   const empty: UdiscLayout = {
@@ -106,22 +183,30 @@ export function parseUdiscLayout(html: string, url: string): UdiscLayout {
     note: "Imported from UDisc (best-effort): name only — enter hole pars manually to enable scoring.",
   };
 
-  const scripts = [...html.matchAll(/<script[^>]*type=["']application\/(?:ld\+)?json["'][^>]*>([\s\S]*?)<\/script>/gi)].map((m) => m[1]!);
-  let holeObjs: Record<string, unknown>[] = [];
+  const candidates: Record<string, unknown>[][] = [];
   let jsonName: string | null = null;
-  for (const raw of scripts) {
+
+  // 1) Typed JSON script blocks: parse fully and search for the largest par-bearing array anywhere.
+  for (const raw of scriptJsonBlocks(html)) {
     try {
       const data = JSON.parse(raw.trim());
       const found = findHoleArray(data);
-      if (found.length > holeObjs.length) {
-        holeObjs = found;
-        jsonName = findCourseName(data);
+      if (found.length) {
+        candidates.push(found);
+        if (!jsonName) jsonName = findCourseName(data);
       }
     } catch {
       continue;
     }
   }
-  if (!holeObjs.length) return empty;
+
+  // 2) App Router RSC flight payload, and 3) any other inline "holes":[...] in the raw HTML.
+  for (const arr of holeArraysFromText(nextFlightText(html))) candidates.push(arr);
+  for (const arr of holeArraysFromText(html)) candidates.push(arr);
+
+  if (!candidates.length) return empty;
+  // Keep the richest array (most holes) found across every strategy.
+  const holeObjs = candidates.reduce((best, arr) => (arr.length > best.length ? arr : best));
 
   const positions: UdiscPosition[] = [];
   const holes: UdiscHole[] = holeObjs.map((h, i) => {

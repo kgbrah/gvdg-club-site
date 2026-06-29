@@ -27,7 +27,8 @@ export async function handleAdminImport(request: Request, env: Env, origin: stri
     if (kind === "udisc") {
       const url = asStr(b.url, 500);
       if (!url) return json({ error: "invalid_request" }, 400, origin);
-      const html = await safeFetch(url, ["udisc.com"]);
+      // UDisc App Router pages embed a large flight payload — allow more than the 1 MB default.
+      const html = await safeFetch(url, ["udisc.com"], { maxBytes: 3_000_000 });
       return json({ source: "udisc", candidate: parseUdiscLayout(html, url) }, 200, origin);
     }
     return json({ error: "not_found" }, 404, origin);
