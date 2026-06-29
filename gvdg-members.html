@@ -389,9 +389,7 @@
 
     <!-- Login Gate -->
     <div class="login-gate" id="loginGate"
-         data-auth-base=""
-         data-players-url="https://raw.githubusercontent.com/mostlysober252/GVDG-DGS-Scraper-2.0/main/players.json"
-         data-stats-url="https://raw.githubusercontent.com/mostlysober252/GVDG-DGS-Scraper-2.0/main/stats.json">
+         data-auth-base="">
         <div class="login-card">
             <div class="login-icon">🔐</div>
             <h1 class="login-title">Members Only</h1>
@@ -976,8 +974,6 @@
             ((_h === 'greenvillediscgolf.com' || _h === 'www.greenvillediscgolf.com')
                 ? 'https://auth.greenvillediscgolf.com' : 'https://auth.gvdgclub.com')
         ).replace(/\/+$/, '');
-        const PLAYERS_URL = (_gate.dataset.playersUrl || '').trim();
-        const STATS_URL = (_gate.dataset.statsUrl || '').trim();
         const TOKEN_KEY = 'gvdg_member_token';
         const NAME_KEY = 'gvdg_member_name';
         const PDGA_KEY = 'gvdg_member_pdga';
@@ -1048,7 +1044,7 @@
             showLogin();
         }
 
-        // ---- My Player Dashboard (players.json + stats.json, keyed by PDGA#) ----
+        // ---- My Player Dashboard (live PDGA ratings via the Worker's /pdga-stats endpoint) ----
         function setText(id, v) { const el = $(id); if (el) el.textContent = v; }
 
         async function fetchJson(url) {
@@ -1622,24 +1618,23 @@
                 empty.style.display = '';
                 return;
             }
-            const [players, stats] = await Promise.all([fetchJson(PLAYERS_URL), fetchJson(STATS_URL)]);
-            const p = players && players.players ? players.players[pdga] : null;
-            const s = stats && stats.players ? stats.players[pdga] : null;
-            if (!p && !s) {
+            // Live PDGA ratings via the Worker's /pdga-stats endpoint (scrapes + caches pdga.com).
+            const data = await fetchJson(AUTH_BASE + '/pdga-stats?pdga=' + encodeURIComponent(pdga));
+            if (!data || (data.official_rating == null && !(data.events && data.events.length))) {
                 loading.style.display = 'none';
                 empty.textContent = "We couldn't find live data for PDGA #" + pdga + ' yet — check back after the next sync.';
                 empty.style.display = '';
                 return;
             }
-            const live = p ? p.live_rating : (s && s.summary ? s.summary.latest_rating : null);
-            const official = p ? p.official_rating : null;
-            const peak = s && s.summary ? s.summary.peak_rating : null;
-            const events = s ? s.events : null;
-            if (!memberProfile.photo) showAvatar(p && p.photo ? p.photo : null); // fall back to pdga.com photo
+            const live = data.live_rating;
+            const official = data.official_rating;
+            const peak = data.peak_rating;
+            const events = data.events || null;
+            if (!memberProfile.photo) showAvatar(data.photo || null); // fall back to pdga.com photo if present
             setText('dashLive', live != null ? live : '—');
             setText('dashOfficial', official != null ? official : '—');
             setText('dashPeak', peak != null ? peak : '—');
-            setText('dashEvents', s && s.summary ? s.summary.events_count : (events ? events.length : '—'));
+            setText('dashEvents', data.events_count != null ? data.events_count : (events ? events.length : '—'));
             const delta = (live != null && official != null) ? live - official : null;
             setText('dashDelta', delta != null ? (delta >= 0 ? '+' + delta + ' vs official' : delta + ' vs official') : '');
             renderEvents(events);
