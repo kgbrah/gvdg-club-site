@@ -1010,6 +1010,7 @@
             $('passkeyBtn').style.display = show ? '' : 'none';
             const divider = document.querySelector('#loginForm .login-divider');
             if (divider) divider.style.display = show ? '' : 'none';
+            if (show) prefetchPasskey(); // warm the Worker + hold a challenge ready (see prefetchPasskey)
         }
         function showPinChange() {
             $('loginGate').style.display = 'flex';
@@ -1710,15 +1711,42 @@
             }
         }
 
+        // Pre-fetch a passkey challenge as soon as the login screen appears. This warms the (possibly
+        // cold) auth Worker AND puts a ready challenge in hand, so the click can call
+        // navigator.credentials.get() with NO network request in between. Browsers — Safari/WebKit
+        // especially — require fresh "user activation" for the passkey prompt; a slow cold-start fetch
+        // between the click and get() consumes that window and rejects the FIRST attempt, which is
+        // exactly why a quick second try (Worker now warm) succeeded. Server TTL is ~5 min; single-use.
+        let passkeyPrefetch = null; // { options, flowId, ts }
+        async function prefetchPasskey() {
+            if (!AUTH_BASE || !passkeysSupported() || passkeyPrefetch) return;
+            try {
+                const r = await api('/webauthn/auth/options', { method: 'POST' });
+                if (!r.ok) return;
+                const { options, flowId } = await r.json();
+                passkeyPrefetch = { options, flowId, ts: Date.now() };
+            } catch (_e) { /* best-effort warm-up; the click path will fetch on demand */ }
+        }
         async function loginWithPasskey() {
             const errEl = $('loginError'); clearError(errEl);
             if (!AUTH_BASE) { showError(errEl, 'Login is not configured yet — contact an admin.'); return; }
             if (!passkeysSupported()) { showError(errEl, 'Passkeys are not supported on this device.'); return; }
             const btn = $('passkeyBtn'); setBusy(btn, true);
             try {
-                const r = await api('/webauthn/auth/options', { method: 'POST' });
-                if (!r.ok) throw new Error('options');
-                const { options, flowId } = await r.json();
+                // Use the pre-fetched challenge if it's fresh (< 4 min; server TTL is 5) so there is NO
+                // network round-trip between this click and navigator.credentials.get() — that's what
+                // preserves user activation and fixes the first-attempt failure. Otherwise fetch now
+                // (the Worker was already warmed by the page-load prefetch, so this stays fast).
+                let options, flowId;
+                const pf = passkeyPrefetch;
+                passkeyPrefetch = null; // single use
+                if (pf && (Date.now() - pf.ts) < 240000) {
+                    options = pf.options; flowId = pf.flowId;
+                } else {
+                    const r = await api('/webauthn/auth/options', { method: 'POST' });
+                    if (!r.ok) throw new Error('options');
+                    const j = await r.json(); options = j.options; flowId = j.flowId;
+                }
                 options.challenge = b64urlToBuf(options.challenge);
                 if (options.allowCredentials)
                     options.allowCredentials = options.allowCredentials.map((c) => ({ ...c, id: b64urlToBuf(c.id) }));
@@ -1750,6 +1778,7 @@
                 showError(errEl, e && e.name === 'NotAllowedError' ? 'Passkey sign-in cancelled.' : 'Passkey sign-in failed. Use your PIN instead.');
             } finally {
                 setBusy(btn, false);
+                prefetchPasskey(); // prime the next attempt and keep the Worker warm
             }
         }
 
