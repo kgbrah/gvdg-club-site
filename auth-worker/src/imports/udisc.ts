@@ -1,3 +1,12 @@
+// Best-effort import of disc-golf layouts from a UDisc course page.
+//
+// UDisc is a React Router v7 app: the course/layout data is NOT in the HTML as plain JSON. It ships
+// as a turbo-stream payload inside `window.__reactRouterContext.streamController.enqueue("…")` — one
+// big flat "pool" array where every object is `{ "_<keyIndex>": <valueIndex> }` and strings are
+// interned (so "par"/"distance"/"latitude" appear once and are referenced by index). We rebuild the
+// object graph (unflatten), then walk it for layout objects (`{name, layoutId, holes:[…]}`) whose
+// holes carry `par` + tee/target GPS. Everything degrades to name-only if the shape ever changes.
+
 export interface CourseCandidate {
   name: string | null;
   udisc_url: string;
@@ -42,13 +51,15 @@ function titleFromHtml(html: string): string {
   const title = html.match(/<title>([^<]+)<\/title>/i);
   let name = (og?.[1] ?? title?.[1] ?? "").trim();
   name = name.replace(/&middot;/gi, "·").replace(/&amp;/gi, "&");
-  return name.replace(/\s*[·|\-–]\s*UDisc.*$/i, "").trim();
+  // UDisc titles look like "West Meadowbrook Park - Greenville, NC | UDisc …" — keep the course name.
+  return name.replace(/\s*[·|\-–]\s*(Greenville|.*UDisc).*$/i, "").trim() || name.split(/\s*[|·]\s*/)[0]!.trim();
 }
 
 function asCoord(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
+// A tee/target position object exposes latitude/longitude (UDisc) — tolerate lat/lng/lon aliases too.
 function coordOf(obj: unknown): { lat: number | null; lng: number | null } | null {
   if (!obj || typeof obj !== "object") return null;
   const o = obj as Record<string, unknown>;
@@ -58,174 +69,153 @@ function coordOf(obj: unknown): { lat: number | null; lng: number | null } | nul
   return { lat, lng };
 }
 
-function firstCoord(...cands: unknown[]): { lat: number | null; lng: number | null } | null {
-  for (const c of cands) {
-    if (Array.isArray(c) && c.length) {
-      const r = coordOf(c[0]);
-      if (r) return r;
-    }
-    const r = coordOf(c);
-    if (r) return r;
-  }
-  return null;
-}
+// --- turbo-stream decode (React Router v7 single-fetch payload) ---
 
-function findHoleArray(node: unknown, best: Record<string, unknown>[] = []): Record<string, unknown>[] {
-  if (Array.isArray(node)) {
-    const looksLikeHoles = node.length > 0 && node.every((x) => x && typeof x === "object" && typeof (x as Record<string, unknown>).par === "number");
-    if (looksLikeHoles && node.length > best.length) best = node as Record<string, unknown>[];
-    for (const item of node) best = findHoleArray(item, best);
-  } else if (node && typeof node === "object") {
-    for (const v of Object.values(node as Record<string, unknown>)) best = findHoleArray(v, best);
-  }
-  return best;
-}
-
-function findCourseName(node: unknown): string | null {
-  const seen: unknown[] = [node];
-  while (seen.length) {
-    const n = seen.shift();
-    if (n && typeof n === "object" && !Array.isArray(n)) {
-      const o = n as Record<string, unknown>;
-      if (typeof o.name === "string" && Array.isArray(o.holes)) return o.name;
-      for (const v of Object.values(o)) {
-        if (v && typeof v === "object") seen.push(v);
-      }
-    }
-  }
-  return null;
-}
-
-// --- Embedded-JSON extraction across UDisc's rendering strategies ---
-// UDisc has moved from a Pages-Router `__NEXT_DATA__` blob to an App-Router build that streams its
-// data through `self.__next_f.push([n,"<escaped json>"])` chunks. To be resilient to both (and to
-// plain inline JSON), we gather hole arrays from three sources and keep the richest one.
-
-// Typed <script type="application/json"> / ld+json blocks (Pages Router __NEXT_DATA__, JSON-LD).
-function scriptJsonBlocks(html: string): string[] {
-  return [...html.matchAll(/<script[^>]*type=["']application\/(?:ld\+)?json["'][^>]*>([\s\S]*?)<\/script>/gi)].map((m) => m[1]!);
-}
-
-// Concatenate the unescaped string payloads of every `self.__next_f.push([n,"..."])` chunk back into
-// the original RSC flight text, which contains the course/holes JSON as ordinary substrings.
-function nextFlightText(html: string): string {
-  let out = "";
-  for (const m of html.matchAll(/self\.__next_f\.push\(\[\s*\d+\s*,\s*("(?:[^"\\]|\\.)*")\s*\]\)/g)) {
+// Collect and concatenate every enqueued chunk into one flat value pool. Each chunk is a JSON string
+// (so double-encoded: the captured group is a JSON string literal whose contents are a JSON array).
+function turboStreamValues(html: string): unknown[] {
+  const chunks: unknown[][] = [];
+  for (const m of html.matchAll(/streamController\.enqueue\((\"(?:[^"\\]|\\.)*\")\)/g)) {
     try {
-      out += JSON.parse(m[1]!) as string; // m[1] is a JSON string literal — parse unescapes it
+      const inner = JSON.parse(m[1]!) as string;
+      const arr = JSON.parse(inner) as unknown;
+      if (Array.isArray(arr)) chunks.push(arr);
     } catch {
-      /* skip malformed chunk */
+      /* skip a malformed chunk */
     }
   }
+  return chunks.flat();
+}
+
+// Resolve the flat pool into a real object graph. Indices reference other entries; an object's keys
+// are themselves index references (`"_<idx>"`). Memoized + cycle-safe (the container is cached before
+// its children are filled). Negative indices are turbo-stream sentinels — mapped to null (NaN for -3).
+function unflatten(values: unknown[]): unknown {
+  const cache = new Array<unknown>(values.length);
+  const done = new Array<boolean>(values.length).fill(false);
+
+  function hyd(i: unknown): unknown {
+    if (typeof i !== "number") return undefined;
+    if (i < 0) return i === -3 ? NaN : null;
+    if (i >= values.length) return null;
+    if (done[i]) return cache[i];
+
+    const v = values[i];
+    if (v === null || typeof v !== "object") {
+      done[i] = true;
+      cache[i] = v;
+      return v;
+    }
+    if (Array.isArray(v)) {
+      // A leading string is a type tag (e.g. ["D", ms] = Date); otherwise it is an array of refs.
+      if (typeof v[0] === "string") {
+        done[i] = true;
+        cache[i] = v[0] === "D" ? new Date(v[1] as number) : v;
+        return cache[i];
+      }
+      const arr: unknown[] = [];
+      done[i] = true;
+      cache[i] = arr;
+      for (const el of v) arr.push(hyd(el));
+      return arr;
+    }
+    const obj: Record<string, unknown> = {};
+    done[i] = true;
+    cache[i] = obj;
+    for (const k of Object.keys(v as Record<string, unknown>)) {
+      const keyName = k[0] === "_" ? hyd(parseInt(k.slice(1), 10)) : k;
+      obj[String(keyName)] = hyd((v as Record<string, unknown>)[k]);
+    }
+    return obj;
+  }
+  return hyd(0);
+}
+
+function isLayout(o: unknown): o is { name?: unknown; layoutId?: unknown; holes: unknown[] } {
+  if (!o || typeof o !== "object") return false;
+  const holes = (o as { holes?: unknown }).holes;
+  return Array.isArray(holes) && holes.length > 0 && holes.some((h) => h && typeof h === "object" && typeof (h as { par?: unknown }).par === "number");
+}
+
+// Walk the graph for every distinct layout object. Cycle-safe via `seen`; depth-capped as a backstop.
+function collectLayouts(root: unknown): { name?: unknown; layoutId?: unknown; holes: unknown[] }[] {
+  const out: { name?: unknown; layoutId?: unknown; holes: unknown[] }[] = [];
+  const seen = new Set<unknown>();
+  function walk(n: unknown, depth: number): void {
+    if (!n || typeof n !== "object" || depth > 60 || seen.has(n)) return;
+    seen.add(n);
+    if (Array.isArray(n)) {
+      for (const x of n) walk(x, depth + 1);
+      return;
+    }
+    if (isLayout(n)) out.push(n);
+    for (const v of Object.values(n as Record<string, unknown>)) walk(v, depth + 1);
+  }
+  walk(root, 0);
   return out;
 }
 
-// Return the substring spanning the balanced [..] or {..} that starts at openIdx, respecting strings
-// and escapes. null if it never closes. Lets us pull a JSON array out of arbitrary surrounding text.
-function extractBalanced(text: string, openIdx: number): string | null {
-  const open = text[openIdx];
-  const close = open === "[" ? "]" : "}";
-  let depth = 0;
-  let inStr = false;
-  let esc = false;
-  for (let i = openIdx; i < text.length; i++) {
-    const c = text[i];
-    if (inStr) {
-      if (esc) esc = false;
-      else if (c === "\\") esc = true;
-      else if (c === '"') inStr = false;
-    } else if (c === '"') {
-      inStr = true;
-    } else if (c === open) {
-      depth++;
-    } else if (c === close) {
-      depth--;
-      if (depth === 0) return text.slice(openIdx, i + 1);
-    }
-  }
-  return null;
-}
-
-function isHoleish(x: unknown): x is Record<string, unknown> {
-  if (!x || typeof x !== "object" || Array.isArray(x)) return false;
-  const o = x as Record<string, unknown>;
-  return typeof o.par === "number" || typeof o.holeNumber === "number" || typeof o.number === "number";
-}
-
-// Pull every plausible `"holes":[ ... ]` array out of a text blob (raw HTML or flight text). Accepts
-// an array only if it is mostly hole-shaped objects, so we don't grab an unrelated array named holes.
-function holeArraysFromText(text: string): Record<string, unknown>[][] {
-  const found: Record<string, unknown>[][] = [];
-  for (const m of text.matchAll(/"holes"\s*:\s*\[/g)) {
-    const bracket = text.indexOf("[", m.index! + m[0].length - 1);
-    if (bracket < 0) continue;
-    const arrStr = extractBalanced(text, bracket);
-    if (!arrStr) continue;
-    try {
-      const arr = JSON.parse(arrStr) as unknown[];
-      if (Array.isArray(arr) && arr.length > 0 && arr.length <= 40 && arr.filter(isHoleish).length >= Math.ceil(arr.length / 2)) {
-        found.push(arr as Record<string, unknown>[]);
-      }
-    } catch {
-      /* not valid JSON at this position — skip */
-    }
-  }
-  return found;
-}
-
-export function parseUdiscLayout(html: string, url: string): UdiscLayout {
-  const name = titleFromHtml(html) || null;
-  const empty: UdiscLayout = {
-    name,
-    udisc_url: url,
-    holes: [],
-    positions: [],
-    note: "Imported from UDisc (best-effort): name only — enter hole pars manually to enable scoring.",
-  };
-
-  const candidates: Record<string, unknown>[][] = [];
-  let jsonName: string | null = null;
-
-  // 1) Typed JSON script blocks: parse fully and search for the largest par-bearing array anywhere.
-  for (const raw of scriptJsonBlocks(html)) {
-    try {
-      const data = JSON.parse(raw.trim());
-      const found = findHoleArray(data);
-      if (found.length) {
-        candidates.push(found);
-        if (!jsonName) jsonName = findCourseName(data);
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  // 2) App Router RSC flight payload, and 3) any other inline "holes":[...] in the raw HTML.
-  for (const arr of holeArraysFromText(nextFlightText(html))) candidates.push(arr);
-  for (const arr of holeArraysFromText(html)) candidates.push(arr);
-
-  if (!candidates.length) return empty;
-  // Keep the richest array (most holes) found across every strategy.
-  const holeObjs = candidates.reduce((best, arr) => (arr.length > best.length ? arr : best));
-
+function layoutToUdisc(layout: { name?: unknown; holes: unknown[] }, url: string): UdiscLayout {
   const positions: UdiscPosition[] = [];
-  const holes: UdiscHole[] = holeObjs.map((h, i) => {
-    const num = typeof h.holeNumber === "number" ? h.holeNumber : typeof h.number === "number" ? h.number : i + 1;
+  const holes: UdiscHole[] = layout.holes.map((raw, i) => {
+    const h = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+    const parsedNum = parseInt(String(h.name ?? ""), 10);
+    const hole = Number.isFinite(parsedNum) ? parsedNum : i + 1;
     const par = typeof h.par === "number" ? h.par : 3;
-    const teeC = firstCoord(h.teePositions, h.tees, h.teePads, h.teePosition, h.tee);
-    const tgtC = firstCoord(h.targetPositions, h.baskets, h.targetPosition, h.basket, h.pin);
-    const tee = teeC ? { label: `Hole ${num} tee`, lat: teeC.lat, lng: teeC.lng } : null;
-    const target = tgtC ? { label: `Hole ${num} basket`, lat: tgtC.lat, lng: tgtC.lng } : null;
+    const teeC = coordOf(h.teePosition) ?? coordOf(h.teePad);
+    const tgtC = coordOf(h.targetPosition) ?? coordOf(h.basket);
+    const tee = teeC ? { label: `Hole ${hole} tee`, lat: teeC.lat, lng: teeC.lng } : null;
+    const target = tgtC ? { label: `Hole ${hole} basket`, lat: tgtC.lat, lng: tgtC.lng } : null;
     if (tee) positions.push({ kind: "tee", ...tee });
     if (target) positions.push({ kind: "target", ...target });
-    return { hole: num, par, tee, target };
+    return { hole, par, tee, target };
   });
-
+  const name = typeof layout.name === "string" && layout.name.trim() ? layout.name.trim() : null;
   return {
-    name: jsonName ?? name,
+    name,
     udisc_url: url,
     holes,
     positions,
-    note: `Imported ${holes.length} holes from UDisc (best-effort). Review pars and distances before scoring.`,
+    note: `Imported ${holes.length} holes from UDisc layout "${name ?? "?"}". Review pars and distances before scoring.`,
   };
+}
+
+// Parse ALL scorable layouts from a UDisc course page (deduped by UDisc layout id, in page order).
+export function parseUdiscLayouts(html: string, url: string): { name: string | null; layouts: UdiscLayout[] } {
+  const name = titleFromHtml(html) || null;
+  let root: unknown;
+  try {
+    const values = turboStreamValues(html);
+    if (!values.length) return { name, layouts: [] };
+    root = unflatten(values);
+  } catch {
+    return { name, layouts: [] };
+  }
+
+  const seenIds = new Set<unknown>();
+  const layouts: UdiscLayout[] = [];
+  for (const raw of collectLayouts(root)) {
+    if (raw.layoutId != null) {
+      if (seenIds.has(raw.layoutId)) continue;
+      seenIds.add(raw.layoutId);
+    }
+    const ul = layoutToUdisc(raw, url);
+    if (ul.holes.length) layouts.push(ul);
+  }
+  return { name, layouts };
+}
+
+// Single-layout convenience used by callers/tests that want one candidate: the first layout, or a
+// name-only degrade when nothing scorable was found.
+export function parseUdiscLayout(html: string, url: string): UdiscLayout {
+  const { name, layouts } = parseUdiscLayouts(html, url);
+  return (
+    layouts[0] ?? {
+      name,
+      udisc_url: url,
+      holes: [],
+      positions: [],
+      note: "Imported from UDisc (best-effort): name only — enter hole pars manually to enable scoring.",
+    }
+  );
 }

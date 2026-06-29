@@ -1,5 +1,5 @@
 import type { Env } from "./env.js";
-import { safeFetch, normalizeDgs, normalizeCsvEvents, parseCsvRows, parseUdiscLayout, ImportError } from "./imports.js";
+import { safeFetch, normalizeDgs, normalizeCsvEvents, parseCsvRows, parseUdiscLayouts, ImportError } from "./imports.js";
 import { json, readJson } from "./http.js";
 import { asStr } from "./input.js";
 
@@ -27,9 +27,11 @@ export async function handleAdminImport(request: Request, env: Env, origin: stri
     if (kind === "udisc") {
       const url = asStr(b.url, 500);
       if (!url) return json({ error: "invalid_request" }, 400, origin);
-      // UDisc App Router pages embed a large flight payload — allow more than the 1 MB default.
+      // UDisc ships its data as a large turbo-stream payload — allow more than the 1 MB default.
       const html = await safeFetch(url, ["udisc.com"], { maxBytes: 3_000_000 });
-      return json({ source: "udisc", candidate: parseUdiscLayout(html, url) }, 200, origin);
+      const { name, layouts } = parseUdiscLayouts(html, url);
+      // `candidate` keeps the old single-layout shape working; `layouts` exposes all of them.
+      return json({ source: "udisc", name, layouts, candidate: layouts[0] ?? null }, 200, origin);
     }
     return json({ error: "not_found" }, 404, origin);
   } catch (e) {
