@@ -68,7 +68,7 @@ simple = { limit = 20, period = 60 }
 
 [vars]
 ALLOWED_ORIGINS = "https://www.greenvillediscgolf.com,https://greenvillediscgolf.com"
-SESSION_TTL_SEC = "900"
+SESSION_TTL_SEC = "43200"
 # Crotts brains: OpenRouter free model is tried first, then Workers AI if it fails/unavailable.
 # Override either model id here. OPENROUTER_API_KEY is a SECRET, NOT a var:
 #   wrangler secret put OPENROUTER_API_KEY      (get a free key at openrouter.ai)
@@ -153,7 +153,7 @@ simple = { limit = 20, period = 60 }
 
 [env.staging.vars]
 ALLOWED_ORIGINS = "https://gvdgclub.com,https://www.gvdgclub.com"
-SESSION_TTL_SEC = "900"
+SESSION_TTL_SEC = "43200"
 # Crotts brain on the dev site: best WORKING free NVIDIA Nemotron — super-120b (12B active, ~1s, clean
 # answer in `content` with chain-of-thought in a separate `reasoning` field at 512 tokens). Verified live:
 # the 550b-ultra:free returns no usable response on the free tier and nano-9b returns empty content, so

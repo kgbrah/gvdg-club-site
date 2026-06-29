@@ -782,6 +782,12 @@
                 btn.disabled = false;
                 if (!r.ok) {
                     const e = await r.json().catch(() => ({}));
+                    if (r.status === 401 || e.error === 'session_expired') {
+                        try { sessionStorage.removeItem('gvdg_member_token'); } catch (_e) {}
+                        alert('Your members session expired. Registering as a guest below — or sign in again on the Members page.');
+                        loadRegistration(); // re-render: with no token the form now asks for name/email (guest)
+                        return;
+                    }
                     alert(e.error === 'registration_closed' ? 'Registration is closed for this event.'
                         : e.error === 'rate_limited' ? 'Too many sign-ups from your network — please try again in a minute.'
                         : e.error === 'invalid_division' ? 'Please pick a valid division.'

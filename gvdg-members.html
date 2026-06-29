@@ -995,11 +995,25 @@
             btn.textContent = busy ? 'Please wait…' : btn.dataset.label;
         }
 
+        let sessionExpiredShown = false;
+        function handleSessionExpired() {
+            if (sessionExpiredShown) return;
+            sessionExpiredShown = true;
+            try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
+            showLogin();
+            const err = $('loginError'); if (err) showError(err, 'Your session expired — please sign in again.');
+            setTimeout(() => { sessionExpiredShown = false; }, 4000);
+        }
         function api(path, { method = 'GET', token, body } = {}) {
             const headers = {};
             if (body) headers['Content-Type'] = 'application/json';
             if (token) headers['Authorization'] = 'Bearer ' + token;
-            return fetch(AUTH_BASE + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+            return fetch(AUTH_BASE + path, { method, headers, body: body ? JSON.stringify(body) : undefined })
+                .then((r) => {
+                    // An authed request rejected with 401 means the token expired — bounce to a clean re-login.
+                    if (r.status === 401 && token) handleSessionExpired();
+                    return r;
+                });
         }
 
         function showLogin() {
