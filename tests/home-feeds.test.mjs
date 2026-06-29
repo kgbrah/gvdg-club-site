@@ -1,12 +1,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  isClubEvent,
   parseCsvLine,
   parseHomepageEventCsv,
   parseHomepageEventDate,
   parseTournamentCsv,
   parseTournamentDate,
 } from '../home-feeds.js';
+
+test('isClubEvent flags club business but keeps tournaments/league rounds', () => {
+  assert.equal(isClubEvent({ title: 'Club Meeting', description: 'At Local Oak Brewing' }), true);
+  assert.equal(isClubEvent({ title: 'Course Cleanup Fundraiser', description: '' }), true);
+  assert.equal(isClubEvent({ title: 'GVDG Summer Doubles League', description: 'Farmville' }), false);
+  assert.equal(isClubEvent({ title: 'Ryder Cup Matchplay', description: '' }), false);
+});
 
 test('parseCsvLine handles quoted commas and escaped quotes', () => {
   assert.deepEqual(parseCsvLine('"One, Two","He said ""go""",Plain'), ['One, Two', 'He said "go"', 'Plain']);

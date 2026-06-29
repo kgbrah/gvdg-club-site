@@ -1,5 +1,6 @@
 import { safeExternalUrl } from './safe-url.js';
 import {
+  isClubEvent,
   parseHomepageEventCsv,
   parseHomepageEventDate,
   parseTournamentCsv,
@@ -8,6 +9,7 @@ import {
 
 export {
   parseCsvLine,
+  isClubEvent,
   parseHomepageEventCsv,
   parseHomepageEventDate,
   parseTournamentCsv,
@@ -165,6 +167,9 @@ export async function loadHomepageEvents(fetchImpl = fetch, showPast = false) {
     const response = await fetchImpl(EVENT_FEED_URL + '&_cb=' + Date.now());
     if (!response.ok) throw new Error('feed_error');
     let events = parseHomepageEventCsv(await response.text());
+    // "Events" here = tournaments & league rounds; club business (meetings/fundraisers/minutes) lives
+    // under Club Events on the events page, so keep it off the homepage Events list.
+    events = events.filter((event) => !isClubEvent(event));
     if (!showPast) events = events.filter((event) => !parseHomepageEventDate(event.date).isPast);
     events.sort((a, b) => parseHomepageEventDate(a.date).dateObj - parseHomepageEventDate(b.date).dateObj);
     total = events.length;

@@ -64,6 +64,14 @@ export function parseHomepageEventCsv(csv) {
   return events;
 }
 
+// Club-business items (meetings, minutes, fundraisers, socials) belong under "Club Events", not the
+// homepage "Events" list — which is for disc golf tournaments & league rounds. Mirrors the worker's
+// classifier in auth-worker/src/feeds.ts so Crotts and the site agree on the split.
+const CLUB_EVENT_RE = /\b(meeting|minutes|agenda|fundrais|donat|social|banquet|cleanup|clean-up|volunteer|board|election|membership drive|potluck|holiday party)\b/i;
+export function isClubEvent(event) {
+  return CLUB_EVENT_RE.test((((event && event.title) || '') + ' ' + ((event && event.description) || '')));
+}
+
 export function parseHomepageEventDate(raw, now = new Date()) {
   if (!raw || typeof raw !== 'string') return tbdDate();
   const s = raw.trim();
