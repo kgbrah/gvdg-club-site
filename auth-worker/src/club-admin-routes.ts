@@ -35,7 +35,7 @@ export async function handleClubAdmin(
   else if (sub === "import" && method === "POST") response = await handleAdminImport(request, env, origin);
   else if (sub === "layouts") response = await handleAdminLayouts(request, env, origin, method, id);
   else if (sub === "members") response = await handleAdminMembers(request, env, origin, method, seg);
-  else if (sub === "shop" || sub === "wallets") response = await handleAdminShop(request, env, origin, method, seg, adminId);
+  else if (sub === "shop" || sub === "wallets" || sub === "orders") response = await handleAdminShop(request, env, origin, method, seg, adminId);
   else if (sub === "tee-signs") response = await handleAdminTeeSigns(request, env, origin, method, seg, adminId, id);
 
   return response ?? json({ error: "not_found" }, 404, origin);

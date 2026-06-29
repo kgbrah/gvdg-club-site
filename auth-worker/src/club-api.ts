@@ -5,7 +5,7 @@ import { handleClubPublic } from "./club-public-routes.js";
 import { handleClubRegistration } from "./club-registration-routes.js";
 import { handleClubShop } from "./club-shop-routes.js";
 
-export async function clubApi(request: Request, env: Env, origin: string | null, pathname: string, method: string): Promise<Response | null> {
+export async function clubApi(request: Request, env: Env, origin: string | null, pathname: string, method: string, ctx?: ExecutionContext): Promise<Response | null> {
   const seg = pathname.split("/").filter(Boolean);
 
   const publicRoute = await handleClubPublic(request, env, origin, pathname, method, seg);
@@ -14,7 +14,7 @@ export async function clubApi(request: Request, env: Env, origin: string | null,
   const liveRoute = await handleClubLive(request, env, origin, method, seg);
   if (liveRoute) return liveRoute;
 
-  const shopRoute = await handleClubShop(request, env, origin, method, seg);
+  const shopRoute = await handleClubShop(request, env, origin, method, seg, ctx);
   if (shopRoute) return shopRoute;
 
   const registrationRoute = await handleClubRegistration(request, env, origin, method, seg);

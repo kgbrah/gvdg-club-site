@@ -158,5 +158,33 @@ export async function handleAdminShop(
     }
   }
 
+  if (seg[1] === "orders") {
+    const id = seg[2] != null ? asInt(seg[2]) : null;
+    if (method === "GET" && seg.length === 2) {
+      const status = new URL(request.url).searchParams.get("status");
+      const filter = status && inSet(shopDb.ORDER_STATUSES, status) ? status : undefined;
+      const [orders, unfulfilled] = await Promise.all([
+        shopDb.listAllStoreOrders(env.DB, { status: filter }),
+        shopDb.countUnfulfilledStoreOrders(env.DB),
+      ]);
+      return json({ orders, unfulfilled }, 200, origin);
+    }
+    if (method === "PATCH" && id != null) {
+      const body = (await readJson(request)) ?? {};
+      const patch: shopDb.OrderFulfillmentPatch = {};
+      if ("status" in body) {
+        const s = asStr(body.status, 20);
+        if (!s || !inSet(shopDb.ORDER_STATUSES, s)) return json({ error: "invalid_status" }, 400, origin);
+        patch.status = s;
+      }
+      if ("tracking_carrier" in body) patch.tracking_carrier = asStr(body.tracking_carrier, 60);
+      if ("tracking_number" in body) patch.tracking_number = asStr(body.tracking_number, 120);
+      if ("admin_note" in body) patch.admin_note = asStr(body.admin_note, 500);
+      const updated = await shopDb.updateStoreOrderFulfillment(env.DB, id, patch);
+      if (!updated) return json({ error: "not_found" }, 404, origin);
+      return json({ order: updated }, 200, origin);
+    }
+  }
+
   return null;
 }

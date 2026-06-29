@@ -4,6 +4,7 @@ import * as shopDb from "./shop-db.js";
 import { requireAuth } from "./authz.js";
 import { getMember } from "./roster.js";
 import { paypalBase, createOrder as ppCreateOrder, captureOrder as ppCaptureOrder } from "./payments.js";
+import { notifyNewOrder } from "./order-notify.js";
 import { json, readJson } from "./http.js";
 import { asInt, asStr } from "./input.js";
 
@@ -112,26 +113,29 @@ async function validateStoredStock(database: D1Like, lines: StoreOrderLine[]): P
 }
 
 async function submitStoreOrder(
-  database: D1Like,
+  env: Env,
+  ctx: ExecutionContext | undefined,
   memberId: string,
   memberName: string,
   total: number,
   lines: StoreOrderLine[],
   payment: { method: string; ref?: string | null },
 ) {
-  const order = await shopDb.createStoreOrder(database, { member_id: memberId, member_name: memberName, total_cents: total, payment_method: payment.method, payment_ref: payment.ref ?? null });
+  const order = await shopDb.createStoreOrder(env.DB, { member_id: memberId, member_name: memberName, total_cents: total, payment_method: payment.method, payment_ref: payment.ref ?? null });
   const orderId = isRecord(order) ? rowNumber(order, "id") : 0;
   if (!orderId) return null;
   for (const line of lines) {
-    await shopDb.createStoreOrderItem(database, {
+    await shopDb.createStoreOrderItem(env.DB, {
       order_id: orderId,
       product_id: line.product_id,
       name_snapshot: line.name_snapshot,
       price_cents: line.price_cents,
       quantity: line.quantity,
     });
-    await shopDb.decrementStoreProductStock(database, line.product_id, line.quantity);
+    await shopDb.decrementStoreProductStock(env.DB, line.product_id, line.quantity);
   }
+  // New-order email to the club if configured (the admin Orders tab always shows it). Fire-and-forget.
+  ctx?.waitUntil(notifyNewOrder(env, order, lines));
   return { order, orderId };
 }
 
@@ -141,6 +145,7 @@ export async function handleClubShop(
   origin: string | null,
   method: string,
   seg: string[],
+  ctx?: ExecutionContext,
 ): Promise<Response | null> {
   if (seg[0] !== "shop") return null;
 
@@ -212,7 +217,7 @@ export async function handleClubShop(
         if (rowText(afterCaptureOrder, "member_id") !== claims.sub) return json({ error: "forbidden" }, 403, origin);
         return json({ order: afterCaptureOrder, balance_cents: await shopDb.walletBalance(env.DB, claims.sub) }, 200, origin);
       }
-      const submitted = await submitStoreOrder(env.DB, claims.sub, member.name, total, lines, { method: "paypal", ref: orderId });
+      const submitted = await submitStoreOrder(env, ctx, claims.sub, member.name, total, lines, { method: "paypal", ref: orderId });
       if (!submitted) return json({ error: "order_failed" }, 500, origin);
       await shopDb.markStorePaymentSessionCaptured(env.DB, orderId);
       return json({ order: submitted.order, balance_cents: await shopDb.walletBalance(env.DB, claims.sub) }, 201, origin);
@@ -228,7 +233,7 @@ export async function handleClubShop(
     if (!priced.ok) return json(priced.body, priced.status, origin);
     const balance = await shopDb.walletBalance(env.DB, claims.sub);
     if (balance < priced.total) return json({ error: "insufficient_store_credit", balance_cents: balance, total_cents: priced.total }, 402, origin);
-    const submitted = await submitStoreOrder(env.DB, claims.sub, member.name, priced.total, priced.lines, { method: "store_credit" });
+    const submitted = await submitStoreOrder(env, ctx, claims.sub, member.name, priced.total, priced.lines, { method: "store_credit" });
     if (!submitted) return json({ error: "order_failed" }, 500, origin);
     const transaction = await shopDb.createWalletTransaction(env.DB, {
       member_id: claims.sub,

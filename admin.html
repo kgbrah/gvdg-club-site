@@ -189,6 +189,17 @@
         .wallet-row .debit { color: var(--primary); font-weight: 700; }
         .credit-award { display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
         .credit-award input { width: 5rem; padding: 0.3rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
+        .orders-badge { display: inline-flex; min-width: 1.2rem; height: 1.2rem; padding: 0 0.35rem; border-radius: 999px; background: var(--primary); color: #fff; font-size: 0.7rem; font-weight: 700; align-items: center; justify-content: center; }
+        .orders-list { display: grid; gap: 0.75rem; }
+        .order-card { border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-secondary); padding: 0.75rem 0.9rem; }
+        .order-card.unfulfilled { border-left: 3px solid var(--primary); }
+        .order-head { display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; align-items: baseline; }
+        .order-head strong { color: var(--text-primary); }
+        .order-items { margin: 0.4rem 0; color: var(--text-secondary); font-size: 0.9rem; display: grid; gap: 0.15rem; }
+        .order-controls { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: end; margin-top: 0.5rem; }
+        .order-controls label { display: block; font-size: 0.68rem; color: var(--text-muted); margin-bottom: 0.1rem; }
+        .order-controls select, .order-controls input { padding: 0.35rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
+        .order-controls input { width: 9rem; }
         /* Helper classes referenced by the copied admin JS */
         .dash-note { color: var(--text-muted); font-size: 0.95rem; padding: 0.5rem 0; }
         .dash-event-date { font-size: 0.8rem; color: var(--text-muted); }
@@ -256,6 +267,7 @@
                 <button type="button" class="admin-tab" data-atab="registration">Registration</button>
                 <button type="button" class="admin-tab" data-atab="shop">Pro Shop</button>
                 <button type="button" class="admin-tab" data-atab="wallets">Wallets</button>
+                <button type="button" class="admin-tab" data-atab="orders">Orders <span id="ordersBadge" class="orders-badge" hidden></span></button>
                 <button type="button" class="admin-tab" data-atab="members">Members</button>
             </div>
             <div class="admin-msg" id="adminMsg"></div>
@@ -481,6 +493,22 @@
                     <div id="adminWalletRecent" class="wallet-ledger">Loading…</div>
                 </div>
             </div>
+            <div class="admin-pane" id="apane-orders">
+                <div class="al-section" style="margin-bottom:0.75rem; display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                    <label for="ordStatusFilter">Show</label>
+                    <select id="ordStatusFilter">
+                        <option value="">All orders</option>
+                        <option value="submitted">Submitted</option>
+                        <option value="processing">Processing</option>
+                        <option value="ready">Ready for pickup</option>
+                        <option value="shipped">Shipped</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                    <button type="button" class="admin-btn" id="ordRefresh">Refresh</button>
+                </div>
+                <div id="adminOrdersList" class="orders-list">Loading…</div>
+            </div>
             <div class="admin-pane" id="apane-members">
                 <form class="admin-form" id="adminMemberForm">
                     <div><label for="amName">Name</label><input id="amName" maxlength="80" required></div>
@@ -657,6 +685,7 @@
             if (tab === 'registration') rgLoadEvents();
             if (tab === 'shop') adminLoadProducts();
             if (tab === 'wallets') adminLoadWalletRecent();
+            if (tab === 'orders') adminLoadOrders();
             if (tab === 'members') adminLoadMembers();
         }
 
@@ -1396,6 +1425,54 @@
             if (!transactions.length) { list.appendChild(elx('p', 'al-note', 'No wallet activity yet.')); return; }
             transactions.forEach((tx) => list.appendChild(walletRow(tx)));
         }
+
+        // ---- Pro shop orders: status, tracking, and the new-order badge ----
+        const ORDER_STATUS_LABELS = { submitted: 'Submitted', processing: 'Processing', ready: 'Ready for pickup', shipped: 'Shipped', completed: 'Completed', cancelled: 'Cancelled' };
+        const ORDER_UNFULFILLED = ['submitted', 'processing'];
+        function setOrdersBadge(n) { const b = $('ordersBadge'); if (!b) return; if (n > 0) { b.textContent = n; b.hidden = false; } else { b.hidden = true; } }
+        function orderCard(o) {
+            const card = elx('div', 'order-card' + (ORDER_UNFULFILLED.includes(o.status) ? ' unfulfilled' : ''));
+            const head = elx('div', 'order-head');
+            head.appendChild(elx('strong', null, 'Order #' + o.id + ' · ' + (o.member_name || o.member_id || 'Member')));
+            head.appendChild(elx('span', null, dollarsFromCents(o.total_cents) + ' · ' + (o.payment_method || '')));
+            card.appendChild(head);
+            card.appendChild(elx('div', 'shop-admin-meta', 'Placed ' + (o.created_at || '?') + ' · ' + (ORDER_STATUS_LABELS[o.status] || o.status || 'submitted')));
+            const items = elx('div', 'order-items');
+            (o.items || []).forEach((it) => items.appendChild(elx('div', null, (it.quantity || 1) + ' × ' + it.name_snapshot + ' (' + dollarsFromCents(it.price_cents) + ')')));
+            card.appendChild(items);
+            const ctrls = elx('div', 'order-controls');
+            const sWrap = elx('div'); sWrap.appendChild(elx('label', null, 'Status'));
+            const sel = elx('select');
+            Object.keys(ORDER_STATUS_LABELS).forEach((s) => { const opt = elx('option', null, ORDER_STATUS_LABELS[s]); opt.value = s; if (s === o.status) opt.selected = true; sel.appendChild(opt); });
+            sWrap.appendChild(sel); ctrls.appendChild(sWrap);
+            const cWrap = elx('div'); cWrap.appendChild(elx('label', null, 'Carrier')); const car = elx('input'); car.value = o.tracking_carrier || ''; car.placeholder = 'USPS / UPS'; car.maxLength = 60; cWrap.appendChild(car); ctrls.appendChild(cWrap);
+            const tWrap = elx('div'); tWrap.appendChild(elx('label', null, 'Tracking #')); const trk = elx('input'); trk.value = o.tracking_number || ''; trk.placeholder = 'tracking number'; trk.maxLength = 120; tWrap.appendChild(trk); ctrls.appendChild(tWrap);
+            const save = elx('button', 'admin-btn', 'Save'); save.type = 'button';
+            save.addEventListener('click', () => saveOrder(o.id, { status: sel.value, tracking_carrier: car.value.trim() || null, tracking_number: trk.value.trim() || null }, save));
+            ctrls.appendChild(save);
+            card.appendChild(ctrls);
+            return card;
+        }
+        async function adminLoadOrders() {
+            const status = ($('ordStatusFilter') && $('ordStatusFilter').value) || '';
+            let orders = [], unfulfilled = 0;
+            try { const r = await adminApi('/admin/orders' + (status ? '?status=' + encodeURIComponent(status) : '')); if (r.ok) { const d = await r.json(); orders = d.orders || []; unfulfilled = d.unfulfilled || 0; } } catch (e) {}
+            setOrdersBadge(unfulfilled);
+            const list = $('adminOrdersList'); list.replaceChildren();
+            if (!orders.length) { list.appendChild(elx('p', 'al-note', status ? 'No orders with that status.' : 'No orders yet.')); return; }
+            orders.forEach((o) => list.appendChild(orderCard(o)));
+        }
+        async function saveOrder(id, body, btn) {
+            if (btn) btn.disabled = true;
+            const r = await adminApi('/admin/orders/' + id, { method: 'PATCH', body });
+            if (btn) btn.disabled = false;
+            if (r.ok) { adminMsg('Order #' + id + ' updated', true); adminLoadOrders(); }
+            else { const d = await r.json().catch(() => ({})); adminMsg('Order update failed' + (d.error ? ' (' + d.error + ')' : ''), false); }
+        }
+        async function refreshOrdersBadge() {
+            try { const r = await adminApi('/admin/orders'); if (r.ok) setOrdersBadge((await r.json()).unfulfilled || 0); } catch (e) {}
+        }
+
         async function adminPostWalletAdjustment(e) {
             e.preventDefault();
             const amount = dollarsToCents($('waAmount').value);
@@ -1571,6 +1648,10 @@
             $('adminMeetingForm').addEventListener('submit', adminAddMeeting);
             $('adminProductForm').addEventListener('submit', adminAddProduct);
             $('adminWalletForm').addEventListener('submit', adminPostWalletAdjustment);
+            $('ordStatusFilter').addEventListener('change', adminLoadOrders);
+            $('ordRefresh').addEventListener('click', adminLoadOrders);
+            refreshOrdersBadge();                          // show the new-order count on load
+            setInterval(refreshOrdersBadge, 60000);        // and keep it current while the page is open
             $('adminMemberForm').addEventListener('submit', adminAddMember);
             $('rgEvent').addEventListener('change', rgOnSelect);
             $('rgSaveBtn').addEventListener('click', rgSaveConfig);

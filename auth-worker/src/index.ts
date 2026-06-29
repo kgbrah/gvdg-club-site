@@ -66,7 +66,7 @@ export default {
       if (pathname === "/pdga-stats" && method === "GET") return await handlePdgaStats(request, env, origin);
       if (pathname === "/club-feed" && method === "GET") return await handleClubFeed(env, origin);
 
-      const club = await clubApi(request, env, origin, pathname, method);
+      const club = await clubApi(request, env, origin, pathname, method, ctx);
       if (club) return club;
 
       return json({ error: "not_found" }, 404, origin);

@@ -217,6 +217,61 @@ export async function listStoreOrders(db: D1Like, memberId: string) {
   return (await db.prepare("SELECT * FROM store_orders WHERE member_id = ? ORDER BY id DESC").bind(memberId).all()).results;
 }
 
+// ---- admin order fulfillment ----
+export const ORDER_STATUSES = ["submitted", "processing", "ready", "shipped", "completed", "cancelled"] as const;
+const UNFULFILLED_STATUSES = ["submitted", "processing"]; // new/in-progress orders needing admin action
+
+export interface OrderFulfillmentPatch {
+  status?: string;
+  tracking_carrier?: string | null;
+  tracking_number?: string | null;
+  admin_note?: string | null;
+}
+
+/** Admin view: all orders (optionally filtered by status), newest first, each with its line items. */
+export async function listAllStoreOrders(db: D1Like, opts: { status?: string; limit?: number } = {}) {
+  const limit = opts.limit ?? 200;
+  const sql = "SELECT * FROM store_orders" + (opts.status ? " WHERE status = ?" : "") + " ORDER BY id DESC LIMIT ?";
+  const orders = (await db.prepare(sql).bind(...(opts.status ? [opts.status, limit] : [limit])).all()).results as Record<string, unknown>[];
+  if (!orders.length) return [];
+  const ids = orders.map((o) => o.id as number);
+  const items = (await db
+    .prepare(`SELECT * FROM store_order_items WHERE order_id IN (${ids.map(() => "?").join(",")}) ORDER BY id`)
+    .bind(...ids)
+    .all()).results as Record<string, unknown>[];
+  const byOrder = new Map<number, Record<string, unknown>[]>();
+  for (const it of items) {
+    const oid = it.order_id as number;
+    (byOrder.get(oid) ?? byOrder.set(oid, []).get(oid)!).push(it);
+  }
+  return orders.map((o) => ({ ...o, items: byOrder.get(o.id as number) ?? [] }));
+}
+
+/** Count of orders still awaiting admin action — drives the in-app "new orders" badge. */
+export async function countUnfulfilledStoreOrders(db: D1Like): Promise<number> {
+  const row = await db
+    .prepare(`SELECT count(*) AS n FROM store_orders WHERE status IN (${UNFULFILLED_STATUSES.map(() => "?").join(",")})`)
+    .bind(...UNFULFILLED_STATUSES)
+    .first();
+  return row && typeof (row as { n?: unknown }).n === "number" ? (row as { n: number }).n : 0;
+}
+
+/** Update an order's status and/or shipment tracking. `undefined` fields are left unchanged. */
+export async function updateStoreOrderFulfillment(db: D1Like, id: number, patch: OrderFulfillmentPatch) {
+  const sets: string[] = [];
+  const binds: unknown[] = [];
+  if (patch.status !== undefined) {
+    sets.push("status = ?", "status_updated_at = datetime('now')");
+    binds.push(patch.status);
+  }
+  if (patch.tracking_carrier !== undefined) { sets.push("tracking_carrier = ?"); binds.push(patch.tracking_carrier); }
+  if (patch.tracking_number !== undefined) { sets.push("tracking_number = ?"); binds.push(patch.tracking_number); }
+  if (patch.admin_note !== undefined) { sets.push("admin_note = ?"); binds.push(patch.admin_note); }
+  if (!sets.length) return db.prepare("SELECT * FROM store_orders WHERE id = ?").bind(id).first();
+  binds.push(id);
+  return db.prepare(`UPDATE store_orders SET ${sets.join(", ")} WHERE id = ? RETURNING *`).bind(...binds).first();
+}
+
 export async function createStorePaymentSession(db: D1Like, session: StorePaymentSessionInput) {
   return db
     .prepare("INSERT INTO store_payment_sessions (paypal_order_id, member_id, member_name, items_json, total_cents, status) VALUES (?, ?, ?, ?, ?, 'pending') RETURNING *")
