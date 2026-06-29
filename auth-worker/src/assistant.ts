@@ -93,15 +93,31 @@ export interface ReplyProvider {
   generate(messages: ChatMessage[]): Promise<string>;
 }
 
-/** Try each provider in order; return the first non-empty reply (trimmed) with its provider name,
- *  falling through on any throw or empty result. Returns null if every provider fails. */
+/** Strip a reasoning model's chain-of-thought out of a reply so only the answer is shown. Handles
+ *  well-formed <think>…</think> (also <thinking>/<reasoning>) blocks, a stray CLOSING tag when the
+ *  model started mid-thought (keep what follows the last one), and a stray OPENING tag when the model
+ *  ran out of tokens mid-thought (drop from it to the end → empty, so generateReply falls back). */
+export function stripReasoning(text: string): string {
+  if (!text) return "";
+  let t = text.replace(/<(think|thinking|reasoning)\b[^>]*>[\s\S]*?<\/\1>/gi, "");
+  const close = /<\/(?:think|thinking|reasoning)>/gi;
+  let m: RegExpExecArray | null;
+  let after: number | null = null;
+  while ((m = close.exec(t)) !== null) after = m.index + m[0].length;
+  if (after !== null) t = t.slice(after);
+  t = t.replace(/<(?:think|thinking|reasoning)\b[^>]*>[\s\S]*$/i, "");
+  return t.trim();
+}
+
+/** Try each provider in order; return the first non-empty reply (reasoning stripped, trimmed) with its
+ *  provider name, falling through on any throw or empty result. Returns null if every provider fails. */
 export async function generateReply(
   providers: ReplyProvider[],
   messages: ChatMessage[],
 ): Promise<{ reply: string; provider: string } | null> {
   for (const p of providers) {
     try {
-      const r = (await p.generate(messages))?.trim();
+      const r = stripReasoning((await p.generate(messages)) ?? "");
       if (r) return { reply: r, provider: p.name };
     } catch {
       /* provider unavailable — fall back to the next */
