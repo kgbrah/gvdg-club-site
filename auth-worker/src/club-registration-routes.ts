@@ -35,6 +35,11 @@ export async function handleClubRegistration(
   if (eid == null) return json({ error: "not_found" }, 404, origin);
   // Auth is OPTIONAL: members act via their JWT, guests via a registration token. Only `pay` requires a member.
   const claims = await requireAuth(request, env);
+  // A present-but-invalid bearer token is an EXPIRED session, not a guest — say so (so the UI re-prompts
+  // login) instead of silently falling through to the name-required guest path (the old confusing error).
+  if (!claims && (request.headers.get("authorization") || "").toLowerCase().startsWith("bearer ")) {
+    return json({ error: "session_expired" }, 401, origin);
+  }
 
   if (seg[2] === "pay" && method === "POST") {
     if (!claims) return json({ error: "unauthorized" }, 401, origin);
