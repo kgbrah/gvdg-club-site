@@ -1,0 +1,94 @@
+# GVDG member auth Worker.
+# mostlysober252: replace the KV `id` values with real namespace IDs
+# (`wrangler kv namespace create ROSTER` / `... RATELIMIT`) and set the JWT secret
+# with `wrangler secret put JWT_SECRET` before deploying.
+
+name = "gvdg-member-auth"
+main = "src/index.ts"
+compatibility_date = "2026-06-26"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.01
+persist = true
+
+[[kv_namespaces]]
+binding = "ROSTER"
+id = "REPLACE_WITH_ROSTER_KV_ID"
+
+[[kv_namespaces]]
+binding = "RATELIMIT"
+id = "REPLACE_WITH_RATELIMIT_KV_ID"
+
+# Club operations data (events, leagues, courses, layouts, results, meetings, fundraisers).
+# mostlysober252: `wrangler d1 create gvdg`, paste the database_id, then apply migrations with
+# `wrangler d1 migrations apply DB` (remote) — add `--local` for dev.
+[[d1_databases]]
+binding = "DB"
+database_name = "gvdg"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+# Tee-sign photos (T1). mostlysober252: `wrangler r2 bucket create gvdg-photos` then deploy.
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "gvdg-photos"
+
+# Cloudflare Workers AI — the FALLBACK brain for "Crotts" (POST /assistant). Free to declare;
+# usage bills to the account's Workers AI quota. Primary brain is OpenRouter (see below).
+[ai]
+binding = "AI"
+
+# Durable Object for live UDisc-style scoring (one instance per in-progress event).
+[[durable_objects.bindings]]
+name = "LIVE"
+class_name = "LiveEventDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LiveEventDO"]
+
+# Atomic rate limiter for the UNAUTHENTICATED /assistant (Crotts) endpoint. Unlike the KV counter,
+# this binding increments atomically, so a concurrent burst can't all read a stale count and slip past
+# the cap to run up Workers-AI/OpenRouter cost. (Code falls back to the KV limiter if unset, e.g. tests.)
+[[unsafe.bindings]]
+name = "ASSISTANT_RL"
+type = "ratelimit"
+namespace_id = "1001"
+simple = { limit = 20, period = 60 }
+
+[vars]
+ALLOWED_ORIGINS = "https://www.greenvillediscgolf.com,https://greenvillediscgolf.com"
+SESSION_TTL_SEC = "900"
+# Crotts brains: OpenRouter free model is tried first, then Workers AI if it fails/unavailable.
+# Override either model id here. OPENROUTER_API_KEY is a SECRET, NOT a var:
+#   wrangler secret put OPENROUTER_API_KEY      (get a free key at openrouter.ai)
+# If the key is unset, Crotts uses Workers AI only.
+# (gpt-oss-120b:free verified working 2026-06-23; llama-3.3-70b:free was rate-limited upstream then.)
+OPENROUTER_MODEL = "openai/gpt-oss-120b:free"
+ASSISTANT_MODEL = "@cf/meta/llama-3.1-8b-instruct"
+# PayPal Checkout for event entry/add-ons (Track G). Payments stay OFF (manual "paid" flag, no downtime)
+# until the club adds BOTH secrets below; then PayPal Checkout auto-activates. CLIENT_ID is public.
+#   wrangler secret put PAYPAL_CLIENT_ID    (your PayPal app's client id)
+#   wrangler secret put PAYPAL_SECRET       (your PayPal app's secret)
+# Set PAYPAL_ENV = "live" to switch from the sandbox to production.
+PAYPAL_ENV = "sandbox"
+# Passkeys / WebAuthn. RP_ID must be the registrable domain (covers the www subdomain);
+# EXPECTED_ORIGIN must exactly match the page origin the browser reports.
+RP_ID = "greenvillediscgolf.com"
+RP_NAME = "Greenville Disc Golf Club"
+EXPECTED_ORIGIN = "https://www.greenvillediscgolf.com"
+# JWT_SECRET is set as a secret, NOT here:  wrangler secret put JWT_SECRET
+# Crotts vision (T2): tee-sign OCR. OpenRouter free VL model tried first (needs OPENROUTER_API_KEY),
+# then Workers AI. Override the model ids here.
+OPENROUTER_VISION_MODEL = "nvidia/nemotron-nano-12b-v2-vl:free"
+VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct"
