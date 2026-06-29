@@ -177,7 +177,8 @@ export async function getClubCalendar(env: Env, now: number = Date.now()): Promi
     ...feeds.clubEvents,
     ...evRows.filter((e) => e.type === "fundraiser" || e.type === "meeting").map((e) => item(String(e.name ?? ""), dateOf(e), (e.notes as string) || undefined)),
     ...(meetings as Record<string, unknown>[]).map((m) => item(String(m.title ?? "Meeting"), dateOf(m), "Minutes posted")),
-    ...(fundraisers as Record<string, unknown>[]).filter((f) => f.status === "active").map((f) => item(String(f.title ?? "Fundraiser"), dateOf(f), "Fundraiser", (f.paypal_url as string) || undefined)),
+    // Active fundraisers are ongoing, not date-bound — stamp them "now" so they always count as current.
+    ...(fundraisers as Record<string, unknown>[]).filter((f) => f.status === "active").map((f) => ({ name: String(f.title ?? "Fundraiser"), date: (f.starts_at as string) || null, epoch: now, detail: "Fundraiser", url: (f.paypal_url as string) || undefined } as FeedItem)),
   ];
 
   // Soonest first; include the last ~45 days so recent rounds/minutes still show. Unknown dates last.
