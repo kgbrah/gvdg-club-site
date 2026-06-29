@@ -17,7 +17,7 @@ export async function clubApi(request: Request, env: Env, origin: string | null,
   const shopRoute = await handleClubShop(request, env, origin, method, seg, ctx);
   if (shopRoute) return shopRoute;
 
-  const registrationRoute = await handleClubRegistration(request, env, origin, method, seg);
+  const registrationRoute = await handleClubRegistration(request, env, origin, method, seg, ctx);
   if (registrationRoute) return registrationRoute;
 
   return handleClubAdmin(request, env, origin, method, seg);
