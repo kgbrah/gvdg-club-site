@@ -71,11 +71,17 @@ wrangler kv bulk put ./out/kv-bulk.json --binding ROSTER --env staging
 # default PINs are in out/default-pins.csv — hand out, then delete. Members force-change PIN on first login.
 ```
 
-## Per-PR loop
-1. Push the PR branch → Pages auto-builds a preview (and refreshes `gvdgclub.com` if it's your dev branch).
-2. If the PR changes the Worker: `npm run deploy:staging`.
-3. Devs live-drive `gvdgclub.com` / the preview URL against **isolated** dev data.
-4. 👍 → merge to `main` → production deploy. Prod data untouched.
+## Per-PR loop (automated)
+1. Open/push a PR to `main` → **`.github/workflows/deploy-staging.yml`** auto-deploys the Worker to the
+   staging env and comments the dev URL on the PR; **Cloudflare Pages** auto-builds the static preview.
+2. Devs live-drive `gvdgclub.com` / the preview URL against **isolated** dev data.
+3. 👍 → merge to `main` → production deploy. Prod data untouched.
+
+> The staging CI needs only the `CLOUDFLARE_API_TOKEN` repo secret (same one prod uses). It does **not**
+> sync app secrets — set those once with `wrangler secret put JWT_SECRET --env staging` (+ `OPENROUTER_API_KEY`,
+> optional PayPal); Worker secrets persist across deploys. The workflow stays red until the
+> `REPLACE_WITH_STAGING_*` ids are filled in `wrangler.toml`. Manual deploy any time: `npm run deploy:staging`.
+> One shared staging slot — newest PR push wins; for true per-PR isolation you'd add per-PR Worker names later.
 
 ## Notes
 - **Passkeys are per-domain.** Enroll separately on `gvdgclub.com`; PIN login works regardless.
