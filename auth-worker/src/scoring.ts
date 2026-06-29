@@ -36,6 +36,7 @@ export interface PlayerState {
   startingHole?: number | null; // assigned shotgun start (Track G G4); display-only, doesn't affect scoring
   cardId?: string | null; // which scoring card/group this player is on (a player may score only their own card)
   scores: Record<number, number>; // hole -> strokes
+  scoredBy?: Record<number, string | null>; // hole -> who last set it (for live scoring-conflict detection)
 }
 
 export const DEFAULT_CARD_SIZE = 4;

@@ -112,6 +112,25 @@ describe("LiveEventDO card-scoped scoring", () => {
     const mine0 = (await (await live.fetch(new Request("https://do/mine", { headers: { "X-Auth-Member": "m0" } }))).json()) as { cardmates: { name: string }[] };
     expect(mine0.cardmates.map((c) => c.name)).toEqual(["A", "B", "C", "D"]);
   });
+
+  it("alerts the card when two scorers disagree on the same player/hole; same-scorer fixes don't", async () => {
+    const state = new FakeState({});
+    const live = new LiveEventDO(state, { DB: db });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ casual: true, holes: [{ hole: 1, par: 3 }], players: [{ memberId: "m0", name: "A" }, { memberId: "m1", name: "B" }] }) }));
+    const sock = new FakeSocket();
+    state.acceptWebSocket(sock as unknown as WebSocket);
+    sock.sent.length = 0;
+    await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m0" }, body: JSON.stringify({ index: 1, hole: 1, strokes: 3 }) }));
+    await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m1" }, body: JSON.stringify({ index: 1, hole: 1, strokes: 4 }) }));
+    const conflict = sock.sent.find((m) => m.includes('"type":"conflict"'));
+    expect(conflict).toBeTruthy();
+    expect(conflict).toContain('"from":3');
+    expect(conflict).toContain('"to":4');
+    // the same scorer correcting their own entry must NOT raise a conflict
+    sock.sent.length = 0;
+    await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m1" }, body: JSON.stringify({ index: 1, hole: 1, strokes: 5 }) }));
+    expect(sock.sent.some((m) => m.includes('"type":"conflict"'))).toBe(false);
+  });
 });
 
 describe("LiveEventDO casual rounds (self-organizing cards)", () => {
