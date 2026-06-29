@@ -524,7 +524,12 @@
                 .board-compose { display: flex; gap: 0.6rem; align-items: flex-start; margin-bottom: 1rem; }
                 .board-compose textarea, .board-replybox textarea { flex: 1; resize: vertical; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.6rem; font: inherit; font-size: 0.9rem; background: var(--bg-secondary); color: var(--text-primary); }
                 .board-post { border: 1px solid var(--border-color); border-radius: 10px; padding: 0.85rem 1.1rem; margin-bottom: 0.75rem; background: var(--bg-secondary); }
-                .board-head { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
+                .board-head { display: flex; gap: 0.6rem; align-items: center; }
+                .board-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex: 0 0 auto; background: var(--primary); }
+                .board-avatar.initials { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 0.9rem; font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.03em; }
+                .board-reply .board-avatar { width: 32px; height: 32px; }
+                .board-reply .board-avatar.initials { font-size: 0.78rem; }
+                .board-meta { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
                 .board-author { font-weight: 700; color: var(--text-primary); }
                 .board-when { font-size: 0.75rem; color: var(--text-muted); }
                 .board-body { color: var(--text-secondary); line-height: 1.55; margin: 0.35rem 0; }
@@ -1502,6 +1507,7 @@
             const n = Array.isArray(posts) ? posts.length : 0;
             count.textContent = n === 1 ? '1 thread' : n ? n + ' threads' : 'No threads yet';
         }
+        let boardAuthors = {}; // member_id -> profile photo (URL or data-URL); only authors who set one
         async function loadBoard() {
             const wrap = $('clubBoard'), feed = $('boardFeed');
             const token = sessionStorage.getItem(TOKEN_KEY);
@@ -1514,7 +1520,9 @@
             try {
                 const r = await api('/board', { token });
                 if (!r.ok) throw new Error('board_load_failed');
-                posts = (await r.json()).posts || [];
+                const data = await r.json();
+                posts = data.posts || [];
+                boardAuthors = data.authors || {};
             } catch (_e) {
                 setBoardStatus('Could not load the board. Please refresh or try again in a minute.', 'error');
                 feed.appendChild(elNode('p', 'dash-note', 'Board posts are temporarily unavailable.'));
@@ -1526,11 +1534,28 @@
             posts.forEach((p) => feed.appendChild(boardCard(p, false)));
         }
         function elNode(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+        function boardInitials(name) {
+            const parts = (name || 'Member').trim().split(/\s+/).filter(Boolean);
+            const ini = (parts[0] ? parts[0][0] : 'M') + (parts.length > 1 ? parts[parts.length - 1][0] : '');
+            return ini.toUpperCase();
+        }
+        function boardAvatarInitials(name) { return elNode('div', 'board-avatar initials', boardInitials(name)); }
+        function boardAvatar(post) {
+            const photo = boardAuthors[post.member_id];
+            if (!photo) return boardAvatarInitials(post.author_name);
+            const img = elNode('img', 'board-avatar');
+            img.src = photo; img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
+            img.addEventListener('error', () => img.replaceWith(boardAvatarInitials(post.author_name)));
+            return img;
+        }
         function boardCard(post, isReply) {
             const card = elNode('div', isReply ? 'board-reply' : 'board-post');
             const head = elNode('div', 'board-head');
-            head.appendChild(elNode('span', 'board-author', post.author_name || 'Member'));
-            head.appendChild(elNode('span', 'board-when', post.created_at || ''));
+            head.appendChild(boardAvatar(post));
+            const meta = elNode('div', 'board-meta');
+            meta.appendChild(elNode('span', 'board-author', post.author_name || 'Member'));
+            meta.appendChild(elNode('span', 'board-when', post.created_at || ''));
+            head.appendChild(meta);
             card.appendChild(head);
             const body = elNode('div', 'board-body'); mdRender(post.body, body); card.appendChild(body);
             const actions = elNode('div', 'board-actions');
