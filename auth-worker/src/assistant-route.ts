@@ -23,7 +23,10 @@ function openRouterProvider(env: Env): ReplyProvider {
           "HTTP-Referer": "https://greenvillediscgolf.com",
           "X-Title": "GVDG Crotts",
         },
-        body: JSON.stringify({ model: env.OPENROUTER_MODEL || DEFAULT_OR_MODEL, messages, max_tokens: 512 }),
+        // reasoning.exclude: keep the model's internal reasoning for answer quality but DON'T return the
+        // chain-of-thought to the client. stripReasoning() in generateReply is the belt-and-suspenders
+        // for models that ignore this and inline <think>…</think> anyway (and for the Workers AI fallback).
+        body: JSON.stringify({ model: env.OPENROUTER_MODEL || DEFAULT_OR_MODEL, messages, max_tokens: 512, reasoning: { exclude: true } }),
         signal: AbortSignal.timeout(15000),
       });
       if (!res.ok) throw new Error("openrouter_" + res.status);
