@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | Greenville Disc Golf Club</title>
+    <link rel="icon" type="image/png" href="img/logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #FF6B35;
+            --secondary: #004E89;
+            --accent: #F7B801;
+            --dark: #1A1A2E;
+            --light: #F4F4F9;
+            --green: #2D5016;
+            --bg-primary: #F4F4F9;
+            --bg-secondary: #FFFFFF;
+            --bg-tertiary: #F4F4F9;
+            --text-primary: #1A1A2E;
+            --text-secondary: #333333;
+            --text-tertiary: #555555;
+            --text-muted: #666666;
+            --border-color: #F4F4F9;
+            --card-shadow: rgba(0, 0, 0, 0.1);
+            --card-shadow-hover: rgba(0, 0, 0, 0.15);
+        }
+        [data-theme="dark"] {
+            --bg-primary: #0F0F1E;
+            --bg-secondary: #1A1A2E;
+            --bg-tertiary: #252538;
+            --text-primary: #F4F4F9;
+            --text-secondary: #E0E0E0;
+            --text-tertiary: #C0C0C0;
+            --text-muted: #A0A0A0;
+            --border-color: #2A2A3E;
+            --card-shadow: rgba(0, 0, 0, 0.3);
+            --card-shadow-hover: rgba(0, 0, 0, 0.5);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Archivo', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            min-height: 100vh;
+            color: var(--text-primary);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+        body::before {
+            content: ""; position: fixed; inset: 0; z-index: -1;
+            background: linear-gradient(to bottom, rgba(244,244,249,0.25), rgba(244,244,249,0.15)), url("img/bg/forest-bg.png");
+            background-repeat: no-repeat; background-position: center bottom; background-size: cover; opacity: 1;
+        }
+        [data-theme="dark"] body::before {
+            background: linear-gradient(to bottom, rgba(15,15,30,0.25), rgba(15,15,30,0.15)), url("img/bg/forest-bg.png");
+            background-repeat: no-repeat; background-position: center bottom; background-size: cover;
+        }
+
+        /* ---- Header / nav (mirrors index.html) ---- */
+        header { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: rgba(26, 26, 46, 0.95); backdrop-filter: blur(10px); padding: 1rem 1.5rem; transition: all 0.3s ease; }
+        [data-theme="dark"] header { background: rgba(15, 15, 30, 0.95); }
+        header.scrolled { box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2); padding: 0.75rem 1.5rem; }
+        nav { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem; color: white; letter-spacing: 0.05em; text-decoration: none; transition: transform 0.3s ease; display: flex; align-items: center; }
+        .logo-image { height: 50px; width: auto; transition: transform 0.3s ease; }
+        header.scrolled .logo-image { height: 40px; }
+        .logo:active { transform: scale(0.95); }
+        .logo:hover .logo-image { transform: scale(1.05); }
+        .nav-right { display: flex; align-items: center; gap: 1.5rem; }
+        .theme-toggle { background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.3); color: white; width: 44px; height: 44px; min-width: 44px; min-height: 44px; border-radius: 50%; cursor: pointer; font-size: 1.3rem; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; backdrop-filter: blur(5px); -webkit-tap-highlight-color: transparent; }
+        .theme-toggle:hover { background: rgba(255, 255, 255, 0.2); transform: rotate(20deg) scale(1.1); }
+        .theme-toggle:active { transform: rotate(20deg) scale(0.95); }
+        .nav-links { display: flex; gap: 2.5rem; list-style: none; }
+        .nav-links a { color: white; text-decoration: none; font-weight: 600; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; position: relative; transition: color 0.3s ease; -webkit-tap-highlight-color: transparent; }
+        .nav-links a::after { content: ''; position: absolute; bottom: -5px; left: 0; width: 0; height: 2px; background: var(--primary); transition: width 0.3s ease; }
+        .nav-links a:hover::after, .nav-links a:active::after, .nav-links a.active::after { width: 100%; }
+        .nav-links a:hover, .nav-links a.active { color: var(--primary); }
+        .menu-toggle { display: none; background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 0.5rem; min-width: 44px; min-height: 44px; -webkit-tap-highlight-color: transparent; transition: transform 0.2s ease; }
+        .menu-toggle:active { transform: scale(0.9); }
+        @media (max-width: 768px) {
+            header { padding: 1rem; }
+            .logo-image { height: 40px; }
+            header.scrolled .logo-image { height: 35px; }
+            .menu-toggle { display: flex; align-items: center; justify-content: center; }
+            .nav-right { gap: 1rem; }
+            .nav-account { display: none !important; }
+            .nav-links { position: fixed; top: 70px; left: 0; right: 0; background: rgba(26, 26, 46, 0.995); flex-direction: column; gap: 0; padding: 2rem; transform: translateY(-100%); opacity: 0; transition: all 0.3s ease; pointer-events: none; max-height: calc(100vh - 70px); overflow-y: auto; border-top: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 18px 36px rgba(15, 15, 30, 0.32); z-index: 999; }
+            [data-theme="dark"] .nav-links { background: rgba(15, 15, 30, 0.995); }
+            .nav-links.active { transform: translateY(0); opacity: 1; pointer-events: all; }
+            .nav-links li { padding: 1.25rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+            .nav-links li:last-child { border-bottom: none; }
+            .nav-links a { font-size: 1.1rem; display: block; padding: 0.5rem 0; }
+        }
+
+        /* ---- Page body ---- */
+        main { flex: 1; width: 100%; padding-top: 110px; max-width: 1200px; margin: 0 auto; padding-left: 1.5rem; padding-right: 1.5rem; padding-bottom: 4rem; }
+        .page-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(2.4rem, 7vw, 4rem); text-align: center; letter-spacing: 0.05em; color: var(--text-primary); margin: 1rem 0 0.25rem; }
+        .page-subtitle { text-align: center; color: rgba(255, 255, 255, 0.94); font-size: 1rem; margin-bottom: 2rem; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45); }
+
+        /* ---- States ---- */
+        .status-box { text-align: center; padding: 3rem 1.5rem; color: var(--text-muted); }
+        .status-box .spinner { width: 42px; height: 42px; border: 4px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; margin: 0 auto 1rem; animation: spin 0.9s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .back-link { display: inline-block; margin-top: 0.5rem; color: rgba(255, 255, 255, 0.94); text-decoration: none; font-size: 0.95rem; background: none; border: none; cursor: pointer; font: inherit; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45); }
+        .back-link:hover { color: var(--primary); }
+
+        /* ---- Admin gate (sign-in / access states) ---- */
+        .admin-gate { max-width: 560px; margin: 1rem auto 0; background: var(--bg-secondary); border: 2px solid var(--border-color); border-radius: 14px; padding: 2rem; text-align: center; box-shadow: 0 8px 30px var(--card-shadow); }
+        .admin-gate .gate-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+        .admin-gate .gate-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem; letter-spacing: 0.03em; color: var(--text-primary); margin-bottom: 0.5rem; }
+        .admin-gate .gate-msg { color: var(--text-secondary); font-size: 1rem; line-height: 1.5; margin-bottom: 1.25rem; }
+        .gate-btn { display: inline-block; background: var(--primary); color: #fff; text-decoration: none; padding: 0.75rem 1.75rem; min-height: 44px; border-radius: 50px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; transition: all 0.3s ease; }
+        .gate-btn:hover { background: #ff7f4d; transform: translateY(-2px); }
+
+        /* ---- Header account row (log out / back to members) ---- */
+        .nav-account { display: flex; align-items: center; gap: 0.75rem; }
+        .nav-account a { color: white; text-decoration: none; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; padding: 0.4rem 0.8rem; transition: all 0.2s ease; -webkit-tap-highlight-color: transparent; }
+        .nav-account a:hover { background: rgba(255,255,255,0.15); }
+        .nav-mobile-account { display: none; }
+        @media (max-width: 768px) { .nav-mobile-account { display: block; } }
+
+        /* ---- Admin panel (copied verbatim from gvdg-members.html) ---- */
+        .admin-panel { background: var(--bg-primary); border: 2px solid var(--primary); border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; }
+        .admin-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; color: var(--primary); margin-bottom: 1rem; letter-spacing: 0.03em; }
+        .admin-tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+        /* ---- Tee-sign reference strip (T4 scorekeeper) ---- */
+        .ts-strip { display: flex; gap: 0.6rem; overflow-x: auto; padding-bottom: 0.5rem; }
+        .ts-strip-card { flex: 0 0 auto; width: 140px; border: 1px solid var(--border-color); border-radius: 10px; padding: 0.5rem; background: var(--bg-secondary); display: flex; flex-direction: column; gap: 0.35rem; }
+        .ts-strip-photo { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; background: var(--bg-tertiary); }
+        .ts-strip-svg svg { width: 100%; height: auto; }
+        .ts-strip-meta { font-size: 0.8rem; color: var(--text-secondary); font-weight: 600; }
+        .ts-strip-hole { color: var(--primary); font-weight: 700; }
+        .ts-unverified { display: inline-block; font-size: 0.7rem; font-weight: 700; color: #b7791f; background: rgba(214,158,46,0.18); border-radius: 999px; padding: 0.05rem 0.45rem; align-self: flex-start; }
+        .ts-temp { display: inline-block; font-size: 0.7rem; font-weight: 700; color: #2563eb; background: rgba(37,99,235,0.16); border-radius: 999px; padding: 0.05rem 0.45rem; align-self: flex-start; }
+        .al-holes th.th-temp { color: #2563eb; }
+        .tee-sign { color: var(--text-primary); }
+        .tee-sign-bg { fill: var(--bg-tertiary); stroke: var(--border-color); stroke-opacity: 0.8; }
+        .tee-sign-hole { font: 700 40px 'Bebas Neue', system-ui, sans-serif; fill: currentColor; }
+        .tee-sign-course { font: 600 13px system-ui, sans-serif; fill: currentColor; opacity: 0.7; }
+        .tee-sign-rule { stroke: currentColor; stroke-opacity: 0.2; }
+        .tee-sign-label, .tee-sign-par { font: 600 13px system-ui, sans-serif; fill: currentColor; }
+        .tee-sign-dist { font: 600 13px system-ui, sans-serif; fill: currentColor; opacity: 0.8; }
+        .admin-tab { background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; }
+        .admin-tab.active { background: var(--secondary); border-color: var(--secondary); color: #fff; }
+        .al-section { border: 1px solid var(--border-color); border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 1rem; }
+        .al-h { margin: 0 0 0.5rem; font-size: 0.95rem; }
+        .al-note { font-size: 0.8rem; color: var(--text-muted); }
+        .al-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+        .al-row input, .al-row select { padding: 0.4rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
+        .al-holes { width: 100%; border-collapse: collapse; margin-top: 0.5rem; font-size: 0.85rem; }
+        .al-holes th, .al-holes td { padding: 0.3rem 0.4rem; text-align: left; border-bottom: 1px solid var(--border-color); }
+        .al-holes input, .al-holes select { width: 100%; padding: 0.3rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); box-sizing: border-box; }
+        .al-holes input[type=number] { width: 4rem; }
+        .al-est { white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .al-est .src { font-size: 0.7rem; color: var(--text-muted); }
+        .al-verified { font-size: 0.7rem; font-weight: 700; color: #2e9e44; background: rgba(46,158,68,0.16); border-radius: 999px; padding: 0.05rem 0.45rem; white-space: nowrap; }
+        tr.al-row-verified .al-par, tr.al-row-verified .al-manual { opacity: 0.6; }
+        .al-poolitem { display: inline-flex; align-items: center; gap: 0.35rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 999px; padding: 0.2rem 0.6rem; margin: 0.15rem; font-size: 0.78rem; }
+        .al-poolitem button { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.9rem; line-height: 1; }
+        .admin-pane { display: none; }
+        .admin-pane.active { display: block; }
+        .admin-form { display: grid; gap: 0.75rem; max-width: 520px; }
+        .admin-form label { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 0.2rem; }
+        .admin-form input, .admin-form select, .admin-form textarea { width: 100%; padding: 0.6rem 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95rem; }
+        .admin-btn { background: var(--primary); color: #fff; border: none; padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
+        .admin-btn.secondary { background: transparent; border: 1px solid var(--secondary); color: var(--secondary); }
+        .admin-btn.danger { background: transparent; border: 1px solid #dc3545; color: #dc3545; padding: 0.35rem 0.7rem; font-size: 0.8rem; }
+        .admin-msg { font-size: 0.9rem; margin-bottom: 0.75rem; min-height: 1.2em; }
+        .admin-msg.ok { color: var(--green); } .admin-msg.err { color: #dc3545; }
+        .admin-evrow { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); margin-bottom: 0.5rem; }
+        .admin-evrow .ev-name { font-weight: 600; flex: 1; min-width: 140px; }
+        .admin-badge { font-size: 0.7rem; text-transform: uppercase; padding: 0.15rem 0.5rem; border-radius: 4px; background: var(--secondary); color: #fff; letter-spacing: 0.04em; }
+        .admin-badge.live { background: #dc3545; } .admin-badge.final { background: var(--text-muted); } .admin-badge.scheduled { background: var(--green); }
+        .admin-cand { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--border-color); }
+        .admin-split { display: grid; grid-template-columns: minmax(260px, 420px) 1fr; gap: 1.25rem; align-items: start; }
+        @media (max-width: 820px) { .admin-split { grid-template-columns: 1fr; } }
+        .shop-admin-list, .wallet-ledger { display: grid; gap: 0.65rem; }
+        .shop-admin-row { display: grid; grid-template-columns: 56px minmax(160px, 1fr) auto; gap: 0.75rem; align-items: center; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); padding: 0.65rem; }
+        .shop-admin-thumb { width: 56px; aspect-ratio: 1; border-radius: 8px; object-fit: cover; background: var(--bg-tertiary); border: 1px solid var(--border-color); }
+        .shop-admin-meta { font-size: 0.8rem; color: var(--text-muted); }
+        .shop-admin-controls { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; }
+        .shop-admin-controls input { width: 5rem; padding: 0.35rem 0.45rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
+        .wallet-row { display: flex; justify-content: space-between; gap: 0.75rem; align-items: baseline; flex-wrap: wrap; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); padding: 0.65rem 0.75rem; }
+        .wallet-row strong { color: var(--text-primary); }
+        .wallet-row .credit { color: var(--green); font-weight: 700; }
+        .wallet-row .debit { color: var(--primary); font-weight: 700; }
+        .credit-award { display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+        .credit-award input { width: 5rem; padding: 0.3rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
+        /* Helper classes referenced by the copied admin JS */
+        .dash-note { color: var(--text-muted); font-size: 0.95rem; padding: 0.5rem 0; }
+        .dash-event-date { font-size: 0.8rem; color: var(--text-muted); }
+
+        /* ---- Footer (mirrors index.html) ---- */
+        footer { background: linear-gradient(135deg, var(--dark) 0%, #0d1a0d 100%); color: white; text-align: center; padding: 2.5rem 2rem; font-size: 0.95rem; border-top: 3px solid var(--accent); }
+        [data-theme="dark"] footer { background: linear-gradient(135deg, var(--bg-secondary) 0%, #0a0a14 100%); }
+        @media print { header, footer { display: none; } }
+    </style>
+</head>
+<body data-auth-base="https://auth.greenvillediscgolf.com">
+    <header>
+    <nav>
+        <a href="index.html" class="logo">
+            <img src="img/logo.png" alt="Greenville DGC Logo" class="logo-image">
+        </a>
+        <ul class="nav-links">
+            <li><a href="index.html">Home</a></li>
+            <li><a href="events.html">Club Events</a></li>
+            <li><a href="gvdg-members.html">Members</a></li>
+            <li><a href="pro-shop.html">Pro Shop</a></li>
+            <li><a href="admin.html" class="active" aria-current="page">Admin</a></li>
+            <li class="nav-mobile-account"><a href="gvdg-members.html">Back to Members</a></li>
+            <li class="nav-mobile-account"><a href="gvdg-members.html" class="logout-link">Log out</a></li>
+        </ul>
+       <div class="nav-right">
+            <div class="nav-account">
+                <a href="gvdg-members.html">Back to Members</a>
+                <a href="gvdg-members.html" id="logoutLink" class="logout-link">Log out</a>
+            </div>
+            <button class="menu-toggle" aria-label="Toggle menu">☰</button>
+            <button class="theme-toggle" aria-label="Toggle dark mode">
+                <span class="theme-icon">🌙</span>
+            </button>
+        </div>
+    </nav>
+</header>
+
+    <main>
+        <h1 class="page-title">Admin</h1>
+        <p class="page-subtitle">Event management for club admins</p>
+
+        <!-- Loading / auth-check state -->
+        <div id="adminStatus" class="status-box">
+            <div class="spinner"></div>
+            <div>Checking your session&hellip;</div>
+        </div>
+
+        <!-- Auth gate: shown when not signed in / not admin / session expired -->
+        <div id="adminGate" class="admin-gate" hidden></div>
+
+        <!-- Admin panel (copied verbatim from gvdg-members.html) -->
+        <div id="adminPanel" class="admin-panel" style="display:none;">
+            <h3 class="admin-title">🛠 Admin — Event Management</h3>
+            <div class="admin-tabs">
+                <button type="button" class="admin-tab active" data-atab="events">Events</button>
+                <button type="button" class="admin-tab" data-atab="create">New Event</button>
+                <button type="button" class="admin-tab" data-atab="import">Import</button>
+                <button type="button" class="admin-tab" data-atab="courses">Courses</button>
+                <button type="button" class="admin-tab" data-atab="layouts">Layouts</button>
+                <button type="button" class="admin-tab" data-atab="scoring">Live Scoring</button>
+                <button type="button" class="admin-tab" data-atab="leagues-mgmt">Leagues</button>
+                <button type="button" class="admin-tab" data-atab="fundraisers">Fundraisers</button>
+                <button type="button" class="admin-tab" data-atab="meetings">Meetings</button>
+                <button type="button" class="admin-tab" data-atab="registration">Registration</button>
+                <button type="button" class="admin-tab" data-atab="shop">Pro Shop</button>
+                <button type="button" class="admin-tab" data-atab="wallets">Wallets</button>
+            </div>
+            <div class="admin-msg" id="adminMsg"></div>
+            <div class="admin-pane active" id="apane-events"><div id="adminEventsList">Loading…</div></div>
+            <div class="admin-pane" id="apane-create">
+                <form class="admin-form" id="adminCreateForm">
+                    <div><label for="aeType">Type</label><select id="aeType"><option value="tournament">Tournament</option><option value="league_round">League round</option><option value="fundraiser">Fundraiser</option><option value="meeting">Meeting</option></select></div>
+                    <div><label for="aeName">Name</label><input id="aeName" maxlength="200" required></div>
+                    <div><label for="aeDate">Date</label><input id="aeDate" type="date"></div>
+                    <div><label for="aeFormat">Format</label><select id="aeFormat"><option value="">—</option><option value="stroke">Stroke</option><option value="matchplay">Matchplay</option><option value="doubles">Doubles</option></select></div>
+                    <div><label for="aeCourse">Course</label><select id="aeCourse"><option value="">—</option></select></div>
+                    <div><label for="aeLeague">League (for league rounds)</label><select id="aeLeague"><option value="">—</option></select></div>
+                    <button type="submit" class="admin-btn">Create event</button>
+                </form>
+            </div>
+            <div class="admin-pane" id="apane-import">
+                <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:0.5rem;">Import candidates appear below; click <em>Create</em> to add an event.</p>
+                <button type="button" class="admin-btn secondary" id="dgsImportBtn">⬇ Import from DiscGolfScene feed</button>
+                <div style="margin-top:1rem;">
+                    <label for="csvImportText" style="font-size:0.8rem;font-weight:600;">Paste CSV (header: name,date,type,format)</label>
+                    <textarea id="csvImportText" rows="4" placeholder="name,date,type,format&#10;Fall Open,2026-09-12,tournament,stroke"></textarea>
+                    <button type="button" class="admin-btn secondary" id="csvImportBtn" style="margin-top:0.5rem;">Preview CSV</button>
+                </div>
+                <div id="importCandidates" style="margin-top:1rem;"></div>
+            </div>
+            <div class="admin-pane" id="apane-courses">
+                <form class="admin-form" id="adminCourseForm">
+                    <div><label for="acName">Course name</label><input id="acName" maxlength="200" required></div>
+                    <div><label for="acLoc">Location</label><input id="acLoc" maxlength="200"></div>
+                    <div><label for="acUdisc">UDisc URL (https)</label><input id="acUdisc" type="url" maxlength="1000"></div>
+                    <button type="submit" class="admin-btn">Add course</button>
+                </form>
+                <div id="adminCoursesList" style="margin-top:1rem;"></div>
+            </div>
+            <div class="admin-pane" id="apane-layouts">
+                <div><label for="alCourse">Course</label>
+                    <select id="alCourse"><option value="">— select a course —</option></select></div>
+                <div id="alBody" style="display:none;margin-top:1rem;">
+                    <!-- UDisc import (best-effort) -->
+                    <div class="al-section">
+                        <h4 class="al-h">Import layout from UDisc <span class="al-note">(best-effort — review before saving)</span></h4>
+                        <div class="al-row">
+                            <input id="alUdiscUrl" type="url" placeholder="https://udisc.com/courses/..." maxlength="1000">
+                            <button type="button" class="admin-btn secondary" id="alUdiscBtn">Fetch</button>
+                        </div>
+                        <div id="alUdiscResult" class="al-note"></div>
+                    </div>
+                    <!-- Tee / target pool -->
+                    <div class="al-section">
+                        <h4 class="al-h">Tee &amp; target pool <span class="al-note">(Safari mode links any of these)</span></h4>
+                        <div id="alPoolList" class="al-note">No positions yet.</div>
+                        <div class="al-row" style="margin-top:0.5rem;">
+                            <select id="alPosKind"><option value="tee">Tee pad</option><option value="target">Target</option></select>
+                            <input id="alPosLabel" placeholder="Label e.g. Hole 5 (Blue)" maxlength="80">
+                            <input id="alPosLat" placeholder="lat" inputmode="decimal" size="8">
+                            <input id="alPosLng" placeholder="lng" inputmode="decimal" size="8">
+                            <button type="button" class="admin-btn secondary" id="alPosAddBtn">Add</button>
+                        </div>
+                    </div>
+                    <!-- Layout / Safari builder -->
+                    <div class="al-section">
+                        <h4 class="al-h">🦁 Layout / Safari builder</h4>
+                        <p class="al-note">Link <strong>any</strong> tee to <strong>any</strong> target and set <strong>any</strong> par. Distance is auto-estimated (GPS when both have coordinates, else by par) — override any hole manually.</p>
+                        <div><label for="alName">Layout name</label><input id="alName" maxlength="60" placeholder="Main / Safari / Blue"></div>
+                        <table class="al-holes"><thead><tr><th>#</th><th>Par</th><th>Tee</th><th>Target</th><th>Manual ft</th><th>Est.</th><th></th></tr></thead>
+                            <tbody id="alHoles"></tbody></table>
+                        <div class="al-row" style="margin-top:0.5rem;">
+                            <button type="button" class="admin-btn secondary" id="alAddHole">+ Add hole</button>
+                            <button type="button" class="admin-btn" id="alSaveLayout">Save layout</button>
+                            <button type="button" class="admin-btn secondary" id="alResetLayout" style="display:none;">New (clear)</button>
+                        </div>
+                    </div>
+                    <!-- Existing layouts -->
+                    <div class="al-section">
+                        <h4 class="al-h">Existing layouts</h4>
+                        <div id="alLayoutsList" class="al-note">None yet.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="admin-pane" id="apane-scoring">
+                <div><label for="scEvent">Event</label>
+                    <select id="scEvent"><option value="">— select a scheduled or live event —</option></select></div>
+                <div id="scStart" style="display:none;margin-top:1rem;">
+                    <div class="al-row">
+                        <label for="scLayout" style="margin:0;">Layout</label>
+                        <select id="scLayout"><option value="">— event's current layout —</option></select>
+                        <button type="button" class="admin-btn" id="scStartBtn">▶ Start live scoring</button>
+                    </div>
+                    <p class="al-note">An event needs a layout (with pars) to score. Pick one here, or set it on the Layouts tab.</p>
+                </div>
+                <div id="scLive" style="display:none;margin-top:1rem;">
+                    <h4 class="al-h">Scorecard <span class="al-note">(enter strokes — saves + pushes live instantly)</span></h4>
+                    <div style="overflow-x:auto;"><table class="al-holes" id="scGrid"></table></div>
+                    <div class="al-row" id="scOverride" style="margin-top:0.75rem;align-items:flex-end;flex-wrap:wrap;">
+                        <div><label for="scOvHole">⏱ Temporary hole override</label><select id="scOvHole"></select></div>
+                        <div><label for="scOvPar">Par</label><input id="scOvPar" type="number" min="1" max="15" placeholder="—" style="width:4rem;"></div>
+                        <div><label for="scOvDist">Distance ft</label><input id="scOvDist" type="number" min="20" max="2000" placeholder="—" style="width:6rem;"></div>
+                        <button type="button" class="admin-btn" id="scOvApply">Apply (this round only)</button>
+                        <button type="button" class="admin-btn secondary" id="scOvClear">Clear</button>
+                    </div>
+                    <p class="al-note">A temporary override changes par/distance for THIS live round only — the course layout stays verified and the hole reverts after the round.</p>
+                    <h4 class="al-h" style="margin-top:1rem;">🪧 Tee signs <span class="al-note">(official, or ⚠ unverified candidates awaiting review)</span></h4>
+                    <div id="scTeeSigns" class="al-note"></div>
+                    <h4 class="al-h" style="margin-top:1rem;">Live leaderboard</h4>
+                    <div id="scBoard" class="al-note"></div>
+                    <div class="al-row" style="margin-top:0.75rem;">
+                        <button type="button" class="admin-btn danger" id="scFinalizeBtn">🏁 Finalize results</button>
+                        <span class="al-note">Writes final places + breakdown to each player's record and closes the event.</span>
+                    </div>
+                </div>
+            </div>
+            <div class="admin-pane" id="apane-leagues-mgmt">
+                <form class="admin-form" id="adminLeagueForm">
+                    <div><label for="lgName">League name</label><input id="lgName" maxlength="120" required></div>
+                    <div><label for="lgSeason">Season</label><input id="lgSeason" maxlength="40" placeholder="2026"></div>
+                    <div><label for="lgFormat">Format</label><select id="lgFormat"><option value="">—</option><option value="doubles">Doubles</option><option value="stroke">Singles/Stroke</option><option value="matchplay">Matchplay</option></select></div>
+                    <button type="submit" class="admin-btn">Add league</button>
+                </form>
+                <p class="al-note" style="margin-top:0.5rem;">Assign <strong>league round</strong> events to a league on the New Event tab; finalized rounds roll up into the league standings automatically.</p>
+                <div id="adminLeaguesList" style="margin-top:1rem;"></div>
+            </div>
+            <div class="admin-pane" id="apane-fundraisers">
+                <form class="admin-form" id="adminFundraiserForm">
+                    <div><label for="frTitle">Title</label><input id="frTitle" maxlength="200" required></div>
+                    <div><label for="frGoal">Goal ($)</label><input id="frGoal" type="number" min="0" step="1"></div>
+                    <div><label for="frPaypal">PayPal URL (https)</label><input id="frPaypal" type="url" maxlength="1000" placeholder="https://paypal.me/greenvillediscgolf"></div>
+                    <div style="grid-column:1/-1;"><label for="frBody">Description (markdown: **bold**, - bullets, [link](https://…))</label><textarea id="frBody" rows="4"></textarea></div>
+                    <button type="submit" class="admin-btn">Add fundraiser</button>
+                </form>
+                <div id="adminFundraisersList" style="margin-top:1rem;"></div>
+            </div>
+            <div class="admin-pane" id="apane-meetings">
+                <form class="admin-form" id="adminMeetingForm">
+                    <div><label for="mtDate">Date</label><input id="mtDate" type="date" required></div>
+                    <div><label for="mtTitle">Title</label><input id="mtTitle" maxlength="200" required></div>
+                    <div style="grid-column:1/-1;"><label for="mtMinutes">Minutes (markdown)</label><textarea id="mtMinutes" rows="5"></textarea></div>
+                    <div style="grid-column:1/-1;"><label for="mtActions">Action items (one per line)</label><textarea id="mtActions" rows="3"></textarea></div>
+                    <button type="submit" class="admin-btn">Add meeting</button>
+                </form>
+                <div id="adminMeetingsList" style="margin-top:1rem;"></div>
+            </div>
+            <div class="admin-pane" id="apane-registration">
+                <div><label for="rgEvent">Event</label>
+                    <select id="rgEvent"><option value="">— select an event —</option></select></div>
+                <div id="rgBody" style="display:none;margin-top:1rem;">
+                    <div class="al-section">
+                        <h4 class="al-h">Registration settings</h4>
+                        <label class="register-addon"><input type="checkbox" id="rgOpen"> Registration open</label>
+                        <div class="al-row" style="margin-top:0.5rem;">
+                            <span>Entry $<input id="rgEntry" type="number" min="0" step="1" size="5"></span>
+                            <span>CTP $<input id="rgCtp" type="number" min="0" step="1" size="5"></span>
+                            <span>Ace $<input id="rgAce" type="number" min="0" step="1" size="5"></span>
+                            <select id="rgFormat"><option value="">format…</option><option value="singles">Singles</option><option value="doubles">Doubles</option><option value="teams">Teams</option></select>
+                        </div>
+                        <div class="al-row" style="margin-top:0.5rem;"><span>Divisions (comma-separated)<input id="rgDivisions" maxlength="400" size="40" placeholder="MA1, MA40, FA1, Rec"></span></div>
+                        <button type="button" class="admin-btn" id="rgSaveBtn" style="margin-top:0.5rem;">Save settings</button>
+                    </div>
+                    <h4 class="al-h">Registered players (<span id="rgCount">0</span>) <span class="al-note">— check in, assign division/starting hole/team</span></h4>
+                    <div style="overflow-x:auto;"><table class="al-holes" id="rgRoster"></table></div>
+                    <div class="al-row" style="margin-top:0.6rem;">
+                        <button type="button" class="admin-btn secondary" id="rgAssignHoles">🎯 Assign starting holes (shotgun)</button>
+                        <button type="button" class="admin-btn secondary" id="rgAssignTeams">👥 Assign teams</button>
+                        <span class="al-note">players/team <input id="rgTeamSize" type="number" min="1" value="2" style="width:3rem"></span>
+                    </div>
+                    <div class="al-section" style="margin-top:1rem;">
+                        <h4 class="al-h">CTPs (closest to pin)</h4>
+                        <div class="al-row">
+                            <span>Hole <input id="rgCtpHole" type="number" min="1" style="width:4rem"></span>
+                            <input id="rgCtpDivision" placeholder="division (optional)" maxlength="60" size="12">
+                            <input id="rgCtpPrize" placeholder="prize" maxlength="200" size="16">
+                            <button type="button" class="admin-btn secondary" id="rgCtpAdd">Add CTP</button>
+                        </div>
+                        <div id="rgCtpList" style="margin-top:0.5rem;"></div>
+                    </div>
+                    <div class="al-section">
+                        <h4 class="al-h">Store credit payouts</h4>
+                        <p class="al-note">Award credit from the registered-player rows, or review the payout ledger here.</p>
+                        <div id="rgCreditList" style="margin-top:0.5rem;"></div>
+                    </div>
+                    <div class="al-section">
+                        <h4 class="al-h">Ace pot</h4>
+                        <div id="rgAceInfo" class="al-note"></div>
+                        <div class="al-row" style="margin-top:0.5rem;">
+                            <span>Carryover in $<input id="rgAceCarry" type="number" min="0" style="width:5rem"></span>
+                            <button type="button" class="admin-btn secondary" id="rgAceSave">Save carryover</button>
+                            <input id="rgAceWinner" placeholder="ace winner name" maxlength="100" size="14">
+                            <button type="button" class="admin-btn" id="rgAcePayout">Pay out</button>
+                            <button type="button" class="admin-btn secondary" id="rgAceCarryNext">Carry to next</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="admin-pane" id="apane-shop">
+                <div class="admin-split">
+                    <form class="admin-form" id="adminProductForm">
+                        <div><label for="psCategory">Category</label><select id="psCategory"><option value="disc">Disc</option><option value="accessory">Accessory</option></select></div>
+                        <div><label for="psName">Product name</label><input id="psName" maxlength="160" required></div>
+                        <div><label for="psBrand">Brand</label><input id="psBrand" maxlength="80" placeholder="Innova, Discraft, MVP"></div>
+                        <div><label for="psType">Type</label><select id="psType"><option value="distance_driver">Distance driver</option><option value="fairway_driver">Fairway driver</option><option value="midrange">Midrange</option><option value="putter">Putter</option><option value="approach">Approach</option><option value="bag">Bag</option><option value="apparel">Apparel</option><option value="accessory">Accessory</option></select></div>
+                        <div><label for="psColor">Color</label><input id="psColor" maxlength="60"></div>
+                        <div><label for="psWeight">Weight (g)</label><input id="psWeight" type="number" min="0" step="1"></div>
+                        <div><label for="psPrice">Price ($)</label><input id="psPrice" type="number" min="0" step="0.01" required></div>
+                        <div><label for="psStock">Stock</label><input id="psStock" type="number" min="0" step="1" value="1"></div>
+                        <div style="grid-column:1/-1;"><label for="psImage">Image URL</label><input id="psImage" type="url" maxlength="2000" placeholder="https://..."></div>
+                        <div style="grid-column:1/-1;"><label for="psDescription">Description</label><textarea id="psDescription" rows="3" maxlength="1000"></textarea></div>
+                        <button type="submit" class="admin-btn">Add product</button>
+                    </form>
+                    <div>
+                        <h4 class="al-h">Inventory</h4>
+                        <div id="adminProductsList" class="shop-admin-list">Loading…</div>
+                    </div>
+                </div>
+            </div>
+            <div class="admin-pane" id="apane-wallets">
+                <form class="admin-form" id="adminWalletForm">
+                    <div><label for="waMemberId">Member ID</label><input id="waMemberId" maxlength="80" placeholder="m_jane" required></div>
+                    <div><label for="waAmount">Adjustment ($)</label><input id="waAmount" type="number" step="0.01" required></div>
+                    <div style="grid-column:1/-1;"><label for="waNote">Note</label><input id="waNote" maxlength="300" placeholder="League payout, correction, volunteer credit"></div>
+                    <button type="submit" class="admin-btn">Post wallet adjustment</button>
+                </form>
+                <div class="al-section" style="margin-top:1rem;">
+                    <h4 class="al-h">Recent wallet ledger</h4>
+                    <div id="adminWalletRecent" class="wallet-ledger">Loading…</div>
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align:center;">
+            <a href="index.html" class="back-link">&larr; Back to home</a>
+        </div>
+    </main>
+
+    <footer><p>&copy; 2026 Greenville Disc Golf Club. All rights reserved. | Greenville, NC</p></footer>
+
+    <!-- T4: expose the shared (pure, XSS-safe) tee-sign SVG renderer to the classic script below. -->
+    <script type="module">
+        import { teeSignNode } from './tee-sign.js';
+        window.teeSignNode = teeSignNode;
+    </script>
+    <script>
+        // --- Theme toggle (mirrors index.html / events.html) ---
+        const themeToggle = document.querySelector('.theme-toggle');
+        const themeIcon = document.querySelector('.theme-icon');
+        const htmlEl = document.documentElement;
+        const currentTheme = localStorage.getItem('theme') || 'light';
+        htmlEl.setAttribute('data-theme', currentTheme);
+        themeIcon.textContent = currentTheme === 'dark' ? '☀️' : '🌙';
+        themeToggle.addEventListener('click', () => {
+            const t = htmlEl.getAttribute('data-theme');
+            const n = t === 'dark' ? 'light' : 'dark';
+            htmlEl.setAttribute('data-theme', n);
+            localStorage.setItem('theme', n);
+            themeIcon.textContent = n === 'dark' ? '☀️' : '🌙';
+        });
+
+        // --- Mobile menu (mirrors index.html / events.html) ---
+        const menuToggle = document.querySelector('.menu-toggle');
+        const navLinks = document.querySelector('.nav-links');
+        menuToggle.addEventListener('click', () => {
+            navLinks.classList.toggle('active');
+            menuToggle.textContent = navLinks.classList.contains('active') ? '✕' : '☰';
+        });
+        document.querySelectorAll('.nav-links a').forEach((l) =>
+            l.addEventListener('click', () => {
+                navLinks.classList.remove('active');
+                menuToggle.textContent = '☰';
+            })
+        );
+
+        // --- Scrolled header shadow (mirrors index.html / events.html) ---
+        const headerEl = document.querySelector('header');
+        window.addEventListener('scroll', () => {
+            window.scrollY > 100 ? headerEl.classList.add('scrolled') : headerEl.classList.remove('scrolled');
+        });
+
+        // ============================================================
+        //  Config + auth — admin.html relies on the session the member
+        //  established on the Members page. The session token lives in
+        //  sessionStorage under 'gvdg_member_token' and is preserved
+        //  across same-origin, same-tab navigation.
+        // ============================================================
+        const LOCAL_AUTH_BASE = ['127.0.0.1', 'localhost'].includes(location.hostname)
+            ? 'http://127.0.0.1:8788'
+            : '';
+        const AUTH_BASE = (LOCAL_AUTH_BASE || document.body.dataset.authBase || 'https://auth.greenvillediscgolf.com')
+            .trim()
+            .replace(/\/+$/, ''); // strip trailing slashes
+        const TOKEN_KEY = 'gvdg_member_token';
+        const NAME_KEY = 'gvdg_member_name';
+        const PDGA_KEY = 'gvdg_member_pdga';
+        const $ = (id) => document.getElementById(id);
+
+        // Shared fetch helper (mirrors gvdg-members.html `api()`).
+        function api(path, { method = 'GET', token, body } = {}) {
+            const headers = {};
+            if (body) headers['Content-Type'] = 'application/json';
+            if (token) headers['Authorization'] = 'Bearer ' + token;
+            return fetch(AUTH_BASE + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+        }
+
+        // "Log out" in the header: drop the session keys, then go back to
+        // the Members page (where the user can sign in again).
+        document.querySelectorAll('.logout-link').forEach((link) => link.addEventListener('click', () => {
+            sessionStorage.removeItem(TOKEN_KEY);
+            sessionStorage.removeItem(NAME_KEY);
+            sessionStorage.removeItem(PDGA_KEY);
+            // Let the link's default navigation to gvdg-members.html proceed.
+        }));
+
+        // --- Gate rendering (XSS-safe: textContent + createElement only) ---
+        function showAdminPanel() {
+            $('adminStatus').hidden = true;
+            $('adminGate').hidden = true;
+            $('adminPanel').style.display = '';
+            initAdmin();
+        }
+
+        // Render the gate with a message and (optionally) a link back to the
+        // Members page so the user can sign in. Never injects API data.
+        function showGate(message, withMembersLink) {
+            $('adminStatus').hidden = true;
+            $('adminPanel').style.display = 'none';
+            const gate = $('adminGate');
+            gate.replaceChildren();
+            gate.appendChild(elx('div', 'gate-icon', '🔒'));
+            gate.appendChild(elx('div', 'gate-title', 'Admin'));
+            gate.appendChild(elx('p', 'gate-msg', message));
+            if (withMembersLink) {
+                const a = elx('a', 'gate-btn', 'Go to Members page');
+                a.href = 'gvdg-members.html';
+                gate.appendChild(a);
+            }
+            gate.hidden = false;
+        }
+
+        // On load: verify the session token grants admin, then show the panel.
+        async function checkAdminSession() {
+            const token = sessionStorage.getItem(TOKEN_KEY);
+            if (!token) {
+                showGate('Admin sign-in required — please log in on the Members page first.', true);
+                return;
+            }
+            try {
+                const res = await api('/me', { token });
+                if (res.status === 200) {
+                    const data = await res.json();
+                    if (data && data.isAdmin === true) {
+                        showAdminPanel();
+                    } else {
+                        showGate("You don't have admin access.", false);
+                    }
+                } else {
+                    showGate('Session expired — log in again.', true);
+                }
+            } catch (e) {
+                showGate('Session expired — log in again.', true);
+            }
+        }
+
+        // ============================================================
+        //  Admin panel (events / courses / imports) — copied verbatim
+        //  from gvdg-members.html. Wired to the club Worker; XSS-safe via
+        //  createElement/textContent (never innerHTML with API data).
+        // ============================================================
+        let adminInited = false;
+        const elx = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+        function adminMsg(text, ok) { const m = $('adminMsg'); m.textContent = text || ''; m.className = 'admin-msg' + (text ? (ok ? ' ok' : ' err') : ''); }
+        function adminApi(path, opts) { return api(path, { ...(opts || {}), token: sessionStorage.getItem(TOKEN_KEY) }); }
+        function dollarsFromCents(c) { const n = Number(c || 0); const abs = Math.abs(n); const out = '$' + (abs / 100).toLocaleString(undefined, { minimumFractionDigits: abs % 100 ? 2 : 0 }); return n < 0 ? '-' + out : out; }
+        function dollarsToCents(v) { const n = parseFloat(v); return Number.isFinite(n) ? Math.round(n * 100) : null; }
+        function adminSwitch(tab) {
+            document.querySelectorAll('.admin-tab').forEach((t) => t.classList.toggle('active', t.dataset.atab === tab));
+            document.querySelectorAll('.admin-pane').forEach((p) => p.classList.toggle('active', p.id === 'apane-' + tab));
+            if (tab === 'scoring') scLoadEvents();
+            if (tab === 'leagues-mgmt') adminLoadLeagues();
+            if (tab === 'fundraisers') adminLoadFundraisers();
+            if (tab === 'meetings') adminLoadMeetings();
+            if (tab === 'registration') rgLoadEvents();
+            if (tab === 'shop') adminLoadProducts();
+            if (tab === 'wallets') adminLoadWalletRecent();
+        }
+
+        async function adminLoadCourses() {
+            let courses = [];
+            try { const r = await api('/courses'); if (r.ok) courses = (await r.json()).courses || []; } catch (e) {}
+            const sel = $('aeCourse'); sel.length = 1;
+            const lsel = $('alCourse'); lsel.length = 1;
+            const list = $('adminCoursesList'); list.textContent = '';
+            courses.forEach((c) => {
+                const label = c.name + (c.location ? ' — ' + c.location : '');
+                const o = document.createElement('option'); o.value = c.id; o.textContent = label; sel.appendChild(o);
+                const o2 = document.createElement('option'); o2.value = c.id; o2.textContent = label; lsel.appendChild(o2);
+                list.appendChild(elx('div', 'admin-cand', label));
+            });
+        }
+
+        async function adminLoadEvents() {
+            const wrap = $('adminEventsList'); wrap.textContent = 'Loading…';
+            let events = [];
+            try { const r = await api('/events'); if (r.ok) events = (await r.json()).events || []; } catch (e) {}
+            wrap.textContent = '';
+            if (!events.length) { wrap.appendChild(elx('p', 'dash-note', 'No events yet — create or import one.')); return; }
+            events.forEach((ev) => {
+                const row = elx('div', 'admin-evrow');
+                row.appendChild(elx('span', 'ev-name', ev.name));
+                row.appendChild(elx('span', 'admin-badge ' + (ev.status || ''), ev.status || ''));
+                if (ev.date) row.appendChild(elx('span', 'dash-event-date', ev.date));
+                const sel = document.createElement('select');
+                ['scheduled', 'live', 'final', 'cancelled'].forEach((s) => { const o = document.createElement('option'); o.value = s; o.textContent = s; if (s === ev.status) o.selected = true; sel.appendChild(o); });
+                sel.addEventListener('change', async () => {
+                    const r = await adminApi('/admin/events/' + ev.id, { method: 'PATCH', body: { status: sel.value } });
+                    adminMsg(r.ok ? 'Updated “' + ev.name + '” → ' + sel.value : 'Update failed', r.ok);
+                    if (r.ok) adminLoadEvents();
+                });
+                row.appendChild(sel);
+                const del = elx('button', 'admin-btn danger', 'Delete');
+                del.addEventListener('click', async () => {
+                    if (!confirm('Delete event “' + ev.name + '”?')) return;
+                    const r = await adminApi('/admin/events/' + ev.id, { method: 'DELETE' });
+                    adminMsg(r.ok ? 'Deleted “' + ev.name + '”' : 'Delete failed', r.ok);
+                    if (r.ok) adminLoadEvents();
+                });
+                row.appendChild(del);
+                wrap.appendChild(row);
+            });
+        }
+
+        async function adminCreateEvent(e) {
+            e.preventDefault();
+            const body = { type: $('aeType').value, name: $('aeName').value.trim(), date: $('aeDate').value || null, format: $('aeFormat').value || null, course_id: $('aeCourse').value ? Number($('aeCourse').value) : null, league_id: $('aeLeague').value ? Number($('aeLeague').value) : null, source: 'manual' };
+            if (!body.name) { adminMsg('Name required', false); return; }
+            const r = await adminApi('/admin/events', { method: 'POST', body });
+            if (r.ok) { adminMsg('Created “' + body.name + '”', true); $('adminCreateForm').reset(); adminSwitch('events'); adminLoadEvents(); }
+            else { adminMsg('Create failed (' + r.status + ')', false); }
+        }
+
+        async function adminAddCourse(e) {
+            e.preventDefault();
+            const body = { name: $('acName').value.trim(), location: $('acLoc').value.trim() || null, udisc_url: $('acUdisc').value.trim() || null };
+            if (!body.name) { adminMsg('Course name required', false); return; }
+            const r = await adminApi('/admin/courses', { method: 'POST', body });
+            if (r.ok) { adminMsg('Added course “' + body.name + '”', true); $('adminCourseForm').reset(); adminLoadCourses(); }
+            else { adminMsg('Add course failed (' + r.status + ')', false); }
+        }
+
+        function renderCandidates(cands) {
+            const wrap = $('importCandidates'); wrap.textContent = '';
+            if (!cands || !cands.length) { wrap.appendChild(elx('p', 'dash-note', 'No candidates found.')); return; }
+            cands.forEach((c) => {
+                const row = elx('div', 'admin-cand');
+                row.appendChild(elx('span', null, (c.name || '?') + (c.date ? ' (' + c.date + ')' : '') + ' [' + (c.type || 'event') + ']'));
+                const btn = elx('button', 'admin-btn secondary', 'Create');
+                btn.addEventListener('click', async () => {
+                    btn.disabled = true;
+                    const r = await adminApi('/admin/events', { method: 'POST', body: { type: c.type || 'tournament', name: c.name, date: c.date || null, format: c.format || null, source: c.source || 'manual', external_url: c.external_url || null } });
+                    btn.textContent = r.ok ? '✓ Created' : 'Failed';
+                    if (r.ok) adminLoadEvents();
+                });
+                row.appendChild(btn);
+                wrap.appendChild(row);
+            });
+        }
+
+        async function adminDgsImport() {
+            adminMsg('Importing from DiscGolfScene…', true);
+            const r = await adminApi('/admin/import/dgs', { method: 'POST', body: {} });
+            if (r.ok) { const d = await r.json(); renderCandidates(d.candidates); adminMsg((d.candidates || []).length + ' candidates loaded', true); }
+            else { adminMsg('DGS import failed (' + r.status + ')', false); }
+        }
+        async function adminCsvImport() {
+            const csv = $('csvImportText').value;
+            if (!csv.trim()) { adminMsg('Paste CSV first', false); return; }
+            const r = await adminApi('/admin/import/csv', { method: 'POST', body: { csv } });
+            if (r.ok) { const d = await r.json(); renderCandidates(d.candidates); adminMsg((d.candidates || []).length + ' rows parsed', true); }
+            else { adminMsg('CSV import failed (' + r.status + ')', false); }
+        }
+
+        // ============================================================
+        //  Layouts / SAFARI editor. Mirrors the server's distance model
+        //  (auth-worker/src/distance.ts) for live preview; the server
+        //  re-computes authoritatively on save. XSS-safe DOM building.
+        // ============================================================
+        let alCourseId = null, alPool = [], alEditing = null;
+        const PAR_FT = { 2: 120, 3: 250, 4: 400, 5: 600, 6: 800 };
+        function haversineFt(a, b) {
+            const R = 6371000, rad = (d) => d * Math.PI / 180;
+            const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+            const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+            return Math.round(2 * R * Math.asin(Math.min(1, Math.sqrt(h))) * 3.28084);
+        }
+        function estJS(tee, target, par, manual) {
+            if (manual != null && manual > 0) return { ft: Math.round(manual), src: 'manual' };
+            const ok = (p) => p && typeof p.lat === 'number' && typeof p.lng === 'number';
+            if (ok(tee) && ok(target)) return { ft: haversineFt(tee, target), src: 'geo' };
+            if (par > 0) return { ft: PAR_FT[par] != null ? PAR_FT[par] : Math.max(250, (par - 2) * 200), src: 'par' };
+            return { ft: null, src: null };
+        }
+        const numOrNull = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
+
+        async function alOnCourseChange() {
+            alCourseId = $('alCourse').value ? Number($('alCourse').value) : null;
+            $('alBody').style.display = alCourseId ? '' : 'none';
+            alResetLayout();
+            if (alCourseId) { await alLoadPool(); await alLoadLayouts(); }
+        }
+        async function alLoadPool() {
+            alPool = [];
+            try { const r = await api('/courses/' + alCourseId + '/positions'); if (r.ok) alPool = (await r.json()).positions || []; } catch (e) {}
+            const wrap = $('alPoolList'); wrap.textContent = '';
+            if (!alPool.length) { wrap.textContent = 'No positions yet — add tees/targets or import from UDisc.'; }
+            else alPool.forEach((p) => {
+                const chip = elx('span', 'al-poolitem', (p.kind === 'tee' ? '⛳ ' : '🎯 ') + p.label + (p.lat != null ? '' : ' (no GPS)'));
+                const x = elx('button', null, '✕'); x.title = 'Remove';
+                x.addEventListener('click', () => alDeletePosition(p.id));
+                chip.appendChild(x); wrap.appendChild(chip);
+            });
+            document.querySelectorAll('#alHoles tr').forEach(refreshRowSelects);
+        }
+        async function alAddPosition() {
+            const kind = $('alPosKind').value, label = $('alPosLabel').value.trim();
+            if (!label) { adminMsg('Position label required', false); return; }
+            const body = { kind, label, lat: numOrNull($('alPosLat').value), lng: numOrNull($('alPosLng').value) };
+            const r = await adminApi('/admin/courses/' + alCourseId + '/positions', { method: 'POST', body });
+            if (r.ok) { $('alPosLabel').value = ''; $('alPosLat').value = ''; $('alPosLng').value = ''; adminMsg('Added ' + kind, true); alLoadPool(); }
+            else adminMsg('Add position failed (' + r.status + ')', false);
+        }
+        async function alDeletePosition(id) {
+            const r = await adminApi('/admin/courses/' + alCourseId + '/positions/' + id, { method: 'DELETE' });
+            if (r.ok) alLoadPool(); else adminMsg('Remove failed', false);
+        }
+
+        async function alUdiscFetch() {
+            const url = $('alUdiscUrl').value.trim();
+            if (!url) { adminMsg('Paste a UDisc course URL', false); return; }
+            adminMsg('Fetching from UDisc…', true);
+            const r = await adminApi('/admin/import/udisc', { method: 'POST', body: { url } });
+            const out = $('alUdiscResult'); out.textContent = '';
+            if (!r.ok) { adminMsg('UDisc import failed (' + r.status + ')', false); return; }
+            const c = (await r.json()).candidate || {};
+            out.appendChild(elx('div', null, (c.note || '') + ' — ' + (c.holes ? c.holes.length : 0) + ' holes, ' + (c.positions ? c.positions.length : 0) + ' positions.'));
+            if ((c.positions && c.positions.length) || (c.holes && c.holes.length)) {
+                const apply = elx('button', 'admin-btn secondary', 'Apply to course (replace pool + prefill holes)');
+                apply.style.marginTop = '0.4rem';
+                apply.addEventListener('click', async () => {
+                    apply.disabled = true;
+                    if (c.positions && c.positions.length) await adminApi('/admin/courses/' + alCourseId + '/positions', { method: 'PUT', body: { positions: c.positions } });
+                    await alLoadPool();
+                    if (c.holes && c.holes.length) { $('alName').value = c.name || 'Main'; renderHoleRows(c.holes); }
+                    adminMsg('Applied UDisc import — review and Save.', true);
+                });
+                out.appendChild(apply);
+            }
+            adminMsg('UDisc fetched', true);
+        }
+
+        function posOptions(kind, selLabel, selPos) {
+            // <select> of pool positions for `kind`, value=label, coords on dataset.
+            const sel = document.createElement('select');
+            sel.appendChild(new Option('— none —', ''));
+            const labels = new Set();
+            alPool.filter((p) => p.kind === kind).forEach((p) => {
+                const o = new Option(p.label, p.label); o.dataset.lat = p.lat == null ? '' : p.lat; o.dataset.lng = p.lng == null ? '' : p.lng;
+                sel.appendChild(o); labels.add(p.label);
+            });
+            // keep an embedded position that isn't (or no longer) in the pool
+            if (selLabel && !labels.has(selLabel)) {
+                const o = new Option(selLabel + ' (saved)', selLabel);
+                if (selPos) { o.dataset.lat = selPos.lat == null ? '' : selPos.lat; o.dataset.lng = selPos.lng == null ? '' : selPos.lng; }
+                sel.appendChild(o);
+            }
+            if (selLabel) sel.value = selLabel;
+            return sel;
+        }
+        function selToPos(sel) {
+            if (!sel.value) return null;
+            const o = sel.selectedOptions[0];
+            return { label: sel.value, lat: o && o.dataset.lat !== '' ? Number(o.dataset.lat) : null, lng: o && o.dataset.lng !== '' ? Number(o.dataset.lng) : null };
+        }
+        function refreshRowSelects(tr) {
+            const teeTd = tr.querySelector('.al-tee'), tgtTd = tr.querySelector('.al-target');
+            if (!teeTd || !tgtTd) return;
+            const curTee = teeTd.querySelector('select').value, curTgt = tgtTd.querySelector('select').value;
+            const t = posOptions('tee', curTee), g = posOptions('target', curTgt);
+            t.addEventListener('change', () => recalcRow(tr)); g.addEventListener('change', () => recalcRow(tr));
+            teeTd.replaceChildren(t); tgtTd.replaceChildren(g);
+            recalcRow(tr);
+        }
+        function recalcRow(tr) {
+            const cell = tr.querySelector('.al-est');
+            cell.replaceChildren();
+            // A verified (tee-sign) hole is authoritative & sticky: show the verified value, not a local
+            // estimate. An admin can still type, but the server reverts it to verified on save.
+            if (tr._verified) {
+                const v = tr._verified;
+                cell.appendChild(elx('span', 'al-verified', '✓ verified'));
+                cell.appendChild(elx('span', null, ' ' + (v.distance_ft != null ? v.distance_ft + ' ft' : '—')));
+                return;
+            }
+            const par = parseInt(tr.querySelector('.al-par').value, 10) || 0;
+            const manual = numOrNull(tr.querySelector('.al-manual').value);
+            const tee = selToPos(tr.querySelector('.al-tee select')), target = selToPos(tr.querySelector('.al-target select'));
+            const e = estJS(tee, target, par, manual);
+            cell.appendChild(elx('span', null, e.ft == null ? '—' : e.ft + ' ft'));
+            if (e.src) cell.appendChild(elx('span', 'src', ' ' + e.src));
+        }
+        function addHoleRow(hole) {
+            const tbody = $('alHoles');
+            const n = tbody.children.length + 1;
+            const tr = document.createElement('tr');
+            // Verified (tee-sign) record on the hole, if any. Mirrors the server's verifiedOf() (layouts.ts) to
+            // tolerate legacy rows that predate the `verified` object — the TS helper can't be imported here.
+            tr._verified = (hole && hole.verified) || (hole && hole.distance_source === 'tee_sign' && hole.tee_sign_key
+                ? { par: hole.par, distance_ft: hole.distance_ft, tee_sign_key: hole.tee_sign_key } : null);
+            if (tr._verified) { tr.className = 'al-row-verified'; if (hole) hole.par = tr._verified.par; }
+            tr.appendChild(elx('td', null, String((hole && hole.hole) || n)));
+            const parTd = document.createElement('td'); const par = document.createElement('input'); par.type = 'number'; par.min = '1'; par.max = '15'; par.className = 'al-par'; par.value = (hole && hole.par) || 3; par.addEventListener('input', () => recalcRow(tr)); parTd.appendChild(par); tr.appendChild(parTd);
+            const teeTd = document.createElement('td'); teeTd.className = 'al-tee'; tr.appendChild(teeTd);
+            const tgtTd = document.createElement('td'); tgtTd.className = 'al-target'; tr.appendChild(tgtTd);
+            const manTd = document.createElement('td'); const man = document.createElement('input'); man.type = 'number'; man.min = '0'; man.className = 'al-manual'; man.placeholder = 'auto'; if (hole && hole.manual_distance != null) man.value = hole.manual_distance; man.addEventListener('input', () => recalcRow(tr)); manTd.appendChild(man); tr.appendChild(manTd);
+            const estTd = document.createElement('td'); estTd.className = 'al-est'; tr.appendChild(estTd);
+            const delTd = document.createElement('td'); const del = elx('button', 'al-poolitem', '✕'); del.addEventListener('click', () => { tr.remove(); renumberHoles(); }); delTd.appendChild(del); tr.appendChild(delTd);
+            tbody.appendChild(tr);
+            // populate selects, preselecting any embedded tee/target
+            const teeSel = posOptions('tee', hole && hole.tee ? hole.tee.label : '', hole && hole.tee);
+            const tgtSel = posOptions('target', hole && hole.target ? hole.target.label : '', hole && hole.target);
+            teeSel.addEventListener('change', () => recalcRow(tr)); tgtSel.addEventListener('change', () => recalcRow(tr));
+            teeTd.appendChild(teeSel); tgtTd.appendChild(tgtSel);
+            recalcRow(tr);
+        }
+        function renumberHoles() { [...$('alHoles').children].forEach((tr, i) => { tr.firstChild.textContent = String(i + 1); }); }
+        function renderHoleRows(holes) { $('alHoles').replaceChildren(); (holes || []).forEach((h) => addHoleRow(h)); }
+        function gatherHoles() {
+            // Note: `verified` is intentionally NOT sent — the Worker owns it and re-attaches it from the
+            // stored layout (it can't be set/forged from here), so a manual edit reverts to verified on save.
+            return [...$('alHoles').children].map((tr, i) => {
+                const par = parseInt(tr.querySelector('.al-par').value, 10);
+                return { hole: i + 1, par, tee: selToPos(tr.querySelector('.al-tee select')), target: selToPos(tr.querySelector('.al-target select')), manual_distance: numOrNull(tr.querySelector('.al-manual').value) };
+            });
+        }
+        async function alSaveLayout() {
+            const holes = gatherHoles();
+            if (!holes.length) { adminMsg('Add at least one hole', false); return; }
+            if (holes.some((h) => !(h.par >= 1 && h.par <= 15))) { adminMsg('Every hole needs a par 1–15', false); return; }
+            const name = $('alName').value.trim() || 'Main';
+            const r = alEditing
+                ? await adminApi('/admin/layouts/' + alEditing, { method: 'PATCH', body: { name, holes } })
+                : await adminApi('/admin/layouts', { method: 'POST', body: { course_id: alCourseId, name, holes } });
+            if (r.ok) { adminMsg((alEditing ? 'Updated' : 'Saved') + ' layout “' + name + '”', true); alResetLayout(); alLoadLayouts(); }
+            else adminMsg('Save layout failed (' + r.status + ')', false);
+        }
+        function alResetLayout() {
+            alEditing = null; $('alName').value = ''; $('alHoles').replaceChildren();
+            $('alResetLayout').style.display = 'none'; $('alSaveLayout').textContent = 'Save layout';
+        }
+        async function alLoadLayouts() {
+            let layouts = [];
+            try { const r = await api('/courses/' + alCourseId + '/layouts'); if (r.ok) layouts = (await r.json()).layouts || []; } catch (e) {}
+            const wrap = $('alLayoutsList'); wrap.textContent = '';
+            if (!layouts.length) { wrap.textContent = 'None yet.'; return; }
+            layouts.forEach((l) => {
+                const holes = (() => { try { return JSON.parse(l.holes || '[]'); } catch (e) { return []; } })();
+                const row = elx('div', 'admin-evrow');
+                row.appendChild(elx('span', 'ev-name', l.name + ' — ' + holes.length + ' holes, par ' + (l.total_par != null ? l.total_par : '?')));
+                const edit = elx('button', 'admin-btn secondary', 'Edit');
+                edit.addEventListener('click', () => alEditLayout(l, holes));
+                const del = elx('button', 'admin-btn danger', 'Delete');
+                del.addEventListener('click', async () => { if (!confirm('Delete layout “' + l.name + '”?')) return; const r = await adminApi('/admin/layouts/' + l.id, { method: 'DELETE' }); if (r.ok) { adminMsg('Deleted layout', true); if (alEditing === l.id) alResetLayout(); alLoadLayouts(); } });
+                row.appendChild(edit); row.appendChild(del);
+                wrap.appendChild(row);
+            });
+        }
+        function alEditLayout(l, holes) {
+            alEditing = l.id; $('alName').value = l.name || '';
+            renderHoleRows(holes);
+            $('alResetLayout').style.display = ''; $('alSaveLayout').textContent = 'Update layout';
+            $('alName').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // ============================================================
+        //  Live Scoring (S2) — admin scorekeeper. Start an event, enter
+        //  hole-by-hole strokes (saved + pushed live via the DO), finalize
+        //  -> results to D1. XSS-safe DOM building.
+        // ============================================================
+        let scEventId = null, scSnap = null, scTeeThumbUrls = [];
+        const scToPar = (n) => { n = n || 0; return n === 0 ? 'E' : (n > 0 ? '+' + n : String(n)); };
+
+        async function scLoadEvents() {
+            let events = [];
+            try { const r = await api('/events'); if (r.ok) events = (await r.json()).events || []; } catch (e) {}
+            const sel = $('scEvent'); sel.length = 1;
+            events.filter((e) => e.status === 'scheduled' || e.status === 'live').forEach((e) => {
+                const o = document.createElement('option'); o.value = e.id;
+                o.textContent = e.name + ' [' + e.status + ']' + (e.date ? ' — ' + e.date : '');
+                o.dataset.status = e.status; o.dataset.courseId = e.course_id || ''; o.dataset.layoutId = e.layout_id || '';
+                sel.appendChild(o);
+            });
+        }
+
+        async function scOnEventChange() {
+            scEventId = $('scEvent').value ? Number($('scEvent').value) : null;
+            $('scStart').style.display = 'none'; $('scLive').style.display = 'none';
+            if (!scEventId) return;
+            const opt = $('scEvent').selectedOptions[0];
+            if (opt.dataset.status === 'live') { await scRefresh(); return; }
+            // scheduled: show start controls + layout options for the event's course
+            const lsel = $('scLayout'); lsel.length = 1;
+            const courseId = opt.dataset.courseId;
+            if (courseId) {
+                try { const r = await api('/courses/' + courseId + '/layouts'); if (r.ok) (await r.json()).layouts.forEach((l) => { const o = document.createElement('option'); o.value = l.id; o.textContent = l.name + ' (par ' + (l.total_par != null ? l.total_par : '?') + ')'; if (String(l.id) === opt.dataset.layoutId) o.selected = true; lsel.appendChild(o); }); } catch (e) {}
+            }
+            $('scStart').style.display = '';
+        }
+
+        async function scStart() {
+            const layoutId = $('scLayout').value ? Number($('scLayout').value) : null;
+            if (layoutId) await adminApi('/admin/events/' + scEventId, { method: 'PATCH', body: { layout_id: layoutId } });
+            const r = await adminApi('/events/' + scEventId + '/live/start', { method: 'POST' });
+            if (r.ok) { adminMsg('Live scoring started', true); $('scEvent').selectedOptions[0].dataset.status = 'live'; await scRefresh(); }
+            else { const e = await r.json().catch(() => ({})); adminMsg(e.error === 'no_layout_holes' ? 'That event has no layout with pars — pick one above (or build one on the Layouts tab).' : 'Start failed (' + r.status + ')', false); }
+        }
+
+        async function scRefresh() {
+            const r = await api('/events/' + scEventId + '/live');
+            if (!r.ok) { $('scLive').style.display = 'none'; return; }
+            scSnap = await r.json();
+            if (scSnap.status !== 'live' && scSnap.status !== 'final') { $('scLive').style.display = 'none'; return; }
+            $('scStart').style.display = 'none'; $('scLive').style.display = '';
+            const live = scSnap.status === 'live';
+            $('scOverride').style.display = live ? '' : 'none'; // overrides only make sense mid-round
+            scRenderGrid(); scRenderBoard(); scRenderTeeSigns(); scPopulateOverrideHoles();
+        }
+
+        // Part 2: single-use, round-scoped temporary override of a hole's par/distance.
+        function scPopulateOverrideHoles() {
+            const sel = $('scOvHole'); if (!sel) return;
+            const prev = sel.value;
+            sel.replaceChildren();
+            (scSnap.holes || []).forEach((h) => {
+                const o = document.createElement('option'); o.value = h.hole;
+                o.textContent = 'Hole ' + h.hole + (h.overridden ? ' ⏱ temp' : '');
+                sel.appendChild(o);
+            });
+            if (prev) sel.value = prev;
+        }
+        async function scApplyOverride(clear) {
+            const hole = Number($('scOvHole').value);
+            if (!hole) { adminMsg('Pick a hole to override', false); return; }
+            const body = { hole, clear };
+            if (!clear) {
+                const par = parseInt($('scOvPar').value, 10);
+                const dist = parseInt($('scOvDist').value, 10);
+                if (Number.isFinite(par)) { if (par < 1 || par > 15) { adminMsg('Par must be 1–15', false); return; } body.par = par; }
+                if (Number.isFinite(dist)) { if (dist < 20 || dist > 2000) { adminMsg('Distance must be 20–2000 ft', false); return; } body.distance_ft = dist; }
+                if (body.par == null && body.distance_ft == null) { adminMsg('Enter a temporary par and/or distance', false); return; }
+            }
+            const r = await adminApi('/events/' + scEventId + '/live/override', { method: 'POST', body });
+            if (r.ok) { adminMsg(clear ? 'Override cleared — hole reverted' : 'Temporary override applied (this round only)', true); $('scOvPar').value = ''; $('scOvDist').value = ''; await scRefresh(); }
+            else { const e = await r.json().catch(() => ({})); adminMsg(e.error === 'empty_override' ? 'Enter a temporary par and/or distance' : 'Override failed (' + r.status + ')', false); }
+        }
+
+        // T4: per-hole tee-sign reference for the scorekeeper. As an authed admin we also surface
+        // candidate (unconfirmed) photos with a ⚠ unverified badge; the public viewer sees official only.
+        async function scRenderTeeSigns() {
+            const wrap = $('scTeeSigns'); if (!wrap) return;
+            wrap.replaceChildren();
+            scTeeThumbUrls.forEach((u) => URL.revokeObjectURL(u)); scTeeThumbUrls = [];
+            const opt = $('scEvent').selectedOptions[0];
+            const courseId = opt && opt.dataset.courseId;
+            const layoutId = opt && opt.dataset.layoutId;
+            const holes = (scSnap && scSnap.holes) || [];
+            if (!courseId || !holes.length) return;
+            const [td, ld] = await Promise.all([
+                api('/courses/' + courseId + '/tee-signs', { token: sessionStorage.getItem(TOKEN_KEY) }).then((r) => r.ok ? r.json() : null).catch(() => null),
+                api('/courses/' + courseId + '/layouts').then((r) => r.ok ? r.json() : null).catch(() => null),
+            ]);
+            const signs = (td && td.teeSigns) || [];
+            const layouts = (ld && ld.layouts) || [];
+            const layout = layouts.find((l) => String(l.id) === String(layoutId)) || layouts[0] || null;
+            const holeData = new Map();
+            if (layout) { try { JSON.parse(layout.holes || '[]').forEach((h) => holeData.set(Number(h.hole), h)); } catch (e) {} }
+            const officialByHole = new Map(), candidateByHole = new Map();
+            signs.forEach((s) => {
+                const hn = Number(s.hole_number);
+                if (s.status === 'official') officialByHole.set(hn, s.id);
+                else if (s.status === 'candidate' && !candidateByHole.has(hn)) candidateByHole.set(hn, s.id);
+            });
+            const strip = elx('div', 'ts-strip');
+            holes.forEach((h) => {
+                const hn = h.hole, hd = holeData.get(hn) || {};
+                // A round override (Part 2) wins for THIS round's display; else the layout's verified/estimated value.
+                const dist = (h.overridden && h.distance_ft != null) ? h.distance_ft : (hd.distance_ft != null ? hd.distance_ft : null);
+                const cardEl = elx('div', 'ts-strip-card');
+                const officialId = officialByHole.get(hn), candId = candidateByHole.get(hn);
+                if (officialId != null) {
+                    const img = elx('img', 'ts-strip-photo'); img.alt = 'Tee sign hole ' + hn; img.loading = 'lazy';
+                    img.src = AUTH_BASE + '/tee-signs/' + officialId + '/image';
+                    cardEl.appendChild(img);
+                } else if (candId != null) {
+                    const img = elx('img', 'ts-strip-photo'); img.alt = 'Candidate tee sign hole ' + hn;
+                    scLoadCandidateThumb(candId, img); // members-only → authed blob fetch
+                    cardEl.appendChild(img);
+                    cardEl.appendChild(elx('span', 'ts-unverified', '⚠ unverified'));
+                } else if (typeof window.teeSignNode === 'function') {
+                    const sv = elx('div', 'ts-strip-svg');
+                    const node = window.teeSignNode({ hole: hn, courseName: '', layouts: [{ label: layout ? layout.name : 'Layout', color: hd.color || null, par: h.par != null ? h.par : null, distance_ft: dist }] });
+                    if (node) sv.appendChild(node);
+                    cardEl.appendChild(sv);
+                }
+                if (h.overridden) cardEl.appendChild(elx('span', 'ts-temp', '⏱ temporary'));
+                const meta = elx('div', 'ts-strip-meta');
+                meta.appendChild(elx('span', 'ts-strip-hole', 'H' + hn));
+                const bits = ['Par ' + h.par];
+                if (dist != null) bits.push(dist + ' ft');
+                meta.appendChild(document.createTextNode(' · ' + bits.join(' · ')));
+                cardEl.appendChild(meta);
+                strip.appendChild(cardEl);
+            });
+            wrap.appendChild(strip);
+        }
+
+        async function scLoadCandidateThumb(id, img) {
+            try {
+                const r = await fetch(AUTH_BASE + '/tee-signs/' + id + '/image', { headers: { Authorization: 'Bearer ' + sessionStorage.getItem(TOKEN_KEY) } });
+                if (!r.ok) return;
+                const url = URL.createObjectURL(await r.blob());
+                // If a re-render detached this <img> while the fetch was in flight, revoke now (don't leak).
+                if (img.isConnected) { scTeeThumbUrls.push(url); img.src = url; } else { URL.revokeObjectURL(url); }
+            } catch (e) { /* leave the placeholder */ }
+        }
+
+        function scRenderGrid() {
+            const grid = $('scGrid'); grid.replaceChildren();
+            const holes = scSnap.holes || [], players = scSnap.players || [];
+            const thead = document.createElement('thead'); const htr = document.createElement('tr');
+            ['Player', 'Div', 'Start'].forEach((h) => htr.appendChild(elx('th', null, h)));
+            holes.forEach((h) => htr.appendChild(elx('th', h.overridden ? 'th-temp' : null, h.hole + ' (' + h.par + ')' + (h.overridden ? ' ⏱' : ''))));
+            htr.appendChild(elx('th', null, 'Tot'));
+            thead.appendChild(htr); grid.appendChild(thead);
+            const tbody = document.createElement('tbody');
+            players.forEach((p) => {
+                const tr = document.createElement('tr');
+                tr.appendChild(elx('td', 'lb-name', p.name));
+                tr.appendChild(elx('td', null, p.division || '—'));
+                tr.appendChild(elx('td', null, p.startingHole != null ? String(p.startingHole) : '—'));
+                let tot = 0;
+                holes.forEach((h) => {
+                    const td = document.createElement('td');
+                    const inp = document.createElement('input'); inp.type = 'number'; inp.min = '1'; inp.max = '30'; inp.style.width = '3rem';
+                    const v = p.scores ? p.scores[h.hole] : null; if (v != null) { inp.value = v; tot += v; }
+                    inp.addEventListener('change', () => scPostScore(p.index, h.hole, inp.value));
+                    td.appendChild(inp); tr.appendChild(td);
+                });
+                tr.appendChild(elx('td', null, tot ? String(tot) : '—'));
+                tbody.appendChild(tr);
+            });
+            grid.appendChild(tbody);
+        }
+
+        async function scPostScore(index, hole, value) {
+            const strokes = parseInt(value, 10);
+            if (!(strokes >= 1 && strokes <= 30)) { adminMsg('Strokes must be 1–30', false); return; }
+            const r = await adminApi('/events/' + scEventId + '/live/score', { method: 'POST', body: { index, hole, strokes } });
+            if (r.ok) { scSnap = await r.json(); scUpdateTotals(); scRenderBoard(); } else { adminMsg('Score save failed', false); }
+        }
+        // Update each grid row's running Total cell without re-rendering inputs (keeps focus).
+        function scUpdateTotals() {
+            const rows = $('scGrid').querySelectorAll('tbody tr');
+            (scSnap.players || []).forEach((p) => {
+                const tr = rows[p.index]; if (!tr) return;
+                const tot = Object.values(p.scores || {}).reduce((a, b) => a + (b || 0), 0);
+                tr.lastElementChild.textContent = tot ? String(tot) : '—';
+            });
+        }
+
+        function scRenderBoard() {
+            const wrap = $('scBoard'); wrap.replaceChildren();
+            const standings = (scSnap && scSnap.standings) || [];
+            if (!standings.length) { wrap.textContent = 'No scores yet.'; return; }
+            const table = document.createElement('table'); table.className = 'al-holes';
+            const thead = document.createElement('thead'); const htr = document.createElement('tr');
+            ['Pos', 'Player', 'Thru', 'Total', 'To Par'].forEach((h) => htr.appendChild(elx('th', null, h)));
+            thead.appendChild(htr); table.appendChild(thead);
+            const tbody = document.createElement('tbody');
+            standings.forEach((s, i) => {
+                const tr = document.createElement('tr');
+                tr.appendChild(elx('td', null, String(i + 1)));
+                tr.appendChild(elx('td', 'lb-name', s.name));
+                tr.appendChild(elx('td', null, s.thru ? String(s.thru) : '—'));
+                tr.appendChild(elx('td', null, s.thru ? String(s.total) : '—'));
+                tr.appendChild(elx('td', null, s.thru ? scToPar(s.toPar) : '—'));
+                tbody.appendChild(tr);
+            });
+            table.appendChild(tbody); wrap.appendChild(table);
+        }
+
+        async function scFinalize() {
+            if (!confirm('Finalize this event? This writes final results and closes scoring.')) return;
+            const r = await adminApi('/events/' + scEventId + '/live/finalize', { method: 'POST' });
+            if (r.ok) { adminMsg('Event finalized — results saved.', true); $('scLive').style.display = 'none'; scLoadEvents(); $('scEvent').value = ''; adminLoadEvents(); }
+            else { adminMsg('Finalize failed (' + r.status + ')', false); }
+        }
+
+        // ---- Leagues management (Phase 4) ----
+        async function adminLoadLeagues() {
+            let leagues = [];
+            try { const r = await api('/leagues'); if (r.ok) leagues = (await r.json()).leagues || []; } catch (e) {}
+            const sel = $('aeLeague'); sel.length = 1;
+            const list = $('adminLeaguesList'); list.textContent = '';
+            if (!leagues.length) { list.appendChild(elx('p', 'al-note', 'No leagues yet.')); }
+            leagues.forEach((l) => {
+                const o = document.createElement('option'); o.value = l.id; o.textContent = l.name + (l.season ? ' (' + l.season + ')' : ''); sel.appendChild(o);
+                const row = elx('div', 'admin-evrow');
+                row.appendChild(elx('span', 'ev-name', l.name + (l.season ? ' · ' + l.season : '') + (l.format ? ' · ' + l.format : '')));
+                const del = elx('button', 'admin-btn danger', 'Delete');
+                del.addEventListener('click', async () => { if (!confirm('Delete league “' + l.name + '”?')) return; const r = await adminApi('/admin/leagues/' + l.id, { method: 'DELETE' }); if (r.ok) { adminMsg('Deleted league', true); adminLoadLeagues(); } });
+                row.appendChild(del);
+                list.appendChild(row);
+            });
+        }
+        async function adminAddLeague(e) {
+            e.preventDefault();
+            const body = { name: $('lgName').value.trim(), season: $('lgSeason').value.trim() || null, format: $('lgFormat').value || null };
+            if (!body.name) { adminMsg('League name required', false); return; }
+            const r = await adminApi('/admin/leagues', { method: 'POST', body });
+            if (r.ok) { adminMsg('Added league “' + body.name + '”', true); $('adminLeagueForm').reset(); adminLoadLeagues(); }
+            else adminMsg('Add league failed (' + r.status + ')', false);
+        }
+
+        // ---- Fundraisers management (Phase 4) ----
+        async function adminLoadFundraisers() {
+            let items = [];
+            try { const r = await api('/fundraisers'); if (r.ok) items = (await r.json()).fundraisers || []; } catch (e) {}
+            const list = $('adminFundraisersList'); list.textContent = '';
+            if (!items.length) { list.appendChild(elx('p', 'al-note', 'No fundraisers yet.')); }
+            items.forEach((f) => {
+                const row = elx('div', 'admin-evrow');
+                const goal = f.goal_cents != null ? ' · goal $' + (f.goal_cents / 100) : '';
+                row.appendChild(elx('span', 'ev-name', f.title + ' [' + f.status + ']' + goal));
+                const close = elx('button', 'admin-btn secondary', f.status === 'active' ? 'Close' : 'Reopen');
+                close.addEventListener('click', async () => { const r = await adminApi('/admin/fundraisers/' + f.id, { method: 'PATCH', body: { status: f.status === 'active' ? 'closed' : 'active' } }); if (r.ok) { adminMsg('Updated', true); adminLoadFundraisers(); } });
+                const del = elx('button', 'admin-btn danger', 'Delete');
+                del.addEventListener('click', async () => { if (!confirm('Delete fundraiser “' + f.title + '”?')) return; const r = await adminApi('/admin/fundraisers/' + f.id, { method: 'DELETE' }); if (r.ok) { adminMsg('Deleted', true); adminLoadFundraisers(); } });
+                row.appendChild(close); row.appendChild(del);
+                list.appendChild(row);
+            });
+        }
+        async function adminAddFundraiser(e) {
+            e.preventDefault();
+            const goal = $('frGoal').value ? Math.round(Number($('frGoal').value) * 100) : null;
+            const body = { title: $('frTitle').value.trim(), body_md: $('frBody').value.trim() || null, goal_cents: goal, paypal_url: $('frPaypal').value.trim() || null, status: 'active' };
+            if (!body.title) { adminMsg('Title required', false); return; }
+            const r = await adminApi('/admin/fundraisers', { method: 'POST', body });
+            if (r.ok) { adminMsg('Added fundraiser', true); $('adminFundraiserForm').reset(); adminLoadFundraisers(); }
+            else adminMsg('Add failed (' + r.status + ')', false);
+        }
+
+        // ---- Meetings management (Phase 4) ----
+        async function adminLoadMeetings() {
+            let items = [];
+            try { const r = await api('/meetings'); if (r.ok) items = (await r.json()).meetings || []; } catch (e) {}
+            const list = $('adminMeetingsList'); list.textContent = '';
+            if (!items.length) { list.appendChild(elx('p', 'al-note', 'No meetings yet.')); }
+            items.forEach((m) => {
+                const row = elx('div', 'admin-evrow');
+                row.appendChild(elx('span', 'ev-name', (m.date || '') + ' · ' + m.title));
+                const del = elx('button', 'admin-btn danger', 'Delete');
+                del.addEventListener('click', async () => { if (!confirm('Delete meeting “' + m.title + '”?')) return; const r = await adminApi('/admin/meetings/' + m.id, { method: 'DELETE' }); if (r.ok) { adminMsg('Deleted', true); adminLoadMeetings(); } });
+                row.appendChild(del);
+                list.appendChild(row);
+            });
+        }
+        async function adminAddMeeting(e) {
+            e.preventDefault();
+            const actions = $('mtActions').value.split('\n').map((s) => s.trim()).filter(Boolean);
+            const body = { date: $('mtDate').value, title: $('mtTitle').value.trim(), minutes_md: $('mtMinutes').value.trim() || null, action_items: actions };
+            if (!body.date || !body.title) { adminMsg('Date and title required', false); return; }
+            const r = await adminApi('/admin/meetings', { method: 'POST', body });
+            if (r.ok) { adminMsg('Added meeting', true); $('adminMeetingForm').reset(); adminLoadMeetings(); }
+            else adminMsg('Add failed (' + r.status + ')', false);
+        }
+
+        function productThumb(product) {
+            if (product.image_url) {
+                const img = elx('img', 'shop-admin-thumb');
+                img.src = product.image_url;
+                img.alt = product.name || 'Product image';
+                img.loading = 'lazy';
+                return img;
+            }
+            const fallback = elx('div', 'shop-admin-thumb', (product.brand || product.name || '?').slice(0, 1).toUpperCase());
+            fallback.style.display = 'flex';
+            fallback.style.alignItems = 'center';
+            fallback.style.justifyContent = 'center';
+            fallback.style.fontWeight = '700';
+            return fallback;
+        }
+        async function adminLoadProducts() {
+            let products = [];
+            try { const r = await adminApi('/admin/shop/products'); if (r.ok) products = (await r.json()).products || []; } catch (e) {}
+            const list = $('adminProductsList'); list.replaceChildren();
+            if (!products.length) { list.appendChild(elx('p', 'al-note', 'No products yet.')); return; }
+            products.forEach((p) => {
+                const row = elx('div', 'shop-admin-row');
+                row.appendChild(productThumb(p));
+                const info = elx('div');
+                info.appendChild(elx('div', 'ev-name', p.name || 'Product'));
+                const meta = [p.brand, p.product_type, p.color, p.weight_g != null ? p.weight_g + 'g' : '', p.active ? 'active' : 'inactive'].filter(Boolean).join(' · ');
+                info.appendChild(elx('div', 'shop-admin-meta', meta || 'No metadata'));
+                row.appendChild(info);
+                const controls = elx('div', 'shop-admin-controls');
+                const price = document.createElement('input'); price.type = 'number'; price.min = '0'; price.step = '0.01'; price.value = p.price_cents != null ? String(p.price_cents / 100) : '';
+                const stock = document.createElement('input'); stock.type = 'number'; stock.min = '0'; stock.step = '1'; stock.value = p.stock_qty != null ? String(p.stock_qty) : '0';
+                const activeLabel = elx('label', 'register-addon'); const active = document.createElement('input'); active.type = 'checkbox'; active.checked = p.active !== 0; activeLabel.appendChild(active); activeLabel.appendChild(document.createTextNode(' active'));
+                const save = elx('button', 'admin-btn secondary', 'Save');
+                save.addEventListener('click', async () => {
+                    const r = await adminApi('/admin/shop/products/' + p.id, { method: 'PATCH', body: { price_cents: dollarsToCents(price.value), stock_qty: parseInt(stock.value, 10) || 0, active: active.checked } });
+                    adminMsg(r.ok ? 'Product updated' : 'Product update failed', r.ok);
+                    if (r.ok) adminLoadProducts();
+                });
+                const del = elx('button', 'admin-btn danger', 'Archive');
+                del.addEventListener('click', async () => {
+                    if (!confirm('Archive “' + p.name + '”?')) return;
+                    const r = await adminApi('/admin/shop/products/' + p.id, { method: 'DELETE' });
+                    adminMsg(r.ok ? 'Product archived' : 'Archive failed', r.ok);
+                    if (r.ok) adminLoadProducts();
+                });
+                controls.appendChild(price); controls.appendChild(stock); controls.appendChild(activeLabel); controls.appendChild(save); controls.appendChild(del);
+                row.appendChild(controls);
+                list.appendChild(row);
+            });
+        }
+        async function adminAddProduct(e) {
+            e.preventDefault();
+            const price = dollarsToCents($('psPrice').value);
+            const stock = parseInt($('psStock').value, 10);
+            const body = {
+                category: $('psCategory').value,
+                name: $('psName').value.trim(),
+                brand: $('psBrand').value.trim() || null,
+                product_type: $('psType').value || null,
+                color: $('psColor').value.trim() || null,
+                weight_g: parseInt($('psWeight').value, 10) || null,
+                price_cents: price,
+                stock_qty: Number.isFinite(stock) ? stock : 0,
+                image_url: $('psImage').value.trim() || null,
+                description: $('psDescription').value.trim() || null,
+            };
+            if (!body.name || price == null) { adminMsg('Product name and price are required', false); return; }
+            const r = await adminApi('/admin/shop/products', { method: 'POST', body });
+            if (r.ok) { adminMsg('Product added', true); $('adminProductForm').reset(); $('psStock').value = '1'; adminLoadProducts(); }
+            else adminMsg('Add product failed (' + r.status + ')', false);
+        }
+        function walletRow(tx) {
+            const row = elx('div', 'wallet-row');
+            const left = elx('div');
+            left.appendChild(elx('strong', null, (tx.member_name || tx.member_id || 'Member') + ' · ' + (tx.source || 'wallet')));
+            left.appendChild(elx('div', 'shop-admin-meta', (tx.note || '') + (tx.created_at ? ' · ' + tx.created_at : '')));
+            row.appendChild(left);
+            const amt = elx('span', tx.amount_cents >= 0 ? 'credit' : 'debit', (tx.amount_cents >= 0 ? '+' : '') + dollarsFromCents(tx.amount_cents || 0));
+            row.appendChild(amt);
+            return row;
+        }
+        async function adminLoadWalletRecent() {
+            let transactions = [];
+            try { const r = await adminApi('/admin/wallets/recent'); if (r.ok) transactions = (await r.json()).transactions || []; } catch (e) {}
+            const list = $('adminWalletRecent'); list.replaceChildren();
+            if (!transactions.length) { list.appendChild(elx('p', 'al-note', 'No wallet activity yet.')); return; }
+            transactions.forEach((tx) => list.appendChild(walletRow(tx)));
+        }
+        async function adminPostWalletAdjustment(e) {
+            e.preventDefault();
+            const amount = dollarsToCents($('waAmount').value);
+            const body = { member_id: $('waMemberId').value.trim(), amount_cents: amount, note: $('waNote').value.trim() || null };
+            if (!body.member_id || amount == null || amount === 0) { adminMsg('Member ID and non-zero amount are required', false); return; }
+            const r = await adminApi('/admin/wallets/credit', { method: 'POST', body });
+            if (r.ok) { const d = await r.json(); adminMsg('Wallet updated. Balance: ' + dollarsFromCents(d.balance_cents || 0), true); $('adminWalletForm').reset(); adminLoadWalletRecent(); }
+            else { const d = await r.json().catch(() => ({})); adminMsg(d.error === 'member_not_found' ? 'Member ID not found' : 'Wallet update failed (' + r.status + ')', false); }
+        }
+
+        // ---- Registration management (Track G) ----
+        let rgEventId = null;
+        async function rgLoadEvents() {
+            let events = [];
+            try { const r = await api('/events'); if (r.ok) events = (await r.json()).events || []; } catch (e) {}
+            const sel = $('rgEvent'); sel.length = 1;
+            events.filter((e) => e.status === 'scheduled' || e.status === 'live').forEach((e) => { const o = document.createElement('option'); o.value = e.id; o.textContent = e.name + ' [' + e.status + ']'; sel.appendChild(o); });
+        }
+        async function rgOnSelect() {
+            rgEventId = $('rgEvent').value ? Number($('rgEvent').value) : null;
+            $('rgBody').style.display = rgEventId ? '' : 'none';
+            if (!rgEventId) return;
+            // config (the member endpoint returns config for any authed user)
+            let cfg = null;
+            try { const r = await adminApi('/events/' + rgEventId + '/registration'); if (r.ok) cfg = (await r.json()).config; } catch (e) {}
+            $('rgOpen').checked = !!(cfg && cfg.registration_open);
+            $('rgEntry').value = cfg && cfg.entry_fee_cents != null ? cfg.entry_fee_cents / 100 : '';
+            $('rgCtp').value = cfg && cfg.ctp_fee_cents != null ? cfg.ctp_fee_cents / 100 : '';
+            $('rgAce').value = cfg && cfg.ace_fee_cents != null ? cfg.ace_fee_cents / 100 : '';
+            $('rgFormat').value = (cfg && cfg.play_format) || '';
+            let divs = []; try { divs = JSON.parse((cfg && cfg.divisions) || '[]'); } catch (e) {}
+            $('rgDivisions').value = divs.join(', ');
+            rgLoadRoster();
+            rgLoadCtps();
+            rgLoadCredits();
+            rgLoadAcePot();
+        }
+        const cents = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? Math.round(n * 100) : null; };
+        async function rgSaveConfig() {
+            const divisions = $('rgDivisions').value.split(',').map((s) => s.trim()).filter(Boolean);
+            const body = { registration_open: $('rgOpen').checked, entry_fee_cents: cents($('rgEntry').value), ctp_fee_cents: cents($('rgCtp').value), ace_fee_cents: cents($('rgAce').value), play_format: $('rgFormat').value || null, divisions };
+            const r = await adminApi('/admin/events/' + rgEventId + '/config', { method: 'PUT', body });
+            adminMsg(r.ok ? 'Registration settings saved' : 'Save failed (' + r.status + ')', r.ok);
+        }
+        async function rgLoadRoster() {
+            let regs = [];
+            try { const r = await adminApi('/admin/events/' + rgEventId + '/registrations'); if (r.ok) regs = (await r.json()).registrations || []; } catch (e) {}
+            $('rgCount').textContent = String(regs.length);
+            const grid = $('rgRoster'); grid.replaceChildren();
+            const thead = document.createElement('thead'); const htr = document.createElement('tr');
+            ['Player', 'Division', 'Team', 'Start hole', 'In?', 'Paid?', 'Credit'].forEach((h) => htr.appendChild(elx('th', null, h)));
+            thead.appendChild(htr); grid.appendChild(thead);
+            const tbody = document.createElement('tbody');
+            if (!regs.length) { const tr = document.createElement('tr'); const td = elx('td', null, 'No registrations yet.'); td.colSpan = 7; tr.appendChild(td); tbody.appendChild(tr); }
+            regs.forEach((rg) => {
+                const tr = document.createElement('tr');
+                tr.appendChild(elx('td', 'lb-name', rg.name));
+                tr.appendChild(elx('td', null, rg.division || '—'));
+                tr.appendChild(elx('td', null, rg.team || '—'));
+                const shTd = document.createElement('td'); const sh = document.createElement('input'); sh.type = 'number'; sh.min = '1'; sh.style.width = '3.5rem'; if (rg.starting_hole != null) sh.value = rg.starting_hole; sh.addEventListener('change', () => rgPatch(rg.id, { starting_hole: parseInt(sh.value, 10) || null })); shTd.appendChild(sh); tr.appendChild(shTd);
+                tr.appendChild(rgToggleCell(rg.checked_in, (v) => rgPatch(rg.id, { checked_in: v })));
+                tr.appendChild(rgToggleCell(rg.paid_entry, (v) => rgPatch(rg.id, { paid_entry: v })));
+                tr.appendChild(rgCreditCell(rg));
+                tbody.appendChild(tr);
+            });
+            grid.appendChild(tbody);
+        }
+        function rgCreditCell(rg) {
+            const td = document.createElement('td');
+            if (!rg.member_id) { td.textContent = '—'; return td; }
+            const wrap = elx('span', 'credit-award');
+            const amount = document.createElement('input'); amount.type = 'number'; amount.min = '0'; amount.step = '0.01'; amount.placeholder = '$';
+            const btn = elx('button', 'admin-btn secondary', 'Award'); btn.type = 'button';
+            btn.addEventListener('click', () => rgAwardCredit(rg.member_id, rg.name, amount));
+            wrap.appendChild(amount); wrap.appendChild(btn); td.appendChild(wrap);
+            return td;
+        }
+        async function rgAwardCredit(memberId, name, input) {
+            const amount = dollarsToCents(input.value);
+            if (amount == null || amount <= 0) { adminMsg('Enter a store credit amount', false); return; }
+            const r = await adminApi('/admin/events/' + rgEventId + '/store-credit', { method: 'POST', body: { member_id: memberId, member_name: name || null, amount_cents: amount, note: 'Event payout: ' + ($('rgEvent').selectedOptions[0]?.textContent || 'event') } });
+            if (r.ok) { const d = await r.json(); adminMsg('Awarded ' + dollarsFromCents(amount) + ' to ' + (name || memberId) + '. Balance: ' + dollarsFromCents(d.balance_cents || 0), true); input.value = ''; rgLoadCredits(); }
+            else adminMsg('Store credit award failed (' + r.status + ')', false);
+        }
+        function rgToggleCell(on, onChange) {
+            const td = document.createElement('td'); const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!on;
+            cb.addEventListener('change', () => onChange(cb.checked)); td.appendChild(cb); return td;
+        }
+        async function rgPatch(rid, patch) {
+            const r = await adminApi('/admin/events/' + rgEventId + '/registrations/' + rid, { method: 'PATCH', body: patch });
+            adminMsg(r.ok ? 'Updated' : 'Update failed', r.ok);
+            if (r.ok) rgLoadRoster();
+        }
+        // Assignment (shotgun starting holes / teams) — random
+        async function rgAssign(kind, body) {
+            const r = await adminApi('/admin/events/' + rgEventId + '/' + kind, { method: 'POST', body });
+            adminMsg(r.ok ? 'Assigned' : 'Assign failed (' + r.status + ')', r.ok);
+            if (r.ok) rgLoadRoster();
+        }
+        // CTPs
+        async function rgLoadCtps() {
+            let ctps = [];
+            try { const r = await api('/events/' + rgEventId + '/ctps'); if (r.ok) ctps = (await r.json()).ctps || []; } catch (e) {}
+            const list = $('rgCtpList'); list.replaceChildren();
+            if (!ctps.length) { list.appendChild(elx('p', 'al-note', 'No CTPs yet.')); }
+            ctps.forEach((c) => {
+                const row = elx('div', 'admin-evrow');
+                row.appendChild(elx('span', 'ev-name', 'Hole ' + c.hole + (c.division ? ' · ' + c.division : '') + (c.prize ? ' · ' + c.prize : '') + (c.winner_name ? ' · 🏆 ' + c.winner_name : '')));
+                const win = document.createElement('input'); win.placeholder = 'winner'; win.style.width = '8rem'; if (c.winner_name) win.value = c.winner_name;
+                const setW = elx('button', 'admin-btn secondary', 'Set winner');
+                setW.addEventListener('click', async () => { const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + c.id, { method: 'PATCH', body: { winner_name: win.value.trim() || null } }); if (r.ok) { adminMsg('CTP winner set', true); rgLoadCtps(); } });
+                const del = elx('button', 'admin-btn danger', 'Delete');
+                del.addEventListener('click', async () => { const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + c.id, { method: 'DELETE' }); if (r.ok) rgLoadCtps(); });
+                row.appendChild(win); row.appendChild(setW); row.appendChild(del);
+                list.appendChild(row);
+            });
+        }
+        async function rgAddCtp() {
+            const hole = parseInt($('rgCtpHole').value, 10);
+            if (!(hole >= 1)) { adminMsg('CTP needs a hole', false); return; }
+            const r = await adminApi('/admin/events/' + rgEventId + '/ctps', { method: 'POST', body: { hole, division: $('rgCtpDivision').value.trim() || null, prize: $('rgCtpPrize').value.trim() || null } });
+            if (r.ok) { adminMsg('CTP added', true); $('rgCtpHole').value = ''; $('rgCtpDivision').value = ''; $('rgCtpPrize').value = ''; rgLoadCtps(); }
+            else adminMsg('Add CTP failed', false);
+        }
+        async function rgLoadCredits() {
+            let payouts = [];
+            try { const r = await adminApi('/admin/events/' + rgEventId + '/store-credit'); if (r.ok) payouts = (await r.json()).payouts || []; } catch (e) {}
+            const list = $('rgCreditList'); list.replaceChildren();
+            if (!payouts.length) { list.appendChild(elx('p', 'al-note', 'No store credit payouts yet.')); return; }
+            payouts.forEach((tx) => list.appendChild(walletRow(tx)));
+        }
+        // Ace pot
+        async function rgLoadAcePot() {
+            let pot = null;
+            try { const r = await api('/events/' + rgEventId + '/ace-pot'); if (r.ok) pot = (await r.json()).ace_pot; } catch (e) {}
+            const d = (c) => '$' + ((c || 0) / 100).toLocaleString();
+            $('rgAceInfo').textContent = pot ? ('Total pot ' + d(pot.total_cents) + ' = carryover ' + d(pot.carryover_in_cents) + ' + ' + (pot.contributors || 0) + ' paid × ' + d(pot.ace_fee_cents) + ' · status: ' + (pot.status || 'active') + (pot.winner_name ? ' · 🏆 ' + pot.winner_name : '')) : 'No ace pot data.';
+            if (pot && pot.carryover_in_cents != null) $('rgAceCarry').value = pot.carryover_in_cents / 100;
+        }
+        async function rgAcePut(body) {
+            const r = await adminApi('/admin/events/' + rgEventId + '/ace-pot', { method: 'PUT', body });
+            adminMsg(r.ok ? 'Ace pot updated' : 'Ace pot failed', r.ok);
+            if (r.ok) rgLoadAcePot();
+        }
+
+        function initAdmin() {
+            if (adminInited) { adminLoadEvents(); adminLoadCourses(); return; }
+            adminInited = true;
+            document.querySelectorAll('.admin-tab').forEach((t) => t.addEventListener('click', () => adminSwitch(t.dataset.atab)));
+            $('adminCreateForm').addEventListener('submit', adminCreateEvent);
+            $('adminCourseForm').addEventListener('submit', adminAddCourse);
+            $('dgsImportBtn').addEventListener('click', adminDgsImport);
+            $('csvImportBtn').addEventListener('click', adminCsvImport);
+            $('alCourse').addEventListener('change', alOnCourseChange);
+            $('alPosAddBtn').addEventListener('click', alAddPosition);
+            $('alUdiscBtn').addEventListener('click', alUdiscFetch);
+            $('alAddHole').addEventListener('click', () => addHoleRow());
+            $('alSaveLayout').addEventListener('click', alSaveLayout);
+            $('alResetLayout').addEventListener('click', alResetLayout);
+            $('scEvent').addEventListener('change', scOnEventChange);
+            $('scStartBtn').addEventListener('click', scStart);
+            $('scFinalizeBtn').addEventListener('click', scFinalize);
+            $('scOvApply').addEventListener('click', () => scApplyOverride(false));
+            $('scOvClear').addEventListener('click', () => scApplyOverride(true));
+            $('adminLeagueForm').addEventListener('submit', adminAddLeague);
+            $('adminFundraiserForm').addEventListener('submit', adminAddFundraiser);
+            $('adminMeetingForm').addEventListener('submit', adminAddMeeting);
+            $('adminProductForm').addEventListener('submit', adminAddProduct);
+            $('adminWalletForm').addEventListener('submit', adminPostWalletAdjustment);
+            $('rgEvent').addEventListener('change', rgOnSelect);
+            $('rgSaveBtn').addEventListener('click', rgSaveConfig);
+            $('rgAssignHoles').addEventListener('click', () => rgAssign('assign-starting-holes', { shuffle: true, groupSize: 4 }));
+            $('rgAssignTeams').addEventListener('click', () => rgAssign('assign-teams', { shuffle: true, size: parseInt($('rgTeamSize').value, 10) || 2 }));
+            $('rgCtpAdd').addEventListener('click', rgAddCtp);
+            $('rgAceSave').addEventListener('click', () => rgAcePut({ carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100), status: 'active' }));
+            $('rgAcePayout').addEventListener('click', () => rgAcePut({ status: 'paid_out', winner_name: $('rgAceWinner').value.trim() || null, carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100) }));
+            $('rgAceCarryNext').addEventListener('click', () => rgAcePut({ status: 'carried', carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100) }));
+            adminLoadEvents();
+            adminLoadCourses();
+            adminLoadLeagues();
+        }
+
+        // Kick off the auth gate on load.
+        checkAdminSession();
+    </script>
+    <script src="crotts.js" defer></script>
+</body>
+</html>
