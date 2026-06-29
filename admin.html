@@ -471,7 +471,15 @@
                         <div><label for="psWeight">Weight (g)</label><input id="psWeight" type="number" min="0" step="1"></div>
                         <div><label for="psPrice">Price ($)</label><input id="psPrice" type="number" min="0" step="0.01" required></div>
                         <div><label for="psStock">Stock</label><input id="psStock" type="number" min="0" step="1" value="1"></div>
-                        <div style="grid-column:1/-1;"><label for="psImage">Image URL</label><input id="psImage" type="url" maxlength="2000" placeholder="https://..."></div>
+                        <div style="grid-column:1/-1;">
+                            <label for="psImage">Image</label>
+                            <input id="psImage" type="url" maxlength="2000" placeholder="https://… paste an image URL">
+                            <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.4rem; flex-wrap:wrap;">
+                                <input id="psImageFile" type="file" accept="image/*">
+                                <span class="al-note" style="font-size:0.78rem;">…or take a photo / upload from your device</span>
+                            </div>
+                            <img id="psImagePreview" alt="" style="display:none; margin-top:0.5rem; max-height:120px; border-radius:8px; border:1px solid var(--border-color);">
+                        </div>
                         <div style="grid-column:1/-1;"><label for="psDescription">Description</label><textarea id="psDescription" rows="3" maxlength="1000"></textarea></div>
                         <button type="submit" class="admin-btn">Add product</button>
                     </form>
@@ -1387,6 +1395,37 @@
                 list.appendChild(row);
             });
         }
+        // Product image: take a photo / upload (resized to a data URL) OR paste a URL.
+        let productImageDataUrl = '';
+        function resizeImageToDataUrl(file, maxDim, quality) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                const url = URL.createObjectURL(file);
+                img.onload = () => {
+                    URL.revokeObjectURL(url);
+                    let w = img.width, h = img.height;
+                    if (w > maxDim || h > maxDim) {
+                        if (w >= h) { h = Math.round(h * maxDim / w); w = maxDim; } else { w = Math.round(w * maxDim / h); h = maxDim; }
+                    }
+                    const c = document.createElement('canvas'); c.width = w; c.height = h;
+                    c.getContext('2d').drawImage(img, 0, 0, w, h);
+                    resolve(c.toDataURL('image/jpeg', quality));
+                };
+                img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image_load_failed')); };
+                img.src = url;
+            });
+        }
+        async function onProductImageFile(e) {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            try {
+                productImageDataUrl = await resizeImageToDataUrl(file, 700, 0.78);
+                const pv = $('psImagePreview'); pv.src = productImageDataUrl; pv.style.display = '';
+                $('psImage').value = ''; // a captured/uploaded photo overrides a pasted URL
+                adminMsg('Photo ready (~' + Math.round(productImageDataUrl.length / 1024) + ' KB). Add the product to save it.', true);
+            } catch (_e) { adminMsg('Could not read that image — try another.', false); }
+        }
+        function clearProductImage() { productImageDataUrl = ''; const pv = $('psImagePreview'); if (pv) { pv.style.display = 'none'; pv.removeAttribute('src'); } const f = $('psImageFile'); if (f) f.value = ''; }
         async function adminAddProduct(e) {
             e.preventDefault();
             const price = dollarsToCents($('psPrice').value);
@@ -1400,12 +1439,12 @@
                 weight_g: parseInt($('psWeight').value, 10) || null,
                 price_cents: price,
                 stock_qty: Number.isFinite(stock) ? stock : 0,
-                image_url: $('psImage').value.trim() || null,
+                image_url: productImageDataUrl || $('psImage').value.trim() || null,
                 description: $('psDescription').value.trim() || null,
             };
             if (!body.name || price == null) { adminMsg('Product name and price are required', false); return; }
             const r = await adminApi('/admin/shop/products', { method: 'POST', body });
-            if (r.ok) { adminMsg('Product added', true); $('adminProductForm').reset(); $('psStock').value = '1'; adminLoadProducts(); }
+            if (r.ok) { adminMsg('Product added', true); $('adminProductForm').reset(); $('psStock').value = '1'; clearProductImage(); adminLoadProducts(); }
             else adminMsg('Add product failed (' + r.status + ')', false);
         }
         function walletRow(tx) {
@@ -1647,6 +1686,8 @@
             $('adminFundraiserForm').addEventListener('submit', adminAddFundraiser);
             $('adminMeetingForm').addEventListener('submit', adminAddMeeting);
             $('adminProductForm').addEventListener('submit', adminAddProduct);
+            $('psImageFile').addEventListener('change', onProductImageFile);
+            $('psImage').addEventListener('input', () => { if ($('psImage').value) clearProductImage(); });
             $('adminWalletForm').addEventListener('submit', adminPostWalletAdjustment);
             $('ordStatusFilter').addEventListener('change', adminLoadOrders);
             $('ordRefresh').addEventListener('click', adminLoadOrders);

@@ -12,11 +12,14 @@ function asSignedInt(v: unknown): number | null {
   return null;
 }
 
+const MAX_IMAGE_DATA_URL = 700_000; // ~500KB photo as base64 (admin camera/upload images are resized client-side)
 function imageUrl(v: unknown): string | null | undefined {
   if (v == null || v === "") return null;
-  const s = asStr(v, 2000);
-  if (!s || !/^https:\/\//.test(s)) return undefined;
-  return s;
+  if (typeof v !== "string") return undefined;
+  const s = v.trim();
+  if (/^https:\/\//.test(s)) return s.length <= 2000 ? s : undefined; // pasted URL
+  if (/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(s)) return s.length <= MAX_IMAGE_DATA_URL ? s : undefined; // photo/upload
+  return undefined;
 }
 
 function nonNegativeInt(v: unknown): number | null {
@@ -107,13 +110,13 @@ export async function handleAdminShop(
     const id = seg[3] != null ? asInt(seg[3]) : null;
     if (method === "GET" && seg.length === 3) return json({ products: await shopDb.listStoreProducts(env.DB, { includeInactive: true }) }, 200, origin);
     if (method === "POST" && seg.length === 3) {
-      const body = await readJson(request);
+      const body = await readJson(request, MAX_IMAGE_DATA_URL + 8_000); // room for an inline product photo
       const input = body && cleanProductInput(body, adminId);
       if (!input) return json({ error: "invalid_product" }, 400, origin);
       return json({ product: await shopDb.createStoreProduct(env.DB, input) }, 201, origin);
     }
     if (method === "PATCH" && id != null) {
-      const body = await readJson(request);
+      const body = await readJson(request, MAX_IMAGE_DATA_URL + 8_000);
       const patch = body && cleanProductPatch(body);
       if (!patch) return json({ error: "invalid_product" }, 400, origin);
       const row = await shopDb.updateStoreProduct(env.DB, id, patch);
