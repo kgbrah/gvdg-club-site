@@ -4,6 +4,7 @@ export { normalizeCsvEvents, normalizeDgs, type EventCandidate } from "./imports
 export {
   parseUdiscCourse,
   parseUdiscLayout,
+  parseUdiscLayouts,
   type CourseCandidate,
   type UdiscHole,
   type UdiscLayout,
