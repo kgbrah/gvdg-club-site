@@ -12,10 +12,6 @@ export function ttl(env: Env): number {
   return Number.isFinite(n) && n > 0 ? n : 900;
 }
 
-export function rateKey(identifier: string): string {
-  return identifier.trim().toLowerCase();
-}
-
 export async function requireAuth(request: Request, env: Env) {
   const token = bearer(request);
   const claims = token ? await verifySession(token, env.JWT_SECRET) : null;

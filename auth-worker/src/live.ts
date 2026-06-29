@@ -175,25 +175,36 @@ export class LiveEventDO {
 
   private async finalize(): Promise<Response> {
     if (!this.meta) return j({ error: "not_started" }, 409);
-    const standings = finalizeStandings(this.resolvedHoles(), this.players);
-    // Idempotent: clear any prior results for this event, then write fresh (inserts run concurrently).
-    await db.clearResults(this.env.DB, this.meta.eventId);
-    const eventId = this.meta.eventId;
-    await Promise.all(
-      standings.map((s) =>
-        db.createResult(this.env.DB, {
-          event_id: eventId,
-          member_id: s.memberId,
-          name: s.name,
-          place: s.place,
-          total: s.total,
-          to_par: s.toPar,
-          breakdown: JSON.stringify(s.breakdown),
-        }),
-      ),
-    );
-    await db.updateEvent(this.env.DB, this.meta.eventId, { status: "final" });
+    // Idempotent under a double-submit: claim finalization SYNCHRONOUSLY (before any await) so a second
+    // finalize that interleaves at one of the awaits below sees status==='final' and short-circuits,
+    // instead of racing clearResults + concurrent inserts into duplicate result rows.
+    if (this.meta.status === "final") {
+      return j({ status: "final", standings: finalizeStandings(this.resolvedHoles(), this.players) });
+    }
     this.meta.status = "final";
+    const standings = finalizeStandings(this.resolvedHoles(), this.players);
+    const eventId = this.meta.eventId;
+    try {
+      // Clear any prior results for this event, then write fresh (inserts run concurrently).
+      await db.clearResults(this.env.DB, eventId);
+      await Promise.all(
+        standings.map((s) =>
+          db.createResult(this.env.DB, {
+            event_id: eventId,
+            member_id: s.memberId,
+            name: s.name,
+            place: s.place,
+            total: s.total,
+            to_par: s.toPar,
+            breakdown: JSON.stringify(s.breakdown),
+          }),
+        ),
+      );
+      await db.updateEvent(this.env.DB, eventId, { status: "final" });
+    } catch (e) {
+      this.meta.status = "live"; // roll back the in-memory claim so the admin can retry finalize
+      throw e;
+    }
     await this.persist();
     this.broadcast();
     return j({ status: "final", standings });

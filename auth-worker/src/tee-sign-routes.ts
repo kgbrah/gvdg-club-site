@@ -60,6 +60,8 @@ export async function handleTeeSignImage(request: Request, env: Env, origin: str
   if (id == null) return json({ error: "not_found" }, 404, origin);
   const sign = await db.getTeeSign(env.DB, id);
   if (!sign) return json({ error: "not_found" }, 404, origin);
+  // A rejected sign is excluded from every member-facing list; never serve its blob either (id-enumeration IDOR).
+  if (sign.status === "rejected") return json({ error: "not_found" }, 404, origin);
   if (sign.status !== "official") {
     const who = await requireMember(request, env, origin);
     if (who instanceof Response) return who;

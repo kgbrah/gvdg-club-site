@@ -67,13 +67,17 @@ export function computeLeaderboard(holes: { hole: number; par: number }[], playe
 }
 
 export interface FinalStanding extends Standing {
-  place: number;
+  /** Competition rank for a completed round; `null` = DNF (no-show or partial round): recorded but
+   *  unranked, so it never outranks a real finisher and earns no podium/league points. */
+  place: number | null;
   breakdown: Breakdown;
 }
 
-/** Final results for an event: sorted standings with competition ranks (ties share a place, e.g.
- *  1,2,2,4) and each player's score breakdown over the holes they played. Used at finalize. */
+/** Final results for an event: only players who completed every hole are ranked (ties share a place,
+ *  e.g. 1,2,2,4). No-shows and partial cards are recorded as DNF (place null) and sorted to the bottom,
+ *  so a registrant who never played can't sit at "even par" ahead of an over-par finisher. */
 export function finalizeStandings(holes: { hole: number; par: number }[], players: PlayerState[]): FinalStanding[] {
+  const holeCount = holes.length;
   const rows = players.map((p) => {
     const pars: number[] = [];
     const strokes: number[] = [];
@@ -99,14 +103,20 @@ export function finalizeStandings(holes: { hole: number; par: number }[], player
       breakdown: countScores(pars, strokes),
     };
   });
-  rows.sort((a, b) => a.toPar - b.toPar || a.total - b.total || a.name.localeCompare(b.name));
+  const completed = (r: { thru: number }) => holeCount > 0 && r.thru === holeCount;
+  const finishers = rows.filter(completed);
+  const dnf = rows.filter((r) => !completed(r));
+  finishers.sort((a, b) => a.toPar - b.toPar || a.total - b.total || a.name.localeCompare(b.name));
+  dnf.sort((a, b) => b.thru - a.thru || a.name.localeCompare(b.name)); // most-played first; display only
   let place = 0;
   let prevKey = "";
-  return rows.map((r, i) => {
+  const ranked: FinalStanding[] = finishers.map((r, i) => {
     const key = r.toPar + "/" + r.total;
     if (key !== prevKey) { place = i + 1; prevKey = key; } // competition ranking: ties share, gaps after
     return { ...r, place };
   });
+  const unranked: FinalStanding[] = dnf.map((r) => ({ ...r, place: null }));
+  return [...ranked, ...unranked];
 }
 
 // ---------------- league standings ----------------

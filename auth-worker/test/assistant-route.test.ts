@@ -36,6 +36,14 @@ describe("POST /assistant", () => {
     expect(j.stub).toBeUndefined();
   });
 
+  it("uses the atomic ASSISTANT_RL binding when present (429 when it denies)", async () => {
+    const calls: { key: string }[] = [];
+    const ASSISTANT_RL = { limit: async (o: { key: string }) => { calls.push(o); return { success: false }; } };
+    const res = await worker.fetch(req({ message: "hi" }), makeEnv({ ASSISTANT_RL }));
+    expect(res.status).toBe(429);
+    expect(calls[0]!.key).toBe("asst:1.2.3.4"); // consulted the atomic limiter, not the KV counter
+  });
+
   it("rejects an empty message with 400", async () => {
     const res = await worker.fetch(req({ message: "   " }), makeEnv());
     expect(res.status).toBe(400);

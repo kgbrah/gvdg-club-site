@@ -91,6 +91,16 @@ describe("POST /login", () => {
     expect(Number(res.headers.get("Retry-After"))).toBeGreaterThan(0);
   });
 
+  it("counts PDGA# punctuation variants against ONE lockout bucket (no key-splitting bypass)", async () => {
+    // All of these normalize to PDGA 12345 and resolve to the same member; the lockout must not reset
+    // just because the raw identifier string differs.
+    for (const v of ["1-2345", "1.2345", "12-345", "123.45", "1234-5"]) {
+      await worker.fetch(post("/login", { identifier: v, pin: "0000" }), env);
+    }
+    const res = await worker.fetch(post("/login", { identifier: "12345", pin: PIN }), env);
+    expect(res.status).toBe(423);
+  });
+
   it("rejects a malformed body with 400", async () => {
     const req = new Request("https://auth.example/login", {
       method: "POST",
@@ -169,6 +179,29 @@ describe("POST /set-pin", () => {
 
   it("401s without a token", async () => {
     expect((await worker.fetch(post("/set-pin", { newPin: "7777" }), env)).status).toBe(401);
+  });
+
+  // Once a member is established (mustChangePin cleared), changing the PIN must re-prove the current
+  // PIN, so a transiently-stolen session token can't be turned into a permanent account takeover.
+  describe("established member re-auth", () => {
+    async function establishedToken(): Promise<string> {
+      const login = await worker.fetch(post("/login", { identifier: "12345", pin: PIN }), env);
+      const loginToken = ((await login.json()) as any).token; // mustChangePin: true
+      const sp = await worker.fetch(post("/set-pin", { newPin: "9999" }, { Authorization: `Bearer ${loginToken}` }), env);
+      return ((await sp.json()) as any).token; // mustChangePin: false; current PIN is now 9999
+    }
+
+    it("rejects a non-forced change without the correct current PIN, and accepts it with", async () => {
+      const t = await establishedToken();
+      const auth = { Authorization: `Bearer ${t}` };
+      expect((await worker.fetch(post("/set-pin", { newPin: "1111" }, auth), env)).status).toBe(401);
+      expect((await worker.fetch(post("/set-pin", { newPin: "1111", currentPin: "0000" }, auth), env)).status).toBe(401);
+      // PIN is unchanged so far
+      expect((await worker.fetch(post("/login", { identifier: "12345", pin: "9999" }), env)).status).toBe(200);
+      // Correct current PIN succeeds and rotates the PIN
+      expect((await worker.fetch(post("/set-pin", { newPin: "1111", currentPin: "9999" }, auth), env)).status).toBe(200);
+      expect((await worker.fetch(post("/login", { identifier: "12345", pin: "1111" }), env)).status).toBe(200);
+    });
   });
 });
 
