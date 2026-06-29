@@ -14,12 +14,29 @@ import { handleAssistant } from "./assistant-route.js";
 import { handleWebAuthnRoute } from "./webauthn-routes.js";
 import { handleMyTeeSigns, handleTeeSignUpload } from "./tee-sign-routes.js";
 import { clubApi } from "./club-api.js";
+import { D1KV } from "./d1kv.js";
 
 export type { Env } from "./env.js";
 export { LiveEventDO } from "./live.js";
 
+/**
+ * STOPGAP: when no Workers KV namespace is bound (deployed dev/staging while this account's KV data
+ * plane is degraded), back the ROSTER + RATELIMIT bindings with D1 instead. Tests inject KV mocks and
+ * production binds real KV, so in those cases env is returned untouched and the adapter is bypassed.
+ */
+function withKvFallback(env: Env): Env {
+  const cur = env as unknown as { ROSTER?: KVNamespace; RATELIMIT?: KVNamespace; DB: D1Database };
+  if (cur.ROSTER || cur.RATELIMIT) return env; // real KV (prod) or mocks (tests) present — use as-is
+  return {
+    ...env,
+    ROSTER: new D1KV(cur.DB, "roster") as unknown as KVNamespace,
+    RATELIMIT: new D1KV(cur.DB, "ratelimit") as unknown as KVNamespace,
+  } as Env;
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
+    env = withKvFallback(env);
     const origin = allowedOrigin(env, request);
     const { pathname } = new URL(request.url);
     const method = request.method.toUpperCase();

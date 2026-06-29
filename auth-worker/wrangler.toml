@@ -115,13 +115,13 @@ custom_domain = true
 [env.staging.observability]
 enabled = true
 
-[[env.staging.kv_namespaces]]
-binding = "ROSTER"
-id = "f608c9470e5e4853878e9e230bcb660b"
-
-[[env.staging.kv_namespaces]]
-binding = "RATELIMIT"
-id = "94664f864e76466ebe3d0f087526e00a"
+# STOPGAP (2026-06-29): Workers KV is degraded on this Cloudflare account — deployed Workers read/write
+# an isolated empty KV instead of the central store (D1 is unaffected). The ROSTER + RATELIMIT KV
+# bindings are intentionally OMITTED here so withKvFallback() in src/index.ts backs them with D1
+# (table `kv_store`, migration 0010). Re-add the two [[env.staging.kv_namespaces]] blocks below to
+# switch staging back to KV once the account's KV recovers:
+#   [[env.staging.kv_namespaces]]  binding = "ROSTER"     id = "f608c9470e5e4853878e9e230bcb660b"
+#   [[env.staging.kv_namespaces]]  binding = "RATELIMIT"  id = "94664f864e76466ebe3d0f087526e00a"
 
 [[env.staging.d1_databases]]
 binding = "DB"
