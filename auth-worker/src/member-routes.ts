@@ -103,6 +103,12 @@ export async function handleMyRegistrations(request: Request, env: Env, origin: 
   return json({ registrations: await db.listMyRegistrations(env.DB, claims.sub) }, 200, origin);
 }
 
+export async function handleMyLiveRounds(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const claims = await requireAuth(request, env);
+  if (!claims) return json({ error: "unauthorized" }, 401, origin);
+  return json({ rounds: await db.listMemberLiveEvents(env.DB, claims.sub) }, 200, origin);
+}
+
 /** Distinct board authors' profile photos (from KV), keyed by member_id, so the UI can render avatars.
  *  Only authors who have set a photo are included; deduped across posts+replies and fetched in parallel. */
 async function boardAuthorPhotos(env: Env, posts: Record<string, unknown>[]): Promise<Record<string, string>> {

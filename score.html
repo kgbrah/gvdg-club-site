@@ -20,6 +20,7 @@
             --text-primary: #1A1A2E; --text-secondary: #444; --text-muted: #6A6A78;
             --border-color: #E2E2EA; --shadow: rgba(0,0,0,0.10);
             --under: #15743A; --over: #C8472E; --even: #6A6A78;
+            --over-soft: rgba(200,71,46,0.10);
             --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px);
         }
         [data-theme="dark"] {
@@ -27,6 +28,7 @@
             --text-primary: #F4F4F9; --text-secondary: #D8D8E0; --text-muted: #9A9AAC;
             --border-color: #2C2C40; --shadow: rgba(0,0,0,0.4);
             --under: #4FD37E; --over: #FF7A5C;
+            --over-soft: rgba(255,122,92,0.16);
         }
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
@@ -102,11 +104,20 @@
         .hole-head .hpar { font-size: 1.5rem; font-weight: 700; }
         .navbtn { width: 46px; height: 46px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); font-size: 1.4rem; cursor: pointer; }
         .navbtn:disabled { opacity: 0.35; }
+        .scorecard-owner { display: flex; align-items: center; gap: 0.65rem; padding-bottom: 0.75rem; margin-bottom: 0.1rem; border-bottom: 1px solid var(--border-color); }
+        .scorecard-owner label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); white-space: nowrap; }
+        .scorecard-owner select {
+            flex: 1; min-width: 0; min-height: 40px; border: 1px solid var(--border-color); border-radius: 10px;
+            background: var(--bg-primary); color: var(--text-primary); font: 700 0.95rem 'Archivo'; padding: 0 0.65rem;
+        }
+        .scorecard-owner + .prow { border-top: none; }
         .prow { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0; border-top: 1px solid var(--border-color); }
         .prow:first-child { border-top: none; }
+        .prow.conflict { border-left: 4px solid var(--over); padding-left: 0.55rem; background: var(--over-soft); }
         .prow .pinfo { flex: 1; min-width: 0; }
         .prow .pname { font-weight: 700; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .prow .pmeta { font-size: 0.74rem; color: var(--text-muted); }
+        .prow .conflict-text { color: var(--over); font-weight: 700; }
         .stepper { display: flex; align-items: center; gap: 0.45rem; }
         .stepper button { width: 44px; height: 44px; border-radius: 50%; border: none; font-size: 1.5rem; font-weight: 700; cursor: pointer; display: grid; place-items: center; }
         .stepper button.minus { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); }
@@ -125,6 +136,10 @@
         .holegrid button.cur { background: var(--primary); color: #fff; border-color: var(--primary); }
         .holegrid button.done::after { content: ""; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 50%; background: var(--under); }
         .holegrid button.cur.done::after { background: #fff; }
+        .holegrid button.conflict { border-color: var(--over); color: var(--over); box-shadow: inset 0 0 0 1px var(--over); }
+        .holegrid button.conflict::before { content: "⚑"; position: absolute; right: 4px; top: 2px; font-size: 0.7rem; line-height: 1; }
+        .holegrid button.cur.conflict { background: var(--over); border-color: var(--over); color: #fff; }
+        .holegrid button.cur.conflict::before { color: #fff; }
         /* ---- leaderboard overlay ---- */
         .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; display: flex; flex-direction: column; justify-content: flex-end; }
         .sheet { background: var(--bg-secondary); border-radius: 20px 20px 0 0; max-height: 82vh; overflow-y: auto; padding: 1rem 0.9rem calc(1.4rem + var(--safe-bottom)); }
@@ -159,7 +174,7 @@
         const API_BASE = (LOCAL || (document.body.dataset.apiBase || '').trim() ||
             ((_h === 'greenvillediscgolf.com' || _h === 'www.greenvillediscgolf.com') ? 'https://auth.greenvillediscgolf.com' : 'https://auth.gvdgclub.com')).replace(/\/+$/, '');
 
-        const TOKEN_KEY = 'gvdg_member_token', NAME_KEY = 'gvdg_member_name', GUESTREG_KEY = 'gvdg_guest_regs';
+        const TOKEN_KEY = 'gvdg_member_token', NAME_KEY = 'gvdg_member_name', GUESTREG_KEY = 'gvdg_guest_regs', RECENT_ROUNDS_KEY = 'gvdg_recent_rounds';
         const params = new URLSearchParams(location.search);
         const EVENT_ID = (params.get('event') || '').replace(/[^0-9]/g, '');
         const ROUND_CODE = (params.get('round') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -171,13 +186,25 @@
         const GUEST_TOKEN = MODE === 'event' ? (params.get('gt') || guestTokenStored()) : null;
 
         const app = document.getElementById('app');
-        const S = { holes: [], cardId: null, myIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, courseName: null, layoutName: null };
-        const pending = new Set();            // "index:hole" optimistically set, awaiting confirm — don't clobber from snapshot
-        const QKEY = 'gvdg_score_queue:' + EVENT_ID;
+        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], courseName: null, layoutName: null };
+        const pending = new Set();            // "scorer:index:hole" optimistically set, awaiting confirm — don't clobber from snapshot
+        const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
 
         // ---------- tiny helpers ----------
         function el(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
         function memberToken() { try { return sessionStorage.getItem(TOKEN_KEY); } catch (e) { return null; } }
+        function rememberRecentRound(entry) {
+            try {
+                if (!entry || !entry.code) return;
+                const key = String(entry.code).toUpperCase().replace(/[^A-Z0-9]/g, '');
+                if (!key) return;
+                const rows = JSON.parse(localStorage.getItem(RECENT_ROUNDS_KEY) || '[]');
+                const next = [{ code: key, label: entry.label || ('Casual round ' + key), updatedAt: Date.now() }]
+                    .concat((Array.isArray(rows) ? rows : []).filter((row) => String(row && row.code || '').toUpperCase() !== key))
+                    .slice(0, 12);
+                localStorage.setItem(RECENT_ROUNDS_KEY, JSON.stringify(next));
+            } catch (e) {}
+        }
         function relClass(d) { return d < 0 ? 'under' : d > 0 ? 'over' : 'even'; }
         function relText(d) { return d === 0 ? 'E' : d > 0 ? '+' + d : String(d); }
         function toast(msg) {
@@ -188,7 +215,8 @@
         // A loud, sticky, top-of-screen alert (with a buzz) when the card has a scoring conflict. Tap to dismiss.
         function conflictAlert(msg) {
             if (navigator.vibrate) { try { navigator.vibrate([120, 60, 120]); } catch (e) {} }
-            const text = '⚠️ Scoring conflict — Hole ' + msg.hole + ', ' + (msg.playerName || 'a player') + ': was ' + msg.from + ', now ' + msg.to + '. Confirm with your card.';
+            const values = Array.isArray(msg.values) && msg.values.length ? msg.values.join(' vs ') : ((msg.from != null && msg.to != null) ? (msg.from + ' vs ' + msg.to) : 'scores do not match');
+            const text = '⚠️ Scoring conflict — Hole ' + msg.hole + ', ' + (msg.playerName || 'a player') + ': ' + values + '. Confirm with your card.';
             const t = el('div', 'toast conflict', text);
             t.addEventListener('click', () => t.remove());
             document.body.appendChild(t);
@@ -233,7 +261,9 @@
             let q = qLoad(); if (!q.length) return;
             const remain = [];
             for (const item of q) {
-                const r = await api(LIVE + '/score', { method: 'POST', body: { index: item.index, hole: item.hole, strokes: item.strokes } });
+                const body = { index: item.index, hole: item.hole, strokes: item.strokes };
+                if (Number.isInteger(item.scorerIndex)) body.scorerIndex = item.scorerIndex;
+                const r = await api(LIVE + '/score', { method: 'POST', body: body });
                 if (!r.ok && (r.neterr || r.status >= 500)) remain.push(item); // keep only transient failures
             }
             qSave(remain);
@@ -250,6 +280,25 @@
         window.addEventListener('offline', function () { setOnline(false); });
 
         // ---------- score state access ----------
+        function scorecardChoices() {
+            return S.cardmates.filter((p) => p && p.canEnterScorecard !== false);
+        }
+        function currentScorerIndex() {
+            const choices = scorecardChoices();
+            if (!choices.length) return null;
+            if (choices.some((p) => p.index === S.scorerIndex)) return S.scorerIndex;
+            const mine = choices.find((p) => p.index === S.myIndex);
+            S.scorerIndex = (mine || choices[0]).index;
+            return S.scorerIndex;
+        }
+        function pendingKey(scorerIndex, index, hole) {
+            return scorerIndex + ':' + index + ':' + hole;
+        }
+        function hasPendingScore(index, hole) {
+            const suffix = ':' + index + ':' + hole;
+            for (const key of pending) { if (key.endsWith(suffix)) return true; }
+            return false;
+        }
         function strokesFor(index, hole) {
             const cm = S.cardmates.find((p) => p.index === index);
             const v = cm && cm.scores ? cm.scores[hole] : undefined;
@@ -259,16 +308,32 @@
             const cm = S.cardmates.find((p) => p.index === index);
             if (cm) { cm.scores = cm.scores || {}; cm.scores[hole] = strokes; }
         }
+        function setConflicts(rows) {
+            S.conflicts = (Array.isArray(rows) ? rows : []).filter((c) => c && c.cardId === S.cardId);
+        }
+        function upsertConflict(msg) {
+            if (!msg || msg.cardId !== S.cardId) return;
+            S.conflicts = S.conflicts.filter((c) => !(c.playerIndex === msg.playerIndex && c.hole === msg.hole));
+            if (Array.isArray(msg.values) && msg.values.length > 1) S.conflicts.push({ cardId: msg.cardId, playerIndex: msg.playerIndex, playerName: msg.playerName, hole: msg.hole, values: msg.values });
+        }
+        function conflictFor(index, hole) {
+            return S.conflicts.find((c) => c && c.playerIndex === index && c.hole === hole) || null;
+        }
+        function holeHasConflict(hole) {
+            return S.conflicts.some((c) => c && c.hole === hole);
+        }
 
         async function postScore(index, hole, strokes) {
-            const key = index + ':' + hole;
+            const scorerIndex = currentScorerIndex();
+            if (scorerIndex == null) { toast('Choose a scorecard'); return; }
+            const key = pendingKey(scorerIndex, index, hole);
             pending.add(key);
             setLocal(index, hole, strokes);
             renderHole();
-            const r = await api(LIVE + '/score', { method: 'POST', body: { index: index, hole: hole, strokes: strokes } });
+            const r = await api(LIVE + '/score', { method: 'POST', body: { index: index, scorerIndex: scorerIndex, hole: hole, strokes: strokes } });
             pending.delete(key);
             if (r.ok) { S.snap = r.data; mergeFromSnap(); }
-            else if (r.neterr) { qAdd({ index: index, hole: hole, strokes: strokes }); setOnline(false); }
+            else if (r.neterr) { qAdd({ index: index, scorerIndex: scorerIndex, hole: hole, strokes: strokes }); setOnline(false); }
             else if (r.status === 403) toast('You can only score your own card');
             else if (r.status === 401) toast('Session expired — sign in again');
             else if (r.status === 429) toast('Easy there — one moment');
@@ -279,12 +344,16 @@
         // ---------- merge a snapshot's scores into our cardmates (respecting pending optimistic edits) ----------
         function mergeFromSnap() {
             const snap = S.snap; if (!snap || !Array.isArray(snap.players)) return;
+            setConflicts(snap.conflicts);
             const byIndex = new Map(snap.players.map((p) => [p.index, p]));
             S.cardmates.forEach((cm) => {
                 const sp = byIndex.get(cm.index); if (!sp) return;
                 cm.scores = cm.scores || {};
-                Object.keys(sp.scores || {}).forEach((h) => {
-                    if (!pending.has(cm.index + ':' + Number(h))) cm.scores[h] = sp.scores[h];
+                S.holes.forEach((hh) => {
+                    if (hasPendingScore(cm.index, hh.hole)) return;
+                    const scores = sp.scores || {};
+                    if (Object.prototype.hasOwnProperty.call(scores, hh.hole)) cm.scores[hh.hole] = scores[hh.hole];
+                    else delete cm.scores[hh.hole];
                 });
             });
             renderHole();
@@ -293,7 +362,7 @@
 
         // ---------- WebSocket live sync ----------
         function connectWs() {
-            if (!EVENT_ID) return;
+            if (MODE === 'home') return;
             try { if (S.ws) S.ws.close(); } catch (e) {}
             let ws;
             try { ws = new WebSocket(API_BASE.replace(/^http/, 'ws') + LIVE + '/ws'); }
@@ -302,7 +371,7 @@
             ws.addEventListener('message', function (ev) {
                 let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
                 // Two scorers on the same card disagreed on a hole — alert this card immediately to reconcile.
-                if (msg && msg.type === 'conflict') { if (msg.cardId === S.cardId) conflictAlert(msg); return; }
+                if (msg && msg.type === 'conflict') { if (msg.cardId === S.cardId) { upsertConflict(msg); conflictAlert(msg); renderHole(); } return; }
                 if (msg && msg.type === 'snapshot') { S.snap = msg; mergeFromSnap(); }
             });
             ws.addEventListener('close', function () { if (S.wsTimer) return; S.wsTimer = setTimeout(function () { S.wsTimer = null; connectWs(); }, 4000); });
@@ -450,11 +519,30 @@
 
             // player rows with steppers
             const box = el('div', 'card');
+            const choices = scorecardChoices();
+            const scorerIndex = currentScorerIndex();
+            if (choices.length > 1) {
+                const owner = el('div', 'scorecard-owner');
+                owner.appendChild(el('label', null, 'Scorecard'));
+                const select = document.createElement('select');
+                choices.forEach((p) => {
+                    const opt = document.createElement('option');
+                    opt.value = String(p.index);
+                    opt.textContent = p.name + (p.isMe ? ' (you)' : '');
+                    select.appendChild(opt);
+                });
+                select.value = String(scorerIndex);
+                select.addEventListener('change', function () { S.scorerIndex = Number(select.value); });
+                owner.appendChild(select);
+                box.appendChild(owner);
+            }
             S.cardmates.forEach((p) => {
-                const row = el('div', 'prow');
+                const conflict = conflictFor(p.index, h.hole);
+                const row = el('div', 'prow' + (conflict ? ' conflict' : ''));
                 const info = el('div', 'pinfo');
                 info.appendChild(el('div', 'pname', p.name + (p.isMe ? ' (you)' : '')));
                 if (p.division) info.appendChild(el('div', 'pmeta', p.division));
+                if (conflict) info.appendChild(el('div', 'pmeta conflict-text', '⚑ Score conflict'));
                 const cur = strokesFor(p.index, h.hole);
                 const step = el('div', 'stepper');
                 const minus = el('button', 'minus', '−');
@@ -487,6 +575,7 @@
             S.holes.forEach((hh, i) => {
                 const b = el('button', i === S.holeIdx ? 'cur' : '', String(hh.hole));
                 if (me && me.scores && typeof me.scores[hh.hole] === 'number') b.className += ' done';
+                if (holeHasConflict(hh.hole)) b.className += ' conflict';
                 b.addEventListener('click', function () { S.holeIdx = i; renderHole(); });
                 grid.appendChild(b);
             });
@@ -545,6 +634,10 @@
             S.holes = Array.isArray(d.holes) ? d.holes : [];
             S.cardId = d.cardId; S.myIndex = d.playerIndex; S.cardmates = d.cardmates;
             S.courseName = d.courseName || null; S.layoutName = d.layoutName || null;
+            S.scorerIndex = d.playerIndex;
+            if (MODE === 'round') rememberRecentRound({ code: ROUND_CODE, label: 'Casual round ' + ROUND_CODE });
+            currentScorerIndex();
+            setConflicts(d.conflicts);
             // start on the card's shotgun hole if set, else hole 1
             const me = d.cardmates.find((p) => p.isMe);
             const sh = me && me.startingHole;
@@ -620,7 +713,7 @@
             const name = (window.prompt('Add a player to your card (their name):') || '').trim();
             if (!name) return;
             const r = await api('/rounds/' + ROUND_CODE + '/guest', { method: 'POST', body: { name: name } });
-            if (r.ok && r.data && Array.isArray(r.data.cardmates)) { S.cardmates = r.data.cardmates; renderHole(); toast(name + ' added'); }
+            if (r.ok && r.data && Array.isArray(r.data.cardmates)) { S.cardmates = r.data.cardmates; currentScorerIndex(); renderHole(); toast(name + ' added'); }
             else toast('Could not add player');
         }
         // Manage players: remove someone who joined by accident, had to leave, or no-showed (casual round).

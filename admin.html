@@ -26,6 +26,8 @@
             --border-color: #F4F4F9;
             --card-shadow: rgba(0, 0, 0, 0.1);
             --card-shadow-hover: rgba(0, 0, 0, 0.15);
+            --over: #C8472E;
+            --over-soft: rgba(200, 71, 46, 0.10);
         }
         [data-theme="dark"] {
             --bg-primary: #0F0F1E;
@@ -38,6 +40,8 @@
             --border-color: #2A2A3E;
             --card-shadow: rgba(0, 0, 0, 0.3);
             --card-shadow-hover: rgba(0, 0, 0, 0.5);
+            --over: #FF7A5C;
+            --over-soft: rgba(255, 122, 92, 0.16);
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -154,6 +158,9 @@
         .al-holes th, .al-holes td { padding: 0.3rem 0.4rem; text-align: left; border-bottom: 1px solid var(--border-color); }
         .al-holes input, .al-holes select { width: 100%; padding: 0.3rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); box-sizing: border-box; }
         .al-holes input[type=number] { width: 4rem; }
+        .al-holes td.sc-conflict { background: var(--over-soft); border-left: 3px solid var(--over); }
+        .al-holes td.sc-conflict input { border-color: var(--over); box-shadow: 0 0 0 1px var(--over-soft); }
+        .sc-conflict-flag { color: var(--over); font-weight: 800; margin-left: 0.3rem; }
         .al-est { white-space: nowrap; font-variant-numeric: tabular-nums; }
         .al-est .src { font-size: 0.7rem; color: var(--text-muted); }
         .al-verified { font-size: 0.7rem; font-weight: 700; color: #2e9e44; background: rgba(46,158,68,0.16); border-radius: 999px; padding: 0.05rem 0.45rem; white-space: nowrap; }
@@ -1100,6 +1107,34 @@
         // ============================================================
         let scEventId = null, scSnap = null, scTeeThumbUrls = [];
         const scToPar = (n) => { n = n || 0; return n === 0 ? 'E' : (n > 0 ? '+' + n : String(n)); };
+        function scConflictFor(index, hole) {
+            const rows = (scSnap && Array.isArray(scSnap.conflicts)) ? scSnap.conflicts : [];
+            return rows.find((c) => c && c.playerIndex === index && c.hole === hole) || null;
+        }
+        function scConflictTitle(conflict) {
+            const values = Array.isArray(conflict.values) ? conflict.values.join(' vs ') : 'scores do not match';
+            return 'Score conflict: ' + values;
+        }
+        function scMarkConflicts() {
+            const grid = $('scGrid');
+            const holes = (scSnap && scSnap.holes) || [];
+            const players = (scSnap && scSnap.players) || [];
+            const rows = grid.querySelectorAll('tbody tr');
+            players.forEach((p) => {
+                const tr = rows[p.index]; if (!tr) return;
+                holes.forEach((h, i) => {
+                    const td = tr.children[3 + i]; if (!td) return;
+                    const conflict = scConflictFor(p.index, h.hole);
+                    td.classList.toggle('sc-conflict', !!conflict);
+                    let flag = td.querySelector('.sc-conflict-flag');
+                    if (conflict && !flag) { flag = elx('span', 'sc-conflict-flag', '⚑'); td.appendChild(flag); }
+                    if (flag) {
+                        if (conflict) flag.title = scConflictTitle(conflict);
+                        else flag.remove();
+                    }
+                });
+            });
+        }
 
         async function scLoadEvents() {
             let events = [];
@@ -1161,7 +1196,7 @@
             scWs = ws;
             ws.addEventListener('message', (ev) => {
                 let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
-                if (msg && msg.type === 'snapshot' && scWsEvent === scEventId) { scSnap = msg; scUpdateTotals(); scRenderBoard(); }
+                if (msg && msg.type === 'snapshot' && scWsEvent === scEventId) { scSnap = msg; scUpdateTotals(); scRenderBoard(); scMarkConflicts(); }
             });
             ws.addEventListener('close', () => { if (scWsEvent === scEventId && !scWsTimer) scWsTimer = setTimeout(() => { scWsTimer = null; if (scWsEvent === scEventId) scConnectWs(); }, 4000); });
             ws.addEventListener('error', () => { try { ws.close(); } catch (e) {} });
@@ -1282,10 +1317,14 @@
                 let tot = 0;
                 holes.forEach((h) => {
                     const td = document.createElement('td');
+                    const conflict = scConflictFor(p.index, h.hole);
+                    if (conflict) td.className = 'sc-conflict';
                     const inp = document.createElement('input'); inp.type = 'number'; inp.min = '1'; inp.max = '30'; inp.style.width = '3rem';
                     const v = p.scores ? p.scores[h.hole] : null; if (v != null) { inp.value = v; tot += v; }
                     inp.addEventListener('change', () => scPostScore(p.index, h.hole, inp.value));
-                    td.appendChild(inp); tr.appendChild(td);
+                    td.appendChild(inp);
+                    if (conflict) { const flag = elx('span', 'sc-conflict-flag', '⚑'); flag.title = scConflictTitle(conflict); td.appendChild(flag); }
+                    tr.appendChild(td);
                 });
                 tr.appendChild(elx('td', null, tot ? String(tot) : '—'));
                 tbody.appendChild(tr);
@@ -1297,7 +1336,7 @@
             const strokes = parseInt(value, 10);
             if (!(strokes >= 1 && strokes <= 30)) { adminMsg('Strokes must be 1–30', false); return; }
             const r = await adminApi('/events/' + scEventId + '/live/score', { method: 'POST', body: { index, hole, strokes } });
-            if (r.ok) { scSnap = await r.json(); scUpdateTotals(); scRenderBoard(); } else { adminMsg('Score save failed', false); }
+            if (r.ok) { scSnap = await r.json(); scUpdateTotals(); scRenderBoard(); scRenderGrid(); } else { adminMsg('Score save failed', false); }
         }
         // Update each grid row's running Total cell without re-rendering inputs (keeps focus).
         function scUpdateTotals() {
@@ -1334,7 +1373,17 @@
             if (!confirm('Finalize this event? This writes final results and closes scoring.')) return;
             const r = await adminApi('/events/' + scEventId + '/live/finalize', { method: 'POST' });
             if (r.ok) { adminMsg('Event finalized — results saved.', true); $('scLive').style.display = 'none'; scLoadEvents(); $('scEvent').value = ''; adminLoadEvents(); }
-            else { adminMsg('Finalize failed (' + r.status + ')', false); }
+            else {
+                const data = await r.json().catch(() => ({}));
+                if (r.status === 409 && data.error === 'scorecards_not_matched') {
+                    const conflicts = Array.isArray(data.conflicts) ? data.conflicts.length : 0;
+                    const missing = Array.isArray(data.missing) ? data.missing.length : 0;
+                    adminMsg('Scorecards do not match: ' + conflicts + ' conflict' + (conflicts === 1 ? '' : 's') + ', ' + missing + ' missing confirmation' + (missing === 1 ? '' : 's') + '.', false);
+                    await scRefresh();
+                } else {
+                    adminMsg('Finalize failed (' + r.status + ')', false);
+                }
+            }
         }
 
         // ---- Leagues management (Phase 4) ----

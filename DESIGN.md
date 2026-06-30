@@ -14,6 +14,8 @@ Greenville Disc Golf Club should feel local, energetic, outdoors-focused, and ea
 | Accent/secondary | `--secondary` | `#004E89` | `#004E89` | Gradients, supporting actions |
 | Accent/warm | `--accent` | `#F7B801` | `#F7B801` | Price and highlight details |
 | Accent/green | `--green` | `#2D5016` | `#2D5016` | Club/nature gradient accents |
+| Score/conflict | `--over` | `#C8472E` | `#FF7A5C` | Over-par labels, scoring conflicts, blocking error states |
+| Score/conflict soft | `--over-soft` | `rgba(200, 71, 46, 0.10)` | `rgba(255, 122, 92, 0.16)` | Conflict row and cell backgrounds |
 | Surface/primary | `--bg-primary` | `#F4F4F9` | `#0F0F1E` | Page background, nested card surfaces |
 | Surface/secondary | `--bg-secondary` | `#FFFFFF` | `#1A1A2E` | Main section panels and modals |
 | Surface/tertiary | `--bg-tertiary` | `#F4F4F9` | `#252538` | Metadata strips and inset panels |
