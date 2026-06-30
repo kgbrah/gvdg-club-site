@@ -206,6 +206,22 @@ describe("LiveEventDO card-scoped scoring", () => {
     expect(resolved.players.find((p) => p.index === 1)?.scores).toMatchObject({ 1: 3 });
   });
 
+  it("preserves cardmates' scores when the sole scorekeeper is removed (no data loss, still finalizes)", async () => {
+    let touchedDb = false;
+    const trackDb = { prepare: () => ({ bind() { return this; }, all: async () => ({ results: [], success: true }), first: async () => null, run: async () => { touchedDb = true; return { results: [], success: true }; } }) };
+    const live = new LiveEventDO(new FakeState({}), { DB: trackDb });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ casual: true, holes: [{ hole: 1, par: 3 }], players: [{ memberId: "m0", name: "A" }, { memberId: "m1", name: "B" }, { memberId: "m2", name: "C" }] }) }));
+    // A is the sole scorekeeper — enters everyone's score on A's own card (scorerIndex defaults to A=0).
+    await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m0" }, body: JSON.stringify({ index: 1, hole: 1, strokes: 4 }) }));
+    await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m0" }, body: JSON.stringify({ index: 2, hole: 1, strokes: 5 }) }));
+    await live.fetch(new Request("https://do/remove", { method: "POST", headers: { "X-Auth-Member": "m1" }, body: JSON.stringify({ index: 0, name: "A" }) })); // A leaves
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { players: { name: string; scores: Record<string, number> }[] };
+    expect(snap.players.find((p) => p.name === "B")?.scores).toMatchObject({ 1: 4 }); // survived A's departure
+    expect(snap.players.find((p) => p.name === "C")?.scores).toMatchObject({ 1: 5 });
+    const fin = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Member": "m1" } }));
+    expect(fin.status).toBe(200); // no conflict → finalizes (B & C ranked, not DNF-wiped)
+  });
+
   it("lets one scorer edit their own unopposed entry without creating a conflict", async () => {
     const state = new FakeState({});
     const live = new LiveEventDO(state, { DB: db });
