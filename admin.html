@@ -162,6 +162,21 @@
         .al-poolitem button { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.9rem; line-height: 1; }
         .admin-pane { display: none; }
         .admin-pane.active { display: block; }
+        /* Grouped sidebar nav: 5 sections on the left, content on the right (stacks on mobile) */
+        .admin-main { display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 1.5rem; align-items: start; }
+        .admin-sidebar { display: flex; flex-direction: column; gap: 0.15rem; position: sticky; top: 84px; }
+        .admin-navgroup { font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); padding: 0.8rem 0.5rem 0.25rem; }
+        .admin-navgroup:first-child { padding-top: 0; }
+        .admin-sidebar .admin-tab { text-align: left; width: 100%; background: transparent; border-color: transparent; color: var(--text-secondary); }
+        .admin-sidebar .admin-tab:hover { background: var(--bg-secondary); color: var(--text-primary); }
+        .admin-sidebar .admin-tab.active { background: var(--secondary); border-color: var(--secondary); color: #fff; }
+        .admin-content { min-width: 0; }
+        @media (max-width: 760px) {
+            .admin-main { grid-template-columns: 1fr; gap: 0.5rem; }
+            .admin-sidebar { position: static; flex-direction: row; flex-wrap: wrap; gap: 0.4rem; }
+            .admin-navgroup { width: 100%; padding: 0.6rem 0 0.1rem; }
+            .admin-sidebar .admin-tab { width: auto; background: var(--bg-secondary); border-color: var(--border-color); }
+        }
         .admin-form { display: grid; gap: 0.75rem; max-width: 520px; }
         .admin-form label { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 0.2rem; }
         .admin-form input, .admin-form select, .admin-form textarea { width: 100%; padding: 0.6rem 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95rem; }
@@ -254,22 +269,29 @@
         <!-- Admin panel (copied verbatim from gvdg-members.html) -->
         <div id="adminPanel" class="admin-panel" style="display:none;">
             <h3 class="admin-title">🛠 Admin — Event Management</h3>
-            <div class="admin-tabs">
-                <button type="button" class="admin-tab active" data-atab="events">Events</button>
-                <button type="button" class="admin-tab" data-atab="create">New Event</button>
-                <button type="button" class="admin-tab" data-atab="import">Import</button>
-                <button type="button" class="admin-tab" data-atab="courses">Courses</button>
-                <button type="button" class="admin-tab" data-atab="layouts">Layouts</button>
-                <button type="button" class="admin-tab" data-atab="scoring">Live Scoring</button>
-                <button type="button" class="admin-tab" data-atab="leagues-mgmt">Leagues</button>
-                <button type="button" class="admin-tab" data-atab="fundraisers">Fundraisers</button>
-                <button type="button" class="admin-tab" data-atab="meetings">Meetings</button>
-                <button type="button" class="admin-tab" data-atab="registration">Registration</button>
-                <button type="button" class="admin-tab" data-atab="shop">Pro Shop</button>
-                <button type="button" class="admin-tab" data-atab="wallets">Wallets</button>
-                <button type="button" class="admin-tab" data-atab="orders">Orders <span id="ordersBadge" class="orders-badge" hidden></span></button>
-                <button type="button" class="admin-tab" data-atab="members">Members</button>
-            </div>
+            <div class="admin-main">
+                <nav class="admin-sidebar" aria-label="Admin sections">
+                    <div class="admin-navgroup">Events</div>
+                    <button type="button" class="admin-tab active" data-atab="events">Events</button>
+                    <button type="button" class="admin-tab" data-atab="create">New Event</button>
+                    <button type="button" class="admin-tab" data-atab="import">Import</button>
+                    <button type="button" class="admin-tab" data-atab="registration">Registration</button>
+                    <button type="button" class="admin-tab" data-atab="scoring">Live Scoring</button>
+                    <div class="admin-navgroup">Courses</div>
+                    <button type="button" class="admin-tab" data-atab="courses">Courses</button>
+                    <button type="button" class="admin-tab" data-atab="layouts">Layouts</button>
+                    <div class="admin-navgroup">Club</div>
+                    <button type="button" class="admin-tab" data-atab="leagues-mgmt">Leagues</button>
+                    <button type="button" class="admin-tab" data-atab="fundraisers">Fundraisers</button>
+                    <button type="button" class="admin-tab" data-atab="meetings">Meetings</button>
+                    <div class="admin-navgroup">Shop</div>
+                    <button type="button" class="admin-tab" data-atab="shop">Pro Shop</button>
+                    <button type="button" class="admin-tab" data-atab="orders">Orders <span id="ordersBadge" class="orders-badge" hidden></span></button>
+                    <button type="button" class="admin-tab" data-atab="wallets">Wallets</button>
+                    <div class="admin-navgroup">Members</div>
+                    <button type="button" class="admin-tab" data-atab="members">Members</button>
+                </nav>
+                <div class="admin-content">
             <div class="admin-msg" id="adminMsg"></div>
             <div class="admin-pane active" id="apane-events"><div id="adminEventsList">Loading…</div></div>
             <div class="admin-pane" id="apane-create">
@@ -531,6 +553,8 @@
                     <div id="adminMembersList">Loading…</div>
                 </div>
             </div>
+                </div><!-- /.admin-content -->
+            </div><!-- /.admin-main -->
         </div>
 
         <div style="text-align:center;">
