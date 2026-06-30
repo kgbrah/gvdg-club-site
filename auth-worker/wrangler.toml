@@ -174,3 +174,55 @@ RP_NAME = "GVDG Club (dev)"
 EXPECTED_ORIGIN = "https://gvdgclub.com"
 OPENROUTER_VISION_MODEL = "nvidia/nemotron-nano-12b-v2-vl:free"
 VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct"
+
+# GVDGCLUB LIVE API ALIAS -> auth.gvdgclub.com.
+# Mirrors [env.staging] but deploys to the legacy Worker name currently attached
+# to the live dev auth domain.
+[env.gvdgclub]
+name = "gvdg-member-auth"
+
+[env.gvdgclub.observability]
+enabled = true
+
+[[env.gvdgclub.d1_databases]]
+binding = "DB"
+database_name = "gvdg-staging"
+database_id = "f276a1dd-a94d-4ca7-b83d-233d5e5c0eba"
+migrations_dir = "migrations"
+
+[[env.gvdgclub.r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "gvdg-photos-staging"
+
+[env.gvdgclub.ai]
+binding = "AI"
+
+[[env.gvdgclub.durable_objects.bindings]]
+name = "LIVE"
+class_name = "LiveEventDO"
+
+[[env.gvdgclub.migrations]]
+tag = "v1"
+new_sqlite_classes = ["LiveEventDO"]
+
+[[env.gvdgclub.unsafe.bindings]]
+name = "ASSISTANT_RL"
+type = "ratelimit"
+namespace_id = "2001"
+simple = { limit = 20, period = 60 }
+
+[env.gvdgclub.vars]
+ALLOWED_ORIGINS = "https://gvdgclub.com,https://www.gvdgclub.com"
+SESSION_TTL_SEC = "43200"
+OPENROUTER_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
+ASSISTANT_MODEL = "@cf/meta/llama-3.1-8b-instruct"
+PAYPAL_ENV = "sandbox"
+ORDER_NOTIFY_EMAIL = "greenvillediscgolf@gmail.com"
+ORDER_NOTIFY_FROM = "GVDG Pro Shop <shop@gvdgclub.com>"
+REGISTER_NOTIFY_FROM = "GVDG Events <events@gvdgclub.com>"
+EMAIL_REPLY_TO = "greenvillediscgolf@gmail.com"
+RP_ID = "gvdgclub.com"
+RP_NAME = "GVDG Club (dev)"
+EXPECTED_ORIGIN = "https://gvdgclub.com"
+OPENROUTER_VISION_MODEL = "nvidia/nemotron-nano-12b-v2-vl:free"
+VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct"
