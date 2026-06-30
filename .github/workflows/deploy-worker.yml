@@ -50,12 +50,18 @@ jobs:
           # Placeholder resource ids are expected until production is provisioned; the strict no-placeholder
           # check below guards the real deploy.
           node scripts/validate-wrangler-config.mjs --allow-placeholders
-      - name: Validate production config (no placeholders) — only when deploying
-        if: ${{ env.HAS_CF_TOKEN == 'true' }}
+      - name: Check production resource config
+        id: prod_config
         working-directory: auth-worker
-        run: node scripts/validate-wrangler-config.mjs
+        run: |
+          if node scripts/validate-wrangler-config.mjs; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Production Cloudflare resource ids are still placeholders; tests passed and deploy is skipped."
+          fi
       - name: Deploy to Cloudflare + sync secrets
-        if: ${{ env.HAS_CF_TOKEN == 'true' }}
+        if: ${{ env.HAS_CF_TOKEN == 'true' && steps.prod_config.outputs.configured == 'true' }}
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

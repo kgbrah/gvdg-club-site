@@ -1,24 +1,8 @@
 name: Deploy to staging (gvdgclub.com)
 
-# Live-drive PRs before merge: on every PR to main that touches the Worker, deploy auth-worker/ to the
-# STAGING environment (gvdg-member-auth-staging → auth.gvdgclub.com) and comment the dev-site URL.
-# Cloudflare Pages auto-builds the static site preview separately (and posts its own per-PR URL).
-#
-# Unlike the production workflow this does NOT sync secrets — set the staging secrets ONCE with
-#   wrangler secret put JWT_SECRET --env staging   (+ OPENROUTER_API_KEY, optional PAYPAL_*)
-# (wrangler-action's secret sync can't target a named env, and Worker secrets persist across deploys).
-#
-# Required GitHub repo secret: CLOUDFLARE_API_TOKEN ("Edit Cloudflare Workers" — covers D1/KV/R2/AI).
-# Inert until the REPLACE_WITH_STAGING_* ids are filled in auth-worker/wrangler.toml (the gate fails
-# loudly with "[env.staging] still contains placeholder resource ids" until then).
-
 on:
-  pull_request:
-    branches: [main]
-    paths: ["auth-worker/**", ".github/workflows/deploy-staging.yml"]
   workflow_dispatch:
 
-# One shared staging slot — newest PR push wins; cancel any in-flight deploy.
 concurrency:
   group: staging-worker
   cancel-in-progress: true
@@ -26,16 +10,13 @@ concurrency:
 jobs:
   deploy-staging:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write # to comment the staging URL on the PR
     env:
       HAS_CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22 # wrangler 4.x requires Node >= 22
+          node-version: 22
           cache: npm
           cache-dependency-path: auth-worker/package-lock.json
       - name: Static site tests
@@ -47,9 +28,10 @@ jobs:
         working-directory: auth-worker
         run: |
           npm run typegen:check
+          npm run audit
           npm run typecheck
           npm test
-          node scripts/validate-wrangler-config.mjs --env staging --allow-placeholders
+          node scripts/validate-wrangler-config.mjs --env staging
       - name: Deploy Worker to the staging env
         if: ${{ env.HAS_CF_TOKEN == 'true' }}
         uses: cloudflare/wrangler-action@v3
@@ -57,25 +39,6 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: auth-worker
           command: deploy --env staging
-      - name: Comment the staging URL on the PR
-        if: ${{ env.HAS_CF_TOKEN == 'true' && github.event_name == 'pull_request' }}
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const body = [
-              "🧪 **Deployed to staging** — this PR's Worker is live on the dev site.",
-              '',
-              '- App: https://gvdgclub.com',
-              '- Worker/API: https://auth.gvdgclub.com',
-              '',
-              '_Single shared staging slot — the most recent PR push wins. Cloudflare Pages also posts a per-PR preview URL for the static site._',
-            ].join('\n');
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number,
-            });
-            const mine = comments.find((c) => c.user.type === 'Bot' && c.body.includes('Deployed to staging'));
-            if (mine) {
-              await github.rest.issues.updateComment({ owner: context.repo.owner, repo: context.repo.repo, comment_id: mine.id, body });
-            } else {
-              await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body });
-            }
+      - name: Skip notice
+        if: ${{ env.HAS_CF_TOKEN != 'true' }}
+        run: echo "::notice::CLOUDFLARE_API_TOKEN is not configured; staging deploy skipped after tests."

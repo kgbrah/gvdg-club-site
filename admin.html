@@ -188,6 +188,10 @@
             .admin-mnav:last-child { grid-column: 1 / -1; } /* lone Members select spans the full width */
             .admin-panel { padding: 1.1rem 0.9rem; }
             .admin-form { max-width: none; }
+            .al-row > span { max-width: 100%; min-width: 0; }
+            .al-row input:not([type="checkbox"]), .al-row select { max-width: 100%; }
+            #apane-registration .al-row > span { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+            #rgDivisions { flex: 1 1 12rem; min-width: 0; }
             /* Wide builder/scoring/roster tables scroll inside their overflow-x wrapper instead of
                crushing every column to fit (which mashed the "Est." cell into "250 ft par"). */
             .al-holes { min-width: 500px; }
@@ -355,6 +359,15 @@
                     <div><label for="aeDate">Date</label><input id="aeDate" type="date"></div>
                     <div><label for="aeFormat">Format</label><select id="aeFormat"><option value="">—</option><option value="stroke">Stroke</option><option value="matchplay">Matchplay</option><option value="doubles">Doubles</option></select></div>
                     <div><label for="aeCourse">Course</label><select id="aeCourse"><option value="">—</option></select></div>
+                    <div><label for="aeLayout">Layout</label><select id="aeLayout"><option value="">— no layout yet —</option></select></div>
+                    <div id="aeQuickLayout" class="al-section" style="display:none;margin:0;">
+                        <h4 class="al-h">Create layout</h4>
+                        <div class="al-row">
+                            <input id="aeLayoutName" maxlength="60" placeholder="Layout name">
+                            <span>Holes <input id="aeHoleCount" type="number" min="1" max="36" value="18" style="width:4.5rem;"></span>
+                            <span>Par <input id="aeDefaultPar" type="number" min="1" max="15" value="3" style="width:4.5rem;"></span>
+                        </div>
+                    </div>
                     <div><label for="aeLeague">League (for league rounds)</label><select id="aeLeague"><option value="">—</option></select></div>
                     <button type="submit" class="admin-btn">Create event</button>
                 </form>
@@ -430,6 +443,7 @@
                     <div class="al-row">
                         <label for="scLayout" style="margin:0;">Layout</label>
                         <select id="scLayout"><option value="">— event's current layout —</option></select>
+                        <label class="register-addon" style="margin:0;"><input type="checkbox" id="scUseManualPlayers"> Manual roster</label>
                         <button type="button" class="admin-btn" id="scStartBtn">▶ Start live scoring</button>
                     </div>
                     <p class="al-note">An event needs a layout (with pars) to score. Pick one here, or set it on the Layouts tab.</p>
@@ -501,12 +515,23 @@
                         <div class="al-row" style="margin-top:0.5rem;"><span>Divisions (comma-separated)<input id="rgDivisions" maxlength="400" size="40" placeholder="MA1, MA40, FA1, Rec"></span></div>
                         <button type="button" class="admin-btn" id="rgSaveBtn" style="margin-top:0.5rem;">Save settings</button>
                     </div>
-                    <h4 class="al-h">Registered players (<span id="rgCount">0</span>) <span class="al-note">— check in, assign division/starting hole/team</span></h4>
+                    <h4 class="al-h">Registered players (<span id="rgCount">0</span>) <span class="al-note">— check in, assign division/card/start hole</span></h4>
                     <div style="overflow-x:auto;"><table class="al-holes" id="rgRoster"></table></div>
                     <div class="al-row" style="margin-top:0.6rem;">
-                        <button type="button" class="admin-btn secondary" id="rgAssignHoles">🎯 Assign starting holes (shotgun)</button>
-                        <button type="button" class="admin-btn secondary" id="rgAssignTeams">👥 Assign teams</button>
-                        <span class="al-note">players/team <input id="rgTeamSize" type="number" min="1" value="2" style="width:3rem"></span>
+                        <button type="button" class="admin-btn secondary" id="rgAssignCards">Assign Cards</button>
+                        <span class="al-note">Players/Card <input id="rgCardSize" type="number" min="1" value="4" style="width:3rem"></span>
+                    </div>
+                    <div class="al-section" style="margin-top:1rem;">
+                        <h4 class="al-h">Manual players (<span id="rgManualCount">0</span>)</h4>
+                        <div class="al-row">
+                            <input id="rgPlayerName" maxlength="100" placeholder="Player name">
+                            <input id="rgPlayerMember" maxlength="64" placeholder="member id">
+                            <input id="rgPlayerPdga" maxlength="20" placeholder="PDGA #">
+                            <input id="rgPlayerDivision" maxlength="40" placeholder="division">
+                            <input id="rgPlayerTeam" maxlength="40" placeholder="team">
+                            <button type="button" class="admin-btn secondary" id="rgPlayerAdd">Add player</button>
+                        </div>
+                        <div style="overflow-x:auto;margin-top:0.75rem;"><table class="al-holes" id="rgManualPlayers"></table></div>
                     </div>
                     <div class="al-section" style="margin-top:1rem;">
                         <h4 class="al-h">CTPs (closest to pin)</h4>
@@ -778,6 +803,36 @@
             if (tab === 'members') adminLoadMembers();
         }
 
+        function aeResetLayoutSelect() {
+            const sel = $('aeLayout'); if (!sel) return;
+            sel.length = 1; sel.value = '';
+            $('aeQuickLayout').style.display = 'none';
+        }
+        function aeToggleQuickLayout() {
+            $('aeQuickLayout').style.display = $('aeLayout').value === '__new__' ? '' : 'none';
+        }
+        async function aeLoadLayouts() {
+            aeResetLayoutSelect();
+            const courseId = $('aeCourse').value;
+            if (!courseId) return;
+            try {
+                const r = await api('/courses/' + courseId + '/layouts');
+                if (r.ok) {
+                    const layouts = (await r.json()).layouts || [];
+                    layouts.forEach((l) => {
+                        const o = document.createElement('option');
+                        o.value = l.id;
+                        o.textContent = l.name + (l.total_par != null ? ' (par ' + l.total_par + ')' : '');
+                        $('aeLayout').appendChild(o);
+                    });
+                }
+            } catch (e) {}
+            const fresh = document.createElement('option');
+            fresh.value = '__new__';
+            fresh.textContent = '+ Create basic layout';
+            $('aeLayout').appendChild(fresh);
+        }
+
         async function adminLoadCourses() {
             let courses = [];
             try { const r = await api('/courses'); if (r.ok) courses = (await r.json()).courses || []; } catch (e) {}
@@ -790,6 +845,7 @@
                 const o2 = document.createElement('option'); o2.value = c.id; o2.textContent = label; lsel.appendChild(o2);
                 list.appendChild(elx('div', 'admin-cand', label));
             });
+            aeResetLayoutSelect();
         }
 
         async function adminLoadEvents() {
@@ -827,8 +883,17 @@
             e.preventDefault();
             const body = { type: $('aeType').value, name: $('aeName').value.trim(), date: $('aeDate').value || null, format: $('aeFormat').value || null, course_id: $('aeCourse').value ? Number($('aeCourse').value) : null, league_id: $('aeLeague').value ? Number($('aeLeague').value) : null, source: 'manual' };
             if (!body.name) { adminMsg('Name required', false); return; }
+            const layoutChoice = $('aeLayout').value;
+            if (layoutChoice && layoutChoice !== '__new__') body.layout_id = Number(layoutChoice);
+            if (layoutChoice === '__new__') {
+                if (!body.course_id) { adminMsg('Pick a course before creating a layout', false); return; }
+                const holeCount = parseInt($('aeHoleCount').value, 10);
+                const defaultPar = parseInt($('aeDefaultPar').value, 10);
+                if (!(holeCount >= 1 && holeCount <= 36) || !(defaultPar >= 1 && defaultPar <= 15)) { adminMsg('Layout holes must be 1–36 and par 1–15', false); return; }
+                body.layout = { name: $('aeLayoutName').value.trim() || 'Main', hole_count: holeCount, default_par: defaultPar };
+            }
             const r = await adminApi('/admin/events', { method: 'POST', body });
-            if (r.ok) { adminMsg('Created “' + body.name + '”', true); $('adminCreateForm').reset(); adminSwitch('events'); adminLoadEvents(); }
+            if (r.ok) { adminMsg('Created “' + body.name + '”', true); $('adminCreateForm').reset(); aeResetLayoutSelect(); adminSwitch('events'); adminLoadEvents(); }
             else { adminMsg('Create failed (' + r.status + ')', false); }
         }
 
@@ -1160,13 +1225,15 @@
             if (courseId) {
                 try { const r = await api('/courses/' + courseId + '/layouts'); if (r.ok) (await r.json()).layouts.forEach((l) => { const o = document.createElement('option'); o.value = l.id; o.textContent = l.name + ' (par ' + (l.total_par != null ? l.total_par : '?') + ')'; if (String(l.id) === opt.dataset.layoutId) o.selected = true; lsel.appendChild(o); }); } catch (e) {}
             }
+            $('scUseManualPlayers').checked = false;
             $('scStart').style.display = '';
         }
 
         async function scStart() {
             const layoutId = $('scLayout').value ? Number($('scLayout').value) : null;
             if (layoutId) await adminApi('/admin/events/' + scEventId, { method: 'PATCH', body: { layout_id: layoutId } });
-            const r = await adminApi('/events/' + scEventId + '/live/start', { method: 'POST' });
+            const body = $('scUseManualPlayers').checked ? { from: 'players' } : {};
+            const r = await adminApi('/events/' + scEventId + '/live/start', { method: 'POST', body });
             if (r.ok) { adminMsg('Live scoring started', true); $('scEvent').selectedOptions[0].dataset.status = 'live'; await scRefresh(); }
             else { const e = await r.json().catch(() => ({})); adminMsg(e.error === 'no_layout_holes' ? 'That event has no layout with pars — pick one above (or build one on the Layouts tab).' : 'Start failed (' + r.status + ')', false); }
         }
@@ -1720,6 +1787,7 @@
             let divs = []; try { divs = JSON.parse((cfg && cfg.divisions) || '[]'); } catch (e) {}
             $('rgDivisions').value = divs.join(', ');
             rgLoadRoster();
+            rgLoadManualPlayers();
             rgLoadCtps();
             rgLoadCredits();
             rgLoadAcePot();
@@ -1754,6 +1822,66 @@
             });
             grid.appendChild(tbody);
         }
+        async function rgLoadManualPlayers() {
+            let players = [];
+            try {
+                const r = await api('/events/' + rgEventId);
+                if (r.ok) players = ((await r.json()).event || {}).players || [];
+            } catch (e) {}
+            $('rgManualCount').textContent = String(players.length);
+            const grid = $('rgManualPlayers'); grid.replaceChildren();
+            const thead = document.createElement('thead'); const htr = document.createElement('tr');
+            ['Player', 'Member', 'PDGA', 'Division', 'Team', ''].forEach((h) => htr.appendChild(elx('th', null, h)));
+            thead.appendChild(htr); grid.appendChild(thead);
+            const tbody = document.createElement('tbody');
+            if (!players.length) {
+                const tr = document.createElement('tr');
+                const td = elx('td', null, 'No manual players yet.');
+                td.colSpan = 6;
+                tr.appendChild(td);
+                tbody.appendChild(tr);
+            }
+            players.forEach((p) => {
+                const tr = document.createElement('tr');
+                tr.appendChild(elx('td', 'lb-name', p.name || 'Player'));
+                tr.appendChild(elx('td', null, p.member_id || '—'));
+                tr.appendChild(elx('td', null, p.pdga_no || '—'));
+                tr.appendChild(elx('td', null, p.division || '—'));
+                tr.appendChild(elx('td', null, p.team || '—'));
+                const act = document.createElement('td');
+                const del = elx('button', 'admin-btn danger', 'Remove');
+                del.type = 'button';
+                del.addEventListener('click', () => rgRemoveManualPlayer(p));
+                act.appendChild(del);
+                tr.appendChild(act);
+                tbody.appendChild(tr);
+            });
+            grid.appendChild(tbody);
+        }
+        async function rgAddManualPlayer() {
+            const body = {
+                name: $('rgPlayerName').value.trim(),
+                member_id: $('rgPlayerMember').value.trim() || null,
+                pdga_no: $('rgPlayerPdga').value.trim() || null,
+                division: $('rgPlayerDivision').value.trim() || null,
+                team: $('rgPlayerTeam').value.trim() || null,
+            };
+            if (!body.name) { adminMsg('Player name required', false); return; }
+            const r = await adminApi('/admin/events/' + rgEventId + '/players', { method: 'POST', body });
+            if (r.ok) {
+                adminMsg('Player added', true);
+                ['rgPlayerName', 'rgPlayerMember', 'rgPlayerPdga', 'rgPlayerDivision', 'rgPlayerTeam'].forEach((id) => { $(id).value = ''; });
+                rgLoadManualPlayers();
+            } else {
+                adminMsg('Add player failed (' + r.status + ')', false);
+            }
+        }
+        async function rgRemoveManualPlayer(player) {
+            if (!confirm('Remove ' + (player.name || 'this player') + '?')) return;
+            const r = await adminApi('/admin/events/' + rgEventId + '/players/' + player.id, { method: 'DELETE' });
+            adminMsg(r.ok ? 'Player removed' : 'Remove failed (' + r.status + ')', r.ok);
+            if (r.ok) rgLoadManualPlayers();
+        }
         function rgCreditCell(rg) {
             const td = document.createElement('td');
             if (!rg.member_id) { td.textContent = '—'; return td; }
@@ -1780,7 +1908,7 @@
             adminMsg(r.ok ? 'Updated' : 'Update failed', r.ok);
             if (r.ok) rgLoadRoster();
         }
-        // Assignment (shotgun starting holes / teams) — random
+        // Assignment (shotgun cards by starting hole) — random
         async function rgAssign(kind, body) {
             const r = await adminApi('/admin/events/' + rgEventId + '/' + kind, { method: 'POST', body });
             adminMsg(r.ok ? 'Assigned' : 'Assign failed (' + r.status + ')', r.ok);
@@ -1838,6 +1966,8 @@
             document.querySelectorAll('.admin-tab').forEach((t) => t.addEventListener('click', () => adminSwitch(t.dataset.atab)));
             document.querySelectorAll('.admin-mnav').forEach((sel) => sel.addEventListener('change', () => { if (sel.value) adminSwitch(sel.value); }));
             $('adminCreateForm').addEventListener('submit', adminCreateEvent);
+            $('aeCourse').addEventListener('change', aeLoadLayouts);
+            $('aeLayout').addEventListener('change', aeToggleQuickLayout);
             $('adminCourseForm').addEventListener('submit', adminAddCourse);
             $('dgsImportBtn').addEventListener('click', adminDgsImport);
             $('csvImportBtn').addEventListener('click', adminCsvImport);
@@ -1866,8 +1996,8 @@
             $('adminMemberForm').addEventListener('submit', adminAddMember);
             $('rgEvent').addEventListener('change', rgOnSelect);
             $('rgSaveBtn').addEventListener('click', rgSaveConfig);
-            $('rgAssignHoles').addEventListener('click', () => rgAssign('assign-starting-holes', { shuffle: true, groupSize: 4 }));
-            $('rgAssignTeams').addEventListener('click', () => rgAssign('assign-teams', { shuffle: true, size: parseInt($('rgTeamSize').value, 10) || 2 }));
+            $('rgPlayerAdd').addEventListener('click', rgAddManualPlayer);
+            $('rgAssignCards').addEventListener('click', () => rgAssign('assign-starting-holes', { shuffle: true, groupSize: parseInt($('rgCardSize').value, 10) || 4 }));
             $('rgCtpAdd').addEventListener('click', rgAddCtp);
             $('rgAceSave').addEventListener('click', () => rgAcePut({ carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100), status: 'active' }));
             $('rgAcePayout').addEventListener('click', () => rgAcePut({ status: 'paid_out', winner_name: $('rgAceWinner').value.trim() || null, carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100) }));

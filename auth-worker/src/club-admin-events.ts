@@ -4,8 +4,25 @@ import * as shopDb from "./shop-db.js";
 import { EVENT_FORMATS, EVENT_STATUSES } from "./db.js";
 import { assignShotgun, assignTeams } from "./assign.js";
 import { getMember } from "./roster.js";
+import { enrichHoles, type LayoutHole } from "./layouts.js";
 import { json, readJson } from "./http.js";
-import { asInt, asStr, inSet, jsonStringArray, validEventInput } from "./input.js";
+import { asInt, asStr, inSet, jsonStringArray, sanitizeHoles, validEventInput } from "./input.js";
+
+function inlineLayout(raw: unknown): { name: string; holes: LayoutHole[]; total_par: number } | null {
+  if (!raw || typeof raw !== "object") return null;
+  const body = raw as Record<string, unknown>;
+  const name = asStr(body.name, 60) ?? "Main";
+  if (Array.isArray(body.holes)) {
+    const clean = sanitizeHoles(body.holes);
+    if (!clean || clean.length === 0 || clean.length > 36) return null;
+    return { name, ...enrichHoles(clean) };
+  }
+  const holeCount = asInt(body.hole_count ?? body.holeCount);
+  const defaultPar = asInt(body.default_par ?? body.defaultPar ?? body.par);
+  if (holeCount == null || holeCount < 1 || holeCount > 36 || defaultPar == null || defaultPar < 1 || defaultPar > 15) return null;
+  const holes = Array.from({ length: holeCount }, (_, i): LayoutHole => ({ hole: i + 1, par: defaultPar }));
+  return { name, ...enrichHoles(holes) };
+}
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -139,8 +156,20 @@ export async function handleAdminEvents(
     const b = await readJson(request);
     const v = b && validEventInput(b);
     if (!v) return json({ error: "invalid_event" }, 400, origin);
-    const row = await db.createEvent(env.DB, { ...v, created_by: adminId });
-    return json({ event: row }, 201, origin);
+    let layout: unknown = null;
+    let eventInput = v;
+    const layoutBody = b && typeof b === "object" ? (b as Record<string, unknown>).layout : null;
+    if (layoutBody != null && v.layout_id == null) {
+      if (v.course_id == null) return json({ error: "invalid_layout" }, 400, origin);
+      const cleanLayout = inlineLayout(layoutBody);
+      if (!cleanLayout) return json({ error: "invalid_layout" }, 400, origin);
+      layout = await db.createLayout(env.DB, { course_id: v.course_id, ...cleanLayout });
+      const layoutId = asInt((layout as { id?: unknown } | null)?.id);
+      if (layoutId == null) return json({ error: "invalid_layout" }, 500, origin);
+      eventInput = { ...v, layout_id: layoutId };
+    }
+    const row = await db.createEvent(env.DB, { ...eventInput, created_by: adminId });
+    return json(layout ? { event: row, layout } : { event: row }, 201, origin);
   }
   if (method === "PATCH" && id != null) {
     const b = (await readJson(request)) ?? {};
