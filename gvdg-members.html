@@ -1064,7 +1064,7 @@
         // ---- Player dashboard tabs: one section group visible at a time; each section's own load-state
         // (shown only when it has content) still governs WITHIN the active tab via the dtab-off override. ----
         const DASH_TABS = {
-            overview: ['#adminPortalLink', '#myDashboard', '#liveScoring'],
+            overview: ['#adminPortalLink', '#myDashboard', '#liveScoring', '#clubRegister'],
             events: ['#clubRegister', '#clubMeetings'],
             board: ['#clubBoard'],
             tee: ['#teeCapture'],
@@ -1430,6 +1430,8 @@
             head.appendChild(elNode('span', 'register-name', ev.name));
             if (ev.date) head.appendChild(elNode('span', 'register-date', ev.date));
             card.appendChild(head);
+            const meta = [ev.course_name, ev.layout_name ? ev.layout_name + (ev.total_par != null ? ' · par ' + ev.total_par : '') : null].filter(Boolean).join(' · ');
+            if (meta) card.appendChild(elNode('div', 'register-fee', meta));
             card.appendChild(elNode('div', 'register-fee', (ev.entry_fee_cents ? dollars(ev.entry_fee_cents) + ' entry' : 'Free entry') + (ev.play_format ? ' · ' + ev.play_format : '')));
             if (myReg) {
                 card.appendChild(elNode('div', 'register-status', '✅ Registered' + (myReg.division ? ' — ' + myReg.division : '') + (myReg.checked_in ? ' · checked in' : '')));
