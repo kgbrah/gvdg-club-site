@@ -1,0 +1,44 @@
+name: Deploy to staging (gvdgclub.com)
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: staging-worker
+  cancel-in-progress: true
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    env:
+      HAS_CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: auth-worker/package-lock.json
+      - name: Static site tests
+        run: npm test
+      - name: Install dependencies
+        working-directory: auth-worker
+        run: npm ci
+      - name: Type-check + tests (gate the staging deploy)
+        working-directory: auth-worker
+        run: |
+          npm run typegen:check
+          npm run audit
+          npm run typecheck
+          npm test
+          node scripts/validate-wrangler-config.mjs --env staging
+      - name: Deploy Worker to the staging env
+        if: ${{ env.HAS_CF_TOKEN == 'true' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: auth-worker
+          command: deploy --env staging
+      - name: Skip notice
+        if: ${{ env.HAS_CF_TOKEN != 'true' }}
+        run: echo "::notice::CLOUDFLARE_API_TOKEN is not configured; staging deploy skipped after tests."
