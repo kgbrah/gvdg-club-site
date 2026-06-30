@@ -83,11 +83,15 @@ export async function getLayout(db: D1Like, id: number) {
   return db.prepare("SELECT * FROM course_layouts WHERE id = ?").bind(id).first();
 }
 /** A layout's hole list as {hole,par}[] (parses the stored JSON), or [] for none/invalid/missing layout. */
-export async function getLayoutHoles(db: D1Like, layoutId: number | null | undefined): Promise<{ hole: number; par: number }[]> {
+export async function getLayoutHoles(db: D1Like, layoutId: number | null | undefined): Promise<{ hole: number; par: number; distance_ft: number | null }[]> {
   if (!layoutId) return [];
   const layout = (await getLayout(db, Number(layoutId))) as { holes?: string } | null;
   try {
-    return JSON.parse(layout?.holes ?? "[]").map((h: { hole: number; par: number }) => ({ hole: Number(h.hole), par: Number(h.par) }));
+    return JSON.parse(layout?.holes ?? "[]").map((h: { hole: number; par: number; distance_ft?: number | null }) => ({
+      hole: Number(h.hole),
+      par: Number(h.par),
+      distance_ft: h.distance_ft == null ? null : Number(h.distance_ft),
+    }));
   } catch {
     return [];
   }

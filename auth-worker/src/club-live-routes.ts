@@ -81,12 +81,14 @@ export async function handleClubLive(
       if (!ev) return json({ error: "not_found" }, 404, origin);
       const holes = await db.getLayoutHoles(env.DB, ev.layout_id);
       if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin);
+      const evLayout = ev.layout_id != null ? ((await db.getLayout(env.DB, ev.layout_id)) as { name?: string | null; course_id?: number | null } | null) : null;
+      const evCourse = evLayout?.course_id != null ? ((await db.getCourse(env.DB, evLayout.course_id)) as { name?: string | null } | null) : null;
       const regs = (await db.listRegistrations(env.DB, eid)) as { member_id?: string; name?: string; division?: string | null; starting_hole?: number | null }[];
       const players =
         regs.length && startBody!.from !== "players"
           ? regs.map((r) => ({ memberId: r.member_id ?? null, name: String(r.name ?? "Player"), division: r.division ?? null, startingHole: r.starting_hole ?? null }))
           : (Array.isArray(ev.players) ? ev.players : []).map((p) => ({ memberId: (p.member_id as string) ?? null, name: String(p.name ?? "Player"), division: (p.division as string) ?? null, startingHole: null }));
-      const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, holes, players, startedAt: new Date().toISOString() }) });
+      const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, courseName: evCourse?.name ?? null, layoutName: evLayout?.name ?? null, holes, players, startedAt: new Date().toISOString() }) });
       const data = await r.json().catch(() => ({}));
       if (r.status === 200) await db.updateEvent(env.DB, eid, { status: "live" });
       return json(data, r.status, origin);
