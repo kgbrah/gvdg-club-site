@@ -176,7 +176,9 @@
         @media (max-width: 760px) {
             .admin-main { grid-template-columns: 1fr; gap: 0; }
             .admin-sidebar { display: none; }
-            .admin-mobile-nav { display: block; width: 100%; padding: 0.85rem 0.95rem; margin-bottom: 1rem; font-size: 1rem; font-weight: 700; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-secondary); color: var(--text-primary); }
+            .admin-mobile-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem; }
+            .admin-mnav { width: 100%; padding: 0.7rem 0.7rem; font-size: 0.92rem; font-weight: 700; border: 1px solid var(--border-color); border-radius: 9px; background: var(--bg-secondary); color: var(--text-primary); }
+            .admin-mnav:last-child { grid-column: 1 / -1; } /* lone Members select spans the full width */
             .admin-panel { padding: 1.1rem 0.9rem; }
             .admin-form { max-width: none; }
             /* Wide builder/scoring/roster tables scroll inside their overflow-x wrapper instead of
@@ -276,32 +278,37 @@
         <!-- Admin panel (copied verbatim from gvdg-members.html) -->
         <div id="adminPanel" class="admin-panel" style="display:none;">
             <h3 class="admin-title">🛠 Admin — Event Management</h3>
-            <select id="adminMobileNav" class="admin-mobile-nav" aria-label="Admin section">
-                <optgroup label="Events">
+            <div class="admin-mobile-nav" role="group" aria-label="Admin sections">
+                <select class="admin-mnav" aria-label="Events section">
+                    <option value="" disabled selected hidden>Events</option>
                     <option value="events">Events</option>
                     <option value="create">New Event</option>
                     <option value="import">Import</option>
                     <option value="registration">Registration</option>
                     <option value="scoring">Live Scoring</option>
-                </optgroup>
-                <optgroup label="Courses">
+                </select>
+                <select class="admin-mnav" aria-label="Courses section">
+                    <option value="" disabled selected hidden>Courses</option>
                     <option value="courses">Courses</option>
                     <option value="layouts">Layouts</option>
-                </optgroup>
-                <optgroup label="Club">
+                </select>
+                <select class="admin-mnav" aria-label="Club section">
+                    <option value="" disabled selected hidden>Club</option>
                     <option value="leagues-mgmt">Leagues</option>
                     <option value="fundraisers">Fundraisers</option>
                     <option value="meetings">Meetings</option>
-                </optgroup>
-                <optgroup label="Shop">
+                </select>
+                <select class="admin-mnav" aria-label="Shop section">
+                    <option value="" disabled selected hidden>Shop</option>
                     <option value="shop">Pro Shop</option>
                     <option value="orders">Orders</option>
                     <option value="wallets">Wallets</option>
-                </optgroup>
-                <optgroup label="Members">
+                </select>
+                <select class="admin-mnav" aria-label="Members section">
+                    <option value="" disabled selected hidden>Members</option>
                     <option value="members">Members</option>
-                </optgroup>
-            </select>
+                </select>
+            </div>
             <div class="admin-main">
                 <nav class="admin-sidebar" aria-label="Admin sections">
                     <div class="admin-navgroup">Events</div>
@@ -743,7 +750,9 @@
         function adminSwitch(tab) {
             document.querySelectorAll('.admin-tab').forEach((t) => t.classList.toggle('active', t.dataset.atab === tab));
             document.querySelectorAll('.admin-pane').forEach((p) => p.classList.toggle('active', p.id === 'apane-' + tab));
-            const mNav = document.getElementById('adminMobileNav'); if (mNav && mNav.value !== tab) mNav.value = tab; // keep the mobile dropdown in sync
+            document.querySelectorAll('.admin-mnav').forEach((sel) => { // sync the per-section dropdowns: the active group shows the tab, the rest reset to their section label
+                if (Array.prototype.some.call(sel.options, (o) => o.value === tab)) sel.value = tab; else sel.selectedIndex = 0;
+            });
             if (tab === 'scoring') scLoadEvents();
             if (tab === 'leagues-mgmt') adminLoadLeagues();
             if (tab === 'fundraisers') adminLoadFundraisers();
@@ -1771,7 +1780,7 @@
             if (adminInited) { adminLoadEvents(); adminLoadCourses(); return; }
             adminInited = true;
             document.querySelectorAll('.admin-tab').forEach((t) => t.addEventListener('click', () => adminSwitch(t.dataset.atab)));
-            const mNav = document.getElementById('adminMobileNav'); if (mNav) mNav.addEventListener('change', () => adminSwitch(mNav.value));
+            document.querySelectorAll('.admin-mnav').forEach((sel) => sel.addEventListener('change', () => { if (sel.value) adminSwitch(sel.value); }));
             $('adminCreateForm').addEventListener('submit', adminCreateEvent);
             $('adminCourseForm').addEventListener('submit', adminAddCourse);
             $('dgsImportBtn').addEventListener('click', adminDgsImport);
