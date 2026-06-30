@@ -17,12 +17,15 @@ const db = { prepare: (sql: string) => ({
   all: async () => {
     if (/FROM registrations/i.test(sql)) return { results: [{ id: 1, name: "A" }, { id: 2, name: "B" }], success: true };
     if (/FROM ctps/i.test(sql)) return { results: [{ id: 1, hole: 7, prize: "disc" }], success: true };
+    if (/FROM wallet_transactions WHERE event_id/i.test(sql)) return { results: [{ id: 2, event_id: 5, source: "event_payout", amount_cents: 1200 }], success: true };
     return { results: [], success: true };
   },
   first: async () => {
     if (/COUNT\(\*\) AS n/i.test(sql)) return { n: 2 };
+    if (/SELECT COALESCE\(SUM\(amount_cents\)/i.test(sql)) return { balance_cents: 1200 };
     if (/INSERT INTO ctps/i.test(sql)) return { id: 1, hole: 7 };
-    if (/UPDATE ctps/i.test(sql)) return { id: 1, winner_name: "A" };
+    if (/UPDATE ctps/i.test(sql)) return { id: 1, hole: 7, winner_member_id: "m_jane", winner_name: "Jane" };
+    if (/INSERT INTO wallet_transactions/i.test(sql)) return { id: 2, member_id: "m_jane", amount_cents: 1200, source: "event_payout", event_id: 5 };
     if (/ace_pots/i.test(sql)) return { event_id: 5, carryover_in_cents: 1000, status: "active" };
     if (/FROM event_config/i.test(sql)) return { ace_fee_cents: 300 };
     if (/FROM events WHERE id/i.test(sql)) return { id: 5, layout_id: null };
@@ -49,6 +52,14 @@ describe("Track G G3 — CTPs, ace pots, assignment", () => {
   it("CTPs are public; admin sets a winner", async () => {
     expect((await call("/events/5/ctps")).status).toBe(200);
     expect((await call("/admin/events/5/ctps/1", "PATCH", await tok("m_admin"), { winner_name: "A", winner_member_id: "m_a" })).status).toBe(200);
+  });
+  it("admin awards store credit for a CTP without hitting a not-found route", async () => {
+    const res = await call("/admin/events/5/ctps/1/store-credit", "POST", await tok("m_admin"), { member_id: "m_jane", amount_cents: 1200, winner_name: "Jane" });
+    expect(res.status).toBe(201);
+    const body = await jsonObject(res);
+    expect(objectField(body, "ctp").winner_member_id).toBe("m_jane");
+    expect(objectField(body, "transaction").source).toBe("event_payout");
+    expect(body.balance_cents).toBe(1200);
   });
   it("ace pot: admin sets carryover; public total = carryover + paid contributors * fee", async () => {
     expect((await call("/admin/events/5/ace-pot", "PUT", await tok("m_admin"), { carryover_in_cents: 1000 })).status).toBe(200);
