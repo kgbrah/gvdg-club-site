@@ -42,7 +42,10 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          wranglerVersion: 4.105.0
           command: pages deploy .pages-dist --project-name gvdg-club-site --branch "${{ github.ref_name }}"
+        env:
+          CLOUDFLARE_ACCOUNT_ID: fdf77c2a9f4966b946b4d232eb7889a3
       - name: Deploy Worker to the staging env
         if: ${{ env.HAS_CF_TOKEN == 'true' }}
         uses: cloudflare/wrangler-action@v3
