@@ -206,6 +206,7 @@ export async function authenticationVerify(
       pdgaNo: member.pdgaNo ?? null,
       udisc: member.udisc ?? null,
       photo: member.photo ?? null,
+      isAdmin: member.isAdmin === true, // so the admin portal link shows immediately after a passkey login
     },
   };
 }
