@@ -10,7 +10,7 @@
     <style>
         :root {
             --primary: #FF6B35;
-            --secondary: #004E89;
+            --secondary: #004E89; --secondary-text: #004E89; /* navy link/accent text → readable light blue in dark mode */
             --accent: #F7B801;
             --dark: #1A1A2E;
             --light: #F4F4F9;
@@ -30,7 +30,7 @@
             --bg-primary: #0F0F1E;
             --bg-secondary: #1A1A2E;
             --bg-tertiary: #252538;
-            --text-primary: #F4F4F9;
+            --text-primary: #F4F4F9; --secondary-text: #6cb4e8;
             --text-secondary: #E0E0E0;
             --text-tertiary: #C0C0C0;
             --text-muted: #A0A0A0;
@@ -330,7 +330,7 @@ body::before{
         .contact-label { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; color: var(--text-primary); margin-bottom: 0.5rem; letter-spacing: 0.03em; }
         .contact-detail { font-size: 1rem; color: var(--text-tertiary); }
         .contact-detail a { color: var(--primary); text-decoration: none; transition: color 0.3s ease; }
-        .contact-detail a:hover { color: var(--secondary); text-decoration: underline; }
+        .contact-detail a:hover { color: var(--secondary-text); text-decoration: underline; }
         footer { background: linear-gradient(135deg, var(--dark) 0%, #0d1a0d 100%); color: white; text-align: center; padding: 2.5rem 2rem; font-size: 0.95rem; border-top: 3px solid var(--accent); }
         [data-theme="dark"] footer { background: linear-gradient(135deg, var(--bg-secondary) 0%, #0a0a14 100%); }
         .fade-in { opacity: 0; transform: translateY(20px); transition: all 0.6s ease; }
