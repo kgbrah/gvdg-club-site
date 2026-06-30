@@ -186,6 +186,10 @@
             .admin-mobile-nav { display: block; width: 100%; padding: 0.85rem 0.95rem; margin-bottom: 1rem; font-size: 1rem; font-weight: 700; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-secondary); color: var(--text-primary); }
             .admin-panel { padding: 1.1rem 0.9rem; }
             .admin-form { max-width: none; }
+            .al-row > span { max-width: 100%; min-width: 0; }
+            .al-row input:not([type="checkbox"]), .al-row select { max-width: 100%; }
+            #apane-registration .al-row > span { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+            #rgDivisions { flex: 1 1 12rem; min-width: 0; }
             /* Wide builder/scoring/roster tables scroll inside their overflow-x wrapper instead of
                crushing every column to fit (which mashed the "Est." cell into "250 ft par"). */
             .al-holes { min-width: 500px; }
