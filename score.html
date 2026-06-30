@@ -186,7 +186,7 @@
         const GUEST_TOKEN = MODE === 'event' ? (params.get('gt') || guestTokenStored()) : null;
 
         const app = document.getElementById('app');
-        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], courseName: null, layoutName: null };
+        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], courseName: null, layoutName: null, lastRev: -1 };
         const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
         const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
 
@@ -385,6 +385,8 @@
         // ---------- merge a snapshot's scores into our cardmates (respecting pending optimistic edits) ----------
         function mergeFromSnap() {
             const snap = S.snap; if (!snap || !Array.isArray(snap.players)) return;
+            // Drop a stale/out-of-order snapshot (a newer one from another device was already applied).
+            if (snap.rev != null) { if (snap.rev <= S.lastRev) return; S.lastRev = snap.rev; }
             setConflicts(snap.conflicts);
             const byIndex = new Map(snap.players.map((p) => [p.index, p]));
             // Card roster changed (a player was removed elsewhere, or a new walk-on/cardmate joined on
