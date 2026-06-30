@@ -119,12 +119,14 @@ function scoreConflictFor(players: PlayerState[], playerIndex: number, hole: num
 
 function syncConsensusScore(players: PlayerState[], player: PlayerState, hole: number): void {
   const values = activeVoteValues(players, player, hole);
-  const agreed = values[0];
-  if (values.length === 1 && agreed != null) {
-    player.scores[hole] = agreed;
-  } else {
-    delete player.scores[hole];
+  if (values.length === 1) {
+    player.scores[hole] = values[0]!;
+  } else if (values.length > 1) {
+    delete player.scores[hole]; // genuine disagreement among active scorers → blank until reconciled
   }
+  // values.length === 0: no active votes remain (e.g. the sole scorekeeper left, or a removed scorer's
+  // vote was purged) — KEEP the last-known score so a departed scorer's entered scores aren't wiped and
+  // the round still finalizes. A hole that was never scored simply stays unset.
 }
 
 /** Distinct stroke values among votes cast by scorers CURRENTLY ACTIVE on the card. Votes from removed

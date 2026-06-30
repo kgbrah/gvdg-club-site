@@ -263,10 +263,17 @@
             for (const item of q) {
                 const body = { index: item.index, hole: item.hole, strokes: item.strokes };
                 if (Number.isInteger(item.scorerIndex)) body.scorerIndex = item.scorerIndex;
+                // Protect the queued optimistic value with the same pending refcount so an interim WS snapshot
+                // (which doesn't have this score yet) can't wipe it mid-replay.
+                const key = Number.isInteger(item.scorerIndex) ? pendingKey(item.scorerIndex, item.index, item.hole) : null;
+                if (key) pending.set(key, (pending.get(key) || 0) + 1);
                 const r = await api(LIVE + '/score', { method: 'POST', body: body });
+                if (key) { const m = (pending.get(key) || 0) - 1; if (m > 0) pending.set(key, m); else pending.delete(key); }
                 if (!r.ok && (r.neterr || r.status >= 500)) remain.push(item); // keep only transient failures
+                else if (r.ok) S.snap = r.data;
             }
             qSave(remain);
+            mergeFromSnap(); // reconcile the card with the server once the queue has drained
             if (q.length && !remain.length) toast('Synced offline scores');
         }
 
@@ -345,6 +352,10 @@
             const scorerIndex = currentScorerIndex();
             if (scorerIndex == null) { toast('Choose a scorecard'); return; }
             const key = pendingKey(scorerIndex, index, hole);
+            // Snapshot the cell's prior value so a rejection can be rolled back even before any snapshot exists.
+            const cm0 = S.cardmates.find((p) => p.index === index);
+            const prevVote = cm0 && cm0.scorecards && cm0.scorecards[hole] ? cm0.scorecards[hole]['player:' + scorerIndex] : undefined;
+            const prevScore = cm0 && cm0.scores ? cm0.scores[hole] : undefined;
             pending.set(key, (pending.get(key) || 0) + 1); // refcount so a later concurrent tap stays protected
             setLocal(index, hole, strokes);
             renderHole();
@@ -358,8 +369,16 @@
                 else if (r.status === 429) toast('Easy there — one moment');
                 else if (r.status === 409) toast('Round isn’t live');
                 else toast('Could not save that score');
-                // Rejected — roll the phantom optimistic vote back to the server's truth so it doesn't linger.
-                if (S.snap) mergeFromSnap(); else renderHole();
+                // Rejected — roll the phantom optimistic vote back. Reconcile from the snapshot if we have one;
+                // otherwise (no snapshot yet) restore the captured prior value directly.
+                if (S.snap) mergeFromSnap();
+                else if (cm0) {
+                    cm0.scorecards = cm0.scorecards || {}; cm0.scorecards[hole] = Object.assign({}, cm0.scorecards[hole]);
+                    if (prevVote === undefined) delete cm0.scorecards[hole]['player:' + scorerIndex]; else cm0.scorecards[hole]['player:' + scorerIndex] = prevVote;
+                    cm0.scores = cm0.scores || {};
+                    if (prevScore === undefined) delete cm0.scores[hole]; else cm0.scores[hole] = prevScore;
+                    renderHole();
+                }
             }
         }
 
@@ -368,6 +387,13 @@
             const snap = S.snap; if (!snap || !Array.isArray(snap.players)) return;
             setConflicts(snap.conflicts);
             const byIndex = new Map(snap.players.map((p) => [p.index, p]));
+            // Card roster changed (a player was removed elsewhere, or a new walk-on/cardmate joined on
+            // another device)? The snapshot omits removed players and includes new ones; rebuild from /mine
+            // (which carries isMe/canEnterScorecard the public snapshot lacks) so removed players don't
+            // linger as ghost rows, joins appear, and a selector pointing at a removed scorer is reset.
+            const snapMine = snap.players.filter((p) => (p.cardId ?? null) === S.cardId).map((p) => p.index).sort((a, b) => a - b);
+            const haveMine = S.cardmates.map((c) => c.index).sort((a, b) => a - b);
+            if (snapMine.join(',') !== haveMine.join(',')) { loadMine(); return; }
             S.cardmates.forEach((cm) => {
                 const sp = byIndex.get(cm.index); if (!sp) return;
                 cm.scores = cm.scores || {};

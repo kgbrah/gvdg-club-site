@@ -110,7 +110,7 @@ export class LiveEventDO {
     if (action === "guest") return this.addGuest(authMember, (body as { name?: string }).name); // add a non-member to my card
     if (action === "remove") return this.removePlayer(body as RemoveBody, authMember, authAdmin); // drop a player (accidental/left/no-show)
     if (action === "override") return this.override(body as OverrideBody);
-    if (action === "finalize") return this.finalize();
+    if (action === "finalize") return this.finalize(authMember, authAdmin);
     return j({ error: "not_found" }, 404);
   }
 
@@ -338,8 +338,14 @@ export class LiveEventDO {
     return j(this.snapshot());
   }
 
-  private async finalize(): Promise<Response> {
+  private async finalize(authMember: string | null, authAdmin: boolean): Promise<Response> {
     if (!this.meta) return j({ error: "not_started" }, 409);
+    // Casual rounds are only member-gated at the route, so anyone with the code could otherwise finalize
+    // (lock) someone else's round — require the caller to actually be on the card. Admin events bypass
+    // (they're admin-gated at the route and meta.casual is false).
+    if (this.meta.casual && !authAdmin && !(authMember && this.players.some((p) => p.memberId === authMember && !p.removed))) {
+      return j({ error: "not_on_card" }, 403);
+    }
     // Idempotent under a double-submit: claim finalization SYNCHRONOUSLY (before any await) so a second
     // finalize that interleaves at one of the awaits below sees status==='final' and short-circuits,
     // instead of racing clearResults + concurrent inserts into duplicate result rows.
