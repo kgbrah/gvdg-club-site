@@ -165,6 +165,7 @@
         </header>
         <main id="app"><div class="spin"></div></main>
     </div>
+    <script src="udisc-export.js"></script>
     <script>
     (function () {
         "use strict";
@@ -186,7 +187,7 @@
         const GUEST_TOKEN = MODE === 'event' ? (params.get('gt') || guestTokenStored()) : null;
 
         const app = document.getElementById('app');
-        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], courseName: null, layoutName: null };
+        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], courseName: null, layoutName: null, udiscCourseId: null };
         const pending = new Set();            // "scorer:index:hole" optimistically set, awaiting confirm — don't clobber from snapshot
         const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
 
@@ -609,6 +610,17 @@
                 });
                 sheet.appendChild(table);
             }
+            // "Add to UDisc": the caller's own hole-by-hole scores → open the right UDisc course to tap
+            // in (UDisc has no import API). Casual rounds aren't written to D1, so we source the scorecard
+            // live from this card. Shown only when the course's numeric UDisc id is known.
+            if (window.UDiscExport && S.udiscCourseId) {
+                const me = (S.cardmates || []).find((c) => c.isMe);
+                if (me && me.scores) {
+                    const card = S.holes.filter((h) => me.scores[h.hole] != null).map((h) => ({ hole: h.hole, par: h.par, strokes: me.scores[h.hole] }));
+                    const node = window.UDiscExport.build({ courseId: S.udiscCourseId, scorecard: card });
+                    if (node) { node.style.marginTop = '1rem'; sheet.appendChild(node); }
+                }
+            }
             const close = el('button', 'btn secondary', 'Close'); close.style.marginTop = '1rem'; close.addEventListener('click', closeLeaderboard);
             sheet.appendChild(close);
             overlay.appendChild(sheet); document.body.appendChild(overlay); lbSheet = overlay;
@@ -633,7 +645,7 @@
             }
             S.holes = Array.isArray(d.holes) ? d.holes : [];
             S.cardId = d.cardId; S.myIndex = d.playerIndex; S.cardmates = d.cardmates;
-            S.courseName = d.courseName || null; S.layoutName = d.layoutName || null;
+            S.courseName = d.courseName || null; S.layoutName = d.layoutName || null; S.udiscCourseId = d.udiscCourseId || null;
             S.scorerIndex = d.playerIndex;
             if (MODE === 'round') rememberRecentRound({ code: ROUND_CODE, label: 'Casual round ' + ROUND_CODE });
             currentScorerIndex();

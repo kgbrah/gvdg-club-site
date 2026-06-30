@@ -363,6 +363,7 @@
         .doubles-table tbody tr.clickable-row { cursor: pointer; }
     </style>
   <script src="nav.js" defer></script>
+  <script src="udisc-export.js" defer></script>
 </head>
 <body>
     <header>
@@ -1157,6 +1158,13 @@
                 score.textContent = res.to_par != null ? fmtClubToPar(res.to_par) : '—';
                 row.appendChild(left); row.appendChild(score);
                 list.appendChild(row);
+                // "Add to UDisc": open the right UDisc course + this round's hole-by-hole scores to tap
+                // in (UDisc has no import API). Shown only when the round's per-hole scorecard and the
+                // course's numeric UDisc id are both known.
+                if (res.scorecard && res.udisc_course_id && window.UDiscExport) {
+                    var addNode = window.UDiscExport.build({ courseId: res.udisc_course_id, scorecard: res.scorecard });
+                    if (addNode) list.appendChild(addNode);
+                }
             });
             wrap.style.display = '';
         }

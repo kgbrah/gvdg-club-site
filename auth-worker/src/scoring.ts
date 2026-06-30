@@ -89,6 +89,9 @@ export interface FinalStanding extends Standing {
    *  unranked, so it never outranks a real finisher and earns no podium/league points. */
   place: number | null;
   breakdown: Breakdown;
+  /** The holes this player actually scored, in layout order — persisted as the result's scorecard so
+   *  a player can later open the right UDisc course and tap these in (UDisc has no import API). */
+  holes: { hole: number; par: number; strokes: number }[];
 }
 
 /** Final results for an event: only players who completed every hole are ranked (ties share a place,
@@ -99,6 +102,7 @@ export function finalizeStandings(holes: { hole: number; par: number }[], player
   const rows = players.filter((p) => !p.removed).map((p) => {
     const pars: number[] = [];
     const strokes: number[] = [];
+    const played: { hole: number; par: number; strokes: number }[] = [];
     let thru = 0;
     let total = 0;
     let toPar = 0;
@@ -107,6 +111,7 @@ export function finalizeStandings(holes: { hole: number; par: number }[], player
       if (s == null) continue;
       pars.push(h.par);
       strokes.push(s);
+      played.push({ hole: h.hole, par: h.par, strokes: s });
       thru++;
       total += s;
       toPar += s - h.par;
@@ -119,6 +124,7 @@ export function finalizeStandings(holes: { hole: number; par: number }[], player
       total,
       toPar,
       breakdown: countScores(pars, strokes),
+      holes: played,
     };
   });
   const completed = (r: { thru: number }) => holeCount > 0 && r.thru === holeCount;

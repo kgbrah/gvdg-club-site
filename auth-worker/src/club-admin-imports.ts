@@ -29,9 +29,10 @@ export async function handleAdminImport(request: Request, env: Env, origin: stri
       if (!url) return json({ error: "invalid_request" }, 400, origin);
       // UDisc ships its data as a large turbo-stream payload — allow more than the 1 MB default.
       const html = await safeFetch(url, ["udisc.com"], { maxBytes: 3_000_000 });
-      const { name, layouts } = parseUdiscLayouts(html, url);
+      const { name, udisc_course_id, layouts } = parseUdiscLayouts(html, url);
       // `candidate` keeps the old single-layout shape working; `layouts` exposes all of them.
-      return json({ source: "udisc", name, layouts, candidate: layouts[0] ?? null }, 200, origin);
+      // `udisc_course_id` (course-level) lets the admin save it on the course to enable "Add to UDisc".
+      return json({ source: "udisc", name, udisc_course_id, layouts, candidate: layouts[0] ?? null }, 200, origin);
     }
     return json({ error: "not_found" }, 404, origin);
   } catch (e) {
