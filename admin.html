@@ -189,6 +189,13 @@
         .admin-form { display: grid; gap: 0.75rem; max-width: 520px; }
         .admin-form label { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 0.2rem; }
         .admin-form input, .admin-form select, .admin-form textarea { width: 100%; padding: 0.6rem 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95rem; }
+        /* Long course/event/layout option text grew these unconstrained pickers off the right edge on mobile.
+           Cap every admin-pane control to its container, let flex-row controls shrink below their content
+           width, and lay the stand-alone Course/Event pickers out full-width like the form fields. */
+        .admin-pane select, .admin-pane input, .admin-pane textarea { max-width: 100%; }
+        .al-row span, .al-row select, .al-row input, .order-controls select, .order-controls input { min-width: 0; }
+        #rgDivisions { width: 100%; } /* size="40" forced ~412px; fill its (now shrinkable) span instead */
+        #alCourse, #scEvent, #rgEvent { display: block; width: 100%; max-width: 520px; margin-top: 0.3rem; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95rem; }
         .admin-btn { background: var(--primary); color: #fff; border: none; padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
         .admin-btn.secondary { background: transparent; border: 1px solid var(--secondary); color: var(--secondary); }
         .admin-btn.danger { background: transparent; border: 1px solid #dc3545; color: #dc3545; padding: 0.35rem 0.7rem; font-size: 0.8rem; }
