@@ -43,8 +43,8 @@ npm run deploy:staging                    # validates only the [env.staging] blo
 
 Then in the **Cloudflare dashboard**: add the `gvdgclub.com` zone, and on the
 `gvdg-member-auth-staging` Worker → **Settings → Domains & Routes → add Custom Domain
-`auth.gvdgclub.com`**. (wrangler.toml declares no routes, so without this the Worker is
-only at `*.workers.dev`.)
+`auth.gvdgclub.com`**. `wrangler.toml` intentionally does not declare staging routes because
+the deploy token only needs Worker permissions; the dashboard-owned custom domain stays attached.
 
 > `npm run deploy:staging:dry-run` validates the config with placeholders allowed — useful before the ids are filled in.
 
@@ -71,11 +71,11 @@ wrangler kv bulk put ./out/kv-bulk.json --binding ROSTER --env staging
 # default PINs are in out/default-pins.csv — hand out, then delete. Members force-change PIN on first login.
 ```
 
-## Per-PR loop (automated)
-1. Open/push a PR to `main` → **`.github/workflows/deploy-staging.yml`** auto-deploys the Worker to the
-   staging env and comments the dev URL on the PR; **Cloudflare Pages** auto-builds the static preview.
-2. Devs live-drive `gvdgclub.com` / the preview URL against **isolated** dev data.
-3. 👍 → merge to `main` → production deploy. Prod data untouched.
+## Staging deploy loop
+1. Push the branch you want to live-drive.
+2. Run **Deploy to staging (gvdgclub.com)** from GitHub Actions, choosing that branch.
+3. Devs live-drive `gvdgclub.com` / the preview URL against **isolated** dev data.
+4. Merge to `main` when ready. Prod data remains untouched until production resource ids are configured.
 
 > The staging CI needs only the `CLOUDFLARE_API_TOKEN` repo secret (same one prod uses). It does **not**
 > sync app secrets — set those once with `wrangler secret put JWT_SECRET --env staging` (+ `OPENROUTER_API_KEY`,

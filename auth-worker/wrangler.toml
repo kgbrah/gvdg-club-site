@@ -106,11 +106,8 @@ VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct"
 [env.staging]
 name = "gvdg-member-auth-staging"
 
-# Bind the dev API subdomain to this Worker (gvdgclub.com zone is on Cloudflare). wrangler creates the
-# Custom Domain + DNS on deploy. The frontend resolves gvdgclub.com pages -> https://auth.gvdgclub.com.
-[[env.staging.routes]]
-pattern = "auth.gvdgclub.com"
-custom_domain = true
+# The dev API custom domain (auth.gvdgclub.com) is managed in the Cloudflare dashboard. The CI token
+# can deploy Workers but does not need zone route permissions, so routes are intentionally omitted here.
 
 [env.staging.observability]
 enabled = true
