@@ -6,6 +6,7 @@
 // snapshot + ws reads are public). The DO trusts requests it receives.
 
 import * as db from "./db.js";
+import { normalizeScorecards, playerScorerId, recordScoreVote, scorecardConsensusIssues, scoreConflicts } from "./live-consensus.js";
 import { assignCards, computeLeaderboard, finalizeStandings, type PlayerState } from "./scoring.js";
 
 interface LiveEnv {
@@ -42,6 +43,7 @@ interface ScoreBody {
   memberId?: string | null;
   index?: number;
   name?: string;
+  scorerIndex?: number | null;
   hole: number;
   strokes: number;
 }
@@ -53,6 +55,10 @@ interface OverrideBody {
 }
 
 const j = (o: unknown, status = 200): Response => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json" } });
+
+function canEnterScorecard(player: PlayerState, authMember: string | null): boolean {
+  return !player.memberId || player.memberId === authMember || player.memberId.startsWith("g_");
+}
 
 export class LiveEventDO {
   private state: LiveState;
@@ -70,6 +76,7 @@ export class LiveEventDO {
     if (this.loaded) return;
     this.meta = (await this.state.storage.get<LiveMeta>("meta")) ?? null;
     this.players = (await this.state.storage.get<PlayerState[]>("players")) ?? [];
+    normalizeScorecards(this.players, this.meta?.holes ?? []);
     this.loaded = true;
   }
   private async persist(): Promise<void> {
@@ -109,6 +116,7 @@ export class LiveEventDO {
 
   private snapshot() {
     const holes = this.resolvedHoles();
+    const conflicts = scoreConflicts(this.players, holes);
     return {
       status: this.meta?.status ?? "none",
       eventId: this.meta?.eventId ?? null,
@@ -119,6 +127,7 @@ export class LiveEventDO {
       // because guest member ids are "g_<token>" capability tokens — never expose them to ws/snapshot
       // readers. The authed /mine endpoint is how a player learns which index/card is theirs.
       players: this.players.map((p, index) => ({ index, cardId: p.cardId ?? null, name: p.name, division: p.division ?? null, startingHole: p.startingHole ?? null, scores: p.scores })),
+      conflicts,
       standings: computeLeaderboard(holes, this.players).map((s) => ({ name: s.name, division: s.division, thru: s.thru, total: s.total, toPar: s.toPar })),
       updatedAt: this.meta?.startedAt ?? null,
     };
@@ -137,6 +146,7 @@ export class LiveEventDO {
       startingHole: p.startingHole ?? null,
       cardId: p.cardId ?? null,
       scores: {},
+      scorecards: {},
     }));
     assignCards(this.players, b.cardSize); // group into cards (by starting hole, else buckets of 4)
     await this.persist();
@@ -159,25 +169,26 @@ export class LiveEventDO {
     if (!Number.isInteger(strokes) || strokes < 1 || strokes > 30) return j({ error: "bad_strokes" }, 400);
     const player = this.findPlayer(b);
     if (!player) return j({ error: "no_player" }, 404);
+    const targetIndex = this.players.indexOf(player);
+    const meIndex = authMember ? this.players.findIndex((p) => p.memberId === authMember) : -1;
+    const me = meIndex >= 0 ? this.players[meIndex] : undefined;
     // Authorize from the Worker-trusted identity ONLY: an admin may score anyone; otherwise the
     // submitter must be a player on the SAME card as the target. Body identity is for targeting, not auth.
     if (!authAdmin) {
-      const me = authMember ? this.players.find((p) => p.memberId === authMember) : undefined;
       if (!me) return j({ error: "not_on_card" }, 403);
       if ((me.cardId ?? null) !== (player.cardId ?? null)) return j({ error: "wrong_card" }, 403);
     }
-    // CONFLICT DETECTION: when this overwrites an existing value that a DIFFERENT scorer set, two people
-    // scoring the same card disagree — push an immediate alert to everyone watching so they reconcile.
-    const by = authAdmin ? "admin:" + (authMember ?? "?") : authMember ?? "?";
-    const prev = player.scores[hole];
-    const prevBy = player.scoredBy?.[hole] ?? null;
-    const conflict = prev != null && prev !== strokes && prevBy != null && prevBy !== by;
-    player.scores[hole] = strokes;
-    player.scoredBy = player.scoredBy || {};
-    player.scoredBy[hole] = by;
+    if (b.scorerIndex != null && (!Number.isInteger(b.scorerIndex) || b.scorerIndex < 0)) return j({ error: "bad_scorer" }, 400);
+    const scorerIndex = typeof b.scorerIndex === "number" ? b.scorerIndex : authAdmin ? targetIndex : meIndex;
+    const scorer = this.players[scorerIndex];
+    if (!scorer) return j({ error: "bad_scorer" }, 400);
+    if ((scorer.cardId ?? null) !== (player.cardId ?? null)) return j({ error: "scorer_wrong_card" }, 403);
+    if (!authAdmin && !canEnterScorecard(scorer, authMember)) return j({ error: "wrong_scorer" }, 403);
+    const scorerId = playerScorerId(scorerIndex);
+    const conflict = recordScoreVote({ players: this.players, targetIndex, scorerId, hole, strokes });
     await this.persist();
     if (conflict) {
-      this.sendAll({ type: "conflict", cardId: player.cardId ?? null, playerIndex: this.players.indexOf(player), playerName: player.name, hole, from: prev, to: strokes });
+      this.sendAll({ type: "conflict", ...conflict, from: conflict.values[0] ?? null, to: conflict.values[1] ?? null });
     }
     this.broadcast();
     return j(this.snapshot());
@@ -186,14 +197,25 @@ export class LiveEventDO {
   /** The authenticated caller's own card: which player they are, their cardmates, and the holes — so the
    *  score app renders just their group. memberIds stay internal; cardmates are keyed by stable index. */
   private mineData(authMember: string | null): Record<string, unknown> {
+    const holes = this.resolvedHoles();
     const meIdx = authMember ? this.players.findIndex((p) => p.memberId === authMember) : -1;
-    const base = { eventId: this.meta?.eventId ?? 0, casual: !!this.meta?.casual, status: this.meta?.status ?? "none", holes: this.resolvedHoles() };
-    if (meIdx < 0) return { ...base, cardId: null, playerIndex: null, cardmates: [] };
+    const base = { eventId: this.meta?.eventId ?? 0, casual: !!this.meta?.casual, status: this.meta?.status ?? "none", holes };
+    if (meIdx < 0) return { ...base, cardId: null, playerIndex: null, cardmates: [], conflicts: [] };
     const cardId = this.players[meIdx]!.cardId ?? null;
     const cardmates = this.players
-      .map((p, index) => ({ index, cardId: p.cardId ?? null, name: p.name, division: p.division ?? null, startingHole: p.startingHole ?? null, scores: p.scores, isMe: index === meIdx }))
+      .map((p, index) => ({
+        index,
+        cardId: p.cardId ?? null,
+        name: p.name,
+        division: p.division ?? null,
+        startingHole: p.startingHole ?? null,
+        scores: p.scores,
+        isMe: index === meIdx,
+        canEnterScorecard: canEnterScorecard(p, authMember),
+      }))
       .filter((p) => p.cardId === cardId);
-    return { ...base, cardId, playerIndex: meIdx, cardmates };
+    const conflicts = scoreConflicts(this.players, holes).filter((conflict) => conflict.cardId === cardId);
+    return { ...base, cardId, playerIndex: meIdx, cardmates, conflicts };
   }
   private mine(authMember: string | null): Response {
     if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
@@ -206,7 +228,7 @@ export class LiveEventDO {
     if (!authMember) return j({ error: "unauthorized" }, 401);
     if (!this.players.some((p) => p.memberId === authMember)) {
       const cardId = this.meta.casual ? "c0" : (this.players[0]?.cardId ?? "c0");
-      this.players.push({ memberId: authMember, name: String(name || "Player").slice(0, 60), division: null, startingHole: null, cardId, scores: {} });
+      this.players.push({ memberId: authMember, name: String(name || "Player").slice(0, 60), division: null, startingHole: null, cardId, scores: {}, scorecards: {} });
       await this.persist();
       this.broadcast();
     }
@@ -220,7 +242,7 @@ export class LiveEventDO {
     if (!me) return j({ error: "not_on_card" }, 403);
     const nm = String(name || "").trim();
     if (!nm) return j({ error: "name_required" }, 400);
-    this.players.push({ memberId: null, name: nm.slice(0, 60), division: null, startingHole: null, cardId: me.cardId ?? "c0", scores: {} });
+    this.players.push({ memberId: null, name: nm.slice(0, 60), division: null, startingHole: null, cardId: me.cardId ?? "c0", scores: {}, scorecards: {} });
     await this.persist();
     this.broadcast();
     return j(this.mineData(authMember));
@@ -257,8 +279,13 @@ export class LiveEventDO {
     if (this.meta.status === "final") {
       return j({ status: "final", standings: finalizeStandings(this.resolvedHoles(), this.players) });
     }
+    const holes = this.resolvedHoles();
+    const issues = scorecardConsensusIssues(this.players, holes);
+    if (issues.conflicts.length > 0 || issues.missing.length > 0) {
+      return j({ error: "scorecards_not_matched", conflicts: issues.conflicts, missing: issues.missing }, 409);
+    }
     this.meta.status = "final";
-    const standings = finalizeStandings(this.resolvedHoles(), this.players);
+    const standings = finalizeStandings(holes, this.players);
     // A casual round has no admin event — just close it out; nothing is written to D1 event results.
     if (this.meta.casual || !this.meta.eventId) {
       await this.persist();

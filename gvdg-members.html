@@ -497,6 +497,13 @@
                 .dashboard-action { display: inline-flex; align-items: center; min-height: 40px; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.45rem 0.85rem; background: var(--bg-secondary); color: var(--text-primary); text-decoration: none; font-size: 0.85rem; font-weight: 700; transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease; }
                 .dashboard-action:hover { border-color: var(--secondary); color: var(--secondary); transform: translateY(-1px); }
                 .dashboard-action.primary { background: var(--green); border-color: var(--green); color: #fff; }
+                .live-round-list { display: grid; gap: 0.7rem; margin-top: 0.35rem; }
+                .live-round-card { display: grid; grid-template-columns: 1fr auto; gap: 0.85rem; align-items: center; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.8rem 0.9rem; background: var(--bg-secondary); }
+                .live-round-title { font-weight: 800; color: var(--text-primary); line-height: 1.25; overflow-wrap: anywhere; }
+                .live-round-meta { color: var(--text-muted); font-size: 0.82rem; margin-top: 0.2rem; line-height: 1.4; }
+                .live-round-badge { display: inline-flex; align-items: center; min-height: 1.35rem; padding: 0.12rem 0.45rem; border-radius: 999px; background: rgba(45, 80, 22, 0.12); color: var(--green); font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.3rem; }
+                .live-round-actions { display: flex; gap: 0.55rem; flex-wrap: wrap; margin-top: 0.85rem; }
+                @media (max-width: 620px) { .live-round-card { grid-template-columns: 1fr; } .live-round-card .passkey-btn { width: 100%; text-align: center; } }
                 .wallet-panel { display: grid; grid-template-columns: minmax(9rem, 1fr) auto; gap: 0.8rem 1rem; align-items: center; padding: 0.9rem 0 1rem; margin: 0 0 1.25rem; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); }
                 .wallet-label { color: var(--text-muted); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
                 .wallet-balance { font-family: 'Bebas Neue', sans-serif; color: var(--green); font-size: 2.3rem; line-height: 1; letter-spacing: 0.02em; }
@@ -993,6 +1000,7 @@
         const TOKEN_KEY = 'gvdg_member_token';
         const NAME_KEY = 'gvdg_member_name';
         const PDGA_KEY = 'gvdg_member_pdga';
+        const RECENT_ROUNDS_KEY = 'gvdg_recent_rounds';
         const $ = (id) => document.getElementById(id);
 
         let memberProfile = { pdgaNo: null, udisc: null, photo: null, isAdmin: false, sub: null, name: null };
@@ -1265,24 +1273,94 @@
         // ---- Event registration (Track G) — sign up, pick division/add-ons, check in, pay ----
         function regToken() { return sessionStorage.getItem(TOKEN_KEY); }
         let paymentsCfg = null, paypalSdkPromise = null;
-        // Live-scoring entry: any live event (one tap into its card) + always an option to start/join a
-        // casual round. Members use their saved login in the scorecard app (score.html).
+        function recentCasualRounds() {
+            try {
+                const rows = JSON.parse(localStorage.getItem(RECENT_ROUNDS_KEY) || '[]');
+                const seen = new Set();
+                return (Array.isArray(rows) ? rows : []).map((row) => ({
+                    code: String(row && row.code || '').toUpperCase().replace(/[^A-Z0-9]/g, ''),
+                    label: String(row && row.label || ''),
+                    updatedAt: Number(row && row.updatedAt || 0)
+                })).filter((row) => {
+                    if (!row.code || seen.has(row.code)) return false;
+                    seen.add(row.code);
+                    return true;
+                }).slice(0, 8);
+            } catch (_e) {
+                return [];
+            }
+        }
+        function shortDate(value) {
+            if (!value) return '';
+            const d = new Date(value);
+            if (Number.isNaN(d.getTime())) return String(value);
+            return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        }
+        function roundMeta(parts) {
+            return parts.filter(Boolean).join(' · ');
+        }
+        async function loadRecentCasualRounds(token) {
+            const checks = recentCasualRounds().map(async (row) => {
+                try {
+                    const res = await api('/rounds/' + encodeURIComponent(row.code) + '/live/mine', { token });
+                    if (!res.ok) return null;
+                    const data = await res.json();
+                    const cardmates = Array.isArray(data.cardmates) ? data.cardmates : [];
+                    if (data.status !== 'live' || data.cardId == null || !cardmates.length) return null;
+                    const names = cardmates.map((p) => p && p.name).filter(Boolean).slice(0, 4).join(', ');
+                    return {
+                        kind: 'round',
+                        title: row.label || ('Casual round ' + row.code),
+                        meta: names ? ('Card: ' + names) : 'Casual card in progress',
+                        href: 'score.html?round=' + encodeURIComponent(row.code),
+                        sort: row.updatedAt || 0
+                    };
+                } catch (_e) {
+                    return null;
+                }
+            });
+            return (await Promise.all(checks)).filter(Boolean);
+        }
         async function loadLiveScoring() {
             const wrap = $('liveScoring'); if (!wrap) return;
             wrap.replaceChildren();
+            const token = regToken();
+            if (!token) { wrap.style.display = 'none'; return; }
             const card = elNode('div', 'club-board');
-            card.appendChild(elNode('h3', 'my-dashboard-title', '🥏 Live Scoring'));
-            const mkRow = (text, label, href) => {
-                const row = elNode('div', 'board-status');
-                row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;margin-top:0.5rem;';
-                row.appendChild(elNode('span', null, text));
-                const a = elNode('a', 'passkey-btn', label); a.href = href;
-                row.appendChild(a); card.appendChild(row);
+            card.appendChild(elNode('h3', 'my-dashboard-title', 'Live Scoring'));
+            const list = elNode('div', 'live-round-list');
+            const mkRow = (item) => {
+                const row = elNode('div', 'live-round-card');
+                const body = elNode('div');
+                body.appendChild(elNode('span', 'live-round-badge', item.kind === 'event' ? 'Club event' : 'Casual round'));
+                body.appendChild(elNode('div', 'live-round-title', item.title));
+                if (item.meta) body.appendChild(elNode('div', 'live-round-meta', item.meta));
+                const a = elNode('a', 'passkey-btn', 'Rejoin scorecard');
+                a.href = item.href;
+                row.appendChild(body);
+                row.appendChild(a);
+                list.appendChild(row);
             };
-            let events = [];
-            try { const r = await api('/events'); if (r.ok) events = ((await r.json()).events) || []; } catch (_e) {}
-            events.filter((e) => e && e.status === 'live').forEach((ev) => mkRow('🟢 ' + ev.name + ' is live', '✏️ Keep score', 'score.html?event=' + encodeURIComponent(ev.id)));
-            mkRow('Playing a casual round?', '⛳ Start / join a card', 'score.html');
+            let rounds = [];
+            try {
+                const r = await api('/my-live-rounds', { token });
+                if (r.ok) rounds = ((await r.json()).rounds) || [];
+            } catch (_e) {}
+            const eventRows = rounds.map((ev) => ({
+                kind: 'event',
+                title: ev.name || 'Live club event',
+                meta: roundMeta([shortDate(ev.date), ev.course_name, ev.layout_name, ev.division]),
+                href: 'score.html?event=' + encodeURIComponent(ev.id),
+                sort: Date.parse(ev.date || '') || 0
+            }));
+            const casualRows = await loadRecentCasualRounds(token);
+            [...eventRows, ...casualRows].sort((a, b) => (b.sort || 0) - (a.sort || 0)).forEach(mkRow);
+            if (!list.children.length) list.appendChild(elNode('p', 'dash-note', 'No active scorecards right now.'));
+            card.appendChild(list);
+            const actions = elNode('div', 'live-round-actions');
+            const start = elNode('a', 'passkey-btn', 'Start / join a casual round'); start.href = 'score.html';
+            actions.appendChild(start);
+            card.appendChild(actions);
             wrap.style.display = '';
             wrap.appendChild(card);
         }

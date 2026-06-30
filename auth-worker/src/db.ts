@@ -328,6 +328,29 @@ export async function getEventStatus(db: D1Like, id: number): Promise<string | n
 export async function listMyRegistrations(db: D1Like, memberId: string) {
   return (await db.prepare("SELECT * FROM registrations WHERE member_id = ? ORDER BY event_id DESC").bind(memberId).all()).results;
 }
+export async function listMemberLiveEvents(db: D1Like, memberId: string) {
+  return (
+    await db
+      .prepare(
+        `WITH member_events AS (
+           SELECT event_id, division FROM registrations WHERE member_id = ?
+           UNION ALL
+           SELECT event_id, division FROM event_players WHERE member_id = ?
+         )
+         SELECT e.id, e.name, e.type, e.date, e.status, e.course_id, e.layout_id,
+                c.name AS course_name, l.name AS layout_name, MAX(member_events.division) AS division
+         FROM member_events
+         JOIN events e ON e.id = member_events.event_id
+         LEFT JOIN courses c ON c.id = e.course_id
+         LEFT JOIN course_layouts l ON l.id = e.layout_id
+         WHERE e.status = 'live'
+         GROUP BY e.id
+         ORDER BY e.date DESC, e.id DESC`,
+      )
+      .bind(memberId, memberId)
+      .all()
+  ).results;
+}
 export async function listRegistrations(db: D1Like, eventId: number) {
   return (await db.prepare("SELECT * FROM registrations WHERE event_id = ? ORDER BY division, name").bind(eventId).all()).results;
 }
