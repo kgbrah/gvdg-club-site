@@ -32,6 +32,17 @@ jobs:
           npm run typecheck
           npm test
           node scripts/validate-wrangler-config.mjs --env staging
+      - name: Build static Pages artifact
+        run: |
+          rm -rf .pages-dist
+          mkdir .pages-dist
+          cp -R *.html *.js img _headers CNAME site.webmanifest .pages-dist/
+      - name: Deploy static site to Cloudflare Pages
+        if: ${{ env.HAS_CF_TOKEN == 'true' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          command: pages deploy .pages-dist --project-name gvdg-club-site --branch "${{ github.ref_name }}"
       - name: Deploy Worker to the staging env
         if: ${{ env.HAS_CF_TOKEN == 'true' }}
         uses: cloudflare/wrangler-action@v3
