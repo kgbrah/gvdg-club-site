@@ -242,6 +242,23 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     expect(bee?.scores["1"]).toBeUndefined(); // fresh card, old score cleared
   });
 
+  it("carries hole distance + course/layout name through to the snapshot and /mine", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      casual: true, courseName: "North Rec", layoutName: "Blue",
+      holes: [{ hole: 1, par: 3, distance_ft: 250 }, { hole: 2, par: 4, distance_ft: 410 }],
+      players: [{ memberId: "m_a", name: "A" }],
+    }) }));
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { courseName: string; layoutName: string; holes: { hole: number; distance_ft: number | null }[] };
+    expect(snap.courseName).toBe("North Rec");
+    expect(snap.layoutName).toBe("Blue");
+    expect(snap.holes.find((h) => h.hole === 1)?.distance_ft).toBe(250);
+    const mine = (await (await live.fetch(new Request("https://do/mine", { headers: { "X-Auth-Member": "m_a" } }))).json()) as { courseName: string; layoutName: string; holes: { hole: number; distance_ft: number | null }[] };
+    expect(mine.courseName).toBe("North Rec");
+    expect(mine.layoutName).toBe("Blue");
+    expect(mine.holes.find((h) => h.hole === 2)?.distance_ft).toBe(410);
+  });
+
   it("a member adds a guest; casual finalize writes nothing to D1", async () => {
     let touchedDb = false;
     const trackDb = { prepare: () => ({ bind() { return this; }, all: async () => ({ results: [], success: true }), first: async () => null, run: async () => { touchedDb = true; return { results: [], success: true }; } }) };

@@ -171,7 +171,7 @@
         const GUEST_TOKEN = MODE === 'event' ? (params.get('gt') || guestTokenStored()) : null;
 
         const app = document.getElementById('app');
-        const S = { holes: [], cardId: null, myIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null };
+        const S = { holes: [], cardId: null, myIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, courseName: null, layoutName: null };
         const pending = new Set();            // "index:hole" optimistically set, awaiting confirm — don't clobber from snapshot
         const QKEY = 'gvdg_score_queue:' + EVENT_ID;
 
@@ -544,12 +544,14 @@
             }
             S.holes = Array.isArray(d.holes) ? d.holes : [];
             S.cardId = d.cardId; S.myIndex = d.playerIndex; S.cardmates = d.cardmates;
+            S.courseName = d.courseName || null; S.layoutName = d.layoutName || null;
             // start on the card's shotgun hole if set, else hole 1
             const me = d.cardmates.find((p) => p.isMe);
             const sh = me && me.startingHole;
             const startIdx = sh ? S.holes.findIndex((h) => h.hole === sh) : 0;
             S.holeIdx = startIdx >= 0 ? startIdx : 0;
             document.getElementById('barTitle').firstChild.textContent = MODE === 'round' ? ('Round ' + ROUND_CODE) : ('Card ' + (S.cardId || ''));
+            const subEl = document.getElementById('barSub'); if (subEl) subEl.textContent = [S.courseName, S.layoutName].filter(Boolean).join(' · ') || 'Greenville Disc Golf Club';
             renderHole();
             connectWs();
             flushQueue();
