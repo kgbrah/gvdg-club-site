@@ -1,8 +1,6 @@
 import type { Env, RawEnv } from "./env.js";
 import { secretOk } from "./authz.js";
-import { allowedOrigin, corsHeaders, json, readJson, RequestBodyTooLargeError } from "./http.js";
-import { signSession } from "./jwt.js";
-import { getMember } from "./roster.js";
+import { allowedOrigin, corsHeaders, json, RequestBodyTooLargeError } from "./http.js";
 import {
   handleBoard,
   handleLogin,
@@ -37,22 +35,6 @@ function withKvFallback(env: RawEnv): Env {
   };
 }
 
-async function handleLiveTestMint(request: Request, env: Env, origin: string | null): Promise<Response> {
-  const configured = env.LIVE_TEST_MINT_SECRET;
-  const supplied = request.headers.get("x-live-test-secret") ?? "";
-  if (!configured || supplied !== configured) return json({ error: "not_found" }, 404, origin);
-
-  const body = (await readJson(request, 512)) ?? {};
-  const sub = typeof body.sub === "string" ? body.sub.trim() : "";
-  const member = sub ? await getMember(env.ROSTER, sub) : null;
-  if (!member || member.mustChangePin) return json({ error: "unknown_member" }, 404, origin);
-
-  const requestedTtl = Number(body.ttlSeconds);
-  const ttlSeconds = Number.isFinite(requestedTtl) ? Math.max(60, Math.min(900, Math.floor(requestedTtl))) : 600;
-  const token = await signSession({ sub: member.memberId, mustChangePin: false }, env.JWT_SECRET, ttlSeconds);
-  return json({ token, name: member.name, sub: member.memberId, ttlSeconds }, 200, origin);
-}
-
 export default {
   async fetch(request: Request, rawEnv: RawEnv, ctx?: ExecutionContext): Promise<Response> {
     const env = withKvFallback(rawEnv);
@@ -66,7 +48,6 @@ export default {
     if (!secretOk(env)) return json({ error: "server_misconfigured" }, 500, origin);
 
     try {
-      if (pathname === "/__live-test/mint-session" && method === "POST") return await handleLiveTestMint(request, env, origin);
       if (pathname === "/login" && method === "POST") return await handleLogin(request, env, origin);
       if (pathname === "/me" && method === "GET") return await handleMe(request, env, origin);
       if (pathname === "/my-results" && method === "GET") return await handleMyResults(request, env, origin);

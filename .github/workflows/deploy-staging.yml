@@ -31,7 +31,6 @@ jobs:
       pull-requests: write # to comment the staging URL on the PR
     env:
       HAS_CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
-      HAS_LIVE_TEST_MINT_SECRET: ${{ secrets.LIVE_TEST_MINT_SECRET != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -51,13 +50,6 @@ jobs:
           npm run typecheck
           npm test
           node scripts/validate-wrangler-config.mjs --env staging --allow-placeholders
-      - name: Sync temporary live-test mint secret
-        if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_LIVE_TEST_MINT_SECRET == 'true' }}
-        working-directory: auth-worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          LIVE_TEST_MINT_SECRET: ${{ secrets.LIVE_TEST_MINT_SECRET }}
-        run: printf '%s' "$LIVE_TEST_MINT_SECRET" | npx wrangler secret put LIVE_TEST_MINT_SECRET --env staging
       - name: Deploy Worker to the staging env
         if: ${{ env.HAS_CF_TOKEN == 'true' }}
         uses: cloudflare/wrangler-action@v3
