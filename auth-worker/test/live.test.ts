@@ -181,6 +181,31 @@ describe("LiveEventDO card-scoped scoring", () => {
     expect(touchedDb).toBe(false);
   });
 
+  it("exposes per-scorer votes (scorecards) in snapshot + /mine so a scorer can see/edit their own vote in a conflict", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ casual: true, holes: [{ hole: 1, par: 3 }], players: [{ memberId: "m0", name: "A" }, { memberId: "m1", name: "B" }] }) }));
+    await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m0" }, body: JSON.stringify({ index: 1, hole: 1, strokes: 3 }) }));
+    await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m1" }, body: JSON.stringify({ index: 1, hole: 1, strokes: 4 }) }));
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { players: { index: number; scores: Record<string, number>; scorecards: Record<string, Record<string, number>> }[] };
+    const target = snap.players.find((p) => p.index === 1)!;
+    expect(target.scores).not.toHaveProperty("1"); // consensus blank during conflict…
+    expect(target.scorecards["1"]).toEqual({ "player:0": 3, "player:1": 4 }); // …but each scorer's own vote is visible
+    const mine = (await (await live.fetch(new Request("https://do/mine", { headers: { "X-Auth-Member": "m0" } }))).json()) as { cardmates: { index: number; scorecards: Record<string, Record<string, number>> }[] };
+    expect(mine.cardmates.find((c) => c.index === 1)!.scorecards["1"]).toEqual({ "player:0": 3, "player:1": 4 });
+  });
+
+  it("ignores a removed scorer's stale cross-vote so the conflict auto-resolves on removal (no deadlock)", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ casual: true, holes: [{ hole: 1, par: 3 }], players: [{ memberId: "m0", name: "A" }, { memberId: "m1", name: "B" }, { memberId: "m2", name: "X" }] }) }));
+    await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m2" }, body: JSON.stringify({ index: 1, hole: 1, strokes: 5 }) })); // X votes 5 on B
+    await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m0" }, body: JSON.stringify({ index: 1, hole: 1, strokes: 3 }) })); // A votes 3 on B → conflict [3,5]
+    expect(((await (await live.fetch(new Request("https://do/"))).json()) as SnapshotBody).conflicts.length).toBe(1);
+    await live.fetch(new Request("https://do/remove", { method: "POST", headers: { "X-Auth-Member": "m0" }, body: JSON.stringify({ index: 2, name: "X" }) })); // X leaves
+    const resolved = (await (await live.fetch(new Request("https://do/"))).json()) as { conflicts: ConflictRow[]; players: { index: number; scores: Record<string, number> }[] };
+    expect(resolved.conflicts).toEqual([]); // X's stale 5-vote is purged → A's 3 stands
+    expect(resolved.players.find((p) => p.index === 1)?.scores).toMatchObject({ 1: 3 });
+  });
+
   it("lets one scorer edit their own unopposed entry without creating a conflict", async () => {
     const state = new FakeState({});
     const live = new LiveEventDO(state, { DB: db });
@@ -355,24 +380,22 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     expect(matched.players[0]?.scores).toMatchObject({ 1: 3 });
   });
 
-  it("rejects finalize when a guest scorecard is missing", async () => {
+  it("finalizes with one scorekeeper even when a cardmate/guest never kept their own card (no conflict = no block)", async () => {
     let touchedDb = false;
     const trackDb = { prepare: () => ({ bind() { return this; }, all: async () => ({ results: [], success: true }), first: async () => null, run: async () => { touchedDb = true; return { results: [], success: true }; } }) };
     const live = new LiveEventDO(new FakeState({}), { DB: trackDb });
     await startCasual(live, "m_a");
-    await act(live, "guest", "m_a", { name: "Walk-on" });
+    await act(live, "guest", "m_a", { name: "Walk-on" }); // a walk-on guest can't vote, so their card is "missing"
     await act(live, "score", "m_a", { index: 0, scorerIndex: 0, hole: 1, strokes: 3 });
     await act(live, "score", "m_a", { index: 0, scorerIndex: 0, hole: 2, strokes: 3 });
     await act(live, "score", "m_a", { index: 1, scorerIndex: 0, hole: 1, strokes: 3 });
     await act(live, "score", "m_a", { index: 1, scorerIndex: 0, hole: 2, strokes: 3 });
 
-    const blocked = await act(live, "finalize", "m_a", {});
-    expect(blocked.status).toBe(409);
-    const body = (await blocked.json()) as { error: string; conflicts: ConflictRow[]; missing: unknown[] };
-    expect(body.error).toBe("scorecards_not_matched");
-    expect(body.conflicts).toEqual([]);
-    expect(body.missing).toContainEqual(expect.objectContaining({ cardId: "c0", playerIndex: 0, hole: 1, missing: 1, required: 2 }));
-    expect(touchedDb).toBe(false);
+    // Missing cardmate votes no longer block finalize — only a genuine conflict does.
+    const finalized = await act(live, "finalize", "m_a", {});
+    expect(finalized.status).toBe(200);
+    expect(((await finalized.json()) as { status: string }).status).toBe("final");
+    expect(touchedDb).toBe(false); // casual → nothing written to D1
   });
 
   it("rejects finalize until every player's card scores match exactly", async () => {

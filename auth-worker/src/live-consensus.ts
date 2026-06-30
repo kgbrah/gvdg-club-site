@@ -57,7 +57,7 @@ export function normalizeScorecards(players: PlayerState[], holes: ScoreHole[]):
       for (const scorerId of scorerIds) seeded[scorerId] = strokes;
       scorecards[hole] = seeded;
     }
-    for (const hole of holeSet) syncConsensusScore(player, hole);
+    for (const hole of holeSet) syncConsensusScore(players, player, hole);
   }
 }
 
@@ -68,7 +68,7 @@ export function recordScoreVote(input: RecordScoreVoteInput): ScoreConflict | nu
   const scorecards = (target.scorecards ??= {});
   const votes = (scorecards[input.hole] ??= {});
   votes[input.scorerId] = input.strokes;
-  syncConsensusScore(target, input.hole);
+  syncConsensusScore(input.players, target, input.hole);
   return scoreConflictFor(input.players, input.targetIndex, input.hole);
 }
 
@@ -112,18 +112,47 @@ export function scorecardConsensusIssues(players: PlayerState[], holes: ScoreHol
 function scoreConflictFor(players: PlayerState[], playerIndex: number, hole: number): ScoreConflict | null {
   const player = players[playerIndex];
   if (!player || player.removed) return null;
-  const values = uniqueSorted(Object.values(player.scorecards?.[hole] ?? {}));
+  const values = activeVoteValues(players, player, hole);
   if (values.length <= 1) return null;
   return { cardId: player.cardId ?? null, playerIndex, playerName: player.name, hole, values };
 }
 
-function syncConsensusScore(player: PlayerState, hole: number): void {
-  const values = uniqueSorted(Object.values(player.scorecards?.[hole] ?? {}));
+function syncConsensusScore(players: PlayerState[], player: PlayerState, hole: number): void {
+  const values = activeVoteValues(players, player, hole);
   const agreed = values[0];
   if (values.length === 1 && agreed != null) {
     player.scores[hole] = agreed;
   } else {
     delete player.scores[hole];
+  }
+}
+
+/** Distinct stroke values among votes cast by scorers CURRENTLY ACTIVE on the card. Votes from removed
+ *  players (or stale/unknown scorer ids no longer on the card) are ignored — so a departed scorer can't
+ *  pin a hole in permanent conflict or block consensus, and this self-heals already-persisted data. */
+function activeVoteValues(players: PlayerState[], target: PlayerState, hole: number): number[] {
+  const active = new Set(cardScorerIds(players, target));
+  const out: number[] = [];
+  for (const [scorerId, strokes] of Object.entries(target.scorecards?.[hole] ?? {})) {
+    if (active.has(scorerId) && typeof strokes === "number") out.push(strokes);
+  }
+  return uniqueSorted(out);
+}
+
+/** A player has left the card (tombstoned): drop the votes they cast on their cardmates and re-derive
+ *  the consensus for each affected hole, so their stale vote can't keep a hole in permanent conflict and
+ *  any now-agreed score is restored immediately. */
+export function purgeScorerVotes(players: PlayerState[], removedIndex: number, holes: ScoreHole[]): void {
+  const removedId = playerScorerId(removedIndex);
+  for (const player of players) {
+    if (!player || player.removed || !player.scorecards) continue;
+    for (const hole of holes) {
+      const votes = player.scorecards[hole.hole];
+      if (votes && removedId in votes) {
+        delete votes[removedId];
+        syncConsensusScore(players, player, hole.hole);
+      }
+    }
   }
 }
 
