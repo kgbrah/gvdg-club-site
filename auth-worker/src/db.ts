@@ -27,6 +27,7 @@ export interface CourseInput {
   name: string;
   location?: string | null;
   udisc_url?: string | null;
+  udisc_course_id?: string | null;
   lat?: number | null;
   lng?: number | null;
   created_by?: string | null;
@@ -41,13 +42,13 @@ export async function getCourse(db: D1Like, id: number) {
 export async function createCourse(db: D1Like, c: CourseInput) {
   return db
     .prepare(
-      "INSERT INTO courses (name, location, udisc_url, lat, lng, is_default, created_by) VALUES (?, ?, ?, ?, ?, 0, ?) RETURNING *",
+      "INSERT INTO courses (name, location, udisc_url, udisc_course_id, lat, lng, is_default, created_by) VALUES (?, ?, ?, ?, ?, ?, 0, ?) RETURNING *",
     )
-    .bind(c.name, c.location ?? null, c.udisc_url ?? null, c.lat ?? null, c.lng ?? null, c.created_by ?? null)
+    .bind(c.name, c.location ?? null, c.udisc_url ?? null, c.udisc_course_id ?? null, c.lat ?? null, c.lng ?? null, c.created_by ?? null)
     .first();
 }
 // Patch types: a null field means "leave unchanged" (COALESCE), matching the asStr()/asInt() helpers.
-export type CoursePatch = { name?: string | null; location?: string | null; udisc_url?: string | null; lat?: number | null; lng?: number | null };
+export type CoursePatch = { name?: string | null; location?: string | null; udisc_url?: string | null; udisc_course_id?: string | null; lat?: number | null; lng?: number | null };
 export type EventPatch = {
   name?: string | null; status?: string | null; format?: string | null; date?: string | null;
   course_id?: number | null; layout_id?: number | null; league_id?: number | null; notes?: string | null;
@@ -56,9 +57,9 @@ export type EventPatch = {
 export async function updateCourse(db: D1Like, id: number, c: CoursePatch) {
   return db
     .prepare(
-      "UPDATE courses SET name=COALESCE(?,name), location=COALESCE(?,location), udisc_url=COALESCE(?,udisc_url), lat=COALESCE(?,lat), lng=COALESCE(?,lng) WHERE id=? RETURNING *",
+      "UPDATE courses SET name=COALESCE(?,name), location=COALESCE(?,location), udisc_url=COALESCE(?,udisc_url), udisc_course_id=COALESCE(?,udisc_course_id), lat=COALESCE(?,lat), lng=COALESCE(?,lng) WHERE id=? RETURNING *",
     )
-    .bind(c.name ?? null, c.location ?? null, c.udisc_url ?? null, c.lat ?? null, c.lng ?? null, id)
+    .bind(c.name ?? null, c.location ?? null, c.udisc_url ?? null, c.udisc_course_id ?? null, c.lat ?? null, c.lng ?? null, id)
     .first();
 }
 export async function deleteCourse(db: D1Like, id: number) {
@@ -576,13 +577,14 @@ export interface ResultInput {
   to_par?: number | null;
   rating?: number | null;
   breakdown?: string | null; // JSON {aces,eagles,birdies,pars,bogeys,doubles_plus}
+  scorecard?: string | null; // JSON [{hole,par,strokes}] — drives "Add to UDisc"
 }
 export async function createResult(db: D1Like, r: ResultInput) {
   return db
     .prepare(
-      "INSERT INTO results (event_id, member_id, name, place, total, to_par, rating, breakdown) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
+      "INSERT INTO results (event_id, member_id, name, place, total, to_par, rating, breakdown, scorecard) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
     )
-    .bind(r.event_id, r.member_id ?? null, r.name, r.place ?? null, r.total ?? null, r.to_par ?? null, r.rating ?? null, r.breakdown ?? null)
+    .bind(r.event_id, r.member_id ?? null, r.name, r.place ?? null, r.total ?? null, r.to_par ?? null, r.rating ?? null, r.breakdown ?? null, r.scorecard ?? null)
     .first();
 }
 export async function clearResults(db: D1Like, eventId: number) {
@@ -596,8 +598,10 @@ export async function listMemberResults(db: D1Like, memberId: string) {
   return (
     await db
       .prepare(
-        `SELECT r.*, e.name AS event_name, e.date AS event_date, e.type AS event_type
+        `SELECT r.*, e.name AS event_name, e.date AS event_date, e.type AS event_type,
+                c.udisc_course_id AS udisc_course_id, c.udisc_url AS udisc_url
          FROM results r JOIN events e ON e.id = r.event_id
+         LEFT JOIN courses c ON c.id = e.course_id
          WHERE r.member_id = ? ORDER BY e.date DESC, r.id DESC`,
       )
       .bind(memberId)

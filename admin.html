@@ -374,6 +374,7 @@
                     <div><label for="acName">Course name</label><input id="acName" maxlength="200" required></div>
                     <div><label for="acLoc">Location</label><input id="acLoc" maxlength="200"></div>
                     <div><label for="acUdisc">UDisc URL (https)</label><input id="acUdisc" type="url" maxlength="1000"></div>
+                    <div><label for="acUdiscCourseId">UDisc course id <span class="al-note">(numeric — auto-saved by UDisc import; enables “Add to UDisc”)</span></label><input id="acUdiscCourseId" inputmode="numeric" pattern="\d*" maxlength="20"></div>
                     <button type="submit" class="admin-btn">Add course</button>
                 </form>
                 <div id="adminCoursesList" style="margin-top:1rem;"></div>
@@ -834,7 +835,7 @@
 
         async function adminAddCourse(e) {
             e.preventDefault();
-            const body = { name: $('acName').value.trim(), location: $('acLoc').value.trim() || null, udisc_url: $('acUdisc').value.trim() || null };
+            const body = { name: $('acName').value.trim(), location: $('acLoc').value.trim() || null, udisc_url: $('acUdisc').value.trim() || null, udisc_course_id: $('acUdiscCourseId').value.trim() || null };
             if (!body.name) { adminMsg('Course name required', false); return; }
             const r = await adminApi('/admin/courses', { method: 'POST', body });
             if (r.ok) { adminMsg('Added course “' + body.name + '”', true); $('adminCourseForm').reset(); adminLoadCourses(); }
@@ -935,6 +936,15 @@
             const out = $('alUdiscResult'); out.textContent = '';
             if (!r.ok) { adminMsg('UDisc import failed (' + r.status + ')', false); return; }
             const data = await r.json();
+            // Persist the page's numeric UDisc course id onto the selected course so "Add to UDisc" can
+            // deep-link it (the course-page slug can't build the applink). Saved even if no scorable
+            // layouts were found, since the id lives on the page regardless.
+            if (data.udisc_course_id && alCourseId) {
+                const pr = await adminApi('/admin/courses/' + alCourseId, { method: 'PATCH', body: { udisc_course_id: String(data.udisc_course_id) } });
+                out.appendChild(elx('div', null, pr.ok ? ('Saved UDisc course id ' + data.udisc_course_id + ' — “Add to UDisc” enabled for this course.') : ('Found UDisc course id ' + data.udisc_course_id + ' but could not save it (' + pr.status + ').')));
+            } else if (!data.udisc_course_id) {
+                out.appendChild(elx('div', null, 'No UDisc course id found on that page — “Add to UDisc” needs it; you can enter it on the course form.'));
+            }
             const layouts = Array.isArray(data.layouts) ? data.layouts : [];
             if (!layouts.length) {
                 out.appendChild(elx('div', null, 'No scorable layouts found on that UDisc page' + (data.name ? ' (“' + data.name + '”)' : '') + '. Enter pars manually below.'));

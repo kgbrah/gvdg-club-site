@@ -387,3 +387,48 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     expect(touchedDb).toBe(false);
   });
 });
+
+describe("LiveEventDO UDisc export bridge", () => {
+  it("persists each player's per-hole scorecard to the result row on admin-event finalize", async () => {
+    const inserts: { sql: string; args: unknown[] }[] = [];
+    const recDb = {
+      prepare(sql: string) {
+        const entry = { sql, args: [] as unknown[] };
+        return {
+          bind(...args: unknown[]) {
+            entry.args = args;
+            if (/INSERT INTO results/i.test(sql)) inserts.push(entry);
+            return this;
+          },
+          run: async () => ({ results: [], success: true }),
+          first: async () => null,
+          all: async () => ({ results: [], success: true }),
+        };
+      },
+    };
+    const live = new LiveEventDO(new FakeState({}), { DB: recDb });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ eventId: 9, holes: [{ hole: 1, par: 3 }, { hole: 2, par: 4 }], players: [{ memberId: "m_jane", name: "Jane" }] }) }));
+    const score = (hole: number, strokes: number) =>
+      live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify({ index: 0, scorerIndex: 0, hole, strokes }) }));
+    await score(1, 3);
+    await score(2, 5);
+
+    const fin = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" } }));
+    expect(fin.status).toBe(200);
+    expect(inserts).toHaveLength(1);
+    const scorecard = inserts[0]!.args[8]; // 9th bind column = scorecard JSON
+    expect(JSON.parse(scorecard as string)).toEqual([
+      { hole: 1, par: 3, strokes: 3 },
+      { hole: 2, par: 4, strokes: 5 },
+    ]);
+  });
+
+  it("carries the UDisc course id from start into the snapshot and /mine (casual export source)", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ casual: true, udiscCourseId: "98765", holes: [{ hole: 1, par: 3 }], players: [{ memberId: "m_a", name: "A" }] }) }));
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { udiscCourseId: string | null };
+    expect(snap.udiscCourseId).toBe("98765");
+    const mine = (await (await live.fetch(new Request("https://do/mine", { headers: { "X-Auth-Member": "m_a" } }))).json()) as { udiscCourseId: string | null };
+    expect(mine.udiscCourseId).toBe("98765");
+  });
+});
