@@ -1026,7 +1026,7 @@
             $('passkeyBtn').style.display = show ? '' : 'none';
             const divider = document.querySelector('#loginForm .login-divider');
             if (divider) divider.style.display = show ? '' : 'none';
-            if (show) prefetchPasskey(); // warm the Worker + hold a challenge ready (see prefetchPasskey)
+            if (show) startPasskeyPriming(); // keep a fresh challenge ready the whole time the login screen is up
         }
         function showPinChange() {
             $('loginGate').style.display = 'flex';
@@ -1038,6 +1038,7 @@
 
         let membersInitialized = false;
         function showMembersContent(name) {
+            stopPasskeyPriming(); // logged in — no need to keep priming a login challenge
             $('loginGate').style.display = 'none';
             $('membersContent').classList.add('active');
             const banner = document.querySelector('.welcome-text strong');
@@ -1757,8 +1758,10 @@
         // between the click and get() consumes that window and rejects the FIRST attempt, which is
         // exactly why a quick second try (Worker now warm) succeeded. Server TTL is ~5 min; single-use.
         let passkeyPrefetch = null; // { options, flowId, ts }
+        const PASSKEY_REFRESH_MS = 170000; // re-prime before the held challenge ages out (server TTL ~5 min)
         async function prefetchPasskey() {
-            if (!AUTH_BASE || !passkeysSupported() || passkeyPrefetch) return;
+            if (!AUTH_BASE || !passkeysSupported()) return;
+            if (passkeyPrefetch && Date.now() - passkeyPrefetch.ts < PASSKEY_REFRESH_MS) return; // still fresh — keep it
             try {
                 const r = await api('/webauthn/auth/options', { method: 'POST' });
                 if (!r.ok) return;
@@ -1766,6 +1769,19 @@
                 passkeyPrefetch = { options, flowId, ts: Date.now() };
             } catch (_e) { /* best-effort warm-up; the click path will fetch on demand */ }
         }
+        // Keep a fresh challenge ALWAYS in hand while the login screen is up, so the tap never has to fetch
+        // one first (an await before navigator.credentials.get(), which Safari rejects as not user-activated).
+        // Re-prime periodically AND whenever the tab is refocused (background timers get throttled).
+        let passkeyPrimeTimer = null, passkeyVisHooked = false;
+        function startPasskeyPriming() {
+            prefetchPasskey();
+            if (!passkeyPrimeTimer) passkeyPrimeTimer = setInterval(prefetchPasskey, PASSKEY_REFRESH_MS);
+            if (!passkeyVisHooked) {
+                passkeyVisHooked = true;
+                document.addEventListener('visibilitychange', () => { if (!document.hidden && $('loginGate').style.display !== 'none') prefetchPasskey(); });
+            }
+        }
+        function stopPasskeyPriming() { if (passkeyPrimeTimer) { clearInterval(passkeyPrimeTimer); passkeyPrimeTimer = null; } }
         async function loginWithPasskey() {
             const errEl = $('loginError'); clearError(errEl);
             if (!AUTH_BASE) { showError(errEl, 'Login is not configured yet — contact an admin.'); return; }
@@ -1779,7 +1795,7 @@
                 let options, flowId;
                 const pf = passkeyPrefetch;
                 passkeyPrefetch = null; // single use
-                if (pf && (Date.now() - pf.ts) < 240000) {
+                if (pf && (Date.now() - pf.ts) < 290000) {
                     options = pf.options; flowId = pf.flowId;
                 } else {
                     const r = await api('/webauthn/auth/options', { method: 'POST' });
