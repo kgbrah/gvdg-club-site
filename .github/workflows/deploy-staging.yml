@@ -43,7 +43,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           wranglerVersion: 4.105.0
-          command: pages deploy .pages-dist --project-name gvdg-club-site --commit-dirty=true
+          command: pages deploy .pages-dist --project-name gvdg-club-site --branch main --commit-dirty=true
         env:
           CLOUDFLARE_ACCOUNT_ID: fdf77c2a9f4966b946b4d232eb7889a3
       - name: Deploy Worker to the staging env
