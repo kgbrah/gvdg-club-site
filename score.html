@@ -323,6 +323,68 @@
             shell(c);
         }
 
+        // ---------- passkey login + forced PIN change (mirrors the members page) ----------
+        function passkeysSupported() { return typeof window.PublicKeyCredential !== 'undefined'; }
+        function b64urlToBuf(s) { s = String(s).replace(/-/g, '+').replace(/_/g, '/'); const pad = '='.repeat((4 - (s.length % 4)) % 4); const bin = atob(s + pad); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; }
+        function bufToB64url(buf) { const u = new Uint8Array(buf); let s = ''; for (const b of u) s += String.fromCharCode(b); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+
+        // Pre-fetch a passkey challenge while the login screen is up so the tap can call
+        // navigator.credentials.get() with NO network in between (Safari/WebKit reject the prompt otherwise).
+        let passkeyPrefetch = null; const PASSKEY_REFRESH_MS = 170000;
+        async function prefetchPasskey() {
+            if (!passkeysSupported()) return;
+            if (passkeyPrefetch && Date.now() - passkeyPrefetch.ts < PASSKEY_REFRESH_MS) return;
+            try { const r = await api('/webauthn/auth/options', { method: 'POST', auth: false, guest: false }); if (r.ok && r.data) passkeyPrefetch = { options: r.data.options, flowId: r.data.flowId, ts: Date.now() }; } catch (e) {}
+        }
+        async function loginWithPasskey(errEl, btn) {
+            if (!passkeysSupported()) { if (errEl) errEl.textContent = 'Passkeys aren’t supported on this device.'; return; }
+            if (btn) btn.disabled = true; if (errEl) errEl.textContent = '';
+            try {
+                let options, flowId; const pf = passkeyPrefetch; passkeyPrefetch = null; // single use, no await before get()
+                if (pf && Date.now() - pf.ts < 290000) { options = pf.options; flowId = pf.flowId; }
+                else { const r = await api('/webauthn/auth/options', { method: 'POST', auth: false, guest: false }); if (!r.ok || !r.data) throw new Error('options'); options = r.data.options; flowId = r.data.flowId; }
+                options.challenge = b64urlToBuf(options.challenge);
+                if (options.allowCredentials) options.allowCredentials = options.allowCredentials.map(function (c) { return Object.assign({}, c, { id: b64urlToBuf(c.id) }); });
+                const a = await navigator.credentials.get({ publicKey: options });
+                const body = { flowId, response: { id: a.id, rawId: bufToB64url(a.rawId), type: a.type, response: { clientDataJSON: bufToB64url(a.response.clientDataJSON), authenticatorData: bufToB64url(a.response.authenticatorData), signature: bufToB64url(a.response.signature), userHandle: a.response.userHandle ? bufToB64url(a.response.userHandle) : undefined }, clientExtensionResults: a.getClientExtensionResults ? a.getClientExtensionResults() : {} } };
+                const v = await api('/webauthn/auth/verify', { method: 'POST', auth: false, guest: false, body });
+                if (v.status === 200 && v.data && v.data.token) afterAuth(v.data);
+                else if (errEl) errEl.textContent = 'Passkey sign-in failed. Use your PIN instead.';
+            } catch (e) {
+                if (errEl) errEl.textContent = (e && e.name === 'NotAllowedError') ? 'Passkey sign-in cancelled.' : 'Passkey sign-in failed. Use your PIN instead.';
+            } finally { if (btn) btn.disabled = false; prefetchPasskey(); }
+        }
+        // After any successful auth (PIN or passkey): store the token, then force the PIN change if the
+        // account still requires it — the must-change-PIN gate rejects EVERY protected route (incl. joining
+        // a card), so without this a temp-PIN member logs in but gets bounced right back to the login screen.
+        function afterAuth(data) {
+            try { sessionStorage.setItem(TOKEN_KEY, data.token); if (data.name) sessionStorage.setItem(NAME_KEY, data.name); } catch (e) {}
+            if (data.mustChangePin) renderSetPin();
+            else boot();
+        }
+        function renderSetPin(message) {
+            const c = el('div', 'card stack');
+            c.appendChild(el('h2', 'section', 'Set your PIN'));
+            c.appendChild(el('p', 'muted', message || 'Choose a new 4-digit PIN to finish signing in.'));
+            const np = el('input', 'field'); np.type = 'password'; np.inputMode = 'numeric'; np.maxLength = 4; np.placeholder = 'New 4-digit PIN'; np.autocomplete = 'new-password';
+            const cp = el('input', 'field'); cp.type = 'password'; cp.inputMode = 'numeric'; cp.maxLength = 4; cp.placeholder = 'Confirm PIN'; cp.autocomplete = 'new-password';
+            const err = el('p', 'muted'); err.style.color = 'var(--over)'; err.style.minHeight = '1rem';
+            const btn = el('button', 'btn', 'Save PIN & continue');
+            btn.addEventListener('click', async function () {
+                const a = np.value.trim(), b = cp.value.trim();
+                if (!/^\d{4}$/.test(a)) { err.textContent = 'PIN must be exactly 4 digits.'; return; }
+                if (a !== b) { err.textContent = 'PINs don’t match.'; return; }
+                btn.disabled = true; err.textContent = '';
+                const r = await api('/set-pin', { method: 'POST', guest: false, body: { newPin: a } });
+                btn.disabled = false;
+                if (r.status === 200 && r.data && r.data.token) { try { sessionStorage.setItem(TOKEN_KEY, r.data.token); } catch (e) {} boot(); }
+                else if (r.status === 401) { renderLogin('Please sign in again.'); }
+                else { err.textContent = 'Could not update PIN — try again.'; }
+            });
+            c.appendChild(np); c.appendChild(cp); c.appendChild(err); c.appendChild(btn);
+            shell(c);
+        }
+
         function renderLogin(message) {
             const c = el('div', 'card stack');
             c.appendChild(el('h2', 'section', 'Sign in to keep score'));
@@ -337,12 +399,17 @@
                 btn.disabled = true; err.textContent = '';
                 const r = await api('/login', { method: 'POST', auth: false, guest: false, body: { identifier: identifier, pin: p } });
                 btn.disabled = false;
-                if (r.ok && r.data && r.data.token) {
-                    try { sessionStorage.setItem(TOKEN_KEY, r.data.token); if (r.data.name) sessionStorage.setItem(NAME_KEY, r.data.name); } catch (e) {}
-                    boot();
-                } else { err.textContent = r.status === 401 ? 'That ID/PIN didn’t match.' : 'Sign-in failed — try again.'; }
+                if (r.ok && r.data && r.data.token) { afterAuth(r.data); }
+                else if (r.status === 423) { err.textContent = 'Too many attempts — try again in a few minutes.'; }
+                else { err.textContent = r.status === 401 ? 'That ID/PIN didn’t match.' : 'Sign-in failed — try again.'; }
             });
             c.appendChild(idL); c.appendChild(id); c.appendChild(pinL); c.appendChild(pin); c.appendChild(err); c.appendChild(btn);
+            if (passkeysSupported()) {
+                const pkb = el('button', 'btn secondary', '🔑 Log in with a passkey');
+                pkb.addEventListener('click', function () { loginWithPasskey(err, pkb); });
+                c.appendChild(pkb);
+                prefetchPasskey(); // warm the Worker + hold a challenge so the tap has no network before get()
+            }
             if (GUEST_TOKEN) { const note = el('p', 'muted center', 'Registered as a guest? You can keep your card without signing in.'); const gb = el('button', 'btn ghost', 'Keep score as a guest'); gb.addEventListener('click', function () { try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {} boot(); }); c.appendChild(note); c.appendChild(gb); }
             shell(c);
         }
