@@ -75,6 +75,13 @@ export async function handleCasualRounds(
     const b = (await readJson(request)) ?? {};
     return proxy(stub, "/guest", { method: "POST", headers: hdr, body: JSON.stringify({ name: b.name }) }, origin);
   }
+  if (method === "POST" && sub === "remove") {
+    // Drop a player from the round (accidental join, left early, or no-show). The DO authorizes from the
+    // injected member identity (admin or same-card); index+name target the player (name guards a stale index).
+    if (await kvRateLimited(env, "round-remove:" + claims.sub, 30, 60)) return json({ error: "rate_limited" }, 429, origin);
+    const b = (await readJson(request)) ?? {};
+    return proxy(stub, "/remove", { method: "POST", headers: hdr, body: JSON.stringify({ index: b.index, name: b.name }) }, origin);
+  }
   if (method === "POST" && sub === "finalize") {
     return proxy(stub, "/finalize", { method: "POST", headers: hdr, body: "{}" }, origin);
   }

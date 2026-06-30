@@ -37,6 +37,8 @@ export interface PlayerState {
   cardId?: string | null; // which scoring card/group this player is on (a player may score only their own card)
   scores: Record<number, number>; // hole -> strokes
   scoredBy?: Record<number, string | null>; // hole -> who last set it (for live scoring-conflict detection)
+  removed?: boolean; // tombstoned (accidental join / left early / no-show): kept in the array so positional
+  // indexes never shift under live scorers, but filtered out of the card, snapshot, and standings.
 }
 
 export const DEFAULT_CARD_SIZE = 4;
@@ -64,7 +66,7 @@ export interface Standing {
 /** Live leaderboard: per player thru/total/to-par over played holes, sorted to-par ↑, total ↑, name. */
 export function computeLeaderboard(holes: { hole: number; par: number }[], players: PlayerState[]): Standing[] {
   const parByHole = new Map(holes.map((h) => [h.hole, h.par]));
-  const standings: Standing[] = players.map((p) => {
+  const standings: Standing[] = players.filter((p) => !p.removed).map((p) => {
     let thru = 0;
     let total = 0;
     let toPar = 0;
@@ -93,7 +95,7 @@ export interface FinalStanding extends Standing {
  *  so a registrant who never played can't sit at "even par" ahead of an over-par finisher. */
 export function finalizeStandings(holes: { hole: number; par: number }[], players: PlayerState[]): FinalStanding[] {
   const holeCount = holes.length;
-  const rows = players.map((p) => {
+  const rows = players.filter((p) => !p.removed).map((p) => {
     const pars: number[] = [];
     const strokes: number[] = [];
     let thru = 0;

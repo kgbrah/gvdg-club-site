@@ -365,7 +365,8 @@
                 const actions = el('div'); actions.style.cssText = 'display:flex;gap:0.4rem;';
                 const share = el('button', 'btn small secondary', 'Share'); share.addEventListener('click', shareRound);
                 const add = el('button', 'btn small secondary', '+ Player'); add.addEventListener('click', addGuestPrompt);
-                actions.appendChild(share); actions.appendChild(add);
+                const manage = el('button', 'btn small secondary', 'Manage'); manage.addEventListener('click', openManagePlayers);
+                actions.appendChild(share); actions.appendChild(add); actions.appendChild(manage);
                 bar.appendChild(left); bar.appendChild(actions);
                 c.appendChild(bar);
             }
@@ -552,6 +553,36 @@
             const r = await api('/rounds/' + ROUND_CODE + '/guest', { method: 'POST', body: { name: name } });
             if (r.ok && r.data && Array.isArray(r.data.cardmates)) { S.cardmates = r.data.cardmates; renderHole(); toast(name + ' added'); }
             else toast('Could not add player');
+        }
+        // Manage players: remove someone who joined by accident, had to leave, or no-showed (casual round).
+        function openManagePlayers() {
+            const overlay = el('div', 'overlay'); overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+            const sheet = el('div', 'sheet'); sheet.appendChild(el('div', 'grab'));
+            sheet.appendChild(el('h2', 'section', 'Players'));
+            sheet.appendChild(el('p', 'muted', 'Remove a player who registered by accident, had to leave, or didn’t show. Their scores are cleared.'));
+            (S.cardmates || []).forEach(function (p) {
+                const row = el('div', 'prow');
+                row.appendChild(el('div', 'pname', p.name + (p.isMe ? ' (you)' : '')));
+                const rm = el('button', 'btn small ghost', p.isMe ? 'Leave round' : 'Remove');
+                rm.addEventListener('click', function () { removeFromRound(p, overlay); });
+                row.appendChild(rm);
+                sheet.appendChild(row);
+            });
+            const close = el('button', 'btn secondary', 'Close'); close.style.marginTop = '1rem'; close.addEventListener('click', function () { overlay.remove(); });
+            sheet.appendChild(close);
+            overlay.appendChild(sheet); document.body.appendChild(overlay);
+        }
+        async function removeFromRound(p, overlay) {
+            const msg = p.isMe ? 'Leave this round? Your scores will be cleared.' : ('Remove ' + p.name + ' from this round? Their scores will be cleared.');
+            if (!window.confirm(msg)) return;
+            const r = await api('/rounds/' + ROUND_CODE + '/remove', { method: 'POST', body: { index: p.index, name: p.name } });
+            if (overlay) overlay.remove();
+            if (r.status === 409 && r.data && r.data.error === 'player_moved') { await loadMine(); toast('Card changed — open Manage again'); return; }
+            if (!r.ok || !r.data) { toast('Could not remove player'); return; }
+            if (r.data.cardId == null) { location.href = location.pathname; return; } // I left the round → back to home
+            S.cardId = r.data.cardId; S.myIndex = r.data.playerIndex; S.cardmates = Array.isArray(r.data.cardmates) ? r.data.cardmates : S.cardmates;
+            renderHole();
+            toast(p.name + ' removed');
         }
         function shareRound() {
             const url = location.origin + location.pathname + '?round=' + ROUND_CODE;
