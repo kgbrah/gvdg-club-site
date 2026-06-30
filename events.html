@@ -11,7 +11,7 @@
     <style>
         :root {
             --primary: #FF6B35;
-            --secondary: #004E89;
+            --secondary: #004E89; --secondary-text: #004E89; /* navy link/accent text → readable light blue in dark mode */
             --accent: #F7B801;
             --dark: #1A1A2E;
             --light: #F4F4F9;
@@ -31,7 +31,7 @@
             --bg-primary: #0F0F1E;
             --bg-secondary: #1A1A2E;
             --bg-tertiary: #252538;
-            --text-primary: #F4F4F9;
+            --text-primary: #F4F4F9; --secondary-text: #6cb4e8;
             --text-secondary: #E0E0E0;
             --text-tertiary: #C0C0C0;
             --text-muted: #A0A0A0;
@@ -151,7 +151,7 @@
         .type-badge.meeting { background: var(--bg-tertiary); color: var(--text-secondary); }
         .status-badge { font-size: 0.68rem; }
         .status-badge.live { background: var(--primary); color: white; }
-        .status-badge.scheduled { background: rgba(0, 78, 137, 0.15); color: var(--secondary); }
+        .status-badge.scheduled { background: rgba(0, 78, 137, 0.15); color: var(--secondary-text); }
         [data-theme="dark"] .status-badge.scheduled { background: rgba(47, 127, 196, 0.25); color: #7fb3e0; }
         .status-badge.final { background: var(--bg-tertiary); color: var(--text-muted); border: 1px solid var(--border-color); }
         .status-badge.cancelled { background: rgba(200, 16, 46, 0.15); color: #c8102e; text-decoration: line-through; }

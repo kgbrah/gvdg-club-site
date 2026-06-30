@@ -11,7 +11,7 @@
     <style>
         :root {
             --primary: #FF6B35;
-            --secondary: #004E89;
+            --secondary: #004E89; --secondary-text: #004E89; /* navy link/accent text → readable light blue in dark mode */
             --accent: #F7B801;
             --dark: #1A1A2E;
             --light: #F4F4F9;
@@ -32,7 +32,7 @@
             --bg-primary: #0F0F1E;
             --bg-secondary: #1A1A2E;
             --bg-tertiary: #252538;
-            --text-primary: #F4F4F9;
+            --text-primary: #F4F4F9; --secondary-text: #6cb4e8;
             --text-secondary: #E0E0E0;
             --text-tertiary: #C0C0C0;
             --text-muted: #A0A0A0;
@@ -192,7 +192,7 @@
         .meeting-minutes-content { display: none; padding: 0 1.25rem 1.25rem; border-top: 1px solid var(--border-color); }
         .meeting-minutes-item.expanded .meeting-minutes-content { display: block; }
         .meeting-minutes-section { margin-top: 1rem; }
-        .meeting-minutes-section-title { font-weight: 700; color: var(--secondary); font-size: 0.95rem; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .meeting-minutes-section-title { font-weight: 700; color: var(--secondary-text); font-size: 0.95rem; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
         .meeting-minutes-section ul { list-style: none; padding-left: 0; }
         .meeting-minutes-section li { position: relative; padding-left: 1.25rem; margin-bottom: 0.4rem; color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; }
         .meeting-minutes-section li::before { content: "•"; position: absolute; left: 0; color: var(--primary); font-weight: bold; }
@@ -209,7 +209,7 @@
         .members-search { flex: 1; min-width: 200px; padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); font-size: 1rem; color: var(--text-primary); outline: none; transition: border-color 0.15s ease; }
         .members-search:focus { border-color: var(--secondary); }
         .members-filter-btn { padding: 0.75rem 1.25rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-secondary); font-weight: 600; font-size: 0.9rem; cursor: pointer; transition: all 0.15s ease; white-space: nowrap; }
-        .members-filter-btn:hover { border-color: var(--secondary); color: var(--secondary); }
+        .members-filter-btn:hover { border-color: var(--secondary); color: var(--secondary-text); }
         .members-filter-btn.active { background: var(--secondary); border-color: var(--secondary); color: white; }
         .members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.25rem; }
         @media (max-width: 640px) { .members-grid { grid-template-columns: 1fr; } }
@@ -266,7 +266,7 @@
             color: var(--text-secondary); font-weight: 600; font-size: 0.85rem;
             cursor: pointer; transition: all 0.15s ease; white-space: nowrap;
         }
-        .doubles-tab:hover { border-color: var(--secondary); color: var(--secondary); }
+        .doubles-tab:hover { border-color: var(--secondary); color: var(--secondary-text); }
         .doubles-tab.active { background: var(--secondary); border-color: var(--secondary); color: white; }
 
         .doubles-panel { display: none; }
@@ -313,7 +313,7 @@
         .doubles-table .rank-cell.bronze { color: #CD7F32; }
         .doubles-table .player-name-cell { font-weight: 700; color: var(--text-primary); white-space: nowrap; }
         .doubles-table .player-name-cell .trophy-icon { margin-left: 0.35rem; font-size: 0.75rem; }
-        .doubles-table .highlight-cell { font-weight: 700; color: var(--secondary); }
+        .doubles-table .highlight-cell { font-weight: 700; color: var(--secondary-text); }
         .doubles-table .win-badge { display: inline-block; background: var(--accent); color: var(--dark); padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.7rem; font-weight: 700; }
         .doubles-table .top3-badge { display: inline-block; background: var(--green); color: white; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.7rem; font-weight: 700; }
 
@@ -340,7 +340,7 @@
         .player-modal-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1.5rem; }
         @media (max-width: 480px) { .player-modal-stats { grid-template-columns: repeat(2, 1fr); } }
         .player-modal-stat { background: var(--bg-primary); border-radius: 6px; padding: 0.75rem; text-align: center; border: 1px solid var(--border-color); }
-        .player-modal-stat-val { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; color: var(--secondary); }
+        .player-modal-stat-val { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; color: var(--secondary-text); }
         .player-modal-stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-top: 0.15rem; }
         .player-modal-seasons-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; color: var(--primary); margin-bottom: 0.75rem; }
         .player-season-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 0.5rem; padding: 0.6rem 0; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; color: var(--text-secondary); }
@@ -488,14 +488,14 @@
                 .dash-tile-num { font-family: 'Bebas Neue', sans-serif; font-size: 2.4rem; line-height: 1; }
                 .dash-tile-delta { font-size: 0.8rem; opacity: 0.9; margin-top: 0.2rem; }
                 .dash-tile-label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.95; margin-top: 0.35rem; }
-                .dash-subtitle { font-weight: 700; color: var(--secondary); margin: 0.5rem 0 0.75rem; font-size: 1rem; }
+                .dash-subtitle { font-weight: 700; color: var(--secondary-text); margin: 0.5rem 0 0.75rem; font-size: 1rem; }
                 .dash-event { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); margin-bottom: 0.5rem; flex-wrap: wrap; }
                 .dash-event-name { font-weight: 600; color: var(--text-primary); }
                 .dash-event-date { font-size: 0.8rem; color: var(--text-muted); }
-                .dash-event-ratings { font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; color: var(--secondary); }
+                .dash-event-ratings { font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; color: var(--secondary-text); }
                 .dashboard-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 0 0 1.25rem; }
                 .dashboard-action { display: inline-flex; align-items: center; min-height: 40px; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.45rem 0.85rem; background: var(--bg-secondary); color: var(--text-primary); text-decoration: none; font-size: 0.85rem; font-weight: 700; transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease; }
-                .dashboard-action:hover { border-color: var(--secondary); color: var(--secondary); transform: translateY(-1px); }
+                .dashboard-action:hover { border-color: var(--secondary); color: var(--secondary-text); transform: translateY(-1px); }
                 .dashboard-action.primary { background: var(--green); border-color: var(--green); color: #fff; }
                 .live-round-list { display: grid; gap: 0.7rem; margin-top: 0.35rem; }
                 .live-round-card { display: grid; grid-template-columns: 1fr auto; gap: 0.85rem; align-items: center; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.8rem 0.9rem; background: var(--bg-secondary); }
@@ -558,21 +558,21 @@
                 .board-body { color: var(--text-secondary); line-height: 1.55; margin: 0.35rem 0; }
                 .board-body p { margin: 0.3rem 0; } .board-body ul { margin: 0.3rem 0 0.3rem 1.25rem; }
                 .board-actions { display: flex; gap: 0.75rem; }
-                .board-link { background: none; border: none; color: var(--secondary); cursor: pointer; font: inherit; font-size: 0.8rem; font-weight: 600; padding: 0; }
+                .board-link { background: none; border: none; color: var(--secondary-text); cursor: pointer; font: inherit; font-size: 0.8rem; font-weight: 600; padding: 0; }
                 .board-link.danger { color: var(--primary); }
                 .board-replies { margin: 0.5rem 0 0 1.25rem; border-left: 2px solid var(--border-color); padding-left: 0.85rem; }
                 .board-reply { padding: 0.5rem 0; }
                 .board-replybox { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
                 @media (max-width: 600px) { .board-compose, .board-replybox { flex-direction: column; } .board-compose textarea, .board-replybox textarea { width: 100%; } .board-compose .passkey-btn, .board-replybox .passkey-btn { width: 100%; } }
                 .passkey-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
-                .passkey-btn { background: transparent; border: 1px solid var(--secondary); color: var(--secondary); padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background 0.15s ease, color 0.15s ease; }
+                .passkey-btn { background: transparent; border: 1px solid var(--secondary); color: var(--secondary-text); padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background 0.15s ease, color 0.15s ease; }
                 .passkey-btn:hover { background: var(--secondary); color: #fff; }
                 .passkey-btn:disabled { opacity: 0.6; cursor: default; }
                 .passkey-status { font-size: 0.85rem; color: var(--text-muted); }
                 .login-divider { display: flex; align-items: center; text-align: center; color: var(--text-muted); font-size: 0.8rem; margin: 0.75rem 0; }
                 .login-divider::before, .login-divider::after { content: ''; flex: 1; border-bottom: 1px solid var(--border-color); }
                 .login-divider span { padding: 0 0.75rem; }
-                .login-btn-secondary { background: transparent; border: 1px solid var(--secondary); color: var(--secondary); margin-top: 0; }
+                .login-btn-secondary { background: transparent; border: 1px solid var(--secondary); color: var(--secondary-text); margin-top: 0; }
                 .login-btn-secondary:hover { background: var(--secondary); color: #fff; }
                 .dash-head { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
                 .dash-head .my-dashboard-title { margin-bottom: 0; }
@@ -585,7 +585,7 @@
                 .ts-field { display: flex; flex-direction: column; gap: 0.25rem; }
                 .ts-field label { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
                 .ts-field select { padding: 0.5rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font: inherit; min-width: 8rem; }
-                .ts-filelabel { display: inline-block; cursor: pointer; background: transparent; border: 1px solid var(--secondary); color: var(--secondary); padding: 0.55rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; transition: background 0.15s ease, color 0.15s ease; }
+                .ts-filelabel { display: inline-block; cursor: pointer; background: transparent; border: 1px solid var(--secondary); color: var(--secondary-text); padding: 0.55rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; transition: background 0.15s ease, color 0.15s ease; }
                 .ts-filelabel:hover { background: var(--secondary); color: #fff; }
                 .ts-preview { display: none; max-width: 100%; width: 220px; border-radius: 8px; border: 1px solid var(--border-color); margin: 0.25rem 0 0.85rem; }
                 .ts-status { font-size: 0.9rem; color: var(--text-secondary); margin: 0.5rem 0; min-height: 1.2em; }
