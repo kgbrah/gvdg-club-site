@@ -157,6 +157,91 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     expect((await act(live, "score", "stranger", { index: 0, hole: 1, strokes: 5 })).status).toBe(403);
   });
 
+  it("a member removes a cardmate (accidental/no-show); they drop off the card", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await startCasual(live, "m_a");
+    await act(live, "join", "m_b", { name: "Bee" });
+    await act(live, "guest", "m_a", { name: "Walk-on" }); // [Creator(0), Bee(1), Walk-on(2)]
+    const rm = await act(live, "remove", "m_b", { index: 2, name: "Walk-on" });
+    expect(rm.status).toBe(200);
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { players: { name: string }[] };
+    expect(snap.players.map((p) => p.name).sort()).toEqual(["Bee", "Creator"]);
+  });
+
+  it("a stranger (not on the round) cannot remove a player (403)", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await startCasual(live, "m_a");
+    await act(live, "join", "m_b", { name: "Bee" });
+    expect((await act(live, "remove", "stranger", { index: 0, name: "Creator" })).status).toBe(403);
+  });
+
+  it("a member can remove themselves (leave the round)", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await startCasual(live, "m_a");
+    await act(live, "join", "m_b", { name: "Bee" });
+    const left = await act(live, "remove", "m_b", { index: 1, name: "Bee" });
+    expect(left.status).toBe(200);
+    expect(((await left.json()) as { cardId: string | null }).cardId).toBeNull(); // m_b is off the card
+    const mineA = (await (await live.fetch(new Request("https://do/mine", { headers: { "X-Auth-Member": "m_a" } }))).json()) as { cardmates: { name: string }[] };
+    expect(mineA.cardmates.map((c) => c.name)).toEqual(["Creator"]);
+  });
+
+  it("a stale/shifted index whose name no longer matches is rejected (409 player_moved)", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await startCasual(live, "m_a");
+    await act(live, "join", "m_b", { name: "Bee" });
+    const r = await act(live, "remove", "m_a", { index: 1, name: "Ghost" }); // index 1 is "Bee", not "Ghost"
+    expect(r.status).toBe(409);
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { players: { name: string }[] };
+    expect(snap.players.length).toBe(2); // nobody removed
+  });
+
+  it("an admin may remove any player", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await startCasual(live, "m_a");
+    await act(live, "join", "m_b", { name: "Bee" });
+    const rm = await live.fetch(new Request("https://do/remove", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify({ index: 0, name: "Creator" }) }));
+    expect(rm.status).toBe(200);
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { players: { name: string }[] };
+    expect(snap.players.map((p) => p.name)).toEqual(["Bee"]);
+  });
+
+  it("removal tombstones (no index shift): scoring an unchanged index still targets the right player", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await startCasual(live, "m_a"); // Creator @ index 0
+    await act(live, "join", "m_b", { name: "Bee" }); // Bee @ index 1
+    await act(live, "guest", "m_a", { name: "Cat" }); // Cat @ index 2
+    expect((await act(live, "remove", "m_a", { index: 1, name: "Bee" })).status).toBe(200);
+    // index 2 must STILL be Cat (not shifted down to index 1) — score it and confirm it landed on Cat.
+    expect((await act(live, "score", "m_a", { index: 2, hole: 1, strokes: 3 })).status).toBe(200);
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { players: { index: number; name: string; scores: Record<string, number> }[] };
+    const cat = snap.players.find((p) => p.index === 2);
+    expect(cat?.name).toBe("Cat");
+    expect(cat?.scores["1"]).toBe(3);
+    expect(snap.players.some((p) => p.name === "Bee")).toBe(false); // Bee is gone from the card
+  });
+
+  it("a removed player can no longer be scored (404)", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await startCasual(live, "m_a");
+    await act(live, "join", "m_b", { name: "Bee" }); // index 1
+    await act(live, "remove", "m_a", { index: 1, name: "Bee" });
+    expect((await act(live, "score", "m_a", { index: 1, hole: 1, strokes: 4 })).status).toBe(404);
+  });
+
+  it("a removed member rejoining reactivates their slot with a fresh card", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await startCasual(live, "m_a");
+    await act(live, "join", "m_b", { name: "Bee" });
+    await act(live, "score", "m_b", { index: 1, hole: 1, strokes: 2 }); // Bee has a score
+    await act(live, "remove", "m_b", { index: 1, name: "Bee" }); // Bee leaves
+    const rejoined = await act(live, "join", "m_b", { name: "Bee" });
+    const mine = (await rejoined.json()) as { cardId: string | null; cardmates: { name: string; scores: Record<string, number> }[] };
+    expect(mine.cardId).toBe("c0"); // back on the card
+    const bee = mine.cardmates.find((c) => c.name === "Bee");
+    expect(bee?.scores["1"]).toBeUndefined(); // fresh card, old score cleared
+  });
+
   it("a member adds a guest; casual finalize writes nothing to D1", async () => {
     let touchedDb = false;
     const trackDb = { prepare: () => ({ bind() { return this; }, all: async () => ({ results: [], success: true }), first: async () => null, run: async () => { touchedDb = true; return { results: [], success: true }; } }) };
