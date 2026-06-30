@@ -206,6 +206,8 @@
         .admin-btn { background: var(--primary); color: #fff; border: none; padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
         .admin-btn.secondary { background: transparent; border: 1px solid var(--secondary); color: var(--secondary); }
         .admin-btn.danger { background: transparent; border: 1px solid #dc3545; color: #dc3545; padding: 0.35rem 0.7rem; font-size: 0.8rem; }
+        .admin-form-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
+        .admin-form-note { color: var(--text-muted); font-size: 0.9rem; margin: 0 0 0.75rem; }
         .admin-msg { font-size: 0.9rem; margin-bottom: 0.75rem; min-height: 1.2em; }
         .admin-msg.ok { color: var(--green); } .admin-msg.err { color: #dc3545; }
         .admin-evrow { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); margin-bottom: 0.5rem; }
@@ -349,14 +351,20 @@
             <div class="admin-msg" id="adminMsg"></div>
             <div class="admin-pane active" id="apane-events"><div id="adminEventsList">Loading…</div></div>
             <div class="admin-pane" id="apane-create">
+                <p class="admin-form-note" id="aeModeNote">Create a scheduled event, fundraiser, meeting, or league round.</p>
                 <form class="admin-form" id="adminCreateForm">
                     <div><label for="aeType">Type</label><select id="aeType"><option value="tournament">Tournament</option><option value="league_round">League round</option><option value="fundraiser">Fundraiser</option><option value="meeting">Meeting</option></select></div>
                     <div><label for="aeName">Name</label><input id="aeName" maxlength="200" required></div>
                     <div><label for="aeDate">Date</label><input id="aeDate" type="date"></div>
+                    <div><label for="aeStatus">Status</label><select id="aeStatus"><option value="scheduled">Scheduled</option><option value="live">Live</option><option value="final">Final</option><option value="cancelled">Cancelled</option></select></div>
                     <div><label for="aeFormat">Format</label><select id="aeFormat"><option value="">—</option><option value="stroke">Stroke</option><option value="matchplay">Matchplay</option><option value="doubles">Doubles</option></select></div>
                     <div><label for="aeCourse">Course</label><select id="aeCourse"><option value="">—</option></select></div>
                     <div><label for="aeLeague">League (for league rounds)</label><select id="aeLeague"><option value="">—</option></select></div>
-                    <button type="submit" class="admin-btn">Create event</button>
+                    <div><label for="aeNotes">Notes</label><textarea id="aeNotes" rows="3" maxlength="5000"></textarea></div>
+                    <div class="admin-form-actions">
+                        <button type="submit" class="admin-btn" id="aeSubmitBtn">Create event</button>
+                        <button type="button" class="admin-btn secondary" id="aeCancelEdit" style="display:none;">Cancel edit</button>
+                    </div>
                 </form>
             </div>
             <div class="admin-pane" id="apane-import">
@@ -762,6 +770,7 @@
         function adminApi(path, opts) { return api(path, { ...(opts || {}), token: sessionStorage.getItem(TOKEN_KEY) }); }
         function dollarsFromCents(c) { const n = Number(c || 0); const abs = Math.abs(n); const out = '$' + (abs / 100).toLocaleString(undefined, { minimumFractionDigits: abs % 100 ? 2 : 0 }); return n < 0 ? '-' + out : out; }
         function dollarsToCents(v) { const n = parseFloat(v); return Number.isFinite(n) ? Math.round(n * 100) : null; }
+        let aeEditingEvent = null;
         function adminSwitch(tab) {
             document.querySelectorAll('.admin-tab').forEach((t) => t.classList.toggle('active', t.dataset.atab === tab));
             document.querySelectorAll('.admin-pane').forEach((p) => p.classList.toggle('active', p.id === 'apane-' + tab));
@@ -812,6 +821,9 @@
                     if (r.ok) adminLoadEvents();
                 });
                 row.appendChild(sel);
+                const edit = elx('button', 'admin-btn secondary', 'Edit');
+                edit.addEventListener('click', () => aeEditEvent(ev));
+                row.appendChild(edit);
                 const del = elx('button', 'admin-btn danger', 'Delete');
                 del.addEventListener('click', async () => {
                     if (!confirm('Delete event “' + ev.name + '”?')) return;
@@ -824,13 +836,58 @@
             });
         }
 
-        async function adminCreateEvent(e) {
+        function aePayload() {
+            return {
+                type: $('aeType').value,
+                name: $('aeName').value.trim(),
+                status: $('aeStatus').value,
+                date: $('aeDate').value || null,
+                format: $('aeFormat').value || null,
+                course_id: $('aeCourse').value ? Number($('aeCourse').value) : null,
+                league_id: $('aeLeague').value ? Number($('aeLeague').value) : null,
+                notes: $('aeNotes').value.trim() || null,
+            };
+        }
+        function aeResetForm() {
+            aeEditingEvent = null;
+            $('adminCreateForm').reset();
+            $('aeStatus').value = 'scheduled';
+            $('aeModeNote').textContent = 'Create a scheduled event, fundraiser, meeting, or league round.';
+            $('aeSubmitBtn').textContent = 'Create event';
+            $('aeCancelEdit').style.display = 'none';
+        }
+        function aeEditEvent(ev) {
+            aeEditingEvent = ev;
+            $('aeType').value = ev.type || 'tournament';
+            $('aeName').value = ev.name || '';
+            $('aeDate').value = ev.date || '';
+            $('aeStatus').value = ev.status || 'scheduled';
+            $('aeFormat').value = ev.format || '';
+            $('aeCourse').value = ev.course_id == null ? '' : String(ev.course_id);
+            $('aeLeague').value = ev.league_id == null ? '' : String(ev.league_id);
+            $('aeNotes').value = ev.notes || '';
+            $('aeModeNote').textContent = 'Editing “' + (ev.name || 'event') + '” from the Events menu.';
+            $('aeSubmitBtn').textContent = 'Update event';
+            $('aeCancelEdit').style.display = '';
+            adminSwitch('create');
+            $('aeName').focus();
+            $('aeName').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        async function adminSaveEvent(e) {
             e.preventDefault();
-            const body = { type: $('aeType').value, name: $('aeName').value.trim(), date: $('aeDate').value || null, format: $('aeFormat').value || null, course_id: $('aeCourse').value ? Number($('aeCourse').value) : null, league_id: $('aeLeague').value ? Number($('aeLeague').value) : null, source: 'manual' };
+            const body = aePayload();
             if (!body.name) { adminMsg('Name required', false); return; }
-            const r = await adminApi('/admin/events', { method: 'POST', body });
-            if (r.ok) { adminMsg('Created “' + body.name + '”', true); $('adminCreateForm').reset(); adminSwitch('events'); adminLoadEvents(); }
-            else { adminMsg('Create failed (' + r.status + ')', false); }
+            const r = aeEditingEvent
+                ? await adminApi('/admin/events/' + aeEditingEvent.id, { method: 'PATCH', body })
+                : await adminApi('/admin/events', { method: 'POST', body: { ...body, source: 'manual' } });
+            if (r.ok) {
+                adminMsg((aeEditingEvent ? 'Updated' : 'Created') + ' “' + body.name + '”', true);
+                aeResetForm();
+                adminSwitch('events');
+                adminLoadEvents();
+            } else {
+                adminMsg((aeEditingEvent ? 'Update' : 'Create') + ' failed (' + r.status + ')', false);
+            }
         }
 
         async function adminAddCourse(e) {
@@ -1847,7 +1904,8 @@
             adminInited = true;
             document.querySelectorAll('.admin-tab').forEach((t) => t.addEventListener('click', () => adminSwitch(t.dataset.atab)));
             document.querySelectorAll('.admin-mnav').forEach((sel) => sel.addEventListener('change', () => { if (sel.value) adminSwitch(sel.value); }));
-            $('adminCreateForm').addEventListener('submit', adminCreateEvent);
+            $('adminCreateForm').addEventListener('submit', adminSaveEvent);
+            $('aeCancelEdit').addEventListener('click', () => { aeResetForm(); adminSwitch('events'); });
             $('adminCourseForm').addEventListener('submit', adminAddCourse);
             $('dgsImportBtn').addEventListener('click', adminDgsImport);
             $('csvImportBtn').addEventListener('click', adminCsvImport);

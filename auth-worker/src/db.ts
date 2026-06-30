@@ -47,10 +47,11 @@ export async function createCourse(db: D1Like, c: CourseInput) {
     .bind(c.name, c.location ?? null, c.udisc_url ?? null, c.udisc_course_id ?? null, c.lat ?? null, c.lng ?? null, c.created_by ?? null)
     .first();
 }
-// Patch types: a null field means "leave unchanged" (COALESCE), matching the asStr()/asInt() helpers.
+// CoursePatch keeps legacy COALESCE semantics: null means "leave unchanged".
 export type CoursePatch = { name?: string | null; location?: string | null; udisc_url?: string | null; udisc_course_id?: string | null; lat?: number | null; lng?: number | null };
+// EventPatch uses undefined for "leave unchanged" and null to clear nullable fields.
 export type EventPatch = {
-  name?: string | null; status?: string | null; format?: string | null; date?: string | null;
+  type?: string | null; name?: string | null; status?: string | null; format?: string | null; date?: string | null;
   course_id?: number | null; layout_id?: number | null; league_id?: number | null; notes?: string | null;
 };
 
@@ -250,12 +251,29 @@ export async function createEvent(db: D1Like, e: EventInput) {
 export async function updateEvent(db: D1Like, id: number, e: EventPatch) {
   return db
     .prepare(
-      `UPDATE events SET name=COALESCE(?,name), status=COALESCE(?,status), format=COALESCE(?,format),
-        date=COALESCE(?,date), course_id=COALESCE(?,course_id), layout_id=COALESCE(?,layout_id),
-        league_id=COALESCE(?,league_id), notes=COALESCE(?,notes), updated_at=datetime('now') WHERE id=? RETURNING *`,
+      `UPDATE events SET type=CASE WHEN ? THEN ? ELSE type END,
+        name=CASE WHEN ? THEN ? ELSE name END,
+        status=CASE WHEN ? THEN ? ELSE status END,
+        format=CASE WHEN ? THEN ? ELSE format END,
+        date=CASE WHEN ? THEN ? ELSE date END,
+        course_id=CASE WHEN ? THEN ? ELSE course_id END,
+        layout_id=CASE WHEN ? THEN ? ELSE layout_id END,
+        league_id=CASE WHEN ? THEN ? ELSE league_id END,
+        notes=CASE WHEN ? THEN ? ELSE notes END,
+        updated_at=datetime('now') WHERE id=? RETURNING *`,
     )
-    .bind(e.name ?? null, e.status ?? null, e.format ?? null, e.date ?? null, e.course_id ?? null,
-      e.layout_id ?? null, e.league_id ?? null, e.notes ?? null, id)
+    .bind(
+      e.type !== undefined ? 1 : 0, e.type ?? null,
+      e.name !== undefined ? 1 : 0, e.name ?? null,
+      e.status !== undefined ? 1 : 0, e.status ?? null,
+      e.format !== undefined ? 1 : 0, e.format ?? null,
+      e.date !== undefined ? 1 : 0, e.date ?? null,
+      e.course_id !== undefined ? 1 : 0, e.course_id ?? null,
+      e.layout_id !== undefined ? 1 : 0, e.layout_id ?? null,
+      e.league_id !== undefined ? 1 : 0, e.league_id ?? null,
+      e.notes !== undefined ? 1 : 0, e.notes ?? null,
+      id,
+    )
     .first();
 }
 export async function deleteEvent(db: D1Like, id: number) {
