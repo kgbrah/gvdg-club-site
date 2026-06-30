@@ -1,60 +1,74 @@
-// Service worker for the GVDG live-scoring app (score.html). The app document is served NETWORK-FIRST
-// so a new deploy is always picked up when online (cache-first previously pinned a stale/broken build and
-// could cache the /score.html -> /score redirect). Static assets are cache-first. The cross-origin Worker
-// API (auth.*) is never intercepted — offline score writes are queued in the page and flushed on reconnect.
-const CACHE = "gvdg-score-v3"; // bump to evict any older (possibly stale/broken) cache on activate
-const ASSETS = ["img/logo.png"];
-const SHELL = "score.html"; // offline fallback for the app document
+const CACHE = "gvdg-club-v4";
+const OFFLINE_PAGE = "gvdg-members.html";
+const ASSETS = [
+  "site.webmanifest",
+  "pwa.js",
+  "nav.js",
+  "crotts.js",
+  "img/logo.png",
+  "img/icons/app-icon-192.png",
+  "img/icons/app-icon-512.png",
+  "img/icons/maskable-icon-512.png",
+  "img/icons/apple-touch-icon.png",
+  OFFLINE_PAGE,
+  "score.html"
+];
+const STATIC_DESTINATIONS = new Set(["script", "style", "image", "font", "manifest"]);
 
-// Only clean, same-origin 200s are safe to cache (never opaque/redirect/error responses).
 function cacheable(res) {
   return res && res.ok && res.status === 200 && res.type === "basic";
 }
 
-self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()).catch(() => {}));
+function staticAsset(req, url) {
+  return STATIC_DESTINATIONS.has(req.destination) || /\.(?:css|gif|ico|jpe?g|js|png|svg|webmanifest|webp)$/i.test(url.pathname);
+}
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()).catch(() => {}));
 });
 
-self.addEventListener("activate", (e) => {
-  e.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()),
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
   );
 });
 
-self.addEventListener("fetch", (e) => {
-  const req = e.request;
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
   const url = new URL(req.url);
-  if (req.method !== "GET" || url.origin !== self.location.origin) return; // let the cross-origin API pass through
+  if (req.method !== "GET" || url.origin !== self.location.origin) return;
 
-  // App document: network-first (always the latest score.html online), cached only as an offline fallback.
   if (req.mode === "navigate" || req.destination === "document") {
-    e.respondWith(
+    event.respondWith(
       fetch(req)
         .then((res) => {
           if (cacheable(res)) {
             const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(SHELL, copy)).catch(() => {});
+            caches.open(CACHE).then((cache) => cache.put(req, copy)).catch(() => {});
           }
           return res;
         })
-        .catch(() => caches.match(SHELL)),
+        .catch(() => caches.match(req).then((cached) => cached || caches.match(OFFLINE_PAGE)))
     );
     return;
   }
 
-  // Static assets: cache-first, but only ever store clean 200s.
-  e.respondWith(
+  if (!staticAsset(req, url)) return;
+
+  event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;
       return fetch(req)
         .then((res) => {
           if (cacheable(res)) {
             const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+            caches.open(CACHE).then((cache) => cache.put(req, copy)).catch(() => {});
           }
           return res;
         })
-        .catch(() => caches.match(SHELL));
-    }),
+        .catch(() => (req.destination === "image" ? caches.match("img/logo.png") : Response.error()));
+    })
   );
 });
