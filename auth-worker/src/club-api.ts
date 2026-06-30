@@ -1,5 +1,6 @@
 import type { Env } from "./env.js";
 import { handleClubAdmin } from "./club-admin-routes.js";
+import { handleCasualRoundRequests } from "./club-casual-round-requests-routes.js";
 import { handleClubLive } from "./club-live-routes.js";
 import { handleCasualRounds } from "./club-rounds-routes.js";
 import { handleClubPublic } from "./club-public-routes.js";
@@ -14,6 +15,9 @@ export async function clubApi(request: Request, env: Env, origin: string | null,
 
   const liveRoute = await handleClubLive(request, env, origin, method, seg);
   if (liveRoute) return liveRoute;
+
+  const casualRequestsRoute = await handleCasualRoundRequests(request, env, origin, method, seg);
+  if (casualRequestsRoute) return casualRequestsRoute;
 
   const roundsRoute = await handleCasualRounds(request, env, origin, method, seg);
   if (roundsRoute) return roundsRoute;

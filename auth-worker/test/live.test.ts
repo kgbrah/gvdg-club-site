@@ -163,6 +163,24 @@ describe("LiveEventDO card-scoped scoring", () => {
     expect(matched.players[1]?.scores).toMatchObject({ 1: 3 });
   });
 
+  it("blocks competition finalization when a non-member scorecard disagrees", async () => {
+    let touchedDb = false;
+    const trackDb = { prepare: () => ({ bind() { return this; }, all: async () => ({ results: [], success: true }), first: async () => null, run: async () => { touchedDb = true; return { results: [], success: true }; } }) };
+    const live = new LiveEventDO(new FakeState({}), { DB: trackDb });
+    await start(live, [{ memberId: "m0", name: "A" }, { memberId: null, name: "Walk-on" }]);
+    await post(live, { "X-Auth-Member": "m0" }, { index: 0, scorerIndex: 0, hole: 1, strokes: 3 });
+    const disagreed = (await (await post(live, { "X-Auth-Member": "m0" }, { index: 0, scorerIndex: 1, hole: 1, strokes: 4 })).json()) as SnapshotBody;
+    expect(disagreed.conflicts).toEqual([{ cardId: "c0", playerIndex: 0, playerName: "A", hole: 1, values: [3, 4] }]);
+    expect(disagreed.players[0]?.scores).not.toHaveProperty("1");
+
+    const blocked = await live.fetch(new Request("https://do/finalize", { method: "POST" }));
+    expect(blocked.status).toBe(409);
+    const body = (await blocked.json()) as { error: string; conflicts: ConflictRow[]; missing: unknown[] };
+    expect(body.error).toBe("scorecards_not_matched");
+    expect(body.conflicts).toContainEqual({ cardId: "c0", playerIndex: 0, playerName: "A", hole: 1, values: [3, 4] });
+    expect(touchedDb).toBe(false);
+  });
+
   it("lets one scorer edit their own unopposed entry without creating a conflict", async () => {
     const state = new FakeState({});
     const live = new LiveEventDO(state, { DB: db });
