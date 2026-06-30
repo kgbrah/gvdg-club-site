@@ -63,7 +63,7 @@ export function normalizeScorecards(players: PlayerState[], holes: ScoreHole[]):
 
 export function recordScoreVote(input: RecordScoreVoteInput): ScoreConflict | null {
   const target = input.players[input.targetIndex];
-  if (!target) return null;
+  if (!target || target.removed) return null;
   target.scores = target.scores ?? {};
   const scorecards = (target.scorecards ??= {});
   const votes = (scorecards[input.hole] ??= {});
@@ -89,7 +89,7 @@ export function scorecardConsensusIssues(players: PlayerState[], holes: ScoreHol
   const missing: MissingScoreConsensus[] = [];
   for (let index = 0; index < players.length; index++) {
     const player = players[index];
-    if (!player) continue;
+    if (!player || player.removed) continue;
     const requiredScorers = cardScorerIds(players, player);
     if (requiredScorers.length === 0) continue;
     for (const hole of holes) {

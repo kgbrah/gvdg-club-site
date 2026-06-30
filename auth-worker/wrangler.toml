@@ -106,16 +106,8 @@ VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct"
 [env.staging]
 name = "gvdg-member-auth-staging"
 
-# auth.gvdgclub.com is bound to this Worker as a Custom Domain, but it is MANAGED OUT-OF-BAND (in the
-# Cloudflare dashboard: Workers → gvdg-member-auth-staging → Custom Domains), NOT declared here. Reason:
-# a `custom_domain` route makes `wrangler deploy` re-assert the domain via the gvdgclub.com ZONE's
-# workers-routes API, which needs a Zone·Workers Routes·Edit token. To let CI deploy with a simpler
-# account-scoped "Edit Cloudflare Workers" token, we omit the route so deploy only uploads the script;
-# the Custom Domain is persistent and stays bound across deploys. To put deploy back in charge of it,
-# restore the block below and use a token that also has Zone·Workers Routes·Edit on gvdgclub.com:
-#   [[env.staging.routes]]
-#   pattern = "auth.gvdgclub.com"
-#   custom_domain = true
+# The dev API custom domain (auth.gvdgclub.com) is managed in the Cloudflare dashboard. The CI token
+# can deploy Workers but does not need zone route permissions, so routes are intentionally omitted here.
 
 [env.staging.observability]
 enabled = true
