@@ -171,11 +171,15 @@
         .admin-sidebar .admin-tab:hover { background: var(--bg-secondary); color: var(--text-primary); }
         .admin-sidebar .admin-tab.active { background: var(--secondary); border-color: var(--secondary); color: #fff; }
         .admin-content { min-width: 0; }
+        /* On mobile the 14-item sidebar becomes one compact grouped dropdown (the wrapped-button wall was unusable). */
+        .admin-mobile-nav { display: none; }
         @media (max-width: 760px) {
-            .admin-main { grid-template-columns: 1fr; gap: 0.5rem; }
-            .admin-sidebar { position: static; flex-direction: row; flex-wrap: wrap; gap: 0.4rem; }
-            .admin-navgroup { width: 100%; padding: 0.6rem 0 0.1rem; }
-            .admin-sidebar .admin-tab { width: auto; background: var(--bg-secondary); border-color: var(--border-color); }
+            .admin-main { grid-template-columns: 1fr; gap: 0; }
+            .admin-sidebar { display: none; }
+            .admin-mobile-nav { display: block; width: 100%; padding: 0.7rem 0.75rem; margin-bottom: 1rem; font-size: 0.95rem; font-weight: 700; border: 1px solid var(--border-color); border-radius: 9px; background: var(--bg-secondary); color: var(--text-primary); }
+            .admin-panel { padding: 1rem 0.85rem; }
+            .admin-form { max-width: none; }
+            .admin-content table { font-size: 0.82rem; }
         }
         .admin-form { display: grid; gap: 0.75rem; max-width: 520px; }
         .admin-form label { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 0.2rem; }
@@ -269,6 +273,32 @@
         <!-- Admin panel (copied verbatim from gvdg-members.html) -->
         <div id="adminPanel" class="admin-panel" style="display:none;">
             <h3 class="admin-title">🛠 Admin — Event Management</h3>
+            <select id="adminMobileNav" class="admin-mobile-nav" aria-label="Admin section">
+                <optgroup label="Events">
+                    <option value="events">Events</option>
+                    <option value="create">New Event</option>
+                    <option value="import">Import</option>
+                    <option value="registration">Registration</option>
+                    <option value="scoring">Live Scoring</option>
+                </optgroup>
+                <optgroup label="Courses">
+                    <option value="courses">Courses</option>
+                    <option value="layouts">Layouts</option>
+                </optgroup>
+                <optgroup label="Club">
+                    <option value="leagues-mgmt">Leagues</option>
+                    <option value="fundraisers">Fundraisers</option>
+                    <option value="meetings">Meetings</option>
+                </optgroup>
+                <optgroup label="Shop">
+                    <option value="shop">Pro Shop</option>
+                    <option value="orders">Orders</option>
+                    <option value="wallets">Wallets</option>
+                </optgroup>
+                <optgroup label="Members">
+                    <option value="members">Members</option>
+                </optgroup>
+            </select>
             <div class="admin-main">
                 <nav class="admin-sidebar" aria-label="Admin sections">
                     <div class="admin-navgroup">Events</div>
@@ -710,6 +740,7 @@
         function adminSwitch(tab) {
             document.querySelectorAll('.admin-tab').forEach((t) => t.classList.toggle('active', t.dataset.atab === tab));
             document.querySelectorAll('.admin-pane').forEach((p) => p.classList.toggle('active', p.id === 'apane-' + tab));
+            const mNav = document.getElementById('adminMobileNav'); if (mNav && mNav.value !== tab) mNav.value = tab; // keep the mobile dropdown in sync
             if (tab === 'scoring') scLoadEvents();
             if (tab === 'leagues-mgmt') adminLoadLeagues();
             if (tab === 'fundraisers') adminLoadFundraisers();
@@ -1737,6 +1768,7 @@
             if (adminInited) { adminLoadEvents(); adminLoadCourses(); return; }
             adminInited = true;
             document.querySelectorAll('.admin-tab').forEach((t) => t.addEventListener('click', () => adminSwitch(t.dataset.atab)));
+            const mNav = document.getElementById('adminMobileNav'); if (mNav) mNav.addEventListener('change', () => adminSwitch(mNav.value));
             $('adminCreateForm').addEventListener('submit', adminCreateEvent);
             $('adminCourseForm').addEventListener('submit', adminAddCourse);
             $('dgsImportBtn').addEventListener('click', adminDgsImport);
