@@ -176,10 +176,13 @@
         @media (max-width: 760px) {
             .admin-main { grid-template-columns: 1fr; gap: 0; }
             .admin-sidebar { display: none; }
-            .admin-mobile-nav { display: block; width: 100%; padding: 0.7rem 0.75rem; margin-bottom: 1rem; font-size: 0.95rem; font-weight: 700; border: 1px solid var(--border-color); border-radius: 9px; background: var(--bg-secondary); color: var(--text-primary); }
-            .admin-panel { padding: 1rem 0.85rem; }
+            .admin-mobile-nav { display: block; width: 100%; padding: 0.85rem 0.95rem; margin-bottom: 1rem; font-size: 1rem; font-weight: 700; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-secondary); color: var(--text-primary); }
+            .admin-panel { padding: 1.1rem 0.9rem; }
             .admin-form { max-width: none; }
-            .admin-content table { font-size: 0.82rem; }
+            /* Wide builder/scoring/roster tables scroll inside their overflow-x wrapper instead of
+               crushing every column to fit (which mashed the "Est." cell into "250 ft par"). */
+            .al-holes { min-width: 500px; }
+            .al-est .src { display: block; }
         }
         .admin-form { display: grid; gap: 0.75rem; max-width: 520px; }
         .admin-form label { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 0.2rem; }
@@ -384,8 +387,8 @@
                         <h4 class="al-h">🦁 Layout / Safari builder</h4>
                         <p class="al-note">Link <strong>any</strong> tee to <strong>any</strong> target and set <strong>any</strong> par. Distance is auto-estimated (GPS when both have coordinates, else by par) — override any hole manually.</p>
                         <div><label for="alName">Layout name</label><input id="alName" maxlength="60" placeholder="Main / Safari / Blue"></div>
-                        <table class="al-holes"><thead><tr><th>#</th><th>Par</th><th>Tee</th><th>Target</th><th>Manual ft</th><th>Est.</th><th></th></tr></thead>
-                            <tbody id="alHoles"></tbody></table>
+                        <div style="overflow-x:auto;"><table class="al-holes"><thead><tr><th>#</th><th>Par</th><th>Tee</th><th>Target</th><th>Manual ft</th><th>Est.</th><th></th></tr></thead>
+                            <tbody id="alHoles"></tbody></table></div>
                         <div class="al-row" style="margin-top:0.5rem;">
                             <button type="button" class="admin-btn secondary" id="alAddHole">+ Add hole</button>
                             <button type="button" class="admin-btn" id="alSaveLayout">Save layout</button>
