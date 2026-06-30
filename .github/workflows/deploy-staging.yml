@@ -32,6 +32,7 @@ jobs:
           npm run typecheck
           npm test
           node scripts/validate-wrangler-config.mjs --env staging
+          node scripts/validate-wrangler-config.mjs --env gvdgclub
       - name: Build static Pages artifact
         run: |
           rm -rf .pages-dist
@@ -53,6 +54,13 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: auth-worker
           command: deploy --env staging
+      - name: Deploy Worker to the gvdgclub auth env
+        if: ${{ env.HAS_CF_TOKEN == 'true' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: auth-worker
+          command: deploy --env gvdgclub
       - name: Skip notice
         if: ${{ env.HAS_CF_TOKEN != 'true' }}
         run: echo "::notice::CLOUDFLARE_API_TOKEN is not configured; staging deploy skipped after tests."
