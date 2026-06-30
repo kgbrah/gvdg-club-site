@@ -25,6 +25,22 @@ describe("buildMessages (Crotts assistant prompt assembly)", () => {
     expect(sys.indexOf("background")).toBeLessThan(sys.indexOf("Current club context"));
   });
 
+  it("injects the founding-members PDGA profiles and general disc-golf history", () => {
+    const sys = buildMessages({ userMessage: "who are the club's founders?" })[0]!.content;
+    // 2004 founding members + their PDGA info
+    expect(sys).toMatch(/founded in 2004/);
+    expect(sys).toMatch(/Max Crotts/);
+    expect(sys).toMatch(/Scott Faison/);
+    expect(sys).toMatch(/25901|14844/); // PDGA numbers present
+    expect(sys).toMatch(/MP40|MA2/); // divisions present
+    expect(sys).toMatch(/in memoriam/); // Robert Wynn handled respectfully
+    // general disc golf history
+    expect(sys).toMatch(/Headrick/);
+    expect(sys).toMatch(/Innova|PDGA/);
+    // members block precedes the live club context (which still takes priority / comes last)
+    expect(sys.indexOf("founding members")).toBeLessThan(sys.indexOf("Current club context"));
+  });
+
   it("appends prior history (sanitized) before the new user message", () => {
     const msgs = buildMessages({
       userMessage: "and the one after?",
