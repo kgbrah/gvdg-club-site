@@ -187,7 +187,7 @@
 
         const app = document.getElementById('app');
         const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], courseName: null, layoutName: null };
-        const pending = new Set();            // "scorer:index:hole" optimistically set, awaiting confirm — don't clobber from snapshot
+        const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
         const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
 
         // ---------- tiny helpers ----------
@@ -296,17 +296,35 @@
         }
         function hasPendingScore(index, hole) {
             const suffix = ':' + index + ':' + hole;
-            for (const key of pending) { if (key.endsWith(suffix)) return true; }
+            for (const key of pending.keys()) { if (key.endsWith(suffix)) return true; }
             return false;
         }
         function strokesFor(index, hole) {
             const cm = S.cardmates.find((p) => p.index === index);
-            const v = cm && cm.scores ? cm.scores[hole] : undefined;
+            if (!cm) return null;
+            // Show the SELECTED scorecard's OWN vote for this player, so you can see and dial your own number
+            // even during a conflict (when the consensus score is intentionally blank). Fall back to the
+            // agreed/consensus value when this scorecard hasn't voted on the hole yet.
+            const sIdx = currentScorerIndex();
+            const votes = cm.scorecards && cm.scorecards[hole];
+            if (sIdx != null && votes && typeof votes['player:' + sIdx] === 'number') return votes['player:' + sIdx];
+            const v = cm.scores ? cm.scores[hole] : undefined;
             return (typeof v === 'number') ? v : null;
         }
         function setLocal(index, hole, strokes) {
             const cm = S.cardmates.find((p) => p.index === index);
-            if (cm) { cm.scores = cm.scores || {}; cm.scores[hole] = strokes; }
+            if (!cm) return;
+            // Optimistically record the SELECTED scorecard's own vote (not the consensus) so the number sticks
+            // and can be incremented during a conflict instead of snapping back to blank.
+            const sIdx = currentScorerIndex();
+            cm.scorecards = cm.scorecards || {};
+            cm.scorecards[hole] = Object.assign({}, cm.scorecards[hole]);
+            if (sIdx != null) cm.scorecards[hole]['player:' + sIdx] = strokes;
+            // Also reflect it as this card's score so the player's own Thru/Total/To-par bar and the
+            // hole-grid "done" dots update immediately (and offline). mergeFromSnap re-blanks it after the
+            // round-trip if it's a genuine conflict; the stepper reads the per-scorer vote first regardless.
+            cm.scores = cm.scores || {};
+            cm.scores[hole] = strokes;
         }
         function setConflicts(rows) {
             S.conflicts = (Array.isArray(rows) ? rows : []).filter((c) => c && c.cardId === S.cardId);
@@ -327,18 +345,22 @@
             const scorerIndex = currentScorerIndex();
             if (scorerIndex == null) { toast('Choose a scorecard'); return; }
             const key = pendingKey(scorerIndex, index, hole);
-            pending.add(key);
+            pending.set(key, (pending.get(key) || 0) + 1); // refcount so a later concurrent tap stays protected
             setLocal(index, hole, strokes);
             renderHole();
             const r = await api(LIVE + '/score', { method: 'POST', body: { index: index, scorerIndex: scorerIndex, hole: hole, strokes: strokes } });
-            pending.delete(key);
+            const n = (pending.get(key) || 0) - 1; if (n > 0) pending.set(key, n); else pending.delete(key);
             if (r.ok) { S.snap = r.data; mergeFromSnap(); }
             else if (r.neterr) { qAdd({ index: index, scorerIndex: scorerIndex, hole: hole, strokes: strokes }); setOnline(false); }
-            else if (r.status === 403) toast('You can only score your own card');
-            else if (r.status === 401) toast('Session expired — sign in again');
-            else if (r.status === 429) toast('Easy there — one moment');
-            else if (r.status === 409) toast('Round isn’t live');
-            else toast('Could not save that score');
+            else {
+                if (r.status === 403) toast('You can only score your own card');
+                else if (r.status === 401) toast('Session expired — sign in again');
+                else if (r.status === 429) toast('Easy there — one moment');
+                else if (r.status === 409) toast('Round isn’t live');
+                else toast('Could not save that score');
+                // Rejected — roll the phantom optimistic vote back to the server's truth so it doesn't linger.
+                if (S.snap) mergeFromSnap(); else renderHole();
+            }
         }
 
         // ---------- merge a snapshot's scores into our cardmates (respecting pending optimistic edits) ----------
@@ -349,11 +371,23 @@
             S.cardmates.forEach((cm) => {
                 const sp = byIndex.get(cm.index); if (!sp) return;
                 cm.scores = cm.scores || {};
+                cm.scorecards = cm.scorecards || {};
                 S.holes.forEach((hh) => {
-                    if (hasPendingScore(cm.index, hh.hole)) return;
-                    const scores = sp.scores || {};
-                    if (Object.prototype.hasOwnProperty.call(scores, hh.hole)) cm.scores[hh.hole] = scores[hh.hole];
-                    else delete cm.scores[hh.hole];
+                    // Consensus value (drives totals/leaderboard + the fallback display).
+                    if (!hasPendingScore(cm.index, hh.hole)) {
+                        const scores = sp.scores || {};
+                        if (Object.prototype.hasOwnProperty.call(scores, hh.hole)) cm.scores[hh.hole] = scores[hh.hole];
+                        else delete cm.scores[hh.hole];
+                    }
+                    // Per-scorer votes: the snapshot is the source of truth, but keep any of OUR own in-flight
+                    // (pending) optimistic votes so the number doesn't flicker back while a POST is in flight.
+                    const votes = Object.assign({}, (sp.scorecards && sp.scorecards[hh.hole]) || {});
+                    const local = cm.scorecards[hh.hole] || {};
+                    Object.keys(local).forEach((sid) => {
+                        const sidx = sid.indexOf('player:') === 0 ? Number(sid.slice(7)) : NaN;
+                        if (Number.isInteger(sidx) && pending.has(pendingKey(sidx, cm.index, hh.hole))) votes[sid] = local[sid];
+                    });
+                    if (Object.keys(votes).length) cm.scorecards[hh.hole] = votes; else delete cm.scorecards[hh.hole];
                 });
             });
             renderHole();
@@ -532,7 +566,7 @@
                     select.appendChild(opt);
                 });
                 select.value = String(scorerIndex);
-                select.addEventListener('change', function () { S.scorerIndex = Number(select.value); });
+                select.addEventListener('change', function () { S.scorerIndex = Number(select.value); renderHole(); });
                 owner.appendChild(select);
                 box.appendChild(owner);
             }
@@ -542,7 +576,7 @@
                 const info = el('div', 'pinfo');
                 info.appendChild(el('div', 'pname', p.name + (p.isMe ? ' (you)' : '')));
                 if (p.division) info.appendChild(el('div', 'pmeta', p.division));
-                if (conflict) info.appendChild(el('div', 'pmeta conflict-text', '⚑ Score conflict'));
+                if (conflict) info.appendChild(el('div', 'pmeta conflict-text', '⚑ Conflict: ' + (conflict.values || []).join(' vs ') + ' — set yours to match'));
                 const cur = strokesFor(p.index, h.hole);
                 const step = el('div', 'stepper');
                 const minus = el('button', 'minus', '−');

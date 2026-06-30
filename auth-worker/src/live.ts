@@ -6,7 +6,7 @@
 // snapshot + ws reads are public). The DO trusts requests it receives.
 
 import * as db from "./db.js";
-import { normalizeScorecards, playerScorerId, recordScoreVote, scorecardConsensusIssues, scoreConflicts } from "./live-consensus.js";
+import { normalizeScorecards, playerScorerId, purgeScorerVotes, recordScoreVote, scorecardConsensusIssues, scoreConflicts } from "./live-consensus.js";
 import { assignCards, computeLeaderboard, finalizeStandings, type PlayerState } from "./scoring.js";
 
 interface LiveEnv {
@@ -142,7 +142,7 @@ export class LiveEventDO {
       players: this.players
         .map((p, index) => ({ p, index }))
         .filter((x) => !x.p.removed)
-        .map(({ p, index }) => ({ index, cardId: p.cardId ?? null, name: p.name, division: p.division ?? null, startingHole: p.startingHole ?? null, scores: p.scores })),
+        .map(({ p, index }) => ({ index, cardId: p.cardId ?? null, name: p.name, division: p.division ?? null, startingHole: p.startingHole ?? null, scores: p.scores, scorecards: p.scorecards ?? {} })),
       conflicts,
       standings: computeLeaderboard(holes, this.players).map((s) => ({ name: s.name, division: s.division, thru: s.thru, total: s.total, toPar: s.toPar })),
       updatedAt: this.meta?.startedAt ?? null,
@@ -229,6 +229,7 @@ export class LiveEventDO {
         division: p.division ?? null,
         startingHole: p.startingHole ?? null,
         scores: p.scores,
+        scorecards: p.scorecards ?? {}, // per-scorer votes so the client can show/edit the caller's OWN vote during a conflict
         isMe: index === meIdx,
         canEnterScorecard: canEnterScorecard(p, authMember),
       }));
@@ -308,6 +309,7 @@ export class LiveEventDO {
     target.scores = {};
     target.scorecards = {};
     target.scoredBy = {};
+    purgeScorerVotes(this.players, idx, this.meta.holes); // drop this player's votes on cardmates + re-derive consensus, so a leaver can't pin a hole in permanent conflict
     await this.persist();
     this.broadcast();
     return j(this.mineData(authMember));
@@ -345,8 +347,12 @@ export class LiveEventDO {
       return j({ status: "final", standings: finalizeStandings(this.resolvedHoles(), this.players) });
     }
     const holes = this.resolvedHoles();
+    // Block finalize ONLY on real disagreements (two scorers entered different values), NOT on cardmates
+    // who simply didn't keep their own card — the common case is one scorekeeper, and walk-on guests can't
+    // vote at all. Unscored/partial players already fall to DNF in finalizeStandings. (issues.missing is
+    // still surfaced in the conflict response so the client can show who hasn't matched.)
     const issues = scorecardConsensusIssues(this.players, holes);
-    if (issues.conflicts.length > 0 || issues.missing.length > 0) {
+    if (issues.conflicts.length > 0) {
       return j({ error: "scorecards_not_matched", conflicts: issues.conflicts, missing: issues.missing }, 409);
     }
     this.meta.status = "final";
