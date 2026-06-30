@@ -460,6 +460,22 @@
             </div>
 
             <style>
+                .dash-tabs { display: flex; gap: 0.45rem; overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 0.3rem 0 0.85rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border-color); scrollbar-width: none; }
+                .dash-tabs::-webkit-scrollbar { display: none; }
+                .dash-tab { flex: 0 0 auto; background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.5rem 1.05rem; font-weight: 700; font-size: 0.88rem; cursor: pointer; white-space: nowrap; transition: background .15s ease, color .15s ease; }
+                .dash-tab:hover { color: var(--text-primary); }
+                .dash-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+                .dtab-off { display: none !important; }
+            </style>
+            <div class="dash-tabs" id="dashTabs" role="tablist" style="display:none;">
+                <button type="button" class="dash-tab active" data-dtab="overview">📊 Overview</button>
+                <button type="button" class="dash-tab" data-dtab="events">📝 Events</button>
+                <button type="button" class="dash-tab" data-dtab="board">💬 Board</button>
+                <button type="button" class="dash-tab" data-dtab="tee">🪧 Tee Signs</button>
+                <button type="button" class="dash-tab" data-dtab="club">🥏 Club</button>
+            </div>
+
+            <style>
                 .my-dashboard { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; }
                 .my-dashboard-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; color: var(--primary); margin-bottom: 1rem; letter-spacing: 0.03em; }
                 .dash-note { color: var(--text-muted); font-size: 0.95rem; padding: 0.5rem 0; }
@@ -596,9 +612,9 @@
                     <span class="passkey-status" id="passkeyStatus"></span>
                 </div>
                 <div class="dashboard-actions" aria-label="Member tools">
-                    <a class="dashboard-action primary" href="#clubBoard">Message board</a>
-                    <a class="dashboard-action" href="#clubRegister">Register</a>
-                    <a class="dashboard-action" href="#teeCapture">Tee signs</a>
+                    <button type="button" class="dashboard-action primary" data-dtab="board">Message board</button>
+                    <button type="button" class="dashboard-action" data-dtab="events">Register</button>
+                    <button type="button" class="dashboard-action" data-dtab="tee">Tee signs</button>
                     <a class="dashboard-action" href="pro-shop.html">Pro Shop</a>
                 </div>
                 <div id="clubWallet" class="wallet-panel" style="display:none;">
@@ -1037,6 +1053,25 @@
         }
 
         let membersInitialized = false;
+        // ---- Player dashboard tabs: one section group visible at a time; each section's own load-state
+        // (shown only when it has content) still governs WITHIN the active tab via the dtab-off override. ----
+        const DASH_TABS = {
+            overview: ['#adminPortalLink', '#myDashboard', '#liveScoring'],
+            events: ['#clubRegister', '#clubMeetings'],
+            board: ['#clubBoard'],
+            tee: ['#teeCapture'],
+            club: ['.members-stats-grid', '.members-chart-container', '#doublesLeague', '.meeting-minutes-container'],
+        };
+        const DASH_ALL_SEL = [...new Set(Object.values(DASH_TABS).flat())];
+        function selectDashTab(tab) {
+            if (!DASH_TABS[tab]) tab = 'overview';
+            DASH_ALL_SEL.forEach((sel) => document.querySelectorAll(sel).forEach((el) => el.classList.add('dtab-off')));
+            DASH_TABS[tab].forEach((sel) => document.querySelectorAll(sel).forEach((el) => el.classList.remove('dtab-off')));
+            document.querySelectorAll('#dashTabs .dash-tab').forEach((b) => b.classList.toggle('active', b.dataset.dtab === tab));
+            const t = $('dashTabs'); if (t) t.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        }
+        document.querySelectorAll('#dashTabs .dash-tab, .dashboard-action[data-dtab]').forEach((b) => b.addEventListener('click', () => selectDashTab(b.dataset.dtab)));
+
         function showMembersContent(name) {
             stopPasskeyPriming(); // logged in — no need to keep priming a login challenge
             $('loginGate').style.display = 'none';
@@ -1050,6 +1085,8 @@
                 $('passkeyStatus').textContent = '';
             }
             $('adminPortalLink').style.display = memberProfile.isAdmin ? '' : 'none';
+            $('dashTabs').style.display = '';
+            selectDashTab('overview'); // land on Overview; tabs jump to each feature with no scrolling
         }
 
         function logout() {
