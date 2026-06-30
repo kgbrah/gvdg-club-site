@@ -33,6 +33,22 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+function textValue(value: unknown): string | null {
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function defaultCtpPayoutNote(event: Record<string, unknown>, ctp: Record<string, unknown>): string {
+  const parts = [`CTP payout: ${textValue(event.name) ?? "event"}`];
+  const hole = textValue(ctp.hole);
+  if (hole) parts.push(`hole ${hole}`);
+  const division = textValue(ctp.division);
+  if (division) parts.push(division);
+  const prize = textValue(ctp.prize);
+  if (prize) parts.push(prize);
+  return parts.join(" - ");
+}
+
 export async function handleAdminEvents(
   request: Request,
   env: Env,
@@ -114,12 +130,36 @@ export async function handleAdminEvents(
       return json({ ctp: row }, 201, origin);
     }
     const cid = seg[4] != null ? asInt(seg[4]) : null;
-    if (method === "PATCH" && cid != null) {
+    if (method === "POST" && cid != null && seg[5] === "store-credit") {
+      const body = (await readJson(request)) ?? {};
+      const memberId = asStr(body.member_id, 80);
+      const amount = asInt(body.amount_cents);
+      if (!memberId || amount == null || amount <= 0) return json({ error: "invalid_store_credit" }, 400, origin);
+      const event = await db.getEvent(env.DB, id);
+      if (!event) return json({ error: "not_found" }, 404, origin);
+      const member = await getMember(env.ROSTER, memberId);
+      if (!member) return json({ error: "member_not_found" }, 404, origin);
+      const winnerName = asStr(body.winner_name, 100) ?? member.name;
+      const ctp = await db.setCtpWinner(env.DB, cid, id, memberId, winnerName);
+      if (!ctp) return json({ error: "not_found" }, 404, origin);
+      const tx = await shopDb.createWalletTransaction(env.DB, {
+        member_id: memberId,
+        member_name: member.name,
+        amount_cents: amount,
+        transaction_type: "credit",
+        source: "event_payout",
+        event_id: id,
+        note: asStr(body.note, 300) ?? defaultCtpPayoutNote(event, ctp),
+        created_by: adminId,
+      });
+      return json({ ctp, transaction: tx, balance_cents: await shopDb.walletBalance(env.DB, memberId), payouts: await shopDb.listEventStoreCreditPayouts(env.DB, id) }, 201, origin);
+    }
+    if (method === "PATCH" && cid != null && seg[5] == null) {
       const b = (await readJson(request)) ?? {};
       const row = await db.setCtpWinner(env.DB, cid, id, asStr(b.winner_member_id, 64), asStr(b.winner_name, 100));
       return row ? json({ ctp: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
     }
-    if (method === "DELETE" && cid != null) {
+    if (method === "DELETE" && cid != null && seg[5] == null) {
       await db.deleteCtp(env.DB, id, cid);
       return json({ ok: true }, 200, origin);
     }

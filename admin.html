@@ -214,6 +214,7 @@
         .admin-msg.ok { color: var(--green); } .admin-msg.err { color: #dc3545; }
         .admin-evrow { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); margin-bottom: 0.5rem; }
         .admin-evrow .ev-name { font-weight: 600; flex: 1; min-width: 140px; }
+        .admin-evrow input, .admin-evrow select { padding: 0.35rem 0.45rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
         .admin-badge { font-size: 0.7rem; text-transform: uppercase; padding: 0.15rem 0.5rem; border-radius: 4px; background: var(--secondary); color: #fff; letter-spacing: 0.04em; }
         .admin-badge.live { background: #dc3545; } .admin-badge.final { background: var(--text-muted); } .admin-badge.scheduled { background: var(--green); }
         .admin-cand { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--border-color); }
@@ -535,6 +536,7 @@
                     </div>
                     <div class="al-section" style="margin-top:1rem;">
                         <h4 class="al-h">CTPs (closest to pin)</h4>
+                        <datalist id="rgMemberOptions"></datalist>
                         <div class="al-row">
                             <span>Hole <input id="rgCtpHole" type="number" min="1" style="width:4rem"></span>
                             <input id="rgCtpDivision" placeholder="division (optional)" maxlength="60" size="12">
@@ -545,7 +547,7 @@
                     </div>
                     <div class="al-section">
                         <h4 class="al-h">Store credit payouts</h4>
-                        <p class="al-note">Award credit from the registered-player rows, or review the payout ledger here.</p>
+                        <p class="al-note">Award credit from registered-player rows or CTP rows, then review the payout ledger here.</p>
                         <div id="rgCreditList" style="margin-top:0.5rem;"></div>
                     </div>
                     <div class="al-section">
@@ -1803,6 +1805,16 @@
             let regs = [];
             try { const r = await adminApi('/admin/events/' + rgEventId + '/registrations'); if (r.ok) regs = (await r.json()).registrations || []; } catch (e) {}
             $('rgCount').textContent = String(regs.length);
+            const memberOptions = $('rgMemberOptions');
+            if (memberOptions) {
+                memberOptions.replaceChildren();
+                regs.filter((rg) => rg.member_id).forEach((rg) => {
+                    const opt = document.createElement('option');
+                    opt.value = rg.member_id;
+                    opt.label = rg.name || rg.member_id;
+                    memberOptions.appendChild(opt);
+                });
+            }
             const grid = $('rgRoster'); grid.replaceChildren();
             const thead = document.createElement('thead'); const htr = document.createElement('tr');
             ['Player', 'Division', 'Team', 'Start hole', 'In?', 'Paid?', 'Credit'].forEach((h) => htr.appendChild(elx('th', null, h)));
@@ -1897,7 +1909,13 @@
             if (amount == null || amount <= 0) { adminMsg('Enter a store credit amount', false); return; }
             const r = await adminApi('/admin/events/' + rgEventId + '/store-credit', { method: 'POST', body: { member_id: memberId, member_name: name || null, amount_cents: amount, note: 'Event payout: ' + ($('rgEvent').selectedOptions[0]?.textContent || 'event') } });
             if (r.ok) { const d = await r.json(); adminMsg('Awarded ' + dollarsFromCents(amount) + ' to ' + (name || memberId) + '. Balance: ' + dollarsFromCents(d.balance_cents || 0), true); input.value = ''; rgLoadCredits(); }
-            else adminMsg('Store credit award failed (' + r.status + ')', false);
+            else adminMsg(await rgStoreCreditError(r, 'Store credit award failed'), false);
+        }
+        async function rgStoreCreditError(r, fallback) {
+            const d = await r.json().catch(() => ({}));
+            if (d.error === 'member_not_found') return fallback + ': member id not found';
+            if (d.error === 'invalid_store_credit') return fallback + ': enter a valid member and amount';
+            return fallback + ' (' + r.status + ')';
         }
         function rgToggleCell(on, onChange) {
             const td = document.createElement('td'); const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!on;
@@ -1924,13 +1942,33 @@
                 const row = elx('div', 'admin-evrow');
                 row.appendChild(elx('span', 'ev-name', 'Hole ' + c.hole + (c.division ? ' · ' + c.division : '') + (c.prize ? ' · ' + c.prize : '') + (c.winner_name ? ' · 🏆 ' + c.winner_name : '')));
                 const win = document.createElement('input'); win.placeholder = 'winner'; win.style.width = '8rem'; if (c.winner_name) win.value = c.winner_name;
+                const member = document.createElement('input'); member.placeholder = 'member id'; member.style.width = '7rem'; member.setAttribute('list', 'rgMemberOptions'); if (c.winner_member_id) member.value = c.winner_member_id;
                 const setW = elx('button', 'admin-btn secondary', 'Set winner');
-                setW.addEventListener('click', async () => { const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + c.id, { method: 'PATCH', body: { winner_name: win.value.trim() || null } }); if (r.ok) { adminMsg('CTP winner set', true); rgLoadCtps(); } });
+                setW.addEventListener('click', async () => { const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + c.id, { method: 'PATCH', body: { winner_name: win.value.trim() || null, winner_member_id: member.value.trim() || null } }); if (r.ok) { adminMsg('CTP winner set', true); rgLoadCtps(); } });
+                const credit = document.createElement('input'); credit.type = 'number'; credit.min = '0'; credit.step = '0.01'; credit.placeholder = '$'; credit.style.width = '5rem';
+                const award = elx('button', 'admin-btn secondary', 'Award credit'); award.type = 'button';
+                award.addEventListener('click', () => rgAwardCtpCredit(c, member, win, credit));
                 const del = elx('button', 'admin-btn danger', 'Delete');
                 del.addEventListener('click', async () => { const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + c.id, { method: 'DELETE' }); if (r.ok) rgLoadCtps(); });
-                row.appendChild(win); row.appendChild(setW); row.appendChild(del);
+                row.appendChild(win); row.appendChild(member); row.appendChild(setW); row.appendChild(credit); row.appendChild(award); row.appendChild(del);
                 list.appendChild(row);
             });
+        }
+        async function rgAwardCtpCredit(ctp, memberInput, nameInput, amountInput) {
+            const memberId = memberInput.value.trim();
+            const amount = dollarsToCents(amountInput.value);
+            if (!memberId) { adminMsg('CTP store credit needs a member id', false); return; }
+            if (amount == null || amount <= 0) { adminMsg('Enter a CTP store credit amount', false); return; }
+            const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + ctp.id + '/store-credit', { method: 'POST', body: { member_id: memberId, winner_name: nameInput.value.trim() || null, amount_cents: amount } });
+            if (r.ok) {
+                const d = await r.json();
+                adminMsg('Awarded CTP credit ' + dollarsFromCents(amount) + '. Balance: ' + dollarsFromCents(d.balance_cents || 0), true);
+                amountInput.value = '';
+                rgLoadCtps();
+                rgLoadCredits();
+            } else {
+                adminMsg(await rgStoreCreditError(r, 'CTP store credit award failed'), false);
+            }
         }
         async function rgAddCtp() {
             const hole = parseInt($('rgCtpHole').value, 10);
