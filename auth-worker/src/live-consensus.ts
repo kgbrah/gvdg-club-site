@@ -50,12 +50,11 @@ export function normalizeScorecards(players: PlayerState[], holes: ScoreHole[]):
       if (!holeSet.has(hole) || typeof strokes !== "number") continue;
       const existing = scorecards[hole];
       if (existing && Object.keys(existing).length > 0) continue;
-      const seeded: Record<string, number> = {};
-      const requiredScorers = cardScorerIds(players, player);
-      const legacyScorer = player.scoredBy?.[hole] ?? null;
-      const scorerIds = requiredScorers.length > 0 ? requiredScorers : legacyScorer ? [legacyScorer] : ["legacy"];
-      for (const scorerId of scorerIds) seeded[scorerId] = strokes;
-      scorecards[hole] = seeded;
+      // Seed a legacy (pre-consensus) score under a SINGLE non-active "legacy" marker — NOT one fabricated
+      // vote per cardmate. activeVoteValues ignores a non-card-scorer id, so syncConsensusScore preserves
+      // the displayed legacy score (via the 0-active-votes branch), and the FIRST real vote by any active
+      // scorer becomes the consensus without colliding with phantom cardmate votes.
+      scorecards[hole] = { legacy: strokes };
     }
     for (const hole of holeSet) syncConsensusScore(players, player, hole);
   }

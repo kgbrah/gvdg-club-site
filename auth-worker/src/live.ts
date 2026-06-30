@@ -28,6 +28,7 @@ interface LiveMeta {
   holes: { hole: number; par: number; distance_ft?: number | null }[];
   status: "live" | "final";
   startedAt: string;
+  rev?: number; // monotonic revision, bumped on every mutation so clients can drop out-of-order snapshots
   // Single-use, ROUND-SCOPED hole overrides (e.g. short baskets today). They live only here, in the
   // live round — the course layout is never touched, so the hole reverts to its verified value after
   // the round. Keyed by hole number (string for JSON safety).
@@ -89,6 +90,7 @@ export class LiveEventDO {
     this.loaded = true;
   }
   private async persist(): Promise<void> {
+    if (this.meta) this.meta.rev = (this.meta.rev ?? 0) + 1; // one bump per mutation (persist is the mutation marker)
     await this.state.storage.put("meta", this.meta);
     await this.state.storage.put("players", this.players);
   }
@@ -129,6 +131,7 @@ export class LiveEventDO {
     const conflicts = scoreConflicts(this.players, holes);
     return {
       status: this.meta?.status ?? "none",
+      rev: this.meta?.rev ?? 0,
       eventId: this.meta?.eventId ?? null,
       courseName: this.meta?.courseName ?? null,
       layoutName: this.meta?.layoutName ?? null,

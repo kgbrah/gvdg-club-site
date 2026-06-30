@@ -222,6 +222,33 @@ describe("LiveEventDO card-scoped scoring", () => {
     expect(fin.status).toBe(200); // no conflict → finalizes (B & C ranked, not DNF-wiped)
   });
 
+  it("seeds legacy scores under a single marker so a single-scorer correction doesn't phantom-conflict", async () => {
+    const state = new FakeState({
+      meta: { eventId: 0, casual: true, holes: [{ hole: 1, par: 3 }], status: "live", startedAt: "" },
+      players: [
+        { memberId: "m0", name: "A", scores: { 1: 4 } },
+        { memberId: "m1", name: "B", scores: { 1: 4 } },
+      ],
+    });
+    const live = new LiveEventDO(state, { DB: db });
+    const seeded = (await (await live.fetch(new Request("https://do/"))).json()) as SnapshotBody;
+    expect(seeded.conflicts).toEqual([]); // legacy migration must NOT fabricate a cardmate conflict
+    expect(seeded.players[1]?.scores).toMatchObject({ 1: 4 }); // legacy score preserved on load
+    const corrected = (await (await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m0" }, body: JSON.stringify({ index: 1, hole: 1, strokes: 3 }) }))).json()) as SnapshotBody;
+    expect(corrected.conflicts).toEqual([]); // A's correction supersedes the legacy marker — no phantom conflict
+    expect(corrected.players[1]?.scores).toMatchObject({ 1: 3 });
+  });
+
+  it("snapshot carries a monotonic rev that bumps on each mutation (stale-snapshot guard)", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ casual: true, holes: [{ hole: 1, par: 3 }], players: [{ memberId: "m0", name: "A" }] }) }));
+    const a = (await (await live.fetch(new Request("https://do/"))).json()) as { rev: number };
+    await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m0" }, body: JSON.stringify({ index: 0, hole: 1, strokes: 3 }) }));
+    const b = (await (await live.fetch(new Request("https://do/"))).json()) as { rev: number };
+    expect(typeof a.rev).toBe("number");
+    expect(b.rev).toBeGreaterThan(a.rev);
+  });
+
   it("lets one scorer edit their own unopposed entry without creating a conflict", async () => {
     const state = new FakeState({});
     const live = new LiveEventDO(state, { DB: db });
