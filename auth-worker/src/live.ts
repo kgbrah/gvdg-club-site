@@ -7,7 +7,7 @@
 
 import * as db from "./db.js";
 import { normalizeScorecards, playerScorerId, purgeScorerVotes, recordScoreVote, scorecardConsensusIssues } from "./live-consensus.js";
-import { assignCards, computeLeaderboard, finalizeStandings, type PlayerState } from "./scoring.js";
+import { assignCards, computeLeaderboard, finalizeStandings, type FinalStanding, type PlayerState } from "./scoring.js";
 
 interface LiveEnv {
   DB: db.D1Like;
@@ -22,7 +22,11 @@ interface LiveState {
 }
 interface LiveMeta {
   eventId: number;
-  casual?: boolean; // self-organizing casual round (no admin event); finalize does not write D1 event results
+  casual?: boolean; // self-organizing casual round (no admin event); finalize writes casual_rounds/casual_results (not event results)
+  roundCode?: string | null; // casual share code (the DO name suffix) — the durable key for casual_rounds
+  courseId?: number | null; // casual: the layout's course + layout ids, kept so ratings can compute a per-layout SSA
+  layoutId?: number | null;
+  createdBy?: string | null; // casual: member id that started the round
   courseName?: string | null; // display-only: course + layout shown in the scorecard header
   layoutName?: string | null;
   udiscCourseId?: string | null; // UDisc numeric course id for the "Add to UDisc" applink (export bridge)
@@ -38,6 +42,10 @@ interface LiveMeta {
 interface StartBody {
   eventId?: number;
   casual?: boolean;
+  roundCode?: string | null;
+  courseId?: number | null;
+  layoutId?: number | null;
+  createdBy?: string | null;
   courseName?: string | null;
   layoutName?: string | null;
   udiscCourseId?: string | null;
@@ -163,7 +171,7 @@ export class LiveEventDO {
       .filter((h) => h && typeof h.hole === "number" && typeof h.par === "number")
       .map((h) => ({ hole: h.hole, par: h.par, distance_ft: h.distance_ft ?? null, tee_sign_id: h.tee_sign_id ?? null }));
     if (holes.length === 0 || (!b.eventId && !b.casual)) return j({ error: "invalid_start" }, 400);
-    this.meta = { eventId: b.eventId ?? 0, casual: !!b.casual, courseName: b.courseName ?? null, layoutName: b.layoutName ?? null, udiscCourseId: b.udiscCourseId ?? null, holes, status: "live", startedAt: b.startedAt ?? "", overrides: {} };
+    this.meta = { eventId: b.eventId ?? 0, casual: !!b.casual, roundCode: b.roundCode ?? null, courseId: b.courseId ?? null, layoutId: b.layoutId ?? null, createdBy: b.createdBy ?? null, courseName: b.courseName ?? null, layoutName: b.layoutName ?? null, udiscCourseId: b.udiscCourseId ?? null, holes, status: "live", startedAt: b.startedAt ?? "", overrides: {} };
     this.players = (Array.isArray(b.players) ? b.players : []).map((p) => ({
       memberId: p.memberId ?? null,
       name: String(p.name ?? "Player"),
@@ -382,8 +390,18 @@ export class LiveEventDO {
     const forced = incomplete; // an admin pushed a not-fully-agreed card through
     this.meta.status = "final";
     const standings = finalizeStandings(holes, this.players);
-    // A casual round has no admin event — just close it out; nothing is written to D1 event results.
+    // A casual round has no admin event, so it isn't written to D1 EVENT results — but we DO persist a
+    // durable casual_rounds/casual_results record (the DO storage is ephemeral), so the round survives for
+    // history + ratings. Guarded by roundCode; roll back the finalize claim if the write fails so it retries.
     if (this.meta.casual || !this.meta.eventId) {
+      if (this.meta.casual && this.meta.roundCode) {
+        try {
+          await this.persistCasualResults(standings);
+        } catch (e) {
+          this.meta.status = "live";
+          throw e;
+        }
+      }
       await this.persist();
       this.broadcast();
       return j({ status: "final", standings, forced });
@@ -414,6 +432,46 @@ export class LiveEventDO {
     await this.persist();
     this.broadcast();
     return j({ status: "final", standings, forced });
+  }
+
+  /** Write a finalized casual round to D1 (header + one row per player) so it survives the DO's eviction
+   *  and feeds dashboard history + the ratings engine. Called once, on the first finalize (the idempotent
+   *  status==="final" short-circuit above prevents duplicate inserts). */
+  private async persistCasualResults(standings: FinalStanding[]): Promise<void> {
+    const meta = this.meta!;
+    const holes = this.resolvedHoles().map((h) => ({ hole: h.hole, par: h.par, distance_ft: h.distance_ft }));
+    // Delete any prior durable record for this round code FIRST (cascades to casual_results), so a
+    // re-finalize after a fault/eviction — or after a partial write on the previous attempt — REPLACES
+    // rather than duplicates the round. Mirrors the competition path's clearResults(eventId) idempotency;
+    // the UNIQUE round_code index is the backstop. (DO requests are serialized, so no concurrent race.)
+    await db.clearCasualRound(this.env.DB, meta.roundCode!);
+    const round = (await db.createCasualRound(this.env.DB, {
+      round_code: meta.roundCode!,
+      course_id: meta.courseId ?? null,
+      layout_id: meta.layoutId ?? null,
+      course_name: meta.courseName ?? null,
+      layout_name: meta.layoutName ?? null,
+      holes: JSON.stringify(holes),
+      created_by: meta.createdBy ?? null,
+      started_at: meta.startedAt || null,
+    })) as { id?: number } | null;
+    const roundId = round?.id;
+    if (!roundId) throw new Error("casual_round_insert_failed");
+    await Promise.all(
+      standings.map((s) =>
+        db.createCasualResult(this.env.DB, {
+          casual_round_id: roundId,
+          member_id: s.memberId,
+          name: s.name,
+          division: s.division,
+          place: s.place,
+          total: s.total,
+          to_par: s.toPar,
+          breakdown: JSON.stringify(s.breakdown),
+          scorecard: s.holes.length ? JSON.stringify(s.holes) : null,
+        }),
+      ),
+    );
   }
 
   private handleWs(_request: Request): Response {
