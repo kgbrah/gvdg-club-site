@@ -147,6 +147,27 @@
         .ts-strip-hole { color: var(--primary); font-weight: 700; }
         .ts-unverified { display: inline-block; font-size: 0.7rem; font-weight: 700; color: #b7791f; background: rgba(214,158,46,0.18); border-radius: 999px; padding: 0.05rem 0.45rem; align-self: flex-start; }
         .ts-temp { display: inline-block; font-size: 0.7rem; font-weight: 700; color: #2563eb; background: rgba(37,99,235,0.16); border-radius: 999px; padding: 0.05rem 0.45rem; align-self: flex-start; }
+        .ts-review-toolbar { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+        .ts-review-toolbar select { padding: 0.45rem 0.55rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
+        .ts-review-list { display: grid; gap: 0.85rem; }
+        .ts-review-card { display: grid; grid-template-columns: minmax(170px, 260px) minmax(0, 1fr); gap: 0.9rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); padding: 0.85rem; box-shadow: 0 3px 12px var(--card-shadow); }
+        .ts-review-media { min-width: 0; }
+        .ts-review-photo { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; object-position: center; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-tertiary); display: block; }
+        .ts-review-body { display: grid; gap: 0.65rem; min-width: 0; }
+        .ts-review-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+        .ts-review-title { font-weight: 800; color: var(--text-primary); }
+        .ts-review-meta { font-size: 0.78rem; color: var(--text-muted); }
+        .ts-review-rows { display: grid; gap: 0.45rem; }
+        .ts-review-row { display: grid; grid-template-columns: minmax(7rem, 1.4fr) minmax(7rem, 1fr) minmax(4rem, 0.55fr) minmax(5rem, 0.7fr); gap: 0.4rem; align-items: end; }
+        .ts-review-row input, .ts-review-row select { width: 100%; min-height: 36px; padding: 0.35rem 0.45rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-primary); color: var(--text-primary); }
+        .ts-review-row label { display: block; font-size: 0.65rem; line-height: 1.1; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: 0.12rem; }
+        .ts-review-actions { display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center; }
+        .ts-review-empty { padding: 1rem; border: 1px dashed var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-muted); }
+        @media (max-width: 920px) {
+            .ts-review-card { grid-template-columns: 1fr; }
+            .ts-review-media { max-width: 360px; }
+            .ts-review-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
         .al-holes th.th-temp { color: #2563eb; }
         .tee-sign { color: var(--text-primary); }
         .tee-sign-bg { fill: var(--bg-tertiary); stroke: var(--border-color); stroke-opacity: 0.8; }
@@ -320,6 +341,7 @@
                     <option value="" disabled selected hidden>Courses</option>
                     <option value="courses">Courses</option>
                     <option value="layouts">Layouts</option>
+                    <option value="tee-signs">Tee Signs</option>
                 </select>
                 <select class="admin-mnav" aria-label="Club section">
                     <option value="" disabled selected hidden>Club</option>
@@ -349,6 +371,7 @@
                     <div class="admin-navgroup">Courses</div>
                     <button type="button" class="admin-tab" data-atab="courses">Courses</button>
                     <button type="button" class="admin-tab" data-atab="layouts">Layouts</button>
+                    <button type="button" class="admin-tab" data-atab="tee-signs">Tee Signs</button>
                     <div class="admin-navgroup">Club</div>
                     <button type="button" class="admin-tab" data-atab="leagues-mgmt">Leagues</button>
                     <button type="button" class="admin-tab" data-atab="fundraisers">Fundraisers</button>
@@ -453,6 +476,18 @@
                         <div id="alLayoutsList" class="al-note">None yet.</div>
                     </div>
                 </div>
+            </div>
+            <div class="admin-pane" id="apane-tee-signs">
+                <div class="al-section ts-review-toolbar">
+                    <label for="tsStatusFilter">Show</label>
+                    <select id="tsStatusFilter">
+                        <option value="candidate">Awaiting review</option>
+                        <option value="official">Official</option>
+                        <option value="rejected">Rejected</option>
+                    </select>
+                    <button type="button" class="admin-btn" id="tsRefresh">Refresh</button>
+                </div>
+                <div id="tsReviewList" class="ts-review-list">Loading…</div>
             </div>
             <div class="admin-pane" id="apane-scoring">
                 <div><label for="scEvent">Event</label>
@@ -806,6 +841,7 @@
         function dollarsFromCents(c) { const n = Number(c || 0); const abs = Math.abs(n); const out = '$' + (abs / 100).toLocaleString(undefined, { minimumFractionDigits: abs % 100 ? 2 : 0 }); return n < 0 ? '-' + out : out; }
         function dollarsToCents(v) { const n = parseFloat(v); return Number.isFinite(n) ? Math.round(n * 100) : null; }
         let aeEditingEvent = null;
+        let adminCoursesCache = [], tsReviewThumbUrls = [];
         function adminSwitch(tab) {
             document.querySelectorAll('.admin-tab').forEach((t) => t.classList.toggle('active', t.dataset.atab === tab));
             document.querySelectorAll('.admin-pane').forEach((p) => p.classList.toggle('active', p.id === 'apane-' + tab));
@@ -820,6 +856,7 @@
             if (tab === 'shop') adminLoadProducts();
             if (tab === 'wallets') adminLoadWalletRecent();
             if (tab === 'orders') adminLoadOrders();
+            if (tab === 'tee-signs') tsLoadReview();
             if (tab === 'members') adminLoadMembers();
         }
 
@@ -858,6 +895,7 @@
         async function adminLoadCourses() {
             let courses = [];
             try { const r = await api('/courses'); if (r.ok) courses = (await r.json()).courses || []; } catch (e) {}
+            adminCoursesCache = courses;
             const sel = $('aeCourse'); sel.length = 1;
             const lsel = $('alCourse'); lsel.length = 1;
             const list = $('adminCoursesList'); list.textContent = '';
@@ -978,6 +1016,220 @@
             const r = await adminApi('/admin/courses', { method: 'POST', body });
             if (r.ok) { adminMsg('Added course “' + body.name + '”', true); $('adminCourseForm').reset(); adminLoadCourses(); }
             else { adminMsg('Add course failed (' + r.status + ')', false); }
+        }
+
+        function tsCourseName(courseId) {
+            const c = adminCoursesCache.find((row) => String(row.id) === String(courseId));
+            return c ? c.name : 'Course #' + courseId;
+        }
+        function tsReleaseThumbs() {
+            tsReviewThumbUrls.forEach((url) => URL.revokeObjectURL(url));
+            tsReviewThumbUrls = [];
+        }
+        async function tsLoadReviewImage(sign, img) {
+            const id = Number(sign.id);
+            if (!id) return;
+            if (sign.status === 'official') {
+                img.src = AUTH_BASE + '/tee-signs/' + id + '/image';
+                return;
+            }
+            if (sign.status !== 'candidate') return;
+            try {
+                const r = await fetch(AUTH_BASE + '/tee-signs/' + id + '/image', { headers: { Authorization: 'Bearer ' + sessionStorage.getItem(TOKEN_KEY) } });
+                if (!r.ok) return;
+                const url = URL.createObjectURL(await r.blob());
+                if (img.isConnected) { tsReviewThumbUrls.push(url); img.src = url; }
+                else URL.revokeObjectURL(url);
+            } catch (e) {}
+        }
+        async function tsLayoutsForCourse(courseId) {
+            try {
+                const r = await api('/courses/' + encodeURIComponent(courseId) + '/layouts');
+                if (r.ok) return (await r.json()).layouts || [];
+            } catch (e) {}
+            return [];
+        }
+        function tsField(label, node) {
+            const wrap = document.createElement('div');
+            wrap.appendChild(elx('label', null, label));
+            wrap.appendChild(node);
+            return wrap;
+        }
+        function tsAddReviewRow(wrap, layouts, seed) {
+            const row = elx('div', 'ts-review-row');
+            const layout = document.createElement('select');
+            layout.className = 'ts-layout';
+            layouts.forEach((l) => {
+                const opt = document.createElement('option');
+                opt.value = String(l.id);
+                opt.textContent = l.name || ('Layout #' + l.id);
+                layout.appendChild(opt);
+            });
+            const fresh = document.createElement('option');
+            fresh.value = '__new__';
+            fresh.textContent = '+ New layout';
+            layout.appendChild(fresh);
+            const hasLayout = seed && seed.layoutId != null;
+            layout.value = hasLayout ? String(seed.layoutId) : '__new__';
+            const newLayout = document.createElement('input');
+            newLayout.className = 'ts-new-layout';
+            newLayout.maxLength = 80;
+            newLayout.placeholder = 'Layout name';
+            newLayout.value = !hasLayout ? (seed && (seed.suggestedLayoutName || seed.label) || 'Main') : '';
+            const syncNewLayout = () => { newLayout.disabled = layout.value !== '__new__'; };
+            layout.addEventListener('change', syncNewLayout);
+            syncNewLayout();
+            const par = document.createElement('input');
+            par.className = 'ts-par';
+            par.type = 'number';
+            par.min = '1';
+            par.max = '15';
+            par.value = seed && seed.par != null ? String(seed.par) : '3';
+            const dist = document.createElement('input');
+            dist.className = 'ts-distance';
+            dist.type = 'number';
+            dist.min = '0';
+            dist.placeholder = 'ft';
+            if (seed && seed.distance_ft != null) dist.value = String(seed.distance_ft);
+            const tee = document.createElement('input');
+            tee.className = 'ts-tee';
+            tee.maxLength = 80;
+            tee.placeholder = 'Tee';
+            tee.value = seed && seed.tee != null ? String(seed.tee) : '';
+            const target = document.createElement('input');
+            target.className = 'ts-target';
+            target.maxLength = 80;
+            target.placeholder = 'Target';
+            target.value = seed && seed.target != null ? String(seed.target) : '';
+            const color = document.createElement('input');
+            color.className = 'ts-color';
+            color.maxLength = 24;
+            color.placeholder = 'Color';
+            color.value = seed && seed.color != null ? String(seed.color) : '';
+            const remove = elx('button', 'admin-btn danger', 'Remove');
+            remove.type = 'button';
+            remove.addEventListener('click', () => row.remove());
+            row.appendChild(tsField('Layout', layout));
+            row.appendChild(tsField('New name', newLayout));
+            row.appendChild(tsField('Par', par));
+            row.appendChild(tsField('Feet', dist));
+            row.appendChild(tsField('Tee', tee));
+            row.appendChild(tsField('Target', target));
+            row.appendChild(tsField('Color', color));
+            row.appendChild(remove);
+            wrap.appendChild(row);
+        }
+        function tsRowsFrom(card) {
+            return Array.from(card.querySelectorAll('.ts-review-row')).map((row) => {
+                const layout = row.querySelector('.ts-layout');
+                const par = parseInt(row.querySelector('.ts-par').value, 10);
+                const dist = parseInt(row.querySelector('.ts-distance').value, 10);
+                if (!(par >= 1 && par <= 15)) return null;
+                const body = {
+                    par,
+                    distance_ft: Number.isFinite(dist) && dist > 0 ? dist : null,
+                    tee: row.querySelector('.ts-tee').value.trim() || null,
+                    target: row.querySelector('.ts-target').value.trim() || null,
+                    color: row.querySelector('.ts-color').value.trim() || null,
+                };
+                if (layout.value && layout.value !== '__new__') body.layoutId = Number(layout.value);
+                else body.newLayoutName = row.querySelector('.ts-new-layout').value.trim() || 'Main';
+                return body;
+            }).filter(Boolean);
+        }
+        async function tsApprove(sign, card) {
+            const rows = tsRowsFrom(card);
+            if (!rows.length) { adminMsg('Add at least one valid row before approving', false); return; }
+            const r = await adminApi('/admin/tee-signs/' + sign.id + '/approve', { method: 'POST', body: { rows } });
+            adminMsg(r.ok ? 'Tee sign approved and layout holes updated' : 'Approve failed (' + r.status + ')', r.ok);
+            if (r.ok) tsLoadReview();
+        }
+        async function tsExtract(sign) {
+            adminMsg('Re-running tee-sign vision...', true);
+            const r = await adminApi('/admin/tee-signs/' + sign.id + '/extract', { method: 'POST', body: {} });
+            adminMsg(r.ok ? 'Vision extraction refreshed' : 'Vision refresh failed (' + r.status + ')', r.ok);
+            if (r.ok) tsLoadReview();
+        }
+        async function tsReject(sign) {
+            if (!confirm('Reject tee sign for hole ' + sign.hole_number + '? The stored image will be removed.')) return;
+            const r = await adminApi('/admin/tee-signs/' + sign.id + '/reject', { method: 'POST', body: {} });
+            adminMsg(r.ok ? 'Tee sign rejected' : 'Reject failed (' + r.status + ')', r.ok);
+            if (r.ok) tsLoadReview();
+        }
+        async function tsDelete(sign) {
+            if (!confirm('Delete tee sign #' + sign.id + '?')) return;
+            const r = await adminApi('/admin/tee-signs/' + sign.id, { method: 'DELETE' });
+            adminMsg(r.ok ? 'Tee sign deleted' : 'Delete failed (' + r.status + ')', r.ok);
+            if (r.ok) tsLoadReview();
+        }
+        function tsCard(sign, layouts) {
+            const card = elx('div', 'ts-review-card');
+            const media = elx('div', 'ts-review-media');
+            const img = elx('img', 'ts-review-photo');
+            img.alt = 'Tee sign for hole ' + sign.hole_number;
+            img.loading = 'lazy';
+            media.appendChild(img);
+            tsLoadReviewImage(sign, img);
+            card.appendChild(media);
+            const body = elx('div', 'ts-review-body');
+            const head = elx('div', 'ts-review-head');
+            head.appendChild(elx('div', 'ts-review-title', tsCourseName(sign.course_id) + ' · Hole ' + sign.hole_number));
+            head.appendChild(elx('span', 'admin-badge ' + (sign.status || ''), sign.status || 'candidate'));
+            body.appendChild(head);
+            const metaBits = [];
+            if (sign.uploaded_by) metaBits.push('Uploaded by ' + sign.uploaded_by);
+            if (sign.created_at) metaBits.push(sign.created_at);
+            if (sign.extract_source) metaBits.push('Vision: ' + sign.extract_source);
+            body.appendChild(elx('div', 'ts-review-meta', metaBits.join(' · ') || 'No metadata'));
+            const rows = elx('div', 'ts-review-rows');
+            const seeds = Array.isArray(sign.suggestedRows) && sign.suggestedRows.length ? sign.suggestedRows : [{ suggestedLayoutName: 'Main', par: 3 }];
+            seeds.forEach((seed) => tsAddReviewRow(rows, layouts, seed));
+            body.appendChild(rows);
+            const actions = elx('div', 'ts-review-actions');
+            const add = elx('button', 'admin-btn secondary', '+ Row');
+            add.type = 'button';
+            add.addEventListener('click', () => tsAddReviewRow(rows, layouts, { suggestedLayoutName: 'Main', par: 3 }));
+            actions.appendChild(add);
+            if (sign.status !== 'rejected') {
+                const approve = elx('button', 'admin-btn', sign.status === 'official' ? 'Apply rows' : 'Approve');
+                approve.type = 'button';
+                approve.addEventListener('click', () => tsApprove(sign, card));
+                actions.appendChild(approve);
+                const extract = elx('button', 'admin-btn secondary', 'Re-run vision');
+                extract.type = 'button';
+                extract.addEventListener('click', () => tsExtract(sign));
+                actions.appendChild(extract);
+                const reject = elx('button', 'admin-btn danger', 'Reject');
+                reject.type = 'button';
+                reject.addEventListener('click', () => tsReject(sign));
+                actions.appendChild(reject);
+            }
+            const del = elx('button', 'admin-btn danger', 'Delete');
+            del.type = 'button';
+            del.addEventListener('click', () => tsDelete(sign));
+            actions.appendChild(del);
+            body.appendChild(actions);
+            card.appendChild(body);
+            return card;
+        }
+        async function tsLoadReview() {
+            const wrap = $('tsReviewList');
+            if (!wrap) return;
+            wrap.textContent = 'Loading...';
+            tsReleaseThumbs();
+            if (!adminCoursesCache.length) await adminLoadCourses();
+            const status = $('tsStatusFilter').value || 'candidate';
+            const r = await adminApi('/admin/tee-signs?status=' + encodeURIComponent(status));
+            wrap.replaceChildren();
+            if (!r.ok) { wrap.appendChild(elx('div', 'ts-review-empty', 'Could not load tee signs (' + r.status + ').')); return; }
+            const signs = (await r.json()).teeSigns || [];
+            if (!signs.length) { wrap.appendChild(elx('div', 'ts-review-empty', 'No tee signs in this queue.')); return; }
+            const layoutCache = new Map();
+            for (const sign of signs) {
+                const cid = Number(sign.course_id);
+                if (!layoutCache.has(cid)) layoutCache.set(cid, await tsLayoutsForCourse(cid));
+                wrap.appendChild(tsCard(sign, layoutCache.get(cid) || []));
+            }
         }
 
         function renderCandidates(cands) {
@@ -2097,6 +2349,8 @@
             $('alAddHole').addEventListener('click', () => addHoleRow());
             $('alSaveLayout').addEventListener('click', alSaveLayout);
             $('alResetLayout').addEventListener('click', alResetLayout);
+            $('tsStatusFilter').addEventListener('change', tsLoadReview);
+            $('tsRefresh').addEventListener('click', tsLoadReview);
             $('scEvent').addEventListener('change', scOnEventChange);
             $('scStartBtn').addEventListener('click', scStart);
             $('scFinalizeBtn').addEventListener('click', scFinalize);

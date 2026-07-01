@@ -11,6 +11,7 @@ export interface VerifiedHole {
   par: number;
   distance_ft: number | null;
   tee_sign_key: string;
+  tee_sign_id?: number | null;
 }
 
 export interface LayoutHole {
@@ -35,7 +36,8 @@ export interface EnrichedLayout {
 export function verifiedOf(h: LayoutHole): VerifiedHole | null {
   if (h.verified && typeof h.verified.par === "number") return h.verified;
   if (h.distance_source === "tee_sign" && (h as { tee_sign_key?: string }).tee_sign_key) {
-    return { par: Number(h.par) || 0, distance_ft: h.distance_ft ?? null, tee_sign_key: (h as { tee_sign_key?: string }).tee_sign_key! };
+    const legacy = h as { tee_sign_key?: string; tee_sign_id?: number | null };
+    return { par: Number(h.par) || 0, distance_ft: h.distance_ft ?? null, tee_sign_key: legacy.tee_sign_key!, tee_sign_id: legacy.tee_sign_id ?? null };
   }
   return null;
 }

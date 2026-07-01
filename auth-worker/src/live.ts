@@ -26,7 +26,7 @@ interface LiveMeta {
   courseName?: string | null; // display-only: course + layout shown in the scorecard header
   layoutName?: string | null;
   udiscCourseId?: string | null; // UDisc numeric course id for the "Add to UDisc" applink (export bridge)
-  holes: { hole: number; par: number; distance_ft?: number | null }[];
+  holes: { hole: number; par: number; distance_ft?: number | null; tee_sign_id?: number | null }[];
   status: "live" | "final";
   startedAt: string;
   rev?: number; // monotonic revision, bumped on every mutation so clients can drop out-of-order snapshots
@@ -41,7 +41,7 @@ interface StartBody {
   courseName?: string | null;
   layoutName?: string | null;
   udiscCourseId?: string | null;
-  holes: { hole: number; par: number; distance_ft?: number | null }[];
+  holes: { hole: number; par: number; distance_ft?: number | null; tee_sign_id?: number | null }[];
   players: { memberId?: string | null; name: string; division?: string | null; startingHole?: number | null; cardId?: string | null }[];
   startedAt?: string;
   cardSize?: number;
@@ -120,11 +120,11 @@ export class LiveEventDO {
 
   /** meta.holes with any round-scoped overrides applied — the par the scorecard/leaderboard use, plus
    *  an optional temporary distance + an `overridden` flag for the tee-sign render. */
-  private resolvedHoles(): { hole: number; par: number; distance_ft: number | null; overridden: boolean }[] {
+  private resolvedHoles(): { hole: number; par: number; distance_ft: number | null; tee_sign_id: number | null; overridden: boolean }[] {
     const ov = this.meta?.overrides ?? {};
     return (this.meta?.holes ?? []).map((h) => {
       const o = ov[String(h.hole)];
-      return { hole: h.hole, par: o?.par ?? h.par, distance_ft: o?.distance_ft ?? h.distance_ft ?? null, overridden: !!o };
+      return { hole: h.hole, par: o?.par ?? h.par, distance_ft: o?.distance_ft ?? h.distance_ft ?? null, tee_sign_id: h.tee_sign_id ?? null, overridden: !!o };
     });
   }
 
@@ -158,7 +158,7 @@ export class LiveEventDO {
   private async start(b: StartBody): Promise<Response> {
     const holes = (Array.isArray(b.holes) ? b.holes : [])
       .filter((h) => h && typeof h.hole === "number" && typeof h.par === "number")
-      .map((h) => ({ hole: h.hole, par: h.par, distance_ft: h.distance_ft ?? null }));
+      .map((h) => ({ hole: h.hole, par: h.par, distance_ft: h.distance_ft ?? null, tee_sign_id: h.tee_sign_id ?? null }));
     if (holes.length === 0 || (!b.eventId && !b.casual)) return j({ error: "invalid_start" }, 400);
     this.meta = { eventId: b.eventId ?? 0, casual: !!b.casual, courseName: b.courseName ?? null, layoutName: b.layoutName ?? null, udiscCourseId: b.udiscCourseId ?? null, holes, status: "live", startedAt: b.startedAt ?? "", overrides: {} };
     this.players = (Array.isArray(b.players) ? b.players : []).map((p) => ({

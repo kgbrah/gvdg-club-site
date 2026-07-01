@@ -107,6 +107,9 @@
         .hole-head .hpar { font-size: 1.5rem; font-weight: 700; }
         .navbtn { width: 46px; height: 46px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); font-size: 1.4rem; cursor: pointer; }
         .navbtn:disabled { opacity: 0.35; }
+        .tee-sign-card { padding: 0.55rem; overflow: hidden; }
+        .tee-sign-card img { display: block; width: 100%; aspect-ratio: 16 / 10; max-height: 230px; object-fit: cover; object-position: center; border-radius: 8px; background: var(--bg-tertiary); border: 1px solid var(--border-color); }
+        .tee-sign-caption { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.45rem; font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
         .scorecard-owner { display: flex; align-items: center; gap: 0.65rem; padding-bottom: 0.75rem; margin-bottom: 0.1rem; border-bottom: 1px solid var(--border-color); }
         .scorecard-owner label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); white-space: nowrap; }
         .scorecard-owner select {
@@ -550,6 +553,23 @@
         }
 
         function holeMeta(idx) { return S.holes[idx] || { hole: idx + 1, par: 3 }; }
+        function renderLiveTeeSign(h) {
+            const id = Number(h && h.tee_sign_id);
+            if (!id) return null;
+            const card = el('div', 'card tee-sign-card');
+            const img = el('img');
+            img.src = API_BASE + '/tee-signs/' + id + '/image';
+            img.alt = 'Tee sign for hole ' + h.hole;
+            img.loading = 'lazy';
+            img.width = 640;
+            img.height = 400;
+            card.appendChild(img);
+            const caption = el('div', 'tee-sign-caption');
+            caption.appendChild(el('span', null, 'Tee sign'));
+            caption.appendChild(el('span', null, 'Hole ' + h.hole));
+            card.appendChild(caption);
+            return card;
+        }
 
         function renderHole() {
             if (!S.holes.length) return;
@@ -582,6 +602,8 @@
             const next = el('button', 'navbtn', '›'); next.disabled = S.holeIdx >= S.holes.length - 1; next.addEventListener('click', function () { S.holeIdx = Math.min(S.holes.length - 1, S.holeIdx + 1); renderHole(); });
             head.appendChild(prev); head.appendChild(mid); head.appendChild(next);
             c.appendChild(head);
+            const teeSign = renderLiveTeeSign(h);
+            if (teeSign) c.appendChild(teeSign);
 
             // player rows with steppers
             const box = el('div', 'card');
