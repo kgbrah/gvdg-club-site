@@ -401,11 +401,11 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     expect(mine.holes.find((h) => h.hole === 2)?.distance_ft).toBe(410);
   });
 
-  it("a member adds a guest; casual finalize writes nothing to D1", async () => {
+  it("a member adds a guest; a casual round with NO share code writes no D1 EVENT results", async () => {
     let touchedDb = false;
     const trackDb = { prepare: () => ({ bind() { return this; }, all: async () => ({ results: [], success: true }), first: async () => null, run: async () => { touchedDb = true; return { results: [], success: true }; } }) };
     const live = new LiveEventDO(new FakeState({}), { DB: trackDb });
-    await startCasual(live, "m_a");
+    await startCasual(live, "m_a"); // startCasual passes no roundCode → no durable casual persistence either
     expect((await act(live, "guest", "m_a", { name: "Walk-on" })).status).toBe(200);
     for (const scorerIndex of [0, 1]) {
       await act(live, "score", "m_a", { index: 0, scorerIndex, hole: 1, strokes: 3 });
@@ -415,7 +415,43 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     }
     const fin = await act(live, "finalize", "m_a", {});
     expect(fin.status).toBe(200);
-    expect(touchedDb).toBe(false);
+    expect(touchedDb).toBe(false); // never touches the event `results` path (durable casual persistence needs a roundCode — see next test)
+  });
+
+  it("a casual round WITH a share code persists a durable casual_rounds + casual_results record on finalize", async () => {
+    const inserts: { sql: string; args: unknown[] }[] = [];
+    const recDb = {
+      prepare(sql: string) {
+        const entry = { sql, args: [] as unknown[] };
+        return {
+          bind(...args: unknown[]) { entry.args = args; if (/INSERT INTO casual_|DELETE FROM casual_rounds/i.test(sql)) inserts.push(entry); return this; },
+          run: async () => ({ results: [], success: true }),
+          first: async () => ((/INSERT INTO casual_rounds/i.test(sql) ? { id: 7 } : null) as unknown as null),
+          all: async () => ({ results: [], success: true }),
+        };
+      },
+    };
+    const live = new LiveEventDO(new FakeState({}), { DB: recDb });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ casual: true, roundCode: "AB23CD", courseId: 3, layoutId: 5, courseName: "North Rec", layoutName: "Blue", createdBy: "m_a", holes: [{ hole: 1, par: 3 }, { hole: 2, par: 4 }], players: [{ memberId: "m_a", name: "A" }] }) }));
+    await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m_a" }, body: JSON.stringify({ index: 0, hole: 1, strokes: 3 }) }));
+    await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m_a" }, body: JSON.stringify({ index: 0, hole: 2, strokes: 4 }) }));
+    const fin = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Member": "m_a" } }));
+    expect(fin.status).toBe(200);
+    const delIdx = inserts.findIndex((i) => /DELETE FROM casual_rounds/i.test(i.sql));
+    const roundIdx = inserts.findIndex((i) => /INSERT INTO casual_rounds/i.test(i.sql));
+    const roundIns = inserts[roundIdx];
+    const resIns = inserts.find((i) => /INSERT INTO casual_results/i.test(i.sql));
+    // Idempotency guard: a DELETE-by-round_code runs BEFORE the header insert so a fault/retry replaces
+    // (never duplicates) the round — the casual analogue of the competition path's clearResults.
+    expect(delIdx).toBeGreaterThanOrEqual(0);
+    expect(inserts[delIdx]!.args).toContain("AB23CD");
+    expect(roundIdx).toBeGreaterThan(delIdx);
+    expect(roundIns).toBeTruthy();
+    expect(roundIns!.args).toContain("AB23CD"); // round_code = the durable key
+    expect(roundIns!.args).toContain(5); // layout_id — kept so the ratings engine can compute a per-layout SSA
+    expect(resIns).toBeTruthy();
+    expect(resIns!.args[0]).toBe(7); // casual_round_id FK = the id returned by createCasualRound
+    expect(resIns!.args).toContain("A"); // player name persisted
   });
 
   it("flags score conflicts from guest scorecards too", async () => {
