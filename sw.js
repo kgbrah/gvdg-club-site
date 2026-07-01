@@ -1,10 +1,22 @@
-// Service worker for the GVDG live-scoring app (score.html). The app document is served NETWORK-FIRST
-// so a new deploy is always picked up when online (cache-first previously pinned a stale/broken build and
-// could cache the /score.html -> /score redirect). Static assets are cache-first. The cross-origin Worker
-// API (auth.*) is never intercepted — offline score writes are queued in the page and flushed on reconnect.
-const CACHE = "gvdg-score-v3"; // bump to evict any older (possibly stale/broken) cache on activate
-const ASSETS = ["img/logo.png"];
-const SHELL = "score.html"; // offline fallback for the app document
+const CACHE = "gvdg-club-v4";
+const ASSETS = [
+  "img/logo.png",
+  "img/logo2.png",
+  "club.webmanifest",
+  "site.webmanifest",
+  "gvdg-members.html",
+  "admin.html",
+  "score.html",
+];
+const DEFAULT_SHELL = "gvdg-members.html";
+const DOCUMENT_SHELLS = new Map([
+  ["/admin", "admin.html"],
+  ["/admin.html", "admin.html"],
+  ["/score", "score.html"],
+  ["/score.html", "score.html"],
+  ["/gvdg-members", "gvdg-members.html"],
+  ["/gvdg-members.html", "gvdg-members.html"],
+]);
 
 // Only clean, same-origin 200s are safe to cache (never opaque/redirect/error responses).
 function cacheable(res) {
@@ -26,18 +38,17 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
   if (req.method !== "GET" || url.origin !== self.location.origin) return; // let the cross-origin API pass through
 
-  // App document: network-first (always the latest score.html online), cached only as an offline fallback.
   if (req.mode === "navigate" || req.destination === "document") {
     e.respondWith(
       fetch(req)
         .then((res) => {
           if (cacheable(res)) {
             const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(SHELL, copy)).catch(() => {});
+            caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
           }
           return res;
         })
-        .catch(() => caches.match(SHELL)),
+        .catch(() => caches.match(req).then((cached) => cached || caches.match(DOCUMENT_SHELLS.get(url.pathname) || DEFAULT_SHELL))),
     );
     return;
   }
@@ -54,7 +65,7 @@ self.addEventListener("fetch", (e) => {
           }
           return res;
         })
-        .catch(() => caches.match(SHELL));
+        .catch(() => caches.match(DEFAULT_SHELL));
     }),
   );
 });

@@ -1,0 +1,42 @@
+{
+  "id": "/club-dashboard",
+  "name": "GVDG Club",
+  "short_name": "GVDG Club",
+  "description": "Greenville Disc Golf Club player and admin dashboards",
+  "start_url": "gvdg-members.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0F0F1E",
+  "theme_color": "#FF6B35",
+  "icons": [
+    { "src": "img/logo2.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "img/logo2.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Player Dashboard",
+      "short_name": "Dashboard",
+      "url": "gvdg-members.html",
+      "icons": [{ "src": "img/logo2.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Live Scoring",
+      "short_name": "Scoring",
+      "url": "score.html",
+      "icons": [{ "src": "img/logo2.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Admin Dashboard",
+      "short_name": "Admin",
+      "url": "admin.html",
+      "icons": [{ "src": "img/logo2.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Pro Shop",
+      "short_name": "Shop",
+      "url": "pro-shop.html",
+      "icons": [{ "src": "img/logo2.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}
