@@ -6,7 +6,7 @@
 // snapshot + ws reads are public). The DO trusts requests it receives.
 
 import * as db from "./db.js";
-import { normalizeScorecards, playerScorerId, purgeScorerVotes, recordScoreVote, scorecardConsensusIssues, scoreConflicts } from "./live-consensus.js";
+import { normalizeScorecards, playerScorerId, purgeScorerVotes, recordScoreVote, scorecardConsensusIssues } from "./live-consensus.js";
 import { assignCards, computeLeaderboard, finalizeStandings, type PlayerState } from "./scoring.js";
 
 interface LiveEnv {
@@ -114,7 +114,7 @@ export class LiveEventDO {
     if (action === "guest") return this.addGuest(authMember, (body as { name?: string }).name); // add a non-member to my card
     if (action === "remove") return this.removePlayer(body as RemoveBody, authMember, authAdmin); // drop a player (accidental/left/no-show)
     if (action === "override") return this.override(body as OverrideBody);
-    if (action === "finalize") return this.finalize(authMember, authAdmin);
+    if (action === "finalize") return this.finalize(authMember, authAdmin, (body as { force?: boolean }).force === true);
     return j({ error: "not_found" }, 404);
   }
 
@@ -130,7 +130,7 @@ export class LiveEventDO {
 
   private snapshot() {
     const holes = this.resolvedHoles();
-    const conflicts = scoreConflicts(this.players, holes);
+    const issues = scorecardConsensusIssues(this.players, holes);
     return {
       status: this.meta?.status ?? "none",
       rev: this.meta?.rev ?? 0,
@@ -149,7 +149,10 @@ export class LiveEventDO {
         .map((p, index) => ({ p, index }))
         .filter((x) => !x.p.removed)
         .map(({ p, index }) => ({ index, cardId: p.cardId ?? null, name: p.name, division: p.division ?? null, startingHole: p.startingHole ?? null, scores: p.scores, scorecards: p.scorecards ?? {} })),
-      conflicts,
+      conflicts: issues.conflicts,
+      // Holes where a required (member) scorer hasn't voted yet — drives the "what's blocking finalize"
+      // panel. Safe to expose publicly: identifies players by stable index/name, never memberId.
+      missing: issues.missing,
       standings: computeLeaderboard(holes, this.players).map((s) => ({ name: s.name, division: s.division, thru: s.thru, total: s.total, toPar: s.toPar })),
       updatedAt: this.meta?.startedAt ?? null,
     };
@@ -223,7 +226,7 @@ export class LiveEventDO {
     const meRaw = authMember ? this.players.findIndex((p) => p.memberId === authMember) : -1;
     const meIdx = meRaw >= 0 && !this.players[meRaw]!.removed ? meRaw : -1; // a tombstoned caller is off the card
     const base = { eventId: this.meta?.eventId ?? 0, casual: !!this.meta?.casual, courseName: this.meta?.courseName ?? null, layoutName: this.meta?.layoutName ?? null, udiscCourseId: this.meta?.udiscCourseId ?? null, status: this.meta?.status ?? "none", holes };
-    if (meIdx < 0) return { ...base, cardId: null, playerIndex: null, cardmates: [], conflicts: [] };
+    if (meIdx < 0) return { ...base, cardId: null, playerIndex: null, cardmates: [], conflicts: [], missing: [] };
     const cardId = this.players[meIdx]!.cardId ?? null;
     const cardmates = this.players
       .map((p, index) => ({ p, index }))
@@ -239,8 +242,15 @@ export class LiveEventDO {
         isMe: index === meIdx,
         canEnterScorecard: canEnterScorecard(p, authMember),
       }));
-    const conflicts = scoreConflicts(this.players, holes).filter((conflict) => conflict.cardId === cardId);
-    return { ...base, cardId, playerIndex: meIdx, cardmates, conflicts };
+    const issues = scorecardConsensusIssues(this.players, holes);
+    return {
+      ...base,
+      cardId,
+      playerIndex: meIdx,
+      cardmates,
+      conflicts: issues.conflicts.filter((c) => c.cardId === cardId),
+      missing: issues.missing.filter((m) => m.cardId === cardId),
+    };
   }
   private mine(authMember: string | null): Response {
     if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
@@ -344,7 +354,7 @@ export class LiveEventDO {
     return j(this.snapshot());
   }
 
-  private async finalize(authMember: string | null, authAdmin: boolean): Promise<Response> {
+  private async finalize(authMember: string | null, authAdmin: boolean, force = false): Promise<Response> {
     if (!this.meta) return j({ error: "not_started" }, 409);
     // Casual rounds are only member-gated at the route, so anyone with the code could otherwise finalize
     // (lock) someone else's round — require the caller to actually be on the card. Admin events bypass
@@ -359,21 +369,24 @@ export class LiveEventDO {
       return j({ status: "final", standings: finalizeStandings(this.resolvedHoles(), this.players) });
     }
     const holes = this.resolvedHoles();
-    // Block finalize ONLY on real disagreements (two scorers entered different values), NOT on cardmates
-    // who simply didn't keep their own card — the common case is one scorekeeper, and walk-on guests can't
-    // vote at all. Unscored/partial players already fall to DNF in finalizeStandings. (issues.missing is
-    // still surfaced in the conflict response so the client can show who hasn't matched.)
+    // A round finalizes only when the whole card AGREES: no active-scorer conflicts AND every required
+    // (member) cardmate has voted on every hole. Guests are optional (requiredScorerIds), but a guest's
+    // differing vote still blocks as a conflict. An admin may FORCE past an incomplete board (e.g. a
+    // cardmate left without matching, or a solo-scorekeeper card); leavers otherwise self-heal via
+    // purgeScorerVotes. The blocking issues are returned so the client can show exactly what's missing.
     const issues = scorecardConsensusIssues(this.players, holes);
-    if (issues.conflicts.length > 0) {
-      return j({ error: "scorecards_not_matched", conflicts: issues.conflicts, missing: issues.missing }, 409);
+    const incomplete = issues.conflicts.length > 0 || issues.missing.length > 0;
+    if (incomplete && !(authAdmin && force)) {
+      return j({ error: "scorecard_incomplete", conflicts: issues.conflicts, missing: issues.missing }, 409);
     }
+    const forced = incomplete; // an admin pushed a not-fully-agreed card through
     this.meta.status = "final";
     const standings = finalizeStandings(holes, this.players);
     // A casual round has no admin event — just close it out; nothing is written to D1 event results.
     if (this.meta.casual || !this.meta.eventId) {
       await this.persist();
       this.broadcast();
-      return j({ status: "final", standings });
+      return j({ status: "final", standings, forced });
     }
     const eventId = this.meta.eventId;
     try {
@@ -400,7 +413,7 @@ export class LiveEventDO {
     }
     await this.persist();
     this.broadcast();
-    return j({ status: "final", standings });
+    return j({ status: "final", standings, forced });
   }
 
   private handleWs(_request: Request): Response {

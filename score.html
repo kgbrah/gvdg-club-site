@@ -193,7 +193,7 @@
         const GUEST_TOKEN = MODE === 'event' ? (params.get('gt') || guestTokenStored()) : null;
 
         const app = document.getElementById('app');
-        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null };
+        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null };
         const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
         const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
 
@@ -343,6 +343,11 @@
         function setConflicts(rows) {
             S.conflicts = (Array.isArray(rows) ? rows : []).filter((c) => c && c.cardId === S.cardId);
         }
+        function setMissing(rows) {
+            // Holes where a member cardmate hasn't confirmed a score yet (guests are optional). Drives the
+            // "what's blocking finalize" panel; scoped to our own card.
+            S.missing = (Array.isArray(rows) ? rows : []).filter((m) => m && m.cardId === S.cardId);
+        }
         function upsertConflict(msg) {
             if (!msg || msg.cardId !== S.cardId) return;
             S.conflicts = S.conflicts.filter((c) => !(c.playerIndex === msg.playerIndex && c.hole === msg.hole));
@@ -394,7 +399,9 @@
             const snap = S.snap; if (!snap || !Array.isArray(snap.players)) return;
             // Drop a stale/out-of-order snapshot (a newer one from another device was already applied).
             if (snap.rev != null) { if (snap.rev <= S.lastRev) return; S.lastRev = snap.rev; }
+            if (snap.status) S.status = snap.status; // reflect a finalize (or start) that happened on another device
             setConflicts(snap.conflicts);
+            setMissing(snap.missing);
             const byIndex = new Map(snap.players.map((p) => [p.index, p]));
             // Card roster changed (a player was removed elsewhere, or a new walk-on/cardmate joined on
             // another device)? The snapshot omits removed players and includes new ones; rebuild from /mine
@@ -708,9 +715,60 @@
                     if (node) { node.style.marginTop = '1rem'; sheet.appendChild(node); }
                 }
             }
+            // ---- finalize status + action ----
+            if (S.status === 'final') {
+                const done = el('div'); done.style.cssText = 'margin-top:1rem;padding:0.8rem;border-radius:12px;border:1px solid var(--under);background:var(--bg-primary)';
+                done.appendChild(el('p', null, '🏁 Round finished — scores are locked.')).style.cssText = 'font-weight:700;color:var(--under)';
+                sheet.appendChild(done);
+            } else {
+                const bl = finalizeBlockers();
+                const box = el('div'); box.style.cssText = 'margin-top:1rem;padding:0.8rem;border-radius:12px;border:1px solid var(--border-color);background:var(--bg-primary)';
+                const head = el('p', null, bl.ready ? '✓ Your card agrees — ready to finalize' : '⚑ Your card isn’t ready yet');
+                head.style.cssText = 'font-weight:700;margin-bottom:0.2rem;color:' + (bl.ready ? 'var(--under)' : 'var(--over)');
+                box.appendChild(head);
+                bl.lines.forEach((line) => { const p = el('p', 'muted', line); p.style.fontSize = '0.82rem'; box.appendChild(p); });
+                sheet.appendChild(box);
+                // Casual rounds are finished from here by any member on the card. Competition rounds are
+                // finalized by an admin from the admin console, so players only see the status above.
+                if (MODE === 'round') {
+                    const fin = el('button', 'btn', '🏁 Finish round'); fin.style.marginTop = '0.7rem';
+                    fin.disabled = !bl.ready;
+                    fin.addEventListener('click', finalizeRound);
+                    sheet.appendChild(fin);
+                    if (!bl.ready) { const hint = el('p', 'muted', 'Every member on the card must enter matching scores for every hole before the round can be finished.'); hint.style.cssText = 'font-size:0.8rem;margin-top:0.4rem'; sheet.appendChild(hint); }
+                }
+            }
             const close = el('button', 'btn secondary', 'Close'); close.style.marginTop = '1rem'; close.addEventListener('click', closeLeaderboard);
             sheet.appendChild(close);
             overlay.appendChild(sheet); document.body.appendChild(overlay); lbSheet = overlay;
+        }
+        // What (if anything) is stopping this card from finalizing: unresolved conflicts + unconfirmed
+        // member scores. Recomputed each render so the sheet reflects live snapshots while it's open.
+        function finalizeBlockers() {
+            const conflicts = S.conflicts || [];
+            const missing = S.missing || [];
+            const lines = [];
+            conflicts.forEach((c) => lines.push('Hole ' + c.hole + ' — ' + (c.playerName || 'a player') + ': scores disagree (' + (Array.isArray(c.values) ? c.values.join(' vs ') : '?') + ')'));
+            const shown = missing.slice(0, 4);
+            shown.forEach((m) => lines.push('Hole ' + m.hole + ' — ' + (m.playerName || 'a player') + ': not confirmed by all members'));
+            if (missing.length > shown.length) lines.push('…and ' + (missing.length - shown.length) + ' more unconfirmed');
+            return { conflicts: conflicts, missing: missing, ready: conflicts.length === 0 && missing.length === 0, lines: lines };
+        }
+        async function finalizeRound() {
+            if (!confirm('Finish this round? This locks the scorecard for everyone.')) return;
+            // Casual finalize is /rounds/<code>/finalize (NOT under /live). The Finish button only shows
+            // for casual rounds; competition rounds are finalized by an admin from the admin console.
+            const r = await api('/rounds/' + ROUND_CODE + '/finalize', { method: 'POST', body: {} });
+            if (r.ok && r.data && r.data.status === 'final') {
+                S.status = 'final';
+                toast('Round finished 🏁');
+                if (lbOpen) renderLeaderboard();
+            } else if (r.status === 409) {
+                toast('Can’t finish yet — scorecards don’t agree');
+                if (lbOpen) renderLeaderboard(); // reflect the latest blockers
+            } else {
+                toast('Couldn’t finish the round');
+            }
         }
 
         // ---------- boot ----------
@@ -737,6 +795,7 @@
             if (MODE === 'round') rememberRecentRound({ code: ROUND_CODE, label: 'Casual round ' + ROUND_CODE });
             currentScorerIndex();
             setConflicts(d.conflicts);
+            setMissing(d.missing);
             // start on the card's shotgun hole if set, else hole 1
             const me = d.cardmates.find((p) => p.isMe);
             const sh = me && me.startingHole;

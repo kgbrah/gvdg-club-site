@@ -89,7 +89,7 @@ export function scorecardConsensusIssues(players: PlayerState[], holes: ScoreHol
   for (let index = 0; index < players.length; index++) {
     const player = players[index];
     if (!player || player.removed) continue;
-    const requiredScorers = cardScorerIds(players, player);
+    const requiredScorers = requiredScorerIds(players, player);
     if (requiredScorers.length === 0) continue;
     for (const hole of holes) {
       const votes = player.scorecards?.[hole.hole] ?? {};
@@ -106,6 +106,13 @@ export function scorecardConsensusIssues(players: PlayerState[], holes: ScoreHol
     }
   }
   return { conflicts: scoreConflicts(players, holes), missing };
+}
+
+/** A round is ready to finalize when the whole card agrees: NO active-scorer conflicts AND every required
+ *  (member) scorer has voted on every hole. Guests are optional (see requiredScorerIds). */
+export function isScoreboardComplete(players: PlayerState[], holes: ScoreHole[]): boolean {
+  const issues = scorecardConsensusIssues(players, holes);
+  return issues.conflicts.length === 0 && issues.missing.length === 0;
 }
 
 function scoreConflictFor(players: PlayerState[], playerIndex: number, hole: number): ScoreConflict | null {
@@ -167,6 +174,22 @@ function cardScorerIds(players: PlayerState[], target: PlayerState): string[] {
   for (let index = 0; index < players.length; index++) {
     const player = players[index];
     if (!player || player.removed || (player.cardId ?? null) !== cardId) continue;
+    ids.push(playerScorerId(index));
+  }
+  return ids;
+}
+
+/** Scorers REQUIRED to have voted before a scorecard counts as complete: the MEMBER players on the card
+ *  (a real member id — not null and not a "g_" guest capability token). Walk-on guests aren't required to
+ *  keep a card (they may have no phone), so their absence never blocks finalize — but any vote a guest DOES
+ *  cast still counts toward consensus via activeVoteValues, so a disagreeing guest blocks it as a conflict. */
+export function requiredScorerIds(players: PlayerState[], target: PlayerState): string[] {
+  const cardId = target.cardId ?? null;
+  const ids: string[] = [];
+  for (let index = 0; index < players.length; index++) {
+    const player = players[index];
+    if (!player || player.removed || (player.cardId ?? null) !== cardId) continue;
+    if (!player.memberId || player.memberId.startsWith("g_")) continue; // guests optional
     ids.push(playerScorerId(index));
   }
   return ids;
