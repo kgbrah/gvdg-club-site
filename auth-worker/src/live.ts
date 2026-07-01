@@ -25,6 +25,7 @@ interface LiveMeta {
   casual?: boolean; // self-organizing casual round (no admin event); finalize does not write D1 event results
   courseName?: string | null; // display-only: course + layout shown in the scorecard header
   layoutName?: string | null;
+  udiscCourseId?: string | null; // UDisc numeric course id for the "Add to UDisc" applink (export bridge)
   holes: { hole: number; par: number; distance_ft?: number | null }[];
   status: "live" | "final";
   startedAt: string;
@@ -39,6 +40,7 @@ interface StartBody {
   casual?: boolean;
   courseName?: string | null;
   layoutName?: string | null;
+  udiscCourseId?: string | null;
   holes: { hole: number; par: number; distance_ft?: number | null }[];
   players: { memberId?: string | null; name: string; division?: string | null; startingHole?: number | null; cardId?: string | null }[];
   startedAt?: string;
@@ -135,6 +137,7 @@ export class LiveEventDO {
       eventId: this.meta?.eventId ?? null,
       courseName: this.meta?.courseName ?? null,
       layoutName: this.meta?.layoutName ?? null,
+      udiscCourseId: this.meta?.udiscCourseId ?? null,
       holes, // {hole, par, distance_ft, overridden} — par/distance reflect any round override
       // players (with per-hole scores + their stable index) drive the scorekeeper grid;
       // standings drive the public leaderboard.
@@ -157,7 +160,7 @@ export class LiveEventDO {
       .filter((h) => h && typeof h.hole === "number" && typeof h.par === "number")
       .map((h) => ({ hole: h.hole, par: h.par, distance_ft: h.distance_ft ?? null }));
     if (holes.length === 0 || (!b.eventId && !b.casual)) return j({ error: "invalid_start" }, 400);
-    this.meta = { eventId: b.eventId ?? 0, casual: !!b.casual, courseName: b.courseName ?? null, layoutName: b.layoutName ?? null, holes, status: "live", startedAt: b.startedAt ?? "", overrides: {} };
+    this.meta = { eventId: b.eventId ?? 0, casual: !!b.casual, courseName: b.courseName ?? null, layoutName: b.layoutName ?? null, udiscCourseId: b.udiscCourseId ?? null, holes, status: "live", startedAt: b.startedAt ?? "", overrides: {} };
     this.players = (Array.isArray(b.players) ? b.players : []).map((p) => ({
       memberId: p.memberId ?? null,
       name: String(p.name ?? "Player"),
@@ -219,7 +222,7 @@ export class LiveEventDO {
     const holes = this.resolvedHoles();
     const meRaw = authMember ? this.players.findIndex((p) => p.memberId === authMember) : -1;
     const meIdx = meRaw >= 0 && !this.players[meRaw]!.removed ? meRaw : -1; // a tombstoned caller is off the card
-    const base = { eventId: this.meta?.eventId ?? 0, casual: !!this.meta?.casual, courseName: this.meta?.courseName ?? null, layoutName: this.meta?.layoutName ?? null, status: this.meta?.status ?? "none", holes };
+    const base = { eventId: this.meta?.eventId ?? 0, casual: !!this.meta?.casual, courseName: this.meta?.courseName ?? null, layoutName: this.meta?.layoutName ?? null, udiscCourseId: this.meta?.udiscCourseId ?? null, status: this.meta?.status ?? "none", holes };
     if (meIdx < 0) return { ...base, cardId: null, playerIndex: null, cardmates: [], conflicts: [] };
     const cardId = this.players[meIdx]!.cardId ?? null;
     const cardmates = this.players
@@ -386,6 +389,7 @@ export class LiveEventDO {
             total: s.total,
             to_par: s.toPar,
             breakdown: JSON.stringify(s.breakdown),
+            scorecard: s.holes.length ? JSON.stringify(s.holes) : null,
           }),
         ),
       );

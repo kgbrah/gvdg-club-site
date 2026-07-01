@@ -291,6 +291,7 @@
     </style>
   <script src="nav.js" defer></script>
   <script src="pwa.js" defer></script>
+  <script src="udisc-export.js" defer></script>
 </head>
 <body data-api-base="">
     <header>
@@ -1304,7 +1305,7 @@
             add('aces', 'ace'); add('eagles', 'eagle'); add('birdies', 'birdie'); add('pars', 'par'); add('bogeys', 'bogey'); add('doubles_plus', 'dbl+');
             return parts.join(' · ');
         }
-        async function renderFinalResults(eventId, container) {
+        async function renderFinalResults(eventId, container, courseId) {
             let results = [];
             try { const d = await fetchJson(`/events/${encodeURIComponent(eventId)}/results`); results = (d && d.results) || []; } catch (_e) {}
             container.replaceChildren();
@@ -1327,6 +1328,22 @@
                 tbody.appendChild(tr);
             });
             table.appendChild(tbody); container.appendChild(table);
+
+            // "Add to UDisc": one tap per player to open the right UDisc course + their hole-by-hole
+            // scores to enter (UDisc has no import API). Needs the course's numeric UDisc id and a
+            // stored scorecard; otherwise this section is simply omitted.
+            const course = courseIndex.get(String(courseId));
+            const udiscCourseId = course && course.udisc_course_id;
+            const addable = results.filter((r) => r && r.scorecard);
+            if (udiscCourseId && addable.length && window.UDiscExport) {
+                const sec = el('div', 'udisc-export-section');
+                sec.appendChild(el('h4', 'roster-title', 'Add your round to UDisc'));
+                addable.forEach((r) => {
+                    const node = window.UDiscExport.build({ courseId: udiscCourseId, scorecard: r.scorecard, label: r.name || 'Player' });
+                    if (node) sec.appendChild(node);
+                });
+                container.appendChild(sec);
+            }
         }
 
         // ---- CTPs + ace pot (Track G G3, public on the event detail) ----
@@ -1443,7 +1460,7 @@
             } else if (ev.status === 'final') {
                 const rwrap = el('div', 'lb-wrap');
                 card.appendChild(rwrap);
-                renderFinalResults(ev.id, rwrap);
+                renderFinalResults(ev.id, rwrap, ev.course_id);
             }
 
             const facts = el('div', 'detail-facts');

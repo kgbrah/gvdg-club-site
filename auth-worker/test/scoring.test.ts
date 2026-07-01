@@ -79,6 +79,22 @@ describe("finalizeStandings (placements + breakdown for results)", () => {
     expect(fs[0]!.breakdown).toMatchObject({ bogeys: 1 });
   });
 
+  it("emits each player's played holes in layout order for the UDisc scorecard (skips unplayed)", () => {
+    const fs = finalizeStandings(holes, [
+      { memberId: "a", name: "Ann", scores: { 1: 3, 2: 4, 3: 3 } }, // complete
+      { memberId: "p", name: "Partial", scores: { 1: 4, 3: 2 } }, //  skipped hole 2
+    ]);
+    expect(fs.find((s) => s.name === "Ann")!.holes).toEqual([
+      { hole: 1, par: 3, strokes: 3 },
+      { hole: 2, par: 4, strokes: 4 },
+      { hole: 3, par: 3, strokes: 3 },
+    ]);
+    expect(fs.find((s) => s.name === "Partial")!.holes).toEqual([
+      { hole: 1, par: 3, strokes: 4 },
+      { hole: 3, par: 3, strokes: 2 },
+    ]); // unplayed hole 2 omitted, order preserved
+  });
+
   it("ranks only finishers; no-shows/partials are DNF (null) and never outrank a real finisher", () => {
     const players: PlayerState[] = [
       { memberId: "f", name: "Finisher", scores: { 1: 4, 2: 5, 3: 4 } }, // +3, complete

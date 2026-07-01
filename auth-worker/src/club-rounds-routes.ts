@@ -44,12 +44,12 @@ export async function handleCasualRounds(
     const holes = await db.getLayoutHoles(env.DB, layoutId);
     if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin);
     const layout = (await db.getLayout(env.DB, layoutId)) as { name?: string | null; course_id?: number | null } | null;
-    const course = layout?.course_id != null ? ((await db.getCourse(env.DB, layout.course_id)) as { name?: string | null } | null) : null;
+    const course = layout?.course_id != null ? ((await db.getCourse(env.DB, layout.course_id)) as { name?: string | null; udisc_course_id?: string | null } | null) : null;
     const member = await getMember(env.ROSTER, claims.sub);
     const code = genCode();
     const r = await roundStub(env, code).fetch("https://do/start", {
       method: "POST",
-      body: JSON.stringify({ casual: true, courseName: course?.name ?? null, layoutName: layout?.name ?? null, holes, players: [{ memberId: claims.sub, name: member?.name ?? "Player" }], startedAt: new Date().toISOString() }),
+      body: JSON.stringify({ casual: true, courseName: course?.name ?? null, layoutName: layout?.name ?? null, udiscCourseId: course?.udisc_course_id ?? null, holes, players: [{ memberId: claims.sub, name: member?.name ?? "Player" }], startedAt: new Date().toISOString() }),
     });
     if (r.status !== 200) return json({ error: "start_failed" }, 502, origin);
     return json({ code }, 201, origin);
