@@ -85,6 +85,12 @@
         label.lbl { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); display: block; margin: 0 0 0.3rem 0.2rem; }
         .pill { display: inline-block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 0.2rem 0.5rem; border-radius: 999px; background: var(--bg-tertiary); color: var(--text-secondary); }
         .pill.live { background: var(--primary); color: #fff; }
+        .weather-strip { background: var(--bg-secondary); border: 1px solid var(--border-color); border-left: 4px solid var(--secondary); border-radius: 14px; box-shadow: 0 2px 10px var(--shadow); padding: 0.75rem 0.85rem; margin-bottom: 0.85rem; }
+        .weather-title { font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 0.45rem; }
+        .weather-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+        .weather-chip { display: inline-flex; align-items: baseline; gap: 0.3rem; border: 1px solid var(--border-color); border-radius: 999px; background: var(--bg-tertiary); color: var(--text-secondary); padding: 0.22rem 0.55rem; font-size: 0.78rem; line-height: 1.25; }
+        .weather-chip strong { font-size: 0.64rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+        .weather-note { margin-top: 0.45rem; color: var(--text-muted); font-size: 0.72rem; line-height: 1.35; }
         .offline-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 60; background: var(--over); color: #fff; text-align: center; font-size: 0.78rem; font-weight: 700; padding: calc(0.3rem + var(--safe-top)) 0.5rem 0.3rem; }
         .toast {
             position: fixed; left: 50%; bottom: calc(1.2rem + var(--safe-bottom)); transform: translateX(-50%);
@@ -179,6 +185,7 @@
         </header>
         <main id="app"><div class="spin"></div></main>
     </div>
+    <script src="weather-display.js"></script>
     <script src="udisc-export.js"></script>
     <script>
     (function () {
@@ -201,7 +208,7 @@
         const GUEST_TOKEN = MODE === 'event' ? (params.get('gt') || guestTokenStored()) : null;
 
         const app = document.getElementById('app');
-        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null };
+        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, weather: null };
         const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
         const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
 
@@ -367,6 +374,9 @@
         function holeHasConflict(hole) {
             return S.conflicts.some((c) => c && c.hole === hole);
         }
+        function roundWeatherNode() {
+            return window.GVDGWeather ? window.GVDGWeather.buildWeatherStrip(document, S.weather, { title: 'Round weather' }) : null;
+        }
 
         async function postScore(index, hole, strokes) {
             const scorerIndex = currentScorerIndex();
@@ -408,6 +418,7 @@
             // Drop a stale/out-of-order snapshot (a newer one from another device was already applied).
             if (snap.rev != null) { if (snap.rev <= S.lastRev) return; S.lastRev = snap.rev; }
             if (snap.status) S.status = snap.status; // reflect a finalize (or start) that happened on another device
+            if (Object.prototype.hasOwnProperty.call(snap, 'weather')) S.weather = snap.weather || null;
             setConflicts(snap.conflicts);
             setMissing(snap.missing);
             const byIndex = new Map(snap.players.map((p) => [p.index, p]));
@@ -612,6 +623,8 @@
                 bar.appendChild(left); bar.appendChild(actions);
                 c.appendChild(bar);
             }
+            const weather = roundWeatherNode();
+            if (weather) c.appendChild(weather);
 
             // hole header + nav
             const head = el('div', 'hole-head');
@@ -702,6 +715,8 @@
             const overlay = el('div', 'overlay'); overlay.addEventListener('click', function (e) { if (e.target === overlay) closeLeaderboard(); });
             const sheet = el('div', 'sheet'); sheet.appendChild(el('div', 'grab'));
             sheet.appendChild(el('h2', 'section', 'Live Leaderboard'));
+            const weather = roundWeatherNode();
+            if (weather) sheet.appendChild(weather);
             const standings = (S.snap && S.snap.standings) || [];
             if (!standings.length) { sheet.appendChild(el('p', 'muted', 'No scores in yet.')); }
             else {
@@ -804,6 +819,7 @@
             S.holes = Array.isArray(d.holes) ? d.holes : [];
             S.cardId = d.cardId; S.myIndex = d.playerIndex; S.cardmates = d.cardmates;
             S.courseName = d.courseName || null; S.layoutName = d.layoutName || null; S.udiscCourseId = d.udiscCourseId || null;
+            S.weather = d.weather || null;
             S.scorerIndex = d.playerIndex;
             if (MODE === 'round') rememberRecentRound({ code: ROUND_CODE, label: 'Casual round ' + ROUND_CODE });
             currentScorerIndex();

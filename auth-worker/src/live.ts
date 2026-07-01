@@ -72,6 +72,9 @@ interface OverrideBody {
   distance_ft?: number | null;
   clear?: boolean;
 }
+interface WeatherBody {
+  weatherLocation?: WeatherLocation | null;
+}
 interface RemoveBody {
   memberId?: string | null;
   index?: number;
@@ -144,6 +147,7 @@ export class LiveEventDO {
     if (action === "join") return this.join(authMember, body as { name?: string; ratingAnchor?: number | null }); // casual round: caller joins
     if (action === "guest") return this.addGuest(authMember, (body as { name?: string }).name); // add a non-member to my card
     if (action === "remove") return this.removePlayer(body as RemoveBody, authMember, authAdmin); // drop a player (accidental/left/no-show)
+    if (action === "weather") return this.ensureWeather(body as WeatherBody);
     if (action === "override") return this.override(body as OverrideBody);
     if (action === "finalize") return this.finalize(authMember, authAdmin, (body as { force?: boolean }).force === true);
     return j({ error: "not_found" }, 404);
@@ -225,6 +229,18 @@ export class LiveEventDO {
     await this.refreshWeatherIfDue(true);
     await this.persist();
     this.broadcast();
+    return j(this.snapshot());
+  }
+
+  private async ensureWeather(b: WeatherBody): Promise<Response> {
+    if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
+    if (!this.meta.weather && b.weatherLocation) {
+      this.meta.weather = createWeatherState(b.weatherLocation);
+      await this.refreshWeatherIfDue(true);
+      this.broadcast();
+      return j(this.snapshot());
+    }
+    await this.refreshWeatherIfDue();
     return j(this.snapshot());
   }
 

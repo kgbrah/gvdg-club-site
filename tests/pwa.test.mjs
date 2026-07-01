@@ -63,9 +63,15 @@ test('live scoring links back to the members dashboard', () => {
   assert.match(html, /\.iconbtn\[hidden\] \{ display: none; \}/);
 });
 
+test('live scoring surfaces load the shared weather display formatter', () => {
+  for (const path of ['score.html', 'events.html', 'admin.html']) {
+    assert.match(readFileSync(path, 'utf8'), /weather-display\.js/);
+  }
+});
+
 test('shared service worker caches app install assets and member fallback', () => {
   const sw = readFileSync('sw.js', 'utf8');
-  assert.match(sw, /const CACHE = "gvdg-club-v5"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v6"/);
   assert.match(sw, /const OFFLINE_PAGE = "gvdg-members\.html"/);
   assert.match(sw, /const STATIC_DESTINATIONS = new Set/);
   assert.match(sw, /if \(!staticAsset\(req, url\)\) return/);
@@ -77,6 +83,7 @@ test('shared service worker caches app install assets and member fallback', () =
     'img/icons/maskable-icon-512.png',
     'img/icons/apple-touch-icon.png',
     'admin.html',
+    'weather-display.js',
   ]) {
     assert.ok(sw.includes(`"${asset}"`), asset);
   }

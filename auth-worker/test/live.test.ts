@@ -473,6 +473,29 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     expect(scoredBody.weather?.error).toBeNull();
   });
 
+  it("backfills weather for a live round that started before weather tracking", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-01T12:00:00.000Z"));
+    stubWeather([openMeteoSample("2026-07-01T08:00", 7.5, 0.1)]);
+    const live = new LiveEventDO(new FakeState({
+      meta: {
+        eventId: 7,
+        holes: [{ hole: 1, par: 3 }],
+        status: "live",
+        startedAt: "2026-07-01T11:30:00.000Z",
+      },
+      players: [{ memberId: "m_a", name: "A", division: null, startingHole: null, scores: {} }],
+    }), { DB: db });
+
+    const filled = await live.fetch(new Request("https://do/weather", { method: "POST", body: JSON.stringify({
+      weatherLocation: { lat: 35.631092, lng: -77.319923, label: "North Rec - Greenville, NC" },
+    }) }));
+    const body = (await filled.json()) as WeatherSnapshot;
+    expect(body.weather?.location.label).toBe("North Rec - Greenville, NC");
+    expect(body.weather?.current).toMatchObject({ observedAt: "2026-07-01T08:00", rainIn: 0.1, windSpeedMph: 7.5 });
+    expect(body.weather?.history.map((sample) => sample.observedAt)).toEqual(["2026-07-01T08:00"]);
+  });
+
   it("a member adds a guest; a casual round with NO share code writes no D1 EVENT results", async () => {
     let touchedDb = false;
     const trackDb = { prepare: () => ({ bind() { return this; }, all: async () => ({ results: [], success: true }), first: async () => null, run: async () => { touchedDb = true; return { results: [], success: true }; } }) };

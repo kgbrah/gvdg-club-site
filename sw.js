@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v5";
+const CACHE = "gvdg-club-v6";
 const OFFLINE_PAGE = "gvdg-members.html";
 const ASSETS = [
   "site.webmanifest",
@@ -12,7 +12,8 @@ const ASSETS = [
   "img/icons/apple-touch-icon.png",
   OFFLINE_PAGE,
   "score.html",
-  "admin.html"
+  "admin.html",
+  "weather-display.js",
 ];
 const STATIC_DESTINATIONS = new Set(["script", "style", "image", "font", "manifest"]);
 

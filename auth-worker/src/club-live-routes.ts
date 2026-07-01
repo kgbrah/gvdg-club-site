@@ -6,7 +6,7 @@ import { json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { asInt, asStr } from "./input.js";
 import { findRatingAnchor } from "./rating-store.js";
-import { weatherLocationForCourse } from "./weather.js";
+import { weatherLocationForCourse, type WeatherLocation } from "./weather.js";
 
 const LIVE_SCORE_IP_LIMIT = 180; // score writes per identity per minute (a card rarely exceeds a few)
 
@@ -17,15 +17,71 @@ type StartPlayer = {
   readonly startingHole: number | null;
   readonly pdgaNo?: string | null;
 };
+type LiveJson = Record<string, unknown>;
+type LiveEventRow = Record<string, unknown> & {
+  readonly course_id?: number | null;
+  readonly layout_id?: number | null;
+  readonly players?: Record<string, unknown>[];
+};
+type LiveLayoutRow = {
+  readonly name?: string | null;
+  readonly course_id?: number | null;
+  readonly holes?: string | null;
+};
+type LiveCourseRow = {
+  readonly name?: string | null;
+  readonly location?: string | null;
+  readonly lat?: number | null;
+  readonly lng?: number | null;
+};
 
 async function liveProxy(stub: DurableObjectStub, path: string, init: RequestInit | undefined, origin: string | null): Promise<Response> {
   const r = await stub.fetch("https://do" + path, init);
   const data = await r.json().catch(() => ({}));
   return json(data, r.status, origin);
 }
+async function liveJson(stub: DurableObjectStub, path: string, init?: RequestInit): Promise<{ readonly data: LiveJson; readonly status: number }> {
+  const r = await stub.fetch("https://do" + path, init);
+  const parsed: unknown = await r.json().catch(() => ({}));
+  return { data: isRecord(parsed) ? parsed : {}, status: r.status };
+}
+function isRecord(value: unknown): value is LiveJson {
+  return value != null && typeof value === "object" && !Array.isArray(value);
+}
+function needsWeatherBackfill(data: LiveJson, status: number): boolean {
+  return status === 200 && data["status"] === "live" && data["weather"] == null;
+}
 function rowString(row: Record<string, unknown>, key: string): string | null {
   const value = row[key];
   return typeof value === "string" ? value : null;
+}
+async function liveWeatherLocation(env: Env, eid: number): Promise<WeatherLocation | null> {
+  const ev = (await db.getEvent(env.DB, eid)) as LiveEventRow | null;
+  if (!ev) return null;
+  const evLayout = ev.layout_id != null ? ((await db.getLayout(env.DB, ev.layout_id)) as LiveLayoutRow | null) : null;
+  const courseId = evLayout?.course_id ?? ev.course_id ?? null;
+  const evCourse = courseId != null ? ((await db.getCourse(env.DB, courseId)) as LiveCourseRow | null) : null;
+  return weatherLocationForCourse(evCourse, evLayout);
+}
+async function ensureLiveWeather(stub: DurableObjectStub, env: Env, eid: number): Promise<LiveJson | null> {
+  const weatherLocation = await liveWeatherLocation(env, eid);
+  if (!weatherLocation) return null;
+  const updated = await liveJson(stub, "/weather", { method: "POST", body: JSON.stringify({ weatherLocation }) });
+  return updated.status === 200 ? updated.data : null;
+}
+async function liveSnapshotWithWeather(stub: DurableObjectStub, env: Env, eid: number, origin: string | null): Promise<Response> {
+  const first = await liveJson(stub, "/snapshot");
+  if (!needsWeatherBackfill(first.data, first.status)) return json(first.data, first.status, origin);
+  const updated = await ensureLiveWeather(stub, env, eid);
+  return json(updated ?? first.data, updated ? 200 : first.status, origin);
+}
+async function liveMineWithWeather(stub: DurableObjectStub, env: Env, eid: number, headers: HeadersInit, origin: string | null): Promise<Response> {
+  const first = await liveJson(stub, "/mine", { headers });
+  if (!needsWeatherBackfill(first.data, first.status)) return json(first.data, first.status, origin);
+  const updated = await ensureLiveWeather(stub, env, eid);
+  if (!updated) return json(first.data, first.status, origin);
+  const second = await liveJson(stub, "/mine", { headers });
+  return json(second.data, second.status, origin);
 }
 
 async function withRatingAnchor(env: Env, player: StartPlayer) {
@@ -71,15 +127,14 @@ export async function handleClubLive(
   const stub = env.LIVE.get(env.LIVE.idFromName("event:" + eid));
 
   // Public reads: the live leaderboard/scorecard snapshot and the WebSocket. No identity, memberIds redacted.
-  if (method === "GET" && !sub) return liveProxy(stub, "/snapshot", undefined, origin);
+  if (method === "GET" && !sub) return liveSnapshotWithWeather(stub, env, eid, origin);
   if (sub === "ws") return stub.fetch(request);
 
   // A player's own card (members via JWT, guests via ?gt= token) — tells the score app which card is theirs.
   if (method === "GET" && sub === "mine") {
     const id = await scoreIdentity(request, env, null);
     if (!id.authMember) return json({ error: "unauthorized" }, 401, origin);
-    const r = await stub.fetch("https://do/mine", { headers: { "X-Auth-Member": id.authMember } });
-    return json(await r.json().catch(() => ({})), r.status, origin);
+    return liveMineWithWeather(stub, env, eid, { "X-Auth-Member": id.authMember }, origin);
   }
 
   // Score submission: any player (or guest) may score; the DO enforces that the target is on THEIR card.
@@ -103,12 +158,13 @@ export async function handleClubLive(
 
     if (sub === "start") {
       const startBody = (await readJson(request)) ?? {};
-      const ev = (await db.getEvent(env.DB, eid)) as (Record<string, unknown> & { course_id?: number | null; layout_id?: number | null; players?: Record<string, unknown>[] }) | null;
+      const ev = (await db.getEvent(env.DB, eid)) as LiveEventRow | null;
       if (!ev) return json({ error: "not_found" }, 404, origin);
       const holes = await db.getLayoutHoles(env.DB, ev.layout_id);
       if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin);
-      const evLayout = ev.layout_id != null ? ((await db.getLayout(env.DB, ev.layout_id)) as { name?: string | null; course_id?: number | null; holes?: string | null } | null) : null;
-      const evCourse = evLayout?.course_id != null ? ((await db.getCourse(env.DB, evLayout.course_id)) as { name?: string | null; location?: string | null; lat?: number | null; lng?: number | null } | null) : null;
+      const evLayout = ev.layout_id != null ? ((await db.getLayout(env.DB, ev.layout_id)) as LiveLayoutRow | null) : null;
+      const courseId = evLayout?.course_id ?? ev.course_id ?? null;
+      const evCourse = courseId != null ? ((await db.getCourse(env.DB, courseId)) as LiveCourseRow | null) : null;
       const weatherLocation = weatherLocationForCourse(evCourse, evLayout);
       const regs = (await db.listRegistrations(env.DB, eid)) as { member_id?: string; name?: string; division?: string | null; starting_hole?: number | null }[];
       const rawPlayers: StartPlayer[] =

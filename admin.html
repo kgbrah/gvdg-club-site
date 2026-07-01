@@ -169,6 +169,13 @@
             .ts-review-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         .al-holes th.th-temp { color: #2563eb; }
+        .live-weather { margin: 0.75rem 0 1rem; }
+        .weather-strip { background: var(--bg-secondary); border: 1px solid var(--border-color); border-left: 4px solid var(--secondary); border-radius: 10px; padding: 0.75rem 0.85rem; }
+        .weather-title { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.45rem; }
+        .weather-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+        .weather-chip { display: inline-flex; align-items: baseline; gap: 0.3rem; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 999px; color: var(--text-secondary); padding: 0.22rem 0.55rem; font-size: 0.8rem; line-height: 1.25; }
+        .weather-chip strong { color: var(--text-muted); font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.04em; }
+        .weather-note { margin-top: 0.45rem; color: var(--text-muted); font-size: 0.75rem; line-height: 1.4; }
         .tee-sign { color: var(--text-primary); }
         .tee-sign-bg { fill: var(--bg-tertiary); stroke: var(--border-color); stroke-opacity: 0.8; }
         .tee-sign-hole { font: 700 40px 'Bebas Neue', system-ui, sans-serif; fill: currentColor; }
@@ -502,6 +509,7 @@
                     <p class="al-note">An event needs a layout (with pars) to score. Pick one here, or set it on the Layouts tab.</p>
                 </div>
                 <div id="scLive" style="display:none;margin-top:1rem;">
+                    <div id="scWeather" class="live-weather" hidden></div>
                     <h4 class="al-h">Scorecard <span class="al-note">(enter strokes — saves + pushes live instantly)</span></h4>
                     <div style="overflow-x:auto;"><table class="al-holes" id="scGrid"></table></div>
                     <div class="al-row" id="scOverride" style="margin-top:0.75rem;align-items:flex-end;flex-wrap:wrap;">
@@ -702,6 +710,7 @@
         import { teeSignNode } from './tee-sign.js';
         window.teeSignNode = teeSignNode;
     </script>
+    <script src="weather-display.js"></script>
     <script>
         // --- Theme toggle (mirrors index.html / events.html) ---
         const themeToggle = document.querySelector('.theme-toggle');
@@ -1581,8 +1590,13 @@
             $('scStart').style.display = 'none'; $('scLive').style.display = '';
             const live = scSnap.status === 'live';
             $('scOverride').style.display = live ? '' : 'none'; // overrides only make sense mid-round
+            scRenderWeather();
             scRenderGrid(); scRenderBoard(); scRenderTeeSigns(); scPopulateOverrideHoles();
             if (live) scConnectWs(); // stream player/cardmate edits in real time
+        }
+        function scRenderWeather() {
+            const target = $('scWeather');
+            if (window.GVDGWeather && target) window.GVDGWeather.renderWeather(target, scSnap && scSnap.weather, { title: 'Round weather' });
         }
 
         // Subscribe to the live event's WebSocket so scores entered by players on the course appear here
@@ -1598,7 +1612,7 @@
             scWs = ws;
             ws.addEventListener('message', (ev) => {
                 let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
-                if (msg && msg.type === 'snapshot' && scWsEvent === scEventId) { scSnap = msg; scUpdateTotals(); scRenderBoard(); scMarkConflicts(); }
+                if (msg && msg.type === 'snapshot' && scWsEvent === scEventId) { scSnap = msg; scRenderWeather(); scUpdateTotals(); scRenderBoard(); scMarkConflicts(); }
             });
             ws.addEventListener('close', () => { if (scWsEvent === scEventId && !scWsTimer) scWsTimer = setTimeout(() => { scWsTimer = null; if (scWsEvent === scEventId) scConnectWs(); }, 4000); });
             ws.addEventListener('error', () => { try { ws.close(); } catch (e) {} });
@@ -1738,7 +1752,7 @@
             const strokes = parseInt(value, 10);
             if (!(strokes >= 1 && strokes <= 30)) { adminMsg('Strokes must be 1–30', false); return; }
             const r = await adminApi('/events/' + scEventId + '/live/score', { method: 'POST', body: { index, hole, strokes } });
-            if (r.ok) { scSnap = await r.json(); scUpdateTotals(); scRenderBoard(); scRenderGrid(); } else { adminMsg('Score save failed', false); }
+            if (r.ok) { scSnap = await r.json(); scRenderWeather(); scUpdateTotals(); scRenderBoard(); scRenderGrid(); } else { adminMsg('Score save failed', false); }
         }
         // Update each grid row's running Total cell without re-rendering inputs (keeps focus).
         function scUpdateTotals() {

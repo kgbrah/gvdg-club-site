@@ -206,6 +206,14 @@
         [data-theme="dark"] .detail-notes { background: var(--bg-primary); }
         .live-banner { display: flex; align-items: center; gap: 0.6rem; background: linear-gradient(135deg, var(--primary), #cc4a1a); color: white; border-radius: 12px; padding: 1rem 1.25rem; margin: 1.25rem 0; font-weight: 700; }
         .live-banner .leaderboard-link { margin-left: auto; color: white; text-decoration: underline; font-size: 0.9rem; font-weight: 600; }
+        .live-weather { margin: -0.3rem 0 0.85rem; }
+        .weather-strip { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-left: 4px solid var(--secondary); border-radius: 12px; padding: 0.85rem 1rem; }
+        [data-theme="dark"] .weather-strip { background: var(--bg-primary); }
+        .weather-title { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.5rem; }
+        .weather-chips { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+        .weather-chip { display: inline-flex; align-items: baseline; gap: 0.3rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 999px; color: var(--text-secondary); padding: 0.25rem 0.6rem; font-size: 0.82rem; line-height: 1.25; }
+        .weather-chip strong { color: var(--text-muted); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; }
+        .weather-note { margin-top: 0.5rem; color: var(--text-muted); font-size: 0.78rem; line-height: 1.4; }
         .lb-conn { margin-left: auto; font-size: 0.78rem; font-weight: 700; opacity: 0.9; }
         .lb-wrap { margin: 0.25rem 0 1.25rem; }
         .lb-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
@@ -344,6 +352,7 @@
 
     <footer><p>&copy; 2026 Greenville Disc Golf Club. All rights reserved. | Greenville, NC</p></footer>
 
+    <script src="weather-display.js"></script>
     <script type="module">
         import {
             bucketEvents,
@@ -1278,19 +1287,23 @@
             table.appendChild(tbody);
             container.appendChild(table);
         }
-        function mountLiveLeaderboard(eventId, container, statusEl) {
+        function renderLiveSnapshot(container, weatherEl, snap) {
+            if (window.GVDGWeather && weatherEl) window.GVDGWeather.renderWeather(weatherEl, snap && snap.weather, { title: 'Round weather' });
+            renderStandings(container, snap);
+        }
+        function mountLiveLeaderboard(eventId, container, statusEl, weatherEl) {
             teardownLive();
             const ctx = { ws: null, poll: null, gotWs: false };
             activeLive = ctx;
             const setConn = (t) => { if (statusEl) statusEl.textContent = t; };
-            const pollOnce = async () => { try { const d = await fetchJson(`/events/${encodeURIComponent(eventId)}/live`); if (activeLive === ctx) renderStandings(container, d); } catch (_e) {} };
+            const pollOnce = async () => { try { const d = await fetchJson(`/events/${encodeURIComponent(eventId)}/live`); if (activeLive === ctx) renderLiveSnapshot(container, weatherEl, d); } catch (_e) {} };
             const startPolling = () => { if (ctx.poll || activeLive !== ctx) return; setConn('live (auto-refresh)'); pollOnce(); ctx.poll = setInterval(pollOnce, 5000); };
             try {
                 const wsUrl = API_BASE.replace(/^http/, 'ws') + `/events/${encodeURIComponent(eventId)}/live/ws`;
                 const ws = new WebSocket(wsUrl);
                 ctx.ws = ws;
                 ws.onopen = () => { ctx.gotWs = true; setConn('● live'); };
-                ws.onmessage = (e) => { try { if (activeLive === ctx) renderStandings(container, JSON.parse(e.data)); } catch (_e) {} };
+                ws.onmessage = (e) => { try { if (activeLive === ctx) renderLiveSnapshot(container, weatherEl, JSON.parse(e.data)); } catch (_e) {} };
                 ws.onerror = () => { if (!ctx.gotWs) startPolling(); };
                 ws.onclose = () => { if (!ctx.gotWs && activeLive === ctx) startPolling(); };
                 setTimeout(() => { if (!ctx.gotWs) startPolling(); }, 4000); // fallback if the upgrade stalls
@@ -1446,6 +1459,9 @@
                 const conn = el('span', 'lb-conn', 'connecting…');
                 banner.appendChild(conn);
                 card.appendChild(banner);
+                const weather = el('div', 'live-weather');
+                weather.hidden = true;
+                card.appendChild(weather);
                 // Players keep their own card's scores in the mobile scorecard app (score.html). Members use
                 // their saved login; a guest registrant passes their registration token so they can score too.
                 const ks = el('a', 'btn-keep-score', '✏️ Keep score for my card');
@@ -1456,7 +1472,7 @@
                 card.appendChild(ks);
                 const lb = el('div', 'lb-wrap');
                 card.appendChild(lb);
-                mountLiveLeaderboard(ev.id, lb, conn);
+                mountLiveLeaderboard(ev.id, lb, conn, weather);
             } else if (ev.status === 'final') {
                 const rwrap = el('div', 'lb-wrap');
                 card.appendChild(rwrap);
