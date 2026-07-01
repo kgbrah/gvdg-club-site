@@ -176,7 +176,7 @@ describe("LiveEventDO card-scoped scoring", () => {
     const blocked = await live.fetch(new Request("https://do/finalize", { method: "POST" }));
     expect(blocked.status).toBe(409);
     const body = (await blocked.json()) as { error: string; conflicts: ConflictRow[]; missing: unknown[] };
-    expect(body.error).toBe("scorecards_not_matched");
+    expect(body.error).toBe("scorecard_incomplete");
     expect(body.conflicts).toContainEqual({ cardId: "c0", playerIndex: 0, playerName: "A", hole: 1, values: [3, 4] });
     expect(touchedDb).toBe(false);
   });
@@ -206,7 +206,7 @@ describe("LiveEventDO card-scoped scoring", () => {
     expect(resolved.players.find((p) => p.index === 1)?.scores).toMatchObject({ 1: 3 });
   });
 
-  it("preserves cardmates' scores when the sole scorekeeper is removed (no data loss, still finalizes)", async () => {
+  it("preserves cardmates' scores when the sole scorekeeper is removed (no data loss); finalize then needs confirmation or an admin force", async () => {
     let touchedDb = false;
     const trackDb = { prepare: () => ({ bind() { return this; }, all: async () => ({ results: [], success: true }), first: async () => null, run: async () => { touchedDb = true; return { results: [], success: true }; } }) };
     const live = new LiveEventDO(new FakeState({}), { DB: trackDb });
@@ -216,10 +216,20 @@ describe("LiveEventDO card-scoped scoring", () => {
     await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m0" }, body: JSON.stringify({ index: 2, hole: 1, strokes: 5 }) }));
     await live.fetch(new Request("https://do/remove", { method: "POST", headers: { "X-Auth-Member": "m1" }, body: JSON.stringify({ index: 0, name: "A" }) })); // A leaves
     const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { players: { name: string; scores: Record<string, number> }[] };
-    expect(snap.players.find((p) => p.name === "B")?.scores).toMatchObject({ 1: 4 }); // survived A's departure
+    expect(snap.players.find((p) => p.name === "B")?.scores).toMatchObject({ 1: 4 }); // survived A's departure — NO DATA LOSS
     expect(snap.players.find((p) => p.name === "C")?.scores).toMatchObject({ 1: 5 });
-    const fin = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Member": "m1" } }));
-    expect(fin.status).toBe(200); // no conflict → finalizes (B & C ranked, not DNF-wiped)
+    // With the only scorekeeper gone, no remaining MEMBER has confirmed a score → the card isn't agreed.
+    const blocked = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Member": "m1" } }));
+    expect(blocked.status).toBe(409);
+    expect(((await blocked.json()) as { error: string }).error).toBe("scorecard_incomplete");
+    expect(touchedDb).toBe(false);
+    // An admin may FORCE it through, locking the preserved scores as they stand (B & C ranked, not DNF-wiped).
+    const forced = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify({ force: true }) }));
+    expect(forced.status).toBe(200);
+    const fb = (await forced.json()) as { status: string; forced: boolean; standings: { name: string; place: number | null }[] };
+    expect(fb.status).toBe("final");
+    expect(fb.forced).toBe(true);
+    expect(fb.standings.find((s) => s.name === "B")?.place).not.toBeNull();
   });
 
   it("seeds legacy scores under a single marker so a single-scorer correction doesn't phantom-conflict", async () => {
@@ -423,22 +433,68 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     expect(matched.players[0]?.scores).toMatchObject({ 1: 3 });
   });
 
-  it("finalizes with one scorekeeper even when a cardmate/guest never kept their own card (no conflict = no block)", async () => {
+  it("finalizes when only a walk-on GUEST hasn't kept a card (guests are optional; the sole member scored everyone)", async () => {
     let touchedDb = false;
     const trackDb = { prepare: () => ({ bind() { return this; }, all: async () => ({ results: [], success: true }), first: async () => null, run: async () => { touchedDb = true; return { results: [], success: true }; } }) };
     const live = new LiveEventDO(new FakeState({}), { DB: trackDb });
     await startCasual(live, "m_a");
-    await act(live, "guest", "m_a", { name: "Walk-on" }); // a walk-on guest can't vote, so their card is "missing"
+    await act(live, "guest", "m_a", { name: "Walk-on" }); // a walk-on guest is NOT a required scorer
     await act(live, "score", "m_a", { index: 0, scorerIndex: 0, hole: 1, strokes: 3 });
     await act(live, "score", "m_a", { index: 0, scorerIndex: 0, hole: 2, strokes: 3 });
     await act(live, "score", "m_a", { index: 1, scorerIndex: 0, hole: 1, strokes: 3 });
     await act(live, "score", "m_a", { index: 1, scorerIndex: 0, hole: 2, strokes: 3 });
 
-    // Missing cardmate votes no longer block finalize — only a genuine conflict does.
+    // The only MEMBER (m_a) confirmed every hole for both players; the guest's own card isn't required.
     const finalized = await act(live, "finalize", "m_a", {});
     expect(finalized.status).toBe(200);
     expect(((await finalized.json()) as { status: string }).status).toBe("final");
     expect(touchedDb).toBe(false); // casual → nothing written to D1
+  });
+
+  it("blocks finalize while a MEMBER cardmate hasn't confirmed (no conflict, purely unconfirmed), then finalizes once they match", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await startCasual(live, "m_a");
+    await act(live, "join", "m_b", { name: "Bee" });
+    // m_a keeps the whole card; m_b (a member) hasn't entered anything.
+    for (const hole of [1, 2]) { await act(live, "score", "m_a", { index: 0, hole, strokes: 3 }); await act(live, "score", "m_a", { index: 1, hole, strokes: 3 }); }
+    const blocked = await act(live, "finalize", "m_a", {});
+    expect(blocked.status).toBe(409);
+    const b1 = (await blocked.json()) as { error: string; conflicts: unknown[]; missing: unknown[] };
+    expect(b1.error).toBe("scorecard_incomplete");
+    expect(b1.conflicts).toEqual([]); // nothing disagrees — it's purely unconfirmed
+    expect(b1.missing.length).toBeGreaterThan(0);
+    // m_b confirms matching scores on every hole for both players → complete.
+    for (const hole of [1, 2]) { await act(live, "score", "m_b", { index: 0, hole, strokes: 3 }); await act(live, "score", "m_b", { index: 1, hole, strokes: 3 }); }
+    const done = await act(live, "finalize", "m_a", {});
+    expect(done.status).toBe(200);
+    expect(((await done.json()) as { forced: boolean }).forced).toBe(false);
+  });
+
+  it("a non-admin cannot force past an incomplete board; only an admin can", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await startCasual(live, "m_a");
+    await act(live, "join", "m_b", { name: "Bee" });
+    // Only m_a scores; member m_b never confirms → incomplete.
+    for (const hole of [1, 2]) { await act(live, "score", "m_a", { index: 0, hole, strokes: 3 }); await act(live, "score", "m_a", { index: 1, hole, strokes: 3 }); }
+    const nope = await act(live, "finalize", "m_a", { force: true }); // non-admin force is ignored
+    expect(nope.status).toBe(409);
+    expect(((await nope.json()) as { error: string }).error).toBe("scorecard_incomplete");
+    const forced = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Member": "m_a", "X-Auth-Admin": "true" }, body: JSON.stringify({ force: true }) }));
+    expect(forced.status).toBe(200);
+    expect(((await forced.json()) as { forced: boolean }).forced).toBe(true);
+  });
+
+  it("exposes `missing` (unconfirmed member scores) in the snapshot and /mine", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await startCasual(live, "m_a");
+    await act(live, "join", "m_b", { name: "Bee" });
+    await act(live, "score", "m_a", { index: 0, hole: 1, strokes: 3 }); // barely started → lots unconfirmed
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { missing: { hole: number; playerName: string }[] };
+    expect(Array.isArray(snap.missing)).toBe(true);
+    expect(snap.missing.length).toBeGreaterThan(0);
+    const mine = (await (await live.fetch(new Request("https://do/mine", { headers: { "X-Auth-Member": "m_a" } }))).json()) as { missing: unknown[] };
+    expect(Array.isArray(mine.missing)).toBe(true);
+    expect((mine.missing as unknown[]).length).toBeGreaterThan(0);
   });
 
   it("rejects finalize until every player's card scores match exactly", async () => {
@@ -455,7 +511,7 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     const blocked = await act(live, "finalize", "m_a", {});
     expect(blocked.status).toBe(409);
     const body = (await blocked.json()) as { error: string; conflicts: ConflictRow[]; missing: unknown[] };
-    expect(body.error).toBe("scorecards_not_matched");
+    expect(body.error).toBe("scorecard_incomplete");
     expect(body.conflicts).toEqual([{ cardId: "c0", playerIndex: 0, playerName: "Creator", hole: 1, values: [3, 4] }]);
     expect(body.missing.length).toBeGreaterThan(0);
     expect(touchedDb).toBe(false);
