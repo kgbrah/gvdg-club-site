@@ -47,12 +47,18 @@
             border-bottom: 1px solid var(--border-color); box-shadow: 0 1px 8px var(--shadow);
         }
         .topbar .logo { height: 30px; width: auto; }
-        .topbar h1 { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; letter-spacing: 0.5px; font-weight: 400; flex: 1; line-height: 1; }
+        .topbar h1 { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; letter-spacing: 0.5px; font-weight: 400; flex: 1; line-height: 1; min-width: 0; }
         .topbar h1 small { display: block; font-family: 'Archivo'; font-size: 0.62rem; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+        .top-link {
+            display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 0.65rem;
+            border: 1px solid var(--border-color); border-radius: 11px; background: var(--bg-tertiary); color: var(--primary);
+            font-size: 0.78rem; font-weight: 700; text-decoration: none;
+        }
         .iconbtn {
             border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary);
             width: 40px; height: 40px; border-radius: 11px; font-size: 1.1rem; cursor: pointer; display: grid; place-items: center;
         }
+        .iconbtn[hidden] { display: none; }
         .iconbtn:active { transform: scale(0.94); }
         main { flex: 1; padding: 1rem 0.9rem calc(1.2rem + var(--safe-bottom)); }
         /* ---- generic ---- */
@@ -167,6 +173,7 @@
         <header class="topbar">
             <img src="img/logo.png" alt="GVDG" class="logo">
             <h1 id="barTitle">Live Scoring<small id="barSub">Greenville Disc Golf Club</small></h1>
+            <a class="top-link" href="gvdg-members.html" aria-label="Return to members">Members</a>
             <button class="iconbtn" id="lbBtn" title="Leaderboard" hidden>🏆</button>
             <button class="iconbtn" id="themeBtn" title="Toggle theme">🌙</button>
         </header>

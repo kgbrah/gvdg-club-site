@@ -54,15 +54,17 @@ test('app entry pages link manifest, touch icon, theme color, and pwa registrar'
   }
 });
 
-test('live scoring login links back to the members dashboard', () => {
+test('live scoring links back to the members dashboard', () => {
   const html = readFileSync('score.html', 'utf8');
   assert.match(html, /Return to members/);
   assert.match(html, /membersLink\.href = 'gvdg-members\.html'/);
+  assert.match(html, /<a class="top-link" href="gvdg-members\.html" aria-label="Return to members">Members<\/a>/);
+  assert.match(html, /\.iconbtn\[hidden\] \{ display: none; \}/);
 });
 
 test('shared service worker caches app install assets and member fallback', () => {
   const sw = readFileSync('sw.js', 'utf8');
-  assert.match(sw, /const CACHE = "gvdg-club-v4"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v5"/);
   assert.match(sw, /const OFFLINE_PAGE = "gvdg-members\.html"/);
   assert.match(sw, /const STATIC_DESTINATIONS = new Set/);
   assert.match(sw, /if \(!staticAsset\(req, url\)\) return/);
