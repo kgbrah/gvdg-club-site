@@ -26,37 +26,41 @@ const r2 = () => {
   };
 };
 const PNG_DATAURL = "data:image/png;base64," + btoa(String.fromCharCode(0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a));
+let lastLayoutHolesJson = "";
 function mockDb() {
-  return { prepare: (sql: string) => ({
-    bind() { return this; },
-    all: async () => {
-      if (/SELECT \* FROM tee_signs WHERE status/i.test(sql)) {
-        return { results: [{ id: 1, course_id: 3, hole_number: 5, status: "candidate", r2_key: "tee-signs/3/5/u.png", content_type: "image/png", uploaded_by: "m_jane", extracted_json: '{"hole":7,"layouts":[{"label":"Long","par":4,"distance_ft":420}]}', extract_source: "dev-stub" }], success: true };
-      }
-      if (/SELECT id, name FROM course_layouts WHERE course_id/i.test(sql)) {
+  return { prepare: (sql: string) => {
+    let bound: unknown[] = [];
+    return {
+      bind(...vals: unknown[]) { bound = vals; return this; },
+      all: async () => {
+        if (/SELECT \* FROM tee_signs WHERE status/i.test(sql)) {
+          return { results: [{ id: 1, course_id: 3, hole_number: 5, status: "candidate", r2_key: "tee-signs/3/5/u.png", content_type: "image/png", uploaded_by: "m_jane", extracted_json: '{"hole":7,"layouts":[{"label":"Long","par":4,"distance_ft":420}]}', extract_source: "dev-stub" }], success: true };
+        }
+        if (/SELECT id, name FROM course_layouts WHERE course_id/i.test(sql)) {
+          return { results: [], success: true };
+        }
+        // T4 render route: official-only uses IN (?), authed (official+candidate) uses IN (?,?).
+        if (/SELECT id, hole_number, status FROM tee_signs WHERE course_id/i.test(sql)) {
+          const official = { id: 1, hole_number: 7, status: "official" };
+          const candidate = { id: 2, hole_number: 8, status: "candidate" };
+          return { results: /IN \(\?,\?\)/.test(sql) ? [official, candidate] : [official], success: true };
+        }
         return { results: [], success: true };
-      }
-      // T4 render route: official-only uses IN (?), authed (official+candidate) uses IN (?,?).
-      if (/SELECT id, hole_number, status FROM tee_signs WHERE course_id/i.test(sql)) {
-        const official = { id: 1, hole_number: 7, status: "official" };
-        const candidate = { id: 2, hole_number: 8, status: "candidate" };
-        return { results: /IN \(\?,\?\)/.test(sql) ? [official, candidate] : [official], success: true };
-      }
-      return { results: [], success: true };
-    },
-    first: async () => {
-      if (/SELECT \* FROM courses WHERE id/i.test(sql)) return { id: 3, name: "Test Course" };
-      if (/INSERT INTO tee_signs/i.test(sql)) return { id: 1, status: "candidate", r2_key: "tee-signs/3/5/u.png" };
-      if (/SELECT \* FROM tee_signs WHERE id/i.test(sql)) return { id: 1, course_id: 3, hole_number: 5, status: "candidate", r2_key: "tee-signs/3/5/u.png", content_type: "image/png", uploaded_by: "m_jane", extracted_json: null, extract_source: null };
-      if (/INSERT INTO course_layouts/i.test(sql)) return { id: 99, course_id: 3, name: "Long", holes: "[]", total_par: null };
-      if (/SELECT \* FROM course_layouts WHERE id/i.test(sql)) return { id: 99, course_id: 3, name: "Long", holes: "[]", total_par: null };
-      if (/UPDATE course_layouts/i.test(sql)) return { id: 99 };
-      if (/DELETE FROM tee_signs/i.test(sql)) return { r2_key: "tee-signs/3/5/u.png" };
-      if (/UPDATE tee_signs/i.test(sql)) return { id: 1, status: "official" };
-      return null;
-    },
-    run: async () => ({ success: true }),
-  }) };
+      },
+      first: async () => {
+        if (/SELECT \* FROM courses WHERE id/i.test(sql)) return { id: 3, name: "Test Course" };
+        if (/INSERT INTO tee_signs/i.test(sql)) return { id: 1, status: "candidate", r2_key: "tee-signs/3/5/u.png" };
+        if (/SELECT \* FROM tee_signs WHERE id/i.test(sql)) return { id: 1, course_id: 3, hole_number: 5, status: "candidate", r2_key: "tee-signs/3/5/u.png", content_type: "image/png", uploaded_by: "m_jane", extracted_json: null, extract_source: null };
+        if (/INSERT INTO course_layouts/i.test(sql)) return { id: 99, course_id: 3, name: "Long", holes: "[]", total_par: null };
+        if (/SELECT \* FROM course_layouts WHERE id/i.test(sql)) return { id: 99, course_id: 3, name: "Long", holes: "[]", total_par: null };
+        if (/UPDATE course_layouts/i.test(sql)) { lastLayoutHolesJson = String(bound[1] ?? ""); return { id: 99 }; }
+        if (/DELETE FROM tee_signs/i.test(sql)) return { r2_key: "tee-signs/3/5/u.png" };
+        if (/UPDATE tee_signs/i.test(sql)) return { id: 1, status: "official" };
+        return null;
+      },
+      run: async () => ({ success: true }),
+    };
+  } };
 }
 const env = (photos?: ReturnType<typeof r2>) => ({ ROSTER: kv(members), RATELIMIT: kv(), DB: mockDb(), PHOTOS: photos ?? r2(), JWT_SECRET: SECRET, ALLOWED_ORIGINS: "http://localhost:8080" } as unknown as Parameters<typeof worker.fetch>[1]);
 const tok = (sub: string) => signSession({ sub, mustChangePin: false }, SECRET, 900);
@@ -88,8 +92,12 @@ describe("admin approve/reject", () => {
     expect((await call("/admin/tee-signs/1/approve", "POST", tok("m_jane"), { rows: [{ par: 3 }] })).status).toBe(403);
   });
   it("approves with manual rows (admin)", async () => {
+    lastLayoutHolesJson = "";
     const res = await call("/admin/tee-signs/1/approve", "POST", tok("m_admin"), { rows: [{ newLayoutName: "Long", par: 4, distance_ft: 420 }] });
     expect(res.status).toBe(200);
+    const holes = JSON.parse(lastLayoutHolesJson) as { verified?: { tee_sign_id?: number | null }; tee_sign_id?: number | null }[];
+    expect(holes[0]!.verified?.tee_sign_id).toBe(1);
+    expect(holes[0]!.tee_sign_id).toBe(1);
   });
 });
 

@@ -84,15 +84,23 @@ export async function createLayout(
 export async function getLayout(db: D1Like, id: number) {
   return db.prepare("SELECT * FROM course_layouts WHERE id = ?").bind(id).first();
 }
-/** A layout's hole list as {hole,par}[] (parses the stored JSON), or [] for none/invalid/missing layout. */
-export async function getLayoutHoles(db: D1Like, layoutId: number | null | undefined): Promise<{ hole: number; par: number; distance_ft: number | null }[]> {
+export interface ScorableHole {
+  hole: number;
+  par: number;
+  distance_ft: number | null;
+  tee_sign_id: number | null;
+}
+
+/** A layout's hole list as scorable hole metadata (parses stored JSON), or [] for none/invalid/missing layout. */
+export async function getLayoutHoles(db: D1Like, layoutId: number | null | undefined): Promise<ScorableHole[]> {
   if (!layoutId) return [];
   const layout = (await getLayout(db, Number(layoutId))) as { holes?: string } | null;
   try {
-    return JSON.parse(layout?.holes ?? "[]").map((h: { hole: number; par: number; distance_ft?: number | null }) => ({
+    return JSON.parse(layout?.holes ?? "[]").map((h: { hole: number; par: number; distance_ft?: number | null; verified?: { tee_sign_id?: number | null } | null; tee_sign_id?: number | null }) => ({
       hole: Number(h.hole),
       par: Number(h.par),
       distance_ft: h.distance_ft == null ? null : Number(h.distance_ft),
+      tee_sign_id: h.verified?.tee_sign_id ?? h.tee_sign_id ?? null,
     }));
   } catch {
     return [];
@@ -739,7 +747,7 @@ export interface ApproveRow {
  *  Returns the list of affected layout ids. The official-photo bookkeeping (status flip / demote prior)
  *  is done by the caller via setTeeSignStatus + demoteOtherOfficial. */
 export async function applyTeeSignRows(
-  db: D1Like, courseId: number, hole: number, rows: ApproveRow[], teeSignKey: string,
+  db: D1Like, courseId: number, hole: number, rows: ApproveRow[], teeSignKey: string, teeSignId: number,
 ): Promise<number[]> {
   const affected: number[] = [];
   for (const row of rows) {
@@ -756,12 +764,13 @@ export async function applyTeeSignRows(
     // reverts any earlier manual stopgap — verified now owns the value (enrichHoles resolves it).
     const entry: Record<string, unknown> = {
       hole, par: row.par,
-      verified: { par: row.par, distance_ft: row.distance_ft ?? null, tee_sign_key: teeSignKey },
+      verified: { par: row.par, distance_ft: row.distance_ft ?? null, tee_sign_key: teeSignKey, tee_sign_id: teeSignId },
       manual_distance: null,
       tee: row.tee ? { label: String(row.tee).slice(0, 80) } : null,
       target: row.target ? { label: String(row.target).slice(0, 80) } : null,
       color: row.color ?? null,
       tee_sign_key: teeSignKey,
+      tee_sign_id: teeSignId,
     };
     if (idx >= 0) holes[idx] = { ...holes[idx], ...entry }; else holes.push(entry);
     holes.sort((a, b) => Number(a.hole) - Number(b.hole));
