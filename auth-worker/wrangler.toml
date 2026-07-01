@@ -88,8 +88,7 @@ RP_ID = "greenvillediscgolf.com"
 RP_NAME = "Greenville Disc Golf Club"
 EXPECTED_ORIGIN = "https://www.greenvillediscgolf.com"
 # JWT_SECRET is set as a secret, NOT here:  wrangler secret put JWT_SECRET
-# Crotts vision (T2): tee-sign OCR. OpenRouter free VL model tried first (needs OPENROUTER_API_KEY),
-# then Workers AI. Override the model ids here.
+GEMINI_VISION_MODEL = "gemini-2.5-flash-lite"
 OPENROUTER_VISION_MODEL = "nvidia/nemotron-nano-12b-v2-vl:free"
 VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct"
 
@@ -178,6 +177,7 @@ EMAIL_REPLY_TO = "greenvillediscgolf@gmail.com"
 RP_ID = "gvdgclub.com"
 RP_NAME = "GVDG Club (dev)"
 EXPECTED_ORIGIN = "https://gvdgclub.com"
+GEMINI_VISION_MODEL = "gemini-2.5-flash-lite"
 OPENROUTER_VISION_MODEL = "nvidia/nemotron-nano-12b-v2-vl:free"
 VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct"
 
@@ -240,5 +240,6 @@ EMAIL_REPLY_TO = "greenvillediscgolf@gmail.com"
 RP_ID = "gvdgclub.com"
 RP_NAME = "GVDG Club (dev)"
 EXPECTED_ORIGIN = "https://gvdgclub.com"
+GEMINI_VISION_MODEL = "gemini-2.5-flash-lite"
 OPENROUTER_VISION_MODEL = "nvidia/nemotron-nano-12b-v2-vl:free"
 VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct"

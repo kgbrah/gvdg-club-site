@@ -13,7 +13,7 @@ export interface VisionRow {
 export interface VisionResult {
   hole: number | null;
   layouts: VisionRow[];
-  source?: string | null; // 'openrouter:<model>' | 'workers-ai:<model>' | 'dev-stub' | null
+  source?: string | null;
 }
 
 export const VISION_PROMPT =
@@ -58,19 +58,51 @@ export function parseVisionJson(text: unknown): VisionResult {
 
 // ---- providers (I/O; live-verified) ----
 export interface VisionEnv {
+  GEMINI_API_KEY?: string;
+  GEMINI_VISION_MODEL?: string;
   OPENROUTER_API_KEY?: string;
   OPENROUTER_VISION_MODEL?: string;
   VISION_MODEL?: string;
   VISION_DEV_STUB?: string;
   AI?: { run(model: string, opts: Record<string, unknown>): Promise<{ response?: string }> };
 }
+const DEFAULT_GEMINI_VISION = "gemini-2.5-flash-lite";
 const DEFAULT_OR_VISION = "nvidia/nemotron-nano-12b-v2-vl:free";
 const DEFAULT_WAI_VISION = "@cf/meta/llama-3.2-11b-vision-instruct";
 
-function dataUrlOf(bytes: Uint8Array, contentType: string): string {
+function base64Of(bytes: Uint8Array): string {
   let bin = "";
   for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
-  return `data:${contentType};base64,${btoa(bin)}`;
+  return btoa(bin);
+}
+
+function dataUrlOf(bytes: Uint8Array, contentType: string): string {
+  return `data:${contentType};base64,${base64Of(bytes)}`;
+}
+
+function geminiResponseText(data: { candidates?: { content?: { parts?: { text?: string }[] } }[] }): string {
+  return data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("\n") ?? "";
+}
+
+async function geminiVision(env: VisionEnv, bytes: Uint8Array, contentType: string): Promise<VisionResult> {
+  const model = env.GEMINI_VISION_MODEL || DEFAULT_GEMINI_VISION;
+  const modelId = model.replace(/^models\//, "");
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generateContent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY || "" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [
+        { text: VISION_PROMPT },
+        { inlineData: { mimeType: contentType, data: base64Of(bytes) } },
+      ] }],
+      generationConfig: { responseMimeType: "application/json", maxOutputTokens: 700, temperature: 0 },
+    }),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!res.ok) throw new Error("gemini_" + res.status);
+  const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+  const out = parseVisionJson(geminiResponseText(data));
+  return { ...out, source: "gemini:" + model };
 }
 
 async function openRouterVision(env: VisionEnv, bytes: Uint8Array, contentType: string): Promise<VisionResult> {
@@ -112,17 +144,18 @@ function devStub(): VisionResult {
   ] };
 }
 
-/** Provider chain: dev-stub (only if VISION_DEV_STUB) → OpenRouter (if key) → Workers AI (if bound) → empty.
- *  Never throws — returns an empty result if every path fails, so the candidate just awaits manual entry. */
 export async function extractTeeSign(env: VisionEnv, bytes: Uint8Array, contentType: string): Promise<VisionResult> {
   // VISION_DEV_STUB forces the deterministic local stub (set ONLY in .dev.vars, never in deploy) so the
   // pipeline is verifiable without AI creds and without attempting — and hanging on — a real provider call.
   if (env.VISION_DEV_STUB) return devStub();
+  if (env.GEMINI_API_KEY) {
+    try { const r = await geminiVision(env, bytes, contentType); if (r.layouts.length || r.hole != null) return r; } catch {}
+  }
   if (env.OPENROUTER_API_KEY) {
-    try { const r = await openRouterVision(env, bytes, contentType); if (r.layouts.length || r.hole != null) return r; } catch { /* fall through */ }
+    try { const r = await openRouterVision(env, bytes, contentType); if (r.layouts.length || r.hole != null) return r; } catch {}
   }
   if (env.AI) {
-    try { const r = await workersAiVision(env, bytes); if (r.layouts.length || r.hole != null) return r; } catch { /* fall through */ }
+    try { const r = await workersAiVision(env, bytes); if (r.layouts.length || r.hole != null) return r; } catch {}
   }
   return { hole: null, layouts: [], source: null };
 }
