@@ -11,6 +11,8 @@ import { getMember } from "./roster.js";
 import { json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { asInt } from "./input.js";
+import { findRatingAnchor } from "./rating-store.js";
+import { weatherLocationForCourse } from "./weather.js";
 
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // unambiguous (no 0/O/1/I/L)
 function genCode(): string {
@@ -43,13 +45,15 @@ export async function handleCasualRounds(
     if (layoutId == null) return json({ error: "invalid_request" }, 400, origin);
     const holes = await db.getLayoutHoles(env.DB, layoutId);
     if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin);
-    const layout = (await db.getLayout(env.DB, layoutId)) as { name?: string | null; course_id?: number | null } | null;
-    const course = layout?.course_id != null ? ((await db.getCourse(env.DB, layout.course_id)) as { name?: string | null; udisc_course_id?: string | null } | null) : null;
+    const layout = (await db.getLayout(env.DB, layoutId)) as { name?: string | null; course_id?: number | null; holes?: string | null } | null;
+    const course = layout?.course_id != null ? ((await db.getCourse(env.DB, layout.course_id)) as { name?: string | null; location?: string | null; lat?: number | null; lng?: number | null; udisc_course_id?: string | null } | null) : null;
+    const weatherLocation = weatherLocationForCourse(course, layout);
     const member = await getMember(env.ROSTER, claims.sub);
+    const ratingAnchor = await findRatingAnchor(env.DB, { memberId: claims.sub, pdgaNo: member?.pdgaNo ?? null });
     const code = genCode();
     const r = await roundStub(env, code).fetch("https://do/start", {
       method: "POST",
-      body: JSON.stringify({ casual: true, courseName: course?.name ?? null, layoutName: layout?.name ?? null, udiscCourseId: course?.udisc_course_id ?? null, holes, players: [{ memberId: claims.sub, name: member?.name ?? "Player" }], startedAt: new Date().toISOString() }),
+      body: JSON.stringify({ casual: true, roundCode: code, courseId: layout?.course_id ?? null, layoutId, courseName: course?.name ?? null, layoutName: layout?.name ?? null, udiscCourseId: course?.udisc_course_id ?? null, weatherLocation, holes, players: [{ memberId: claims.sub, name: member?.name ?? "Player", ratingAnchor }], startedAt: new Date().toISOString() }),
     });
     if (r.status !== 200) return json({ error: "start_failed" }, 502, origin);
     return json({ code }, 201, origin);
@@ -71,7 +75,8 @@ export async function handleCasualRounds(
 
   if (method === "POST" && sub === "join") {
     const member = await getMember(env.ROSTER, claims.sub);
-    return proxy(stub, "/join", { method: "POST", headers: hdr, body: JSON.stringify({ name: member?.name ?? "Player" }) }, origin);
+    const ratingAnchor = await findRatingAnchor(env.DB, { memberId: claims.sub, pdgaNo: member?.pdgaNo ?? null });
+    return proxy(stub, "/join", { method: "POST", headers: hdr, body: JSON.stringify({ name: member?.name ?? "Player", ratingAnchor }) }, origin);
   }
   if (method === "POST" && sub === "guest") {
     const b = (await readJson(request)) ?? {};

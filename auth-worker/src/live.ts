@@ -6,8 +6,10 @@
 // snapshot + ws reads are public). The DO trusts requests it receives.
 
 import * as db from "./db.js";
+import { persistFinalizedRound } from "./live-finalize.js";
 import { normalizeScorecards, playerScorerId, recordScoreVote, scorecardConsensusIssues, scoreConflicts } from "./live-consensus.js";
 import { assignCards, computeLeaderboard, finalizeStandings, type PlayerState } from "./scoring.js";
+import { createWeatherState, refreshWeatherState, weatherRefreshDue, type WeatherLocation, type WeatherState } from "./weather.js";
 
 interface LiveEnv {
   DB: db.D1Like;
@@ -23,12 +25,16 @@ interface LiveState {
 interface LiveMeta {
   eventId: number;
   casual?: boolean; // self-organizing casual round (no admin event); finalize does not write D1 event results
+  roundCode?: string | null;
+  courseId?: number | null;
+  layoutId?: number | null;
   courseName?: string | null; // display-only: course + layout shown in the scorecard header
   layoutName?: string | null;
   udiscCourseId?: string | null; // UDisc numeric course id for the "Add to UDisc" applink (export bridge)
   holes: { hole: number; par: number; distance_ft?: number | null }[];
   status: "live" | "final";
   startedAt: string;
+  weather?: WeatherState | null;
   // Single-use, ROUND-SCOPED hole overrides (e.g. short baskets today). They live only here, in the
   // live round — the course layout is never touched, so the hole reverts to its verified value after
   // the round. Keyed by hole number (string for JSON safety).
@@ -37,13 +43,17 @@ interface LiveMeta {
 interface StartBody {
   eventId?: number;
   casual?: boolean;
+  roundCode?: string | null;
+  courseId?: number | null;
+  layoutId?: number | null;
   courseName?: string | null;
   layoutName?: string | null;
   udiscCourseId?: string | null;
   holes: { hole: number; par: number; distance_ft?: number | null }[];
-  players: { memberId?: string | null; name: string; division?: string | null; startingHole?: number | null; cardId?: string | null }[];
+  players: { memberId?: string | null; name: string; division?: string | null; startingHole?: number | null; cardId?: string | null; ratingAnchor?: number | null }[];
   startedAt?: string;
   cardSize?: number;
+  weatherLocation?: WeatherLocation | null;
 }
 interface ScoreBody {
   memberId?: string | null;
@@ -70,6 +80,9 @@ const j = (o: unknown, status = 200): Response => new Response(JSON.stringify(o)
 function canEnterScorecard(player: PlayerState, authMember: string | null): boolean {
   return !player.memberId || player.memberId === authMember || player.memberId.startsWith("g_");
 }
+function finiteRatingAnchor(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
 
 export class LiveEventDO {
   private state: LiveState;
@@ -94,6 +107,13 @@ export class LiveEventDO {
     await this.state.storage.put("meta", this.meta);
     await this.state.storage.put("players", this.players);
   }
+  private async refreshWeatherIfDue(force = false): Promise<void> {
+    const meta = this.meta;
+    if (!meta?.weather) return;
+    if (!force && !weatherRefreshDue(meta.weather)) return;
+    meta.weather = await refreshWeatherState(meta.weather);
+    await this.persist();
+  }
 
   async fetch(request: Request): Promise<Response> {
     await this.load();
@@ -102,13 +122,22 @@ export class LiveEventDO {
     // never reads identity from the request body for authorization (the body is spoofable).
     const authMember = request.headers.get("X-Auth-Member");
     const authAdmin = request.headers.get("X-Auth-Admin") === "true";
-    if (action === "ws") return this.handleWs(request);
-    if (action === "mine") return this.mine(authMember); // a player's own card (authed read)
-    if (request.method === "GET") return j(this.snapshot()); // public leaderboard/scorecard (no identity)
+    if (action === "ws") {
+      await this.refreshWeatherIfDue();
+      return this.handleWs(request);
+    }
+    if (action === "mine") {
+      await this.refreshWeatherIfDue();
+      return this.mine(authMember); // a player's own card (authed read)
+    }
+    if (request.method === "GET") {
+      await this.refreshWeatherIfDue();
+      return j(this.snapshot()); // public leaderboard/scorecard (no identity)
+    }
     const body = await request.json().catch(() => ({}));
     if (action === "start") return this.start(body as StartBody);
     if (action === "score") return this.score(body as ScoreBody, authMember, authAdmin);
-    if (action === "join") return this.join(authMember, (body as { name?: string }).name); // casual round: caller joins
+    if (action === "join") return this.join(authMember, body as { name?: string; ratingAnchor?: number | null }); // casual round: caller joins
     if (action === "guest") return this.addGuest(authMember, (body as { name?: string }).name); // add a non-member to my card
     if (action === "remove") return this.removePlayer(body as RemoveBody, authMember, authAdmin); // drop a player (accidental/left/no-show)
     if (action === "override") return this.override(body as OverrideBody);
@@ -135,6 +164,7 @@ export class LiveEventDO {
       courseName: this.meta?.courseName ?? null,
       layoutName: this.meta?.layoutName ?? null,
       udiscCourseId: this.meta?.udiscCourseId ?? null,
+      weather: this.meta?.weather ?? null,
       holes, // {hole, par, distance_ft, overridden} — par/distance reflect any round override
       // players (with per-hole scores + their stable index) drive the scorekeeper grid;
       // standings drive the public leaderboard.
@@ -157,17 +187,33 @@ export class LiveEventDO {
       .filter((h) => h && typeof h.hole === "number" && typeof h.par === "number")
       .map((h) => ({ hole: h.hole, par: h.par, distance_ft: h.distance_ft ?? null }));
     if (holes.length === 0 || (!b.eventId && !b.casual)) return j({ error: "invalid_start" }, 400);
-    this.meta = { eventId: b.eventId ?? 0, casual: !!b.casual, courseName: b.courseName ?? null, layoutName: b.layoutName ?? null, udiscCourseId: b.udiscCourseId ?? null, holes, status: "live", startedAt: b.startedAt ?? "", overrides: {} };
+    this.meta = {
+      eventId: b.eventId ?? 0,
+      casual: !!b.casual,
+      roundCode: b.roundCode ?? null,
+      courseId: b.courseId ?? null,
+      layoutId: b.layoutId ?? null,
+      courseName: b.courseName ?? null,
+      layoutName: b.layoutName ?? null,
+      udiscCourseId: b.udiscCourseId ?? null,
+      holes,
+      status: "live",
+      startedAt: b.startedAt ?? "",
+      weather: createWeatherState(b.weatherLocation ?? null),
+      overrides: {},
+    };
     this.players = (Array.isArray(b.players) ? b.players : []).map((p) => ({
       memberId: p.memberId ?? null,
       name: String(p.name ?? "Player"),
       division: p.division ?? null,
       startingHole: p.startingHole ?? null,
       cardId: p.cardId ?? null,
+      ratingAnchor: finiteRatingAnchor(p.ratingAnchor),
       scores: {},
       scorecards: {},
     }));
     assignCards(this.players, b.cardSize); // group into cards (by starting hole, else buckets of 4)
+    await this.refreshWeatherIfDue(true);
     await this.persist();
     this.broadcast();
     return j(this.snapshot());
@@ -205,6 +251,7 @@ export class LiveEventDO {
     if (!authAdmin && !canEnterScorecard(scorer, authMember)) return j({ error: "wrong_scorer" }, 403);
     const scorerId = playerScorerId(scorerIndex);
     const conflict = recordScoreVote({ players: this.players, targetIndex, scorerId, hole, strokes });
+    await this.refreshWeatherIfDue();
     await this.persist();
     if (conflict) {
       this.sendAll({ type: "conflict", ...conflict, from: conflict.values[0] ?? null, to: conflict.values[1] ?? null });
@@ -219,7 +266,7 @@ export class LiveEventDO {
     const holes = this.resolvedHoles();
     const meRaw = authMember ? this.players.findIndex((p) => p.memberId === authMember) : -1;
     const meIdx = meRaw >= 0 && !this.players[meRaw]!.removed ? meRaw : -1; // a tombstoned caller is off the card
-    const base = { eventId: this.meta?.eventId ?? 0, casual: !!this.meta?.casual, courseName: this.meta?.courseName ?? null, layoutName: this.meta?.layoutName ?? null, udiscCourseId: this.meta?.udiscCourseId ?? null, status: this.meta?.status ?? "none", holes };
+    const base = { eventId: this.meta?.eventId ?? 0, casual: !!this.meta?.casual, courseName: this.meta?.courseName ?? null, layoutName: this.meta?.layoutName ?? null, udiscCourseId: this.meta?.udiscCourseId ?? null, weather: this.meta?.weather ?? null, status: this.meta?.status ?? "none", holes };
     if (meIdx < 0) return { ...base, cardId: null, playerIndex: null, cardmates: [], conflicts: [] };
     const cardId = this.players[meIdx]!.cardId ?? null;
     const cardmates = this.players
@@ -244,16 +291,18 @@ export class LiveEventDO {
   }
 
   /** Casual round: the authenticated caller joins (added once, on the single card "c0"). No-op if already in. */
-  private async join(authMember: string | null, name?: string): Promise<Response> {
+  private async join(authMember: string | null, b?: { name?: string; ratingAnchor?: number | null }): Promise<Response> {
     if (!this.meta || this.meta.status !== "live") return j({ error: "round_not_live" }, 409);
     if (!authMember) return j({ error: "unauthorized" }, 401);
+    const ratingAnchor = finiteRatingAnchor(b?.ratingAnchor);
     const existing = this.players.find((p) => p.memberId === authMember);
     if (existing) {
       // Already a player: no-op — unless they were removed (accidental/left), in which case rejoining
       // reactivates the same slot (index stays stable) with a fresh, empty card.
       if (existing.removed) {
         existing.removed = false;
-        existing.name = String(name || existing.name).slice(0, 60);
+        existing.name = String(b?.name || existing.name).slice(0, 60);
+        existing.ratingAnchor = ratingAnchor;
         existing.scores = {};
         existing.scorecards = {};
         existing.scoredBy = {};
@@ -262,7 +311,7 @@ export class LiveEventDO {
       }
     } else {
       const cardId = this.meta.casual ? "c0" : (this.players[0]?.cardId ?? "c0");
-      this.players.push({ memberId: authMember, name: String(name || "Player").slice(0, 60), division: null, startingHole: null, cardId, scores: {}, scorecards: {} });
+      this.players.push({ memberId: authMember, name: String(b?.name || "Player").slice(0, 60), division: null, startingHole: null, cardId, ratingAnchor, scores: {}, scorecards: {} });
       await this.persist();
       this.broadcast();
     }
@@ -345,47 +394,39 @@ export class LiveEventDO {
     // finalize that interleaves at one of the awaits below sees status==='final' and short-circuits,
     // instead of racing clearResults + concurrent inserts into duplicate result rows.
     if (this.meta.status === "final") {
-      return j({ status: "final", standings: finalizeStandings(this.resolvedHoles(), this.players) });
+      return j({ status: "final", standings: finalizeStandings(this.resolvedHoles(), this.players), weather: this.meta.weather ?? null });
     }
     const holes = this.resolvedHoles();
     const issues = scorecardConsensusIssues(this.players, holes);
     if (issues.conflicts.length > 0 || issues.missing.length > 0) {
       return j({ error: "scorecards_not_matched", conflicts: issues.conflicts, missing: issues.missing }, 409);
     }
+    await this.refreshWeatherIfDue(true);
     this.meta.status = "final";
     const standings = finalizeStandings(holes, this.players);
-    // A casual round has no admin event — just close it out; nothing is written to D1 event results.
-    if (this.meta.casual || !this.meta.eventId) {
-      await this.persist();
-      this.broadcast();
-      return j({ status: "final", standings });
-    }
-    const eventId = this.meta.eventId;
+    const weatherJson = this.meta.weather ? JSON.stringify(this.meta.weather) : null;
     try {
-      // Clear any prior results for this event, then write fresh (inserts run concurrently).
-      await db.clearResults(this.env.DB, eventId);
-      await Promise.all(
-        standings.map((s) =>
-          db.createResult(this.env.DB, {
-            event_id: eventId,
-            member_id: s.memberId,
-            name: s.name,
-            place: s.place,
-            total: s.total,
-            to_par: s.toPar,
-            breakdown: JSON.stringify(s.breakdown),
-            scorecard: s.holes.length ? JSON.stringify(s.holes) : null,
-          }),
-        ),
-      );
-      await db.updateEvent(this.env.DB, eventId, { status: "final" });
+      await persistFinalizedRound({
+        db: this.env.DB,
+        meta: {
+          eventId: this.meta.eventId,
+          casual: this.meta.casual === true,
+          roundCode: this.meta.roundCode ?? null,
+          courseId: this.meta.courseId ?? null,
+          layoutId: this.meta.layoutId ?? null,
+          startedAt: this.meta.startedAt,
+          weatherJson,
+        },
+        standings,
+        players: this.players,
+      });
     } catch (e) {
       this.meta.status = "live"; // roll back the in-memory claim so the admin can retry finalize
       throw e;
     }
     await this.persist();
     this.broadcast();
-    return j({ status: "final", standings });
+    return j({ status: "final", standings, weather: this.meta.weather ?? null });
   }
 
   private handleWs(_request: Request): Response {

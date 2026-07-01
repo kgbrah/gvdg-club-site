@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LiveEventDO } from "../src/live.js";
 
 type Stored = {
@@ -54,9 +54,51 @@ type SnapshotBody = {
   readonly players: { readonly scores: Record<string, number> }[];
   readonly conflicts: ConflictRow[];
 };
+type WeatherSnapshot = {
+  readonly weather: {
+    readonly location: { readonly label: string | null };
+    readonly current: { readonly observedAt: string; readonly rainIn: number | null; readonly windSpeedMph: number | null } | null;
+    readonly history: readonly { readonly observedAt: string; readonly windSpeedMph: number | null }[];
+    readonly error: string | null;
+  } | null;
+};
+
+function openMeteoSample(observedAt: string, windSpeedMph: number, rainIn: number): Record<string, unknown> {
+  return {
+    current: {
+      time: observedAt,
+      temperature_2m: 82,
+      apparent_temperature: 87,
+      relative_humidity_2m: 72,
+      precipitation: rainIn,
+      rain: rainIn,
+      showers: 0,
+      snowfall: 0,
+      weather_code: rainIn > 0 ? 61 : 1,
+      cloud_cover: 44,
+      wind_speed_10m: windSpeedMph,
+      wind_direction_10m: 180,
+      wind_gusts_10m: windSpeedMph + 6,
+      is_day: 1,
+    },
+  };
+}
+
+function stubWeather(samples: readonly Record<string, unknown>[]): void {
+  let nextIndex = 0;
+  vi.stubGlobal("fetch", vi.fn(async () => {
+    const sample = samples[nextIndex] ?? samples[samples.length - 1] ?? openMeteoSample("2026-07-01T08:00", 0, 0);
+    nextIndex++;
+    return new Response(JSON.stringify(sample));
+  }));
+}
 
 beforeEach(() => {
   vi.unstubAllGlobals();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("LiveEventDO WebSocket handling", () => {
@@ -305,6 +347,34 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     expect(mine.holes.find((h) => h.hole === 2)?.distance_ft).toBe(410);
   });
 
+  it("captures weather at start and appends changed conditions during scoring", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-01T12:00:00.000Z"));
+    stubWeather([
+      openMeteoSample("2026-07-01T08:00", 6.5, 0),
+      openMeteoSample("2026-07-01T08:15", 18.2, 0.2),
+    ]);
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    const started = await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      casual: true,
+      courseName: "North Rec",
+      holes: [{ hole: 1, par: 3 }],
+      players: [{ memberId: "m_a", name: "A" }],
+      weatherLocation: { lat: 35.631092, lng: -77.319923, label: "North Rec - Greenville, NC" },
+    }) }));
+    const startBody = (await started.json()) as WeatherSnapshot;
+    expect(startBody.weather?.location.label).toBe("North Rec - Greenville, NC");
+    expect(startBody.weather?.current?.windSpeedMph).toBe(6.5);
+    expect(startBody.weather?.history.map((sample) => sample.observedAt)).toEqual(["2026-07-01T08:00"]);
+
+    vi.setSystemTime(new Date("2026-07-01T12:11:00.000Z"));
+    const scored = await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify({ index: 0, scorerIndex: 0, hole: 1, strokes: 3 }) }));
+    const scoredBody = (await scored.json()) as WeatherSnapshot;
+    expect(scoredBody.weather?.current).toMatchObject({ observedAt: "2026-07-01T08:15", rainIn: 0.2, windSpeedMph: 18.2 });
+    expect(scoredBody.weather?.history.map((sample) => sample.windSpeedMph)).toEqual([6.5, 18.2]);
+    expect(scoredBody.weather?.error).toBeNull();
+  });
+
   it("a member adds a guest; casual finalize writes nothing to D1", async () => {
     let touchedDb = false;
     const trackDb = { prepare: () => ({ bind() { return this; }, all: async () => ({ results: [], success: true }), first: async () => null, run: async () => { touchedDb = true; return { results: [], success: true }; } }) };
@@ -320,6 +390,49 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     const fin = await act(live, "finalize", "m_a", {});
     expect(fin.status).toBe(200);
     expect(touchedDb).toBe(false);
+  });
+
+  it("stores casual round ratings from a cached layout SSA without writing event results", async () => {
+    const resultInserts: unknown[][] = [];
+    const ratingInserts: unknown[][] = [];
+    const recDb = {
+      prepare(sql: string) {
+        let args: unknown[] = [];
+        return {
+          bind(...bound: unknown[]) {
+            args = bound;
+            return this;
+          },
+          run: async () => {
+            if (/INSERT INTO round_ratings/i.test(sql)) ratingInserts.push(args);
+            return { results: [], success: true };
+          },
+          first: async <T = Record<string, unknown>>() => {
+            if (/SELECT ssa, ppt, propagator_count FROM layout_ssa/i.test(sql)) return { ssa: 10, ppt: 29.70245, propagator_count: 3 } as T;
+            if (/INSERT INTO results/i.test(sql)) resultInserts.push(args);
+            return null;
+          },
+          all: async () => ({ results: [], success: true }),
+        };
+      },
+    };
+    const live = new LiveEventDO(new FakeState({}), { DB: recDb });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      casual: true,
+      roundCode: "ABC123",
+      layoutId: 5,
+      holes: [{ hole: 1, par: 10 }],
+      players: [{ memberId: "m_a", name: "A" }],
+    }) }));
+    await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m_a" }, body: JSON.stringify({ index: 0, scorerIndex: 0, hole: 1, strokes: 10 }) }));
+
+    const fin = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Member": "m_a" } }));
+    expect(fin.status).toBe(200);
+    expect(resultInserts).toEqual([]);
+    expect(ratingInserts).toHaveLength(1);
+    expect(ratingInserts[0]).toContain("casual");
+    expect(ratingInserts[0]).toContain("ABC123");
+    expect(ratingInserts[0]).toContain(1000);
   });
 
   it("flags score conflicts from guest scorecards too", async () => {
@@ -389,7 +502,65 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
 });
 
 describe("LiveEventDO UDisc export bridge", () => {
+  it("calculates round ratings and stores them with finalized admin results", async () => {
+    const resultInserts: unknown[][] = [];
+    const ratingInserts: unknown[][] = [];
+    const recDb = {
+      prepare(sql: string) {
+        let args: unknown[] = [];
+        return {
+          bind(...bound: unknown[]) {
+            args = bound;
+            return this;
+          },
+          run: async () => {
+            if (/INSERT INTO round_ratings/i.test(sql)) ratingInserts.push(args);
+            return { results: [], success: true };
+          },
+          first: async () => {
+            if (/INSERT INTO results/i.test(sql)) {
+              resultInserts.push(args);
+            }
+            return null;
+          },
+          all: async () => ({ results: [], success: true }),
+        };
+      },
+    };
+    const live = new LiveEventDO(new FakeState({}), { DB: recDb });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      eventId: 9,
+      courseId: 4,
+      layoutId: 5,
+      startedAt: "2026-07-01T12:00:00.000Z",
+      holes: [{ hole: 1, par: 10 }],
+      players: [
+        { memberId: "m_a", name: "A", startingHole: 1, ratingAnchor: 1000 },
+        { memberId: "m_b", name: "B", startingHole: 2, ratingAnchor: 941 },
+        { memberId: "m_c", name: "C", startingHole: 3, ratingAnchor: 1059 },
+      ],
+    }) }));
+
+    for (const [index, strokes] of [[0, 10], [1, 12], [2, 8]]) {
+      await live.fetch(new Request("https://do/score", {
+        method: "POST",
+        headers: { "X-Auth-Admin": "true" },
+        body: JSON.stringify({ index, scorerIndex: index, hole: 1, strokes }),
+      }));
+    }
+
+    const fin = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" } }));
+    expect(fin.status).toBe(200);
+    expect(resultInserts.map((args) => args[6])).toEqual([1059, 1000, 941]);
+    expect(ratingInserts).toHaveLength(3);
+    expect(ratingInserts.every((args) => args.includes("competition"))).toBe(true);
+  });
+
   it("persists each player's per-hole scorecard to the result row on admin-event finalize", async () => {
+    stubWeather([
+      openMeteoSample("2026-07-01T08:00", 7.5, 0),
+      openMeteoSample("2026-07-01T08:15", 9.2, 0.04),
+    ]);
     const inserts: { sql: string; args: unknown[] }[] = [];
     const recDb = {
       prepare(sql: string) {
@@ -407,7 +578,7 @@ describe("LiveEventDO UDisc export bridge", () => {
       },
     };
     const live = new LiveEventDO(new FakeState({}), { DB: recDb });
-    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ eventId: 9, holes: [{ hole: 1, par: 3 }, { hole: 2, par: 4 }], players: [{ memberId: "m_jane", name: "Jane" }] }) }));
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ eventId: 9, holes: [{ hole: 1, par: 3 }, { hole: 2, par: 4 }], players: [{ memberId: "m_jane", name: "Jane" }], weatherLocation: { lat: 35.631092, lng: -77.319923, label: "North Rec" } }) }));
     const score = (hole: number, strokes: number) =>
       live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify({ index: 0, scorerIndex: 0, hole, strokes }) }));
     await score(1, 3);
@@ -421,6 +592,13 @@ describe("LiveEventDO UDisc export bridge", () => {
       { hole: 1, par: 3, strokes: 3 },
       { hole: 2, par: 4, strokes: 5 },
     ]);
+    const weather = inserts[0]!.args[9];
+    expect(typeof weather).toBe("string");
+    const parsedWeather: unknown = typeof weather === "string" ? JSON.parse(weather) : null;
+    expect(parsedWeather).toMatchObject({
+      current: { observedAt: "2026-07-01T08:15", rainIn: 0.04, windSpeedMph: 9.2 },
+      history: [{ windSpeedMph: 7.5 }, { windSpeedMph: 9.2 }],
+    });
   });
 
   it("carries the UDisc course id from start into the snapshot and /mine (casual export source)", async () => {

@@ -5,13 +5,39 @@ import { getMember } from "./roster.js";
 import { json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { asInt, asStr } from "./input.js";
+import { findRatingAnchor } from "./rating-store.js";
+import { weatherLocationForCourse } from "./weather.js";
 
 const LIVE_SCORE_IP_LIMIT = 180; // score writes per identity per minute (a card rarely exceeds a few)
+
+type StartPlayer = {
+  readonly memberId: string | null;
+  readonly name: string;
+  readonly division: string | null;
+  readonly startingHole: number | null;
+  readonly pdgaNo?: string | null;
+};
 
 async function liveProxy(stub: DurableObjectStub, path: string, init: RequestInit | undefined, origin: string | null): Promise<Response> {
   const r = await stub.fetch("https://do" + path, init);
   const data = await r.json().catch(() => ({}));
   return json(data, r.status, origin);
+}
+function rowString(row: Record<string, unknown>, key: string): string | null {
+  const value = row[key];
+  return typeof value === "string" ? value : null;
+}
+
+async function withRatingAnchor(env: Env, player: StartPlayer) {
+  const member = player.memberId ? await getMember(env.ROSTER, player.memberId) : null;
+  const ratingAnchor = await findRatingAnchor(env.DB, { memberId: player.memberId, pdgaNo: player.pdgaNo ?? member?.pdgaNo ?? null });
+  return {
+    memberId: player.memberId,
+    name: player.name,
+    division: player.division,
+    startingHole: player.startingHole,
+    ratingAnchor,
+  };
 }
 
 /** Who is scoring: a signed-in member (admins get the all-cards bypass) or a guest registrant via their
@@ -77,18 +103,20 @@ export async function handleClubLive(
 
     if (sub === "start") {
       const startBody = (await readJson(request)) ?? {};
-      const ev = (await db.getEvent(env.DB, eid)) as (Record<string, unknown> & { layout_id?: number | null; players?: Record<string, unknown>[] }) | null;
+      const ev = (await db.getEvent(env.DB, eid)) as (Record<string, unknown> & { course_id?: number | null; layout_id?: number | null; players?: Record<string, unknown>[] }) | null;
       if (!ev) return json({ error: "not_found" }, 404, origin);
       const holes = await db.getLayoutHoles(env.DB, ev.layout_id);
       if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin);
-      const evLayout = ev.layout_id != null ? ((await db.getLayout(env.DB, ev.layout_id)) as { name?: string | null; course_id?: number | null } | null) : null;
-      const evCourse = evLayout?.course_id != null ? ((await db.getCourse(env.DB, evLayout.course_id)) as { name?: string | null } | null) : null;
+      const evLayout = ev.layout_id != null ? ((await db.getLayout(env.DB, ev.layout_id)) as { name?: string | null; course_id?: number | null; holes?: string | null } | null) : null;
+      const evCourse = evLayout?.course_id != null ? ((await db.getCourse(env.DB, evLayout.course_id)) as { name?: string | null; location?: string | null; lat?: number | null; lng?: number | null } | null) : null;
+      const weatherLocation = weatherLocationForCourse(evCourse, evLayout);
       const regs = (await db.listRegistrations(env.DB, eid)) as { member_id?: string; name?: string; division?: string | null; starting_hole?: number | null }[];
-      const players =
+      const rawPlayers: StartPlayer[] =
         regs.length && startBody!.from !== "players"
           ? regs.map((r) => ({ memberId: r.member_id ?? null, name: String(r.name ?? "Player"), division: r.division ?? null, startingHole: r.starting_hole ?? null }))
-          : (Array.isArray(ev.players) ? ev.players : []).map((p) => ({ memberId: (p.member_id as string) ?? null, name: String(p.name ?? "Player"), division: (p.division as string) ?? null, startingHole: null }));
-      const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, courseName: evCourse?.name ?? null, layoutName: evLayout?.name ?? null, holes, players, startedAt: new Date().toISOString() }) });
+          : (Array.isArray(ev.players) ? ev.players : []).map((p) => ({ memberId: rowString(p, "member_id"), name: String(p.name ?? "Player"), division: rowString(p, "division"), startingHole: null, pdgaNo: rowString(p, "pdga_no") }));
+      const players = await Promise.all(rawPlayers.map((player) => withRatingAnchor(env, player)));
+      const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, courseId: ev.course_id ?? evLayout?.course_id ?? null, layoutId: ev.layout_id ?? null, courseName: evCourse?.name ?? null, layoutName: evLayout?.name ?? null, holes, players, startedAt: new Date().toISOString(), weatherLocation }) });
       const data = await r.json().catch(() => ({}));
       if (r.status === 200) await db.updateEvent(env.DB, eid, { status: "live" });
       return json(data, r.status, origin);

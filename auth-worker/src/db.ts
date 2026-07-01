@@ -596,13 +596,14 @@ export interface ResultInput {
   rating?: number | null;
   breakdown?: string | null; // JSON {aces,eagles,birdies,pars,bogeys,doubles_plus}
   scorecard?: string | null; // JSON [{hole,par,strokes}] — drives "Add to UDisc"
+  weather?: string | null;
 }
 export async function createResult(db: D1Like, r: ResultInput) {
   return db
     .prepare(
-      "INSERT INTO results (event_id, member_id, name, place, total, to_par, rating, breakdown, scorecard) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
+      "INSERT INTO results (event_id, member_id, name, place, total, to_par, rating, breakdown, scorecard, weather) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
     )
-    .bind(r.event_id, r.member_id ?? null, r.name, r.place ?? null, r.total ?? null, r.to_par ?? null, r.rating ?? null, r.breakdown ?? null, r.scorecard ?? null)
+    .bind(r.event_id, r.member_id ?? null, r.name, r.place ?? null, r.total ?? null, r.to_par ?? null, r.rating ?? null, r.breakdown ?? null, r.scorecard ?? null, r.weather ?? null)
     .first();
 }
 export async function clearResults(db: D1Like, eventId: number) {
