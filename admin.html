@@ -1771,20 +1771,28 @@
             table.appendChild(tbody); wrap.appendChild(table);
         }
 
-        async function scFinalize() {
-            if (!confirm('Finalize this event? This writes final results and closes scoring.')) return;
-            const r = await adminApi('/events/' + scEventId + '/live/finalize', { method: 'POST' });
-            if (r.ok) { adminMsg('Event finalized — results saved.', true); $('scLive').style.display = 'none'; scLoadEvents(); $('scEvent').value = ''; adminLoadEvents(); }
-            else {
-                const data = await r.json().catch(() => ({}));
-                if (r.status === 409 && data.error === 'scorecards_not_matched') {
-                    const conflicts = Array.isArray(data.conflicts) ? data.conflicts.length : 0;
-                    const missing = Array.isArray(data.missing) ? data.missing.length : 0;
-                    adminMsg('Scorecards do not match: ' + conflicts + ' conflict' + (conflicts === 1 ? '' : 's') + ', ' + missing + ' missing confirmation' + (missing === 1 ? '' : 's') + '.', false);
-                    await scRefresh();
-                } else {
-                    adminMsg('Finalize failed (' + r.status + ')', false);
-                }
+        function scFinalize() { return doFinalize(false); } // click handler (no args)
+        async function doFinalize(force, skipConfirm) {
+            if (!skipConfirm) {
+                const ask = force
+                    ? 'Force-finalize despite unmatched scorecards? Results lock exactly as they stand.'
+                    : 'Finalize this event? This writes final results and closes scoring.';
+                if (!confirm(ask)) return;
+            }
+            const r = await adminApi('/events/' + scEventId + '/live/finalize', { method: 'POST', ...(force ? { body: { force: true } } : {}) });
+            if (r.ok) { adminMsg('Event finalized — results saved.', true); $('scLive').style.display = 'none'; scLoadEvents(); $('scEvent').value = ''; adminLoadEvents(); return; }
+            const data = await r.json().catch(() => ({}));
+            if (r.status === 409 && data.error === 'scorecard_incomplete') {
+                const conflicts = Array.isArray(data.conflicts) ? data.conflicts.length : 0;
+                const missing = Array.isArray(data.missing) ? data.missing.length : 0;
+                const c = conflicts + ' conflict' + (conflicts === 1 ? '' : 's');
+                const m = missing + ' unconfirmed score' + (missing === 1 ? '' : 's');
+                adminMsg('Scorecards don’t agree yet: ' + c + ', ' + m + '.', false);
+                await scRefresh();
+                // Admin override: the finalize route is admin-gated, so an admin may push it through.
+                if (confirm('Scorecards don’t fully agree (' + c + ', ' + m + '). Force-finalize as admin and lock results as they stand?')) return doFinalize(true, true); // this prompt IS the force confirmation → skip the inner one
+            } else {
+                adminMsg('Finalize failed (' + r.status + ')', false);
             }
         }
 
