@@ -53,14 +53,24 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: auth-worker
+          environment: staging
+          secrets: |
+            GEMINI_API_KEY
           command: deploy --env staging
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       - name: Deploy Worker to the gvdgclub auth env
         if: ${{ env.HAS_CF_TOKEN == 'true' }}
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: auth-worker
+          environment: gvdgclub
+          secrets: |
+            GEMINI_API_KEY
           command: deploy --env gvdgclub
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       - name: Skip notice
         if: ${{ env.HAS_CF_TOKEN != 'true' }}
         run: echo "::notice::CLOUDFLARE_API_TOKEN is not configured; staging deploy skipped after tests."
