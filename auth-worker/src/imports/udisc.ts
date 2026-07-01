@@ -10,6 +10,7 @@
 export interface CourseCandidate {
   name: string | null;
   udisc_url: string;
+  udisc_course_id: string | null;
   holes: { hole: number; par: number }[] | null;
   note: string;
 }
@@ -31,9 +32,18 @@ export interface UdiscHole {
 export interface UdiscLayout {
   name: string | null;
   udisc_url: string;
+  udisc_course_id: string | null;
   holes: UdiscHole[];
   positions: UdiscPosition[];
   note: string;
+}
+
+/** UDisc's internal numeric course id, scraped from the page's "start a round" deep link
+ *  (e.g. .../applink/create-scorecard/12345). Needed to build the Add-to-UDisc applink — the slug in
+ *  udisc_url can't. Best-effort over the raw payload; returns null if the page doesn't expose it. */
+export function courseIdFromHtml(html: string): string | null {
+  const m = html.match(/create-scorecard\/(\d+)/);
+  return m ? m[1]! : null;
 }
 
 export function parseUdiscCourse(html: string, url: string): CourseCandidate {
@@ -41,6 +51,7 @@ export function parseUdiscCourse(html: string, url: string): CourseCandidate {
   return {
     name,
     udisc_url: url,
+    udisc_course_id: courseIdFromHtml(html),
     holes: null,
     note: "Imported from UDisc (best-effort): name only. Enter the hole pars manually to enable scoring.",
   };
@@ -185,6 +196,7 @@ function layoutToUdisc(layout: { name?: unknown; holes: unknown[] }, url: string
   return {
     name,
     udisc_url: url,
+    udisc_course_id: null, // course-level; stamped by parseUdiscLayouts from the page
     holes,
     positions,
     note: `Imported ${holes.length} holes from UDisc layout "${name ?? "?"}". Review pars and distances before scoring.`,
@@ -192,15 +204,16 @@ function layoutToUdisc(layout: { name?: unknown; holes: unknown[] }, url: string
 }
 
 // Parse ALL scorable layouts from a UDisc course page (deduped by UDisc layout id, in page order).
-export function parseUdiscLayouts(html: string, url: string): { name: string | null; layouts: UdiscLayout[] } {
+export function parseUdiscLayouts(html: string, url: string): { name: string | null; udisc_course_id: string | null; layouts: UdiscLayout[] } {
   const name = titleFromHtml(html) || null;
+  const udisc_course_id = courseIdFromHtml(html);
   let root: unknown;
   try {
     const values = turboStreamValues(html);
-    if (!values.length) return { name, layouts: [] };
+    if (!values.length) return { name, udisc_course_id, layouts: [] };
     root = unflatten(values);
   } catch {
-    return { name, layouts: [] };
+    return { name, udisc_course_id, layouts: [] };
   }
 
   const seenIds = new Set<unknown>();
@@ -211,19 +224,20 @@ export function parseUdiscLayouts(html: string, url: string): { name: string | n
       seenIds.add(raw.layoutId);
     }
     const ul = layoutToUdisc(raw, url);
-    if (ul.holes.length) layouts.push(ul);
+    if (ul.holes.length) layouts.push({ ...ul, udisc_course_id }); // stamp the course-level id onto each layout
   }
-  return { name, layouts };
+  return { name, udisc_course_id, layouts };
 }
 
 // Single-layout convenience used by callers/tests that want one candidate: the first layout, or a
 // name-only degrade when nothing scorable was found.
 export function parseUdiscLayout(html: string, url: string): UdiscLayout {
-  const { name, layouts } = parseUdiscLayouts(html, url);
+  const { name, udisc_course_id, layouts } = parseUdiscLayouts(html, url);
   return (
     layouts[0] ?? {
       name,
       udisc_url: url,
+      udisc_course_id,
       holes: [],
       positions: [],
       note: "Imported from UDisc (best-effort): name only — enter hole pars manually to enable scoring.",

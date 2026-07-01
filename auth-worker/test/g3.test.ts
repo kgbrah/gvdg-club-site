@@ -29,6 +29,7 @@ const db = { prepare: (sql: string) => ({
     if (/ace_pots/i.test(sql)) return { event_id: 5, carryover_in_cents: 1000, status: "active" };
     if (/FROM event_config/i.test(sql)) return { ace_fee_cents: 300 };
     if (/FROM events WHERE id/i.test(sql)) return { id: 5, layout_id: null };
+    if (/UPDATE events/i.test(sql)) return { id: 5, type: "fundraiser", name: "Edited event", status: "scheduled", format: null, date: null, course_id: null, league_id: null, notes: null };
     if (/UPDATE registrations/i.test(sql)) return { id: 1 };
     return null;
   },
@@ -71,5 +72,12 @@ describe("Track G G3 — CTPs, ace pots, assignment", () => {
     expect((await call("/admin/events/5/assign-starting-holes", "POST", await tok("m_admin"), { groupSize: 4, holeCount: 18 })).status).toBe(200);
     expect((await call("/admin/events/5/assign-teams", "POST", await tok("m_admin"), { size: 2 })).status).toBe(200);
     expect((await call("/admin/events/5/assign-teams", "POST", await tok("m_jane"), { size: 2 })).status).toBe(403);
+  });
+  it("admin edits an event type and can clear optional fields", async () => {
+    const edited = await call("/admin/events/5", "PATCH", await tok("m_admin"), { type: "fundraiser", name: "Edited event", format: null, date: null, course_id: null, league_id: null, notes: null });
+    expect(edited.status).toBe(200);
+    const event = objectField(await jsonObject(edited), "event");
+    expect(event.type).toBe("fundraiser");
+    expect((await call("/admin/events/5", "PATCH", await tok("m_admin"), { type: "side_quest" })).status).toBe(400);
   });
 });

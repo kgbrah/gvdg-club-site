@@ -1,7 +1,7 @@
 import type { Env } from "./env.js";
 import * as db from "./db.js";
 import * as shopDb from "./shop-db.js";
-import { EVENT_FORMATS, EVENT_STATUSES } from "./db.js";
+import { EVENT_FORMATS, EVENT_STATUSES, EVENT_TYPES } from "./db.js";
 import { assignShotgun, assignTeams } from "./assign.js";
 import { getMember } from "./roster.js";
 import { enrichHoles, type LayoutHole } from "./layouts.js";
@@ -48,6 +48,8 @@ function defaultCtpPayoutNote(event: Record<string, unknown>, ctp: Record<string
   if (prize) parts.push(prize);
   return parts.join(" - ");
 }
+
+const hasField = (body: Record<string, unknown>, field: string): boolean => Object.prototype.hasOwnProperty.call(body, field);
 
 export async function handleAdminEvents(
   request: Request,
@@ -213,14 +215,51 @@ export async function handleAdminEvents(
   }
   if (method === "PATCH" && id != null) {
     const b = (await readJson(request)) ?? {};
-    if (b.status != null && !inSet(EVENT_STATUSES, b.status)) return json({ error: "invalid_event" }, 400, origin);
-    if (b.format != null && b.format !== "" && !inSet(EVENT_FORMATS, b.format)) return json({ error: "invalid_event" }, 400, origin);
-    const row = await db.updateEvent(env.DB, id, {
-      name: asStr(b.name, 200), status: asStr(b.status), format: asStr(b.format),
-      date: asStr(b.date, 40), course_id: b.course_id == null ? null : asInt(b.course_id),
-      layout_id: b.layout_id == null ? null : asInt(b.layout_id), league_id: b.league_id == null ? null : asInt(b.league_id),
-      notes: asStr(b.notes, 5000),
-    });
+    const patch: db.EventPatch = {};
+    if (hasField(b, "type")) {
+      if (!inSet(EVENT_TYPES, b.type)) return json({ error: "invalid_event" }, 400, origin);
+      patch.type = b.type;
+    }
+    if (hasField(b, "name")) {
+      const name = asStr(b.name, 200);
+      if (!name) return json({ error: "invalid_event" }, 400, origin);
+      patch.name = name;
+    }
+    if (hasField(b, "status")) {
+      if (!inSet(EVENT_STATUSES, b.status)) return json({ error: "invalid_event" }, 400, origin);
+      patch.status = b.status;
+    }
+    if (hasField(b, "format")) {
+      if (b.format == null || b.format === "") patch.format = null;
+      else if (inSet(EVENT_FORMATS, b.format)) patch.format = b.format;
+      else return json({ error: "invalid_event" }, 400, origin);
+    }
+    if (hasField(b, "date")) {
+      const date = b.date == null || b.date === "" ? null : asStr(b.date, 40);
+      if (date == null && b.date != null && b.date !== "") return json({ error: "invalid_event" }, 400, origin);
+      patch.date = date;
+    }
+    if (hasField(b, "course_id")) {
+      const courseId = b.course_id == null || b.course_id === "" ? null : asInt(b.course_id);
+      if (courseId == null && b.course_id != null && b.course_id !== "") return json({ error: "invalid_event" }, 400, origin);
+      patch.course_id = courseId;
+    }
+    if (hasField(b, "layout_id")) {
+      const layoutId = b.layout_id == null || b.layout_id === "" ? null : asInt(b.layout_id);
+      if (layoutId == null && b.layout_id != null && b.layout_id !== "") return json({ error: "invalid_event" }, 400, origin);
+      patch.layout_id = layoutId;
+    }
+    if (hasField(b, "league_id")) {
+      const leagueId = b.league_id == null || b.league_id === "" ? null : asInt(b.league_id);
+      if (leagueId == null && b.league_id != null && b.league_id !== "") return json({ error: "invalid_event" }, 400, origin);
+      patch.league_id = leagueId;
+    }
+    if (hasField(b, "notes")) {
+      const notes = b.notes == null || b.notes === "" ? null : asStr(b.notes, 5000);
+      if (notes == null && b.notes != null && b.notes !== "") return json({ error: "invalid_event" }, 400, origin);
+      patch.notes = notes;
+    }
+    const row = await db.updateEvent(env.DB, id, patch);
     return row ? json({ event: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
   }
   if (method === "DELETE" && id != null) {

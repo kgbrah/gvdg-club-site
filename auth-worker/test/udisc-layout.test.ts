@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseUdiscLayout, parseUdiscLayouts } from "../src/imports.js";
+import { parseUdiscLayout, parseUdiscLayouts, courseIdFromHtml } from "../src/imports.js";
 
 // UDisc (React Router v7) ships course data as a turbo-stream pool inside
 // `window.__reactRouterContext.streamController.enqueue("…")`. The pool is a flat array where objects
@@ -133,5 +133,28 @@ describe("parseUdiscLayouts — graceful degrade", () => {
     const pool = [[1], { _2: 3 }, "holes", [4, 5], "review one", "review two"];
     const { layouts } = parseUdiscLayouts(turboStreamHtml(pool), "https://udisc.com/courses/x");
     expect(layouts).toEqual([]);
+  });
+});
+
+describe("courseIdFromHtml — UDisc numeric course id for the Add-to-UDisc applink", () => {
+  it("extracts the id from a create-scorecard deep link", () => {
+    expect(courseIdFromHtml(`<a href="https://app.udisc.com/applink/create-scorecard/98765">Start a round</a>`)).toBe("98765");
+  });
+
+  it("returns null when the page exposes no create-scorecard link", () => {
+    expect(courseIdFromHtml("<html><body>no link here</body></html>")).toBeNull();
+  });
+
+  it("parseUdiscLayouts surfaces the course id and stamps it on every layout", () => {
+    const html = turboStreamHtml(POOL).replace("</body>", `<a href="https://app.udisc.com/applink/create-scorecard/98765">Start</a></body>`);
+    const { udisc_course_id, layouts } = parseUdiscLayouts(html, "https://udisc.com/courses/x");
+    expect(udisc_course_id).toBe("98765");
+    expect(layouts.map((l) => l.udisc_course_id)).toEqual(["98765", "98765"]);
+  });
+
+  it("parseUdiscLayouts course id is null when absent (degrade path keeps it null)", () => {
+    const { udisc_course_id, layouts } = parseUdiscLayouts(turboStreamHtml(POOL), "https://udisc.com/courses/x");
+    expect(udisc_course_id).toBeNull();
+    expect(layouts[0]!.udisc_course_id).toBeNull();
   });
 });

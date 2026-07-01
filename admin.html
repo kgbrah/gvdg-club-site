@@ -218,6 +218,8 @@
         .admin-btn { background: var(--primary); color: #fff; border: none; padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
         .admin-btn.secondary { background: transparent; border: 1px solid var(--secondary-text); color: var(--secondary-text); }
         .admin-btn.danger { background: transparent; border: 1px solid #dc3545; color: #dc3545; padding: 0.35rem 0.7rem; font-size: 0.8rem; }
+        .admin-form-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
+        .admin-form-note { color: var(--text-muted); font-size: 0.9rem; margin: 0 0 0.75rem; }
         .admin-msg { font-size: 0.9rem; margin-bottom: 0.75rem; min-height: 1.2em; }
         .admin-msg.ok { color: var(--green); } .admin-msg.err { color: #dc3545; }
         .admin-evrow { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); margin-bottom: 0.5rem; }
@@ -362,10 +364,12 @@
             <div class="admin-msg" id="adminMsg"></div>
             <div class="admin-pane active" id="apane-events"><div id="adminEventsList">Loading…</div></div>
             <div class="admin-pane" id="apane-create">
+                <p class="admin-form-note" id="aeModeNote">Create a scheduled event, fundraiser, meeting, or league round.</p>
                 <form class="admin-form" id="adminCreateForm">
                     <div><label for="aeType">Type</label><select id="aeType"><option value="tournament">Tournament</option><option value="league_round">League round</option><option value="fundraiser">Fundraiser</option><option value="meeting">Meeting</option></select></div>
                     <div><label for="aeName">Name</label><input id="aeName" maxlength="200" required></div>
                     <div><label for="aeDate">Date</label><input id="aeDate" type="date"></div>
+                    <div><label for="aeStatus">Status</label><select id="aeStatus"><option value="scheduled">Scheduled</option><option value="live">Live</option><option value="final">Final</option><option value="cancelled">Cancelled</option></select></div>
                     <div><label for="aeFormat">Format</label><select id="aeFormat"><option value="">—</option><option value="stroke">Stroke</option><option value="matchplay">Matchplay</option><option value="doubles">Doubles</option></select></div>
                     <div><label for="aeCourse">Course</label><select id="aeCourse"><option value="">—</option></select></div>
                     <div><label for="aeLayout">Layout</label><select id="aeLayout"><option value="">— no layout yet —</option></select></div>
@@ -378,7 +382,11 @@
                         </div>
                     </div>
                     <div><label for="aeLeague">League (for league rounds)</label><select id="aeLeague"><option value="">—</option></select></div>
-                    <button type="submit" class="admin-btn">Create event</button>
+                    <div><label for="aeNotes">Notes</label><textarea id="aeNotes" rows="3" maxlength="5000"></textarea></div>
+                    <div class="admin-form-actions">
+                        <button type="submit" class="admin-btn" id="aeSubmitBtn">Create event</button>
+                        <button type="button" class="admin-btn secondary" id="aeCancelEdit" style="display:none;">Cancel edit</button>
+                    </div>
                 </form>
             </div>
             <div class="admin-pane" id="apane-import">
@@ -396,6 +404,7 @@
                     <div><label for="acName">Course name</label><input id="acName" maxlength="200" required></div>
                     <div><label for="acLoc">Location</label><input id="acLoc" maxlength="200"></div>
                     <div><label for="acUdisc">UDisc URL (https)</label><input id="acUdisc" type="url" maxlength="1000"></div>
+                    <div><label for="acUdiscCourseId">UDisc course id <span class="al-note">(numeric — auto-saved by UDisc import; enables “Add to UDisc”)</span></label><input id="acUdiscCourseId" inputmode="numeric" pattern="\d*" maxlength="20"></div>
                     <button type="submit" class="admin-btn">Add course</button>
                 </form>
                 <div id="adminCoursesList" style="margin-top:1rem;"></div>
@@ -796,6 +805,7 @@
         function adminApi(path, opts) { return api(path, { ...(opts || {}), token: sessionStorage.getItem(TOKEN_KEY) }); }
         function dollarsFromCents(c) { const n = Number(c || 0); const abs = Math.abs(n); const out = '$' + (abs / 100).toLocaleString(undefined, { minimumFractionDigits: abs % 100 ? 2 : 0 }); return n < 0 ? '-' + out : out; }
         function dollarsToCents(v) { const n = parseFloat(v); return Number.isFinite(n) ? Math.round(n * 100) : null; }
+        let aeEditingEvent = null;
         function adminSwitch(tab) {
             document.querySelectorAll('.admin-tab').forEach((t) => t.classList.toggle('active', t.dataset.atab === tab));
             document.querySelectorAll('.admin-pane').forEach((p) => p.classList.toggle('active', p.id === 'apane-' + tab));
@@ -877,6 +887,9 @@
                     if (r.ok) adminLoadEvents();
                 });
                 row.appendChild(sel);
+                const edit = elx('button', 'admin-btn secondary', 'Edit');
+                edit.addEventListener('click', () => aeEditEvent(ev));
+                row.appendChild(edit);
                 const del = elx('button', 'admin-btn danger', 'Delete');
                 del.addEventListener('click', async () => {
                     if (!confirm('Delete event “' + ev.name + '”?')) return;
@@ -889,10 +902,48 @@
             });
         }
 
-        async function adminCreateEvent(e) {
+        function aePayload() {
+            return {
+                type: $('aeType').value,
+                name: $('aeName').value.trim(),
+                status: $('aeStatus').value,
+                date: $('aeDate').value || null,
+                format: $('aeFormat').value || null,
+                course_id: $('aeCourse').value ? Number($('aeCourse').value) : null,
+                league_id: $('aeLeague').value ? Number($('aeLeague').value) : null,
+                notes: $('aeNotes').value.trim() || null,
+            };
+        }
+        function aeResetForm() {
+            aeEditingEvent = null;
+            $('adminCreateForm').reset();
+            $('aeStatus').value = 'scheduled';
+            $('aeModeNote').textContent = 'Create a scheduled event, fundraiser, meeting, or league round.';
+            $('aeSubmitBtn').textContent = 'Create event';
+            $('aeCancelEdit').style.display = 'none';
+        }
+        function aeEditEvent(ev) {
+            aeEditingEvent = ev;
+            $('aeType').value = ev.type || 'tournament';
+            $('aeName').value = ev.name || '';
+            $('aeDate').value = ev.date || '';
+            $('aeStatus').value = ev.status || 'scheduled';
+            $('aeFormat').value = ev.format || '';
+            $('aeCourse').value = ev.course_id == null ? '' : String(ev.course_id);
+            $('aeLeague').value = ev.league_id == null ? '' : String(ev.league_id);
+            $('aeNotes').value = ev.notes || '';
+            $('aeModeNote').textContent = 'Editing “' + (ev.name || 'event') + '” from the Events menu.';
+            $('aeSubmitBtn').textContent = 'Update event';
+            $('aeCancelEdit').style.display = '';
+            adminSwitch('create');
+            $('aeName').focus();
+            $('aeName').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        async function adminSaveEvent(e) {
             e.preventDefault();
-            const body = { type: $('aeType').value, name: $('aeName').value.trim(), date: $('aeDate').value || null, format: $('aeFormat').value || null, course_id: $('aeCourse').value ? Number($('aeCourse').value) : null, league_id: $('aeLeague').value ? Number($('aeLeague').value) : null, source: 'manual' };
+            const body = aePayload();
             if (!body.name) { adminMsg('Name required', false); return; }
+            // Quick-layout (main): attach an existing layout, or create one inline.
             const layoutChoice = $('aeLayout').value;
             if (layoutChoice && layoutChoice !== '__new__') body.layout_id = Number(layoutChoice);
             if (layoutChoice === '__new__') {
@@ -902,14 +953,24 @@
                 if (!(holeCount >= 1 && holeCount <= 36) || !(defaultPar >= 1 && defaultPar <= 15)) { adminMsg('Layout holes must be 1–36 and par 1–15', false); return; }
                 body.layout = { name: $('aeLayoutName').value.trim() || 'Main', hole_count: holeCount, default_par: defaultPar };
             }
-            const r = await adminApi('/admin/events', { method: 'POST', body });
-            if (r.ok) { adminMsg('Created “' + body.name + '”', true); $('adminCreateForm').reset(); aeResetLayoutSelect(); adminSwitch('events'); adminLoadEvents(); }
-            else { adminMsg('Create failed (' + r.status + ')', false); }
+            // Edit (udisc) vs create; a new manual event is tagged source:'manual'.
+            const r = aeEditingEvent
+                ? await adminApi('/admin/events/' + aeEditingEvent.id, { method: 'PATCH', body })
+                : await adminApi('/admin/events', { method: 'POST', body: { ...body, source: 'manual' } });
+            if (r.ok) {
+                adminMsg((aeEditingEvent ? 'Updated' : 'Created') + ' “' + body.name + '”', true);
+                aeResetForm();          // clears edit state + form fields
+                aeResetLayoutSelect();  // clears the layout dropdown options + quick-layout panel
+                adminSwitch('events');
+                adminLoadEvents();
+            } else {
+                adminMsg((aeEditingEvent ? 'Update' : 'Create') + ' failed (' + r.status + ')', false);
+            }
         }
 
         async function adminAddCourse(e) {
             e.preventDefault();
-            const body = { name: $('acName').value.trim(), location: $('acLoc').value.trim() || null, udisc_url: $('acUdisc').value.trim() || null };
+            const body = { name: $('acName').value.trim(), location: $('acLoc').value.trim() || null, udisc_url: $('acUdisc').value.trim() || null, udisc_course_id: $('acUdiscCourseId').value.trim() || null };
             if (!body.name) { adminMsg('Course name required', false); return; }
             const r = await adminApi('/admin/courses', { method: 'POST', body });
             if (r.ok) { adminMsg('Added course “' + body.name + '”', true); $('adminCourseForm').reset(); adminLoadCourses(); }
@@ -1010,6 +1071,15 @@
             const out = $('alUdiscResult'); out.textContent = '';
             if (!r.ok) { adminMsg('UDisc import failed (' + r.status + ')', false); return; }
             const data = await r.json();
+            // Persist the page's numeric UDisc course id onto the selected course so "Add to UDisc" can
+            // deep-link it (the course-page slug can't build the applink). Saved even if no scorable
+            // layouts were found, since the id lives on the page regardless.
+            if (data.udisc_course_id && alCourseId) {
+                const pr = await adminApi('/admin/courses/' + alCourseId, { method: 'PATCH', body: { udisc_course_id: String(data.udisc_course_id) } });
+                out.appendChild(elx('div', null, pr.ok ? ('Saved UDisc course id ' + data.udisc_course_id + ' — “Add to UDisc” enabled for this course.') : ('Found UDisc course id ' + data.udisc_course_id + ' but could not save it (' + pr.status + ').')));
+            } else if (!data.udisc_course_id) {
+                out.appendChild(elx('div', null, 'No UDisc course id found on that page — “Add to UDisc” needs it; you can enter it on the course form.'));
+            }
             const layouts = Array.isArray(data.layouts) ? data.layouts : [];
             if (!layouts.length) {
                 out.appendChild(elx('div', null, 'No scorable layouts found on that UDisc page' + (data.name ? ' (“' + data.name + '”)' : '') + '. Enter pars manually below.'));
@@ -2011,9 +2081,10 @@
             adminInited = true;
             document.querySelectorAll('.admin-tab').forEach((t) => t.addEventListener('click', () => adminSwitch(t.dataset.atab)));
             document.querySelectorAll('.admin-mnav').forEach((sel) => sel.addEventListener('change', () => { if (sel.value) adminSwitch(sel.value); }));
-            $('adminCreateForm').addEventListener('submit', adminCreateEvent);
+            $('adminCreateForm').addEventListener('submit', adminSaveEvent);
             $('aeCourse').addEventListener('change', aeLoadLayouts);
             $('aeLayout').addEventListener('change', aeToggleQuickLayout);
+            $('aeCancelEdit').addEventListener('click', () => { aeResetForm(); adminSwitch('events'); });
             $('adminCourseForm').addEventListener('submit', adminAddCourse);
             $('dgsImportBtn').addEventListener('click', adminDgsImport);
             $('csvImportBtn').addEventListener('click', adminCsvImport);

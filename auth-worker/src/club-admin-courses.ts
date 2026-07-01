@@ -3,6 +3,17 @@ import * as db from "./db.js";
 import { json, readJson } from "./http.js";
 import { asInt, asNum, asStr, cleanPosition, isUniqueViolation } from "./input.js";
 
+const INVALID = Symbol("invalid");
+/** UDisc's internal numeric course id (for the create-scorecard applink). Returns null when absent
+ *  (POST: none; PATCH: leave unchanged), the digit string when valid, or INVALID to reject the request. */
+function udiscCourseId(raw: unknown): string | null | typeof INVALID {
+  if (raw == null) return null;
+  if (typeof raw !== "string") return INVALID;
+  const v = raw.trim();
+  if (!v) return null;
+  return /^\d{1,20}$/.test(v) ? v : INVALID;
+}
+
 export async function handleAdminCourses(
   request: Request,
   env: Env,
@@ -47,8 +58,10 @@ export async function handleAdminCourses(
     if (!b || !name) return json({ error: "invalid_course" }, 400, origin);
     const udisc = b.udisc_url == null ? null : asStr(b.udisc_url, 1000);
     if (b.udisc_url != null && (!udisc || !/^https?:\/\//.test(udisc))) return json({ error: "invalid_course" }, 400, origin);
+    const courseId = udiscCourseId(b.udisc_course_id);
+    if (courseId === INVALID) return json({ error: "invalid_course" }, 400, origin);
     try {
-      const row = await db.createCourse(env.DB, { name, location: asStr(b.location, 200), udisc_url: udisc, lat: asNum(b.lat), lng: asNum(b.lng), created_by: adminId });
+      const row = await db.createCourse(env.DB, { name, location: asStr(b.location, 200), udisc_url: udisc, udisc_course_id: courseId, lat: asNum(b.lat), lng: asNum(b.lng), created_by: adminId });
       return json({ course: row }, 201, origin);
     } catch (e) {
       if (isUniqueViolation(e)) return json({ error: "course_exists" }, 409, origin);
@@ -57,8 +70,10 @@ export async function handleAdminCourses(
   }
   if (method === "PATCH" && id != null) {
     const b = (await readJson(request)) ?? {};
+    const courseId = udiscCourseId(b.udisc_course_id);
+    if (courseId === INVALID) return json({ error: "invalid_course" }, 400, origin);
     try {
-      const row = await db.updateCourse(env.DB, id, { name: asStr(b.name, 200), location: asStr(b.location, 200), udisc_url: asStr(b.udisc_url, 1000), lat: asNum(b.lat), lng: asNum(b.lng) });
+      const row = await db.updateCourse(env.DB, id, { name: asStr(b.name, 200), location: asStr(b.location, 200), udisc_url: asStr(b.udisc_url, 1000), udisc_course_id: courseId, lat: asNum(b.lat), lng: asNum(b.lng) });
       return row ? json({ course: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
     } catch (e) {
       if (isUniqueViolation(e)) return json({ error: "course_exists" }, 409, origin);
