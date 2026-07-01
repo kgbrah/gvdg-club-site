@@ -69,12 +69,8 @@ simple = { limit = 20, period = 60 }
 [vars]
 ALLOWED_ORIGINS = "https://www.greenvillediscgolf.com,https://greenvillediscgolf.com"
 SESSION_TTL_SEC = "43200"
-# Crotts brains: OpenRouter free model is tried first, then Workers AI if it fails/unavailable.
-# Override either model id here. OPENROUTER_API_KEY is a SECRET, NOT a var:
-#   wrangler secret put OPENROUTER_API_KEY      (get a free key at openrouter.ai)
-# If the key is unset, Crotts uses Workers AI only.
-# (gpt-oss-120b:free verified working 2026-06-23; llama-3.3-70b:free was rate-limited upstream then.)
 OPENROUTER_MODEL = "openai/gpt-oss-120b:free"
+OPENROUTER_FALLBACK_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
 ASSISTANT_MODEL = "@cf/meta/llama-3.1-8b-instruct"
 # PayPal Checkout for event entry/add-ons (Track G). Payments stay OFF (manual "paid" flag, no downtime)
 # until the club adds BOTH secrets below; then PayPal Checkout auto-activates. CLIENT_ID is public.
@@ -156,11 +152,8 @@ simple = { limit = 20, period = 60 }
 [env.staging.vars]
 ALLOWED_ORIGINS = "https://gvdgclub.com,https://www.gvdgclub.com"
 SESSION_TTL_SEC = "43200"
-# Crotts brain on the dev site: best WORKING free NVIDIA Nemotron — super-120b (12B active, ~1s, clean
-# answer in `content` with chain-of-thought in a separate `reasoning` field at 512 tokens). Verified live:
-# the 550b-ultra:free returns no usable response on the free tier and nano-9b returns empty content, so
-# 120b is the sweet spot. Workers AI is the fallback.
-OPENROUTER_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
+OPENROUTER_MODEL = "openai/gpt-oss-120b:free"
+OPENROUTER_FALLBACK_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
 ASSISTANT_MODEL = "@cf/meta/llama-3.1-8b-instruct"
 # Payments stay OFF (manual paid flag) on staging unless you add sandbox PayPal secrets; never live here.
 PAYPAL_ENV = "sandbox"
@@ -230,7 +223,8 @@ simple = { limit = 20, period = 60 }
 [env.gvdgclub.vars]
 ALLOWED_ORIGINS = "https://gvdgclub.com,https://www.gvdgclub.com"
 SESSION_TTL_SEC = "43200"
-OPENROUTER_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
+OPENROUTER_MODEL = "openai/gpt-oss-120b:free"
+OPENROUTER_FALLBACK_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
 ASSISTANT_MODEL = "@cf/meta/llama-3.1-8b-instruct"
 PAYPAL_ENV = "sandbox"
 ORDER_NOTIFY_EMAIL = "greenvillediscgolf@gmail.com"
