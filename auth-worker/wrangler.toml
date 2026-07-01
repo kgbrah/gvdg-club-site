@@ -69,12 +69,8 @@ simple = { limit = 20, period = 60 }
 [vars]
 ALLOWED_ORIGINS = "https://www.greenvillediscgolf.com,https://greenvillediscgolf.com"
 SESSION_TTL_SEC = "43200"
-# Crotts brains: OpenRouter free model is tried first, then Workers AI if it fails/unavailable.
-# Override either model id here. OPENROUTER_API_KEY is a SECRET, NOT a var:
-#   wrangler secret put OPENROUTER_API_KEY      (get a free key at openrouter.ai)
-# If the key is unset, Crotts uses Workers AI only.
-# (gpt-oss-120b:free verified working 2026-06-23; llama-3.3-70b:free was rate-limited upstream then.)
 OPENROUTER_MODEL = "openai/gpt-oss-120b:free"
+OPENROUTER_FALLBACK_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
 ASSISTANT_MODEL = "@cf/meta/llama-3.1-8b-instruct"
 # PayPal Checkout for event entry/add-ons (Track G). Payments stay OFF (manual "paid" flag, no downtime)
 # until the club adds BOTH secrets below; then PayPal Checkout auto-activates. CLIENT_ID is public.
@@ -88,8 +84,7 @@ RP_ID = "greenvillediscgolf.com"
 RP_NAME = "Greenville Disc Golf Club"
 EXPECTED_ORIGIN = "https://www.greenvillediscgolf.com"
 # JWT_SECRET is set as a secret, NOT here:  wrangler secret put JWT_SECRET
-# Crotts vision (T2): tee-sign OCR. OpenRouter free VL model tried first (needs OPENROUTER_API_KEY),
-# then Workers AI. Override the model ids here.
+GEMINI_VISION_MODEL = "gemini-2.5-flash"
 OPENROUTER_VISION_MODEL = "nvidia/nemotron-nano-12b-v2-vl:free"
 VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct"
 
@@ -106,22 +101,25 @@ VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct"
 [env.staging]
 name = "gvdg-member-auth-staging"
 
-# Bind the dev API subdomain to this Worker (gvdgclub.com zone is on Cloudflare). wrangler creates the
-# Custom Domain + DNS on deploy. The frontend resolves gvdgclub.com pages -> https://auth.gvdgclub.com.
-[[env.staging.routes]]
-pattern = "auth.gvdgclub.com"
-custom_domain = true
+# The dev API custom domain (auth.gvdgclub.com) is managed in the Cloudflare dashboard. The CI token
+# can deploy Workers but does not need zone route permissions, so routes are intentionally omitted here.
 
 [env.staging.observability]
 enabled = true
 
-# STOPGAP (2026-06-29): Workers KV is degraded on this Cloudflare account — deployed Workers read/write
-# an isolated empty KV instead of the central store (D1 is unaffected). The ROSTER + RATELIMIT KV
-# bindings are intentionally OMITTED here so withKvFallback() in src/index.ts backs them with D1
-# (table `kv_store`, migration 0010). Re-add the two [[env.staging.kv_namespaces]] blocks below to
-# switch staging back to KV once the account's KV recovers:
-#   [[env.staging.kv_namespaces]]  binding = "ROSTER"     id = "f608c9470e5e4853878e9e230bcb660b"
-#   [[env.staging.kv_namespaces]]  binding = "RATELIMIT"  id = "94664f864e76466ebe3d0f087526e00a"
+# Workers KV — RESTORED 2026-07-01. The account-wide KV data-plane fault (2026-06-29, where Workers
+# read/wrote an isolated empty store) has cleared; verified with a cross-plane read/write test before
+# switching. ROSTER holds the member roster + PIN hashes + passkey creds; RATELIMIT holds login-lockout
+# + rate-limit counters. withKvFallback() in src/index.ts uses these real bindings when present and only
+# falls back to D1 (`kv_store`, migration 0010) if they're absent. The roster was migrated from D1
+# `kv_store` into ROSTER KV at switch time; the D1 copy is left in place as a snapshot/rollback.
+[[env.staging.kv_namespaces]]
+binding = "ROSTER"
+id = "f608c9470e5e4853878e9e230bcb660b"
+
+[[env.staging.kv_namespaces]]
+binding = "RATELIMIT"
+id = "94664f864e76466ebe3d0f087526e00a"
 
 [[env.staging.d1_databases]]
 binding = "DB"
@@ -154,11 +152,8 @@ simple = { limit = 20, period = 60 }
 [env.staging.vars]
 ALLOWED_ORIGINS = "https://gvdgclub.com,https://www.gvdgclub.com"
 SESSION_TTL_SEC = "43200"
-# Crotts brain on the dev site: best WORKING free NVIDIA Nemotron — super-120b (12B active, ~1s, clean
-# answer in `content` with chain-of-thought in a separate `reasoning` field at 512 tokens). Verified live:
-# the 550b-ultra:free returns no usable response on the free tier and nano-9b returns empty content, so
-# 120b is the sweet spot. Workers AI is the fallback.
-OPENROUTER_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
+OPENROUTER_MODEL = "openai/gpt-oss-120b:free"
+OPENROUTER_FALLBACK_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
 ASSISTANT_MODEL = "@cf/meta/llama-3.1-8b-instruct"
 # Payments stay OFF (manual paid flag) on staging unless you add sandbox PayPal secrets; never live here.
 PAYPAL_ENV = "sandbox"
@@ -175,5 +170,70 @@ EMAIL_REPLY_TO = "greenvillediscgolf@gmail.com"
 RP_ID = "gvdgclub.com"
 RP_NAME = "GVDG Club (dev)"
 EXPECTED_ORIGIN = "https://gvdgclub.com"
+GEMINI_VISION_MODEL = "gemini-2.5-flash"
+OPENROUTER_VISION_MODEL = "nvidia/nemotron-nano-12b-v2-vl:free"
+VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct"
+
+# GVDGCLUB LIVE API ALIAS -> auth.gvdgclub.com.
+# Mirrors [env.staging] but deploys to the legacy Worker name currently attached
+# to the live dev auth domain.
+[env.gvdgclub]
+name = "gvdg-member-auth"
+
+[env.gvdgclub.observability]
+enabled = true
+
+# Workers KV — RESTORED 2026-07-01 (see the [env.staging] note). Same namespaces as staging: both envs
+# share the one gvdg-staging D1 + roster, so they read the same KV.
+[[env.gvdgclub.kv_namespaces]]
+binding = "ROSTER"
+id = "f608c9470e5e4853878e9e230bcb660b"
+
+[[env.gvdgclub.kv_namespaces]]
+binding = "RATELIMIT"
+id = "94664f864e76466ebe3d0f087526e00a"
+
+[[env.gvdgclub.d1_databases]]
+binding = "DB"
+database_name = "gvdg-staging"
+database_id = "f276a1dd-a94d-4ca7-b83d-233d5e5c0eba"
+migrations_dir = "migrations"
+
+[[env.gvdgclub.r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "gvdg-photos-staging"
+
+[env.gvdgclub.ai]
+binding = "AI"
+
+[[env.gvdgclub.durable_objects.bindings]]
+name = "LIVE"
+class_name = "LiveEventDO"
+
+[[env.gvdgclub.migrations]]
+tag = "v1"
+new_sqlite_classes = ["LiveEventDO"]
+
+[[env.gvdgclub.unsafe.bindings]]
+name = "ASSISTANT_RL"
+type = "ratelimit"
+namespace_id = "2001"
+simple = { limit = 20, period = 60 }
+
+[env.gvdgclub.vars]
+ALLOWED_ORIGINS = "https://gvdgclub.com,https://www.gvdgclub.com"
+SESSION_TTL_SEC = "43200"
+OPENROUTER_MODEL = "openai/gpt-oss-120b:free"
+OPENROUTER_FALLBACK_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
+ASSISTANT_MODEL = "@cf/meta/llama-3.1-8b-instruct"
+PAYPAL_ENV = "sandbox"
+ORDER_NOTIFY_EMAIL = "greenvillediscgolf@gmail.com"
+ORDER_NOTIFY_FROM = "GVDG Pro Shop <shop@gvdgclub.com>"
+REGISTER_NOTIFY_FROM = "GVDG Events <events@gvdgclub.com>"
+EMAIL_REPLY_TO = "greenvillediscgolf@gmail.com"
+RP_ID = "gvdgclub.com"
+RP_NAME = "GVDG Club (dev)"
+EXPECTED_ORIGIN = "https://gvdgclub.com"
+GEMINI_VISION_MODEL = "gemini-2.5-flash"
 OPENROUTER_VISION_MODEL = "nvidia/nemotron-nano-12b-v2-vl:free"
 VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct"

@@ -2,7 +2,7 @@
 // short code; cardmates join with the code, anyone on the round can add guests, and everyone on it keeps
 // score on one shared card. Reuses the LiveEventDO (keyed "round:<code>") and its scoring/leaderboard.
 // Round control + scoring require a member (the DO binds writes to the Worker-injected identity); the
-// snapshot + WebSocket are public reads. Casual finalize does not write D1 event results.
+// snapshot + WebSocket are public reads.
 
 import type { Env } from "./env.js";
 import * as db from "./db.js";
@@ -53,7 +53,7 @@ export async function handleCasualRounds(
     const code = genCode();
     const r = await roundStub(env, code).fetch("https://do/start", {
       method: "POST",
-      body: JSON.stringify({ casual: true, roundCode: code, courseId: layout?.course_id ?? null, layoutId, courseName: course?.name ?? null, layoutName: layout?.name ?? null, udiscCourseId: course?.udisc_course_id ?? null, weatherLocation, holes, players: [{ memberId: claims.sub, name: member?.name ?? "Player", ratingAnchor }], startedAt: new Date().toISOString() }),
+      body: JSON.stringify({ casual: true, roundCode: code, courseId: layout?.course_id ?? null, layoutId, createdBy: claims.sub, courseName: course?.name ?? null, layoutName: layout?.name ?? null, udiscCourseId: course?.udisc_course_id ?? null, weatherLocation, holes, players: [{ memberId: claims.sub, name: member?.name ?? "Player", ratingAnchor }], startedAt: new Date().toISOString() }),
     });
     if (r.status !== 200) return json({ error: "start_failed" }, 502, origin);
     return json({ code }, 201, origin);
@@ -68,17 +68,30 @@ export async function handleCasualRounds(
   if (method === "GET" && sub === "live" && !seg[3]) return proxy(stub, "/snapshot", undefined, origin);
   if (sub === "live" && seg[3] === "ws") return stub.fetch(request);
 
+  // Public read: durable finalized results (survives the DO's eviction; casual finalize persists to D1).
+  // Redact internal ids (member_id / created_by) the same way the live snapshot does — names are enough for
+  // a public leaderboard, and we never expose member ids to an unauthenticated reader who has the code.
+  if (method === "GET" && sub === "results") {
+    const data = await db.listCasualRoundResults(env.DB, code);
+    if (!data) return json({ error: "not_found" }, 404, origin);
+    const { created_by: _cb, ...round } = data.round as Record<string, unknown>;
+    const results = (data.results as Record<string, unknown>[]).map(({ member_id: _m, ...rest }) => rest);
+    return json({ round, results }, 200, origin);
+  }
+
   // Everything else needs a member (the DO binds the write to this identity, never the body).
   const claims = await requireAuth(request, env);
   if (!claims) return json({ error: "unauthorized" }, 401, origin);
   const hdr = { "X-Auth-Member": claims.sub };
 
   if (method === "POST" && sub === "join") {
+    if (await kvRateLimited(env, "round-join:" + claims.sub, 60, 60)) return json({ error: "rate_limited" }, 429, origin);
     const member = await getMember(env.ROSTER, claims.sub);
     const ratingAnchor = await findRatingAnchor(env.DB, { memberId: claims.sub, pdgaNo: member?.pdgaNo ?? null });
     return proxy(stub, "/join", { method: "POST", headers: hdr, body: JSON.stringify({ name: member?.name ?? "Player", ratingAnchor }) }, origin);
   }
   if (method === "POST" && sub === "guest") {
+    if (await kvRateLimited(env, "round-guest:" + claims.sub, 30, 60)) return json({ error: "rate_limited" }, 429, origin); // cap walk-on spam → DO/snapshot bloat
     const b = (await readJson(request)) ?? {};
     return proxy(stub, "/guest", { method: "POST", headers: hdr, body: JSON.stringify({ name: b.name }) }, origin);
   }
@@ -90,7 +103,13 @@ export async function handleCasualRounds(
     return proxy(stub, "/remove", { method: "POST", headers: hdr, body: JSON.stringify({ index: b.index, name: b.name }) }, origin);
   }
   if (method === "POST" && sub === "finalize") {
-    return proxy(stub, "/finalize", { method: "POST", headers: hdr, body: "{}" }, origin);
+    // Any member on the card may finalize when the whole card agrees. The force override (finalize past a
+    // not-fully-agreed board) is admin-only, so only look up admin status when force is actually requested.
+    const b = (await readJson(request)) ?? {};
+    const force = b.force === true || new URL(request.url).searchParams.get("force") === "1";
+    let admin = false;
+    if (force) { const m = await getMember(env.ROSTER, claims.sub); admin = m?.isAdmin === true; }
+    return proxy(stub, "/finalize", { method: "POST", headers: { ...hdr, "X-Auth-Admin": String(admin) }, body: JSON.stringify({ force }) }, origin);
   }
   if (sub === "live" && method === "GET" && seg[3] === "mine") {
     const r = await stub.fetch("https://do/mine", { headers: hdr });

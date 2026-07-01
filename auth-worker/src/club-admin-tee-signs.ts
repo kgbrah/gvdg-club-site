@@ -69,7 +69,7 @@ export async function handleAdminTeeSigns(
     if (!rows.length) return json({ error: "no_valid_rows" }, 400, origin);
     const sign = await db.getTeeSign(env.DB, id);
     if (!sign) return json({ error: "not_found" }, 404, origin);
-    const affected = await db.applyTeeSignRows(env.DB, sign.course_id, sign.hole_number, rows, sign.r2_key);
+    const affected = await db.applyTeeSignRows(env.DB, sign.course_id, sign.hole_number, rows, sign.r2_key, id);
     const demotedKeys = await db.demoteOtherOfficial(env.DB, sign.course_id, sign.hole_number, id);
     await db.setTeeSignStatus(env.DB, id, "official", adminId);
     // The superseded officials are no longer referenced — reclaim their R2 blobs.

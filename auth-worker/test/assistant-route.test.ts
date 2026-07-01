@@ -71,19 +71,46 @@ describe("POST /assistant", () => {
   });
 
   it("uses OpenRouter as the primary brain when a key is set", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ choices: [{ message: { content: "From OpenRouter!" } }] }), { status: 200 })));
+    const bodies: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes("openrouter.ai")) bodies.push(String(init?.body ?? ""));
+      return new Response(JSON.stringify({ choices: [{ message: { content: "From OpenRouter!" } }] }), { status: 200 });
+    }));
     const res = await worker.fetch(req({ message: "hi" }), makeEnv({ OPENROUTER_API_KEY: "sk-or-test" }));
     const j = await jsonObject(res);
     expect(j.reply).toBe("From OpenRouter!");
     expect(j.provider).toBe("openrouter");
+    expect(bodies[0]).toContain('"model":"openai/gpt-oss-120b:free"');
+  });
+
+  it("uses the OpenRouter fallback model when GPT-OSS is rate-limited", async () => {
+    const bodies: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (!String(input).includes("openrouter.ai")) return new Response("", { status: 503 });
+      bodies.push(String(init?.body ?? ""));
+      if (bodies.length === 1) return new Response("rate limited", { status: 429 });
+      return new Response(JSON.stringify({ choices: [{ message: { content: "From OpenRouter fallback" } }] }), { status: 200 });
+    }));
+    const AI = { run: async () => ({ response: "Workers AI should not run" }) };
+    const res = await worker.fetch(req({ message: "hi" }), makeEnv({ OPENROUTER_API_KEY: "sk-or-test", AI }));
+    const j = await jsonObject(res);
+    expect(j.reply).toBe("From OpenRouter fallback");
+    expect(j.provider).toBe("openrouter");
+    expect(bodies[0]).toContain('"model":"openai/gpt-oss-120b:free"');
+    expect(bodies[1]).toContain('"model":"nvidia/nemotron-3-super-120b-a12b:free"');
   });
 
   it("falls back to Workers AI when the free OpenRouter model is unavailable", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("rate limited", { status: 429 })));
+    const bodies: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes("openrouter.ai")) bodies.push(String(init?.body ?? ""));
+      return new Response("rate limited", { status: 429 });
+    }));
     const AI = { run: async () => ({ response: "From Workers AI fallback" }) };
     const res = await worker.fetch(req({ message: "hi" }), makeEnv({ OPENROUTER_API_KEY: "sk-or-test", AI }));
     const j = await jsonObject(res);
     expect(j.reply).toBe("From Workers AI fallback");
     expect(j.provider).toBe("workers-ai");
+    expect(bodies.length).toBe(2);
   });
 });

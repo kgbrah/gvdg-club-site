@@ -7,7 +7,7 @@
 
 import * as db from "./db.js";
 import { persistFinalizedRound } from "./live-finalize.js";
-import { normalizeScorecards, playerScorerId, recordScoreVote, scorecardConsensusIssues, scoreConflicts } from "./live-consensus.js";
+import { normalizeScorecards, playerScorerId, purgeScorerVotes, recordScoreVote, scorecardConsensusIssues } from "./live-consensus.js";
 import { assignCards, computeLeaderboard, finalizeStandings, type PlayerState } from "./scoring.js";
 import { createWeatherState, refreshWeatherState, weatherRefreshDue, type WeatherLocation, type WeatherState } from "./weather.js";
 
@@ -24,17 +24,19 @@ interface LiveState {
 }
 interface LiveMeta {
   eventId: number;
-  casual?: boolean; // self-organizing casual round (no admin event); finalize does not write D1 event results
-  roundCode?: string | null;
-  courseId?: number | null;
+  casual?: boolean; // self-organizing casual round (no admin event); finalize writes casual_rounds/casual_results (not event results)
+  roundCode?: string | null; // casual share code (the DO name suffix) — the durable key for casual_rounds
+  courseId?: number | null; // casual: the layout's course + layout ids, kept so ratings can compute a per-layout SSA
   layoutId?: number | null;
+  createdBy?: string | null; // casual: member id that started the round
   courseName?: string | null; // display-only: course + layout shown in the scorecard header
   layoutName?: string | null;
   udiscCourseId?: string | null; // UDisc numeric course id for the "Add to UDisc" applink (export bridge)
-  holes: { hole: number; par: number; distance_ft?: number | null }[];
+  holes: { hole: number; par: number; distance_ft?: number | null; tee_sign_id?: number | null }[];
   status: "live" | "final";
   startedAt: string;
   weather?: WeatherState | null;
+  rev?: number; // monotonic revision, bumped on every mutation so clients can drop out-of-order snapshots
   // Single-use, ROUND-SCOPED hole overrides (e.g. short baskets today). They live only here, in the
   // live round — the course layout is never touched, so the hole reverts to its verified value after
   // the round. Keyed by hole number (string for JSON safety).
@@ -46,10 +48,11 @@ interface StartBody {
   roundCode?: string | null;
   courseId?: number | null;
   layoutId?: number | null;
+  createdBy?: string | null;
   courseName?: string | null;
   layoutName?: string | null;
   udiscCourseId?: string | null;
-  holes: { hole: number; par: number; distance_ft?: number | null }[];
+  holes: { hole: number; par: number; distance_ft?: number | null; tee_sign_id?: number | null }[];
   players: { memberId?: string | null; name: string; division?: string | null; startingHole?: number | null; cardId?: string | null; ratingAnchor?: number | null }[];
   startedAt?: string;
   cardSize?: number;
@@ -104,6 +107,7 @@ export class LiveEventDO {
     this.loaded = true;
   }
   private async persist(): Promise<void> {
+    if (this.meta) this.meta.rev = (this.meta.rev ?? 0) + 1; // one bump per mutation (persist is the mutation marker)
     await this.state.storage.put("meta", this.meta);
     await this.state.storage.put("players", this.players);
   }
@@ -141,25 +145,26 @@ export class LiveEventDO {
     if (action === "guest") return this.addGuest(authMember, (body as { name?: string }).name); // add a non-member to my card
     if (action === "remove") return this.removePlayer(body as RemoveBody, authMember, authAdmin); // drop a player (accidental/left/no-show)
     if (action === "override") return this.override(body as OverrideBody);
-    if (action === "finalize") return this.finalize();
+    if (action === "finalize") return this.finalize(authMember, authAdmin, (body as { force?: boolean }).force === true);
     return j({ error: "not_found" }, 404);
   }
 
   /** meta.holes with any round-scoped overrides applied — the par the scorecard/leaderboard use, plus
    *  an optional temporary distance + an `overridden` flag for the tee-sign render. */
-  private resolvedHoles(): { hole: number; par: number; distance_ft: number | null; overridden: boolean }[] {
+  private resolvedHoles(): { hole: number; par: number; distance_ft: number | null; tee_sign_id: number | null; overridden: boolean }[] {
     const ov = this.meta?.overrides ?? {};
     return (this.meta?.holes ?? []).map((h) => {
       const o = ov[String(h.hole)];
-      return { hole: h.hole, par: o?.par ?? h.par, distance_ft: o?.distance_ft ?? h.distance_ft ?? null, overridden: !!o };
+      return { hole: h.hole, par: o?.par ?? h.par, distance_ft: o?.distance_ft ?? h.distance_ft ?? null, tee_sign_id: h.tee_sign_id ?? null, overridden: !!o };
     });
   }
 
   private snapshot() {
     const holes = this.resolvedHoles();
-    const conflicts = scoreConflicts(this.players, holes);
+    const issues = scorecardConsensusIssues(this.players, holes);
     return {
       status: this.meta?.status ?? "none",
+      rev: this.meta?.rev ?? 0,
       eventId: this.meta?.eventId ?? null,
       courseName: this.meta?.courseName ?? null,
       layoutName: this.meta?.layoutName ?? null,
@@ -175,8 +180,11 @@ export class LiveEventDO {
       players: this.players
         .map((p, index) => ({ p, index }))
         .filter((x) => !x.p.removed)
-        .map(({ p, index }) => ({ index, cardId: p.cardId ?? null, name: p.name, division: p.division ?? null, startingHole: p.startingHole ?? null, scores: p.scores })),
-      conflicts,
+        .map(({ p, index }) => ({ index, cardId: p.cardId ?? null, name: p.name, division: p.division ?? null, startingHole: p.startingHole ?? null, scores: p.scores, scorecards: p.scorecards ?? {} })),
+      conflicts: issues.conflicts,
+      // Holes where a required (member) scorer hasn't voted yet — drives the "what's blocking finalize"
+      // panel. Safe to expose publicly: identifies players by stable index/name, never memberId.
+      missing: issues.missing,
       standings: computeLeaderboard(holes, this.players).map((s) => ({ name: s.name, division: s.division, thru: s.thru, total: s.total, toPar: s.toPar })),
       updatedAt: this.meta?.startedAt ?? null,
     };
@@ -185,7 +193,7 @@ export class LiveEventDO {
   private async start(b: StartBody): Promise<Response> {
     const holes = (Array.isArray(b.holes) ? b.holes : [])
       .filter((h) => h && typeof h.hole === "number" && typeof h.par === "number")
-      .map((h) => ({ hole: h.hole, par: h.par, distance_ft: h.distance_ft ?? null }));
+      .map((h) => ({ hole: h.hole, par: h.par, distance_ft: h.distance_ft ?? null, tee_sign_id: h.tee_sign_id ?? null }));
     if (holes.length === 0 || (!b.eventId && !b.casual)) return j({ error: "invalid_start" }, 400);
     this.meta = {
       eventId: b.eventId ?? 0,
@@ -193,6 +201,7 @@ export class LiveEventDO {
       roundCode: b.roundCode ?? null,
       courseId: b.courseId ?? null,
       layoutId: b.layoutId ?? null,
+      createdBy: b.createdBy ?? null,
       courseName: b.courseName ?? null,
       layoutName: b.layoutName ?? null,
       udiscCourseId: b.udiscCourseId ?? null,
@@ -267,7 +276,7 @@ export class LiveEventDO {
     const meRaw = authMember ? this.players.findIndex((p) => p.memberId === authMember) : -1;
     const meIdx = meRaw >= 0 && !this.players[meRaw]!.removed ? meRaw : -1; // a tombstoned caller is off the card
     const base = { eventId: this.meta?.eventId ?? 0, casual: !!this.meta?.casual, courseName: this.meta?.courseName ?? null, layoutName: this.meta?.layoutName ?? null, udiscCourseId: this.meta?.udiscCourseId ?? null, weather: this.meta?.weather ?? null, status: this.meta?.status ?? "none", holes };
-    if (meIdx < 0) return { ...base, cardId: null, playerIndex: null, cardmates: [], conflicts: [] };
+    if (meIdx < 0) return { ...base, cardId: null, playerIndex: null, cardmates: [], conflicts: [], missing: [] };
     const cardId = this.players[meIdx]!.cardId ?? null;
     const cardmates = this.players
       .map((p, index) => ({ p, index }))
@@ -279,11 +288,19 @@ export class LiveEventDO {
         division: p.division ?? null,
         startingHole: p.startingHole ?? null,
         scores: p.scores,
+        scorecards: p.scorecards ?? {}, // per-scorer votes so the client can show/edit the caller's OWN vote during a conflict
         isMe: index === meIdx,
         canEnterScorecard: canEnterScorecard(p, authMember),
       }));
-    const conflicts = scoreConflicts(this.players, holes).filter((conflict) => conflict.cardId === cardId);
-    return { ...base, cardId, playerIndex: meIdx, cardmates, conflicts };
+    const issues = scorecardConsensusIssues(this.players, holes);
+    return {
+      ...base,
+      cardId,
+      playerIndex: meIdx,
+      cardmates,
+      conflicts: issues.conflicts.filter((c) => c.cardId === cardId),
+      missing: issues.missing.filter((m) => m.cardId === cardId),
+    };
   }
   private mine(authMember: string | null): Response {
     if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
@@ -360,6 +377,7 @@ export class LiveEventDO {
     target.scores = {};
     target.scorecards = {};
     target.scoredBy = {};
+    purgeScorerVotes(this.players, idx, this.meta.holes); // drop this player's votes on cardmates + re-derive consensus, so a leaver can't pin a hole in permanent conflict
     await this.persist();
     this.broadcast();
     return j(this.mineData(authMember));
@@ -388,20 +406,33 @@ export class LiveEventDO {
     return j(this.snapshot());
   }
 
-  private async finalize(): Promise<Response> {
+  private async finalize(authMember: string | null, authAdmin: boolean, force = false): Promise<Response> {
     if (!this.meta) return j({ error: "not_started" }, 409);
+    // Casual rounds are only member-gated at the route, so anyone with the code could otherwise finalize
+    // (lock) someone else's round — require the caller to actually be on the card. Admin events bypass
+    // (they're admin-gated at the route and meta.casual is false).
+    if (this.meta.casual && !authAdmin && !(authMember && this.players.some((p) => p.memberId === authMember && !p.removed))) {
+      return j({ error: "not_on_card" }, 403);
+    }
     // Idempotent under a double-submit: claim finalization SYNCHRONOUSLY (before any await) so a second
     // finalize that interleaves at one of the awaits below sees status==='final' and short-circuits,
     // instead of racing clearResults + concurrent inserts into duplicate result rows.
     if (this.meta.status === "final") {
-      return j({ status: "final", standings: finalizeStandings(this.resolvedHoles(), this.players), weather: this.meta.weather ?? null });
+      return j({ status: "final", standings: finalizeStandings(this.resolvedHoles(), this.players), forced: false, weather: this.meta.weather ?? null });
     }
     const holes = this.resolvedHoles();
+    // A round finalizes only when the whole card AGREES: no active-scorer conflicts AND every required
+    // (member) cardmate has voted on every hole. Guests are optional (requiredScorerIds), but a guest's
+    // differing vote still blocks as a conflict. An admin may FORCE past an incomplete board (e.g. a
+    // cardmate left without matching, or a solo-scorekeeper card); leavers otherwise self-heal via
+    // purgeScorerVotes. The blocking issues are returned so the client can show exactly what's missing.
     const issues = scorecardConsensusIssues(this.players, holes);
-    if (issues.conflicts.length > 0 || issues.missing.length > 0) {
-      return j({ error: "scorecards_not_matched", conflicts: issues.conflicts, missing: issues.missing }, 409);
+    const incomplete = issues.conflicts.length > 0 || issues.missing.length > 0;
+    if (incomplete && !(authAdmin && force)) {
+      return j({ error: "scorecard_incomplete", conflicts: issues.conflicts, missing: issues.missing }, 409);
     }
     await this.refreshWeatherIfDue(true);
+    const forced = incomplete; // an admin pushed a not-fully-agreed card through
     this.meta.status = "final";
     const standings = finalizeStandings(holes, this.players);
     const weatherJson = this.meta.weather ? JSON.stringify(this.meta.weather) : null;
@@ -414,7 +445,11 @@ export class LiveEventDO {
           roundCode: this.meta.roundCode ?? null,
           courseId: this.meta.courseId ?? null,
           layoutId: this.meta.layoutId ?? null,
+          createdBy: this.meta.createdBy ?? null,
+          courseName: this.meta.courseName ?? null,
+          layoutName: this.meta.layoutName ?? null,
           startedAt: this.meta.startedAt,
+          holesJson: JSON.stringify(holes.map((h) => ({ hole: h.hole, par: h.par, distance_ft: h.distance_ft }))),
           weatherJson,
         },
         standings,
@@ -426,7 +461,7 @@ export class LiveEventDO {
     }
     await this.persist();
     this.broadcast();
-    return j({ status: "final", standings, weather: this.meta.weather ?? null });
+    return j({ status: "final", standings, forced, weather: this.meta.weather ?? null });
   }
 
   private handleWs(_request: Request): Response {

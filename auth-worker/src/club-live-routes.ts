@@ -122,6 +122,12 @@ export async function handleClubLive(
       return json(data, r.status, origin);
     }
     const body = (await readJson(request)) ?? {};
+    if (sub === "finalize") {
+      // This route already passed adminGate, so the caller is a club admin → allow the force override
+      // (finalize past scorecards that don't fully agree). Force comes from ?force=1 or body.force.
+      const force = body.force === true || new URL(request.url).searchParams.get("force") === "1";
+      return liveProxy(stub, "/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify({ ...body, force }) }, origin);
+    }
     return liveProxy(stub, "/" + sub, { method: "POST", body: JSON.stringify(body) }, origin);
   }
   return json({ error: "not_found" }, 404, origin);

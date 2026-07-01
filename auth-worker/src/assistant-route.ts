@@ -9,29 +9,58 @@ const ASSISTANT_BODY_BYTES = 64_000;
 const ASSISTANT_LIMIT = 20;
 const ASSISTANT_WINDOW = 60;
 const DEFAULT_MODEL = "@cf/meta/llama-3.1-8b-instruct";
-const DEFAULT_OR_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
+const DEFAULT_OR_MODEL = "openai/gpt-oss-120b:free";
+const DEFAULT_OR_FALLBACK_MODEL = "nvidia/nemotron-3-super-120b-a12b:free";
+
+class OpenRouterStatusError extends Error {
+  constructor(readonly status: number) {
+    super("openrouter_" + status);
+  }
+}
+
+function openRouterModels(env: Env): string[] {
+  const primary = env.OPENROUTER_MODEL || DEFAULT_OR_MODEL;
+  const fallback = env.OPENROUTER_FALLBACK_MODEL || DEFAULT_OR_FALLBACK_MODEL;
+  return primary === fallback ? [primary] : [primary, fallback];
+}
+
+function shouldTryNextOpenRouterModel(error: unknown): error is OpenRouterStatusError {
+  return error instanceof OpenRouterStatusError && (error.status === 404 || error.status === 408 || error.status === 429 || error.status >= 500);
+}
+
+async function openRouterCompletion(env: Env, model: string, messages: ChatMessage[]): Promise<string> {
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + env.OPENROUTER_API_KEY,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://greenvillediscgolf.com",
+      "X-Title": "GVDG Crotts",
+    },
+    body: JSON.stringify({ model, messages, max_tokens: 512, reasoning: { exclude: true } }),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new OpenRouterStatusError(res.status);
+  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+  return data?.choices?.[0]?.message?.content ?? "";
+}
 
 function openRouterProvider(env: Env): ReplyProvider {
   return {
     name: "openrouter",
     async generate(messages: ChatMessage[]): Promise<string> {
-      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer " + env.OPENROUTER_API_KEY,
-          "Content-Type": "application/json",
-          "HTTP-Referer": "https://greenvillediscgolf.com",
-          "X-Title": "GVDG Crotts",
-        },
-        // reasoning.exclude: keep the model's internal reasoning for answer quality but DON'T return the
-        // chain-of-thought to the client. stripReasoning() in generateReply is the belt-and-suspenders
-        // for models that ignore this and inline <think>…</think> anyway (and for the Workers AI fallback).
-        body: JSON.stringify({ model: env.OPENROUTER_MODEL || DEFAULT_OR_MODEL, messages, max_tokens: 512, reasoning: { exclude: true } }),
-        signal: AbortSignal.timeout(15000),
-      });
-      if (!res.ok) throw new Error("openrouter_" + res.status);
-      const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-      return data?.choices?.[0]?.message?.content ?? "";
+      let lastError: Error | null = null;
+      for (const model of openRouterModels(env)) {
+        try {
+          const content = await openRouterCompletion(env, model, messages);
+          if (content.trim()) return content;
+        } catch (error) {
+          if (!shouldTryNextOpenRouterModel(error)) throw error;
+          lastError = error;
+        }
+      }
+      if (lastError) throw lastError;
+      return "";
     },
   };
 }

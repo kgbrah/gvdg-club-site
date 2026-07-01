@@ -4,13 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Greenville Disc Golf Club | North Carolina</title>
+    <meta name="theme-color" content="#FF6B35">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="GVDG Club">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="icon" type="image/png" href="img/logo.png">
+    <link rel="manifest" href="site.webmanifest">
+    <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary: #FF6B35;
-            --secondary: #004E89;
+            --secondary: #004E89; --secondary-text: #004E89; /* navy link/accent text → readable light blue in dark mode */
             --accent: #F7B801;
             --dark: #1A1A2E;
             --light: #F4F4F9;
@@ -30,7 +38,7 @@
             --bg-primary: #0F0F1E;
             --bg-secondary: #1A1A2E;
             --bg-tertiary: #252538;
-            --text-primary: #F4F4F9;
+            --text-primary: #F4F4F9; --secondary-text: #6cb4e8;
             --text-secondary: #E0E0E0;
             --text-tertiary: #C0C0C0;
             --text-muted: #A0A0A0;
@@ -330,7 +338,7 @@ body::before{
         .contact-label { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; color: var(--text-primary); margin-bottom: 0.5rem; letter-spacing: 0.03em; }
         .contact-detail { font-size: 1rem; color: var(--text-tertiary); }
         .contact-detail a { color: var(--primary); text-decoration: none; transition: color 0.3s ease; }
-        .contact-detail a:hover { color: var(--secondary); text-decoration: underline; }
+        .contact-detail a:hover { color: var(--secondary-text); text-decoration: underline; }
         footer { background: linear-gradient(135deg, var(--dark) 0%, #0d1a0d 100%); color: white; text-align: center; padding: 2.5rem 2rem; font-size: 0.95rem; border-top: 3px solid var(--accent); }
         [data-theme="dark"] footer { background: linear-gradient(135deg, var(--bg-secondary) 0%, #0a0a14 100%); }
         .fade-in { opacity: 0; transform: translateY(20px); transition: all 0.6s ease; }
@@ -453,6 +461,7 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
 @media (max-width: 480px) { .slide-header-nav { gap: 0.5rem; margin-bottom: 1rem; } .slide-nav-arrow { width: 38px; height: 38px; min-width: 38px; min-height: 38px; font-size: 1.2rem; } .slide-header-nav .slide-title { font-size: 1.5rem; } .slide-header-nav .slide-subtitle { font-size: 0.8rem; } }
     </style>
   <script src="nav.js" defer></script>
+  <script src="pwa.js" defer></script>
 </head>
 <body>
     <header>

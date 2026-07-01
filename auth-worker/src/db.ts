@@ -84,15 +84,23 @@ export async function createLayout(
 export async function getLayout(db: D1Like, id: number) {
   return db.prepare("SELECT * FROM course_layouts WHERE id = ?").bind(id).first();
 }
-/** A layout's hole list as {hole,par}[] (parses the stored JSON), or [] for none/invalid/missing layout. */
-export async function getLayoutHoles(db: D1Like, layoutId: number | null | undefined): Promise<{ hole: number; par: number; distance_ft: number | null }[]> {
+export interface ScorableHole {
+  hole: number;
+  par: number;
+  distance_ft: number | null;
+  tee_sign_id: number | null;
+}
+
+/** A layout's hole list as scorable hole metadata (parses stored JSON), or [] for none/invalid/missing layout. */
+export async function getLayoutHoles(db: D1Like, layoutId: number | null | undefined): Promise<ScorableHole[]> {
   if (!layoutId) return [];
   const layout = (await getLayout(db, Number(layoutId))) as { holes?: string } | null;
   try {
-    return JSON.parse(layout?.holes ?? "[]").map((h: { hole: number; par: number; distance_ft?: number | null }) => ({
+    return JSON.parse(layout?.holes ?? "[]").map((h: { hole: number; par: number; distance_ft?: number | null; verified?: { tee_sign_id?: number | null } | null; tee_sign_id?: number | null }) => ({
       hole: Number(h.hole),
       par: Number(h.par),
       distance_ft: h.distance_ft == null ? null : Number(h.distance_ft),
+      tee_sign_id: h.verified?.tee_sign_id ?? h.tee_sign_id ?? null,
     }));
   } catch {
     return [];
@@ -324,8 +332,12 @@ export async function listOpenRegistrationEvents(db: D1Like) {
   return (
     await db
       .prepare(
-        `SELECT e.id, e.name, e.date, e.type, e.format AS event_format, c.entry_fee_cents, c.ctp_fee_cents, c.ace_fee_cents, c.divisions, c.play_format
+        `SELECT e.id, e.name, e.date, e.type, e.format AS event_format, e.course_id, e.layout_id,
+           co.name AS course_name, l.name AS layout_name, l.total_par,
+           c.entry_fee_cents, c.ctp_fee_cents, c.ace_fee_cents, c.divisions, c.play_format
          FROM events e JOIN event_config c ON c.event_id = e.id
+         LEFT JOIN courses co ON co.id = e.course_id
+         LEFT JOIN course_layouts l ON l.id = e.layout_id
          WHERE c.registration_open = 1 AND e.status IN ('scheduled','live') ORDER BY e.date, e.id`,
       )
       .all()
@@ -628,6 +640,72 @@ export async function listMemberResults(db: D1Like, memberId: string) {
   ).results;
 }
 
+// ---- Casual rounds (durable record of finalized self-organizing rounds; migration 0016) ----
+export interface CasualRoundInput {
+  round_code: string;
+  course_id?: number | null;
+  layout_id?: number | null;
+  course_name?: string | null;
+  layout_name?: string | null;
+  holes?: string | null; // JSON [{hole,par,distance_ft}] snapshot as played
+  created_by?: string | null;
+  started_at?: string | null;
+}
+/** Remove any prior durable record for a casual round code (cascades to casual_results) so a re-finalize
+ *  after a fault/eviction replaces rather than duplicates it — the casual analogue of clearResults(eventId). */
+export async function clearCasualRound(db: D1Like, roundCode: string) {
+  await db.prepare("DELETE FROM casual_rounds WHERE round_code = ?").bind(roundCode).run();
+}
+export async function createCasualRound(db: D1Like, r: CasualRoundInput) {
+  return db
+    .prepare(
+      "INSERT INTO casual_rounds (round_code, course_id, layout_id, course_name, layout_name, holes, created_by, started_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
+    )
+    .bind(r.round_code, r.course_id ?? null, r.layout_id ?? null, r.course_name ?? null, r.layout_name ?? null, r.holes ?? null, r.created_by ?? null, r.started_at ?? null)
+    .first();
+}
+export interface CasualResultInput {
+  casual_round_id: number;
+  member_id?: string | null;
+  name: string;
+  division?: string | null;
+  place?: number | null;
+  total?: number | null;
+  to_par?: number | null;
+  breakdown?: string | null; // JSON {aces,eagles,birdies,pars,bogeys,doubles_plus}
+  scorecard?: string | null; // JSON [{hole,par,strokes}]
+}
+export async function createCasualResult(db: D1Like, r: CasualResultInput) {
+  return db
+    .prepare(
+      "INSERT INTO casual_results (casual_round_id, member_id, name, division, place, total, to_par, breakdown, scorecard) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
+    )
+    .bind(r.casual_round_id, r.member_id ?? null, r.name, r.division ?? null, r.place ?? null, r.total ?? null, r.to_par ?? null, r.breakdown ?? null, r.scorecard ?? null)
+    .first();
+}
+/** Finalized results for a casual round by its share code (the most recent finalized round for that code). */
+export async function listCasualRoundResults(db: D1Like, roundCode: string) {
+  const round = (await db.prepare("SELECT * FROM casual_rounds WHERE round_code = ? ORDER BY id DESC LIMIT 1").bind(roundCode).first()) as { id?: number } | null;
+  if (!round?.id) return null;
+  const results = (await db.prepare("SELECT * FROM casual_results WHERE casual_round_id = ? ORDER BY place IS NULL, place, total").bind(round.id).all()).results;
+  return { round, results };
+}
+/** A member's finalized CASUAL round history (for the dashboard) — joins the round header for course/layout. */
+export async function listMemberCasualResults(db: D1Like, memberId: string) {
+  return (
+    await db
+      .prepare(
+        `SELECT cr.*, r.round_code, r.course_name, r.layout_name, r.layout_id, r.finalized_at, r.holes AS round_holes,
+                c.udisc_course_id AS udisc_course_id
+         FROM casual_results cr JOIN casual_rounds r ON r.id = cr.casual_round_id
+         LEFT JOIN courses c ON c.id = r.course_id
+         WHERE cr.member_id = ? ORDER BY r.finalized_at DESC, cr.id DESC`,
+      )
+      .bind(memberId)
+      .all()
+  ).results;
+}
+
 // ---- Tee signs (T1) ----
 export interface TeeSignRow {
   id: number; course_id: number; hole_number: number; r2_key: string;
@@ -736,7 +814,7 @@ export interface ApproveRow {
  *  Returns the list of affected layout ids. The official-photo bookkeeping (status flip / demote prior)
  *  is done by the caller via setTeeSignStatus + demoteOtherOfficial. */
 export async function applyTeeSignRows(
-  db: D1Like, courseId: number, hole: number, rows: ApproveRow[], teeSignKey: string,
+  db: D1Like, courseId: number, hole: number, rows: ApproveRow[], teeSignKey: string, teeSignId: number,
 ): Promise<number[]> {
   const affected: number[] = [];
   for (const row of rows) {
@@ -753,12 +831,13 @@ export async function applyTeeSignRows(
     // reverts any earlier manual stopgap — verified now owns the value (enrichHoles resolves it).
     const entry: Record<string, unknown> = {
       hole, par: row.par,
-      verified: { par: row.par, distance_ft: row.distance_ft ?? null, tee_sign_key: teeSignKey },
+      verified: { par: row.par, distance_ft: row.distance_ft ?? null, tee_sign_key: teeSignKey, tee_sign_id: teeSignId },
       manual_distance: null,
       tee: row.tee ? { label: String(row.tee).slice(0, 80) } : null,
       target: row.target ? { label: String(row.target).slice(0, 80) } : null,
       color: row.color ?? null,
       tee_sign_key: teeSignKey,
+      tee_sign_id: teeSignId,
     };
     if (idx >= 0) holes[idx] = { ...holes[idx], ...entry }; else holes.push(entry);
     holes.sort((a, b) => Number(a.hole) - Number(b.hole));

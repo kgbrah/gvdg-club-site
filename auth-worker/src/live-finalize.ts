@@ -18,7 +18,11 @@ export type FinalizedRoundMeta = {
   readonly roundCode: string | null;
   readonly courseId: number | null;
   readonly layoutId: number | null;
+  readonly createdBy: string | null;
+  readonly courseName: string | null;
+  readonly layoutName: string | null;
   readonly startedAt: string;
+  readonly holesJson: string | null;
   readonly weatherJson: string | null;
 };
 
@@ -89,6 +93,34 @@ async function persistCasualRatings(
 ): Promise<void> {
   if (!input.meta.roundCode) return;
   await clearRoundRatingsForCasualRound(input.db, input.meta.roundCode);
+  await clubDb.clearCasualRound(input.db, input.meta.roundCode);
+  const round = (await clubDb.createCasualRound(input.db, {
+    round_code: input.meta.roundCode,
+    course_id: input.meta.courseId,
+    layout_id: input.meta.layoutId,
+    course_name: input.meta.courseName,
+    layout_name: input.meta.layoutName,
+    holes: input.meta.holesJson,
+    created_by: input.meta.createdBy,
+    started_at: input.meta.startedAt || null,
+  })) as { readonly id?: number } | null;
+  const roundId = round?.id;
+  if (!roundId) throw new Error("casual_round_insert_failed");
+  await Promise.all(
+    rated.map((row) =>
+      clubDb.createCasualResult(input.db, {
+        casual_round_id: roundId,
+        member_id: row.standing.memberId,
+        name: row.standing.name,
+        division: row.standing.division,
+        place: row.standing.place,
+        total: row.standing.total,
+        to_par: row.standing.toPar,
+        breakdown: JSON.stringify(row.standing.breakdown),
+        scorecard: row.standing.holes.length ? JSON.stringify(row.standing.holes) : null,
+      }),
+    ),
+  );
   await persistRoundRatingRows(input, stream, rated, context);
 }
 

@@ -4,14 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Events | Greenville Disc Golf Club</title>
+    <meta name="theme-color" content="#FF6B35">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="GVDG Club">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="icon" type="image/png" href="img/logo.png">
+    <link rel="manifest" href="site.webmanifest">
+    <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary: #FF6B35;
-            --secondary: #004E89;
+            --secondary: #004E89; --secondary-text: #004E89; /* navy link/accent text → readable light blue in dark mode */
             --accent: #F7B801;
             --dark: #1A1A2E;
             --light: #F4F4F9;
@@ -31,7 +38,7 @@
             --bg-primary: #0F0F1E;
             --bg-secondary: #1A1A2E;
             --bg-tertiary: #252538;
-            --text-primary: #F4F4F9;
+            --text-primary: #F4F4F9; --secondary-text: #6cb4e8;
             --text-secondary: #E0E0E0;
             --text-tertiary: #C0C0C0;
             --text-muted: #A0A0A0;
@@ -136,6 +143,32 @@
         .reg-btn:hover { filter: brightness(1.07); }
         .reg-btn:disabled { opacity: 0.6; cursor: default; }
         .reg-btn.secondary { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
+        #registerSection, #casualRoundsSection { background: rgba(244, 244, 249, 0.94); margin: 0 -1.5rem 2rem; padding: 1.25rem 1.5rem 1.5rem; }
+        #registerSection { border-radius: 0 0 16px 16px; }
+        #casualRoundsSection { border-radius: 16px; }
+        [data-theme="dark"] #registerSection, [data-theme="dark"] #casualRoundsSection { background: rgba(15, 15, 30, 0.86); }
+        #registerSection .events-group-head, #casualRoundsSection .events-group-head { margin-top: 0; }
+        .casual-board { display: grid; gap: 1rem; }
+        .casual-form { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 14px; padding: 1rem; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; align-items: end; box-shadow: 0 6px 24px var(--card-shadow); }
+        .casual-field { display: flex; flex-direction: column; gap: 0.35rem; color: var(--text-secondary); font-size: 0.82rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+        .casual-field.notes { grid-column: span 2; }
+        .casual-notes { min-height: 42px; resize: vertical; }
+        .casual-status { grid-column: 1 / -1; min-height: 1.2rem; color: var(--text-muted); font-size: 0.88rem; }
+        .casual-status.error { color: #c8102e; }
+        .casual-list { display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+        .casual-card { cursor: default; }
+        .casual-card:hover { transform: none; border-color: var(--border-color); }
+        .casual-meta-label { min-width: 4.2rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.04em; }
+        .casual-players { color: var(--text-secondary); font-size: 0.9rem; line-height: 1.45; }
+        .casual-actions { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: auto; }
+        .casual-actions .reg-btn { margin-top: 0; }
+        .casual-link { text-decoration: none; display: inline-flex; align-items: center; }
+        @media (max-width: 760px) {
+            .casual-form { grid-template-columns: 1fr; }
+            .casual-field.notes { grid-column: auto; }
+            .casual-list { grid-template-columns: 1fr; }
+            #casualRoundsSection .events-group-head { padding-left: 56px; min-height: 54px; }
+        }
         /* Keep-score CTA on a live event */
         .btn-keep-score { display: inline-block; margin: 0.25rem 0 0.75rem; background: var(--primary); color: #fff; text-decoration: none; font-weight: 800; padding: 0.7rem 1.3rem; border-radius: 50px; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.9rem; }
         .btn-keep-score:hover { filter: brightness(1.07); }
@@ -151,7 +184,7 @@
         .type-badge.meeting { background: var(--bg-tertiary); color: var(--text-secondary); }
         .status-badge { font-size: 0.68rem; }
         .status-badge.live { background: var(--primary); color: white; }
-        .status-badge.scheduled { background: rgba(0, 78, 137, 0.15); color: var(--secondary); }
+        .status-badge.scheduled { background: rgba(0, 78, 137, 0.15); color: var(--secondary-text); }
         [data-theme="dark"] .status-badge.scheduled { background: rgba(47, 127, 196, 0.25); color: #7fb3e0; }
         .status-badge.final { background: var(--bg-tertiary); color: var(--text-muted); border: 1px solid var(--border-color); }
         .status-badge.cancelled { background: rgba(200, 16, 46, 0.15); color: #c8102e; text-decoration: line-through; }
@@ -257,6 +290,7 @@
         .tee-sign-dist { font: 600 14px system-ui, sans-serif; fill: currentColor; opacity: 0.8; }
     </style>
   <script src="nav.js" defer></script>
+  <script src="pwa.js" defer></script>
   <script src="udisc-export.js" defer></script>
 </head>
 <body data-api-base="">
@@ -287,6 +321,7 @@
 
         <!-- REGISTER: club events open for sign-up (members or guests) -->
         <div id="registerSection" hidden></div>
+        <div id="casualRoundsSection" hidden></div>
 
         <!-- EVENTS: disc golf tournaments & league rounds (schedule feed + any club-scored events) -->
         <div id="calendarEvents" hidden></div>
@@ -377,6 +412,7 @@
 
         const statusEl = document.getElementById('status');
         const registerEl = document.getElementById('registerSection');
+        const casualEl = document.getElementById('casualRoundsSection');
         const calendarEl = document.getElementById('calendarEvents');
         const hubEl = document.getElementById('hub');
         const leaguesEl = document.getElementById('leaguesSection');
@@ -388,6 +424,8 @@
 
         // In-memory caches so navigating hub <-> detail doesn't refetch needlessly.
         let courseIndex = new Map();
+        let coursesCache = [];
+        let layoutsCache = new Map();
         let coursesLoaded = false;
         let refreshTimer = null;
 
@@ -426,6 +464,7 @@
         function setView(which) {
             statusEl.hidden = which !== 'status';
             registerEl.hidden = which !== 'hub';
+            casualEl.hidden = which !== 'hub';
             calendarEl.hidden = which !== 'hub';
             hubEl.hidden = which !== 'hub';
             leaguesEl.hidden = which !== 'hub';
@@ -510,9 +549,11 @@
             if (coursesLoaded) return;
             try {
                 const data = await fetchJson('/courses');
-                courseIndex = buildCourseIndex(data && data.courses);
+                coursesCache = Array.isArray(data && data.courses) ? data.courses : [];
+                courseIndex = buildCourseIndex(coursesCache);
             } catch (_e) {
                 // Course names are a nicety — never block events on this.
+                coursesCache = [];
                 courseIndex = new Map();
             }
             coursesLoaded = true;
@@ -615,6 +656,7 @@
                 ]);
                 renderPage(feed, (d1 && d1.events) || []);
                 loadRegistration(); // best-effort; club events open for sign-up
+                loadCasualRounds();
                 loadLeaguesList(); // best-effort; standings live behind each league
                 loadFundraisers();
                 loadMeetings();
@@ -802,6 +844,256 @@
             form.appendChild(btn);
             card.appendChild(form);
             return card;
+        }
+
+        function currentMemberId() {
+            const tok = memberToken();
+            if (!tok) return null;
+            try {
+                const raw = tok.split('.')[1];
+                if (!raw) return null;
+                const padded = raw.replace(/-/g, '+').replace(/_/g, '/');
+                const json = JSON.parse(atob(padded + '='.repeat((4 - padded.length % 4) % 4)));
+                return typeof json.sub === 'string' ? json.sub : null;
+            } catch (_e) {
+                return null;
+            }
+        }
+
+        function localDateTimeValue(ms) {
+            const d = new Date(ms);
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
+
+        function formatRoundTime(raw) {
+            const d = new Date(raw);
+            if (!Number.isFinite(d.getTime())) return raw || 'Time TBD';
+            return d.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        }
+
+        async function layoutsForCourse(courseId) {
+            const key = String(courseId);
+            if (layoutsCache.has(key)) return layoutsCache.get(key) || [];
+            try {
+                const data = await fetchJson(`/courses/${encodeURIComponent(courseId)}/layouts`);
+                const layouts = Array.isArray(data && data.layouts) ? data.layouts : [];
+                layoutsCache.set(key, layouts);
+                return layouts;
+            } catch (_e) {
+                layoutsCache.set(key, []);
+                return [];
+            }
+        }
+
+        async function casualForm() {
+            await ensureCourses();
+            const form = el('form', 'casual-form');
+            const courseField = el('label', 'casual-field');
+            courseField.appendChild(el('span', null, 'Course'));
+            const courseSel = document.createElement('select');
+            courseSel.className = 'reg-input';
+            courseSel.required = true;
+            coursesCache.forEach((c) => {
+                if (c && c.id != null) {
+                    const o = document.createElement('option');
+                    o.value = String(c.id);
+                    o.textContent = c.name || 'Course';
+                    courseSel.appendChild(o);
+                }
+            });
+            courseField.appendChild(courseSel);
+
+            const layoutField = el('label', 'casual-field');
+            layoutField.appendChild(el('span', null, 'Layout'));
+            const layoutSel = document.createElement('select');
+            layoutSel.className = 'reg-input';
+            layoutSel.required = true;
+            layoutField.appendChild(layoutSel);
+
+            const timeField = el('label', 'casual-field');
+            timeField.appendChild(el('span', null, 'Time'));
+            const timeInput = document.createElement('input');
+            timeInput.type = 'datetime-local';
+            timeInput.className = 'reg-input';
+            timeInput.required = true;
+            timeInput.min = localDateTimeValue(Date.now() - 5 * 60 * 60 * 1000);
+            timeInput.value = localDateTimeValue(Date.now() + 2 * 60 * 60 * 1000);
+            timeField.appendChild(timeInput);
+
+            const notesField = el('label', 'casual-field notes');
+            notesField.appendChild(el('span', null, 'Notes'));
+            const notes = document.createElement('textarea');
+            notes.className = 'reg-input casual-notes';
+            notes.maxLength = 800;
+            notes.rows = 2;
+            notes.placeholder = 'Optional';
+            notesField.appendChild(notes);
+
+            const btn = el('button', 'reg-btn', 'Post');
+            btn.type = 'submit';
+            const status = el('div', 'casual-status');
+
+            async function fillLayouts() {
+                layoutSel.replaceChildren();
+                const courseId = courseSel.value;
+                const layouts = courseId ? await layoutsForCourse(courseId) : [];
+                layouts.forEach((l) => {
+                    if (l && l.id != null) {
+                        const o = document.createElement('option');
+                        o.value = String(l.id);
+                        o.textContent = l.name || 'Layout';
+                        layoutSel.appendChild(o);
+                    }
+                });
+                layoutSel.disabled = layouts.length === 0;
+                btn.disabled = coursesCache.length === 0 || layouts.length === 0;
+                if (!coursesCache.length) status.textContent = 'Courses are not available right now.';
+                else if (!layouts.length) status.textContent = 'No layouts are available for this course.';
+                else status.textContent = '';
+            }
+
+            courseSel.addEventListener('change', fillLayouts);
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                status.className = 'casual-status';
+                const tok = memberToken();
+                const starts = new Date(timeInput.value);
+                if (!tok) { status.textContent = 'Sign in again on the Members page.'; status.classList.add('error'); return; }
+                if (!courseSel.value || !layoutSel.value || !Number.isFinite(starts.getTime())) {
+                    status.textContent = 'Pick a course, layout, and time.';
+                    status.classList.add('error');
+                    return;
+                }
+                btn.disabled = true;
+                status.textContent = 'Posting...';
+                const r = await regApi('/casual-rounds', {
+                    method: 'POST',
+                    token: tok,
+                    body: {
+                        course_id: Number(courseSel.value),
+                        layout_id: Number(layoutSel.value),
+                        starts_at: starts.toISOString(),
+                        notes: notes.value.trim() || null,
+                    },
+                });
+                btn.disabled = false;
+                if (!r.ok) {
+                    if (r.status === 401) { try { sessionStorage.removeItem('gvdg_member_token'); } catch (_e) {} }
+                    status.textContent = r.status === 401 ? 'Sign in again on the Members page.' : 'Request could not be posted.';
+                    status.classList.add('error');
+                    return;
+                }
+                await loadCasualRounds();
+            });
+
+            form.appendChild(courseField);
+            form.appendChild(layoutField);
+            form.appendChild(timeField);
+            form.appendChild(notesField);
+            form.appendChild(btn);
+            form.appendChild(status);
+            await fillLayouts();
+            return form;
+        }
+
+        function casualMeta(label, value) {
+            const row = el('div', 'meta-row');
+            row.appendChild(el('span', 'casual-meta-label', label));
+            row.appendChild(el('span', null, value || 'TBD'));
+            return row;
+        }
+
+        async function casualButtonAction(btn, path, method, body) {
+            const tok = memberToken();
+            if (!tok) return;
+            const original = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+            const r = await regApi(path, { method, token: tok, body });
+            if (!r.ok) {
+                if (r.status === 401) { try { sessionStorage.removeItem('gvdg_member_token'); } catch (_e) {} }
+                btn.disabled = false;
+                btn.textContent = r.status === 401 ? 'Sign in again' : 'Try again';
+                setTimeout(() => { btn.textContent = original; }, 1800);
+                return;
+            }
+            await loadCasualRounds();
+        }
+
+        function casualCard(req, tok, memberId) {
+            const card = el('div', 'event-card casual-card');
+            const top = el('div', 'event-card-top');
+            top.appendChild(el('h3', 'event-name', req.course_name || 'Casual round'));
+            top.appendChild(badge(String(req.player_count || 0) + ' in', 'type-badge'));
+            card.appendChild(top);
+            const meta = el('div', 'event-meta');
+            meta.appendChild(casualMeta('Time', formatRoundTime(req.starts_at)));
+            meta.appendChild(casualMeta('Layout', req.layout_name || 'Layout TBD'));
+            if (req.course_location) meta.appendChild(casualMeta('Where', req.course_location));
+            meta.appendChild(casualMeta('Posted', req.created_by_name || 'Member'));
+            card.appendChild(meta);
+            if (req.notes) card.appendChild(el('div', 'detail-notes', req.notes));
+            const players = Array.isArray(req.players) && req.players.length ? req.players.join(', ') : 'No commitments yet';
+            card.appendChild(el('div', 'casual-players', 'Players: ' + players));
+            const actions = el('div', 'casual-actions');
+            if (tok) {
+                const join = el('button', 'reg-btn' + (req.committed ? ' secondary' : ''), req.committed ? 'Leave' : 'Join');
+                join.type = 'button';
+                join.addEventListener('click', () => casualButtonAction(join, '/casual-rounds/' + encodeURIComponent(req.id) + '/join', req.committed ? 'DELETE' : 'POST', req.committed ? undefined : {}));
+                actions.appendChild(join);
+                if (memberId && req.created_by === memberId) {
+                    const close = el('button', 'reg-btn secondary', 'Close');
+                    close.type = 'button';
+                    close.addEventListener('click', () => {
+                        if (confirm('Close this casual round request?')) casualButtonAction(close, '/casual-rounds/' + encodeURIComponent(req.id), 'DELETE');
+                    });
+                    actions.appendChild(close);
+                }
+            } else {
+                const signIn = safeLink('gvdg-members.html', 'Sign in to join');
+                signIn.className = 'reg-btn secondary casual-link';
+                actions.appendChild(signIn);
+            }
+            card.appendChild(actions);
+            return card;
+        }
+
+        async function loadCasualRounds() {
+            casualEl.replaceChildren();
+            let requests = [];
+            let failed = false;
+            const tok = memberToken();
+            try {
+                const r = await regApi('/casual-rounds', { token: tok || undefined });
+                if (!r.ok) throw new Error('casual_rounds_failed');
+                const data = await r.json();
+                requests = Array.isArray(data && data.requests) ? data.requests : [];
+            } catch (_e) {
+                failed = true;
+            }
+            casualEl.appendChild(groupHeading('Casual Rounds', 'Member cards by course, layout, and time'));
+            const board = el('div', 'casual-board');
+            if (tok) board.appendChild(await casualForm());
+            else {
+                const signIn = el('div', 'fundraiser-card');
+                signIn.appendChild(el('div', 'fundraiser-body', 'Sign in on the Members page to post or join casual rounds.'));
+                const link = safeLink('gvdg-members.html', 'Members');
+                link.className = 'reg-btn secondary casual-link';
+                signIn.appendChild(link);
+                board.appendChild(signIn);
+            }
+            if (failed) {
+                board.appendChild(el('p', 'events-empty', 'Casual rounds could not load right now.'));
+            } else if (requests.length) {
+                const list = el('div', 'casual-list');
+                const memberId = currentMemberId();
+                requests.forEach((req) => list.appendChild(casualCard(req, tok, memberId)));
+                board.appendChild(list);
+            } else {
+                board.appendChild(el('p', 'events-empty', 'No casual round requests are posted right now.'));
+            }
+            casualEl.appendChild(board);
         }
 
         // ---------- FUNDRAISERS (Phase 4, public) ----------
@@ -1286,6 +1578,8 @@
                             fetchJson('/events').catch(() => ({ events: [] })),
                         ]);
                         renderPage(feed, (d1 && d1.events) || []);
+                        loadRegistration();
+                        loadCasualRounds();
                     } catch (_e) {
                         // Silent on background refresh; visible content stays put.
                     }

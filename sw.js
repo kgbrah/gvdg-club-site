@@ -1,71 +1,75 @@
-const CACHE = "gvdg-club-v4";
+const CACHE = "gvdg-club-v5";
+const OFFLINE_PAGE = "gvdg-members.html";
 const ASSETS = [
-  "img/logo.png",
-  "img/logo2.png",
-  "club.webmanifest",
   "site.webmanifest",
-  "gvdg-members.html",
-  "admin.html",
+  "pwa.js",
+  "nav.js",
+  "crotts.js",
+  "img/logo.png",
+  "img/icons/app-icon-192.png",
+  "img/icons/app-icon-512.png",
+  "img/icons/maskable-icon-512.png",
+  "img/icons/apple-touch-icon.png",
+  OFFLINE_PAGE,
   "score.html",
+  "admin.html"
 ];
-const DEFAULT_SHELL = "gvdg-members.html";
-const DOCUMENT_SHELLS = new Map([
-  ["/admin", "admin.html"],
-  ["/admin.html", "admin.html"],
-  ["/score", "score.html"],
-  ["/score.html", "score.html"],
-  ["/gvdg-members", "gvdg-members.html"],
-  ["/gvdg-members.html", "gvdg-members.html"],
-]);
+const STATIC_DESTINATIONS = new Set(["script", "style", "image", "font", "manifest"]);
 
-// Only clean, same-origin 200s are safe to cache (never opaque/redirect/error responses).
 function cacheable(res) {
   return res && res.ok && res.status === 200 && res.type === "basic";
 }
 
-self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()).catch(() => {}));
+function staticAsset(req, url) {
+  return STATIC_DESTINATIONS.has(req.destination) || /\.(?:css|gif|ico|jpe?g|js|png|svg|webmanifest|webp)$/i.test(url.pathname);
+}
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()).catch(() => {}));
 });
 
-self.addEventListener("activate", (e) => {
-  e.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()),
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
   );
 });
 
-self.addEventListener("fetch", (e) => {
-  const req = e.request;
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
   const url = new URL(req.url);
-  if (req.method !== "GET" || url.origin !== self.location.origin) return; // let the cross-origin API pass through
+  if (req.method !== "GET" || url.origin !== self.location.origin) return;
 
   if (req.mode === "navigate" || req.destination === "document") {
-    e.respondWith(
+    event.respondWith(
       fetch(req)
         .then((res) => {
           if (cacheable(res)) {
             const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+            caches.open(CACHE).then((cache) => cache.put(req, copy)).catch(() => {});
           }
           return res;
         })
-        .catch(() => caches.match(req).then((cached) => cached || caches.match(DOCUMENT_SHELLS.get(url.pathname) || DEFAULT_SHELL))),
+        .catch(() => caches.match(req).then((cached) => cached || caches.match(OFFLINE_PAGE)))
     );
     return;
   }
 
-  // Static assets: cache-first, but only ever store clean 200s.
-  e.respondWith(
+  if (!staticAsset(req, url)) return;
+
+  event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;
       return fetch(req)
         .then((res) => {
           if (cacheable(res)) {
             const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+            caches.open(CACHE).then((cache) => cache.put(req, copy)).catch(() => {});
           }
           return res;
         })
-        .catch(() => caches.match(DEFAULT_SHELL));
-    }),
+        .catch(() => (req.destination === "image" ? caches.match("img/logo.png") : Response.error()));
+    })
   );
 });

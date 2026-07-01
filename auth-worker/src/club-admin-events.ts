@@ -4,8 +4,25 @@ import * as shopDb from "./shop-db.js";
 import { EVENT_FORMATS, EVENT_STATUSES, EVENT_TYPES } from "./db.js";
 import { assignShotgun, assignTeams } from "./assign.js";
 import { getMember } from "./roster.js";
+import { enrichHoles, type LayoutHole } from "./layouts.js";
 import { json, readJson } from "./http.js";
-import { asInt, asStr, inSet, jsonStringArray, validEventInput } from "./input.js";
+import { asInt, asStr, inSet, jsonStringArray, sanitizeHoles, validEventInput } from "./input.js";
+
+function inlineLayout(raw: unknown): { name: string; holes: LayoutHole[]; total_par: number } | null {
+  if (!raw || typeof raw !== "object") return null;
+  const body = raw as Record<string, unknown>;
+  const name = asStr(body.name, 60) ?? "Main";
+  if (Array.isArray(body.holes)) {
+    const clean = sanitizeHoles(body.holes);
+    if (!clean || clean.length === 0 || clean.length > 36) return null;
+    return { name, ...enrichHoles(clean) };
+  }
+  const holeCount = asInt(body.hole_count ?? body.holeCount);
+  const defaultPar = asInt(body.default_par ?? body.defaultPar ?? body.par);
+  if (holeCount == null || holeCount < 1 || holeCount > 36 || defaultPar == null || defaultPar < 1 || defaultPar > 15) return null;
+  const holes = Array.from({ length: holeCount }, (_, i): LayoutHole => ({ hole: i + 1, par: defaultPar }));
+  return { name, ...enrichHoles(holes) };
+}
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -14,6 +31,22 @@ function shuffle<T>(arr: T[]): T[] {
     [a[i], a[j]] = [a[j]!, a[i]!];
   }
   return a;
+}
+
+function textValue(value: unknown): string | null {
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function defaultCtpPayoutNote(event: Record<string, unknown>, ctp: Record<string, unknown>): string {
+  const parts = [`CTP payout: ${textValue(event.name) ?? "event"}`];
+  const hole = textValue(ctp.hole);
+  if (hole) parts.push(`hole ${hole}`);
+  const division = textValue(ctp.division);
+  if (division) parts.push(division);
+  const prize = textValue(ctp.prize);
+  if (prize) parts.push(prize);
+  return parts.join(" - ");
 }
 
 const hasField = (body: Record<string, unknown>, field: string): boolean => Object.prototype.hasOwnProperty.call(body, field);
@@ -99,12 +132,36 @@ export async function handleAdminEvents(
       return json({ ctp: row }, 201, origin);
     }
     const cid = seg[4] != null ? asInt(seg[4]) : null;
-    if (method === "PATCH" && cid != null) {
+    if (method === "POST" && cid != null && seg[5] === "store-credit") {
+      const body = (await readJson(request)) ?? {};
+      const memberId = asStr(body.member_id, 80);
+      const amount = asInt(body.amount_cents);
+      if (!memberId || amount == null || amount <= 0) return json({ error: "invalid_store_credit" }, 400, origin);
+      const event = await db.getEvent(env.DB, id);
+      if (!event) return json({ error: "not_found" }, 404, origin);
+      const member = await getMember(env.ROSTER, memberId);
+      if (!member) return json({ error: "member_not_found" }, 404, origin);
+      const winnerName = asStr(body.winner_name, 100) ?? member.name;
+      const ctp = await db.setCtpWinner(env.DB, cid, id, memberId, winnerName);
+      if (!ctp) return json({ error: "not_found" }, 404, origin);
+      const tx = await shopDb.createWalletTransaction(env.DB, {
+        member_id: memberId,
+        member_name: member.name,
+        amount_cents: amount,
+        transaction_type: "credit",
+        source: "event_payout",
+        event_id: id,
+        note: asStr(body.note, 300) ?? defaultCtpPayoutNote(event, ctp),
+        created_by: adminId,
+      });
+      return json({ ctp, transaction: tx, balance_cents: await shopDb.walletBalance(env.DB, memberId), payouts: await shopDb.listEventStoreCreditPayouts(env.DB, id) }, 201, origin);
+    }
+    if (method === "PATCH" && cid != null && seg[5] == null) {
       const b = (await readJson(request)) ?? {};
       const row = await db.setCtpWinner(env.DB, cid, id, asStr(b.winner_member_id, 64), asStr(b.winner_name, 100));
       return row ? json({ ctp: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
     }
-    if (method === "DELETE" && cid != null) {
+    if (method === "DELETE" && cid != null && seg[5] == null) {
       await db.deleteCtp(env.DB, id, cid);
       return json({ ok: true }, 200, origin);
     }
@@ -141,8 +198,20 @@ export async function handleAdminEvents(
     const b = await readJson(request);
     const v = b && validEventInput(b);
     if (!v) return json({ error: "invalid_event" }, 400, origin);
-    const row = await db.createEvent(env.DB, { ...v, created_by: adminId });
-    return json({ event: row }, 201, origin);
+    let layout: unknown = null;
+    let eventInput = v;
+    const layoutBody = b && typeof b === "object" ? (b as Record<string, unknown>).layout : null;
+    if (layoutBody != null && v.layout_id == null) {
+      if (v.course_id == null) return json({ error: "invalid_layout" }, 400, origin);
+      const cleanLayout = inlineLayout(layoutBody);
+      if (!cleanLayout) return json({ error: "invalid_layout" }, 400, origin);
+      layout = await db.createLayout(env.DB, { course_id: v.course_id, ...cleanLayout });
+      const layoutId = asInt((layout as { id?: unknown } | null)?.id);
+      if (layoutId == null) return json({ error: "invalid_layout" }, 500, origin);
+      eventInput = { ...v, layout_id: layoutId };
+    }
+    const row = await db.createEvent(env.DB, { ...eventInput, created_by: adminId });
+    return json(layout ? { event: row, layout } : { event: row }, 201, origin);
   }
   if (method === "PATCH" && id != null) {
     const b = (await readJson(request)) ?? {};
