@@ -6,7 +6,7 @@
 // snapshot + ws reads are public). The DO trusts requests it receives.
 
 import * as db from "./db.js";
-import { normalizeScorecards, playerScorerId, recordScoreVote, scorecardConsensusIssues, scoreConflicts } from "./live-consensus.js";
+import { normalizeScorecards, playerScorerId, purgeScorerVotes, recordScoreVote, scorecardConsensusIssues, scoreConflicts } from "./live-consensus.js";
 import { assignCards, computeLeaderboard, finalizeStandings, type PlayerState } from "./scoring.js";
 
 interface LiveEnv {
@@ -28,6 +28,7 @@ interface LiveMeta {
   holes: { hole: number; par: number; distance_ft?: number | null }[];
   status: "live" | "final";
   startedAt: string;
+  rev?: number; // monotonic revision, bumped on every mutation so clients can drop out-of-order snapshots
   // Single-use, ROUND-SCOPED hole overrides (e.g. short baskets today). They live only here, in the
   // live round — the course layout is never touched, so the hole reverts to its verified value after
   // the round. Keyed by hole number (string for JSON safety).
@@ -89,6 +90,7 @@ export class LiveEventDO {
     this.loaded = true;
   }
   private async persist(): Promise<void> {
+    if (this.meta) this.meta.rev = (this.meta.rev ?? 0) + 1; // one bump per mutation (persist is the mutation marker)
     await this.state.storage.put("meta", this.meta);
     await this.state.storage.put("players", this.players);
   }
@@ -110,7 +112,7 @@ export class LiveEventDO {
     if (action === "guest") return this.addGuest(authMember, (body as { name?: string }).name); // add a non-member to my card
     if (action === "remove") return this.removePlayer(body as RemoveBody, authMember, authAdmin); // drop a player (accidental/left/no-show)
     if (action === "override") return this.override(body as OverrideBody);
-    if (action === "finalize") return this.finalize();
+    if (action === "finalize") return this.finalize(authMember, authAdmin);
     return j({ error: "not_found" }, 404);
   }
 
@@ -129,6 +131,7 @@ export class LiveEventDO {
     const conflicts = scoreConflicts(this.players, holes);
     return {
       status: this.meta?.status ?? "none",
+      rev: this.meta?.rev ?? 0,
       eventId: this.meta?.eventId ?? null,
       courseName: this.meta?.courseName ?? null,
       layoutName: this.meta?.layoutName ?? null,
@@ -142,7 +145,7 @@ export class LiveEventDO {
       players: this.players
         .map((p, index) => ({ p, index }))
         .filter((x) => !x.p.removed)
-        .map(({ p, index }) => ({ index, cardId: p.cardId ?? null, name: p.name, division: p.division ?? null, startingHole: p.startingHole ?? null, scores: p.scores })),
+        .map(({ p, index }) => ({ index, cardId: p.cardId ?? null, name: p.name, division: p.division ?? null, startingHole: p.startingHole ?? null, scores: p.scores, scorecards: p.scorecards ?? {} })),
       conflicts,
       standings: computeLeaderboard(holes, this.players).map((s) => ({ name: s.name, division: s.division, thru: s.thru, total: s.total, toPar: s.toPar })),
       updatedAt: this.meta?.startedAt ?? null,
@@ -229,6 +232,7 @@ export class LiveEventDO {
         division: p.division ?? null,
         startingHole: p.startingHole ?? null,
         scores: p.scores,
+        scorecards: p.scorecards ?? {}, // per-scorer votes so the client can show/edit the caller's OWN vote during a conflict
         isMe: index === meIdx,
         canEnterScorecard: canEnterScorecard(p, authMember),
       }));
@@ -308,6 +312,7 @@ export class LiveEventDO {
     target.scores = {};
     target.scorecards = {};
     target.scoredBy = {};
+    purgeScorerVotes(this.players, idx, this.meta.holes); // drop this player's votes on cardmates + re-derive consensus, so a leaver can't pin a hole in permanent conflict
     await this.persist();
     this.broadcast();
     return j(this.mineData(authMember));
@@ -336,8 +341,14 @@ export class LiveEventDO {
     return j(this.snapshot());
   }
 
-  private async finalize(): Promise<Response> {
+  private async finalize(authMember: string | null, authAdmin: boolean): Promise<Response> {
     if (!this.meta) return j({ error: "not_started" }, 409);
+    // Casual rounds are only member-gated at the route, so anyone with the code could otherwise finalize
+    // (lock) someone else's round — require the caller to actually be on the card. Admin events bypass
+    // (they're admin-gated at the route and meta.casual is false).
+    if (this.meta.casual && !authAdmin && !(authMember && this.players.some((p) => p.memberId === authMember && !p.removed))) {
+      return j({ error: "not_on_card" }, 403);
+    }
     // Idempotent under a double-submit: claim finalization SYNCHRONOUSLY (before any await) so a second
     // finalize that interleaves at one of the awaits below sees status==='final' and short-circuits,
     // instead of racing clearResults + concurrent inserts into duplicate result rows.
@@ -345,8 +356,12 @@ export class LiveEventDO {
       return j({ status: "final", standings: finalizeStandings(this.resolvedHoles(), this.players) });
     }
     const holes = this.resolvedHoles();
+    // Block finalize ONLY on real disagreements (two scorers entered different values), NOT on cardmates
+    // who simply didn't keep their own card — the common case is one scorekeeper, and walk-on guests can't
+    // vote at all. Unscored/partial players already fall to DNF in finalizeStandings. (issues.missing is
+    // still surfaced in the conflict response so the client can show who hasn't matched.)
     const issues = scorecardConsensusIssues(this.players, holes);
-    if (issues.conflicts.length > 0 || issues.missing.length > 0) {
+    if (issues.conflicts.length > 0) {
       return j({ error: "scorecards_not_matched", conflicts: issues.conflicts, missing: issues.missing }, 409);
     }
     this.meta.status = "final";

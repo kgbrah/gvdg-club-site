@@ -70,10 +70,12 @@ export async function handleCasualRounds(
   const hdr = { "X-Auth-Member": claims.sub };
 
   if (method === "POST" && sub === "join") {
+    if (await kvRateLimited(env, "round-join:" + claims.sub, 60, 60)) return json({ error: "rate_limited" }, 429, origin);
     const member = await getMember(env.ROSTER, claims.sub);
     return proxy(stub, "/join", { method: "POST", headers: hdr, body: JSON.stringify({ name: member?.name ?? "Player" }) }, origin);
   }
   if (method === "POST" && sub === "guest") {
+    if (await kvRateLimited(env, "round-guest:" + claims.sub, 30, 60)) return json({ error: "rate_limited" }, 429, origin); // cap walk-on spam → DO/snapshot bloat
     const b = (await readJson(request)) ?? {};
     return proxy(stub, "/guest", { method: "POST", headers: hdr, body: JSON.stringify({ name: b.name }) }, origin);
   }
