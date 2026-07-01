@@ -1,3 +1,5 @@
+import type { RatingWeather } from "./ratings.js";
+
 export type WeatherLocation = {
   readonly lat: number;
   readonly lng: number;
@@ -191,6 +193,17 @@ export function parseOpenMeteoCurrent(payload: unknown, fetchedAt: string): Weat
   };
 }
 
+export function ratingWeatherFromJson(weatherJson: string | null | undefined): RatingWeather {
+  if (!weatherJson) return { windGustMph: null };
+  try {
+    const parsed: unknown = JSON.parse(weatherJson);
+    return ratingWeatherFromUnknown(parsed);
+  } catch (error) {
+    if (error instanceof SyntaxError) return { windGustMph: null };
+    throw error;
+  }
+}
+
 export async function fetchCurrentWeather(
   location: WeatherLocation,
   doFetch: FetchLike = fetch,
@@ -229,6 +242,27 @@ function appendSample(history: readonly WeatherCondition[], sample: WeatherCondi
   const previous = history[history.length - 1];
   if (!sampleChanged(previous, sample)) return history;
   return [...history, sample].slice(-WEATHER_HISTORY_LIMIT);
+}
+
+function ratingWeatherFromUnknown(value: unknown): RatingWeather {
+  if (!isRecord(value)) return { windGustMph: null };
+  const currentGust = conditionWindGust(value["current"]);
+  const historyGusts = Array.isArray(value["history"]) ? value["history"].map((sample) => conditionWindGust(sample)) : [];
+  return { windGustMph: round1(maxFinite([currentGust, ...historyGusts])) };
+}
+
+function conditionWindGust(value: unknown): number | null {
+  if (!isRecord(value)) return null;
+  return asNumber(value["windGustMph"]) ?? asNumber(value["wind_gust_mph"]) ?? asNumber(value["wind_gusts_10m"]);
+}
+
+function maxFinite(values: readonly (number | null)[]): number | null {
+  let max: number | null = null;
+  for (const value of values) {
+    if (value == null || !Number.isFinite(value)) continue;
+    max = max == null ? value : Math.max(max, value);
+  }
+  return max;
 }
 
 export async function refreshWeatherState(

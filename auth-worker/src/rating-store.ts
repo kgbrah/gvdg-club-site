@@ -26,6 +26,8 @@ export type RoundRatingInput = {
   readonly roundRating: number | null;
   readonly ssa: number | null;
   readonly ppt: number | null;
+  readonly windGustMph: number | null;
+  readonly weatherAdjustment: number;
   readonly propagatorCount: number;
   readonly ratingMethod: RatingMethod;
 };
@@ -74,8 +76,9 @@ export async function createRoundRating(db: D1Like, row: RoundRatingInput): Prom
     .prepare(
       `INSERT INTO round_ratings (
          member_id, player_name, stream, event_id, casual_round_code, course_id, layout_id,
-         round_date, total, to_par, round_rating, ssa, ppt, propagator_count, rating_method
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         round_date, total, to_par, round_rating, ssa, ppt, wind_gust_mph, weather_adjustment,
+         propagator_count, rating_method
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       row.memberId,
@@ -91,6 +94,8 @@ export async function createRoundRating(db: D1Like, row: RoundRatingInput): Prom
       row.roundRating,
       row.ssa,
       row.ppt,
+      row.windGustMph,
+      row.weatherAdjustment,
       row.propagatorCount,
       row.ratingMethod,
     )

@@ -1,4 +1,4 @@
-import { aggregatePlayerRating, roundRatingForScore, solveSsa, type RatingMethod, type RatingStream } from "./ratings.js";
+import { aggregatePlayerRating, roundRatingForScoreWithWeather, solveSsa, type RatingMethod, type RatingStream } from "./ratings.js";
 
 export type StoredRoundRating = {
   readonly id: number;
@@ -10,12 +10,14 @@ export type StoredRoundRating = {
   readonly roundDate: string;
   readonly total: number;
   readonly toPar: number | null;
+  readonly windGustMph: number | null;
 };
 
 export type RecomputedRoundRating = StoredRoundRating & {
   readonly roundRating: number | null;
   readonly ssa: number | null;
   readonly ppt: number | null;
+  readonly weatherAdjustment: number;
   readonly propagatorCount: number;
   readonly ratingMethod: RatingMethod;
 };
@@ -116,9 +118,22 @@ function solveGroup(group: GroupedRound, anchors: ReadonlyMap<string, number>): 
 }
 
 function rateRow(row: StoredRoundRating, context: GroupContext | null): RecomputedRoundRating {
-  return context
-    ? { ...row, roundRating: roundRatingForScore(row.total, context.ssa, context.ppt), ssa: context.ssa, ppt: context.ppt, propagatorCount: context.propagatorCount, ratingMethod: context.ratingMethod }
-    : unrated(row);
+  if (!context) return unrated(row);
+  const rated = roundRatingForScoreWithWeather({
+    score: row.total,
+    ssa: context.ssa,
+    ppt: context.ppt,
+    weather: context.ratingMethod === "layout" ? { windGustMph: row.windGustMph } : null,
+  });
+  return {
+    ...row,
+    roundRating: rated.roundRating,
+    ssa: rated.ssa,
+    ppt: rated.ppt,
+    weatherAdjustment: rated.weatherAdjustment,
+    propagatorCount: context.propagatorCount,
+    ratingMethod: context.ratingMethod,
+  };
 }
 
 function aggregateStreams(rows: readonly RecomputedRoundRating[], now: string): Map<string, number> {
@@ -157,7 +172,7 @@ function sameBaseline(a: Omit<RecomputedLayoutBaseline, "layoutId" | "eventId"> 
 }
 
 function unrated(row: StoredRoundRating): RecomputedRoundRating {
-  return { ...row, roundRating: null, ssa: null, ppt: null, propagatorCount: 0, ratingMethod: "unrated" };
+  return { ...row, roundRating: null, ssa: null, ppt: null, weatherAdjustment: 0, propagatorCount: 0, ratingMethod: "unrated" };
 }
 
 function anchorKey(memberId: string, stream: RatingStream): string {

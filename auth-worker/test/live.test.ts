@@ -7,14 +7,36 @@ type Stored = {
 };
 
 class FakeSocket extends EventTarget {
+  readonly CLOSED = 3;
+  readonly CLOSING = 2;
+  readonly CONNECTING = 0;
+  readonly OPEN = 1;
+  readonly binaryType = "blob";
+  readonly bufferedAmount = 0;
+  readonly extensions = "";
+  readonly protocol = "";
+  readonly readyState = 1;
   readonly sent: string[] = [];
+  readonly url = "";
+  onclose: ((this: WebSocket, ev: CloseEvent) => unknown) | null = null;
+  onerror: ((this: WebSocket, ev: Event) => unknown) | null = null;
+  onmessage: ((this: WebSocket, ev: MessageEvent) => unknown) | null = null;
+  onopen: ((this: WebSocket, ev: Event) => unknown) | null = null;
 
   accept(): void {
     throw new Error("legacy_accept_used");
   }
 
-  send(message: string): void {
-    this.sent.push(message);
+  close(): void {}
+
+  serializeAttachment(_attachment: unknown): void {}
+
+  deserializeAttachment(): unknown | null {
+    return null;
+  }
+
+  send(message: string | ArrayBuffer | ArrayBufferView | Blob): void {
+    this.sent.push(typeof message === "string" ? message : String(message));
   }
 }
 
@@ -57,8 +79,17 @@ type SnapshotBody = {
 type WeatherSnapshot = {
   readonly weather: {
     readonly location: { readonly label: string | null };
-    readonly current: { readonly observedAt: string; readonly rainIn: number | null; readonly windSpeedMph: number | null } | null;
-    readonly history: readonly { readonly observedAt: string; readonly windSpeedMph: number | null }[];
+    readonly current: {
+      readonly observedAt: string;
+      readonly rainIn: number | null;
+      readonly windSpeedMph: number | null;
+      readonly windGustMph: number | null;
+    } | null;
+    readonly history: readonly {
+      readonly observedAt: string;
+      readonly windSpeedMph: number | null;
+      readonly windGustMph: number | null;
+    }[];
     readonly error: string | null;
   } | null;
 };
@@ -91,6 +122,11 @@ function stubWeather(samples: readonly Record<string, unknown>[]): void {
     nextIndex++;
     return new Response(JSON.stringify(sample));
   }));
+}
+
+function defined<T>(value: T | null | undefined, label: string): T {
+  if (value == null) throw new Error(label);
+  return value;
 }
 
 beforeEach(() => {
@@ -185,7 +221,7 @@ describe("LiveEventDO card-scoped scoring", () => {
     const live = new LiveEventDO(state, { DB: db });
     await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ casual: true, holes: [{ hole: 1, par: 3 }], players: [{ memberId: "m0", name: "A" }, { memberId: "m1", name: "B" }] }) }));
     const sock = new FakeSocket();
-    state.acceptWebSocket(sock as unknown as WebSocket);
+    state.acceptWebSocket(sock);
     sock.sent.length = 0;
     const first = (await (await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m0" }, body: JSON.stringify({ index: 1, hole: 1, strokes: 3 }) }))).json()) as SnapshotBody;
     expect(first.conflicts).toEqual([]);
@@ -229,11 +265,12 @@ describe("LiveEventDO card-scoped scoring", () => {
     await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m0" }, body: JSON.stringify({ index: 1, hole: 1, strokes: 3 }) }));
     await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m1" }, body: JSON.stringify({ index: 1, hole: 1, strokes: 4 }) }));
     const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { players: { index: number; scores: Record<string, number>; scorecards: Record<string, Record<string, number>> }[] };
-    const target = snap.players.find((p) => p.index === 1)!;
+    const target = defined(snap.players.find((p) => p.index === 1), "target_player_missing");
     expect(target.scores).not.toHaveProperty("1"); // consensus blank during conflict…
     expect(target.scorecards["1"]).toEqual({ "player:0": 3, "player:1": 4 }); // …but each scorer's own vote is visible
     const mine = (await (await live.fetch(new Request("https://do/mine", { headers: { "X-Auth-Member": "m0" } }))).json()) as { cardmates: { index: number; scorecards: Record<string, Record<string, number>> }[] };
-    expect(mine.cardmates.find((c) => c.index === 1)!.scorecards["1"]).toEqual({ "player:0": 3, "player:1": 4 });
+    const cardmate = defined(mine.cardmates.find((c) => c.index === 1), "target_cardmate_missing");
+    expect(cardmate.scorecards["1"]).toEqual({ "player:0": 3, "player:1": 4 });
   });
 
   it("ignores a removed scorer's stale cross-vote so the conflict auto-resolves on removal (no deadlock)", async () => {
@@ -306,7 +343,7 @@ describe("LiveEventDO card-scoped scoring", () => {
     const live = new LiveEventDO(state, { DB: db });
     await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ casual: true, holes: [{ hole: 1, par: 3 }], players: [{ memberId: "m0", name: "A" }, { memberId: "m1", name: "B" }] }) }));
     const sock = new FakeSocket();
-    state.acceptWebSocket(sock as unknown as WebSocket);
+    state.acceptWebSocket(sock);
     sock.sent.length = 0;
 
     await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m1" }, body: JSON.stringify({ index: 1, hole: 1, strokes: 4 }) }));
@@ -463,13 +500,15 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     const startBody = (await started.json()) as WeatherSnapshot;
     expect(startBody.weather?.location.label).toBe("North Rec - Greenville, NC");
     expect(startBody.weather?.current?.windSpeedMph).toBe(6.5);
+    expect(startBody.weather?.current?.windGustMph).toBe(12.5);
     expect(startBody.weather?.history.map((sample) => sample.observedAt)).toEqual(["2026-07-01T08:00"]);
 
     vi.setSystemTime(new Date("2026-07-01T12:11:00.000Z"));
     const scored = await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify({ index: 0, scorerIndex: 0, hole: 1, strokes: 3 }) }));
     const scoredBody = (await scored.json()) as WeatherSnapshot;
-    expect(scoredBody.weather?.current).toMatchObject({ observedAt: "2026-07-01T08:15", rainIn: 0.2, windSpeedMph: 18.2 });
+    expect(scoredBody.weather?.current).toMatchObject({ observedAt: "2026-07-01T08:15", rainIn: 0.2, windSpeedMph: 18.2, windGustMph: 24.2 });
     expect(scoredBody.weather?.history.map((sample) => sample.windSpeedMph)).toEqual([6.5, 18.2]);
+    expect(scoredBody.weather?.history.map((sample) => sample.windGustMph)).toEqual([12.5, 24.2]);
     expect(scoredBody.weather?.error).toBeNull();
   });
 
@@ -492,7 +531,7 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     }) }));
     const body = (await filled.json()) as WeatherSnapshot;
     expect(body.weather?.location.label).toBe("North Rec - Greenville, NC");
-    expect(body.weather?.current).toMatchObject({ observedAt: "2026-07-01T08:00", rainIn: 0.1, windSpeedMph: 7.5 });
+    expect(body.weather?.current).toMatchObject({ observedAt: "2026-07-01T08:00", rainIn: 0.1, windSpeedMph: 7.5, windGustMph: 13.5 });
     expect(body.weather?.history.map((sample) => sample.observedAt)).toEqual(["2026-07-01T08:00"]);
   });
 
@@ -521,7 +560,7 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
         return {
           bind(...args: unknown[]) { entry.args = args; if (/INSERT INTO casual_|DELETE FROM casual_rounds/i.test(sql)) inserts.push(entry); return this; },
           run: async () => ({ results: [], success: true }),
-          first: async () => ((/INSERT INTO casual_rounds/i.test(sql) ? { id: 7 } : null) as unknown as null),
+          first: async <T = Record<string, unknown>>() => (/INSERT INTO casual_rounds/i.test(sql) ? { id: 7 } as T : null),
           all: async () => ({ results: [], success: true }),
         };
       },
@@ -534,19 +573,18 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     expect(fin.status).toBe(200);
     const delIdx = inserts.findIndex((i) => /DELETE FROM casual_rounds/i.test(i.sql));
     const roundIdx = inserts.findIndex((i) => /INSERT INTO casual_rounds/i.test(i.sql));
-    const roundIns = inserts[roundIdx];
-    const resIns = inserts.find((i) => /INSERT INTO casual_results/i.test(i.sql));
+    const roundIns = defined(inserts[roundIdx], "casual_round_insert_missing");
+    const resIns = defined(inserts.find((i) => /INSERT INTO casual_results/i.test(i.sql)), "casual_result_insert_missing");
     // Idempotency guard: a DELETE-by-round_code runs BEFORE the header insert so a fault/retry replaces
     // (never duplicates) the round — the casual analogue of the competition path's clearResults.
     expect(delIdx).toBeGreaterThanOrEqual(0);
-    expect(inserts[delIdx]!.args).toContain("AB23CD");
+    const deleteIns = defined(inserts[delIdx], "casual_round_delete_missing");
+    expect(deleteIns.args).toContain("AB23CD");
     expect(roundIdx).toBeGreaterThan(delIdx);
-    expect(roundIns).toBeTruthy();
-    expect(roundIns!.args).toContain("AB23CD"); // round_code = the durable key
-    expect(roundIns!.args).toContain(5); // layout_id — kept so the ratings engine can compute a per-layout SSA
-    expect(resIns).toBeTruthy();
-    expect(resIns!.args[0]).toBe(7); // casual_round_id FK = the id returned by createCasualRound
-    expect(resIns!.args).toContain("A"); // player name persisted
+    expect(roundIns.args).toContain("AB23CD"); // round_code = the durable key
+    expect(roundIns.args).toContain(5); // layout_id — kept so the ratings engine can compute a per-layout SSA
+    expect(resIns.args[0]).toBe(7); // casual_round_id FK = the id returned by createCasualRound
+    expect(resIns.args).toContain("A"); // player name persisted
   });
 
   it("stores casual round ratings from a cached layout SSA without writing event results", async () => {
@@ -591,6 +629,51 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     expect(ratingInserts[0]).toContain("casual");
     expect(ratingInserts[0]).toContain("ABC123");
     expect(ratingInserts[0]).toContain(1000);
+  });
+
+  it("stores gusts and weather adjustment on layout-rated casual rounds", async () => {
+    stubWeather([openMeteoSample("2026-07-01T08:00", 32, 0)]);
+    const ratingInserts: unknown[][] = [];
+    const recDb = {
+      prepare(sql: string) {
+        let args: unknown[] = [];
+        return {
+          bind(...bound: unknown[]) {
+            args = bound;
+            return this;
+          },
+          run: async () => {
+            if (/INSERT INTO round_ratings/i.test(sql)) ratingInserts.push(args);
+            return { results: [], success: true };
+          },
+          first: async <T = Record<string, unknown>>() => {
+            if (/SELECT ssa, ppt, propagator_count FROM layout_ssa/i.test(sql)) return { ssa: 54, ppt: 10, propagator_count: 3 } as T;
+            if (/INSERT INTO casual_rounds/i.test(sql)) return { id: 7 } as T;
+            return null;
+          },
+          all: async () => ({ results: [], success: true }),
+        };
+      },
+    };
+    const live = new LiveEventDO(new FakeState({}), { DB: recDb });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      casual: true,
+      roundCode: "ABC123",
+      layoutId: 5,
+      holes: [{ hole: 1, par: 27 }, { hole: 2, par: 30 }],
+      players: [{ memberId: "m_a", name: "A" }],
+      weatherLocation: { lat: 35.631092, lng: -77.319923, label: "North Rec" },
+    }) }));
+    await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m_a" }, body: JSON.stringify({ index: 0, scorerIndex: 0, hole: 1, strokes: 27 }) }));
+    await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m_a" }, body: JSON.stringify({ index: 0, scorerIndex: 0, hole: 2, strokes: 30 }) }));
+
+    const fin = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Member": "m_a" } }));
+    expect(fin.status).toBe(200);
+    expect(ratingInserts).toHaveLength(1);
+    expect(ratingInserts[0]).toContain(977);
+    expect(ratingInserts[0]).toContain(54.7);
+    expect(ratingInserts[0]).toContain(38);
+    expect(ratingInserts[0]).toContain(0.7);
   });
 
   it("flags score conflicts from guest scorecards too", async () => {
@@ -789,17 +872,18 @@ describe("LiveEventDO UDisc export bridge", () => {
     const fin = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" } }));
     expect(fin.status).toBe(200);
     expect(inserts).toHaveLength(1);
-    const scorecard = inserts[0]!.args[8]; // 9th bind column = scorecard JSON
+    const resultInsert = defined(inserts[0], "result_insert_missing");
+    const scorecard = resultInsert.args[8]; // 9th bind column = scorecard JSON
     expect(JSON.parse(scorecard as string)).toEqual([
       { hole: 1, par: 3, strokes: 3 },
       { hole: 2, par: 4, strokes: 5 },
     ]);
-    const weather = inserts[0]!.args[9];
+    const weather = resultInsert.args[9];
     expect(typeof weather).toBe("string");
     const parsedWeather: unknown = typeof weather === "string" ? JSON.parse(weather) : null;
     expect(parsedWeather).toMatchObject({
-      current: { observedAt: "2026-07-01T08:15", rainIn: 0.04, windSpeedMph: 9.2 },
-      history: [{ windSpeedMph: 7.5 }, { windSpeedMph: 9.2 }],
+      current: { observedAt: "2026-07-01T08:15", rainIn: 0.04, windSpeedMph: 9.2, windGustMph: 15.2 },
+      history: [{ windSpeedMph: 7.5, windGustMph: 13.5 }, { windSpeedMph: 9.2, windGustMph: 15.2 }],
     });
   });
 

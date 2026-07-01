@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { aggregatePlayerRating, pointsPerThrow, roundRatingForScore, solveSsa } from "../src/ratings.js";
+import {
+  aggregatePlayerRating,
+  pointsPerThrow,
+  roundRatingForScore,
+  roundRatingForScoreWithWeather,
+  solveSsa,
+  weatherSsaAdjustment,
+} from "../src/ratings.js";
 
 function rated(daysAgo: number, roundRating: number) {
   const date = new Date(Date.UTC(2026, 6, 1 - daysAgo));
@@ -22,6 +29,28 @@ describe("ratings engine", () => {
     expect(solved).toMatchObject({ status: "stable", propagatorCount: 3, droppedCount: 0 });
     expect(solved?.ssa).toBeCloseTo(54, 0);
     expect(solved ? roundRatingForScore(54, solved.ssa, solved.ppt) : null).toBe(1000);
+  });
+
+  it("keeps layout-based ratings unchanged when gusts are calm or missing", () => {
+    expect(weatherSsaAdjustment(null)).toBe(0);
+    expect(weatherSsaAdjustment({ windGustMph: 18 })).toBe(0);
+    expect(roundRatingForScoreWithWeather({
+      score: 57,
+      ssa: 54,
+      ppt: 10,
+      weather: { windGustMph: null },
+    })).toEqual({ roundRating: 970, ssa: 54, ppt: 10, weatherAdjustment: 0 });
+  });
+
+  it("raises the effective layout SSA for sustained high gusts", () => {
+    expect(weatherSsaAdjustment({ windGustMph: 38 })).toBe(0.7);
+    expect(weatherSsaAdjustment({ windGustMph: 90 })).toBe(1.5);
+    expect(roundRatingForScoreWithWeather({
+      score: 57,
+      ssa: 54,
+      ppt: 10,
+      weather: { windGustMph: 38 },
+    })).toEqual({ roundRating: 977, ssa: 54.7, ppt: 10, weatherAdjustment: 0.7 });
   });
 
   it("drops propagators whose round is more than 60 below their pre-round rating", () => {

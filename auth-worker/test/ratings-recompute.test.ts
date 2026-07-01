@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { recomputeRatingRows, type StoredRoundRating } from "../src/ratings-recompute-core.js";
 
-function round(input: Omit<StoredRoundRating, "toPar"> & { readonly toPar?: number | null }): StoredRoundRating {
-  return { ...input, toPar: input.toPar ?? null };
+type RoundInput = Omit<StoredRoundRating, "toPar" | "windGustMph"> & {
+  readonly toPar?: number | null;
+  readonly windGustMph?: number | null;
+};
+
+function round(input: RoundInput): StoredRoundRating {
+  return { ...input, toPar: input.toPar ?? null, windGustMph: input.windGustMph ?? null };
 }
 
 describe("ratings recompute", () => {
@@ -45,6 +50,28 @@ describe("ratings recompute", () => {
       ppt: 10,
       propagatorCount: 3,
       ratingMethod: "layout",
+    });
+  });
+
+  it("weather-adjusts casual ratings that use a stored layout baseline", () => {
+    const result = recomputeRatingRows({
+      rows: [
+        round({ id: 4, memberId: "m4", stream: "casual", eventId: null, casualRoundCode: "ABC123", layoutId: 100, roundDate: "2026-06-02T00:00:00.000Z", total: 57, windGustMph: 38 }),
+      ],
+      officialAnchors: new Map(),
+      layoutBaselines: new Map([[100, { ssa: 54, ppt: 10, propagatorCount: 3 }]]),
+      now: "2026-07-01T00:00:00.000Z",
+    });
+
+    expect(result.rows.at(0)).toMatchObject({
+      memberId: "m4",
+      roundRating: 977,
+      ssa: 54.7,
+      ppt: 10,
+      propagatorCount: 3,
+      ratingMethod: "layout",
+      windGustMph: 38,
+      weatherAdjustment: 0.7,
     });
   });
 

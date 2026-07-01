@@ -4,6 +4,7 @@ import { upsertLayoutRatingBaseline, upsertPlayerRatingFromRounds } from "./rati
 import { listMembers, type AdminMember } from "./roster.js";
 import type { RatingStream } from "./ratings.js";
 import { recomputeRatingRows, type RecomputedLayoutBaseline, type RecomputedRoundRating, type StoredRoundRating } from "./ratings-recompute-core.js";
+import { ratingWeatherFromJson } from "./weather.js";
 
 export type RatingsRecomputeResult = {
   readonly pdgaRefreshed: number;
@@ -22,6 +23,8 @@ type StoredRoundRow = {
   readonly round_date: string;
   readonly total: number;
   readonly to_par: number | null;
+  readonly wind_gust_mph: number | null;
+  readonly weather: string | null;
 };
 
 type LayoutBaselineRow = {
@@ -94,9 +97,11 @@ async function freshPdgaStats(pdga: string, doFetch: typeof fetch): Promise<Pdga
 async function loadRoundRows(db: D1Database): Promise<StoredRoundRating[]> {
   const rows = await db
     .prepare(
-      `SELECT id, member_id, stream, event_id, casual_round_code, layout_id, round_date, total, to_par
-       FROM round_ratings
-       ORDER BY round_date, id`,
+      `SELECT rr.id, rr.member_id, rr.stream, rr.event_id, rr.casual_round_code, rr.layout_id,
+              rr.round_date, rr.total, rr.to_par, rr.wind_gust_mph, r.weather
+       FROM round_ratings rr
+       LEFT JOIN results r ON r.event_id = rr.event_id AND r.member_id = rr.member_id
+       ORDER BY rr.round_date, rr.id`,
     )
     .all<StoredRoundRow>();
   return rows.results.map((row) => ({
@@ -109,6 +114,7 @@ async function loadRoundRows(db: D1Database): Promise<StoredRoundRating[]> {
     roundDate: row.round_date,
     total: row.total,
     toPar: row.to_par,
+    windGustMph: finiteNumber(row.wind_gust_mph) ?? ratingWeatherFromJson(row.weather).windGustMph,
   }));
 }
 
@@ -137,8 +143,13 @@ function memberStreamKeys(rows: readonly RecomputedRoundRating[]): readonly Play
 
 async function updateRoundRating(db: D1Database, row: RecomputedRoundRating): Promise<void> {
   await db
-    .prepare("UPDATE round_ratings SET round_rating = ?, ssa = ?, ppt = ?, propagator_count = ?, rating_method = ? WHERE id = ?")
-    .bind(row.roundRating, row.ssa, row.ppt, row.propagatorCount, row.ratingMethod, row.id)
+    .prepare(
+      `UPDATE round_ratings
+       SET round_rating = ?, ssa = ?, ppt = ?, wind_gust_mph = ?, weather_adjustment = ?,
+           propagator_count = ?, rating_method = ?
+       WHERE id = ?`,
+    )
+    .bind(row.roundRating, row.ssa, row.ppt, row.windGustMph, row.weatherAdjustment, row.propagatorCount, row.ratingMethod, row.id)
     .run();
   if (row.stream === "competition" && row.eventId != null) {
     await db.prepare("UPDATE results SET rating = ? WHERE event_id = ? AND member_id = ?").bind(row.roundRating, row.eventId, row.memberId).run();
@@ -161,6 +172,10 @@ function officialRating(data: string | null | undefined): number | null {
     if (error instanceof SyntaxError) return null;
     throw error;
   }
+}
+
+function finiteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseOpenMeteoCurrent, weatherLocationForCourse } from "../src/weather.js";
+import { parseOpenMeteoCurrent, ratingWeatherFromJson, weatherLocationForCourse } from "../src/weather.js";
 
 describe("live round weather", () => {
   it("parses current rain and wind conditions from Open-Meteo", () => {
@@ -46,5 +46,13 @@ describe("live round weather", () => {
       { name: "Imported Layout" },
       { holes: JSON.stringify([{ tee: { lat: 35, lng: -77 }, target: { lat: 36, lng: -78 } }]) },
     )).toEqual({ lat: 35.5, lng: -77.5, label: "Imported Layout" });
+  });
+
+  it("extracts the peak recorded gust from stored round weather", () => {
+    expect(ratingWeatherFromJson(null)).toEqual({ windGustMph: null });
+    expect(ratingWeatherFromJson(JSON.stringify({
+      current: { windGustMph: 18.4 },
+      history: [{ windGustMph: 19.1 }, { wind_gusts_10m: 25.24 }],
+    }))).toEqual({ windGustMph: 25.2 });
   });
 });

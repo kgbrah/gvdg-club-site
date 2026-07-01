@@ -9,8 +9,9 @@ import {
   type LayoutRatingBaseline,
   type RoundRatingInput,
 } from "./rating-store.js";
-import { roundRatingForScore, solveSsa, type RatingMethod, type RatingStream } from "./ratings.js";
+import { roundRatingForScoreWithWeather, solveSsa, type RatingMethod, type RatingStream, type RatingWeather } from "./ratings.js";
 import type { FinalStanding, PlayerState } from "./scoring.js";
+import { ratingWeatherFromJson } from "./weather.js";
 
 export type FinalizedRoundMeta = {
   readonly eventId: number;
@@ -40,13 +41,18 @@ type RatingContext = LayoutRatingBaseline & {
 type RatedStanding = {
   readonly standing: FinalStanding;
   readonly roundRating: number | null;
+  readonly ratingSsa: number | null;
+  readonly ratingPpt: number | null;
+  readonly windGustMph: number | null;
+  readonly weatherAdjustment: number;
 };
 
 export async function persistFinalizedRound(input: PersistFinalizedRoundInput): Promise<void> {
   const stream: RatingStream = input.meta.casual ? "casual" : "competition";
   if (input.meta.casual && !input.meta.roundCode) return;
   const context = await ratingContext(input);
-  const rated = input.standings.map((standing) => rateStanding(standing, context));
+  const ratingWeather = ratingWeatherFromJson(input.meta.weatherJson);
+  const rated = input.standings.map((standing) => rateStanding(standing, context, ratingWeather));
   if (input.meta.casual) {
     await persistCasualRatings(input, stream, rated, context);
     return;
@@ -161,11 +167,31 @@ function propagators(standings: readonly FinalStanding[], players: readonly Play
   });
 }
 
-function rateStanding(standing: FinalStanding, context: RatingContext | null): RatedStanding {
+function rateStanding(standing: FinalStanding, context: RatingContext | null, ratingWeather: RatingWeather): RatedStanding {
   const completed = standing.place != null;
+  if (!completed || !context) {
+    return {
+      standing,
+      roundRating: null,
+      ratingSsa: null,
+      ratingPpt: null,
+      windGustMph: ratingWeather.windGustMph,
+      weatherAdjustment: 0,
+    };
+  }
+  const rated = roundRatingForScoreWithWeather({
+    score: standing.total,
+    ssa: context.ssa,
+    ppt: context.ppt,
+    weather: context.ratingMethod === "layout" ? ratingWeather : null,
+  });
   return {
     standing,
-    roundRating: completed && context ? roundRatingForScore(standing.total, context.ssa, context.ppt) : null,
+    roundRating: rated.roundRating,
+    ratingSsa: rated.ssa,
+    ratingPpt: rated.ppt,
+    windGustMph: ratingWeather.windGustMph,
+    weatherAdjustment: rated.weatherAdjustment,
   };
 }
 
@@ -188,8 +214,10 @@ function roundRatingRow(
     total: rated.standing.total,
     toPar: rated.standing.toPar,
     roundRating: rated.roundRating,
-    ssa: context?.ssa ?? null,
-    ppt: context?.ppt ?? null,
+    ssa: rated.ratingSsa,
+    ppt: rated.ratingPpt,
+    windGustMph: rated.windGustMph,
+    weatherAdjustment: rated.weatherAdjustment,
     propagatorCount: context?.propagatorCount ?? 0,
     ratingMethod: context?.ratingMethod ?? "unrated",
   }];
