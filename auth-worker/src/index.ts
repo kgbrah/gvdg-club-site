@@ -18,6 +18,7 @@ import { handlePdgaStats } from "./pdga.js";
 import { handleClubFeed } from "./feeds.js";
 import { clubApi } from "./club-api.js";
 import { D1KV } from "./d1kv.js";
+import { runRatingsRecompute } from "./ratings-recompute.js";
 
 export type { Env } from "./env.js";
 export { LiveEventDO } from "./live.js";
@@ -76,4 +77,23 @@ export default {
       return json({ error: "server_error" }, 500, origin);
     }
   },
+
+  async scheduled(controller: ScheduledController, rawEnv: RawEnv, ctx: ExecutionContext): Promise<void> {
+    const env = withKvFallback(rawEnv);
+    ctx.waitUntil(logRatingsRecompute(env, controller.cron));
+  },
 } satisfies ExportedHandler<RawEnv>;
+
+async function logRatingsRecompute(env: Env, cron: string): Promise<void> {
+  try {
+    const result = await runRatingsRecompute(env);
+    console.log(JSON.stringify({ message: "ratings_recompute_complete", cron, ...result }));
+  } catch (error) {
+    console.error(JSON.stringify({ message: "ratings_recompute_failed", cron, error: errorMessage(error) }));
+    throw error;
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.stack ?? error.message : String(error);
+}

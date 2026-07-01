@@ -21,6 +21,9 @@ enabled = true
 head_sampling_rate = 0.01
 persist = true
 
+[triggers]
+crons = ["17 8 * * *"]
+
 [[kv_namespaces]]
 binding = "ROSTER"
 id = "REPLACE_WITH_ROSTER_KV_ID"
@@ -101,6 +104,9 @@ VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct"
 [env.staging]
 name = "gvdg-member-auth-staging"
 
+[env.staging.triggers]
+crons = ["17 8 * * *"]
+
 # The dev API custom domain (auth.gvdgclub.com) is managed in the Cloudflare dashboard. The CI token
 # can deploy Workers but does not need zone route permissions, so routes are intentionally omitted here.
 
@@ -179,6 +185,9 @@ VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct"
 # to the live dev auth domain.
 [env.gvdgclub]
 name = "gvdg-member-auth"
+
+[env.gvdgclub.triggers]
+crons = ["17 8 * * *"]
 
 [env.gvdgclub.observability]
 enabled = true
