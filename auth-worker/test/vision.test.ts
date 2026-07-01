@@ -62,10 +62,10 @@ describe("extractTeeSign", () => {
 
     const result = await extractTeeSign({ GEMINI_API_KEY: "gemini-secret" }, new Uint8Array([1, 2, 3]), "image/jpeg");
 
-    expect(result.source).toBe("gemini:gemini-2.5-flash-lite");
+    expect(result.source).toBe("gemini:gemini-2.5-flash");
     expect(result.hole).toBe(7);
     expect(calls.length).toBe(1);
-    expect(String(calls[0]!.input)).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent");
+    expect(String(calls[0]!.input)).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent");
     expect(new Headers(calls[0]!.init?.headers).get("x-goog-api-key")).toBe("gemini-secret");
     const body = jsonBody<GeminiRequest>(calls[0]!.init);
     expect(body.generationConfig).toMatchObject({ responseMimeType: "application/json", maxOutputTokens: 700, temperature: 0 });
@@ -94,7 +94,7 @@ describe("extractTeeSign", () => {
     expect(result.source).toBe("openrouter:nvidia/nemotron-nano-12b-v2-vl:free");
     expect(result.hole).toBe(8);
     expect(calls.map((call) => String(call.input))).toEqual([
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
       "https://openrouter.ai/api/v1/chat/completions",
     ]);
   });

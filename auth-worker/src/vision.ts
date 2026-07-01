@@ -66,7 +66,7 @@ export interface VisionEnv {
   VISION_DEV_STUB?: string;
   AI?: { run(model: string, opts: Record<string, unknown>): Promise<{ response?: string }> };
 }
-const DEFAULT_GEMINI_VISION = "gemini-2.5-flash-lite";
+const DEFAULT_GEMINI_VISION = "gemini-2.5-flash";
 const DEFAULT_OR_VISION = "nvidia/nemotron-nano-12b-v2-vl:free";
 const DEFAULT_WAI_VISION = "@cf/meta/llama-3.2-11b-vision-instruct";
 

@@ -69,11 +69,13 @@ jobs:
           # wrangler-action runs `wrangler secret put` for each name using the matching env var below.
           secrets: |
             JWT_SECRET
+            GEMINI_API_KEY
             OPENROUTER_API_KEY
             PAYPAL_CLIENT_ID
             PAYPAL_SECRET
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           # PayPal Checkout — optional. Add both to turn payments on; omit to keep the manual paid flag.
           PAYPAL_CLIENT_ID: ${{ secrets.PAYPAL_CLIENT_ID }}
