@@ -87,7 +87,13 @@ export async function handleCasualRounds(
     return proxy(stub, "/remove", { method: "POST", headers: hdr, body: JSON.stringify({ index: b.index, name: b.name }) }, origin);
   }
   if (method === "POST" && sub === "finalize") {
-    return proxy(stub, "/finalize", { method: "POST", headers: hdr, body: "{}" }, origin);
+    // Any member on the card may finalize when the whole card agrees. The force override (finalize past a
+    // not-fully-agreed board) is admin-only, so only look up admin status when force is actually requested.
+    const b = (await readJson(request)) ?? {};
+    const force = b.force === true || new URL(request.url).searchParams.get("force") === "1";
+    let admin = false;
+    if (force) { const m = await getMember(env.ROSTER, claims.sub); admin = m?.isAdmin === true; }
+    return proxy(stub, "/finalize", { method: "POST", headers: { ...hdr, "X-Auth-Admin": String(admin) }, body: JSON.stringify({ force }) }, origin);
   }
   if (sub === "live" && method === "GET" && seg[3] === "mine") {
     const r = await stub.fetch("https://do/mine", { headers: hdr });
