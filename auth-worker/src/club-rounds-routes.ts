@@ -49,7 +49,7 @@ export async function handleCasualRounds(
     const code = genCode();
     const r = await roundStub(env, code).fetch("https://do/start", {
       method: "POST",
-      body: JSON.stringify({ casual: true, courseName: course?.name ?? null, layoutName: layout?.name ?? null, udiscCourseId: course?.udisc_course_id ?? null, holes, players: [{ memberId: claims.sub, name: member?.name ?? "Player" }], startedAt: new Date().toISOString() }),
+      body: JSON.stringify({ casual: true, roundCode: code, courseId: layout?.course_id ?? null, layoutId, createdBy: claims.sub, courseName: course?.name ?? null, layoutName: layout?.name ?? null, udiscCourseId: course?.udisc_course_id ?? null, holes, players: [{ memberId: claims.sub, name: member?.name ?? "Player" }], startedAt: new Date().toISOString() }),
     });
     if (r.status !== 200) return json({ error: "start_failed" }, 502, origin);
     return json({ code }, 201, origin);
@@ -63,6 +63,17 @@ export async function handleCasualRounds(
   // Public reads: snapshot + WebSocket (memberIds redacted, identified by index).
   if (method === "GET" && sub === "live" && !seg[3]) return proxy(stub, "/snapshot", undefined, origin);
   if (sub === "live" && seg[3] === "ws") return stub.fetch(request);
+
+  // Public read: durable finalized results (survives the DO's eviction; casual finalize persists to D1).
+  // Redact internal ids (member_id / created_by) the same way the live snapshot does — names are enough for
+  // a public leaderboard, and we never expose member ids to an unauthenticated reader who has the code.
+  if (method === "GET" && sub === "results") {
+    const data = await db.listCasualRoundResults(env.DB, code);
+    if (!data) return json({ error: "not_found" }, 404, origin);
+    const { created_by: _cb, ...round } = data.round as Record<string, unknown>;
+    const results = (data.results as Record<string, unknown>[]).map(({ member_id: _m, ...rest }) => rest);
+    return json({ round, results }, 200, origin);
+  }
 
   // Everything else needs a member (the DO binds the write to this identity, never the body).
   const claims = await requireAuth(request, env);
