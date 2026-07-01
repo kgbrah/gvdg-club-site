@@ -831,10 +831,11 @@
         function aeToggleQuickLayout() {
             $('aeQuickLayout').style.display = $('aeLayout').value === '__new__' ? '' : 'none';
         }
-        async function aeLoadLayouts() {
+        async function aeLoadLayouts(selectedLayoutId) {
             aeResetLayoutSelect();
             const courseId = $('aeCourse').value;
             if (!courseId) return;
+            const selected = selectedLayoutId == null ? '' : String(selectedLayoutId);
             try {
                 const r = await api('/courses/' + courseId + '/layouts');
                 if (r.ok) {
@@ -843,6 +844,7 @@
                         const o = document.createElement('option');
                         o.value = l.id;
                         o.textContent = l.name + (l.total_par != null ? ' (par ' + l.total_par + ')' : '');
+                        if (String(l.id) === selected) o.selected = true;
                         $('aeLayout').appendChild(o);
                     });
                 }
@@ -922,7 +924,7 @@
             $('aeSubmitBtn').textContent = 'Create event';
             $('aeCancelEdit').style.display = 'none';
         }
-        function aeEditEvent(ev) {
+        async function aeEditEvent(ev) {
             aeEditingEvent = ev;
             $('aeType').value = ev.type || 'tournament';
             $('aeName').value = ev.name || '';
@@ -936,6 +938,7 @@
             $('aeSubmitBtn').textContent = 'Update event';
             $('aeCancelEdit').style.display = '';
             adminSwitch('create');
+            await aeLoadLayouts(ev.layout_id);
             $('aeName').focus();
             $('aeName').scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
