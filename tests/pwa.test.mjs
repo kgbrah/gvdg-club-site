@@ -69,6 +69,12 @@ test('live scoring surfaces load the shared weather display formatter', () => {
   }
 });
 
+test('admin live scoring layout selector uses themed picker styles', () => {
+  const html = readFileSync('admin.html', 'utf8');
+  assert.match(html, /<select id="scLayout"/);
+  assert.match(html, /#alCourse,\s*#scEvent,\s*#scLayout,\s*#rgEvent\s*\{/);
+});
+
 test('shared service worker caches app install assets and member fallback', () => {
   const sw = readFileSync('sw.js', 'utf8');
   assert.match(sw, /const CACHE = "gvdg-club-v10"/);
