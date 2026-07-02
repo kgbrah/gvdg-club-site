@@ -27,6 +27,24 @@ type MockState = {
   paymentSessions: Row[];
 };
 
+type MockResult = {
+  results: Row[];
+  success: boolean;
+  meta?: {
+    changes?: number;
+    rows_written?: number;
+  };
+};
+
+type MockStatement = {
+  readonly sql: string;
+  readonly args: () => unknown[];
+  bind(...args: unknown[]): MockStatement;
+  all(): Promise<MockResult>;
+  first(): Promise<Row | null>;
+  run(): Promise<MockResult>;
+};
+
 function kv(initial: Record<string, string> = {}) {
   const m = new Map(Object.entries(initial));
   return {
@@ -63,18 +81,58 @@ function numberArg(value: unknown): number {
   return typeof value === "number" ? value : Number(value || 0);
 }
 
+function lowerArg(value: unknown): string {
+  return String(value ?? "").toLowerCase();
+}
+
+function textValue(row: Row, key: string): string {
+  return String(row[key] ?? "").toLowerCase();
+}
+
+function productRows(sql: string, args: unknown[], state: MockState): Row[] {
+  let rows = [...state.products];
+  let argIndex = 0;
+  if (/active = \?/i.test(sql)) {
+    const active = numberArg(args[argIndex]);
+    argIndex += 1;
+    rows = rows.filter((p) => numberArg(p.active) === active);
+  } else if (/active = 1/i.test(sql)) {
+    rows = rows.filter((p) => numberArg(p.active) === 1);
+  }
+  if (/LOWER\(brand\) = \?/i.test(sql)) {
+    const brand = lowerArg(args[argIndex]);
+    argIndex += 1;
+    rows = rows.filter((p) => textValue(p, "brand") === brand);
+  }
+  if (/ORDER BY name COLLATE NOCASE/i.test(sql)) return rows.sort((a, b) => textValue(a, "name").localeCompare(textValue(b, "name")));
+  if (/ORDER BY stock_qty ASC/i.test(sql)) return rows.sort((a, b) => numberArg(a.stock_qty) - numberArg(b.stock_qty));
+  if (/ORDER BY stock_qty DESC/i.test(sql)) return rows.sort((a, b) => numberArg(b.stock_qty) - numberArg(a.stock_qty));
+  return rows.sort((a, b) => numberArg(b.id) - numberArg(a.id));
+}
+
+function orderRows(sql: string, args: unknown[], state: MockState): Row[] {
+  let rows = [...state.orders];
+  if (/WHERE status = \?/i.test(sql)) rows = rows.filter((o) => o.status === args[0]);
+  return rows.sort((a, b) => numberArg(b.id) - numberArg(a.id));
+}
+
 function allRows(sql: string, args: unknown[], state: MockState): Row[] {
   if (/FROM store_products WHERE id IN/i.test(sql)) {
     const ids = new Set(args.map((v) => Number(v)));
     return state.products.filter((p) => ids.has(numberArg(p.id)));
   }
-  if (/FROM store_products/i.test(sql)) return state.products;
+  if (/FROM store_products/i.test(sql)) return productRows(sql, args, state);
+  if (/FROM store_order_items WHERE order_id IN/i.test(sql)) {
+    const ids = new Set(args.map((v) => Number(v)));
+    return state.orderItems.filter((item) => ids.has(numberArg(item.order_id)));
+  }
+  if (/FROM store_orders WHERE member_id/i.test(sql)) return state.orders.filter((o) => o.member_id === args[0]);
+  if (/FROM store_orders/i.test(sql)) return orderRows(sql, args, state);
   if (/FROM wallet_transactions WHERE event_id/i.test(sql)) {
     return state.transactions.filter((t) => numberArg(t.event_id) === numberArg(args[0]) && t.source === "event_payout");
   }
   if (/FROM wallet_transactions WHERE member_id/i.test(sql)) return state.transactions.filter((t) => t.member_id === args[0]);
   if (/FROM wallet_transactions ORDER BY/i.test(sql)) return state.transactions;
-  if (/FROM store_orders WHERE member_id/i.test(sql)) return state.orders.filter((o) => o.member_id === args[0]);
   if (/FROM event_players WHERE event_id/i.test(sql)) return [];
   return [];
 }
@@ -85,6 +143,9 @@ function firstRow(sql: string, args: unknown[], state: MockState): Row | null {
   if (/SELECT \* FROM store_payment_sessions WHERE paypal_order_id/i.test(sql)) return state.paymentSessions.find((session) => session.paypal_order_id === args[0]) ?? null;
   if (/SELECT \* FROM events WHERE id = \?/i.test(sql)) {
     return state.eventExists ? { id: numberArg(args[0]), name: "League Night", date: "2026-06-01", status: "scheduled" } : null;
+  }
+  if (/SELECT count\(\*\) AS n FROM store_order_items WHERE product_id/i.test(sql)) {
+    return { n: state.orderItems.filter((item) => numberArg(item.product_id) === numberArg(args[0])).length };
   }
   if (/INSERT INTO store_products/i.test(sql)) return insertProduct(args, state);
   if (/INSERT INTO wallet_transactions/i.test(sql)) return insertTransaction(args, state);
@@ -97,6 +158,30 @@ function firstRow(sql: string, args: unknown[], state: MockState): Row | null {
     const row = state.products.find((p) => numberArg(p.id) === numberArg(args[0]));
     if (row) row.active = 0;
     return row ?? null;
+  }
+  if (/UPDATE store_products SET category=COALESCE/i.test(sql)) {
+    const row = state.products.find((p) => numberArg(p.id) === numberArg(args[11]));
+    if (!row) return null;
+    const fields = ["category", "name", "brand", "product_type", "color", "weight_g", "price_cents", "stock_qty", "image_url", "description", "active"] as const;
+    fields.forEach((field, index) => {
+      if (args[index] !== null) row[field] = args[index];
+    });
+    return row;
+  }
+  if (/UPDATE store_orders SET/i.test(sql)) {
+    const id = numberArg(args[args.length - 1]);
+    const row = state.orders.find((o) => numberArg(o.id) === id);
+    if (!row) return null;
+    if (/status = \?/i.test(sql)) row.status = stringArg(args[0]);
+    return row;
+  }
+  if (/DELETE FROM store_orders WHERE id = \?/i.test(sql)) {
+    const id = numberArg(args[0]);
+    const row = state.orders.find((o) => numberArg(o.id) === id);
+    if (!row) return null;
+    state.orders = state.orders.filter((o) => numberArg(o.id) !== id);
+    state.orderItems = state.orderItems.filter((item) => numberArg(item.order_id) !== id);
+    return row;
   }
   return null;
 }
@@ -114,7 +199,7 @@ function insertProduct(args: unknown[], state: MockState): Row {
     stock_qty: numberArg(args[7]),
     image_url: stringArg(args[8]),
     description: stringArg(args[9]),
-    active: numberArg(args[10]) || 1,
+    active: args[10] == null ? 1 : numberArg(args[10]),
     created_by: stringArg(args[11]),
   });
   state.products.push(row);
@@ -160,7 +245,7 @@ function insertOrderItem(args: unknown[], state: MockState): Row {
   const row: Row = {
     id: state.nextOrderItemId++,
     order_id: numberArg(args[0]),
-    product_id: numberArg(args[1]),
+    product_id: args[1] == null ? null : numberArg(args[1]),
     name_snapshot: stringArg(args[2]),
     price_cents: numberArg(args[3]),
     quantity: numberArg(args[4]),
@@ -193,12 +278,86 @@ function capturePaymentSession(args: unknown[], state: MockState): Row | null {
   return row ?? null;
 }
 
-function runSql(sql: string, args: unknown[], state: MockState) {
-  if (/UPDATE store_products SET stock_qty = MAX\(0, stock_qty - \?/i.test(sql)) {
-    const row = state.products.find((p) => numberArg(p.id) === numberArg(args[1]));
-    if (row) row.stock_qty = Math.max(0, numberArg(row.stock_qty) - numberArg(args[0]));
+function runSql(sql: string, args: unknown[], state: MockState): MockResult {
+  if (/UPDATE store_products SET stock_qty = stock_qty - \?/i.test(sql)) {
+    const row = state.products.find((p) => (
+      numberArg(p.id) === numberArg(args[1])
+      && numberArg(p.active) === 1
+      && numberArg(p.stock_qty) >= numberArg(args[2] ?? args[0])
+    ));
+    if (row) row.stock_qty = numberArg(row.stock_qty) - numberArg(args[0]);
+    const changes = row ? 1 : 0;
+    return { results: [], success: true, meta: { changes, rows_written: changes } };
+  }
+  if (/DELETE FROM store_products WHERE id = \?/i.test(sql)) {
+    const id = numberArg(args[0]);
+    state.products = state.products.filter((p) => numberArg(p.id) !== id);
+    state.orderItems = state.orderItems.map((item) => (numberArg(item.product_id) === id ? { ...item, product_id: null } : item));
   }
   return { results: [], success: true };
+}
+
+function cloneRows(rows: Row[]): Row[] {
+  return rows.map((row) => ({ ...row }));
+}
+
+function snapshotState(state: MockState): MockState {
+  return {
+    balanceCents: state.balanceCents,
+    eventExists: state.eventExists,
+    nextProductId: state.nextProductId,
+    nextOrderId: state.nextOrderId,
+    nextOrderItemId: state.nextOrderItemId,
+    nextTransactionId: state.nextTransactionId,
+    products: cloneRows(state.products),
+    orders: cloneRows(state.orders),
+    orderItems: cloneRows(state.orderItems),
+    transactions: cloneRows(state.transactions),
+    paymentSessions: cloneRows(state.paymentSessions),
+  };
+}
+
+function restoreState(state: MockState, snapshot: MockState): void {
+  state.balanceCents = snapshot.balanceCents;
+  state.eventExists = snapshot.eventExists;
+  state.nextProductId = snapshot.nextProductId;
+  state.nextOrderId = snapshot.nextOrderId;
+  state.nextOrderItemId = snapshot.nextOrderItemId;
+  state.nextTransactionId = snapshot.nextTransactionId;
+  state.products = cloneRows(snapshot.products);
+  state.orders = cloneRows(snapshot.orders);
+  state.orderItems = cloneRows(snapshot.orderItems);
+  state.transactions = cloneRows(snapshot.transactions);
+  state.paymentSessions = cloneRows(snapshot.paymentSessions);
+}
+
+async function runBatchStatement(stmt: MockStatement, state: MockState): Promise<MockResult> {
+  const sql = stmt.sql;
+  const args = stmt.args();
+  if (/INSERT INTO store_order_items .*SELECT id FROM store_products/i.test(sql)) {
+    const product = state.products.find((p) => (
+      numberArg(p.id) === numberArg(args[1])
+      && numberArg(p.active) === 1
+      && numberArg(p.stock_qty) >= numberArg(args[2])
+    ));
+    if (!product) throw new Error("D1_ERROR: NOT NULL constraint failed: store_order_items.name_snapshot");
+    const row = insertOrderItem([args[0], product.id, args[3], args[6], args[7]], state);
+    return { results: [row], success: true, meta: { changes: 1, rows_written: 1 } };
+  }
+  return stmt.run();
+}
+
+async function runBatch(statements: readonly MockStatement[], state: MockState): Promise<MockResult[]> {
+  const snapshot = snapshotState(state);
+  const results: MockResult[] = [];
+  try {
+    for (const statement of statements) results.push(await runBatchStatement(statement, state));
+    return results;
+  } catch (error) {
+    restoreState(state, snapshot);
+    if (error instanceof Error) throw error;
+    throw new Error("batch_failed");
+  }
 }
 
 export function makeDb(overrides: Partial<Pick<MockState, "balanceCents" | "eventExists" | "products">> = {}) {
@@ -218,7 +377,9 @@ export function makeDb(overrides: Partial<Pick<MockState, "balanceCents" | "even
   const db = {
     prepare(sql: string) {
       let bound: unknown[] = [];
-      const stmt = {
+      const stmt: MockStatement = {
+        sql,
+        args: () => bound,
         bind(...args: unknown[]) {
           bound = args;
           return stmt;
@@ -229,6 +390,7 @@ export function makeDb(overrides: Partial<Pick<MockState, "balanceCents" | "even
       };
       return stmt;
     },
+    batch: async (statements: MockStatement[]) => runBatch(statements, state),
   };
   return { db: db as unknown as Env["DB"], state };
 }

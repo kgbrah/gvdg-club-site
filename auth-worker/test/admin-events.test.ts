@@ -1,4 +1,16 @@
 import { describe, expect, it } from "vitest";
+import {
+  createCasualResult,
+  createCasualRound,
+  createResult,
+  getEventConfig,
+  listEvents,
+  listCasualRoundResults,
+  listResults,
+  upsertEventConfig,
+  type D1Like,
+  type D1ResultLike,
+} from "../src/db.js";
 import worker from "../src/index.js";
 import { signSession } from "../src/jwt.js";
 
@@ -18,7 +30,18 @@ function kv(initial: Record<string, string> = {}) {
   };
 }
 
-function db(state: { layoutBinds?: unknown[]; eventBinds?: unknown[]; playerBinds?: unknown[]; removedPlayer?: number } = {}) {
+function db(
+  state: {
+    layoutBinds?: unknown[];
+    eventBinds?: unknown[];
+    playerBinds?: unknown[];
+    eventConfigBinds?: unknown[];
+    removedPlayer?: number;
+    openRegistrationSql?: string;
+    existingEvent?: Record<string, unknown>;
+    existingEventConfig?: Record<string, unknown> | null;
+  } = {},
+) {
   return {
     prepare: (sql: string) => {
       let binds: unknown[] = [];
@@ -28,11 +51,16 @@ function db(state: { layoutBinds?: unknown[]; eventBinds?: unknown[]; playerBind
           return this;
         },
         all: async () => {
+          if (/FROM event_players/i.test(sql)) {
+            return { results: [], success: true };
+          }
           if (/FROM events e JOIN event_config c/i.test(sql)) {
+            state.openRegistrationSql = sql;
             return {
               results: [{
                 id: 5,
                 name: "Summer Flex",
+                status: "live",
                 date: "2026-07-12",
                 type: "tournament",
                 event_format: "stroke",
@@ -53,6 +81,12 @@ function db(state: { layoutBinds?: unknown[]; eventBinds?: unknown[]; playerBind
           return { results: [], success: true };
         },
         first: async () => {
+          if (/SELECT \* FROM events WHERE id = \?/i.test(sql)) {
+            return state.existingEvent ?? { id: binds[0], format: "stroke" };
+          }
+          if (/SELECT \* FROM event_config WHERE event_id = \?/i.test(sql)) {
+            return state.existingEventConfig ?? null;
+          }
           if (/INSERT INTO course_layouts/i.test(sql)) {
             state.layoutBinds = binds;
             return { id: 44, course_id: binds[0], name: binds[1], holes: binds[2], total_par: binds[3] };
@@ -65,6 +99,10 @@ function db(state: { layoutBinds?: unknown[]; eventBinds?: unknown[]; playerBind
             state.playerBinds = binds;
             return { id: 88, event_id: binds[0], member_id: binds[1], name: binds[2], pdga_no: binds[3], division: binds[4], team: binds[5] };
           }
+          if (/INSERT INTO event_config/i.test(sql)) {
+            state.eventConfigBinds = binds;
+            return { event_id: binds[0], play_format: binds[6], live_scoring_config: binds[8] };
+          }
           return null;
         },
         run: async () => {
@@ -76,15 +114,102 @@ function db(state: { layoutBinds?: unknown[]; eventBinds?: unknown[]; playerBind
   };
 }
 
-function env(state: Parameters<typeof db>[0] = {}) {
-  return {
+function env(state: Parameters<typeof db>[0] = {}): Parameters<typeof worker.fetch>[1] {
+  return Object.assign(Object.create(null), {
     ROSTER: kv(MEMBERS),
     RATELIMIT: kv(),
     DB: db(state),
     JWT_SECRET: SECRET,
     ALLOWED_ORIGINS: ORIGIN,
     LIVE: undefined,
-  } as unknown as Parameters<typeof worker.fetch>[1];
+  });
+}
+
+type MetadataState = {
+  eventConfig: Record<string, unknown>;
+  results: Record<string, unknown>[];
+  casualRound: Record<string, unknown> | null;
+  casualResults: Record<string, unknown>[];
+  listEventsSql?: string;
+  listEventsBinds?: unknown[];
+};
+
+function metadataDb(state: MetadataState): D1Like {
+  return {
+    prepare: (sql: string) => {
+      let binds: unknown[] = [];
+      return {
+        bind(...values: unknown[]) {
+          binds = values;
+          return this;
+        },
+        all: async <T = Record<string, unknown>>(): Promise<D1ResultLike<T>> => {
+          if (/FROM events e/i.test(sql)) {
+            state.listEventsSql = sql;
+            state.listEventsBinds = binds;
+            return {
+              results: [
+                {
+                  id: 12,
+                  name: "Saved Doubles",
+                  status: "scheduled",
+                  format: "stroke",
+                  date: "2026-08-01",
+                  play_format: "doubles",
+                  live_scoring_config: JSON.stringify({ groupFormat: "doubles", scoringStyle: "matchplay" }),
+                },
+              ] as T[],
+              success: true,
+            };
+          }
+          if (/FROM events\b/i.test(sql)) {
+            state.listEventsSql = sql;
+            state.listEventsBinds = binds;
+            return {
+              results: [
+                {
+                  id: 12,
+                  name: "Saved Doubles",
+                  status: "scheduled",
+                  format: "stroke",
+                  date: "2026-08-01",
+                },
+              ] as T[],
+              success: true,
+            };
+          }
+          if (/FROM results/i.test(sql)) return { results: state.results as T[], success: true };
+          if (/FROM casual_results/i.test(sql)) return { results: state.casualResults as T[], success: true };
+          return { results: [], success: true };
+        },
+        first: async <T = Record<string, unknown>>(): Promise<T | null> => {
+          if (/SELECT \* FROM event_config/i.test(sql)) return state.eventConfig as T;
+          if (/INSERT INTO event_config/i.test(sql)) {
+            state.eventConfig.live_scoring_config = binds[8] ?? null;
+            return state.eventConfig as T;
+          }
+          if (/INSERT INTO results/i.test(sql)) {
+            const row = { event_id: binds[0], member_id: binds[1], name: binds[2], scoring_group: binds[9], match_result: binds[10] };
+            state.results.push(row);
+            return row as T;
+          }
+          if (/INSERT INTO casual_rounds/i.test(sql)) {
+            const row = { id: 31, round_code: binds[0], scoring_config: binds[8] };
+            state.casualRound = row;
+            return row as T;
+          }
+          if (/SELECT \* FROM casual_rounds/i.test(sql)) return state.casualRound as T | null;
+          if (/INSERT INTO casual_results/i.test(sql)) {
+            const row = { casual_round_id: binds[0], member_id: binds[1], name: binds[2], scoring_group: binds[9], match_result: binds[10] };
+            state.casualResults.push(row);
+            return row as T;
+          }
+          return null;
+        },
+        run: async () => ({ results: [], success: true }),
+      };
+    },
+  };
 }
 
 async function token(sub: string) {
@@ -134,9 +259,145 @@ describe("admin event management", () => {
   });
 
   it("includes course and layout details for open registration events", async () => {
-    const res = await call("/registration/open", "GET");
+    const state: Parameters<typeof db>[0] = {};
+    const res = await call("/registration/open", "GET", undefined, undefined, state);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { events: { course_name?: string; layout_name?: string; total_par?: number }[] };
-    expect(body.events[0]).toMatchObject({ course_name: "West Meadowbrook", layout_name: "Gold", total_par: 54 });
+    const body = (await res.json()) as { events: { course_name?: string; layout_name?: string; status?: string; total_par?: number }[] };
+    expect(body.events[0]).toMatchObject({ course_name: "West Meadowbrook", layout_name: "Gold", status: "live", total_par: 54 });
+    expect(state.openRegistrationSql).toMatch(/e\.status IN \('scheduled','live'\)/);
+    expect(state.openRegistrationSql).toMatch(/ORDER BY CASE WHEN e\.status = 'live' THEN 0 ELSE 1 END, e\.date, e\.id/);
+  });
+
+  it("persists normalized live scoring config when admin saves event config", async () => {
+    const state: Parameters<typeof db>[0] = {};
+    const res = await call("/admin/events/12/config", "PUT", {
+      registration_open: true,
+      play_format: "doubles",
+      liveScoringConfig: { groupFormat: "doubles", scoringStyle: "matchplay" },
+    }, await token("m_admin"), state);
+
+    expect(res.status).toBe(200);
+    expect(state.eventConfigBinds?.[6]).toBe("doubles");
+    expect(JSON.parse(String(state.eventConfigBinds?.[8]))).toEqual({ groupFormat: "doubles", scoringStyle: "matchplay" });
+  });
+
+  it("preserves legacy matchplay when admin saves config without explicit live scoring config", async () => {
+    const state: Parameters<typeof db>[0] = {
+      existingEvent: { id: 12, format: "matchplay" },
+      existingEventConfig: { event_id: 12, play_format: "singles", live_scoring_config: null },
+    };
+    const res = await call("/admin/events/12/config", "PUT", {
+      registration_open: true,
+      play_format: "singles",
+    }, await token("m_admin"), state);
+
+    expect(res.status).toBe(200);
+    expect(JSON.parse(String(state.eventConfigBinds?.[8]))).toEqual({ groupFormat: "singles", scoringStyle: "matchplay" });
+  });
+
+  it("rejects unsupported live scoring config values before writing event config", async () => {
+    const state: Parameters<typeof db>[0] = {};
+    const adminJwt = await token("m_admin");
+    const badGroup = await call("/admin/events/12/config", "PUT", {
+      play_format: "doubles",
+      liveScoringConfig: { groupFormat: "team", scoringStyle: "stroke" },
+    }, adminJwt, state);
+    const badStyle = await call("/admin/events/12/config", "PUT", {
+      play_format: "singles",
+      liveScoringConfig: { groupFormat: "singles", scoringStyle: "custom" },
+    }, adminJwt, state);
+    const badPlayFormat = await call("/admin/events/12/config", "PUT", {
+      play_format: "teams",
+    }, adminJwt, state);
+
+    expect(badGroup.status).toBe(400);
+    expect(badStyle.status).toBe(400);
+    expect(badPlayFormat.status).toBe(400);
+    expect(state.eventConfigBinds).toBeUndefined();
+  });
+});
+
+describe("live scoring metadata DB helpers", () => {
+  it("includes saved live scoring config and play format in public event rows", async () => {
+    const state: MetadataState = {
+      eventConfig: { event_id: 12, play_format: "doubles", live_scoring_config: null },
+      results: [],
+      casualRound: null,
+      casualResults: [],
+    };
+
+    const events = await listEvents(metadataDb(state), { status: "scheduled", type: "tournament", limit: 10, offset: 5 });
+
+    expect(events).toEqual([
+      {
+        id: 12,
+        name: "Saved Doubles",
+        status: "scheduled",
+        format: "stroke",
+        date: "2026-08-01",
+        play_format: "doubles",
+        live_scoring_config: JSON.stringify({ groupFormat: "doubles", scoringStyle: "matchplay" }),
+      },
+    ]);
+    expect(state.listEventsSql).toMatch(/LEFT JOIN event_config/i);
+    expect(state.listEventsSql).toMatch(/ORDER BY e\.date DESC, e\.id DESC/i);
+    expect(state.listEventsBinds).toEqual(["scheduled", "tournament", 10, 5]);
+  });
+
+  it("reads legacy event config rows when live scoring config is null", async () => {
+    const state: MetadataState = {
+      eventConfig: { event_id: 12, play_format: "singles", live_scoring_config: null },
+      results: [],
+      casualRound: null,
+      casualResults: [],
+    };
+
+    const config = await getEventConfig(metadataDb(state), 12);
+
+    expect(config).toMatchObject({ event_id: 12, play_format: "singles", live_scoring_config: null });
+  });
+
+  it("round-trips live scoring metadata through event, result, and casual helpers", async () => {
+    const state: MetadataState = {
+      eventConfig: { event_id: 12, play_format: "doubles", live_scoring_config: null },
+      results: [],
+      casualRound: null,
+      casualResults: [],
+    };
+    const database = metadataDb(state);
+    const scoringConfig = JSON.stringify({ groupFormat: "doubles", scoringStyle: "matchplay" });
+    const scoringGroup = JSON.stringify({ targetId: "pair:a", label: "Pair A", members: ["m_jane", "m_sam"] });
+    const matchResult = JSON.stringify({ status: "won", holesUp: 2, holesRemaining: 1 });
+
+    await upsertEventConfig(database, 12, {
+      registration_open: 1,
+      play_format: "doubles",
+      live_scoring_config: scoringConfig,
+    });
+    await createResult(database, {
+      event_id: 12,
+      member_id: "m_jane",
+      name: "Jane",
+      scoring_group: scoringGroup,
+      match_result: matchResult,
+    });
+    const round = await createCasualRound(database, {
+      round_code: "ABCD",
+      scoring_config: scoringConfig,
+    });
+    await createCasualResult(database, {
+      casual_round_id: Number(round?.id),
+      member_id: "m_jane",
+      name: "Jane",
+      scoring_group: scoringGroup,
+      match_result: matchResult,
+    });
+
+    await expect(getEventConfig(database, 12)).resolves.toMatchObject({ live_scoring_config: scoringConfig });
+    await expect(listResults(database, 12)).resolves.toMatchObject([{ scoring_group: scoringGroup, match_result: matchResult }]);
+    await expect(listCasualRoundResults(database, "ABCD")).resolves.toMatchObject({
+      round: { scoring_config: scoringConfig },
+      results: [{ scoring_group: scoringGroup, match_result: matchResult }],
+    });
   });
 });

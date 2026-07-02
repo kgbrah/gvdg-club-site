@@ -5,6 +5,7 @@ import { json, readJson } from "./http.js";
 import { asInt, asStr, inSet } from "./input.js";
 
 const PRODUCT_CATEGORIES = ["disc", "accessory"] as const;
+const PRODUCT_ADMIN_STATUSES = ["active", "inactive", "all"] as const;
 
 function asSignedInt(v: unknown): number | null {
   if (typeof v === "number" && Number.isInteger(v) && v !== 0) return v;
@@ -98,6 +99,17 @@ function cleanProductPatch(body: Record<string, unknown>): shopDb.StoreProductPa
   return patch;
 }
 
+function adminProductListOptions(request: Request): shopDb.StoreProductListOptions {
+  const params = new URL(request.url).searchParams;
+  const status = params.get("status") ?? "active";
+  const active = inSet(PRODUCT_ADMIN_STATUSES, status) && status !== "all" ? status === "active" : undefined;
+  return {
+    sort: params.get("sort") ?? "newest",
+    includeInactive: status === "all",
+    ...(active !== undefined ? { active } : {}),
+  };
+}
+
 export async function handleAdminShop(
   request: Request,
   env: Env,
@@ -108,7 +120,7 @@ export async function handleAdminShop(
 ): Promise<Response | null> {
   if (seg[1] === "shop" && seg[2] === "products") {
     const id = seg[3] != null ? asInt(seg[3]) : null;
-    if (method === "GET" && seg.length === 3) return json({ products: await shopDb.listStoreProducts(env.DB, { includeInactive: true }) }, 200, origin);
+    if (method === "GET" && seg.length === 3) return json({ products: await shopDb.listStoreProducts(env.DB, adminProductListOptions(request)) }, 200, origin);
     if (method === "POST" && seg.length === 3) {
       const body = await readJson(request, MAX_IMAGE_DATA_URL + 8_000); // room for an inline product photo
       const input = body && cleanProductInput(body, adminId);
@@ -123,8 +135,14 @@ export async function handleAdminShop(
       return row ? json({ product: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
     }
     if (method === "DELETE" && id != null) {
-      const row = await shopDb.deactivateStoreProduct(env.DB, id);
-      return row ? json({ product: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
+      const result = await shopDb.deleteStoreProduct(env.DB, id);
+      if (result.kind === "not_found") return json({ error: "not_found" }, 404, origin);
+      return json({
+        product: result.product,
+        deleted: true,
+        archived: false,
+        reason: null,
+      }, 200, origin);
     }
   }
 
@@ -186,6 +204,10 @@ export async function handleAdminShop(
       const updated = await shopDb.updateStoreOrderFulfillment(env.DB, id, patch);
       if (!updated) return json({ error: "not_found" }, 404, origin);
       return json({ order: updated }, 200, origin);
+    }
+    if (method === "DELETE" && id != null) {
+      const deleted = await shopDb.deleteStoreOrder(env.DB, id);
+      return deleted ? json({ order: deleted, deleted: true }, 200, origin) : json({ error: "not_found" }, 404, origin);
     }
   }
 

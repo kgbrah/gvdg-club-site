@@ -6,6 +6,7 @@ import {
   handleLogin,
   handleMe,
   handleMyLiveRounds,
+  handleMyRatings,
   handleMyRegistrations,
   handleMyResults,
   handleProfile,
@@ -51,6 +52,7 @@ export default {
       if (pathname === "/login" && method === "POST") return await handleLogin(request, env, origin);
       if (pathname === "/me" && method === "GET") return await handleMe(request, env, origin);
       if (pathname === "/my-results" && method === "GET") return await handleMyResults(request, env, origin);
+      if (pathname === "/my-ratings" && method === "GET") return await handleMyRatings(request, env, origin);
       if (pathname === "/my-live-rounds" && method === "GET") return await handleMyLiveRounds(request, env, origin);
       if (pathname === "/board" || pathname.startsWith("/board/")) return await handleBoard(request, env, origin);
       if (pathname === "/my-registrations" && method === "GET") return await handleMyRegistrations(request, env, origin);

@@ -64,7 +64,7 @@ test('live scoring links back to the members dashboard', () => {
 
 test('shared service worker caches app install assets and member fallback', () => {
   const sw = readFileSync('sw.js', 'utf8');
-  assert.match(sw, /const CACHE = "gvdg-club-v5"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v9"/);
   assert.match(sw, /const OFFLINE_PAGE = "gvdg-members\.html"/);
   assert.match(sw, /const STATIC_DESTINATIONS = new Set/);
   assert.match(sw, /if \(!staticAsset\(req, url\)\) return/);
@@ -79,4 +79,10 @@ test('shared service worker caches app install assets and member fallback', () =
     assert.ok(sw.includes(`"${asset}"`), asset);
   }
   assert.match(readFileSync('pwa.js', 'utf8'), /serviceWorker\.register\('sw\.js', \{ scope: '\.\/' \}\)/);
+});
+
+test('admin order badge clears stale counts when refresh fails closed', () => {
+  const html = readFileSync('admin.html', 'utf8');
+  assert.match(html, /function setOrdersBadge\(n\) \{[\s\S]*b\.textContent = '';[\s\S]*b\.hidden = true;/);
+  assert.match(html, /async function refreshOrdersBadge\(\) \{[\s\S]*setOrdersBadge\(0\);[\s\S]*catch \(e\) \{[\s\S]*setOrdersBadge\(0\);/);
 });

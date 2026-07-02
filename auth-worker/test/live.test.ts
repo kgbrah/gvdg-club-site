@@ -1,5 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  purgeScoreTargetScorerVotes,
+  recordScoreTargetVote,
+  recordScoreVote,
+  scoreConflicts,
+  scoreTargetConsensusIssues,
+} from "../src/live-consensus.js";
+import worker from "../src/index.js";
+import { signSession } from "../src/jwt.js";
 import { LiveEventDO } from "../src/live.js";
+import type { ScoreTarget } from "../src/live-format.js";
+import type { LiveSocket } from "../src/live-types.js";
+import type { PlayerState } from "../src/scoring.js";
 
 type Stored = {
   readonly meta?: unknown;
@@ -19,29 +31,280 @@ class FakeSocket extends EventTarget {
 }
 
 class FakeState {
-  readonly accepted: WebSocket[] = [];
+  readonly accepted: LiveSocket[] = [];
   readonly storage: {
     get<T = unknown>(key: string): Promise<T | undefined>;
     put(key: string, value: unknown): Promise<void>;
   };
+  private readonly stored: Record<string, unknown>;
 
   constructor(stored: Stored = {}) {
+    this.stored = { ...stored };
     this.storage = {
-      get: async <T = unknown>(key: string) => stored[key as keyof Stored] as T | undefined,
-      put: async () => {},
+      get: async <T = unknown>(key: string) => this.stored[key] as T | undefined,
+      put: async (key: string, value: unknown) => {
+        this.stored[key] = value;
+      },
     };
   }
 
-  acceptWebSocket(socket: WebSocket): void {
+  getStored<T = unknown>(key: string): T | undefined {
+    return this.stored[key] as T | undefined;
+  }
+
+  acceptWebSocket(socket: LiveSocket): void {
     this.accepted.push(socket);
   }
 
-  getWebSockets(): WebSocket[] {
+  getWebSockets(): LiveSocket[] {
     return this.accepted;
   }
 }
 
 const db = { prepare: () => ({ bind() { return this; }, all: async () => ({ results: [], success: true }), first: async () => null, run: async () => ({ results: [], success: true }) }) };
+const SECRET = "x".repeat(40);
+const ORIGIN = "http://localhost:8080";
+
+function kv(initial: Record<string, string> = {}) {
+  const rows = new Map(Object.entries(initial));
+  return {
+    get: async (key: string) => rows.get(key) ?? null,
+    put: async (key: string, value: string) => void rows.set(key, value),
+    delete: async (key: string) => void rows.delete(key),
+    list: async () => ({ keys: [...rows.keys()].map((name) => ({ name })), list_complete: true }),
+  };
+}
+
+type StartPayload = {
+  readonly liveScoringConfig?: { readonly groupFormat: string; readonly scoringStyle: string };
+  readonly players?: readonly {
+    readonly memberId?: string | null;
+    readonly name?: string;
+    readonly division?: string | null;
+    readonly startingHole?: number | null;
+    readonly team?: string | null;
+  }[];
+};
+type LiveRouteState = {
+  readonly starts: StartPayload[];
+  readonly pairUpdates?: { readonly body: unknown; readonly isAdmin: boolean; readonly member: string | null }[];
+  readonly registrations?: readonly Record<string, unknown>[];
+  readonly eventPlayers?: readonly Record<string, unknown>[];
+  readonly eventConfig?: Record<string, unknown> | null;
+  readonly eventFormat?: string | null;
+  updatedStatus?: string | null;
+};
+
+type WorkerEnv = Parameters<typeof worker.fetch>[1];
+
+function missingBinding<T>(name: string): T {
+  return new Proxy({}, {
+    get() {
+      throw new Error(`unused binding accessed: ${name}`);
+    },
+  }) as T;
+}
+
+function liveRouteDb(state: LiveRouteState) {
+  return {
+    prepare: (sql: string) => {
+      let binds: unknown[] = [];
+      return {
+        bind(...values: unknown[]) {
+          binds = values;
+          return this;
+        },
+        all: async () => {
+          if (/FROM registrations/i.test(sql)) return { results: state.registrations ?? [], success: true };
+          if (/FROM event_players/i.test(sql)) return { results: state.eventPlayers ?? [], success: true };
+          return { results: [], success: true };
+        },
+        first: async () => {
+          if (/SELECT \* FROM events/i.test(sql)) return { id: binds[0], layout_id: 44, format: state.eventFormat ?? null };
+          if (/SELECT \* FROM course_layouts/i.test(sql)) {
+            return { id: 44, course_id: 7, name: "Gold", holes: JSON.stringify([{ hole: 1, par: 3 }, { hole: 2, par: 4 }]) };
+          }
+          if (/SELECT \* FROM courses/i.test(sql)) return { id: 7, name: "West Meadowbrook" };
+          if (/SELECT \* FROM event_config/i.test(sql)) return state.eventConfig ?? null;
+          if (/UPDATE events/i.test(sql)) {
+            state.updatedStatus = binds[5] as string | null;
+            return { id: binds[22], status: state.updatedStatus };
+          }
+          return null;
+        },
+        run: async () => ({ results: [], success: true }),
+      };
+    },
+  };
+}
+
+function liveNamespace(state: LiveRouteState) {
+  const headerValue = (headers: HeadersInit | undefined, key: string): string | null => {
+    if (headers instanceof Headers) return headers.get(key);
+    if (Array.isArray(headers)) {
+      const found = headers.find(([name]) => name.toLocaleLowerCase("en-US") === key.toLocaleLowerCase("en-US"));
+      return found?.[1] ?? null;
+    }
+    return headers?.[key] ?? headers?.[key.toLocaleLowerCase("en-US")] ?? null;
+  };
+  const stub = {
+    fetch: async (url: string, init?: RequestInit) => {
+      const payload = init?.body ? (JSON.parse(String(init.body)) as StartPayload) : {};
+      const action = new URL(url).pathname.split("/").filter(Boolean).pop();
+      if (action === "pairs") {
+        state.pairUpdates?.push({
+          body: payload,
+          isAdmin: headerValue(init?.headers, "X-Auth-Admin") === "true",
+          member: headerValue(init?.headers, "X-Auth-Member"),
+        });
+        return new Response(JSON.stringify({ status: "live", cardId: "c0", cardmates: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      state.starts.push(payload);
+      return new Response(JSON.stringify({ status: "live", players: payload.players ?? [], liveScoringConfig: payload.liveScoringConfig ?? null }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
+    connect: () => missingBinding<Socket>("DurableObjectStub.connect"),
+  };
+  const id = (name: string): DurableObjectId => ({
+    name,
+    toString: () => name,
+    equals: (other: DurableObjectId) => other.toString() === name,
+  });
+  return {
+    newUniqueId: () => id("new"),
+    idFromName: (name: string) => id(name),
+    idFromString: (name: string) => id(name),
+    get: (objectId: DurableObjectId) => ({ ...stub, id: objectId }),
+    getByName: (name: string) => ({ ...stub, id: id(name), name }),
+    jurisdiction: () => liveNamespace(state),
+  };
+}
+
+function d1Database(database: ReturnType<typeof liveRouteDb>): D1Database {
+  return {
+    prepare: (query: string) => new LiveRouteD1Statement(database.prepare(query)),
+    batch: async <T = unknown>(statements: D1PreparedStatement[]) => Promise.all(statements.map((statement) => statement.run<T>())),
+    exec: async () => ({ count: 0, duration: 0 }),
+    withSession: () => missingBinding<D1DatabaseSession>("D1DatabaseSession"),
+    dump: async () => new ArrayBuffer(0),
+  };
+}
+
+function d1Meta(): D1Meta & Record<string, unknown> {
+  return {
+    duration: 0,
+    size_after: 0,
+    rows_read: 0,
+    rows_written: 0,
+    last_row_id: 0,
+    changed_db: false,
+    changes: 0,
+  };
+}
+
+class LiveRouteD1Statement implements D1PreparedStatement {
+  private readonly statement: ReturnType<ReturnType<typeof liveRouteDb>["prepare"]>;
+
+  constructor(statement: ReturnType<ReturnType<typeof liveRouteDb>["prepare"]>) {
+    this.statement = statement;
+  }
+
+  bind(...values: unknown[]): D1PreparedStatement {
+    this.statement.bind(...values);
+    return this;
+  }
+
+  async all<T = Record<string, unknown>>(): Promise<D1Result<T>> {
+    const result = await this.statement.all();
+    return { success: true, results: [...result.results] as T[], meta: d1Meta() };
+  }
+
+  async first<T = unknown>(colName: string): Promise<T | null>;
+  async first<T = Record<string, unknown>>(): Promise<T | null>;
+  async first<T = Record<string, unknown>>(colName?: string): Promise<T | null> {
+    const row = await this.statement.first();
+    if (row == null) return null;
+    if (colName) return row[colName] as T;
+    return row as T;
+  }
+
+  async run<T = Record<string, unknown>>(): Promise<D1Result<T>> {
+    const result = await this.statement.run();
+    return { success: true, results: [...result.results] as T[], meta: d1Meta() };
+  }
+
+  async raw<T = unknown[]>(options: { columnNames: true }): Promise<[string[], ...T[]]>;
+  async raw<T = unknown[]>(options?: { columnNames?: false }): Promise<T[]>;
+  async raw<T = unknown[]>(options?: { columnNames?: boolean }): Promise<T[] | [string[], ...T[]]> {
+    if (options?.columnNames) return [[]] as [string[], ...T[]];
+    return [] as T[];
+  }
+}
+
+function liveRouteEnv(state: LiveRouteState) {
+  return {
+    ROSTER: kv({
+      "member:m_admin": JSON.stringify({ memberId: "m_admin", name: "Admin", isAdmin: true, pinHash: "x", mustChangePin: false }),
+      "member:m_jane": JSON.stringify({ memberId: "m_jane", name: "Jane", isAdmin: false, pinHash: "x", mustChangePin: false }),
+    }),
+    RATELIMIT: kv(),
+    PHOTOS: missingBinding<R2Bucket>("PHOTOS"),
+    DB: d1Database(liveRouteDb(state)),
+    AI: missingBinding<Ai>("AI"),
+    SESSION_TTL_SEC: "900",
+    OPENROUTER_MODEL: "test",
+    OPENROUTER_FALLBACK_MODEL: "test",
+    ASSISTANT_MODEL: "test",
+    PAYPAL_ENV: "sandbox",
+    ORDER_NOTIFY_EMAIL: "",
+    ORDER_NOTIFY_FROM: "",
+    REGISTER_NOTIFY_FROM: "",
+    EMAIL_REPLY_TO: "",
+    RP_ID: "localhost",
+    RP_NAME: "Test",
+    EXPECTED_ORIGIN: ORIGIN,
+    GEMINI_VISION_MODEL: "test",
+    OPENROUTER_VISION_MODEL: "test",
+    VISION_MODEL: "test",
+    JWT_SECRET: SECRET,
+    GEMINI_API_KEY: "test",
+    OPENROUTER_API_KEY: "test",
+    PAYPAL_CLIENT_ID: "test",
+    PAYPAL_SECRET: "test",
+    VISION_DEV_STUB: "1",
+    ALLOWED_ORIGINS: ORIGIN,
+    PAYPAL_API_BASE: "https://paypal.test",
+    LIVE: liveNamespace(state),
+    ASSISTANT_RL: missingBinding<RateLimit>("ASSISTANT_RL"),
+  } satisfies WorkerEnv;
+}
+
+function must<T>(value: T | null | undefined): T {
+  expect(value).toBeDefined();
+  if (value == null) throw new Error("expected test value to be defined");
+  return value;
+}
+
+function rowValue<T>(value: Record<string, unknown> | null): T | null {
+  return value as T | null;
+}
+
+async function routeToken(sub: string) {
+  return signSession({ sub, mustChangePin: false }, SECRET, 900);
+}
+
+async function liveRouteCall(path: string, method: string, body: unknown, state: LiveRouteState, sub = "m_admin") {
+  return worker.fetch(new Request("https://w" + path, {
+    method,
+    headers: { Origin: ORIGIN, authorization: "Bearer " + await routeToken(sub), "content-type": "application/json" },
+    body: JSON.stringify(body),
+  }), liveRouteEnv(state));
+}
 
 type ConflictRow = {
   readonly cardId: string | null;
@@ -51,12 +314,283 @@ type ConflictRow = {
   readonly values: number[];
 };
 type SnapshotBody = {
-  readonly players: { readonly scores: Record<string, number> }[];
+  readonly players: { readonly index?: number; readonly name?: string; readonly scores: Record<string, number> }[];
   readonly conflicts: ConflictRow[];
+  readonly roundConfig?: { readonly groupFormat: string; readonly scoringStyle: string };
+  readonly scoreTargets?: {
+    readonly id: string;
+    readonly type: string;
+    readonly label: string;
+    readonly playerIndexes: readonly number[];
+    readonly members: readonly string[];
+  }[];
+  readonly standings?: {
+    readonly name: string;
+    readonly targetId?: string;
+    readonly targetType?: string;
+    readonly total: number;
+    readonly toPar: number;
+    readonly members?: readonly string[];
+    readonly match?: { readonly status: string; readonly outcome: string };
+  }[];
 };
+
+function recordingDb(roundId = 7) {
+  const inserts: { sql: string; args: unknown[] }[] = [];
+  const database = {
+    prepare(sql: string) {
+      const entry: { sql: string; args: unknown[] } = { sql, args: [] };
+      return {
+        bind(...args: unknown[]) {
+          entry.args = args;
+          if (/INSERT INTO results|INSERT INTO casual_|DELETE FROM results|DELETE FROM casual_rounds/i.test(sql)) inserts.push(entry);
+          return this;
+        },
+        run: async () => ({ results: [], success: true }),
+        first: async <T = Record<string, unknown>>() => rowValue<T>(/INSERT INTO casual_rounds/i.test(sql) ? { id: roundId } : null),
+        all: async () => ({ results: [], success: true }),
+      };
+    },
+  };
+  return { database, inserts };
+}
 
 beforeEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("live route start payloads", () => {
+  it("threads legacy doubles/matchplay config and registration teams into competition start payload", async () => {
+    const state: LiveRouteState = {
+      starts: [],
+      eventFormat: "matchplay",
+      eventConfig: { event_id: 9, play_format: "doubles", live_scoring_config: null },
+      registrations: [
+        { member_id: "m_a", name: "A", division: "MA1", starting_hole: 1, team: "Pair 1" },
+        { member_id: "m_b", name: "B", division: "MA1", starting_hole: 1, team: "Pair 1" },
+        { member_id: "m_c", name: "C", division: "MA1", starting_hole: 1, team: "Pair 2" },
+        { member_id: "m_d", name: "D", division: "MA1", starting_hole: 1, team: "Pair 2" },
+      ],
+    };
+
+    const res = await liveRouteCall("/events/9/live/start", "POST", {}, state);
+
+    expect(res.status).toBe(200);
+    expect(state.starts).toHaveLength(1);
+    expect(state.starts[0]?.liveScoringConfig).toEqual({ groupFormat: "doubles", scoringStyle: "matchplay" });
+    expect(state.starts[0]?.players).toEqual([
+      { memberId: "m_a", name: "A", division: "MA1", startingHole: 1, team: "Pair 1" },
+      { memberId: "m_b", name: "B", division: "MA1", startingHole: 1, team: "Pair 1" },
+      { memberId: "m_c", name: "C", division: "MA1", startingHole: 1, team: "Pair 2" },
+      { memberId: "m_d", name: "D", division: "MA1", startingHole: 1, team: "Pair 2" },
+    ]);
+    expect(state.updatedStatus).toBe("live");
+  });
+
+  it("rejects invalid competition doubles starts before calling the Durable Object", async () => {
+    const state: LiveRouteState = {
+      starts: [],
+      eventConfig: { event_id: 9, play_format: "doubles", live_scoring_config: JSON.stringify({ groupFormat: "doubles", scoringStyle: "stroke" }) },
+      registrations: [
+        { member_id: "m_a", name: "A", division: "MA1", starting_hole: 1, team: "Solo Pair" },
+        { member_id: "m_b", name: "B", division: "MA1", starting_hole: 1, team: "Full Pair" },
+        { member_id: "m_c", name: "C", division: "MA1", starting_hole: 1, team: "Full Pair" },
+      ],
+    };
+
+    const res = await liveRouteCall("/events/9/live/start", "POST", {}, state);
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "invalid_score_targets",
+      code: "invalid_pair_size",
+    });
+    expect(state.starts).toEqual([]);
+    expect(state.updatedStatus).toBeUndefined();
+  });
+
+  it("rejects invalid competition matchplay cards before marking the event live", async () => {
+    const state: LiveRouteState = {
+      starts: [],
+      eventConfig: { event_id: 9, play_format: "singles", live_scoring_config: JSON.stringify({ groupFormat: "singles", scoringStyle: "matchplay" }) },
+      registrations: [
+        { member_id: "m_a", name: "A", division: "MA1", starting_hole: 1 },
+        { member_id: "m_b", name: "B", division: "MA1", starting_hole: 1 },
+        { member_id: "m_c", name: "C", division: "MA1", starting_hole: 1 },
+      ],
+    };
+
+    const res = await liveRouteCall("/events/9/live/start", "POST", {}, state);
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "invalid_score_targets",
+      code: "invalid_matchplay_targets",
+    });
+    expect(state.starts).toEqual([]);
+    expect(state.updatedStatus).toBeUndefined();
+  });
+
+  it("rejects malformed casual live scoring config before starting a Durable Object", async () => {
+    const state: LiveRouteState = { starts: [] };
+
+    const res = await liveRouteCall("/rounds", "POST", {
+      layout_id: 44,
+      liveScoringConfig: { groupFormat: "singles", scoringStyle: "custom" },
+    }, state, "m_jane");
+
+    expect(res.status).toBe(400);
+    expect(state.starts).toEqual([]);
+  });
+
+  it("threads validated casual config and creator pair label into start payload", async () => {
+    const state: LiveRouteState = { starts: [] };
+
+    const res = await liveRouteCall("/rounds", "POST", {
+      layout_id: 44,
+      liveScoringConfig: { groupFormat: "doubles", scoringStyle: "stroke" },
+      pairLabel: "Pair A",
+    }, state, "m_jane");
+
+    expect(res.status).toBe(201);
+    expect(state.starts[0]?.liveScoringConfig).toEqual({ groupFormat: "doubles", scoringStyle: "stroke" });
+    expect(state.starts[0]?.players).toEqual([{ memberId: "m_jane", name: "Jane", team: "Pair A" }]);
+  });
+
+  it("proxies authenticated casual pair updates with trusted identity headers", async () => {
+    const state: LiveRouteState = { starts: [], pairUpdates: [] };
+
+    const res = await liveRouteCall("/rounds/PAIR12/pairs", "POST", {
+      pairs: [{ label: "Alpha", playerIndexes: [0, 1] }],
+    }, state, "m_admin");
+
+    expect(res.status).toBe(200);
+    expect(state.pairUpdates).toEqual([
+      {
+        body: { assignments: undefined, pairs: [{ label: "Alpha", playerIndexes: [0, 1] }] },
+        isAdmin: true,
+        member: "m_admin",
+      },
+    ]);
+  });
+});
+
+describe("live consensus score targets", () => {
+  const holes = [{ hole: 1 }];
+  const pairTarget = {
+    type: "pair",
+    id: "pair:blue",
+    label: "Blue Pair",
+    playerIndexes: [0, 1],
+    memberIds: ["m0", "m1"],
+  } satisfies ScoreTarget;
+
+  const playerTarget = {
+    type: "player",
+    id: "player:0",
+    label: "A",
+    playerIndexes: [0],
+    memberIds: ["m0"],
+  } satisfies ScoreTarget;
+
+  const players = (): PlayerState[] => [
+    { memberId: "m0", name: "A", cardId: "c0", scores: {} },
+    { memberId: "m1", name: "B", cardId: "c0", scores: {} },
+  ];
+
+  it("keeps legacy player conflict behavior unchanged when no score targets are supplied", () => {
+    const card = players();
+
+    recordScoreVote({ players: card, targetIndex: 1, scorerId: "player:0", hole: 1, strokes: 3 });
+    recordScoreVote({ players: card, targetIndex: 1, scorerId: "player:1", hole: 1, strokes: 4 });
+
+    expect(scoreConflicts(card, holes)).toEqual([{ cardId: "c0", playerIndex: 1, playerName: "B", hole: 1, values: [3, 4] }]);
+    expect(card[1]?.scores).not.toHaveProperty("1");
+  });
+
+  it("mirrors an agreed pair target score to both active pair members", () => {
+    const card = players();
+
+    recordScoreTargetVote({ players: card, target: pairTarget, scorerId: "player:0", hole: 1, strokes: 3 });
+    const conflict = recordScoreTargetVote({ players: card, target: pairTarget, scorerId: "player:1", hole: 1, strokes: 3 });
+
+    expect(conflict).toBeNull();
+    expect(card[0]?.scores).toMatchObject({ 1: 3 });
+    expect(card[1]?.scores).toMatchObject({ 1: 3 });
+    expect(scoreTargetConsensusIssues(card, holes, [pairTarget])).toEqual({ conflicts: [], missing: [] });
+  });
+
+  it("reports pair target conflicts once with the pair label", () => {
+    const card = players();
+
+    recordScoreTargetVote({ players: card, target: pairTarget, scorerId: "player:0", hole: 1, strokes: 3 });
+    recordScoreTargetVote({ players: card, target: pairTarget, scorerId: "player:1", hole: 1, strokes: 4 });
+
+    expect(scoreTargetConsensusIssues(card, holes, [pairTarget]).conflicts).toEqual([
+      {
+        cardId: "c0",
+        playerIndex: 0,
+        playerName: "Blue Pair",
+        hole: 1,
+        values: [3, 4],
+        targetId: "pair:blue",
+        targetType: "pair",
+        playerIndexes: [0, 1],
+      },
+    ]);
+    expect(card[0]?.scores).not.toHaveProperty("1");
+    expect(card[1]?.scores).not.toHaveProperty("1");
+  });
+
+  it("counts a missing pair target confirmation once instead of once per member", () => {
+    const card = players();
+
+    recordScoreTargetVote({ players: card, target: pairTarget, scorerId: "player:0", hole: 1, strokes: 3 });
+
+    expect(scoreTargetConsensusIssues(card, holes, [pairTarget]).missing).toEqual([
+      {
+        cardId: "c0",
+        playerIndex: 0,
+        playerName: "Blue Pair",
+        hole: 1,
+        missing: 1,
+        required: 2,
+        targetId: "pair:blue",
+        targetType: "pair",
+        playerIndexes: [0, 1],
+      },
+    ]);
+  });
+
+  it("purges a removed scorer's stale pair-target vote and restores the agreed pair score", () => {
+    const card: PlayerState[] = [
+      { memberId: "m0", name: "A", cardId: "c0", scores: {} },
+      { memberId: "m1", name: "B", cardId: "c0", scores: {} },
+      { memberId: "m2", name: "X", cardId: "c0", scores: {} },
+    ];
+
+    recordScoreTargetVote({ players: card, target: pairTarget, scorerId: "player:2", hole: 1, strokes: 5 });
+    recordScoreTargetVote({ players: card, target: pairTarget, scorerId: "player:0", hole: 1, strokes: 3 });
+    recordScoreTargetVote({ players: card, target: pairTarget, scorerId: "player:1", hole: 1, strokes: 3 });
+    expect(scoreTargetConsensusIssues(card, holes, [pairTarget]).conflicts).toHaveLength(1);
+
+    const removed = card[2];
+    if (removed) removed.removed = true;
+    purgeScoreTargetScorerVotes(card, 2, holes, [pairTarget]);
+
+    expect(scoreTargetConsensusIssues(card, holes, [pairTarget])).toEqual({ conflicts: [], missing: [] });
+    expect(card[0]?.scores).toMatchObject({ 1: 3 });
+    expect(card[1]?.scores).toMatchObject({ 1: 3 });
+  });
+
+  it("keeps target-aware player scoring equivalent to legacy player scoring", () => {
+    const card = players();
+
+    recordScoreTargetVote({ players: card, target: playerTarget, scorerId: "player:0", hole: 1, strokes: 2 });
+
+    expect(card[0]?.scores).toMatchObject({ 1: 2 });
+    expect(scoreTargetConsensusIssues(card, holes, [playerTarget])).toEqual({ conflicts: [], missing: [{ cardId: "c0", playerIndex: 0, playerName: "A", hole: 1, missing: 1, required: 2 }] });
+  });
 });
 
 describe("LiveEventDO WebSocket handling", () => {
@@ -143,7 +677,7 @@ describe("LiveEventDO card-scoped scoring", () => {
     const live = new LiveEventDO(state, { DB: db });
     await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ casual: true, holes: [{ hole: 1, par: 3 }], players: [{ memberId: "m0", name: "A" }, { memberId: "m1", name: "B" }] }) }));
     const sock = new FakeSocket();
-    state.acceptWebSocket(sock as unknown as WebSocket);
+    state.acceptWebSocket(sock);
     sock.sent.length = 0;
     const first = (await (await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m0" }, body: JSON.stringify({ index: 1, hole: 1, strokes: 3 }) }))).json()) as SnapshotBody;
     expect(first.conflicts).toEqual([]);
@@ -191,7 +725,7 @@ describe("LiveEventDO card-scoped scoring", () => {
     expect(target.scores).not.toHaveProperty("1"); // consensus blank during conflict…
     expect(target.scorecards["1"]).toEqual({ "player:0": 3, "player:1": 4 }); // …but each scorer's own vote is visible
     const mine = (await (await live.fetch(new Request("https://do/mine", { headers: { "X-Auth-Member": "m0" } }))).json()) as { cardmates: { index: number; scorecards: Record<string, Record<string, number>> }[] };
-    expect(mine.cardmates.find((c) => c.index === 1)!.scorecards["1"]).toEqual({ "player:0": 3, "player:1": 4 });
+    expect(must(mine.cardmates.find((c) => c.index === 1)).scorecards["1"]).toEqual({ "player:0": 3, "player:1": 4 });
   });
 
   it("ignores a removed scorer's stale cross-vote so the conflict auto-resolves on removal (no deadlock)", async () => {
@@ -264,7 +798,7 @@ describe("LiveEventDO card-scoped scoring", () => {
     const live = new LiveEventDO(state, { DB: db });
     await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ casual: true, holes: [{ hole: 1, par: 3 }], players: [{ memberId: "m0", name: "A" }, { memberId: "m1", name: "B" }] }) }));
     const sock = new FakeSocket();
-    state.acceptWebSocket(sock as unknown as WebSocket);
+    state.acceptWebSocket(sock);
     sock.sent.length = 0;
 
     await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m1" }, body: JSON.stringify({ index: 1, hole: 1, strokes: 4 }) }));
@@ -315,6 +849,117 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     await startCasual(live, "m_a");
     await act(live, "join", "m_b", { name: "Bee" });
     expect((await act(live, "remove", "stranger", { index: 0, name: "Creator" })).status).toBe(403);
+  });
+
+  it("updates casual doubles pair labels before scoring and persists them in /mine", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({
+        casual: true,
+        holes: [{ hole: 1, par: 3 }],
+        liveScoringConfig: { groupFormat: "doubles", scoringStyle: "stroke" },
+        players: [
+          { memberId: "m_a", name: "A", team: "Old" },
+          { memberId: "m_b", name: "B", team: "Old" },
+          { memberId: "m_c", name: "C", team: "Blue" },
+          { memberId: "m_d", name: "D", team: "Blue" },
+        ],
+      }),
+    }));
+
+    const changed = await act(live, "pairs", "m_a", {
+      pairs: [
+        { label: "Alpha", playerIndexes: [0, 1] },
+        { label: "Beta", playerIndexes: [2, 3] },
+      ],
+    });
+
+    expect(changed.status).toBe(200);
+    const mine = (await changed.json()) as { cardmates: { index: number; team?: string | null }[]; scoreTargets: { id: string; label: string }[] };
+    expect(mine.cardmates.map((player) => [player.index, player.team])).toEqual([[0, "Alpha"], [1, "Alpha"], [2, "Beta"], [3, "Beta"]]);
+    expect(mine.scoreTargets.map((target) => [target.id, target.label])).toEqual([["pair:alpha", "Alpha"], ["pair:beta", "Beta"]]);
+  });
+
+  it("rejects a casual doubles pair with three active players and leaves labels unchanged", async () => {
+    const state = new FakeState({});
+    const live = new LiveEventDO(state, { DB: db });
+    await live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({
+        casual: true,
+        holes: [{ hole: 1, par: 3 }],
+        liveScoringConfig: { groupFormat: "doubles", scoringStyle: "stroke" },
+        players: [
+          { memberId: "m_a", name: "A", team: "Alpha" },
+          { memberId: "m_b", name: "B", team: "Alpha" },
+          { memberId: "m_c", name: "C", team: "Beta" },
+          { memberId: "m_d", name: "D", team: "Beta" },
+        ],
+      }),
+    }));
+
+    const rejected = await act(live, "pairs", "m_a", {
+      pairs: [
+        { label: "Alpha", playerIndexes: [0, 1, 2] },
+        { label: "Beta", playerIndexes: [3] },
+      ],
+    });
+
+    expect(rejected.status).toBe(400);
+    await expect(rejected.json()).resolves.toMatchObject({ error: "invalid_pairs", code: "invalid_pair_size" });
+    const players = state.getStored<PlayerState[]>("players") ?? [];
+    expect(players.map((player) => player.team)).toEqual(["Alpha", "Alpha", "Beta", "Beta"]);
+  });
+
+  it("blocks pair changes after an affected player has a score", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({
+        casual: true,
+        holes: [{ hole: 1, par: 3 }],
+        liveScoringConfig: { groupFormat: "doubles", scoringStyle: "stroke" },
+        players: [
+          { memberId: "m_a", name: "A", team: "Alpha" },
+          { memberId: "m_b", name: "B", team: "Alpha" },
+          { memberId: "m_c", name: "C", team: "Beta" },
+          { memberId: "m_d", name: "D", team: "Beta" },
+        ],
+      }),
+    }));
+    expect((await act(live, "score", "m_a", { targetId: "pair:alpha", hole: 1, strokes: 3 })).status).toBe(200);
+
+    const rejected = await act(live, "pairs", "m_a", {
+      pairs: [
+        { label: "Beta", playerIndexes: [0, 2] },
+        { label: "Alpha", playerIndexes: [1, 3] },
+      ],
+    });
+
+    expect(rejected.status).toBe(409);
+    await expect(rejected.json()).resolves.toMatchObject({ error: "scores_exist" });
+  });
+
+  it("rejects pair changes from a member outside the casual card", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({
+        casual: true,
+        holes: [{ hole: 1, par: 3 }],
+        liveScoringConfig: { groupFormat: "doubles", scoringStyle: "stroke" },
+        players: [
+          { memberId: "m_a", name: "A", team: "Alpha" },
+          { memberId: "m_b", name: "B", team: "Alpha" },
+        ],
+      }),
+    }));
+
+    const rejected = await act(live, "pairs", "m_stranger", { pairs: [{ label: "Alpha", playerIndexes: [0, 1] }] });
+
+    expect(rejected.status).toBe(403);
+    await expect(rejected.json()).resolves.toMatchObject({ error: "not_on_card" });
   });
 
   it("a member can remove themselves (leave the round)", async () => {
@@ -424,11 +1069,11 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     const inserts: { sql: string; args: unknown[] }[] = [];
     const recDb = {
       prepare(sql: string) {
-        const entry = { sql, args: [] as unknown[] };
+        const entry: { sql: string; args: unknown[] } = { sql, args: [] };
         return {
           bind(...args: unknown[]) { entry.args = args; if (/INSERT INTO casual_|DELETE FROM casual_rounds/i.test(sql)) inserts.push(entry); return this; },
           run: async () => ({ results: [], success: true }),
-          first: async () => ((/INSERT INTO casual_rounds/i.test(sql) ? { id: 7 } : null) as unknown as null),
+          first: async <T = Record<string, unknown>>() => rowValue<T>(/INSERT INTO casual_rounds/i.test(sql) ? { id: 7 } : null),
           all: async () => ({ results: [], success: true }),
         };
       },
@@ -446,14 +1091,14 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     // Idempotency guard: a DELETE-by-round_code runs BEFORE the header insert so a fault/retry replaces
     // (never duplicates) the round — the casual analogue of the competition path's clearResults.
     expect(delIdx).toBeGreaterThanOrEqual(0);
-    expect(inserts[delIdx]!.args).toContain("AB23CD");
+    expect(must(inserts[delIdx]).args).toContain("AB23CD");
     expect(roundIdx).toBeGreaterThan(delIdx);
     expect(roundIns).toBeTruthy();
-    expect(roundIns!.args).toContain("AB23CD"); // round_code = the durable key
-    expect(roundIns!.args).toContain(5); // layout_id — kept so the ratings engine can compute a per-layout SSA
+    expect(must(roundIns).args).toContain("AB23CD"); // round_code = the durable key
+    expect(must(roundIns).args).toContain(5); // layout_id — kept so the ratings engine can compute a per-layout SSA
     expect(resIns).toBeTruthy();
-    expect(resIns!.args[0]).toBe(7); // casual_round_id FK = the id returned by createCasualRound
-    expect(resIns!.args).toContain("A"); // player name persisted
+    expect(must(resIns).args[0]).toBe(7); // casual_round_id FK = the id returned by createCasualRound
+    expect(must(resIns).args).toContain("A"); // player name persisted
   });
 
   it("flags score conflicts from guest scorecards too", async () => {
@@ -530,9 +1175,9 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { missing: { hole: number; playerName: string }[] };
     expect(Array.isArray(snap.missing)).toBe(true);
     expect(snap.missing.length).toBeGreaterThan(0);
-    const mine = (await (await live.fetch(new Request("https://do/mine", { headers: { "X-Auth-Member": "m_a" } }))).json()) as { missing: unknown[] };
+    const mine = (await (await live.fetch(new Request("https://do/mine", { headers: { "X-Auth-Member": "m_a" } }))).json()) as { missing: readonly unknown[] };
     expect(Array.isArray(mine.missing)).toBe(true);
-    expect((mine.missing as unknown[]).length).toBeGreaterThan(0);
+    expect(mine.missing.length).toBeGreaterThan(0);
   });
 
   it("rejects finalize until every player's card scores match exactly", async () => {
@@ -566,12 +1211,271 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
   });
 });
 
+describe("LiveEventDO config-aware score targets and final results", () => {
+  const holes = [{ hole: 1, par: 3 }, { hole: 2, par: 3 }];
+  const doublesConfig = { groupFormat: "doubles", scoringStyle: "stroke" };
+
+  const startDoubles = (live: LiveEventDO) =>
+    live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({
+        eventId: 10,
+        holes,
+        liveScoringConfig: doublesConfig,
+        players: [
+          { memberId: "m_ann", name: "Ann", team: "Alpha" },
+          { memberId: "m_bo", name: "Bo", team: "Alpha" },
+          { memberId: "m_cy", name: "Cy", team: "Beta" },
+          { memberId: "m_dee", name: "Dee", team: "Beta" },
+        ],
+      }),
+    }));
+
+  const adminScore = (live: LiveEventDO, body: unknown) =>
+    live.fetch(new Request("https://do/score", {
+      method: "POST",
+      headers: { "X-Auth-Admin": "true" },
+      body: JSON.stringify(body),
+    }));
+
+  it("stores normalized config and exposes roundConfig plus scoreTargets in snapshot and /mine", async () => {
+    const state = new FakeState({});
+    const live = new LiveEventDO(state, { DB: db });
+
+    const started = await startDoubles(live);
+    expect(started.status).toBe(200);
+    const meta = state.getStored<{ roundConfig?: unknown }>("meta");
+    expect(meta?.roundConfig).toEqual(doublesConfig);
+
+    await adminScore(live, { targetId: "pair:alpha", scorerIndex: 0, hole: 1, strokes: 3 });
+    const snap = (await (await adminScore(live, { index: 2, scorerIndex: 2, hole: 1, strokes: 4 })).json()) as SnapshotBody;
+
+    expect(snap.roundConfig).toEqual(doublesConfig);
+    expect(snap.scoreTargets).toEqual([
+      { id: "pair:alpha", type: "pair", label: "Alpha", playerIndexes: [0, 1], members: ["Ann", "Bo"] },
+      { id: "pair:beta", type: "pair", label: "Beta", playerIndexes: [2, 3], members: ["Cy", "Dee"] },
+    ]);
+    expect(snap.players.find((p) => p.index === 0)?.scores).toMatchObject({ 1: 3 });
+    expect(snap.players.find((p) => p.index === 1)?.scores).toMatchObject({ 1: 3 });
+    expect(snap.players.find((p) => p.index === 2)?.scores).toMatchObject({ 1: 4 });
+    expect(snap.players.find((p) => p.index === 3)?.scores).toMatchObject({ 1: 4 });
+    expect(snap.standings?.map((s) => ({ name: s.name, targetId: s.targetId, total: s.total, members: s.members }))).toEqual([
+      { name: "Alpha", targetId: "pair:alpha", total: 3, members: ["Ann", "Bo"] },
+      { name: "Beta", targetId: "pair:beta", total: 4, members: ["Cy", "Dee"] },
+    ]);
+
+    const mine = (await (await live.fetch(new Request("https://do/mine", { headers: { "X-Auth-Member": "m_ann" } }))).json()) as SnapshotBody & { readonly cardmates: readonly { readonly index: number }[] };
+    expect(mine.roundConfig).toEqual(doublesConfig);
+    expect(mine.scoreTargets).toEqual(snap.scoreTargets);
+    expect(mine.cardmates.map((p) => p.index)).toEqual([0, 1, 2, 3]);
+  });
+
+  it("allows casual doubles rounds to start before all players are paired", async () => {
+    const state = new FakeState({});
+    const live = new LiveEventDO(state, { DB: db });
+
+    const started = await live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({
+        casual: true,
+        roundCode: "PAIR12",
+        holes: [{ hole: 1, par: 3 }],
+        liveScoringConfig: doublesConfig,
+        players: [{ memberId: "m_ann", name: "Ann" }],
+      }),
+    }));
+
+    expect(started.status).toBe(200);
+    await expect(started.json()).resolves.toMatchObject({
+      status: "live",
+      scoreTargetError: {
+        code: "missing_pair_label",
+      },
+    });
+    expect(state.getStored("meta")).toMatchObject({ casual: true, roundCode: "PAIR12" });
+  });
+
+  it("returns a precise validation error when doubles finalize has an unpaired active player", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({
+        casual: true,
+        holes: [{ hole: 1, par: 3 }],
+        liveScoringConfig: doublesConfig,
+        players: [{ memberId: "m_solo", name: "Solo", team: "Solo Pair" }],
+      }),
+    }));
+
+    const finalized = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Member": "m_solo" } }));
+    expect(finalized.status).toBe(400);
+    await expect(finalized.json()).resolves.toMatchObject({
+      error: "invalid_score_targets",
+      code: "invalid_pair_size",
+      message: 'doubles scoring pair "Solo Pair" must have exactly two active players',
+    });
+  });
+
+  it("persists doubles stroke results as one row per player with shared scoring group metadata", async () => {
+    const { database, inserts } = recordingDb();
+    const live = new LiveEventDO(new FakeState({}), { DB: database });
+    await startDoubles(live);
+    for (const scorerIndex of [0, 1, 2, 3]) {
+      for (const hole of [1, 2]) {
+        await adminScore(live, { targetId: "pair:alpha", scorerIndex, hole, strokes: 3 });
+        await adminScore(live, { targetId: "pair:beta", scorerIndex, hole, strokes: 4 });
+      }
+    }
+
+    const finalized = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" } }));
+    expect(finalized.status).toBe(200);
+    const resultRows = inserts.filter((i) => /INSERT INTO results/i.test(i.sql));
+    expect(resultRows).toHaveLength(4);
+    const alphaRows = resultRows.filter((i) => i.args[2] === "Ann" || i.args[2] === "Bo");
+    expect(alphaRows.map((i) => i.args[3])).toEqual([1, 1]);
+    expect(alphaRows.map((i) => JSON.parse(i.args[9] as string))).toEqual([
+      { targetId: "pair:alpha", targetType: "pair", label: "Alpha", members: ["Ann", "Bo"] },
+      { targetId: "pair:alpha", targetType: "pair", label: "Alpha", members: ["Ann", "Bo"] },
+    ]);
+    expect(alphaRows.map((i) => i.args[10])).toEqual([null, null]);
+  });
+
+  it("persists casual doubles result metadata and the round scoring config", async () => {
+    const { database, inserts } = recordingDb(15);
+    const live = new LiveEventDO(new FakeState({}), { DB: database });
+    await live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({
+        casual: true,
+        roundCode: "PAIR12",
+        holes,
+        liveScoringConfig: doublesConfig,
+        players: [
+          { memberId: "m_ann", name: "Ann", team: "Alpha" },
+          { memberId: "m_bo", name: "Bo", team: "Alpha" },
+          { memberId: "m_cy", name: "Cy", team: "Beta" },
+          { memberId: "m_dee", name: "Dee", team: "Beta" },
+        ],
+      }),
+    }));
+    for (const scorerIndex of [0, 1, 2, 3]) {
+      for (const hole of [1, 2]) {
+        await adminScore(live, { targetId: "pair:alpha", scorerIndex, hole, strokes: 3 });
+        await adminScore(live, { targetId: "pair:beta", scorerIndex, hole, strokes: 4 });
+      }
+    }
+
+    const finalized = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Member": "m_ann" } }));
+    expect(finalized.status).toBe(200);
+    const round = inserts.find((i) => /INSERT INTO casual_rounds/i.test(i.sql));
+    expect(round?.args[8]).toBe(JSON.stringify(doublesConfig));
+    const resultRows = inserts.filter((i) => /INSERT INTO casual_results/i.test(i.sql));
+    expect(resultRows).toHaveLength(4);
+    expect(JSON.parse(resultRows[0]?.args[9] as string)).toEqual({ targetId: "pair:alpha", targetType: "pair", label: "Alpha", members: ["Ann", "Bo"] });
+  });
+
+  it("persists matchplay winner place and full match_result metadata", async () => {
+    const { database, inserts } = recordingDb();
+    const live = new LiveEventDO(new FakeState({}), { DB: database });
+    await live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({
+        eventId: 11,
+        holes,
+        liveScoringConfig: { groupFormat: "singles", scoringStyle: "matchplay" },
+        players: [
+          { memberId: "m_winner", name: "Winner" },
+          { memberId: "m_loser", name: "Loser" },
+        ],
+      }),
+    }));
+    for (const scorerIndex of [0, 1]) {
+      for (const hole of [1, 2]) {
+        await adminScore(live, { targetId: "player:0", scorerIndex, hole, strokes: 3 });
+        await adminScore(live, { targetId: "player:1", scorerIndex, hole, strokes: 4 });
+      }
+    }
+
+    const finalized = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" } }));
+    expect(finalized.status).toBe(200);
+    const resultRows = inserts.filter((i) => /INSERT INTO results/i.test(i.sql));
+    expect(resultRows.map((i) => ({ name: i.args[2], place: i.args[3], match: JSON.parse(i.args[10] as string) }))).toEqual([
+      { name: "Winner", place: 1, match: { status: "won 2&0", outcome: "won", holesWon: 2, holesLost: 0, holesTied: 0, lead: 2, holesRemaining: 0, opponent: "Loser" } },
+      { name: "Loser", place: 2, match: { status: "won 2&0", outcome: "lost", holesWon: 0, holesLost: 2, holesTied: 0, lead: -2, holesRemaining: 0, opponent: "Winner" } },
+    ]);
+  });
+
+  it("validates matchplay target counts per card instead of rejecting valid multi-card rounds", async () => {
+    const { database, inserts } = recordingDb();
+    const live = new LiveEventDO(new FakeState({}), { DB: database });
+    await live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({
+        eventId: 13,
+        holes: [{ hole: 1, par: 3 }],
+        liveScoringConfig: { groupFormat: "singles", scoringStyle: "matchplay" },
+        players: [
+          { memberId: "m_a", name: "A", startingHole: 1 },
+          { memberId: "m_b", name: "B", startingHole: 1 },
+          { memberId: "m_c", name: "C", startingHole: 2 },
+          { memberId: "m_d", name: "D", startingHole: 2 },
+        ],
+      }),
+    }));
+
+    for (const scorerIndex of [0, 1]) {
+      await adminScore(live, { targetId: "player:0", scorerIndex, hole: 1, strokes: 3 });
+      await adminScore(live, { targetId: "player:1", scorerIndex, hole: 1, strokes: 4 });
+    }
+    for (const scorerIndex of [2, 3]) {
+      await adminScore(live, { targetId: "player:2", scorerIndex, hole: 1, strokes: 5 });
+      await adminScore(live, { targetId: "player:3", scorerIndex, hole: 1, strokes: 4 });
+    }
+
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as SnapshotBody & { readonly scoreTargetError: null };
+    expect(snap.scoreTargetError).toBeNull();
+    expect(snap.standings?.map((standing) => [standing.name, standing.match?.outcome])).toEqual([
+      ["A", "leading"],
+      ["B", "trailing"],
+      ["C", "trailing"],
+      ["D", "leading"],
+    ]);
+
+    const finalized = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" } }));
+    expect(finalized.status).toBe(200);
+    const resultRows = inserts.filter((insert) => /INSERT INTO results/i.test(insert.sql));
+    expect(resultRows.map((insert) => ({ name: insert.args[2], place: insert.args[3], outcome: JSON.parse(insert.args[10] as string).outcome }))).toEqual([
+      { name: "A", place: 1, outcome: "won" },
+      { name: "B", place: 2, outcome: "lost" },
+      { name: "D", place: 1, outcome: "won" },
+      { name: "C", place: 2, outcome: "lost" },
+    ]);
+  });
+
+  it("keeps legacy no-config finalize rows with null metadata", async () => {
+    const { database, inserts } = recordingDb();
+    const live = new LiveEventDO(new FakeState({}), { DB: database });
+    await live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({ eventId: 12, holes: [{ hole: 1, par: 3 }], players: [{ memberId: "m_legacy", name: "Legacy" }] }),
+    }));
+    await adminScore(live, { index: 0, scorerIndex: 0, hole: 1, strokes: 3 });
+
+    const finalized = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" } }));
+    expect(finalized.status).toBe(200);
+    const result = inserts.find((i) => /INSERT INTO results/i.test(i.sql));
+    expect(result?.args[2]).toBe("Legacy");
+    expect(result?.args[9]).toBeNull();
+    expect(result?.args[10]).toBeNull();
+  });
+});
+
 describe("LiveEventDO UDisc export bridge", () => {
   it("persists each player's per-hole scorecard to the result row on admin-event finalize", async () => {
     const inserts: { sql: string; args: unknown[] }[] = [];
     const recDb = {
       prepare(sql: string) {
-        const entry = { sql, args: [] as unknown[] };
+        const entry: { sql: string; args: unknown[] } = { sql, args: [] };
         return {
           bind(...args: unknown[]) {
             entry.args = args;
@@ -594,7 +1498,7 @@ describe("LiveEventDO UDisc export bridge", () => {
     const fin = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" } }));
     expect(fin.status).toBe(200);
     expect(inserts).toHaveLength(1);
-    const scorecard = inserts[0]!.args[8]; // 9th bind column = scorecard JSON
+    const scorecard = must(inserts[0]).args[8]; // 9th bind column = scorecard JSON
     expect(JSON.parse(scorecard as string)).toEqual([
       { hole: 1, par: 3, strokes: 3 },
       { hole: 2, par: 4, strokes: 5 },

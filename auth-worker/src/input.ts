@@ -2,6 +2,64 @@ import * as db from "./db.js";
 import { EVENT_FORMATS, EVENT_STATUSES, EVENT_TYPES } from "./db.js";
 import type { LayoutHole } from "./layouts.js";
 
+export interface WindowQuery {
+  readonly limit: number | null;
+  readonly offset: number;
+}
+
+export interface ParseWindowOptions {
+  readonly defaultLimit?: number | null;
+  readonly defaultOffset?: number;
+  readonly maxLimit?: number;
+  readonly limitParam?: string;
+  readonly offsetParam?: string;
+}
+
+export const RECORD_PAGE_DEFAULTS = {
+  events: { defaultLimit: 500, maxLimit: 4000 },
+  memberResults: { defaultLimit: 250, maxLimit: 4000 },
+  memberRatings: { defaultLimit: 250, maxLimit: 2000 },
+} as const;
+
+export function parseWindow(
+  p: URLSearchParams,
+  defaults: { limit?: number | null; offset?: number } = {},
+  opts: ParseWindowOptions = {},
+): WindowQuery {
+  const limitParam = opts.limitParam ?? "limit";
+  const offsetParam = opts.offsetParam ?? "offset";
+  const maxLimit = opts.maxLimit;
+  const rawLimit = p.get(limitParam);
+  const rawOffset = p.get(offsetParam);
+
+  const defaultLimit = defaults.limit ?? opts.defaultLimit ?? null;
+  const defaultOffset = defaults.offset ?? opts.defaultOffset ?? 0;
+
+  const limitParsed = rawLimit == null ? defaultLimit : parseWindowNumber(rawLimit, defaultLimit);
+  const offsetParsed = rawOffset == null ? defaultOffset : parseWindowOffset(rawOffset, defaultOffset);
+
+  if (limitParsed == null) {
+    return { limit: null, offset: offsetParsed };
+  }
+
+  return {
+    limit: maxLimit == null ? limitParsed : Math.min(limitParsed, maxLimit),
+    offset: offsetParsed,
+  };
+}
+
+function parseWindowNumber(raw: string, fallback: number | null): number | null {
+  if (!/^\d+$/.test(raw.trim())) return fallback;
+  const n = Number.parseInt(raw, 10);
+  return Number.isSafeInteger(n) && n >= 0 ? n : fallback;
+}
+
+function parseWindowOffset(raw: string, fallback: number): number {
+  if (!/^\d+$/.test(raw.trim())) return fallback;
+  const n = Number.parseInt(raw, 10);
+  return Number.isSafeInteger(n) && n >= 0 ? n : fallback;
+}
+
 export function asInt(v: unknown): number | null {
   if (typeof v === "number" && Number.isInteger(v) && v >= 0) return v;
   if (typeof v === "string" && /^\d+$/.test(v.trim())) return parseInt(v, 10);
