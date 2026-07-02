@@ -1233,7 +1233,8 @@
         async function tsApprove(sign, card) {
             const rows = tsRowsFrom(card);
             if (!rows.length) { adminMsg('Add at least one valid row before approving', false); return; }
-            const r = await adminApi('/admin/tee-signs/' + sign.id + '/approve', { method: 'POST', body: { rows } });
+            if (!confirm('Approve tee sign for hole ' + sign.hole_number + ' and apply these rows? Existing official tee sign for this hole may be replaced.')) return;
+            const r = await adminApi('/admin/tee-signs/' + sign.id + '/approve', { method: 'POST', body: { rows, confirm_tee_sign_approval: true } });
             adminMsg(r.ok ? 'Tee sign approved and layout holes updated' : 'Approve failed (' + r.status + ')', r.ok);
             if (r.ok) tsLoadReview();
         }
@@ -1245,13 +1246,13 @@
         }
         async function tsReject(sign) {
             if (!confirm('Reject tee sign for hole ' + sign.hole_number + '? The stored image will be removed.')) return;
-            const r = await adminApi('/admin/tee-signs/' + sign.id + '/reject', { method: 'POST', body: {} });
+            const r = await adminApi('/admin/tee-signs/' + sign.id + '/reject', { method: 'POST', body: { confirm_tee_sign_reject: true } });
             adminMsg(r.ok ? 'Tee sign rejected' : 'Reject failed (' + r.status + ')', r.ok);
             if (r.ok) tsLoadReview();
         }
         async function tsDelete(sign) {
             if (!confirm('Delete tee sign #' + sign.id + '?')) return;
-            const r = await adminApi('/admin/tee-signs/' + sign.id, { method: 'DELETE' });
+            const r = await adminApi('/admin/tee-signs/' + sign.id, { method: 'DELETE', body: { confirm_tee_sign_delete: true } });
             adminMsg(r.ok ? 'Tee sign deleted' : 'Delete failed (' + r.status + ')', r.ok);
             if (r.ok) tsLoadReview();
         }

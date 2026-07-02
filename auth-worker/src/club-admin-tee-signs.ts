@@ -50,6 +50,7 @@ export async function handleAdminTeeSigns(
   }
   if (id != null && seg[3] === "approve" && method === "POST") {
     const b = (await readJson(request)) ?? {};
+    if (b.confirm_tee_sign_approval !== true) return json({ error: "tee_sign_approval_confirmation_required" }, 409, origin);
     const rawRows = Array.isArray(b.rows) ? b.rows : [];
     const rows: db.ApproveRow[] = [];
     for (const r of rawRows) {
@@ -77,6 +78,8 @@ export async function handleAdminTeeSigns(
     return json({ ok: true, affectedLayouts: affected }, 200, origin);
   }
   if (id != null && seg[3] === "reject" && method === "POST") {
+    const b = (await readJson(request)) ?? {};
+    if (b.confirm_tee_sign_reject !== true) return json({ error: "tee_sign_reject_confirmation_required" }, 409, origin);
     const sign = await db.getTeeSign(env.DB, id);
     if (!sign) return json({ error: "not_found" }, 404, origin);
     await db.setTeeSignStatus(env.DB, id, "rejected", adminId);
@@ -85,6 +88,8 @@ export async function handleAdminTeeSigns(
     return json({ ok: true }, 200, origin);
   }
   if (id != null && method === "DELETE") {
+    const b = (await readJson(request)) ?? {};
+    if (b.confirm_tee_sign_delete !== true) return json({ error: "tee_sign_delete_confirmation_required" }, 409, origin);
     const r2Key = await db.deleteTeeSign(env.DB, id);
     if (r2Key) await env.PHOTOS?.delete(r2Key)?.catch(() => {});
     return json({ ok: true }, 200, origin);
