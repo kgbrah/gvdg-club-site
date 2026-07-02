@@ -1958,7 +1958,13 @@
                 const goal = f.goal_cents != null ? ' · goal $' + (f.goal_cents / 100) : '';
                 row.appendChild(elx('span', 'ev-name', f.title + ' [' + f.status + ']' + goal));
                 const close = elx('button', 'admin-btn secondary', f.status === 'active' ? 'Close' : 'Reopen');
-                close.addEventListener('click', async () => { const r = await adminApi('/admin/fundraisers/' + f.id, { method: 'PATCH', body: { status: f.status === 'active' ? 'closed' : 'active' } }); if (r.ok) { adminMsg('Updated', true); adminLoadFundraisers(); } });
+                close.addEventListener('click', async () => {
+                    const nextStatus = f.status === 'active' ? 'closed' : 'active';
+                    if (f.status === 'active' && !confirm('Close fundraiser “' + f.title + '”?')) return;
+                    if (f.status !== 'active' && !confirm('Reopen fundraiser “' + f.title + '”?')) return;
+                    const r = await adminApi('/admin/fundraisers/' + f.id, { method: 'PATCH', body: { status: nextStatus, confirm_fundraiser_status_change: true } });
+                    if (r.ok) { adminMsg('Updated', true); adminLoadFundraisers(); }
+                });
                 const del = elx('button', 'admin-btn danger', 'Delete');
                 del.addEventListener('click', async () => { if (!confirm('Delete fundraiser “' + f.title + '”?')) return; const r = await adminApi('/admin/fundraisers/' + f.id, { method: 'DELETE' }); if (r.ok) { adminMsg('Deleted', true); adminLoadFundraisers(); } });
                 row.appendChild(close); row.appendChild(del);
