@@ -3,6 +3,7 @@ import * as shopDb from "./shop-db.js";
 import { resolveMemberFlexible, type KVListLike } from "./roster.js";
 import { json, readJson } from "./http.js";
 import { asInt, asStr, inSet } from "./input.js";
+import { createWalletTransactionOnce } from "./wallet-idempotency.js";
 
 const PRODUCT_CATEGORIES = ["disc", "accessory"] as const;
 
@@ -140,7 +141,9 @@ export async function handleAdminShop(
       // Accept any member identifier (name / PDGA# / UDisc / internal id), then store the canonical id.
       const identifier = asStr(body.member_id, 80);
       const amount = asSignedInt(body.amount_cents);
+      const idempotencyKey = asStr(body.idempotency_key, 160);
       if (!identifier || amount == null) return json({ error: "invalid_wallet_adjustment" }, 400, origin);
+      if (!idempotencyKey) return json({ error: "idempotency_key_required" }, 400, origin);
       const resolved = await resolveMemberFlexible(env.ROSTER as unknown as KVListLike, identifier);
       if (!resolved.ok) {
         return resolved.reason === "ambiguous"
@@ -148,7 +151,7 @@ export async function handleAdminShop(
           : json({ error: "member_not_found" }, 404, origin);
       }
       const member = resolved.member;
-      const tx = await shopDb.createWalletTransaction(env.DB, {
+      const txResult = await createWalletTransactionOnce(env.DB, {
         member_id: member.memberId,
         member_name: member.name,
         amount_cents: amount,
@@ -156,8 +159,10 @@ export async function handleAdminShop(
         source: "manual_adjustment",
         note: asStr(body.note, 300),
         created_by: adminId,
+        idempotency_key: idempotencyKey,
       });
-      return json({ transaction: tx, balance_cents: await shopDb.walletBalance(env.DB, member.memberId) }, 201, origin);
+      if (!txResult.ok) return json({ error: txResult.error }, 409, origin);
+      return json({ transaction: txResult.transaction, balance_cents: await shopDb.walletBalance(env.DB, member.memberId) }, txResult.created ? 201 : 200, origin);
     }
   }
 

@@ -663,7 +663,7 @@
                     <div><label for="waMemberId">Member</label><input id="waMemberId" maxlength="80" placeholder="Name, PDGA#, or UDisc" required></div>
                     <div><label for="waAmount">Adjustment ($)</label><input id="waAmount" type="number" step="0.01" required></div>
                     <div style="grid-column:1/-1;"><label for="waNote">Note</label><input id="waNote" maxlength="300" placeholder="League payout, correction, volunteer credit"></div>
-                    <button type="submit" class="admin-btn">Post wallet adjustment</button>
+                    <button type="submit" class="admin-btn" id="waSubmit">Post wallet adjustment</button>
                 </form>
                 <div class="al-section" style="margin-top:1rem;">
                     <h4 class="al-h">Recent wallet ledger</h4>
@@ -862,10 +862,13 @@
             return prefix + ':' + nonce;
         }
         function idempotencyKeyFor(input, prefix) {
-            if (!input.dataset.idempotencyKey) input.dataset.idempotencyKey = makeIdempotencyKey(prefix);
+            if (input.dataset.idempotencyScope !== prefix) {
+                input.dataset.idempotencyScope = prefix;
+                input.dataset.idempotencyKey = makeIdempotencyKey(prefix);
+            }
             return input.dataset.idempotencyKey;
         }
-        function clearIdempotencyKey(input) { delete input.dataset.idempotencyKey; }
+        function clearIdempotencyKey(input) { delete input.dataset.idempotencyKey; delete input.dataset.idempotencyScope; }
         const EDITABLE_EVENT_STATUSES = ['scheduled', 'cancelled'];
         function isLifecycleEventStatus(status) { return status === 'live' || status === 'final'; }
         function eventStatusLabel(status) {
@@ -2177,16 +2180,35 @@
         async function adminPostWalletAdjustment(e) {
             e.preventDefault();
             const amount = dollarsToCents($('waAmount').value);
-            const body = { member_id: $('waMemberId').value.trim(), amount_cents: amount, note: $('waNote').value.trim() || null };
-            if (!body.member_id || amount == null || amount === 0) { adminMsg('Member and non-zero amount are required', false); return; }
-            const r = await adminApi('/admin/wallets/credit', { method: 'POST', body });
-            if (r.ok) { const d = await r.json(); adminMsg('Wallet updated. Balance: ' + dollarsFromCents(d.balance_cents || 0), true); $('adminWalletForm').reset(); adminLoadWalletRecent(); }
-            else {
-                const d = await r.json().catch(() => ({}));
-                const msg = d.error === 'member_not_found' ? 'No member matches that — try their PDGA#, UDisc, or exact name'
-                    : d.error === 'member_ambiguous' ? 'More than one member has that name — use their PDGA# or UDisc instead'
-                    : 'Wallet update failed (' + r.status + ')';
-                adminMsg(msg, false);
+            const memberId = $('waMemberId').value.trim();
+            const note = $('waNote').value.trim() || null;
+            if (!memberId || amount == null || amount === 0) { adminMsg('Member and non-zero amount are required', false); return; }
+            if (!confirm('Post ' + dollarsFromCents(amount) + ' wallet adjustment for ' + memberId + '?')) return;
+            const form = $('adminWalletForm');
+            const btn = $('waSubmit');
+            const key = idempotencyKeyFor(form, 'wallet-adjustment:' + memberId + ':' + amount);
+            const originalText = btn ? btn.textContent : '';
+            if (btn) { btn.disabled = true; btn.textContent = 'Posting...'; }
+            try {
+                const body = { member_id: memberId, amount_cents: amount, note, idempotency_key: key };
+                const r = await adminApi('/admin/wallets/credit', { method: 'POST', body });
+                if (r.ok) {
+                    const d = await r.json();
+                    adminMsg('Wallet updated. Balance: ' + dollarsFromCents(d.balance_cents || 0), true);
+                    form.reset();
+                    clearIdempotencyKey(form);
+                    adminLoadWalletRecent();
+                } else {
+                    const d = await r.json().catch(() => ({}));
+                    const msg = d.error === 'member_not_found' ? 'No member matches that — try their PDGA#, UDisc, or exact name'
+                        : d.error === 'member_ambiguous' ? 'More than one member has that name — use their PDGA# or UDisc instead'
+                        : d.error === 'idempotency_key_required' ? 'Wallet update failed: retry key missing'
+                        : d.error === 'idempotency_key_conflict' ? 'Wallet update failed: retry key was already used for a different adjustment'
+                        : 'Wallet update failed (' + r.status + ')';
+                    adminMsg(msg, false);
+                }
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = originalText; }
             }
         }
 

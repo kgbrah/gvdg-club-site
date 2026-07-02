@@ -71,6 +71,50 @@ describe("pro shop and player wallets", () => {
     expect(dbState.state.balanceCents).toBe(1700);
   });
 
+  it("deduplicates manual wallet adjustments with the same idempotency key", async () => {
+    const dbState = makeDb({ balanceCents: 200 });
+    const body = { member_id: "m_jane", amount_cents: 500, note: "Volunteer credit", idempotency_key: "wallet:m_jane:retry" };
+
+    const first = await call("/admin/wallets/credit", "POST", await token("m_admin"), body, dbState);
+    const second = await call("/admin/wallets/credit", "POST", await token("m_admin"), body, dbState);
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(200);
+    expect(dbState.state.transactions).toHaveLength(1);
+    expect(dbState.state.transactions[0]?.source).toBe("manual_adjustment");
+    expect(dbState.state.balanceCents).toBe(700);
+  });
+
+  it("requires an idempotency key for manual wallet adjustments", async () => {
+    const dbState = makeDb({ balanceCents: 200 });
+    const res = await call("/admin/wallets/credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 500 }, dbState);
+
+    expect(res.status).toBe(400);
+    expect(dbState.state.transactions).toHaveLength(0);
+    expect(dbState.state.balanceCents).toBe(200);
+  });
+
+  it("rejects manual wallet adjustments from non-admin members", async () => {
+    const dbState = makeDb({ balanceCents: 200 });
+    const res = await call("/admin/wallets/credit", "POST", await token("m_jane"), { member_id: "m_jane", amount_cents: 500, idempotency_key: "wallet:m_jane:forbidden" }, dbState);
+
+    expect(res.status).toBe(403);
+    expect(dbState.state.transactions).toHaveLength(0);
+    expect(dbState.state.balanceCents).toBe(200);
+  });
+
+  it("rejects idempotency key reuse for a different manual wallet adjustment", async () => {
+    const dbState = makeDb({ balanceCents: 200 });
+    const key = "wallet:m_jane:conflict";
+    const first = await call("/admin/wallets/credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 500, idempotency_key: key }, dbState);
+    const second = await call("/admin/wallets/credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 600, idempotency_key: key }, dbState);
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(409);
+    expect(dbState.state.transactions).toHaveLength(1);
+    expect(dbState.state.balanceCents).toBe(700);
+  });
+
   it("shows the member wallet balance and ledger", async () => {
     const dbState = makeDb({ balanceCents: 2500 });
     dbState.state.transactions.push({ id: 1, member_id: "m_jane", amount_cents: 2500, source: "event_payout" });
