@@ -692,7 +692,7 @@
                     <div><label for="amPdga">PDGA #</label><input id="amPdga" maxlength="12" inputmode="numeric" placeholder="optional if UDisc set"></div>
                     <div><label for="amUdisc">UDisc username</label><input id="amUdisc" maxlength="50" placeholder="optional if PDGA# set"></div>
                     <div style="display:flex;align-items:flex-end;"><label style="display:flex;align-items:center;gap:.5rem;"><input id="amAdmin" type="checkbox"> Make admin</label></div>
-                    <button type="submit" class="admin-btn">Create &amp; issue temp PIN</button>
+                    <button type="submit" class="admin-btn" id="amSubmit">Create &amp; issue temp PIN</button>
                 </form>
                 <div id="amTempPin" style="display:none;"></div>
                 <div class="al-section" style="margin-top:1rem;">
@@ -2023,9 +2023,20 @@
             const body = { name: $('amName').value.trim(), pdgaNo: $('amPdga').value.trim() || null, udisc: $('amUdisc').value.trim() || null, isAdmin: $('amAdmin').checked };
             if (!body.name) { adminMsg('Name is required', false); return; }
             if (!body.pdgaNo && !body.udisc) { adminMsg('PDGA# or UDisc is required', false); return; }
-            const r = await adminApi('/admin/members', { method: 'POST', body });
-            if (r.ok) { const j = await r.json(); showTempPin(j.member, j.tempPin); adminMsg('Member created', true); $('adminMemberForm').reset(); adminLoadMembers(); }
-            else { let err = {}; try { err = await r.json(); } catch (e) {} adminMsg('Create failed: ' + (err.error || r.status), false); }
+            if (body.isAdmin) {
+                if (!confirm('Create ' + body.name + ' as a club admin? They will be able to manage events, courses, members, shop, and wallets.')) return;
+                body.confirm_admin_grant = true;
+            }
+            const btn = $('amSubmit');
+            const oldText = btn.textContent;
+            btn.disabled = true; btn.textContent = 'Creating...';
+            try {
+                const r = await adminApi('/admin/members', { method: 'POST', body });
+                if (r.ok) { const j = await r.json(); showTempPin(j.member, j.tempPin); adminMsg('Member created', true); $('adminMemberForm').reset(); adminLoadMembers(); }
+                else { let err = {}; try { err = await r.json(); } catch (e) {} adminMsg('Create failed: ' + (err.error || r.status), false); }
+            } finally {
+                btn.disabled = false; btn.textContent = oldText;
+            }
         }
 
         function productThumb(product) {

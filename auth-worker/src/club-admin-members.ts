@@ -35,10 +35,12 @@ export async function handleAdminMembers(
     const pdgaNo = asStr(b.pdgaNo, 12);
     const udisc = asStr(b.udisc, 50);
     const isAdmin = b.isAdmin === true;
+    const adminGrantConfirmed = b.confirm_admin_grant === true;
     if (!name) return json({ error: "name_required" }, 400, origin);
     if (!pdgaNo && !udisc) return json({ error: "pdga_or_udisc_required" }, 400, origin);
     if (pdgaNo && !PDGA_RE.test(pdgaNo)) return json({ error: "invalid_pdga" }, 400, origin);
     if (udisc && !UDISC_RE.test(udisc)) return json({ error: "invalid_udisc" }, 400, origin);
+    if (isAdmin && !adminGrantConfirmed) return json({ error: "admin_grant_confirmation_required" }, 409, origin);
 
     const tempPin = generatePin();
     const result = await createMember(env.ROSTER, { name, pdgaNo, udisc, isAdmin }, await hashPin(tempPin));

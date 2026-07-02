@@ -74,6 +74,23 @@ describe("admin members onboarding", () => {
     expect((await json(l)).mustChangePin).toBe(true);
   });
 
+  it("requires explicit confirmation before creating another admin", async () => {
+    const t = await login("1", "4821");
+
+    const blocked = await worker.fetch(req("/admin/members", "POST", t, { name: "New Admin", pdgaNo: "273071", isAdmin: true }), env);
+    expect(blocked.status).toBe(409);
+    expect(await json(blocked)).toMatchObject({ error: "admin_grant_confirmation_required" });
+    expect(await roster.get("member:m_273071")).toBeNull();
+
+    const confirmed = await worker.fetch(
+      req("/admin/members", "POST", t, { name: "New Admin", pdgaNo: "273071", isAdmin: true, confirm_admin_grant: true }),
+      env,
+    );
+    expect(confirmed.status).toBe(201);
+    const j = await json(confirmed);
+    expect(j.member).toMatchObject({ memberId: "m_273071", name: "New Admin", pdgaNo: "273071", isAdmin: true, mustChangePin: true });
+  });
+
   it("409 when the member already exists; validates input", async () => {
     const t = await login("1", "4821");
     await worker.fetch(req("/admin/members", "POST", t, { name: "A", pdgaNo: "273070" }), env);
