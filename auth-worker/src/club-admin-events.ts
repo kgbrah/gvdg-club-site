@@ -53,6 +53,12 @@ function defaultCtpPayoutNote(event: Record<string, unknown>, ctp: Record<string
 
 const hasField = (body: Record<string, unknown>, field: string): boolean => Object.prototype.hasOwnProperty.call(body, field);
 
+function assignmentInt(value: unknown, fallback: number, min: number, max: number): number | null {
+  if (value == null || value === "") return fallback;
+  const n = asInt(value);
+  return n != null && n >= min && n <= max ? n : null;
+}
+
 export async function handleAdminEvents(
   request: Request,
   env: Env,
@@ -205,13 +211,20 @@ export async function handleAdminEvents(
     let order = regs.map((r) => r.id);
     if (b.shuffle !== false) order = shuffle(order);
     if (seg[3] === "assign-starting-holes") {
+      const groupSize = assignmentInt(b.groupSize, 4, 1, 12);
+      const holeCount = assignmentInt(b.holeCount, 18, 1, 36);
+      if (groupSize == null || holeCount == null) return json({ error: "invalid_assignment" }, 400, origin);
       const ev = (await db.getEvent(env.DB, id)) as { layout_id?: number | null } | null;
       let holes = (await db.getLayoutHoles(env.DB, ev?.layout_id)).map((h) => h.hole);
-      if (!holes.length) holes = Array.from({ length: asInt(b.holeCount) || 18 }, (_, i) => i + 1);
-      const assigned = assignShotgun(order.map(String), holes, asInt(b.groupSize) || 4);
+      if (!holes.length) holes = Array.from({ length: holeCount }, (_, i) => i + 1);
+      const assigned = assignShotgun(order.map(String), holes, groupSize);
       await Promise.all(order.map((rid, i) => db.adminUpdateRegistration(env.DB, id, rid, { starting_hole: assigned[i]!.hole })));
     } else {
-      const opts = asInt(b.size) ? { size: asInt(b.size)! } : { count: asInt(b.count) || 2 };
+      const hasSize = hasField(b, "size");
+      const size = hasSize ? assignmentInt(b.size, 2, 1, 12) : null;
+      const count = hasSize ? null : assignmentInt(b.count, 2, 2, 64);
+      if ((hasSize && size == null) || (!hasSize && count == null)) return json({ error: "invalid_assignment" }, 400, origin);
+      const opts = hasSize ? { size: size ?? 2 } : { count: count ?? 2 };
       const assigned = assignTeams(order.map(String), opts);
       await Promise.all(order.map((rid, i) => db.adminUpdateRegistration(env.DB, id, rid, { team: assigned[i]!.team })));
     }

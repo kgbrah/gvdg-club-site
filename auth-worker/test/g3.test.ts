@@ -74,6 +74,14 @@ describe("Track G G3 — CTPs, ace pots, assignment", () => {
     expect((await call("/admin/events/5/assign-teams", "POST", await tok("m_admin"), { size: 2 })).status).toBe(200);
     expect((await call("/admin/events/5/assign-teams", "POST", await tok("m_jane"), { size: 2 })).status).toBe(403);
   });
+  it("admin assignment rejects invalid sizing", async () => {
+    expect((await call("/admin/events/5/assign-starting-holes", "POST", await tok("m_admin"), { groupSize: 0 })).status).toBe(400);
+    expect((await call("/admin/events/5/assign-starting-holes", "POST", await tok("m_admin"), { groupSize: 13 })).status).toBe(400);
+    expect((await call("/admin/events/5/assign-starting-holes", "POST", await tok("m_admin"), { holeCount: 99 })).status).toBe(400);
+    expect((await call("/admin/events/5/assign-teams", "POST", await tok("m_admin"), { size: 0 })).status).toBe(400);
+    expect((await call("/admin/events/5/assign-teams", "POST", await tok("m_admin"), { size: 13 })).status).toBe(400);
+    expect((await call("/admin/events/5/assign-teams", "POST", await tok("m_admin"), { count: 1 })).status).toBe(400);
+  });
   it("admin edits an event type and can clear optional fields", async () => {
     const edited = await call("/admin/events/5", "PATCH", await tok("m_admin"), { type: "fundraiser", name: "Edited event", format: null, date: null, course_id: null, league_id: null, notes: null });
     expect(edited.status).toBe(200);

@@ -584,7 +584,9 @@
                     <div style="overflow-x:auto;"><table class="al-holes" id="rgRoster"></table></div>
                     <div class="al-row" style="margin-top:0.6rem;">
                         <button type="button" class="admin-btn secondary" id="rgAssignCards">Assign Cards</button>
-                        <span class="al-note">Players/Card <input id="rgCardSize" type="number" min="1" value="4" style="width:3rem"></span>
+                        <span class="al-note">Players/Card <input id="rgCardSize" type="number" min="1" max="12" value="4" style="width:3rem"></span>
+                        <button type="button" class="admin-btn secondary" id="rgAssignTeams">Assign Teams</button>
+                        <span class="al-note">Players/Team <input id="rgTeamSize" type="number" min="1" max="12" value="2" style="width:3rem"></span>
                     </div>
                     <div class="al-section" style="margin-top:1rem;">
                         <h4 class="al-h">Manual players (<span id="rgManualCount">0</span>)</h4>
@@ -2365,11 +2367,34 @@
             adminMsg(r.ok ? 'Updated' : 'Update failed', r.ok);
             if (r.ok) rgLoadRoster();
         }
+        function assignmentCount(id, fallback, label, max) {
+            const raw = $(id).value.trim();
+            if (!raw) return fallback;
+            const n = Number(raw);
+            if (!Number.isInteger(n) || n < 1 || n > max) {
+                adminMsg(label + ' must be between 1 and ' + max, false);
+                return null;
+            }
+            return n;
+        }
         // Assignment (shotgun cards by starting hole) — random
-        async function rgAssign(kind, body) {
-            const r = await adminApi('/admin/events/' + rgEventId + '/' + kind, { method: 'POST', body });
-            adminMsg(r.ok ? 'Assigned' : 'Assign failed (' + r.status + ')', r.ok);
-            if (r.ok) rgLoadRoster();
+        async function rgAssign(kind, body, btn, actionLabel, overwriteLabel) {
+            if (!rgEventId) { adminMsg('Select an event first', false); return; }
+            if (btn && btn.disabled) return;
+            const count = parseInt($('rgCount').textContent, 10) || 0;
+            if (!count) { adminMsg('No registered players to assign', false); return; }
+            const eventName = $('rgEvent').selectedOptions[0]?.textContent || 'this event';
+            const confirmed = confirm(actionLabel + ' for ' + count + ' registered players in ' + eventName + '? Existing ' + overwriteLabel + ' will be overwritten.');
+            if (!confirmed) return;
+            const originalText = btn ? btn.textContent : '';
+            if (btn) { btn.disabled = true; btn.textContent = 'Assigning...'; }
+            try {
+                const r = await adminApi('/admin/events/' + rgEventId + '/' + kind, { method: 'POST', body });
+                adminMsg(r.ok ? actionLabel + ' complete' : actionLabel + ' failed (' + r.status + ')', r.ok);
+                if (r.ok) rgLoadRoster();
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = originalText; }
+            }
         }
         // CTPs
         async function rgLoadCtps() {
@@ -2486,7 +2511,14 @@
             $('rgEvent').addEventListener('change', rgOnSelect);
             $('rgSaveBtn').addEventListener('click', rgSaveConfig);
             $('rgPlayerAdd').addEventListener('click', rgAddManualPlayer);
-            $('rgAssignCards').addEventListener('click', () => rgAssign('assign-starting-holes', { shuffle: true, groupSize: parseInt($('rgCardSize').value, 10) || 4 }));
+            $('rgAssignCards').addEventListener('click', () => {
+                const groupSize = assignmentCount('rgCardSize', 4, 'Players per card', 12);
+                if (groupSize != null) rgAssign('assign-starting-holes', { shuffle: true, groupSize }, $('rgAssignCards'), 'Assign cards', 'start holes');
+            });
+            $('rgAssignTeams').addEventListener('click', () => {
+                const size = assignmentCount('rgTeamSize', 2, 'Players per team', 12);
+                if (size != null) rgAssign('assign-teams', { shuffle: true, size }, $('rgAssignTeams'), 'Assign teams', 'teams');
+            });
             $('rgCtpAdd').addEventListener('click', rgAddCtp);
             $('rgAceSave').addEventListener('click', () => rgAcePut({ carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100), status: 'active' }));
             $('rgAcePayout').addEventListener('click', () => rgAcePut({ status: 'paid_out', winner_name: $('rgAceWinner').value.trim() || null, carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100) }));
