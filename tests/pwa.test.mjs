@@ -98,8 +98,12 @@ test('admin delete blockers surface dependent records', () => {
   assert.match(html, /DELETE_BLOCKER_LABELS/);
   assert.match(html, /course_layouts: 'layouts'/);
   assert.match(html, /round_ratings: 'round ratings'/);
+  assert.match(html, /winner: 'a recorded winner'/);
   assert.match(html, /deleteBlockedMessage\('event', r\.status, d\)/);
   assert.match(html, /deleteBlockedMessage\('layout', r\.status, d\)/);
+  assert.match(html, /confirm\('Delete CTP for hole ' \+ c\.hole \+ '\?'\)/);
+  assert.match(html, /deleteBlockedMessage\('CTP', r\.status, d\)/);
+  assert.match(html, /del\.disabled = true; del\.textContent = 'Deleting\.\.\.'/);
 });
 
 test('score course picker rows use themed text and app font', () => {
@@ -110,7 +114,7 @@ test('score course picker rows use themed text and app font', () => {
 
 test('shared service worker caches app install assets and member fallback', () => {
   const sw = readFileSync('sw.js', 'utf8');
-  assert.match(sw, /const CACHE = "gvdg-club-v14"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v15"/);
   assert.match(sw, /const OFFLINE_PAGE = "gvdg-members\.html"/);
   assert.match(sw, /const STATIC_DESTINATIONS = new Set/);
   assert.match(sw, /if \(!staticAsset\(req, url\)\) return/);

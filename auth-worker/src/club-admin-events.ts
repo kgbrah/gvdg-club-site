@@ -1,9 +1,10 @@
 import type { Env } from "./env.js";
 import * as db from "./db.js";
 import * as shopDb from "./shop-db.js";
+import { handleAdminCtps } from "./admin-ctp-routes.js";
 import { checkEventDeletion, isLifecycleManagedStatus } from "./admin-event-safety.js";
 import { EVENT_FORMATS, EVENT_STATUSES, EVENT_TYPES } from "./db.js";
-import { checkWalletTransactionIdempotency, createWalletTransactionOnce } from "./wallet-idempotency.js";
+import { createWalletTransactionOnce } from "./wallet-idempotency.js";
 import { assignShotgun, assignTeams } from "./assign.js";
 import { getMember } from "./roster.js";
 import { enrichHoles, type LayoutHole } from "./layouts.js";
@@ -33,22 +34,6 @@ function shuffle<T>(arr: T[]): T[] {
     [a[i], a[j]] = [a[j]!, a[i]!];
   }
   return a;
-}
-
-function textValue(value: unknown): string | null {
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-function defaultCtpPayoutNote(event: Record<string, unknown>, ctp: Record<string, unknown>): string {
-  const parts = [`CTP payout: ${textValue(event.name) ?? "event"}`];
-  const hole = textValue(ctp.hole);
-  if (hole) parts.push(`hole ${hole}`);
-  const division = textValue(ctp.division);
-  if (division) parts.push(division);
-  const prize = textValue(ctp.prize);
-  if (prize) parts.push(prize);
-  return parts.join(" - ");
 }
 
 const hasField = (body: Record<string, unknown>, field: string): boolean => Object.prototype.hasOwnProperty.call(body, field);
@@ -142,59 +127,8 @@ export async function handleAdminEvents(
       return json({ transaction: txResult.transaction, balance_cents: await shopDb.walletBalance(env.DB, memberId), payouts: await shopDb.listEventStoreCreditPayouts(env.DB, id) }, txResult.created ? 201 : 200, origin);
     }
   }
-  if (seg[3] === "ctps" && id != null) {
-    if (method === "POST" && seg[4] == null) {
-      const b = await readJson(request);
-      const hole = b && asInt(b.hole);
-      if (!b || hole == null) return json({ error: "invalid_ctp" }, 400, origin);
-      const row = await db.createCtp(env.DB, { event_id: id, hole, division: asStr(b.division, 60), prize: asStr(b.prize, 200) });
-      return json({ ctp: row }, 201, origin);
-    }
-    const cid = seg[4] != null ? asInt(seg[4]) : null;
-    if (method === "POST" && cid != null && seg[5] === "store-credit") {
-      const body = (await readJson(request)) ?? {};
-      const memberId = asStr(body.member_id, 80);
-      const amount = asInt(body.amount_cents);
-      const idempotencyKey = asStr(body.idempotency_key, 160);
-      if (!memberId || amount == null || amount <= 0) return json({ error: "invalid_store_credit" }, 400, origin);
-      if (!idempotencyKey) return json({ error: "idempotency_key_required" }, 400, origin);
-      const event = await db.getEvent(env.DB, id);
-      if (!event) return json({ error: "not_found" }, 404, origin);
-      const member = await getMember(env.ROSTER, memberId);
-      if (!member) return json({ error: "member_not_found" }, 404, origin);
-      const txInput = {
-        member_id: memberId,
-        member_name: member.name,
-        amount_cents: amount,
-        transaction_type: "credit",
-        source: "event_payout",
-        event_id: id,
-        note: asStr(body.note, 300),
-        created_by: adminId,
-        idempotency_key: idempotencyKey,
-      };
-      const idempotency = await checkWalletTransactionIdempotency(env.DB, txInput);
-      if (!idempotency.ok) return json({ error: idempotency.error }, 409, origin);
-      const winnerName = asStr(body.winner_name, 100) ?? member.name;
-      const ctp = await db.setCtpWinner(env.DB, cid, id, memberId, winnerName);
-      if (!ctp) return json({ error: "not_found" }, 404, origin);
-      if (idempotency.transaction) {
-        return json({ ctp, transaction: idempotency.transaction, balance_cents: await shopDb.walletBalance(env.DB, memberId), payouts: await shopDb.listEventStoreCreditPayouts(env.DB, id) }, 200, origin);
-      }
-      const txResult = await createWalletTransactionOnce(env.DB, { ...txInput, note: txInput.note ?? defaultCtpPayoutNote(event, ctp) });
-      if (!txResult.ok) return json({ error: txResult.error }, 409, origin);
-      return json({ ctp, transaction: txResult.transaction, balance_cents: await shopDb.walletBalance(env.DB, memberId), payouts: await shopDb.listEventStoreCreditPayouts(env.DB, id) }, txResult.created ? 201 : 200, origin);
-    }
-    if (method === "PATCH" && cid != null && seg[5] == null) {
-      const b = (await readJson(request)) ?? {};
-      const row = await db.setCtpWinner(env.DB, cid, id, asStr(b.winner_member_id, 64), asStr(b.winner_name, 100));
-      return row ? json({ ctp: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
-    }
-    if (method === "DELETE" && cid != null && seg[5] == null) {
-      await db.deleteCtp(env.DB, id, cid);
-      return json({ ok: true }, 200, origin);
-    }
-  }
+  const ctpResponse = await handleAdminCtps({ request, env, origin, method, seg, adminId, eventId: id });
+  if (ctpResponse) return ctpResponse;
   if (seg[3] === "ace-pot" && id != null && method === "PUT") {
     const b = (await readJson(request)) ?? {};
     const status = b.status == null ? "active" : (inSet(["active", "paid_out", "carried"], b.status) ? (b.status as string) : undefined);

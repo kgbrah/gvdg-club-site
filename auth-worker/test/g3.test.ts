@@ -8,12 +8,21 @@ const members = {
   "member:m_jane": JSON.stringify({ memberId: "m_jane", name: "Jane", isAdmin: false, pinHash: "x", mustChangePin: false }),
   "member:m_admin": JSON.stringify({ memberId: "m_admin", name: "Admin", isAdmin: true, pinHash: "x", mustChangePin: false }),
 };
+type TestStatement = {
+  bind(...vals: unknown[]): TestStatement;
+  all(): Promise<{ results: unknown[]; success: boolean }>;
+  first(): Promise<Record<string, unknown> | null>;
+  run(): Promise<{ results: unknown[]; success: boolean; meta?: { changes?: number } }>;
+};
+type TestDb = {
+  prepare(sql: string): TestStatement;
+};
 function kv(initial: Record<string, string> = {}) {
   const m = new Map(Object.entries(initial));
   return { get: async (k: string) => m.get(k) ?? null, put: async (k: string, v: string) => void m.set(k, v), delete: async (k: string) => void m.delete(k) };
 }
-const db = { prepare: (sql: string) => ({
-  bind() { return this; },
+const db: TestDb = { prepare: (sql: string) => ({
+  bind(..._vals: unknown[]) { return this; },
   all: async () => {
     if (/FROM registrations/i.test(sql)) return { results: [{ id: 1, name: "A" }, { id: 2, name: "B" }], success: true };
     if (/FROM ctps/i.test(sql)) return { results: [{ id: 1, hole: 7, prize: "disc" }], success: true };
@@ -36,13 +45,30 @@ const db = { prepare: (sql: string) => ({
   },
   run: async () => ({ results: [], success: true }),
 }) };
-const env = () => ({ ROSTER: kv(members), RATELIMIT: kv(), DB: db, JWT_SECRET: SECRET, ALLOWED_ORIGINS: "http://localhost:8080", LIVE: undefined } as unknown as Parameters<typeof worker.fetch>[1]);
+const env = (database = db) => ({ ROSTER: kv(members), RATELIMIT: kv(), DB: database, JWT_SECRET: SECRET, ALLOWED_ORIGINS: "http://localhost:8080", LIVE: undefined } as unknown as Parameters<typeof worker.fetch>[1]);
 const tok = (sub: string) => signSession({ sub, mustChangePin: false }, SECRET, 900);
-async function call(path: string, method = "GET", token?: string, body?: unknown) {
+async function call(path: string, method = "GET", token?: string, body?: unknown, database = db) {
   const h: Record<string, string> = { Origin: "http://localhost:8080" };
   if (token) h.authorization = "Bearer " + token;
   if (body) h["content-type"] = "application/json";
-  return worker.fetch(new Request("https://w" + path, { method, headers: h, body: body ? JSON.stringify(body) : undefined }), env());
+  return worker.fetch(new Request("https://w" + path, { method, headers: h, body: body ? JSON.stringify(body) : undefined }), env(database));
+}
+
+function ctpDeleteDb(ctp: Record<string, unknown> | null, deleteChanges = 1) {
+  let deleted = false;
+  const database: TestDb = { prepare: (sql: string) => ({
+    bind(..._vals: unknown[]) { return this; },
+    all: async () => ({ results: [], success: true }),
+    first: async () => {
+      if (/SELECT \* FROM ctps WHERE id = \? AND event_id = \?/i.test(sql)) return ctp;
+      return null;
+    },
+    run: async () => {
+      if (/DELETE FROM ctps/i.test(sql)) deleted = true;
+      return { results: [], success: true, meta: { changes: deleteChanges } };
+    },
+  }) };
+  return { database, deleted: () => deleted };
 }
 
 describe("Track G G3 — CTPs, ace pots, assignment", () => {
@@ -62,6 +88,36 @@ describe("Track G G3 — CTPs, ace pots, assignment", () => {
     expect(objectField(body, "ctp").winner_member_id).toBe("m_jane");
     expect(objectField(body, "transaction").source).toBe("event_payout");
     expect(body.balance_cents).toBe(1200);
+  });
+  it("admin cannot delete a missing CTP", async () => {
+    const fixture = ctpDeleteDb(null);
+    const res = await call("/admin/events/5/ctps/99", "DELETE", await tok("m_admin"), undefined, fixture.database);
+
+    expect(res.status).toBe(404);
+    expect(fixture.deleted()).toBe(false);
+  });
+  it("admin cannot delete a CTP after a winner is recorded", async () => {
+    const fixture = ctpDeleteDb({ id: 1, event_id: 5, hole: 7, winner_member_id: "m_jane", winner_name: "Jane" });
+    const res = await call("/admin/events/5/ctps/1", "DELETE", await tok("m_admin"), undefined, fixture.database);
+
+    expect(res.status).toBe(409);
+    expect(await jsonObject(res)).toMatchObject({ error: "ctp_delete_blocked", blockers: ["winner"] });
+    expect(fixture.deleted()).toBe(false);
+  });
+  it("admin can delete a CTP before a winner is recorded", async () => {
+    const fixture = ctpDeleteDb({ id: 1, event_id: 5, hole: 7, winner_member_id: null, winner_name: null });
+    const res = await call("/admin/events/5/ctps/1", "DELETE", await tok("m_admin"), undefined, fixture.database);
+
+    expect(res.status).toBe(200);
+    expect(fixture.deleted()).toBe(true);
+  });
+  it("admin CTP delete is blocked if the row becomes awarded during delete", async () => {
+    const fixture = ctpDeleteDb({ id: 1, event_id: 5, hole: 7, winner_member_id: null, winner_name: null }, 0);
+    const res = await call("/admin/events/5/ctps/1", "DELETE", await tok("m_admin"), undefined, fixture.database);
+
+    expect(res.status).toBe(409);
+    expect(await jsonObject(res)).toMatchObject({ error: "ctp_delete_blocked", blockers: ["winner"] });
+    expect(fixture.deleted()).toBe(true);
   });
   it("ace pot: admin sets carryover; public total = carryover + paid contributors * fee", async () => {
     expect((await call("/admin/events/5/ace-pot", "PUT", await tok("m_admin"), { carryover_in_cents: 1000 })).status).toBe(200);
