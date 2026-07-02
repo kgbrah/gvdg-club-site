@@ -1,5 +1,6 @@
 import type { Env } from "./env.js";
 import * as db from "./db.js";
+import { checkLayoutDeletion } from "./admin-course-safety.js";
 import { enrichHoles, verifiedOf, type LayoutHole } from "./layouts.js";
 import { json, readJson } from "./http.js";
 import { asInt, asStr, sanitizeHoles } from "./input.js";
@@ -43,6 +44,8 @@ export async function handleAdminLayouts(
     return row ? json({ layout: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
   }
   if (method === "DELETE" && id != null) {
+    const check = await checkLayoutDeletion(env.DB, id);
+    if (!check.ok) return json({ error: check.error, blockers: check.blockers }, check.error === "not_found" ? 404 : 409, origin);
     await db.deleteLayout(env.DB, id);
     return json({ ok: true }, 200, origin);
   }

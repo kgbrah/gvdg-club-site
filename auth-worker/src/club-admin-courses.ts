@@ -1,5 +1,6 @@
 import type { Env } from "./env.js";
 import * as db from "./db.js";
+import { checkCourseDeletion } from "./admin-course-safety.js";
 import { json, readJson } from "./http.js";
 import { asInt, asNum, asStr, cleanPosition, isUniqueViolation } from "./input.js";
 
@@ -81,6 +82,8 @@ export async function handleAdminCourses(
     }
   }
   if (method === "DELETE" && id != null) {
+    const check = await checkCourseDeletion(env.DB, id);
+    if (!check.ok) return json({ error: check.error, blockers: check.blockers }, check.error === "not_found" ? 404 : 409, origin);
     await db.deleteCourse(env.DB, id);
     return json({ ok: true }, 200, origin);
   }

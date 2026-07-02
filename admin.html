@@ -853,6 +853,12 @@
         const elx = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
         function adminMsg(text, ok) { const m = $('adminMsg'); m.textContent = text || ''; m.className = 'admin-msg' + (text ? (ok ? ' ok' : ' err') : ''); }
         function adminApi(path, opts) { return api(path, { ...(opts || {}), token: sessionStorage.getItem(TOKEN_KEY) }); }
+        const DELETE_BLOCKER_LABELS = { event_config: 'registration settings', registrations: 'registrations', event_players: 'players', results: 'results', ctps: 'CTPs', wallet_transactions: 'wallet payouts', ace_pots: 'ace pot', course_layouts: 'layouts', course_positions: 'tee/target positions', events: 'events', tee_signs: 'tee signs', casual_round_requests: 'casual round requests', round_ratings: 'round ratings', layout_ssa: 'ratings baseline' };
+        function deleteBlockedMessage(subject, status, body) {
+            const blockers = body && Array.isArray(body.blockers) ? body.blockers : [];
+            if (!blockers.length) return 'Delete failed (' + status + ')';
+            return 'Cannot delete ' + subject + ' while it has ' + blockers.map((b) => DELETE_BLOCKER_LABELS[b] || b).join(', ') + '.';
+        }
         function dollarsFromCents(c) { const n = Number(c || 0); const abs = Math.abs(n); const out = '$' + (abs / 100).toLocaleString(undefined, { minimumFractionDigits: abs % 100 ? 2 : 0 }); return n < 0 ? '-' + out : out; }
         function dollarsToCents(v) { const n = parseFloat(v); return Number.isFinite(n) ? Math.round(n * 100) : null; }
         function makeIdempotencyKey(prefix) {
@@ -993,7 +999,8 @@
                 del.addEventListener('click', async () => {
                     if (!confirm('Delete event “' + ev.name + '”?')) return;
                     const r = await adminApi('/admin/events/' + ev.id, { method: 'DELETE' });
-                    adminMsg(r.ok ? 'Deleted “' + ev.name + '”' : 'Delete failed', r.ok);
+                    const d = r.ok ? {} : await r.json().catch(() => ({}));
+                    adminMsg(r.ok ? 'Deleted “' + ev.name + '”' : deleteBlockedMessage('event', r.status, d), r.ok);
                     if (r.ok) adminLoadEvents();
                 });
                 row.appendChild(del);
@@ -1548,7 +1555,18 @@
                 const edit = elx('button', 'admin-btn secondary', 'Edit');
                 edit.addEventListener('click', () => alEditLayout(l, holes));
                 const del = elx('button', 'admin-btn danger', 'Delete');
-                del.addEventListener('click', async () => { if (!confirm('Delete layout “' + l.name + '”?')) return; const r = await adminApi('/admin/layouts/' + l.id, { method: 'DELETE' }); if (r.ok) { adminMsg('Deleted layout', true); if (alEditing === l.id) alResetLayout(); alLoadLayouts(); } });
+                del.addEventListener('click', async () => {
+                    if (!confirm('Delete layout “' + l.name + '”?')) return;
+                    const r = await adminApi('/admin/layouts/' + l.id, { method: 'DELETE' });
+                    if (r.ok) {
+                        adminMsg('Deleted layout', true);
+                        if (alEditing === l.id) alResetLayout();
+                        alLoadLayouts();
+                    } else {
+                        const d = await r.json().catch(() => ({}));
+                        adminMsg(deleteBlockedMessage('layout', r.status, d), false);
+                    }
+                });
                 row.appendChild(edit); row.appendChild(del);
                 wrap.appendChild(row);
             });

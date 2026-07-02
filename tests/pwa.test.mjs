@@ -93,6 +93,15 @@ test('admin wallet adjustments confirm and carry retry keys', () => {
   assert.match(html, /btn\.disabled = true; btn\.textContent = 'Posting\.\.\.'/);
 });
 
+test('admin delete blockers surface dependent records', () => {
+  const html = readFileSync('admin.html', 'utf8');
+  assert.match(html, /DELETE_BLOCKER_LABELS/);
+  assert.match(html, /course_layouts: 'layouts'/);
+  assert.match(html, /round_ratings: 'round ratings'/);
+  assert.match(html, /deleteBlockedMessage\('event', r\.status, d\)/);
+  assert.match(html, /deleteBlockedMessage\('layout', r\.status, d\)/);
+});
+
 test('score course picker rows use themed text and app font', () => {
   const html = readFileSync('score.html', 'utf8');
   assert.match(html, /c\.appendChild\(el\('h2', 'section', 'Pick a course'\)\)/);
@@ -101,7 +110,7 @@ test('score course picker rows use themed text and app font', () => {
 
 test('shared service worker caches app install assets and member fallback', () => {
   const sw = readFileSync('sw.js', 'utf8');
-  assert.match(sw, /const CACHE = "gvdg-club-v13"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v14"/);
   assert.match(sw, /const OFFLINE_PAGE = "gvdg-members\.html"/);
   assert.match(sw, /const STATIC_DESTINATIONS = new Set/);
   assert.match(sw, /if \(!staticAsset\(req, url\)\) return/);
