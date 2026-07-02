@@ -75,9 +75,15 @@ test('admin live scoring layout selector uses themed picker styles', () => {
   assert.match(html, /#alCourse,\s*#scEvent,\s*#scLayout,\s*#rgEvent\s*\{/);
 });
 
+test('score course picker rows use themed text and app font', () => {
+  const html = readFileSync('score.html', 'utf8');
+  assert.match(html, /c\.appendChild\(el\('h2', 'section', 'Pick a course'\)\)/);
+  assert.match(html, /\.tap-row\s*\{[^}]*color: var\(--text-primary\); font: inherit;/s);
+});
+
 test('shared service worker caches app install assets and member fallback', () => {
   const sw = readFileSync('sw.js', 'utf8');
-  assert.match(sw, /const CACHE = "gvdg-club-v10"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v11"/);
   assert.match(sw, /const OFFLINE_PAGE = "gvdg-members\.html"/);
   assert.match(sw, /const STATIC_DESTINATIONS = new Set/);
   assert.match(sw, /if \(!staticAsset\(req, url\)\) return/);
