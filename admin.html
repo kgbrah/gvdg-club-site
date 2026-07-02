@@ -2303,7 +2303,7 @@
                 tr.appendChild(elx('td', null, rg.team || '—'));
                 const shTd = document.createElement('td'); const sh = document.createElement('input'); sh.type = 'number'; sh.min = '1'; sh.style.width = '3.5rem'; if (rg.starting_hole != null) sh.value = rg.starting_hole; sh.addEventListener('change', () => rgPatch(rg.id, { starting_hole: parseInt(sh.value, 10) || null })); shTd.appendChild(sh); tr.appendChild(shTd);
                 tr.appendChild(rgToggleCell(rg.checked_in, (v) => rgPatch(rg.id, { checked_in: v })));
-                tr.appendChild(rgToggleCell(rg.paid_entry, (v) => rgPatch(rg.id, { paid_entry: v })));
+                tr.appendChild(rgToggleCell(rg.paid_entry, (v) => rgConfirmPaidEntry(rg, v)));
                 tr.appendChild(rgCreditCell(rg));
                 tbody.appendChild(tr);
             });
@@ -2411,12 +2411,34 @@
         }
         function rgToggleCell(on, onChange) {
             const td = document.createElement('td'); const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!on;
-            cb.addEventListener('change', () => onChange(cb.checked)); td.appendChild(cb); return td;
+            cb.addEventListener('change', async () => {
+                const next = cb.checked;
+                cb.disabled = true;
+                try {
+                    const ok = await onChange(next);
+                    if (!ok) cb.checked = !next;
+                } catch (e) {
+                    cb.checked = !next;
+                    adminMsg('Update failed', false);
+                } finally {
+                    cb.disabled = false;
+                }
+            }); td.appendChild(cb); return td;
+        }
+        function rgConfirmPaidEntry(rg, paid) {
+            const name = rg.name || rg.member_id || 'this player';
+            if (paid) {
+                if (!confirm('Mark ' + name + ' as paid for this event?')) return false;
+            } else if (!confirm('Mark ' + name + ' as unpaid for this event?')) {
+                return false;
+            }
+            return rgPatch(rg.id, { paid_entry: paid, confirm_paid_entry_change: true });
         }
         async function rgPatch(rid, patch) {
             const r = await adminApi('/admin/events/' + rgEventId + '/registrations/' + rid, { method: 'PATCH', body: patch });
             adminMsg(r.ok ? 'Updated' : 'Update failed', r.ok);
             if (r.ok) rgLoadRoster();
+            return r.ok;
         }
         function assignmentCount(id, fallback, label, max) {
             const raw = $(id).value.trim();

@@ -111,6 +111,14 @@ test('admin ace pot resolution confirms payout and carry actions', () => {
   assert.match(html, /btn\.disabled = true; btn\.textContent = busyText/);
 });
 
+test('admin paid registration changes require confirmation', () => {
+  const html = readFileSync('admin.html', 'utf8');
+  assert.match(html, /Paid\?/);
+  assert.match(html, /confirm\('Mark ' \+ name \+ ' as paid for this event\?'\)/);
+  assert.match(html, /confirm\('Mark ' \+ name \+ ' as unpaid for this event\?'\)/);
+  assert.match(html, /confirm_paid_entry_change: true/);
+});
+
 test('admin delete blockers surface dependent records', () => {
   const html = readFileSync('admin.html', 'utf8');
   assert.match(html, /DELETE_BLOCKER_LABELS/);
@@ -132,7 +140,7 @@ test('score course picker rows use themed text and app font', () => {
 
 test('shared service worker caches app install assets and member fallback', () => {
   const sw = readFileSync('sw.js', 'utf8');
-  assert.match(sw, /const CACHE = "gvdg-club-v17"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v18"/);
   assert.match(sw, /const OFFLINE_PAGE = "gvdg-members\.html"/);
   assert.match(sw, /const STATIC_DESTINATIONS = new Set/);
   assert.match(sw, /if \(!staticAsset\(req, url\)\) return/);

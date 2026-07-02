@@ -218,6 +218,27 @@ describe("admin event management", () => {
     expect(state.registrationUpdateBinds).toEqual([null, 44, 9]);
   });
 
+  it("requires confirmation before changing paid registration status", async () => {
+    const jwt = await token("m_admin");
+    const unconfirmedState: DbState = {};
+    const unconfirmed = await call("/admin/events/9/registrations/44", "PATCH", { paid_entry: true }, jwt, unconfirmedState);
+
+    expect(unconfirmed.status).toBe(409);
+    expect(unconfirmedState.registrationUpdateBinds).toBeUndefined();
+
+    const confirmedState: DbState = {};
+    const confirmed = await call(
+      "/admin/events/9/registrations/44",
+      "PATCH",
+      { paid_entry: true, confirm_paid_entry_change: true },
+      jwt,
+      confirmedState,
+    );
+
+    expect(confirmed.status).toBe(200);
+    expect(confirmedState.registrationUpdateBinds).toEqual([1, 44, 9]);
+  });
+
   it("requires confirmation and a winner before resolving ace pot payout", async () => {
     const jwt = await token("m_admin");
     const unconfirmedState: DbState = {};

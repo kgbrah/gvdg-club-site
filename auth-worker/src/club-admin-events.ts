@@ -94,7 +94,10 @@ export async function handleAdminEvents(
         patch.starting_hole = startingHole;
       }
       if (hasField(b, "checked_in")) patch.checked_in = b.checked_in ? 1 : 0;
-      if (hasField(b, "paid_entry")) patch.paid_entry = b.paid_entry ? 1 : 0;
+      if (hasField(b, "paid_entry")) {
+        if (b.confirm_paid_entry_change !== true) return json({ error: "paid_entry_confirmation_required" }, 409, origin);
+        patch.paid_entry = b.paid_entry ? 1 : 0;
+      }
       const row = await db.adminUpdateRegistration(env.DB, id, rid, patch);
       return row ? json({ registration: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
     }
