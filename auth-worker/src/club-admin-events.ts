@@ -133,9 +133,13 @@ export async function handleAdminEvents(
     const b = (await readJson(request)) ?? {};
     const status = b.status == null ? "active" : (inSet(["active", "paid_out", "carried"], b.status) ? (b.status as string) : undefined);
     if (status === undefined) return json({ error: "invalid_ace_pot" }, 400, origin);
+    const winnerMemberId = asStr(b.winner_member_id, 64);
+    const winnerName = asStr(b.winner_name, 100);
+    if (status !== "active" && b.confirm_ace_pot_resolution !== true) return json({ error: "ace_pot_confirmation_required" }, 409, origin);
+    if (status === "paid_out" && !winnerMemberId && !winnerName) return json({ error: "ace_pot_winner_required" }, 400, origin);
     const row = await db.upsertAcePot(env.DB, id, {
-      carryover_in_cents: asInt(b.carryover_in_cents), status, winner_member_id: asStr(b.winner_member_id, 64),
-      winner_name: asStr(b.winner_name, 100), payout_cents: asInt(b.payout_cents), resolved_at: status === "active" ? null : new Date().toISOString(),
+      carryover_in_cents: asInt(b.carryover_in_cents), status, winner_member_id: winnerMemberId,
+      winner_name: winnerName, payout_cents: asInt(b.payout_cents), resolved_at: status === "active" ? null : new Date().toISOString(),
     });
     return json({ ace_pot: row }, 200, origin);
   }

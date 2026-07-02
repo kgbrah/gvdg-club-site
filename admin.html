@@ -2528,10 +2528,31 @@
             $('rgAceInfo').textContent = pot ? ('Total pot ' + d(pot.total_cents) + ' = carryover ' + d(pot.carryover_in_cents) + ' + ' + (pot.contributors || 0) + ' paid × ' + d(pot.ace_fee_cents) + ' · status: ' + (pot.status || 'active') + (pot.winner_name ? ' · 🏆 ' + pot.winner_name : '')) : 'No ace pot data.';
             if (pot && pot.carryover_in_cents != null) $('rgAceCarry').value = pot.carryover_in_cents / 100;
         }
-        async function rgAcePut(body) {
-            const r = await adminApi('/admin/events/' + rgEventId + '/ace-pot', { method: 'PUT', body });
-            adminMsg(r.ok ? 'Ace pot updated' : 'Ace pot failed', r.ok);
-            if (r.ok) rgLoadAcePot();
+        function rgAceCarryCents() {
+            return Math.round((parseFloat($('rgAceCarry').value) || 0) * 100);
+        }
+        async function rgAcePut(body, btn, busyText) {
+            const oldText = btn ? btn.textContent : '';
+            if (btn) { btn.disabled = true; btn.textContent = busyText; }
+            try {
+                const r = await adminApi('/admin/events/' + rgEventId + '/ace-pot', { method: 'PUT', body });
+                adminMsg(r.ok ? 'Ace pot updated' : 'Ace pot failed (' + r.status + ')', r.ok);
+                if (r.ok) rgLoadAcePot();
+            } catch (e) {
+                adminMsg('Ace pot failed', false);
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = oldText; }
+            }
+        }
+        function rgAcePayout() {
+            const winner = $('rgAceWinner').value.trim();
+            if (!winner) { adminMsg('Ace pot payout needs a winner name', false); return; }
+            if (!confirm('Mark ace pot paid out to ' + winner + '? This resolves the ace pot for this event.')) return;
+            return rgAcePut({ status: 'paid_out', winner_name: winner, carryover_in_cents: rgAceCarryCents(), confirm_ace_pot_resolution: true }, $('rgAcePayout'), 'Paying...');
+        }
+        function rgAceCarryNext() {
+            if (!confirm('Carry this ace pot to the next event? This resolves the ace pot for this event.')) return;
+            return rgAcePut({ status: 'carried', carryover_in_cents: rgAceCarryCents(), confirm_ace_pot_resolution: true }, $('rgAceCarryNext'), 'Carrying...');
         }
 
         function initAdmin() {
@@ -2583,9 +2604,9 @@
                 if (size != null) rgAssign('assign-teams', { shuffle: true, size }, $('rgAssignTeams'), 'Assign teams', 'teams');
             });
             $('rgCtpAdd').addEventListener('click', rgAddCtp);
-            $('rgAceSave').addEventListener('click', () => rgAcePut({ carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100), status: 'active' }));
-            $('rgAcePayout').addEventListener('click', () => rgAcePut({ status: 'paid_out', winner_name: $('rgAceWinner').value.trim() || null, carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100) }));
-            $('rgAceCarryNext').addEventListener('click', () => rgAcePut({ status: 'carried', carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100) }));
+            $('rgAceSave').addEventListener('click', () => rgAcePut({ carryover_in_cents: rgAceCarryCents(), status: 'active' }, $('rgAceSave'), 'Saving...'));
+            $('rgAcePayout').addEventListener('click', rgAcePayout);
+            $('rgAceCarryNext').addEventListener('click', rgAceCarryNext);
             adminLoadEvents();
             adminLoadCourses();
             adminLoadLeagues();

@@ -24,6 +24,7 @@ type DbState = {
   updateEventBinds?: unknown[];
   registrationUpdateBinds?: unknown[];
   playerBinds?: unknown[];
+  acePotBinds?: unknown[];
   removedPlayer?: number;
   deleteEventId?: number;
   eventStatus?: string;
@@ -100,6 +101,18 @@ function db(state: DbState = {}) {
           if (/INSERT INTO event_players/i.test(sql)) {
             state.playerBinds = binds;
             return { id: 88, event_id: binds[0], member_id: binds[1], name: binds[2], pdga_no: binds[3], division: binds[4], team: binds[5] };
+          }
+          if (/INSERT INTO ace_pots/i.test(sql)) {
+            state.acePotBinds = binds;
+            return {
+              event_id: binds[0],
+              carryover_in_cents: binds[1],
+              status: binds[2],
+              winner_member_id: binds[3],
+              winner_name: binds[4],
+              payout_cents: binds[5],
+              resolved_at: binds[6],
+            };
           }
           if (/UPDATE events/i.test(sql)) {
             state.updateEventBinds = binds;
@@ -203,6 +216,34 @@ describe("admin event management", () => {
 
     expect(res.status).toBe(200);
     expect(state.registrationUpdateBinds).toEqual([null, 44, 9]);
+  });
+
+  it("requires confirmation and a winner before resolving ace pot payout", async () => {
+    const jwt = await token("m_admin");
+    const unconfirmedState: DbState = {};
+    const unconfirmed = await call("/admin/events/9/ace-pot", "PUT", { status: "paid_out", winner_name: "Ace Winner", carryover_in_cents: 2500 }, jwt, unconfirmedState);
+
+    expect(unconfirmed.status).toBe(409);
+    expect(unconfirmedState.acePotBinds).toBeUndefined();
+
+    const missingWinnerState: DbState = {};
+    const missingWinner = await call("/admin/events/9/ace-pot", "PUT", { status: "paid_out", carryover_in_cents: 2500, confirm_ace_pot_resolution: true }, jwt, missingWinnerState);
+
+    expect(missingWinner.status).toBe(400);
+    expect(missingWinnerState.acePotBinds).toBeUndefined();
+
+    const confirmedState: DbState = {};
+    const confirmed = await call(
+      "/admin/events/9/ace-pot",
+      "PUT",
+      { status: "paid_out", winner_name: "Ace Winner", carryover_in_cents: 2500, confirm_ace_pot_resolution: true },
+      jwt,
+      confirmedState,
+    );
+
+    expect(confirmed.status).toBe(200);
+    expect(confirmedState.acePotBinds?.slice(0, 6)).toEqual([9, 2500, "paid_out", null, "Ace Winner", null]);
+    expect(typeof confirmedState.acePotBinds?.[6]).toBe("string");
   });
 
   it("rejects direct lifecycle status writes that must go through live scoring", async () => {
