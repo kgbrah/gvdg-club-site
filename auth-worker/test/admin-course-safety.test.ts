@@ -18,6 +18,7 @@ type DbState = {
   readonly layoutBlockers?: Partial<Record<LayoutBlocker, number>>;
   deletedCourseId?: number;
   deletedLayoutId?: number;
+  deletedPositionId?: number;
 };
 
 function kv(initial: Record<string, string> = {}) {
@@ -61,6 +62,7 @@ function db(state: DbState) {
         run: async () => {
           if (/DELETE FROM courses WHERE id = \?/i.test(sql)) state.deletedCourseId = Number(binds[0]);
           if (/DELETE FROM course_layouts WHERE id = \?/i.test(sql)) state.deletedLayoutId = Number(binds[0]);
+          if (/DELETE FROM course_positions WHERE id = \? AND course_id = \?/i.test(sql)) state.deletedPositionId = Number(binds[0]);
           return { results: [], success: true };
         },
       };
@@ -76,21 +78,29 @@ function env(state: DbState) {
     JWT_SECRET: SECRET,
     ALLOWED_ORIGINS: ORIGIN,
     LIVE: undefined,
-  } as unknown as Parameters<typeof worker.fetch>[1];
+  };
 }
 
 async function token() {
   return signSession({ sub: "m_admin", mustChangePin: false }, SECRET, 900);
 }
 
-async function call(path: string, method: string, state: DbState) {
-  return worker.fetch(new Request("https://w" + path, { method, headers: { Origin: ORIGIN, authorization: "Bearer " + await token() } }), env(state));
+async function deleteAsAdmin(path: string, state: DbState, body?: unknown) {
+  const headers: Record<string, string> = { Origin: ORIGIN, authorization: "Bearer " + await token() };
+  if (body != null) headers["content-type"] = "application/json";
+  // The generated Cloudflare env type includes bindings irrelevant to this route fixture.
+  const response: unknown = await Reflect.apply(worker.fetch, worker, [
+    new Request("https://w" + path, { method: "DELETE", headers, body: body != null ? JSON.stringify(body) : undefined }),
+    env(state),
+  ]);
+  if (response instanceof Response) return response;
+  throw new TypeError("worker_fetch_failed");
 }
 
 describe("admin course and layout deletion safety", () => {
   it("blocks deleting courses that still have dependent records", async () => {
     const state: DbState = { courseBlockers: { course_layouts: 2, events: 1 } };
-    const res = await call("/admin/courses/7", "DELETE", state);
+    const res = await deleteAsAdmin("/admin/courses/7", state);
 
     expect(res.status).toBe(409);
     await expect(res.json()).resolves.toMatchObject({ error: "course_delete_blocked", blockers: ["course_layouts", "events"] });
@@ -99,7 +109,7 @@ describe("admin course and layout deletion safety", () => {
 
   it("still deletes empty courses", async () => {
     const state: DbState = {};
-    const res = await call("/admin/courses/7", "DELETE", state);
+    const res = await deleteAsAdmin("/admin/courses/7", state);
 
     expect(res.status).toBe(200);
     expect(state.deletedCourseId).toBe(7);
@@ -107,7 +117,7 @@ describe("admin course and layout deletion safety", () => {
 
   it("blocks deleting layouts referenced by events or ratings", async () => {
     const state: DbState = { layoutBlockers: { events: 1, round_ratings: 4 } };
-    const res = await call("/admin/layouts/44", "DELETE", state);
+    const res = await deleteAsAdmin("/admin/layouts/44", state);
 
     expect(res.status).toBe(409);
     await expect(res.json()).resolves.toMatchObject({ error: "layout_delete_blocked", blockers: ["events", "round_ratings"] });
@@ -116,9 +126,26 @@ describe("admin course and layout deletion safety", () => {
 
   it("returns 404 when deleting a missing layout", async () => {
     const state: DbState = { layoutExists: false };
-    const res = await call("/admin/layouts/44", "DELETE", state);
+    const res = await deleteAsAdmin("/admin/layouts/44", state);
 
     expect(res.status).toBe(404);
     expect(state.deletedLayoutId).toBeUndefined();
+  });
+
+  it("requires explicit confirmation before deleting a tee or target position", async () => {
+    const state: DbState = {};
+    const res = await deleteAsAdmin("/admin/courses/7/positions/15", state);
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({ error: "course_position_delete_confirmation_required" });
+    expect(state.deletedPositionId).toBeUndefined();
+  });
+
+  it("deletes a tee or target position after explicit confirmation", async () => {
+    const state: DbState = {};
+    const res = await deleteAsAdmin("/admin/courses/7/positions/15", state, { confirm_course_position_delete: true });
+
+    expect(res.status).toBe(200);
+    expect(state.deletedPositionId).toBe(15);
   });
 });

@@ -1387,7 +1387,7 @@
             else alPool.forEach((p) => {
                 const chip = elx('span', 'al-poolitem', (p.kind === 'tee' ? '⛳ ' : '🎯 ') + p.label + (p.lat != null ? '' : ' (no GPS)'));
                 const x = elx('button', null, '✕'); x.title = 'Remove';
-                x.addEventListener('click', () => alDeletePosition(p.id));
+                x.addEventListener('click', () => alDeletePosition(p));
                 chip.appendChild(x); wrap.appendChild(chip);
             });
             document.querySelectorAll('#alHoles tr').forEach(refreshRowSelects);
@@ -1400,8 +1400,9 @@
             if (r.ok) { $('alPosLabel').value = ''; $('alPosLat').value = ''; $('alPosLng').value = ''; adminMsg('Added ' + kind, true); alLoadPool(); }
             else adminMsg('Add position failed (' + r.status + ')', false);
         }
-        async function alDeletePosition(id) {
-            const r = await adminApi('/admin/courses/' + alCourseId + '/positions/' + id, { method: 'DELETE' });
+        async function alDeletePosition(p) {
+            if (!confirm('Delete ' + p.kind + ' position “' + p.label + '”? Layout holes using it may lose that tee/target reference.')) return;
+            const r = await adminApi('/admin/courses/' + alCourseId + '/positions/' + p.id, { method: 'DELETE', body: { confirm_course_position_delete: true } });
             if (r.ok) alLoadPool(); else adminMsg('Remove failed', false);
         }
 

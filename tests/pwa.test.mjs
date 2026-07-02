@@ -146,6 +146,13 @@ test('admin delete blockers surface dependent records', () => {
   assert.match(html, /del\.disabled = true; del\.textContent = 'Deleting\.\.\.'/);
 });
 
+test('admin course position deletes require confirmation', () => {
+  const html = readFileSync('admin.html', 'utf8');
+  assert.match(html, /alDeletePosition\(p\)/);
+  assert.match(html, /confirm\('Delete ' \+ p\.kind \+ ' position “' \+ p\.label/);
+  assert.match(html, /confirm_course_position_delete: true/);
+});
+
 test('score course picker rows use themed text and app font', () => {
   const html = readFileSync('score.html', 'utf8');
   assert.match(html, /c\.appendChild\(el\('h2', 'section', 'Pick a course'\)\)/);
@@ -154,7 +161,7 @@ test('score course picker rows use themed text and app font', () => {
 
 test('shared service worker caches app install assets and member fallback', () => {
   const sw = readFileSync('sw.js', 'utf8');
-  assert.match(sw, /const CACHE = "gvdg-club-v20"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v21"/);
   assert.match(sw, /const OFFLINE_PAGE = "gvdg-members\.html"/);
   assert.match(sw, /const STATIC_DESTINATIONS = new Set/);
   assert.match(sw, /if \(!staticAsset\(req, url\)\) return/);

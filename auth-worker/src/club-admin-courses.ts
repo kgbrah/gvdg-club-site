@@ -49,6 +49,8 @@ export async function handleAdminCourses(
     if (method === "DELETE" && seg[4] != null) {
       const pid = asInt(seg[4]);
       if (pid == null) return json({ error: "not_found" }, 404, origin);
+      const b = (await readJson(request)) ?? {};
+      if (b.confirm_course_position_delete !== true) return json({ error: "course_position_delete_confirmation_required" }, 409, origin);
       await db.deletePosition(env.DB, id, pid);
       return json({ ok: true }, 200, origin);
     }
