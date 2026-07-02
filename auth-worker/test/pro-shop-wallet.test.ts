@@ -115,6 +115,25 @@ describe("pro shop and player wallets", () => {
     expect(dbState.state.balanceCents).toBe(700);
   });
 
+  it("requires confirmation before changing an order status", async () => {
+    const dbState = makeDb();
+    dbState.state.orders.push({ id: 10, member_id: "m_jane", member_name: "Jane", total_cents: 1800, payment_method: "store_credit", status: "submitted" });
+    const auth = await token("m_admin");
+
+    const unconfirmed = await call("/admin/orders/10", "PATCH", auth, { status: "completed" }, dbState);
+    expect(unconfirmed.status).toBe(409);
+    expect(dbState.state.orders[0]?.status).toBe("submitted");
+
+    const tracking = await call("/admin/orders/10", "PATCH", auth, { tracking_carrier: "USPS", tracking_number: "9400" }, dbState);
+    expect(tracking.status).toBe(200);
+    expect(dbState.state.orders[0]?.tracking_carrier).toBe("USPS");
+    expect(dbState.state.orders[0]?.status).toBe("submitted");
+
+    const confirmed = await call("/admin/orders/10", "PATCH", auth, { status: "completed", confirm_order_status_change: true }, dbState);
+    expect(confirmed.status).toBe(200);
+    expect(dbState.state.orders[0]?.status).toBe("completed");
+  });
+
   it("shows the member wallet balance and ledger", async () => {
     const dbState = makeDb({ balanceCents: 2500 });
     dbState.state.transactions.push({ id: 1, member_id: "m_jane", amount_cents: 2500, source: "event_payout" });

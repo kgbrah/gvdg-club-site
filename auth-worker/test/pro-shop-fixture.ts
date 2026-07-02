@@ -98,7 +98,7 @@ function firstRow(sql: string, args: unknown[], state: MockState): Row | null {
   if (/UPDATE store_payment_sessions SET status = 'capturing'/i.test(sql)) return reservePaymentSessionCapture(args, state);
   if (/UPDATE store_payment_sessions SET status = 'pending'/i.test(sql)) return releasePaymentSessionCapture(args, state);
   if (/UPDATE store_payment_sessions SET status = 'captured'/i.test(sql)) return capturePaymentSession(args, state);
-  if (/UPDATE store_orders SET/i.test(sql)) return updateOrder(args, state);
+  if (/UPDATE store_orders SET/i.test(sql)) return updateOrder(sql, args, state);
   if (/SELECT \* FROM store_products WHERE id = \?/i.test(sql)) return state.products.find((p) => numberArg(p.id) === numberArg(args[0])) ?? null;
   if (/UPDATE store_products SET active = 0/i.test(sql)) {
     const row = state.products.find((p) => numberArg(p.id) === numberArg(args[0]));
@@ -192,13 +192,14 @@ function insertPaymentSession(args: unknown[], state: MockState): Row {
   return row;
 }
 
-function updateOrder(args: unknown[], state: MockState): Row | null {
+function updateOrder(sql: string, args: unknown[], state: MockState): Row | null {
   const row = state.orders.find((o) => numberArg(o.id) === numberArg(args[args.length - 1]));
   if (!row) return null;
-  const status = stringArg(args[0]);
-  const adminNote = args.length > 2 ? stringArg(args[1]) : null;
-  if (status) row.status = status;
-  if (adminNote) row.admin_note = adminNote;
+  let valueIndex = 0;
+  if (/\bstatus = \?/i.test(sql)) row.status = stringArg(args[valueIndex++]) ?? row.status;
+  if (/tracking_carrier = \?/i.test(sql)) row.tracking_carrier = stringArg(args[valueIndex++]);
+  if (/tracking_number = \?/i.test(sql)) row.tracking_number = stringArg(args[valueIndex++]);
+  if (/admin_note = \?/i.test(sql)) row.admin_note = stringArg(args[valueIndex]);
   return row;
 }
 

@@ -2181,7 +2181,7 @@
             const cWrap = elx('div'); cWrap.appendChild(elx('label', null, 'Carrier')); const car = elx('input'); car.value = o.tracking_carrier || ''; car.placeholder = 'USPS / UPS'; car.maxLength = 60; cWrap.appendChild(car); ctrls.appendChild(cWrap);
             const tWrap = elx('div'); tWrap.appendChild(elx('label', null, 'Tracking #')); const trk = elx('input'); trk.value = o.tracking_number || ''; trk.placeholder = 'tracking number'; trk.maxLength = 120; tWrap.appendChild(trk); ctrls.appendChild(tWrap);
             const save = elx('button', 'admin-btn', 'Save'); save.type = 'button';
-            save.addEventListener('click', () => saveOrder(o.id, { status: sel.value, tracking_carrier: car.value.trim() || null, tracking_number: trk.value.trim() || null }, save));
+            save.addEventListener('click', () => saveOrder(o, sel.value, car.value.trim() || null, trk.value.trim() || null, save));
             ctrls.appendChild(save);
             card.appendChild(ctrls);
             return card;
@@ -2195,12 +2195,27 @@
             if (!orders.length) { list.appendChild(elx('p', 'al-note', status ? 'No orders with that status.' : 'No orders yet.')); return; }
             orders.forEach((o) => list.appendChild(orderCard(o)));
         }
-        async function saveOrder(id, body, btn) {
+        async function saveOrder(order, nextStatus, carrier, tracking, btn) {
+            if (btn && btn.disabled) return;
+            const currentStatus = order.status || 'submitted';
+            const body = { tracking_carrier: carrier, tracking_number: tracking };
+            if (nextStatus !== currentStatus) {
+                const from = ORDER_STATUS_LABELS[currentStatus] || currentStatus;
+                const to = ORDER_STATUS_LABELS[nextStatus] || nextStatus;
+                if (!confirm('Change order #' + order.id + ' from ' + from + ' to ' + to + '?')) return;
+                body.status = nextStatus;
+                body.confirm_order_status_change = true;
+            }
             if (btn) btn.disabled = true;
-            const r = await adminApi('/admin/orders/' + id, { method: 'PATCH', body });
-            if (btn) btn.disabled = false;
-            if (r.ok) { adminMsg('Order #' + id + ' updated', true); adminLoadOrders(); }
-            else { const d = await r.json().catch(() => ({})); adminMsg('Order update failed' + (d.error ? ' (' + d.error + ')' : ''), false); }
+            try {
+                const r = await adminApi('/admin/orders/' + order.id, { method: 'PATCH', body });
+                if (r.ok) { adminMsg('Order #' + order.id + ' updated', true); adminLoadOrders(); }
+                else { const d = await r.json().catch(() => ({})); adminMsg('Order update failed' + (d.error ? ' (' + d.error + ')' : ''), false); }
+            } catch (e) {
+                adminMsg('Order update failed', false);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
         }
         async function refreshOrdersBadge() {
             try { const r = await adminApi('/admin/orders'); if (r.ok) setOrdersBadge((await r.json()).unfulfilled || 0); } catch (e) {}

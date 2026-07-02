@@ -181,6 +181,7 @@ export async function handleAdminShop(
       const body = (await readJson(request)) ?? {};
       const patch: shopDb.OrderFulfillmentPatch = {};
       if ("status" in body) {
+        if (body.confirm_order_status_change !== true) return json({ error: "order_status_confirmation_required" }, 409, origin);
         const s = asStr(body.status, 20);
         if (!s || !inSet(shopDb.ORDER_STATUSES, s)) return json({ error: "invalid_status" }, 400, origin);
         patch.status = s;
