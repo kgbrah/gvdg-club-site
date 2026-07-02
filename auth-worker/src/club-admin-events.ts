@@ -3,9 +3,10 @@ import * as db from "./db.js";
 import * as shopDb from "./shop-db.js";
 import { handleAdminCtps } from "./admin-ctp-routes.js";
 import { checkEventDeletion, isLifecycleManagedStatus } from "./admin-event-safety.js";
-import { EVENT_FORMATS, EVENT_STATUSES, EVENT_TYPES } from "./db.js";
+import { readConfirmedEventStatusPatch } from "./admin-event-status.js";
+import { assignRegistrationStartingHoles, assignRegistrationTeams } from "./admin-event-assignments.js";
+import { EVENT_FORMATS, EVENT_TYPES } from "./db.js";
 import { createWalletTransactionOnce } from "./wallet-idempotency.js";
-import { assignShotgun, assignTeams } from "./assign.js";
 import { getMember } from "./roster.js";
 import { enrichHoles, type LayoutHole } from "./layouts.js";
 import { json, readJson } from "./http.js";
@@ -25,15 +26,6 @@ function inlineLayout(raw: unknown): { name: string; holes: LayoutHole[]; total_
   if (holeCount == null || holeCount < 1 || holeCount > 36 || defaultPar == null || defaultPar < 1 || defaultPar > 15) return null;
   const holes = Array.from({ length: holeCount }, (_, i): LayoutHole => ({ hole: i + 1, par: defaultPar }));
   return { name, ...enrichHoles(holes) };
-}
-
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j]!, a[i]!];
-  }
-  return a;
 }
 
 const hasField = (body: Record<string, unknown>, field: string): boolean => Object.prototype.hasOwnProperty.call(body, field);
@@ -149,8 +141,7 @@ export async function handleAdminEvents(
   if ((seg[3] === "assign-starting-holes" || seg[3] === "assign-teams") && id != null && method === "POST") {
     const b = (await readJson(request)) ?? {};
     const regs = (await db.listRegistrations(env.DB, id)) as { id: number }[];
-    let order = regs.map((r) => r.id);
-    if (b.shuffle !== false) order = shuffle(order);
+    const registrationIds = regs.map((r) => r.id);
     if (seg[3] === "assign-starting-holes") {
       const groupSize = assignmentInt(b.groupSize, 4, 1, 12);
       const holeCount = assignmentInt(b.holeCount, 18, 1, 36);
@@ -158,16 +149,16 @@ export async function handleAdminEvents(
       const ev = (await db.getEvent(env.DB, id)) as { layout_id?: number | null } | null;
       let holes = (await db.getLayoutHoles(env.DB, ev?.layout_id)).map((h) => h.hole);
       if (!holes.length) holes = Array.from({ length: holeCount }, (_, i) => i + 1);
-      const assigned = assignShotgun(order.map(String), holes, groupSize);
-      await Promise.all(order.map((rid, i) => db.adminUpdateRegistration(env.DB, id, rid, { starting_hole: assigned[i]!.hole })));
+      const error = await assignRegistrationStartingHoles({ database: env.DB, eventId: id, registrationIds, shuffle: b.shuffle !== false, holes, groupSize, origin });
+      if (error) return error;
     } else {
       const hasSize = hasField(b, "size");
       const size = hasSize ? assignmentInt(b.size, 2, 1, 12) : null;
       const count = hasSize ? null : assignmentInt(b.count, 2, 2, 64);
       if ((hasSize && size == null) || (!hasSize && count == null)) return json({ error: "invalid_assignment" }, 400, origin);
       const opts = hasSize ? { size: size ?? 2 } : { count: count ?? 2 };
-      const assigned = assignTeams(order.map(String), opts);
-      await Promise.all(order.map((rid, i) => db.adminUpdateRegistration(env.DB, id, rid, { team: assigned[i]!.team })));
+      const error = await assignRegistrationTeams({ database: env.DB, eventId: id, registrationIds, shuffle: b.shuffle !== false, options: opts, origin });
+      if (error) return error;
     }
     return json({ registrations: await db.listRegistrations(env.DB, id) }, 200, origin);
   }
@@ -204,12 +195,9 @@ export async function handleAdminEvents(
       patch.name = name;
     }
     if (hasField(b, "status")) {
-      if (!inSet(EVENT_STATUSES, b.status)) return json({ error: "invalid_event" }, 400, origin);
-      if (isLifecycleManagedStatus(b.status)) return json({ error: "lifecycle_status_requires_live_flow" }, 409, origin);
-      const currentStatus = await db.getEventStatus(env.DB, id);
-      if (currentStatus == null) return json({ error: "not_found" }, 404, origin);
-      if (isLifecycleManagedStatus(currentStatus)) return json({ error: "lifecycle_status_requires_live_flow" }, 409, origin);
-      patch.status = b.status;
+      const statusPatch = await readConfirmedEventStatusPatch({ database: env.DB, eventId: id, body: b, origin });
+      if (!statusPatch.ok) return statusPatch.response;
+      patch.status = statusPatch.status;
     }
     if (hasField(b, "format")) {
       if (b.format == null || b.format === "") patch.format = null;

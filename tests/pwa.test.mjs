@@ -126,6 +126,13 @@ test('admin order status changes require confirmation', () => {
   assert.match(html, /confirm_order_status_change = true/);
 });
 
+test('admin event status changes require confirmation', () => {
+  const html = readFileSync('admin.html', 'utf8');
+  assert.match(html, /function confirmEventStatusChange/);
+  assert.match(html, /confirm\('Change “' \+ ev\.name \+ '” from '/);
+  assert.match(html, /body\.confirm_event_status_change = true/);
+});
+
 test('admin delete blockers surface dependent records', () => {
   const html = readFileSync('admin.html', 'utf8');
   assert.match(html, /DELETE_BLOCKER_LABELS/);
@@ -147,7 +154,7 @@ test('score course picker rows use themed text and app font', () => {
 
 test('shared service worker caches app install assets and member fallback', () => {
   const sw = readFileSync('sw.js', 'utf8');
-  assert.match(sw, /const CACHE = "gvdg-club-v19"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v20"/);
   assert.match(sw, /const OFFLINE_PAGE = "gvdg-members\.html"/);
   assert.match(sw, /const STATIC_DESTINATIONS = new Set/);
   assert.match(sw, /if \(!staticAsset\(req, url\)\) return/);

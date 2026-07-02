@@ -902,6 +902,15 @@
             }
             sel.value = EDITABLE_EVENT_STATUSES.includes(next) ? next : 'scheduled';
         }
+        function confirmEventStatusChange(body, ev, nextStatus) {
+            const currentStatus = ev.status || 'scheduled';
+            if (nextStatus === currentStatus) return true;
+            const from = eventStatusLabel(currentStatus);
+            const to = eventStatusLabel(nextStatus);
+            if (!confirm('Change “' + ev.name + '” from ' + from + ' to ' + to + '?')) return false;
+            body.confirm_event_status_change = true;
+            return true;
+        }
         let aeEditingEvent = null;
         let adminCoursesCache = [], tsReviewThumbUrls = [];
         function adminSwitch(tab) {
@@ -986,8 +995,15 @@
                 setEventStatusSelect(sel, ev.status || 'scheduled');
                 if (!sel.disabled) {
                     sel.addEventListener('change', async () => {
-                        const r = await adminApi('/admin/events/' + ev.id, { method: 'PATCH', body: { status: sel.value } });
+                        const previousStatus = ev.status || 'scheduled';
+                        const body = { status: sel.value };
+                        if (!confirmEventStatusChange(body, ev, sel.value)) {
+                            setEventStatusSelect(sel, previousStatus);
+                            return;
+                        }
+                        const r = await adminApi('/admin/events/' + ev.id, { method: 'PATCH', body });
                         adminMsg(r.ok ? 'Updated “' + ev.name + '” → ' + eventStatusLabel(sel.value) : 'Update failed', r.ok);
+                        if (!r.ok) setEventStatusSelect(sel, previousStatus);
                         if (r.ok) adminLoadEvents();
                     });
                 }
@@ -1060,6 +1076,10 @@
                 const defaultPar = parseInt($('aeDefaultPar').value, 10);
                 if (!(holeCount >= 1 && holeCount <= 36) || !(defaultPar >= 1 && defaultPar <= 15)) { adminMsg('Layout holes must be 1–36 and par 1–15', false); return; }
                 body.layout = { name: $('aeLayoutName').value.trim() || 'Main', hole_count: holeCount, default_par: defaultPar };
+            }
+            if (aeEditingEvent && body.status) {
+                if (body.status === (aeEditingEvent.status || 'scheduled')) delete body.status;
+                else if (!confirmEventStatusChange(body, aeEditingEvent, body.status)) return;
             }
             // Edit (udisc) vs create; a new manual event is tagged source:'manual'.
             const r = aeEditingEvent
