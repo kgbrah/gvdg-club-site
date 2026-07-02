@@ -116,6 +116,11 @@
         .events-empty { color: var(--text-muted); padding: 0.4rem 0 1rem; }
         .events-section.live .events-section-title { color: var(--primary); }
         .events-section-count { color: var(--text-muted); font-size: 0.85rem; font-weight: 600; }
+        .events-load-more { text-align: center; margin: 1rem 0; }
+        .events-load-btn { background: var(--secondary); color: white; border: none; padding: 0.65rem 1.7rem; border-radius: 999px; font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: background 0.15s ease; }
+        .events-load-btn:hover { background: #003d6d; }
+        .events-load-btn:disabled { opacity: 0.6; cursor: default; }
+        .events-load-status { color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.45rem; }
         .live-dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--primary); display: inline-block; box-shadow: 0 0 0 0 rgba(255,107,53,0.6); animation: pulse 1.8s infinite; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,107,53,0.6); } 70% { box-shadow: 0 0 0 10px rgba(255,107,53,0); } 100% { box-shadow: 0 0 0 0 rgba(255,107,53,0); } }
 
@@ -409,6 +414,15 @@
             .trim()
             .replace(/\/+$/, ''); // strip trailing slashes
         const REFRESH_MS = 60 * 1000; // ~60s background refresh on the hub
+        const EVENTS_PAGE_SIZE = 200;
+        const EVENTS_PAGE_MAX_LIMIT = 2000;
+        const eventsLoadState = {
+            events: [],
+            offset: 0,
+            hasMore: false,
+            loading: false,
+            shown: 0,
+        };
 
         const statusEl = document.getElementById('status');
         const registerEl = document.getElementById('registerSection');
@@ -614,6 +628,25 @@
             wrap.appendChild(grid);
             return wrap;
         }
+        function eventsLoadMoreControl() {
+            if (!eventsLoadState.shown) return null;
+            const wrap = el('div', 'events-load-more');
+            wrap.appendChild(el('div', 'events-load-status', `Showing ${eventsLoadState.shown} club-scored event${eventsLoadState.shown === 1 ? '' : 's'}`));
+            if (eventsLoadState.loading) {
+                const btn = el('button', 'events-load-btn', 'Loading more club-scored events…');
+                btn.type = 'button';
+                btn.disabled = true;
+                wrap.appendChild(btn);
+                return wrap;
+            }
+            if (!eventsLoadState.hasMore) return wrap;
+            const loadMore = el('button', 'events-load-btn', 'Load more club-scored events');
+            loadMore.type = 'button';
+            loadMore.disabled = false;
+            loadMore.addEventListener('click', () => { loadMoreClubEvents(); });
+            wrap.appendChild(loadMore);
+            return wrap;
+        }
 
         // Render the two club categories: Events (schedule feed + any club-scored D1 events) and the
         // Club Events heading (fundraisers/meetings render into their own sections just below).
@@ -623,10 +656,10 @@
 
             calendarEl.replaceChildren();
             calendarEl.appendChild(groupHeading('Events', 'Disc golf tournaments & league rounds'));
+            if (live.length) calendarEl.appendChild(section('Live Now', live, { live: true }));
             if (feedEvents.length) calendarEl.appendChild(feedList(feedEvents));
 
             hubEl.replaceChildren();
-            if (live.length) hubEl.appendChild(section('Live Now', live, { live: true }));
             if (upcoming.length) hubEl.appendChild(section('Club-scored — Upcoming', upcoming));
             if (past.length) hubEl.appendChild(section('Club-scored — Past', past));
             if (!feedEvents.length && !live.length && !upcoming.length && !past.length) {
@@ -637,6 +670,8 @@
             clubEl.appendChild(groupHeading('Club Events', 'Fundraisers, meetings & minutes'));
             const feedClub = (feed && feed.clubEvents) || [];
             if (feedClub.length) clubEl.appendChild(feedList(feedClub));
+            const more = eventsLoadMoreControl();
+            if (more) hubEl.appendChild(more);
 
             setView('hub');
             lastUpdatedEl.hidden = false;
@@ -644,25 +679,59 @@
                 'Last updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         }
 
-        async function loadHub() {
+        async function loadMoreClubEvents() {
+            if (eventsLoadState.loading || !eventsLoadState.hasMore) return;
+            const btn = document.querySelector('.events-load-btn');
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Loading more club-scored events…';
+            }
+            try {
+                await loadHub({ reset: false, quiet: true });
+            } finally {
+                if (btn && btn.isConnected) {
+                    btn.disabled = false;
+                    btn.textContent = 'Load more club-scored events';
+                }
+            }
+        }
+        async function loadHub({ reset = true, preserveCount = false, quiet = false } = {}) {
             teardownLive(); // close any live socket from a detail view
-            showStatus('Loading…', false);
+            if (eventsLoadState.loading) return;
+            const requestedLimit = reset
+                ? (preserveCount ? (eventsLoadState.shown || EVENTS_PAGE_SIZE) : EVENTS_PAGE_SIZE)
+                : EVENTS_PAGE_SIZE;
+            const limit = Math.min(requestedLimit, EVENTS_PAGE_MAX_LIMIT);
+            const offset = reset ? 0 : eventsLoadState.offset;
+            const state = eventsLoadState;
+            const mergedBase = reset ? [] : state.events;
+            if (!quiet) showStatus('Loading…', false);
+            state.loading = true;
             try {
                 // Courses first (best-effort) so cards can show names on first paint.
                 await ensureCourses();
                 const [feed, d1] = await Promise.all([
                     fetchJson('/club-feed').catch(() => ({ events: [], clubEvents: [] })),
-                    fetchJson('/events').catch(() => ({ events: [] })),
+                    fetchJson('/events?limit=' + encodeURIComponent(String(limit)) + '&offset=' + encodeURIComponent(String(offset))).catch(() => ({ events: [] })),
                 ]);
-                renderPage(feed, (d1 && d1.events) || []);
+                const next = (d1 && d1.events) || [];
+                state.events = mergedBase.concat(next);
+                state.offset = (reset ? 0 : state.offset) + next.length;
+                state.shown = state.events.length;
+                state.hasMore = next.length === limit;
+                renderPage(feed, state.events);
                 loadRegistration(); // best-effort; club events open for sign-up
                 loadCasualRounds();
                 loadLeaguesList(); // best-effort; standings live behind each league
                 loadFundraisers();
                 loadMeetings();
             } catch (_err) {
-                lastUpdatedEl.hidden = true;
-                showStatus('We couldn’t load the calendar right now. Please try again.', true, loadHub);
+                if (!quiet) {
+                    lastUpdatedEl.hidden = true;
+                    showStatus('We couldn’t load the calendar right now. Please try again.', true, loadHub);
+                }
+            } finally {
+                state.loading = false;
             }
         }
 
@@ -753,6 +822,18 @@
             form.appendChild(l);
             return cb;
         }
+        function registrationLiveConfig(ev) {
+            const raw = ev.liveScoringConfig || ev.live_scoring_config || null;
+            if (raw && typeof raw === 'object') return { groupFormat: raw.groupFormat === 'doubles' ? 'doubles' : 'singles', scoringStyle: raw.scoringStyle === 'matchplay' ? 'matchplay' : 'stroke' };
+            if (typeof raw === 'string' && raw.trim()) {
+                try { return registrationLiveConfig({ liveScoringConfig: JSON.parse(raw) }); } catch (_e) {}
+            }
+            if (raw == null && ev.play_format === 'doubles') return { groupFormat: 'doubles', scoringStyle: 'stroke' };
+            return { groupFormat: 'singles', scoringStyle: ev.format === 'matchplay' ? 'matchplay' : 'stroke' };
+        }
+        function isDoublesRegistration(ev) {
+            return registrationLiveConfig(ev).groupFormat === 'doubles';
+        }
         async function loadRegistration() {
             registerEl.replaceChildren();
             let events = [];
@@ -809,11 +890,22 @@
             let divs = []; try { divs = JSON.parse(ev.divisions || '[]'); } catch (_e) {}
             let divSel = null;
             if (divs.length) { divSel = document.createElement('select'); divSel.className = 'reg-input'; divs.forEach((d) => { const o = document.createElement('option'); o.value = d; o.textContent = d; divSel.appendChild(o); }); form.appendChild(divSel); }
+            let pairInput = null;
+            if (isDoublesRegistration(ev)) {
+                pairInput = document.createElement('input');
+                pairInput.type = 'text';
+                pairInput.placeholder = 'Pair label or partner';
+                pairInput.maxLength = 40;
+                pairInput.className = 'reg-input';
+                pairInput.setAttribute('data-register-pair', 'team');
+                form.appendChild(pairInput);
+            }
             const ctpCb = ev.ctp_fee_cents ? addonCheckbox(form, 'CTP pot ' + dollars(ev.ctp_fee_cents)) : null;
             const aceCb = ev.ace_fee_cents ? addonCheckbox(form, 'Ace pot ' + dollars(ev.ace_fee_cents)) : null;
             const btn = el('button', 'reg-btn', 'Register'); btn.type = 'button';
             btn.addEventListener('click', async () => {
                 const body = { division: divSel ? divSel.value : null, addons: { ctp: !!(ctpCb && ctpCb.checked), ace: !!(aceCb && aceCb.checked) } };
+                if (pairInput) body.team = pairInput.value.trim();
                 if (!tok) {
                     const nm = (nameInput.value || '').trim();
                     if (!nm) { alert('Please enter your name.'); nameInput.focus(); return; }
@@ -838,7 +930,7 @@
                     return;
                 }
                 const d = await r.json().catch(() => ({}));
-                if (!tok && d.guestToken) setGuestReg(ev.id, { guestToken: d.guestToken, name: body.name });
+                if (!tok && d.guestToken) setGuestReg(ev.id, { guestToken: d.guestToken, name: body.name, team: body.team || null });
                 loadRegistration();
             });
             form.appendChild(btn);
@@ -1570,22 +1662,13 @@
         // on screen and only swaps it in once the new payload parses cleanly.
         function startRefresh() {
             stopRefresh();
-            refreshTimer = setInterval(async () => {
+            refreshTimer = setInterval(() => {
                 if (!hubEl.hidden) {
-                    try {
-                        const [feed, d1] = await Promise.all([
-                            fetchJson('/club-feed').catch(() => ({ events: [], clubEvents: [] })),
-                            fetchJson('/events').catch(() => ({ events: [] })),
-                        ]);
-                        renderPage(feed, (d1 && d1.events) || []);
-                        loadRegistration();
-                        loadCasualRounds();
-                    } catch (_e) {
-                        // Silent on background refresh; visible content stays put.
-                    }
+                    loadHub({ reset: true, preserveCount: true, quiet: true });
                 }
             }, REFRESH_MS);
         }
+
         function stopRefresh() {
             if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
         }

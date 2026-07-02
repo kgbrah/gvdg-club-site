@@ -3,7 +3,7 @@ import * as db from "./db.js";
 import { computeLeagueStandings } from "./scoring.js";
 import { verifySession } from "./jwt.js";
 import { bearer, json } from "./http.js";
-import { asInt } from "./input.js";
+import { RECORD_PAGE_DEFAULTS, asInt, parseWindow } from "./input.js";
 import { handleTeeSignImage } from "./tee-sign-routes.js";
 
 export async function handleClubPublic(
@@ -41,7 +41,15 @@ export async function handleClubPublic(
   }
   if (method === "GET" && pathname === "/events") {
     const p = new URL(request.url).searchParams;
-    return json({ events: await db.listEvents(env.DB, { status: p.get("status") ?? undefined, type: p.get("type") ?? undefined }) }, 200, origin);
+    const q = parseWindow(p, { limit: RECORD_PAGE_DEFAULTS.events.defaultLimit }, { maxLimit: RECORD_PAGE_DEFAULTS.events.maxLimit });
+    const requestedLimit = p.get("all") === "1" ? RECORD_PAGE_DEFAULTS.events.maxLimit : q.limit;
+    const args: { status?: string; type?: string; limit?: number | null; offset?: number | null } = {
+      status: p.get("status") ?? undefined,
+      type: p.get("type") ?? undefined,
+      limit: requestedLimit,
+      offset: q.offset,
+    };
+    return json({ events: await db.listEvents(env.DB, args) }, 200, origin);
   }
   if (method === "GET" && seg[0] === "events" && seg.length === 2) {
     const id = asInt(seg[1]);

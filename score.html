@@ -96,13 +96,23 @@
         .tap-row {
             display: flex; align-items: center; gap: 0.75rem; width: 100%; text-align: left;
             background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 14px;
-            padding: 0.85rem; cursor: pointer; margin-bottom: 0.6rem;
+            padding: 0.85rem; cursor: pointer; margin-bottom: 0.6rem; color: var(--text-primary);
+            font-family: 'Archivo', -apple-system, BlinkMacSystemFont, sans-serif;
         }
         .tap-row:active { transform: scale(0.99); }
         .tap-row .grow { flex: 1; min-width: 0; }
-        .tap-row .title { font-weight: 700; font-size: 1.02rem; }
+        .tap-row .title { font-weight: 700; font-size: 1.02rem; color: var(--text-primary); }
         .tap-row .sub { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.1rem; }
         .tap-row .chev { color: var(--text-muted); font-size: 1.3rem; }
+        .setup-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; }
+        .setup-option {
+            min-height: 58px; padding: 0.6rem 0.65rem; border: 1px solid var(--border-color); border-radius: 12px;
+            background: var(--bg-primary); color: var(--text-primary); cursor: pointer; text-align: left;
+            font-family: 'Archivo', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        .setup-option[aria-pressed="true"] { border-color: var(--primary); background: var(--bg-tertiary); box-shadow: inset 0 0 0 1px var(--primary); }
+        .setup-option .title { display: block; font-weight: 700; font-size: 0.95rem; line-height: 1.2; }
+        .setup-option .sub { display: block; color: var(--text-muted); font-size: 0.72rem; line-height: 1.25; margin-top: 0.15rem; }
         .avatars { display: flex; }
         .ava { width: 26px; height: 26px; border-radius: 50%; background: var(--secondary); color: #fff; display: grid; place-items: center; font-size: 0.7rem; font-weight: 700; margin-left: -6px; border: 2px solid var(--bg-secondary); }
         .ava:first-child { margin-left: 0; }
@@ -201,7 +211,7 @@
         const GUEST_TOKEN = MODE === 'event' ? (params.get('gt') || guestTokenStored()) : null;
 
         const app = document.getElementById('app');
-        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null };
+        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, roundConfig: null, scoreTargets: [], scoreTargetError: null };
         const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
         const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
 
@@ -272,24 +282,32 @@
         function qLoad() { try { return JSON.parse(localStorage.getItem(QKEY) || '[]'); } catch (e) { return []; } }
         function qSave(q) { try { localStorage.setItem(QKEY, JSON.stringify(q)); } catch (e) {} }
         function qAdd(item) { const q = qLoad(); q.push(item); qSave(q); }
+        let flushQueuePromise = null;
         async function flushQueue() {
-            let q = qLoad(); if (!q.length) return;
-            const remain = [];
-            for (const item of q) {
-                const body = { index: item.index, hole: item.hole, strokes: item.strokes };
-                if (Number.isInteger(item.scorerIndex)) body.scorerIndex = item.scorerIndex;
-                // Protect the queued optimistic value with the same pending refcount so an interim WS snapshot
-                // (which doesn't have this score yet) can't wipe it mid-replay.
-                const key = Number.isInteger(item.scorerIndex) ? pendingKey(item.scorerIndex, item.index, item.hole) : null;
-                if (key) pending.set(key, (pending.get(key) || 0) + 1);
-                const r = await api(LIVE + '/score', { method: 'POST', body: body });
-                if (key) { const m = (pending.get(key) || 0) - 1; if (m > 0) pending.set(key, m); else pending.delete(key); }
-                if (!r.ok && (r.neterr || r.status >= 500)) remain.push(item); // keep only transient failures
-                else if (r.ok) S.snap = r.data;
-            }
-            qSave(remain);
-            mergeFromSnap(); // reconcile the card with the server once the queue has drained
-            if (q.length && !remain.length) toast('Synced offline scores');
+            if (flushQueuePromise) return flushQueuePromise;
+            flushQueuePromise = (async function () {
+                let q = qLoad(); if (!q.length) return;
+                const remain = [];
+                for (const item of q) {
+                    const body = { hole: item.hole, strokes: item.strokes };
+                    if (item.targetId) body.targetId = item.targetId;
+                    else body.index = item.index;
+                    if (Number.isInteger(item.scorerIndex)) body.scorerIndex = item.scorerIndex;
+                    // Protect the queued optimistic value with the same pending refcount so an interim WS snapshot
+                    // (which doesn't have this score yet) can't wipe it mid-replay.
+                    const key = Number.isInteger(item.scorerIndex) ? pendingKey(item.scorerIndex, item.targetId ? null : item.index, item.hole, item.targetId || null) : null;
+                    if (key) pending.set(key, (pending.get(key) || 0) + 1);
+                    const r = await api(LIVE + '/score', { method: 'POST', body: body });
+                    if (key) { const m = (pending.get(key) || 0) - 1; if (m > 0) pending.set(key, m); else pending.delete(key); }
+                    if (!r.ok && (r.neterr || r.status >= 500)) remain.push(item); // keep only transient failures
+                    else if (r.ok) S.snap = r.data;
+                }
+                qSave(remain);
+                mergeFromSnap(); // reconcile the card with the server once the queue has drained
+                if (q.length && !remain.length) toast('Synced offline scores');
+            })();
+            try { return await flushQueuePromise; }
+            finally { flushQueuePromise = null; }
         }
 
         // ---------- offline bar ----------
@@ -313,13 +331,43 @@
             S.scorerIndex = (mine || choices[0]).index;
             return S.scorerIndex;
         }
-        function pendingKey(scorerIndex, index, hole) {
-            return scorerIndex + ':' + index + ':' + hole;
+        function pendingKey(scorerIndex, index, hole, targetId) {
+            return scorerIndex + ':' + (targetId ? ('target:' + targetId) : ('index:' + index)) + ':' + hole;
         }
         function hasPendingScore(index, hole) {
-            const suffix = ':' + index + ':' + hole;
-            for (const key of pending.keys()) { if (key.endsWith(suffix)) return true; }
+            const legacySuffix = ':index:' + index + ':' + hole;
+            for (const key of pending.keys()) {
+                if (key.endsWith(legacySuffix)) return true;
+                const target = targetForPlayer(index);
+                if (target && key.endsWith(':target:' + target.id + ':' + hole)) return true;
+            }
             return false;
+        }
+        function isDoublesScoring() {
+            return S.roundConfig && S.roundConfig.groupFormat === 'doubles';
+        }
+        function isMatchplayScoring() {
+            return S.roundConfig && S.roundConfig.scoringStyle === 'matchplay';
+        }
+        function targetForPlayer(index) {
+            return (S.scoreTargets || []).find(function (target) { return target && Array.isArray(target.playerIndexes) && target.playerIndexes.indexOf(index) >= 0; }) || null;
+        }
+        function scoreRows() {
+            if (!isDoublesScoring()) {
+                return S.cardmates.map(function (p) { return { type: 'player', index: p.index, label: p.name + (p.isMe ? ' (you)' : ''), meta: p.division || '', playerIndexes: [p.index] }; });
+            }
+            const cardIndexes = new Set(S.cardmates.map(function (p) { return p.index; }));
+            return (S.scoreTargets || [])
+                .filter(function (target) { return target && target.type === 'pair' && target.playerIndexes.some(function (index) { return cardIndexes.has(index); }); })
+                .map(function (target) {
+                    return {
+                        type: 'pair',
+                        targetId: target.id,
+                        label: target.label,
+                        meta: (target.members || []).join(' / '),
+                        playerIndexes: target.playerIndexes || []
+                    };
+                });
         }
         function strokesFor(index, hole) {
             const cm = S.cardmates.find((p) => p.index === index);
@@ -332,6 +380,10 @@
             if (sIdx != null && votes && typeof votes['player:' + sIdx] === 'number') return votes['player:' + sIdx];
             const v = cm.scores ? cm.scores[hole] : undefined;
             return (typeof v === 'number') ? v : null;
+        }
+        function strokesForRow(row, hole) {
+            const index = row.playerIndexes && row.playerIndexes[0];
+            return Number.isInteger(index) ? strokesFor(index, hole) : null;
         }
         function setLocal(index, hole, strokes) {
             const cm = S.cardmates.find((p) => p.index === index);
@@ -348,6 +400,9 @@
             cm.scores = cm.scores || {};
             cm.scores[hole] = strokes;
         }
+        function setLocalRow(row, hole, strokes) {
+            (row.playerIndexes || []).forEach(function (index) { setLocal(index, hole, strokes); });
+        }
         function setConflicts(rows) {
             S.conflicts = (Array.isArray(rows) ? rows : []).filter((c) => c && c.cardId === S.cardId);
         }
@@ -358,31 +413,53 @@
         }
         function upsertConflict(msg) {
             if (!msg || msg.cardId !== S.cardId) return;
-            S.conflicts = S.conflicts.filter((c) => !(c.playerIndex === msg.playerIndex && c.hole === msg.hole));
-            if (Array.isArray(msg.values) && msg.values.length > 1) S.conflicts.push({ cardId: msg.cardId, playerIndex: msg.playerIndex, playerName: msg.playerName, hole: msg.hole, values: msg.values });
+            S.conflicts = S.conflicts.filter((c) => !((msg.targetId && c.targetId === msg.targetId || !msg.targetId && c.playerIndex === msg.playerIndex) && c.hole === msg.hole));
+            if (Array.isArray(msg.values) && msg.values.length > 1) S.conflicts.push({ cardId: msg.cardId, playerIndex: msg.playerIndex, playerName: msg.playerName, targetId: msg.targetId, label: msg.label, hole: msg.hole, values: msg.values });
         }
         function conflictFor(index, hole) {
             return S.conflicts.find((c) => c && c.playerIndex === index && c.hole === hole) || null;
         }
+        function conflictForRow(row, hole) {
+            if (row.targetId) return S.conflicts.find((c) => c && c.targetId === row.targetId && c.hole === hole) || null;
+            return conflictFor(row.index, hole);
+        }
         function holeHasConflict(hole) {
             return S.conflicts.some((c) => c && c.hole === hole);
         }
+        function matchStatusText() {
+            if (!isMatchplayScoring() || !S.snap || !Array.isArray(S.snap.standings)) return '';
+            const cardTargets = scoreRows().map(function (row) { return row.targetId || ('player:' + row.index); });
+            const rows = S.snap.standings.filter(function (standing) { return cardTargets.indexOf(standing.targetId) >= 0; });
+            const withMatch = rows.find(function (standing) { return standing.match && standing.match.status; });
+            return withMatch && withMatch.match ? ('Match: ' + withMatch.match.status) : '';
+        }
+        function myScoreRow() {
+            return scoreRows().find(function (row) { return row.playerIndexes.indexOf(S.myIndex) >= 0; }) || null;
+        }
 
-        async function postScore(index, hole, strokes) {
+        async function postScore(row, hole, strokes) {
             const scorerIndex = currentScorerIndex();
             if (scorerIndex == null) { toast('Choose a scorecard'); return; }
-            const key = pendingKey(scorerIndex, index, hole);
+            const key = pendingKey(scorerIndex, row.index, hole, row.targetId || null);
             // Snapshot the cell's prior value so a rejection can be rolled back even before any snapshot exists.
-            const cm0 = S.cardmates.find((p) => p.index === index);
-            const prevVote = cm0 && cm0.scorecards && cm0.scorecards[hole] ? cm0.scorecards[hole]['player:' + scorerIndex] : undefined;
-            const prevScore = cm0 && cm0.scores ? cm0.scores[hole] : undefined;
+            const previous = (row.playerIndexes || []).map(function (index) {
+                const cm = S.cardmates.find((p) => p.index === index);
+                return {
+                    cm: cm,
+                    vote: cm && cm.scorecards && cm.scorecards[hole] ? cm.scorecards[hole]['player:' + scorerIndex] : undefined,
+                    score: cm && cm.scores ? cm.scores[hole] : undefined
+                };
+            });
             pending.set(key, (pending.get(key) || 0) + 1); // refcount so a later concurrent tap stays protected
-            setLocal(index, hole, strokes);
+            setLocalRow(row, hole, strokes);
             renderHole();
-            const r = await api(LIVE + '/score', { method: 'POST', body: { index: index, scorerIndex: scorerIndex, hole: hole, strokes: strokes } });
+            const body = { scorerIndex: scorerIndex, hole: hole, strokes: strokes };
+            if (row.targetId) body.targetId = row.targetId;
+            else body.index = row.index;
+            const r = await api(LIVE + '/score', { method: 'POST', body: body });
             const n = (pending.get(key) || 0) - 1; if (n > 0) pending.set(key, n); else pending.delete(key);
             if (r.ok) { S.snap = r.data; mergeFromSnap(); }
-            else if (r.neterr) { qAdd({ index: index, scorerIndex: scorerIndex, hole: hole, strokes: strokes }); setOnline(false); }
+            else if (r.neterr) { qAdd(row.targetId ? { targetId: row.targetId, scorerIndex: scorerIndex, hole: hole, strokes: strokes } : { index: row.index, scorerIndex: scorerIndex, hole: hole, strokes: strokes }); setOnline(false); }
             else {
                 if (r.status === 403) toast('You can only score your own card');
                 else if (r.status === 401) toast('Session expired — sign in again');
@@ -392,13 +469,14 @@
                 // Rejected — roll the phantom optimistic vote back. Reconcile from the snapshot if we have one;
                 // otherwise (no snapshot yet) restore the captured prior value directly.
                 if (S.snap) mergeFromSnap();
-                else if (cm0) {
+                previous.forEach(function (prev) {
+                    const cm0 = prev.cm; if (!cm0) return;
                     cm0.scorecards = cm0.scorecards || {}; cm0.scorecards[hole] = Object.assign({}, cm0.scorecards[hole]);
-                    if (prevVote === undefined) delete cm0.scorecards[hole]['player:' + scorerIndex]; else cm0.scorecards[hole]['player:' + scorerIndex] = prevVote;
+                    if (prev.vote === undefined) delete cm0.scorecards[hole]['player:' + scorerIndex]; else cm0.scorecards[hole]['player:' + scorerIndex] = prev.vote;
                     cm0.scores = cm0.scores || {};
-                    if (prevScore === undefined) delete cm0.scores[hole]; else cm0.scores[hole] = prevScore;
-                    renderHole();
-                }
+                    if (prev.score === undefined) delete cm0.scores[hole]; else cm0.scores[hole] = prev.score;
+                });
+                renderHole();
             }
         }
 
@@ -408,6 +486,9 @@
             // Drop a stale/out-of-order snapshot (a newer one from another device was already applied).
             if (snap.rev != null) { if (snap.rev <= S.lastRev) return; S.lastRev = snap.rev; }
             if (snap.status) S.status = snap.status; // reflect a finalize (or start) that happened on another device
+            S.roundConfig = snap.roundConfig || S.roundConfig;
+            S.scoreTargets = Array.isArray(snap.scoreTargets) ? snap.scoreTargets : S.scoreTargets;
+            S.scoreTargetError = snap.scoreTargetError || null;
             setConflicts(snap.conflicts);
             setMissing(snap.missing);
             const byIndex = new Map(snap.players.map((p) => [p.index, p]));
@@ -435,7 +516,8 @@
                     const local = cm.scorecards[hh.hole] || {};
                     Object.keys(local).forEach((sid) => {
                         const sidx = sid.indexOf('player:') === 0 ? Number(sid.slice(7)) : NaN;
-                        if (Number.isInteger(sidx) && pending.has(pendingKey(sidx, cm.index, hh.hole))) votes[sid] = local[sid];
+                        const target = targetForPlayer(cm.index);
+                        if (Number.isInteger(sidx) && (pending.has(pendingKey(sidx, cm.index, hh.hole, null)) || (target && pending.has(pendingKey(sidx, null, hh.hole, target.id))))) votes[sid] = local[sid];
                     });
                     if (Object.keys(votes).length) cm.scorecards[hh.hole] = votes; else delete cm.scorecards[hh.hole];
                 });
@@ -619,6 +701,10 @@
             const mid = el('div'); mid.style.flex = '1'; mid.style.textAlign = 'center';
             mid.appendChild(el('div', 'hnum', 'Hole ' + h.hole));
             mid.appendChild(el('div', 'hpar', 'Par ' + h.par + (h.distance_ft ? ' · ' + h.distance_ft + ' ft' : '') + (h.overridden ? ' (today)' : '')));
+            if (isMatchplayScoring()) {
+                const status = matchStatusText();
+                if (status) mid.appendChild(el('div', 'pmeta', status));
+            }
             const next = el('button', 'navbtn', '›'); next.disabled = S.holeIdx >= S.holes.length - 1; next.addEventListener('click', function () { S.holeIdx = Math.min(S.holes.length - 1, S.holeIdx + 1); renderHole(); });
             head.appendChild(prev); head.appendChild(mid); head.appendChild(next);
             c.appendChild(head);
@@ -644,34 +730,42 @@
                 owner.appendChild(select);
                 box.appendChild(owner);
             }
-            S.cardmates.forEach((p) => {
-                const conflict = conflictFor(p.index, h.hole);
+            const rows = scoreRows();
+            if (isDoublesScoring() && !rows.length) {
+                const warn = el('p', 'muted', S.scoreTargetError && S.scoreTargetError.message ? S.scoreTargetError.message : 'Set pairs in Manage before scoring doubles.');
+                warn.style.color = 'var(--over)';
+                box.appendChild(warn);
+            }
+            rows.forEach((rowData) => {
+                const conflict = conflictForRow(rowData, h.hole);
                 const row = el('div', 'prow' + (conflict ? ' conflict' : ''));
                 const info = el('div', 'pinfo');
-                info.appendChild(el('div', 'pname', p.name + (p.isMe ? ' (you)' : '')));
-                if (p.division) info.appendChild(el('div', 'pmeta', p.division));
+                info.appendChild(el('div', 'pname', rowData.label));
+                if (rowData.meta) info.appendChild(el('div', 'pmeta', rowData.meta));
                 if (conflict) info.appendChild(el('div', 'pmeta conflict-text', '⚑ Conflict: ' + (conflict.values || []).join(' vs ') + ' — set yours to match'));
-                const cur = strokesFor(p.index, h.hole);
+                const cur = strokesForRow(rowData, h.hole);
                 const step = el('div', 'stepper');
                 const minus = el('button', 'minus', '−');
                 const val = el('div', 'val');
                 const n = el('div', 'n', cur == null ? '–' : String(cur)); val.appendChild(n);
                 if (cur != null) { const d = cur - h.par; const rel = el('div', 'rel ' + relClass(d), relText(d)); val.appendChild(rel); }
                 const plus = el('button', 'plus', '+');
-                minus.addEventListener('click', function () { const base = cur == null ? h.par : cur; const nv = Math.max(1, base - 1); postScore(p.index, h.hole, nv); });
-                plus.addEventListener('click', function () { const base = cur == null ? h.par - 1 : cur; const nv = Math.min(30, base + 1); postScore(p.index, h.hole, nv); });
+                minus.addEventListener('click', function () { const base = cur == null ? h.par : cur; const nv = Math.max(1, base - 1); postScore(rowData, h.hole, nv); });
+                plus.addEventListener('click', function () { const base = cur == null ? h.par - 1 : cur; const nv = Math.min(30, base + 1); postScore(rowData, h.hole, nv); });
                 step.appendChild(minus); step.appendChild(val); step.appendChild(plus);
                 row.appendChild(info); row.appendChild(step);
                 box.appendChild(row);
             });
 
             // my totals
-            const me = S.cardmates.find((p) => p.isMe);
-            if (me) {
+            const meRow = myScoreRow();
+            if (meRow) {
                 let thru = 0, total = 0, toPar = 0;
-                S.holes.forEach((hh) => { const s = me.scores ? me.scores[hh.hole] : undefined; if (typeof s === 'number') { thru++; total += s; toPar += s - hh.par; } });
+                S.holes.forEach((hh) => { const s = strokesForRow(meRow, hh.hole); if (typeof s === 'number') { thru++; total += s; toPar += s - hh.par; } });
                 const tot = el('div', 'totbar');
-                [['Thru', String(thru) + '/' + S.holes.length], ['Total', total ? String(total) : '–'], ['To par', thru ? relText(toPar) : 'E']].forEach((kv) => {
+                const resultLabel = isMatchplayScoring() ? 'Match' : 'To par';
+                const resultValue = isMatchplayScoring() ? (matchStatusText().replace(/^Match: /, '') || 'AS') : (thru ? relText(toPar) : 'E');
+                [['Thru', String(thru) + '/' + S.holes.length], ['Total', total ? String(total) : '–'], [resultLabel, resultValue]].forEach((kv) => {
                     const d = el('div'); d.appendChild(el('div', 'k', kv[0])); d.appendChild(el('div', 'v', kv[1])); tot.appendChild(d);
                 });
                 box.appendChild(tot);
@@ -682,7 +776,7 @@
             const grid = el('div', 'holegrid');
             S.holes.forEach((hh, i) => {
                 const b = el('button', i === S.holeIdx ? 'cur' : '', String(hh.hole));
-                if (me && me.scores && typeof me.scores[hh.hole] === 'number') b.className += ' done';
+                if (meRow && strokesForRow(meRow, hh.hole) != null) b.className += ' done';
                 if (holeHasConflict(hh.hole)) b.className += ' conflict';
                 b.addEventListener('click', function () { S.holeIdx = i; renderHole(); });
                 grid.appendChild(b);
@@ -706,13 +800,16 @@
             if (!standings.length) { sheet.appendChild(el('p', 'muted', 'No scores in yet.')); }
             else {
                 const table = el('table', 'lb');
-                const thead = el('tr'); ['', 'Player', 'Thru', 'To par'].forEach((t) => thead.appendChild(el('th', null, t))); table.appendChild(thead);
+                const resultHead = isMatchplayScoring() ? 'Match' : 'To par';
+                const thead = el('tr'); ['', isDoublesScoring() ? 'Pair' : 'Player', 'Thru', resultHead].forEach((t) => thead.appendChild(el('th', null, t))); table.appendChild(thead);
                 standings.forEach((s, i) => {
                     const tr = el('tr');
                     tr.appendChild(el('td', 'pos', String(i + 1)));
-                    tr.appendChild(el('td', 'name', s.name + (s.division ? ' · ' + s.division : '')));
+                    const name = s.name + (s.members && s.members.length ? ' · ' + s.members.join(' / ') : (s.division ? ' · ' + s.division : ''));
+                    tr.appendChild(el('td', 'name', name));
                     tr.appendChild(el('td', null, (s.thru || 0) + ''));
-                    tr.appendChild(el('td', 'tp ' + relClass(s.toPar || 0), s.thru ? relText(s.toPar || 0) : 'E'));
+                    if (isMatchplayScoring()) tr.appendChild(el('td', null, s.match && s.match.status ? s.match.status : 'AS'));
+                    else tr.appendChild(el('td', 'tp ' + relClass(s.toPar || 0), s.thru ? relText(s.toPar || 0) : 'E'));
                     table.appendChild(tr);
                 });
                 sheet.appendChild(table);
@@ -761,9 +858,9 @@
             const conflicts = S.conflicts || [];
             const missing = S.missing || [];
             const lines = [];
-            conflicts.forEach((c) => lines.push('Hole ' + c.hole + ' — ' + (c.playerName || 'a player') + ': scores disagree (' + (Array.isArray(c.values) ? c.values.join(' vs ') : '?') + ')'));
+            conflicts.forEach((c) => lines.push('Hole ' + c.hole + ' — ' + (c.playerName || c.label || 'a target') + ': scores disagree (' + (Array.isArray(c.values) ? c.values.join(' vs ') : '?') + ')'));
             const shown = missing.slice(0, 4);
-            shown.forEach((m) => lines.push('Hole ' + m.hole + ' — ' + (m.playerName || 'a player') + ': not confirmed by all members'));
+            shown.forEach((m) => lines.push('Hole ' + m.hole + ' — ' + (m.playerName || m.label || 'a target') + ': not confirmed by all members'));
             if (missing.length > shown.length) lines.push('…and ' + (missing.length - shown.length) + ' more unconfirmed');
             return { conflicts: conflicts, missing: missing, ready: conflicts.length === 0 && missing.length === 0, lines: lines };
         }
@@ -795,6 +892,7 @@
             if (r.status === 401) { renderLogin('Please sign in to keep score.'); return; }
             if (!r.ok || !r.data) { renderMessage('Couldn’t load your card', 'Check your connection and try again.', true); return; }
             const d = r.data;
+            S.snap = d;
             S.status = d.status || null;
             if (d.cardId == null || !Array.isArray(d.cardmates) || !d.cardmates.length) {
                 if (MODE === 'round') renderMessage('Round not found', 'That round code isn’t active. Double-check it, or start a new round.', true);
@@ -803,6 +901,7 @@
             }
             S.holes = Array.isArray(d.holes) ? d.holes : [];
             S.cardId = d.cardId; S.myIndex = d.playerIndex; S.cardmates = d.cardmates;
+            S.roundConfig = d.roundConfig || null; S.scoreTargets = Array.isArray(d.scoreTargets) ? d.scoreTargets : []; S.scoreTargetError = d.scoreTargetError || null;
             S.courseName = d.courseName || null; S.layoutName = d.layoutName || null; S.udiscCourseId = d.udiscCourseId || null;
             S.scorerIndex = d.playerIndex;
             if (MODE === 'round') rememberRecentRound({ code: ROUND_CODE, label: 'Casual round ' + ROUND_CODE });
@@ -869,14 +968,81 @@
                 const row = el('button', 'tap-row'); const g = el('div', 'grow');
                 g.appendChild(el('div', 'title', L.name || 'Layout')); g.appendChild(el('div', 'sub', L.total_par != null ? ('Par ' + L.total_par) : ''));
                 row.appendChild(g); row.appendChild(el('div', 'chev', '›'));
-                row.addEventListener('click', function () { createRound(course, L); });
+                row.addEventListener('click', function () { renderSetupPick(course, L); });
                 c.appendChild(row);
             });
             shell(c);
         }
-        async function createRound(course, layout) {
+        function defaultLiveScoringConfig() {
+            return { groupFormat: 'singles', scoringStyle: 'stroke' };
+        }
+        function renderSetupPick(course, layout) {
+            const selected = defaultLiveScoringConfig();
+            const c = el('div', 'stack');
+            const back = el('button', 'btn ghost small', '‹ Back'); back.addEventListener('click', function () { renderLayoutPick(course); }); c.appendChild(back);
+            const intro = el('div', 'card stack');
+            intro.setAttribute('data-score-setup', 'casual-format');
+            intro.appendChild(el('span', 'pill', layout && layout.name ? layout.name : 'Layout'));
+            intro.appendChild(el('h2', 'section', 'Round setup'));
+            intro.appendChild(el('p', 'muted', 'Choose how this casual card is scored. Defaults are ready for a standard singles stroke round.'));
+            c.appendChild(intro);
+
+            const optionGroups = [
+                {
+                    key: 'groupFormat',
+                    label: 'Group format',
+                    attr: 'data-group-format',
+                    options: [
+                        { value: 'singles', title: 'Singles', sub: 'One score per player' },
+                        { value: 'doubles', title: 'Doubles', sub: 'One score per pair' }
+                    ]
+                },
+                {
+                    key: 'scoringStyle',
+                    label: 'Scoring style',
+                    attr: 'data-scoring-style',
+                    options: [
+                        { value: 'stroke', title: 'Stroke play', sub: 'Lowest total wins' },
+                        { value: 'matchplay', title: 'Match play', sub: 'Win holes head to head' }
+                    ]
+                }
+            ];
+            const buttons = [];
+            function refresh() {
+                buttons.forEach(function (btn) {
+                    btn.setAttribute('aria-pressed', selected[btn.dataset.setupKey] === btn.dataset.setupValue ? 'true' : 'false');
+                });
+            }
+            optionGroups.forEach(function (group) {
+                const card = el('div', 'card stack');
+                card.appendChild(el('label', 'lbl', group.label));
+                const grid = el('div', 'setup-grid');
+                group.options.forEach(function (opt) {
+                    const btn = el('button', 'setup-option');
+                    btn.type = 'button';
+                    btn.dataset.setupKey = group.key;
+                    btn.dataset.setupValue = opt.value;
+                    btn.setAttribute(group.attr, opt.value);
+                    btn.appendChild(el('span', 'title', opt.title));
+                    btn.appendChild(el('span', 'sub', opt.sub));
+                    btn.addEventListener('click', function () { selected[group.key] = opt.value; refresh(); });
+                    buttons.push(btn);
+                    grid.appendChild(btn);
+                });
+                card.appendChild(grid);
+                c.appendChild(card);
+            });
+            const start = el('button', 'btn', 'Start round');
+            start.setAttribute('data-create-round', 'casual');
+            start.addEventListener('click', function () { createRound(course, layout, selected); });
+            c.appendChild(start);
+            refresh();
+            shell(c);
+        }
+        async function createRound(course, layout, config) {
             shell(spinner());
-            const r = await api('/rounds', { method: 'POST', body: { course_id: course.id, layout_id: layout.id } });
+            const liveScoringConfig = config || defaultLiveScoringConfig();
+            const r = await api('/rounds', { method: 'POST', body: { course_id: course.id, layout_id: layout.id, liveScoringConfig: { groupFormat: liveScoringConfig.groupFormat, scoringStyle: liveScoringConfig.scoringStyle } } });
             if (r.ok && r.data && r.data.code) { location.search = '?round=' + r.data.code; return; }
             renderMessage('Could not start round', (r.data && r.data.error === 'no_layout_holes') ? 'That layout has no holes/pars yet.' : 'Please try again.', false);
         }
@@ -893,6 +1059,28 @@
             const sheet = el('div', 'sheet'); sheet.appendChild(el('div', 'grab'));
             sheet.appendChild(el('h2', 'section', 'Players'));
             sheet.appendChild(el('p', 'muted', 'Remove a player who registered by accident, had to leave, or didn’t show. Their scores are cleared.'));
+            const pairInputs = [];
+            if (isDoublesScoring()) {
+                const pairBox = el('div', 'card stack');
+                pairBox.style.margin = '0.75rem 0';
+                pairBox.appendChild(el('label', 'lbl', 'Doubles pairs'));
+                pairBox.appendChild(el('p', 'muted', 'Use the same pair label for exactly two active players before scoring starts.'));
+                (S.cardmates || []).forEach(function (p) {
+                    const wrap = el('label', 'lbl');
+                    wrap.textContent = p.name + (p.isMe ? ' (you)' : '');
+                    const input = el('input', 'field');
+                    input.maxLength = 40;
+                    input.value = p.team || '';
+                    input.placeholder = 'Pair label';
+                    wrap.appendChild(input);
+                    pairInputs.push({ player: p, input: input });
+                    pairBox.appendChild(wrap);
+                });
+                const savePairs = el('button', 'btn small secondary', 'Save pairs');
+                savePairs.addEventListener('click', function () { savePairLabels(pairInputs, overlay); });
+                pairBox.appendChild(savePairs);
+                sheet.appendChild(pairBox);
+            }
             (S.cardmates || []).forEach(function (p) {
                 const row = el('div', 'prow');
                 row.appendChild(el('div', 'pname', p.name + (p.isMe ? ' (you)' : '')));
@@ -904,6 +1092,27 @@
             const close = el('button', 'btn secondary', 'Close'); close.style.marginTop = '1rem'; close.addEventListener('click', function () { overlay.remove(); });
             sheet.appendChild(close);
             overlay.appendChild(sheet); document.body.appendChild(overlay);
+        }
+        async function savePairLabels(pairInputs, overlay) {
+            const assignments = pairInputs.map(function (item) { return { index: item.player.index, pairLabel: item.input.value.trim() }; });
+            const r = await api('/rounds/' + ROUND_CODE + '/pairs', { method: 'POST', body: { assignments: assignments } });
+            if (!r.ok) {
+                if (r.status === 409) toast(r.data && r.data.error === 'scores_exist' ? 'Pair changes are blocked after scoring starts' : 'Could not save pairs');
+                else if (r.status === 400 && r.data && r.data.message) toast(r.data.message);
+                else toast('Could not save pairs');
+                return;
+            }
+            if (overlay) overlay.remove();
+            if (r.data) {
+                S.cardId = r.data.cardId || S.cardId;
+                S.myIndex = r.data.playerIndex == null ? S.myIndex : r.data.playerIndex;
+                S.cardmates = Array.isArray(r.data.cardmates) ? r.data.cardmates : S.cardmates;
+                S.roundConfig = r.data.roundConfig || S.roundConfig;
+                S.scoreTargets = Array.isArray(r.data.scoreTargets) ? r.data.scoreTargets : S.scoreTargets;
+                S.scoreTargetError = r.data.scoreTargetError || null;
+            }
+            renderHole();
+            toast('Pairs saved');
         }
         async function removeFromRound(p, overlay) {
             const msg = p.isMe ? 'Leave this round? Your scores will be cleared.' : ('Remove ' + p.name + ' from this round? Their scores will be cleared.');

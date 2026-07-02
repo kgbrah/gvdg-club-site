@@ -209,7 +209,7 @@
             const headers = {};
             if (body) headers['Content-Type'] = 'application/json';
             if (token) headers.Authorization = 'Bearer ' + token;
-            return fetch(AUTH_BASE + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+            return fetch(AUTH_BASE + path, { method, headers, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' });
         }
         function typeLabel(value) {
             return String(value || '').replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase()) || 'Gear';
@@ -221,6 +221,38 @@
         }
         function cartItemsPayload() {
             return Array.from(cart.entries()).map(([productId, quantity]) => ({ product_id: productId, quantity }));
+        }
+        function isActiveProduct(product) {
+            return !!product && Number(product.active) === 1;
+        }
+        function stockQty(product) {
+            return Number(product && product.stock_qty || 0);
+        }
+        function isPurchasableProduct(product) {
+            return isActiveProduct(product) && stockQty(product) > 0;
+        }
+        function pruneCart(message) {
+            let changed = false;
+            for (const [productId, quantity] of Array.from(cart.entries())) {
+                const product = products.find((p) => Number(p.id) === Number(productId));
+                if (!isPurchasableProduct(product)) {
+                    cart.delete(productId);
+                    changed = true;
+                    continue;
+                }
+                const stock = stockQty(product);
+                if (quantity > stock) {
+                    cart.set(productId, stock);
+                    changed = true;
+                }
+            }
+            if (changed && message) setStatus(message, 'error');
+            return changed;
+        }
+        function ensureCartStillAvailable() {
+            const changed = pruneCart('One or more cart items are no longer available.');
+            if (changed) renderCart();
+            return cart.size > 0;
         }
         function updatePaymentControls() {
             const loggedIn = !!sessionStorage.getItem(TOKEN_KEY);
@@ -240,6 +272,7 @@
         }
         async function payWithPaypal() {
             if (!cart.size) { setStatus('Add an item before checking out.', 'error'); return; }
+            if (!ensureCartStillAvailable()) return;
             const token = sessionStorage.getItem(TOKEN_KEY);
             const name = ($('ppName').value || '').trim();
             const contact = ($('ppContact').value || '').trim();
@@ -252,7 +285,7 @@
                     setStatus('Opening PayPal… complete your payment to @greenvillediscgolf to finish the order.', 'success');
                     window.location.href = 'https://www.paypal.com/paypalme/greenvillediscgolf/' + (data.amount_cents / 100).toFixed(2);
                 } else if (data.error === 'insufficient_stock' || data.error === 'product_unavailable') {
-                    setStatus('An item just went out of stock. Refreshing the shop.', 'error'); await loadProducts(); btn.disabled = false;
+                    setStatus('An item is no longer available. Refreshing the shop.', 'error'); await loadProducts(); renderCart(); btn.disabled = false;
                 } else { setStatus('Could not start PayPal checkout. Please try again.', 'error'); btn.disabled = false; }
             } catch (e) { setStatus('Could not reach the store. Please try again.', 'error'); btn.disabled = false; }
         }
@@ -335,6 +368,7 @@
             window.paypal.Buttons({
                 createOrder: async () => {
                     if (!cart.size) { setStatus('Add an item before checking out.', 'error'); throw new Error('empty_cart'); }
+                    if (!ensureCartStillAvailable()) { setStatus('One or more cart items are no longer available.', 'error'); throw new Error('cart_unavailable'); }
                     const token = sessionStorage.getItem(TOKEN_KEY);
                     const name = ($('ppName').value || '').trim();
                     if (!token && !name) { setStatus('Enter your name so the club can match your order.', 'error'); $('ppName').focus(); throw new Error('name_required'); }
@@ -342,9 +376,10 @@
                     const data = await r.json().catch(() => ({}));
                     if (!r.ok || !data.orderId) {
                         if (data.error === 'insufficient_stock') setStatus('One item no longer has enough stock. Refreshing inventory.', 'error');
+                        else if (data.error === 'product_unavailable') setStatus('One item is no longer available. Refreshing inventory.', 'error');
                         else if (data.error === 'name_required') setStatus('Enter your name to check out.', 'error');
                         else setStatus('PayPal checkout could not start. Please try again.', 'error');
-                        if (data.error === 'insufficient_stock') await loadProducts();
+                        if (data.error === 'insufficient_stock' || data.error === 'product_unavailable') { await loadProducts(); renderCart(); }
                         throw new Error(data.error || 'paypal_create_failed');
                     }
                     return data.orderId;
@@ -361,8 +396,8 @@
                         renderCart();
                         return;
                     }
-                    if (body.error === 'insufficient_stock') {
-                        setStatus('One item no longer has enough stock. Refreshing inventory.', 'error');
+                    if (body.error === 'insufficient_stock' || body.error === 'product_unavailable') {
+                        setStatus('One item is no longer available. Refreshing inventory.', 'error');
                         await loadProducts();
                         renderCart();
                         return;
@@ -375,8 +410,10 @@
         }
         async function loadProducts() {
             const r = await api('/shop/products?sort=brand');
-            products = r.ok ? ((await r.json()).products || []) : [];
+            const data = r.ok ? await r.json().catch(() => ({})) : {};
+            products = ((data.products || [])).filter(isActiveProduct);
             fillFilters();
+            pruneCart('One or more cart items are no longer available.');
             renderProducts();
         }
         function uniqueValues(key) {
@@ -409,7 +446,7 @@
             const sort = $('sortSelect').value;
             const list = products.filter((p) => {
                 const hay = [p.name, p.brand, p.color, p.product_type, p.weight_g != null ? String(p.weight_g) : ''].join(' ').toLowerCase();
-                return (!q || hay.includes(q)) && (!brand || String(p.brand) === brand) && (!color || String(p.color) === color) && (!weight || String(p.weight_g) === weight) && (!type || String(p.product_type) === type);
+                return isActiveProduct(p) && (!q || hay.includes(q)) && (!brand || String(p.brand) === brand) && (!color || String(p.color) === color) && (!weight || String(p.weight_g) === weight) && (!type || String(p.product_type) === type);
             });
             const textSort = (key) => list.sort((a, b) => String(a[key] || '').localeCompare(String(b[key] || '')) || String(a.name || '').localeCompare(String(b.name || '')));
             if (sort === 'color') return textSort('color');
@@ -458,7 +495,7 @@
             body.appendChild(name);
             const meta = document.createElement('div');
             meta.className = 'product-meta';
-            meta.textContent = [product.brand, typeLabel(product.product_type), product.color, product.weight_g != null ? product.weight_g + 'g' : '', (product.stock_qty || 0) + ' in stock'].filter(Boolean).join(' · ');
+            meta.textContent = [product.brand, typeLabel(product.product_type), product.color, product.weight_g != null ? product.weight_g + 'g' : '', stockQty(product) + ' in stock'].filter(Boolean).join(' · ');
             body.appendChild(meta);
             if (product.description) {
                 const desc = document.createElement('div');
@@ -474,8 +511,8 @@
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'shop-btn';
-            btn.textContent = (product.stock_qty || 0) > 0 ? 'Add' : 'Sold out';
-            btn.disabled = (product.stock_qty || 0) <= 0;
+            btn.textContent = isPurchasableProduct(product) ? 'Add' : 'Unavailable';
+            btn.disabled = !isPurchasableProduct(product);
             btn.addEventListener('click', () => addToCart(product.id));
             bottom.appendChild(price);
             bottom.appendChild(btn);
@@ -484,20 +521,21 @@
             return card;
         }
         function addToCart(productId) {
-            const product = products.find((p) => p.id === productId);
-            if (!product) return;
+            const product = products.find((p) => Number(p.id) === Number(productId));
+            if (!isPurchasableProduct(product)) { setStatus('That product is no longer available.', 'error'); return; }
             const current = cart.get(productId) || 0;
-            if (current >= Number(product.stock_qty || 0)) { setStatus('That is all the stock available for this product.', 'error'); return; }
+            if (current >= stockQty(product)) { setStatus('That is all the stock available for this product.', 'error'); return; }
             cart.set(productId, current + 1);
             setStatus('');
             renderCart();
         }
         function renderCart() {
+            pruneCart();
             const list = $('cartList');
             list.replaceChildren();
             let total = 0;
             for (const [productId, quantity] of cart.entries()) {
-                const product = products.find((p) => p.id === productId);
+                const product = products.find((p) => Number(p.id) === Number(productId));
                 if (!product) continue;
                 total += Number(product.price_cents || 0) * quantity;
                 list.appendChild(cartRow(product, quantity));
@@ -526,17 +564,18 @@
             return row;
         }
         function changeQty(productId, delta) {
-            const product = products.find((p) => p.id === productId);
-            if (!product) return;
+            const product = products.find((p) => Number(p.id) === Number(productId));
+            if (!isPurchasableProduct(product)) { cart.delete(productId); setStatus('That product is no longer available.', 'error'); renderCart(); return; }
             const next = (cart.get(productId) || 0) + delta;
             if (next <= 0) cart.delete(productId);
-            else if (next <= Number(product.stock_qty || 0)) cart.set(productId, next);
+            else if (next <= stockQty(product)) cart.set(productId, next);
             else setStatus('That is all the stock available for this product.', 'error');
             renderCart();
         }
         async function checkout() {
             const token = sessionStorage.getItem(TOKEN_KEY);
             if (!token) { setStatus('Log in on the Members page before spending store credit.', 'error'); return; }
+            if (!ensureCartStillAvailable()) return;
             const items = Array.from(cart.entries()).map(([productId, quantity]) => ({ product_id: productId, quantity }));
             const btn = $('checkoutBtn');
             btn.disabled = true;
@@ -555,6 +594,9 @@
                     setStatus('Not enough store credit. Balance: ' + money(data.balance_cents || 0) + ', cart: ' + money(data.total_cents || 0) + '.', 'error');
                 } else if (data.error === 'insufficient_stock') {
                     setStatus('One item no longer has enough stock. Refreshing inventory.', 'error');
+                    await loadProducts();
+                } else if (data.error === 'product_unavailable') {
+                    setStatus('One item is no longer available. Refreshing inventory.', 'error');
                     await loadProducts();
                 } else {
                     setStatus('Checkout failed. Please try again or see an admin.', 'error');

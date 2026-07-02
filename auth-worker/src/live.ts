@@ -5,80 +5,14 @@
 // Auth is enforced by the Worker BEFORE forwarding here (start/score/finalize are admin-gated; the
 // snapshot + ws reads are public). The DO trusts requests it receives.
 
-import * as db from "./db.js";
-import { normalizeScorecards, playerScorerId, purgeScorerVotes, recordScoreVote, scorecardConsensusIssues } from "./live-consensus.js";
-import { assignCards, computeLeaderboard, finalizeStandings, type FinalStanding, type PlayerState } from "./scoring.js";
-
-interface LiveEnv {
-  DB: db.D1Like;
-}
-interface LiveState {
-  storage: {
-    get<T = unknown>(key: string): Promise<T | undefined>;
-    put(key: string, value: unknown): Promise<void>;
-  };
-  acceptWebSocket(socket: WebSocket): void;
-  getWebSockets(): WebSocket[];
-}
-interface LiveMeta {
-  eventId: number;
-  casual?: boolean; // self-organizing casual round (no admin event); finalize writes casual_rounds/casual_results (not event results)
-  roundCode?: string | null; // casual share code (the DO name suffix) — the durable key for casual_rounds
-  courseId?: number | null; // casual: the layout's course + layout ids, kept so ratings can compute a per-layout SSA
-  layoutId?: number | null;
-  createdBy?: string | null; // casual: member id that started the round
-  courseName?: string | null; // display-only: course + layout shown in the scorecard header
-  layoutName?: string | null;
-  udiscCourseId?: string | null; // UDisc numeric course id for the "Add to UDisc" applink (export bridge)
-  holes: { hole: number; par: number; distance_ft?: number | null; tee_sign_id?: number | null }[];
-  status: "live" | "final";
-  startedAt: string;
-  rev?: number; // monotonic revision, bumped on every mutation so clients can drop out-of-order snapshots
-  // Single-use, ROUND-SCOPED hole overrides (e.g. short baskets today). They live only here, in the
-  // live round — the course layout is never touched, so the hole reverts to its verified value after
-  // the round. Keyed by hole number (string for JSON safety).
-  overrides?: Record<string, { par?: number; distance_ft?: number }>;
-}
-interface StartBody {
-  eventId?: number;
-  casual?: boolean;
-  roundCode?: string | null;
-  courseId?: number | null;
-  layoutId?: number | null;
-  createdBy?: string | null;
-  courseName?: string | null;
-  layoutName?: string | null;
-  udiscCourseId?: string | null;
-  holes: { hole: number; par: number; distance_ft?: number | null; tee_sign_id?: number | null }[];
-  players: { memberId?: string | null; name: string; division?: string | null; startingHole?: number | null; cardId?: string | null }[];
-  startedAt?: string;
-  cardSize?: number;
-}
-interface ScoreBody {
-  memberId?: string | null;
-  index?: number;
-  name?: string;
-  scorerIndex?: number | null;
-  hole: number;
-  strokes: number;
-}
-interface OverrideBody {
-  hole: number;
-  par?: number | null;
-  distance_ft?: number | null;
-  clear?: boolean;
-}
-interface RemoveBody {
-  memberId?: string | null;
-  index?: number;
-  name?: string;
-}
-
-const j = (o: unknown, status = 200): Response => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json" } });
-
-function canEnterScorecard(player: PlayerState, authMember: string | null): boolean {
-  return !player.memberId || player.memberId === authMember || player.memberId.startsWith("g_");
-}
+import { normalizeScorecards, playerScorerId, purgeScorerVotes, purgeScoreTargetScorerVotes, recordScoreTargetVote } from "./live-consensus.js";
+import { isLiveFormatError, normalizeLiveScoringConfig, type LiveScoringConfig } from "./live-format.js";
+import { finalizeLiveEvent } from "./live-finalize.js";
+import { updateLivePairs } from "./live-pairs.js";
+import { canEnterScorecard, findPlayer, invalidScoreTargetsResponse, scoreTargetForBody, scoringState, targetAnchor } from "./live-state.js";
+import { mineData, publicSnapshot } from "./live-snapshot.js";
+import { j, type LiveEnv, type LiveMeta, type LiveState, type OverrideBody, type PairAssignmentBody, type RemoveBody, type ScoreBody, type StartBody } from "./live-types.js";
+import { assignCards, type PlayerState } from "./scoring.js";
 
 export class LiveEventDO {
   private state: LiveState;
@@ -121,49 +55,14 @@ export class LiveEventDO {
     if (action === "join") return this.join(authMember, (body as { name?: string }).name); // casual round: caller joins
     if (action === "guest") return this.addGuest(authMember, (body as { name?: string }).name); // add a non-member to my card
     if (action === "remove") return this.removePlayer(body as RemoveBody, authMember, authAdmin); // drop a player (accidental/left/no-show)
+    if (action === "pairs") return this.updatePairs(body as PairAssignmentBody, authMember, authAdmin);
     if (action === "override") return this.override(body as OverrideBody);
     if (action === "finalize") return this.finalize(authMember, authAdmin, (body as { force?: boolean }).force === true);
     return j({ error: "not_found" }, 404);
   }
 
-  /** meta.holes with any round-scoped overrides applied — the par the scorecard/leaderboard use, plus
-   *  an optional temporary distance + an `overridden` flag for the tee-sign render. */
-  private resolvedHoles(): { hole: number; par: number; distance_ft: number | null; tee_sign_id: number | null; overridden: boolean }[] {
-    const ov = this.meta?.overrides ?? {};
-    return (this.meta?.holes ?? []).map((h) => {
-      const o = ov[String(h.hole)];
-      return { hole: h.hole, par: o?.par ?? h.par, distance_ft: o?.distance_ft ?? h.distance_ft ?? null, tee_sign_id: h.tee_sign_id ?? null, overridden: !!o };
-    });
-  }
-
   private snapshot() {
-    const holes = this.resolvedHoles();
-    const issues = scorecardConsensusIssues(this.players, holes);
-    return {
-      status: this.meta?.status ?? "none",
-      rev: this.meta?.rev ?? 0,
-      eventId: this.meta?.eventId ?? null,
-      courseName: this.meta?.courseName ?? null,
-      layoutName: this.meta?.layoutName ?? null,
-      udiscCourseId: this.meta?.udiscCourseId ?? null,
-      holes, // {hole, par, distance_ft, overridden} — par/distance reflect any round override
-      // players (with per-hole scores + their stable index) drive the scorekeeper grid;
-      // standings drive the public leaderboard.
-      // PUBLIC payload: identify players by their stable `index` and `cardId`. memberId is REDACTED here
-      // because guest member ids are "g_<token>" capability tokens — never expose them to ws/snapshot
-      // readers. The authed /mine endpoint is how a player learns which index/card is theirs. Removed
-      // (tombstoned) players are filtered out, but each kept player retains its absolute array index.
-      players: this.players
-        .map((p, index) => ({ p, index }))
-        .filter((x) => !x.p.removed)
-        .map(({ p, index }) => ({ index, cardId: p.cardId ?? null, name: p.name, division: p.division ?? null, startingHole: p.startingHole ?? null, scores: p.scores, scorecards: p.scorecards ?? {} })),
-      conflicts: issues.conflicts,
-      // Holes where a required (member) scorer hasn't voted yet — drives the "what's blocking finalize"
-      // panel. Safe to expose publicly: identifies players by stable index/name, never memberId.
-      missing: issues.missing,
-      standings: computeLeaderboard(holes, this.players).map((s) => ({ name: s.name, division: s.division, thru: s.thru, total: s.total, toPar: s.toPar })),
-      updatedAt: this.meta?.startedAt ?? null,
-    };
+    return publicSnapshot(this.meta, this.players);
   }
 
   private async start(b: StartBody): Promise<Response> {
@@ -171,11 +70,19 @@ export class LiveEventDO {
       .filter((h) => h && typeof h.hole === "number" && typeof h.par === "number")
       .map((h) => ({ hole: h.hole, par: h.par, distance_ft: h.distance_ft ?? null, tee_sign_id: h.tee_sign_id ?? null }));
     if (holes.length === 0 || (!b.eventId && !b.casual)) return j({ error: "invalid_start" }, 400);
-    this.meta = { eventId: b.eventId ?? 0, casual: !!b.casual, roundCode: b.roundCode ?? null, courseId: b.courseId ?? null, layoutId: b.layoutId ?? null, createdBy: b.createdBy ?? null, courseName: b.courseName ?? null, layoutName: b.layoutName ?? null, udiscCourseId: b.udiscCourseId ?? null, holes, status: "live", startedAt: b.startedAt ?? "", overrides: {} };
+    let roundConfig: LiveScoringConfig;
+    try {
+      roundConfig = normalizeLiveScoringConfig(b.liveScoringConfig);
+    } catch (error) {
+      if (isLiveFormatError(error)) return j({ error: "invalid_live_scoring_config", code: error.code, message: error.message }, 400);
+      throw error;
+    }
+    this.meta = { eventId: b.eventId ?? 0, casual: !!b.casual, roundCode: b.roundCode ?? null, courseId: b.courseId ?? null, layoutId: b.layoutId ?? null, createdBy: b.createdBy ?? null, courseName: b.courseName ?? null, layoutName: b.layoutName ?? null, udiscCourseId: b.udiscCourseId ?? null, holes, status: "live", startedAt: b.startedAt ?? "", roundConfig, overrides: {} };
     this.players = (Array.isArray(b.players) ? b.players : []).map((p) => ({
       memberId: p.memberId ?? null,
       name: String(p.name ?? "Player"),
       division: p.division ?? null,
+      team: p.team ?? p.pairLabel ?? null,
       startingHole: p.startingHole ?? null,
       cardId: p.cardId ?? null,
       scores: {},
@@ -188,10 +95,7 @@ export class LiveEventDO {
   }
 
   private findPlayer(b: ScoreBody): PlayerState | undefined {
-    if (b.memberId) return this.players.find((p) => p.memberId === b.memberId);
-    if (typeof b.index === "number") return this.players[b.index];
-    if (b.name) return this.players.find((p) => p.name === b.name);
-    return undefined;
+    return findPlayer(b, this.players);
   }
 
   private async score(b: ScoreBody, authMember: string | null, authAdmin: boolean): Promise<Response> {
@@ -200,25 +104,27 @@ export class LiveEventDO {
     const strokes = Number(b.strokes);
     if (!this.meta.holes.some((h) => h.hole === hole)) return j({ error: "bad_hole" }, 400);
     if (!Number.isInteger(strokes) || strokes < 1 || strokes > 30) return j({ error: "bad_strokes" }, 400);
-    const player = this.findPlayer(b);
-    if (!player || player.removed) return j({ error: "no_player" }, 404); // a removed player is no longer scorable
-    const targetIndex = this.players.indexOf(player);
+    const scoring = scoringState(this.meta, this.players);
+    if (scoring.error) return invalidScoreTargetsResponse(scoring.error);
+    const target = scoreTargetForBody(b, this.players, scoring.targets);
+    const anchor = target ? targetAnchor(this.players, target) : null;
+    if (!target || !anchor) return j({ error: b.targetId ? "no_target" : "no_player" }, 404); // a removed player is no longer scorable
     const meIndex = authMember ? this.players.findIndex((p) => p.memberId === authMember && !p.removed) : -1;
     const me = meIndex >= 0 ? this.players[meIndex] : undefined;
     // Authorize from the Worker-trusted identity ONLY: an admin may score anyone; otherwise the
     // submitter must be a player on the SAME card as the target. Body identity is for targeting, not auth.
     if (!authAdmin) {
       if (!me) return j({ error: "not_on_card" }, 403);
-      if ((me.cardId ?? null) !== (player.cardId ?? null)) return j({ error: "wrong_card" }, 403);
+      if ((me.cardId ?? null) !== (anchor.player.cardId ?? null)) return j({ error: "wrong_card" }, 403);
     }
     if (b.scorerIndex != null && (!Number.isInteger(b.scorerIndex) || b.scorerIndex < 0)) return j({ error: "bad_scorer" }, 400);
-    const scorerIndex = typeof b.scorerIndex === "number" ? b.scorerIndex : authAdmin ? targetIndex : meIndex;
+    const scorerIndex = typeof b.scorerIndex === "number" ? b.scorerIndex : authAdmin ? anchor.index : meIndex;
     const scorer = this.players[scorerIndex];
     if (!scorer || scorer.removed) return j({ error: "bad_scorer" }, 400);
-    if ((scorer.cardId ?? null) !== (player.cardId ?? null)) return j({ error: "scorer_wrong_card" }, 403);
+    if ((scorer.cardId ?? null) !== (anchor.player.cardId ?? null)) return j({ error: "scorer_wrong_card" }, 403);
     if (!authAdmin && !canEnterScorecard(scorer, authMember)) return j({ error: "wrong_scorer" }, 403);
     const scorerId = playerScorerId(scorerIndex);
-    const conflict = recordScoreVote({ players: this.players, targetIndex, scorerId, hole, strokes });
+    const conflict = recordScoreTargetVote({ players: this.players, target, scorerId, hole, strokes });
     await this.persist();
     if (conflict) {
       this.sendAll({ type: "conflict", ...conflict, from: conflict.values[0] ?? null, to: conflict.values[1] ?? null });
@@ -227,42 +133,9 @@ export class LiveEventDO {
     return j(this.snapshot());
   }
 
-  /** The authenticated caller's own card: which player they are, their cardmates, and the holes — so the
-   *  score app renders just their group. memberIds stay internal; cardmates are keyed by stable index. */
-  private mineData(authMember: string | null): Record<string, unknown> {
-    const holes = this.resolvedHoles();
-    const meRaw = authMember ? this.players.findIndex((p) => p.memberId === authMember) : -1;
-    const meIdx = meRaw >= 0 && !this.players[meRaw]!.removed ? meRaw : -1; // a tombstoned caller is off the card
-    const base = { eventId: this.meta?.eventId ?? 0, casual: !!this.meta?.casual, courseName: this.meta?.courseName ?? null, layoutName: this.meta?.layoutName ?? null, udiscCourseId: this.meta?.udiscCourseId ?? null, status: this.meta?.status ?? "none", holes };
-    if (meIdx < 0) return { ...base, cardId: null, playerIndex: null, cardmates: [], conflicts: [], missing: [] };
-    const cardId = this.players[meIdx]!.cardId ?? null;
-    const cardmates = this.players
-      .map((p, index) => ({ p, index }))
-      .filter((x) => !x.p.removed && (x.p.cardId ?? null) === cardId)
-      .map(({ p, index }) => ({
-        index,
-        cardId: p.cardId ?? null,
-        name: p.name,
-        division: p.division ?? null,
-        startingHole: p.startingHole ?? null,
-        scores: p.scores,
-        scorecards: p.scorecards ?? {}, // per-scorer votes so the client can show/edit the caller's OWN vote during a conflict
-        isMe: index === meIdx,
-        canEnterScorecard: canEnterScorecard(p, authMember),
-      }));
-    const issues = scorecardConsensusIssues(this.players, holes);
-    return {
-      ...base,
-      cardId,
-      playerIndex: meIdx,
-      cardmates,
-      conflicts: issues.conflicts.filter((c) => c.cardId === cardId),
-      missing: issues.missing.filter((m) => m.cardId === cardId),
-    };
-  }
   private mine(authMember: string | null): Response {
     if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
-    return j(this.mineData(authMember));
+    return j(mineData(this.meta, this.players, authMember));
   }
 
   /** Casual round: the authenticated caller joins (added once, on the single card "c0"). No-op if already in. */
@@ -288,7 +161,7 @@ export class LiveEventDO {
       await this.persist();
       this.broadcast();
     }
-    return j(this.mineData(authMember));
+    return j(mineData(this.meta, this.players, authMember));
   }
 
   /** Add a non-member guest to the caller's card (the caller must already be on the round). */
@@ -301,7 +174,7 @@ export class LiveEventDO {
     this.players.push({ memberId: null, name: nm.slice(0, 60), division: null, startingHole: null, cardId: me.cardId ?? "c0", scores: {}, scorecards: {} });
     await this.persist();
     this.broadcast();
-    return j(this.mineData(authMember));
+    return j(mineData(this.meta, this.players, authMember));
   }
 
   /** Remove a player from the card — a casual-round player who registered by accident, had to leave
@@ -333,10 +206,23 @@ export class LiveEventDO {
     target.scores = {};
     target.scorecards = {};
     target.scoredBy = {};
-    purgeScorerVotes(this.players, idx, this.meta.holes); // drop this player's votes on cardmates + re-derive consensus, so a leaver can't pin a hole in permanent conflict
+    const scoring = scoringState(this.meta, this.players);
+    if (scoring.error) purgeScorerVotes(this.players, idx, this.meta.holes);
+    else purgeScoreTargetScorerVotes(this.players, idx, this.meta.holes, scoring.targets); // drop this player's votes on cardmates + re-derive consensus, so a leaver can't pin a hole in permanent conflict
     await this.persist();
     this.broadcast();
-    return j(this.mineData(authMember));
+    return j(mineData(this.meta, this.players, authMember));
+  }
+
+  private async updatePairs(b: PairAssignmentBody, authMember: string | null, authAdmin: boolean): Promise<Response> {
+    const result = updateLivePairs({ meta: this.meta, players: this.players, body: b, authMember, authAdmin });
+    if (!result.ok) return j(result.body, result.status);
+    if (result.changed) {
+      this.players = result.players;
+      await this.persist();
+      this.broadcast();
+    }
+    return j(mineData(this.meta, this.players, authMember));
   }
 
   // Round-scoped single-use override of a hole's par/distance. Admin-gated at the Worker. The layout
@@ -363,115 +249,16 @@ export class LiveEventDO {
   }
 
   private async finalize(authMember: string | null, authAdmin: boolean, force = false): Promise<Response> {
-    if (!this.meta) return j({ error: "not_started" }, 409);
-    // Casual rounds are only member-gated at the route, so anyone with the code could otherwise finalize
-    // (lock) someone else's round — require the caller to actually be on the card. Admin events bypass
-    // (they're admin-gated at the route and meta.casual is false).
-    if (this.meta.casual && !authAdmin && !(authMember && this.players.some((p) => p.memberId === authMember && !p.removed))) {
-      return j({ error: "not_on_card" }, 403);
-    }
-    // Idempotent under a double-submit: claim finalization SYNCHRONOUSLY (before any await) so a second
-    // finalize that interleaves at one of the awaits below sees status==='final' and short-circuits,
-    // instead of racing clearResults + concurrent inserts into duplicate result rows.
-    if (this.meta.status === "final") {
-      return j({ status: "final", standings: finalizeStandings(this.resolvedHoles(), this.players) });
-    }
-    const holes = this.resolvedHoles();
-    // A round finalizes only when the whole card AGREES: no active-scorer conflicts AND every required
-    // (member) cardmate has voted on every hole. Guests are optional (requiredScorerIds), but a guest's
-    // differing vote still blocks as a conflict. An admin may FORCE past an incomplete board (e.g. a
-    // cardmate left without matching, or a solo-scorekeeper card); leavers otherwise self-heal via
-    // purgeScorerVotes. The blocking issues are returned so the client can show exactly what's missing.
-    const issues = scorecardConsensusIssues(this.players, holes);
-    const incomplete = issues.conflicts.length > 0 || issues.missing.length > 0;
-    if (incomplete && !(authAdmin && force)) {
-      return j({ error: "scorecard_incomplete", conflicts: issues.conflicts, missing: issues.missing }, 409);
-    }
-    const forced = incomplete; // an admin pushed a not-fully-agreed card through
-    this.meta.status = "final";
-    const standings = finalizeStandings(holes, this.players);
-    // A casual round has no admin event, so it isn't written to D1 EVENT results — but we DO persist a
-    // durable casual_rounds/casual_results record (the DO storage is ephemeral), so the round survives for
-    // history + ratings. Guarded by roundCode; roll back the finalize claim if the write fails so it retries.
-    if (this.meta.casual || !this.meta.eventId) {
-      if (this.meta.casual && this.meta.roundCode) {
-        try {
-          await this.persistCasualResults(standings);
-        } catch (e) {
-          this.meta.status = "live";
-          throw e;
-        }
-      }
-      await this.persist();
-      this.broadcast();
-      return j({ status: "final", standings, forced });
-    }
-    const eventId = this.meta.eventId;
-    try {
-      // Clear any prior results for this event, then write fresh (inserts run concurrently).
-      await db.clearResults(this.env.DB, eventId);
-      await Promise.all(
-        standings.map((s) =>
-          db.createResult(this.env.DB, {
-            event_id: eventId,
-            member_id: s.memberId,
-            name: s.name,
-            place: s.place,
-            total: s.total,
-            to_par: s.toPar,
-            breakdown: JSON.stringify(s.breakdown),
-            scorecard: s.holes.length ? JSON.stringify(s.holes) : null,
-          }),
-        ),
-      );
-      await db.updateEvent(this.env.DB, eventId, { status: "final" });
-    } catch (e) {
-      this.meta.status = "live"; // roll back the in-memory claim so the admin can retry finalize
-      throw e;
-    }
-    await this.persist();
-    this.broadcast();
-    return j({ status: "final", standings, forced });
-  }
-
-  /** Write a finalized casual round to D1 (header + one row per player) so it survives the DO's eviction
-   *  and feeds dashboard history + the ratings engine. Called once, on the first finalize (the idempotent
-   *  status==="final" short-circuit above prevents duplicate inserts). */
-  private async persistCasualResults(standings: FinalStanding[]): Promise<void> {
-    const meta = this.meta!;
-    const holes = this.resolvedHoles().map((h) => ({ hole: h.hole, par: h.par, distance_ft: h.distance_ft }));
-    // Delete any prior durable record for this round code FIRST (cascades to casual_results), so a
-    // re-finalize after a fault/eviction — or after a partial write on the previous attempt — REPLACES
-    // rather than duplicates the round. Mirrors the competition path's clearResults(eventId) idempotency;
-    // the UNIQUE round_code index is the backstop. (DO requests are serialized, so no concurrent race.)
-    await db.clearCasualRound(this.env.DB, meta.roundCode!);
-    const round = (await db.createCasualRound(this.env.DB, {
-      round_code: meta.roundCode!,
-      course_id: meta.courseId ?? null,
-      layout_id: meta.layoutId ?? null,
-      course_name: meta.courseName ?? null,
-      layout_name: meta.layoutName ?? null,
-      holes: JSON.stringify(holes),
-      created_by: meta.createdBy ?? null,
-      started_at: meta.startedAt || null,
-    })) as { id?: number } | null;
-    const roundId = round?.id;
-    if (!roundId) throw new Error("casual_round_insert_failed");
-    await Promise.all(
-      standings.map((s) =>
-        db.createCasualResult(this.env.DB, {
-          casual_round_id: roundId,
-          member_id: s.memberId,
-          name: s.name,
-          division: s.division,
-          place: s.place,
-          total: s.total,
-          to_par: s.toPar,
-          breakdown: JSON.stringify(s.breakdown),
-          scorecard: s.holes.length ? JSON.stringify(s.holes) : null,
-        }),
-      ),
-    );
+    return finalizeLiveEvent({
+      meta: this.meta,
+      players: this.players,
+      env: this.env,
+      authMember,
+      authAdmin,
+      force,
+      persist: () => this.persist(),
+      broadcast: () => this.broadcast(),
+    });
   }
 
   private handleWs(_request: Request): Response {

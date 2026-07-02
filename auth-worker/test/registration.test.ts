@@ -13,20 +13,22 @@ function kv(initial: Record<string, string> = {}) {
 }
 // SQL-aware mock parameterized by the event config + event status it returns.
 function mockDb(cfg: Record<string, unknown> | null, status = "scheduled") {
-  return { prepare: (sql: string) => ({
-    bind() { return this; },
+  return { prepare: (sql: string) => {
+    let binds: unknown[] = [];
+    return ({
+    bind(...values: unknown[]) { binds = values; return this; },
     all: async () => ({ results: [], success: true }),
     first: async () => {
       if (/SELECT status FROM events/i.test(sql)) return { status }; // getEventStatus
       if (/INSERT INTO event_config/i.test(sql) || /FROM event_config/i.test(sql)) return cfg;
       if (/FROM registrations WHERE id/i.test(sql)) return { id: 1, member_id: "m_jane" };
-      if (/INSERT INTO registrations/i.test(sql)) return { id: 1, division: "MA1" };
+      if (/INSERT INTO registrations/i.test(sql)) return { id: 1, division: binds[3] ?? null, team: binds[4] ?? null };
       if (/UPDATE registrations SET checked_in/i.test(sql)) return { id: 1, checked_in: 1 };
       if (/UPDATE registrations/i.test(sql)) return { id: 1 };
       return null; // getMyRegistration -> not registered
     },
     run: async () => ({ results: [], success: true }),
-  }) };
+  }); } };
 }
 const env = (cfg: Record<string, unknown> | null, status = "scheduled") => ({ ROSTER: kv(members), RATELIMIT: kv(), DB: mockDb(cfg, status), JWT_SECRET: SECRET, ALLOWED_ORIGINS: "http://localhost:8080", LIVE: undefined } as unknown as Parameters<typeof worker.fetch>[1]);
 const tok = (sub: string) => signSession({ sub, mustChangePin: false }, SECRET, 900);
@@ -61,6 +63,11 @@ describe("Track G — event registration", () => {
   });
   it("lets a member register when open (201)", async () => {
     expect((await call("/events/5/register", "POST", await tok("m_jane"), { division: "MA1" }, OPEN)).status).toBe(201);
+  });
+  it("stores a doubles pair label in the existing team field", async () => {
+    const res = await call("/events/5/register", "POST", await tok("m_jane"), { division: "MA1", team: "Pair Alpha" }, OPEN);
+    expect(res.status).toBe(201);
+    await expect(res.json()).resolves.toMatchObject({ registration: { team: "Pair Alpha" } });
   });
   it("rejects a division not in the event config (400)", async () => {
     expect((await call("/events/5/register", "POST", await tok("m_jane"), { division: "NOPE" }, OPEN)).status).toBe(400);

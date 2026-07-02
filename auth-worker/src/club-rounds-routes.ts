@@ -10,7 +10,8 @@ import { requireAuth } from "./authz.js";
 import { getMember } from "./roster.js";
 import { json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
-import { asInt } from "./input.js";
+import { asInt, asStr } from "./input.js";
+import { isLiveFormatError, normalizeLiveScoringConfig, type LiveScoringConfig } from "./live-format.js";
 
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // unambiguous (no 0/O/1/I/L)
 function genCode(): string {
@@ -41,15 +42,24 @@ export async function handleCasualRounds(
     const b = (await readJson(request)) ?? {};
     const layoutId = asInt(b.layout_id);
     if (layoutId == null) return json({ error: "invalid_request" }, 400, origin);
+    let liveScoringConfig: LiveScoringConfig;
+    try {
+      liveScoringConfig = normalizeLiveScoringConfig(b.liveScoringConfig ?? b.live_scoring_config);
+    } catch (error) {
+      if (isLiveFormatError(error)) return json({ error: "invalid_live_scoring_config" }, 400, origin);
+      throw error;
+    }
     const holes = await db.getLayoutHoles(env.DB, layoutId);
     if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin);
     const layout = (await db.getLayout(env.DB, layoutId)) as { name?: string | null; course_id?: number | null } | null;
     const course = layout?.course_id != null ? ((await db.getCourse(env.DB, layout.course_id)) as { name?: string | null; udisc_course_id?: string | null } | null) : null;
     const member = await getMember(env.ROSTER, claims.sub);
     const code = genCode();
+    const pairLabel = asStr(b.pairLabel, 40) ?? asStr(b.pair_label, 40) ?? asStr(b.team, 40);
+    const initialPlayer = { memberId: claims.sub, name: member?.name ?? "Player", ...(pairLabel ? { team: pairLabel } : {}) };
     const r = await roundStub(env, code).fetch("https://do/start", {
       method: "POST",
-      body: JSON.stringify({ casual: true, roundCode: code, courseId: layout?.course_id ?? null, layoutId, createdBy: claims.sub, courseName: course?.name ?? null, layoutName: layout?.name ?? null, udiscCourseId: course?.udisc_course_id ?? null, holes, players: [{ memberId: claims.sub, name: member?.name ?? "Player" }], startedAt: new Date().toISOString() }),
+      body: JSON.stringify({ casual: true, roundCode: code, courseId: layout?.course_id ?? null, layoutId, createdBy: claims.sub, courseName: course?.name ?? null, layoutName: layout?.name ?? null, udiscCourseId: course?.udisc_course_id ?? null, holes, players: [initialPlayer], liveScoringConfig, startedAt: new Date().toISOString() }),
     });
     if (r.status !== 200) return json({ error: "start_failed" }, 502, origin);
     return json({ code }, 201, origin);
@@ -96,6 +106,16 @@ export async function handleCasualRounds(
     if (await kvRateLimited(env, "round-remove:" + claims.sub, 30, 60)) return json({ error: "rate_limited" }, 429, origin);
     const b = (await readJson(request)) ?? {};
     return proxy(stub, "/remove", { method: "POST", headers: hdr, body: JSON.stringify({ index: b.index, name: b.name }) }, origin);
+  }
+  if (method === "POST" && sub === "pairs") {
+    if (await kvRateLimited(env, "round-pairs:" + claims.sub, 60, 60)) return json({ error: "rate_limited" }, 429, origin);
+    const member = await getMember(env.ROSTER, claims.sub);
+    const b = (await readJson(request)) ?? {};
+    return proxy(stub, "/pairs", {
+      method: "POST",
+      headers: { ...hdr, "X-Auth-Admin": String(member?.isAdmin === true) },
+      body: JSON.stringify({ assignments: b.assignments, pairs: b.pairs }),
+    }, origin);
   }
   if (method === "POST" && sub === "finalize") {
     // Any member on the card may finalize when the whole card agrees. The force override (finalize past a

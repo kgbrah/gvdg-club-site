@@ -196,6 +196,11 @@
         tr.al-row-verified .al-par, tr.al-row-verified .al-manual { opacity: 0.6; }
         .al-poolitem { display: inline-flex; align-items: center; gap: 0.35rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 999px; padding: 0.2rem 0.6rem; margin: 0.15rem; font-size: 0.78rem; }
         .al-poolitem button { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.9rem; line-height: 1; }
+        .sc-start-grid { display: grid; grid-template-columns: minmax(12rem, 1.4fr) minmax(7rem, 0.7fr) minmax(9rem, 0.85fr) auto auto; gap: 0.6rem; align-items: end; }
+        .sc-start-field { display: grid; gap: 0.2rem; min-width: 0; color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; }
+        .sc-start-field select { width: 100%; min-width: 0; padding: 0.45rem 0.55rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-size: 0.9rem; }
+        .sc-start-check { display: inline-flex; align-items: center; gap: 0.35rem; margin-bottom: 0.45rem; white-space: nowrap; }
+        .sc-start-grid #scStartBtn { white-space: nowrap; }
         .admin-pane { display: none; }
         .admin-pane.active { display: block; }
         /* Grouped sidebar nav: 5 sections on the left, content on the right (stacks on mobile) */
@@ -219,6 +224,22 @@
             .admin-form { max-width: none; }
             .al-row > span { max-width: 100%; min-width: 0; }
             .al-row input:not([type="checkbox"]), .al-row select { max-width: 100%; }
+            .sc-start-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .sc-start-field:first-child, .sc-start-check, .sc-start-grid #scStartBtn { grid-column: 1 / -1; }
+            .sc-start-check { margin-bottom: 0; white-space: normal; }
+            .sc-start-grid #scStartBtn { width: 100%; }
+            .shop-admin-heading { align-items: stretch; }
+            .shop-admin-toolbar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+            .shop-admin-toolbar select { width: 100%; min-width: 0; }
+            .shop-admin-row { grid-template-columns: 48px minmax(0, 1fr); }
+            .shop-admin-thumb { width: 48px; }
+            .shop-admin-controls { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: stretch; }
+            .shop-admin-controls input { width: 100%; min-width: 0; }
+            .shop-admin-controls label { grid-column: 1 / -1; }
+            .shop-admin-controls button { min-width: 0; padding-left: 0.65rem; padding-right: 0.65rem; }
+            .order-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; }
+            .order-controls select, .order-controls input { width: 100%; min-width: 0; }
+            .order-actions { grid-column: 1 / -1; }
             #apane-registration .al-row > span { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
             #rgDivisions { flex: 1 1 12rem; min-width: 0; }
             /* Wide builder/scoring/roster tables scroll inside their overflow-x wrapper instead of
@@ -236,6 +257,7 @@
         .al-row span, .al-row select, .al-row input, .order-controls select, .order-controls input { min-width: 0; }
         #rgDivisions { width: 100%; } /* size="40" forced ~412px; fill its (now shrinkable) span instead */
         #alCourse, #scEvent, #rgEvent { display: block; width: 100%; max-width: 520px; margin-top: 0.3rem; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95rem; }
+        body.admin-page #crotts-fab, body.admin-page #crotts-panel { display: none !important; }
         .admin-btn { background: var(--primary); color: #fff; border: none; padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
         .admin-btn.secondary { background: transparent; border: 1px solid var(--secondary-text); color: var(--secondary-text); }
         .admin-btn.danger { background: transparent; border: 1px solid #dc3545; color: #dc3545; padding: 0.35rem 0.7rem; font-size: 0.8rem; }
@@ -251,8 +273,14 @@
         .admin-cand { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--border-color); }
         .admin-split { display: grid; grid-template-columns: minmax(260px, 420px) 1fr; gap: 1.25rem; align-items: start; }
         @media (max-width: 820px) { .admin-split { grid-template-columns: 1fr; } }
+        .shop-admin-heading { display: flex; align-items: end; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.65rem; }
+        .shop-admin-heading .al-h { margin: 0; }
+        .shop-admin-toolbar { display: flex; gap: 0.5rem; align-items: end; flex-wrap: wrap; }
+        .shop-admin-toolbar label { display: grid; gap: 0.15rem; font-size: 0.7rem; color: var(--text-muted); }
+        .shop-admin-toolbar select { min-width: 8.5rem; padding: 0.4rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
         .shop-admin-list, .wallet-ledger { display: grid; gap: 0.65rem; }
         .shop-admin-row { display: grid; grid-template-columns: 56px minmax(160px, 1fr) auto; gap: 0.75rem; align-items: center; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); padding: 0.65rem; }
+        .shop-admin-row.inactive { opacity: 0.72; }
         .shop-admin-thumb { width: 56px; aspect-ratio: 1; border-radius: 8px; object-fit: cover; background: var(--bg-tertiary); border: 1px solid var(--border-color); }
         .shop-admin-meta { font-size: 0.8rem; color: var(--text-muted); }
         .shop-admin-controls { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; }
@@ -267,6 +295,7 @@
         .orders-list { display: grid; gap: 0.75rem; }
         .order-card { border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-secondary); padding: 0.75rem 0.9rem; }
         .order-card.unfulfilled { border-left: 3px solid var(--primary); }
+        .order-card.cancelled { opacity: 0.78; }
         .order-head { display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; align-items: baseline; }
         .order-head strong { color: var(--text-primary); }
         .order-items { margin: 0.4rem 0; color: var(--text-secondary); font-size: 0.9rem; display: grid; gap: 0.15rem; }
@@ -274,6 +303,7 @@
         .order-controls label { display: block; font-size: 0.68rem; color: var(--text-muted); margin-bottom: 0.1rem; }
         .order-controls select, .order-controls input { padding: 0.35rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
         .order-controls input { width: 9rem; }
+        .order-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
         /* Helper classes referenced by the copied admin JS */
         .dash-note { color: var(--text-muted); font-size: 0.95rem; padding: 0.5rem 0; }
         .dash-event-date { font-size: 0.8rem; color: var(--text-muted); }
@@ -284,7 +314,7 @@
         @media print { header, footer { display: none; } }
     </style>
 </head>
-<body data-auth-base="">
+<body class="admin-page" data-auth-base="">
     <header>
     <nav>
         <a href="index.html" class="logo">
@@ -359,6 +389,10 @@
                     <option value="" disabled selected hidden>Members</option>
                     <option value="members">Members</option>
                 </select>
+                <select class="admin-mnav" aria-label="Data section">
+                    <option value="" disabled selected hidden>Data</option>
+                    <option value="data-archive">Data archive</option>
+                </select>
             </div>
             <div class="admin-main">
                 <nav class="admin-sidebar" aria-label="Admin sections">
@@ -382,6 +416,8 @@
                     <button type="button" class="admin-tab" data-atab="wallets">Wallets</button>
                     <div class="admin-navgroup">Members</div>
                     <button type="button" class="admin-tab" data-atab="members">Members</button>
+                    <div class="admin-navgroup">Data</div>
+                    <button type="button" class="admin-tab" data-atab="data-archive">Data archive</button>
                 </nav>
                 <div class="admin-content">
             <div class="admin-msg" id="adminMsg"></div>
@@ -493,12 +529,20 @@
                 <div><label for="scEvent">Event</label>
                     <select id="scEvent"><option value="">— select a scheduled or live event —</option></select></div>
                 <div id="scStart" style="display:none;margin-top:1rem;">
-                    <div class="al-row">
-                        <label for="scLayout" style="margin:0;">Layout</label>
-                        <select id="scLayout"><option value="">— event's current layout —</option></select>
-                        <label class="register-addon" style="margin:0;"><input type="checkbox" id="scUseManualPlayers"> Manual roster</label>
+                    <div class="sc-start-grid">
+                        <label class="sc-start-field" for="scLayout"><span>Layout</span>
+                            <select id="scLayout"><option value="">— event's current layout —</option></select>
+                        </label>
+                        <label class="sc-start-field" for="scGroupFormat"><span>Group</span>
+                            <select id="scGroupFormat"><option value="singles">Singles</option><option value="doubles">Doubles</option></select>
+                        </label>
+                        <label class="sc-start-field" for="scScoringStyle"><span>Scoring</span>
+                            <select id="scScoringStyle"><option value="stroke">Stroke play</option><option value="matchplay">Match play</option></select>
+                        </label>
+                        <label class="register-addon sc-start-check"><input type="checkbox" id="scUseManualPlayers"> Manual roster</label>
                         <button type="button" class="admin-btn" id="scStartBtn">▶ Start live scoring</button>
                     </div>
+                    <p class="al-note" id="scStartValidation"></p>
                     <p class="al-note">An event needs a layout (with pars) to score. Pick one here, or set it on the Layouts tab.</p>
                 </div>
                 <div id="scLive" style="display:none;margin-top:1rem;">
@@ -639,7 +683,33 @@
                         <button type="submit" class="admin-btn">Add product</button>
                     </form>
                     <div>
-                        <h4 class="al-h">Inventory</h4>
+                        <div class="shop-admin-heading">
+                            <h4 class="al-h">Inventory</h4>
+                            <div class="shop-admin-toolbar" aria-label="Inventory controls">
+                                <label for="psInvSort">Sort
+                                    <select id="psInvSort">
+                                        <option value="newest">Newest first</option>
+                                        <option value="name">Name A-Z</option>
+                                        <option value="brand">Brand A-Z</option>
+                                        <option value="type">Type</option>
+                                        <option value="color">Color</option>
+                                        <option value="weight">Weight</option>
+                                        <option value="price_asc">Price low-high</option>
+                                        <option value="price_desc">Price high-low</option>
+                                        <option value="stock_asc">Stock low-high</option>
+                                        <option value="stock_desc">Stock high-low</option>
+                                        <option value="status">Status</option>
+                                    </select>
+                                </label>
+                                <label for="psInvStatus">Show
+                                    <select id="psInvStatus">
+                                        <option value="active">Active</option>
+                                        <option value="inactive">Archived</option>
+                                        <option value="all">All items</option>
+                                    </select>
+                                </label>
+                            </div>
+                        </div>
                         <div id="adminProductsList" class="shop-admin-list">Loading…</div>
                     </div>
                 </div>
@@ -684,6 +754,50 @@
                 <div class="al-section" style="margin-top:1rem;">
                     <h4 class="al-h">Members</h4>
                     <div id="adminMembersList">Loading…</div>
+                </div>
+            </div>
+            <div class="admin-pane" id="apane-data-archive">
+                <div class="al-section">
+                    <h4 class="al-h">Archive destinations</h4>
+                    <p class="al-note">Set one or more archive endpoints. The active destination is used by default.</p>
+                    <form class="admin-form" id="dxEndpointForm">
+                        <input id="dxEndpointId" type="hidden">
+                        <div><label for="dxEndpointLabel">Label</label><input id="dxEndpointLabel" maxlength="120" required></div>
+                        <div><label for="dxEndpointUrl">Endpoint URL (https)</label><input id="dxEndpointUrl" type="url" maxlength="1000" required></div>
+                        <div><label for="dxAuthHeader">Auth header (optional)</label><input id="dxAuthHeader" maxlength="80" placeholder="Authorization or X-Api-Key"></div>
+                        <div><label for="dxAuthPrefix">Auth prefix (optional)</label><input id="dxAuthPrefix" maxlength="40" placeholder="Bearer"></div>
+                        <div><label for="dxAuthToken">Auth token (optional)</label><input id="dxAuthToken" type="text" maxlength="4096" autocomplete="off" placeholder="Leave blank to keep existing"></div>
+                        <label class="register-addon"><input id="dxAuthTokenClear" type="checkbox"> Clear auth token</label>
+                        <label class="register-addon"><input id="dxEndpointActive" type="checkbox"> Use as active destination</label>
+                        <div class="admin-form-actions">
+                            <button type="submit" class="admin-btn" id="dxEndpointSave">Add destination</button>
+                            <button type="button" class="admin-btn secondary" id="dxEndpointCancel" style="display:none;">Cancel edit</button>
+                        </div>
+                    </form>
+                    <div id="dxDestinationsList" style="margin-top:1rem;">Loading…</div>
+                </div>
+                <div class="al-section">
+                    <h4 class="al-h">Run export</h4>
+                    <p class="al-note">Choose the date window and optional destination. Download mode is always available.</p>
+                    <div class="admin-form">
+                        <div><label for="dxExportFrom">From date</label><input id="dxExportFrom" type="date"></div>
+                        <div><label for="dxExportTo">To date</label><input id="dxExportTo" type="date"></div>
+                        <div><label for="dxExportDestination">Destination</label><select id="dxExportDestination"><option value="">Download only (no endpoint)</option></select></div>
+                        <div class="al-row" style="margin-top:0.6rem;">
+                            <label class="register-addon"><input id="dxIncludeEventPlayers" type="checkbox" checked> Include event players</label>
+                            <label class="register-addon"><input id="dxIncludeResults" type="checkbox" checked> Include results</label>
+                            <label class="register-addon"><input id="dxIncludeCasualRounds" type="checkbox" checked> Include casual rounds</label>
+                            <label class="register-addon"><input id="dxIncludeEventConfig" type="checkbox" checked> Include event config</label>
+                        </div>
+                        <div class="al-row" style="margin-top:0.4rem;">
+                            <label class="register-addon"><input id="dxDryRun" type="checkbox"> Dry run (download JSON)</label>
+                            <label class="register-addon"><input id="dxTest" type="checkbox"> Test destination ping</label>
+                        </div>
+                        <div class="admin-form-actions" style="margin-top:0.6rem;">
+                            <button type="button" class="admin-btn" id="dxRunExport">Run export</button>
+                        </div>
+                    </div>
+                    <div id="dxExportResult" style="margin-top:0.75rem;" class="al-note">No export run yet.</div>
                 </div>
             </div>
                 </div><!-- /.admin-content -->
@@ -840,6 +954,199 @@
         function adminApi(path, opts) { return api(path, { ...(opts || {}), token: sessionStorage.getItem(TOKEN_KEY) }); }
         function dollarsFromCents(c) { const n = Number(c || 0); const abs = Math.abs(n); const out = '$' + (abs / 100).toLocaleString(undefined, { minimumFractionDigits: abs % 100 ? 2 : 0 }); return n < 0 ? '-' + out : out; }
         function dollarsToCents(v) { const n = parseFloat(v); return Number.isFinite(n) ? Math.round(n * 100) : null; }
+        let dataArchiveDestinations = [];
+        function setDataArchiveExportResult(message, ok) {
+            const r = $('dxExportResult');
+            if (!r) return;
+            r.textContent = message || 'No export run yet.';
+            r.className = 'al-note' + (ok ? '' : ' err');
+        }
+        function resetDataArchiveEndpointForm() {
+            $('dxEndpointId').value = '';
+            $('dxEndpointLabel').value = '';
+            $('dxEndpointUrl').value = '';
+            $('dxAuthHeader').value = '';
+            $('dxAuthPrefix').value = '';
+            $('dxAuthToken').value = '';
+            $('dxAuthToken').placeholder = 'Leave blank to keep existing';
+            $('dxAuthTokenClear').checked = false;
+            $('dxEndpointActive').checked = false;
+            $('dxEndpointSave').textContent = 'Add destination';
+            $('dxEndpointCancel').style.display = 'none';
+        }
+        async function adminLoadDataArchiveDestinations() {
+            const list = $('dxDestinationsList');
+            list.textContent = 'Loading…';
+            let destinations = [];
+            try {
+                const r = await adminApi('/admin/export/endpoints');
+                if (r.ok) destinations = (await r.json()).destinations || [];
+                else throw new Error(r.statusText || 'Failed to load destinations');
+            } catch (e) {
+                list.textContent = 'Unable to load destinations.';
+                return;
+            }
+            dataArchiveDestinations = destinations;
+            const select = $('dxExportDestination');
+            const current = select.value;
+            select.replaceChildren();
+            select.appendChild(Object.assign(document.createElement('option'), { value: '', textContent: 'Download only (no endpoint)' }));
+            destinations.forEach((dest) => {
+                const option = document.createElement('option');
+                option.value = String(dest.id);
+                option.textContent = `${dest.label} (${dest.endpoint_url})` + (dest.is_active ? ' (active)' : '');
+                option.selected = current ? String(dest.id) === current : Number(dest.is_active) === 1;
+                select.appendChild(option);
+            });
+            list.replaceChildren();
+            if (!destinations.length) {
+                list.appendChild(elx('p', 'al-note', 'No destinations yet. Add one above to send archived snapshots.'));
+                return;
+            }
+            destinations.forEach((destination) => {
+                const row = elx('div', 'admin-evrow');
+                const left = document.createElement('div');
+                const title = elx('div', 'ev-name', destination.label || ('Endpoint ' + destination.id));
+                const details = [
+                    destination.endpoint_url,
+                    destination.auth_header || '(no auth header)',
+                    destination.auth_prefix || '(no auth prefix)',
+                    destination.hasAuthToken ? 'token: set' : 'token: not set',
+                ];
+                left.appendChild(title);
+                left.appendChild(elx('div', 'al-note', details.join(' · ')));
+                if (Number(destination.is_active) === 1) left.appendChild(elx('span', 'admin-msg ok', 'Active default'));
+                const controls = document.createElement('div');
+                controls.style.display = 'flex';
+                controls.style.flexWrap = 'wrap';
+                controls.style.gap = '0.4rem';
+                const edit = elx('button', 'admin-btn secondary', 'Edit');
+                edit.addEventListener('click', () => {
+                    $('dxEndpointId').value = String(destination.id);
+                    $('dxEndpointLabel').value = destination.label || '';
+                    $('dxEndpointUrl').value = destination.endpoint_url || '';
+                    $('dxAuthHeader').value = destination.auth_header || '';
+                    $('dxAuthPrefix').value = destination.auth_prefix || '';
+                    $('dxAuthToken').value = '';
+                    $('dxAuthToken').placeholder = destination.hasAuthToken ? 'Leave blank to keep existing token' : 'Add a token (optional)';
+                    $('dxAuthTokenClear').checked = false;
+                    $('dxEndpointActive').checked = Number(destination.is_active) === 1;
+                    $('dxEndpointSave').textContent = 'Save destination';
+                    $('dxEndpointCancel').style.display = '';
+                    adminMsg('Editing destination "' + (destination.label || ('Endpoint ' + destination.id)) + '".');
+                });
+                controls.appendChild(edit);
+                if (Number(destination.is_active) !== 1) {
+                    const activate = elx('button', 'admin-btn', 'Make active');
+                    activate.addEventListener('click', async () => {
+                        const r = await adminApi('/admin/export/endpoints/' + destination.id + '/activate', { method: 'POST' });
+                        if (r.ok) { adminMsg('Activated endpoint "' + (destination.label || ('Endpoint ' + destination.id)) + '"', true); await adminLoadDataArchiveDestinations(); }
+                        else adminMsg('Activate failed (' + r.status + ')', false);
+                    });
+                    controls.appendChild(activate);
+                }
+                const del = elx('button', 'admin-btn danger', 'Delete');
+                del.addEventListener('click', async () => {
+                    if (!confirm('Delete destination "' + (destination.label || ('Endpoint ' + destination.id)) + '"?')) return;
+                    const r = await adminApi('/admin/export/endpoints/' + destination.id, { method: 'DELETE' });
+                    if (r.ok) { adminMsg('Deleted "' + (destination.label || ('Endpoint ' + destination.id)) + '"', true); await adminLoadDataArchiveDestinations(); }
+                    else adminMsg('Delete failed (' + r.status + ')', false);
+                });
+                row.appendChild(left);
+                row.appendChild(controls);
+                list.appendChild(row);
+            });
+        }
+        async function adminSaveDataArchiveEndpoint(e) {
+            e.preventDefault();
+            const label = $('dxEndpointLabel').value.trim();
+            const endpointUrl = $('dxEndpointUrl').value.trim();
+            if (!label || !/^https?:\/\//.test(endpointUrl)) {
+                adminMsg('Label and https endpoint URL are required.', false);
+                return;
+            }
+            const editing = Boolean($('dxEndpointId').value);
+            const body = {
+                label,
+                endpoint_url: endpointUrl,
+                auth_header: $('dxAuthHeader').value.trim() || null,
+                auth_prefix: $('dxAuthPrefix').value.trim() || null,
+                is_active: $('dxEndpointActive').checked,
+            };
+            const token = $('dxAuthToken').value.trim();
+            if (token) body.auth_token = token;
+            else if (editing && $('dxAuthTokenClear').checked) body.auth_token = null;
+            if (!editing && body.auth_token == null && $('dxAuthTokenClear').checked) body.auth_token = null;
+            const id = editing ? Number($('dxEndpointId').value) : null;
+            const path = editing ? '/admin/export/endpoints/' + id : '/admin/export/endpoints';
+            const method = editing ? 'PATCH' : 'POST';
+            const r = await adminApi(path, { method, body });
+            if (r.ok) {
+                const labelText = $('dxEndpointLabel').value.trim() || ('Endpoint ' + (id || ''));
+                adminMsg(editing ? 'Saved destination "' + labelText + '"' : 'Added destination "' + labelText + '"', true);
+                resetDataArchiveEndpointForm();
+                await adminLoadDataArchiveDestinations();
+            } else {
+                let payload = {};
+                try { payload = await r.json(); } catch (err) {}
+                adminMsg((payload.error || 'Save failed') + ' (' + r.status + ')', false);
+            }
+        }
+        async function adminRunArchiveExport() {
+            const btn = $('dxRunExport');
+            btn.disabled = true;
+            const from = $('dxExportFrom').value.trim();
+            const to = $('dxExportTo').value.trim();
+            const body = {
+                from: from || null,
+                to: to || null,
+                includeEventPlayers: $('dxIncludeEventPlayers').checked,
+                includeResults: $('dxIncludeResults').checked,
+                includeCasualRounds: $('dxIncludeCasualRounds').checked,
+                includeEventConfig: $('dxIncludeEventConfig').checked,
+                dry_run: $('dxDryRun').checked,
+                test: $('dxTest').checked,
+            };
+            const endpointId = $('dxExportDestination').value;
+            if (endpointId) body.endpoint_id = Number(endpointId);
+            try {
+                const r = await adminApi('/admin/export', { method: 'POST', body });
+                const payload = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    if (payload.error === 'invalid_date_range') adminMsg('Export failed: invalid date range', false);
+                    else adminMsg('Export failed (' + r.status + '): ' + (payload.error || 'request error'), false);
+                    setDataArchiveExportResult('Export failed (' + (payload.error || 'request error') + ')', false);
+                    return;
+                }
+                if (payload.mode === 'download' && payload.exportData) {
+                    const jsonText = JSON.stringify(payload.exportData, null, 2);
+                    const blob = new Blob([jsonText], { type: 'application/json;charset=utf-8' });
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = 'gvdg-archive-' + new Date().toISOString().slice(0, 10) + '.json';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(link.href);
+                    setDataArchiveExportResult('Download ready: ' + (payload.exportData.exportedAt || 'snapshot') + ' (events: ' + (payload.exportData.counts?.events || 0) + ')', true);
+                    return;
+                }
+                if (payload.mode === 'test') {
+                    setDataArchiveExportResult('Test passed for "' + (payload.destination && payload.destination.label ? payload.destination.label : payload.destination) + '" (HTTP ' + payload.status + ')', true);
+                    return;
+                }
+                if (payload.mode === 'sent') {
+                    setDataArchiveExportResult('Export sent to "' + (payload.destination && payload.destination.label ? payload.destination.label : payload.destination) + '" (HTTP ' + payload.status + ', events: ' + (payload.counts?.events || 0) + ')', true);
+                    return;
+                }
+                setDataArchiveExportResult('Export completed.', true);
+            } catch (error) {
+                setDataArchiveExportResult('Export failed unexpectedly.', false);
+                adminMsg('Export failed unexpectedly', false);
+            } finally {
+                btn.disabled = false;
+            }
+        }
         let aeEditingEvent = null;
         let adminCoursesCache = [], tsReviewThumbUrls = [];
         function adminSwitch(tab) {
@@ -858,6 +1165,7 @@
             if (tab === 'orders') adminLoadOrders();
             if (tab === 'tee-signs') tsLoadReview();
             if (tab === 'members') adminLoadMembers();
+            if (tab === 'data-archive') adminLoadDataArchiveDestinations();
         }
 
         function aeResetLayoutSelect() {
@@ -1507,9 +1815,30 @@
         // ============================================================
         let scEventId = null, scSnap = null, scTeeThumbUrls = [];
         const scToPar = (n) => { n = n || 0; return n === 0 ? 'E' : (n > 0 ? '+' + n : String(n)); };
+        function scNormalizeConfig(raw, fallbackPlayFormat, fallbackEventFormat) {
+            if (raw && typeof raw === 'object') return { groupFormat: raw.groupFormat === 'doubles' ? 'doubles' : 'singles', scoringStyle: raw.scoringStyle === 'matchplay' ? 'matchplay' : 'stroke' };
+            if (typeof raw === 'string' && raw.trim()) {
+                try { return scNormalizeConfig(JSON.parse(raw), fallbackPlayFormat, fallbackEventFormat); } catch (e) {}
+            }
+            return { groupFormat: fallbackPlayFormat === 'doubles' ? 'doubles' : 'singles', scoringStyle: fallbackEventFormat === 'matchplay' ? 'matchplay' : 'stroke' };
+        }
+        function scCurrentConfig() {
+            return { groupFormat: $('scGroupFormat').value === 'doubles' ? 'doubles' : 'singles', scoringStyle: $('scScoringStyle').value === 'matchplay' ? 'matchplay' : 'stroke' };
+        }
+        function scApplyStartDefaults(ev) {
+            const config = scNormalizeConfig(ev.liveScoringConfig || ev.live_scoring_config || ev.live_scoring_config_json || null, ev.play_format || null, ev.format || null);
+            $('scGroupFormat').value = config.groupFormat;
+            $('scScoringStyle').value = config.scoringStyle;
+            $('scStartValidation').textContent = '';
+        }
         function scConflictFor(index, hole) {
             const rows = (scSnap && Array.isArray(scSnap.conflicts)) ? scSnap.conflicts : [];
             return rows.find((c) => c && c.playerIndex === index && c.hole === hole) || null;
+        }
+        function scConflictForRow(row, hole) {
+            const rows = (scSnap && Array.isArray(scSnap.conflicts)) ? scSnap.conflicts : [];
+            if (row.targetId) return rows.find((c) => c && c.targetId === row.targetId && c.hole === hole) || null;
+            return rows.find((c) => c && c.playerIndex === row.index && c.hole === hole) || null;
         }
         function scConflictTitle(conflict) {
             const values = Array.isArray(conflict.values) ? conflict.values.join(' vs ') : 'scores do not match';
@@ -1520,11 +1849,11 @@
             const holes = (scSnap && scSnap.holes) || [];
             const players = (scSnap && scSnap.players) || [];
             const rows = grid.querySelectorAll('tbody tr');
-            players.forEach((p) => {
-                const tr = rows[p.index]; if (!tr) return;
+            scScoreRows().forEach((row, rowIndex) => {
+                const tr = rows[rowIndex]; if (!tr) return;
                 holes.forEach((h, i) => {
                     const td = tr.children[3 + i]; if (!td) return;
-                    const conflict = scConflictFor(p.index, h.hole);
+                    const conflict = scConflictForRow(row, h.hole);
                     td.classList.toggle('sc-conflict', !!conflict);
                     let flag = td.querySelector('.sc-conflict-flag');
                     if (conflict && !flag) { flag = elx('span', 'sc-conflict-flag', '⚑'); td.appendChild(flag); }
@@ -1544,6 +1873,9 @@
                 const o = document.createElement('option'); o.value = e.id;
                 o.textContent = e.name + ' [' + e.status + ']' + (e.date ? ' — ' + e.date : '');
                 o.dataset.status = e.status; o.dataset.courseId = e.course_id || ''; o.dataset.layoutId = e.layout_id || '';
+                o.dataset.playFormat = e.play_format || '';
+                o.dataset.eventFormat = e.format || '';
+                if (e.liveScoringConfig || e.live_scoring_config || e.live_scoring_config_json) o.dataset.liveScoringConfig = JSON.stringify(e.liveScoringConfig || e.live_scoring_config || e.live_scoring_config_json);
                 sel.appendChild(o);
             });
         }
@@ -1553,6 +1885,7 @@
             $('scStart').style.display = 'none'; $('scLive').style.display = 'none';
             if (!scEventId) return;
             const opt = $('scEvent').selectedOptions[0];
+            scApplyStartDefaults({ liveScoringConfig: opt.dataset.liveScoringConfig || null, play_format: opt.dataset.playFormat || null, format: opt.dataset.eventFormat || null });
             if (opt.dataset.status === 'live') { await scRefresh(); return; }
             // scheduled: show start controls + layout options for the event's course
             const lsel = $('scLayout'); lsel.length = 1;
@@ -1567,7 +1900,13 @@
         async function scStart() {
             const layoutId = $('scLayout').value ? Number($('scLayout').value) : null;
             if (layoutId) await adminApi('/admin/events/' + scEventId, { method: 'PATCH', body: { layout_id: layoutId } });
-            const body = $('scUseManualPlayers').checked ? { from: 'players' } : {};
+            const liveScoringConfig = scCurrentConfig();
+            if (liveScoringConfig.scoringStyle === 'matchplay') {
+                $('scStartValidation').textContent = 'Match play requires exactly two score targets per card; start will be blocked if the roster/pairs do not satisfy that.';
+            } else {
+                $('scStartValidation').textContent = '';
+            }
+            const body = $('scUseManualPlayers').checked ? { from: 'players', liveScoringConfig } : { liveScoringConfig };
             const r = await adminApi('/events/' + scEventId + '/live/start', { method: 'POST', body });
             if (r.ok) { adminMsg('Live scoring started', true); $('scEvent').selectedOptions[0].dataset.status = 'live'; await scRefresh(); }
             else { const e = await r.json().catch(() => ({})); adminMsg(e.error === 'no_layout_holes' ? 'That event has no layout with pars — pick one above (or build one on the Layouts tab).' : 'Start failed (' + r.status + ')', false); }
@@ -1702,28 +2041,67 @@
             } catch (e) { /* leave the placeholder */ }
         }
 
+        function scIsDoubles() {
+            return scSnap && scSnap.roundConfig && scSnap.roundConfig.groupFormat === 'doubles';
+        }
+        function scIsMatchplay() {
+            return scSnap && scSnap.roundConfig && scSnap.roundConfig.scoringStyle === 'matchplay';
+        }
+        function scPlayerByIndex(index) {
+            return (scSnap.players || []).find((player) => player.index === index) || null;
+        }
+        function scScoreRows() {
+            const players = scSnap.players || [];
+            if (!scIsDoubles()) {
+                return players.map((p) => ({ type: 'player', index: p.index, label: p.name, meta: p.division || '—', start: p.startingHole != null ? String(p.startingHole) : '—', playerIndexes: [p.index] }));
+            }
+            const targets = Array.isArray(scSnap.scoreTargets) ? scSnap.scoreTargets : [];
+            return targets.filter((target) => target.type === 'pair').map((target) => ({
+                type: 'pair',
+                targetId: target.id,
+                label: target.label,
+                meta: (target.members || []).join(' / '),
+                start: (scPlayerByIndex(target.playerIndexes && target.playerIndexes[0]) || {}).startingHole || '—',
+                playerIndexes: target.playerIndexes || []
+            }));
+        }
+        function scRowScore(row, hole) {
+            const player = scPlayerByIndex(row.playerIndexes && row.playerIndexes[0]);
+            const value = player && player.scores ? player.scores[hole] : null;
+            return value == null ? null : value;
+        }
+        function scRowTotal(row) {
+            let total = 0;
+            (scSnap.holes || []).forEach((hole) => {
+                const score = scRowScore(row, hole.hole);
+                if (score != null) total += score;
+            });
+            return total;
+        }
+
         function scRenderGrid() {
             const grid = $('scGrid'); grid.replaceChildren();
-            const holes = scSnap.holes || [], players = scSnap.players || [];
+            const holes = scSnap.holes || [], rows = scScoreRows();
             const thead = document.createElement('thead'); const htr = document.createElement('tr');
-            ['Player', 'Div', 'Start'].forEach((h) => htr.appendChild(elx('th', null, h)));
+            [scIsDoubles() ? 'Pair' : 'Player', scIsDoubles() ? 'Members' : 'Div', 'Start'].forEach((h) => htr.appendChild(elx('th', null, h)));
             holes.forEach((h) => htr.appendChild(elx('th', h.overridden ? 'th-temp' : null, h.hole + ' (' + h.par + ')' + (h.overridden ? ' ⏱' : ''))));
             htr.appendChild(elx('th', null, 'Tot'));
             thead.appendChild(htr); grid.appendChild(thead);
             const tbody = document.createElement('tbody');
-            players.forEach((p) => {
+            rows.forEach((rowData) => {
                 const tr = document.createElement('tr');
-                tr.appendChild(elx('td', 'lb-name', p.name));
-                tr.appendChild(elx('td', null, p.division || '—'));
-                tr.appendChild(elx('td', null, p.startingHole != null ? String(p.startingHole) : '—'));
+                tr.dataset.rowKey = rowData.targetId || ('player:' + rowData.index);
+                tr.appendChild(elx('td', 'lb-name', rowData.label));
+                tr.appendChild(elx('td', null, rowData.meta || '—'));
+                tr.appendChild(elx('td', null, rowData.start || '—'));
                 let tot = 0;
                 holes.forEach((h) => {
                     const td = document.createElement('td');
-                    const conflict = scConflictFor(p.index, h.hole);
+                    const conflict = scConflictForRow(rowData, h.hole);
                     if (conflict) td.className = 'sc-conflict';
                     const inp = document.createElement('input'); inp.type = 'number'; inp.min = '1'; inp.max = '30'; inp.style.width = '3rem';
-                    const v = p.scores ? p.scores[h.hole] : null; if (v != null) { inp.value = v; tot += v; }
-                    inp.addEventListener('change', () => scPostScore(p.index, h.hole, inp.value));
+                    const v = scRowScore(rowData, h.hole); if (v != null) { inp.value = v; tot += v; }
+                    inp.addEventListener('change', () => scPostScore(rowData, h.hole, inp.value));
                     td.appendChild(inp);
                     if (conflict) { const flag = elx('span', 'sc-conflict-flag', '⚑'); flag.title = scConflictTitle(conflict); td.appendChild(flag); }
                     tr.appendChild(td);
@@ -1734,18 +2112,21 @@
             grid.appendChild(tbody);
         }
 
-        async function scPostScore(index, hole, value) {
+        async function scPostScore(row, hole, value) {
             const strokes = parseInt(value, 10);
             if (!(strokes >= 1 && strokes <= 30)) { adminMsg('Strokes must be 1–30', false); return; }
-            const r = await adminApi('/events/' + scEventId + '/live/score', { method: 'POST', body: { index, hole, strokes } });
+            const body = { hole, strokes };
+            if (row.targetId) body.targetId = row.targetId;
+            else body.index = row.index;
+            const r = await adminApi('/events/' + scEventId + '/live/score', { method: 'POST', body });
             if (r.ok) { scSnap = await r.json(); scUpdateTotals(); scRenderBoard(); scRenderGrid(); } else { adminMsg('Score save failed', false); }
         }
         // Update each grid row's running Total cell without re-rendering inputs (keeps focus).
         function scUpdateTotals() {
             const rows = $('scGrid').querySelectorAll('tbody tr');
-            (scSnap.players || []).forEach((p) => {
-                const tr = rows[p.index]; if (!tr) return;
-                const tot = Object.values(p.scores || {}).reduce((a, b) => a + (b || 0), 0);
+            scScoreRows().forEach((rowData, index) => {
+                const tr = rows[index]; if (!tr) return;
+                const tot = scRowTotal(rowData);
                 tr.lastElementChild.textContent = tot ? String(tot) : '—';
             });
         }
@@ -1756,16 +2137,16 @@
             if (!standings.length) { wrap.textContent = 'No scores yet.'; return; }
             const table = document.createElement('table'); table.className = 'al-holes';
             const thead = document.createElement('thead'); const htr = document.createElement('tr');
-            ['Pos', 'Player', 'Thru', 'Total', 'To Par'].forEach((h) => htr.appendChild(elx('th', null, h)));
+            ['Pos', scIsDoubles() ? 'Pair' : 'Player', 'Thru', 'Total', scIsMatchplay() ? 'Match' : 'To Par'].forEach((h) => htr.appendChild(elx('th', null, h)));
             thead.appendChild(htr); table.appendChild(thead);
             const tbody = document.createElement('tbody');
             standings.forEach((s, i) => {
                 const tr = document.createElement('tr');
                 tr.appendChild(elx('td', null, String(i + 1)));
-                tr.appendChild(elx('td', 'lb-name', s.name));
+                tr.appendChild(elx('td', 'lb-name', s.name + (s.members && s.members.length ? ' · ' + s.members.join(' / ') : '')));
                 tr.appendChild(elx('td', null, s.thru ? String(s.thru) : '—'));
                 tr.appendChild(elx('td', null, s.thru ? String(s.total) : '—'));
-                tr.appendChild(elx('td', null, s.thru ? scToPar(s.toPar) : '—'));
+                tr.appendChild(elx('td', null, scIsMatchplay() ? ((s.match && s.match.status) || 'AS') : (s.thru ? scToPar(s.toPar) : '—')));
                 tbody.appendChild(tr);
             });
             table.appendChild(tbody); wrap.appendChild(table);
@@ -1939,34 +2320,43 @@
             fallback.style.fontWeight = '700';
             return fallback;
         }
+        function productIsActive(product) {
+            return Number(product && product.active) === 1;
+        }
         async function adminLoadProducts() {
             let products = [];
-            try { const r = await adminApi('/admin/shop/products'); if (r.ok) products = (await r.json()).products || []; } catch (e) {}
+            const params = new URLSearchParams();
+            const sort = $('psInvSort') ? $('psInvSort').value : 'newest';
+            const status = $('psInvStatus') ? $('psInvStatus').value : 'active';
+            if (sort) params.set('sort', sort);
+            if (status) params.set('status', status);
+            try { const r = await adminApi('/admin/shop/products?' + params.toString()); if (r.ok) products = (await r.json()).products || []; } catch (e) {}
             const list = $('adminProductsList'); list.replaceChildren();
-            if (!products.length) { list.appendChild(elx('p', 'al-note', 'No products yet.')); return; }
+            if (!products.length) { list.appendChild(elx('p', 'al-note', status === 'inactive' ? 'No archived products.' : 'No products yet.')); return; }
             products.forEach((p) => {
-                const row = elx('div', 'shop-admin-row');
+                const isActive = productIsActive(p);
+                const row = elx('div', 'shop-admin-row' + (isActive ? '' : ' inactive'));
                 row.appendChild(productThumb(p));
                 const info = elx('div');
                 info.appendChild(elx('div', 'ev-name', p.name || 'Product'));
-                const meta = [p.brand, p.product_type, p.color, p.weight_g != null ? p.weight_g + 'g' : '', p.active ? 'active' : 'inactive'].filter(Boolean).join(' · ');
+                const meta = [p.brand, p.product_type, p.color, p.weight_g != null ? p.weight_g + 'g' : '', dollarsFromCents(p.price_cents), (p.stock_qty || 0) + ' in stock', isActive ? 'active' : 'archived'].filter(Boolean).join(' · ');
                 info.appendChild(elx('div', 'shop-admin-meta', meta || 'No metadata'));
                 row.appendChild(info);
                 const controls = elx('div', 'shop-admin-controls');
                 const price = document.createElement('input'); price.type = 'number'; price.min = '0'; price.step = '0.01'; price.value = p.price_cents != null ? String(p.price_cents / 100) : '';
                 const stock = document.createElement('input'); stock.type = 'number'; stock.min = '0'; stock.step = '1'; stock.value = p.stock_qty != null ? String(p.stock_qty) : '0';
-                const activeLabel = elx('label', 'register-addon'); const active = document.createElement('input'); active.type = 'checkbox'; active.checked = p.active !== 0; activeLabel.appendChild(active); activeLabel.appendChild(document.createTextNode(' active'));
+                const activeLabel = elx('label', 'register-addon'); const active = document.createElement('input'); active.type = 'checkbox'; active.checked = isActive; const activeText = document.createTextNode(active.checked ? ' active' : ' archived'); active.addEventListener('change', () => { activeText.textContent = active.checked ? ' active' : ' archived'; }); activeLabel.appendChild(active); activeLabel.appendChild(activeText);
                 const save = elx('button', 'admin-btn secondary', 'Save');
                 save.addEventListener('click', async () => {
                     const r = await adminApi('/admin/shop/products/' + p.id, { method: 'PATCH', body: { price_cents: dollarsToCents(price.value), stock_qty: parseInt(stock.value, 10) || 0, active: active.checked } });
                     adminMsg(r.ok ? 'Product updated' : 'Product update failed', r.ok);
                     if (r.ok) adminLoadProducts();
                 });
-                const del = elx('button', 'admin-btn danger', 'Archive');
+                const del = elx('button', 'admin-btn danger', 'Delete');
                 del.addEventListener('click', async () => {
-                    if (!confirm('Archive “' + p.name + '”?')) return;
+                    if (!confirm('Permanently delete "' + (p.name || 'this product') + '"? Past orders keep the item name, price, and quantity, but this product will be removed from inventory.')) return;
                     const r = await adminApi('/admin/shop/products/' + p.id, { method: 'DELETE' });
-                    adminMsg(r.ok ? 'Product archived' : 'Archive failed', r.ok);
+                    adminMsg(r.ok ? 'Product permanently deleted' : 'Delete failed', r.ok);
                     if (r.ok) adminLoadProducts();
                 });
                 controls.appendChild(price); controls.appendChild(stock); controls.appendChild(activeLabel); controls.appendChild(save); controls.appendChild(del);
@@ -2047,9 +2437,19 @@
         // ---- Pro shop orders: status, tracking, and the new-order badge ----
         const ORDER_STATUS_LABELS = { submitted: 'Submitted', processing: 'Processing', ready: 'Ready for pickup', shipped: 'Shipped', completed: 'Completed', cancelled: 'Cancelled' };
         const ORDER_UNFULFILLED = ['submitted', 'processing'];
-        function setOrdersBadge(n) { const b = $('ordersBadge'); if (!b) return; if (n > 0) { b.textContent = n; b.hidden = false; } else { b.hidden = true; } }
+        function setOrdersBadge(n) {
+            const b = $('ordersBadge'); if (!b) return;
+            const count = Number(n || 0);
+            if (count > 0) {
+                b.textContent = String(count);
+                b.hidden = false;
+            } else {
+                b.textContent = '';
+                b.hidden = true;
+            }
+        }
         function orderCard(o) {
-            const card = elx('div', 'order-card' + (ORDER_UNFULFILLED.includes(o.status) ? ' unfulfilled' : ''));
+            const card = elx('div', 'order-card' + (ORDER_UNFULFILLED.includes(o.status) ? ' unfulfilled' : '') + (o.status === 'cancelled' ? ' cancelled' : ''));
             const head = elx('div', 'order-head');
             head.appendChild(elx('strong', null, 'Order #' + o.id + ' · ' + (o.member_name || o.member_id || 'Member')));
             head.appendChild(elx('span', null, dollarsFromCents(o.total_cents) + ' · ' + (o.payment_method || '')));
@@ -2068,6 +2468,12 @@
             const save = elx('button', 'admin-btn', 'Save'); save.type = 'button';
             save.addEventListener('click', () => saveOrder(o.id, { status: sel.value, tracking_carrier: car.value.trim() || null, tracking_number: trk.value.trim() || null }, save));
             ctrls.appendChild(save);
+            const actions = elx('div', 'order-actions');
+            const cancel = elx('button', 'admin-btn secondary', 'Cancel'); cancel.type = 'button'; cancel.disabled = o.status === 'cancelled';
+            cancel.addEventListener('click', () => cancelOrder(o.id, o.status, cancel));
+            const del = elx('button', 'admin-btn danger', 'Delete'); del.type = 'button';
+            del.addEventListener('click', () => deleteOrder(o.id, del));
+            actions.appendChild(cancel); actions.appendChild(del); ctrls.appendChild(actions);
             card.appendChild(ctrls);
             return card;
         }
@@ -2087,8 +2493,26 @@
             if (r.ok) { adminMsg('Order #' + id + ' updated', true); adminLoadOrders(); }
             else { const d = await r.json().catch(() => ({})); adminMsg('Order update failed' + (d.error ? ' (' + d.error + ')' : ''), false); }
         }
+        async function cancelOrder(id, status, btn) {
+            if (status === 'cancelled') return;
+            if (!confirm('Cancel order #' + id + '?')) return;
+            await saveOrder(id, { status: 'cancelled' }, btn);
+        }
+        async function deleteOrder(id, btn) {
+            if (!confirm('Delete order #' + id + '? Order items will be removed from the admin list. Wallet ledger entries remain for accounting.')) return;
+            if (btn) btn.disabled = true;
+            const r = await adminApi('/admin/orders/' + id, { method: 'DELETE' });
+            if (btn) btn.disabled = false;
+            if (r.ok) { adminMsg('Order #' + id + ' deleted', true); adminLoadOrders(); }
+            else { const d = await r.json().catch(() => ({})); adminMsg('Order delete failed' + (d.error ? ' (' + d.error + ')' : ''), false); }
+        }
         async function refreshOrdersBadge() {
-            try { const r = await adminApi('/admin/orders'); if (r.ok) setOrdersBadge((await r.json()).unfulfilled || 0); } catch (e) {}
+            setOrdersBadge(0);
+            try {
+                const r = await adminApi('/admin/orders');
+                if (!r.ok) return;
+                setOrdersBadge((await r.json()).unfulfilled || 0);
+            } catch (e) { setOrdersBadge(0); }
         }
 
         async function adminPostWalletAdjustment(e) {
@@ -2368,6 +2792,8 @@
             $('adminFundraiserForm').addEventListener('submit', adminAddFundraiser);
             $('adminMeetingForm').addEventListener('submit', adminAddMeeting);
             $('adminProductForm').addEventListener('submit', adminAddProduct);
+            $('psInvSort').addEventListener('change', adminLoadProducts);
+            $('psInvStatus').addEventListener('change', adminLoadProducts);
             $('psImageFile').addEventListener('change', onProductImageFile);
             $('psImage').addEventListener('input', () => { if ($('psImage').value) clearProductImage(); });
             $('adminWalletForm').addEventListener('submit', adminPostWalletAdjustment);
@@ -2384,6 +2810,9 @@
             $('rgAceSave').addEventListener('click', () => rgAcePut({ carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100), status: 'active' }));
             $('rgAcePayout').addEventListener('click', () => rgAcePut({ status: 'paid_out', winner_name: $('rgAceWinner').value.trim() || null, carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100) }));
             $('rgAceCarryNext').addEventListener('click', () => rgAcePut({ status: 'carried', carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100) }));
+            $('dxEndpointForm').addEventListener('submit', adminSaveDataArchiveEndpoint);
+            $('dxEndpointCancel').addEventListener('click', resetDataArchiveEndpointForm);
+            $('dxRunExport').addEventListener('click', adminRunArchiveExport);
             adminLoadEvents();
             adminLoadCourses();
             adminLoadLeagues();

@@ -4,25 +4,11 @@ import * as shopDb from "./shop-db.js";
 import { EVENT_FORMATS, EVENT_STATUSES, EVENT_TYPES } from "./db.js";
 import { assignShotgun, assignTeams } from "./assign.js";
 import { getMember } from "./roster.js";
-import { enrichHoles, type LayoutHole } from "./layouts.js";
 import { json, readJson } from "./http.js";
-import { asInt, asStr, inSet, jsonStringArray, sanitizeHoles, validEventInput } from "./input.js";
-
-function inlineLayout(raw: unknown): { name: string; holes: LayoutHole[]; total_par: number } | null {
-  if (!raw || typeof raw !== "object") return null;
-  const body = raw as Record<string, unknown>;
-  const name = asStr(body.name, 60) ?? "Main";
-  if (Array.isArray(body.holes)) {
-    const clean = sanitizeHoles(body.holes);
-    if (!clean || clean.length === 0 || clean.length > 36) return null;
-    return { name, ...enrichHoles(clean) };
-  }
-  const holeCount = asInt(body.hole_count ?? body.holeCount);
-  const defaultPar = asInt(body.default_par ?? body.defaultPar ?? body.par);
-  if (holeCount == null || holeCount < 1 || holeCount > 36 || defaultPar == null || defaultPar < 1 || defaultPar > 15) return null;
-  const holes = Array.from({ length: holeCount }, (_, i): LayoutHole => ({ hole: i + 1, par: defaultPar }));
-  return { name, ...enrichHoles(holes) };
-}
+import { asInt, asStr, inSet, jsonStringArray, validEventInput } from "./input.js";
+import { AdminLiveConfigError, adminLiveScoringConfigJson } from "./admin-live-config.js";
+import { inlineLayout } from "./admin-event-layout.js";
+import { defaultCtpPayoutNote } from "./admin-payout-notes.js";
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -31,22 +17,6 @@ function shuffle<T>(arr: T[]): T[] {
     [a[i], a[j]] = [a[j]!, a[i]!];
   }
   return a;
-}
-
-function textValue(value: unknown): string | null {
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-function defaultCtpPayoutNote(event: Record<string, unknown>, ctp: Record<string, unknown>): string {
-  const parts = [`CTP payout: ${textValue(event.name) ?? "event"}`];
-  const hole = textValue(ctp.hole);
-  if (hole) parts.push(`hole ${hole}`);
-  const division = textValue(ctp.division);
-  if (division) parts.push(division);
-  const prize = textValue(ctp.prize);
-  if (prize) parts.push(prize);
-  return parts.join(" - ");
 }
 
 const hasField = (body: Record<string, unknown>, field: string): boolean => Object.prototype.hasOwnProperty.call(body, field);
@@ -78,11 +48,18 @@ export async function handleAdminEvents(
   if (seg[3] === "config" && id != null && method === "PUT") {
     const b = (await readJson(request)) ?? {};
     const divs = jsonStringArray(b.divisions, 40);
-    const fmt = b.play_format == null ? null : (inSet(["singles", "doubles", "teams"], b.play_format) ? (b.play_format as string) : undefined);
+    const fmt = b.play_format == null ? null : (inSet(["singles", "doubles"], b.play_format) ? (b.play_format as string) : undefined);
     if (fmt === undefined) return json({ error: "invalid_config" }, 400, origin);
+    let liveScoringConfig: string;
+    try {
+      liveScoringConfig = await adminLiveScoringConfigJson({ env, eventId: id, body: b, playFormat: fmt });
+    } catch (error) {
+      if (error instanceof AdminLiveConfigError) return json({ error: "invalid_config" }, 400, origin);
+      throw error;
+    }
     const row = await db.upsertEventConfig(env.DB, id, {
       registration_open: b.registration_open ? 1 : 0, entry_fee_cents: asInt(b.entry_fee_cents), ctp_fee_cents: asInt(b.ctp_fee_cents),
-      ace_fee_cents: asInt(b.ace_fee_cents), divisions: divs, play_format: fmt, notes: asStr(b.notes, 2000),
+      ace_fee_cents: asInt(b.ace_fee_cents), divisions: divs, play_format: fmt, live_scoring_config: liveScoringConfig, notes: asStr(b.notes, 2000),
     });
     return json({ config: row }, 200, origin);
   }

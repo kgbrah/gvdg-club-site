@@ -36,6 +36,7 @@ export type StoreProductListOptions = {
   readonly weight_g?: number;
   readonly product_type?: string;
   readonly sort?: string;
+  readonly active?: boolean;
   readonly includeInactive?: boolean;
 };
 
@@ -67,6 +68,13 @@ type StoreOrderItemInput = {
   readonly quantity: number;
 };
 
+export type StoreOrderLineInput = {
+  readonly product_id: number;
+  readonly name_snapshot: string;
+  readonly price_cents: number;
+  readonly quantity: number;
+};
+
 type StorePaymentSessionInput = {
   readonly paypal_order_id: string;
   readonly member_id: string;
@@ -77,12 +85,17 @@ type StorePaymentSessionInput = {
 
 function storeProductOrderBy(sort: string | undefined): string {
   switch (sort) {
+    case "newest": return "id DESC";
+    case "name": return "name COLLATE NOCASE";
     case "brand": return "brand COLLATE NOCASE, name COLLATE NOCASE";
     case "color": return "color COLLATE NOCASE, brand COLLATE NOCASE, name COLLATE NOCASE";
     case "weight": return "weight_g IS NULL, weight_g, brand COLLATE NOCASE, name COLLATE NOCASE";
     case "type": return "product_type COLLATE NOCASE, brand COLLATE NOCASE, name COLLATE NOCASE";
     case "price_asc": return "price_cents ASC, name COLLATE NOCASE";
     case "price_desc": return "price_cents DESC, name COLLATE NOCASE";
+    case "stock_asc": return "stock_qty ASC, name COLLATE NOCASE";
+    case "stock_desc": return "stock_qty DESC, name COLLATE NOCASE";
+    case "status": return "active DESC, brand COLLATE NOCASE, name COLLATE NOCASE";
     default: return "id DESC";
   }
 }
@@ -96,7 +109,12 @@ export async function listStoreProducts(db: D1Like, opts: StoreProductListOption
   let sql = "SELECT * FROM store_products";
   const where: string[] = [];
   const binds: unknown[] = [];
-  if (!opts.includeInactive) where.push("active = 1");
+  if (opts.active !== undefined) {
+    where.push("active = ?");
+    binds.push(opts.active ? 1 : 0);
+  } else if (!opts.includeInactive) {
+    where.push("active = 1");
+  }
   if (opts.q) {
     const q = "%" + opts.q.toLowerCase() + "%";
     where.push("(LOWER(name) LIKE ? OR LOWER(brand) LIKE ? OR LOWER(product_type) LIKE ? OR LOWER(color) LIKE ?)");
@@ -147,8 +165,15 @@ export async function updateStoreProduct(db: D1Like, id: number, p: StoreProduct
     .first();
 }
 
-export async function deactivateStoreProduct(db: D1Like, id: number) {
-  return db.prepare("UPDATE store_products SET active = 0, updated_at = datetime('now') WHERE id = ? RETURNING *").bind(id).first();
+export type StoreProductDeleteResult =
+  | { readonly kind: "deleted"; readonly product: Record<string, unknown> }
+  | { readonly kind: "not_found" };
+
+export async function deleteStoreProduct(db: D1Like, id: number): Promise<StoreProductDeleteResult> {
+  const product = await db.prepare("SELECT * FROM store_products WHERE id = ?").bind(id).first();
+  if (!product) return { kind: "not_found" };
+  await db.prepare("DELETE FROM store_products WHERE id = ?").bind(id).run();
+  return { kind: "deleted", product };
 }
 
 export async function walletBalance(db: D1Like, memberId: string): Promise<number> {
@@ -209,9 +234,39 @@ export async function createStoreOrderItem(db: D1Like, item: StoreOrderItemInput
     .first();
 }
 
-export async function decrementStoreProductStock(db: D1Like, id: number, quantity: number) {
-  // MAX(0, …) keeps stock from going negative if two async (PayPal) checkouts race on the last unit.
-  await db.prepare("UPDATE store_products SET stock_qty = MAX(0, stock_qty - ?), updated_at = datetime('now') WHERE id = ?").bind(quantity, id).run();
+export async function decrementStoreProductStock(db: D1Like, id: number, quantity: number): Promise<boolean> {
+  const result = await db
+    .prepare("UPDATE store_products SET stock_qty = stock_qty - ?, updated_at = datetime('now') WHERE id = ? AND active = 1 AND stock_qty >= ?")
+    .bind(quantity, id, quantity)
+    .run();
+  return (result.meta?.changes ?? result.meta?.rows_written ?? 0) > 0;
+}
+
+export async function addStoreOrderLinesAndDecrementStock(db: D1Like, orderId: number, lines: readonly StoreOrderLineInput[]): Promise<boolean> {
+  if (!lines.length) return false;
+  if (!db.batch) {
+    for (const line of lines) {
+      const reserved = await decrementStoreProductStock(db, line.product_id, line.quantity);
+      if (!reserved) return false;
+      await createStoreOrderItem(db, { order_id: orderId, ...line });
+    }
+    return true;
+  }
+  const statements = lines.flatMap((line) => [
+    db
+      .prepare(
+        "INSERT INTO store_order_items (order_id, product_id, name_snapshot, price_cents, quantity) VALUES (?, (SELECT id FROM store_products WHERE id = ? AND active = 1 AND stock_qty >= ?), (SELECT ? WHERE EXISTS (SELECT 1 FROM store_products WHERE id = ? AND active = 1 AND stock_qty >= ?)), ?, ?)",
+      )
+      .bind(orderId, line.product_id, line.quantity, line.name_snapshot, line.product_id, line.quantity, line.price_cents, line.quantity),
+    db.prepare("UPDATE store_products SET stock_qty = stock_qty - ?, updated_at = datetime('now') WHERE id = ?").bind(line.quantity, line.product_id),
+  ]);
+  try {
+    await db.batch(statements);
+    return true;
+  } catch (error) {
+    if (error instanceof Error) return false;
+    throw error;
+  }
 }
 
 /** Attach each order's line items in one IN-query, grouped in memory. Safe for an empty list. */
@@ -275,6 +330,10 @@ export async function updateStoreOrderFulfillment(db: D1Like, id: number, patch:
   if (!sets.length) return db.prepare("SELECT * FROM store_orders WHERE id = ?").bind(id).first();
   binds.push(id);
   return db.prepare(`UPDATE store_orders SET ${sets.join(", ")} WHERE id = ? RETURNING *`).bind(...binds).first();
+}
+
+export async function deleteStoreOrder(db: D1Like, id: number) {
+  return db.prepare("DELETE FROM store_orders WHERE id = ? RETURNING *").bind(id).first();
 }
 
 export async function createStorePaymentSession(db: D1Like, session: StorePaymentSessionInput) {

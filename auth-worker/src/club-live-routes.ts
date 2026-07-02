@@ -5,6 +5,9 @@ import { getMember } from "./roster.js";
 import { json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { asInt, asStr } from "./input.js";
+import { isLiveFormatError, normalizeLiveScoringConfigFromLegacy, type LiveScoringConfig } from "./live-format.js";
+import { scoringState } from "./live-state.js";
+import { assignCards, type PlayerState } from "./scoring.js";
 
 const LIVE_SCORE_IP_LIMIT = 180; // score writes per identity per minute (a card rarely exceeds a few)
 
@@ -83,12 +86,31 @@ export async function handleClubLive(
       if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin);
       const evLayout = ev.layout_id != null ? ((await db.getLayout(env.DB, ev.layout_id)) as { name?: string | null; course_id?: number | null } | null) : null;
       const evCourse = evLayout?.course_id != null ? ((await db.getCourse(env.DB, evLayout.course_id)) as { name?: string | null } | null) : null;
-      const regs = (await db.listRegistrations(env.DB, eid)) as { member_id?: string; name?: string; division?: string | null; starting_hole?: number | null }[];
+      const eventConfig = (await db.getEventConfig(env.DB, eid)) as { live_scoring_config?: unknown; play_format?: unknown } | null;
+      let liveScoringConfig: LiveScoringConfig;
+      try {
+        liveScoringConfig = normalizeLiveScoringConfigFromLegacy({
+          liveScoringConfig: startBody.liveScoringConfig,
+          live_scoring_config: eventConfig?.live_scoring_config,
+          play_format: eventConfig?.play_format,
+          format: ev.format,
+        });
+      } catch (error) {
+        if (isLiveFormatError(error)) return json({ error: "invalid_live_scoring_config" }, 400, origin);
+        throw error;
+      }
+      const regs = (await db.listRegistrations(env.DB, eid)) as { member_id?: string; name?: string; division?: string | null; starting_hole?: number | null; team?: string | null }[];
       const players =
         regs.length && startBody!.from !== "players"
-          ? regs.map((r) => ({ memberId: r.member_id ?? null, name: String(r.name ?? "Player"), division: r.division ?? null, startingHole: r.starting_hole ?? null }))
-          : (Array.isArray(ev.players) ? ev.players : []).map((p) => ({ memberId: (p.member_id as string) ?? null, name: String(p.name ?? "Player"), division: (p.division as string) ?? null, startingHole: null }));
-      const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, courseName: evCourse?.name ?? null, layoutName: evLayout?.name ?? null, holes, players, startedAt: new Date().toISOString() }) });
+          ? regs.map((r) => ({ memberId: r.member_id ?? null, name: String(r.name ?? "Player"), division: r.division ?? null, startingHole: r.starting_hole ?? null, team: r.team ?? null }))
+          : (Array.isArray(ev.players) ? ev.players : []).map((p) => ({ memberId: (p.member_id as string) ?? null, name: String(p.name ?? "Player"), division: (p.division as string) ?? null, startingHole: null, team: (p.team as string) ?? null }));
+      const validationPlayers: PlayerState[] = players.map((player) => ({ ...player, scores: {}, scorecards: {} }));
+      assignCards(validationPlayers);
+      const targetValidation = scoringState({ eventId: eid, holes, status: "live", startedAt: "", roundConfig: liveScoringConfig }, validationPlayers);
+      if (targetValidation.error) {
+        return json({ error: "invalid_score_targets", code: targetValidation.error.code, message: targetValidation.error.message }, 400, origin);
+      }
+      const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, courseName: evCourse?.name ?? null, layoutName: evLayout?.name ?? null, holes, players, liveScoringConfig, startedAt: new Date().toISOString() }) });
       const data = await r.json().catch(() => ({}));
       if (r.status === 200) await db.updateEvent(env.DB, eid, { status: "live" });
       return json(data, r.status, origin);

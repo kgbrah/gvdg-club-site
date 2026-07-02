@@ -1,4 +1,14 @@
+import type { ScoreTarget } from "./live-format.js";
 import type { PlayerState } from "./scoring.js";
+import { scoreTargetConflicts, scoreTargetConsensusIssues } from "./live-target-consensus.js";
+
+export {
+  purgeScoreTargetScorerVotes,
+  recordScoreTargetVote,
+  scoreTargetConflicts,
+  scoreTargetConsensusIssues,
+  type RecordScoreTargetVoteInput,
+} from "./live-target-consensus.js";
 
 export interface ScoreHole {
   hole: number;
@@ -10,6 +20,9 @@ export interface ScoreConflict {
   playerName: string;
   hole: number;
   values: number[];
+  targetId?: string;
+  targetType?: ScoreTarget["type"];
+  playerIndexes?: number[];
 }
 
 export interface MissingScoreConsensus {
@@ -19,6 +32,9 @@ export interface MissingScoreConsensus {
   hole: number;
   missing: number;
   required: number;
+  targetId?: string;
+  targetType?: ScoreTarget["type"];
+  playerIndexes?: number[];
 }
 
 export interface ConsensusIssues {
@@ -71,7 +87,8 @@ export function recordScoreVote(input: RecordScoreVoteInput): ScoreConflict | nu
   return scoreConflictFor(input.players, input.targetIndex, input.hole);
 }
 
-export function scoreConflicts(players: PlayerState[], holes: ScoreHole[]): ScoreConflict[] {
+export function scoreConflicts(players: PlayerState[], holes: ScoreHole[], targets?: readonly ScoreTarget[]): ScoreConflict[] {
+  if (targets) return scoreTargetConflicts(players, holes, targets);
   const conflicts: ScoreConflict[] = [];
   for (let index = 0; index < players.length; index++) {
     const player = players[index];
@@ -84,7 +101,8 @@ export function scoreConflicts(players: PlayerState[], holes: ScoreHole[]): Scor
   return conflicts;
 }
 
-export function scorecardConsensusIssues(players: PlayerState[], holes: ScoreHole[]): ConsensusIssues {
+export function scorecardConsensusIssues(players: PlayerState[], holes: ScoreHole[], targets?: readonly ScoreTarget[]): ConsensusIssues {
+  if (targets) return scoreTargetConsensusIssues(players, holes, targets);
   const missing: MissingScoreConsensus[] = [];
   for (let index = 0; index < players.length; index++) {
     const player = players[index];
@@ -110,8 +128,8 @@ export function scorecardConsensusIssues(players: PlayerState[], holes: ScoreHol
 
 /** A round is ready to finalize when the whole card agrees: NO active-scorer conflicts AND every required
  *  (member) scorer has voted on every hole. Guests are optional (see requiredScorerIds). */
-export function isScoreboardComplete(players: PlayerState[], holes: ScoreHole[]): boolean {
-  const issues = scorecardConsensusIssues(players, holes);
+export function isScoreboardComplete(players: PlayerState[], holes: ScoreHole[], targets?: readonly ScoreTarget[]): boolean {
+  const issues = scorecardConsensusIssues(players, holes, targets);
   return issues.conflicts.length === 0 && issues.missing.length === 0;
 }
 
@@ -126,7 +144,8 @@ function scoreConflictFor(players: PlayerState[], playerIndex: number, hole: num
 function syncConsensusScore(players: PlayerState[], player: PlayerState, hole: number): void {
   const values = activeVoteValues(players, player, hole);
   if (values.length === 1) {
-    player.scores[hole] = values[0]!;
+    const score = values[0];
+    if (score != null) player.scores[hole] = score;
   } else if (values.length > 1) {
     delete player.scores[hole]; // genuine disagreement among active scorers → blank until reconciled
   }

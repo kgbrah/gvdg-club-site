@@ -111,6 +111,15 @@ Spacing follows a 4px base through rem values.
 - Spacing: `0.75rem 1.5rem`.
 - States: hover fills with `--primary`; expanded rotates icon.
 
+### Dashboard Rating Panel
+
+- Structure: panel header with category label/count and a prominent live rating, followed by compact per-round rows.
+- Variants: competitive and casual; both use the same primitive so histories stay visually separate but comparable.
+- Spacing: `0.75rem-1rem` panel padding, `0.6rem` row gaps, single column on mobile and two columns on tablet/desktop.
+- States: empty state text inside each panel; rows remain stable with or without UDisc export actions.
+- Accessibility: each panel is labelled by its category heading.
+- Motion: static display; no layout-shifting animation.
+
 ## 6. Motion & Interaction
 
 ### Timing

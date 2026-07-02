@@ -1,38 +1,18 @@
 // Pure scoring logic for live events — no DO/D1/DOM here so it's unit-testable.
 
-export interface Breakdown {
-  aces: number;
-  eagles: number;
-  birdies: number;
-  pars: number;
-  bogeys: number;
-  doubles_plus: number;
-}
+import { countScores, type Breakdown } from "./score-breakdown.js";
 
-/** Tally a round's holes into a UDisc-style breakdown. `aces` (hole-in-one) is counted
- *  separately AND in its score-to-par bucket (an ace on a par 3 is also an eagle). */
-export function countScores(pars: number[], strokes: number[]): Breakdown {
-  const b: Breakdown = { aces: 0, eagles: 0, birdies: 0, pars: 0, bogeys: 0, doubles_plus: 0 };
-  const n = Math.min(pars.length, strokes.length);
-  for (let i = 0; i < n; i++) {
-    const par = pars[i];
-    const s = strokes[i];
-    if (s == null || par == null) continue;
-    if (s === 1) b.aces++;
-    const d = s - par;
-    if (d <= -2) b.eagles++;
-    else if (d === -1) b.birdies++;
-    else if (d === 0) b.pars++;
-    else if (d === 1) b.bogeys++;
-    else b.doubles_plus++;
-  }
-  return b;
-}
+export { countScores } from "./score-breakdown.js";
+export type { Breakdown } from "./score-breakdown.js";
+export { computeLiveStandings, finalizeLiveStandings } from "./live-scoring.js";
+export type { FinalLiveStanding, LiveScoringInput, LiveStanding, ScoringGroup } from "./live-scoring.js";
+export type { MatchStatus } from "./matchplay-scoring.js";
 
 export interface PlayerState {
   memberId: string | null;
   name: string;
   division?: string | null;
+  team?: string | null;
   startingHole?: number | null; // assigned shotgun start (Track G G4); display-only, doesn't affect scoring
   cardId?: string | null; // which scoring card/group this player is on (a player may score only their own card)
   scores: Record<number, number>; // hole -> strokes

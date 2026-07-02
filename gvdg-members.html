@@ -502,6 +502,41 @@
                 .dash-event-name { font-weight: 600; color: var(--text-primary); }
                 .dash-event-date { font-size: 0.8rem; color: var(--text-muted); }
                 .dash-event-ratings { font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; color: var(--secondary-text); }
+                .club-ratings { margin-top: 1.35rem; }
+                .club-rating-grid { display: grid; grid-template-columns: 1fr; gap: 0.85rem; }
+                @media (min-width: 780px) { .club-rating-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+                .club-rating-panel { border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-secondary); padding: 0.95rem; min-width: 0; }
+                .club-rating-head { display: flex; justify-content: space-between; gap: 0.8rem; align-items: flex-start; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color); }
+                .club-rating-label { font-weight: 800; color: var(--text-primary); line-height: 1.2; }
+                .club-rating-count { color: var(--text-muted); font-size: 0.78rem; margin-top: 0.2rem; }
+                .club-rating-live { text-align: right; flex: 0 0 auto; }
+                .club-rating-number { font-family: 'Bebas Neue', sans-serif; font-size: 2.25rem; color: var(--primary); line-height: 1; }
+                .club-rating-live-label { color: var(--text-muted); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+                .club-rating-list { display: grid; gap: 0.6rem; margin-top: 0.75rem; }
+                .club-rating-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.75rem; align-items: center; padding-top: 0.6rem; border-top: 1px solid var(--border-color); }
+                .club-rating-row:first-child { padding-top: 0; border-top: 0; }
+                .club-rating-title { font-weight: 700; color: var(--text-primary); line-height: 1.25; overflow-wrap: anywhere; }
+                .club-rating-meta { color: var(--text-muted); font-size: 0.78rem; margin-top: 0.18rem; line-height: 1.35; }
+                .club-rating-score { min-width: 4.5rem; text-align: right; }
+                .club-rating-score-main { font-family: 'Bebas Neue', sans-serif; color: var(--secondary-text); font-size: 1.45rem; line-height: 1; }
+                .club-rating-score-sub { color: var(--text-muted); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 0.15rem; }
+                .club-rating-empty { color: var(--text-muted); font-size: 0.88rem; line-height: 1.45; margin-top: 0.75rem; }
+                .club-rating-actions { margin-top: 0.65rem; display: flex; justify-content: flex-end; }
+                .club-rating-load-btn {
+                    background: var(--bg-primary);
+                    border: 1px solid var(--border-color);
+                    color: var(--text-secondary);
+                    border-radius: 8px;
+                    font-weight: 700;
+                    font-size: 0.8rem;
+                    line-height: 1;
+                    padding: 0.5rem 0.85rem;
+                    cursor: pointer;
+                    transition: border-color 0.15s ease, color 0.15s ease;
+                }
+                .club-rating-load-btn:hover { border-color: var(--secondary); color: var(--secondary-text); }
+                .club-rating-load-btn:disabled { opacity: 0.6; cursor: default; }
+                @media (max-width: 768px) { #membersContent.active ~ #crotts-fab { display: none; } }
                 .dashboard-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 0 0 1.25rem; }
                 .dashboard-action { display: inline-flex; align-items: center; min-height: 40px; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.45rem 0.85rem; background: var(--bg-secondary); color: var(--text-primary); text-decoration: none; font-size: 0.85rem; font-weight: 700; transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease; }
                 .dashboard-action:hover { border-color: var(--secondary); color: var(--secondary-text); transform: translateY(-1px); }
@@ -536,6 +571,13 @@
                 .register-form, .register-actions { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
                 .register-form select, .register-form input { padding: 0.4rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
                 .register-addon { font-size: 0.85rem; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 0.3rem; }
+                .register-card.live { border-color: var(--primary); }
+                .register-live-badge { display: inline-flex; align-items: center; min-height: 1.35rem; padding: 0.12rem 0.45rem; border-radius: 999px; background: var(--primary); color: #fff; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.04em; }
+                .register-subhead { color: var(--secondary-text); font-size: 0.78rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; margin: 1rem 0 0.35rem; }
+                .register-subhead:first-child { margin-top: 0; }
+                .casual-register-card .register-actions { margin-top: 0.75rem; }
+                .casual-register-players { color: var(--text-secondary); font-size: 0.85rem; line-height: 1.45; margin-top: 0.35rem; }
+                .casual-register-note { color: var(--text-muted); font-size: 0.85rem; line-height: 1.45; margin-top: 0.35rem; }
                 .club-meetings { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; }
                 .meeting-card { border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem 1.25rem; margin-top: 0.75rem; background: var(--bg-secondary); }
                 .meeting-head { display: flex; gap: 0.75rem; align-items: baseline; flex-wrap: wrap; margin-bottom: 0.5rem; }
@@ -656,9 +698,42 @@
                         <div id="dashEventsList"></div>
                     </div>
                 </div>
-                <div id="clubHistory" style="display:none;">
-                    <h4 class="dash-subtitle">🥏 GVDG Event History</h4>
-                    <div id="clubHistoryList"></div>
+                <div id="clubRatings" class="club-ratings" style="display:none;">
+                    <h4 class="dash-subtitle">GVDG Round Ratings</h4>
+                    <div class="club-rating-grid">
+                        <section class="club-rating-panel" aria-labelledby="competitiveRatingTitle">
+                            <div class="club-rating-head">
+                                <div>
+                                    <div class="club-rating-label" id="competitiveRatingTitle">Competitive</div>
+                                    <div class="club-rating-count" id="competitiveRatingCount">0 rounds</div>
+                                </div>
+                                <div class="club-rating-live">
+                                    <div class="club-rating-number" id="competitiveLiveRating">—</div>
+                                    <div class="club-rating-live-label">Live</div>
+                                </div>
+                            </div>
+                            <div id="competitiveRatingList" class="club-rating-list"></div>
+                            <div class="club-rating-actions">
+                                <button type="button" id="competitiveRatingLoadMore" class="club-rating-load-btn" data-rating-kind="competitive" style="display:none;">Load more competitive rounds</button>
+                            </div>
+                        </section>
+                        <section class="club-rating-panel" aria-labelledby="casualRatingTitle">
+                            <div class="club-rating-head">
+                                <div>
+                                    <div class="club-rating-label" id="casualRatingTitle">Casual</div>
+                                    <div class="club-rating-count" id="casualRatingCount">0 rounds</div>
+                                </div>
+                                <div class="club-rating-live">
+                                    <div class="club-rating-number" id="casualLiveRating">—</div>
+                                    <div class="club-rating-live-label">Live</div>
+                                </div>
+                            </div>
+                            <div id="casualRatingList" class="club-rating-list"></div>
+                            <div class="club-rating-actions">
+                                <button type="button" id="casualRatingLoadMore" class="club-rating-load-btn" data-rating-kind="casual" style="display:none;">Load more casual rounds</button>
+                            </div>
+                        </section>
+                    </div>
                 </div>
             </div>
 
@@ -1012,6 +1087,12 @@
         const PDGA_KEY = 'gvdg_member_pdga';
         const RECENT_ROUNDS_KEY = 'gvdg_recent_rounds';
         const $ = (id) => document.getElementById(id);
+        const RATING_PAGE_SIZE = 250;
+        const ratingLoadState = {
+            competitive: { offset: 0, hasMore: false, loading: false, ratedShown: 0, totalShown: 0 },
+            casual: { offset: 0, hasMore: false, loading: false, ratedShown: 0, totalShown: 0 },
+        };
+        let ratingLoadInFlight = false;
 
         let memberProfile = { pdgaNo: null, udisc: null, photo: null, isAdmin: false, sub: null, name: null };
         let pendingPhoto = null; // a chosen-but-unsaved uploaded photo (data URL)
@@ -1089,6 +1170,12 @@
             const t = $('dashTabs'); if (t) t.scrollIntoView({ block: 'start', behavior: 'smooth' });
         }
         document.querySelectorAll('#dashTabs .dash-tab, .dashboard-action[data-dtab]').forEach((b) => b.addEventListener('click', () => selectDashTab(b.dataset.dtab)));
+        document.querySelectorAll('.club-rating-load-btn[data-rating-kind]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const key = btn.dataset.ratingKind;
+                if (key === 'competitive' || key === 'casual') loadMoreRatings(key);
+            });
+        });
 
         function showMembersContent(name) {
             stopPasskeyPriming(); // logged in — no need to keep priming a login challenge
@@ -1144,37 +1231,180 @@
             wrap.style.display = '';
         }
 
-        // ---- Club event history (Phase 3 R1): the member's finalized GVDG results ----
+        // ---- GVDG round ratings: finalized competitive + casual rounds, kept separate ----
         function fmtClubToPar(n) { n = n || 0; return n === 0 ? 'E' : (n > 0 ? '+' + n : String(n)); }
-        async function loadClubHistory() {
-            const wrap = $('clubHistory'), list = $('clubHistoryList');
-            const token = sessionStorage.getItem(TOKEN_KEY);
-            if (!token) { wrap.style.display = 'none'; return; }
-            let results = [];
-            try { const r = await api('/my-results', { token }); if (r.ok) results = (await r.json()).results || []; } catch (_e) {}
-            list.textContent = '';
-            if (!results.length) { wrap.style.display = 'none'; return; }
-            results.forEach((res) => {
-                const row = document.createElement('div'); row.className = 'dash-event';
-                const left = document.createElement('div');
-                const name = document.createElement('div'); name.className = 'dash-event-name';
-                name.textContent = (res.place != null ? '#' + res.place + ' · ' : '') + (res.event_name || 'Event');
-                const date = document.createElement('div'); date.className = 'dash-event-date';
-                date.textContent = (res.event_date || '') + (res.total != null ? ' • ' + res.total + ' (' + fmtClubToPar(res.to_par) + ')' : '');
-                left.appendChild(name); left.appendChild(date);
-                const score = document.createElement('div'); score.className = 'dash-event-ratings';
-                score.textContent = res.to_par != null ? fmtClubToPar(res.to_par) : '—';
-                row.appendChild(left); row.appendChild(score);
-                list.appendChild(row);
-                // "Add to UDisc": open the right UDisc course + this round's hole-by-hole scores to tap
-                // in (UDisc has no import API). Shown only when the round's per-hole scorecard and the
-                // course's numeric UDisc id are both known.
-                if (res.scorecard && res.udisc_course_id && window.UDiscExport) {
-                    var addNode = window.UDiscExport.build({ courseId: res.udisc_course_id, scorecard: res.scorecard });
-                    if (addNode) list.appendChild(addNode);
+        function fmtRatingValue(n) { return n == null ? '—' : String(n); }
+        function plural(n, one, many) { return n === 1 ? one : many; }
+        function ratingStateFor(key) { return ratingLoadState[key] || null; }
+        function resetRatingState(key) {
+            const state = ratingStateFor(key);
+            if (!state) return;
+            state.offset = 0;
+            state.hasMore = false;
+            state.loading = false;
+            state.ratedShown = 0;
+            state.totalShown = 0;
+            const btn = $(key + 'RatingLoadMore');
+            if (btn) btn.style.display = 'none';
+        }
+        function updateRatingCount(key) {
+            const state = ratingStateFor(key);
+            const count = $(key + 'RatingCount');
+            if (!state || !count) return;
+            count.textContent = (state.ratedShown || 0) + ' rated ' + plural(state.ratedShown || 0, 'round', 'rounds') + ' / ' + (state.totalShown || 0) + ' shown';
+        }
+        function updateRatingLoadMoreBtn(key) {
+            const state = ratingStateFor(key);
+            const btn = $(key + 'RatingLoadMore');
+            if (!state || !btn) return;
+            if (state.loading) {
+                btn.textContent = 'Loading…';
+                btn.disabled = true;
+                btn.style.display = '';
+                return;
+            }
+            btn.disabled = false;
+            btn.style.display = state.hasMore ? '' : 'none';
+            btn.textContent = 'Load more ' + (key === 'competitive' ? 'competitive' : 'casual') + ' rounds';
+        }
+        function appendRatingRow(round, key, list) {
+            const row = document.createElement('div');
+            row.className = 'club-rating-row';
+            const main = document.createElement('div');
+            const title = document.createElement('div');
+            title.className = 'club-rating-title';
+            title.textContent = (round.place != null ? '#' + round.place + ' · ' : '') + (round.label || (key === 'competitive' ? 'Competitive round' : 'Casual round'));
+            const meta = document.createElement('div');
+            meta.className = 'club-rating-meta';
+            const parts = [];
+            const when = ratingDate(round.date);
+            if (when) parts.push(when);
+            if (round.total != null) parts.push(round.total + ' (' + fmtClubToPar(round.to_par) + ')');
+            if (round.round_code) parts.push('Round ' + round.round_code);
+            meta.textContent = parts.join(' • ');
+            main.appendChild(title);
+            if (meta.textContent) main.appendChild(meta);
+            const score = document.createElement('div');
+            score.className = 'club-rating-score';
+            const rating = document.createElement('div');
+            rating.className = 'club-rating-score-main';
+            rating.textContent = fmtRatingValue(round.rating);
+            const sub = document.createElement('div');
+            sub.className = 'club-rating-score-sub';
+            sub.textContent = round.rating == null ? 'Unrated' : (round.rating_source === 'estimated' ? 'Est.' : 'Rating');
+            score.appendChild(rating);
+            score.appendChild(sub);
+            row.appendChild(main);
+            row.appendChild(score);
+            list.appendChild(row);
+            if (round.scorecard && round.udisc_course_id && window.UDiscExport) {
+                const addNode = window.UDiscExport.build({ courseId: round.udisc_course_id, scorecard: round.scorecard });
+                if (addNode) list.appendChild(addNode);
+            }
+        }
+        function ratingDate(value) {
+            const raw = String(value || '');
+            const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            const d = dateOnly
+                ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+                : new Date(raw);
+            return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+        function renderRatingGroup(key, group, append = false) {
+            group = group || { live_rating: null, rated_rounds: 0, rounds_count: 0, rounds: [] };
+            const state = ratingStateFor(key);
+            if (!state) return;
+            const live = $(key + 'LiveRating');
+            const list = $(key + 'RatingList');
+            if (!live || !list) return;
+            const rounds = group.rounds || [];
+            live.textContent = fmtRatingValue(group.live_rating);
+            if (!append) list.replaceChildren();
+            if (!append && rounds.length) list.replaceChildren();
+            if (!rounds.length) {
+                if (!append || !list.children.length) {
+                    const empty = document.createElement('div');
+                    empty.className = 'club-rating-empty';
+                    empty.textContent = key === 'competitive' ? 'No finalized competitive rounds yet.' : 'No finalized casual rounds yet.';
+                    list.appendChild(empty);
                 }
+                updateRatingCount(key);
+                return;
+            }
+            if (append && list.querySelector('.club-rating-empty')) list.replaceChildren();
+            state.ratedShown += group.rated_rounds || 0;
+            state.totalShown += rounds.length;
+            rounds.forEach((round) => appendRatingRow(round, key, list));
+            updateRatingCount(key);
+        }
+        function resetRatingPaging() {
+            Object.keys(ratingLoadState).forEach((key) => resetRatingState(key));
+        }
+        async function loadClubRatings({ reset = true, appendKey = null } = {}) {
+            const wrap = $('clubRatings');
+            const token = sessionStorage.getItem(TOKEN_KEY);
+            if (ratingLoadInFlight) return;
+            if (!wrap || !token) { if (wrap) wrap.style.display = 'none'; return; }
+            ratingLoadInFlight = true;
+            const loadParams = new URLSearchParams({
+                competitiveLimit: String((reset || appendKey === 'competitive' || appendKey == null) ? RATING_PAGE_SIZE : 0),
+                casualLimit: String((reset || appendKey === 'casual' || appendKey == null) ? RATING_PAGE_SIZE : 0),
+                competitiveOffset: String(reset ? 0 : ratingLoadState.competitive.offset),
+                casualOffset: String(reset ? 0 : ratingLoadState.casual.offset),
             });
-            wrap.style.display = '';
+            try {
+                if (reset) resetRatingPaging();
+                Object.keys(ratingLoadState).forEach((key) => {
+                    const state = ratingStateFor(key);
+                    if (!state) return;
+                    state.loading = true;
+                    updateRatingLoadMoreBtn(key);
+                });
+                const r = await api('/my-ratings?' + loadParams.toString(), { token });
+                if (!r.ok) throw new Error('ratings');
+                const data = await r.json();
+                const competitive = data && data.competitive ? data.competitive : {};
+                const casual = data && data.casual ? data.casual : {};
+                const cState = ratingStateFor('competitive');
+                const casualState = ratingStateFor('casual');
+                const compRounds = (competitive.rounds || []);
+                const casRounds = (casual.rounds || []);
+                if (reset || appendKey == null || appendKey === 'competitive') {
+                    renderRatingGroup('competitive', competitive, !reset);
+                }
+                if (reset || appendKey == null || appendKey === 'casual') {
+                    renderRatingGroup('casual', casual, !reset);
+                }
+                if (cState && (reset || appendKey == null || appendKey === 'competitive')) {
+                    cState.offset = (reset ? 0 : cState.offset) + (compRounds.length || 0);
+                    cState.hasMore = compRounds.length === RATING_PAGE_SIZE;
+                    cState.loading = false;
+                    updateRatingLoadMoreBtn('competitive');
+                }
+                if (casualState && (reset || appendKey == null || appendKey === 'casual')) {
+                    casualState.offset = (reset ? 0 : casualState.offset) + (casRounds.length || 0);
+                    casualState.hasMore = casRounds.length === RATING_PAGE_SIZE;
+                    casualState.loading = false;
+                    updateRatingLoadMoreBtn('casual');
+                }
+                wrap.style.display = '';
+            } catch (_e) {
+                wrap.style.display = 'none';
+            } finally {
+                Object.keys(ratingLoadState).forEach((key) => {
+                    const state = ratingStateFor(key);
+                    if (!state) return;
+                    state.loading = false;
+                    updateRatingLoadMoreBtn(key);
+                });
+                ratingLoadInFlight = false;
+            }
+        }
+        async function loadMoreRatings(key) {
+            const state = ratingStateFor(key);
+            if (!state || state.loading || ratingLoadInFlight || !state.hasMore) return;
+            if (key !== 'competitive' && key !== 'casual') return;
+            await loadClubRatings({ reset: false, appendKey: key });
         }
 
         function walletDate(value) {
@@ -1313,6 +1543,12 @@
             if (Number.isNaN(d.getTime())) return String(value);
             return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
         }
+        function shortDateTime(value) {
+            if (!value) return '';
+            const d = new Date(value);
+            if (Number.isNaN(d.getTime())) return String(value);
+            return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        }
         function roundMeta(parts) {
             return parts.filter(Boolean).join(' · ');
         }
@@ -1387,17 +1623,30 @@
             const token = regToken();
             if (!token) { wrap.style.display = 'none'; return; }
             if (paymentsCfg === null) { try { const r = await api('/payments/config'); paymentsCfg = r.ok ? await r.json() : { enabled: false }; } catch (_e) { paymentsCfg = { enabled: false }; } }
-            let events = [], myRegs = [];
-            const [er, mr] = await Promise.all([
+            let events = [], myRegs = [], casualRequests = [];
+            const [er, mr, cr] = await Promise.all([
                 api('/registration/open').catch(() => null),
                 api('/my-registrations', { token }).catch(() => null),
+                api('/casual-rounds', { token }).catch(() => null),
             ]);
             if (er && er.ok) events = (await er.json()).events || [];
             if (mr && mr.ok) myRegs = (await mr.json()).registrations || [];
-            if (!events.length) { wrap.style.display = 'none'; return; }
+            if (cr && cr.ok) casualRequests = (await cr.json()).requests || [];
+            if (!events.length && !casualRequests.length) { wrap.style.display = 'none'; return; }
             const byEvent = new Map(myRegs.map((r) => [r.event_id, r]));
+            const liveEvents = events.filter((ev) => ev.status === 'live');
+            const scheduledEvents = events.filter((ev) => ev.status !== 'live');
             list.replaceChildren();
-            events.forEach((ev) => list.appendChild(registerCard(ev, byEvent.get(ev.id))));
+            if (liveEvents.length) {
+                list.appendChild(elNode('h4', 'register-subhead', 'LIVE NOW'));
+                liveEvents.forEach((ev) => list.appendChild(registerCard(ev, byEvent.get(ev.id))));
+            }
+            if (scheduledEvents.length) {
+                list.appendChild(elNode('h4', 'register-subhead', 'Club events'));
+                scheduledEvents.forEach((ev) => list.appendChild(registerCard(ev, byEvent.get(ev.id))));
+            }
+            if (casualRequests.length) list.appendChild(elNode('h4', 'register-subhead', 'Casual round posts'));
+            casualRequests.forEach((req) => list.appendChild(casualRegisterCard(req)));
             wrap.style.display = '';
         }
         function dollars(c) {
@@ -1441,10 +1690,23 @@
                 }).render(container);
             }).catch(() => { container.appendChild(elNode('div', 'register-fee', 'Online payment is temporarily unavailable — pay at the event.')); });
         }
+        function registrationLiveConfig(ev) {
+            const raw = ev.liveScoringConfig || ev.live_scoring_config || null;
+            if (raw && typeof raw === 'object') return { groupFormat: raw.groupFormat === 'doubles' ? 'doubles' : 'singles', scoringStyle: raw.scoringStyle === 'matchplay' ? 'matchplay' : 'stroke' };
+            if (typeof raw === 'string' && raw.trim()) {
+                try { return registrationLiveConfig({ liveScoringConfig: JSON.parse(raw) }); } catch (_e) {}
+            }
+            if (raw == null && ev.play_format === 'doubles') return { groupFormat: 'doubles', scoringStyle: 'stroke' };
+            return { groupFormat: 'singles', scoringStyle: ev.format === 'matchplay' ? 'matchplay' : 'stroke' };
+        }
+        function isDoublesRegistration(ev) {
+            return registrationLiveConfig(ev).groupFormat === 'doubles';
+        }
         function registerCard(ev, myReg) {
-            const card = elNode('div', 'register-card');
+            const card = elNode('div', 'register-card' + (ev.status === 'live' ? ' live' : ''));
             const head = elNode('div', 'register-head');
             head.appendChild(elNode('span', 'register-name', ev.name));
+            if (ev.status === 'live') head.appendChild(elNode('span', 'register-live-badge', 'LIVE NOW'));
             if (ev.date) head.appendChild(elNode('span', 'register-date', ev.date));
             card.appendChild(head);
             const meta = [ev.course_name, ev.layout_name ? ev.layout_name + (ev.total_par != null ? ' · par ' + ev.total_par : '') : null].filter(Boolean).join(' · ');
@@ -1486,6 +1748,15 @@
                 let divs = []; try { divs = JSON.parse(ev.divisions || '[]'); } catch (_e) {}
                 let divSel = null;
                 if (divs.length) { divSel = document.createElement('select'); divs.forEach((d) => { const o = document.createElement('option'); o.value = d; o.textContent = d; divSel.appendChild(o); }); form.appendChild(divSel); }
+                let pairInput = null;
+                if (isDoublesRegistration(ev)) {
+                    pairInput = document.createElement('input');
+                    pairInput.type = 'text';
+                    pairInput.placeholder = 'Pair label or partner';
+                    pairInput.maxLength = 40;
+                    pairInput.setAttribute('data-register-pair', 'team');
+                    form.appendChild(pairInput);
+                }
                 let ctpCb = null, aceCb = null;
                 const addon = (label) => { const l = elNode('label', 'register-addon'); const cb = document.createElement('input'); cb.type = 'checkbox'; l.appendChild(cb); l.appendChild(document.createTextNode(' ' + label)); form.appendChild(l); return cb; };
                 if (ev.ctp_fee_cents) ctpCb = addon('CTP pot ' + dollars(ev.ctp_fee_cents));
@@ -1493,12 +1764,47 @@
                 const reg = elNode('button', 'passkey-btn', 'Register'); reg.type = 'button';
                 reg.addEventListener('click', async () => {
                     const body = { division: divSel ? divSel.value : null, addons: { ctp: !!(ctpCb && ctpCb.checked), ace: !!(aceCb && aceCb.checked) } };
+                    if (pairInput) body.team = pairInput.value.trim();
                     const r = await api('/events/' + ev.id + '/register', { method: 'POST', token: regToken(), body });
                     if (r.ok) loadRegister(); else alert('Registration could not be completed.');
                 });
                 form.appendChild(reg);
                 card.appendChild(form);
             }
+            return card;
+        }
+        function casualRegisterCard(req) {
+            const card = elNode('div', 'register-card casual-register-card');
+            const head = elNode('div', 'register-head');
+            head.appendChild(elNode('span', 'register-name', req.course_name || 'Casual round'));
+            const when = shortDateTime(req.starts_at);
+            if (when) head.appendChild(elNode('span', 'register-date', when));
+            card.appendChild(head);
+            const meta = [req.layout_name, req.course_location, req.created_by_name ? 'Posted by ' + req.created_by_name : null].filter(Boolean).join(' · ');
+            if (meta) card.appendChild(elNode('div', 'register-fee', meta));
+            if (req.notes) card.appendChild(elNode('div', 'casual-register-note', req.notes));
+            const players = Array.isArray(req.players) && req.players.length ? req.players.join(', ') : 'No commitments yet';
+            const count = Number(req.player_count || 0);
+            card.appendChild(elNode('div', 'casual-register-players', count + ' ' + (count === 1 ? 'player' : 'players') + ' in · ' + players));
+            const actions = elNode('div', 'register-actions');
+            const join = elNode('button', 'passkey-btn', req.committed ? 'Leave casual round' : 'Join casual round');
+            join.type = 'button';
+            join.addEventListener('click', async () => {
+                const r = await api('/casual-rounds/' + encodeURIComponent(req.id) + '/join', { method: req.committed ? 'DELETE' : 'POST', token: regToken(), body: req.committed ? undefined : {} });
+                if (r.ok) loadRegister(); else alert('Casual round could not be updated.');
+            });
+            actions.appendChild(join);
+            if (memberProfile.sub && req.created_by === memberProfile.sub) {
+                const close = elNode('button', 'board-link danger', 'Close');
+                close.type = 'button';
+                close.addEventListener('click', async () => {
+                    if (!confirm('Close this casual round post?')) return;
+                    const r = await api('/casual-rounds/' + encodeURIComponent(req.id), { method: 'DELETE', token: regToken() });
+                    if (r.ok) loadRegister(); else alert('Casual round could not be closed.');
+                });
+                actions.appendChild(close);
+            }
+            card.appendChild(actions);
             return card;
         }
 
@@ -1790,7 +2096,7 @@
         async function loadDashboard() {
             const loading = $('dashLoading'), empty = $('dashEmpty'), body = $('dashBody');
             $('myDashboard').style.display = '';
-            loadClubHistory(); // GVDG results are keyed by memberId, so they show even without a PDGA#
+            loadClubRatings(); // GVDG results are keyed by memberId, so they show even without a PDGA#
             loadWallet();
             loadLiveScoring();
             loadRegister();
@@ -1807,7 +2113,7 @@
             const pdga = sessionStorage.getItem(PDGA_KEY);
             if (!pdga) {
                 loading.style.display = 'none';
-                empty.textContent = 'No PDGA # is linked to your account yet — your ratings & tournament history will appear here once it is.';
+                empty.textContent = 'No PDGA # is linked to your account yet — PDGA ratings & tournament history will appear here once it is.';
                 empty.style.display = '';
                 return;
             }

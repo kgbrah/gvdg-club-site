@@ -7,7 +7,8 @@ import * as db from "./db.js";
 import { bearer, clientIp, json, readJson } from "./http.js";
 import { requireAuth, ttl } from "./authz.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
-import { asInt } from "./input.js";
+import { RECORD_PAGE_DEFAULTS, asInt, parseWindow } from "./input.js";
+import { getMemberRatings } from "./ratings.js";
 
 // Iteration count must stay <=100000 to match crypto.ts / the workerd PBKDF2 cap, so the
 // no-such-member path computes a real PBKDF2 (constant-time-ish) instead of throwing immediately.
@@ -94,7 +95,40 @@ export async function handleMe(request: Request, env: Env, origin: string | null
 export async function handleMyResults(request: Request, env: Env, origin: string | null): Promise<Response> {
   const claims = await requireAuth(request, env);
   if (!claims) return json({ error: "unauthorized" }, 401, origin);
-  return json({ results: await db.listMemberResults(env.DB, claims.sub) }, 200, origin);
+  const q = new URL(request.url).searchParams;
+  const { limit, offset } = parseWindow(q, { limit: RECORD_PAGE_DEFAULTS.memberResults.defaultLimit }, {
+    maxLimit: RECORD_PAGE_DEFAULTS.memberResults.maxLimit,
+  });
+  const requestedLimit = q.get("all") === "1" ? RECORD_PAGE_DEFAULTS.memberResults.maxLimit : limit;
+  return json({ results: await db.listMemberResults(env.DB, claims.sub, { limit: requestedLimit, offset }) }, 200, origin);
+}
+
+export async function handleMyRatings(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const claims = await requireAuth(request, env);
+  if (!claims) return json({ error: "unauthorized" }, 401, origin);
+  const q = new URL(request.url).searchParams;
+  const all = q.get("all") === "1";
+  const competitive = parseWindow(q, { limit: RECORD_PAGE_DEFAULTS.memberRatings.defaultLimit }, {
+    maxLimit: RECORD_PAGE_DEFAULTS.memberRatings.maxLimit,
+    limitParam: "competitiveLimit",
+    offsetParam: "competitiveOffset",
+  });
+  const casual = parseWindow(q, { limit: RECORD_PAGE_DEFAULTS.memberRatings.defaultLimit }, {
+    maxLimit: RECORD_PAGE_DEFAULTS.memberRatings.maxLimit,
+    limitParam: "casualLimit",
+    offsetParam: "casualOffset",
+  });
+
+  return json(
+    await getMemberRatings(env.DB, claims.sub, {
+      competitiveLimit: all ? RECORD_PAGE_DEFAULTS.memberRatings.maxLimit : competitive.limit,
+      competitiveOffset: competitive.offset,
+      casualLimit: all ? RECORD_PAGE_DEFAULTS.memberRatings.maxLimit : casual.limit,
+      casualOffset: casual.offset,
+    }),
+    200,
+    origin,
+  );
 }
 
 export async function handleMyRegistrations(request: Request, env: Env, origin: string | null): Promise<Response> {
