@@ -233,6 +233,10 @@
             .al-holes { min-width: 500px; }
             .al-est .src { display: block; }
         }
+        @media (max-width: 760px) {
+            body #crotts-fab,
+            body #crotts-panel { display: none !important; }
+        }
         .admin-form { display: grid; gap: 0.75rem; max-width: 520px; }
         .admin-form label { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 0.2rem; }
         .admin-form input, .admin-form select, .admin-form textarea { width: 100%; padding: 0.6rem 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95rem; }
@@ -399,7 +403,7 @@
                     <div><label for="aeType">Type</label><select id="aeType"><option value="tournament">Tournament</option><option value="league_round">League round</option><option value="fundraiser">Fundraiser</option><option value="meeting">Meeting</option></select></div>
                     <div><label for="aeName">Name</label><input id="aeName" maxlength="200" required></div>
                     <div><label for="aeDate">Date</label><input id="aeDate" type="date"></div>
-                    <div><label for="aeStatus">Status</label><select id="aeStatus"><option value="scheduled">Scheduled</option><option value="live">Live</option><option value="final">Final</option><option value="cancelled">Cancelled</option></select></div>
+                    <div><label for="aeStatus">Status</label><select id="aeStatus"><option value="scheduled">Scheduled</option><option value="cancelled">Cancelled</option></select></div>
                     <div><label for="aeFormat">Format</label><select id="aeFormat"><option value="">—</option><option value="stroke">Stroke</option><option value="matchplay">Matchplay</option><option value="doubles">Doubles</option></select></div>
                     <div><label for="aeCourse">Course</label><select id="aeCourse"><option value="">—</option></select></div>
                     <div><label for="aeLayout">Layout</label><select id="aeLayout"><option value="">— no layout yet —</option></select></div>
@@ -849,6 +853,44 @@
         function adminApi(path, opts) { return api(path, { ...(opts || {}), token: sessionStorage.getItem(TOKEN_KEY) }); }
         function dollarsFromCents(c) { const n = Number(c || 0); const abs = Math.abs(n); const out = '$' + (abs / 100).toLocaleString(undefined, { minimumFractionDigits: abs % 100 ? 2 : 0 }); return n < 0 ? '-' + out : out; }
         function dollarsToCents(v) { const n = parseFloat(v); return Number.isFinite(n) ? Math.round(n * 100) : null; }
+        function makeIdempotencyKey(prefix) {
+            const nonce = window.crypto && typeof window.crypto.randomUUID === 'function'
+                ? window.crypto.randomUUID()
+                : Date.now() + '-' + Math.random().toString(36).slice(2);
+            return prefix + ':' + nonce;
+        }
+        function idempotencyKeyFor(input, prefix) {
+            if (!input.dataset.idempotencyKey) input.dataset.idempotencyKey = makeIdempotencyKey(prefix);
+            return input.dataset.idempotencyKey;
+        }
+        function clearIdempotencyKey(input) { delete input.dataset.idempotencyKey; }
+        const EDITABLE_EVENT_STATUSES = ['scheduled', 'cancelled'];
+        function isLifecycleEventStatus(status) { return status === 'live' || status === 'final'; }
+        function eventStatusLabel(status) {
+            if (status === 'scheduled') return 'Scheduled';
+            if (status === 'cancelled') return 'Cancelled';
+            if (status === 'live') return 'Live';
+            if (status === 'final') return 'Final';
+            return status || 'Scheduled';
+        }
+        function setEventStatusSelect(sel, status) {
+            Array.from(sel.querySelectorAll('option[data-lifecycle-status]')).forEach((o) => o.remove());
+            sel.disabled = false;
+            sel.title = '';
+            const next = status || 'scheduled';
+            if (isLifecycleEventStatus(next)) {
+                const o = document.createElement('option');
+                o.value = next;
+                o.textContent = eventStatusLabel(next) + ' (managed in Live Scoring)';
+                o.dataset.lifecycleStatus = 'true';
+                sel.appendChild(o);
+                sel.value = next;
+                sel.disabled = true;
+                sel.title = 'Use Live Scoring to start or finalize this event.';
+                return;
+            }
+            sel.value = EDITABLE_EVENT_STATUSES.includes(next) ? next : 'scheduled';
+        }
         let aeEditingEvent = null;
         let adminCoursesCache = [], tsReviewThumbUrls = [];
         function adminSwitch(tab) {
@@ -929,12 +971,15 @@
                 row.appendChild(elx('span', 'admin-badge ' + (ev.status || ''), ev.status || ''));
                 if (ev.date) row.appendChild(elx('span', 'dash-event-date', ev.date));
                 const sel = document.createElement('select');
-                ['scheduled', 'live', 'final', 'cancelled'].forEach((s) => { const o = document.createElement('option'); o.value = s; o.textContent = s; if (s === ev.status) o.selected = true; sel.appendChild(o); });
-                sel.addEventListener('change', async () => {
-                    const r = await adminApi('/admin/events/' + ev.id, { method: 'PATCH', body: { status: sel.value } });
-                    adminMsg(r.ok ? 'Updated “' + ev.name + '” → ' + sel.value : 'Update failed', r.ok);
-                    if (r.ok) adminLoadEvents();
-                });
+                EDITABLE_EVENT_STATUSES.forEach((s) => { const o = document.createElement('option'); o.value = s; o.textContent = eventStatusLabel(s); sel.appendChild(o); });
+                setEventStatusSelect(sel, ev.status || 'scheduled');
+                if (!sel.disabled) {
+                    sel.addEventListener('change', async () => {
+                        const r = await adminApi('/admin/events/' + ev.id, { method: 'PATCH', body: { status: sel.value } });
+                        adminMsg(r.ok ? 'Updated “' + ev.name + '” → ' + eventStatusLabel(sel.value) : 'Update failed', r.ok);
+                        if (r.ok) adminLoadEvents();
+                    });
+                }
                 row.appendChild(sel);
                 const edit = elx('button', 'admin-btn secondary', 'Edit');
                 edit.addEventListener('click', () => aeEditEvent(ev));
@@ -952,21 +997,22 @@
         }
 
         function aePayload() {
-            return {
+            const body = {
                 type: $('aeType').value,
                 name: $('aeName').value.trim(),
-                status: $('aeStatus').value,
                 date: $('aeDate').value || null,
                 format: $('aeFormat').value || null,
                 course_id: $('aeCourse').value ? Number($('aeCourse').value) : null,
                 league_id: $('aeLeague').value ? Number($('aeLeague').value) : null,
                 notes: $('aeNotes').value.trim() || null,
             };
+            if (!$('aeStatus').disabled) body.status = $('aeStatus').value;
+            return body;
         }
         function aeResetForm() {
             aeEditingEvent = null;
             $('adminCreateForm').reset();
-            $('aeStatus').value = 'scheduled';
+            setEventStatusSelect($('aeStatus'), 'scheduled');
             $('aeModeNote').textContent = 'Create a scheduled event, fundraiser, meeting, or league round.';
             $('aeSubmitBtn').textContent = 'Create event';
             $('aeCancelEdit').style.display = 'none';
@@ -976,7 +1022,7 @@
             $('aeType').value = ev.type || 'tournament';
             $('aeName').value = ev.name || '';
             $('aeDate').value = ev.date || '';
-            $('aeStatus').value = ev.status || 'scheduled';
+            setEventStatusSelect($('aeStatus'), ev.status || 'scheduled');
             $('aeFormat').value = ev.format || '';
             $('aeCourse').value = ev.course_id == null ? '' : String(ev.course_id);
             $('aeLeague').value = ev.league_id == null ? '' : String(ev.league_id);
@@ -1574,12 +1620,33 @@
         }
 
         async function scStart() {
-            const layoutId = $('scLayout').value ? Number($('scLayout').value) : null;
-            if (layoutId) await adminApi('/admin/events/' + scEventId, { method: 'PATCH', body: { layout_id: layoutId } });
-            const body = $('scUseManualPlayers').checked ? { from: 'players' } : {};
-            const r = await adminApi('/events/' + scEventId + '/live/start', { method: 'POST', body });
-            if (r.ok) { adminMsg('Live scoring started', true); $('scEvent').selectedOptions[0].dataset.status = 'live'; await scRefresh(); }
-            else { const e = await r.json().catch(() => ({})); adminMsg(e.error === 'no_layout_holes' ? 'That event has no layout with pars — pick one above (or build one on the Layouts tab).' : 'Start failed (' + r.status + ')', false); }
+            const btn = $('scStartBtn');
+            if (btn.disabled) return;
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Starting...';
+            try {
+                const layoutId = $('scLayout').value ? Number($('scLayout').value) : null;
+                if (layoutId) {
+                    const pr = await adminApi('/admin/events/' + scEventId, { method: 'PATCH', body: { layout_id: layoutId } });
+                    if (!pr.ok) { adminMsg('Layout update failed (' + pr.status + ')', false); return; }
+                    const opt = $('scEvent').selectedOptions[0];
+                    if (opt) opt.dataset.layoutId = String(layoutId);
+                }
+                const body = $('scUseManualPlayers').checked ? { from: 'players' } : {};
+                const r = await adminApi('/events/' + scEventId + '/live/start', { method: 'POST', body });
+                if (r.ok) { adminMsg('Live scoring started', true); $('scEvent').selectedOptions[0].dataset.status = 'live'; await scRefresh(); }
+                else {
+                    const e = await r.json().catch(() => ({}));
+                    const msg = e.error === 'no_layout_holes'
+                        ? 'That event has no layout with pars — pick one above (or build one on the Layouts tab).'
+                        : e.error === 'round_already_live' ? 'Live scoring is already running for this event.' : 'Start failed (' + r.status + ')';
+                    adminMsg(msg, false);
+                }
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
         }
 
         async function scRefresh() {
@@ -2255,21 +2322,38 @@
             const wrap = elx('span', 'credit-award');
             const amount = document.createElement('input'); amount.type = 'number'; amount.min = '0'; amount.step = '0.01'; amount.placeholder = '$';
             const btn = elx('button', 'admin-btn secondary', 'Award'); btn.type = 'button';
-            btn.addEventListener('click', () => rgAwardCredit(rg.member_id, rg.name, amount));
+            btn.addEventListener('click', () => rgAwardCredit(rg.member_id, rg.name, amount, btn));
             wrap.appendChild(amount); wrap.appendChild(btn); td.appendChild(wrap);
             return td;
         }
-        async function rgAwardCredit(memberId, name, input) {
+        async function rgAwardCredit(memberId, name, input, btn) {
+            if (btn && btn.disabled) return;
             const amount = dollarsToCents(input.value);
             if (amount == null || amount <= 0) { adminMsg('Enter a store credit amount', false); return; }
-            const r = await adminApi('/admin/events/' + rgEventId + '/store-credit', { method: 'POST', body: { member_id: memberId, member_name: name || null, amount_cents: amount, note: 'Event payout: ' + ($('rgEvent').selectedOptions[0]?.textContent || 'event') } });
-            if (r.ok) { const d = await r.json(); adminMsg('Awarded ' + dollarsFromCents(amount) + ' to ' + (name || memberId) + '. Balance: ' + dollarsFromCents(d.balance_cents || 0), true); input.value = ''; rgLoadCredits(); }
-            else adminMsg(await rgStoreCreditError(r, 'Store credit award failed'), false);
+            const key = idempotencyKeyFor(input, 'event-payout:' + rgEventId + ':' + memberId);
+            const originalText = btn ? btn.textContent : '';
+            if (btn) { btn.disabled = true; btn.textContent = 'Awarding...'; }
+            try {
+                const r = await adminApi('/admin/events/' + rgEventId + '/store-credit', { method: 'POST', body: { member_id: memberId, member_name: name || null, amount_cents: amount, note: 'Event payout: ' + ($('rgEvent').selectedOptions[0]?.textContent || 'event'), idempotency_key: key } });
+                if (r.ok) {
+                    const d = await r.json();
+                    adminMsg('Awarded ' + dollarsFromCents(amount) + ' to ' + (name || memberId) + '. Balance: ' + dollarsFromCents(d.balance_cents || 0), true);
+                    input.value = '';
+                    clearIdempotencyKey(input);
+                    rgLoadCredits();
+                } else {
+                    adminMsg(await rgStoreCreditError(r, 'Store credit award failed'), false);
+                }
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = originalText; }
+            }
         }
         async function rgStoreCreditError(r, fallback) {
             const d = await r.json().catch(() => ({}));
             if (d.error === 'member_not_found') return fallback + ': member id not found';
             if (d.error === 'invalid_store_credit') return fallback + ': enter a valid member and amount';
+            if (d.error === 'idempotency_key_required') return fallback + ': retry key missing';
+            if (d.error === 'idempotency_key_conflict') return fallback + ': duplicate retry key used for a different award';
             return fallback + ' (' + r.status + ')';
         }
         function rgToggleCell(on, onChange) {
@@ -2302,27 +2386,36 @@
                 setW.addEventListener('click', async () => { const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + c.id, { method: 'PATCH', body: { winner_name: win.value.trim() || null, winner_member_id: member.value.trim() || null } }); if (r.ok) { adminMsg('CTP winner set', true); rgLoadCtps(); } });
                 const credit = document.createElement('input'); credit.type = 'number'; credit.min = '0'; credit.step = '0.01'; credit.placeholder = '$'; credit.style.width = '5rem';
                 const award = elx('button', 'admin-btn secondary', 'Award credit'); award.type = 'button';
-                award.addEventListener('click', () => rgAwardCtpCredit(c, member, win, credit));
+                award.addEventListener('click', () => rgAwardCtpCredit(c, member, win, credit, award));
                 const del = elx('button', 'admin-btn danger', 'Delete');
                 del.addEventListener('click', async () => { const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + c.id, { method: 'DELETE' }); if (r.ok) rgLoadCtps(); });
                 row.appendChild(win); row.appendChild(member); row.appendChild(setW); row.appendChild(credit); row.appendChild(award); row.appendChild(del);
                 list.appendChild(row);
             });
         }
-        async function rgAwardCtpCredit(ctp, memberInput, nameInput, amountInput) {
+        async function rgAwardCtpCredit(ctp, memberInput, nameInput, amountInput, btn) {
+            if (btn && btn.disabled) return;
             const memberId = memberInput.value.trim();
             const amount = dollarsToCents(amountInput.value);
             if (!memberId) { adminMsg('CTP store credit needs a member id', false); return; }
             if (amount == null || amount <= 0) { adminMsg('Enter a CTP store credit amount', false); return; }
-            const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + ctp.id + '/store-credit', { method: 'POST', body: { member_id: memberId, winner_name: nameInput.value.trim() || null, amount_cents: amount } });
-            if (r.ok) {
-                const d = await r.json();
-                adminMsg('Awarded CTP credit ' + dollarsFromCents(amount) + '. Balance: ' + dollarsFromCents(d.balance_cents || 0), true);
-                amountInput.value = '';
-                rgLoadCtps();
-                rgLoadCredits();
-            } else {
-                adminMsg(await rgStoreCreditError(r, 'CTP store credit award failed'), false);
+            const key = idempotencyKeyFor(amountInput, 'ctp-payout:' + rgEventId + ':' + ctp.id + ':' + memberId);
+            const originalText = btn ? btn.textContent : '';
+            if (btn) { btn.disabled = true; btn.textContent = 'Awarding...'; }
+            try {
+                const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + ctp.id + '/store-credit', { method: 'POST', body: { member_id: memberId, winner_name: nameInput.value.trim() || null, amount_cents: amount, idempotency_key: key } });
+                if (r.ok) {
+                    const d = await r.json();
+                    adminMsg('Awarded CTP credit ' + dollarsFromCents(amount) + '. Balance: ' + dollarsFromCents(d.balance_cents || 0), true);
+                    amountInput.value = '';
+                    clearIdempotencyKey(amountInput);
+                    rgLoadCtps();
+                    rgLoadCredits();
+                } else {
+                    adminMsg(await rgStoreCreditError(r, 'CTP store credit award failed'), false);
+                }
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = originalText; }
             }
         }
         async function rgAddCtp() {

@@ -23,6 +23,7 @@ const db = { prepare: (sql: string) => ({
   first: async () => {
     if (/COUNT\(\*\) AS n/i.test(sql)) return { n: 2 };
     if (/SELECT COALESCE\(SUM\(amount_cents\)/i.test(sql)) return { balance_cents: 1200 };
+    if (/SELECT \* FROM wallet_transactions WHERE idempotency_key/i.test(sql)) return null;
     if (/INSERT INTO ctps/i.test(sql)) return { id: 1, hole: 7 };
     if (/UPDATE ctps/i.test(sql)) return { id: 1, hole: 7, winner_member_id: "m_jane", winner_name: "Jane" };
     if (/INSERT INTO wallet_transactions/i.test(sql)) return { id: 2, member_id: "m_jane", amount_cents: 1200, source: "event_payout", event_id: 5 };
@@ -55,7 +56,7 @@ describe("Track G G3 — CTPs, ace pots, assignment", () => {
     expect((await call("/admin/events/5/ctps/1", "PATCH", await tok("m_admin"), { winner_name: "A", winner_member_id: "m_a" })).status).toBe(200);
   });
   it("admin awards store credit for a CTP without hitting a not-found route", async () => {
-    const res = await call("/admin/events/5/ctps/1/store-credit", "POST", await tok("m_admin"), { member_id: "m_jane", amount_cents: 1200, winner_name: "Jane" });
+    const res = await call("/admin/events/5/ctps/1/store-credit", "POST", await tok("m_admin"), { member_id: "m_jane", amount_cents: 1200, winner_name: "Jane", idempotency_key: "ctp:5:1:m_jane:test" });
     expect(res.status).toBe(201);
     const body = await jsonObject(res);
     expect(objectField(body, "ctp").winner_member_id).toBe("m_jane");

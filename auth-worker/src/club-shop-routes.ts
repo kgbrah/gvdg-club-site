@@ -25,6 +25,28 @@ type PricedCart =
   | { ok: true; total: number; lines: StoreOrderLine[] }
   | { ok: false; status: number; body: Record<string, unknown> };
 
+type SubmittedStoreOrder =
+  | { ok: true; order: unknown; orderId: number }
+  | { ok: false; status: number; body: Record<string, unknown> };
+
+type SubmitStoreOrderInput = {
+  readonly env: Env;
+  readonly ctx?: ExecutionContext;
+  readonly memberId: string;
+  readonly memberName: string;
+  readonly total: number;
+  readonly lines: readonly StoreOrderLine[];
+  readonly payment: { readonly method: string; readonly ref?: string | null };
+  readonly notify?: boolean;
+};
+
+type CancelSubmittedStoreOrderInput = {
+  readonly database: D1Like;
+  readonly orderId: number;
+  readonly lines: readonly StoreOrderLine[];
+  readonly adminNote: string;
+};
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return v != null && typeof v === "object" && !Array.isArray(v);
 }
@@ -132,31 +154,52 @@ async function validateStoredStock(database: D1Like, lines: StoreOrderLine[]): P
   return { ok: true };
 }
 
-async function submitStoreOrder(
-  env: Env,
-  ctx: ExecutionContext | undefined,
-  memberId: string,
-  memberName: string,
-  total: number,
-  lines: StoreOrderLine[],
-  payment: { method: string; ref?: string | null },
-) {
+async function releaseStoreOrderStock(database: D1Like, lines: readonly StoreOrderLine[]): Promise<void> {
+  for (const line of lines) await shopDb.incrementStoreProductStock(database, line.product_id, line.quantity);
+}
+
+async function cancelSubmittedStoreOrder(input: CancelSubmittedStoreOrderInput): Promise<void> {
+  await releaseStoreOrderStock(input.database, input.lines);
+  await shopDb.updateStoreOrderFulfillment(input.database, input.orderId, {
+    status: "cancelled",
+    admin_note: input.adminNote,
+  });
+}
+
+async function submitStoreOrder(input: SubmitStoreOrderInput): Promise<SubmittedStoreOrder> {
+  const { env, ctx, memberId, memberName, total, lines, payment } = input;
   const order = await shopDb.createStoreOrder(env.DB, { member_id: memberId, member_name: memberName, total_cents: total, payment_method: payment.method, payment_ref: payment.ref ?? null });
   const orderId = isRecord(order) ? rowNumber(order, "id") : 0;
-  if (!orderId) return null;
-  for (const line of lines) {
-    await shopDb.createStoreOrderItem(env.DB, {
-      order_id: orderId,
-      product_id: line.product_id,
-      name_snapshot: line.name_snapshot,
-      price_cents: line.price_cents,
-      quantity: line.quantity,
-    });
-    await shopDb.decrementStoreProductStock(env.DB, line.product_id, line.quantity);
+  if (!orderId) return { ok: false, status: 500, body: { error: "order_failed" } };
+  const reserved: StoreOrderLine[] = [];
+  try {
+    for (const line of lines) {
+      const stockReserved = await shopDb.decrementStoreProductStock(env.DB, line.product_id, line.quantity);
+      if (!stockReserved) {
+        await releaseStoreOrderStock(env.DB, reserved);
+        await shopDb.updateStoreOrderFulfillment(env.DB, orderId, {
+          status: "cancelled",
+          admin_note: "Cancelled automatically: insufficient stock for product #" + line.product_id,
+        });
+        return { ok: false, status: 409, body: { error: "insufficient_stock", product_id: line.product_id } };
+      }
+      reserved.push(line);
+      await shopDb.createStoreOrderItem(env.DB, {
+        order_id: orderId,
+        product_id: line.product_id,
+        name_snapshot: line.name_snapshot,
+        price_cents: line.price_cents,
+        quantity: line.quantity,
+      });
+    }
+  } catch (e) {
+    await releaseStoreOrderStock(env.DB, reserved);
+    await shopDb.updateStoreOrderFulfillment(env.DB, orderId, { status: "cancelled", admin_note: "Cancelled automatically: order submission failed." });
+    return { ok: false, status: 500, body: { error: "order_failed" } };
   }
   // New-order email to the club if configured (the admin Orders tab always shows it). Fire-and-forget.
-  ctx?.waitUntil(notifyNewOrder(env, order, lines));
-  return { order, orderId };
+  if (input.notify ?? true) ctx?.waitUntil(notifyNewOrder(env, order, lines));
+  return { ok: true, order, orderId };
 }
 
 export async function handleClubShop(
@@ -240,6 +283,8 @@ export async function handleClubShop(
     const existingOrder = await shopDb.getStoreOrderByPaymentRef(env.DB, orderId); // idempotent: already captured
     if (existingOrder) {
       if (!buyerMatches(rowText(existingOrder, "member_id"), auth)) return json({ error: "forbidden" }, 403, origin);
+      const existingSession = await shopDb.getStorePaymentSession(env.DB, orderId);
+      if (existingSession && rowText(existingSession, "status") !== "captured") return json({ error: "capture_in_progress" }, 409, origin);
       return json({ order: safeOrder(existingOrder), balance_cents: await balanceFor() }, 200, origin);
     }
     const session = await shopDb.getStorePaymentSession(env.DB, orderId);
@@ -252,23 +297,56 @@ export async function handleClubShop(
     const stock = await validateStoredStock(env.DB, lines);
     if (!stock.ok) return json(stock.body, stock.status, origin);
     const creds = { clientId: env.PAYPAL_CLIENT_ID, secret: env.PAYPAL_SECRET, base: paypalBase(env.PAYPAL_ENV, env.PAYPAL_API_BASE) };
+    let sessionLocked = false;
+    let submitted: SubmittedStoreOrder | null = null;
+    let paymentCaptured = false;
     try {
+      const lockedSession = await shopDb.reserveStorePaymentSessionCapture(env.DB, orderId);
+      if (!lockedSession) return json({ error: "capture_in_progress" }, 409, origin);
+      sessionLocked = true;
+      submitted = await submitStoreOrder({
+        env,
+        ctx,
+        memberId: rowText(session, "member_id"),
+        memberName: rowText(session, "member_name"),
+        total,
+        lines,
+        payment: { method: "paypal", ref: orderId },
+        notify: false,
+      });
+      if (!submitted.ok) {
+        await shopDb.releaseStorePaymentSessionCapture(env.DB, orderId);
+        return json(submitted.body, submitted.status, origin);
+      }
       const cap = await ppCaptureOrder(creds, orderId);
+      paymentCaptured = true;
       // Require the ORDER and the CAPTURE itself to be COMPLETED in the expected currency — a COMPLETED
       // order can still carry a PENDING eCheck/bank capture (unsettled funds) that must not be fulfilled.
       if (cap.status !== "COMPLETED" || cap.captureStatus !== "COMPLETED" || cap.currency !== "USD" || cap.amountCents < total) {
+        await cancelSubmittedStoreOrder({
+          database: env.DB,
+          orderId: submitted.orderId,
+          lines,
+          adminNote: "Cancelled automatically: PayPal capture was not completed.",
+        });
+        await shopDb.markStorePaymentSessionCaptured(env.DB, orderId);
         return json({ error: "payment_incomplete" }, 402, origin);
       }
-      const afterCaptureOrder = await shopDb.getStoreOrderByPaymentRef(env.DB, orderId);
-      if (afterCaptureOrder) {
-        if (!buyerMatches(rowText(afterCaptureOrder, "member_id"), auth)) return json({ error: "forbidden" }, 403, origin);
-        return json({ order: safeOrder(afterCaptureOrder), balance_cents: await balanceFor() }, 200, origin);
-      }
-      const submitted = await submitStoreOrder(env, ctx, rowText(session, "member_id"), rowText(session, "member_name"), total, lines, { method: "paypal", ref: orderId });
-      if (!submitted) return json({ error: "order_failed" }, 500, origin);
       await shopDb.markStorePaymentSessionCaptured(env.DB, orderId);
+      ctx?.waitUntil(notifyNewOrder(env, submitted.order, lines));
       return json({ order: safeOrder(submitted.order), balance_cents: await balanceFor() }, 201, origin);
-    } catch (e) {
+    } catch {
+      if (sessionLocked && !paymentCaptured) {
+        if (submitted?.ok) {
+          await cancelSubmittedStoreOrder({
+            database: env.DB,
+            orderId: submitted.orderId,
+            lines,
+            adminNote: "Cancelled automatically: PayPal capture failed.",
+          });
+        }
+        await shopDb.releaseStorePaymentSessionCapture(env.DB, orderId);
+      }
       return json({ error: "paypal_error" }, 502, origin);
     }
   }
@@ -294,8 +372,16 @@ export async function handleClubShop(
     if (!priced.ok) return json(priced.body, priced.status, origin);
     const balance = await shopDb.walletBalance(env.DB, claims.sub);
     if (balance < priced.total) return json({ error: "insufficient_store_credit", balance_cents: balance, total_cents: priced.total }, 402, origin);
-    const submitted = await submitStoreOrder(env, ctx, claims.sub, member.name, priced.total, priced.lines, { method: "store_credit" });
-    if (!submitted) return json({ error: "order_failed" }, 500, origin);
+    const submitted = await submitStoreOrder({
+      env,
+      ctx,
+      memberId: claims.sub,
+      memberName: member.name,
+      total: priced.total,
+      lines: priced.lines,
+      payment: { method: "store_credit" },
+    });
+    if (!submitted.ok) return json(submitted.body, submitted.status, origin);
     const transaction = await shopDb.createWalletTransaction(env.DB, {
       member_id: claims.sub,
       member_name: member.name,

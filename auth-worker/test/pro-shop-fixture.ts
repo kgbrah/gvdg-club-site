@@ -16,6 +16,7 @@ export type Row = Record<string, unknown>;
 type MockState = {
   balanceCents: number;
   eventExists: boolean;
+  stockReservationFailures: number;
   nextProductId: number;
   nextOrderId: number;
   nextOrderItemId: number;
@@ -81,6 +82,9 @@ function allRows(sql: string, args: unknown[], state: MockState): Row[] {
 
 function firstRow(sql: string, args: unknown[], state: MockState): Row | null {
   if (/SELECT COALESCE\(SUM\(amount_cents\)/i.test(sql)) return { balance_cents: state.balanceCents };
+  if (/SELECT \* FROM wallet_transactions WHERE idempotency_key/i.test(sql)) {
+    return state.transactions.find((t) => t.idempotency_key === args[0]) ?? null;
+  }
   if (/SELECT \* FROM store_orders WHERE payment_ref/i.test(sql)) return state.orders.find((o) => o.payment_ref === args[0]) ?? null;
   if (/SELECT \* FROM store_payment_sessions WHERE paypal_order_id/i.test(sql)) return state.paymentSessions.find((session) => session.paypal_order_id === args[0]) ?? null;
   if (/SELECT \* FROM events WHERE id = \?/i.test(sql)) {
@@ -91,7 +95,10 @@ function firstRow(sql: string, args: unknown[], state: MockState): Row | null {
   if (/INSERT INTO store_orders/i.test(sql)) return insertOrder(args, state);
   if (/INSERT INTO store_order_items/i.test(sql)) return insertOrderItem(args, state);
   if (/INSERT INTO store_payment_sessions/i.test(sql)) return insertPaymentSession(args, state);
+  if (/UPDATE store_payment_sessions SET status = 'capturing'/i.test(sql)) return reservePaymentSessionCapture(args, state);
+  if (/UPDATE store_payment_sessions SET status = 'pending'/i.test(sql)) return releasePaymentSessionCapture(args, state);
   if (/UPDATE store_payment_sessions SET status = 'captured'/i.test(sql)) return capturePaymentSession(args, state);
+  if (/UPDATE store_orders SET/i.test(sql)) return updateOrder(args, state);
   if (/SELECT \* FROM store_products WHERE id = \?/i.test(sql)) return state.products.find((p) => numberArg(p.id) === numberArg(args[0])) ?? null;
   if (/UPDATE store_products SET active = 0/i.test(sql)) {
     const row = state.products.find((p) => numberArg(p.id) === numberArg(args[0]));
@@ -134,6 +141,7 @@ function insertTransaction(args: unknown[], state: MockState): Row {
     order_id: args[6] == null ? null : numberArg(args[6]),
     note: stringArg(args[7]),
     created_by: stringArg(args[8]),
+    idempotency_key: stringArg(args[9]),
     created_at: "2026-06-01T12:00:00Z",
   };
   state.transactions.unshift(row);
@@ -184,6 +192,16 @@ function insertPaymentSession(args: unknown[], state: MockState): Row {
   return row;
 }
 
+function updateOrder(args: unknown[], state: MockState): Row | null {
+  const row = state.orders.find((o) => numberArg(o.id) === numberArg(args[args.length - 1]));
+  if (!row) return null;
+  const status = stringArg(args[0]);
+  const adminNote = args.length > 2 ? stringArg(args[1]) : null;
+  if (status) row.status = status;
+  if (adminNote) row.admin_note = adminNote;
+  return row;
+}
+
 function capturePaymentSession(args: unknown[], state: MockState): Row | null {
   const row = state.paymentSessions.find((session) => session.paypal_order_id === args[0]);
   if (row) {
@@ -193,18 +211,46 @@ function capturePaymentSession(args: unknown[], state: MockState): Row | null {
   return row ?? null;
 }
 
+function reservePaymentSessionCapture(args: unknown[], state: MockState): Row | null {
+  const row = state.paymentSessions.find((session) => session.paypal_order_id === args[0] && session.status === "pending");
+  if (row) row.status = "capturing";
+  return row ?? null;
+}
+
+function releasePaymentSessionCapture(args: unknown[], state: MockState): Row | null {
+  const row = state.paymentSessions.find((session) => session.paypal_order_id === args[0] && session.status === "capturing");
+  if (row) row.status = "pending";
+  return row ?? null;
+}
+
 function runSql(sql: string, args: unknown[], state: MockState) {
-  if (/UPDATE store_products SET stock_qty = MAX\(0, stock_qty - \?/i.test(sql)) {
+  if (/UPDATE store_products SET stock_qty = stock_qty - \?/i.test(sql)) {
     const row = state.products.find((p) => numberArg(p.id) === numberArg(args[1]));
-    if (row) row.stock_qty = Math.max(0, numberArg(row.stock_qty) - numberArg(args[0]));
+    const quantity = numberArg(args[0]);
+    const canReserve = row && numberArg(row.active) === 1 && numberArg(row.stock_qty) >= quantity && state.stockReservationFailures === 0;
+    if (canReserve) {
+      row.stock_qty = numberArg(row.stock_qty) - quantity;
+      return { results: [], success: true, meta: { changes: 1, rows_written: 1 } };
+    }
+    if (state.stockReservationFailures > 0) state.stockReservationFailures -= 1;
+    return { results: [], success: true, meta: { changes: 0, rows_written: 0 } };
+  }
+  if (/UPDATE store_products SET stock_qty = stock_qty \+ \?/i.test(sql)) {
+    const row = state.products.find((p) => numberArg(p.id) === numberArg(args[1]));
+    if (row) {
+      row.stock_qty = numberArg(row.stock_qty) + numberArg(args[0]);
+      return { results: [], success: true, meta: { changes: 1, rows_written: 1 } };
+    }
+    return { results: [], success: true, meta: { changes: 0, rows_written: 0 } };
   }
   return { results: [], success: true };
 }
 
-export function makeDb(overrides: Partial<Pick<MockState, "balanceCents" | "eventExists" | "products">> = {}) {
+export function makeDb(overrides: Partial<Pick<MockState, "balanceCents" | "eventExists" | "products" | "stockReservationFailures">> = {}) {
   const state: MockState = {
     balanceCents: overrides.balanceCents ?? 0,
     eventExists: overrides.eventExists ?? true,
+    stockReservationFailures: overrides.stockReservationFailures ?? 0,
     nextProductId: 2,
     nextOrderId: 10,
     nextOrderItemId: 20,

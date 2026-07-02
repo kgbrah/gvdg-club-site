@@ -195,6 +195,8 @@ export class LiveEventDO {
   }
 
   private async start(b: StartBody): Promise<Response> {
+    if (this.meta?.status === "live") return j({ error: "round_already_live" }, 409);
+    if (this.meta?.status === "final") return j({ error: "round_already_final" }, 409);
     const holes = (Array.isArray(b.holes) ? b.holes : [])
       .filter((h) => h && typeof h.hole === "number" && typeof h.par === "number")
       .map((h) => ({ hole: h.hole, par: h.par, distance_ft: h.distance_ft ?? null, tee_sign_id: h.tee_sign_id ?? null }));

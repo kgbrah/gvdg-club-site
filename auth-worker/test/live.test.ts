@@ -189,6 +189,18 @@ describe("LiveEventDO card-scoped scoring", () => {
     expect((await post(live, { "X-Auth-Admin": "true" }, { index: 7, hole: 1, strokes: 4 })).status).toBe(200);
   });
 
+  it("rejects starting an already-live round so existing scores are not wiped", async () => {
+    const live = liveDO();
+    await start(live, [{ memberId: "m0", name: "A" }]);
+    await post(live, { "X-Auth-Admin": "true" }, { index: 0, hole: 1, strokes: 3 });
+
+    const restarted = await start(live, [{ memberId: "m0", name: "A" }]);
+    expect(restarted.status).toBe(409);
+
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { readonly players: readonly { readonly scores: Record<string, number> }[] };
+    expect(snap.players[0]?.scores).toEqual({ 1: 3 });
+  });
+
   it("lets cardmates enter guest-token scorecards but not another member's scorecard", async () => {
     const live = liveDO();
     await start(live, [

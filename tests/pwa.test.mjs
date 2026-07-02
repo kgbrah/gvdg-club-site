@@ -71,7 +71,7 @@ test('live scoring surfaces load the shared weather display formatter', () => {
 
 test('shared service worker caches app install assets and member fallback', () => {
   const sw = readFileSync('sw.js', 'utf8');
-  assert.match(sw, /const CACHE = "gvdg-club-v6"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v10"/);
   assert.match(sw, /const OFFLINE_PAGE = "gvdg-members\.html"/);
   assert.match(sw, /const STATIC_DESTINATIONS = new Set/);
   assert.match(sw, /if \(!staticAsset\(req, url\)\) return/);

@@ -18,7 +18,19 @@ function kv(initial: Record<string, string> = {}) {
   };
 }
 
-function db(state: { layoutBinds?: unknown[]; eventBinds?: unknown[]; playerBinds?: unknown[]; removedPlayer?: number } = {}) {
+type DbState = {
+  layoutBinds?: unknown[];
+  eventBinds?: unknown[];
+  updateEventBinds?: unknown[];
+  registrationUpdateBinds?: unknown[];
+  playerBinds?: unknown[];
+  removedPlayer?: number;
+  deleteEventId?: number;
+  eventStatus?: string;
+  eventDeleteBlockers?: Partial<Record<"event_config" | "registrations" | "event_players" | "results" | "ctps" | "wallet_transactions" | "ace_pots", number>>;
+};
+
+function db(state: DbState = {}) {
   return {
     prepare: (sql: string) => {
       let binds: unknown[] = [];
@@ -53,6 +65,30 @@ function db(state: { layoutBinds?: unknown[]; eventBinds?: unknown[]; playerBind
           return { results: [], success: true };
         },
         first: async () => {
+          if (/SELECT status FROM events WHERE id = \?/i.test(sql)) {
+            return { status: state.eventStatus ?? "scheduled" };
+          }
+          if (/SELECT COUNT\(\*\) AS n FROM event_config WHERE event_id = \?/i.test(sql)) {
+            return { n: state.eventDeleteBlockers?.event_config ?? 0 };
+          }
+          if (/SELECT COUNT\(\*\) AS n FROM registrations WHERE event_id = \?/i.test(sql)) {
+            return { n: state.eventDeleteBlockers?.registrations ?? 0 };
+          }
+          if (/SELECT COUNT\(\*\) AS n FROM event_players WHERE event_id = \?/i.test(sql)) {
+            return { n: state.eventDeleteBlockers?.event_players ?? 0 };
+          }
+          if (/SELECT COUNT\(\*\) AS n FROM results WHERE event_id = \?/i.test(sql)) {
+            return { n: state.eventDeleteBlockers?.results ?? 0 };
+          }
+          if (/SELECT COUNT\(\*\) AS n FROM ctps WHERE event_id = \?/i.test(sql)) {
+            return { n: state.eventDeleteBlockers?.ctps ?? 0 };
+          }
+          if (/SELECT COUNT\(\*\) AS n FROM wallet_transactions WHERE event_id = \?/i.test(sql)) {
+            return { n: state.eventDeleteBlockers?.wallet_transactions ?? 0 };
+          }
+          if (/SELECT COUNT\(\*\) AS n FROM ace_pots WHERE event_id = \?/i.test(sql)) {
+            return { n: state.eventDeleteBlockers?.ace_pots ?? 0 };
+          }
           if (/INSERT INTO course_layouts/i.test(sql)) {
             state.layoutBinds = binds;
             return { id: 44, course_id: binds[0], name: binds[1], holes: binds[2], total_par: binds[3] };
@@ -65,10 +101,23 @@ function db(state: { layoutBinds?: unknown[]; eventBinds?: unknown[]; playerBind
             state.playerBinds = binds;
             return { id: 88, event_id: binds[0], member_id: binds[1], name: binds[2], pdga_no: binds[3], division: binds[4], team: binds[5] };
           }
+          if (/UPDATE events/i.test(sql)) {
+            state.updateEventBinds = binds;
+            return { id: binds.at(-1), status: state.eventStatus ?? "scheduled" };
+          }
+          if (/UPDATE registrations SET/i.test(sql)) {
+            state.registrationUpdateBinds = binds;
+            return { id: binds.at(-2), event_id: binds.at(-1), starting_hole: binds[0], checked_in: binds[1] };
+          }
+          if (/SELECT \* FROM registrations WHERE id = \? AND event_id = \?/i.test(sql)) {
+            state.registrationUpdateBinds = binds;
+            return { id: binds[0], event_id: binds[1] };
+          }
           return null;
         },
         run: async () => {
           if (/DELETE FROM event_players/i.test(sql)) state.removedPlayer = Number(binds[0]);
+          if (/DELETE FROM events/i.test(sql)) state.deleteEventId = Number(binds[0]);
           return { results: [], success: true };
         },
       };
@@ -76,7 +125,7 @@ function db(state: { layoutBinds?: unknown[]; eventBinds?: unknown[]; playerBind
   };
 }
 
-function env(state: Parameters<typeof db>[0] = {}) {
+function env(state: DbState = {}) {
   return {
     ROSTER: kv(MEMBERS),
     RATELIMIT: kv(),
@@ -91,7 +140,7 @@ async function token(sub: string) {
   return signSession({ sub, mustChangePin: false }, SECRET, 900);
 }
 
-async function call(path: string, method = "GET", body?: unknown, jwt?: string, state: Parameters<typeof db>[0] = {}) {
+async function call(path: string, method = "GET", body?: unknown, jwt?: string, state: DbState = {}) {
   const headers: Record<string, string> = { Origin: ORIGIN };
   if (jwt) headers.authorization = "Bearer " + jwt;
   if (body) headers["content-type"] = "application/json";
@@ -138,5 +187,53 @@ describe("admin event management", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { events: { course_name?: string; layout_name?: string; total_par?: number }[] };
     expect(body.events[0]).toMatchObject({ course_name: "West Meadowbrook", layout_name: "Gold", total_par: 54 });
+  });
+
+  it("scopes admin registration updates to the selected event", async () => {
+    const state: DbState = {};
+    const res = await call("/admin/events/9/registrations/44", "PATCH", { starting_hole: 7, checked_in: true }, await token("m_admin"), state);
+
+    expect(res.status).toBe(200);
+    expect(state.registrationUpdateBinds).toEqual([7, 1, 44, 9]);
+  });
+
+  it("clears nullable admin registration fields when explicitly sent as null", async () => {
+    const state: DbState = {};
+    const res = await call("/admin/events/9/registrations/44", "PATCH", { starting_hole: null }, await token("m_admin"), state);
+
+    expect(res.status).toBe(200);
+    expect(state.registrationUpdateBinds).toEqual([null, 44, 9]);
+  });
+
+  it("rejects direct lifecycle status writes that must go through live scoring", async () => {
+    const jwt = await token("m_admin");
+
+    const patchLive = await call("/admin/events/9", "PATCH", { status: "live" }, jwt);
+    expect(patchLive.status).toBe(409);
+
+    const patchFinal = await call("/admin/events/9", "PATCH", { status: "final" }, jwt);
+    expect(patchFinal.status).toBe(409);
+
+    const cancelLive = await call("/admin/events/9", "PATCH", { status: "cancelled" }, jwt, { eventStatus: "live" });
+    expect(cancelLive.status).toBe(409);
+
+    const createFinal = await call("/admin/events", "POST", { type: "tournament", name: "Bad final", status: "final" }, jwt);
+    expect(createFinal.status).toBe(409);
+  });
+
+  it("blocks deleting events that already have operational records", async () => {
+    const state: DbState = { eventDeleteBlockers: { registrations: 1 } };
+    const res = await call("/admin/events/9", "DELETE", undefined, await token("m_admin"), state);
+
+    expect(res.status).toBe(409);
+    expect(state.deleteEventId).toBeUndefined();
+  });
+
+  it("still deletes empty scheduled events", async () => {
+    const state: DbState = {};
+    const res = await call("/admin/events/9", "DELETE", undefined, await token("m_admin"), state);
+
+    expect(res.status).toBe(200);
+    expect(state.deleteEventId).toBe(9);
   });
 });

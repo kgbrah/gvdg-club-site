@@ -1,7 +1,9 @@
 import type { Env } from "./env.js";
 import * as db from "./db.js";
 import * as shopDb from "./shop-db.js";
+import { checkEventDeletion, isLifecycleManagedStatus } from "./admin-event-safety.js";
 import { EVENT_FORMATS, EVENT_STATUSES, EVENT_TYPES } from "./db.js";
+import { checkWalletTransactionIdempotency, createWalletTransactionOnce } from "./wallet-idempotency.js";
 import { assignShotgun, assignTeams } from "./assign.js";
 import { getMember } from "./roster.js";
 import { enrichHoles, type LayoutHole } from "./layouts.js";
@@ -92,10 +94,17 @@ export async function handleAdminEvents(
       const rid = asInt(seg[4]);
       if (rid == null) return json({ error: "not_found" }, 404, origin);
       const b = (await readJson(request)) ?? {};
-      const row = await db.adminUpdateRegistration(env.DB, rid, {
-        division: asStr(b.division, 60), team: asStr(b.team, 40), starting_hole: asInt(b.starting_hole),
-        checked_in: b.checked_in == null ? null : (b.checked_in ? 1 : 0), paid_entry: b.paid_entry == null ? null : (b.paid_entry ? 1 : 0),
-      });
+      const patch: db.RegistrationPatch = {};
+      if (hasField(b, "division")) patch.division = asStr(b.division, 60);
+      if (hasField(b, "team")) patch.team = asStr(b.team, 40);
+      if (hasField(b, "starting_hole")) {
+        const startingHole = b.starting_hole == null || b.starting_hole === "" ? null : asInt(b.starting_hole);
+        if (startingHole == null && b.starting_hole != null && b.starting_hole !== "") return json({ error: "invalid_registration" }, 400, origin);
+        patch.starting_hole = startingHole;
+      }
+      if (hasField(b, "checked_in")) patch.checked_in = b.checked_in ? 1 : 0;
+      if (hasField(b, "paid_entry")) patch.paid_entry = b.paid_entry ? 1 : 0;
+      const row = await db.adminUpdateRegistration(env.DB, id, rid, patch);
       return row ? json({ registration: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
     }
   }
@@ -105,12 +114,14 @@ export async function handleAdminEvents(
       const body = (await readJson(request)) ?? {};
       const memberId = asStr(body.member_id, 80);
       const amount = asInt(body.amount_cents);
+      const idempotencyKey = asStr(body.idempotency_key, 160);
       if (!memberId || amount == null || amount <= 0) return json({ error: "invalid_store_credit" }, 400, origin);
+      if (!idempotencyKey) return json({ error: "idempotency_key_required" }, 400, origin);
       const event = await db.getEvent(env.DB, id);
       if (!event) return json({ error: "not_found" }, 404, origin);
       const member = await getMember(env.ROSTER, memberId);
       if (!member) return json({ error: "member_not_found" }, 404, origin);
-      const tx = await shopDb.createWalletTransaction(env.DB, {
+      const txResult = await createWalletTransactionOnce(env.DB, {
         member_id: memberId,
         member_name: member.name,
         amount_cents: amount,
@@ -119,8 +130,10 @@ export async function handleAdminEvents(
         event_id: id,
         note: asStr(body.note, 300) ?? "Store credit payout",
         created_by: adminId,
+        idempotency_key: idempotencyKey,
       });
-      return json({ transaction: tx, balance_cents: await shopDb.walletBalance(env.DB, memberId), payouts: await shopDb.listEventStoreCreditPayouts(env.DB, id) }, 201, origin);
+      if (!txResult.ok) return json({ error: txResult.error }, 409, origin);
+      return json({ transaction: txResult.transaction, balance_cents: await shopDb.walletBalance(env.DB, memberId), payouts: await shopDb.listEventStoreCreditPayouts(env.DB, id) }, txResult.created ? 201 : 200, origin);
     }
   }
   if (seg[3] === "ctps" && id != null) {
@@ -136,25 +149,35 @@ export async function handleAdminEvents(
       const body = (await readJson(request)) ?? {};
       const memberId = asStr(body.member_id, 80);
       const amount = asInt(body.amount_cents);
+      const idempotencyKey = asStr(body.idempotency_key, 160);
       if (!memberId || amount == null || amount <= 0) return json({ error: "invalid_store_credit" }, 400, origin);
+      if (!idempotencyKey) return json({ error: "idempotency_key_required" }, 400, origin);
       const event = await db.getEvent(env.DB, id);
       if (!event) return json({ error: "not_found" }, 404, origin);
       const member = await getMember(env.ROSTER, memberId);
       if (!member) return json({ error: "member_not_found" }, 404, origin);
-      const winnerName = asStr(body.winner_name, 100) ?? member.name;
-      const ctp = await db.setCtpWinner(env.DB, cid, id, memberId, winnerName);
-      if (!ctp) return json({ error: "not_found" }, 404, origin);
-      const tx = await shopDb.createWalletTransaction(env.DB, {
+      const txInput = {
         member_id: memberId,
         member_name: member.name,
         amount_cents: amount,
         transaction_type: "credit",
         source: "event_payout",
         event_id: id,
-        note: asStr(body.note, 300) ?? defaultCtpPayoutNote(event, ctp),
+        note: asStr(body.note, 300),
         created_by: adminId,
-      });
-      return json({ ctp, transaction: tx, balance_cents: await shopDb.walletBalance(env.DB, memberId), payouts: await shopDb.listEventStoreCreditPayouts(env.DB, id) }, 201, origin);
+        idempotency_key: idempotencyKey,
+      };
+      const idempotency = await checkWalletTransactionIdempotency(env.DB, txInput);
+      if (!idempotency.ok) return json({ error: idempotency.error }, 409, origin);
+      const winnerName = asStr(body.winner_name, 100) ?? member.name;
+      const ctp = await db.setCtpWinner(env.DB, cid, id, memberId, winnerName);
+      if (!ctp) return json({ error: "not_found" }, 404, origin);
+      if (idempotency.transaction) {
+        return json({ ctp, transaction: idempotency.transaction, balance_cents: await shopDb.walletBalance(env.DB, memberId), payouts: await shopDb.listEventStoreCreditPayouts(env.DB, id) }, 200, origin);
+      }
+      const txResult = await createWalletTransactionOnce(env.DB, { ...txInput, note: txInput.note ?? defaultCtpPayoutNote(event, ctp) });
+      if (!txResult.ok) return json({ error: txResult.error }, 409, origin);
+      return json({ ctp, transaction: txResult.transaction, balance_cents: await shopDb.walletBalance(env.DB, memberId), payouts: await shopDb.listEventStoreCreditPayouts(env.DB, id) }, txResult.created ? 201 : 200, origin);
     }
     if (method === "PATCH" && cid != null && seg[5] == null) {
       const b = (await readJson(request)) ?? {};
@@ -186,11 +209,11 @@ export async function handleAdminEvents(
       let holes = (await db.getLayoutHoles(env.DB, ev?.layout_id)).map((h) => h.hole);
       if (!holes.length) holes = Array.from({ length: asInt(b.holeCount) || 18 }, (_, i) => i + 1);
       const assigned = assignShotgun(order.map(String), holes, asInt(b.groupSize) || 4);
-      await Promise.all(order.map((rid, i) => db.adminUpdateRegistration(env.DB, rid, { starting_hole: assigned[i]!.hole })));
+      await Promise.all(order.map((rid, i) => db.adminUpdateRegistration(env.DB, id, rid, { starting_hole: assigned[i]!.hole })));
     } else {
       const opts = asInt(b.size) ? { size: asInt(b.size)! } : { count: asInt(b.count) || 2 };
       const assigned = assignTeams(order.map(String), opts);
-      await Promise.all(order.map((rid, i) => db.adminUpdateRegistration(env.DB, rid, { team: assigned[i]!.team })));
+      await Promise.all(order.map((rid, i) => db.adminUpdateRegistration(env.DB, id, rid, { team: assigned[i]!.team })));
     }
     return json({ registrations: await db.listRegistrations(env.DB, id) }, 200, origin);
   }
@@ -198,6 +221,7 @@ export async function handleAdminEvents(
     const b = await readJson(request);
     const v = b && validEventInput(b);
     if (!v) return json({ error: "invalid_event" }, 400, origin);
+    if (isLifecycleManagedStatus(v.status)) return json({ error: "lifecycle_status_requires_live_flow" }, 409, origin);
     let layout: unknown = null;
     let eventInput = v;
     const layoutBody = b && typeof b === "object" ? (b as Record<string, unknown>).layout : null;
@@ -227,6 +251,10 @@ export async function handleAdminEvents(
     }
     if (hasField(b, "status")) {
       if (!inSet(EVENT_STATUSES, b.status)) return json({ error: "invalid_event" }, 400, origin);
+      if (isLifecycleManagedStatus(b.status)) return json({ error: "lifecycle_status_requires_live_flow" }, 409, origin);
+      const currentStatus = await db.getEventStatus(env.DB, id);
+      if (currentStatus == null) return json({ error: "not_found" }, 404, origin);
+      if (isLifecycleManagedStatus(currentStatus)) return json({ error: "lifecycle_status_requires_live_flow" }, 409, origin);
       patch.status = b.status;
     }
     if (hasField(b, "format")) {
@@ -263,6 +291,10 @@ export async function handleAdminEvents(
     return row ? json({ event: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
   }
   if (method === "DELETE" && id != null) {
+    const check = await checkEventDeletion(env.DB, id);
+    if (!check.ok) {
+      return json({ error: check.error, blockers: check.blockers }, check.error === "not_found" ? 404 : 409, origin);
+    }
     await db.deleteEvent(env.DB, id);
     return json({ ok: true }, 200, origin);
   }

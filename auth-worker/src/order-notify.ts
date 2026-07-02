@@ -14,7 +14,7 @@ interface NotifyLine { name_snapshot: string; quantity: number; price_cents: num
 
 const dollars = (c: unknown) => "$" + ((typeof c === "number" ? c : 0) / 100).toFixed(2);
 
-export async function notifyNewOrder(env: Env, order: unknown, lines: NotifyLine[]): Promise<void> {
+export async function notifyNewOrder(env: Env, order: unknown, lines: readonly NotifyLine[]): Promise<void> {
   const cfg = env as unknown as { ORDER_NOTIFY_EMAIL?: string; ORDER_NOTIFY_FROM?: string; RESEND_API_KEY?: string; EMAIL_REPLY_TO?: string };
   if (!cfg.RESEND_API_KEY || !cfg.ORDER_NOTIFY_EMAIL) return; // email not configured — in-app only
 

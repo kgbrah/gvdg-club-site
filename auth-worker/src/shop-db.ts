@@ -210,8 +210,16 @@ export async function createStoreOrderItem(db: D1Like, item: StoreOrderItemInput
 }
 
 export async function decrementStoreProductStock(db: D1Like, id: number, quantity: number) {
-  // MAX(0, …) keeps stock from going negative if two async (PayPal) checkouts race on the last unit.
-  await db.prepare("UPDATE store_products SET stock_qty = MAX(0, stock_qty - ?), updated_at = datetime('now') WHERE id = ?").bind(quantity, id).run();
+  const res = await db
+    .prepare("UPDATE store_products SET stock_qty = stock_qty - ?, updated_at = datetime('now') WHERE id = ? AND active = 1 AND stock_qty >= ?")
+    .bind(quantity, id, quantity)
+    .run();
+  const changed = res.meta?.changes ?? res.meta?.rows_written;
+  return changed == null ? res.success : changed > 0;
+}
+
+export async function incrementStoreProductStock(db: D1Like, id: number, quantity: number) {
+  await db.prepare("UPDATE store_products SET stock_qty = stock_qty + ?, updated_at = datetime('now') WHERE id = ?").bind(quantity, id).run();
 }
 
 /** Attach each order's line items in one IN-query, grouped in memory. Safe for an empty list. */
@@ -288,9 +296,23 @@ export async function getStorePaymentSession(db: D1Like, paypalOrderId: string) 
   return db.prepare("SELECT * FROM store_payment_sessions WHERE paypal_order_id = ?").bind(paypalOrderId).first();
 }
 
+export async function reserveStorePaymentSessionCapture(db: D1Like, paypalOrderId: string) {
+  return db
+    .prepare("UPDATE store_payment_sessions SET status = 'capturing' WHERE paypal_order_id = ? AND status = 'pending' RETURNING *")
+    .bind(paypalOrderId)
+    .first();
+}
+
+export async function releaseStorePaymentSessionCapture(db: D1Like, paypalOrderId: string) {
+  return db
+    .prepare("UPDATE store_payment_sessions SET status = 'pending' WHERE paypal_order_id = ? AND status = 'capturing' RETURNING *")
+    .bind(paypalOrderId)
+    .first();
+}
+
 export async function markStorePaymentSessionCaptured(db: D1Like, paypalOrderId: string) {
   return db
-    .prepare("UPDATE store_payment_sessions SET status = 'captured', captured_at = datetime('now') WHERE paypal_order_id = ? RETURNING *")
+    .prepare("UPDATE store_payment_sessions SET status = 'captured', captured_at = datetime('now') WHERE paypal_order_id = ? AND status IN ('pending', 'capturing') RETURNING *")
     .bind(paypalOrderId)
     .first();
 }

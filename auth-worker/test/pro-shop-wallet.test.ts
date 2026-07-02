@@ -30,11 +30,45 @@ describe("pro shop and player wallets", () => {
 
   it("credits store payout prizes from an admin event", async () => {
     const dbState = makeDb({ balanceCents: 200 });
-    const res = await call("/admin/events/7/store-credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 1500, note: "League payout" }, dbState);
+    const res = await call("/admin/events/7/store-credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 1500, note: "League payout", idempotency_key: "event:7:m_jane:abc" }, dbState);
     expect(res.status).toBe(201);
     const body = (await res.json()) as { balance_cents: number; payouts: Row[] };
     expect(body.balance_cents).toBe(1700);
     expect(body.payouts[0]?.source).toBe("event_payout");
+  });
+
+  it("deduplicates event store credit awards with the same idempotency key", async () => {
+    const dbState = makeDb({ balanceCents: 200 });
+    const body = { member_id: "m_jane", amount_cents: 1500, note: "League payout", idempotency_key: "event:7:m_jane:retry" };
+
+    const first = await call("/admin/events/7/store-credit", "POST", await token("m_admin"), body, dbState);
+    const second = await call("/admin/events/7/store-credit", "POST", await token("m_admin"), body, dbState);
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(200);
+    expect(dbState.state.transactions).toHaveLength(1);
+    expect(dbState.state.balanceCents).toBe(1700);
+  });
+
+  it("requires an idempotency key for event store credit awards", async () => {
+    const dbState = makeDb({ balanceCents: 200 });
+    const res = await call("/admin/events/7/store-credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 1500 }, dbState);
+
+    expect(res.status).toBe(400);
+    expect(dbState.state.transactions).toHaveLength(0);
+    expect(dbState.state.balanceCents).toBe(200);
+  });
+
+  it("rejects idempotency key reuse for a different event store credit award", async () => {
+    const dbState = makeDb({ balanceCents: 200 });
+    const key = "event:7:m_jane:conflict";
+    const first = await call("/admin/events/7/store-credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 1500, idempotency_key: key }, dbState);
+    const second = await call("/admin/events/7/store-credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 1600, idempotency_key: key }, dbState);
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(409);
+    expect(dbState.state.transactions).toHaveLength(1);
+    expect(dbState.state.balanceCents).toBe(1700);
   });
 
   it("shows the member wallet balance and ledger", async () => {
@@ -63,6 +97,16 @@ describe("pro shop and player wallets", () => {
     expect(dbState.state.orderItems[0]?.quantity).toBe(2);
     expect(dbState.state.products[0]?.stock_qty).toBe(0);
     expect(dbState.state.transactions[0]?.source).toBe("store_purchase");
+  });
+
+  it("rejects checkout when stock reservation loses a race", async () => {
+    const dbState = makeDb({ balanceCents: 5000, stockReservationFailures: 1 });
+    const res = await call("/shop/orders", "POST", await token("m_jane"), { items: [{ product_id: 1, quantity: 2 }] }, dbState);
+
+    expect(res.status).toBe(409);
+    expect(dbState.state.products[0]?.stock_qty).toBe(2);
+    expect(dbState.state.transactions).toHaveLength(0);
+    expect(dbState.state.orders[0]?.status).toBe("cancelled");
   });
 
   it("creates a PayPal order from a server-priced cart", async () => {
@@ -110,8 +154,10 @@ describe("pro shop and player wallets", () => {
     const extra = { PAYPAL_CLIENT_ID: "cid", PAYPAL_SECRET: "sec" };
     expect((await call("/shop/pay/create-order", "POST", await token("m_jane"), { items: [{ product_id: 1, quantity: 1 }] }, dbState, extra)).status).toBe(200);
     const cap = await call("/shop/pay/capture", "POST", await token("m_jane"), { orderId: "ORDER123" }, dbState, extra);
-    expect(cap.status).toBe(402); // payment_incomplete — no order created
-    expect(dbState.state.orders).toHaveLength(0);
+    expect(cap.status).toBe(402);
+    expect(dbState.state.orders[0]?.status).toBe("cancelled");
+    expect(dbState.state.paymentSessions[0]?.status).toBe("captured");
+    expect(dbState.state.products[0]?.stock_qty).toBe(2);
   });
 
   it("rejects a COMPLETED order whose capture is still PENDING (unsettled eCheck)", async () => {
@@ -120,7 +166,48 @@ describe("pro shop and player wallets", () => {
     const extra = { PAYPAL_CLIENT_ID: "cid", PAYPAL_SECRET: "sec" };
     expect((await call("/shop/pay/create-order", "POST", await token("m_jane"), { items: [{ product_id: 1, quantity: 1 }] }, dbState, extra)).status).toBe(200);
     const cap = await call("/shop/pay/capture", "POST", await token("m_jane"), { orderId: "ORDER123" }, dbState, extra);
-    expect(cap.status).toBe(402); // not treated as paid; nothing fulfilled
-    expect(dbState.state.orders).toHaveLength(0);
+    expect(cap.status).toBe(402);
+    expect(dbState.state.orders[0]?.status).toBe("cancelled");
+    expect(dbState.state.paymentSessions[0]?.status).toBe("captured");
+    expect(dbState.state.products[0]?.stock_qty).toBe(2);
+  });
+
+  it("does not capture PayPal when checkout loses the stock reservation race", async () => {
+    stubPayPal();
+    const dbState = makeDb({ balanceCents: 0, stockReservationFailures: 1 });
+    const extra = { PAYPAL_CLIENT_ID: "cid", PAYPAL_SECRET: "sec" };
+    expect((await call("/shop/pay/create-order", "POST", await token("m_jane"), { items: [{ product_id: 1, quantity: 1 }] }, dbState, extra)).status).toBe(200);
+
+    const cap = await call("/shop/pay/capture", "POST", await token("m_jane"), { orderId: "ORDER123" }, dbState, extra);
+
+    expect(cap.status).toBe(409);
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/capture"))).toBe(false);
+    expect(dbState.state.paymentSessions[0]?.status).toBe("pending");
+    expect(dbState.state.orders[0]?.status).toBe("cancelled");
+    expect(dbState.state.products[0]?.stock_qty).toBe(2);
+  });
+
+  it("does not treat a reserved PayPal order as captured while capture is in progress", async () => {
+    stubPayPal();
+    const dbState = makeDb({ balanceCents: 0 });
+    const extra = { PAYPAL_CLIENT_ID: "cid", PAYPAL_SECRET: "sec" };
+    expect((await call("/shop/pay/create-order", "POST", await token("m_jane"), { items: [{ product_id: 1, quantity: 1 }] }, dbState, extra)).status).toBe(200);
+    const session = dbState.state.paymentSessions[0];
+    expect(session).toBeDefined();
+    if (session) session.status = "capturing";
+    dbState.state.orders.unshift({
+      id: 99,
+      member_id: "m_jane",
+      member_name: "Jane",
+      total_cents: 1800,
+      payment_method: "paypal",
+      payment_ref: "ORDER123",
+      status: "submitted",
+    });
+
+    const cap = await call("/shop/pay/capture", "POST", await token("m_jane"), { orderId: "ORDER123" }, dbState, extra);
+
+    expect(cap.status).toBe(409);
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/capture"))).toBe(false);
   });
 });

@@ -6,6 +6,10 @@ import { enrichHoles, type LayoutHole } from "./layouts.js";
 export interface D1ResultLike<T = Record<string, unknown>> {
   results: T[];
   success: boolean;
+  meta?: {
+    changes?: number;
+    rows_written?: number;
+  } & Record<string, unknown>;
 }
 export interface D1StatementLike {
   bind(...vals: unknown[]): D1StatementLike;
@@ -431,18 +435,30 @@ export async function reserveCapture(db: D1Like, id: number, paymentRef: string)
 export async function releaseCapture(db: D1Like, id: number, paymentRef: string): Promise<void> {
   await db.prepare("UPDATE registrations SET payment_ref = NULL WHERE id = ? AND paid_entry = 0 AND payment_ref = ?").bind(id, paymentRef).run();
 }
+export type RegistrationPatch = {
+  division?: string | null;
+  team?: string | null;
+  starting_hole?: number | null;
+  checked_in?: number;
+  paid_entry?: number;
+};
+
 export async function adminUpdateRegistration(
   db: D1Like,
+  eventId: number,
   id: number,
-  p: { division?: string | null; team?: string | null; starting_hole?: number | null; checked_in?: number | null; paid_entry?: number | null },
+  p: RegistrationPatch,
 ) {
-  return db
-    .prepare(
-      `UPDATE registrations SET division=COALESCE(?,division), team=COALESCE(?,team), starting_hole=COALESCE(?,starting_hole),
-        checked_in=COALESCE(?,checked_in), paid_entry=COALESCE(?,paid_entry) WHERE id=? RETURNING *`,
-    )
-    .bind(p.division ?? null, p.team ?? null, p.starting_hole ?? null, p.checked_in ?? null, p.paid_entry ?? null, id)
-    .first();
+  const sets: string[] = [];
+  const binds: unknown[] = [];
+  if (p.division !== undefined) { sets.push("division = ?"); binds.push(p.division); }
+  if (p.team !== undefined) { sets.push("team = ?"); binds.push(p.team); }
+  if (p.starting_hole !== undefined) { sets.push("starting_hole = ?"); binds.push(p.starting_hole); }
+  if (p.checked_in !== undefined) { sets.push("checked_in = ?"); binds.push(p.checked_in); }
+  if (p.paid_entry !== undefined) { sets.push("paid_entry = ?"); binds.push(p.paid_entry); }
+  if (!sets.length) return db.prepare("SELECT * FROM registrations WHERE id = ? AND event_id = ?").bind(id, eventId).first();
+  binds.push(id, eventId);
+  return db.prepare(`UPDATE registrations SET ${sets.join(", ")} WHERE id = ? AND event_id = ? RETURNING *`).bind(...binds).first();
 }
 
 // ---------------- CTPs + ace pots (Track G G3) ----------------
