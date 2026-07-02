@@ -99,6 +99,10 @@ function cleanProductPatch(body: Record<string, unknown>): shopDb.StoreProductPa
   return patch;
 }
 
+function hasOrderFulfillmentPatch(body: Record<string, unknown>): boolean {
+  return "tracking_carrier" in body || "tracking_number" in body || "admin_note" in body;
+}
+
 export async function handleAdminShop(
   request: Request,
   env: Env,
@@ -117,8 +121,9 @@ export async function handleAdminShop(
       return json({ product: await shopDb.createStoreProduct(env.DB, input) }, 201, origin);
     }
     if (method === "PATCH" && id != null) {
-      const body = await readJson(request, MAX_IMAGE_DATA_URL + 8_000);
-      const patch = body && cleanProductPatch(body);
+      const body = (await readJson(request, MAX_IMAGE_DATA_URL + 8_000)) ?? {};
+      if (body.confirm_product_update !== true) return json({ error: "product_update_confirmation_required" }, 409, origin);
+      const patch = cleanProductPatch(body);
       if (!patch) return json({ error: "invalid_product" }, 400, origin);
       const row = await shopDb.updateStoreProduct(env.DB, id, patch);
       return row ? json({ product: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
@@ -140,6 +145,7 @@ export async function handleAdminShop(
     }
     if (method === "POST" && seg[2] === "credit") {
       const body = (await readJson(request)) ?? {};
+      if (body.confirm_wallet_adjustment !== true) return json({ error: "wallet_adjustment_confirmation_required" }, 409, origin);
       // Accept any member identifier (name / PDGA# / UDisc / internal id), then store the canonical id.
       const identifier = asStr(body.member_id, 80);
       const amount = asSignedInt(body.amount_cents);
@@ -182,6 +188,9 @@ export async function handleAdminShop(
     if (method === "PATCH" && id != null) {
       const body = (await readJson(request)) ?? {};
       const patch: shopDb.OrderFulfillmentPatch = {};
+      if (hasOrderFulfillmentPatch(body) && body.confirm_order_fulfillment_update !== true) {
+        return json({ error: "order_fulfillment_confirmation_required" }, 409, origin);
+      }
       if ("status" in body) {
         if (body.confirm_order_status_change !== true) return json({ error: "order_status_confirmation_required" }, 409, origin);
         const s = asStr(body.status, 20);

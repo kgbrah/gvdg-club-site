@@ -30,16 +30,26 @@ describe("pro shop and player wallets", () => {
 
   it("credits store payout prizes from an admin event", async () => {
     const dbState = makeDb({ balanceCents: 200 });
-    const res = await call("/admin/events/7/store-credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 1500, note: "League payout", idempotency_key: "event:7:m_jane:abc" }, dbState);
+    const res = await call("/admin/events/7/store-credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 1500, note: "League payout", idempotency_key: "event:7:m_jane:abc", confirm_event_store_credit_award: true }, dbState);
     expect(res.status).toBe(201);
     const body = (await res.json()) as { balance_cents: number; payouts: Row[] };
     expect(body.balance_cents).toBe(1700);
     expect(body.payouts[0]?.source).toBe("event_payout");
   });
 
+  it("requires confirmation before event store credit awards", async () => {
+    const dbState = makeDb({ balanceCents: 200 });
+    const res = await call("/admin/events/7/store-credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 1500, note: "League payout", idempotency_key: "event:7:m_jane:unconfirmed" }, dbState);
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({ error: "event_store_credit_confirmation_required" });
+    expect(dbState.state.transactions).toHaveLength(0);
+    expect(dbState.state.balanceCents).toBe(200);
+  });
+
   it("deduplicates event store credit awards with the same idempotency key", async () => {
     const dbState = makeDb({ balanceCents: 200 });
-    const body = { member_id: "m_jane", amount_cents: 1500, note: "League payout", idempotency_key: "event:7:m_jane:retry" };
+    const body = { member_id: "m_jane", amount_cents: 1500, note: "League payout", idempotency_key: "event:7:m_jane:retry", confirm_event_store_credit_award: true };
 
     const first = await call("/admin/events/7/store-credit", "POST", await token("m_admin"), body, dbState);
     const second = await call("/admin/events/7/store-credit", "POST", await token("m_admin"), body, dbState);
@@ -52,7 +62,7 @@ describe("pro shop and player wallets", () => {
 
   it("requires an idempotency key for event store credit awards", async () => {
     const dbState = makeDb({ balanceCents: 200 });
-    const res = await call("/admin/events/7/store-credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 1500 }, dbState);
+    const res = await call("/admin/events/7/store-credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 1500, confirm_event_store_credit_award: true }, dbState);
 
     expect(res.status).toBe(400);
     expect(dbState.state.transactions).toHaveLength(0);
@@ -62,8 +72,8 @@ describe("pro shop and player wallets", () => {
   it("rejects idempotency key reuse for a different event store credit award", async () => {
     const dbState = makeDb({ balanceCents: 200 });
     const key = "event:7:m_jane:conflict";
-    const first = await call("/admin/events/7/store-credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 1500, idempotency_key: key }, dbState);
-    const second = await call("/admin/events/7/store-credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 1600, idempotency_key: key }, dbState);
+    const first = await call("/admin/events/7/store-credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 1500, idempotency_key: key, confirm_event_store_credit_award: true }, dbState);
+    const second = await call("/admin/events/7/store-credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 1600, idempotency_key: key, confirm_event_store_credit_award: true }, dbState);
 
     expect(first.status).toBe(201);
     expect(second.status).toBe(409);
@@ -73,7 +83,7 @@ describe("pro shop and player wallets", () => {
 
   it("deduplicates manual wallet adjustments with the same idempotency key", async () => {
     const dbState = makeDb({ balanceCents: 200 });
-    const body = { member_id: "m_jane", amount_cents: 500, note: "Volunteer credit", idempotency_key: "wallet:m_jane:retry" };
+    const body = { member_id: "m_jane", amount_cents: 500, note: "Volunteer credit", idempotency_key: "wallet:m_jane:retry", confirm_wallet_adjustment: true };
 
     const first = await call("/admin/wallets/credit", "POST", await token("m_admin"), body, dbState);
     const second = await call("/admin/wallets/credit", "POST", await token("m_admin"), body, dbState);
@@ -87,7 +97,7 @@ describe("pro shop and player wallets", () => {
 
   it("requires an idempotency key for manual wallet adjustments", async () => {
     const dbState = makeDb({ balanceCents: 200 });
-    const res = await call("/admin/wallets/credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 500 }, dbState);
+    const res = await call("/admin/wallets/credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 500, confirm_wallet_adjustment: true }, dbState);
 
     expect(res.status).toBe(400);
     expect(dbState.state.transactions).toHaveLength(0);
@@ -96,7 +106,7 @@ describe("pro shop and player wallets", () => {
 
   it("rejects manual wallet adjustments from non-admin members", async () => {
     const dbState = makeDb({ balanceCents: 200 });
-    const res = await call("/admin/wallets/credit", "POST", await token("m_jane"), { member_id: "m_jane", amount_cents: 500, idempotency_key: "wallet:m_jane:forbidden" }, dbState);
+    const res = await call("/admin/wallets/credit", "POST", await token("m_jane"), { member_id: "m_jane", amount_cents: 500, idempotency_key: "wallet:m_jane:forbidden", confirm_wallet_adjustment: true }, dbState);
 
     expect(res.status).toBe(403);
     expect(dbState.state.transactions).toHaveLength(0);
@@ -106,13 +116,23 @@ describe("pro shop and player wallets", () => {
   it("rejects idempotency key reuse for a different manual wallet adjustment", async () => {
     const dbState = makeDb({ balanceCents: 200 });
     const key = "wallet:m_jane:conflict";
-    const first = await call("/admin/wallets/credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 500, idempotency_key: key }, dbState);
-    const second = await call("/admin/wallets/credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 600, idempotency_key: key }, dbState);
+    const first = await call("/admin/wallets/credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 500, idempotency_key: key, confirm_wallet_adjustment: true }, dbState);
+    const second = await call("/admin/wallets/credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 600, idempotency_key: key, confirm_wallet_adjustment: true }, dbState);
 
     expect(first.status).toBe(201);
     expect(second.status).toBe(409);
     expect(dbState.state.transactions).toHaveLength(1);
     expect(dbState.state.balanceCents).toBe(700);
+  });
+
+  it("requires confirmation before manual wallet adjustments", async () => {
+    const dbState = makeDb({ balanceCents: 200 });
+    const res = await call("/admin/wallets/credit", "POST", await token("m_admin"), { member_id: "m_jane", amount_cents: 500, idempotency_key: "wallet:m_jane:unconfirmed" }, dbState);
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({ error: "wallet_adjustment_confirmation_required" });
+    expect(dbState.state.transactions).toHaveLength(0);
+    expect(dbState.state.balanceCents).toBe(200);
   });
 
   it("requires confirmation before changing an order status", async () => {
@@ -124,7 +144,7 @@ describe("pro shop and player wallets", () => {
     expect(unconfirmed.status).toBe(409);
     expect(dbState.state.orders[0]?.status).toBe("submitted");
 
-    const tracking = await call("/admin/orders/10", "PATCH", auth, { tracking_carrier: "USPS", tracking_number: "9400" }, dbState);
+    const tracking = await call("/admin/orders/10", "PATCH", auth, { tracking_carrier: "USPS", tracking_number: "9400", confirm_order_fulfillment_update: true }, dbState);
     expect(tracking.status).toBe(200);
     expect(dbState.state.orders[0]?.tracking_carrier).toBe("USPS");
     expect(dbState.state.orders[0]?.status).toBe("submitted");

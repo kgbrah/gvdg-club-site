@@ -40,10 +40,13 @@ export async function handleAdminLayouts(
       for (const h of clean) { const v = verifiedByHole.get(Number(h.hole)); if (v) h.verified = v; }
       ({ holes, total_par } = enrichHoles(clean));
     }
+    if (b.confirm_layout_update !== true) return json({ error: "layout_update_confirmation_required" }, 409, origin);
     const row = await db.updateLayout(env.DB, id, { name: asStr(b.name, 60), holes, total_par });
     return row ? json({ layout: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
   }
   if (method === "DELETE" && id != null) {
+    const b = (await readJson(request)) ?? {};
+    if (b.confirm_layout_delete !== true) return json({ error: "layout_delete_confirmation_required" }, 409, origin);
     const check = await checkLayoutDeletion(env.DB, id);
     if (!check.ok) return json({ error: check.error, blockers: check.blockers }, check.error === "not_found" ? 404 : 409, origin);
     await db.deleteLayout(env.DB, id);

@@ -50,6 +50,7 @@ function changedRows(result: db.D1ResultLike): number | null {
 
 async function awardCtpStoreCredit(ctx: AdminCtpRouteContext, eventId: number, ctpId: number): Promise<Response> {
   const body = (await readJson(ctx.request)) ?? {};
+  if (body.confirm_ctp_store_credit_award !== true) return json({ error: "ctp_store_credit_confirmation_required" }, 409, ctx.origin);
   const memberId = asStr(body.member_id, 80);
   const amount = asInt(body.amount_cents);
   const idempotencyKey = asStr(body.idempotency_key, 160);
@@ -84,6 +85,8 @@ async function awardCtpStoreCredit(ctx: AdminCtpRouteContext, eventId: number, c
 }
 
 async function deleteCtp(ctx: AdminCtpRouteContext, eventId: number, ctpId: number): Promise<Response> {
+  const body = (await readJson(ctx.request)) ?? {};
+  if (body.confirm_ctp_delete !== true) return json({ error: "ctp_delete_confirmation_required" }, 409, ctx.origin);
   const ctp = await getCtp(ctx.env, eventId, ctpId);
   if (!ctp) return json({ error: "not_found" }, 404, ctx.origin);
   if (hasWinner(ctp)) return json({ error: "ctp_delete_blocked", blockers: CTP_DELETE_WINNER_BLOCKERS }, 409, ctx.origin);
@@ -102,7 +105,8 @@ export async function handleAdminCtps(ctx: AdminCtpRouteContext): Promise<Respon
   if (ctx.method === "POST" && ctx.seg[4] == null) {
     const body = await readJson(ctx.request);
     const hole = body && asInt(body.hole);
-    if (!body || hole == null) return json({ error: "invalid_ctp" }, 400, ctx.origin);
+    if (!body || hole == null || hole < 1) return json({ error: "invalid_ctp" }, 400, ctx.origin);
+    if (body.confirm_ctp_create !== true) return json({ error: "ctp_create_confirmation_required" }, 409, ctx.origin);
     const ctp = await db.createCtp(ctx.env.DB, { event_id: eventId, hole, division: asStr(body.division, 60), prize: asStr(body.prize, 200) });
     return json({ ctp }, 201, ctx.origin);
   }
@@ -111,6 +115,7 @@ export async function handleAdminCtps(ctx: AdminCtpRouteContext): Promise<Respon
   if (ctx.method === "POST" && ctx.seg[5] === "store-credit") return awardCtpStoreCredit(ctx, eventId, ctpId);
   if (ctx.method === "PATCH" && ctx.seg[5] == null) {
     const body = (await readJson(ctx.request)) ?? {};
+    if (body.confirm_ctp_winner_change !== true) return json({ error: "ctp_winner_confirmation_required" }, 409, ctx.origin);
     const ctp = await db.setCtpWinner(ctx.env.DB, ctpId, eventId, asStr(body.winner_member_id, 64), asStr(body.winner_name, 100));
     return ctp ? json({ ctp }, 200, ctx.origin) : json({ error: "not_found" }, 404, ctx.origin);
   }

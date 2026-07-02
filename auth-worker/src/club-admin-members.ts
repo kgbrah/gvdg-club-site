@@ -2,7 +2,7 @@ import type { Env } from "./env.js";
 import { json, readJson } from "./http.js";
 import { asStr } from "./input.js";
 import { generatePin, hashPin } from "./crypto.js";
-import { createMember, listMembers, resetMemberPin, type AdminMember, type KVListLike, type Member } from "./roster.js";
+import { createMember, listMembers, resetMemberPin, type AdminMember, type Member } from "./roster.js";
 
 // Admin member onboarding: create a member (or reissue) and return a one-time TEMPORARY PIN for the
 // admin to hand off. The member logs in with PDGA#/UDisc + temp PIN, then is forced to set their own
@@ -25,7 +25,7 @@ export async function handleAdminMembers(
 ): Promise<Response | null> {
   // GET /admin/members — list members (public-safe fields, never the PIN hash)
   if (method === "GET" && seg.length === 2) {
-    return json({ members: await listMembers(env.ROSTER as unknown as KVListLike) }, 200, origin);
+    return json({ members: await listMembers(env.ROSTER) }, 200, origin);
   }
 
   // POST /admin/members — create a NEW member and issue a temporary PIN
@@ -53,6 +53,7 @@ export async function handleAdminMembers(
     const b = (await readJson(request)) ?? {};
     const identifier = asStr(b.identifier, 60);
     if (!identifier) return json({ error: "identifier_required" }, 400, origin);
+    if (b.confirm_member_pin_reset !== true) return json({ error: "member_pin_reset_confirmation_required" }, 409, origin);
 
     const tempPin = generatePin();
     const m = await resetMemberPin(env.ROSTER, identifier, await hashPin(tempPin));

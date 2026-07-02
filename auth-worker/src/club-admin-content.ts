@@ -47,6 +47,8 @@ export async function handleAdminLeagues(
     return row ? json({ league: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
   }
   if (method === "DELETE" && id != null) {
+    const b = (await readJson(request)) ?? {};
+    if (b.confirm_league_delete !== true) return json({ error: "league_delete_confirmation_required" }, 409, origin);
     await db.deleteLeague(env.DB, id);
     return json({ ok: true }, 200, origin);
   }
@@ -98,6 +100,8 @@ export async function handleAdminFundraisers(
     return row ? json({ fundraiser: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
   }
   if (method === "DELETE" && id != null) {
+    const b = (await readJson(request)) ?? {};
+    if (b.confirm_fundraiser_delete !== true) return json({ error: "fundraiser_delete_confirmation_required" }, 409, origin);
     await db.deleteFundraiser(env.DB, id);
     return json({ ok: true }, 200, origin);
   }
@@ -125,6 +129,8 @@ export async function handleAdminMeetings(
     return row ? json({ meeting: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
   }
   if (method === "DELETE" && id != null) {
+    const b = (await readJson(request)) ?? {};
+    if (b.confirm_meeting_delete !== true) return json({ error: "meeting_delete_confirmation_required" }, 409, origin);
     await db.deleteMeeting(env.DB, id);
     return json({ ok: true }, 200, origin);
   }

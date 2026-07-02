@@ -99,9 +99,9 @@
             .menu-toggle { display: flex; align-items: center; justify-content: center; }
             .nav-right { gap: 1rem; }
             .nav-account { display: none !important; }
-            .nav-links { position: fixed; top: 70px; left: 0; right: 0; background: rgba(26, 26, 46, 0.995); flex-direction: column; gap: 0; padding: 2rem; transform: translateY(-100%); opacity: 0; transition: all 0.3s ease; pointer-events: none; max-height: calc(100vh - 70px); overflow-y: auto; border-top: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 18px 36px rgba(15, 15, 30, 0.32); z-index: 999; }
+            .nav-links { position: fixed; top: 70px; left: 0; right: 0; background: rgba(26, 26, 46, 0.995); flex-direction: column; gap: 0; padding: 2rem; transform: translate3d(0, -120%, 0); opacity: 0; visibility: hidden; transition: transform 0.3s ease, opacity 0.3s ease, visibility 0s linear 0.3s; pointer-events: none; max-height: calc(100vh - 70px); overflow-y: auto; border-top: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 18px 36px rgba(15, 15, 30, 0.32); z-index: 999; }
             [data-theme="dark"] .nav-links { background: rgba(15, 15, 30, 0.995); }
-            .nav-links.active { transform: translateY(0); opacity: 1; pointer-events: all; }
+            .nav-links.active { transform: translate3d(0, 0, 0); opacity: 1; visibility: visible; transition-delay: 0s; pointer-events: all; }
             .nav-links li { padding: 1.25rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
             .nav-links li:last-child { border-bottom: none; }
             .nav-links a { font-size: 1.1rem; display: block; padding: 0.5rem 0; }
@@ -170,6 +170,7 @@
         }
         .al-holes th.th-temp { color: #2563eb; }
         .live-weather { margin: 0.75rem 0 1rem; }
+        #scBoard { max-width: 100%; overflow-x: auto; }
         .weather-strip { background: var(--bg-secondary); border: 1px solid var(--border-color); border-left: 4px solid var(--secondary); border-radius: 10px; padding: 0.75rem 0.85rem; }
         .weather-title { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.45rem; }
         .weather-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
@@ -247,6 +248,8 @@
         .al-row span, .al-row select, .al-row input, .order-controls select, .order-controls input { min-width: 0; }
         #rgDivisions { width: 100%; } /* size="40" forced ~412px; fill its (now shrinkable) span instead */
         #alCourse, #scEvent, #scLayout, #rgEvent { display: block; width: 100%; max-width: 520px; margin-top: 0.3rem; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95rem; }
+        .al-field label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.2rem; }
+        .al-field input { display: block; width: 100%; max-width: 520px; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95rem; }
         .admin-btn { background: var(--primary); color: #fff; border: none; padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
         .admin-btn.secondary { background: transparent; border: 1px solid var(--secondary-text); color: var(--secondary-text); }
         .admin-btn.danger { background: transparent; border: 1px solid #dc3545; color: #dc3545; padding: 0.35rem 0.7rem; font-size: 0.8rem; }
@@ -478,7 +481,7 @@
                     <div class="al-section">
                         <h4 class="al-h">🦁 Layout / Safari builder</h4>
                         <p class="al-note">Link <strong>any</strong> tee to <strong>any</strong> target and set <strong>any</strong> par. Distance is auto-estimated (GPS when both have coordinates, else by par) — override any hole manually.</p>
-                        <div><label for="alName">Layout name</label><input id="alName" maxlength="60" placeholder="Main / Safari / Blue"></div>
+                        <div class="al-field"><label for="alName">Layout name</label><input id="alName" maxlength="60" placeholder="Main / Safari / Blue"></div>
                         <div style="overflow-x:auto;"><table class="al-holes"><thead><tr><th>#</th><th>Par</th><th>Tee</th><th>Target</th><th>Manual ft</th><th>Est.</th><th></th></tr></thead>
                             <tbody id="alHoles"></tbody></table></div>
                         <div class="al-row" style="margin-top:0.5rem;">
@@ -535,9 +538,11 @@
                     <h4 class="al-h" style="margin-top:1rem;">Live leaderboard</h4>
                     <div id="scBoard" class="al-note"></div>
                     <div class="al-row" style="margin-top:0.75rem;">
+                        <button type="button" class="admin-btn danger" id="scCancelBtn">Cancel scorecard</button>
                         <button type="button" class="admin-btn danger" id="scFinalizeBtn">🏁 Finalize results</button>
                         <span class="al-note">Writes final places + breakdown to each player's record and closes the event.</span>
                     </div>
+                    <p class="al-note" id="scCancelNote">Cancel clears the live scorecard and returns this event to Scheduled so registration can continue.</p>
                 </div>
             </div>
             <div class="admin-pane" id="apane-leagues-mgmt">
@@ -1020,7 +1025,7 @@
                 const del = elx('button', 'admin-btn danger', 'Delete');
                 del.addEventListener('click', async () => {
                     if (!confirm('Delete event “' + ev.name + '”?')) return;
-                    const r = await adminApi('/admin/events/' + ev.id, { method: 'DELETE' });
+                    const r = await adminApi('/admin/events/' + ev.id, { method: 'DELETE', body: { confirm_event_delete: true } });
                     const d = r.ok ? {} : await r.json().catch(() => ({}));
                     adminMsg(r.ok ? 'Deleted “' + ev.name + '”' : deleteBlockedMessage('event', r.status, d), r.ok);
                     if (r.ok) adminLoadEvents();
@@ -1087,6 +1092,10 @@
                 if (body.status === (aeEditingEvent.status || 'scheduled')) delete body.status;
                 else if (!confirmEventStatusChange(body, aeEditingEvent, body.status)) return;
             }
+            if (aeEditingEvent) {
+                if (!confirm('Update event details for “' + (aeEditingEvent.name || body.name) + '”? This can change the public schedule, course, layout, and notes immediately.')) return;
+                body.confirm_event_details_update = true;
+            }
             // Edit (udisc) vs create; a new manual event is tagged source:'manual'.
             const r = aeEditingEvent
                 ? await adminApi('/admin/events/' + aeEditingEvent.id, { method: 'PATCH', body })
@@ -1098,7 +1107,9 @@
                 adminSwitch('events');
                 adminLoadEvents();
             } else {
-                adminMsg((aeEditingEvent ? 'Update' : 'Create') + ' failed (' + r.status + ')', false);
+                const d = await r.json().catch(() => ({}));
+                const detail = d.error === 'event_details_confirmation_required' ? ': confirmation required' : ' (' + r.status + ')';
+                adminMsg((aeEditingEvent ? 'Update' : 'Create') + ' failed' + detail, false);
             }
         }
 
@@ -1448,14 +1459,20 @@
                     apply.disabled = true;
                     try {
                         if (!alCourseId) { adminMsg('Pick a course first.', false); return; }
+                        const layoutName = L.name || 'Layout';
                         if (L.positions && L.positions.length) {
-                            const pr = await adminApi('/admin/courses/' + alCourseId + '/positions', { method: 'PUT', body: { positions: L.positions } });
-                            if (!pr.ok) { adminMsg('Could not import tee/target positions (' + pr.status + ')', false); return; }
+                            if (!confirm('Replace tee/target positions for this course with imported UDisc layout “' + layoutName + '”? Existing tee/target positions for this course will be cleared.')) return;
+                            const pr = await adminApi('/admin/courses/' + alCourseId + '/positions', { method: 'PUT', body: { positions: L.positions, confirm_course_positions_replace: true } });
+                            if (!pr.ok) {
+                                const d = await pr.json().catch(() => ({}));
+                                adminMsg(d.error === 'course_positions_replace_confirmation_required' ? 'Could not import tee/target positions: confirmation required' : 'Could not import tee/target positions (' + pr.status + ')', false);
+                                return;
+                            }
                         }
                         await alLoadPool();
                         $('alName').value = L.name || 'Main';
                         renderHoleRows(holes);
-                        adminMsg('Applied “' + (L.name || 'Layout') + '” — review the pars below, then click Save layout.', true);
+                        adminMsg('Applied “' + layoutName + '” — review the pars below, then click Save layout.', true);
                         // The holes prefill the builder further down the page; bring it into view so the
                         // result is obvious (otherwise the click looks like it did nothing).
                         $('alName').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1561,11 +1578,15 @@
             if (!holes.length) { adminMsg('Add at least one hole', false); return; }
             if (holes.some((h) => !(h.par >= 1 && h.par <= 15))) { adminMsg('Every hole needs a par 1–15', false); return; }
             const name = $('alName').value.trim() || 'Main';
+            if (alEditing && !confirm('Update layout “' + name + '”? This can change public pars, tee selections, targets, and distances immediately.')) return;
             const r = alEditing
-                ? await adminApi('/admin/layouts/' + alEditing, { method: 'PATCH', body: { name, holes } })
+                ? await adminApi('/admin/layouts/' + alEditing, { method: 'PATCH', body: { name, holes, confirm_layout_update: true } })
                 : await adminApi('/admin/layouts', { method: 'POST', body: { course_id: alCourseId, name, holes } });
             if (r.ok) { adminMsg((alEditing ? 'Updated' : 'Saved') + ' layout “' + name + '”', true); alResetLayout(); alLoadLayouts(); }
-            else adminMsg('Save layout failed (' + r.status + ')', false);
+            else {
+                const d = await r.json().catch(() => ({}));
+                adminMsg(d.error === 'layout_update_confirmation_required' ? 'Save layout failed: confirmation required' : 'Save layout failed (' + r.status + ')', false);
+            }
         }
         function alResetLayout() {
             alEditing = null; $('alName').value = ''; $('alHoles').replaceChildren();
@@ -1585,7 +1606,7 @@
                 const del = elx('button', 'admin-btn danger', 'Delete');
                 del.addEventListener('click', async () => {
                     if (!confirm('Delete layout “' + l.name + '”?')) return;
-                    const r = await adminApi('/admin/layouts/' + l.id, { method: 'DELETE' });
+                    const r = await adminApi('/admin/layouts/' + l.id, { method: 'DELETE', body: { confirm_layout_delete: true } });
                     if (r.ok) {
                         adminMsg('Deleted layout', true);
                         if (alEditing === l.id) alResetLayout();
@@ -1708,6 +1729,8 @@
             $('scStart').style.display = 'none'; $('scLive').style.display = '';
             const live = scSnap.status === 'live';
             $('scOverride').style.display = live ? '' : 'none'; // overrides only make sense mid-round
+            $('scCancelBtn').style.display = live ? '' : 'none';
+            $('scCancelNote').style.display = live ? '' : 'none';
             scRenderWeather();
             scRenderGrid(); scRenderBoard(); scRenderTeeSigns(); scPopulateOverrideHoles();
             if (live) scConnectWs(); // stream player/cardmate edits in real time
@@ -1904,6 +1927,38 @@
         }
 
         function scFinalize() { return doFinalize(false); } // click handler (no args)
+        async function scCancel() {
+            if (!scEventId) return;
+            if (!confirm('Cancel live scoring for this event? This clears the live scorecard and returns the event to Scheduled so registration can continue.')) return;
+            const btn = $('scCancelBtn');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Cancelling...';
+            try {
+                const eventId = scEventId;
+                const r = await adminApi('/events/' + eventId + '/live/cancel', { method: 'POST', body: { confirm_live_scorecard_cancel: true } });
+                if (r.ok) {
+                    adminMsg('Live scoring cancelled - event is back to scheduled.', true);
+                    if (scWs) scWs.close();
+                    scWs = null; scWsEvent = null; scSnap = null;
+                    await scLoadEvents();
+                    $('scEvent').value = String(eventId);
+                    await scOnEventChange();
+                    adminLoadEvents();
+                    return;
+                }
+                const data = await r.json().catch(() => ({}));
+                const msg = data.error === 'round_already_final'
+                    ? 'This event is already final; live scoring cannot be cancelled.'
+                    : data.error === 'live_scorecard_cancel_confirmation_required'
+                        ? 'Cancel failed: confirmation required.'
+                        : 'Cancel failed (' + r.status + ')';
+                adminMsg(msg, false);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
         async function doFinalize(force, skipConfirm) {
             if (!skipConfirm) {
                 const ask = force
@@ -1940,7 +1995,7 @@
                 const row = elx('div', 'admin-evrow');
                 row.appendChild(elx('span', 'ev-name', l.name + (l.season ? ' · ' + l.season : '') + (l.format ? ' · ' + l.format : '')));
                 const del = elx('button', 'admin-btn danger', 'Delete');
-                del.addEventListener('click', async () => { if (!confirm('Delete league “' + l.name + '”?')) return; const r = await adminApi('/admin/leagues/' + l.id, { method: 'DELETE' }); if (r.ok) { adminMsg('Deleted league', true); adminLoadLeagues(); } });
+                del.addEventListener('click', async () => { if (!confirm('Delete league “' + l.name + '”?')) return; const r = await adminApi('/admin/leagues/' + l.id, { method: 'DELETE', body: { confirm_league_delete: true } }); if (r.ok) { adminMsg('Deleted league', true); adminLoadLeagues(); } });
                 row.appendChild(del);
                 list.appendChild(row);
             });
@@ -1973,7 +2028,7 @@
                     if (r.ok) { adminMsg('Updated', true); adminLoadFundraisers(); }
                 });
                 const del = elx('button', 'admin-btn danger', 'Delete');
-                del.addEventListener('click', async () => { if (!confirm('Delete fundraiser “' + f.title + '”?')) return; const r = await adminApi('/admin/fundraisers/' + f.id, { method: 'DELETE' }); if (r.ok) { adminMsg('Deleted', true); adminLoadFundraisers(); } });
+                del.addEventListener('click', async () => { if (!confirm('Delete fundraiser “' + f.title + '”?')) return; const r = await adminApi('/admin/fundraisers/' + f.id, { method: 'DELETE', body: { confirm_fundraiser_delete: true } }); if (r.ok) { adminMsg('Deleted', true); adminLoadFundraisers(); } });
                 row.appendChild(close); row.appendChild(del);
                 list.appendChild(row);
             });
@@ -1998,7 +2053,7 @@
                 const row = elx('div', 'admin-evrow');
                 row.appendChild(elx('span', 'ev-name', (m.date || '') + ' · ' + m.title));
                 const del = elx('button', 'admin-btn danger', 'Delete');
-                del.addEventListener('click', async () => { if (!confirm('Delete meeting “' + m.title + '”?')) return; const r = await adminApi('/admin/meetings/' + m.id, { method: 'DELETE' }); if (r.ok) { adminMsg('Deleted', true); adminLoadMeetings(); } });
+                del.addEventListener('click', async () => { if (!confirm('Delete meeting “' + m.title + '”?')) return; const r = await adminApi('/admin/meetings/' + m.id, { method: 'DELETE', body: { confirm_meeting_delete: true } }); if (r.ok) { adminMsg('Deleted', true); adminLoadMeetings(); } });
                 row.appendChild(del);
                 list.appendChild(row);
             });
@@ -2044,7 +2099,7 @@
                 const re = elx('button', 'admin-btn', 'Reissue PIN'); re.type = 'button';
                 re.addEventListener('click', async () => {
                     if (!confirm('Issue a new temporary PIN for ' + m.name + '? Their current PIN stops working.')) return;
-                    const r = await adminApi('/admin/members/reset-pin', { method: 'POST', body: { identifier: id } });
+                    const r = await adminApi('/admin/members/reset-pin', { method: 'POST', body: { identifier: id, confirm_member_pin_reset: true } });
                     if (r.ok) { const j = await r.json(); showTempPin(j.member, j.tempPin); adminMsg('New temp PIN issued', true); adminLoadMembers(); }
                     else adminMsg('Reissue failed (' + r.status + ')', false);
                 });
@@ -2107,8 +2162,10 @@
                 const activeLabel = elx('label', 'register-addon'); const active = document.createElement('input'); active.type = 'checkbox'; active.checked = p.active !== 0; activeLabel.appendChild(active); activeLabel.appendChild(document.createTextNode(' active'));
                 const save = elx('button', 'admin-btn secondary', 'Save');
                 save.addEventListener('click', async () => {
-                    const r = await adminApi('/admin/shop/products/' + p.id, { method: 'PATCH', body: { price_cents: dollarsToCents(price.value), stock_qty: parseInt(stock.value, 10) || 0, active: active.checked } });
-                    adminMsg(r.ok ? 'Product updated' : 'Product update failed', r.ok);
+                    if (!confirm('Save product changes for “' + (p.name || 'Product') + '”? Price, stock, and active status update the shop immediately.')) return;
+                    const r = await adminApi('/admin/shop/products/' + p.id, { method: 'PATCH', body: { price_cents: dollarsToCents(price.value), stock_qty: parseInt(stock.value, 10) || 0, active: active.checked, confirm_product_update: true } });
+                    const d = r.ok ? {} : await r.json().catch(() => ({}));
+                    adminMsg(r.ok ? 'Product updated' : (d.error === 'product_update_confirmation_required' ? 'Product update failed: confirmation required' : 'Product update failed'), r.ok);
                     if (r.ok) adminLoadProducts();
                 });
                 const del = elx('button', 'admin-btn danger', 'Archive');
@@ -2232,19 +2289,25 @@
         async function saveOrder(order, nextStatus, carrier, tracking, btn) {
             if (btn && btn.disabled) return;
             const currentStatus = order.status || 'submitted';
-            const body = { tracking_carrier: carrier, tracking_number: tracking };
+            const body = { tracking_carrier: carrier, tracking_number: tracking, confirm_order_fulfillment_update: true };
             if (nextStatus !== currentStatus) {
                 const from = ORDER_STATUS_LABELS[currentStatus] || currentStatus;
                 const to = ORDER_STATUS_LABELS[nextStatus] || nextStatus;
                 if (!confirm('Change order #' + order.id + ' from ' + from + ' to ' + to + '?')) return;
                 body.status = nextStatus;
                 body.confirm_order_status_change = true;
+            } else if (!confirm('Save fulfillment details for order #' + order.id + '? Tracking details update the admin order record immediately.')) {
+                return;
             }
             if (btn) btn.disabled = true;
             try {
                 const r = await adminApi('/admin/orders/' + order.id, { method: 'PATCH', body });
                 if (r.ok) { adminMsg('Order #' + order.id + ' updated', true); adminLoadOrders(); }
-                else { const d = await r.json().catch(() => ({})); adminMsg('Order update failed' + (d.error ? ' (' + d.error + ')' : ''), false); }
+                else {
+                    const d = await r.json().catch(() => ({}));
+                    const msg = d.error === 'order_fulfillment_confirmation_required' ? 'Order update failed: confirmation required' : 'Order update failed' + (d.error ? ' (' + d.error + ')' : '');
+                    adminMsg(msg, false);
+                }
             } catch (e) {
                 adminMsg('Order update failed', false);
             } finally {
@@ -2268,7 +2331,7 @@
             const originalText = btn ? btn.textContent : '';
             if (btn) { btn.disabled = true; btn.textContent = 'Posting...'; }
             try {
-                const body = { member_id: memberId, amount_cents: amount, note, idempotency_key: key };
+                const body = { member_id: memberId, amount_cents: amount, note, idempotency_key: key, confirm_wallet_adjustment: true };
                 const r = await adminApi('/admin/wallets/credit', { method: 'POST', body });
                 if (r.ok) {
                     const d = await r.json();
@@ -2280,6 +2343,7 @@
                     const d = await r.json().catch(() => ({}));
                     const msg = d.error === 'member_not_found' ? 'No member matches that — try their PDGA#, UDisc, or exact name'
                         : d.error === 'member_ambiguous' ? 'More than one member has that name — use their PDGA# or UDisc instead'
+                        : d.error === 'wallet_adjustment_confirmation_required' ? 'Wallet update failed: confirmation required'
                         : d.error === 'idempotency_key_required' ? 'Wallet update failed: retry key missing'
                         : d.error === 'idempotency_key_conflict' ? 'Wallet update failed: retry key was already used for a different adjustment'
                         : 'Wallet update failed (' + r.status + ')';
@@ -2321,9 +2385,11 @@
         const cents = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? Math.round(n * 100) : null; };
         async function rgSaveConfig() {
             const divisions = $('rgDivisions').value.split(',').map((s) => s.trim()).filter(Boolean);
-            const body = { registration_open: $('rgOpen').checked, entry_fee_cents: cents($('rgEntry').value), ctp_fee_cents: cents($('rgCtp').value), ace_fee_cents: cents($('rgAce').value), play_format: $('rgFormat').value || null, divisions };
+            if (!confirm('Save registration settings for this event? This can change public sign-ups, fees, and add-ons immediately.')) return;
+            const body = { registration_open: $('rgOpen').checked, entry_fee_cents: cents($('rgEntry').value), ctp_fee_cents: cents($('rgCtp').value), ace_fee_cents: cents($('rgAce').value), play_format: $('rgFormat').value || null, divisions, confirm_event_config_update: true };
             const r = await adminApi('/admin/events/' + rgEventId + '/config', { method: 'PUT', body });
-            adminMsg(r.ok ? 'Registration settings saved' : 'Save failed (' + r.status + ')', r.ok);
+            const d = r.ok ? {} : await r.json().catch(() => ({}));
+            adminMsg(r.ok ? 'Registration settings saved' : (d.error === 'event_config_confirmation_required' ? 'Save failed: confirmation required' : 'Save failed (' + r.status + ')'), r.ok);
         }
         async function rgLoadRoster() {
             let regs = [];
@@ -2414,7 +2480,7 @@
         }
         async function rgRemoveManualPlayer(player) {
             if (!confirm('Remove ' + (player.name || 'this player') + '?')) return;
-            const r = await adminApi('/admin/events/' + rgEventId + '/players/' + player.id, { method: 'DELETE' });
+            const r = await adminApi('/admin/events/' + rgEventId + '/players/' + player.id, { method: 'DELETE', body: { confirm_event_player_delete: true } });
             adminMsg(r.ok ? 'Player removed' : 'Remove failed (' + r.status + ')', r.ok);
             if (r.ok) rgLoadManualPlayers();
         }
@@ -2432,11 +2498,12 @@
             if (btn && btn.disabled) return;
             const amount = dollarsToCents(input.value);
             if (amount == null || amount <= 0) { adminMsg('Enter a store credit amount', false); return; }
+            if (!confirm('Award ' + dollarsFromCents(amount) + ' store credit to ' + (name || memberId) + '?')) return;
             const key = idempotencyKeyFor(input, 'event-payout:' + rgEventId + ':' + memberId);
             const originalText = btn ? btn.textContent : '';
             if (btn) { btn.disabled = true; btn.textContent = 'Awarding...'; }
             try {
-                const r = await adminApi('/admin/events/' + rgEventId + '/store-credit', { method: 'POST', body: { member_id: memberId, member_name: name || null, amount_cents: amount, note: 'Event payout: ' + ($('rgEvent').selectedOptions[0]?.textContent || 'event'), idempotency_key: key } });
+                const r = await adminApi('/admin/events/' + rgEventId + '/store-credit', { method: 'POST', body: { member_id: memberId, member_name: name || null, amount_cents: amount, note: 'Event payout: ' + ($('rgEvent').selectedOptions[0]?.textContent || 'event'), idempotency_key: key, confirm_event_store_credit_award: true } });
                 if (r.ok) {
                     const d = await r.json();
                     adminMsg('Awarded ' + dollarsFromCents(amount) + ' to ' + (name || memberId) + '. Balance: ' + dollarsFromCents(d.balance_cents || 0), true);
@@ -2454,6 +2521,7 @@
             const d = await r.json().catch(() => ({}));
             if (d.error === 'member_not_found') return fallback + ': member id not found';
             if (d.error === 'invalid_store_credit') return fallback + ': enter a valid member and amount';
+            if (d.error === 'event_store_credit_confirmation_required' || d.error === 'ctp_store_credit_confirmation_required') return fallback + ': confirmation required';
             if (d.error === 'idempotency_key_required') return fallback + ': retry key missing';
             if (d.error === 'idempotency_key_conflict') return fallback + ': duplicate retry key used for a different award';
             return fallback + ' (' + r.status + ')';
@@ -2508,10 +2576,11 @@
             const eventName = $('rgEvent').selectedOptions[0]?.textContent || 'this event';
             const confirmed = confirm(actionLabel + ' for ' + count + ' registered players in ' + eventName + '? Existing ' + overwriteLabel + ' will be overwritten.');
             if (!confirmed) return;
+            const requestBody = Object.assign({}, body, { confirm_assignment_overwrite: true });
             const originalText = btn ? btn.textContent : '';
             if (btn) { btn.disabled = true; btn.textContent = 'Assigning...'; }
             try {
-                const r = await adminApi('/admin/events/' + rgEventId + '/' + kind, { method: 'POST', body });
+                const r = await adminApi('/admin/events/' + rgEventId + '/' + kind, { method: 'POST', body: requestBody });
                 adminMsg(r.ok ? actionLabel + ' complete' : actionLabel + ' failed (' + r.status + ')', r.ok);
                 if (r.ok) rgLoadRoster();
             } finally {
@@ -2530,7 +2599,17 @@
                 const win = document.createElement('input'); win.placeholder = 'winner'; win.style.width = '8rem'; if (c.winner_name) win.value = c.winner_name;
                 const member = document.createElement('input'); member.placeholder = 'member id'; member.style.width = '7rem'; member.setAttribute('list', 'rgMemberOptions'); if (c.winner_member_id) member.value = c.winner_member_id;
                 const setW = elx('button', 'admin-btn secondary', 'Set winner');
-                setW.addEventListener('click', async () => { const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + c.id, { method: 'PATCH', body: { winner_name: win.value.trim() || null, winner_member_id: member.value.trim() || null } }); if (r.ok) { adminMsg('CTP winner set', true); rgLoadCtps(); } });
+                setW.addEventListener('click', async () => {
+                    const winnerName = win.value.trim();
+                    const winnerMemberId = member.value.trim();
+                    const winnerLabel = winnerName || winnerMemberId;
+                    const ask = winnerLabel ? 'Set CTP winner for hole ' + c.hole + ' to ' + winnerLabel + '?' : 'Clear CTP winner for hole ' + c.hole + '?';
+                    if (!confirm(ask)) return;
+                    const body = { winner_name: winnerName || null, winner_member_id: winnerMemberId || null, confirm_ctp_winner_change: true };
+                    const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + c.id, { method: 'PATCH', body });
+                    if (r.ok) { adminMsg('CTP winner set', true); rgLoadCtps(); }
+                    else adminMsg(r.status === 409 ? 'CTP winner update failed: confirmation required' : 'CTP winner update failed (' + r.status + ')', false);
+                });
                 const credit = document.createElement('input'); credit.type = 'number'; credit.min = '0'; credit.step = '0.01'; credit.placeholder = '$'; credit.style.width = '5rem';
                 const award = elx('button', 'admin-btn secondary', 'Award credit'); award.type = 'button';
                 award.addEventListener('click', () => rgAwardCtpCredit(c, member, win, credit, award));
@@ -2540,7 +2619,7 @@
                     const originalText = del.textContent;
                     del.disabled = true; del.textContent = 'Deleting...';
                     try {
-                        const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + c.id, { method: 'DELETE' });
+                        const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + c.id, { method: 'DELETE', body: { confirm_ctp_delete: true } });
                         if (r.ok) { adminMsg('CTP deleted', true); rgLoadCtps(); return; }
                         const d = await r.json().catch(() => ({}));
                         adminMsg(deleteBlockedMessage('CTP', r.status, d), false);
@@ -2558,11 +2637,12 @@
             const amount = dollarsToCents(amountInput.value);
             if (!memberId) { adminMsg('CTP store credit needs a member id', false); return; }
             if (amount == null || amount <= 0) { adminMsg('Enter a CTP store credit amount', false); return; }
+            if (!confirm('Award ' + dollarsFromCents(amount) + ' CTP store credit to ' + memberId + '?')) return;
             const key = idempotencyKeyFor(amountInput, 'ctp-payout:' + rgEventId + ':' + ctp.id + ':' + memberId);
             const originalText = btn ? btn.textContent : '';
             if (btn) { btn.disabled = true; btn.textContent = 'Awarding...'; }
             try {
-                const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + ctp.id + '/store-credit', { method: 'POST', body: { member_id: memberId, winner_name: nameInput.value.trim() || null, amount_cents: amount, idempotency_key: key } });
+                const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + ctp.id + '/store-credit', { method: 'POST', body: { member_id: memberId, winner_name: nameInput.value.trim() || null, amount_cents: amount, idempotency_key: key, confirm_ctp_store_credit_award: true } });
                 if (r.ok) {
                     const d = await r.json();
                     adminMsg('Awarded CTP credit ' + dollarsFromCents(amount) + '. Balance: ' + dollarsFromCents(d.balance_cents || 0), true);
@@ -2580,9 +2660,14 @@
         async function rgAddCtp() {
             const hole = parseInt($('rgCtpHole').value, 10);
             if (!(hole >= 1)) { adminMsg('CTP needs a hole', false); return; }
-            const r = await adminApi('/admin/events/' + rgEventId + '/ctps', { method: 'POST', body: { hole, division: $('rgCtpDivision').value.trim() || null, prize: $('rgCtpPrize').value.trim() || null } });
+            if (!confirm('Add CTP for hole ' + hole + '? This changes public CTP options for this event.')) return;
+            const body = { hole, division: $('rgCtpDivision').value.trim() || null, prize: $('rgCtpPrize').value.trim() || null, confirm_ctp_create: true };
+            const r = await adminApi('/admin/events/' + rgEventId + '/ctps', { method: 'POST', body });
             if (r.ok) { adminMsg('CTP added', true); $('rgCtpHole').value = ''; $('rgCtpDivision').value = ''; $('rgCtpPrize').value = ''; rgLoadCtps(); }
-            else adminMsg('Add CTP failed', false);
+            else {
+                const d = await r.json().catch(() => ({}));
+                adminMsg(d && d.error === 'ctp_create_confirmation_required' ? 'Add CTP failed: confirmation required' : 'Add CTP failed', false);
+            }
         }
         async function rgLoadCredits() {
             let payouts = [];
@@ -2648,6 +2733,7 @@
             $('tsRefresh').addEventListener('click', tsLoadReview);
             $('scEvent').addEventListener('change', scOnEventChange);
             $('scStartBtn').addEventListener('click', scStart);
+            $('scCancelBtn').addEventListener('click', scCancel);
             $('scFinalizeBtn').addEventListener('click', scFinalize);
             $('scOvApply').addEventListener('click', () => scApplyOverride(false));
             $('scOvClear').addEventListener('click', () => scApplyOverride(true));

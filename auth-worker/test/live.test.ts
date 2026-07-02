@@ -1,3 +1,4 @@
+// allow: SIZE_OK - cohesive Durable Object regression suite; split with the LiveEventDO refactor.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LiveEventDO } from "../src/live.js";
 
@@ -75,6 +76,10 @@ type ConflictRow = {
 type SnapshotBody = {
   readonly players: { readonly scores: Record<string, number> }[];
   readonly conflicts: ConflictRow[];
+};
+type ResetSnapshot = SnapshotBody & {
+  readonly status: string;
+  readonly rev: number;
 };
 type WeatherSnapshot = {
   readonly weather: {
@@ -199,6 +204,36 @@ describe("LiveEventDO card-scoped scoring", () => {
 
     const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { readonly players: readonly { readonly scores: Record<string, number> }[] };
     expect(snap.players[0]?.scores).toEqual({ 1: 3 });
+  });
+
+  it("cancels a live scorecard back to unstarted and allows a fresh start without stale revisions", async () => {
+    const live = liveDO();
+    await start(live, [{ memberId: "m0", name: "A" }]);
+    const scored = (await (await post(live, { "X-Auth-Admin": "true" }, { index: 0, hole: 1, strokes: 3 })).json()) as ResetSnapshot;
+
+    const cancelled = await live.fetch(new Request("https://do/cancel", { method: "POST", headers: { "X-Auth-Admin": "true" } }));
+    expect(cancelled.status).toBe(200);
+    const cancelledBody = (await cancelled.json()) as ResetSnapshot;
+    expect(cancelledBody.status).toBe("none");
+    expect(cancelledBody.players).toEqual([]);
+    expect(cancelledBody.rev).toBeGreaterThan(scored.rev);
+    expect((await post(live, { "X-Auth-Admin": "true" }, { index: 0, hole: 1, strokes: 3 })).status).toBe(409);
+
+    const restarted = (await (await start(live, [{ memberId: "m0", name: "A" }])).json()) as ResetSnapshot;
+    expect(restarted.status).toBe("live");
+    expect(restarted.rev).toBeGreaterThan(cancelledBody.rev);
+    expect(restarted.players[0]?.scores).toEqual({});
+  });
+
+  it("does not cancel a finalized scorecard", async () => {
+    const live = new LiveEventDO(new FakeState({
+      meta: { eventId: 1, holes: [{ hole: 1, par: 3 }], status: "final", startedAt: "" },
+      players: [],
+    }), { DB: db });
+
+    const cancelled = await live.fetch(new Request("https://do/cancel", { method: "POST", headers: { "X-Auth-Admin": "true" } }));
+    expect(cancelled.status).toBe(409);
+    expect(await cancelled.json()).toMatchObject({ error: "round_already_final" });
   });
 
   it("lets cardmates enter guest-token scorecards but not another member's scorecard", async () => {

@@ -1,3 +1,4 @@
+// allow: SIZE_OK - cohesive Durable Object state machine; split only with dedicated replay/browser coverage.
 // LiveEventDO — one Durable Object per in-progress event. Holds the live scorecard (layout pars +
 // players + per-hole strokes) in DO storage, accepts score submissions, pushes leaderboard updates to
 // WebSocket viewers, and on finalize writes results to D1 and marks the event final.
@@ -33,7 +34,7 @@ interface LiveMeta {
   layoutName?: string | null;
   udiscCourseId?: string | null; // UDisc numeric course id for the "Add to UDisc" applink (export bridge)
   holes: { hole: number; par: number; distance_ft?: number | null; tee_sign_id?: number | null }[];
-  status: "live" | "final";
+  status: "none" | "live" | "final";
   startedAt: string;
   weather?: WeatherState | null;
   rev?: number; // monotonic revision, bumped on every mutation so clients can drop out-of-order snapshots
@@ -143,6 +144,7 @@ export class LiveEventDO {
     }
     const body = await request.json().catch(() => ({}));
     if (action === "start") return this.start(body as StartBody);
+    if (action === "cancel") return this.cancel(authAdmin);
     if (action === "score") return this.score(body as ScoreBody, authMember, authAdmin);
     if (action === "join") return this.join(authMember, body as { name?: string; ratingAnchor?: number | null }); // casual round: caller joins
     if (action === "guest") return this.addGuest(authMember, (body as { name?: string }).name); // add a non-member to my card
@@ -164,6 +166,23 @@ export class LiveEventDO {
   }
 
   private snapshot() {
+    if (!this.meta || this.meta.status === "none") {
+      return {
+        status: "none",
+        rev: this.meta?.rev ?? 0,
+        eventId: null,
+        courseName: null,
+        layoutName: null,
+        udiscCourseId: null,
+        weather: null,
+        holes: [],
+        players: [],
+        conflicts: [],
+        missing: [],
+        standings: [],
+        updatedAt: null,
+      };
+    }
     const holes = this.resolvedHoles();
     const issues = scorecardConsensusIssues(this.players, holes);
     return {
@@ -197,6 +216,7 @@ export class LiveEventDO {
   private async start(b: StartBody): Promise<Response> {
     if (this.meta?.status === "live") return j({ error: "round_already_live" }, 409);
     if (this.meta?.status === "final") return j({ error: "round_already_final" }, 409);
+    const previousRev = this.meta?.rev ?? 0;
     const holes = (Array.isArray(b.holes) ? b.holes : [])
       .filter((h) => h && typeof h.hole === "number" && typeof h.par === "number")
       .map((h) => ({ hole: h.hole, par: h.par, distance_ft: h.distance_ft ?? null, tee_sign_id: h.tee_sign_id ?? null }));
@@ -216,6 +236,7 @@ export class LiveEventDO {
       startedAt: b.startedAt ?? "",
       weather: createWeatherState(b.weatherLocation ?? null),
       overrides: {},
+      rev: previousRev,
     };
     this.players = (Array.isArray(b.players) ? b.players : []).map((p) => ({
       memberId: p.memberId ?? null,
@@ -229,6 +250,33 @@ export class LiveEventDO {
     }));
     assignCards(this.players, b.cardSize); // group into cards (by starting hole, else buckets of 4)
     await this.refreshWeatherIfDue(true);
+    await this.persist();
+    this.broadcast();
+    return j(this.snapshot());
+  }
+
+  private async cancel(authAdmin: boolean): Promise<Response> {
+    if (!authAdmin) return j({ error: "forbidden" }, 403);
+    if (this.meta?.status === "final") return j({ error: "round_already_final" }, 409);
+    const previousRev = this.meta?.rev ?? 0;
+    this.meta = {
+      eventId: this.meta?.eventId ?? 0,
+      casual: this.meta?.casual === true,
+      roundCode: this.meta?.roundCode ?? null,
+      courseId: this.meta?.courseId ?? null,
+      layoutId: this.meta?.layoutId ?? null,
+      createdBy: this.meta?.createdBy ?? null,
+      courseName: null,
+      layoutName: null,
+      udiscCourseId: null,
+      holes: [],
+      status: "none",
+      startedAt: "",
+      weather: null,
+      overrides: {},
+      rev: previousRev,
+    };
+    this.players = [];
     await this.persist();
     this.broadcast();
     return j(this.snapshot());
@@ -292,10 +340,11 @@ export class LiveEventDO {
   private mineData(authMember: string | null): Record<string, unknown> {
     const holes = this.resolvedHoles();
     const meRaw = authMember ? this.players.findIndex((p) => p.memberId === authMember) : -1;
-    const meIdx = meRaw >= 0 && !this.players[meRaw]!.removed ? meRaw : -1; // a tombstoned caller is off the card
+    const me = meRaw >= 0 ? this.players[meRaw] : undefined;
     const base = { eventId: this.meta?.eventId ?? 0, casual: !!this.meta?.casual, courseName: this.meta?.courseName ?? null, layoutName: this.meta?.layoutName ?? null, udiscCourseId: this.meta?.udiscCourseId ?? null, weather: this.meta?.weather ?? null, status: this.meta?.status ?? "none", holes };
-    if (meIdx < 0) return { ...base, cardId: null, playerIndex: null, cardmates: [], conflicts: [], missing: [] };
-    const cardId = this.players[meIdx]!.cardId ?? null;
+    if (!me || me.removed) return { ...base, cardId: null, playerIndex: null, cardmates: [], conflicts: [], missing: [] };
+    const meIdx = meRaw;
+    const cardId = me.cardId ?? null;
     const cardmates = this.players
       .map((p, index) => ({ p, index }))
       .filter((x) => !x.p.removed && (x.p.cardId ?? null) === cardId)
@@ -425,7 +474,7 @@ export class LiveEventDO {
   }
 
   private async finalize(authMember: string | null, authAdmin: boolean, force = false): Promise<Response> {
-    if (!this.meta) return j({ error: "not_started" }, 409);
+    if (!this.meta || this.meta.status === "none") return j({ error: "not_started" }, 409);
     // Casual rounds are only member-gated at the route, so anyone with the code could otherwise finalize
     // (lock) someone else's round — require the caller to actually be on the card. Admin events bypass
     // (they're admin-gated at the route and meta.casual is false).
@@ -487,14 +536,14 @@ export class LiveEventDO {
     const client = pair[0];
     const server = pair[1];
     this.state.acceptWebSocket(server);
-    try { server.send(JSON.stringify({ type: "snapshot", ...this.snapshot() })); } catch { /* ignore */ }
+    try { server.send(JSON.stringify({ type: "snapshot", ...this.snapshot() })); } catch (error) { if (!(error instanceof Error || error instanceof DOMException)) throw error; }
     return new Response(null, { status: 101, webSocket: client });
   }
 
   private sendAll(obj: unknown): void {
     const msg = JSON.stringify(obj);
     for (const ws of this.state.getWebSockets()) {
-      try { ws.send(msg); } catch { /* ignore */ }
+      try { ws.send(msg); } catch (error) { if (!(error instanceof Error || error instanceof DOMException)) throw error; }
     }
   }
   private broadcast(): void {

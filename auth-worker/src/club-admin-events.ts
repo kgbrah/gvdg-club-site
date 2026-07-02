@@ -29,6 +29,8 @@ function inlineLayout(raw: unknown): { name: string; holes: LayoutHole[]; total_
 }
 
 const hasField = (body: Record<string, unknown>, field: string): boolean => Object.prototype.hasOwnProperty.call(body, field);
+const hasEventDetailsPatch = (body: Record<string, unknown>): boolean =>
+  ["type", "name", "format", "date", "course_id", "layout_id", "league_id", "notes"].some((field) => hasField(body, field));
 
 function assignmentInt(value: unknown, fallback: number, min: number, max: number): number | null {
   if (value == null || value === "") return fallback;
@@ -56,12 +58,15 @@ export async function handleAdminEvents(
     if (method === "DELETE" && seg[4] != null) {
       const pid = asInt(seg[4]);
       if (pid == null) return json({ error: "not_found" }, 404, origin);
+      const b = (await readJson(request)) ?? {};
+      if (b.confirm_event_player_delete !== true) return json({ error: "event_player_delete_confirmation_required" }, 409, origin);
       await db.removeEventPlayer(env.DB, id, pid);
       return json({ ok: true }, 200, origin);
     }
   }
   if (seg[3] === "config" && id != null && method === "PUT") {
     const b = (await readJson(request)) ?? {};
+    if (b.confirm_event_config_update !== true) return json({ error: "event_config_confirmation_required" }, 409, origin);
     const divs = jsonStringArray(b.divisions, 40);
     const fmt = b.play_format == null ? null : (inSet(["singles", "doubles", "teams"], b.play_format) ? (b.play_format as string) : undefined);
     if (fmt === undefined) return json({ error: "invalid_config" }, 400, origin);
@@ -98,6 +103,7 @@ export async function handleAdminEvents(
     if (method === "GET") return json({ payouts: await shopDb.listEventStoreCreditPayouts(env.DB, id) }, 200, origin);
     if (method === "POST") {
       const body = (await readJson(request)) ?? {};
+      if (body.confirm_event_store_credit_award !== true) return json({ error: "event_store_credit_confirmation_required" }, 409, origin);
       const memberId = asStr(body.member_id, 80);
       const amount = asInt(body.amount_cents);
       const idempotencyKey = asStr(body.idempotency_key, 160);
@@ -140,6 +146,7 @@ export async function handleAdminEvents(
   }
   if ((seg[3] === "assign-starting-holes" || seg[3] === "assign-teams") && id != null && method === "POST") {
     const b = (await readJson(request)) ?? {};
+    if (b.confirm_assignment_overwrite !== true) return json({ error: "assignment_confirmation_required" }, 409, origin);
     const regs = (await db.listRegistrations(env.DB, id)) as { id: number }[];
     const registrationIds = regs.map((r) => r.id);
     if (seg[3] === "assign-starting-holes") {
@@ -229,10 +236,13 @@ export async function handleAdminEvents(
       if (notes == null && b.notes != null && b.notes !== "") return json({ error: "invalid_event" }, 400, origin);
       patch.notes = notes;
     }
+    if (hasEventDetailsPatch(b) && b.confirm_event_details_update !== true) return json({ error: "event_details_confirmation_required" }, 409, origin);
     const row = await db.updateEvent(env.DB, id, patch);
     return row ? json({ event: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
   }
   if (method === "DELETE" && id != null) {
+    const b = (await readJson(request)) ?? {};
+    if (b.confirm_event_delete !== true) return json({ error: "event_delete_confirmation_required" }, 409, origin);
     const check = await checkEventDeletion(env.DB, id);
     if (!check.ok) {
       return json({ error: check.error, blockers: check.blockers }, check.error === "not_found" ? 404 : 409, origin);

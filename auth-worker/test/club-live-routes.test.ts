@@ -1,12 +1,35 @@
 import { describe, expect, it } from "vitest";
 import { handleClubLive } from "../src/club-live-routes.js";
-import type { Env } from "../src/env.js";
+import { signSession } from "../src/jwt.js";
+import type { ClubLiveEnv } from "../src/club-live-routes.js";
+import type { D1Like } from "../src/db.js";
 
 type DbState = {
   weatherLocation?: unknown;
+  eventStatus?: string | null;
+  scorecardCancelled?: boolean;
+  eventStatusUpdated?: boolean;
 };
 
-function db(state: DbState) {
+const SECRET = "x".repeat(40);
+const MEMBERS = {
+  "member:m_admin": JSON.stringify({ memberId: "m_admin", name: "Admin", isAdmin: true, pinHash: "x", mustChangePin: false }),
+};
+
+function kv(initial: Record<string, string> = {}) {
+  const rows = new Map(Object.entries(initial));
+  return {
+    get: async (key: string) => rows.get(key) ?? null,
+    put: async (key: string, value: string) => void rows.set(key, value),
+    delete: async (key: string) => void rows.delete(key),
+  };
+}
+
+function emptyRows<T>(): T[] {
+  return [];
+}
+
+function db(state: DbState): D1Like {
   return {
     prepare: (sql: string) => {
       let binds: unknown[] = [];
@@ -15,18 +38,27 @@ function db(state: DbState) {
           binds = values;
           return this;
         },
-        all: async () => ({ results: [], success: true }),
-        first: async () => {
-          if (/SELECT \* FROM events WHERE id = \?/i.test(sql)) return null;
+        all: async <T = Record<string, unknown>>() => ({ results: emptyRows<T>(), success: true }),
+        first: async <T = Record<string, unknown>>() => {
+          let row: Record<string, unknown> | null = null;
+          if (/SELECT status FROM events WHERE id = \?/i.test(sql)) {
+            row = state.eventStatus == null ? null : { status: state.eventStatus };
+          }
+          else if (/SELECT \* FROM events WHERE id = \?/i.test(sql)) row = null;
           if (/SELECT \* FROM courses WHERE lower\(name\) = lower\(\?\)/i.test(sql)) {
             expect(binds).toEqual(["West Meadowbrook Park"]);
-            return { id: 2, name: "West Meadowbrook Park", location: "Greenville, NC", lat: 35.6264, lng: -77.375 };
+            row = { id: 2, name: "West Meadowbrook Park", location: "Greenville, NC", lat: 35.6264, lng: -77.375 };
           }
-          if (/SELECT \* FROM course_layouts WHERE course_id = \? AND lower\(name\) = lower\(\?\)/i.test(sql)) {
+          else if (/SELECT \* FROM course_layouts WHERE course_id = \? AND lower\(name\) = lower\(\?\)/i.test(sql)) {
             expect(binds).toEqual([2, "Yard Gnome Layout"]);
-            return { id: 1, course_id: 2, name: "Yard Gnome Layout", holes: "[]" };
+            row = { id: 1, course_id: 2, name: "Yard Gnome Layout", holes: "[]" };
           }
-          return null;
+          else if (/UPDATE events SET/i.test(sql)) {
+            state.eventStatus = "scheduled";
+            state.eventStatusUpdated = true;
+            row = { id: binds.at(-1), status: "scheduled" };
+          }
+          return row as T | null;
         },
         run: async () => ({ results: [], success: true }),
       };
@@ -34,7 +66,7 @@ function db(state: DbState) {
   };
 }
 
-function env(state: DbState): Env {
+function env(state: DbState): ClubLiveEnv {
   const snapshot = {
     status: "live",
     eventId: 2,
@@ -52,16 +84,29 @@ function env(state: DbState): Env {
         state.weatherLocation = JSON.parse(String(init?.body ?? "{}")).weatherLocation;
         return new Response(JSON.stringify({ ...snapshot, weather: { location: state.weatherLocation, current: null, history: [], error: null } }));
       }
+      if (url.endsWith("/cancel")) {
+        state.scorecardCancelled = true;
+        return new Response(JSON.stringify({ status: "none", rev: 3, players: [] }));
+      }
       return new Response(JSON.stringify({ error: "unexpected" }), { status: 500 });
     },
   };
-  return {
+  const bindings: ClubLiveEnv = {
     DB: db(state),
+    ROSTER: kv(MEMBERS),
+    RATELIMIT: kv(),
+    JWT_SECRET: SECRET,
     LIVE: {
       idFromName: (name: string) => name,
       get: () => stub,
     },
-  } as unknown as Env;
+  };
+  return bindings;
+}
+
+async function adminHeader(): Promise<HeadersInit> {
+  const token = await signSession({ sub: "m_admin", mustChangePin: false }, SECRET, 900);
+  return { Authorization: "Bearer " + token };
 }
 
 describe("club live weather backfill", () => {
@@ -72,5 +117,89 @@ describe("club live weather backfill", () => {
     const body = (await res?.json()) as { weather?: { location?: unknown } };
     expect(state.weatherLocation).toEqual({ lat: 35.6264, lng: -77.375, label: "West Meadowbrook Park - Greenville, NC" });
     expect(body.weather?.location).toEqual(state.weatherLocation);
+  });
+});
+
+describe("club live scorecard cancellation", () => {
+  it("requires explicit confirmation before resetting live scoring", async () => {
+    const state: DbState = { eventStatus: "live" };
+    const res = await handleClubLive(
+      new Request("https://w/events/2/live/cancel", { method: "POST", headers: await adminHeader() }),
+      env(state),
+      null,
+      "POST",
+      ["events", "2", "live", "cancel"],
+    );
+
+    if (!res) throw new Error("missing_response");
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({ error: "live_scorecard_cancel_confirmation_required" });
+    expect(state.scorecardCancelled).toBeUndefined();
+    expect(state.eventStatusUpdated).toBeUndefined();
+  });
+
+  it("resets the live Durable Object and returns the event to scheduled", async () => {
+    const state: DbState = { eventStatus: "live" };
+    const res = await handleClubLive(
+      new Request("https://w/events/2/live/cancel", {
+        method: "POST",
+        headers: await adminHeader(),
+        body: JSON.stringify({ confirm_live_scorecard_cancel: true }),
+      }),
+      env(state),
+      null,
+      "POST",
+      ["events", "2", "live", "cancel"],
+    );
+
+    if (!res) throw new Error("missing_response");
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ status: "none" });
+    expect(state.scorecardCancelled).toBe(true);
+    expect(state.eventStatus).toBe("scheduled");
+    expect(state.eventStatusUpdated).toBe(true);
+  });
+
+  it("returns not found without touching live state when the event is missing", async () => {
+    const state: DbState = { eventStatus: null };
+    const res = await handleClubLive(
+      new Request("https://w/events/2/live/cancel", {
+        method: "POST",
+        headers: await adminHeader(),
+        body: JSON.stringify({ confirm_live_scorecard_cancel: true }),
+      }),
+      env(state),
+      null,
+      "POST",
+      ["events", "2", "live", "cancel"],
+    );
+
+    if (!res) throw new Error("missing_response");
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toMatchObject({ error: "not_found" });
+    expect(state.scorecardCancelled).toBeUndefined();
+    expect(state.eventStatusUpdated).toBeUndefined();
+  });
+
+  it("rejects final events without touching live state", async () => {
+    const state: DbState = { eventStatus: "final" };
+    const res = await handleClubLive(
+      new Request("https://w/events/2/live/cancel", {
+        method: "POST",
+        headers: await adminHeader(),
+        body: JSON.stringify({ confirm_live_scorecard_cancel: true }),
+      }),
+      env(state),
+      null,
+      "POST",
+      ["events", "2", "live", "cancel"],
+    );
+
+    if (!res) throw new Error("missing_response");
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({ error: "round_already_final" });
+    expect(state.scorecardCancelled).toBeUndefined();
+    expect(state.eventStatus).toBe("final");
+    expect(state.eventStatusUpdated).toBeUndefined();
   });
 });

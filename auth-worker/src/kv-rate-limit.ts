@@ -1,6 +1,10 @@
-import type { Env } from "./env.js";
+import type { KVLike } from "./ratelimit.js";
 
-export async function kvRateLimited(env: Env, key: string, limit: number, windowSec: number): Promise<boolean> {
+type RateLimitEnv = {
+  readonly RATELIMIT: KVLike;
+};
+
+export async function kvRateLimited(env: RateLimitEnv, key: string, limit: number, windowSec: number): Promise<boolean> {
   const cur = parseInt((await env.RATELIMIT.get(key)) || "0", 10) || 0;
   if (cur >= limit) return true;
   await env.RATELIMIT.put(key, String(cur + 1), { expirationTtl: windowSec });

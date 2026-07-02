@@ -36,6 +36,7 @@ export async function handleAdminCourses(
     }
     if (method === "PUT") {
       const b = (await readJson(request)) ?? {};
+      if (b.confirm_course_positions_replace !== true) return json({ error: "course_positions_replace_confirmation_required" }, 409, origin);
       const raw = Array.isArray(b.positions) ? b.positions : [];
       const positions: db.PositionInput[] = [];
       for (const r of raw) {
@@ -84,6 +85,8 @@ export async function handleAdminCourses(
     }
   }
   if (method === "DELETE" && id != null) {
+    const b = (await readJson(request)) ?? {};
+    if (b.confirm_course_delete !== true) return json({ error: "course_delete_confirmation_required" }, 409, origin);
     const check = await checkCourseDeletion(env.DB, id);
     if (!check.ok) return json({ error: check.error, blockers: check.blockers }, check.error === "not_found" ? 404 : 409, origin);
     await db.deleteCourse(env.DB, id);

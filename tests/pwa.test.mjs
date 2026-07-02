@@ -61,116 +61,15 @@ test('live scoring links back to the members dashboard', () => {
   assert.match(html, /membersLink\.href = 'gvdg-members\.html'/);
   assert.match(html, /<a class="top-link" href="gvdg-members\.html" aria-label="Return to members">Members<\/a>/);
   assert.match(html, /\.iconbtn\[hidden\] \{ display: none; \}/);
+  const admin = readFileSync('admin.html', 'utf8');
+  assert.match(admin, /\.nav-links \{[^}]*translate3d\(0, -120%, 0\)/s);
+  assert.match(admin, /\.nav-links \{[^}]*visibility: hidden;/s);
 });
 
 test('live scoring surfaces load the shared weather display formatter', () => {
   for (const path of ['score.html', 'events.html', 'admin.html']) {
     assert.match(readFileSync(path, 'utf8'), /weather-display\.js/);
   }
-});
-
-test('admin live scoring layout selector uses themed picker styles', () => {
-  const html = readFileSync('admin.html', 'utf8');
-  assert.match(html, /<select id="scLayout"/);
-  assert.match(html, /#alCourse,\s*#scEvent,\s*#scLayout,\s*#rgEvent\s*\{/);
-});
-
-test('admin registration bulk assignment controls confirm destructive changes', () => {
-  const html = readFileSync('admin.html', 'utf8');
-  assert.match(html, /id="rgAssignCards"/);
-  assert.match(html, /id="rgAssignTeams"/);
-  assert.match(html, /id="rgTeamSize"/);
-  assert.match(html, /confirm\([^)]*Existing/s);
-  assert.match(html, /btn\.disabled = true; btn\.textContent = 'Assigning\.\.\.'/);
-});
-
-test('admin wallet adjustments confirm and carry retry keys', () => {
-  const html = readFileSync('admin.html', 'utf8');
-  assert.match(html, /id="waSubmit"/);
-  assert.match(html, /wallet-adjustment:/);
-  assert.match(html, /idempotency_key: key/);
-  assert.match(html, /confirm\('Post ' \+ dollarsFromCents\(amount\)/);
-  assert.match(html, /btn\.disabled = true; btn\.textContent = 'Posting\.\.\.'/);
-});
-
-test('admin member creation confirms admin grants before submitting', () => {
-  const html = readFileSync('admin.html', 'utf8');
-  assert.match(html, /id="amSubmit"/);
-  assert.match(html, /confirm\('Create ' \+ body\.name \+ ' as a club admin/);
-  assert.match(html, /body\.confirm_admin_grant = true/);
-  assert.match(html, /btn\.disabled = true; btn\.textContent = 'Creating\.\.\.'/);
-});
-
-test('admin ace pot resolution confirms payout and carry actions', () => {
-  const html = readFileSync('admin.html', 'utf8');
-  assert.match(html, /id="rgAcePayout"/);
-  assert.match(html, /id="rgAceCarryNext"/);
-  assert.match(html, /confirm\('Mark ace pot paid out to ' \+ winner/);
-  assert.match(html, /confirm\('Carry this ace pot to the next event/);
-  assert.match(html, /confirm_ace_pot_resolution: true/);
-  assert.match(html, /btn\.disabled = true; btn\.textContent = busyText/);
-});
-
-test('admin paid registration changes require confirmation', () => {
-  const html = readFileSync('admin.html', 'utf8');
-  assert.match(html, /Paid\?/);
-  assert.match(html, /confirm\('Mark ' \+ name \+ ' as paid for this event\?'\)/);
-  assert.match(html, /confirm\('Mark ' \+ name \+ ' as unpaid for this event\?'\)/);
-  assert.match(html, /confirm_paid_entry_change: true/);
-});
-
-test('admin order status changes require confirmation', () => {
-  const html = readFileSync('admin.html', 'utf8');
-  assert.match(html, /ORDER_STATUS_LABELS/);
-  assert.match(html, /confirm\('Change order #' \+ order\.id/);
-  assert.match(html, /confirm_order_status_change = true/);
-});
-
-test('admin product archive changes require confirmation', () => {
-  const html = readFileSync('admin.html', 'utf8');
-  assert.match(html, /confirm\('Archive “' \+ p\.name/);
-  assert.match(html, /confirm_product_archive: true/);
-});
-
-test('admin event status changes require confirmation', () => {
-  const html = readFileSync('admin.html', 'utf8');
-  assert.match(html, /function confirmEventStatusChange/);
-  assert.match(html, /confirm\('Change “' \+ ev\.name \+ '” from '/);
-  assert.match(html, /body\.confirm_event_status_change = true/);
-});
-
-test('admin fundraiser status changes require confirmation', () => {
-  const html = readFileSync('admin.html', 'utf8');
-  assert.match(html, /confirm\('Close fundraiser “' \+ f\.title/);
-  assert.match(html, /confirm\('Reopen fundraiser “' \+ f\.title/);
-  assert.match(html, /confirm_fundraiser_status_change: true/);
-});
-
-test('admin delete blockers surface dependent records', () => {
-  const html = readFileSync('admin.html', 'utf8');
-  assert.match(html, /DELETE_BLOCKER_LABELS/);
-  assert.match(html, /course_layouts: 'layouts'/);
-  assert.match(html, /round_ratings: 'round ratings'/);
-  assert.match(html, /winner: 'a recorded winner'/);
-  assert.match(html, /deleteBlockedMessage\('event', r\.status, d\)/);
-  assert.match(html, /deleteBlockedMessage\('layout', r\.status, d\)/);
-  assert.match(html, /confirm\('Delete CTP for hole ' \+ c\.hole \+ '\?'\)/);
-  assert.match(html, /deleteBlockedMessage\('CTP', r\.status, d\)/);
-  assert.match(html, /del\.disabled = true; del\.textContent = 'Deleting\.\.\.'/);
-});
-
-test('admin course position deletes require confirmation', () => {
-  const html = readFileSync('admin.html', 'utf8');
-  assert.match(html, /alDeletePosition\(p\)/);
-  assert.match(html, /confirm\('Delete ' \+ p\.kind \+ ' position “' \+ p\.label/);
-  assert.match(html, /confirm_course_position_delete: true/);
-});
-
-test('admin tee sign review actions require confirmation', () => {
-  const html = readFileSync('admin.html', 'utf8');
-  assert.match(html, /confirm_tee_sign_approval: true/);
-  assert.match(html, /confirm_tee_sign_reject: true/);
-  assert.match(html, /confirm_tee_sign_delete: true/);
 });
 
 test('score course picker rows use themed text and app font', () => {

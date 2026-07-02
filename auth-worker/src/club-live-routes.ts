@@ -1,4 +1,3 @@
-import type { Env } from "./env.js";
 import * as db from "./db.js";
 import { adminGate, requireAuth } from "./authz.js";
 import { getMember } from "./roster.js";
@@ -7,9 +6,24 @@ import { kvRateLimited } from "./kv-rate-limit.js";
 import { asInt, asStr } from "./input.js";
 import { findRatingAnchor } from "./rating-store.js";
 import { weatherLocationForCourse, type WeatherLocation } from "./weather.js";
+import type { KVLike } from "./ratelimit.js";
 
 const LIVE_SCORE_IP_LIMIT = 180; // score writes per identity per minute (a card rarely exceeds a few)
 
+type LiveStub = {
+  fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+};
+type LiveNamespace = {
+  idFromName(name: string): unknown;
+  get(id: unknown): LiveStub;
+};
+export type ClubLiveEnv = {
+  readonly DB: db.D1Like;
+  readonly LIVE: LiveNamespace;
+  readonly RATELIMIT: KVLike;
+  readonly ROSTER: KVLike;
+  readonly JWT_SECRET: string;
+};
 type StartPlayer = {
   readonly memberId: string | null;
   readonly name: string;
@@ -38,12 +52,12 @@ type LiveCourseRow = {
   readonly udisc_course_id?: string | null;
 };
 
-async function liveProxy(stub: DurableObjectStub, path: string, init: RequestInit | undefined, origin: string | null): Promise<Response> {
+async function liveProxy(stub: LiveStub, path: string, init: RequestInit | undefined, origin: string | null): Promise<Response> {
   const r = await stub.fetch("https://do" + path, init);
   const data = await r.json().catch(() => ({}));
   return json(data, r.status, origin);
 }
-async function liveJson(stub: DurableObjectStub, path: string, init?: RequestInit): Promise<{ readonly data: LiveJson; readonly status: number }> {
+async function liveJson(stub: LiveStub, path: string, init?: RequestInit): Promise<{ readonly data: LiveJson; readonly status: number }> {
   const r = await stub.fetch("https://do" + path, init);
   const parsed: unknown = await r.json().catch(() => ({}));
   return { data: isRecord(parsed) ? parsed : {}, status: r.status };
@@ -62,7 +76,7 @@ function rowNumber(row: Record<string, unknown> | null, key: string): number | n
   const value = row?.[key];
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
-async function liveWeatherLocationFromSnapshot(env: Env, data: LiveJson): Promise<WeatherLocation | null> {
+async function liveWeatherLocationFromSnapshot(env: ClubLiveEnv, data: LiveJson): Promise<WeatherLocation | null> {
   const udiscCourseId = rowString(data, "udiscCourseId");
   const courseName = rowString(data, "courseName");
   const layoutName = rowString(data, "layoutName");
@@ -81,7 +95,7 @@ async function liveWeatherLocationFromSnapshot(env: Env, data: LiveJson): Promis
       : null;
   return weatherLocationForCourse(course, layout);
 }
-async function liveWeatherLocation(env: Env, eid: number, data: LiveJson): Promise<WeatherLocation | null> {
+async function liveWeatherLocation(env: ClubLiveEnv, eid: number, data: LiveJson): Promise<WeatherLocation | null> {
   const ev = (await db.getEvent(env.DB, eid)) as LiveEventRow | null;
   if (ev) {
     const evLayout = ev.layout_id != null ? ((await db.getLayout(env.DB, ev.layout_id)) as LiveLayoutRow | null) : null;
@@ -92,19 +106,19 @@ async function liveWeatherLocation(env: Env, eid: number, data: LiveJson): Promi
   }
   return liveWeatherLocationFromSnapshot(env, data);
 }
-async function ensureLiveWeather(stub: DurableObjectStub, env: Env, eid: number, data: LiveJson): Promise<LiveJson | null> {
+async function ensureLiveWeather(stub: LiveStub, env: ClubLiveEnv, eid: number, data: LiveJson): Promise<LiveJson | null> {
   const weatherLocation = await liveWeatherLocation(env, eid, data);
   if (!weatherLocation) return null;
   const updated = await liveJson(stub, "/weather", { method: "POST", body: JSON.stringify({ weatherLocation }) });
   return updated.status === 200 ? updated.data : null;
 }
-async function liveSnapshotWithWeather(stub: DurableObjectStub, env: Env, eid: number, origin: string | null): Promise<Response> {
+async function liveSnapshotWithWeather(stub: LiveStub, env: ClubLiveEnv, eid: number, origin: string | null): Promise<Response> {
   const first = await liveJson(stub, "/snapshot");
   if (!needsWeatherBackfill(first.data, first.status)) return json(first.data, first.status, origin);
   const updated = await ensureLiveWeather(stub, env, eid, first.data);
   return json(updated ?? first.data, updated ? 200 : first.status, origin);
 }
-async function liveMineWithWeather(stub: DurableObjectStub, env: Env, eid: number, headers: HeadersInit, origin: string | null): Promise<Response> {
+async function liveMineWithWeather(stub: LiveStub, env: ClubLiveEnv, eid: number, headers: HeadersInit, origin: string | null): Promise<Response> {
   const first = await liveJson(stub, "/mine", { headers });
   if (!needsWeatherBackfill(first.data, first.status)) return json(first.data, first.status, origin);
   const updated = await ensureLiveWeather(stub, env, eid, first.data);
@@ -113,7 +127,7 @@ async function liveMineWithWeather(stub: DurableObjectStub, env: Env, eid: numbe
   return json(second.data, second.status, origin);
 }
 
-async function withRatingAnchor(env: Env, player: StartPlayer) {
+async function withRatingAnchor(env: ClubLiveEnv, player: StartPlayer) {
   const member = player.memberId ? await getMember(env.ROSTER, player.memberId) : null;
   const ratingAnchor = await findRatingAnchor(env.DB, { memberId: player.memberId, pdgaNo: player.pdgaNo ?? member?.pdgaNo ?? null });
   return {
@@ -130,7 +144,7 @@ async function withRatingAnchor(env: Env, player: StartPlayer) {
  *  resolved identity is injected into the DO as a trusted header; the DO never trusts the body for authz. */
 async function scoreIdentity(
   request: Request,
-  env: Env,
+  env: ClubLiveEnv,
   body: Record<string, unknown> | null,
 ): Promise<{ authMember: string | null; authAdmin: boolean }> {
   const claims = await requireAuth(request, env);
@@ -144,7 +158,7 @@ async function scoreIdentity(
 
 export async function handleClubLive(
   request: Request,
-  env: Env,
+  env: ClubLiveEnv,
   origin: string | null,
   method: string,
   seg: string[],
@@ -180,8 +194,7 @@ export async function handleClubLive(
     return json(await r.json().catch(() => ({})), r.status, origin);
   }
 
-  // Round control stays admin-only: start, finalize, and the round-scoped hole override.
-  if (method === "POST" && (sub === "start" || sub === "finalize" || sub === "override")) {
+  if (method === "POST" && (sub === "start" || sub === "cancel" || sub === "finalize" || sub === "override")) {
     const gate = await adminGate(request, env, origin);
     if (gate instanceof Response) return gate;
 
@@ -197,7 +210,7 @@ export async function handleClubLive(
       const weatherLocation = weatherLocationForCourse(evCourse, evLayout);
       const regs = (await db.listRegistrations(env.DB, eid)) as { member_id?: string; name?: string; division?: string | null; starting_hole?: number | null }[];
       const rawPlayers: StartPlayer[] =
-        regs.length && startBody!.from !== "players"
+        regs.length && startBody.from !== "players"
           ? regs.map((r) => ({ memberId: r.member_id ?? null, name: String(r.name ?? "Player"), division: r.division ?? null, startingHole: r.starting_hole ?? null }))
           : (Array.isArray(ev.players) ? ev.players : []).map((p) => ({ memberId: rowString(p, "member_id"), name: String(p.name ?? "Player"), division: rowString(p, "division"), startingHole: null, pdgaNo: rowString(p, "pdga_no") }));
       const players = await Promise.all(rawPlayers.map((player) => withRatingAnchor(env, player)));
@@ -207,6 +220,16 @@ export async function handleClubLive(
       return json(data, r.status, origin);
     }
     const body = (await readJson(request)) ?? {};
+    if (sub === "cancel") {
+      if (body.confirm_live_scorecard_cancel !== true) return json({ error: "live_scorecard_cancel_confirmation_required" }, 409, origin);
+      const status = await db.getEventStatus(env.DB, eid);
+      if (status == null) return json({ error: "not_found" }, 404, origin);
+      if (status === "final") return json({ error: "round_already_final" }, 409, origin);
+      const r = await stub.fetch("https://do/cancel", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify(body) });
+      const data = await r.json().catch(() => ({}));
+      if (r.status === 200) await db.updateEvent(env.DB, eid, { status: "scheduled" });
+      return json(data, r.status, origin);
+    }
     if (sub === "finalize") {
       // This route already passed adminGate, so the caller is a club admin → allow the force override
       // (finalize past scorecards that don't fully agree). Force comes from ?force=1 or body.force.
