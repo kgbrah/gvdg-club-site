@@ -24,15 +24,18 @@ type LiveEventRow = Record<string, unknown> & {
   readonly players?: Record<string, unknown>[];
 };
 type LiveLayoutRow = {
+  readonly id?: number | null;
   readonly name?: string | null;
   readonly course_id?: number | null;
   readonly holes?: string | null;
 };
 type LiveCourseRow = {
+  readonly id?: number | null;
   readonly name?: string | null;
   readonly location?: string | null;
   readonly lat?: number | null;
   readonly lng?: number | null;
+  readonly udisc_course_id?: string | null;
 };
 
 async function liveProxy(stub: DurableObjectStub, path: string, init: RequestInit | undefined, origin: string | null): Promise<Response> {
@@ -55,16 +58,42 @@ function rowString(row: Record<string, unknown>, key: string): string | null {
   const value = row[key];
   return typeof value === "string" ? value : null;
 }
-async function liveWeatherLocation(env: Env, eid: number): Promise<WeatherLocation | null> {
-  const ev = (await db.getEvent(env.DB, eid)) as LiveEventRow | null;
-  if (!ev) return null;
-  const evLayout = ev.layout_id != null ? ((await db.getLayout(env.DB, ev.layout_id)) as LiveLayoutRow | null) : null;
-  const courseId = evLayout?.course_id ?? ev.course_id ?? null;
-  const evCourse = courseId != null ? ((await db.getCourse(env.DB, courseId)) as LiveCourseRow | null) : null;
-  return weatherLocationForCourse(evCourse, evLayout);
+function rowNumber(row: Record<string, unknown> | null, key: string): number | null {
+  const value = row?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
-async function ensureLiveWeather(stub: DurableObjectStub, env: Env, eid: number): Promise<LiveJson | null> {
-  const weatherLocation = await liveWeatherLocation(env, eid);
+async function liveWeatherLocationFromSnapshot(env: Env, data: LiveJson): Promise<WeatherLocation | null> {
+  const udiscCourseId = rowString(data, "udiscCourseId");
+  const courseName = rowString(data, "courseName");
+  const layoutName = rowString(data, "layoutName");
+  let course: LiveCourseRow | null = null;
+  if (udiscCourseId) {
+    course = (await env.DB.prepare("SELECT * FROM courses WHERE udisc_course_id = ? LIMIT 1").bind(udiscCourseId).first()) as LiveCourseRow | null;
+  }
+  if (!course && courseName) {
+    course = (await env.DB.prepare("SELECT * FROM courses WHERE lower(name) = lower(?) LIMIT 1").bind(courseName).first()) as LiveCourseRow | null;
+  }
+  if (!course) return null;
+  const courseId = rowNumber(course, "id");
+  const layout =
+    courseId != null && layoutName
+      ? ((await env.DB.prepare("SELECT * FROM course_layouts WHERE course_id = ? AND lower(name) = lower(?) LIMIT 1").bind(courseId, layoutName).first()) as LiveLayoutRow | null)
+      : null;
+  return weatherLocationForCourse(course, layout);
+}
+async function liveWeatherLocation(env: Env, eid: number, data: LiveJson): Promise<WeatherLocation | null> {
+  const ev = (await db.getEvent(env.DB, eid)) as LiveEventRow | null;
+  if (ev) {
+    const evLayout = ev.layout_id != null ? ((await db.getLayout(env.DB, ev.layout_id)) as LiveLayoutRow | null) : null;
+    const courseId = evLayout?.course_id ?? ev.course_id ?? null;
+    const evCourse = courseId != null ? ((await db.getCourse(env.DB, courseId)) as LiveCourseRow | null) : null;
+    const location = weatherLocationForCourse(evCourse, evLayout);
+    if (location) return location;
+  }
+  return liveWeatherLocationFromSnapshot(env, data);
+}
+async function ensureLiveWeather(stub: DurableObjectStub, env: Env, eid: number, data: LiveJson): Promise<LiveJson | null> {
+  const weatherLocation = await liveWeatherLocation(env, eid, data);
   if (!weatherLocation) return null;
   const updated = await liveJson(stub, "/weather", { method: "POST", body: JSON.stringify({ weatherLocation }) });
   return updated.status === 200 ? updated.data : null;
@@ -72,13 +101,13 @@ async function ensureLiveWeather(stub: DurableObjectStub, env: Env, eid: number)
 async function liveSnapshotWithWeather(stub: DurableObjectStub, env: Env, eid: number, origin: string | null): Promise<Response> {
   const first = await liveJson(stub, "/snapshot");
   if (!needsWeatherBackfill(first.data, first.status)) return json(first.data, first.status, origin);
-  const updated = await ensureLiveWeather(stub, env, eid);
+  const updated = await ensureLiveWeather(stub, env, eid, first.data);
   return json(updated ?? first.data, updated ? 200 : first.status, origin);
 }
 async function liveMineWithWeather(stub: DurableObjectStub, env: Env, eid: number, headers: HeadersInit, origin: string | null): Promise<Response> {
   const first = await liveJson(stub, "/mine", { headers });
   if (!needsWeatherBackfill(first.data, first.status)) return json(first.data, first.status, origin);
-  const updated = await ensureLiveWeather(stub, env, eid);
+  const updated = await ensureLiveWeather(stub, env, eid, first.data);
   if (!updated) return json(first.data, first.status, origin);
   const second = await liveJson(stub, "/mine", { headers });
   return json(second.data, second.status, origin);
