@@ -237,9 +237,9 @@
             body #crotts-fab,
             body #crotts-panel { display: none !important; }
         }
-        .admin-form { display: grid; gap: 0.75rem; max-width: 520px; }
+        .admin-form { display: grid; gap: 0.75rem; width: 100%; max-width: 520px; min-width: 0; }
         .admin-form label { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 0.2rem; }
-        .admin-form input, .admin-form select, .admin-form textarea { width: 100%; padding: 0.6rem 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95rem; }
+        .admin-form input, .admin-form select, .admin-form textarea { width: 100%; box-sizing: border-box; padding: 0.6rem 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95rem; }
         /* Long course/event/layout option text grew these unconstrained pickers off the right edge on mobile.
            Cap every admin-pane control to its container, let flex-row controls shrink below their content
            width, and lay the stand-alone Course/Event pickers out full-width like the form fields. */
@@ -260,14 +260,20 @@
         .admin-badge { font-size: 0.7rem; text-transform: uppercase; padding: 0.15rem 0.5rem; border-radius: 4px; background: var(--secondary); color: #fff; letter-spacing: 0.04em; }
         .admin-badge.live { background: #dc3545; } .admin-badge.final { background: var(--text-muted); } .admin-badge.scheduled { background: var(--green); }
         .admin-cand { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--border-color); }
-        .admin-split { display: grid; grid-template-columns: minmax(260px, 420px) 1fr; gap: 1.25rem; align-items: start; }
-        @media (max-width: 820px) { .admin-split { grid-template-columns: 1fr; } }
+        .admin-split { display: grid; grid-template-columns: minmax(260px, 420px) minmax(0, 1fr); gap: 1.25rem; align-items: start; min-width: 0; }
+        .admin-split > * { min-width: 0; }
+        @media (max-width: 820px) { .admin-split { grid-template-columns: minmax(0, 1fr); } }
         .shop-admin-list, .wallet-ledger { display: grid; gap: 0.65rem; }
         .shop-admin-row { display: grid; grid-template-columns: 56px minmax(160px, 1fr) auto; gap: 0.75rem; align-items: center; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); padding: 0.65rem; }
         .shop-admin-thumb { width: 56px; aspect-ratio: 1; border-radius: 8px; object-fit: cover; background: var(--bg-tertiary); border: 1px solid var(--border-color); }
         .shop-admin-meta { font-size: 0.8rem; color: var(--text-muted); }
         .shop-admin-controls { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; }
         .shop-admin-controls input { width: 5rem; padding: 0.35rem 0.45rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
+        @media (max-width: 760px) {
+            .shop-admin-row { grid-template-columns: 48px minmax(0, 1fr); gap: 0.6rem; }
+            .shop-admin-thumb { width: 48px; }
+            .shop-admin-controls { grid-column: 1 / -1; justify-content: flex-start; }
+        }
         .wallet-row { display: flex; justify-content: space-between; gap: 0.75rem; align-items: baseline; flex-wrap: wrap; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); padding: 0.65rem 0.75rem; }
         .wallet-row strong { color: var(--text-primary); }
         .wallet-row .credit { color: var(--green); font-weight: 700; }
@@ -2107,7 +2113,7 @@
                 const del = elx('button', 'admin-btn danger', 'Archive');
                 del.addEventListener('click', async () => {
                     if (!confirm('Archive “' + p.name + '”?')) return;
-                    const r = await adminApi('/admin/shop/products/' + p.id, { method: 'DELETE' });
+                    const r = await adminApi('/admin/shop/products/' + p.id, { method: 'DELETE', body: { confirm_product_archive: true } });
                     adminMsg(r.ok ? 'Product archived' : 'Archive failed', r.ok);
                     if (r.ok) adminLoadProducts();
                 });

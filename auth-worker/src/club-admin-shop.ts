@@ -1,6 +1,6 @@
 import type { Env } from "./env.js";
 import * as shopDb from "./shop-db.js";
-import { resolveMemberFlexible, type KVListLike } from "./roster.js";
+import { resolveMemberFlexible } from "./roster.js";
 import { json, readJson } from "./http.js";
 import { asInt, asStr, inSet } from "./input.js";
 import { createWalletTransactionOnce } from "./wallet-idempotency.js";
@@ -124,6 +124,8 @@ export async function handleAdminShop(
       return row ? json({ product: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
     }
     if (method === "DELETE" && id != null) {
+      const body = (await readJson(request)) ?? {};
+      if (body.confirm_product_archive !== true) return json({ error: "product_archive_confirmation_required" }, 409, origin);
       const row = await shopDb.deactivateStoreProduct(env.DB, id);
       return row ? json({ product: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
     }
@@ -144,7 +146,7 @@ export async function handleAdminShop(
       const idempotencyKey = asStr(body.idempotency_key, 160);
       if (!identifier || amount == null) return json({ error: "invalid_wallet_adjustment" }, 400, origin);
       if (!idempotencyKey) return json({ error: "idempotency_key_required" }, 400, origin);
-      const resolved = await resolveMemberFlexible(env.ROSTER as unknown as KVListLike, identifier);
+      const resolved = await resolveMemberFlexible(env.ROSTER, identifier);
       if (!resolved.ok) {
         return resolved.reason === "ambiguous"
           ? json({ error: "member_ambiguous" }, 409, origin)
