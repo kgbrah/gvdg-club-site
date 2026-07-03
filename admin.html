@@ -2605,8 +2605,10 @@
             regs.forEach((rg) => {
                 const tr = document.createElement('tr');
                 tr.appendChild(elx('td', 'lb-name', rg.name));
-                tr.appendChild(elx('td', null, rg.division || '—'));
-                tr.appendChild(elx('td', null, rg.team || '—'));
+                // Division + team are admin-editable (blur to save). Team matters for doubles — each player
+                // needs a pair label, and matchplay/doubles targets are built from these labels.
+                const divTd = document.createElement('td'); const divIn = document.createElement('input'); divIn.type = 'text'; divIn.maxLength = 40; divIn.style.width = '5rem'; divIn.value = rg.division || ''; divIn.placeholder = 'division'; divIn.addEventListener('change', () => rgPatch(rg.id, { division: divIn.value.trim() || null })); divTd.appendChild(divIn); tr.appendChild(divTd);
+                const teamTd = document.createElement('td'); const teamIn = document.createElement('input'); teamIn.type = 'text'; teamIn.maxLength = 40; teamIn.style.width = '5rem'; teamIn.value = rg.team || ''; teamIn.placeholder = 'pair/team'; teamIn.addEventListener('change', () => rgPatch(rg.id, { team: teamIn.value.trim() || null })); teamTd.appendChild(teamIn); tr.appendChild(teamTd);
                 const shTd = document.createElement('td'); const sh = document.createElement('input'); sh.type = 'number'; sh.min = '1'; sh.style.width = '3.5rem'; if (rg.starting_hole != null) sh.value = rg.starting_hole; sh.addEventListener('change', () => rgPatch(rg.id, { starting_hole: parseInt(sh.value, 10) || null })); shTd.appendChild(sh); tr.appendChild(shTd);
                 tr.appendChild(rgToggleCell(rg.checked_in, (v) => rgPatch(rg.id, { checked_in: v })));
                 tr.appendChild(rgToggleCell(rg.paid_entry, (v) => rgPatch(rg.id, { paid_entry: v })));
