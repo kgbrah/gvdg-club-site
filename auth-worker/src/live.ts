@@ -6,7 +6,7 @@
 // snapshot + ws reads are public). The DO trusts requests it receives.
 
 import { normalizeScorecards, playerScorerId, purgeScorerVotes, purgeScoreTargetScorerVotes, recordScoreTargetVote } from "./live-consensus.js";
-import { isLiveFormatError, normalizeLiveScoringConfig, type LiveScoringConfig } from "./live-format.js";
+import { isLiveFormatError, normalizeLiveScoringConfig, normalizePairLabel, type LiveScoringConfig } from "./live-format.js";
 import { finalizeLiveEvent } from "./live-finalize.js";
 import { updateLivePairs } from "./live-pairs.js";
 import { canEnterScorecard, findPlayer, invalidScoreTargetsResponse, scoreTargetForBody, scoringState, targetAnchor } from "./live-state.js";
@@ -53,7 +53,7 @@ export class LiveEventDO {
     if (action === "start") return this.start(body as StartBody);
     if (action === "score") return this.score(body as ScoreBody, authMember, authAdmin);
     if (action === "join") return this.join(authMember, (body as { name?: string }).name); // casual round: caller joins
-    if (action === "guest") return this.addGuest(authMember, (body as { name?: string }).name); // add a non-member to my card
+    if (action === "guest") return this.addGuest(authMember, (body as { name?: string; team?: string }).name, (body as { team?: string }).team); // add a non-member to my card (+ pair label for doubles)
     if (action === "remove") return this.removePlayer(body as RemoveBody, authMember, authAdmin); // drop a player (accidental/left/no-show)
     if (action === "pairs") return this.updatePairs(body as PairAssignmentBody, authMember, authAdmin);
     if (action === "cancel") return this.cancel(authAdmin); // admin: scrap a mis-started round, reset to none
@@ -165,14 +165,16 @@ export class LiveEventDO {
     return j(mineData(this.meta, this.players, authMember));
   }
 
-  /** Add a non-member guest to the caller's card (the caller must already be on the round). */
-  private async addGuest(authMember: string | null, name?: string): Promise<Response> {
+  /** Add a non-member guest to the caller's card (the caller must already be on the round). A pair label
+   *  (team) may be supplied so a doubles walk-on is pairable immediately; it's stored as-is (the pairing
+   *  is validated at scoring time once two players share a label), matching how start() records teams. */
+  private async addGuest(authMember: string | null, name?: string, team?: string): Promise<Response> {
     if (!this.meta || this.meta.status !== "live") return j({ error: "round_not_live" }, 409);
     const me = authMember ? this.players.find((p) => p.memberId === authMember && !p.removed) : undefined;
     if (!me) return j({ error: "not_on_card" }, 403);
     const nm = String(name || "").trim();
     if (!nm) return j({ error: "name_required" }, 400);
-    this.players.push({ memberId: null, name: nm.slice(0, 60), division: null, startingHole: null, cardId: me.cardId ?? "c0", scores: {}, scorecards: {} });
+    this.players.push({ memberId: null, name: nm.slice(0, 60), division: null, team: normalizePairLabel(team), startingHole: null, cardId: me.cardId ?? "c0", scores: {}, scorecards: {} });
     await this.persist();
     this.broadcast();
     return j(mineData(this.meta, this.players, authMember));
