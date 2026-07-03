@@ -163,8 +163,8 @@
         .casual-actions { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: auto; }
         .casual-actions .reg-btn { margin-top: 0; }
         .casual-link { text-decoration: none; display: inline-flex; align-items: center; }
-        body #crotts-fab { left: auto !important; right: 18px; }
-        body #crotts-panel { left: auto !important; right: 18px; }
+        body #crotts-fab,
+        body #crotts-panel { display: none !important; }
         @media (max-width: 760px) {
             .casual-form { grid-template-columns: 1fr; }
             .casual-field.notes { grid-column: auto; }
@@ -266,8 +266,6 @@
             .lb-pos { width: 2rem; }
             .lb-name { word-break: break-word; }
             .lb-topar { text-align: left; }
-            body #crotts-fab,
-            body #crotts-panel { display: none !important; }
         }
 
         .roster-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; letter-spacing: 0.03em; color: var(--text-primary); margin: 1.75rem 0 1rem; }

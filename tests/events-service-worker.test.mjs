@@ -176,7 +176,7 @@ test('events page first service-worker install renders without refreshing the ac
   }
 });
 
-test('events page desktop assistant button stays clear of the casual rounds heading', async () => {
+test('events page desktop keeps assistant overlay hidden from spectator content', async () => {
   const { server, base } = await staticServer();
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
@@ -192,7 +192,7 @@ test('events page desktop assistant button stays clear of the casual rounds head
     await page.goto(`${base}/events.html`, { waitUntil: 'domcontentloaded' });
     await page.locator('.event-card').first().waitFor({ timeout: 5000 });
     await page.locator('#casualRoundsSection .events-group-head').waitFor({ timeout: 5000 });
-    await page.locator('#crotts-fab').waitFor({ timeout: 5000 });
+    await page.locator('#crotts-fab').waitFor({ state: 'attached', timeout: 5000 });
 
     const layout = await page.evaluate(() => {
       const fab = document.querySelector('#crotts-fab');
@@ -200,10 +200,8 @@ test('events page desktop assistant button stays clear of the casual rounds head
       if (!fab || !heading) return { missing: true };
       const f = fab.getBoundingClientRect();
       const h = heading.getBoundingClientRect();
-      const overlaps = !(f.right <= h.left || f.left >= h.right || f.bottom <= h.top || f.top >= h.bottom);
       return {
         missing: false,
-        overlaps,
         fab: { left: f.left, right: f.right, top: f.top, bottom: f.bottom },
         heading: { left: h.left, right: h.right, top: h.top, bottom: h.bottom },
         fabDisplay: getComputedStyle(fab).display,
@@ -211,8 +209,7 @@ test('events page desktop assistant button stays clear of the casual rounds head
     });
 
     assert.equal(layout.missing, false, `expected Crotts button and Casual Rounds heading; layout=${JSON.stringify(layout)}`);
-    assert.notEqual(layout.fabDisplay, 'none', `expected desktop assistant button to remain available; layout=${JSON.stringify(layout)}`);
-    assert.equal(layout.overlaps, false, `assistant button overlaps Casual Rounds heading; layout=${JSON.stringify(layout)}`);
+    assert.equal(layout.fabDisplay, 'none', `expected events page to hide fixed assistant overlay; layout=${JSON.stringify(layout)}`);
     assert.deepEqual(consoleErrors, []);
   } finally {
     await context.close();
