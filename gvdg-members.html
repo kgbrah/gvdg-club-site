@@ -1409,7 +1409,7 @@
 
         function walletDate(value) {
             const d = new Date(value || '');
-            return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+            return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'America/New_York' });
         }
         function walletSource(source) {
             if (source === 'event_payout') return 'Event payout';
@@ -1541,13 +1541,13 @@
             if (!value) return '';
             const d = new Date(value);
             if (Number.isNaN(d.getTime())) return String(value);
-            return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+            return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'America/New_York' });
         }
         function shortDateTime(value) {
             if (!value) return '';
             const d = new Date(value);
             if (Number.isNaN(d.getTime())) return String(value);
-            return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+            return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' });
         }
         function roundMeta(parts) {
             return parts.filter(Boolean).join(' · ');
@@ -1928,7 +1928,7 @@
         }
 
         function tsWhen(iso) {
-            try { const d = new Date(String(iso).replace(' ', 'T') + 'Z'); if (!isNaN(d)) return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); } catch (_e) {}
+            try { const d = new Date(String(iso).replace(' ', 'T') + 'Z'); if (!isNaN(d)) return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'America/New_York' }) + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' }); } catch (_e) {}
             return String(iso || '');
         }
 

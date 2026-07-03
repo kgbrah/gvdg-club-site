@@ -14,6 +14,7 @@ import {
   groupPlayersByDivision,
   parseEventDate,
   formatEventDate,
+  formatClubDateTime,
   typeLabel,
   statusLabel,
   buildCourseIndex,
@@ -79,6 +80,18 @@ test('formatEventDate never throws and labels missing dates', () => {
   assert.ok(out.length > 0);
   // Date-only renders without a time component.
   assert.ok(!/\d:\d\d/.test(out), `expected no time in "${out}"`);
+  // Off-by-one guard: a bare calendar date must NOT shift back a day in a behind-UTC zone (was showing
+  // "Jul 3" for a July 4 event in Eastern). Zone-independent because date-only renders in UTC.
+  assert.ok(/Jul 4/.test(out) && !/Jul 3/.test(out), `expected "Jul 4" (no shift) in "${out}"`);
+});
+
+test('formatClubDateTime renders a timestamp in Eastern time', () => {
+  assert.equal(formatClubDateTime(''), '');
+  assert.equal(formatClubDateTime(null), '');
+  // 2026-07-04T12:00Z == 8:00 AM EDT — must show the Eastern wall clock regardless of the runner's TZ.
+  const out = formatClubDateTime('2026-07-04T12:00:00.000Z');
+  assert.ok(/Jul 4/.test(out), `expected Jul 4 in "${out}"`);
+  assert.ok(/8:00/.test(out) && /EDT/.test(out), `expected 8:00 AM EDT in "${out}"`);
 });
 
 // --- bucketEvents -------------------------------------------------------------
