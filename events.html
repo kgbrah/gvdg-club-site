@@ -116,11 +116,20 @@
         .events-empty { color: var(--text-muted); padding: 0.4rem 0 1rem; }
         .events-section.live .events-section-title { color: var(--primary); }
         .events-section-count { color: var(--text-muted); font-size: 0.85rem; font-weight: 600; }
-        .archive-cta { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 14px; padding: 1rem 1.15rem; margin: 0 0 2rem; box-shadow: 0 4px 18px var(--card-shadow); }
-        .archive-cta-body { display: flex; flex-direction: column; gap: 0.15rem; flex: 1 1 260px; color: var(--text-secondary); }
-        .archive-cta-body strong { color: var(--text-primary); }
-        .archive-cta-body span { color: var(--text-muted); font-size: 0.9rem; line-height: 1.45; }
-        .archive-cta-link { margin-left: auto; white-space: nowrap; text-decoration: none; }
+        .previous-results-panel { margin: 0 0 2rem; }
+        .previous-results-toggle { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 1rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 14px; padding: 1rem 1.15rem; box-shadow: 0 4px 18px var(--card-shadow); cursor: pointer; text-align: left; font: inherit; transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease; }
+        .previous-results-toggle:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: 0 8px 24px var(--card-shadow-hover); }
+        .previous-results-toggle:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+        .previous-results-title { display: flex; flex-direction: column; gap: 0.15rem; }
+        .previous-results-title strong { font-family: 'Bebas Neue', sans-serif; font-size: 1.45rem; letter-spacing: 0.04em; font-weight: 400; }
+        .previous-results-title span { color: var(--text-muted); font-size: 0.9rem; line-height: 1.45; }
+        .previous-results-indicator { color: var(--primary); font-size: 1.4rem; font-weight: 800; line-height: 1; }
+        .previous-results-body { margin-top: 1rem; }
+        .previous-results-actions { display: flex; align-items: center; justify-content: center; gap: 0.75rem; flex-wrap: wrap; margin: 1.25rem 0 0; }
+        .previous-results-status { flex-basis: 100%; text-align: center; color: var(--text-muted); font-size: 0.85rem; }
+        .previous-results-btn { background: var(--secondary); color: white; border: none; padding: 0.65rem 1.7rem; border-radius: 999px; font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: background 0.15s ease; }
+        .previous-results-btn:hover { background: #003d6d; }
+        .previous-results-btn.secondary { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
         .live-dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--primary); display: inline-block; box-shadow: 0 0 0 0 rgba(255,107,53,0.6); animation: pulse 1.8s infinite; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,107,53,0.6); } 70% { box-shadow: 0 0 0 10px rgba(255,107,53,0); } 100% { box-shadow: 0 0 0 0 rgba(255,107,53,0); } }
 
@@ -151,9 +160,6 @@
         #registerSection { background: rgba(244, 244, 249, 0.94); margin: 0 -1.5rem 2rem; padding: 1.25rem 1.5rem 1.5rem; border-radius: 16px; }
         [data-theme="dark"] #registerSection { background: rgba(15, 15, 30, 0.86); }
         #registerSection .events-group-head { margin-top: 0; }
-        @media (max-width: 760px) {
-            .archive-cta-link { margin-left: 0; }
-        }
         /* Keep-score CTA on a live event */
         .btn-keep-score { display: inline-block; margin: 0.25rem 0 0.75rem; background: var(--primary); color: #fff; text-decoration: none; font-weight: 800; padding: 0.7rem 1.3rem; border-radius: 50px; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.9rem; }
         .btn-keep-score:hover { filter: brightness(1.07); }
@@ -321,7 +327,7 @@
         <!-- EVENTS: disc golf tournaments & league rounds (schedule feed + any club-scored upcoming events) -->
         <div id="calendarEvents" hidden></div>
         <div id="hub" hidden></div>
-        <div id="archiveSection" hidden></div>
+        <div id="previousResultsSection" hidden></div>
         <div id="leaguesSection" hidden></div>
 
         <!-- CLUB EVENTS: fundraisers, meetings & minutes -->
@@ -407,10 +413,11 @@
         )
             .trim()
             .replace(/\/+$/, ''); // strip trailing slashes
-        const ARCHIVE_BASE_URL = ((document.body.dataset.archiveUrl || '').trim() || 'archive.html').replace(/\/+$/, '');
         const REFRESH_MS = 60 * 1000; // ~60s background refresh on the hub
         const EVENTS_PAGE_SIZE = 2000;
         const EVENTS_PAGE_MAX_LIMIT = 2000;
+        const PREVIOUS_RESULTS_INITIAL = 3;
+        const PREVIOUS_RESULTS_PAGE_SIZE = 12;
         const RYDER_CUP_LEAGUE_ID = '4';
         const eventsLoadState = {
             events: [],
@@ -422,7 +429,7 @@
         const registerEl = document.getElementById('registerSection');
         const calendarEl = document.getElementById('calendarEvents');
         const hubEl = document.getElementById('hub');
-        const archiveEl = document.getElementById('archiveSection');
+        const previousResultsEl = document.getElementById('previousResultsSection');
         const leaguesEl = document.getElementById('leaguesSection');
         const clubEl = document.getElementById('clubEventsSection');
         const fundraisersEl = document.getElementById('fundraisersSection');
@@ -435,6 +442,8 @@
         let coursesCache = [];
         let coursesLoaded = false;
         let refreshTimer = null;
+        let previousResultsExpanded = false;
+        let previousResultsVisible = PREVIOUS_RESULTS_INITIAL;
 
         // --- XSS-safe DOM helper (mirrors ryder-cup.html) ---
         // Every piece of API data lands here as a text node; we NEVER assign
@@ -492,7 +501,7 @@
             registerEl.hidden = which !== 'hub';
             calendarEl.hidden = which !== 'hub';
             hubEl.hidden = which !== 'hub';
-            archiveEl.hidden = which !== 'hub';
+            previousResultsEl.hidden = which !== 'hub';
             leaguesEl.hidden = which !== 'hub';
             clubEl.hidden = which !== 'hub';
             fundraisersEl.hidden = which !== 'hub';
@@ -568,11 +577,15 @@
             return !info.isTBD && info.isPast;
         }
 
+        function eventDateForSort(ev) {
+            return parseEventDate((ev && (ev.date || ev.starts_at)) || null);
+        }
+
         function isArchivedClubEvent(raw) {
             const ev = normalizeEvent(raw);
             if (ev.status === 'live') return false;
             if (ev.status === 'final' || ev.status === 'cancelled') return true;
-            const d = parseEventDate(ev.date || ev.starts_at);
+            const d = eventDateForSort(ev);
             return d ? d < startOfToday() : false;
         }
 
@@ -598,21 +611,142 @@
             return { active, archived };
         }
 
-        function renderArchiveCta(archivedCount) {
-            archiveEl.replaceChildren();
-            const archiveUrl = sanitizeUrl(ARCHIVE_BASE_URL) || 'archive.html';
-            const card = el('div', 'archive-cta');
-            const body = el('div', 'archive-cta-body');
-            body.appendChild(el('strong', null, 'Past events archive'));
-            const countText = archivedCount > 0
-                ? `${archivedCount} past event${archivedCount === 1 ? '' : 's'} from this calendar moved to the archive.`
-                : 'Past tournaments, league rounds, and club events live on the archive site.';
-            body.appendChild(el('span', null, countText));
-            card.appendChild(body);
-            const link = el('a', 'reg-btn secondary archive-cta-link', 'Open archive');
-            link.href = archiveUrl;
-            card.appendChild(link);
-            archiveEl.appendChild(card);
+        function feedResultDateText(item) {
+            if (item && item.date) return String(item.date);
+            const info = feedDateInfo(item);
+            if (!info.isTBD && info.dateObj && !Number.isNaN(info.dateObj.getTime())) {
+                return info.dateObj.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+            }
+            return 'Date TBD';
+        }
+
+        function previousResultFromFeed(item, category) {
+            const info = feedDateInfo(item);
+            const leagueTarget = ryderCupFeedHash(item);
+            const externalHref = leagueTarget ? '' : sanitizeUrl(item && item.url);
+            return {
+                name: String((item && item.name) || 'Previous result'),
+                dateObj: info.dateObj,
+                dateText: feedResultDateText(item),
+                detail: String((item && item.detail) || ''),
+                label: category,
+                href: leagueTarget || externalHref,
+                external: !!externalHref,
+                cta: leagueTarget ? 'League / Results' : (externalHref ? 'Results / Details' : ''),
+            };
+        }
+
+        function previousResultFromEvent(raw) {
+            const ev = normalizeEvent(raw);
+            const leagueTarget = ryderCupEventHash(ev);
+            const courseName = courseNameFor(courseIndex, ev.course_id);
+            return {
+                name: ev.name,
+                dateObj: eventDateForSort(ev),
+                dateText: formatEventDate(ev.date || ev.starts_at),
+                detail: [courseName, statusLabel(ev.status)].filter(Boolean).join(' · '),
+                label: typeLabel(ev.type),
+                typeClass: ev.type,
+                status: ev.status,
+                href: leagueTarget || `#event/${encodeURIComponent(ev.id)}`,
+                external: false,
+                cta: leagueTarget ? 'League / Results' : 'View results',
+            };
+        }
+
+        function previousResultTime(item) {
+            return item && item.dateObj && !Number.isNaN(item.dateObj.getTime()) ? item.dateObj.getTime() : 0;
+        }
+
+        function previousResultCard(item) {
+            const card = el(item.href ? 'a' : 'div', 'event-card');
+            if (item.href) {
+                card.href = item.href;
+                if (item.external) {
+                    card.target = '_blank';
+                    card.rel = 'noopener noreferrer';
+                }
+            }
+            const top = el('div', 'event-card-top');
+            top.appendChild(el('h3', 'event-name', item.name));
+            top.appendChild(badge(item.label || 'Result', 'type-badge ' + (item.typeClass || '')));
+            card.appendChild(top);
+            const meta = el('div', 'event-meta');
+            const dateRow = el('div', 'meta-row');
+            dateRow.appendChild(el('span', 'meta-icon', 'Date'));
+            dateRow.appendChild(el('span', null, item.dateText || 'Date TBD'));
+            meta.appendChild(dateRow);
+            if (item.detail) {
+                const detailRow = el('div', 'meta-row');
+                detailRow.appendChild(el('span', 'meta-icon', 'Info'));
+                detailRow.appendChild(el('span', null, item.detail));
+                meta.appendChild(detailRow);
+            }
+            card.appendChild(meta);
+            if (item.status) {
+                const statusRow = el('div', 'event-card-top');
+                statusRow.appendChild(badge(statusLabel(item.status), 'status-badge ' + item.status));
+                card.appendChild(statusRow);
+            }
+            if (item.cta) card.appendChild(el('div', 'event-cta', item.cta));
+            return card;
+        }
+
+        function renderPreviousResults(results) {
+            previousResultsEl.replaceChildren();
+            if (!results.length) {
+                previousResultsExpanded = false;
+                previousResultsVisible = PREVIOUS_RESULTS_INITIAL;
+                return;
+            }
+            if (previousResultsVisible < PREVIOUS_RESULTS_INITIAL) previousResultsVisible = PREVIOUS_RESULTS_INITIAL;
+            if (previousResultsVisible > results.length) previousResultsVisible = results.length;
+            const panel = el('section', 'previous-results-panel');
+            const toggle = el('button', 'previous-results-toggle');
+            toggle.type = 'button';
+            toggle.setAttribute('aria-expanded', previousResultsExpanded ? 'true' : 'false');
+            toggle.setAttribute('aria-controls', 'previousResultsBody');
+            const title = el('span', 'previous-results-title');
+            title.appendChild(el('strong', null, previousResultsExpanded ? 'Hide previous results' : 'See previous results'));
+            title.appendChild(el('span', null, `${results.length} previous result${results.length === 1 ? '' : 's'} available`));
+            toggle.appendChild(title);
+            toggle.appendChild(el('span', 'previous-results-indicator', previousResultsExpanded ? '-' : '+'));
+            toggle.addEventListener('click', () => {
+                previousResultsExpanded = !previousResultsExpanded;
+                renderPreviousResults(results);
+            });
+            panel.appendChild(toggle);
+            const body = el('div', 'previous-results-body');
+            body.id = 'previousResultsBody';
+            body.hidden = !previousResultsExpanded;
+            if (previousResultsExpanded) {
+                const grid = el('div', 'events-grid');
+                results.slice(0, previousResultsVisible).forEach((item) => grid.appendChild(previousResultCard(item)));
+                body.appendChild(grid);
+                const actions = el('div', 'previous-results-actions');
+                actions.appendChild(el('div', 'previous-results-status', `Showing ${Math.min(previousResultsVisible, results.length)} of ${results.length}`));
+                if (previousResultsVisible < results.length) {
+                    const loadMore = el('button', 'previous-results-btn', 'Load more');
+                    loadMore.type = 'button';
+                    loadMore.addEventListener('click', () => {
+                        previousResultsVisible = Math.min(results.length, previousResultsVisible + PREVIOUS_RESULTS_PAGE_SIZE);
+                        renderPreviousResults(results);
+                    });
+                    actions.appendChild(loadMore);
+                }
+                if (previousResultsVisible > PREVIOUS_RESULTS_INITIAL) {
+                    const showLess = el('button', 'previous-results-btn secondary', 'Show less');
+                    showLess.type = 'button';
+                    showLess.addEventListener('click', () => {
+                        previousResultsVisible = PREVIOUS_RESULTS_INITIAL;
+                        renderPreviousResults(results);
+                    });
+                    actions.appendChild(showLess);
+                }
+                body.appendChild(actions);
+            }
+            panel.appendChild(body);
+            previousResultsEl.appendChild(panel);
         }
 
         function showStatus(message, isError, onRetry) {
@@ -726,7 +860,11 @@
             const { active: feedClub, archived: feedClubArchived } = splitFeedByDate((feed && feed.clubEvents) || []);
             const { active: activeD1, archived: d1Archived } = splitClubEventsByDate(d1events || []);
             const { live, upcoming } = bucketEvents(activeD1);
-            const archivedCount = feedArchived.length + feedClubArchived.length + d1Archived.length;
+            const previousResults = [
+                ...d1Archived.map(previousResultFromEvent),
+                ...feedArchived.map((item) => previousResultFromFeed(item, 'Event')),
+                ...feedClubArchived.map((item) => previousResultFromFeed(item, 'Club Event')),
+            ].sort((a, b) => previousResultTime(b) - previousResultTime(a));
 
             // LIVE NOW — pinned to the very top so an in-progress event is impossible to miss.
             liveNowEl.replaceChildren();
@@ -738,14 +876,14 @@
 
             hubEl.replaceChildren();
             if (upcoming.length) hubEl.appendChild(section('Upcoming', upcoming));
-            // Empty-state reflects the MAIN flow only (live/upcoming/feed). Past events live on archive.html
-            // (or data-archive-url, once the archive subdomain DNS is active),
+            // Empty-state reflects the MAIN flow only (live/upcoming/feed). Previous results live in a
+            // collapsed section below the current and upcoming events,
             // so their presence must not suppress the "nothing scheduled" message.
             if (!feedEvents.length && !live.length && !upcoming.length) {
                 calendarEl.appendChild(el('p', 'events-empty', 'No tournaments or league rounds are on the schedule right now.'));
             }
 
-            renderArchiveCta(archivedCount);
+            renderPreviousResults(previousResults);
 
             clubEl.replaceChildren();
             clubEl.appendChild(groupHeading('Club Events', 'Fundraisers, meetings & minutes'));

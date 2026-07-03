@@ -22,15 +22,19 @@ test('public Events page pins Live Now to the top section, above the schedule fe
   assert.equal(source.includes("hubEl.appendChild(section('Live Now'"), false, 'Live Now should not be rendered below the schedule feed');
 });
 
-test('public Events page removes past events and casual rounds from the active page', () => {
+test('public Events page hides past events behind previous results', () => {
   const source = readFileSync('events.html', 'utf8');
-  // Only current/upcoming render in the main flow; past events move to the archive subdomain.
+  // Only current/upcoming render in the main flow; previous results stay collapsed on the same page.
   assert.match(source, /function splitFeedByDate\(items\)/);
   assert.match(source, /function isArchivedClubEvent\(raw\)/);
-  assert.match(source, /function renderArchiveCta\(archivedCount\)/);
-  assert.match(source, /archive\.html/);
+  assert.match(source, /function renderPreviousResults\(results\)/);
+  assert.match(source, /See previous results/);
+  assert.match(source, /Hide previous results/);
+  assert.match(source, /previous-results-toggle/);
   assert.doesNotMatch(source, /function renderPastSection\(past\)/);
   assert.doesNotMatch(source, /past-toggle/);
+  assert.doesNotMatch(source, /function renderArchiveCta\(archivedCount\)/);
+  assert.doesNotMatch(source, /archive-cta/);
   assert.equal(source.includes("hubEl.appendChild(section('Club-scored — Past'"), false, 'past events should not render inline in the hub');
   // Casual posting/joining moved to the member dashboard — no Events-page signpost remains.
   assert.doesNotMatch(source, /function renderCasualCta\(\)/);
@@ -46,6 +50,16 @@ test('public Events page parses feed dates before archiving rows', () => {
   assert.match(source, /parseHomepageEventDate\(String\(\(item && item\.date\) \|\| ''\)\)/);
   assert.match(source, /function isPastFeedItem\(item\)/);
   assert.match(source, /isPastFeedItem\(item\) \? archived : active/);
+});
+
+test('public Events previous results include load more and show less controls', () => {
+  const source = readFileSync('events.html', 'utf8');
+  assert.match(source, /const PREVIOUS_RESULTS_INITIAL = 3/);
+  assert.match(source, /const PREVIOUS_RESULTS_PAGE_SIZE = 12/);
+  assert.match(source, /Load more/);
+  assert.match(source, /Show less/);
+  assert.match(source, /previousResultsVisible = PREVIOUS_RESULTS_INITIAL/);
+  assert.match(source, /previousResultTime\(b\) - previousResultTime\(a\)/);
 });
 
 test('public registration cards post pair label only for doubles config', () => {
@@ -72,14 +86,10 @@ test('Ryder Cup schedule cards link to the league route', () => {
   assert.match(ryderSource, /events\.html#league\/4/);
 });
 
-test('archive page lists the latest three past events with load more and show less controls', () => {
-  const archiveSource = readFileSync('archive.html', 'utf8');
+test('archive subdomain redirect is not part of the Events page flow', () => {
+  const eventsSource = readFileSync('events.html', 'utf8');
   const indexSource = readFileSync('index.html', 'utf8');
-  assert.match(archiveSource, /const INITIAL_VISIBLE = 3/);
-  assert.match(archiveSource, /Load more/);
-  assert.match(archiveSource, /Show less/);
-  assert.match(archiveSource, /parseHomepageEventDate/);
-  assert.match(archiveSource, /filter\(isPastFeedItem\)/);
-  assert.match(archiveSource, /sort\(\(a, b\) =>/);
-  assert.match(indexSource, /archive\.gvdgclub\.com/);
+  assert.doesNotMatch(eventsSource, /ARCHIVE_BASE_URL/);
+  assert.doesNotMatch(eventsSource, /archive\.html/);
+  assert.doesNotMatch(indexSource, /archive\.gvdgclub\.com/);
 });
