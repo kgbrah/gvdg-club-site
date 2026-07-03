@@ -175,3 +175,48 @@ test('events page first service-worker install renders without refreshing the ac
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test('events page desktop assistant button stays clear of the casual rounds heading', async () => {
+  const { server, base } = await staticServer();
+  const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await context.newPage();
+  const consoleErrors = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  page.on('pageerror', (error) => consoleErrors.push(error.message));
+
+  try {
+    await installApiRoutes(page);
+    await page.goto(`${base}/events.html`, { waitUntil: 'domcontentloaded' });
+    await page.locator('.event-card').first().waitFor({ timeout: 5000 });
+    await page.locator('#casualRoundsSection .events-group-head').waitFor({ timeout: 5000 });
+    await page.locator('#crotts-fab').waitFor({ timeout: 5000 });
+
+    const layout = await page.evaluate(() => {
+      const fab = document.querySelector('#crotts-fab');
+      const heading = document.querySelector('#casualRoundsSection .events-group-head');
+      if (!fab || !heading) return { missing: true };
+      const f = fab.getBoundingClientRect();
+      const h = heading.getBoundingClientRect();
+      const overlaps = !(f.right <= h.left || f.left >= h.right || f.bottom <= h.top || f.top >= h.bottom);
+      return {
+        missing: false,
+        overlaps,
+        fab: { left: f.left, right: f.right, top: f.top, bottom: f.bottom },
+        heading: { left: h.left, right: h.right, top: h.top, bottom: h.bottom },
+        fabDisplay: getComputedStyle(fab).display,
+      };
+    });
+
+    assert.equal(layout.missing, false, `expected Crotts button and Casual Rounds heading; layout=${JSON.stringify(layout)}`);
+    assert.notEqual(layout.fabDisplay, 'none', `expected desktop assistant button to remain available; layout=${JSON.stringify(layout)}`);
+    assert.equal(layout.overlaps, false, `assistant button overlaps Casual Rounds heading; layout=${JSON.stringify(layout)}`);
+    assert.deepEqual(consoleErrors, []);
+  } finally {
+    await context.close();
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
