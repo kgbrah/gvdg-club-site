@@ -201,6 +201,9 @@
         .sc-start-field select { width: 100%; min-width: 0; padding: 0.45rem 0.55rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-size: 0.9rem; }
         .sc-start-check { display: inline-flex; align-items: center; gap: 0.35rem; margin-bottom: 0.45rem; white-space: nowrap; }
         .sc-start-grid #scStartBtn { white-space: nowrap; }
+        .fmt-btns { display: inline-flex; gap: 0.4rem; flex-wrap: wrap; }
+        .fmt-btn { padding: 0.45rem 0.7rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); font: inherit; font-size: 0.9rem; cursor: pointer; }
+        .fmt-btn[aria-pressed="true"] { border-color: var(--primary); background: var(--bg-tertiary); box-shadow: inset 0 0 0 1px var(--primary); font-weight: 700; }
         .admin-pane { display: none; }
         .admin-pane.active { display: block; }
         /* Grouped sidebar nav: 5 sections on the left, content on the right (stacks on mobile) */
@@ -533,12 +536,20 @@
                         <label class="sc-start-field" for="scLayout"><span>Layout</span>
                             <select id="scLayout"><option value="">— event's current layout —</option></select>
                         </label>
-                        <label class="sc-start-field" for="scGroupFormat"><span>Group</span>
-                            <select id="scGroupFormat"><option value="singles">Singles</option><option value="doubles">Doubles</option></select>
-                        </label>
-                        <label class="sc-start-field" for="scScoringStyle"><span>Scoring</span>
-                            <select id="scScoringStyle"><option value="stroke">Stroke play</option><option value="matchplay">Match play</option></select>
-                        </label>
+                        <div class="sc-start-field"><span>Group</span>
+                            <input type="hidden" id="scGroupFormat" value="singles">
+                            <div class="fmt-btns" id="scGroupFormatBtns">
+                                <button type="button" class="fmt-btn" data-val="singles">Singles</button>
+                                <button type="button" class="fmt-btn" data-val="doubles">Doubles</button>
+                            </div>
+                        </div>
+                        <div class="sc-start-field"><span>Scoring</span>
+                            <input type="hidden" id="scScoringStyle" value="stroke">
+                            <div class="fmt-btns" id="scScoringStyleBtns">
+                                <button type="button" class="fmt-btn" data-val="stroke">Stroke play</button>
+                                <button type="button" class="fmt-btn" data-val="matchplay">Match play</button>
+                            </div>
+                        </div>
                         <label class="register-addon sc-start-check"><input type="checkbox" id="scUseManualPlayers"> Manual roster</label>
                         <button type="button" class="admin-btn" id="scStartBtn">▶ Start live scoring</button>
                     </div>
@@ -1826,10 +1837,30 @@
         function scCurrentConfig() {
             return { groupFormat: $('scGroupFormat').value === 'doubles' ? 'doubles' : 'singles', scoringStyle: $('scScoringStyle').value === 'matchplay' ? 'matchplay' : 'stroke' };
         }
+        // Button-style format selectors (singles/doubles + stroke/matchplay) backed by hidden inputs, so
+        // scCurrentConfig()/scApplyStartDefaults() still read/write .value. Sync reflects value -> pressed.
+        const SC_FMT_GROUPS = [['scGroupFormat', 'scGroupFormatBtns'], ['scScoringStyle', 'scScoringStyleBtns']];
+        function scSyncFormatButtons() {
+            SC_FMT_GROUPS.forEach(([inputId, btnsId]) => {
+                const val = $(inputId).value;
+                $(btnsId).querySelectorAll('.fmt-btn').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.val === val)));
+            });
+        }
+        function scWireFormatButtons() {
+            SC_FMT_GROUPS.forEach(([inputId, btnsId]) => {
+                $(btnsId).addEventListener('click', (e) => {
+                    const b = e.target.closest('.fmt-btn'); if (!b) return;
+                    $(inputId).value = b.dataset.val;
+                    scSyncFormatButtons();
+                });
+            });
+            scSyncFormatButtons();
+        }
         function scApplyStartDefaults(ev) {
             const config = scNormalizeConfig(ev.liveScoringConfig || ev.live_scoring_config || ev.live_scoring_config_json || null, ev.play_format || null, ev.format || null);
             $('scGroupFormat').value = config.groupFormat;
             $('scScoringStyle').value = config.scoringStyle;
+            scSyncFormatButtons();
             $('scStartValidation').textContent = '';
         }
         function scConflictFor(index, hole) {
@@ -2805,6 +2836,7 @@
             $('scStartBtn').addEventListener('click', scStart);
             $('scFinalizeBtn').addEventListener('click', scFinalize);
             $('scCancelBtn').addEventListener('click', scCancel);
+            scWireFormatButtons();
             $('scOvApply').addEventListener('click', () => scApplyOverride(false));
             $('scOvClear').addEventListener('click', () => scApplyOverride(true));
             $('adminLeagueForm').addEventListener('submit', adminAddLeague);
