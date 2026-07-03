@@ -98,7 +98,9 @@ export async function handleCasualRounds(
   if (method === "POST" && sub === "guest") {
     if (await kvRateLimited(env, "round-guest:" + claims.sub, 30, 60)) return json({ error: "rate_limited" }, 429, origin); // cap walk-on spam → DO/snapshot bloat
     const b = (await readJson(request)) ?? {};
-    return proxy(stub, "/guest", { method: "POST", headers: hdr, body: JSON.stringify({ name: b.name }) }, origin);
+    // In doubles the guest needs a pair label (each doubles player must have a team); accept it at add-time.
+    const team = asStr(b.pairLabel, 40) ?? asStr(b.pair_label, 40) ?? asStr(b.team, 40);
+    return proxy(stub, "/guest", { method: "POST", headers: hdr, body: JSON.stringify({ name: b.name, team }) }, origin);
   }
   if (method === "POST" && sub === "remove") {
     // Drop a player from the round (accidental join, left early, or no-show). The DO authorizes from the

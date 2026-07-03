@@ -660,6 +660,19 @@ describe("LiveEventDO card-scoped scoring", () => {
     expect((await post(live, { "X-Auth-Admin": "true" }, { index: 0, hole: 1, strokes: 3 })).status).toBe(409);
   });
 
+  it("adds a doubles guest with a pair label so they're pairable at add-time", async () => {
+    const live = liveDO();
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      casual: true, holes: [{ hole: 1, par: 3 }],
+      liveScoringConfig: { groupFormat: "doubles", scoringStyle: "stroke" },
+      players: [{ memberId: "m0", name: "A", team: "Red" }, { memberId: "m1", name: "B", team: "Red" }],
+    }) }));
+    const res = await live.fetch(new Request("https://do/guest", { method: "POST", headers: { "X-Auth-Member": "m0" }, body: JSON.stringify({ name: "C", team: "Blue" }) }));
+    expect(res.status).toBe(200);
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { players: { name: string; team: string | null }[] };
+    expect(snap.players.find((p) => p.name === "C")?.team).toBe("Blue");
+  });
+
   it("lets cardmates enter guest-token scorecards but not another member's scorecard", async () => {
     const live = liveDO();
     await start(live, [

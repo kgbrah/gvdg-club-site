@@ -1049,7 +1049,14 @@
         async function addGuestPrompt() {
             const name = (window.prompt('Add a player to your card (their name):') || '').trim();
             if (!name) return;
-            const r = await api('/rounds/' + ROUND_CODE + '/guest', { method: 'POST', body: { name: name } });
+            // Doubles requires a pair label per player — collect it now so the walk-on is pairable, rather
+            // than leaving the round unscorable until someone opens Manage players.
+            let team = null;
+            if (isDoublesScoring()) {
+                team = (window.prompt('Pair label for ' + name + ' (doubles — use the SAME label for their partner):') || '').trim();
+                if (!team) { toast('Doubles needs a pair label for each player'); return; }
+            }
+            const r = await api('/rounds/' + ROUND_CODE + '/guest', { method: 'POST', body: team ? { name: name, team: team } : { name: name } });
             if (r.ok && r.data && Array.isArray(r.data.cardmates)) { S.cardmates = r.data.cardmates; currentScorerIndex(); renderHole(); toast(name + ' added'); }
             else toast('Could not add player');
         }
