@@ -64,7 +64,7 @@ test('live scoring links back to the members dashboard', () => {
 
 test('shared service worker caches app install assets and member fallback', () => {
   const sw = readFileSync('sw.js', 'utf8');
-  assert.match(sw, /const CACHE = "gvdg-club-v9"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v\d+"/); // version-agnostic: don't break on every cache bump
   assert.match(sw, /const OFFLINE_PAGE = "gvdg-members\.html"/);
   assert.match(sw, /const STATIC_DESTINATIONS = new Set/);
   assert.match(sw, /if \(!staticAsset\(req, url\)\) return/);
