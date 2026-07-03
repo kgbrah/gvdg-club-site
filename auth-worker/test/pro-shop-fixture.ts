@@ -138,7 +138,10 @@ function allRows(sql: string, args: unknown[], state: MockState): Row[] {
 }
 
 function firstRow(sql: string, args: unknown[], state: MockState): Row | null {
-  if (/SELECT COALESCE\(SUM\(amount_cents\)/i.test(sql)) return { balance_cents: state.balanceCents };
+  // Anchor to a bare balance SELECT: createWalletDebitOnce's atomic debit is an INSERT..SELECT..WHERE that
+  // EMBEDS this same COALESCE(SUM(amount_cents)) as a balance guard — without the anchor it would misroute
+  // that INSERT here and never record the debit.
+  if (/^\s*SELECT COALESCE\(SUM\(amount_cents\)/i.test(sql)) return { balance_cents: state.balanceCents };
   if (/SELECT \* FROM store_orders WHERE payment_ref/i.test(sql)) return state.orders.find((o) => o.payment_ref === args[0]) ?? null;
   if (/SELECT \* FROM store_payment_sessions WHERE paypal_order_id/i.test(sql)) return state.paymentSessions.find((session) => session.paypal_order_id === args[0]) ?? null;
   if (/SELECT \* FROM events WHERE id = \?/i.test(sql)) {
