@@ -198,6 +198,11 @@
         let paypalSdkPromise = null;
         let paypalRendered = false;
         const cart = new Map();
+        // Stable idempotency key for a store-credit checkout: generated once per attempt and reused across
+        // retries (so a lost response can't double-charge), reset whenever the cart changes (a different
+        // purchase) or a checkout succeeds.
+        let checkoutKey = null;
+        function newCheckoutId() { return (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)); }
 
         function money(cents) {
             const n = Number(cents || 0);
@@ -489,6 +494,7 @@
             const current = cart.get(productId) || 0;
             if (current >= Number(product.stock_qty || 0)) { setStatus('That is all the stock available for this product.', 'error'); return; }
             cart.set(productId, current + 1);
+            checkoutKey = null; // cart changed → next checkout is a distinct purchase
             setStatus('');
             renderCart();
         }
@@ -532,6 +538,7 @@
             if (next <= 0) cart.delete(productId);
             else if (next <= Number(product.stock_qty || 0)) cart.set(productId, next);
             else setStatus('That is all the stock available for this product.', 'error');
+            checkoutKey = null; // cart changed → next checkout is a distinct purchase
             renderCart();
         }
         async function checkout() {
@@ -540,10 +547,12 @@
             const items = Array.from(cart.entries()).map(([productId, quantity]) => ({ product_id: productId, quantity }));
             const btn = $('checkoutBtn');
             btn.disabled = true;
+            if (!checkoutKey) checkoutKey = newCheckoutId(); // reused if the user retries after a failed/lost request
             try {
-                const r = await api('/shop/orders', { method: 'POST', token, body: { items } });
+                const r = await api('/shop/orders', { method: 'POST', token, body: { items, idempotency_key: checkoutKey } });
                 const data = await r.json().catch(() => ({}));
-                if (r.status === 201) {
+                if (r.status === 201 || r.status === 200) {
+                    checkoutKey = null; // settled — the next purchase gets a fresh key
                     cart.clear();
                     walletBalance = data.balance_cents || 0;
                     $('walletBalance').textContent = money(walletBalance);

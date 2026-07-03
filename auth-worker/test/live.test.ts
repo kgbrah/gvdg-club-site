@@ -728,6 +728,37 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     expect(resIns.args).toContain("A"); // player name persisted
   });
 
+  it("a finalize whose DB write fails leaves the round LIVE (no phantom 'final') and is retryable", async () => {
+    let failWrites = true;
+    const flakyDb = {
+      prepare(sql: string) {
+        return {
+          bind() { return this; },
+          all: async () => ({ results: [], success: true }),
+          first: async <T = Record<string, unknown>>() => { if (failWrites && /INSERT|UPDATE|DELETE/i.test(sql)) throw new Error("d1 down"); return (/INSERT INTO casual_rounds/i.test(sql) ? { id: 7 } as T : null); },
+          run: async () => { if (failWrites && /INSERT|UPDATE|DELETE/i.test(sql)) throw new Error("d1 down"); return { results: [], success: true }; },
+        };
+      },
+    };
+    const live = new LiveEventDO(new FakeState({}), { DB: flakyDb });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ casual: true, roundCode: "ZZ99ZZ", courseId: 3, layoutId: 5, courseName: "North Rec", layoutName: "Blue", createdBy: "m_a", holes: [{ hole: 1, par: 3 }, { hole: 2, par: 4 }], players: [{ memberId: "m_a", name: "A" }] }) }));
+    await act(live, "score", "m_a", { index: 0, hole: 1, strokes: 3 });
+    await act(live, "score", "m_a", { index: 0, hole: 2, strokes: 4 });
+
+    // First finalize: the D1 write throws (surfaces to the runtime as a 500). status must NOT be claimed
+    // 'final' — a concurrent/subsequent caller must not see a phantom success while the round is unfinalized.
+    await expect(act(live, "finalize", "m_a", {})).rejects.toThrow(/d1 down/);
+    const afterFail = (await (await live.fetch(new Request("https://do/"))).json()) as { status: string };
+    expect(afterFail.status).toBe("live");
+
+    // Retry after the DB recovers: it finalizes cleanly.
+    failWrites = false;
+    const ok = await act(live, "finalize", "m_a", {});
+    expect(ok.status).toBe(200);
+    const afterOk = (await (await live.fetch(new Request("https://do/"))).json()) as { status: string };
+    expect(afterOk.status).toBe("final");
+  });
+
   it("stores casual round ratings from a cached layout SSA without writing event results", async () => {
     const resultInserts: unknown[][] = [];
     const ratingInserts: unknown[][] = [];

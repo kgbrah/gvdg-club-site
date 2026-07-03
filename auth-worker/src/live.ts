@@ -109,6 +109,10 @@ export class LiveEventDO {
   private loaded = false;
   private meta: LiveMeta | null = null;
   private players: PlayerState[] = [];
+  // In-flight finalize, shared across concurrent double-submits so the second caller gets the FIRST's real
+  // outcome (success or failure) instead of an optimistic 'final' that may then roll back. Response DATA
+  // only — each caller builds its own Response so a single body isn't read twice.
+  private finalizing: Promise<{ status: number; body: Record<string, unknown> }> | null = null;
 
   constructor(state: LiveState, env: LiveEnv) {
     this.state = state;
@@ -127,12 +131,13 @@ export class LiveEventDO {
     await this.state.storage.put("meta", this.meta);
     await this.state.storage.put("players", this.players);
   }
-  private async refreshWeatherIfDue(force = false): Promise<void> {
-    const meta = this.meta;
-    if (!meta?.weather) return;
-    if (!force && !weatherRefreshDue(meta.weather)) return;
-    meta.weather = await refreshWeatherState(meta.weather);
-    await this.persist();
+  /** Fetch the latest weather and fold it into meta WITHOUT persisting — the caller persists once. Used on
+   *  the mutation paths (start/score/finalize/ensureWeather) where a brief fetch is acceptable and we want
+   *  the recorded weather current. Awaited and non-persisting, so a failed caller (finalize) rolls back
+   *  with nothing half-written to storage. Reads never call this — a pure read must not fetch/persist or
+   *  advance the revision counter. Gate on weatherRefreshDue() where you only want it when actually due. */
+  private async refreshWeatherNow(): Promise<void> {
+    if (this.meta?.weather) this.meta.weather = await refreshWeatherState(this.meta.weather);
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -142,18 +147,11 @@ export class LiveEventDO {
     // never reads identity from the request body for authorization (the body is spoofable).
     const authMember = request.headers.get("X-Auth-Member");
     const authAdmin = request.headers.get("X-Auth-Admin") === "true";
-    if (action === "ws") {
-      await this.refreshWeatherIfDue();
-      return this.handleWs(request);
-    }
-    if (action === "mine") {
-      await this.refreshWeatherIfDue();
-      return this.mine(authMember); // a player's own card (authed read)
-    }
-    if (request.method === "GET") {
-      await this.refreshWeatherIfDue();
-      return j(this.snapshot()); // public leaderboard/scorecard (no identity)
-    }
+    // Reads are PURE: they never refresh weather (which would fetch + persist + bump rev on a public read).
+    // Weather advances on score() via a non-blocking kick, and definitively on start/finalize.
+    if (action === "ws") return this.handleWs(request);
+    if (action === "mine") return this.mine(authMember); // a player's own card (authed read)
+    if (request.method === "GET") return j(this.snapshot()); // public leaderboard/scorecard (no identity)
     const body = await request.json().catch(() => ({}));
     if (action === "start") return this.start(body as StartBody);
     if (action === "cancel") return this.cancel(authAdmin);
@@ -291,7 +289,7 @@ export class LiveEventDO {
       scorecards: {},
     }));
     assignCards(this.players, b.cardSize); // group into cards (by starting hole, else buckets of 4)
-    await this.refreshWeatherIfDue(true);
+    await this.refreshWeatherNow();
     await this.persist();
     this.broadcast();
     return j(this.snapshot());
@@ -330,12 +328,15 @@ export class LiveEventDO {
   private async ensureWeather(b: WeatherBody): Promise<Response> {
     if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
     if (!this.meta.weather && b.weatherLocation) {
+      // One-time setup: record the location and take an initial reading, persisting once. This is the only
+      // place a read-backfill blocks on a fetch, and only until weather is first set for the round.
       this.meta.weather = createWeatherState(b.weatherLocation);
-      await this.refreshWeatherIfDue(true);
+      await this.refreshWeatherNow();
+      await this.persist();
       this.broadcast();
       return j(this.snapshot());
     }
-    await this.refreshWeatherIfDue();
+    if (weatherRefreshDue(this.meta.weather)) { await this.refreshWeatherNow(); await this.persist(); } // already set — refresh only when due
     return j(this.snapshot());
   }
 
@@ -372,7 +373,9 @@ export class LiveEventDO {
     const conflict = authAdmin && b.authoritative === true
       ? (recordAuthoritativeScore({ players: this.players, targetIndex, hole, strokes }), null)
       : recordScoreVote({ players: this.players, targetIndex, scorerId: playerScorerId(scorerIndex), hole, strokes });
-    await this.refreshWeatherIfDue();
+    // Refresh weather only when actually DUE — with the nextRefreshAt backoff that is at most once per
+    // ~10 min, not on every score. Folded into this handler's single persist() below (no extra write).
+    if (weatherRefreshDue(this.meta?.weather)) await this.refreshWeatherNow();
     await this.persist();
     if (conflict) {
       this.sendAll({ type: "conflict", ...conflict, from: conflict.values[0] ?? null, to: conflict.values[1] ?? null });
@@ -546,12 +549,14 @@ export class LiveEventDO {
     if (this.meta.casual && !authAdmin && !(authMember && this.players.some((p) => p.memberId === authMember && !p.removed))) {
       return j({ error: "not_on_card" }, 403);
     }
-    // Idempotent under a double-submit: claim finalization SYNCHRONOUSLY (before any await) so a second
-    // finalize that interleaves at one of the awaits below sees status==='final' and short-circuits,
-    // instead of racing clearResults + concurrent inserts into duplicate result rows.
+    // Idempotent under a double-submit. Already finalized -> return the idempotent success. Otherwise, if a
+    // finalize is already IN FLIGHT, SHARE its actual outcome (await this.finalizing) instead of optimistically
+    // reporting success: if that attempt fails, this caller sees the same failure rather than a false 'final'
+    // while the round rolls back to 'live'.
     if (this.meta.status === "final") {
       return j({ status: "final", standings: finalizeStandingsForFormat(this.resolvedHoles(), this.players, this.meta.format, this.meta.playFormat), forced: false, weather: this.meta.weather ?? null });
     }
+    if (this.finalizing) { const shared = await this.finalizing; return j(shared.body, shared.status); }
     const holes = this.resolvedHoles();
     // A round finalizes only when the whole card AGREES: no active-scorer conflicts AND every required
     // (member) cardmate has voted on every hole. Guests are optional (requiredScorerIds), but a guest's
@@ -563,37 +568,58 @@ export class LiveEventDO {
     if (incomplete && !(authAdmin && force)) {
       return j({ error: "scorecard_incomplete", conflicts: issues.conflicts, missing: issues.missing }, 409);
     }
-    await this.refreshWeatherIfDue(true);
-    const forced = incomplete; // an admin pushed a not-fully-agreed card through
-    this.meta.status = "final";
-    const standings = finalizeStandingsForFormat(holes, this.players, this.meta.format, this.meta.playFormat);
-    const weatherJson = this.meta.weather ? JSON.stringify(this.meta.weather) : null;
+    const run = this.performFinalize(holes, incomplete);
+    this.finalizing = run;
     try {
-      await persistFinalizedRound({
-        db: this.env.DB,
-        meta: {
-          eventId: this.meta.eventId,
-          casual: this.meta.casual === true,
-          roundCode: this.meta.roundCode ?? null,
-          courseId: this.meta.courseId ?? null,
-          layoutId: this.meta.layoutId ?? null,
-          createdBy: this.meta.createdBy ?? null,
-          courseName: this.meta.courseName ?? null,
-          layoutName: this.meta.layoutName ?? null,
-          startedAt: this.meta.startedAt,
-          holesJson: JSON.stringify(holes.map((h) => ({ hole: h.hole, par: h.par, distance_ft: h.distance_ft }))),
-          weatherJson,
-        },
-        standings,
-        players: this.players,
-      });
-    } catch (e) {
-      this.meta.status = "live"; // roll back the in-memory claim so the admin can retry finalize
-      throw e;
+      const result = await run;
+      return j(result.body, result.status);
+    } finally {
+      this.finalizing = null; // clear so a retry after a failed finalize can run again
     }
+  }
+
+  /** The actual finalize work — run once and shared across concurrent double-submits via this.finalizing
+   *  (that shared promise, NOT the status flag, is the concurrency guard, so only one run persists). status
+   *  is claimed 'final' ONLY AFTER the D1 write commits, so a failed attempt never leaves a phantom 'final'
+   *  and the round stays retryable. Returns response DATA (not a Response) so each caller builds its own
+   *  body. Weather is refreshed WITHOUT a separate persist so a failed finalize leaves nothing half-written
+   *  to storage. */
+  private async performFinalize(
+    holes: ReturnType<LiveEventDO["resolvedHoles"]>,
+    incomplete: boolean,
+  ): Promise<{ status: number; body: Record<string, unknown> }> {
+    const meta = this.meta;
+    if (!meta) return { status: 409, body: { error: "not_started" } };
+    const forced = incomplete; // an admin pushed a not-fully-agreed card through
+    // NB: do NOT claim status='final' before the D1 write. The concurrency guard is this.finalizing (a
+    // concurrent double-submit awaits it and shares this outcome), NOT the status flag — claiming 'final'
+    // early would make a second caller return a false success via the status==='final' branch if this
+    // attempt then failed. So the write happens first; status flips to 'final' only once it has committed.
+    await this.refreshWeatherNow();
+    const standings = finalizeStandingsForFormat(holes, this.players, meta.format, meta.playFormat);
+    const weatherJson = meta.weather ? JSON.stringify(meta.weather) : null;
+    await persistFinalizedRound({
+      db: this.env.DB,
+      meta: {
+        eventId: meta.eventId,
+        casual: meta.casual === true,
+        roundCode: meta.roundCode ?? null,
+        courseId: meta.courseId ?? null,
+        layoutId: meta.layoutId ?? null,
+        createdBy: meta.createdBy ?? null,
+        courseName: meta.courseName ?? null,
+        layoutName: meta.layoutName ?? null,
+        startedAt: meta.startedAt,
+        holesJson: JSON.stringify(holes.map((h) => ({ hole: h.hole, par: h.par, distance_ft: h.distance_ft }))),
+        weatherJson,
+      },
+      standings,
+      players: this.players,
+    });
+    meta.status = "final"; // claim ONLY after the D1 commit succeeded
     await this.persist();
     this.broadcast();
-    return j({ status: "final", standings, forced, weather: this.meta.weather ?? null });
+    return { status: 200, body: { status: "final", standings, forced, weather: meta.weather ?? null } };
   }
 
   private handleWs(_request: Request): Response {

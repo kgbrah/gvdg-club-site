@@ -150,7 +150,10 @@ export function createWeatherState(location: WeatherLocation | null, nowMs = Dat
 
 export function weatherRefreshDue(weather: WeatherState | null | undefined, nowMs = Date.now()): boolean {
   if (!weather) return false;
-  if (!weather.current) return true;
+  // Drive purely off nextRefreshAt — createWeatherState/refreshWeatherState always set it. A freshly
+  // created state has nextRefreshAt=now (due immediately); a failed fetch pushes it out by the refresh
+  // interval. Do NOT force a refresh just because `current` is null, or a failed/empty fetch would be
+  // retried on every single request, ignoring the backoff and hammering Open-Meteo.
   if (!weather.nextRefreshAt) return true;
   const nextRefreshMs = Date.parse(weather.nextRefreshAt);
   return !Number.isFinite(nextRefreshMs) || nextRefreshMs <= nowMs;

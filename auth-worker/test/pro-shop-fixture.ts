@@ -81,17 +81,20 @@ function allRows(sql: string, args: unknown[], state: MockState): Row[] {
 }
 
 function firstRow(sql: string, args: unknown[], state: MockState): Row | null {
+  // INSERTs first: the atomic debit is an `INSERT INTO wallet_transactions ... SELECT ... WHERE (SELECT
+  // COALESCE(SUM(amount_cents) ...)` — it must match the insert branch, not the balance-query branch below.
+  if (/INSERT INTO wallet_transactions/i.test(sql)) return insertTransaction(args, state);
   if (/SELECT COALESCE\(SUM\(amount_cents\)/i.test(sql)) return { balance_cents: state.balanceCents };
   if (/SELECT \* FROM wallet_transactions WHERE idempotency_key/i.test(sql)) {
     return state.transactions.find((t) => t.idempotency_key === args[0]) ?? null;
   }
   if (/SELECT \* FROM store_orders WHERE payment_ref/i.test(sql)) return state.orders.find((o) => o.payment_ref === args[0]) ?? null;
+  if (/SELECT \* FROM store_orders WHERE id = \?/i.test(sql)) return state.orders.find((o) => numberArg(o.id) === numberArg(args[0])) ?? null;
   if (/SELECT \* FROM store_payment_sessions WHERE paypal_order_id/i.test(sql)) return state.paymentSessions.find((session) => session.paypal_order_id === args[0]) ?? null;
   if (/FROM events(?:\s+e)?/i.test(sql) && /WHERE\s+(?:e\.)?id = \?/i.test(sql)) {
     return state.eventExists ? { id: numberArg(args[0]), name: "League Night", date: "2026-06-01", status: "scheduled" } : null;
   }
   if (/INSERT INTO store_products/i.test(sql)) return insertProduct(args, state);
-  if (/INSERT INTO wallet_transactions/i.test(sql)) return insertTransaction(args, state);
   if (/INSERT INTO store_orders/i.test(sql)) return insertOrder(args, state);
   if (/INSERT INTO store_order_items/i.test(sql)) return insertOrderItem(args, state);
   if (/INSERT INTO store_payment_sessions/i.test(sql)) return insertPaymentSession(args, state);
@@ -199,7 +202,8 @@ function updateOrder(sql: string, args: unknown[], state: MockState): Row | null
   if (/\bstatus = \?/i.test(sql)) row.status = stringArg(args[valueIndex++]) ?? row.status;
   if (/tracking_carrier = \?/i.test(sql)) row.tracking_carrier = stringArg(args[valueIndex++]);
   if (/tracking_number = \?/i.test(sql)) row.tracking_number = stringArg(args[valueIndex++]);
-  if (/admin_note = \?/i.test(sql)) row.admin_note = stringArg(args[valueIndex]);
+  if (/admin_note = \?/i.test(sql)) row.admin_note = stringArg(args[valueIndex++]);
+  if (/payment_ref = \?/i.test(sql)) row.payment_ref = stringArg(args[valueIndex++]);
   return row;
 }
 

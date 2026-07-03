@@ -184,7 +184,11 @@
         const changes = weatherChanges(weather);
         if (changes.length) chips.push({ label: "Change", value: changes.join(" | ") });
 
-        const observed = timeLabel(current.observedAt) || timeLabel(current.fetchedAt) || timeLabel(weather.updatedAt);
+        // Use fetchedAt / updatedAt (real UTC instants, "…Z") for the localized "Updated" clock. observedAt
+        // is Open-Meteo's course-local time WITHOUT an offset (e.g. "2026-07-03T14:15"), which new Date()
+        // reads as the VIEWER's local time — so a spectator in another timezone would see a wrong (even
+        // future) time. observedAt is only a last resort if no real instant is available.
+        const observed = timeLabel(current.fetchedAt) || timeLabel(weather.updatedAt) || timeLabel(current.observedAt);
         if (observed) chips.push({ label: "Updated", value: observed });
         return chips;
     }

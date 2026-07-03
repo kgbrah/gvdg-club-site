@@ -182,6 +182,22 @@ describe("pro shop and player wallets", () => {
     expect(dbState.state.transactions[0]?.source).toBe("store_purchase");
   });
 
+  it("deduplicates a store-credit checkout with the same idempotency key (no double charge)", async () => {
+    const dbState = makeDb({ balanceCents: 5000 });
+    const body = { items: [{ product_id: 1, quantity: 2 }], idempotency_key: "checkout-abc" };
+    const first = await call("/shop/orders", "POST", await token("m_jane"), body, dbState);
+    const second = await call("/shop/orders", "POST", await token("m_jane"), body, dbState); // retry / double-submit
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(200); // idempotent replay of the same order
+    const firstBody = (await first.json()) as { balance_cents: number; order: { id: number } };
+    const secondBody = (await second.json()) as { balance_cents: number; order: { id: number } };
+    expect(secondBody.order.id).toBe(firstBody.order.id); // same order, not a duplicate
+    expect(dbState.state.orders.filter((o) => o.status !== "cancelled")).toHaveLength(1);
+    expect(dbState.state.transactions).toHaveLength(1);
+    expect(dbState.state.balanceCents).toBe(1400); // charged once (5000 - 3600), not twice
+  });
+
   it("rejects checkout when stock reservation loses a race", async () => {
     const dbState = makeDb({ balanceCents: 5000, stockReservationFailures: 1 });
     const res = await call("/shop/orders", "POST", await token("m_jane"), { items: [{ product_id: 1, quantity: 2 }] }, dbState);
@@ -243,16 +259,51 @@ describe("pro shop and player wallets", () => {
     expect(dbState.state.products[0]?.stock_qty).toBe(2);
   });
 
-  it("rejects a COMPLETED order whose capture is still PENDING (unsettled eCheck)", async () => {
-    stubPayPal("18.00", "PENDING", "COMPLETED"); // order COMPLETED but the capture itself is PENDING
+  it("keeps a COMPLETED order whose capture is still PENDING (eCheck) for admin reconciliation", async () => {
+    stubPayPal("18.00", "PENDING", "COMPLETED"); // order COMPLETED but the capture itself is PENDING (funds settle later)
     const dbState = makeDb({ balanceCents: 0 });
     const extra = { PAYPAL_CLIENT_ID: "cid", PAYPAL_SECRET: "sec" };
     expect((await call("/shop/pay/create-order", "POST", await token("m_jane"), { items: [{ product_id: 1, quantity: 1 }] }, dbState, extra)).status).toBe(200);
     const cap = await call("/shop/pay/capture", "POST", await token("m_jane"), { orderId: "ORDER123" }, dbState, extra);
-    expect(cap.status).toBe(402);
-    expect(dbState.state.orders[0]?.status).toBe("cancelled");
+    // The funds WILL settle, so the order is NOT discarded (that would strand the buyer's money). It is kept
+    // and flagged for the admin to verify settlement before fulfilling; stock stays reserved.
+    expect(cap.status).toBe(202);
+    await expect(cap.json()).resolves.toMatchObject({ pending: true });
+    expect(dbState.state.orders[0]?.status).toBe("submitted");
+    expect(String(dbState.state.orders[0]?.admin_note)).toContain("PENDING");
+    expect(dbState.state.orders[0]?.payment_ref).toBe("ORDER123"); // kept so the settling capture reconciles
     expect(dbState.state.paymentSessions[0]?.status).toBe("captured");
+    expect(dbState.state.products[0]?.stock_qty).toBe(1);
+  });
+
+  it("detaches a declined PayPal capture so the buyer can retry the checkout cleanly", async () => {
+    const dbState = makeDb({ balanceCents: 0 });
+    const extra = { PAYPAL_CLIENT_ID: "cid", PAYPAL_SECRET: "sec" };
+    // First attempt: the capture call throws (transient network error) AFTER the order was created.
+    vi.stubGlobal("fetch", vi.fn(async (url: string | URL) => {
+      const u = String(url);
+      if (u.includes("/oauth2/token")) return new Response(JSON.stringify({ access_token: "tok" }), { status: 200 });
+      if (u.includes("/capture")) throw new Error("network down");
+      if (u.includes("/v2/checkout/orders")) return new Response(JSON.stringify({ id: "ORDER123" }), { status: 200 });
+      return new Response("{}", { status: 404 });
+    }));
+    expect((await call("/shop/pay/create-order", "POST", await token("m_jane"), { items: [{ product_id: 1, quantity: 1 }] }, dbState, extra)).status).toBe(200);
+    const failed = await call("/shop/pay/capture", "POST", await token("m_jane"), { orderId: "ORDER123" }, dbState, extra);
+    expect(failed.status).toBe(502);
+    // The cancelled order is detached from the PayPal order id, and the session is released back to pending.
+    expect(dbState.state.orders[0]?.status).toBe("cancelled");
+    expect(dbState.state.orders[0]?.payment_ref).toBeNull();
+    expect(dbState.state.paymentSessions[0]?.status).toBe("pending");
     expect(dbState.state.products[0]?.stock_qty).toBe(2);
+
+    // Retry with the same PayPal order id now that the network recovered: it must NOT be blocked by the
+    // stale cancelled order — it captures cleanly.
+    stubPayPal();
+    const retry = await call("/shop/pay/capture", "POST", await token("m_jane"), { orderId: "ORDER123" }, dbState, extra);
+    expect(retry.status).toBe(201);
+    const fresh = dbState.state.orders.find((o) => o.status !== "cancelled");
+    expect(fresh?.payment_method).toBe("paypal");
+    expect(fresh?.payment_ref).toBe("ORDER123");
   });
 
   it("does not capture PayPal when checkout loses the stock reservation race", async () => {

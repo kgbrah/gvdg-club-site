@@ -202,6 +202,10 @@ export async function getStoreOrderByPaymentRef(db: D1Like, paymentRef: string) 
   return db.prepare("SELECT * FROM store_orders WHERE payment_ref = ?").bind(paymentRef).first();
 }
 
+export async function getStoreOrderById(db: D1Like, id: number) {
+  return db.prepare("SELECT * FROM store_orders WHERE id = ?").bind(id).first();
+}
+
 export async function createStoreOrderItem(db: D1Like, item: StoreOrderItemInput) {
   return db
     .prepare("INSERT INTO store_order_items (order_id, product_id, name_snapshot, price_cents, quantity) VALUES (?, ?, ?, ?, ?) RETURNING *")
@@ -214,8 +218,11 @@ export async function decrementStoreProductStock(db: D1Like, id: number, quantit
     .prepare("UPDATE store_products SET stock_qty = stock_qty - ?, updated_at = datetime('now') WHERE id = ? AND active = 1 AND stock_qty >= ?")
     .bind(quantity, id, quantity)
     .run();
+  // Fail SAFE for a conditional stock decrement: only report success when the driver positively confirms
+  // a row changed. Never fall back to res.success (which is true even for a zero-row UPDATE) — that would
+  // let the caller believe stock was reserved when it wasn't, overselling the product.
   const changed = res.meta?.changes ?? res.meta?.rows_written;
-  return changed == null ? res.success : changed > 0;
+  return changed != null && changed > 0;
 }
 
 export async function incrementStoreProductStock(db: D1Like, id: number, quantity: number) {
@@ -250,6 +257,7 @@ export interface OrderFulfillmentPatch {
   tracking_carrier?: string | null;
   tracking_number?: string | null;
   admin_note?: string | null;
+  payment_ref?: string | null;
 }
 
 /** Admin view: all orders (optionally filtered by status), newest first, each with its line items. */
@@ -280,6 +288,7 @@ export async function updateStoreOrderFulfillment(db: D1Like, id: number, patch:
   if (patch.tracking_carrier !== undefined) { sets.push("tracking_carrier = ?"); binds.push(patch.tracking_carrier); }
   if (patch.tracking_number !== undefined) { sets.push("tracking_number = ?"); binds.push(patch.tracking_number); }
   if (patch.admin_note !== undefined) { sets.push("admin_note = ?"); binds.push(patch.admin_note); }
+  if (patch.payment_ref !== undefined) { sets.push("payment_ref = ?"); binds.push(patch.payment_ref); }
   if (!sets.length) return db.prepare("SELECT * FROM store_orders WHERE id = ?").bind(id).first();
   binds.push(id);
   return db.prepare(`UPDATE store_orders SET ${sets.join(", ")} WHERE id = ? RETURNING *`).bind(...binds).first();

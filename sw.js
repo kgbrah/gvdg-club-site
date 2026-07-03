@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v25";
+const CACHE = "gvdg-club-v26";
 const OFFLINE_PAGE = "gvdg-members.html";
 const ASSETS = [
   "site.webmanifest",
@@ -38,29 +38,18 @@ function cacheResponse(req, res) {
   return res;
 }
 
-function refreshEventsClients() {
-  return self.clients.matchAll({ type: "window" }).then((clients) => Promise.all(clients.map((client) => {
-    const url = new URL(client.url);
-    if (url.origin === self.location.origin && /^\/events(?:\.html)?\/?$/.test(url.pathname)) {
-      return client.navigate(client.url).catch(() => null);
-    }
-    return null;
-  })));
-}
-
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()).catch(() => {}));
 });
 
 self.addEventListener("activate", (event) => {
+  // Evict old caches and take control. We do NOT force-reload open pages (e.g. /events) on a version bump:
+  // that discards scroll position and any in-progress form state. Documents are network-first, so open
+  // pages pick up fresh content on their next natural navigation/reload.
   event.waitUntil(
     caches.keys()
-      .then((keys) => {
-        const oldAppCaches = keys.filter((key) => key !== CACHE && /^gvdg-club-v/.test(key));
-        return Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))
-          .then(() => self.clients.claim())
-          .then(() => (oldAppCaches.length ? refreshEventsClients() : null));
-      })
+      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
   );
 });
 

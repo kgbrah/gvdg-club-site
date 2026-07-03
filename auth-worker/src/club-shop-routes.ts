@@ -5,6 +5,7 @@ import { requireAuth } from "./authz.js";
 import { getMember } from "./roster.js";
 import { paypalBase, createOrder as ppCreateOrder, captureOrder as ppCaptureOrder } from "./payments.js";
 import { notifyNewOrder } from "./order-notify.js";
+import { createWalletDebitOnce, findWalletTransactionByIdempotencyKey } from "./wallet-idempotency.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { clientIp, json, readJson } from "./http.js";
 import { asInt, asStr } from "./input.js";
@@ -163,6 +164,10 @@ async function cancelSubmittedStoreOrder(input: CancelSubmittedStoreOrderInput):
   await shopDb.updateStoreOrderFulfillment(input.database, input.orderId, {
     status: "cancelled",
     admin_note: input.adminNote,
+    // Detach the cancelled order from its PayPal order id: no payment was captured for it, so leaving the
+    // ref set would make getStoreOrderByPaymentRef match this dead row on a retry and wedge the buyer in a
+    // permanent 409 "capture_in_progress" for a PayPal order that could still be captured cleanly.
+    payment_ref: null,
   });
 }
 
@@ -180,6 +185,7 @@ async function submitStoreOrder(input: SubmitStoreOrderInput): Promise<Submitted
         await shopDb.updateStoreOrderFulfillment(env.DB, orderId, {
           status: "cancelled",
           admin_note: "Cancelled automatically: insufficient stock for product #" + line.product_id,
+          payment_ref: null, // nothing was captured — detach so a retry isn't blocked by this dead row
         });
         return { ok: false, status: 409, body: { error: "insufficient_stock", product_id: line.product_id } };
       }
@@ -194,7 +200,7 @@ async function submitStoreOrder(input: SubmitStoreOrderInput): Promise<Submitted
     }
   } catch (e) {
     await releaseStoreOrderStock(env.DB, reserved);
-    await shopDb.updateStoreOrderFulfillment(env.DB, orderId, { status: "cancelled", admin_note: "Cancelled automatically: order submission failed." });
+    await shopDb.updateStoreOrderFulfillment(env.DB, orderId, { status: "cancelled", admin_note: "Cancelled automatically: order submission failed.", payment_ref: null });
     return { ok: false, status: 500, body: { error: "order_failed" } };
   }
   // New-order email to the club if configured (the admin Orders tab always shows it). Fire-and-forget.
@@ -320,14 +326,27 @@ export async function handleClubShop(
       }
       const cap = await ppCaptureOrder(creds, orderId);
       paymentCaptured = true;
-      // Require the ORDER and the CAPTURE itself to be COMPLETED in the expected currency — a COMPLETED
-      // order can still carry a PENDING eCheck/bank capture (unsettled funds) that must not be fulfilled.
-      if (cap.status !== "COMPLETED" || cap.captureStatus !== "COMPLETED" || cap.currency !== "USD" || cap.amountCents < total) {
+      const settledOk = cap.status === "COMPLETED" && cap.captureStatus === "COMPLETED" && cap.currency === "USD" && cap.amountCents >= total;
+      if (!settledOk) {
+        // A COMPLETED order whose capture is PENDING is an eCheck/bank payment: the funds are on their way
+        // and WILL settle — voiding the order locally would strand the buyer's money (paid, no order). So
+        // keep the order, flag it for admin reconciliation, and mark the session captured (terminal +
+        // idempotent) so replays return this pending order. Only a genuinely failed/declined capture (no
+        // money moving) is cancelled and detached so the buyer can retry cleanly.
+        const capturePending = cap.status === "COMPLETED" && cap.captureStatus === "PENDING" && cap.currency === "USD" && cap.amountCents >= total;
+        if (capturePending) {
+          await shopDb.updateStoreOrderFulfillment(env.DB, submitted.orderId, {
+            admin_note: "PayPal capture PENDING (eCheck/bank) — verify the payment has SETTLED in PayPal before fulfilling.",
+          });
+          await shopDb.markStorePaymentSessionCaptured(env.DB, orderId);
+          ctx?.waitUntil(notifyNewOrder(env, submitted.order, lines));
+          return json({ order: safeOrder(submitted.order), pending: true, balance_cents: await balanceFor() }, 202, origin);
+        }
         await cancelSubmittedStoreOrder({
           database: env.DB,
           orderId: submitted.orderId,
           lines,
-          adminNote: "Cancelled automatically: PayPal capture was not completed.",
+          adminNote: "Cancelled automatically: PayPal capture was declined or not completed.",
         });
         await shopDb.markStorePaymentSessionCaptured(env.DB, orderId);
         return json({ error: "payment_incomplete" }, 402, origin);
@@ -366,12 +385,29 @@ export async function handleClubShop(
   }
 
   if (method === "POST" && seg[1] === "orders") {
-    const items = cartItems(await readJson(request));
+    const body = (await readJson(request)) ?? {};
+    const items = cartItems(body);
     if (!items) return json({ error: "invalid_order" }, 400, origin);
+    // A client-supplied idempotency key makes the WHOLE checkout idempotent: a retried or double-submitted
+    // request with the same key never creates a second order or debits twice. Optional (older clients omit
+    // it and fall back to per-order keying, which still can't overdraw but doesn't dedup duplicates).
+    const idemKey = asStr(body.idempotency_key, 160);
+    if (idemKey) {
+      const prior = await findWalletTransactionByIdempotencyKey(env.DB, "store_order:" + claims.sub + ":" + idemKey);
+      if (prior) {
+        const priorOrderId = asInt((prior as Record<string, unknown>).order_id) ?? 0;
+        const priorOrder = priorOrderId ? await shopDb.getStoreOrderById(env.DB, priorOrderId) : null;
+        return json({ order: priorOrder, transaction: prior, balance_cents: await shopDb.walletBalance(env.DB, claims.sub) }, 200, origin);
+      }
+    }
     const priced = await priceCart(env.DB, items);
     if (!priced.ok) return json(priced.body, priced.status, origin);
+    // Early, friendly balance check so the common "too short" case returns 402 without creating and then
+    // cancelling an order. It is NOT the safety guarantee — that is the atomic debit below.
     const balance = await shopDb.walletBalance(env.DB, claims.sub);
     if (balance < priced.total) return json({ error: "insufficient_store_credit", balance_cents: balance, total_cents: priced.total }, 402, origin);
+    // Reserve stock / create the order first, but defer the club new-order email until the debit succeeds
+    // (mirrors the PayPal path) so a rolled-back order never emails a phantom sale.
     const submitted = await submitStoreOrder({
       env,
       ctx,
@@ -380,18 +416,46 @@ export async function handleClubShop(
       total: priced.total,
       lines: priced.lines,
       payment: { method: "store_credit" },
+      notify: false,
     });
     if (!submitted.ok) return json(submitted.body, submitted.status, origin);
-    const transaction = await shopDb.createWalletTransaction(env.DB, {
-      member_id: claims.sub,
-      member_name: member.name,
-      amount_cents: -priced.total,
-      transaction_type: "debit",
-      source: "store_purchase",
-      order_id: submitted.orderId,
-      note: "Pro shop order #" + submitted.orderId,
-    });
-    return json({ order: submitted.order, transaction, balance_cents: await shopDb.walletBalance(env.DB, claims.sub) }, 201, origin);
+    // Debit keyed to the CLIENT key when present (dedups a double-submit across requests via the unique
+    // idempotency_key index), else to this order (still atomic — prevents overdraw — but no cross-request
+    // dedup). Atomically balance-checked. On failure, roll the order back so the member is never charged for
+    // an unfulfilled order nor handed stock they didn't pay for.
+    const debitKey = idemKey ? "store_order:" + claims.sub + ":" + idemKey : "store_order:" + submitted.orderId;
+    let debit;
+    try {
+      debit = await createWalletDebitOnce(env.DB, {
+        member_id: claims.sub,
+        member_name: member.name,
+        amount_cents: -priced.total,
+        transaction_type: "debit",
+        source: "store_purchase",
+        order_id: submitted.orderId,
+        note: "Pro shop order #" + submitted.orderId,
+        idempotency_key: debitKey,
+      }, { matchOrderId: false }); // key identifies the purchase; racing attempts have different order_ids
+    } catch (e) {
+      await cancelSubmittedStoreOrder({ database: env.DB, orderId: submitted.orderId, lines: priced.lines, adminNote: "Cancelled automatically: store-credit debit failed." });
+      return json({ error: "order_failed" }, 500, origin);
+    }
+    if (!debit.ok) {
+      await cancelSubmittedStoreOrder({ database: env.DB, orderId: submitted.orderId, lines: priced.lines, adminNote: "Cancelled automatically: store credit no longer covered this order at debit time." });
+      const balanceNow = await shopDb.walletBalance(env.DB, claims.sub);
+      if (debit.error === "insufficient_balance") return json({ error: "insufficient_store_credit", balance_cents: balanceNow, total_cents: priced.total }, 402, origin);
+      return json({ error: "order_conflict" }, 409, origin);
+    }
+    // The debit deduped to an EARLIER order (a concurrent double-submit with the same key won the race): roll
+    // back the duplicate order we just created and return the original settled order — one charge, one order.
+    if (!debit.created) {
+      await cancelSubmittedStoreOrder({ database: env.DB, orderId: submitted.orderId, lines: priced.lines, adminNote: "Cancelled automatically: duplicate of an already-settled checkout." });
+      const originalId = asInt((debit.transaction as Record<string, unknown>).order_id) ?? 0;
+      const original = originalId && originalId !== submitted.orderId ? await shopDb.getStoreOrderById(env.DB, originalId) : submitted.order;
+      return json({ order: original, transaction: debit.transaction, balance_cents: await shopDb.walletBalance(env.DB, claims.sub) }, 200, origin);
+    }
+    ctx?.waitUntil(notifyNewOrder(env, submitted.order, priced.lines));
+    return json({ order: submitted.order, transaction: debit.transaction, balance_cents: await shopDb.walletBalance(env.DB, claims.sub) }, 201, origin);
   }
 
   return json({ error: "not_found" }, 404, origin);
