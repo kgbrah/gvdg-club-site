@@ -23,6 +23,8 @@ import { D1KV } from "./d1kv.js";
 export type { Env } from "./env.js";
 export { LiveEventDO } from "./live.js";
 
+import { runRatingsRecompute } from "./ratings-recompute.js";
+
 /**
  * STOPGAP: when no Workers KV namespace is bound (deployed dev/staging while this account's KV data
  * plane is degraded), back missing ROSTER + RATELIMIT bindings with D1 instead. Tests inject KV mocks and
@@ -77,5 +79,21 @@ export default {
       console.error(JSON.stringify({ message: "worker_error", method, pathname, error: e instanceof Error ? e.stack : String(e) }));
       return json({ error: "server_error" }, 500, origin);
     }
+  },
+  // Daily ratings recompute: refreshes each member's PDGA anchor + re-solves every round_ratings row and
+  // rolls up player_ratings. Idempotent (all upserts). Cron only — never reachable from the public fetch path.
+  async scheduled(controller: ScheduledController, rawEnv: RawEnv, ctx: ExecutionContext): Promise<void> {
+    const env = withKvFallback(rawEnv);
+    ctx.waitUntil(
+      (async () => {
+        try {
+          const result = await runRatingsRecompute(env);
+          console.log(JSON.stringify({ message: "ratings_recompute_complete", cron: controller.cron, ...result }));
+        } catch (error) {
+          console.error(JSON.stringify({ message: "ratings_recompute_failed", cron: controller.cron, error: error instanceof Error ? error.stack : String(error) }));
+          throw error;
+        }
+      })(),
+    );
   },
 } satisfies ExportedHandler<RawEnv>;

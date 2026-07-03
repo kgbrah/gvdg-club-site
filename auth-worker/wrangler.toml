@@ -21,6 +21,10 @@ enabled = true
 head_sampling_rate = 0.01
 persist = true
 
+# Daily ratings recompute (scheduled() in index.ts). 08:17 UTC.
+[triggers]
+crons = ["17 8 * * *"]
+
 [[kv_namespaces]]
 binding = "ROSTER"
 id = "REPLACE_WITH_ROSTER_KV_ID"
@@ -109,6 +113,9 @@ name = "gvdg-member-auth-staging"
 [env.staging.observability]
 enabled = true
 
+[env.staging.triggers]
+crons = ["17 8 * * *"]
+
 # Workers KV — RESTORED 2026-07-01. The account-wide KV data-plane fault (2026-06-29, where Workers
 # read/wrote an isolated empty store) has cleared; verified with a cross-plane read/write test before
 # switching. ROSTER holds the member roster + PIN hashes + passkey creds; RATELIMIT holds login-lockout
@@ -186,6 +193,9 @@ name = "gvdg-member-auth-staging"
 
 [env.gvdgclub.observability]
 enabled = true
+
+[env.gvdgclub.triggers]
+crons = ["17 8 * * *"]
 
 # Workers KV — RESTORED 2026-07-01 (see the [env.staging] note). Same namespaces as staging: both envs
 # share the one gvdg-staging D1 + roster, so they read the same KV.

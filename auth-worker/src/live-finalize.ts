@@ -3,6 +3,9 @@ import { scorecardConsensusIssues } from "./live-consensus.js";
 import { finalizeStandings, type FinalLiveStanding, type PlayerState } from "./scoring.js";
 import { finalizeRoundStandings, invalidScoreTargetsResponse, resolvedHoles, roundConfig, scoringState } from "./live-state.js";
 import { j, metadataJson, type LiveEnv, type LiveMeta } from "./live-types.js";
+import { roundRatingForScoreWithWeather, solveSsa, type Propagator, type RatingMethod, type RatingStream } from "./rating-engine.js";
+import { clearRoundRatingsForCasualRound, clearRoundRatingsForEvent, createRoundRating, findRatingAnchor, getLayoutRatingBaseline, upsertLayoutRatingBaseline, upsertPlayerRatingFromRounds } from "./rating-store.js";
+import { ratingWeatherFromJson } from "./weather.js";
 
 export type FinalizeLiveEventInput = {
   readonly meta: LiveMeta | null;
@@ -49,6 +52,7 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
     }
     await input.persist();
     input.broadcast();
+    await persistRatingsBestEffort(input.env, meta, standings); // ratings never gate the finalize
     return j({ status: "final", standings, forced });
   }
   try {
@@ -76,6 +80,7 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
   }
   await input.persist();
   input.broadcast();
+  await persistRatingsBestEffort(input.env, meta, standings); // ratings never gate the finalize
   return j({ status: "final", standings, forced });
 }
 
@@ -120,4 +125,75 @@ function casualRoundId(value: unknown): number | null {
   if (typeof value !== "object" || value === null || !("id" in value)) return null;
   const id = value.id;
   return typeof id === "number" ? id : null;
+}
+
+/** Write round_ratings for a just-finalized round. BEST-EFFORT: any failure is logged, never thrown, so
+ *  a rating glitch can never block or roll back a finalize (results are authoritative). The daily ratings
+ *  cron re-solves everything with official PDGA anchors, so a miss here self-heals. */
+async function persistRatingsBestEffort(env: LiveEnv, meta: LiveMeta, standings: FinalLiveStanding[]): Promise<void> {
+  try {
+    await persistRoundRatings(env, meta, standings);
+  } catch (error) {
+    console.error(JSON.stringify({ message: "round_ratings_persist_failed", eventId: meta.eventId, roundCode: meta.roundCode ?? null, error: error instanceof Error ? error.message : String(error) }));
+  }
+}
+
+async function persistRoundRatings(env: LiveEnv, meta: LiveMeta, standings: FinalLiveStanding[]): Promise<void> {
+  const stream: RatingStream = meta.casual ? "casual" : "competition";
+  if (stream === "casual" && !meta.roundCode) return; // no durable key → nothing to attach ratings to
+  const now = new Date().toISOString();
+  const roundDate = meta.startedAt || now;
+  const ranked = standings.filter((s) => s.place != null && s.memberId); // only completed, ranked, member rounds
+  const ratingWeather = ratingWeatherFromJson(meta.weather ? JSON.stringify(meta.weather) : null);
+
+  // Rating context: casual reads the per-layout SSA baseline; competition solves SSA from finishers' anchors.
+  let context: { ssa: number; ppt: number; propagatorCount: number; ratingMethod: RatingMethod } | null = null;
+  if (stream === "casual") {
+    const baseline = await getLayoutRatingBaseline(env.DB, meta.layoutId ?? null);
+    context = baseline ? { ssa: baseline.ssa, ppt: baseline.ppt, propagatorCount: baseline.propagatorCount, ratingMethod: "layout" } : null;
+  } else {
+    const propagators: Propagator[] = [];
+    for (const s of ranked) {
+      const anchor = await findRatingAnchor(env.DB, { memberId: s.memberId }); // local player_ratings anchor; cron upgrades with PDGA
+      if (anchor != null) propagators.push({ score: s.total, rating: anchor });
+    }
+    const solved = solveSsa(propagators);
+    context = solved ? { ssa: solved.ssa, ppt: solved.ppt, propagatorCount: solved.propagatorCount, ratingMethod: solved.status } : null;
+  }
+
+  // Idempotent replace: clear this round's prior ratings before rewriting (finalize can run again after a force).
+  if (stream === "competition") await clearRoundRatingsForEvent(env.DB, meta.eventId);
+  else if (meta.roundCode) await clearRoundRatingsForCasualRound(env.DB, meta.roundCode);
+
+  for (const s of ranked) {
+    const rr = context ? roundRatingForScoreWithWeather({ score: s.total, ssa: context.ssa, ppt: context.ppt, weather: context.ratingMethod === "layout" ? ratingWeather : null }) : null;
+    await createRoundRating(env.DB, {
+      memberId: s.memberId as string,
+      playerName: s.name,
+      stream,
+      eventId: stream === "competition" ? meta.eventId : null,
+      casualRoundCode: stream === "casual" ? (meta.roundCode ?? null) : null,
+      courseId: meta.courseId ?? null,
+      layoutId: meta.layoutId ?? null,
+      roundDate,
+      total: s.total,
+      toPar: s.toPar,
+      roundRating: rr ? rr.roundRating : null,
+      ssa: context ? context.ssa : null,
+      ppt: context ? context.ppt : null,
+      windGustMph: ratingWeather.windGustMph,
+      weatherAdjustment: rr ? rr.weatherAdjustment : 0,
+      propagatorCount: context ? context.propagatorCount : 0,
+      ratingMethod: context ? context.ratingMethod : "unrated",
+    });
+  }
+
+  // Competition rounds refresh the per-layout SSA baseline that casual rounds lean on.
+  if (stream === "competition" && context && meta.layoutId != null) {
+    await upsertLayoutRatingBaseline(env.DB, { layoutId: meta.layoutId, eventId: meta.eventId, baseline: { ssa: context.ssa, ppt: context.ppt, propagatorCount: context.propagatorCount } });
+  }
+
+  // Roll each rated member's aggregate player_ratings row forward.
+  const members = [...new Set(ranked.map((s) => s.memberId as string))];
+  await Promise.all(members.map((memberId) => upsertPlayerRatingFromRounds(env.DB, { memberId, stream, now })));
 }
