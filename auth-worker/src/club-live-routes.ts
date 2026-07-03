@@ -234,16 +234,18 @@ export async function handleClubLive(
       const weatherLocation = weatherLocationForCourse(evCourse, evLayout);
       const regs = (await db.listRegistrations(env.DB, eid)) as { member_id?: string; name?: string; team?: string | null; division?: string | null; starting_hole?: number | null; checked_in?: number | null }[];
       const useRegistrationRoster = regs.length > 0 && startBody.from !== "players";
-      // After the check-in deadline, score only checked-in registrants — BUT only when someone actually
-      // used the in-app Check-in. Clubs that track attendance on paper never set checked_in, so fall back
-      // to the full roster instead of hard-failing the round start with no_checked_in_players.
-      const anyCheckedIn = regs.some((r) => Number(r.checked_in ?? 0) === 1);
-      const scoringRegs = deadlinePassed(ev.checkin_deadline) && anyCheckedIn ? regs.filter((r) => Number(r.checked_in ?? 0) === 1) : regs;
-      if (useRegistrationRoster && scoringRegs.length === 0) return json({ error: "no_checked_in_players" }, 400, origin);
-      const rawPlayers: StartPlayer[] =
-        useRegistrationRoster
-          ? scoringRegs.map((r) => ({ memberId: r.member_id ?? null, name: String(r.name ?? "Player"), team: r.team ?? null, division: r.division ?? null, startingHole: r.starting_hole ?? null }))
-          : (Array.isArray(ev.players) ? ev.players : []).map((p) => ({ memberId: rowString(p, "member_id"), name: String(p.name ?? "Player"), team: rowString(p, "team"), division: rowString(p, "division"), startingHole: null, pdgaNo: rowString(p, "pdga_no") }));
+      let rawPlayers: StartPlayer[];
+      if (useRegistrationRoster) {
+        // After the check-in deadline, score only checked-in registrants — BUT only when someone actually
+        // used the in-app Check-in. Clubs that track attendance on paper never set checked_in, so fall back
+        // to the full roster instead of hard-failing the round start with no_checked_in_players.
+        const anyCheckedIn = regs.some((r) => Number(r.checked_in ?? 0) === 1);
+        const scoringRegs = deadlinePassed(ev.checkin_deadline) && anyCheckedIn ? regs.filter((r) => Number(r.checked_in ?? 0) === 1) : regs;
+        if (scoringRegs.length === 0) return json({ error: "no_checked_in_players" }, 400, origin);
+        rawPlayers = scoringRegs.map((r) => ({ memberId: r.member_id ?? null, name: String(r.name ?? "Player"), team: r.team ?? null, division: r.division ?? null, startingHole: r.starting_hole ?? null }));
+      } else {
+        rawPlayers = (Array.isArray(ev.players) ? ev.players : []).map((p) => ({ memberId: rowString(p, "member_id"), name: String(p.name ?? "Player"), team: rowString(p, "team"), division: rowString(p, "division"), startingHole: null, pdgaNo: rowString(p, "pdga_no") }));
+      }
       const teamError = teamValidationError(roundFormats.teamRequired, rawPlayers);
       if (teamError) return json(teamError, 400, origin);
       const players = await Promise.all(rawPlayers.map((player) => withRatingAnchor(env, player)));

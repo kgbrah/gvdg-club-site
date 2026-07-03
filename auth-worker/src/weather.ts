@@ -37,7 +37,7 @@ export type WeatherState = {
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 type LatLng = { readonly lat: number; readonly lng: number };
 
-const WEATHER_REFRESH_MS = 10 * 60 * 1000;
+export const WEATHER_REFRESH_MS = 10 * 60 * 1000;
 const WEATHER_FETCH_TIMEOUT_MS = 3500;
 const WEATHER_HISTORY_LIMIT = 72;
 const OPEN_METEO_CURRENT_FIELDS = [

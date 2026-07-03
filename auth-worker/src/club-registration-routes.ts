@@ -43,6 +43,15 @@ function registrationAddons(raw: unknown): RegistrationAddons {
   return { ctp: addons.ctp === true, ace: addons.ace === true };
 }
 
+// Fetch the event schedule and assert it is OPEN (status scheduled or live). Returns the event, or a 403
+// Response carrying `errorCode` for the caller to return. Deadline handling stays per-handler (register
+// closes only NEW sign-ups; check-in closes for everyone).
+async function requireOpenEvent(env: Env, eid: number, origin: string | null, errorCode: string): Promise<EventSchedule | Response> {
+  const event = (await db.getEventSchedule(env.DB, eid)) as EventSchedule | null;
+  if (!event || (event.status !== "scheduled" && event.status !== "live")) return json({ error: errorCode }, 403, origin);
+  return event;
+}
+
 export async function handleClubRegistration(
   request: Request,
   env: Env,
@@ -117,8 +126,9 @@ export async function handleClubRegistration(
     return json({ config: await db.getEventConfig(env.DB, eid), event: await db.getEventSchedule(env.DB, eid), registration }, 200, origin);
   }
   if (seg[2] === "register" && method === "POST") {
-    const event = (await db.getEventSchedule(env.DB, eid)) as EventSchedule | null;
-    if (!event || (event.status !== "scheduled" && event.status !== "live")) return json({ error: "registration_closed" }, 403, origin);
+    const openEvent = await requireOpenEvent(env, eid, origin, "registration_closed");
+    if (openEvent instanceof Response) return openEvent;
+    const event = openEvent;
     // NB: the registration_deadline gate is applied below, AFTER we know whether this is a new sign-up or an
     // edit — a passed deadline closes NEW registrations but must not block an existing registrant from
     // correcting their entry (removing an add-on / changing division, which lowers or keeps the amount owed).
@@ -176,9 +186,9 @@ export async function handleClubRegistration(
     return json({ ok: true }, 200, origin);
   }
   if (seg[2] === "checkin" && method === "POST") {
-    const event = (await db.getEventSchedule(env.DB, eid)) as EventSchedule | null;
-    if (!event || (event.status !== "scheduled" && event.status !== "live")) return json({ error: "checkin_closed" }, 403, origin);
-    if (deadlinePassed(event.checkin_deadline)) return json({ error: "checkin_closed" }, 403, origin);
+    const openEvent = await requireOpenEvent(env, eid, origin, "checkin_closed");
+    if (openEvent instanceof Response) return openEvent;
+    if (deadlinePassed(openEvent.checkin_deadline)) return json({ error: "checkin_closed" }, 403, origin);
     const b = (await readJson(request)) ?? {};
     const memberId = claims ? claims.sub : guestMemberId(request, b);
     if (!memberId) return json({ error: "unauthorized" }, 401, origin);

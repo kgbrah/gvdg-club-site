@@ -43,15 +43,22 @@ class FakeSocket extends EventTarget {
 
 class FakeState {
   readonly accepted: WebSocket[] = [];
+  alarm: number | null = null;
   readonly storage: {
     get<T = unknown>(key: string): Promise<T | undefined>;
     put(key: string, value: unknown): Promise<void>;
+    getAlarm(): Promise<number | null>;
+    setAlarm(scheduledTime: number): Promise<void>;
+    deleteAlarm(): Promise<void>;
   };
 
   constructor(stored: Stored = {}) {
     this.storage = {
       get: async <T = unknown>(key: string) => stored[key as keyof Stored] as T | undefined,
       put: async () => {},
+      getAlarm: async () => this.alarm,
+      setAlarm: async (scheduledTime: number) => { this.alarm = scheduledTime; },
+      deleteAlarm: async () => { this.alarm = null; },
     };
   }
 
@@ -623,17 +630,19 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     expect(mine.holes.find((h) => h.hole === 1)?.tee_sign_id).toBe(77);
   });
 
-  it("captures weather at start and appends changed conditions during scoring", async () => {
+  it("captures weather at start, schedules the alarm, and refreshes on the alarm (not on score)", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-01T12:00:00.000Z"));
     stubWeather([
       openMeteoSample("2026-07-01T08:00", 6.5, 0),
       openMeteoSample("2026-07-01T08:15", 18.2, 0.2),
     ]);
-    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    const state = new FakeState({});
+    const live = new LiveEventDO(state, { DB: db });
     const started = await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
       casual: true,
       courseName: "North Rec",
+      startedAt: "2026-07-01T12:00:00.000Z",
       holes: [{ hole: 1, par: 3 }],
       players: [{ memberId: "m_a", name: "A" }],
       weatherLocation: { lat: 35.631092, lng: -77.319923, label: "North Rec - Greenville, NC" },
@@ -643,14 +652,36 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     expect(startBody.weather?.current?.windSpeedMph).toBe(6.5);
     expect(startBody.weather?.current?.windGustMph).toBe(12.5);
     expect(startBody.weather?.history.map((sample) => sample.observedAt)).toEqual(["2026-07-01T08:00"]);
+    expect(state.alarm).not.toBeNull(); // background weather alarm scheduled at start
 
+    // A score is PURE: it never fetches weather, so the reading stays at the start value.
     vi.setSystemTime(new Date("2026-07-01T12:11:00.000Z"));
     const scored = await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify({ index: 0, scorerIndex: 0, hole: 1, strokes: 3 }) }));
-    const scoredBody = (await scored.json()) as WeatherSnapshot;
-    expect(scoredBody.weather?.current).toMatchObject({ observedAt: "2026-07-01T08:15", rainIn: 0.2, windSpeedMph: 18.2, windGustMph: 24.2 });
-    expect(scoredBody.weather?.history.map((sample) => sample.windSpeedMph)).toEqual([6.5, 18.2]);
-    expect(scoredBody.weather?.history.map((sample) => sample.windGustMph)).toEqual([12.5, 24.2]);
-    expect(scoredBody.weather?.error).toBeNull();
+    expect(((await scored.json()) as WeatherSnapshot).weather?.current?.observedAt).toBe("2026-07-01T08:00");
+
+    // The background alarm firing refreshes weather, appends the changed sample, and reschedules while live.
+    await live.alarm();
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as WeatherSnapshot;
+    expect(snap.weather?.current).toMatchObject({ observedAt: "2026-07-01T08:15", rainIn: 0.2, windSpeedMph: 18.2, windGustMph: 24.2 });
+    expect(snap.weather?.history.map((sample) => sample.windSpeedMph)).toEqual([6.5, 18.2]);
+    expect(snap.weather?.history.map((sample) => sample.windGustMph)).toEqual([12.5, 24.2]);
+    expect(snap.weather?.error).toBeNull();
+    expect(state.alarm).not.toBeNull(); // rescheduled while the round is live
+  });
+
+  it("the weather alarm clears itself once the round is no longer live", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-01T12:00:00.000Z"));
+    stubWeather([openMeteoSample("2026-07-01T08:00", 6.5, 0)]);
+    const state = new FakeState({});
+    const live = new LiveEventDO(state, { DB: db });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      casual: true, courseName: "North Rec", startedAt: "2026-07-01T12:00:00.000Z", holes: [{ hole: 1, par: 3 }],
+      players: [{ memberId: "m_a", name: "A" }], weatherLocation: { lat: 35.6, lng: -77.3, label: "North Rec" },
+    }) }));
+    expect(state.alarm).not.toBeNull();
+    await live.fetch(new Request("https://do/cancel", { method: "POST", headers: { "X-Auth-Admin": "true" } }));
+    expect(state.alarm).toBeNull(); // cancel stops the background refresh
   });
 
   it("backfills weather for a live round that started before weather tracking", async () => {

@@ -49,6 +49,18 @@ describe("admin event management", () => {
     });
   });
 
+  it("rejects a start time / deadline without a timezone (ambiguous naive datetime)", async () => {
+    const state: DbState = {};
+    const res = await call("/admin/events", "POST", {
+      type: "tournament",
+      name: "Naive",
+      date: "2026-07-04",
+      starts_at: "2026-07-04T13:00", // no Z / offset — would be misread as UTC by the Worker
+    }, await token("m_admin"), state);
+    expect(res.status).toBe(400);
+    expect(state.eventInsert).toBeUndefined();
+  });
+
   it("lets admins add and remove manual event players", async () => {
     const state: DbState = {};
     const jwt = await token("m_admin");

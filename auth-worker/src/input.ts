@@ -26,6 +26,11 @@ export function asIsoTimestamp(v: unknown): string | null | undefined {
   if (v == null || v === "") return null;
   const text = asStr(v, 80);
   if (!text) return undefined;
+  // A datetime WITH a time component must carry an explicit timezone (…Z or ±HH:MM). A bare
+  // "YYYY-MM-DDTHH:MM" has no zone, and the Worker (UTC) would silently read it as UTC — shifting the
+  // stored deadline by the club's offset. The admin UI always sends a toISOString() value (…Z), so this
+  // only rejects ambiguous non-UI input. (Date-only "YYYY-MM-DD" is unambiguous and allowed.)
+  if (/T\d/.test(text) && !/(Z|[+-]\d\d:?\d\d)$/.test(text)) return undefined;
   const time = Date.parse(text);
   return Number.isFinite(time) ? new Date(time).toISOString() : undefined;
 }

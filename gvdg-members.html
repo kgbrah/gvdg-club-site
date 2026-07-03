@@ -1433,6 +1433,9 @@
             const d = new Date(ev.starts_at || ev.date || '');
             return Number.isFinite(d.getTime()) ? d.getTime() : Number.POSITIVE_INFINITY;
         }
+        // NB: deliberately distinct from events.js formatEventDate — here an empty/unparseable value returns
+        // '' so scheduleRows() can HIDE the row (a missing start/deadline shouldn't render a "Date TBD"
+        // placeholder in the member's schedule). events.js renders 'Date TBD' for its list context instead.
         function formatEventDate(raw) {
             if (!raw) return '';
             const s = String(raw).trim();
@@ -1446,7 +1449,7 @@
             } else {
                 d = new Date(s);
             }
-            if (!Number.isFinite(d.getTime())) return s;
+            if (!Number.isFinite(d.getTime())) return ''; // hide a garbled value rather than render it raw
             return d.toLocaleString([], dateOnly
                 ? { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }
                 : { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });

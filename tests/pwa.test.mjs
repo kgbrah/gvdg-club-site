@@ -80,7 +80,7 @@ test('score course picker rows use themed text and app font', () => {
 
 test('shared service worker caches app install assets and member fallback', () => {
   const sw = readFileSync('sw.js', 'utf8');
-  assert.match(sw, /const CACHE = "gvdg-club-v25"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v\d+"/); // version-agnostic: don't break on every cache bump
   assert.match(sw, /const OFFLINE_PAGE = "gvdg-members\.html"/);
   assert.match(sw, /const STATIC_DESTINATIONS = new Set/);
   assert.match(sw, /const NETWORK_FIRST_DESTINATIONS = new Set\(\["script", "style", "manifest"\]\)/);

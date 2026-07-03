@@ -11,7 +11,7 @@ import { playFormatForRound, scoringFormatForRound, teamNameRequiredForFormat } 
 import { persistFinalizedRound } from "./live-finalize.js";
 import { normalizeScorecards, playerScorerId, purgeScorerVotes, recordAuthoritativeScore, recordScoreVote, scorecardConsensusIssues } from "./live-consensus.js";
 import { assignCards, computeLeaderboardForFormat, finalizeStandingsForFormat, type PlayerState } from "./scoring.js";
-import { createWeatherState, refreshWeatherState, weatherRefreshDue, type WeatherLocation, type WeatherState } from "./weather.js";
+import { createWeatherState, refreshWeatherState, WEATHER_REFRESH_MS, type WeatherLocation, type WeatherState } from "./weather.js";
 
 interface LiveEnv {
   DB: db.D1Like;
@@ -20,6 +20,9 @@ interface LiveState {
   storage: {
     get<T = unknown>(key: string): Promise<T | undefined>;
     put(key: string, value: unknown): Promise<void>;
+    getAlarm(): Promise<number | null>;
+    setAlarm(scheduledTime: number): Promise<void>;
+    deleteAlarm(): Promise<void>;
   };
   acceptWebSocket(socket: WebSocket): void;
   getWebSockets(): WebSocket[];
@@ -92,6 +95,10 @@ interface RemoveBody {
 
 const j = (o: unknown, status = 200): Response => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json" } });
 
+// Stop the background weather alarm for a round that's been "live" longer than this — a safety bound so an
+// abandoned round (started, never finalized) can't keep polling Open-Meteo indefinitely.
+const WEATHER_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+
 function canEnterScorecard(player: PlayerState, authMember: string | null): boolean {
   return !player.memberId || player.memberId === authMember || player.memberId.startsWith("g_");
 }
@@ -132,12 +139,35 @@ export class LiveEventDO {
     await this.state.storage.put("players", this.players);
   }
   /** Fetch the latest weather and fold it into meta WITHOUT persisting — the caller persists once. Used on
-   *  the mutation paths (start/score/finalize/ensureWeather) where a brief fetch is acceptable and we want
-   *  the recorded weather current. Awaited and non-persisting, so a failed caller (finalize) rolls back
-   *  with nothing half-written to storage. Reads never call this — a pure read must not fetch/persist or
-   *  advance the revision counter. Gate on weatherRefreshDue() where you only want it when actually due. */
+   *  the mutation paths (start/finalize/ensureWeather) where a brief fetch is acceptable and we want the
+   *  recorded weather current. Awaited and non-persisting, so a failed caller (finalize) rolls back with
+   *  nothing half-written to storage. Reads and score() never call this — periodic freshness comes from the
+   *  Durable Object alarm below, so both stay pure (no inline Open-Meteo fetch, no rev bump on a read). */
   private async refreshWeatherNow(): Promise<void> {
     if (this.meta?.weather) this.meta.weather = await refreshWeatherState(this.meta.weather);
+  }
+  /** Ensure a weather-refresh alarm is scheduled for a live, weather-tracked round (idempotent — never
+   *  stacks alarms). Decouples weather freshness from requests: it advances even with no scoring/reads. */
+  private async scheduleWeatherAlarm(): Promise<void> {
+    if (this.meta?.status !== "live" || !this.meta.weather) return;
+    if ((await this.state.storage.getAlarm()) == null) await this.state.storage.setAlarm(Date.now() + WEATHER_REFRESH_MS);
+  }
+  /** DO alarm handler: refresh weather in the background and reschedule while the round is live. Stops
+   *  (clears the alarm) once the round is final/none, or if the round has been live longer than
+   *  WEATHER_MAX_AGE_MS — a safety bound so an abandoned, never-finalized round can't poll Open-Meteo
+   *  forever. */
+  async alarm(): Promise<void> {
+    await this.load();
+    const startedMs = Date.parse(this.meta?.startedAt ?? "");
+    const stale = Number.isFinite(startedMs) && Date.now() - startedMs > WEATHER_MAX_AGE_MS; // only when age is known + old
+    if (this.meta?.status !== "live" || !this.meta.weather || stale) {
+      await this.state.storage.deleteAlarm();
+      return;
+    }
+    this.meta.weather = await refreshWeatherState(this.meta.weather);
+    await this.persist();
+    this.broadcast();
+    await this.state.storage.setAlarm(Date.now() + WEATHER_REFRESH_MS);
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -291,6 +321,7 @@ export class LiveEventDO {
     assignCards(this.players, b.cardSize); // group into cards (by starting hole, else buckets of 4)
     await this.refreshWeatherNow();
     await this.persist();
+    await this.scheduleWeatherAlarm(); // keep weather fresh in the background for the life of the round
     this.broadcast();
     return j(this.snapshot());
   }
@@ -321,6 +352,7 @@ export class LiveEventDO {
     };
     this.players = [];
     await this.persist();
+    await this.state.storage.deleteAlarm(); // round reset — stop the background weather refresh
     this.broadcast();
     return j(this.snapshot());
   }
@@ -328,15 +360,16 @@ export class LiveEventDO {
   private async ensureWeather(b: WeatherBody): Promise<Response> {
     if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
     if (!this.meta.weather && b.weatherLocation) {
-      // One-time setup: record the location and take an initial reading, persisting once. This is the only
-      // place a read-backfill blocks on a fetch, and only until weather is first set for the round.
+      // One-time setup: record the location, take an initial reading, and start the refresh alarm. This is
+      // the only place a read-backfill blocks on a fetch, and only until weather is first set for the round.
       this.meta.weather = createWeatherState(b.weatherLocation);
       await this.refreshWeatherNow();
       await this.persist();
+      await this.scheduleWeatherAlarm();
       this.broadcast();
       return j(this.snapshot());
     }
-    if (weatherRefreshDue(this.meta.weather)) { await this.refreshWeatherNow(); await this.persist(); } // already set — refresh only when due
+    await this.scheduleWeatherAlarm(); // weather already set — make sure the background alarm is running
     return j(this.snapshot());
   }
 
@@ -373,9 +406,8 @@ export class LiveEventDO {
     const conflict = authAdmin && b.authoritative === true
       ? (recordAuthoritativeScore({ players: this.players, targetIndex, hole, strokes }), null)
       : recordScoreVote({ players: this.players, targetIndex, scorerId: playerScorerId(scorerIndex), hole, strokes });
-    // Refresh weather only when actually DUE — with the nextRefreshAt backoff that is at most once per
-    // ~10 min, not on every score. Folded into this handler's single persist() below (no extra write).
-    if (weatherRefreshDue(this.meta?.weather)) await this.refreshWeatherNow();
+    // Weather is refreshed by the background DO alarm, not here — the scorekeeper's tap never waits on an
+    // Open-Meteo fetch.
     await this.persist();
     if (conflict) {
       this.sendAll({ type: "conflict", ...conflict, from: conflict.values[0] ?? null, to: conflict.values[1] ?? null });
