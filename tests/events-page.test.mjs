@@ -11,14 +11,26 @@ function renderPageSource() {
   return html.slice(start, end);
 }
 
-test('public Events page renders Live Now before the schedule feed', () => {
+test('public Events page pins Live Now to the top section, above the schedule feed', () => {
   const source = renderPageSource();
-  const liveIndex = source.indexOf("calendarEl.appendChild(section('Live Now', live, { live: true }))");
+  const liveIndex = source.indexOf("liveNowEl.appendChild(section('Live Now', live, { live: true }))");
   const feedIndex = source.indexOf('calendarEl.appendChild(feedList(feedEvents))');
-  assert.notEqual(liveIndex, -1, 'Live Now should render inside the Events group');
+  assert.notEqual(liveIndex, -1, 'Live Now should render into the dedicated top liveNow section');
   assert.notEqual(feedIndex, -1, 'schedule feed should still render inside the Events group');
-  assert.ok(liveIndex < feedIndex, 'Live Now should appear above scheduled feed cards');
+  assert.ok(liveIndex < feedIndex, 'Live Now should be rendered before the schedule feed');
+  assert.equal(source.includes("calendarEl.appendChild(section('Live Now'"), false, 'Live Now should no longer render inside the calendar group');
   assert.equal(source.includes("hubEl.appendChild(section('Live Now'"), false, 'Live Now should not be rendered below the schedule feed');
+});
+
+test('public Events page collapses past events and moves casual rounds to the dashboard', () => {
+  const source = readFileSync('events.html', 'utf8');
+  // Only upcoming (+ live) render in the main flow; past events go behind a toggle.
+  assert.match(source, /function renderPastSection\(past\)/);
+  assert.match(source, /past-toggle/);
+  assert.equal(source.includes("hubEl.appendChild(section('Club-scored — Past'"), false, 'past events should not render inline in the hub');
+  // Casual posting/joining moved to the member dashboard — only a signpost CTA remains here.
+  assert.match(source, /function renderCasualCta\(\)/);
+  assert.doesNotMatch(source, /async function loadCasualRounds\(\)/);
 });
 
 test('public registration cards post pair label only for doubles config', () => {
