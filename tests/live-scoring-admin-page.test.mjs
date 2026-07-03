@@ -6,6 +6,12 @@ test('admin live start area sends normalized scoring config', () => {
   const source = readFileSync('admin.html', 'utf8');
   assert.match(source, /id="scGroupFormat"/);
   assert.match(source, /id="scScoringStyle"/);
+  // Format selectors are BUTTON toggles (not dropdowns) — preserve this UI.
+  assert.match(source, /class="fmt-btn" data-val="singles"/);
+  assert.match(source, /class="fmt-btn" data-val="doubles"/);
+  assert.match(source, /class="fmt-btn" data-val="stroke"/);
+  assert.match(source, /class="fmt-btn" data-val="matchplay"/);
+  assert.doesNotMatch(source, /<select id="scGroupFormat"/);
   assert.match(source, /function scCurrentConfig\(\)/);
   assert.match(source, /const body = \$\('scUseManualPlayers'\)\.checked \? \{ from: 'players', liveScoringConfig \} : \{ liveScoringConfig \}/);
 });
