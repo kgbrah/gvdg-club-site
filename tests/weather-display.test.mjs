@@ -41,6 +41,43 @@ test('formats current round weather with wind, precipitation, humidity, and upda
   assert.match(weather.formatLiveWeather(state), /Precip: Rain 0\.03 in/);
 });
 
+function fakeDoc() {
+  function el() {
+    return {
+      children: [], attrs: {}, style: {}, className: '', textContent: '',
+      setAttribute(k, v) { this.attrs[k] = String(v); },
+      getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; },
+      appendChild(c) { this.children.push(c); return c; },
+      addEventListener() {},
+      querySelectorAll() { return []; },
+    };
+  }
+  return { createElement: () => el(), createElementNS: () => el(), createTextNode: (t) => ({ text: t }) };
+}
+function findArrow(node) {
+  if (!node || typeof node !== 'object') return null;
+  if (node.attrs && node.attrs.class === 'weather-wind-arrow') return node;
+  for (const k of node.children || []) { const f = findArrow(k); if (f) return f; }
+  return null;
+}
+
+test('wind chip includes a direction arrow pointing where the wind blows (north-up until compass enabled)', async () => {
+  const weather = await loadWeatherDisplay();
+  const state = { current: { windSpeedMph: 8.4, windDirectionDeg: 225, windGustMph: 10 }, history: [] };
+  const strip = weather.buildWeatherStrip(fakeDoc(), state, {});
+  const arrow = findArrow(strip);
+  assert.ok(arrow, 'wind arrow present');
+  assert.equal(arrow.getAttribute('data-blowto'), '45'); // wind FROM 225 (SW) blows TO 45 (NE)
+  assert.equal(arrow.getAttribute('data-relative'), 'north'); // compass off -> north-up
+  assert.equal(arrow.style.transform, 'rotate(45deg)');
+});
+
+test('no wind arrow when direction is unknown', async () => {
+  const weather = await loadWeatherDisplay();
+  const state = { current: { windSpeedMph: 5, windDirectionDeg: null }, history: [] };
+  assert.equal(findArrow(weather.buildWeatherStrip(fakeDoc(), state, {})), null);
+});
+
 test('surfaces material weather changes during a round', async () => {
   const weather = await loadWeatherDisplay();
   const previous = {

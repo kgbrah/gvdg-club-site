@@ -375,7 +375,11 @@
             return S.conflicts.some((c) => c && c.hole === hole);
         }
         function roundWeatherNode() {
-            return window.GVDGWeather ? window.GVDGWeather.buildWeatherStrip(document, S.weather, { title: 'Round weather' }) : null;
+            if (!window.GVDGWeather) return null;
+            // Best-effort: start the compass so the wind arrow tracks the player's facing. Android/desktop
+            // sensors begin now; iOS needs a user gesture, so there it stays north-up until the arrow is tapped.
+            if (S.weather && S.weather.current && window.GVDGWeather.enableCompass) window.GVDGWeather.enableCompass();
+            return window.GVDGWeather.buildWeatherStrip(document, S.weather, { title: 'Round weather' });
         }
         function applyRoundMeta(d) {
             if (!d) return;

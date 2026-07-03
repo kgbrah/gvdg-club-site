@@ -54,6 +54,99 @@
         return DIRECTIONS[Math.round((((n % 360) + 360) % 360) / 22.5) % 16];
     }
 
+    // ---- wind-direction arrow, relative to the player's facing ------------------------------------------
+    // Open-Meteo windDirectionDeg is the compass bearing the wind blows FROM. An arrow is most useful to a
+    // disc golfer pointing where the wind PUSHES the disc (blow-to = from + 180). When the compass is
+    // enabled we rotate that relative to the phone's heading, so screen-up = the way the player is facing:
+    // arrow up = tailwind, down = headwind, sideways = crosswind. Without the compass the arrow is north-up.
+    const ARROW_NS = "http://www.w3.org/2000/svg";
+    let compassHeading = null; // player facing, degrees (0 = N, clockwise); null = unknown -> arrow is north-up
+    let compassEnabled = false;
+
+    function normalizeDeg(value) {
+        const n = finite(value);
+        return n == null ? null : ((n % 360) + 360) % 360;
+    }
+
+    function applyArrowRotation(arrow) {
+        const blowTo = finite(Number(arrow.getAttribute("data-blowto")));
+        if (blowTo == null) return;
+        const rel = normalizeDeg(blowTo - (compassHeading == null ? 0 : compassHeading));
+        arrow.style.transform = "rotate(" + rel + "deg)";
+        arrow.setAttribute("data-relative", compassHeading == null ? "north" : "facing");
+        const label = compassHeading == null
+            ? "Wind blowing this way (north is up — tap to orient to your facing)"
+            : "Wind blowing this way, relative to the way you're facing";
+        arrow.setAttribute("aria-label", label);
+        if (arrow.__titleEl) arrow.__titleEl.textContent = label;
+    }
+
+    function refreshWindArrows(doc) {
+        (doc || (typeof document !== "undefined" ? document : null) || { querySelectorAll: function () { return []; } })
+            .querySelectorAll("svg.weather-wind-arrow[data-blowto]").forEach(applyArrowRotation);
+    }
+
+    function onOrientation(event) {
+        let heading = null;
+        if (typeof event.webkitCompassHeading === "number" && Number.isFinite(event.webkitCompassHeading)) {
+            heading = event.webkitCompassHeading; // iOS: already a compass heading (0 = N, clockwise)
+        } else if (event.absolute === true && typeof event.alpha === "number" && Number.isFinite(event.alpha)) {
+            heading = 360 - event.alpha; // Android absolute orientation -> compass heading of the device top
+        }
+        if (heading == null) return;
+        compassHeading = normalizeDeg(heading);
+        refreshWindArrows();
+    }
+
+    // Start (once) listening to the device compass so the arrow tracks the player's facing. iOS 13+ requires
+    // this be triggered from a user gesture (we call it from the arrow's click). Returns a Promise<boolean>.
+    function enableCompass() {
+        if (compassEnabled) return Promise.resolve(true);
+        const attach = function () {
+            compassEnabled = true;
+            window.addEventListener("deviceorientationabsolute", onOrientation, true);
+            window.addEventListener("deviceorientation", onOrientation, true);
+            return true;
+        };
+        try {
+            const DOE = window.DeviceOrientationEvent;
+            if (DOE && typeof DOE.requestPermission === "function") {
+                return DOE.requestPermission().then(function (res) { return res === "granted" ? attach() : false; }).catch(function () { return false; });
+            }
+            return Promise.resolve(attach());
+        } catch (_e) {
+            return Promise.resolve(false);
+        }
+    }
+
+    function windArrow(doc, windFromDeg) {
+        const blowTo = normalizeDeg(finite(windFromDeg) == null ? null : finite(windFromDeg) + 180);
+        if (blowTo == null) return null;
+        const svg = doc.createElementNS(ARROW_NS, "svg");
+        svg.setAttribute("class", "weather-wind-arrow");
+        svg.setAttribute("viewBox", "0 0 24 24");
+        svg.setAttribute("width", "15");
+        svg.setAttribute("height", "15");
+        svg.setAttribute("data-blowto", String(blowTo));
+        svg.setAttribute("role", "img");
+        svg.style.display = "inline-block";
+        svg.style.verticalAlign = "-2px";
+        svg.style.marginRight = "4px";
+        svg.style.transformOrigin = "center";
+        svg.style.transition = "transform 0.25s ease-out";
+        svg.style.cursor = "pointer";
+        const title = doc.createElementNS(ARROW_NS, "title");
+        svg.appendChild(title);
+        svg.__titleEl = title;
+        const path = doc.createElementNS(ARROW_NS, "path");
+        path.setAttribute("d", "M12 2 L19 21 L12 16 L5 21 Z"); // an arrowhead-with-notch pointing up (blow-to)
+        path.setAttribute("fill", "currentColor");
+        svg.appendChild(path);
+        svg.addEventListener("click", function () { enableCompass(); }); // tap to orient to your facing (iOS gesture)
+        applyArrowRotation(svg);
+        return svg;
+    }
+
     function inch(value) {
         const n = finite(value);
         if (n == null) return null;
@@ -211,12 +304,19 @@
 
         const row = doc.createElement("div");
         row.className = "weather-chips";
+        const current = weather && weather.current;
         chips.forEach((chip) => {
             const item = doc.createElement("span");
             item.className = "weather-chip";
             const label = doc.createElement("strong");
             label.textContent = chip.label;
             item.appendChild(label);
+            // The wind chip gets a direction arrow next to the speed — points where the wind pushes the disc,
+            // relative to the player's facing once the compass is enabled (tap the arrow), else north-up.
+            if (chip.label === "Wind" && current) {
+                const arrow = windArrow(doc, current.windDirectionDeg);
+                if (arrow) item.appendChild(arrow);
+            }
             item.appendChild(doc.createTextNode(chip.value));
             row.appendChild(item);
         });
@@ -243,6 +343,7 @@
     root.GVDGWeather = {
         buildWeatherStrip,
         conditionLabel,
+        enableCompass,
         formatLiveWeather,
         renderWeather,
         weatherChanges,
