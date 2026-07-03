@@ -64,6 +64,7 @@
         /* ---- generic ---- */
         .card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 16px; box-shadow: 0 2px 10px var(--shadow); padding: 1rem; margin-bottom: 0.85rem; }
         .muted { color: var(--text-muted); }
+        .dormie-badge { display: inline-block; margin-top: 0.35rem; padding: 0.22rem 0.6rem; border-radius: 999px; background: var(--secondary); color: #fff; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
         .weather-strip { background: var(--bg-secondary); border: 1px solid var(--border-color); border-left: 4px solid var(--secondary); border-radius: 14px; box-shadow: 0 2px 10px var(--shadow); padding: 0.75rem 0.85rem; margin-bottom: 0.85rem; }
         .weather-title { font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 0.45rem; }
         .weather-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
@@ -433,6 +434,12 @@
         function holeHasConflict(hole) {
             return S.conflicts.some((c) => c && c.hole === hole);
         }
+        // Dormie: the leader is up by exactly the holes remaining, so a win OR a halve of THIS hole ends the
+        // match. Flagged prominently on the hole so the card knows it's match point.
+        function isMatchDormie() {
+            if (!isMatchplayScoring() || !S.snap || !Array.isArray(S.snap.standings)) return false;
+            return S.snap.standings.some(function (s) { return s.match && s.match.dormie; });
+        }
         function matchStatusText() {
             if (!isMatchplayScoring() || !S.snap || !Array.isArray(S.snap.standings)) return '';
             const cardTargets = scoreRows().map(function (row) { return row.targetId || ('player:' + row.index); });
@@ -732,6 +739,7 @@
             if (isMatchplayScoring()) {
                 const status = matchStatusText();
                 if (status) mid.appendChild(el('div', 'pmeta', status));
+                if (isMatchDormie()) mid.appendChild(el('div', 'dormie-badge', '⚑ DORMIE — win or halve this hole to close it'));
             }
             const next = el('button', 'navbtn', '›'); next.disabled = S.holeIdx >= S.holes.length - 1; next.addEventListener('click', function () { S.holeIdx = Math.min(S.holes.length - 1, S.holeIdx + 1); renderHole(); });
             head.appendChild(prev); head.appendChild(mid); head.appendChild(next);

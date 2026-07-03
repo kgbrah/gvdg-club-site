@@ -33,7 +33,7 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
   const holes = resolvedHoles(meta);
   const scoring = scoringState(meta, input.players);
   if (scoring.error) return invalidScoreTargetsResponse(scoring.error);
-  const issues = scorecardConsensusIssues(input.players, holes, scoring.targets);
+  const issues = scorecardConsensusIssues(input.players, holes, scoring.targets, { casual: !!meta.casual });
   const incomplete = issues.conflicts.length > 0 || issues.missing.length > 0;
   if (incomplete && !(input.authAdmin && input.force)) {
     return j({ error: "scorecard_incomplete", conflicts: issues.conflicts, missing: issues.missing }, 409);
