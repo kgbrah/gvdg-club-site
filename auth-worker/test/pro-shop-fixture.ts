@@ -87,7 +87,7 @@ function firstRow(sql: string, args: unknown[], state: MockState): Row | null {
   }
   if (/SELECT \* FROM store_orders WHERE payment_ref/i.test(sql)) return state.orders.find((o) => o.payment_ref === args[0]) ?? null;
   if (/SELECT \* FROM store_payment_sessions WHERE paypal_order_id/i.test(sql)) return state.paymentSessions.find((session) => session.paypal_order_id === args[0]) ?? null;
-  if (/SELECT \* FROM events WHERE id = \?/i.test(sql)) {
+  if (/FROM events(?:\s+e)?/i.test(sql) && /WHERE\s+(?:e\.)?id = \?/i.test(sql)) {
     return state.eventExists ? { id: numberArg(args[0]), name: "League Night", date: "2026-06-01", status: "scheduled" } : null;
   }
   if (/INSERT INTO store_products/i.test(sql)) return insertProduct(args, state);

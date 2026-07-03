@@ -32,6 +32,7 @@ export function countScores(pars: number[], strokes: number[]): Breakdown {
 export interface PlayerState {
   memberId: string | null;
   name: string;
+  team?: string | null;
   division?: string | null;
   startingHole?: number | null; // assigned shotgun start (Track G G4); display-only, doesn't affect scoring
   cardId?: string | null; // which scoring card/group this player is on (a player may score only their own card)
@@ -59,10 +60,16 @@ export function assignCards(players: PlayerState[], size = DEFAULT_CARD_SIZE): v
 export interface Standing {
   memberId: string | null;
   name: string;
+  team?: string | null;
   division: string | null;
   thru: number;
   total: number;
   toPar: number;
+  holesWon?: number;
+  holesLost?: number;
+  holesTied?: number;
+  matchPoints?: number;
+  matchLabel?: string;
 }
 
 /** Live leaderboard: per player thru/total/to-par over played holes, sorted to-par ↑, total ↑, name. */
@@ -83,6 +90,195 @@ export function computeLeaderboard(holes: { hole: number; par: number }[], playe
   });
   standings.sort((a, b) => a.toPar - b.toPar || a.total - b.total || a.name.localeCompare(b.name));
   return standings;
+}
+
+export type ScoringFormat = "stroke" | "matchplay";
+export type PlayFormat = "singles" | "doubles" | "teams";
+
+type Hole = { hole: number; par: number };
+type PlayerGroup = {
+  key: string;
+  memberId: string | null;
+  name: string;
+  team: string | null;
+  division: string | null;
+  players: PlayerState[];
+};
+type UnplacedFinalStanding = Standing & {
+  breakdown: Breakdown;
+  holes: { hole: number; par: number; strokes: number }[];
+};
+type MatchStanding = Standing & {
+  groupKey: string;
+  holesWon: number;
+  holesLost: number;
+  holesTied: number;
+  matchPoints: number;
+  matchLabel: string;
+};
+
+function scoringFormat(value: string | null | undefined): ScoringFormat {
+  return value === "matchplay" ? "matchplay" : "stroke";
+}
+
+function playFormat(value: string | null | undefined): PlayFormat {
+  return value === "doubles" || value === "teams" ? value : "singles";
+}
+
+function cleanedTeam(value: string | null | undefined): string | null {
+  const team = String(value ?? "").trim();
+  return team ? team : null;
+}
+
+function activeGroups(players: PlayerState[], format: PlayFormat): PlayerGroup[] {
+  const active = players.map((player, index) => ({ player, index })).filter(({ player }) => !player.removed);
+  if (format === "singles") {
+    return active.map(({ player, index }) => ({
+      key: "player:" + index,
+      memberId: player.memberId,
+      name: player.name,
+      team: cleanedTeam(player.team),
+      division: player.division ?? null,
+      players: [player],
+    }));
+  }
+
+  const groups = new Map<string, PlayerGroup>();
+  for (const { player, index } of active) {
+    const team = cleanedTeam(player.team);
+    const key = team ? "team:" + team.toLowerCase() : "player:" + index;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.players.push(player);
+      if (existing.division !== (player.division ?? null)) existing.division = null;
+    } else {
+      groups.set(key, {
+        key,
+        memberId: null,
+        name: team ?? player.name,
+        team,
+        division: player.division ?? null,
+        players: [player],
+      });
+    }
+  }
+  return [...groups.values()];
+}
+
+function groupScore(group: PlayerGroup, hole: number): number | null {
+  let best: number | null = null;
+  for (const player of group.players) {
+    const score = player.scores?.[hole];
+    if (typeof score !== "number" || !Number.isFinite(score)) continue;
+    best = best == null ? score : Math.min(best, score);
+  }
+  return best;
+}
+
+function standingForGroup(holes: Hole[], group: PlayerGroup): Standing {
+  let thru = 0;
+  let total = 0;
+  let toPar = 0;
+  for (const h of holes) {
+    const score = groupScore(group, h.hole);
+    if (score == null) continue;
+    thru++;
+    total += score;
+    toPar += score - h.par;
+  }
+  return { memberId: group.memberId, name: group.name, team: group.team, division: group.division, thru, total, toPar };
+}
+
+function finalStandingForGroup(holes: Hole[], group: PlayerGroup): UnplacedFinalStanding {
+  const pars: number[] = [];
+  const strokes: number[] = [];
+  const played: { hole: number; par: number; strokes: number }[] = [];
+  const standing = standingForGroup(holes, group);
+  for (const h of holes) {
+    const score = groupScore(group, h.hole);
+    if (score == null) continue;
+    pars.push(h.par);
+    strokes.push(score);
+    played.push({ hole: h.hole, par: h.par, strokes: score });
+  }
+  return { ...standing, breakdown: countScores(pars, strokes), holes: played };
+}
+
+function matchLabel(points: number): string {
+  return points > 0 ? "+" + points : points < 0 ? String(points) : "E";
+}
+
+function computeMatchplayGroupStandings(holes: Hole[], players: PlayerState[], format: PlayFormat): MatchStanding[] {
+  const groups = activeGroups(players, format);
+  const standings = groups.map((group) => ({
+    ...standingForGroup(holes, group),
+    groupKey: group.key,
+    holesWon: 0,
+    holesLost: 0,
+    holesTied: 0,
+    matchPoints: 0,
+    matchLabel: "E",
+  }));
+  const byKey = new Map(standings.map((standing) => [standing.groupKey, standing]));
+
+  for (const h of holes) {
+    const scored = groups
+      .map((group) => ({ group, score: groupScore(group, h.hole) }))
+      .filter((row): row is { group: PlayerGroup; score: number } => row.score != null);
+    if (scored.length < 2) continue;
+    const best = Math.min(...scored.map((row) => row.score));
+    const winners = scored.filter((row) => row.score === best);
+    if (winners.length !== 1) {
+      scored.forEach((row) => {
+        const standing = byKey.get(row.group.key);
+        if (standing) standing.holesTied++;
+      });
+      continue;
+    }
+    const winnerKey = winners[0]!.group.key;
+    scored.forEach((row) => {
+      const standing = byKey.get(row.group.key);
+      if (!standing) return;
+      if (row.group.key === winnerKey) standing.holesWon++;
+      else standing.holesLost++;
+    });
+  }
+
+  standings.forEach((standing) => {
+    standing.matchPoints = standing.holesWon - standing.holesLost;
+    standing.matchLabel = matchLabel(standing.matchPoints);
+  });
+  standings.sort(
+    (a, b) =>
+      b.matchPoints - a.matchPoints ||
+      b.holesWon - a.holesWon ||
+      a.holesLost - b.holesLost ||
+      a.toPar - b.toPar ||
+      a.total - b.total ||
+      a.name.localeCompare(b.name),
+  );
+  return standings;
+}
+
+function computeTeamStrokeLeaderboard(holes: Hole[], players: PlayerState[], format: PlayFormat): Standing[] {
+  const standings = activeGroups(players, format).map((group) => standingForGroup(holes, group));
+  standings.sort((a, b) => a.toPar - b.toPar || a.total - b.total || a.name.localeCompare(b.name));
+  return standings;
+}
+
+export function computeLeaderboardForFormat(
+  holes: Hole[],
+  players: PlayerState[],
+  rawScoringFormat?: string | null,
+  rawPlayFormat?: string | null,
+): Standing[] {
+  const scoring = scoringFormat(rawScoringFormat);
+  const play = playFormat(rawPlayFormat);
+  if (scoring === "matchplay") {
+    return computeMatchplayGroupStandings(holes, players, play).map(({ groupKey: _groupKey, ...standing }) => standing);
+  }
+  if (play !== "singles") return computeTeamStrokeLeaderboard(holes, players, play);
+  return computeLeaderboard(holes, players);
 }
 
 export interface FinalStanding extends Standing {
@@ -142,6 +338,84 @@ export function finalizeStandings(holes: { hole: number; par: number }[], player
   });
   const unranked: FinalStanding[] = dnf.map((r) => ({ ...r, place: null }));
   return [...ranked, ...unranked];
+}
+
+function completed(holeCount: number, row: { thru: number }): boolean {
+  return holeCount > 0 && row.thru === holeCount;
+}
+
+function rankFinalRows(
+  rows: UnplacedFinalStanding[],
+  holeCount: number,
+  compare: (a: UnplacedFinalStanding, b: UnplacedFinalStanding) => number,
+  key: (row: UnplacedFinalStanding) => string,
+): FinalStanding[] {
+  const finishers = rows.filter((row) => completed(holeCount, row));
+  const dnf = rows.filter((row) => !completed(holeCount, row));
+  finishers.sort(compare);
+  dnf.sort((a, b) => b.thru - a.thru || a.name.localeCompare(b.name));
+  let place = 0;
+  let prevKey = "";
+  const ranked: FinalStanding[] = finishers.map((row, i) => {
+    const rowKey = key(row);
+    if (rowKey !== prevKey) {
+      place = i + 1;
+      prevKey = rowKey;
+    }
+    return { ...row, place };
+  });
+  return [...ranked, ...dnf.map((row) => ({ ...row, place: null }))];
+}
+
+function finalizeTeamStrokeStandings(holes: Hole[], players: PlayerState[], format: PlayFormat): FinalStanding[] {
+  const rows = activeGroups(players, format).map((group) => finalStandingForGroup(holes, group));
+  return rankFinalRows(
+    rows,
+    holes.length,
+    (a, b) => a.toPar - b.toPar || a.total - b.total || a.name.localeCompare(b.name),
+    (row) => row.toPar + "/" + row.total,
+  );
+}
+
+function finalizeMatchplayStandings(holes: Hole[], players: PlayerState[], format: PlayFormat): FinalStanding[] {
+  const matchByKey = new Map(computeMatchplayGroupStandings(holes, players, format).map((row) => [row.groupKey, row]));
+  const rows = activeGroups(players, format).map((group) => {
+    const base = finalStandingForGroup(holes, group);
+    const match = matchByKey.get(group.key);
+    return {
+      ...base,
+      holesWon: match?.holesWon ?? 0,
+      holesLost: match?.holesLost ?? 0,
+      holesTied: match?.holesTied ?? 0,
+      matchPoints: match?.matchPoints ?? 0,
+      matchLabel: match?.matchLabel ?? "E",
+    };
+  });
+  return rankFinalRows(
+    rows,
+    holes.length,
+    (a, b) =>
+      (b.matchPoints ?? 0) - (a.matchPoints ?? 0) ||
+      (b.holesWon ?? 0) - (a.holesWon ?? 0) ||
+      (a.holesLost ?? 0) - (b.holesLost ?? 0) ||
+      a.toPar - b.toPar ||
+      a.total - b.total ||
+      a.name.localeCompare(b.name),
+    (row) => [row.matchPoints ?? 0, row.holesWon ?? 0, row.holesLost ?? 0].join("/"),
+  );
+}
+
+export function finalizeStandingsForFormat(
+  holes: Hole[],
+  players: PlayerState[],
+  rawScoringFormat?: string | null,
+  rawPlayFormat?: string | null,
+): FinalStanding[] {
+  const scoring = scoringFormat(rawScoringFormat);
+  const play = playFormat(rawPlayFormat);
+  if (scoring === "matchplay") return finalizeMatchplayStandings(holes, players, play);
+  if (play !== "singles") return finalizeTeamStrokeStandings(holes, players, play);
+  return finalizeStandings(holes, players);
 }
 
 // ---------------- league standings ----------------

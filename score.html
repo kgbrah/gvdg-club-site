@@ -77,11 +77,11 @@
         .btn.ghost { background: transparent; color: var(--primary); border: 1.5px solid var(--primary); }
         .btn:disabled { opacity: 0.5; cursor: default; }
         .btn.small { min-height: 40px; width: auto; font-size: 0.85rem; padding: 0 0.85rem; border-radius: 10px; }
-        input.field {
+        input.field, select.field {
             width: 100%; min-height: 50px; padding: 0 0.9rem; border: 1.5px solid var(--border-color);
             border-radius: 12px; background: var(--bg-primary); color: var(--text-primary); font-size: 1rem; font-family: 'Archivo';
         }
-        input.field:focus { outline: none; border-color: var(--primary); }
+        input.field:focus, select.field:focus { outline: none; border-color: var(--primary); }
         label.lbl { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); display: block; margin: 0 0 0.3rem 0.2rem; }
         .pill { display: inline-block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 0.2rem 0.5rem; border-radius: 999px; background: var(--bg-tertiary); color: var(--text-secondary); }
         .pill.live { background: var(--primary); color: #fff; }
@@ -208,7 +208,7 @@
         const GUEST_TOKEN = MODE === 'event' ? (params.get('gt') || guestTokenStored()) : null;
 
         const app = document.getElementById('app');
-        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, weather: null };
+        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, format: 'stroke', playFormat: 'singles', teamRequired: false, lastRev: -1, udiscCourseId: null, weather: null };
         const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
         const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
 
@@ -377,6 +377,20 @@
         function roundWeatherNode() {
             return window.GVDGWeather ? window.GVDGWeather.buildWeatherStrip(document, S.weather, { title: 'Round weather' }) : null;
         }
+        function applyRoundMeta(d) {
+            if (!d) return;
+            S.format = d.format === 'matchplay' ? 'matchplay' : 'stroke';
+            S.playFormat = d.playFormat === 'doubles' || d.playFormat === 'teams' ? d.playFormat : 'singles';
+            S.teamRequired = d.teamRequired === true || S.playFormat === 'doubles' || S.playFormat === 'teams';
+        }
+        function teamNameRequired() {
+            return S.teamRequired === true || S.playFormat === 'doubles' || S.playFormat === 'teams';
+        }
+        function formatLabel() {
+            const play = S.playFormat === 'doubles' ? 'Doubles' : S.playFormat === 'teams' ? 'Teams' : 'Singles';
+            const scoring = S.format === 'matchplay' ? 'Matchplay' : 'Stroke play';
+            return play + ' · ' + scoring;
+        }
 
         async function postScore(index, hole, strokes) {
             const scorerIndex = currentScorerIndex();
@@ -419,6 +433,7 @@
             if (snap.rev != null) { if (snap.rev <= S.lastRev) return; S.lastRev = snap.rev; }
             if (snap.status) S.status = snap.status; // reflect a finalize (or start) that happened on another device
             if (Object.prototype.hasOwnProperty.call(snap, 'weather')) S.weather = snap.weather || null;
+            applyRoundMeta(snap);
             setConflicts(snap.conflicts);
             setMissing(snap.missing);
             const byIndex = new Map(snap.players.map((p) => [p.index, p]));
@@ -615,9 +630,10 @@
                 const left = el('div');
                 left.appendChild(el('span', 'muted', 'Code '));
                 const strong = document.createElement('strong'); strong.textContent = ROUND_CODE; strong.style.letterSpacing = '1.5px'; left.appendChild(strong);
+                const fmt = el('div', 'muted', formatLabel()); fmt.style.fontSize = '0.78rem'; fmt.style.marginTop = '0.1rem'; left.appendChild(fmt);
                 const actions = el('div'); actions.style.cssText = 'display:flex;gap:0.4rem;';
                 const share = el('button', 'btn small secondary', 'Share'); share.addEventListener('click', shareRound);
-                const add = el('button', 'btn small secondary', '+ Player'); add.addEventListener('click', addGuestPrompt);
+                const add = el('button', 'btn small secondary', '+ Player'); add.addEventListener('click', openAddPlayerSheet);
                 const manage = el('button', 'btn small secondary', 'Manage'); manage.addEventListener('click', openManagePlayers);
                 actions.appendChild(share); actions.appendChild(add); actions.appendChild(manage);
                 bar.appendChild(left); bar.appendChild(actions);
@@ -721,13 +737,15 @@
             if (!standings.length) { sheet.appendChild(el('p', 'muted', 'No scores in yet.')); }
             else {
                 const table = el('table', 'lb');
-                const thead = el('tr'); ['', 'Player', 'Thru', 'To par'].forEach((t) => thead.appendChild(el('th', null, t))); table.appendChild(thead);
+                const matchplay = S.format === 'matchplay' || standings.some((s) => s && s.matchLabel);
+                const thead = el('tr'); ['', matchplay ? 'Side' : 'Player', 'Thru', matchplay ? 'Match' : 'To par'].forEach((t) => thead.appendChild(el('th', null, t))); table.appendChild(thead);
                 standings.forEach((s, i) => {
                     const tr = el('tr');
                     tr.appendChild(el('td', 'pos', String(i + 1)));
                     tr.appendChild(el('td', 'name', s.name + (s.division ? ' · ' + s.division : '')));
                     tr.appendChild(el('td', null, (s.thru || 0) + ''));
-                    tr.appendChild(el('td', 'tp ' + relClass(s.toPar || 0), s.thru ? relText(s.toPar || 0) : 'E'));
+                    if (matchplay) tr.appendChild(el('td', 'tp ' + relClass(-(s.matchPoints || 0)), s.matchLabel || 'E'));
+                    else tr.appendChild(el('td', 'tp ' + relClass(s.toPar || 0), s.thru ? relText(s.toPar || 0) : 'E'));
                     table.appendChild(tr);
                 });
                 sheet.appendChild(table);
@@ -804,8 +822,16 @@
             let r = await api(LIVE + '/mine');
             // Casual round: if we're not on it yet, join with the code, then re-load our card.
             if (MODE === 'round' && r.ok && r.data && r.data.cardId == null && r.data.status === 'live') {
-                const jr = await api('/rounds/' + ROUND_CODE + '/join', { method: 'POST', body: {} });
+                applyRoundMeta(r.data);
+                const body = {};
+                if (teamNameRequired()) {
+                    const team = (window.prompt('Team name for this doubles round:') || '').trim();
+                    if (!team) { renderMessage('Team name required', 'This round is set up as doubles. Enter your team name to join.', true); return; }
+                    body.team = team;
+                }
+                const jr = await api('/rounds/' + ROUND_CODE + '/join', { method: 'POST', body: body });
                 if (jr.ok) r = await api(LIVE + '/mine');
+                else if (jr.status === 400 && jr.data && jr.data.error === 'team_required') { renderMessage('Team name required', 'This round is set up as doubles. Enter your team name to join.', true); return; }
             }
             if (r.status === 401) { renderLogin('Please sign in to keep score.'); return; }
             if (!r.ok || !r.data) { renderMessage('Couldn’t load your card', 'Check your connection and try again.', true); return; }
@@ -819,6 +845,7 @@
             S.holes = Array.isArray(d.holes) ? d.holes : [];
             S.cardId = d.cardId; S.myIndex = d.playerIndex; S.cardmates = d.cardmates;
             S.courseName = d.courseName || null; S.layoutName = d.layoutName || null; S.udiscCourseId = d.udiscCourseId || null;
+            applyRoundMeta(d);
             S.weather = d.weather || null;
             S.scorerIndex = d.playerIndex;
             if (MODE === 'round') rememberRecentRound({ code: ROUND_CODE, label: 'Casual round ' + ROUND_CODE });
@@ -885,23 +912,103 @@
                 const row = el('button', 'tap-row'); const g = el('div', 'grow');
                 g.appendChild(el('div', 'title', L.name || 'Layout')); g.appendChild(el('div', 'sub', L.total_par != null ? ('Par ' + L.total_par) : ''));
                 row.appendChild(g); row.appendChild(el('div', 'chev', '›'));
-                row.addEventListener('click', function () { createRound(course, L); });
+                row.addEventListener('click', function () { renderRoundOptions(course, L); });
                 c.appendChild(row);
             });
             shell(c);
         }
-        async function createRound(course, layout) {
-            shell(spinner());
-            const r = await api('/rounds', { method: 'POST', body: { course_id: course.id, layout_id: layout.id } });
-            if (r.ok && r.data && r.data.code) { location.search = '?round=' + r.data.code; return; }
-            renderMessage('Could not start round', (r.data && r.data.error === 'no_layout_holes') ? 'That layout has no holes/pars yet.' : 'Please try again.', false);
+        function casualPlayFormatRequiresTeam(playFormat) {
+            return playFormat === 'doubles' || playFormat === 'teams';
         }
-        async function addGuestPrompt() {
-            const name = (window.prompt('Add a player to your card (their name):') || '').trim();
-            if (!name) return;
-            const r = await api('/rounds/' + ROUND_CODE + '/guest', { method: 'POST', body: { name: name } });
-            if (r.ok && r.data && Array.isArray(r.data.cardmates)) { S.cardmates = r.data.cardmates; currentScorerIndex(); renderHole(); toast(name + ' added'); }
-            else toast('Could not add player');
+        function renderRoundOptions(course, layout) {
+            const c = el('div', 'stack');
+            const back = el('button', 'btn ghost small', '‹ Back'); back.addEventListener('click', function () { renderLayoutPick(course); }); c.appendChild(back);
+            c.appendChild(el('h2', 'section', 'Round setup'));
+            c.appendChild(el('p', 'muted', course.name + ' · ' + (layout.name || 'Layout')));
+
+            const playLabel = el('label', 'lbl', 'Play format'); playLabel.htmlFor = 'roundPlayFormat'; c.appendChild(playLabel);
+            const play = el('select', 'field');
+            play.id = 'roundPlayFormat';
+            [['singles', 'Singles'], ['doubles', 'Doubles']].forEach(function (pair) {
+                const o = document.createElement('option'); o.value = pair[0]; o.textContent = pair[1]; play.appendChild(o);
+            });
+            c.appendChild(play);
+
+            const scoringLabel = el('label', 'lbl', 'Scoring format'); scoringLabel.htmlFor = 'roundScoringFormat'; c.appendChild(scoringLabel);
+            const scoring = el('select', 'field');
+            scoring.id = 'roundScoringFormat';
+            [['stroke', 'Stroke play'], ['matchplay', 'Matchplay']].forEach(function (pair) {
+                const o = document.createElement('option'); o.value = pair[0]; o.textContent = pair[1]; scoring.appendChild(o);
+            });
+            c.appendChild(scoring);
+
+            const teamWrap = el('div');
+            const teamLabel = el('label', 'lbl', 'Your team name'); teamLabel.htmlFor = 'roundTeamName'; teamWrap.appendChild(teamLabel);
+            const team = el('input', 'field'); team.maxLength = 40; team.autocomplete = 'organization';
+            team.id = 'roundTeamName';
+            teamWrap.appendChild(team);
+            c.appendChild(teamWrap);
+            const updateTeam = function () { teamWrap.style.display = casualPlayFormatRequiresTeam(play.value) ? '' : 'none'; };
+            play.addEventListener('change', updateTeam);
+            updateTeam();
+
+            const start = el('button', 'btn', 'Start round');
+            start.addEventListener('click', function () {
+                const teamName = team.value.trim();
+                if (casualPlayFormatRequiresTeam(play.value) && !teamName) { toast('Team name required'); team.focus(); return; }
+                createRound(course, layout, { format: scoring.value || 'stroke', playFormat: play.value || 'singles', team: teamName });
+            });
+            c.appendChild(start);
+            shell(c);
+        }
+        async function createRound(course, layout, options) {
+            shell(spinner());
+            const body = { course_id: course.id, layout_id: layout.id };
+            if (options && options.format) body.format = options.format;
+            if (options && options.playFormat) body.playFormat = options.playFormat;
+            if (options && options.team) body.team = options.team;
+            const r = await api('/rounds', { method: 'POST', body: body });
+            if (r.ok && r.data && r.data.code) { location.search = '?round=' + r.data.code; return; }
+            renderMessage('Could not start round', (r.data && r.data.error === 'no_layout_holes') ? 'That layout has no holes/pars yet.' : (r.data && r.data.error === 'team_required') ? 'Team name required for doubles.' : 'Please try again.', false);
+        }
+        function openAddPlayerSheet() {
+            const overlay = el('div', 'overlay'); overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+            const sheet = el('div', 'sheet'); sheet.appendChild(el('div', 'grab'));
+            sheet.appendChild(el('h2', 'section', 'Add player'));
+            const form = el('form', 'stack');
+            form.appendChild(el('label', 'lbl', 'Player name'));
+            const nameInput = el('input', 'field'); nameInput.maxLength = 60; nameInput.required = true; nameInput.autocomplete = 'name';
+            form.appendChild(nameInput);
+            let teamInput = null;
+            if (teamNameRequired()) {
+                form.appendChild(el('label', 'lbl', 'Team name'));
+                teamInput = el('input', 'field'); teamInput.maxLength = 40; teamInput.required = true; teamInput.autocomplete = 'organization';
+                form.appendChild(teamInput);
+            }
+            const err = el('p', 'muted'); err.style.color = 'var(--over)'; err.style.minHeight = '1rem'; form.appendChild(err);
+            const cancel = el('button', 'btn secondary', 'Cancel'); cancel.type = 'button'; cancel.addEventListener('click', function () { overlay.remove(); });
+            const submit = el('button', 'btn', 'Add player'); submit.type = 'submit';
+            form.appendChild(cancel); form.appendChild(submit);
+            form.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                const name = nameInput.value.trim();
+                const team = teamInput ? teamInput.value.trim() : '';
+                if (!name) { err.textContent = 'Player name required'; nameInput.focus(); return; }
+                if (teamNameRequired() && !team) { err.textContent = 'Team name required'; if (teamInput) teamInput.focus(); return; }
+                const body = { name: name };
+                if (team) body.team = team;
+                submit.disabled = true;
+                try {
+                    const r = await api('/rounds/' + ROUND_CODE + '/guest', { method: 'POST', body: body });
+                    if (r.ok && r.data && Array.isArray(r.data.cardmates)) { S.cardmates = r.data.cardmates; currentScorerIndex(); overlay.remove(); renderHole(); toast(name + ' added'); }
+                    else err.textContent = r.data && r.data.error === 'team_required' ? 'Team name required' : 'Could not add player';
+                } finally {
+                    submit.disabled = false;
+                }
+            });
+            sheet.appendChild(form);
+            overlay.appendChild(sheet); document.body.appendChild(overlay);
+            setTimeout(function () { nameInput.focus(); }, 0);
         }
         // Manage players: remove someone who joined by accident, had to leave, or no-showed (casual round).
         function openManagePlayers() {

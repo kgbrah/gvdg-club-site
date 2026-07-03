@@ -1266,9 +1266,10 @@
             container.replaceChildren();
             if (!standings.length) { container.appendChild(el('p', 'lb-empty', 'Waiting for the first scores…')); return; }
             const hasDiv = standings.some((s) => s && s.division);
+            const matchplay = snap && (snap.format === 'matchplay' || standings.some((s) => s && s.matchLabel));
             const table = el('table', 'lb-table');
             const thead = el('thead'); const htr = el('tr');
-            const cols = hasDiv ? ['Pos', 'Player', 'Div', 'Thru', 'Total', 'To Par'] : ['Pos', 'Player', 'Thru', 'Total', 'To Par'];
+            const cols = hasDiv ? ['Pos', matchplay ? 'Side' : 'Player', 'Div', 'Thru', 'Total', matchplay ? 'Match' : 'To Par'] : ['Pos', matchplay ? 'Side' : 'Player', 'Thru', 'Total', matchplay ? 'Match' : 'To Par'];
             cols.forEach((h) => htr.appendChild(el('th', null, h)));
             thead.appendChild(htr); table.appendChild(thead);
             const tbody = el('tbody');
@@ -1279,8 +1280,8 @@
                 if (hasDiv) tr.appendChild(el('td', null, (s && s.division) || '—'));
                 tr.appendChild(el('td', null, s && s.thru ? String(s.thru) : '—'));
                 tr.appendChild(el('td', null, s && s.total != null && s.thru ? String(s.total) : '—'));
-                const tp = el('td', 'lb-topar', s && s.thru ? fmtToPar(s.toPar) : '—');
-                if (s && s.thru) { if ((s.toPar || 0) < 0) tp.classList.add('under'); else if ((s.toPar || 0) > 0) tp.classList.add('over'); }
+                const tp = el('td', 'lb-topar', matchplay ? ((s && s.matchLabel) || 'E') : (s && s.thru ? fmtToPar(s.toPar) : '—'));
+                if (s && s.thru && !matchplay) { if ((s.toPar || 0) < 0) tp.classList.add('under'); else if ((s.toPar || 0) > 0) tp.classList.add('over'); }
                 tr.appendChild(tp);
                 tbody.appendChild(tr);
             });
@@ -1481,7 +1482,11 @@
 
             const facts = el('div', 'detail-facts');
             facts.appendChild(fact('Date', formatEventDate(ev.date)));
-            if (ev.format) facts.appendChild(fact('Format', ev.format));
+            if (ev.format || ev.play_format) {
+                const play = ev.play_format === 'doubles' || ev.format === 'doubles' ? 'Doubles' : ev.play_format === 'teams' ? 'Teams' : 'Singles';
+                const scoring = ev.format === 'matchplay' ? 'Matchplay' : 'Stroke play';
+                facts.appendChild(fact('Format', play + ' · ' + scoring));
+            }
 
             const courseName = courseNameFor(courseIndex, ev.course_id);
             const course = courseIndex.get(String(ev.course_id));

@@ -98,6 +98,20 @@ type WeatherSnapshot = {
     readonly error: string | null;
   } | null;
 };
+type FormatSnapshot = {
+  readonly format: string;
+  readonly playFormat: string;
+  readonly teamRequired: boolean;
+  readonly players: readonly { readonly name: string; readonly team: string | null }[];
+  readonly standings: readonly {
+    readonly name: string;
+    readonly team: string | null;
+    readonly holesWon?: number;
+    readonly holesLost?: number;
+    readonly matchPoints?: number;
+    readonly matchLabel?: string;
+  }[];
+};
 
 function openMeteoSample(observedAt: string, windSpeedMph: number, rainIn: number): Record<string, unknown> {
   return {
@@ -261,6 +275,45 @@ describe("LiveEventDO card-scoped scoring", () => {
     expect(mine.cardmates.map((c) => c.name)).toEqual(["E"]);
     const mine0 = (await (await live.fetch(new Request("https://do/mine", { headers: { "X-Auth-Member": "m0" } }))).json()) as { cardmates: { name: string }[] };
     expect(mine0.cardmates.map((c) => c.name)).toEqual(["A", "B", "C", "D"]);
+  });
+
+  it("scores doubles matchplay snapshots as team match standings", async () => {
+    const live = liveDO();
+    await live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({
+        eventId: 1,
+        format: "matchplay",
+        playFormat: "doubles",
+        teamRequired: true,
+        holes: [{ hole: 1, par: 3 }, { hole: 2, par: 4 }, { hole: 3, par: 3 }],
+        players: [
+          { memberId: "r1", name: "Red 1", team: "Red" },
+          { memberId: "r2", name: "Red 2", team: "Red" },
+          { memberId: "b1", name: "Blue 1", team: "Blue" },
+          { memberId: "b2", name: "Blue 2", team: "Blue" },
+        ],
+      }),
+    }));
+    await post(live, { "X-Auth-Admin": "true" }, { index: 0, hole: 1, strokes: 3 });
+    await post(live, { "X-Auth-Admin": "true" }, { index: 2, hole: 1, strokes: 4 });
+    await post(live, { "X-Auth-Admin": "true" }, { index: 0, hole: 2, strokes: 5 });
+    await post(live, { "X-Auth-Admin": "true" }, { index: 2, hole: 2, strokes: 4 });
+    await post(live, { "X-Auth-Admin": "true" }, { index: 0, hole: 3, strokes: 3 });
+    await post(live, { "X-Auth-Admin": "true" }, { index: 2, hole: 3, strokes: 4 });
+
+    const snap = (await (await live.fetch(new Request("https://do/snapshot"))).json()) as FormatSnapshot;
+
+    expect(snap).toMatchObject({ format: "matchplay", playFormat: "doubles", teamRequired: true });
+    expect(snap.players.map((p) => [p.name, p.team])).toEqual([
+      ["Red 1", "Red"],
+      ["Red 2", "Red"],
+      ["Blue 1", "Blue"],
+      ["Blue 2", "Blue"],
+    ]);
+    expect(snap.standings).toHaveLength(2);
+    expect(snap.standings[0]).toMatchObject({ name: "Red", team: "Red", holesWon: 2, holesLost: 1, matchPoints: 1, matchLabel: "+1" });
+    expect(snap.standings[1]).toMatchObject({ name: "Blue", team: "Blue", holesWon: 1, holesLost: 2, matchPoints: -1, matchLabel: "-1" });
   });
 
   it("keeps a player/hole conflicted until all cardmate scorecards match", async () => {

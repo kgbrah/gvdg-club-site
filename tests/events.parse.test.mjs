@@ -43,6 +43,11 @@ test('normalizeEvent passes through the selected layout_id as a string (T4 tee-s
   assert.equal(normalizeEvent({ id: 1 }).layout_id, '');
 });
 
+test('normalizeEvent preserves play_format for event detail format labels', () => {
+  assert.equal(normalizeEvent({ id: 1, format: 'matchplay', play_format: 'doubles' }).play_format, 'doubles');
+  assert.equal(normalizeEvent({ id: 1 }).play_format, '');
+});
+
 test('normalizeEvent preserves an unknown status verbatim', () => {
   const ev = normalizeEvent({ id: 1, status: 'postponed' });
   assert.equal(ev.status, 'postponed');

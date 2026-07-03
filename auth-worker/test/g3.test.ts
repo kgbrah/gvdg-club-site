@@ -26,7 +26,7 @@ const db = d1Database((sql) =>
     if (/INSERT INTO wallet_transactions/i.test(sql)) return { id: 2, member_id: "m_jane", amount_cents: 1200, source: "event_payout", event_id: 5 };
     if (/ace_pots/i.test(sql)) return { event_id: 5, carryover_in_cents: 1000, status: "active" };
     if (/FROM event_config/i.test(sql)) return { ace_fee_cents: 300 };
-    if (/FROM events WHERE id/i.test(sql)) return { id: 5, layout_id: null };
+    if (/FROM events(?:\s+e)?/i.test(sql) && /WHERE\s+(?:e\.)?id = \?/i.test(sql)) return { id: 5, layout_id: null };
     if (/UPDATE events/i.test(sql)) return { id: 5, type: "fundraiser", name: "Edited event", status: "scheduled", format: null, date: null, course_id: null, league_id: null, notes: null };
     if (/UPDATE registrations/i.test(sql)) return { id: 1 };
     return null;

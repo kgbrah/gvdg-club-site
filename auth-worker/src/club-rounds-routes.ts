@@ -10,7 +10,7 @@ import { requireAuth } from "./authz.js";
 import { getMember } from "./roster.js";
 import { json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
-import { asInt } from "./input.js";
+import { asInt, asStr, playFormatForRound, scoringFormatForRound, teamNameRequiredForFormat } from "./input.js";
 import { findRatingAnchor } from "./rating-store.js";
 import { weatherLocationForCourse } from "./weather.js";
 
@@ -43,6 +43,14 @@ export async function handleCasualRounds(
     const b = (await readJson(request)) ?? {};
     const layoutId = asInt(b.layout_id);
     if (layoutId == null) return json({ error: "invalid_request" }, 400, origin);
+    const rawFormat = asStr(b.scoring_format, 20) ?? asStr(b.format, 20);
+    const rawPlayFormat = asStr(b.play_format, 20) ?? asStr(b.playFormat, 20);
+    const format = scoringFormatForRound(rawFormat);
+    const playFormat = playFormatForRound(rawPlayFormat, rawFormat);
+    if (!format || !playFormat) return json({ error: "invalid_request" }, 400, origin);
+    const teamRequired = teamNameRequiredForFormat(format, playFormat);
+    const team = asStr(b.team, 40);
+    if (teamRequired && !team) return json({ error: "team_required" }, 400, origin);
     const holes = await db.getLayoutHoles(env.DB, layoutId);
     if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin);
     const layout = (await db.getLayout(env.DB, layoutId)) as { name?: string | null; course_id?: number | null; holes?: string | null } | null;
@@ -53,7 +61,7 @@ export async function handleCasualRounds(
     const code = genCode();
     const r = await roundStub(env, code).fetch("https://do/start", {
       method: "POST",
-      body: JSON.stringify({ casual: true, roundCode: code, courseId: layout?.course_id ?? null, layoutId, createdBy: claims.sub, courseName: course?.name ?? null, layoutName: layout?.name ?? null, udiscCourseId: course?.udisc_course_id ?? null, weatherLocation, holes, players: [{ memberId: claims.sub, name: member?.name ?? "Player", ratingAnchor }], startedAt: new Date().toISOString() }),
+      body: JSON.stringify({ casual: true, roundCode: code, courseId: layout?.course_id ?? null, layoutId, createdBy: claims.sub, courseName: course?.name ?? null, layoutName: layout?.name ?? null, udiscCourseId: course?.udisc_course_id ?? null, format, playFormat, teamRequired, weatherLocation, holes, players: [{ memberId: claims.sub, name: member?.name ?? "Player", team: team ?? null, ratingAnchor }], startedAt: new Date().toISOString() }),
     });
     if (r.status !== 200) return json({ error: "start_failed" }, 502, origin);
     return json({ code }, 201, origin);
@@ -86,14 +94,15 @@ export async function handleCasualRounds(
 
   if (method === "POST" && sub === "join") {
     if (await kvRateLimited(env, "round-join:" + claims.sub, 60, 60)) return json({ error: "rate_limited" }, 429, origin);
+    const b = (await readJson(request)) ?? {};
     const member = await getMember(env.ROSTER, claims.sub);
     const ratingAnchor = await findRatingAnchor(env.DB, { memberId: claims.sub, pdgaNo: member?.pdgaNo ?? null });
-    return proxy(stub, "/join", { method: "POST", headers: hdr, body: JSON.stringify({ name: member?.name ?? "Player", ratingAnchor }) }, origin);
+    return proxy(stub, "/join", { method: "POST", headers: hdr, body: JSON.stringify({ name: member?.name ?? "Player", team: b.team, ratingAnchor }) }, origin);
   }
   if (method === "POST" && sub === "guest") {
     if (await kvRateLimited(env, "round-guest:" + claims.sub, 30, 60)) return json({ error: "rate_limited" }, 429, origin); // cap walk-on spam → DO/snapshot bloat
     const b = (await readJson(request)) ?? {};
-    return proxy(stub, "/guest", { method: "POST", headers: hdr, body: JSON.stringify({ name: b.name }) }, origin);
+    return proxy(stub, "/guest", { method: "POST", headers: hdr, body: JSON.stringify({ name: b.name, team: b.team }) }, origin);
   }
   if (method === "POST" && sub === "remove") {
     // Drop a player from the round (accidental join, left early, or no-show). The DO authorizes from the

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { assignCards, countScores, computeLeaderboard, finalizeStandings, computeLeagueStandings, type PlayerState } from "../src/scoring.js";
+import { assignCards, countScores, computeLeaderboard, computeLeaderboardForFormat, finalizeStandings, finalizeStandingsForFormat, computeLeagueStandings, type PlayerState } from "../src/scoring.js";
 
 describe("assignCards", () => {
   const mk = (over: Partial<PlayerState>): PlayerState => ({ memberId: null, name: "P", scores: {}, ...over });
@@ -50,6 +50,55 @@ describe("computeLeaderboard", () => {
     const bo = lb[0]!;
     expect(bo).toMatchObject({ name: "Bo", thru: 2, total: 6, toPar: -1 });
     expect(lb.find((s) => s.name === "Ann")).toMatchObject({ thru: 3, total: 11, toPar: 1 });
+  });
+});
+
+describe("matchplay leaderboard formats", () => {
+  const holes = [
+    { hole: 1, par: 3 },
+    { hole: 2, par: 4 },
+    { hole: 3, par: 3 },
+  ];
+
+  it("scores singles matchplay by hole wins instead of stroke total", () => {
+    const players: PlayerState[] = [
+      { memberId: "a", name: "Ann", scores: { 1: 3, 2: 5, 3: 3 } },
+      { memberId: "b", name: "Bo", scores: { 1: 4, 2: 4, 3: 4 } },
+    ];
+
+    const lb = computeLeaderboardForFormat(holes, players, "matchplay", "singles");
+
+    expect(lb[0]).toMatchObject({ name: "Ann", holesWon: 2, holesLost: 1, matchPoints: 1, matchLabel: "+1" });
+    expect(lb[1]).toMatchObject({ name: "Bo", holesWon: 1, holesLost: 2, matchPoints: -1, matchLabel: "-1" });
+  });
+
+  it("scores doubles matchplay by team hole wins", () => {
+    const players: PlayerState[] = [
+      { memberId: "r1", name: "Red 1", team: "Red", scores: { 1: 3, 2: 5, 3: 3 } },
+      { memberId: "r2", name: "Red 2", team: "Red", scores: { 1: 4, 2: 6, 3: 5 } },
+      { memberId: "b1", name: "Blue 1", team: "Blue", scores: { 1: 4, 2: 4, 3: 4 } },
+      { memberId: "b2", name: "Blue 2", team: "Blue", scores: { 1: 5, 2: 5, 3: 6 } },
+    ];
+
+    const lb = computeLeaderboardForFormat(holes, players, "matchplay", "doubles");
+
+    expect(lb).toHaveLength(2);
+    expect(lb[0]).toMatchObject({ name: "Red", team: "Red", holesWon: 2, holesLost: 1, matchPoints: 1, matchLabel: "+1" });
+    expect(lb[1]).toMatchObject({ name: "Blue", team: "Blue", holesWon: 1, holesLost: 2, matchPoints: -1, matchLabel: "-1" });
+  });
+
+  it("finalizes doubles matchplay as ranked team rows", () => {
+    const players: PlayerState[] = [
+      { memberId: "r1", name: "Red 1", team: "Red", scores: { 1: 3, 2: 5, 3: 3 } },
+      { memberId: "r2", name: "Red 2", team: "Red", scores: { 1: 4, 2: 6, 3: 5 } },
+      { memberId: "b1", name: "Blue 1", team: "Blue", scores: { 1: 4, 2: 4, 3: 4 } },
+      { memberId: "b2", name: "Blue 2", team: "Blue", scores: { 1: 5, 2: 5, 3: 6 } },
+    ];
+
+    const fs = finalizeStandingsForFormat(holes, players, "matchplay", "doubles");
+
+    expect(fs[0]).toMatchObject({ name: "Red", team: "Red", place: 1, holesWon: 2, holesLost: 1, matchPoints: 1 });
+    expect(fs[1]).toMatchObject({ name: "Blue", team: "Blue", place: 2, holesWon: 1, holesLost: 2, matchPoints: -1 });
   });
 });
 

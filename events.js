@@ -75,6 +75,7 @@ export function normalizeEvent(raw) {
     name: ev.name != null ? String(ev.name) : 'Untitled Event',
     status: ev.status != null ? String(ev.status) : 'scheduled',
     format: ev.format != null ? String(ev.format) : '',
+    play_format: ev.play_format != null ? String(ev.play_format) : '',
     date: ev.date != null ? String(ev.date) : null,
     course_id: ev.course_id != null ? String(ev.course_id) : '',
     layout_id: ev.layout_id != null ? String(ev.layout_id) : '', // selected scoring layout (T4 tee-sign render)

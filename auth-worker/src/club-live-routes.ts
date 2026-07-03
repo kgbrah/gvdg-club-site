@@ -4,6 +4,7 @@ import { getMember } from "./roster.js";
 import { json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { asInt, asStr } from "./input.js";
+import { enrichLiveEventFormats, liveRoundFormats } from "./club-live-formats.js";
 import { findRatingAnchor } from "./rating-store.js";
 import { weatherLocationForCourse, type WeatherLocation } from "./weather.js";
 import type { KVLike } from "./ratelimit.js";
@@ -27,6 +28,7 @@ export type ClubLiveEnv = {
 type StartPlayer = {
   readonly memberId: string | null;
   readonly name: string;
+  readonly team?: string | null;
   readonly division: string | null;
   readonly startingHole: number | null;
   readonly pdgaNo?: string | null;
@@ -35,6 +37,7 @@ type LiveJson = Record<string, unknown>;
 type LiveEventRow = Record<string, unknown> & {
   readonly course_id?: number | null;
   readonly layout_id?: number | null;
+  readonly format?: string | null;
   readonly players?: Record<string, unknown>[];
 };
 type LiveLayoutRow = {
@@ -76,6 +79,17 @@ function rowNumber(row: Record<string, unknown> | null, key: string): number | n
   const value = row?.[key];
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
+function normalizedTeam(value: string | null | undefined): string {
+  return String(value ?? "").trim().toLowerCase();
+}
+function teamValidationError(teamRequired: boolean, players: readonly StartPlayer[]): Record<string, unknown> | null {
+  if (!teamRequired) return null;
+  for (const player of players) {
+    if (!normalizedTeam(player.team)) return { error: "team_required", player: player.name };
+  }
+  if (new Set(players.map((player) => normalizedTeam(player.team))).size < 2) return { error: "not_enough_teams" };
+  return null;
+}
 async function liveWeatherLocationFromSnapshot(env: ClubLiveEnv, data: LiveJson): Promise<WeatherLocation | null> {
   const udiscCourseId = rowString(data, "udiscCourseId");
   const courseName = rowString(data, "courseName");
@@ -114,17 +128,21 @@ async function ensureLiveWeather(stub: LiveStub, env: ClubLiveEnv, eid: number, 
 }
 async function liveSnapshotWithWeather(stub: LiveStub, env: ClubLiveEnv, eid: number, origin: string | null): Promise<Response> {
   const first = await liveJson(stub, "/snapshot");
-  if (!needsWeatherBackfill(first.data, first.status)) return json(first.data, first.status, origin);
-  const updated = await ensureLiveWeather(stub, env, eid, first.data);
-  return json(updated ?? first.data, updated ? 200 : first.status, origin);
+  const enriched = await enrichLiveEventFormats(env, eid, first.data, first.status);
+  if (!needsWeatherBackfill(enriched, first.status)) return json(enriched, first.status, origin);
+  const updated = await ensureLiveWeather(stub, env, eid, enriched);
+  const out = updated ? await enrichLiveEventFormats(env, eid, updated, 200) : enriched;
+  return json(out, updated ? 200 : first.status, origin);
 }
 async function liveMineWithWeather(stub: LiveStub, env: ClubLiveEnv, eid: number, headers: HeadersInit, origin: string | null): Promise<Response> {
   const first = await liveJson(stub, "/mine", { headers });
-  if (!needsWeatherBackfill(first.data, first.status)) return json(first.data, first.status, origin);
-  const updated = await ensureLiveWeather(stub, env, eid, first.data);
-  if (!updated) return json(first.data, first.status, origin);
+  const enriched = await enrichLiveEventFormats(env, eid, first.data, first.status);
+  if (!needsWeatherBackfill(enriched, first.status)) return json(enriched, first.status, origin);
+  const updated = await ensureLiveWeather(stub, env, eid, enriched);
+  if (!updated) return json(enriched, first.status, origin);
   const second = await liveJson(stub, "/mine", { headers });
-  return json(second.data, second.status, origin);
+  const secondEnriched = await enrichLiveEventFormats(env, eid, second.data, second.status);
+  return json(secondEnriched, second.status, origin);
 }
 
 async function withRatingAnchor(env: ClubLiveEnv, player: StartPlayer) {
@@ -133,6 +151,7 @@ async function withRatingAnchor(env: ClubLiveEnv, player: StartPlayer) {
   return {
     memberId: player.memberId,
     name: player.name,
+    team: player.team ?? null,
     division: player.division,
     startingHole: player.startingHole,
     ratingAnchor,
@@ -202,19 +221,24 @@ export async function handleClubLive(
       const startBody = (await readJson(request)) ?? {};
       const ev = (await db.getEvent(env.DB, eid)) as LiveEventRow | null;
       if (!ev) return json({ error: "not_found" }, 404, origin);
+      const evConfig = (await db.getEventConfig(env.DB, eid)) as { readonly play_format?: string | null } | null;
+      const roundFormats = liveRoundFormats(rowString(ev, "format"), rowString(evConfig ?? {}, "play_format"));
+      if (!roundFormats) return json({ error: "invalid_event_format" }, 400, origin);
       const holes = await db.getLayoutHoles(env.DB, ev.layout_id);
       if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin);
       const evLayout = ev.layout_id != null ? ((await db.getLayout(env.DB, ev.layout_id)) as LiveLayoutRow | null) : null;
       const courseId = evLayout?.course_id ?? ev.course_id ?? null;
       const evCourse = courseId != null ? ((await db.getCourse(env.DB, courseId)) as LiveCourseRow | null) : null;
       const weatherLocation = weatherLocationForCourse(evCourse, evLayout);
-      const regs = (await db.listRegistrations(env.DB, eid)) as { member_id?: string; name?: string; division?: string | null; starting_hole?: number | null }[];
+      const regs = (await db.listRegistrations(env.DB, eid)) as { member_id?: string; name?: string; team?: string | null; division?: string | null; starting_hole?: number | null }[];
       const rawPlayers: StartPlayer[] =
         regs.length && startBody.from !== "players"
-          ? regs.map((r) => ({ memberId: r.member_id ?? null, name: String(r.name ?? "Player"), division: r.division ?? null, startingHole: r.starting_hole ?? null }))
-          : (Array.isArray(ev.players) ? ev.players : []).map((p) => ({ memberId: rowString(p, "member_id"), name: String(p.name ?? "Player"), division: rowString(p, "division"), startingHole: null, pdgaNo: rowString(p, "pdga_no") }));
+          ? regs.map((r) => ({ memberId: r.member_id ?? null, name: String(r.name ?? "Player"), team: r.team ?? null, division: r.division ?? null, startingHole: r.starting_hole ?? null }))
+          : (Array.isArray(ev.players) ? ev.players : []).map((p) => ({ memberId: rowString(p, "member_id"), name: String(p.name ?? "Player"), team: rowString(p, "team"), division: rowString(p, "division"), startingHole: null, pdgaNo: rowString(p, "pdga_no") }));
+      const teamError = teamValidationError(roundFormats.teamRequired, rawPlayers);
+      if (teamError) return json(teamError, 400, origin);
       const players = await Promise.all(rawPlayers.map((player) => withRatingAnchor(env, player)));
-      const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, courseId: ev.course_id ?? evLayout?.course_id ?? null, layoutId: ev.layout_id ?? null, courseName: evCourse?.name ?? null, layoutName: evLayout?.name ?? null, holes, players, startedAt: new Date().toISOString(), weatherLocation }) });
+      const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, courseId: ev.course_id ?? evLayout?.course_id ?? null, layoutId: ev.layout_id ?? null, courseName: evCourse?.name ?? null, layoutName: evLayout?.name ?? null, format: roundFormats.format, playFormat: roundFormats.playFormat, teamRequired: roundFormats.teamRequired, holes, players, startedAt: new Date().toISOString(), weatherLocation }) });
       const data = await r.json().catch(() => ({}));
       if (r.status === 200) await db.updateEvent(env.DB, eid, { status: "live" });
       return json(data, r.status, origin);

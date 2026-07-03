@@ -232,17 +232,20 @@ export interface EventInput {
 }
 
 export async function listEvents(db: D1Like, opts: { status?: string; type?: string } = {}) {
-  let sql = "SELECT * FROM events";
+  let sql = "SELECT e.*, c.play_format FROM events e LEFT JOIN event_config c ON c.event_id = e.id";
   const where: string[] = [];
   const binds: unknown[] = [];
-  if (opts.status) { where.push("status = ?"); binds.push(opts.status); }
-  if (opts.type) { where.push("type = ?"); binds.push(opts.type); }
+  if (opts.status) { where.push("e.status = ?"); binds.push(opts.status); }
+  if (opts.type) { where.push("e.type = ?"); binds.push(opts.type); }
   if (where.length) sql += " WHERE " + where.join(" AND ");
-  sql += " ORDER BY date DESC, id DESC";
+  sql += " ORDER BY e.date DESC, e.id DESC";
   return (await db.prepare(sql).bind(...binds).all()).results;
 }
 export async function getEvent(db: D1Like, id: number) {
-  const event = await db.prepare("SELECT * FROM events WHERE id = ?").bind(id).first();
+  const event = await db
+    .prepare("SELECT e.*, c.play_format FROM events e LEFT JOIN event_config c ON c.event_id = e.id WHERE e.id = ?")
+    .bind(id)
+    .first();
   if (!event) return null;
   const players = (await db.prepare("SELECT * FROM event_players WHERE event_id = ? ORDER BY name").bind(id).all()).results;
   return { ...event, players };
@@ -318,6 +321,16 @@ export interface EventConfigPatch {
 }
 export async function getEventConfig(db: D1Like, eventId: number) {
   return db.prepare("SELECT * FROM event_config WHERE event_id = ?").bind(eventId).first();
+}
+export async function setEventConfigPlayFormat(db: D1Like, eventId: number, playFormat: string | null) {
+  return db
+    .prepare(
+      `INSERT INTO event_config (event_id, registration_open, play_format)
+       VALUES (?, 0, ?)
+       ON CONFLICT(event_id) DO UPDATE SET play_format=excluded.play_format RETURNING *`,
+    )
+    .bind(eventId, playFormat)
+    .first();
 }
 export async function upsertEventConfig(db: D1Like, eventId: number, c: EventConfigPatch) {
   return db

@@ -30,7 +30,12 @@ function inlineLayout(raw: unknown): { name: string; holes: LayoutHole[]; total_
 
 const hasField = (body: Record<string, unknown>, field: string): boolean => Object.prototype.hasOwnProperty.call(body, field);
 const hasEventDetailsPatch = (body: Record<string, unknown>): boolean =>
-  ["type", "name", "format", "date", "course_id", "layout_id", "league_id", "notes"].some((field) => hasField(body, field));
+  ["type", "name", "format", "play_format", "date", "course_id", "layout_id", "league_id", "notes"].some((field) => hasField(body, field));
+
+function parseEventSetupPlayFormat(value: unknown): string | null | undefined {
+  if (value == null || value === "" || value === "singles") return null;
+  return inSet(["doubles", "teams"], value) ? value : undefined;
+}
 
 function assignmentInt(value: unknown, fallback: number, min: number, max: number): number | null {
   if (value == null || value === "") return fallback;
@@ -173,6 +178,8 @@ export async function handleAdminEvents(
     const b = await readJson(request);
     const v = b && validEventInput(b);
     if (!v) return json({ error: "invalid_event" }, 400, origin);
+    const playFormat = hasField(b, "play_format") ? parseEventSetupPlayFormat(b.play_format) : null;
+    if (playFormat === undefined) return json({ error: "invalid_event" }, 400, origin);
     if (isLifecycleManagedStatus(v.status)) return json({ error: "lifecycle_status_requires_live_flow" }, 409, origin);
     let layout: unknown = null;
     let eventInput = v;
@@ -187,6 +194,11 @@ export async function handleAdminEvents(
       eventInput = { ...v, layout_id: layoutId };
     }
     const row = await db.createEvent(env.DB, { ...eventInput, created_by: adminId });
+    if (playFormat) {
+      const eventId = asInt((row as { readonly id?: unknown } | null)?.id);
+      if (eventId == null) return json({ error: "invalid_event" }, 500, origin);
+      await db.setEventConfigPlayFormat(env.DB, eventId, playFormat);
+    }
     return json(layout ? { event: row, layout } : { event: row }, 201, origin);
   }
   if (method === "PATCH" && id != null) {
@@ -211,6 +223,8 @@ export async function handleAdminEvents(
       else if (inSet(EVENT_FORMATS, b.format)) patch.format = b.format;
       else return json({ error: "invalid_event" }, 400, origin);
     }
+    const playFormat = hasField(b, "play_format") ? parseEventSetupPlayFormat(b.play_format) : undefined;
+    if (hasField(b, "play_format") && playFormat === undefined) return json({ error: "invalid_event" }, 400, origin);
     if (hasField(b, "date")) {
       const date = b.date == null || b.date === "" ? null : asStr(b.date, 40);
       if (date == null && b.date != null && b.date !== "") return json({ error: "invalid_event" }, 400, origin);
@@ -238,6 +252,7 @@ export async function handleAdminEvents(
     }
     if (hasEventDetailsPatch(b) && b.confirm_event_details_update !== true) return json({ error: "event_details_confirmation_required" }, 409, origin);
     const row = await db.updateEvent(env.DB, id, patch);
+    if (row && hasField(b, "play_format")) await db.setEventConfigPlayFormat(env.DB, id, playFormat ?? null);
     return row ? json({ event: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
   }
   if (method === "DELETE" && id != null) {

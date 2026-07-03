@@ -413,7 +413,8 @@
                     <div><label for="aeName">Name</label><input id="aeName" maxlength="200" required></div>
                     <div><label for="aeDate">Date</label><input id="aeDate" type="date"></div>
                     <div><label for="aeStatus">Status</label><select id="aeStatus"><option value="scheduled">Scheduled</option><option value="cancelled">Cancelled</option></select></div>
-                    <div><label for="aeFormat">Format</label><select id="aeFormat"><option value="">—</option><option value="stroke">Stroke</option><option value="matchplay">Matchplay</option><option value="doubles">Doubles</option></select></div>
+                    <div><label for="aeFormat">Scoring format</label><select id="aeFormat"><option value="stroke">Stroke play</option><option value="matchplay">Matchplay</option></select></div>
+                    <div><label for="aePlayFormat">Play format</label><select id="aePlayFormat"><option value="singles">Singles</option><option value="doubles">Doubles</option></select></div>
                     <div><label for="aeCourse">Course</label><select id="aeCourse"><option value="">—</option></select></div>
                     <div><label for="aeLayout">Layout</label><select id="aeLayout"><option value="">— no layout yet —</option></select></div>
                     <div id="aeQuickLayout" class="al-section" style="display:none;margin:0;">
@@ -1040,7 +1041,8 @@
                 type: $('aeType').value,
                 name: $('aeName').value.trim(),
                 date: $('aeDate').value || null,
-                format: $('aeFormat').value || null,
+                format: $('aeFormat').value || 'stroke',
+                play_format: $('aePlayFormat').value || 'singles',
                 course_id: $('aeCourse').value ? Number($('aeCourse').value) : null,
                 league_id: $('aeLeague').value ? Number($('aeLeague').value) : null,
                 notes: $('aeNotes').value.trim() || null,
@@ -1051,6 +1053,8 @@
         function aeResetForm() {
             aeEditingEvent = null;
             $('adminCreateForm').reset();
+            $('aeFormat').value = 'stroke';
+            $('aePlayFormat').value = 'singles';
             setEventStatusSelect($('aeStatus'), 'scheduled');
             $('aeModeNote').textContent = 'Create a scheduled event, fundraiser, meeting, or league round.';
             $('aeSubmitBtn').textContent = 'Create event';
@@ -1062,7 +1066,8 @@
             $('aeName').value = ev.name || '';
             $('aeDate').value = ev.date || '';
             setEventStatusSelect($('aeStatus'), ev.status || 'scheduled');
-            $('aeFormat').value = ev.format || '';
+            $('aeFormat').value = ev.format === 'matchplay' ? 'matchplay' : 'stroke';
+            $('aePlayFormat').value = ev.play_format || (ev.format === 'doubles' ? 'doubles' : 'singles');
             $('aeCourse').value = ev.course_id == null ? '' : String(ev.course_id);
             $('aeLeague').value = ev.league_id == null ? '' : String(ev.league_id);
             $('aeNotes').value = ev.notes || '';
@@ -1909,9 +1914,10 @@
             const wrap = $('scBoard'); wrap.replaceChildren();
             const standings = (scSnap && scSnap.standings) || [];
             if (!standings.length) { wrap.textContent = 'No scores yet.'; return; }
+            const matchplay = scSnap && (scSnap.format === 'matchplay' || standings.some((s) => s && s.matchLabel));
             const table = document.createElement('table'); table.className = 'al-holes';
             const thead = document.createElement('thead'); const htr = document.createElement('tr');
-            ['Pos', 'Player', 'Thru', 'Total', 'To Par'].forEach((h) => htr.appendChild(elx('th', null, h)));
+            ['Pos', matchplay ? 'Side' : 'Player', 'Thru', 'Total', matchplay ? 'Match' : 'To Par'].forEach((h) => htr.appendChild(elx('th', null, h)));
             thead.appendChild(htr); table.appendChild(thead);
             const tbody = document.createElement('tbody');
             standings.forEach((s, i) => {
@@ -1920,7 +1926,7 @@
                 tr.appendChild(elx('td', 'lb-name', s.name));
                 tr.appendChild(elx('td', null, s.thru ? String(s.thru) : '—'));
                 tr.appendChild(elx('td', null, s.thru ? String(s.total) : '—'));
-                tr.appendChild(elx('td', null, s.thru ? scToPar(s.toPar) : '—'));
+                tr.appendChild(elx('td', null, matchplay ? (s.matchLabel || 'E') : (s.thru ? scToPar(s.toPar) : '—')));
                 tbody.appendChild(tr);
             });
             table.appendChild(tbody); wrap.appendChild(table);
