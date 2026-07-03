@@ -78,6 +78,17 @@ function rowNumber(row: Record<string, unknown> | null, key: string): number | n
   const value = row?.[key];
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
+function normalizedTeam(value: string | null | undefined): string {
+  return String(value ?? "").trim().toLowerCase();
+}
+function teamValidationError(teamRequired: boolean, players: readonly StartPlayer[]): Record<string, unknown> | null {
+  if (!teamRequired) return null;
+  for (const player of players) {
+    if (!normalizedTeam(player.team)) return { error: "team_required", player: player.name };
+  }
+  if (new Set(players.map((player) => normalizedTeam(player.team))).size < 2) return { error: "not_enough_teams" };
+  return null;
+}
 async function liveWeatherLocationFromSnapshot(env: ClubLiveEnv, data: LiveJson): Promise<WeatherLocation | null> {
   const udiscCourseId = rowString(data, "udiscCourseId");
   const courseName = rowString(data, "courseName");
@@ -219,8 +230,11 @@ export async function handleClubLive(
         regs.length && startBody.from !== "players"
           ? regs.map((r) => ({ memberId: r.member_id ?? null, name: String(r.name ?? "Player"), team: r.team ?? null, division: r.division ?? null, startingHole: r.starting_hole ?? null }))
           : (Array.isArray(ev.players) ? ev.players : []).map((p) => ({ memberId: rowString(p, "member_id"), name: String(p.name ?? "Player"), team: rowString(p, "team"), division: rowString(p, "division"), startingHole: null, pdgaNo: rowString(p, "pdga_no") }));
+      const teamRequired = teamNameRequiredForFormat(eventFormat, playFormat);
+      const teamError = teamValidationError(teamRequired, rawPlayers);
+      if (teamError) return json(teamError, 400, origin);
       const players = await Promise.all(rawPlayers.map((player) => withRatingAnchor(env, player)));
-      const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, courseId: ev.course_id ?? evLayout?.course_id ?? null, layoutId: ev.layout_id ?? null, courseName: evCourse?.name ?? null, layoutName: evLayout?.name ?? null, format: eventFormat || playFormat, teamRequired: teamNameRequiredForFormat(eventFormat, playFormat), holes, players, startedAt: new Date().toISOString(), weatherLocation }) });
+      const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, courseId: ev.course_id ?? evLayout?.course_id ?? null, layoutId: ev.layout_id ?? null, courseName: evCourse?.name ?? null, layoutName: evLayout?.name ?? null, format: eventFormat || playFormat, teamRequired, holes, players, startedAt: new Date().toISOString(), weatherLocation }) });
       const data = await r.json().catch(() => ({}));
       if (r.status === 200) await db.updateEvent(env.DB, eid, { status: "live" });
       return json(data, r.status, origin);

@@ -145,7 +145,10 @@ describe("club live scorecard start", () => {
       configRow: { play_format: "doubles" },
       layoutRow: { id: 1, course_id: 2, name: "Yard Gnome Layout", holes: JSON.stringify([{ hole: 1, par: 3 }]) },
       courseRow: { id: 2, name: "West Meadowbrook Park", location: "Greenville, NC", lat: 35.6264, lng: -77.375 },
-      registrations: [{ member_id: "m_jane", name: "Jane", division: "MA1", starting_hole: null, team: "Team Fox" }],
+      registrations: [
+        { member_id: "m_jane", name: "Jane", division: "MA1", starting_hole: null, team: "Team Fox" },
+        { member_id: "m_sam", name: "Sam", division: "MA1", starting_hole: null, team: "Team Owl" },
+      ],
     };
     const res = await handleClubLive(
       new Request("https://w/events/2/live/start", { method: "POST", headers: await adminHeader(), body: JSON.stringify({}) }),
@@ -161,8 +164,58 @@ describe("club live scorecard start", () => {
       eventId: 2,
       format: "matchplay",
       teamRequired: true,
-      players: [{ memberId: "m_jane", name: "Jane", division: "MA1", startingHole: null, team: "Team Fox" }],
+      players: [
+        { memberId: "m_jane", name: "Jane", division: "MA1", startingHole: null, team: "Team Fox" },
+        { memberId: "m_sam", name: "Sam", division: "MA1", startingHole: null, team: "Team Owl" },
+      ],
     });
+  });
+
+  it("rejects team-required starts when a registered player is missing a team", async () => {
+    const state: DbState = {
+      eventRow: { id: 2, format: "matchplay", course_id: 2, layout_id: 1 },
+      configRow: { play_format: "doubles" },
+      layoutRow: { id: 1, course_id: 2, name: "Yard Gnome Layout", holes: JSON.stringify([{ hole: 1, par: 3 }]) },
+      courseRow: { id: 2, name: "West Meadowbrook Park", location: "Greenville, NC", lat: 35.6264, lng: -77.375 },
+      registrations: [{ member_id: "m_tj", name: "TJ Braley", division: "Ryder Cup", starting_hole: null, team: null }],
+    };
+    const res = await handleClubLive(
+      new Request("https://w/events/2/live/start", { method: "POST", headers: await adminHeader(), body: JSON.stringify({}) }),
+      env(state),
+      null,
+      "POST",
+      ["events", "2", "live", "start"],
+    );
+
+    if (!res) throw new Error("missing_response");
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ error: "team_required", player: "TJ Braley" });
+    expect(state.startedBody).toBeUndefined();
+  });
+
+  it("rejects team-required starts without at least two teams", async () => {
+    const state: DbState = {
+      eventRow: { id: 2, format: "matchplay", course_id: 2, layout_id: 1 },
+      configRow: { play_format: "doubles" },
+      layoutRow: { id: 1, course_id: 2, name: "Yard Gnome Layout", holes: JSON.stringify([{ hole: 1, par: 3 }]) },
+      courseRow: { id: 2, name: "West Meadowbrook Park", location: "Greenville, NC", lat: 35.6264, lng: -77.375 },
+      registrations: [
+        { member_id: "m_a", name: "A", division: "Ryder Cup", starting_hole: null, team: "Team Fox" },
+        { member_id: "m_b", name: "B", division: "Ryder Cup", starting_hole: null, team: "Team Fox" },
+      ],
+    };
+    const res = await handleClubLive(
+      new Request("https://w/events/2/live/start", { method: "POST", headers: await adminHeader(), body: JSON.stringify({}) }),
+      env(state),
+      null,
+      "POST",
+      ["events", "2", "live", "start"],
+    );
+
+    if (!res) throw new Error("missing_response");
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ error: "not_enough_teams" });
+    expect(state.startedBody).toBeUndefined();
   });
 });
 

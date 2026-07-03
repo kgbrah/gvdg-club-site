@@ -77,11 +77,11 @@
         .btn.ghost { background: transparent; color: var(--primary); border: 1.5px solid var(--primary); }
         .btn:disabled { opacity: 0.5; cursor: default; }
         .btn.small { min-height: 40px; width: auto; font-size: 0.85rem; padding: 0 0.85rem; border-radius: 10px; }
-        input.field {
+        input.field, select.field {
             width: 100%; min-height: 50px; padding: 0 0.9rem; border: 1.5px solid var(--border-color);
             border-radius: 12px; background: var(--bg-primary); color: var(--text-primary); font-size: 1rem; font-family: 'Archivo';
         }
-        input.field:focus { outline: none; border-color: var(--primary); }
+        input.field:focus, select.field:focus { outline: none; border-color: var(--primary); }
         label.lbl { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); display: block; margin: 0 0 0.3rem 0.2rem; }
         .field-error { color: var(--over); font-size: 0.82rem; font-weight: 700; margin: 0.15rem 0 0; }
         .sheet-actions { display: flex; gap: 0.6rem; margin-top: 1rem; }
@@ -897,16 +897,58 @@
                 const row = el('button', 'tap-row'); const g = el('div', 'grow');
                 g.appendChild(el('div', 'title', L.name || 'Layout')); g.appendChild(el('div', 'sub', L.total_par != null ? ('Par ' + L.total_par) : ''));
                 row.appendChild(g); row.appendChild(el('div', 'chev', '›'));
-                row.addEventListener('click', function () { createRound(course, L); });
+                row.addEventListener('click', function () { renderRoundOptions(course, L); });
                 c.appendChild(row);
             });
             shell(c);
         }
-        async function createRound(course, layout) {
+        function casualFormatRequiresTeam(format) { return format === 'matchplay' || format === 'doubles'; }
+        function renderRoundOptions(course, layout) {
+            const c = el('div', 'stack');
+            const back = el('button', 'btn ghost small', '‹ Back'); back.addEventListener('click', function () { renderLayoutPick(course); }); c.appendChild(back);
+            c.appendChild(el('h2', 'section', 'Round options'));
+            const meta = el('p', 'muted', course.name + ' · ' + (layout.name || 'Layout'));
+            c.appendChild(meta);
+            c.appendChild(el('label', 'lbl', 'Scoring format'));
+            const format = el('select', 'field');
+            [
+                ['stroke', 'Stroke play'],
+                ['doubles', 'Doubles'],
+                ['matchplay', 'Matchplay'],
+            ].forEach(function (pair) {
+                const o = document.createElement('option');
+                o.value = pair[0]; o.textContent = pair[1];
+                format.appendChild(o);
+            });
+            c.appendChild(format);
+            const teamWrap = el('div');
+            teamWrap.appendChild(el('label', 'lbl', 'Your team name'));
+            const team = el('input', 'field');
+            team.maxLength = 40;
+            team.autocomplete = 'organization';
+            teamWrap.appendChild(team);
+            c.appendChild(teamWrap);
+            const updateTeam = function () { teamWrap.style.display = casualFormatRequiresTeam(format.value) ? '' : 'none'; };
+            format.addEventListener('change', updateTeam);
+            updateTeam();
+            const start = el('button', 'btn', 'Start round');
+            start.addEventListener('click', function () {
+                const fmt = format.value || 'stroke';
+                const teamName = team.value.trim();
+                if (casualFormatRequiresTeam(fmt) && !teamName) { toast('Team name required'); team.focus(); return; }
+                createRound(course, layout, { format: fmt, team: teamName });
+            });
+            c.appendChild(start);
+            shell(c);
+        }
+        async function createRound(course, layout, options) {
             shell(spinner());
-            const r = await api('/rounds', { method: 'POST', body: { course_id: course.id, layout_id: layout.id } });
+            const body = { course_id: course.id, layout_id: layout.id };
+            if (options && options.format) body.format = options.format;
+            if (options && options.team) body.team = options.team;
+            const r = await api('/rounds', { method: 'POST', body: body });
             if (r.ok && r.data && r.data.code) { location.search = '?round=' + r.data.code; return; }
-            renderMessage('Could not start round', (r.data && r.data.error === 'no_layout_holes') ? 'That layout has no holes/pars yet.' : 'Please try again.', false);
+            renderMessage('Could not start round', (r.data && r.data.error === 'no_layout_holes') ? 'That layout has no holes/pars yet.' : r.data && r.data.error === 'team_required' ? 'Team name required for that format.' : 'Please try again.', false);
         }
         function openAddPlayerSheet() {
             const overlay = el('div', 'overlay'); overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });

@@ -218,10 +218,7 @@ binding = "AI"
 [[env.gvdgclub.durable_objects.bindings]]
 name = "LIVE"
 class_name = "LiveEventDO"
-
-[[env.gvdgclub.migrations]]
-tag = "v1"
-new_sqlite_classes = ["LiveEventDO"]
+script_name = "gvdg-member-auth-staging"
 
 [[env.gvdgclub.unsafe.bindings]]
 name = "ASSISTANT_RL"

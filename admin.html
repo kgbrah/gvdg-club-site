@@ -544,6 +544,10 @@
                     </div>
                     <p class="al-note" id="scCancelNote">Cancel clears the live scorecard and returns this event to Scheduled so registration can continue.</p>
                 </div>
+                <div id="scRecovery" style="display:none;margin-top:1rem;">
+                    <p class="al-note">This event is marked Live, but no live scorecard exists. Reset it to Scheduled, then start live scoring again.</p>
+                    <button type="button" class="admin-btn danger" id="scRecoverBtn">Reset to Scheduled</button>
+                </div>
             </div>
             <div class="admin-pane" id="apane-leagues-mgmt">
                 <form class="admin-form" id="adminLeagueForm">
@@ -1677,7 +1681,7 @@
 
         async function scOnEventChange() {
             scEventId = $('scEvent').value ? Number($('scEvent').value) : null;
-            $('scStart').style.display = 'none'; $('scLive').style.display = 'none';
+            $('scStart').style.display = 'none'; $('scLive').style.display = 'none'; $('scRecovery').style.display = 'none';
             if (!scEventId) return;
             const opt = $('scEvent').selectedOptions[0];
             if (opt.dataset.status === 'live') { await scRefresh(); return; }
@@ -1698,12 +1702,14 @@
             btn.disabled = true;
             btn.textContent = 'Starting...';
             try {
-                const layoutId = $('scLayout').value ? Number($('scLayout').value) : null;
-                if (layoutId) {
-                    const pr = await adminApi('/admin/events/' + scEventId, { method: 'PATCH', body: { layout_id: layoutId } });
+                const layoutOpt = $('scLayout').selectedOptions[0];
+                const selectedLayoutId = layoutOpt && layoutOpt.value ? Number(layoutOpt.value) : null;
+                const currentLayoutId = Number($('scEvent').selectedOptions[0]?.dataset.layoutId || '') || null;
+                if (selectedLayoutId && selectedLayoutId !== currentLayoutId) {
+                    const pr = await adminApi('/admin/events/' + scEventId, { method: 'PATCH', body: { layout_id: selectedLayoutId, confirm_event_details_update: true } });
                     if (!pr.ok) { adminMsg('Layout update failed (' + pr.status + ')', false); return; }
                     const opt = $('scEvent').selectedOptions[0];
-                    if (opt) opt.dataset.layoutId = String(layoutId);
+                    if (opt) opt.dataset.layoutId = String(selectedLayoutId);
                 }
                 const body = $('scUseManualPlayers').checked ? { from: 'players' } : {};
                 const r = await adminApi('/events/' + scEventId + '/live/start', { method: 'POST', body });
@@ -1725,7 +1731,13 @@
             const r = await api('/events/' + scEventId + '/live');
             if (!r.ok) { $('scLive').style.display = 'none'; return; }
             scSnap = await r.json();
-            if (scSnap.status !== 'live' && scSnap.status !== 'final') { $('scLive').style.display = 'none'; return; }
+            const selectedStatus = $('scEvent').selectedOptions[0]?.dataset.status || '';
+            if (scSnap.status !== 'live' && scSnap.status !== 'final') {
+                $('scLive').style.display = 'none';
+                $('scRecovery').style.display = selectedStatus === 'live' ? '' : 'none';
+                return;
+            }
+            $('scRecovery').style.display = 'none';
             $('scStart').style.display = 'none'; $('scLive').style.display = '';
             const live = scSnap.status === 'live';
             $('scOverride').style.display = live ? '' : 'none'; // overrides only make sense mid-round
@@ -1930,7 +1942,7 @@
         async function scCancel() {
             if (!scEventId) return;
             if (!confirm('Cancel live scoring for this event? This clears the live scorecard and returns the event to Scheduled so registration can continue.')) return;
-            const btn = $('scCancelBtn');
+            const btn = $('scRecovery').style.display === 'none' ? $('scCancelBtn') : $('scRecoverBtn');
             const originalText = btn.textContent;
             btn.disabled = true;
             btn.textContent = 'Cancelling...';
@@ -2769,6 +2781,7 @@
             $('scEvent').addEventListener('change', scOnEventChange);
             $('scStartBtn').addEventListener('click', scStart);
             $('scCancelBtn').addEventListener('click', scCancel);
+            $('scRecoverBtn').addEventListener('click', scCancel);
             $('scFinalizeBtn').addEventListener('click', scFinalize);
             $('scOvApply').addEventListener('click', () => scApplyOverride(false));
             $('scOvClear').addEventListener('click', () => scApplyOverride(true));
