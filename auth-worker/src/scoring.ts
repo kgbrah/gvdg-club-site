@@ -32,6 +32,7 @@ export function countScores(pars: number[], strokes: number[]): Breakdown {
 export interface PlayerState {
   memberId: string | null;
   name: string;
+  team?: string | null;
   division?: string | null;
   startingHole?: number | null; // assigned shotgun start (Track G G4); display-only, doesn't affect scoring
   cardId?: string | null; // which scoring card/group this player is on (a player may score only their own card)

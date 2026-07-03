@@ -40,6 +40,18 @@ describe("admin event management", () => {
     expect(state.removedPlayer).toBe(88);
   });
 
+  it("requires a team when admins add manual players to a team-format event", async () => {
+    const state: DbState = {
+      eventRow: { id: 9, format: "matchplay" },
+      eventConfigRow: { play_format: "doubles" },
+    };
+    const res = await call("/admin/events/9/players", "POST", { name: "Walk On" }, await token("m_admin"), state);
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ error: "team_required" });
+    expect(state.playerBinds).toBeUndefined();
+  });
+
   it("includes course and layout details for open registration events", async () => {
     const res = await call("/registration/open", "GET");
     expect(res.status).toBe(200);
@@ -53,6 +65,14 @@ describe("admin event management", () => {
 
     expect(res.status).toBe(200);
     expect(state.registrationUpdateBinds).toEqual([7, 1, 44, 9]);
+  });
+
+  it("lets admins edit a registered player's team name", async () => {
+    const state: DbState = {};
+    const res = await call("/admin/events/9/registrations/44", "PATCH", { team: "Team Fox" }, await token("m_admin"), state);
+
+    expect(res.status).toBe(200);
+    expect(state.registrationUpdateBinds).toEqual(["Team Fox", 44, 9]);
   });
 
   it("clears nullable admin registration fields when explicitly sent as null", async () => {

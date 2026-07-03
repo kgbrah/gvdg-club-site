@@ -93,7 +93,7 @@ export async function handleCasualRounds(
   if (method === "POST" && sub === "guest") {
     if (await kvRateLimited(env, "round-guest:" + claims.sub, 30, 60)) return json({ error: "rate_limited" }, 429, origin); // cap walk-on spam → DO/snapshot bloat
     const b = (await readJson(request)) ?? {};
-    return proxy(stub, "/guest", { method: "POST", headers: hdr, body: JSON.stringify({ name: b.name }) }, origin);
+    return proxy(stub, "/guest", { method: "POST", headers: hdr, body: JSON.stringify({ name: b.name, team: b.team }) }, origin);
   }
   if (method === "POST" && sub === "remove") {
     // Drop a player from the round (accidental join, left early, or no-show). The DO authorizes from the

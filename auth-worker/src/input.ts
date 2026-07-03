@@ -22,6 +22,14 @@ export const isUniqueViolation = (e: unknown): boolean => /UNIQUE constraint fai
 export const jsonStringArray = (v: unknown, max: number): string | null =>
   Array.isArray(v) ? JSON.stringify(v.filter((x) => typeof x === "string").slice(0, max)) : null;
 
+export function teamNameRequiredForFormat(
+  eventFormat: string | null | undefined,
+  playFormat?: string | null | undefined,
+  explicit = false,
+): boolean {
+  return explicit || eventFormat === "matchplay" || eventFormat === "doubles" || eventFormat === "teams" || playFormat === "doubles" || playFormat === "teams";
+}
+
 const validLat = (n: number | null): number | null => (n != null && n >= -90 && n <= 90 ? n : null);
 const validLng = (n: number | null): number | null => (n != null && n >= -180 && n <= 180 ? n : null);
 

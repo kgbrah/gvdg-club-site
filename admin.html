@@ -2356,16 +2356,28 @@
 
         // ---- Registration management (Track G) ----
         let rgEventId = null;
+        let rgEventFormat = null;
+        function rgTeamNameRequired() {
+            const playFormat = $('rgFormat').value || null;
+            return rgEventFormat === 'matchplay' || rgEventFormat === 'doubles' || playFormat === 'doubles' || playFormat === 'teams';
+        }
+        function rgUpdateTeamRequirement() {
+            const required = rgTeamNameRequired();
+            $('rgPlayerTeam').required = required;
+            $('rgPlayerTeam').placeholder = required ? 'team required' : 'team';
+        }
         async function rgLoadEvents() {
             let events = [];
             try { const r = await api('/events'); if (r.ok) events = (await r.json()).events || []; } catch (e) {}
             const sel = $('rgEvent'); sel.length = 1;
-            events.filter((e) => e.status === 'scheduled' || e.status === 'live').forEach((e) => { const o = document.createElement('option'); o.value = e.id; o.textContent = e.name + ' [' + e.status + ']'; sel.appendChild(o); });
+            events.filter((e) => e.status === 'scheduled' || e.status === 'live').forEach((e) => { const o = document.createElement('option'); o.value = e.id; o.dataset.format = e.format || ''; o.textContent = e.name + ' [' + e.status + ']'; sel.appendChild(o); });
         }
         async function rgOnSelect() {
             rgEventId = $('rgEvent').value ? Number($('rgEvent').value) : null;
+            const selected = $('rgEvent').selectedOptions[0];
+            rgEventFormat = selected ? (selected.dataset.format || null) : null;
             $('rgBody').style.display = rgEventId ? '' : 'none';
-            if (!rgEventId) return;
+            if (!rgEventId) { rgUpdateTeamRequirement(); return; }
             // config (the member endpoint returns config for any authed user)
             let cfg = null;
             try { const r = await adminApi('/events/' + rgEventId + '/registration'); if (r.ok) cfg = (await r.json()).config; } catch (e) {}
@@ -2374,6 +2386,7 @@
             $('rgCtp').value = cfg && cfg.ctp_fee_cents != null ? cfg.ctp_fee_cents / 100 : '';
             $('rgAce').value = cfg && cfg.ace_fee_cents != null ? cfg.ace_fee_cents / 100 : '';
             $('rgFormat').value = (cfg && cfg.play_format) || '';
+            rgUpdateTeamRequirement();
             let divs = []; try { divs = JSON.parse((cfg && cfg.divisions) || '[]'); } catch (e) {}
             $('rgDivisions').value = divs.join(', ');
             rgLoadRoster();
@@ -2389,6 +2402,7 @@
             const body = { registration_open: $('rgOpen').checked, entry_fee_cents: cents($('rgEntry').value), ctp_fee_cents: cents($('rgCtp').value), ace_fee_cents: cents($('rgAce').value), play_format: $('rgFormat').value || null, divisions, confirm_event_config_update: true };
             const r = await adminApi('/admin/events/' + rgEventId + '/config', { method: 'PUT', body });
             const d = r.ok ? {} : await r.json().catch(() => ({}));
+            if (r.ok) rgUpdateTeamRequirement();
             adminMsg(r.ok ? 'Registration settings saved' : (d.error === 'event_config_confirmation_required' ? 'Save failed: confirmation required' : 'Save failed (' + r.status + ')'), r.ok);
         }
         async function rgLoadRoster() {
@@ -2415,7 +2429,7 @@
                 const tr = document.createElement('tr');
                 tr.appendChild(elx('td', 'lb-name', rg.name));
                 tr.appendChild(elx('td', null, rg.division || '—'));
-                tr.appendChild(elx('td', null, rg.team || '—'));
+                tr.appendChild(rgTeamCell(rg));
                 const shTd = document.createElement('td'); const sh = document.createElement('input'); sh.type = 'number'; sh.min = '1'; sh.style.width = '3.5rem'; if (rg.starting_hole != null) sh.value = rg.starting_hole; sh.addEventListener('change', () => rgPatch(rg.id, { starting_hole: parseInt(sh.value, 10) || null })); shTd.appendChild(sh); tr.appendChild(shTd);
                 tr.appendChild(rgToggleCell(rg.checked_in, (v) => rgPatch(rg.id, { checked_in: v })));
                 tr.appendChild(rgToggleCell(rg.paid_entry, (v) => rgConfirmPaidEntry(rg, v)));
@@ -2423,6 +2437,25 @@
                 tbody.appendChild(tr);
             });
             grid.appendChild(tbody);
+        }
+        function rgTeamCell(rg) {
+            const td = document.createElement('td');
+            const team = document.createElement('input');
+            team.type = 'text';
+            team.maxLength = 40;
+            team.placeholder = 'team';
+            team.value = rg.team || '';
+            team.setAttribute('aria-label', 'Team for ' + (rg.name || 'registered player'));
+            team.addEventListener('change', async () => {
+                team.disabled = true;
+                try {
+                    await rgPatch(rg.id, { team: team.value.trim() || null });
+                } finally {
+                    team.disabled = false;
+                }
+            });
+            td.appendChild(team);
+            return td;
         }
         async function rgLoadManualPlayers() {
             let players = [];
@@ -2461,13 +2494,15 @@
             grid.appendChild(tbody);
         }
         async function rgAddManualPlayer() {
+            const team = $('rgPlayerTeam').value.trim();
+            if (rgTeamNameRequired() && !team) { adminMsg('Team name required for this format', false); $('rgPlayerTeam').focus(); return; }
             const body = {
                 name: $('rgPlayerName').value.trim(),
                 member_id: $('rgPlayerMember').value.trim() || null,
                 pdga_no: $('rgPlayerPdga').value.trim() || null,
                 division: $('rgPlayerDivision').value.trim() || null,
-                team: $('rgPlayerTeam').value.trim() || null,
             };
+            body.team = team || null;
             if (!body.name) { adminMsg('Player name required', false); return; }
             const r = await adminApi('/admin/events/' + rgEventId + '/players', { method: 'POST', body });
             if (r.ok) {
@@ -2750,6 +2785,7 @@
             setInterval(refreshOrdersBadge, 60000);        // and keep it current while the page is open
             $('adminMemberForm').addEventListener('submit', adminAddMember);
             $('rgEvent').addEventListener('change', rgOnSelect);
+            $('rgFormat').addEventListener('change', rgUpdateTeamRequirement);
             $('rgSaveBtn').addEventListener('click', rgSaveConfig);
             $('rgPlayerAdd').addEventListener('click', rgAddManualPlayer);
             $('rgAssignCards').addEventListener('click', () => {

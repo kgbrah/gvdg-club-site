@@ -5,39 +5,20 @@ import { handleAdminCtps } from "./admin-ctp-routes.js";
 import { checkEventDeletion, isLifecycleManagedStatus } from "./admin-event-safety.js";
 import { readConfirmedEventStatusPatch } from "./admin-event-status.js";
 import { assignRegistrationStartingHoles, assignRegistrationTeams } from "./admin-event-assignments.js";
+import { inlineLayout } from "./admin-inline-layout.js";
 import { EVENT_FORMATS, EVENT_TYPES } from "./db.js";
 import { createWalletTransactionOnce } from "./wallet-idempotency.js";
 import { getMember } from "./roster.js";
-import { enrichHoles, type LayoutHole } from "./layouts.js";
 import { json, readJson } from "./http.js";
-import { asInt, asStr, inSet, jsonStringArray, sanitizeHoles, validEventInput } from "./input.js";
-
-function inlineLayout(raw: unknown): { name: string; holes: LayoutHole[]; total_par: number } | null {
-  if (!raw || typeof raw !== "object") return null;
-  const body = raw as Record<string, unknown>;
-  const name = asStr(body.name, 60) ?? "Main";
-  if (Array.isArray(body.holes)) {
-    const clean = sanitizeHoles(body.holes);
-    if (!clean || clean.length === 0 || clean.length > 36) return null;
-    return { name, ...enrichHoles(clean) };
-  }
-  const holeCount = asInt(body.hole_count ?? body.holeCount);
-  const defaultPar = asInt(body.default_par ?? body.defaultPar ?? body.par);
-  if (holeCount == null || holeCount < 1 || holeCount > 36 || defaultPar == null || defaultPar < 1 || defaultPar > 15) return null;
-  const holes = Array.from({ length: holeCount }, (_, i): LayoutHole => ({ hole: i + 1, par: defaultPar }));
-  return { name, ...enrichHoles(holes) };
-}
+import { asInt, asStr, inSet, jsonStringArray, teamNameRequiredForFormat, validEventInput } from "./input.js";
 
 const hasField = (body: Record<string, unknown>, field: string): boolean => Object.prototype.hasOwnProperty.call(body, field);
-const hasEventDetailsPatch = (body: Record<string, unknown>): boolean =>
-  ["type", "name", "format", "date", "course_id", "layout_id", "league_id", "notes"].some((field) => hasField(body, field));
+const hasEventDetailsPatch = (body: Record<string, unknown>): boolean => ["type", "name", "format", "date", "course_id", "layout_id", "league_id", "notes"].some((field) => hasField(body, field));
 
 function assignmentInt(value: unknown, fallback: number, min: number, max: number): number | null {
-  if (value == null || value === "") return fallback;
-  const n = asInt(value);
+  const n = value == null || value === "" ? fallback : asInt(value);
   return n != null && n >= min && n <= max ? n : null;
 }
-
 export async function handleAdminEvents(
   request: Request,
   env: Env,
@@ -52,7 +33,11 @@ export async function handleAdminEvents(
       const b = await readJson(request);
       const name = b && asStr(b.name, 100);
       if (!b || !name) return json({ error: "invalid_player" }, 400, origin);
-      const row = await db.addEventPlayer(env.DB, { event_id: id, member_id: asStr(b.member_id, 64), name, pdga_no: asStr(b.pdga_no, 20), division: asStr(b.division, 40), team: asStr(b.team, 40) });
+      const team = asStr(b.team, 40);
+      const event = (await db.getEvent(env.DB, id)) as Record<string, unknown> | null;
+      const config = (await db.getEventConfig(env.DB, id)) as Record<string, unknown> | null;
+      if (teamNameRequiredForFormat(asStr(event?.format, 20), asStr(config?.play_format, 20)) && !team) return json({ error: "team_required" }, 400, origin);
+      const row = await db.addEventPlayer(env.DB, { event_id: id, member_id: asStr(b.member_id, 64), name, pdga_no: asStr(b.pdga_no, 20), division: asStr(b.division, 40), team });
       return json({ player: row }, 201, origin);
     }
     if (method === "DELETE" && seg[4] != null) {

@@ -83,6 +83,9 @@
         }
         input.field:focus { outline: none; border-color: var(--primary); }
         label.lbl { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); display: block; margin: 0 0 0.3rem 0.2rem; }
+        .field-error { color: var(--over); font-size: 0.82rem; font-weight: 700; margin: 0.15rem 0 0; }
+        .sheet-actions { display: flex; gap: 0.6rem; margin-top: 1rem; }
+        .sheet-actions .btn { flex: 1; }
         .pill { display: inline-block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 0.2rem 0.5rem; border-radius: 999px; background: var(--bg-tertiary); color: var(--text-secondary); }
         .pill.live { background: var(--primary); color: #fff; }
         .weather-strip { background: var(--bg-secondary); border: 1px solid var(--border-color); border-left: 4px solid var(--secondary); border-radius: 14px; box-shadow: 0 2px 10px var(--shadow); padding: 0.75rem 0.85rem; margin-bottom: 0.85rem; }
@@ -208,7 +211,7 @@
         const GUEST_TOKEN = MODE === 'event' ? (params.get('gt') || guestTokenStored()) : null;
 
         const app = document.getElementById('app');
-        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, weather: null };
+        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, format: null, teamRequired: false, lastRev: -1, udiscCourseId: null, weather: null };
         const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
         const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
 
@@ -229,6 +232,13 @@
         }
         function relClass(d) { return d < 0 ? 'under' : d > 0 ? 'over' : 'even'; }
         function relText(d) { return d === 0 ? 'E' : d > 0 ? '+' + d : String(d); }
+        function formatRequiresTeam(format) { return format === 'matchplay' || format === 'doubles' || format === 'teams'; }
+        function teamNameRequired() { return S.teamRequired === true || formatRequiresTeam(S.format); }
+        function applyRoundMeta(data) {
+            if (!data) return;
+            S.format = typeof data.format === 'string' ? data.format : null;
+            S.teamRequired = data.teamRequired === true || formatRequiresTeam(S.format);
+        }
         function toast(msg) {
             const t = el('div', 'toast', msg); document.body.appendChild(t);
             setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; }, 1800);
@@ -467,7 +477,7 @@
                 let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
                 // Two scorers on the same card disagreed on a hole — alert this card immediately to reconcile.
                 if (msg && msg.type === 'conflict') { if (msg.cardId === S.cardId) { upsertConflict(msg); conflictAlert(msg); renderHole(); } return; }
-                if (msg && msg.type === 'snapshot') { S.snap = msg; mergeFromSnap(); }
+                if (msg && msg.type === 'snapshot') { S.snap = msg; applyRoundMeta(msg); mergeFromSnap(); }
             });
             ws.addEventListener('close', function () { if (S.wsTimer) return; S.wsTimer = setTimeout(function () { S.wsTimer = null; connectWs(); }, 4000); });
             ws.addEventListener('error', function () { try { ws.close(); } catch (e) {} });
@@ -617,7 +627,7 @@
                 const strong = document.createElement('strong'); strong.textContent = ROUND_CODE; strong.style.letterSpacing = '1.5px'; left.appendChild(strong);
                 const actions = el('div'); actions.style.cssText = 'display:flex;gap:0.4rem;';
                 const share = el('button', 'btn small secondary', 'Share'); share.addEventListener('click', shareRound);
-                const add = el('button', 'btn small secondary', '+ Player'); add.addEventListener('click', addGuestPrompt);
+                const add = el('button', 'btn small secondary', '+ Player'); add.addEventListener('click', openAddPlayerSheet);
                 const manage = el('button', 'btn small secondary', 'Manage'); manage.addEventListener('click', openManagePlayers);
                 actions.appendChild(share); actions.appendChild(add); actions.appendChild(manage);
                 bar.appendChild(left); bar.appendChild(actions);
@@ -662,6 +672,7 @@
                 const row = el('div', 'prow' + (conflict ? ' conflict' : ''));
                 const info = el('div', 'pinfo');
                 info.appendChild(el('div', 'pname', p.name + (p.isMe ? ' (you)' : '')));
+                if (p.team) info.appendChild(el('div', 'pmeta', p.team));
                 if (p.division) info.appendChild(el('div', 'pmeta', p.division));
                 if (conflict) info.appendChild(el('div', 'pmeta conflict-text', '⚑ Conflict: ' + (conflict.values || []).join(' vs ') + ' — set yours to match'));
                 const cur = strokesFor(p.index, h.hole);
@@ -819,6 +830,7 @@
             S.holes = Array.isArray(d.holes) ? d.holes : [];
             S.cardId = d.cardId; S.myIndex = d.playerIndex; S.cardmates = d.cardmates;
             S.courseName = d.courseName || null; S.layoutName = d.layoutName || null; S.udiscCourseId = d.udiscCourseId || null;
+            applyRoundMeta(d);
             S.weather = d.weather || null;
             S.scorerIndex = d.playerIndex;
             if (MODE === 'round') rememberRecentRound({ code: ROUND_CODE, label: 'Casual round ' + ROUND_CODE });
@@ -896,12 +908,65 @@
             if (r.ok && r.data && r.data.code) { location.search = '?round=' + r.data.code; return; }
             renderMessage('Could not start round', (r.data && r.data.error === 'no_layout_holes') ? 'That layout has no holes/pars yet.' : 'Please try again.', false);
         }
-        async function addGuestPrompt() {
-            const name = (window.prompt('Add a player to your card (their name):') || '').trim();
-            if (!name) return;
-            const r = await api('/rounds/' + ROUND_CODE + '/guest', { method: 'POST', body: { name: name } });
-            if (r.ok && r.data && Array.isArray(r.data.cardmates)) { S.cardmates = r.data.cardmates; currentScorerIndex(); renderHole(); toast(name + ' added'); }
-            else toast('Could not add player');
+        function openAddPlayerSheet() {
+            const overlay = el('div', 'overlay'); overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+            const sheet = el('div', 'sheet'); sheet.appendChild(el('div', 'grab'));
+            sheet.appendChild(el('h2', 'section', 'Add player'));
+            const form = el('form', 'stack');
+            form.appendChild(el('label', 'lbl', 'Player name'));
+            const nameInput = el('input', 'field');
+            nameInput.maxLength = 60;
+            nameInput.required = true;
+            nameInput.autocomplete = 'name';
+            form.appendChild(nameInput);
+            let teamInput = null;
+            if (teamNameRequired()) {
+                form.appendChild(el('label', 'lbl', 'Team name'));
+                teamInput = el('input', 'field');
+                teamInput.maxLength = 40;
+                teamInput.required = true;
+                teamInput.autocomplete = 'organization';
+                form.appendChild(teamInput);
+            }
+            const err = el('p', 'field-error', '');
+            err.hidden = true;
+            form.appendChild(err);
+            const actions = el('div', 'sheet-actions');
+            const cancel = el('button', 'btn secondary', 'Cancel');
+            cancel.type = 'button';
+            cancel.addEventListener('click', function () { overlay.remove(); });
+            const submit = el('button', 'btn', 'Add player');
+            submit.type = 'submit';
+            actions.appendChild(cancel); actions.appendChild(submit);
+            form.appendChild(actions);
+            form.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                const name = nameInput.value.trim();
+                const team = teamInput ? teamInput.value.trim() : '';
+                if (!name) { err.textContent = 'Player name required'; err.hidden = false; nameInput.focus(); return; }
+                if (teamNameRequired() && !team) { err.textContent = 'Team name required'; err.hidden = false; if (teamInput) teamInput.focus(); return; }
+                const body = { name: name };
+                if (team) body.team = team;
+                submit.disabled = true;
+                try {
+                    const r = await api('/rounds/' + ROUND_CODE + '/guest', { method: 'POST', body: body });
+                    if (r.ok && r.data && Array.isArray(r.data.cardmates)) {
+                        S.cardmates = r.data.cardmates;
+                        currentScorerIndex();
+                        overlay.remove();
+                        renderHole();
+                        toast(name + ' added');
+                    } else {
+                        err.textContent = r.data && r.data.error === 'team_required' ? 'Team name required' : 'Could not add player';
+                        err.hidden = false;
+                    }
+                } finally {
+                    submit.disabled = false;
+                }
+            });
+            sheet.appendChild(form);
+            overlay.appendChild(sheet); document.body.appendChild(overlay);
+            setTimeout(function () { nameInput.focus(); }, 0);
         }
         // Manage players: remove someone who joined by accident, had to leave, or no-showed (casual round).
         function openManagePlayers() {

@@ -16,6 +16,8 @@ export type DbState = {
   updateEventBinds?: unknown[];
   registrationUpdateBinds?: unknown[];
   playerBinds?: unknown[];
+  eventRow?: Record<string, unknown> | null;
+  eventConfigRow?: Record<string, unknown> | null;
   acePotBinds?: unknown[];
   removedPlayer?: number;
   deleteEventId?: number;
@@ -117,6 +119,8 @@ class AdminEventStatement implements D1PreparedStatement {
     if (/SELECT COUNT\(\*\) AS n FROM ctps WHERE event_id = \?/i.test(this.sql)) return { n: this.state.eventDeleteBlockers?.ctps ?? 0 };
     if (/SELECT COUNT\(\*\) AS n FROM wallet_transactions WHERE event_id = \?/i.test(this.sql)) return { n: this.state.eventDeleteBlockers?.wallet_transactions ?? 0 };
     if (/SELECT COUNT\(\*\) AS n FROM ace_pots WHERE event_id = \?/i.test(this.sql)) return { n: this.state.eventDeleteBlockers?.ace_pots ?? 0 };
+    if (/SELECT \* FROM events WHERE id = \?/i.test(this.sql)) return this.state.eventRow === undefined ? null : this.state.eventRow;
+    if (/SELECT \* FROM event_config WHERE event_id = \?/i.test(this.sql)) return this.state.eventConfigRow === undefined ? null : this.state.eventConfigRow;
     if (/INSERT INTO course_layouts/i.test(this.sql)) {
       this.state.layoutBinds = this.binds;
       return { id: 44, course_id: this.binds[0], name: this.binds[1], holes: this.binds[2], total_par: this.binds[3] };

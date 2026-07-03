@@ -263,6 +263,38 @@ describe("LiveEventDO card-scoped scoring", () => {
     expect(mine0.cardmates.map((c) => c.name)).toEqual(["A", "B", "C", "D"]);
   });
 
+  it("carries team-required format metadata and player teams through snapshot and /mine", async () => {
+    const live = liveDO();
+    await live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({
+        eventId: 1,
+        format: "doubles",
+        teamRequired: true,
+        holes: [{ hole: 1, par: 3 }],
+        players: [{ memberId: "m0", name: "A", team: "Team Fox" }],
+      }),
+    }));
+
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as {
+      readonly format: string | null;
+      readonly teamRequired: boolean;
+      readonly players: readonly { readonly team: string | null }[];
+    };
+    expect(snap.format).toBe("doubles");
+    expect(snap.teamRequired).toBe(true);
+    expect(snap.players[0]?.team).toBe("Team Fox");
+
+    const mine = (await (await live.fetch(new Request("https://do/mine", { headers: { "X-Auth-Member": "m0" } }))).json()) as {
+      readonly format: string | null;
+      readonly teamRequired: boolean;
+      readonly cardmates: readonly { readonly team: string | null }[];
+    };
+    expect(mine.format).toBe("doubles");
+    expect(mine.teamRequired).toBe(true);
+    expect(mine.cardmates[0]?.team).toBe("Team Fox");
+  });
+
   it("keeps a player/hole conflicted until all cardmate scorecards match", async () => {
     const state = new FakeState({});
     const live = new LiveEventDO(state, { DB: db });
@@ -597,6 +629,29 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     const fin = await act(live, "finalize", "m_a", {});
     expect(fin.status).toBe(200);
     expect(touchedDb).toBe(false); // never touches the event `results` path (durable casual persistence needs a roundCode — see next test)
+  });
+
+  it("requires a team name when a player is added to a team-required round", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({
+        casual: true,
+        format: "doubles",
+        teamRequired: true,
+        holes: [{ hole: 1, par: 3 }],
+        players: [{ memberId: "m_a", name: "A", team: "Team A" }],
+      }),
+    }));
+
+    const missingTeam = await act(live, "guest", "m_a", { name: "Walk-on" });
+    expect(missingTeam.status).toBe(400);
+    await expect(missingTeam.json()).resolves.toMatchObject({ error: "team_required" });
+
+    const added = await act(live, "guest", "m_a", { name: "Walk-on", team: "Team B" });
+    expect(added.status).toBe(200);
+    const body = (await added.json()) as { readonly cardmates: readonly { readonly name: string; readonly team: string | null }[] };
+    expect(body.cardmates.find((p) => p.name === "Walk-on")?.team).toBe("Team B");
   });
 
   it("a casual round WITH a share code persists a durable casual_rounds + casual_results record on finalize", async () => {
