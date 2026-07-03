@@ -28,7 +28,7 @@ test('public Events page removes past events and casual rounds from the active p
   assert.match(source, /function splitFeedByDate\(items\)/);
   assert.match(source, /function isArchivedClubEvent\(raw\)/);
   assert.match(source, /function renderArchiveCta\(archivedCount\)/);
-  assert.match(source, /archive\.gvdgclub\.com/);
+  assert.match(source, /archive\.html/);
   assert.doesNotMatch(source, /function renderPastSection\(past\)/);
   assert.doesNotMatch(source, /past-toggle/);
   assert.equal(source.includes("hubEl.appendChild(section('Club-scored — Past'"), false, 'past events should not render inline in the hub');

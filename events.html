@@ -407,7 +407,7 @@
         )
             .trim()
             .replace(/\/+$/, ''); // strip trailing slashes
-        const ARCHIVE_BASE_URL = ((document.body.dataset.archiveUrl || '').trim() || 'https://archive.gvdgclub.com').replace(/\/+$/, '');
+        const ARCHIVE_BASE_URL = ((document.body.dataset.archiveUrl || '').trim() || 'archive.html').replace(/\/+$/, '');
         const REFRESH_MS = 60 * 1000; // ~60s background refresh on the hub
         const EVENTS_PAGE_SIZE = 2000;
         const EVENTS_PAGE_MAX_LIMIT = 2000;
@@ -738,7 +738,8 @@
 
             hubEl.replaceChildren();
             if (upcoming.length) hubEl.appendChild(section('Upcoming', upcoming));
-            // Empty-state reflects the MAIN flow only (live/upcoming/feed). Past events live on archive.gvdgclub.com,
+            // Empty-state reflects the MAIN flow only (live/upcoming/feed). Past events live on archive.html
+            // (or data-archive-url, once the archive subdomain DNS is active),
             // so their presence must not suppress the "nothing scheduled" message.
             if (!feedEvents.length && !live.length && !upcoming.length) {
                 calendarEl.appendChild(el('p', 'events-empty', 'No tournaments or league rounds are on the schedule right now.'));
