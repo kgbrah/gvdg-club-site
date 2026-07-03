@@ -17,6 +17,8 @@ export type DbState = {
   registrationUpdateBinds?: unknown[];
   playerBinds?: unknown[];
   eventRow?: Record<string, unknown> | null;
+  publicEventRow?: Record<string, unknown> | null;
+  publicEvents?: Record<string, unknown>[];
   eventConfigRow?: Record<string, unknown> | null;
   acePotBinds?: unknown[];
   removedPlayer?: number;
@@ -67,6 +69,21 @@ class AdminEventStatement implements D1PreparedStatement {
   }
 
   async all<T = Record<string, unknown>>(): Promise<D1Result<T>> {
+    if (/SELECT e\.\*, cfg\.play_format/i.test(this.sql)) {
+      return d1Result<T>((this.state.publicEvents ?? [
+        {
+          id: 9,
+          name: "Summer Flex",
+          date: "2026-07-12",
+          type: "tournament",
+          status: "live",
+          format: "matchplay",
+          play_format: "doubles",
+          course_name: "West Meadowbrook",
+          layout_name: "Gold",
+        },
+      ]) as T[]);
+    }
     if (/FROM events e JOIN event_config c/i.test(this.sql)) {
       return d1Result<T>([
         {
@@ -120,6 +137,11 @@ class AdminEventStatement implements D1PreparedStatement {
     if (/SELECT COUNT\(\*\) AS n FROM wallet_transactions WHERE event_id = \?/i.test(this.sql)) return { n: this.state.eventDeleteBlockers?.wallet_transactions ?? 0 };
     if (/SELECT COUNT\(\*\) AS n FROM ace_pots WHERE event_id = \?/i.test(this.sql)) return { n: this.state.eventDeleteBlockers?.ace_pots ?? 0 };
     if (/SELECT \* FROM events WHERE id = \?/i.test(this.sql)) return this.state.eventRow === undefined ? null : this.state.eventRow;
+    if (/SELECT e\.\*, cfg\.play_format/i.test(this.sql)) {
+      return this.state.publicEventRow === undefined
+        ? { id: this.binds[0], name: "Summer Flex", status: "live", format: "matchplay", play_format: "doubles", course_name: "West Meadowbrook", layout_name: "Gold" }
+        : this.state.publicEventRow;
+    }
     if (/SELECT \* FROM event_config WHERE event_id = \?/i.test(this.sql)) return this.state.eventConfigRow === undefined ? null : this.state.eventConfigRow;
     if (/INSERT INTO course_layouts/i.test(this.sql)) {
       this.state.layoutBinds = this.binds;

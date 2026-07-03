@@ -25,6 +25,15 @@ const STATUS_LABELS = {
   final: 'Final',
   cancelled: 'Cancelled',
 };
+const SCORING_FORMAT_LABELS = {
+  stroke: 'Stroke play',
+  matchplay: 'Matchplay',
+};
+const PLAY_FORMAT_LABELS = {
+  singles: 'Singles',
+  doubles: 'Doubles',
+  teams: 'Teams',
+};
 
 export function typeLabel(type) {
   if (type == null) return 'Event';
@@ -69,12 +78,16 @@ export function formatEventDate(raw) {
 // treats unknown statuses as "upcoming-ish" so nothing silently vanishes.
 export function normalizeEvent(raw) {
   const ev = raw && typeof raw === 'object' ? raw : {};
+  const playFormat = ev.playFormat != null ? String(ev.playFormat) : ev.play_format != null ? String(ev.play_format) : '';
   return {
     id: ev.id != null ? String(ev.id) : '',
     type: ev.type != null ? String(ev.type) : '',
     name: ev.name != null ? String(ev.name) : 'Untitled Event',
     status: ev.status != null ? String(ev.status) : 'scheduled',
     format: ev.format != null ? String(ev.format) : '',
+    play_format: playFormat,
+    playFormat,
+    teamRequired: ev.teamRequired === true || ev.team_required === true,
     date: ev.date != null ? String(ev.date) : null,
     course_id: ev.course_id != null ? String(ev.course_id) : '',
     layout_id: ev.layout_id != null ? String(ev.layout_id) : '', // selected scoring layout (T4 tee-sign render)
@@ -86,6 +99,48 @@ export function normalizeEvent(raw) {
     players: Array.isArray(ev.players) ? ev.players : [],
     _date: parseEventDate(ev.date),
   };
+}
+
+function cleanString(value) {
+  const text = String(value ?? '').trim();
+  return text || '';
+}
+
+function formatToken(value) {
+  return cleanString(value).toLowerCase();
+}
+
+function labelFromToken(labels, token) {
+  if (!token) return '';
+  if (labels[token]) return labels[token];
+  return token
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
+function scoringFormatKey(format) {
+  const token = formatToken(format);
+  return token === 'doubles' || token === 'teams' ? 'stroke' : token;
+}
+
+function playFormatKey(playFormat, format) {
+  const explicit = formatToken(playFormat);
+  if (explicit) return explicit;
+  const legacy = formatToken(format);
+  return legacy === 'singles' || legacy === 'doubles' || legacy === 'teams' ? legacy : '';
+}
+
+export function roundFormatLabel(raw) {
+  const ev = raw && typeof raw === 'object' ? raw : {};
+  const play = labelFromToken(PLAY_FORMAT_LABELS, playFormatKey(ev.playFormat ?? ev.play_format, ev.format));
+  const scoring = labelFromToken(SCORING_FORMAT_LABELS, scoringFormatKey(ev.format));
+  return [play, scoring].filter(Boolean).join(' · ');
+}
+
+export function isTeamRound(raw) {
+  const ev = raw && typeof raw === 'object' ? raw : {};
+  const play = playFormatKey(ev.playFormat ?? ev.play_format, ev.format);
+  return ev.teamRequired === true || ev.team_required === true || play === 'doubles' || play === 'teams';
 }
 
 // Bucket a list of raw events into { live, upcoming, past, cancelled }.
@@ -146,6 +201,90 @@ export function groupPlayersByDivision(players) {
     byDivision.get(division).push(player);
   }
   return order.map((division) => ({ division, players: byDivision.get(division) }));
+}
+
+function recordValue(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+function finiteNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function playerScore(player, hole) {
+  const scores = recordValue(player.scores);
+  return finiteNumber(scores[hole]) ?? finiteNumber(scores[String(hole)]);
+}
+
+function singleStandings(snap) {
+  const standings = Array.isArray(snap.standings) ? snap.standings : [];
+  return standings.map((raw) => {
+    const row = recordValue(raw);
+    return {
+      name: cleanString(row.name) || 'Player',
+      division: cleanString(row.division) || null,
+      thru: finiteNumber(row.thru) ?? 0,
+      total: finiteNumber(row.total) ?? 0,
+      toPar: finiteNumber(row.toPar) ?? 0,
+      playersText: '',
+      teamRow: false,
+    };
+  });
+}
+
+function teamDivision(players) {
+  const divisions = players.map((player) => cleanString(recordValue(player).division)).filter(Boolean);
+  return divisions.length && divisions.every((division) => division === divisions[0]) ? divisions[0] : null;
+}
+
+function teamStanding(name, players, holes) {
+  let thru = 0;
+  let total = 0;
+  let toPar = 0;
+  for (const rawHole of holes) {
+    const hole = recordValue(rawHole);
+    const holeNo = finiteNumber(hole.hole);
+    const par = finiteNumber(hole.par);
+    if (holeNo == null) continue;
+    let strokes = null;
+    for (const rawPlayer of players) {
+      strokes = playerScore(recordValue(rawPlayer), holeNo);
+      if (strokes != null) break;
+    }
+    if (strokes == null) continue;
+    thru++;
+    total += strokes;
+    if (par != null) toPar += strokes - par;
+  }
+  return {
+    name,
+    division: teamDivision(players),
+    thru,
+    total,
+    toPar,
+    playersText: players.map((player) => cleanString(recordValue(player).name)).filter(Boolean).join(' / '),
+    teamRow: true,
+  };
+}
+
+export function liveStandingsForDisplay(rawSnap) {
+  const snap = recordValue(rawSnap);
+  if (!isTeamRound(snap)) return singleStandings(snap);
+  const players = Array.isArray(snap.players) ? snap.players : [];
+  const holes = Array.isArray(snap.holes) ? snap.holes : [];
+  if (!players.length || !holes.length) return singleStandings(snap);
+
+  const byTeam = new Map();
+  for (const rawPlayer of players) {
+    const player = recordValue(rawPlayer);
+    const team = cleanString(player.team) || cleanString(player.name) || 'Team';
+    if (!byTeam.has(team)) byTeam.set(team, []);
+    byTeam.get(team).push(player);
+  }
+
+  const rows = [...byTeam.entries()].map(([team, teamPlayers]) => teamStanding(team, teamPlayers, holes));
+  rows.sort((a, b) => a.toPar - b.toPar || a.total - b.total || a.name.localeCompare(b.name));
+  return rows.length ? rows : singleStandings(snap);
 }
 
 // Build a course_id -> course-name lookup from the /courses payload, then a

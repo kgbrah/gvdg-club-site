@@ -70,6 +70,20 @@ describe("admin event management", () => {
     expect(body.events[0]).toMatchObject({ course_name: "West Meadowbrook", layout_name: "Gold", total_par: 54 });
   });
 
+  it("includes play format and course details on public event lists", async () => {
+    const res = await call("/events?status=live", "GET");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { events: { play_format?: string; course_name?: string; layout_name?: string }[] };
+    expect(body.events[0]).toMatchObject({ play_format: "doubles", course_name: "West Meadowbrook", layout_name: "Gold" });
+  });
+
+  it("includes play format and course details on public event detail", async () => {
+    const res = await call("/events/9", "GET");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { event: { play_format?: string; course_name?: string; layout_name?: string; players?: unknown[] } };
+    expect(body.event).toMatchObject({ play_format: "doubles", course_name: "West Meadowbrook", layout_name: "Gold", players: [] });
+  });
+
   it("scopes admin registration updates to the selected event", async () => {
     const state: DbState = {};
     const res = await call("/admin/events/9/registrations/44", "PATCH", { starting_hole: 7, checked_in: true }, await token("m_admin"), state);

@@ -6,6 +6,35 @@ import { bearer, json } from "./http.js";
 import { asInt } from "./input.js";
 import { handleTeeSignImage } from "./tee-sign-routes.js";
 
+type PublicEventFilters = {
+  readonly status?: string;
+  readonly type?: string;
+};
+
+const PUBLIC_EVENT_SELECT = `SELECT e.*, cfg.play_format, co.name AS course_name, l.name AS layout_name
+  FROM events e
+  LEFT JOIN event_config cfg ON cfg.event_id = e.id
+  LEFT JOIN courses co ON co.id = e.course_id
+  LEFT JOIN course_layouts l ON l.id = e.layout_id`;
+
+async function listPublicEvents(database: db.D1Like, opts: PublicEventFilters = {}) {
+  let sql = PUBLIC_EVENT_SELECT;
+  const where: string[] = [];
+  const binds: unknown[] = [];
+  if (opts.status) { where.push("e.status = ?"); binds.push(opts.status); }
+  if (opts.type) { where.push("e.type = ?"); binds.push(opts.type); }
+  if (where.length) sql += " WHERE " + where.join(" AND ");
+  sql += " ORDER BY e.date DESC, e.id DESC";
+  return (await database.prepare(sql).bind(...binds).all()).results;
+}
+
+async function getPublicEvent(database: db.D1Like, id: number) {
+  const event = await database.prepare(PUBLIC_EVENT_SELECT + " WHERE e.id = ?").bind(id).first();
+  if (!event) return null;
+  const players = (await database.prepare("SELECT * FROM event_players WHERE event_id = ? ORDER BY name").bind(id).all()).results;
+  return { ...event, players };
+}
+
 export async function handleClubPublic(
   request: Request,
   env: Env,
@@ -41,11 +70,11 @@ export async function handleClubPublic(
   }
   if (method === "GET" && pathname === "/events") {
     const p = new URL(request.url).searchParams;
-    return json({ events: await db.listEvents(env.DB, { status: p.get("status") ?? undefined, type: p.get("type") ?? undefined }) }, 200, origin);
+    return json({ events: await listPublicEvents(env.DB, { status: p.get("status") ?? undefined, type: p.get("type") ?? undefined }) }, 200, origin);
   }
   if (method === "GET" && seg[0] === "events" && seg.length === 2) {
     const id = asInt(seg[1]);
-    const ev = id == null ? null : await db.getEvent(env.DB, id);
+    const ev = id == null ? null : await getPublicEvent(env.DB, id);
     return ev ? json({ event: ev }, 200, origin) : json({ error: "not_found" }, 404, origin);
   }
   if (method === "GET" && seg[0] === "events" && seg.length === 3 && seg[2] === "results") {

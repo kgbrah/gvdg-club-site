@@ -93,9 +93,9 @@
             header.scrolled .logo-image { height: 35px; }
             .menu-toggle { display: flex; align-items: center; justify-content: center; }
             .nav-right { gap: 1rem; }
-            .nav-links { position: fixed; top: 70px; left: 0; right: 0; background: rgba(26, 26, 46, 0.98); flex-direction: column; gap: 0; padding: 2rem; transform: translateY(-100%); opacity: 0; transition: all 0.3s ease; pointer-events: none; max-height: calc(100vh - 70px); overflow-y: auto; }
+            .nav-links { position: fixed; top: 70px; left: 0; right: 0; background: rgba(26, 26, 46, 0.98); flex-direction: column; gap: 0; padding: 2rem; transform: translate3d(0, -120vh, 0); opacity: 0; visibility: hidden; transition: transform 0.3s ease, opacity 0.3s ease, visibility 0s linear 0.3s; pointer-events: none; max-height: calc(100vh - 70px); overflow-y: auto; z-index: 999; }
             [data-theme="dark"] .nav-links { background: rgba(15, 15, 30, 0.98); }
-            .nav-links.active { transform: translateY(0); opacity: 1; pointer-events: all; }
+            .nav-links.active { transform: translate3d(0, 0, 0); opacity: 1; visibility: visible; transition-delay: 0s; pointer-events: all; }
             .nav-links li { padding: 1.25rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
             .nav-links li:last-child { border-bottom: none; }
             .nav-links a { font-size: 1.1rem; display: block; padding: 0.5rem 0; }
@@ -130,6 +130,7 @@
         .event-name { font-family: 'Bebas Neue', sans-serif; font-size: 1.45rem; line-height: 1.1; color: var(--text-primary); letter-spacing: 0.02em; }
         .event-meta { font-size: 0.9rem; color: var(--text-tertiary); display: flex; flex-direction: column; gap: 0.3rem; }
         .event-meta .meta-row { display: flex; align-items: center; gap: 0.4rem; }
+        .event-meta .meta-label { min-width: 3.6rem; color: var(--text-muted); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
         /* External "register" CTA on schedule-feed (linked) cards */
         .event-cta { margin-top: auto; font-weight: 800; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--primary); }
         /* In-house sign-up cards (members or guests) */
@@ -207,6 +208,11 @@
         .live-banner { display: flex; align-items: center; gap: 0.6rem; background: linear-gradient(135deg, var(--primary), #cc4a1a); color: white; border-radius: 12px; padding: 1rem 1.25rem; margin: 1.25rem 0; font-weight: 700; }
         .live-banner .leaderboard-link { margin-left: auto; color: white; text-decoration: underline; font-size: 0.9rem; font-weight: 600; }
         .live-weather { margin: -0.3rem 0 0.85rem; }
+        .live-round-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.6rem; margin: 0 0 0.9rem; }
+        .live-summary-item { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.7rem 0.85rem; min-width: 0; }
+        [data-theme="dark"] .live-summary-item { background: var(--bg-primary); }
+        .live-summary-label { color: var(--text-muted); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.05em; line-height: 1.2; margin-bottom: 0.25rem; text-transform: uppercase; }
+        .live-summary-value { color: var(--text-primary); font-size: 0.92rem; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
         .weather-strip { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-left: 4px solid var(--secondary); border-radius: 12px; padding: 0.85rem 1rem; }
         [data-theme="dark"] .weather-strip { background: var(--bg-primary); }
         .weather-title { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.5rem; }
@@ -222,6 +228,8 @@
         .lb-table tbody tr:first-child td { font-weight: 700; color: var(--text-primary); }
         .lb-pos { width: 2.5rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
         .lb-name { font-weight: 600; color: var(--text-primary); }
+        .lb-name-main { display: block; }
+        .lb-sub { display: block; margin-top: 0.15rem; color: var(--text-muted); font-size: 0.76rem; font-weight: 500; line-height: 1.35; }
         .lb-topar { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
         .lb-topar.under { color: #2e9e44; }
         .lb-topar.over { color: var(--primary); }
@@ -328,6 +336,7 @@
         </div>
 
         <!-- REGISTER: club events open for sign-up (members or guests) -->
+        <div id="liveEvents" hidden></div>
         <div id="registerSection" hidden></div>
         <div id="casualRoundsSection" hidden></div>
 
@@ -358,9 +367,12 @@
             bucketEvents,
             normalizeEvent,
             groupPlayersByDivision,
+            isTeamRound,
+            liveStandingsForDisplay,
             buildCourseIndex,
             courseNameFor,
             formatEventDate,
+            roundFormatLabel,
             typeLabel,
             statusLabel,
         } from './events.js';
@@ -420,6 +432,7 @@
         const REFRESH_MS = 60 * 1000; // ~60s background refresh on the hub
 
         const statusEl = document.getElementById('status');
+        const liveEl = document.getElementById('liveEvents');
         const registerEl = document.getElementById('registerSection');
         const casualEl = document.getElementById('casualRoundsSection');
         const calendarEl = document.getElementById('calendarEvents');
@@ -472,6 +485,7 @@
 
         function setView(which) {
             statusEl.hidden = which !== 'status';
+            liveEl.hidden = which !== 'hub';
             registerEl.hidden = which !== 'hub';
             casualEl.hidden = which !== 'hub';
             calendarEl.hidden = which !== 'hub';
@@ -600,6 +614,13 @@
                 courseRow.appendChild(el('span', null, courseName));
                 meta.appendChild(courseRow);
             }
+            const formatLabel = roundFormatLabel(ev);
+            if (formatLabel) {
+                const formatRow = el('div', 'meta-row');
+                formatRow.appendChild(el('span', 'meta-label', 'Format'));
+                formatRow.appendChild(el('span', null, formatLabel));
+                meta.appendChild(formatRow);
+            }
             card.appendChild(meta);
 
             if (ev.status) {
@@ -630,12 +651,14 @@
             const feedEvents = (feed && feed.events) || [];
             const { live, upcoming, past } = bucketEvents(d1events || []);
 
+            liveEl.replaceChildren();
+            if (live.length) liveEl.appendChild(section('Live Now', live, { live: true }));
+
             calendarEl.replaceChildren();
             calendarEl.appendChild(groupHeading('Events', 'Disc golf tournaments & league rounds'));
             if (feedEvents.length) calendarEl.appendChild(feedList(feedEvents));
 
             hubEl.replaceChildren();
-            if (live.length) hubEl.appendChild(section('Live Now', live, { live: true }));
             if (upcoming.length) hubEl.appendChild(section('Club-scored — Upcoming', upcoming));
             if (past.length) hubEl.appendChild(section('Club-scored — Past', past));
             if (!feedEvents.length && !live.length && !upcoming.length && !past.length) {
@@ -1261,21 +1284,45 @@
             activeLive = null;
         }
         function fmtToPar(n) { n = n || 0; return n === 0 ? 'E' : (n > 0 ? '+' + n : String(n)); }
-        function renderStandings(container, snap) {
-            const standings = (snap && snap.standings) || [];
-            container.replaceChildren();
+        function plural(n, singular, pluralText) {
+            return `${n} ${n === 1 ? singular : pluralText}`;
+        }
+        function summaryItem(label, value) {
+            const item = el('div', 'live-summary-item');
+            item.appendChild(el('div', 'live-summary-label', label));
+            item.appendChild(el('div', 'live-summary-value', value));
+            return item;
+        }
+        function renderLiveSummary(container, snap, standings) {
+            const summary = el('div', 'live-round-summary');
+            const formatLabel = roundFormatLabel(snap);
+            if (formatLabel) summary.appendChild(summaryItem('Format', formatLabel));
+            const players = Array.isArray(snap && snap.players) ? snap.players : [];
+            if (players.length) summary.appendChild(summaryItem('Players', plural(players.length, 'player', 'players')));
+            if (isTeamRound(snap) && standings.length) {
+                const names = standings.map((row) => row.name).filter(Boolean).join(' / ');
+                summary.appendChild(summaryItem('Teams', names ? `${plural(standings.length, 'team', 'teams')} · ${names}` : plural(standings.length, 'team', 'teams')));
+            }
+            if (summary.childNodes.length) container.appendChild(summary);
+        }
+        function renderStandings(container, snap, rows) {
+            const standings = rows || liveStandingsForDisplay(snap);
             if (!standings.length) { container.appendChild(el('p', 'lb-empty', 'Waiting for the first scores…')); return; }
             const hasDiv = standings.some((s) => s && s.division);
+            const nameHeading = isTeamRound(snap) ? 'Team' : 'Player';
             const table = el('table', 'lb-table');
             const thead = el('thead'); const htr = el('tr');
-            const cols = hasDiv ? ['Pos', 'Player', 'Div', 'Thru', 'Total', 'To Par'] : ['Pos', 'Player', 'Thru', 'Total', 'To Par'];
+            const cols = hasDiv ? ['Pos', nameHeading, 'Div', 'Thru', 'Total', 'To Par'] : ['Pos', nameHeading, 'Thru', 'Total', 'To Par'];
             cols.forEach((h) => htr.appendChild(el('th', null, h)));
             thead.appendChild(htr); table.appendChild(thead);
             const tbody = el('tbody');
             standings.forEach((s, i) => {
                 const tr = el('tr');
                 tr.appendChild(el('td', 'lb-pos', String(i + 1)));
-                tr.appendChild(el('td', 'lb-name', s && s.name != null ? String(s.name) : 'Player'));
+                const nameCell = el('td', 'lb-name');
+                nameCell.appendChild(el('span', 'lb-name-main', s && s.name != null ? String(s.name) : nameHeading));
+                if (s && s.playersText) nameCell.appendChild(el('span', 'lb-sub', String(s.playersText)));
+                tr.appendChild(nameCell);
                 if (hasDiv) tr.appendChild(el('td', null, (s && s.division) || '—'));
                 tr.appendChild(el('td', null, s && s.thru ? String(s.thru) : '—'));
                 tr.appendChild(el('td', null, s && s.total != null && s.thru ? String(s.total) : '—'));
@@ -1289,7 +1336,10 @@
         }
         function renderLiveSnapshot(container, weatherEl, snap) {
             if (window.GVDGWeather && weatherEl) window.GVDGWeather.renderWeather(weatherEl, snap && snap.weather, { title: 'Round weather' });
-            renderStandings(container, snap);
+            const standings = liveStandingsForDisplay(snap);
+            container.replaceChildren();
+            renderLiveSummary(container, snap, standings);
+            renderStandings(container, snap, standings);
         }
         function mountLiveLeaderboard(eventId, container, statusEl, weatherEl) {
             teardownLive();
@@ -1481,7 +1531,8 @@
 
             const facts = el('div', 'detail-facts');
             facts.appendChild(fact('Date', formatEventDate(ev.date)));
-            if (ev.format) facts.appendChild(fact('Format', ev.format));
+            const formatLabel = roundFormatLabel(ev);
+            if (formatLabel) facts.appendChild(fact('Format', formatLabel));
 
             const courseName = courseNameFor(courseIndex, ev.course_id);
             const course = courseIndex.get(String(ev.course_id));

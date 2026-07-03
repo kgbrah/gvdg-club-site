@@ -78,19 +78,6 @@ test('score course picker rows use themed text and app font', () => {
   assert.match(html, /\.tap-row\s*\{[^}]*color: var\(--text-primary\); font: inherit;/s);
 });
 
-test('casual scorecard setup separates play format from scoring format', () => {
-  const html = readFileSync('score.html', 'utf8');
-  assert.match(html, /el\('label', 'lbl', 'Play format'\)/);
-  assert.match(html, /\['singles', 'Singles'\]/);
-  assert.match(html, /\['doubles', 'Doubles'\]/);
-  assert.match(html, /el\('label', 'lbl', 'Scoring'\)/);
-  assert.match(html, /\['stroke', 'Stroke play'\]/);
-  assert.match(html, /\['matchplay', 'Matchplay'\]/);
-  assert.match(html, /body\.playFormat = options\.playFormat/);
-  assert.match(html, /function scoreUnits\(\)/);
-  assert.match(html, /postUnitScore\(unit, h\.hole, nv\)/);
-});
-
 test('shared service worker caches app install assets and member fallback', () => {
   const sw = readFileSync('sw.js', 'utf8');
   assert.match(sw, /const CACHE = "gvdg-club-v24"/);

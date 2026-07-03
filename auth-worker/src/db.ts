@@ -376,10 +376,11 @@ export async function listMemberLiveEvents(db: D1Like, memberId: string) {
            UNION ALL
            SELECT event_id, division FROM event_players WHERE member_id = ?
          )
-         SELECT e.id, e.name, e.type, e.date, e.status, e.course_id, e.layout_id,
-                c.name AS course_name, l.name AS layout_name, MAX(member_events.division) AS division
+         SELECT e.id, e.name, e.type, e.date, e.status, e.format, e.course_id, e.layout_id,
+                cfg.play_format, c.name AS course_name, l.name AS layout_name, MAX(member_events.division) AS division
          FROM member_events
          JOIN events e ON e.id = member_events.event_id
+         LEFT JOIN event_config cfg ON cfg.event_id = e.id
          LEFT JOIN courses c ON c.id = e.course_id
          LEFT JOIN course_layouts l ON l.id = e.layout_id
          WHERE e.status = 'live'
