@@ -47,20 +47,38 @@ export function parseEventDate(raw) {
   return d;
 }
 
+// The club runs on Eastern time — show ALL wall-clock times in it regardless of the viewer's timezone.
+// (America/New_York tracks EST/EDT automatically.)
+export const CLUB_TIME_ZONE = 'America/New_York';
+
 // Format a date for display. Tolerates ISO strings, Date objects and nulls.
-// Bare YYYY-MM-DD values are rendered without a time (so a date-only event
-// doesn't show a spurious "12:00 AM" from the local-midnight parse).
+// A bare YYYY-MM-DD is a calendar date: render it in UTC (parseEventDate made it UTC-midnight) so it never
+// shifts a day backward in a behind-UTC zone — the old local render turned a July 4 event into "July 3" in
+// Eastern. A full timestamp is a wall-clock instant: render it in club (Eastern) time.
 export function formatEventDate(raw) {
   const d = parseEventDate(raw);
   if (!d) return 'Date TBD';
   const dateOnly = typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.trim());
   const opts = dateOnly
-    ? { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }
-    : { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' };
+    ? { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }
+    : { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: CLUB_TIME_ZONE, timeZoneName: 'short' };
   try {
     return d.toLocaleString([], opts);
   } catch (_e) {
     return d.toDateString();
+  }
+}
+
+// Format a timestamp (ISO instant) as an Eastern-time wall clock, e.g. "Sat, Jul 4, 9:00 AM EDT".
+// Used for scheduled start + registration/check-in deadlines. Returns '' for empty/invalid input.
+export function formatClubDateTime(raw) {
+  if (raw == null || raw === '') return '';
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return '';
+  try {
+    return d.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: CLUB_TIME_ZONE, timeZoneName: 'short' });
+  } catch (_e) {
+    return d.toISOString();
   }
 }
 
@@ -76,6 +94,9 @@ export function normalizeEvent(raw) {
     status: ev.status != null ? String(ev.status) : 'scheduled',
     format: ev.format != null ? String(ev.format) : '',
     date: ev.date != null ? String(ev.date) : null,
+    starts_at: ev.starts_at != null ? String(ev.starts_at) : null,
+    registration_deadline: ev.registration_deadline != null ? String(ev.registration_deadline) : null,
+    checkin_deadline: ev.checkin_deadline != null ? String(ev.checkin_deadline) : null,
     course_id: ev.course_id != null ? String(ev.course_id) : '',
     layout_id: ev.layout_id != null ? String(ev.layout_id) : '', // selected scoring layout (T4 tee-sign render)
     league_id: ev.league_id != null ? String(ev.league_id) : '',

@@ -365,6 +365,7 @@
             buildCourseIndex,
             courseNameFor,
             formatEventDate,
+            formatClubDateTime,
             typeLabel,
             statusLabel,
         } from './events.js';
@@ -969,7 +970,7 @@
         function formatRoundTime(raw) {
             const d = new Date(raw);
             if (!Number.isFinite(d.getTime())) return raw || 'Time TBD';
-            return d.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+            return d.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' });
         }
 
         async function layoutsForCourse(courseId) {
@@ -1571,6 +1572,10 @@
 
             const facts = el('div', 'detail-facts');
             facts.appendChild(fact('Date', formatEventDate(ev.date)));
+            // Scheduled start + sign-up/check-in cutoffs, shown in club (Eastern) time when set.
+            if (ev.starts_at) facts.appendChild(fact('Starts', formatClubDateTime(ev.starts_at)));
+            if (ev.registration_deadline) facts.appendChild(fact('Registration closes', formatClubDateTime(ev.registration_deadline)));
+            if (ev.checkin_deadline) facts.appendChild(fact('Check-in closes', formatClubDateTime(ev.checkin_deadline)));
             if (ev.format) facts.appendChild(fact('Format', ev.format));
 
             const courseName = courseNameFor(courseIndex, ev.course_id);
