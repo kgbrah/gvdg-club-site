@@ -4,7 +4,6 @@ import { upsertLayoutRatingBaseline, upsertPlayerRatingFromRounds } from "./rati
 import { listMembers, type AdminMember } from "./roster.js";
 import type { RatingStream } from "./rating-engine.js";
 import { recomputeRatingRows, type RecomputedLayoutBaseline, type RecomputedRoundRating, type StoredRoundRating } from "./ratings-recompute-core.js";
-import { ratingWeatherFromJson } from "./weather.js";
 
 export type RatingsRecomputeResult = {
   readonly pdgaRefreshed: number;
@@ -24,7 +23,6 @@ type StoredRoundRow = {
   readonly total: number;
   readonly to_par: number | null;
   readonly wind_gust_mph: number | null;
-  readonly weather: string | null;
 };
 
 type LayoutBaselineRow = {
@@ -98,9 +96,8 @@ async function loadRoundRows(db: D1Database): Promise<StoredRoundRating[]> {
   const rows = await db
     .prepare(
       `SELECT rr.id, rr.member_id, rr.stream, rr.event_id, rr.casual_round_code, rr.layout_id,
-              rr.round_date, rr.total, rr.to_par, rr.wind_gust_mph, r.weather
+              rr.round_date, rr.total, rr.to_par, rr.wind_gust_mph
        FROM round_ratings rr
-       LEFT JOIN results r ON r.event_id = rr.event_id AND r.member_id = rr.member_id
        ORDER BY rr.round_date, rr.id`,
     )
     .all<StoredRoundRow>();
@@ -114,7 +111,7 @@ async function loadRoundRows(db: D1Database): Promise<StoredRoundRating[]> {
     roundDate: row.round_date,
     total: row.total,
     toPar: row.to_par,
-    windGustMph: finiteNumber(row.wind_gust_mph) ?? ratingWeatherFromJson(row.weather).windGustMph,
+    windGustMph: finiteNumber(row.wind_gust_mph),
   }));
 }
 
