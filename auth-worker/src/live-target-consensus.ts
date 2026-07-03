@@ -40,7 +40,20 @@ export function scoreTargetConflicts(players: PlayerState[], holes: ScoreHole[],
   return conflicts;
 }
 
-export function scoreTargetConsensusIssues(players: PlayerState[], holes: ScoreHole[], targets: readonly ScoreTarget[]): ConsensusIssues {
+export function scoreTargetConsensusIssues(
+  players: PlayerState[],
+  holes: ScoreHole[],
+  targets: readonly ScoreTarget[],
+  opts: { readonly casual?: boolean } = {},
+): ConsensusIssues {
+  const missing = opts.casual ? casualTargetMissing(players, holes, targets) : competitionTargetMissing(players, holes, targets);
+  return { conflicts: scoreTargetConflicts(players, holes, targets), missing };
+}
+
+// Casual: whoever is keeping the card can finalize. Every MEMBER on the card must have voted on each hole,
+// which — when only one member is logged in and scoring (guests are optional, see requiredScorerIds) —
+// collapses to that single scorekeeper. So a solo casual round finalizes once every hole is scored.
+function casualTargetMissing(players: PlayerState[], holes: ScoreHole[], targets: readonly ScoreTarget[]): MissingScoreConsensus[] {
   const missing: MissingScoreConsensus[] = [];
   for (const target of targets) {
     const anchor = activeTargetPlayers(players, target)[0];
@@ -54,7 +67,39 @@ export function scoreTargetConsensusIssues(players: PlayerState[], holes: ScoreH
       missing.push(targetMissing({ target, anchor, hole: hole.hole, missing: missingCount, required: requiredScorers.length }));
     }
   }
-  return { conflicts: scoreTargetConflicts(players, holes, targets), missing };
+  return missing;
+}
+
+// Competition: each competing SIDE must confirm the card itself.
+//  • Singles (player targets): unchanged — every member on the card attests each score (for a head-to-head
+//    card that already means both sides confirm), preserving cross-attestation.
+//  • Teams (doubles/matchplay pairs): >=1 of the TEAM's OWN registered (non-guest) members must confirm
+//    each hole — "at least one registered player from each team submits a matching scorecard". A team with
+//    no registered member can never confirm, so its holes stay "missing" (finalize needs an admin override).
+// Matching across sides is enforced separately by the conflict check.
+function competitionTargetMissing(players: PlayerState[], holes: ScoreHole[], targets: readonly ScoreTarget[]): MissingScoreConsensus[] {
+  const missing: MissingScoreConsensus[] = [];
+  for (const target of targets) {
+    const anchor = activeTargetPlayers(players, target)[0];
+    if (!anchor) continue;
+    if (target.type === "player") {
+      const requiredScorers = requiredScorerIds(players, anchor.player);
+      if (requiredScorers.length === 0) continue;
+      for (const hole of holes) {
+        const voted = targetVotedScorerIds(players, target, hole.hole);
+        const missingCount = requiredScorers.filter((scorerId) => !voted.has(scorerId)).length;
+        if (missingCount > 0) missing.push(targetMissing({ target, anchor, hole: hole.hole, missing: missingCount, required: requiredScorers.length }));
+      }
+      continue;
+    }
+    const teamScorers = registeredTargetScorerIds(players, target);
+    for (const hole of holes) {
+      const voted = targetVotedScorerIds(players, target, hole.hole);
+      if (teamScorers.some((id) => voted.has(id))) continue; // this team confirmed the hole
+      missing.push(targetMissing({ target, anchor, hole: hole.hole, missing: 1, required: Math.max(1, teamScorers.length) }));
+    }
+  }
+  return missing;
 }
 
 export function purgeScoreTargetScorerVotes(players: PlayerState[], removedIndex: number, holes: ScoreHole[], targets: readonly ScoreTarget[]): void {
@@ -213,6 +258,19 @@ function requiredScorerIds(players: PlayerState[], target: PlayerState): string[
   for (let index = 0; index < players.length; index++) {
     const player = players[index];
     if (!player || player.removed || (player.cardId ?? null) !== cardId) continue;
+    if (!player.memberId || player.memberId.startsWith("g_")) continue;
+    ids.push(playerScorerId(index));
+  }
+  return ids;
+}
+
+// Scorer ids of the registered (non-guest) members ON a specific team/target — used by the competition
+// gate to require each side to confirm the card itself (not just anyone on the card).
+function registeredTargetScorerIds(players: PlayerState[], target: ScoreTarget): string[] {
+  const ids: string[] = [];
+  for (const index of target.playerIndexes) {
+    const player = players[index];
+    if (!player || player.removed) continue;
     if (!player.memberId || player.memberId.startsWith("g_")) continue;
     ids.push(playerScorerId(index));
   }

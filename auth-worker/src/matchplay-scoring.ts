@@ -10,6 +10,9 @@ export interface MatchStatus {
   readonly lead: number;
   readonly holesRemaining: number;
   readonly opponent: string;
+  /** Dormie: the leader is up by exactly the number of holes left, so winning OR halving the current hole
+   *  clinches the match (the trailer can at best force a tie by winning every remaining hole). */
+  readonly dormie: boolean;
 }
 
 export type MatchplaySide = {
@@ -50,7 +53,10 @@ export function summarizeMatchplay(input: {
 
   const holesRemaining = Math.max(0, input.holes.length - played);
   const lead = leftWins - rightWins;
-  const status = matchStatusLabel(lead, holesRemaining);
+  // Dormie: the leader's margin equals the holes left AND the match isn't already decided/over — a win or a
+  // halve on the current hole ends it. A match-level property, so it's the same for both sides.
+  const dormie = Math.abs(lead) > 0 && Math.abs(lead) === holesRemaining && holesRemaining > 0;
+  const status = matchStatusLabel(lead, holesRemaining, dormie);
   const isFinal = holesRemaining === 0 || Math.abs(lead) > holesRemaining;
   const rightLead = lead === 0 ? 0 : -lead;
   return {
@@ -68,6 +74,7 @@ export function summarizeMatchplay(input: {
           lead,
           holesRemaining,
           opponent: rightName,
+          dormie,
         },
       },
       {
@@ -82,6 +89,7 @@ export function summarizeMatchplay(input: {
           lead: rightLead,
           holesRemaining,
           opponent: leftName,
+          dormie,
         },
       },
     ],
@@ -140,10 +148,11 @@ function liveOutcome(lead: number): MatchStatus["outcome"] {
   return "draw";
 }
 
-function matchStatusLabel(lead: number, holesRemaining: number): string {
+function matchStatusLabel(lead: number, holesRemaining: number, dormie: boolean): string {
   const margin = Math.abs(lead);
   if (margin === 0) return "AS";
   if (margin > holesRemaining) return `won ${margin}&${holesRemaining}`;
+  if (dormie) return `${margin} up (dormie)`;
   return `${margin} up`;
 }
 

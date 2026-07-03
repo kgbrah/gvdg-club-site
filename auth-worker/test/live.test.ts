@@ -582,24 +582,32 @@ describe("live consensus score targets", () => {
     expect(card[1]?.scores).not.toHaveProperty("1");
   });
 
-  it("counts a missing pair target confirmation once instead of once per member", () => {
+  it("competition: a team is confirmed by ONE of its registered members (not all)", () => {
     const card = players();
-
     recordScoreTargetVote({ players: card, target: pairTarget, scorerId: "player:0", hole: 1, strokes: 3 });
+    // >=1 registered member of the pair confirmed the hole → the team is confirmed (its partner need not vote).
+    expect(scoreTargetConsensusIssues(card, holes, [pairTarget]).missing).toEqual([]);
+  });
 
-    expect(scoreTargetConsensusIssues(card, holes, [pairTarget]).missing).toEqual([
-      {
-        cardId: "c0",
-        playerIndex: 0,
-        playerName: "Blue Pair",
-        hole: 1,
-        missing: 1,
-        required: 2,
-        targetId: "pair:blue",
-        targetType: "pair",
-        playerIndexes: [0, 1],
-      },
-    ]);
+  it("competition: a team with NO registered member cannot be confirmed", () => {
+    const card: PlayerState[] = [
+      { memberId: null, name: "Guest A", cardId: "c0", scores: {} },
+      { memberId: "g_tok", name: "Guest B", cardId: "c0", scores: {} },
+    ];
+    const guestPair = { type: "pair", id: "pair:blue", label: "Blue Pair", playerIndexes: [0, 1], memberIds: [null, "g_tok"] } satisfies ScoreTarget;
+    recordScoreTargetVote({ players: card, target: guestPair, scorerId: "player:0", hole: 1, strokes: 3 });
+    // No registered (non-guest) player on the team → the hole stays missing; finalize needs a real confirmer.
+    expect(scoreTargetConsensusIssues(card, holes, [guestPair]).missing).toHaveLength(1);
+  });
+
+  it("casual: a single logged-in member confirms the whole card (guests optional)", () => {
+    const card: PlayerState[] = [
+      { memberId: "m0", name: "A", cardId: "c0", scores: {} }, // the only logged-in member/scorekeeper
+      { memberId: null, name: "Guest", cardId: "c0", scores: {} }, // walk-on guest
+    ];
+    recordScoreTargetVote({ players: card, target: pairTarget, scorerId: "player:0", hole: 1, strokes: 3 });
+    // casual: the solo scorekeeper's vote is enough — no missing, so the round finalizes without a force.
+    expect(scoreTargetConsensusIssues(card, holes, [pairTarget], { casual: true }).missing).toEqual([]);
   });
 
   it("purges a removed scorer's stale pair-target vote and restores the agreed pair score", () => {
@@ -1553,8 +1561,8 @@ describe("LiveEventDO config-aware score targets and final results", () => {
     expect(finalized.status).toBe(200);
     const resultRows = inserts.filter((i) => /INSERT INTO results/i.test(i.sql));
     expect(resultRows.map((i) => ({ name: i.args[2], place: i.args[3], match: JSON.parse(i.args[10] as string) }))).toEqual([
-      { name: "Winner", place: 1, match: { status: "won 2&0", outcome: "won", holesWon: 2, holesLost: 0, holesTied: 0, lead: 2, holesRemaining: 0, opponent: "Loser" } },
-      { name: "Loser", place: 2, match: { status: "won 2&0", outcome: "lost", holesWon: 0, holesLost: 2, holesTied: 0, lead: -2, holesRemaining: 0, opponent: "Winner" } },
+      { name: "Winner", place: 1, match: { status: "won 2&0", outcome: "won", holesWon: 2, holesLost: 0, holesTied: 0, lead: 2, holesRemaining: 0, opponent: "Loser", dormie: false } },
+      { name: "Loser", place: 2, match: { status: "won 2&0", outcome: "lost", holesWon: 0, holesLost: 2, holesTied: 0, lead: -2, holesRemaining: 0, opponent: "Winner", dormie: false } },
     ]);
   });
 

@@ -101,8 +101,8 @@ export function scoreConflicts(players: PlayerState[], holes: ScoreHole[], targe
   return conflicts;
 }
 
-export function scorecardConsensusIssues(players: PlayerState[], holes: ScoreHole[], targets?: readonly ScoreTarget[]): ConsensusIssues {
-  if (targets) return scoreTargetConsensusIssues(players, holes, targets);
+export function scorecardConsensusIssues(players: PlayerState[], holes: ScoreHole[], targets?: readonly ScoreTarget[], opts: { readonly casual?: boolean } = {}): ConsensusIssues {
+  if (targets) return scoreTargetConsensusIssues(players, holes, targets, opts);
   const missing: MissingScoreConsensus[] = [];
   for (let index = 0; index < players.length; index++) {
     const player = players[index];

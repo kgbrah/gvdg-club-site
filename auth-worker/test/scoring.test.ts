@@ -235,8 +235,8 @@ describe("config-aware live standings", () => {
 
     // Then the match status is all square and row order is side order, not total-to-par ranking.
     expect(live.map(({ name, total, match }) => ({ name, total, match }))).toEqual([
-      { name: "Ann", total: 8, match: { status: "AS", outcome: "draw", holesWon: 1, holesLost: 1, holesTied: 0, lead: 0, holesRemaining: 0, opponent: "Bo" } },
-      { name: "Bo", total: 8, match: { status: "AS", outcome: "draw", holesWon: 1, holesLost: 1, holesTied: 0, lead: 0, holesRemaining: 0, opponent: "Ann" } },
+      { name: "Ann", total: 8, match: { status: "AS", outcome: "draw", holesWon: 1, holesLost: 1, holesTied: 0, lead: 0, holesRemaining: 0, opponent: "Bo", dormie: false } },
+      { name: "Bo", total: 8, match: { status: "AS", outcome: "draw", holesWon: 1, holesLost: 1, holesTied: 0, lead: 0, holesRemaining: 0, opponent: "Ann", dormie: false } },
     ]);
   });
 
@@ -252,10 +252,10 @@ describe("config-aware live standings", () => {
     // When matchplay standings are computed.
     const live = computeLiveStandings({ holes: twoHoleLayout, players, config, targets });
 
-    // Then the leading side reports one up without relying on total-to-par placement.
+    // Then the leading side is 1 up with 1 to play = DORMIE (a win or a halve on the last hole clinches it).
     expect(live.map(({ name, match }) => ({ name, match }))).toEqual([
-      { name: "Ann", match: { status: "1 up", outcome: "leading", holesWon: 1, holesLost: 0, holesTied: 0, lead: 1, holesRemaining: 1, opponent: "Bo" } },
-      { name: "Bo", match: { status: "1 up", outcome: "trailing", holesWon: 0, holesLost: 1, holesTied: 0, lead: -1, holesRemaining: 1, opponent: "Ann" } },
+      { name: "Ann", match: { status: "1 up (dormie)", outcome: "leading", holesWon: 1, holesLost: 0, holesTied: 0, lead: 1, holesRemaining: 1, opponent: "Bo", dormie: true } },
+      { name: "Bo", match: { status: "1 up (dormie)", outcome: "trailing", holesWon: 0, holesLost: 1, holesTied: 0, lead: -1, holesRemaining: 1, opponent: "Ann", dormie: true } },
     ]);
   });
 
@@ -274,8 +274,8 @@ describe("config-aware live standings", () => {
 
     // Then winner and loser rows carry the same closed match status metadata.
     expect(finalized.map(({ name, place, matchResult }) => ({ name, place, matchResult }))).toEqual([
-      { name: "Ann", place: 1, matchResult: { status: "won 2&1", outcome: "won", holesWon: 2, holesLost: 0, holesTied: 0, lead: 2, holesRemaining: 1, opponent: "Bo" } },
-      { name: "Bo", place: 2, matchResult: { status: "won 2&1", outcome: "lost", holesWon: 0, holesLost: 2, holesTied: 0, lead: -2, holesRemaining: 1, opponent: "Ann" } },
+      { name: "Ann", place: 1, matchResult: { status: "won 2&1", outcome: "won", holesWon: 2, holesLost: 0, holesTied: 0, lead: 2, holesRemaining: 1, opponent: "Bo", dormie: false } },
+      { name: "Bo", place: 2, matchResult: { status: "won 2&1", outcome: "lost", holesWon: 0, holesLost: 2, holesTied: 0, lead: -2, holesRemaining: 1, opponent: "Ann", dormie: false } },
     ]);
   });
 
@@ -296,10 +296,10 @@ describe("config-aware live standings", () => {
 
     // Then both members on a side receive the same side result and pair metadata.
     expect(finalized.map(({ name, place, scoringGroup, matchResult }) => ({ name, place, scoringGroup, matchResult }))).toEqual([
-      { name: "Ann", place: 1, scoringGroup: { targetId: "pair:alpha", targetType: "pair", label: "Alpha", members: ["Ann", "Bo"] }, matchResult: { status: "won 2&1", outcome: "won", holesWon: 2, holesLost: 0, holesTied: 0, lead: 2, holesRemaining: 1, opponent: "Beta" } },
-      { name: "Bo", place: 1, scoringGroup: { targetId: "pair:alpha", targetType: "pair", label: "Alpha", members: ["Ann", "Bo"] }, matchResult: { status: "won 2&1", outcome: "won", holesWon: 2, holesLost: 0, holesTied: 0, lead: 2, holesRemaining: 1, opponent: "Beta" } },
-      { name: "Cy", place: 2, scoringGroup: { targetId: "pair:beta", targetType: "pair", label: "Beta", members: ["Cy", "Dee"] }, matchResult: { status: "won 2&1", outcome: "lost", holesWon: 0, holesLost: 2, holesTied: 0, lead: -2, holesRemaining: 1, opponent: "Alpha" } },
-      { name: "Dee", place: 2, scoringGroup: { targetId: "pair:beta", targetType: "pair", label: "Beta", members: ["Cy", "Dee"] }, matchResult: { status: "won 2&1", outcome: "lost", holesWon: 0, holesLost: 2, holesTied: 0, lead: -2, holesRemaining: 1, opponent: "Alpha" } },
+      { name: "Ann", place: 1, scoringGroup: { targetId: "pair:alpha", targetType: "pair", label: "Alpha", members: ["Ann", "Bo"] }, matchResult: { status: "won 2&1", outcome: "won", holesWon: 2, holesLost: 0, holesTied: 0, lead: 2, holesRemaining: 1, opponent: "Beta", dormie: false } },
+      { name: "Bo", place: 1, scoringGroup: { targetId: "pair:alpha", targetType: "pair", label: "Alpha", members: ["Ann", "Bo"] }, matchResult: { status: "won 2&1", outcome: "won", holesWon: 2, holesLost: 0, holesTied: 0, lead: 2, holesRemaining: 1, opponent: "Beta", dormie: false } },
+      { name: "Cy", place: 2, scoringGroup: { targetId: "pair:beta", targetType: "pair", label: "Beta", members: ["Cy", "Dee"] }, matchResult: { status: "won 2&1", outcome: "lost", holesWon: 0, holesLost: 2, holesTied: 0, lead: -2, holesRemaining: 1, opponent: "Alpha", dormie: false } },
+      { name: "Dee", place: 2, scoringGroup: { targetId: "pair:beta", targetType: "pair", label: "Beta", members: ["Cy", "Dee"] }, matchResult: { status: "won 2&1", outcome: "lost", holesWon: 0, holesLost: 2, holesTied: 0, lead: -2, holesRemaining: 1, opponent: "Alpha", dormie: false } },
     ]);
   });
 
