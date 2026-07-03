@@ -222,9 +222,11 @@ export async function fetchCurrentWeather(
     if (!response.ok) return null;
     const payload: unknown = await response.json();
     return parseOpenMeteoCurrent(payload, fetchedAt);
-  } catch (error) {
-    if (error instanceof Error) return null;
-    throw error;
+  } catch {
+    // Weather is best-effort: swallow EVERYTHING, including a non-Error abort DOMException on timeout
+    // (which is not always `instanceof Error` in workerd) — never let a weather fetch throw, or the DO
+    // alarm that awaits it crashes and wedges the Durable Object.
+    return null;
   } finally {
     clearTimeout(timeoutId);
   }

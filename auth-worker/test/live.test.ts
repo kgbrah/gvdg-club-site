@@ -779,6 +779,25 @@ describe("LiveEventDO card-scoped scoring", () => {
     expect(body.weather?.history.map((s) => s.observedAt)).toEqual(["2026-07-01T08:00"]);
   });
 
+  it("a failing weather fetch never crashes the alarm — the round stays live + usable", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-01T12:00:00.000Z"));
+    // A timeout/abort can throw a NON-Error (a DOMException in workerd); an uncaught throw here would wedge
+    // the whole Durable Object (score/cancel/finalize would then fail with "internal error").
+    vi.stubGlobal("fetch", vi.fn(async () => { throw { name: "AbortError", message: "timed out" }; }));
+    const state = new FakeState({});
+    const live = new LiveEventDO(state, { DB: db });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      casual: true, startedAt: "2026-07-01T12:00:00.000Z", holes: [{ hole: 1, par: 3 }],
+      players: [{ memberId: "m_a", name: "A" }], weatherLocation: { lat: 35.6, lng: -77.3, label: "North Rec" },
+    }) }));
+    await expect(live.alarm()).resolves.toBeUndefined(); // must NOT throw
+    expect(state.alarmAt).not.toBeNull(); // rescheduled despite the fetch failure
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { status: string; weather: { error: string | null } | null };
+    expect(snap.status).toBe("live"); // DO is healthy; the round is still fully usable
+    expect(snap.weather?.error).toBe("weather_unavailable"); // failure surfaced, not thrown
+  });
+
   it("lets cardmates enter guest-token scorecards but not another member's scorecard", async () => {
     const live = liveDO();
     await start(live, [
