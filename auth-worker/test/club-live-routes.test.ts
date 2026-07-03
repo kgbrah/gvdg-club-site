@@ -308,6 +308,40 @@ describe("club live competition formats", () => {
     ]);
   });
 
+  it("falls back to the full roster when the check-in deadline passed but nobody used in-app check-in", async () => {
+    const state: DbState = {
+      eventRow: {
+        id: 2,
+        type: "tournament",
+        name: "Morning Flex",
+        status: "scheduled",
+        format: "stroke",
+        course_id: 2,
+        layout_id: 1,
+        checkin_deadline: new Date(Date.now() - 60_000).toISOString(),
+      },
+      eventConfig: { play_format: "singles" },
+      registrations: [
+        { member_id: "a", name: "Ada", team: null, division: "MA1", starting_hole: 1, checked_in: 0 },
+        { member_id: "b", name: "Ben", team: null, division: "MA1", starting_hole: 1, checked_in: 0 },
+      ],
+    };
+    const res = await handleClubLive(
+      new Request("https://w/events/2/live/start", { method: "POST", headers: await adminHeader(), body: JSON.stringify({}) }),
+      env(state),
+      null,
+      "POST",
+      ["events", "2", "live", "start"],
+    );
+
+    if (!res) throw new Error("missing_response");
+    expect(res.status).toBe(200); // NOT no_checked_in_players — paper-tracked clubs can still start
+    expect(state.startBody?.players).toEqual([
+      { memberId: "a", name: "Ada", team: null, division: "MA1", startingHole: 1, ratingAnchor: null },
+      { memberId: "b", name: "Ben", team: null, division: "MA1", startingHole: 1, ratingAnchor: null },
+    ]);
+  });
+
   it("rejects doubles live scoring start when teams are missing", async () => {
     const state: DbState = {
       eventRow: { id: 2, type: "tournament", name: "Doubles Match", status: "scheduled", format: "matchplay", course_id: 2, layout_id: 1 },

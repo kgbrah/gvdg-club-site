@@ -119,7 +119,9 @@ export async function handleClubRegistration(
   if (seg[2] === "register" && method === "POST") {
     const event = (await db.getEventSchedule(env.DB, eid)) as EventSchedule | null;
     if (!event || (event.status !== "scheduled" && event.status !== "live")) return json({ error: "registration_closed" }, 403, origin);
-    if (deadlinePassed(event.registration_deadline)) return json({ error: "registration_closed" }, 403, origin);
+    // NB: the registration_deadline gate is applied below, AFTER we know whether this is a new sign-up or an
+    // edit — a passed deadline closes NEW registrations but must not block an existing registrant from
+    // correcting their entry (removing an add-on / changing division, which lowers or keeps the amount owed).
     const cfg = (await db.getEventConfig(env.DB, eid)) as RegistrationEventConfig | null;
     if (!cfg || cfg.registration_open !== 1) return json({ error: "registration_closed" }, 403, origin);
     const b = (await readJson(request)) ?? {};
@@ -148,6 +150,8 @@ export async function handleClubRegistration(
     // never charged — that would put the registrant into a real-cash pool for free. Block any change that
     // raises the amount owed above what was actually captured (removing add-ons / editing division is fine).
     const existing = (await db.getMyRegistration(env.DB, eid, memberId)) as { paid_entry?: number; amount_paid_cents?: number } | null;
+    // A passed registration deadline closes NEW sign-ups; an existing registrant may still edit their entry.
+    if (!existing && deadlinePassed(event.registration_deadline)) return json({ error: "registration_closed" }, 403, origin);
     if (existing?.paid_entry === 1) {
       const owedNow = computeOwed(cfg, selectedAddons);
       if (owedNow > (existing.amount_paid_cents ?? 0)) return json({ error: "paid_addons_locked" }, 409, origin);

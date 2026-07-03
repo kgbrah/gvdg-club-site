@@ -234,7 +234,11 @@ export async function handleClubLive(
       const weatherLocation = weatherLocationForCourse(evCourse, evLayout);
       const regs = (await db.listRegistrations(env.DB, eid)) as { member_id?: string; name?: string; team?: string | null; division?: string | null; starting_hole?: number | null; checked_in?: number | null }[];
       const useRegistrationRoster = regs.length > 0 && startBody.from !== "players";
-      const scoringRegs = deadlinePassed(ev.checkin_deadline) ? regs.filter((r) => Number(r.checked_in ?? 0) === 1) : regs;
+      // After the check-in deadline, score only checked-in registrants — BUT only when someone actually
+      // used the in-app Check-in. Clubs that track attendance on paper never set checked_in, so fall back
+      // to the full roster instead of hard-failing the round start with no_checked_in_players.
+      const anyCheckedIn = regs.some((r) => Number(r.checked_in ?? 0) === 1);
+      const scoringRegs = deadlinePassed(ev.checkin_deadline) && anyCheckedIn ? regs.filter((r) => Number(r.checked_in ?? 0) === 1) : regs;
       if (useRegistrationRoster && scoringRegs.length === 0) return json({ error: "no_checked_in_players" }, 400, origin);
       const rawPlayers: StartPlayer[] =
         useRegistrationRoster

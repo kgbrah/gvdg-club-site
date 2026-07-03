@@ -48,6 +48,9 @@ function mockDb(cfg: Record<string, unknown> | null, status = "scheduled", sched
       if (/SELECT status(?:, starts_at, registration_deadline, checkin_deadline)? FROM events/i.test(sql)) return event;
       if (/INSERT INTO event_config/i.test(sql) || /FROM event_config/i.test(sql)) return cfg;
       if (/FROM registrations WHERE id/i.test(sql)) return { id: 1, member_id: "m_jane" };
+      // getMyRegistration (SELECT * FROM registrations WHERE event_id = ? AND member_id = ?): returns an
+      // existing registration only when the test asks for one, so we can exercise the edit-vs-new paths.
+      if (/SELECT \* FROM registrations WHERE event_id/i.test(sql)) return schedule.existingReg ? { id: 1, member_id: "m_jane", division: "MA1", paid_entry: 0, amount_paid_cents: 0, checked_in: 0, addons: "{}" } : null;
       if (/INSERT INTO registrations/i.test(sql)) return { id: 1, division: "MA1" };
       if (/UPDATE registrations SET checked_in/i.test(sql)) return { id: 1, checked_in: 1 };
       if (/UPDATE registrations/i.test(sql)) return { id: 1 };
@@ -95,6 +98,10 @@ describe("Track G — event registration", () => {
   });
   it("lets a member register when open (201)", async () => {
     expect((await call("/events/5/register", "POST", await tok("m_jane"), { division: "MA1" }, OPEN)).status).toBe(201);
+  });
+  it("lets an EXISTING registrant edit their entry after the registration deadline (deadline closes only new sign-ups)", async () => {
+    const res = await call("/events/5/register", "POST", await tok("m_jane"), { division: "MA1" }, OPEN, "scheduled", { registration_deadline: pastIso(), existingReg: true });
+    expect(res.status).toBe(201); // edit allowed despite the passed deadline (new sign-ups would be 403)
   });
   it("rejects a division not in the event config (400)", async () => {
     expect((await call("/events/5/register", "POST", await tok("m_jane"), { division: "NOPE" }, OPEN)).status).toBe(400);
