@@ -1,5 +1,6 @@
 import type * as db from "./db.js";
 import type { LiveScoringConfig, ScoreTarget } from "./live-format.js";
+import type { WeatherLocation, WeatherState } from "./weather.js";
 
 export interface LiveEnv {
   DB: db.D1Like;
@@ -13,6 +14,9 @@ export interface LiveState {
   storage: {
     get<T = unknown>(key: string): Promise<T | undefined>;
     put(key: string, value: unknown): Promise<void>;
+    getAlarm(): Promise<number | null>;
+    setAlarm(scheduledTime: number): Promise<void>;
+    deleteAlarm(): Promise<void>;
   };
   acceptWebSocket(socket: LiveSocket): void;
   getWebSockets(): LiveSocket[];
@@ -31,6 +35,7 @@ export interface LiveMeta {
   holes: { hole: number; par: number; distance_ft?: number | null; tee_sign_id?: number | null }[];
   status: "live" | "final";
   startedAt: string;
+  weather?: WeatherState | null;
   roundConfig?: LiveScoringConfig;
   rev?: number;
   overrides?: Record<string, { par?: number; distance_ft?: number }>;
@@ -51,6 +56,7 @@ export interface StartBody {
   players: { memberId?: string | null; name: string; division?: string | null; team?: string | null; pairLabel?: string | null; startingHole?: number | null; cardId?: string | null }[];
   startedAt?: string;
   cardSize?: number;
+  weatherLocation?: WeatherLocation | null;
 }
 
 export interface ScoreBody {
@@ -74,6 +80,10 @@ export interface RemoveBody {
   memberId?: string | null;
   index?: number;
   name?: string;
+}
+
+export interface WeatherBody {
+  weatherLocation?: WeatherLocation | null;
 }
 
 export interface PairAssignmentBody {

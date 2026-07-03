@@ -8,6 +8,7 @@ import { asInt, asStr } from "./input.js";
 import { isLiveFormatError, normalizeLiveScoringConfigFromLegacy, type LiveScoringConfig } from "./live-format.js";
 import { scoringState } from "./live-state.js";
 import { assignCards, type PlayerState } from "./scoring.js";
+import { weatherLocationForCourse } from "./weather.js";
 
 const LIVE_SCORE_IP_LIMIT = 180; // score writes per identity per minute (a card rarely exceeds a few)
 
@@ -93,7 +94,8 @@ export async function handleClubLive(
       const holes = await db.getLayoutHoles(env.DB, ev.layout_id);
       if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin);
       const evLayout = ev.layout_id != null ? ((await db.getLayout(env.DB, ev.layout_id)) as { name?: string | null; course_id?: number | null } | null) : null;
-      const evCourse = evLayout?.course_id != null ? ((await db.getCourse(env.DB, evLayout.course_id)) as { name?: string | null } | null) : null;
+      const evCourse = evLayout?.course_id != null ? ((await db.getCourse(env.DB, evLayout.course_id)) as { name?: string | null; lat?: number | null; lng?: number | null } | null) : null;
+      const weatherLocation = weatherLocationForCourse(evCourse, evLayout); // null unless the course has coords
       const eventConfig = (await db.getEventConfig(env.DB, eid)) as { live_scoring_config?: unknown; play_format?: unknown } | null;
       let liveScoringConfig: LiveScoringConfig;
       try {
@@ -118,7 +120,7 @@ export async function handleClubLive(
       if (targetValidation.error) {
         return json({ error: "invalid_score_targets", code: targetValidation.error.code, message: targetValidation.error.message }, 400, origin);
       }
-      const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, courseName: evCourse?.name ?? null, layoutName: evLayout?.name ?? null, holes, players, liveScoringConfig, startedAt: new Date().toISOString() }) });
+      const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, courseName: evCourse?.name ?? null, layoutName: evLayout?.name ?? null, holes, players, liveScoringConfig, startedAt: new Date().toISOString(), weatherLocation }) });
       const data = await r.json().catch(() => ({}));
       if (r.status === 200) await db.updateEvent(env.DB, eid, { status: "live" });
       return json(data, r.status, origin);
