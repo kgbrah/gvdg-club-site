@@ -5,7 +5,7 @@ import { EVENT_FORMATS, EVENT_STATUSES, EVENT_TYPES } from "./db.js";
 import { assignShotgun, assignTeams } from "./assign.js";
 import { getMember } from "./roster.js";
 import { json, readJson } from "./http.js";
-import { asInt, asStr, inSet, jsonStringArray, validEventInput } from "./input.js";
+import { asInt, asIsoTimestamp, asStr, inSet, jsonStringArray, validEventInput } from "./input.js";
 import { AdminLiveConfigError, adminLiveScoringConfigJson } from "./admin-live-config.js";
 import { inlineLayout } from "./admin-event-layout.js";
 import { defaultCtpPayoutNote } from "./admin-payout-notes.js";
@@ -235,6 +235,21 @@ export async function handleAdminEvents(
       const notes = b.notes == null || b.notes === "" ? null : asStr(b.notes, 5000);
       if (notes == null && b.notes != null && b.notes !== "") return json({ error: "invalid_event" }, 400, origin);
       patch.notes = notes;
+    }
+    if (hasField(b, "starts_at") || hasField(b, "start_time")) {
+      const startsAt = asIsoTimestamp(hasField(b, "starts_at") ? b.starts_at : b.start_time);
+      if (startsAt === undefined) return json({ error: "invalid_event" }, 400, origin);
+      patch.starts_at = startsAt;
+    }
+    if (hasField(b, "registration_deadline")) {
+      const rd = asIsoTimestamp(b.registration_deadline);
+      if (rd === undefined) return json({ error: "invalid_event" }, 400, origin);
+      patch.registration_deadline = rd;
+    }
+    if (hasField(b, "checkin_deadline")) {
+      const cd = asIsoTimestamp(b.checkin_deadline);
+      if (cd === undefined) return json({ error: "invalid_event" }, 400, origin);
+      patch.checkin_deadline = cd;
     }
     const row = await db.updateEvent(env.DB, id, patch);
     return row ? json({ event: row }, 200, origin) : json({ error: "not_found" }, 404, origin);

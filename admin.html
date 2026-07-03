@@ -431,6 +431,9 @@
                     <div><label for="aeType">Type</label><select id="aeType"><option value="tournament">Tournament</option><option value="league_round">League round</option><option value="fundraiser">Fundraiser</option><option value="meeting">Meeting</option></select></div>
                     <div><label for="aeName">Name</label><input id="aeName" maxlength="200" required></div>
                     <div><label for="aeDate">Date</label><input id="aeDate" type="date"></div>
+                    <div><label for="aeStartsAt">Start time</label><input id="aeStartsAt" type="datetime-local"></div>
+                    <div><label for="aeRegistrationDeadline">Registration deadline</label><input id="aeRegistrationDeadline" type="datetime-local"></div>
+                    <div><label for="aeCheckinDeadline">Check-in deadline</label><input id="aeCheckinDeadline" type="datetime-local"></div>
                     <div><label for="aeStatus">Status</label><select id="aeStatus"><option value="scheduled">Scheduled</option><option value="live">Live</option><option value="final">Final</option><option value="cancelled">Cancelled</option></select></div>
                     <div><label for="aeFormat">Format</label><select id="aeFormat"><option value="">—</option><option value="stroke">Stroke</option><option value="matchplay">Matchplay</option><option value="doubles">Doubles</option></select></div>
                     <div><label for="aeCourse">Course</label><select id="aeCourse"><option value="">—</option></select></div>
@@ -1262,6 +1265,20 @@
             });
         }
 
+        // datetime-local <-> ISO helpers: the input is in the admin's local zone; the API stores/reads ISO (UTC).
+        function toIsoFromLocalInput(id) {
+            const value = $(id).value;
+            if (!value) return null;
+            const d = new Date(value);
+            return Number.isFinite(d.getTime()) ? d.toISOString() : null;
+        }
+        function toLocalDateTimeInput(raw) {
+            if (!raw) return '';
+            const d = new Date(raw);
+            if (!Number.isFinite(d.getTime())) return '';
+            const pad = (n) => String(n).padStart(2, '0');
+            return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+        }
         function aePayload() {
             return {
                 type: $('aeType').value,
@@ -1272,6 +1289,9 @@
                 course_id: $('aeCourse').value ? Number($('aeCourse').value) : null,
                 league_id: $('aeLeague').value ? Number($('aeLeague').value) : null,
                 notes: $('aeNotes').value.trim() || null,
+                starts_at: toIsoFromLocalInput('aeStartsAt'),
+                registration_deadline: toIsoFromLocalInput('aeRegistrationDeadline'),
+                checkin_deadline: toIsoFromLocalInput('aeCheckinDeadline'),
             };
         }
         function aeResetForm() {
@@ -1287,6 +1307,9 @@
             $('aeType').value = ev.type || 'tournament';
             $('aeName').value = ev.name || '';
             $('aeDate').value = ev.date || '';
+            $('aeStartsAt').value = toLocalDateTimeInput(ev.starts_at);
+            $('aeRegistrationDeadline').value = toLocalDateTimeInput(ev.registration_deadline);
+            $('aeCheckinDeadline').value = toLocalDateTimeInput(ev.checkin_deadline);
             $('aeStatus').value = ev.status || 'scheduled';
             $('aeFormat').value = ev.format || '';
             $('aeCourse').value = ev.course_id == null ? '' : String(ev.course_id);

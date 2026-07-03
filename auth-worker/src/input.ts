@@ -70,6 +70,18 @@ export function asStr(v: unknown, max = 500): string | null {
   return typeof v === "string" && v.trim().length > 0 && v.length <= max ? v.trim() : null;
 }
 
+// Normalize a client timestamp to an ISO string. null/"" -> null (clear); a valid instant -> its ISO form;
+// anything unparseable OR a zone-less "YYYY-MM-DDTHH:MM" (the Worker runs UTC and would misread it) ->
+// undefined, which callers treat as "invalid input" (reject) vs null ("explicitly cleared").
+export function asIsoTimestamp(v: unknown): string | null | undefined {
+  if (v == null || v === "") return null;
+  const text = asStr(v, 80);
+  if (!text) return undefined;
+  if (/T\d/.test(text) && !/(Z|[+-]\d\d:?\d\d)$/.test(text)) return undefined;
+  const time = Date.parse(text);
+  return Number.isFinite(time) ? new Date(time).toISOString() : undefined;
+}
+
 export function asNum(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
@@ -125,6 +137,10 @@ export function validEventInput(b: Record<string, unknown>): db.EventInput | nul
   if (!inSet(["manual", "dgs", "csv", "udisc"], source)) return null;
   const ext = b.external_url == null ? null : asStr(b.external_url, 1000);
   if (b.external_url != null && (!ext || !/^https?:\/\//.test(ext))) return null;
+  const startsAt = asIsoTimestamp(b.starts_at ?? b.start_time);
+  const registrationDeadline = asIsoTimestamp(b.registration_deadline);
+  const checkinDeadline = asIsoTimestamp(b.checkin_deadline);
+  if (startsAt === undefined || registrationDeadline === undefined || checkinDeadline === undefined) return null;
   return {
     type: b.type as string,
     name,
@@ -137,5 +153,8 @@ export function validEventInput(b: Record<string, unknown>): db.EventInput | nul
     source,
     external_url: ext,
     notes: b.notes == null ? null : asStr(b.notes, 5000),
+    starts_at: startsAt,
+    registration_deadline: registrationDeadline,
+    checkin_deadline: checkinDeadline,
   };
 }
