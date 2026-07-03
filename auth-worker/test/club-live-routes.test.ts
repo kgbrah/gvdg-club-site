@@ -15,6 +15,8 @@ type DbState = {
   courseRow?: Record<string, unknown> | null;
   registrations?: Record<string, unknown>[];
   startedBody?: Record<string, unknown>;
+  liveSnapshot?: Record<string, unknown>;
+  liveMine?: Record<string, unknown>;
 };
 
 const SECRET = "x".repeat(40);
@@ -81,7 +83,7 @@ function db(state: DbState): D1Like {
 }
 
 function env(state: DbState): ClubLiveEnv {
-  const snapshot = {
+  const snapshot = state.liveSnapshot ?? {
     status: "live",
     eventId: 2,
     courseName: "West Meadowbrook Park",
@@ -94,6 +96,7 @@ function env(state: DbState): ClubLiveEnv {
     fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/snapshot")) return new Response(JSON.stringify(snapshot));
+      if (url.endsWith("/mine")) return new Response(JSON.stringify(state.liveMine ?? { ...snapshot, cardId: "h1", playerIndex: 0, cardmates: [] }));
       if (url.endsWith("/weather")) {
         state.weatherLocation = JSON.parse(String(init?.body ?? "{}")).weatherLocation;
         return new Response(JSON.stringify({ ...snapshot, weather: { location: state.weatherLocation, current: null, history: [], error: null } }));
@@ -136,6 +139,36 @@ describe("club live weather backfill", () => {
     expect(state.weatherLocation).toEqual({ lat: 35.6264, lng: -77.375, label: "West Meadowbrook Park - Greenville, NC" });
     expect(body.weather?.location).toEqual(state.weatherLocation);
   });
+
+  it("enriches existing live event snapshots with D1 play format metadata", async () => {
+    const state: DbState = {
+      eventRow: { id: 2, format: "matchplay", course_id: 2, layout_id: 1 },
+      configRow: { play_format: "doubles" },
+      liveSnapshot: { status: "live", eventId: 2, weather: { current: null }, format: "matchplay", teamRequired: false, holes: [], players: [], standings: [] },
+    };
+    const res = await handleClubLive(new Request("https://w/events/2/live"), env(state), null, "GET", ["events", "2", "live"]);
+
+    expect(res?.status).toBe(200);
+    await expect(res?.json()).resolves.toMatchObject({ format: "matchplay", playFormat: "doubles", teamRequired: true });
+  });
+
+  it("enriches existing player cards with D1 play format metadata", async () => {
+    const state: DbState = {
+      eventRow: { id: 2, format: "matchplay", course_id: 2, layout_id: 1 },
+      configRow: { play_format: "doubles" },
+      liveMine: { status: "live", eventId: 2, weather: { current: null }, format: "matchplay", teamRequired: false, cardId: "h1", playerIndex: 0, cardmates: [] },
+    };
+    const res = await handleClubLive(
+      new Request("https://w/events/2/live/mine", { headers: await adminHeader() }),
+      env(state),
+      null,
+      "GET",
+      ["events", "2", "live", "mine"],
+    );
+
+    expect(res?.status).toBe(200);
+    await expect(res?.json()).resolves.toMatchObject({ format: "matchplay", playFormat: "doubles", teamRequired: true });
+  });
 });
 
 describe("club live scorecard start", () => {
@@ -163,6 +196,7 @@ describe("club live scorecard start", () => {
     expect(state.startedBody).toMatchObject({
       eventId: 2,
       format: "matchplay",
+      playFormat: "doubles",
       teamRequired: true,
       players: [
         { memberId: "m_jane", name: "Jane", division: "MA1", startingHole: null, team: "Team Fox" },

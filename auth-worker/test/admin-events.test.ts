@@ -52,6 +52,17 @@ describe("admin event management", () => {
     expect(state.playerBinds).toBeUndefined();
   });
 
+  it("does not require a team when admins add manual players to matchplay singles", async () => {
+    const state: DbState = {
+      eventRow: { id: 9, format: "matchplay" },
+      eventConfigRow: { play_format: "singles" },
+    };
+    const res = await call("/admin/events/9/players", "POST", { name: "Walk On" }, await token("m_admin"), state);
+
+    expect(res.status).toBe(201);
+    expect(state.playerBinds).toEqual([9, null, "Walk On", null, null, null]);
+  });
+
   it("includes course and layout details for open registration events", async () => {
     const res = await call("/registration/open", "GET");
     expect(res.status).toBe(200);

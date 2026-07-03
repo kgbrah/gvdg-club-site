@@ -2371,7 +2371,7 @@
         let rgEventFormat = null;
         function rgTeamNameRequired() {
             const playFormat = $('rgFormat').value || null;
-            return rgEventFormat === 'matchplay' || rgEventFormat === 'doubles' || playFormat === 'doubles' || playFormat === 'teams';
+            return rgEventFormat === 'doubles' || playFormat === 'doubles' || playFormat === 'teams';
         }
         function rgUpdateTeamRequirement() {
             const required = rgTeamNameRequired();

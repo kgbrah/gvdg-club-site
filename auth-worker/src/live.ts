@@ -7,7 +7,7 @@
 // snapshot + ws reads are public). The DO trusts requests it receives.
 
 import * as db from "./db.js";
-import { teamNameRequiredForFormat } from "./input.js";
+import { playFormatForRound, scoringFormatForRound, teamNameRequiredForFormat } from "./input.js";
 import { persistFinalizedRound } from "./live-finalize.js";
 import { normalizeScorecards, playerScorerId, purgeScorerVotes, recordScoreVote, scorecardConsensusIssues } from "./live-consensus.js";
 import { assignCards, computeLeaderboard, finalizeStandings, type PlayerState } from "./scoring.js";
@@ -35,6 +35,7 @@ interface LiveMeta {
   layoutName?: string | null;
   udiscCourseId?: string | null; // UDisc numeric course id for the "Add to UDisc" applink (export bridge)
   format?: string | null;
+  playFormat?: string | null;
   teamRequired?: boolean;
   holes: { hole: number; par: number; distance_ft?: number | null; tee_sign_id?: number | null }[];
   status: "none" | "live" | "final";
@@ -57,6 +58,7 @@ interface StartBody {
   layoutName?: string | null;
   udiscCourseId?: string | null;
   format?: string | null;
+  playFormat?: string | null;
   teamRequired?: boolean;
   holes: { hole: number; par: number; distance_ft?: number | null; tee_sign_id?: number | null }[];
   players: { memberId?: string | null; name: string; team?: string | null; division?: string | null; startingHole?: number | null; cardId?: string | null; ratingAnchor?: number | null }[];
@@ -186,6 +188,7 @@ export class LiveEventDO {
         layoutName: null,
         udiscCourseId: null,
         format: null,
+        playFormat: null,
         teamRequired: false,
         weather: null,
         holes: [],
@@ -206,7 +209,8 @@ export class LiveEventDO {
       layoutName: this.meta?.layoutName ?? null,
       udiscCourseId: this.meta?.udiscCourseId ?? null,
       format: this.meta?.format ?? null,
-      teamRequired: teamNameRequiredForFormat(this.meta?.format, undefined, this.meta?.teamRequired === true),
+      playFormat: this.meta?.playFormat ?? null,
+      teamRequired: teamNameRequiredForFormat(this.meta?.format, this.meta?.playFormat, this.meta?.teamRequired === true),
       weather: this.meta?.weather ?? null,
       holes, // {hole, par, distance_ft, overridden} — par/distance reflect any round override
       // players (with per-hole scores + their stable index) drive the scorekeeper grid;
@@ -236,6 +240,9 @@ export class LiveEventDO {
       .filter((h) => h && typeof h.hole === "number" && typeof h.par === "number")
       .map((h) => ({ hole: h.hole, par: h.par, distance_ft: h.distance_ft ?? null, tee_sign_id: h.tee_sign_id ?? null }));
     if (holes.length === 0 || (!b.eventId && !b.casual)) return j({ error: "invalid_start" }, 400);
+    const scoringFormat = scoringFormatForRound(cleanText(b.format, 40));
+    const playFormat = playFormatForRound(cleanText(b.playFormat, 40), cleanText(b.format, 40));
+    if (!scoringFormat || !playFormat) return j({ error: "bad_format" }, 400);
     this.meta = {
       eventId: b.eventId ?? 0,
       casual: !!b.casual,
@@ -246,8 +253,9 @@ export class LiveEventDO {
       courseName: b.courseName ?? null,
       layoutName: b.layoutName ?? null,
       udiscCourseId: b.udiscCourseId ?? null,
-      format: b.format ?? null,
-      teamRequired: b.teamRequired === true,
+      format: scoringFormat,
+      playFormat,
+      teamRequired: teamNameRequiredForFormat(scoringFormat, playFormat, b.teamRequired === true),
       holes,
       status: "live",
       startedAt: b.startedAt ?? "",
@@ -288,6 +296,7 @@ export class LiveEventDO {
       layoutName: null,
       udiscCourseId: null,
       format: null,
+      playFormat: null,
       teamRequired: false,
       holes: [],
       status: "none",
@@ -361,7 +370,7 @@ export class LiveEventDO {
     const holes = this.resolvedHoles();
     const meRaw = authMember ? this.players.findIndex((p) => p.memberId === authMember) : -1;
     const me = meRaw >= 0 ? this.players[meRaw] : undefined;
-    const base = { eventId: this.meta?.eventId ?? 0, casual: !!this.meta?.casual, courseName: this.meta?.courseName ?? null, layoutName: this.meta?.layoutName ?? null, udiscCourseId: this.meta?.udiscCourseId ?? null, format: this.meta?.format ?? null, teamRequired: teamNameRequiredForFormat(this.meta?.format, undefined, this.meta?.teamRequired === true), weather: this.meta?.weather ?? null, status: this.meta?.status ?? "none", holes };
+    const base = { eventId: this.meta?.eventId ?? 0, casual: !!this.meta?.casual, courseName: this.meta?.courseName ?? null, layoutName: this.meta?.layoutName ?? null, udiscCourseId: this.meta?.udiscCourseId ?? null, format: this.meta?.format ?? null, playFormat: this.meta?.playFormat ?? null, teamRequired: teamNameRequiredForFormat(this.meta?.format, this.meta?.playFormat, this.meta?.teamRequired === true), weather: this.meta?.weather ?? null, status: this.meta?.status ?? "none", holes };
     if (!me || me.removed) return { ...base, cardId: null, playerIndex: null, cardmates: [], conflicts: [], missing: [] };
     const meIdx = meRaw;
     const cardId = me.cardId ?? null;
@@ -431,7 +440,7 @@ export class LiveEventDO {
     const nm = String(name || "").trim();
     if (!nm) return j({ error: "name_required" }, 400);
     const tm = cleanText(team, 40);
-    if (teamNameRequiredForFormat(this.meta.format, undefined, this.meta.teamRequired === true) && !tm) return j({ error: "team_required" }, 400);
+    if (teamNameRequiredForFormat(this.meta.format, this.meta.playFormat, this.meta.teamRequired === true) && !tm) return j({ error: "team_required" }, 400);
     this.players.push({ memberId: null, name: nm.slice(0, 60), team: tm, division: null, startingHole: null, cardId: me.cardId ?? "c0", scores: {}, scorecards: {} });
     await this.persist();
     this.broadcast();

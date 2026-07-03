@@ -22,12 +22,35 @@ export const isUniqueViolation = (e: unknown): boolean => /UNIQUE constraint fai
 export const jsonStringArray = (v: unknown, max: number): string | null =>
   Array.isArray(v) ? JSON.stringify(v.filter((x) => typeof x === "string").slice(0, max)) : null;
 
+export const SCORING_FORMATS = ["stroke", "matchplay"] as const;
+export const PLAY_FORMATS = ["singles", "doubles", "teams"] as const;
+export type ScoringFormat = (typeof SCORING_FORMATS)[number];
+export type PlayFormat = (typeof PLAY_FORMATS)[number];
+
+export function scoringFormatForRound(eventFormat: string | null | undefined): ScoringFormat | null {
+  const format = eventFormat == null || eventFormat === "" ? "stroke" : eventFormat;
+  if (format === "stroke" || format === "singles" || format === "doubles" || format === "teams") return "stroke";
+  if (format === "matchplay") return "matchplay";
+  return null;
+}
+
+export function playFormatForRound(
+  playFormat: string | null | undefined,
+  eventFormat?: string | null | undefined,
+): PlayFormat | null {
+  const format = playFormat == null || playFormat === "" ? eventFormat : playFormat;
+  if (format === "doubles" || format === "teams") return format;
+  if (format === "singles" || format == null || format === "" || format === "stroke" || format === "matchplay") return "singles";
+  return null;
+}
+
 export function teamNameRequiredForFormat(
   eventFormat: string | null | undefined,
   playFormat?: string | null | undefined,
   explicit = false,
 ): boolean {
-  return explicit || eventFormat === "matchplay" || eventFormat === "doubles" || eventFormat === "teams" || playFormat === "doubles" || playFormat === "teams";
+  const normalizedPlayFormat = playFormatForRound(playFormat, eventFormat);
+  return explicit || normalizedPlayFormat === "doubles" || normalizedPlayFormat === "teams";
 }
 
 const validLat = (n: number | null): number | null => (n != null && n >= -90 && n <= 90 ? n : null);

@@ -100,7 +100,56 @@ async function authHeader() {
 }
 
 describe("casual round starts", () => {
-  it("passes doubles format and creator team into the live round", async () => {
+  it("passes scoring format, doubles play format, and creator team into the live round", async () => {
+    const state: State = {};
+    const res = await handleCasualRounds(
+      new Request("https://w/rounds", { method: "POST", headers: await authHeader(), body: JSON.stringify({ course_id: 7, layout_id: 9, format: "matchplay", playFormat: "doubles", team: "Team Fox" }) }),
+      env(state),
+      null,
+      "POST",
+      ["rounds"],
+    );
+
+    expect(res?.status).toBe(201);
+    expect(state.startedBody).toMatchObject({
+      casual: true,
+      format: "matchplay",
+      playFormat: "doubles",
+      teamRequired: true,
+      players: [{ memberId: "m_jane", name: "Jane", team: "Team Fox" }],
+    });
+  });
+
+  it("allows matchplay singles without a creator team", async () => {
+    const state: State = {};
+    const res = await handleCasualRounds(
+      new Request("https://w/rounds", { method: "POST", headers: await authHeader(), body: JSON.stringify({ course_id: 7, layout_id: 9, format: "matchplay", playFormat: "singles" }) }),
+      env(state),
+      null,
+      "POST",
+      ["rounds"],
+    );
+
+    expect(res?.status).toBe(201);
+    expect(state.startedBody).toMatchObject({ format: "matchplay", playFormat: "singles", teamRequired: false });
+  });
+
+  it("requires a creator team for doubles casual rounds", async () => {
+    const state: State = {};
+    const res = await handleCasualRounds(
+      new Request("https://w/rounds", { method: "POST", headers: await authHeader(), body: JSON.stringify({ course_id: 7, layout_id: 9, format: "stroke", playFormat: "doubles" }) }),
+      env(state),
+      null,
+      "POST",
+      ["rounds"],
+    );
+
+    expect(res?.status).toBe(400);
+    await expect(res?.json()).resolves.toMatchObject({ error: "team_required" });
+    expect(state.startedBody).toBeUndefined();
+  });
+
+  it("keeps accepting legacy format=doubles requests from cached clients", async () => {
     const state: State = {};
     const res = await handleCasualRounds(
       new Request("https://w/rounds", { method: "POST", headers: await authHeader(), body: JSON.stringify({ course_id: 7, layout_id: 9, format: "doubles", team: "Team Fox" }) }),
@@ -111,26 +160,6 @@ describe("casual round starts", () => {
     );
 
     expect(res?.status).toBe(201);
-    expect(state.startedBody).toMatchObject({
-      casual: true,
-      format: "doubles",
-      teamRequired: true,
-      players: [{ memberId: "m_jane", name: "Jane", team: "Team Fox" }],
-    });
-  });
-
-  it("requires a creator team for doubles and matchplay casual rounds", async () => {
-    const state: State = {};
-    const res = await handleCasualRounds(
-      new Request("https://w/rounds", { method: "POST", headers: await authHeader(), body: JSON.stringify({ course_id: 7, layout_id: 9, format: "matchplay" }) }),
-      env(state),
-      null,
-      "POST",
-      ["rounds"],
-    );
-
-    expect(res?.status).toBe(400);
-    await expect(res?.json()).resolves.toMatchObject({ error: "team_required" });
-    expect(state.startedBody).toBeUndefined();
+    expect(state.startedBody).toMatchObject({ format: "stroke", playFormat: "doubles", teamRequired: true });
   });
 });

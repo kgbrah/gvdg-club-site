@@ -263,14 +263,14 @@ describe("LiveEventDO card-scoped scoring", () => {
     expect(mine0.cardmates.map((c) => c.name)).toEqual(["A", "B", "C", "D"]);
   });
 
-  it("carries team-required format metadata and player teams through snapshot and /mine", async () => {
+  it("carries scoring format, play format, and player teams through snapshot and /mine", async () => {
     const live = liveDO();
     await live.fetch(new Request("https://do/start", {
       method: "POST",
       body: JSON.stringify({
         eventId: 1,
-        format: "doubles",
-        teamRequired: true,
+        format: "matchplay",
+        playFormat: "doubles",
         holes: [{ hole: 1, par: 3 }],
         players: [{ memberId: "m0", name: "A", team: "Team Fox" }],
       }),
@@ -278,21 +278,45 @@ describe("LiveEventDO card-scoped scoring", () => {
 
     const snap = (await (await live.fetch(new Request("https://do/"))).json()) as {
       readonly format: string | null;
+      readonly playFormat: string | null;
       readonly teamRequired: boolean;
       readonly players: readonly { readonly team: string | null }[];
     };
-    expect(snap.format).toBe("doubles");
+    expect(snap.format).toBe("matchplay");
+    expect(snap.playFormat).toBe("doubles");
     expect(snap.teamRequired).toBe(true);
     expect(snap.players[0]?.team).toBe("Team Fox");
 
     const mine = (await (await live.fetch(new Request("https://do/mine", { headers: { "X-Auth-Member": "m0" } }))).json()) as {
       readonly format: string | null;
+      readonly playFormat: string | null;
       readonly teamRequired: boolean;
       readonly cardmates: readonly { readonly team: string | null }[];
     };
-    expect(mine.format).toBe("doubles");
+    expect(mine.format).toBe("matchplay");
+    expect(mine.playFormat).toBe("doubles");
     expect(mine.teamRequired).toBe(true);
     expect(mine.cardmates[0]?.team).toBe("Team Fox");
+  });
+
+  it("normalizes legacy doubles format into stroke scoring plus doubles play format", async () => {
+    const live = liveDO();
+    await live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({
+        eventId: 1,
+        format: "doubles",
+        holes: [{ hole: 1, par: 3 }],
+        players: [{ memberId: "m0", name: "A", team: "Team Fox" }],
+      }),
+    }));
+
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as {
+      readonly format: string | null;
+      readonly playFormat: string | null;
+      readonly teamRequired: boolean;
+    };
+    expect(snap).toMatchObject({ format: "stroke", playFormat: "doubles", teamRequired: true });
   });
 
   it("keeps a player/hole conflicted until all cardmate scorecards match", async () => {

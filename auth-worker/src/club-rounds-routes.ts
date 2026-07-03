@@ -10,10 +10,9 @@ import { requireAuth } from "./authz.js";
 import { getMember } from "./roster.js";
 import { json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
-import { asInt, asStr, inSet, teamNameRequiredForFormat } from "./input.js";
+import { asInt, asStr, playFormatForRound, scoringFormatForRound, teamNameRequiredForFormat } from "./input.js";
 import { findRatingAnchor } from "./rating-store.js";
 import { weatherLocationForCourse } from "./weather.js";
-import { EVENT_FORMATS } from "./db.js";
 
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // unambiguous (no 0/O/1/I/L)
 function genCode(): string {
@@ -44,9 +43,12 @@ export async function handleCasualRounds(
     const b = (await readJson(request)) ?? {};
     const layoutId = asInt(b.layout_id);
     if (layoutId == null) return json({ error: "invalid_request" }, 400, origin);
-    const format = b.format == null || b.format === "" ? "stroke" : (inSet(EVENT_FORMATS, b.format) ? b.format : null);
-    if (!format) return json({ error: "invalid_request" }, 400, origin);
-    const teamRequired = teamNameRequiredForFormat(format);
+    const rawFormat = asStr(b.format, 20);
+    const rawPlayFormat = asStr(b.playFormat, 20) ?? asStr(b.play_format, 20);
+    const format = scoringFormatForRound(rawFormat);
+    const playFormat = playFormatForRound(rawPlayFormat, rawFormat);
+    if (!format || !playFormat) return json({ error: "invalid_request" }, 400, origin);
+    const teamRequired = teamNameRequiredForFormat(format, playFormat);
     const team = asStr(b.team, 40);
     if (teamRequired && !team) return json({ error: "team_required" }, 400, origin);
     const holes = await db.getLayoutHoles(env.DB, layoutId);
@@ -59,7 +61,7 @@ export async function handleCasualRounds(
     const code = genCode();
     const r = await roundStub(env, code).fetch("https://do/start", {
       method: "POST",
-      body: JSON.stringify({ casual: true, roundCode: code, courseId: layout?.course_id ?? null, layoutId, createdBy: claims.sub, courseName: course?.name ?? null, layoutName: layout?.name ?? null, udiscCourseId: course?.udisc_course_id ?? null, format, teamRequired, weatherLocation, holes, players: [{ memberId: claims.sub, name: member?.name ?? "Player", team: team ?? null, ratingAnchor }], startedAt: new Date().toISOString() }),
+      body: JSON.stringify({ casual: true, roundCode: code, courseId: layout?.course_id ?? null, layoutId, createdBy: claims.sub, courseName: course?.name ?? null, layoutName: layout?.name ?? null, udiscCourseId: course?.udisc_course_id ?? null, format, playFormat, teamRequired, weatherLocation, holes, players: [{ memberId: claims.sub, name: member?.name ?? "Player", team: team ?? null, ratingAnchor }], startedAt: new Date().toISOString() }),
     });
     if (r.status !== 200) return json({ error: "start_failed" }, 502, origin);
     return json({ code }, 201, origin);

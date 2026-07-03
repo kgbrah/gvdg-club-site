@@ -46,20 +46,24 @@
             padding: calc(0.7rem + var(--safe-top)) 0.9rem 0.7rem; background: var(--bg-secondary);
             border-bottom: 1px solid var(--border-color); box-shadow: 0 1px 8px var(--shadow);
         }
-        .topbar .logo { height: 30px; width: auto; }
-        .topbar h1 { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; letter-spacing: 0.5px; font-weight: 400; flex: 1; line-height: 1; min-width: 0; }
-        .topbar h1 small { display: block; font-family: 'Archivo'; font-size: 0.62rem; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+        .topbar .logo { height: 30px; width: auto; flex: 0 0 auto; }
+        .topbar h1 { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; letter-spacing: 0.5px; font-weight: 400; flex: 1 1 auto; line-height: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .topbar h1 small { display: block; font-family: 'Archivo'; font-size: 0.62rem; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .top-link {
             display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 0.65rem;
             border: 1px solid var(--border-color); border-radius: 11px; background: var(--bg-tertiary); color: var(--primary);
-            font-size: 0.78rem; font-weight: 700; text-decoration: none;
+            font-size: 0.78rem; font-weight: 700; text-decoration: none; flex: 0 0 auto;
         }
         .iconbtn {
             border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary);
-            width: 40px; height: 40px; border-radius: 11px; font-size: 1.1rem; cursor: pointer; display: grid; place-items: center;
+            width: 40px; height: 40px; border-radius: 11px; font-size: 1.1rem; cursor: pointer; display: grid; place-items: center; flex: 0 0 auto;
         }
         .iconbtn[hidden] { display: none; }
         .iconbtn:active { transform: scale(0.94); }
+        @media (max-width: 480px) {
+            .topbar { gap: 0.45rem; padding-left: 0.7rem; padding-right: 0.7rem; }
+            .topbar .logo { width: 34px; object-fit: cover; object-position: left center; }
+        }
         main { flex: 1; padding: 1rem 0.9rem calc(1.2rem + var(--safe-bottom)); }
         /* ---- generic ---- */
         .card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 16px; box-shadow: 0 2px 10px var(--shadow); padding: 1rem; margin-bottom: 0.85rem; }
@@ -211,7 +215,7 @@
         const GUEST_TOKEN = MODE === 'event' ? (params.get('gt') || guestTokenStored()) : null;
 
         const app = document.getElementById('app');
-        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, format: null, teamRequired: false, lastRev: -1, udiscCourseId: null, weather: null };
+        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, format: null, playFormat: null, teamRequired: false, lastRev: -1, udiscCourseId: null, weather: null };
         const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
         const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
 
@@ -232,12 +236,31 @@
         }
         function relClass(d) { return d < 0 ? 'under' : d > 0 ? 'over' : 'even'; }
         function relText(d) { return d === 0 ? 'E' : d > 0 ? '+' + d : String(d); }
-        function formatRequiresTeam(format) { return format === 'matchplay' || format === 'doubles' || format === 'teams'; }
-        function teamNameRequired() { return S.teamRequired === true || formatRequiresTeam(S.format); }
+        function scoringFormatValue(format) {
+            if (format === 'matchplay') return 'matchplay';
+            if (format === 'stroke' || format === 'singles' || format === 'doubles' || format === 'teams') return 'stroke';
+            return null;
+        }
+        function playFormatValue(playFormat, format) {
+            const value = playFormat || format;
+            if (value === 'doubles' || value === 'teams') return value;
+            if (value === 'singles' || value === 'stroke' || value === 'matchplay') return 'singles';
+            return null;
+        }
+        function playFormatRequiresTeam(playFormat) { return playFormat === 'doubles' || playFormat === 'teams'; }
+        function teamNameRequired() { return S.teamRequired === true || playFormatRequiresTeam(S.playFormat); }
+        function isTeamRound() { return teamNameRequired(); }
         function applyRoundMeta(data) {
             if (!data) return;
-            S.format = typeof data.format === 'string' ? data.format : null;
-            S.teamRequired = data.teamRequired === true || formatRequiresTeam(S.format);
+            const scoringFormat = typeof data.format === 'string' ? scoringFormatValue(data.format) : null;
+            if (scoringFormat) S.format = scoringFormat;
+            const formatText = typeof data.format === 'string' ? data.format : null;
+            const legacyPlayFormat = formatText === 'singles' || formatText === 'doubles' || formatText === 'teams' ? formatText : null;
+            const playFormat = typeof data.playFormat === 'string' ? playFormatValue(data.playFormat, null) : (legacyPlayFormat ? playFormatValue(null, legacyPlayFormat) : null);
+            if (playFormat) S.playFormat = playFormat;
+            if (!S.format) S.format = 'stroke';
+            if (!S.playFormat) S.playFormat = 'singles';
+            S.teamRequired = data.teamRequired === true || playFormatRequiresTeam(S.playFormat);
         }
         function toast(msg) {
             const t = el('div', 'toast', msg); document.body.appendChild(t);
@@ -386,6 +409,55 @@
         }
         function roundWeatherNode() {
             return window.GVDGWeather ? window.GVDGWeather.buildWeatherStrip(document, S.weather, { title: 'Round weather' }) : null;
+        }
+        function uniqueStrings(values) {
+            const out = [];
+            values.forEach(function (value) {
+                const text = String(value || '').trim();
+                if (text && out.indexOf(text) < 0) out.push(text);
+            });
+            return out;
+        }
+        function scoreUnits() {
+            if (!isTeamRound()) {
+                return S.cardmates.map(function (p) {
+                    return { type: 'player', key: 'player:' + p.index, label: p.name, players: [p], isMe: !!p.isMe, meta: [p.team, p.division].filter(Boolean) };
+                });
+            }
+            const byTeam = new Map();
+            S.cardmates.forEach(function (p) {
+                const label = String(p.team || p.name || 'Team').trim();
+                const key = label.toLowerCase() || ('player:' + p.index);
+                if (!byTeam.has(key)) byTeam.set(key, { type: 'team', key: key, label: label, players: [], isMe: false, meta: [] });
+                const unit = byTeam.get(key);
+                unit.players.push(p);
+                if (p.isMe) unit.isMe = true;
+            });
+            return Array.from(byTeam.values()).map(function (unit) {
+                const names = unit.players.map(function (p) { return p.name; }).join(' / ');
+                const divisions = uniqueStrings(unit.players.map(function (p) { return p.division; }));
+                unit.meta = [names].concat(divisions);
+                return unit;
+            });
+        }
+        function unitStrokes(unit, hole) {
+            const values = uniqueStrings(unit.players.map(function (p) {
+                const strokes = strokesFor(p.index, hole);
+                return typeof strokes === 'number' ? String(strokes) : '';
+            })).map(Number);
+            return values.length === 1 ? values[0] : null;
+        }
+        function unitHasMixedScores(unit, hole) {
+            return uniqueStrings(unit.players.map(function (p) {
+                const strokes = strokesFor(p.index, hole);
+                return typeof strokes === 'number' ? String(strokes) : '';
+            })).length > 1;
+        }
+        function unitConflict(unit, hole) {
+            return unit.players.some(function (p) { return conflictFor(p.index, hole); });
+        }
+        async function postUnitScore(unit, hole, strokes) {
+            for (const p of unit.players) await postScore(p.index, hole, strokes);
         }
 
         async function postScore(index, hole, strokes) {
@@ -667,23 +739,24 @@
                 owner.appendChild(select);
                 box.appendChild(owner);
             }
-            S.cardmates.forEach((p) => {
-                const conflict = conflictFor(p.index, h.hole);
+            const units = scoreUnits();
+            units.forEach((unit) => {
+                const conflict = unitConflict(unit, h.hole);
                 const row = el('div', 'prow' + (conflict ? ' conflict' : ''));
                 const info = el('div', 'pinfo');
-                info.appendChild(el('div', 'pname', p.name + (p.isMe ? ' (you)' : '')));
-                if (p.team) info.appendChild(el('div', 'pmeta', p.team));
-                if (p.division) info.appendChild(el('div', 'pmeta', p.division));
-                if (conflict) info.appendChild(el('div', 'pmeta conflict-text', '⚑ Conflict: ' + (conflict.values || []).join(' vs ') + ' — set yours to match'));
-                const cur = strokesFor(p.index, h.hole);
+                info.appendChild(el('div', 'pname', unit.label + (unit.isMe ? ' (you)' : '')));
+                unit.meta.forEach(function (text) { if (text) info.appendChild(el('div', 'pmeta', text)); });
+                if (unitHasMixedScores(unit, h.hole)) info.appendChild(el('div', 'pmeta conflict-text', '⚑ Team scores differ — set one team score'));
+                else if (conflict) info.appendChild(el('div', 'pmeta conflict-text', '⚑ Conflict — set yours to match'));
+                const cur = unitStrokes(unit, h.hole);
                 const step = el('div', 'stepper');
                 const minus = el('button', 'minus', '−');
                 const val = el('div', 'val');
                 const n = el('div', 'n', cur == null ? '–' : String(cur)); val.appendChild(n);
                 if (cur != null) { const d = cur - h.par; const rel = el('div', 'rel ' + relClass(d), relText(d)); val.appendChild(rel); }
                 const plus = el('button', 'plus', '+');
-                minus.addEventListener('click', function () { const base = cur == null ? h.par : cur; const nv = Math.max(1, base - 1); postScore(p.index, h.hole, nv); });
-                plus.addEventListener('click', function () { const base = cur == null ? h.par - 1 : cur; const nv = Math.min(30, base + 1); postScore(p.index, h.hole, nv); });
+                minus.addEventListener('click', function () { const base = cur == null ? h.par : cur; const nv = Math.max(1, base - 1); postUnitScore(unit, h.hole, nv); });
+                plus.addEventListener('click', function () { const base = cur == null ? h.par - 1 : cur; const nv = Math.min(30, base + 1); postUnitScore(unit, h.hole, nv); });
                 step.appendChild(minus); step.appendChild(val); step.appendChild(plus);
                 row.appendChild(info); row.appendChild(step);
                 box.appendChild(row);
@@ -691,9 +764,13 @@
 
             // my totals
             const me = S.cardmates.find((p) => p.isMe);
-            if (me) {
+            const myUnit = isTeamRound() ? units.find(function (unit) { return unit.isMe; }) : null;
+            if (me || myUnit) {
                 let thru = 0, total = 0, toPar = 0;
-                S.holes.forEach((hh) => { const s = me.scores ? me.scores[hh.hole] : undefined; if (typeof s === 'number') { thru++; total += s; toPar += s - hh.par; } });
+                S.holes.forEach((hh) => {
+                    const s = myUnit ? unitStrokes(myUnit, hh.hole) : (me && me.scores ? me.scores[hh.hole] : undefined);
+                    if (typeof s === 'number') { thru++; total += s; toPar += s - hh.par; }
+                });
                 const tot = el('div', 'totbar');
                 [['Thru', String(thru) + '/' + S.holes.length], ['Total', total ? String(total) : '–'], ['To par', thru ? relText(toPar) : 'E']].forEach((kv) => {
                     const d = el('div'); d.appendChild(el('div', 'k', kv[0])); d.appendChild(el('div', 'v', kv[1])); tot.appendChild(d);
@@ -706,7 +783,8 @@
             const grid = el('div', 'holegrid');
             S.holes.forEach((hh, i) => {
                 const b = el('button', i === S.holeIdx ? 'cur' : '', String(hh.hole));
-                if (me && me.scores && typeof me.scores[hh.hole] === 'number') b.className += ' done';
+                const doneScore = myUnit ? unitStrokes(myUnit, hh.hole) : (me && me.scores ? me.scores[hh.hole] : undefined);
+                if (typeof doneScore === 'number') b.className += ' done';
                 if (holeHasConflict(hh.hole)) b.className += ' conflict';
                 b.addEventListener('click', function () { S.holeIdx = i; renderHole(); });
                 grid.appendChild(b);
@@ -902,25 +980,35 @@
             });
             shell(c);
         }
-        function casualFormatRequiresTeam(format) { return format === 'matchplay' || format === 'doubles'; }
+        function casualPlayFormatRequiresTeam(playFormat) { return playFormat === 'doubles' || playFormat === 'teams'; }
         function renderRoundOptions(course, layout) {
             const c = el('div', 'stack');
             const back = el('button', 'btn ghost small', '‹ Back'); back.addEventListener('click', function () { renderLayoutPick(course); }); c.appendChild(back);
             c.appendChild(el('h2', 'section', 'Round options'));
             const meta = el('p', 'muted', course.name + ' · ' + (layout.name || 'Layout'));
             c.appendChild(meta);
-            c.appendChild(el('label', 'lbl', 'Scoring format'));
-            const format = el('select', 'field');
+            c.appendChild(el('label', 'lbl', 'Play format'));
+            const playFormat = el('select', 'field');
+            [
+                ['singles', 'Singles'],
+                ['doubles', 'Doubles'],
+            ].forEach(function (pair) {
+                const o = document.createElement('option');
+                o.value = pair[0]; o.textContent = pair[1];
+                playFormat.appendChild(o);
+            });
+            c.appendChild(playFormat);
+            c.appendChild(el('label', 'lbl', 'Scoring'));
+            const scoring = el('select', 'field');
             [
                 ['stroke', 'Stroke play'],
-                ['doubles', 'Doubles'],
                 ['matchplay', 'Matchplay'],
             ].forEach(function (pair) {
                 const o = document.createElement('option');
                 o.value = pair[0]; o.textContent = pair[1];
-                format.appendChild(o);
+                scoring.appendChild(o);
             });
-            c.appendChild(format);
+            c.appendChild(scoring);
             const teamWrap = el('div');
             teamWrap.appendChild(el('label', 'lbl', 'Your team name'));
             const team = el('input', 'field');
@@ -928,15 +1016,16 @@
             team.autocomplete = 'organization';
             teamWrap.appendChild(team);
             c.appendChild(teamWrap);
-            const updateTeam = function () { teamWrap.style.display = casualFormatRequiresTeam(format.value) ? '' : 'none'; };
-            format.addEventListener('change', updateTeam);
+            const updateTeam = function () { teamWrap.style.display = casualPlayFormatRequiresTeam(playFormat.value) ? '' : 'none'; };
+            playFormat.addEventListener('change', updateTeam);
             updateTeam();
             const start = el('button', 'btn', 'Start round');
             start.addEventListener('click', function () {
-                const fmt = format.value || 'stroke';
+                const fmt = scoring.value || 'stroke';
+                const play = playFormat.value || 'singles';
                 const teamName = team.value.trim();
-                if (casualFormatRequiresTeam(fmt) && !teamName) { toast('Team name required'); team.focus(); return; }
-                createRound(course, layout, { format: fmt, team: teamName });
+                if (casualPlayFormatRequiresTeam(play) && !teamName) { toast('Team name required'); team.focus(); return; }
+                createRound(course, layout, { format: fmt, playFormat: play, team: teamName });
             });
             c.appendChild(start);
             shell(c);
@@ -945,6 +1034,7 @@
             shell(spinner());
             const body = { course_id: course.id, layout_id: layout.id };
             if (options && options.format) body.format = options.format;
+            if (options && options.playFormat) body.playFormat = options.playFormat;
             if (options && options.team) body.team = options.team;
             const r = await api('/rounds', { method: 'POST', body: body });
             if (r.ok && r.data && r.data.code) { location.search = '?round=' + r.data.code; return; }
