@@ -13,6 +13,7 @@ type DbState = {
   eventConfig?: Record<string, unknown> | null;
   registrations?: Record<string, unknown>[];
   startBody?: Record<string, unknown>;
+  liveSnapshot?: Record<string, unknown>;
 };
 
 const SECRET = "x".repeat(40);
@@ -79,7 +80,7 @@ function db(state: DbState): D1Like {
 }
 
 function env(state: DbState): ClubLiveEnv {
-  const snapshot = {
+  const snapshot = state.liveSnapshot ?? {
     status: "live",
     eventId: 2,
     courseName: "West Meadowbrook Park",
@@ -221,6 +222,29 @@ describe("club live scorecard cancellation", () => {
 });
 
 describe("club live competition formats", () => {
+  it("keeps the live snapshot format when event settings are edited after start", async () => {
+    const state: DbState = {
+      eventRow: { id: 2, type: "tournament", name: "Edited Event", status: "live", format: "stroke", course_id: 2, layout_id: 1 },
+      eventConfig: { play_format: "singles" },
+      liveSnapshot: {
+        status: "live",
+        eventId: 2,
+        format: "matchplay",
+        playFormat: "doubles",
+        teamRequired: true,
+        weather: { location: null, current: null, history: [], error: null },
+        holes: [],
+        players: [],
+        standings: [],
+      },
+    };
+    const res = await handleClubLive(new Request("https://w/events/2/live"), env(state), null, "GET", ["events", "2", "live"]);
+
+    if (!res) throw new Error("missing_response");
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ format: "matchplay", playFormat: "doubles", teamRequired: true });
+  });
+
   it("starts live scoring with independent matchplay and doubles metadata", async () => {
     const state: DbState = {
       eventRow: { id: 2, type: "tournament", name: "Doubles Match", status: "scheduled", format: "matchplay", course_id: 2, layout_id: 1 },
@@ -248,6 +272,39 @@ describe("club live competition formats", () => {
       { memberId: "r2", name: "Red 2", team: "Red", division: "MA1", startingHole: null, ratingAnchor: null },
       { memberId: "b1", name: "Blue 1", team: "Blue", division: "MA1", startingHole: null, ratingAnchor: null },
       { memberId: "b2", name: "Blue 2", team: "Blue", division: "MA1", startingHole: null, ratingAnchor: null },
+    ]);
+  });
+
+  it("starts from checked-in registrations only after the check-in deadline", async () => {
+    const state: DbState = {
+      eventRow: {
+        id: 2,
+        type: "tournament",
+        name: "Morning Flex",
+        status: "scheduled",
+        format: "stroke",
+        course_id: 2,
+        layout_id: 1,
+        checkin_deadline: new Date(Date.now() - 60_000).toISOString(),
+      },
+      eventConfig: { play_format: "singles" },
+      registrations: [
+        { member_id: "in", name: "Checked In", team: null, division: "MA1", starting_hole: 1, checked_in: 1 },
+        { member_id: "out", name: "No Show", team: null, division: "MA1", starting_hole: 1, checked_in: 0 },
+      ],
+    };
+    const res = await handleClubLive(
+      new Request("https://w/events/2/live/start", { method: "POST", headers: await adminHeader(), body: JSON.stringify({}) }),
+      env(state),
+      null,
+      "POST",
+      ["events", "2", "live", "start"],
+    );
+
+    if (!res) throw new Error("missing_response");
+    expect(res.status).toBe(200);
+    expect(state.startBody?.players).toEqual([
+      { memberId: "in", name: "Checked In", team: null, division: "MA1", startingHole: 1, ratingAnchor: null },
     ]);
   });
 

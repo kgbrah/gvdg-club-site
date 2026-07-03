@@ -15,13 +15,38 @@ describe("admin event management", () => {
     const body = (await res.json()) as { event: { layout_id: number; created_by: string }; layout: { id: number } };
     expect(body.layout.id).toBe(44);
     expect(body.event).toMatchObject({ layout_id: 44, created_by: "m_admin" });
-    expect(state.eventBinds?.[6]).toBe(44);
+    expect(state.eventInsert).toMatchObject({ layout_id: 44 });
     expect(state.layoutBinds?.[0]).toBe(7);
     expect(state.layoutBinds?.[1]).toBe("Gold");
     expect(state.layoutBinds?.[3]).toBe(54);
     const holes = JSON.parse(String(state.layoutBinds?.[2])) as { hole: number; par: number }[];
     expect(holes).toHaveLength(18);
     expect(holes.every((h) => h.par === 3)).toBe(true);
+  });
+
+  it("creates event start and deadline fields", async () => {
+    const state: DbState = {};
+    const res = await call("/admin/events", "POST", {
+      type: "tournament",
+      name: "July Flex",
+      date: "2026-07-04",
+      starts_at: "2026-07-04T13:00:00.000Z",
+      registration_deadline: "2026-07-03T23:00:00.000Z",
+      checkin_deadline: "2026-07-04T12:30:00.000Z",
+    }, await token("m_admin"), state);
+
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { event: { starts_at?: string; registration_deadline?: string; checkin_deadline?: string } };
+    expect(body.event).toMatchObject({
+      starts_at: "2026-07-04T13:00:00.000Z",
+      registration_deadline: "2026-07-03T23:00:00.000Z",
+      checkin_deadline: "2026-07-04T12:30:00.000Z",
+    });
+    expect(state.eventInsert).toMatchObject({
+      starts_at: "2026-07-04T13:00:00.000Z",
+      registration_deadline: "2026-07-03T23:00:00.000Z",
+      checkin_deadline: "2026-07-04T12:30:00.000Z",
+    });
   });
 
   it("lets admins add and remove manual event players", async () => {
@@ -135,7 +160,7 @@ describe("admin event management", () => {
 
     expect(unconfirmed.status).toBe(409);
     await expect(unconfirmed.json()).resolves.toMatchObject({ error: "event_details_confirmation_required" });
-    expect(unconfirmedState.updateEventBinds).toBeUndefined();
+    expect(unconfirmedState.eventUpdate).toBeUndefined();
 
     const confirmedState: DbState = {};
     const confirmed = await call(
@@ -147,14 +172,9 @@ describe("admin event management", () => {
     );
 
     expect(confirmed.status).toBe(200);
-    expect(confirmedState.updateEventBinds?.slice(0, 10)).toEqual([
-      0, null,
-      1, "Renamed Flex",
-      0, null,
-      0, null,
-      1, "2026-08-01",
-    ]);
-    expect(confirmedState.updateEventBinds?.at(-1)).toBe(9);
+    const body = (await confirmed.json()) as { event: { id: number; name?: string; date?: string } };
+    expect(body.event).toMatchObject({ id: 9, name: "Renamed Flex", date: "2026-08-01" });
+    expect(confirmedState.eventUpdate).toEqual({ name: "Renamed Flex", date: "2026-08-01" });
   });
 
   it("blocks deleting events that already have operational records", async () => {

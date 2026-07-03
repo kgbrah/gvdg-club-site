@@ -53,6 +53,18 @@ test('normalizeEvent preserves play_format for event detail format labels', () =
   assert.equal(normalizeEvent({ id: 1 }).play_format, '');
 });
 
+test('normalizeEvent preserves event schedule and deadline fields', () => {
+  const ev = normalizeEvent({
+    id: 1,
+    starts_at: '2026-07-04T13:00:00.000Z',
+    registration_deadline: '2026-07-03T23:00:00.000Z',
+    checkin_deadline: '2026-07-04T12:30:00.000Z',
+  });
+  assert.equal(ev.starts_at, '2026-07-04T13:00:00.000Z');
+  assert.equal(ev.registration_deadline, '2026-07-03T23:00:00.000Z');
+  assert.equal(ev.checkin_deadline, '2026-07-04T12:30:00.000Z');
+});
+
 test('round format helpers split play format from scoring format', () => {
   const ev = normalizeEvent({ id: 1, format: 'matchplay', play_format: 'doubles' });
   assert.equal(playFormatForDisplay(ev), 'doubles');
@@ -108,6 +120,12 @@ test('parseEventDate tolerates ISO, date-only, null and junk', () => {
   assert.equal(parseEventDate(null), null);
   assert.equal(parseEventDate(''), null);
   assert.equal(parseEventDate('not a date'), null);
+});
+
+test('parseEventDate keeps bare event dates on their scheduled Eastern date', () => {
+  const d = parseEventDate('2026-07-04');
+  const eastern = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', month: 'long', day: 'numeric', year: 'numeric' }).format(d);
+  assert.equal(eastern, 'July 4, 2026');
 });
 
 test('formatEventDate never throws and labels missing dates', () => {

@@ -7,6 +7,7 @@ import { asInt, asStr } from "./input.js";
 import { enrichLiveEventFormats, liveRoundFormats } from "./club-live-formats.js";
 import { findRatingAnchor } from "./rating-store.js";
 import { weatherLocationForCourse, type WeatherLocation } from "./weather.js";
+import { deadlinePassed } from "./event-deadlines.js";
 import type { KVLike } from "./ratelimit.js";
 
 const LIVE_SCORE_IP_LIMIT = 180; // score writes per identity per minute (a card rarely exceeds a few)
@@ -38,6 +39,7 @@ type LiveEventRow = Record<string, unknown> & {
   readonly course_id?: number | null;
   readonly layout_id?: number | null;
   readonly format?: string | null;
+  readonly checkin_deadline?: string | null;
   readonly players?: Record<string, unknown>[];
 };
 type LiveLayoutRow = {
@@ -230,10 +232,13 @@ export async function handleClubLive(
       const courseId = evLayout?.course_id ?? ev.course_id ?? null;
       const evCourse = courseId != null ? ((await db.getCourse(env.DB, courseId)) as LiveCourseRow | null) : null;
       const weatherLocation = weatherLocationForCourse(evCourse, evLayout);
-      const regs = (await db.listRegistrations(env.DB, eid)) as { member_id?: string; name?: string; team?: string | null; division?: string | null; starting_hole?: number | null }[];
+      const regs = (await db.listRegistrations(env.DB, eid)) as { member_id?: string; name?: string; team?: string | null; division?: string | null; starting_hole?: number | null; checked_in?: number | null }[];
+      const useRegistrationRoster = regs.length > 0 && startBody.from !== "players";
+      const scoringRegs = deadlinePassed(ev.checkin_deadline) ? regs.filter((r) => Number(r.checked_in ?? 0) === 1) : regs;
+      if (useRegistrationRoster && scoringRegs.length === 0) return json({ error: "no_checked_in_players" }, 400, origin);
       const rawPlayers: StartPlayer[] =
-        regs.length && startBody.from !== "players"
-          ? regs.map((r) => ({ memberId: r.member_id ?? null, name: String(r.name ?? "Player"), team: r.team ?? null, division: r.division ?? null, startingHole: r.starting_hole ?? null }))
+        useRegistrationRoster
+          ? scoringRegs.map((r) => ({ memberId: r.member_id ?? null, name: String(r.name ?? "Player"), team: r.team ?? null, division: r.division ?? null, startingHole: r.starting_hole ?? null }))
           : (Array.isArray(ev.players) ? ev.players : []).map((p) => ({ memberId: rowString(p, "member_id"), name: String(p.name ?? "Player"), team: rowString(p, "team"), division: rowString(p, "division"), startingHole: null, pdgaNo: rowString(p, "pdga_no") }));
       const teamError = teamValidationError(roundFormats.teamRequired, rawPlayers);
       if (teamError) return json(teamError, 400, origin);

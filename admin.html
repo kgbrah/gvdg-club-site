@@ -427,6 +427,9 @@
                     <div><label for="aeType">Type</label><select id="aeType"><option value="tournament">Tournament</option><option value="league_round">League round</option><option value="fundraiser">Fundraiser</option><option value="meeting">Meeting</option></select></div>
                     <div><label for="aeName">Name</label><input id="aeName" maxlength="200" required></div>
                     <div><label for="aeDate">Date</label><input id="aeDate" type="date"></div>
+                    <div><label for="aeStartsAt">Start time</label><input id="aeStartsAt" type="datetime-local"></div>
+                    <div><label for="aeRegistrationDeadline">Registration deadline</label><input id="aeRegistrationDeadline" type="datetime-local"></div>
+                    <div><label for="aeCheckinDeadline">Check-in deadline</label><input id="aeCheckinDeadline" type="datetime-local"></div>
                     <div><label for="aeStatus">Status</label><select id="aeStatus"><option value="scheduled">Scheduled</option><option value="cancelled">Cancelled</option></select></div>
                     <div><label for="aeFormat">Scoring format</label><select id="aeFormat"><option value="stroke">Stroke play</option><option value="matchplay">Matchplay</option></select></div>
                     <div><label for="aePlayFormat">Play format</label><select id="aePlayFormat"><option value="singles">Singles</option><option value="doubles">Doubles</option></select></div>
@@ -911,6 +914,19 @@
             if (status === 'final') return 'Final';
             return status || 'Scheduled';
         }
+        function toIsoFromLocalInput(id) {
+            const value = $(id).value;
+            if (!value) return null;
+            const d = new Date(value);
+            return Number.isFinite(d.getTime()) ? d.toISOString() : null;
+        }
+        function toLocalDateTimeInput(raw) {
+            if (!raw) return '';
+            const d = new Date(raw);
+            if (!Number.isFinite(d.getTime())) return '';
+            const pad = (n) => String(n).padStart(2, '0');
+            return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+        }
         function setEventStatusSelect(sel, status) {
             Array.from(sel.querySelectorAll('option[data-lifecycle-status]')).forEach((o) => o.remove());
             sel.disabled = false;
@@ -1056,6 +1072,9 @@
                 type: $('aeType').value,
                 name: $('aeName').value.trim(),
                 date: $('aeDate').value || null,
+                starts_at: toIsoFromLocalInput('aeStartsAt'),
+                registration_deadline: toIsoFromLocalInput('aeRegistrationDeadline'),
+                checkin_deadline: toIsoFromLocalInput('aeCheckinDeadline'),
                 format: $('aeFormat').value || 'stroke',
                 play_format: $('aePlayFormat').value || 'singles',
                 course_id: $('aeCourse').value ? Number($('aeCourse').value) : null,
@@ -1080,6 +1099,9 @@
             $('aeType').value = ev.type || 'tournament';
             $('aeName').value = ev.name || '';
             $('aeDate').value = ev.date || '';
+            $('aeStartsAt').value = toLocalDateTimeInput(ev.starts_at);
+            $('aeRegistrationDeadline').value = toLocalDateTimeInput(ev.registration_deadline);
+            $('aeCheckinDeadline').value = toLocalDateTimeInput(ev.checkin_deadline);
             setEventStatusSelect($('aeStatus'), ev.status || 'scheduled');
             $('aeFormat').value = ev.format === 'matchplay' ? 'matchplay' : 'stroke';
             $('aePlayFormat').value = ev.play_format || (ev.format === 'doubles' ? 'doubles' : 'singles');

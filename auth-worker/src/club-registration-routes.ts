@@ -7,8 +7,24 @@ import { clientIp, json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { notifyRegistration } from "./register-notify.js";
 import { asInt, asStr } from "./input.js";
+import { deadlinePassed } from "./event-deadlines.js";
 
 const GUEST_REGISTER_IP_LIMIT = 15; // guest sign-ups per IP per minute
+
+type EventSchedule = {
+  readonly status?: string | null;
+  readonly starts_at?: string | null;
+  readonly registration_deadline?: string | null;
+  readonly checkin_deadline?: string | null;
+};
+type RegistrationEventConfig = OwedConfig & {
+  readonly registration_open?: number;
+  readonly divisions?: string;
+};
+type RegistrationAddons = {
+  readonly ctp?: boolean;
+  readonly ace?: boolean;
+};
 
 /** A guest manages their own registration with a random token (returned at register time): member_id
  *  is "g_<token>". Read it from ?gt= (GET/DELETE) or the JSON body (POST). Members use their JWT sub. */
@@ -20,6 +36,11 @@ function guestMemberId(request: Request, body?: Record<string, unknown> | null):
 }
 function genGuestToken(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+function registrationAddons(raw: unknown): RegistrationAddons {
+  if (!raw || typeof raw !== "object") return {};
+  const addons = raw as Record<string, unknown>;
+  return { ctp: addons.ctp === true, ace: addons.ace === true };
 }
 
 export async function handleClubRegistration(
@@ -93,12 +114,13 @@ export async function handleClubRegistration(
   if (seg[2] === "registration" && method === "GET") {
     const memberId = claims ? claims.sub : guestMemberId(request);
     const registration = memberId ? await db.getMyRegistration(env.DB, eid, memberId) : null;
-    return json({ config: await db.getEventConfig(env.DB, eid), registration }, 200, origin);
+    return json({ config: await db.getEventConfig(env.DB, eid), event: await db.getEventSchedule(env.DB, eid), registration }, 200, origin);
   }
   if (seg[2] === "register" && method === "POST") {
-    const status = await db.getEventStatus(env.DB, eid);
-    if (status !== "scheduled" && status !== "live") return json({ error: "registration_closed" }, 403, origin);
-    const cfg = (await db.getEventConfig(env.DB, eid)) as { registration_open?: number; divisions?: string } | null;
+    const event = (await db.getEventSchedule(env.DB, eid)) as EventSchedule | null;
+    if (!event || (event.status !== "scheduled" && event.status !== "live")) return json({ error: "registration_closed" }, 403, origin);
+    if (deadlinePassed(event.registration_deadline)) return json({ error: "registration_closed" }, 403, origin);
+    const cfg = (await db.getEventConfig(env.DB, eid)) as RegistrationEventConfig | null;
     if (!cfg || cfg.registration_open !== 1) return json({ error: "registration_closed" }, 403, origin);
     const b = (await readJson(request)) ?? {};
     const division = asStr(b.division, 60);
@@ -120,13 +142,14 @@ export async function handleClubRegistration(
       memberId = "g_" + guestToken;
     }
 
-    const addons = b.addons && typeof b.addons === "object" ? JSON.stringify({ ctp: !!(b.addons as Record<string, unknown>).ctp, ace: !!(b.addons as Record<string, unknown>).ace }) : null;
+    const selectedAddons = b.addons && typeof b.addons === "object" ? registrationAddons(b.addons) : {};
+    const addons = b.addons && typeof b.addons === "object" ? JSON.stringify(selectedAddons) : null;
     // Once entry is paid, a re-registration must not silently add a paid add-on (ace pot / CTP) that was
     // never charged — that would put the registrant into a real-cash pool for free. Block any change that
     // raises the amount owed above what was actually captured (removing add-ons / editing division is fine).
     const existing = (await db.getMyRegistration(env.DB, eid, memberId)) as { paid_entry?: number; amount_paid_cents?: number } | null;
     if (existing?.paid_entry === 1) {
-      const owedNow = computeOwed(cfg as unknown as OwedConfig, addons ? (JSON.parse(addons) as { ctp?: boolean; ace?: boolean }) : {});
+      const owedNow = computeOwed(cfg, selectedAddons);
       if (owedNow > (existing.amount_paid_cents ?? 0)) return json({ error: "paid_addons_locked" }, 409, origin);
     }
     const row = await db.registerForEvent(env.DB, { event_id: eid, member_id: memberId, name, division, team: asStr(b.team, 40), addons, email });
@@ -134,7 +157,7 @@ export async function handleClubRegistration(
     // any device. Members manage via their account; this is a no-op unless RESEND_API_KEY is configured.
     if (guestToken && email) {
       const ev = (await db.getEvent(env.DB, eid)) as { name?: string; date?: string | null } | null;
-      const owedCents = computeOwed(cfg as unknown as OwedConfig, addons ? (JSON.parse(addons) as { ctp?: boolean; ace?: boolean }) : {});
+      const owedCents = computeOwed(cfg, selectedAddons);
       const manageUrl = origin ? `${origin}/events.html#manage=${eid}-${guestToken}` : null;
       ctx?.waitUntil(notifyRegistration(env, { to: email, name, eventName: ev?.name ?? "your event", eventDate: ev?.date ?? null, manageUrl, owedCents }));
     }
@@ -149,6 +172,9 @@ export async function handleClubRegistration(
     return json({ ok: true }, 200, origin);
   }
   if (seg[2] === "checkin" && method === "POST") {
+    const event = (await db.getEventSchedule(env.DB, eid)) as EventSchedule | null;
+    if (!event || (event.status !== "scheduled" && event.status !== "live")) return json({ error: "checkin_closed" }, 403, origin);
+    if (deadlinePassed(event.checkin_deadline)) return json({ error: "checkin_closed" }, 403, origin);
     const b = (await readJson(request)) ?? {};
     const memberId = claims ? claims.sub : guestMemberId(request, b);
     if (!memberId) return json({ error: "unauthorized" }, 401, origin);

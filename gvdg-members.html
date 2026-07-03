@@ -1394,11 +1394,74 @@
             ]);
             if (er && er.ok) events = (await er.json()).events || [];
             if (mr && mr.ok) myRegs = (await mr.json()).registrations || [];
-            if (!events.length) { wrap.style.display = 'none'; return; }
             const byEvent = new Map(myRegs.map((r) => [r.event_id, r]));
+            const eventsById = new Map(events.map((ev) => [String(ev.id), ev]));
+            myRegs.forEach((reg) => {
+                const id = String(reg.event_id);
+                if (!eventsById.has(id) && (reg.status === 'scheduled' || reg.status === 'live')) eventsById.set(id, eventFromRegistration(reg));
+            });
+            events = Array.from(eventsById.values()).sort((a, b) => eventSortTime(a) - eventSortTime(b));
+            if (!events.length) { wrap.style.display = 'none'; return; }
             list.replaceChildren();
             events.forEach((ev) => list.appendChild(registerCard(ev, byEvent.get(ev.id))));
             wrap.style.display = '';
+        }
+        function eventFromRegistration(reg) {
+            return {
+                id: reg.event_id,
+                name: reg.event_name || 'Registered event',
+                date: reg.date || null,
+                starts_at: reg.starts_at || null,
+                registration_deadline: reg.registration_deadline || null,
+                checkin_deadline: reg.checkin_deadline || null,
+                status: reg.status || '',
+                type: reg.type || '',
+                event_format: reg.event_format || '',
+                course_id: reg.course_id || null,
+                layout_id: reg.layout_id || null,
+                course_name: reg.course_name || '',
+                layout_name: reg.layout_name || '',
+                total_par: reg.total_par == null ? null : reg.total_par,
+                entry_fee_cents: reg.entry_fee_cents == null ? null : reg.entry_fee_cents,
+                ctp_fee_cents: reg.ctp_fee_cents == null ? null : reg.ctp_fee_cents,
+                ace_fee_cents: reg.ace_fee_cents == null ? null : reg.ace_fee_cents,
+                divisions: reg.divisions || '[]',
+                play_format: reg.play_format || '',
+            };
+        }
+        function eventSortTime(ev) {
+            const d = new Date(ev.starts_at || ev.date || '');
+            return Number.isFinite(d.getTime()) ? d.getTime() : Number.POSITIVE_INFINITY;
+        }
+        function formatEventDate(raw) {
+            if (!raw) return '';
+            const s = String(raw).trim();
+            let d = null;
+            let dateOnly = false;
+            const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+            if (m) {
+                const year = Number(m[1]), month = Number(m[2]), day = Number(m[3]);
+                d = new Date(year, month - 1, day, 12);
+                dateOnly = true;
+            } else {
+                d = new Date(s);
+            }
+            if (!Number.isFinite(d.getTime())) return s;
+            return d.toLocaleString([], dateOnly
+                ? { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }
+                : { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+        }
+        function scheduleRows(ev) {
+            return [
+                ['Date', formatEventDate(ev.date)],
+                ['Start', formatEventDate(ev.starts_at)],
+                ['Register', formatEventDate(ev.registration_deadline)],
+                ['Check-in', formatEventDate(ev.checkin_deadline)],
+            ].filter((row) => row[1]);
+        }
+        function deadlinePassed(raw) {
+            const d = new Date(raw || '');
+            return Number.isFinite(d.getTime()) && d.getTime() <= Date.now();
         }
         function dollars(c) {
             const n = Number(c || 0);
@@ -1445,8 +1508,13 @@
             const card = elNode('div', 'register-card');
             const head = elNode('div', 'register-head');
             head.appendChild(elNode('span', 'register-name', ev.name));
-            if (ev.date) head.appendChild(elNode('span', 'register-date', ev.date));
             card.appendChild(head);
+            const schedule = scheduleRows(ev);
+            if (schedule.length) {
+                const rows = elNode('div', 'register-fee');
+                schedule.forEach(([label, value]) => rows.appendChild(elNode('div', null, label + '  ' + value)));
+                card.appendChild(rows);
+            }
             const meta = [ev.course_name, ev.layout_name ? ev.layout_name + (ev.total_par != null ? ' · par ' + ev.total_par : '') : null].filter(Boolean).join(' · ');
             if (meta) card.appendChild(elNode('div', 'register-fee', meta));
             card.appendChild(elNode('div', 'register-fee', (ev.entry_fee_cents ? dollars(ev.entry_fee_cents) + ' entry' : 'Free entry') + (ev.play_format ? ' · ' + ev.play_format : '')));
@@ -1467,9 +1535,13 @@
                 }
                 const actions = elNode('div', 'register-actions');
                 if (!myReg.checked_in) {
-                    const ci = elNode('button', 'passkey-btn', 'Check in'); ci.type = 'button';
-                    ci.addEventListener('click', async () => { const r = await api('/events/' + ev.id + '/checkin', { method: 'POST', token: regToken() }); if (r.ok) loadRegister(); else alert('Check-in failed — please try again or see an admin.'); });
-                    actions.appendChild(ci);
+                    if (deadlinePassed(ev.checkin_deadline)) {
+                        card.appendChild(elNode('div', 'register-fee', 'Check-in deadline passed — see an admin if you need help.'));
+                    } else {
+                        const ci = elNode('button', 'passkey-btn', 'Check in'); ci.type = 'button';
+                        ci.addEventListener('click', async () => { const r = await api('/events/' + ev.id + '/checkin', { method: 'POST', token: regToken() }); if (r.ok) loadRegister(); else alert('Check-in failed — please try again or see an admin.'); });
+                        actions.appendChild(ci);
+                    }
                 }
                 const wd = elNode('button', 'board-link danger', 'Withdraw'); wd.type = 'button';
                 wd.addEventListener('click', async () => {

@@ -12,8 +12,8 @@ const MEMBERS = {
 
 export type DbState = {
   layoutBinds?: unknown[];
-  eventBinds?: unknown[];
-  updateEventBinds?: unknown[];
+  eventInsert?: Record<string, unknown>;
+  eventUpdate?: Record<string, unknown>;
   registrationUpdateBinds?: unknown[];
   playerBinds?: unknown[];
   acePotBinds?: unknown[];
@@ -51,6 +51,23 @@ function d1Result<T>(results: T[] = []): D1Result<T> {
   return { results, success: true, meta: d1Meta() };
 }
 
+function insertValuesByColumn(sql: string, table: string, binds: readonly unknown[]): Record<string, unknown> {
+  const match = new RegExp(`INSERT INTO ${table} \\(([^)]+)\\)`, "i").exec(sql);
+  const columnList = match?.[1];
+  if (!columnList) return {};
+  return Object.fromEntries(columnList.split(",").map((column, index) => [column.trim(), binds[index]]));
+}
+
+function updateValuesByColumn(sql: string, binds: readonly unknown[]): Record<string, unknown> {
+  const updates: Record<string, unknown> = {};
+  const fields = [...sql.matchAll(/([a-z_]+)=CASE WHEN \? THEN \? ELSE [a-z_]+ END/gi)].map((match) => match[1]).filter((field): field is string => typeof field === "string");
+  fields.forEach((field, index) => {
+    const flag = binds[index * 2];
+    if (flag === 1) updates[field] = binds[index * 2 + 1];
+  });
+  return updates;
+}
+
 class AdminEventStatement implements D1PreparedStatement {
   private binds: unknown[] = [];
 
@@ -71,6 +88,9 @@ class AdminEventStatement implements D1PreparedStatement {
           id: 5,
           name: "Summer Flex",
           date: "2026-07-12",
+          starts_at: "2026-07-12T13:00:00.000Z",
+          registration_deadline: "2026-07-11T23:00:00.000Z",
+          checkin_deadline: "2026-07-12T12:30:00.000Z",
           type: "tournament",
           event_format: "stroke",
           course_id: 7,
@@ -122,8 +142,12 @@ class AdminEventStatement implements D1PreparedStatement {
       return { id: 44, course_id: this.binds[0], name: this.binds[1], holes: this.binds[2], total_par: this.binds[3] };
     }
     if (/INSERT INTO events/i.test(this.sql)) {
-      this.state.eventBinds = this.binds;
-      return { id: 12, type: this.binds[0], name: this.binds[1], course_id: this.binds[5], layout_id: this.binds[6], created_by: this.binds[11] };
+      const row = insertValuesByColumn(this.sql, "events", this.binds);
+      this.state.eventInsert = row;
+      return {
+        id: 12,
+        ...row,
+      };
     }
     if (/INSERT INTO event_players/i.test(this.sql)) {
       this.state.playerBinds = this.binds;
@@ -142,8 +166,9 @@ class AdminEventStatement implements D1PreparedStatement {
       };
     }
     if (/UPDATE events/i.test(this.sql)) {
-      this.state.updateEventBinds = this.binds;
-      return { id: this.binds.at(-1), status: this.state.eventStatus ?? "scheduled" };
+      const updates = updateValuesByColumn(this.sql, this.binds);
+      this.state.eventUpdate = updates;
+      return { id: this.binds.at(-1), status: updates.status ?? this.state.eventStatus ?? "scheduled", ...updates };
     }
     if (/UPDATE registrations SET/i.test(this.sql)) {
       this.state.registrationUpdateBinds = this.binds;

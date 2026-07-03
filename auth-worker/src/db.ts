@@ -56,6 +56,7 @@ export type CoursePatch = { name?: string | null; location?: string | null; udis
 // EventPatch uses undefined for "leave unchanged" and null to clear nullable fields.
 export type EventPatch = {
   type?: string | null; name?: string | null; status?: string | null; format?: string | null; date?: string | null;
+  starts_at?: string | null; registration_deadline?: string | null; checkin_deadline?: string | null;
   course_id?: number | null; layout_id?: number | null; league_id?: number | null; notes?: string | null;
 };
 
@@ -222,6 +223,9 @@ export interface EventInput {
   status?: string;
   format?: string | null;
   date?: string | null;
+  starts_at?: string | null;
+  registration_deadline?: string | null;
+  checkin_deadline?: string | null;
   course_id?: number | null;
   layout_id?: number | null;
   league_id?: number | null;
@@ -253,11 +257,12 @@ export async function getEvent(db: D1Like, id: number) {
 export async function createEvent(db: D1Like, e: EventInput) {
   return db
     .prepare(
-      `INSERT INTO events (type, name, status, format, date, course_id, layout_id, league_id, source, external_url, notes, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
+      `INSERT INTO events (type, name, status, format, date, starts_at, registration_deadline, checkin_deadline, course_id, layout_id, league_id, source, external_url, notes, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
     )
     .bind(
       e.type, e.name, e.status ?? "scheduled", e.format ?? null, e.date ?? null,
+      e.starts_at ?? null, e.registration_deadline ?? null, e.checkin_deadline ?? null,
       e.course_id ?? null, e.layout_id ?? null, e.league_id ?? null,
       e.source ?? "manual", e.external_url ?? null, e.notes ?? null, e.created_by ?? null,
     )
@@ -271,6 +276,9 @@ export async function updateEvent(db: D1Like, id: number, e: EventPatch) {
         status=CASE WHEN ? THEN ? ELSE status END,
         format=CASE WHEN ? THEN ? ELSE format END,
         date=CASE WHEN ? THEN ? ELSE date END,
+        starts_at=CASE WHEN ? THEN ? ELSE starts_at END,
+        registration_deadline=CASE WHEN ? THEN ? ELSE registration_deadline END,
+        checkin_deadline=CASE WHEN ? THEN ? ELSE checkin_deadline END,
         course_id=CASE WHEN ? THEN ? ELSE course_id END,
         layout_id=CASE WHEN ? THEN ? ELSE layout_id END,
         league_id=CASE WHEN ? THEN ? ELSE league_id END,
@@ -283,6 +291,9 @@ export async function updateEvent(db: D1Like, id: number, e: EventPatch) {
       e.status !== undefined ? 1 : 0, e.status ?? null,
       e.format !== undefined ? 1 : 0, e.format ?? null,
       e.date !== undefined ? 1 : 0, e.date ?? null,
+      e.starts_at !== undefined ? 1 : 0, e.starts_at ?? null,
+      e.registration_deadline !== undefined ? 1 : 0, e.registration_deadline ?? null,
+      e.checkin_deadline !== undefined ? 1 : 0, e.checkin_deadline ?? null,
       e.course_id !== undefined ? 1 : 0, e.course_id ?? null,
       e.layout_id !== undefined ? 1 : 0, e.layout_id ?? null,
       e.league_id !== undefined ? 1 : 0, e.league_id ?? null,
@@ -349,14 +360,18 @@ export async function listOpenRegistrationEvents(db: D1Like) {
   return (
     await db
       .prepare(
-        `SELECT e.id, e.name, e.date, e.type, e.format AS event_format, e.course_id, e.layout_id,
+        `SELECT e.id, e.name, e.date, e.starts_at, e.registration_deadline, e.checkin_deadline,
+           e.type, e.format AS event_format, e.course_id, e.layout_id,
            co.name AS course_name, l.name AS layout_name, l.total_par,
            c.entry_fee_cents, c.ctp_fee_cents, c.ace_fee_cents, c.divisions, c.play_format
          FROM events e JOIN event_config c ON c.event_id = e.id
          LEFT JOIN courses co ON co.id = e.course_id
          LEFT JOIN course_layouts l ON l.id = e.layout_id
-         WHERE c.registration_open = 1 AND e.status IN ('scheduled','live') ORDER BY e.date, e.id`,
+         WHERE c.registration_open = 1 AND e.status IN ('scheduled','live')
+           AND (e.registration_deadline IS NULL OR e.registration_deadline = '' OR e.registration_deadline > ?)
+         ORDER BY COALESCE(e.starts_at, e.date), e.id`,
       )
+      .bind(new Date().toISOString())
       .all()
   ).results;
 }
@@ -377,8 +392,28 @@ export async function getEventStatus(db: D1Like, id: number): Promise<string | n
   const r = (await db.prepare("SELECT status FROM events WHERE id = ?").bind(id).first()) as { status?: string } | null;
   return r?.status ?? null;
 }
+export async function getEventSchedule(db: D1Like, id: number) {
+  return db.prepare("SELECT status, starts_at, registration_deadline, checkin_deadline FROM events WHERE id = ?").bind(id).first();
+}
 export async function listMyRegistrations(db: D1Like, memberId: string) {
-  return (await db.prepare("SELECT * FROM registrations WHERE member_id = ? ORDER BY event_id DESC").bind(memberId).all()).results;
+  return (
+    await db
+      .prepare(
+        `SELECT r.*, e.name AS event_name, e.date, e.starts_at, e.registration_deadline, e.checkin_deadline,
+           e.type, e.status, e.format AS event_format, e.course_id, e.layout_id,
+           co.name AS course_name, l.name AS layout_name, l.total_par,
+           c.entry_fee_cents, c.ctp_fee_cents, c.ace_fee_cents, c.divisions, c.play_format
+         FROM registrations r
+         JOIN events e ON e.id = r.event_id
+         LEFT JOIN event_config c ON c.event_id = e.id
+         LEFT JOIN courses co ON co.id = e.course_id
+         LEFT JOIN course_layouts l ON l.id = e.layout_id
+         WHERE r.member_id = ?
+         ORDER BY COALESCE(e.starts_at, e.date) DESC, r.event_id DESC`,
+      )
+      .bind(memberId)
+      .all()
+  ).results;
 }
 export async function listMemberLiveEvents(db: D1Like, memberId: string) {
   return (
@@ -533,8 +568,9 @@ export async function getBoardFeed(db: D1Like, limit = 50): Promise<Record<strin
   const byParent = new Map<number, Record<string, unknown>[]>();
   for (const r of replies) {
     const pid = r.parent_id as number;
-    if (!byParent.has(pid)) byParent.set(pid, []);
-    byParent.get(pid)!.push(r);
+    const group = byParent.get(pid);
+    if (group) group.push(r);
+    else byParent.set(pid, [r]);
   }
   return posts.map((p) => ({ ...p, replies: byParent.get(p.id as number) ?? [] }));
 }
@@ -854,11 +890,11 @@ export async function applyTeeSignRows(
       layoutId = created.id;
     }
     const layout = (await getLayout(db, layoutId)) as { holes?: string } | null;
-    const holes: Record<string, unknown>[] = JSON.parse(layout?.holes ?? "[]");
+    const holes: (LayoutHole & Record<string, unknown>)[] = JSON.parse(layout?.holes ?? "[]");
     const idx = holes.findIndex((h) => Number(h.hole) === hole);
     // The confirmed sign becomes the hole's VERIFIED (sticky) par + distance. Clearing manual_distance
     // reverts any earlier manual stopgap — verified now owns the value (enrichHoles resolves it).
-    const entry: Record<string, unknown> = {
+    const entry: LayoutHole & Record<string, unknown> = {
       hole, par: row.par,
       verified: { par: row.par, distance_ft: row.distance_ft ?? null, tee_sign_key: teeSignKey, tee_sign_id: teeSignId },
       manual_distance: null,
@@ -870,7 +906,7 @@ export async function applyTeeSignRows(
     };
     if (idx >= 0) holes[idx] = { ...holes[idx], ...entry }; else holes.push(entry);
     holes.sort((a, b) => Number(a.hole) - Number(b.hole));
-    const enriched = enrichHoles(holes as unknown as LayoutHole[]); // resolves verified → distance_ft/source + total_par
+    const enriched = enrichHoles(holes); // resolves verified → distance_ft/source + total_par
     await updateLayout(db, layoutId, { holes: enriched.holes, total_par: enriched.total_par });
     affected.push(layoutId);
   }

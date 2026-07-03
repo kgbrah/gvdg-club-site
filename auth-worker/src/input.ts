@@ -22,6 +22,14 @@ export const isUniqueViolation = (e: unknown): boolean => /UNIQUE constraint fai
 export const jsonStringArray = (v: unknown, max: number): string | null =>
   Array.isArray(v) ? JSON.stringify(v.filter((x) => typeof x === "string").slice(0, max)) : null;
 
+export function asIsoTimestamp(v: unknown): string | null | undefined {
+  if (v == null || v === "") return null;
+  const text = asStr(v, 80);
+  if (!text) return undefined;
+  const time = Date.parse(text);
+  return Number.isFinite(time) ? new Date(time).toISOString() : undefined;
+}
+
 export const SCORING_FORMATS = ["stroke", "matchplay"] as const;
 export const PLAY_FORMATS = ["singles", "doubles", "teams"] as const;
 export type ScoringFormat = (typeof SCORING_FORMATS)[number];
@@ -95,12 +103,19 @@ export function validEventInput(b: Record<string, unknown>): db.EventInput | nul
   if (!inSet(["manual", "dgs", "csv", "udisc"], source)) return null;
   const ext = b.external_url == null ? null : asStr(b.external_url, 1000);
   if (b.external_url != null && (!ext || !/^https?:\/\//.test(ext))) return null;
+  const startsAt = asIsoTimestamp(b.starts_at ?? b.start_time);
+  const registrationDeadline = asIsoTimestamp(b.registration_deadline);
+  const checkinDeadline = asIsoTimestamp(b.checkin_deadline);
+  if (startsAt === undefined || registrationDeadline === undefined || checkinDeadline === undefined) return null;
   return {
     type: b.type as string,
     name,
     status,
     format,
     date: b.date == null ? null : asStr(b.date, 40),
+    starts_at: startsAt,
+    registration_deadline: registrationDeadline,
+    checkin_deadline: checkinDeadline,
     course_id: b.course_id == null ? null : asInt(b.course_id),
     layout_id: b.layout_id == null ? null : asInt(b.layout_id),
     league_id: b.league_id == null ? null : asInt(b.league_id),

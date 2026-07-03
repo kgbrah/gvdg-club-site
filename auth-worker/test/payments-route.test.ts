@@ -2,66 +2,54 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import worker from "../src/index.js";
 import { signSession } from "../src/jwt.js";
 import { jsonObject, objectField } from "./json.js";
+import { d1Database, d1Statement, memoryKv, workerEnv } from "./worker-test-env.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
 const SECRET = "x".repeat(40);
 const MEMBER = JSON.stringify({ memberId: "m_jane", name: "Jane", isAdmin: false, pinHash: "x", mustChangePin: false });
-function kv(initial: Record<string, string> = {}) {
-  const m = new Map(Object.entries(initial));
-  return { get: async (k: string) => m.get(k) ?? null, put: async (k: string, v: string) => void m.set(k, v), delete: async (k: string) => void m.delete(k) };
+type TestEnv = Parameters<typeof worker.fetch>[1];
+
+function paymentDb(first: (sql: string) => Record<string, unknown> | null): D1Database {
+  return d1Database((sql) =>
+    d1Statement({
+      first: () => first(sql),
+    }),
+  );
 }
 // reg owes entry 1000 + ctp 500 = 1500
-const db = { prepare: (sql: string) => ({
-  bind() { return this; },
-  all: async () => ({ results: [], success: true }),
-  first: async () => {
+const db = paymentDb((sql) => {
     if (/FROM registrations WHERE event_id/i.test(sql)) return { id: 1, addons: '{"ctp":true}', paid_entry: 0, payment_ref: null };
     if (/FROM event_config/i.test(sql)) return { entry_fee_cents: 1000, ctp_fee_cents: 500, ace_fee_cents: 300 };
     if (/UPDATE registrations SET payment_ref/i.test(sql)) return { id: 1 }; // reserveCapture wins the slot
     if (/UPDATE registrations SET paid_entry/i.test(sql)) return { id: 1, paid_entry: 1, payment_ref: "ORDER123", amount_paid_cents: 1500 };
     return null;
-  },
-  run: async () => ({ results: [], success: true }),
-}) };
+});
 // variant where a concurrent capture already holds the reservation (reserveCapture loses)
-const dbRaceLost = { prepare: (sql: string) => ({
-  bind() { return this; },
-  all: async () => ({ results: [], success: true }),
-  first: async () => {
+const dbRaceLost = paymentDb((sql) => {
     if (/FROM registrations WHERE event_id/i.test(sql)) return { id: 1, addons: '{"ctp":true}', paid_entry: 0, payment_ref: null };
     if (/FROM event_config/i.test(sql)) return { entry_fee_cents: 1000, ctp_fee_cents: 500, ace_fee_cents: 300 };
     if (/UPDATE registrations SET payment_ref/i.test(sql)) return null; // another order id is mid-capture
     return null;
-  },
-  run: async () => ({ results: [], success: true }),
-}) };
+});
 // variant where entry is already PAID (1000c) — used to test the paid-add-on lock on re-register
-const dbPaidEntry = { prepare: (sql: string) => ({
-  bind() { return this; },
-  all: async () => ({ results: [], success: true }),
-  first: async () => {
-    if (/SELECT status FROM events/i.test(sql)) return { status: "scheduled" };
+const dbPaidEntry = paymentDb((sql) => {
+    if (/SELECT status(?:, starts_at, registration_deadline, checkin_deadline)? FROM events/i.test(sql)) return { status: "scheduled" };
     if (/FROM event_config/i.test(sql)) return { registration_open: 1, divisions: "[]", entry_fee_cents: 1000, ctp_fee_cents: 500, ace_fee_cents: 300 };
     if (/FROM registrations WHERE event_id/i.test(sql)) return { id: 1, paid_entry: 1, amount_paid_cents: 1000, addons: "{}" };
     if (/INSERT INTO registrations/i.test(sql)) return { id: 1, addons: '{"ace":true}', paid_entry: 1 };
     return null;
-  },
-  run: async () => ({ results: [], success: true }),
-}) };
+});
 // variant where the registration is already paid (payment_ref ORDER123)
-const dbPaid = { prepare: (sql: string) => ({
-  bind() { return this; },
-  all: async () => ({ results: [], success: true }),
-  first: async () => {
+const dbPaid = paymentDb((sql) => {
     if (/FROM registrations WHERE event_id/i.test(sql)) return { id: 1, addons: '{"ctp":true}', paid_entry: 1, payment_ref: "ORDER123" };
     if (/FROM event_config/i.test(sql)) return { entry_fee_cents: 1000, ctp_fee_cents: 500, ace_fee_cents: 300 };
     return null;
-  },
-  run: async () => ({ results: [], success: true }),
-}) };
-const envBase = { ROSTER: kv({ "member:m_jane": MEMBER }), RATELIMIT: kv(), DB: db, JWT_SECRET: SECRET, ALLOWED_ORIGINS: "http://localhost:8080", LIVE: undefined };
-const env = (extra: Record<string, unknown> = {}) => ({ ...envBase, ...extra } as unknown as Parameters<typeof worker.fetch>[1]);
+});
+const env = (extra: Partial<TestEnv> = {}): TestEnv => ({
+  ...workerEnv({ roster: memoryKv({ "member:m_jane": MEMBER }), db, secret: SECRET, origin: "http://localhost:8080" }),
+  ...extra,
+});
 const tok = () => signSession({ sub: "m_jane", mustChangePin: false }, SECRET, 900);
 async function call(path: string, method = "GET", token?: string, body?: unknown, e = env({ PAYPAL_CLIENT_ID: "cid", PAYPAL_SECRET: "sec" })) {
   const h: Record<string, string> = { Origin: "http://localhost:8080" };
@@ -125,7 +113,7 @@ describe("Track G G2 — PayPal Checkout", () => {
     const e = env({ PAYPAL_CLIENT_ID: "cid", PAYPAL_SECRET: "sec", DB: dbRaceLost });
     const res = await call("/events/5/pay/capture", "POST", await tok(), { orderId: "ORDER123" }, e);
     expect(res.status).toBe(409); // capture_in_progress
-    const calls = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) => String(c[0]));
+    const calls = vi.mocked(globalThis.fetch).mock.calls.map((c) => String(c[0]));
     expect(calls.some((u) => u.includes("/capture"))).toBe(false); // never charged the card
   });
 });

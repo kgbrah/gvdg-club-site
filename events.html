@@ -510,6 +510,23 @@
             return wrap;
         }
 
+        function scheduleMetaRow(label, value) {
+            const row = el('div', 'meta-row');
+            row.appendChild(el('span', 'meta-icon', label));
+            row.appendChild(el('span', null, value));
+            return row;
+        }
+
+        function appendScheduleMeta(meta, ev, options) {
+            const opts = options || {};
+            if (opts.date !== false) meta.appendChild(scheduleMetaRow('Date', formatEventDate(ev.date)));
+            if (ev.starts_at) meta.appendChild(scheduleMetaRow('Start', formatEventDate(ev.starts_at)));
+            if (opts.deadlines) {
+                if (ev.registration_deadline) meta.appendChild(scheduleMetaRow('Register', formatEventDate(ev.registration_deadline)));
+                if (ev.checkin_deadline) meta.appendChild(scheduleMetaRow('Check-in', formatEventDate(ev.checkin_deadline)));
+            }
+        }
+
         // Render a schedule-feed list (Google Sheet items: {name, date, detail, url}) as linked cards.
         function feedList(items) {
             const grid = el('div', 'events-grid');
@@ -607,10 +624,7 @@
             card.appendChild(top);
 
             const meta = el('div', 'event-meta');
-            const dateRow = el('div', 'meta-row');
-            dateRow.appendChild(el('span', 'meta-icon', '📅'));
-            dateRow.appendChild(el('span', null, formatEventDate(ev.date)));
-            meta.appendChild(dateRow);
+            appendScheduleMeta(meta, ev);
 
             const courseName = courseNameFor(courseIndex, ev.course_id);
             if (courseName) {
@@ -802,7 +816,9 @@
             const top = el('div', 'event-card-top');
             top.appendChild(el('h3', 'event-name', ev.name));
             card.appendChild(top);
-            if (ev.date) { const meta = el('div', 'event-meta'); const r = el('div', 'meta-row'); r.appendChild(el('span', 'meta-icon', '📅')); r.appendChild(el('span', null, ev.date)); meta.appendChild(r); card.appendChild(meta); }
+            const meta = el('div', 'event-meta');
+            appendScheduleMeta(meta, ev, { deadlines: true });
+            card.appendChild(meta);
             card.appendChild(el('div', 'register-fee', (ev.entry_fee_cents ? dollars(ev.entry_fee_cents) + ' entry' : 'Free entry') + (ev.play_format ? ' · ' + ev.play_format : '')));
 
             const tok = memberToken();
@@ -1503,6 +1519,9 @@
 
             const facts = el('div', 'detail-facts');
             facts.appendChild(fact('Date', formatEventDate(ev.date)));
+            if (ev.starts_at) facts.appendChild(fact('Start time', formatEventDate(ev.starts_at)));
+            if (ev.registration_deadline) facts.appendChild(fact('Registration deadline', formatEventDate(ev.registration_deadline)));
+            if (ev.checkin_deadline) facts.appendChild(fact('Check-in deadline', formatEventDate(ev.checkin_deadline)));
             const formatLabel = roundFormatLabel(ev);
             if (formatLabel) facts.appendChild(fact('Format', formatLabel));
 

@@ -43,6 +43,12 @@ async function liveEventFormats(env: LiveFormatEnv, eid: number): Promise<LiveRo
 
 export async function enrichLiveEventFormats(env: LiveFormatEnv, eid: number, data: LiveJson, status: number): Promise<LiveJson> {
   if (status !== 200 || (data["status"] !== "live" && data["status"] !== "final")) return data;
+  // The DO snapshot already carries the round's format — set at start, and the standings in `data` were
+  // computed WITH it. Never overwrite it from the current event config: an admin editing the event format
+  // mid-round must not retroactively change how the in-progress leaderboard renders (stroke standings
+  // rendered as matchplay/team columns). This also skips the two extra D1 reads on the hot polling path
+  // whenever the snapshot has a format — which, for any live/final round, is always.
+  if (typeof data["format"] === "string" && data["format"]) return data;
   const formats = await liveEventFormats(env, eid);
-  return formats ? { ...data, ...formats } : data;
+  return formats ? { ...formats, ...data } : data;
 }

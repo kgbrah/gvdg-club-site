@@ -10,7 +10,7 @@ import { createWalletTransactionOnce } from "./wallet-idempotency.js";
 import { getMember } from "./roster.js";
 import { enrichHoles, type LayoutHole } from "./layouts.js";
 import { json, readJson } from "./http.js";
-import { asInt, asStr, inSet, jsonStringArray, sanitizeHoles, validEventInput } from "./input.js";
+import { asInt, asIsoTimestamp, asStr, inSet, jsonStringArray, sanitizeHoles, validEventInput } from "./input.js";
 
 function inlineLayout(raw: unknown): { name: string; holes: LayoutHole[]; total_par: number } | null {
   if (!raw || typeof raw !== "object") return null;
@@ -30,11 +30,17 @@ function inlineLayout(raw: unknown): { name: string; holes: LayoutHole[]; total_
 
 const hasField = (body: Record<string, unknown>, field: string): boolean => Object.prototype.hasOwnProperty.call(body, field);
 const hasEventDetailsPatch = (body: Record<string, unknown>): boolean =>
-  ["type", "name", "format", "play_format", "date", "course_id", "layout_id", "league_id", "notes"].some((field) => hasField(body, field));
+  ["type", "name", "format", "play_format", "date", "starts_at", "start_time", "registration_deadline", "checkin_deadline", "course_id", "layout_id", "league_id", "notes"].some((field) => hasField(body, field));
 
 function parseEventSetupPlayFormat(value: unknown): string | null | undefined {
   if (value == null || value === "" || value === "singles") return null;
   return inSet(["doubles", "teams"], value) ? value : undefined;
+}
+
+function readTimestampPatch(body: Record<string, unknown>, field: string, alias?: string): string | null | undefined {
+  if (hasField(body, field)) return asIsoTimestamp(body[field]);
+  if (alias && hasField(body, alias)) return asIsoTimestamp(body[alias]);
+  return undefined;
 }
 
 function assignmentInt(value: unknown, fallback: number, min: number, max: number): number | null {
@@ -229,6 +235,21 @@ export async function handleAdminEvents(
       const date = b.date == null || b.date === "" ? null : asStr(b.date, 40);
       if (date == null && b.date != null && b.date !== "") return json({ error: "invalid_event" }, 400, origin);
       patch.date = date;
+    }
+    if (hasField(b, "starts_at") || hasField(b, "start_time")) {
+      const startsAt = readTimestampPatch(b, "starts_at", "start_time");
+      if (startsAt === undefined) return json({ error: "invalid_event" }, 400, origin);
+      patch.starts_at = startsAt;
+    }
+    if (hasField(b, "registration_deadline")) {
+      const registrationDeadline = readTimestampPatch(b, "registration_deadline");
+      if (registrationDeadline === undefined) return json({ error: "invalid_event" }, 400, origin);
+      patch.registration_deadline = registrationDeadline;
+    }
+    if (hasField(b, "checkin_deadline")) {
+      const checkinDeadline = readTimestampPatch(b, "checkin_deadline");
+      if (checkinDeadline === undefined) return json({ error: "invalid_event" }, 400, origin);
+      patch.checkin_deadline = checkinDeadline;
     }
     if (hasField(b, "course_id")) {
       const courseId = b.course_id == null || b.course_id === "" ? null : asInt(b.course_id);

@@ -36,12 +36,28 @@ export function statusLabel(status) {
   return STATUS_LABELS[status] || String(status);
 }
 
+const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+function parseDateOnly(s) {
+  const m = DATE_ONLY_RE.exec(s);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const d = new Date(year, month - 1, day, 12, 0, 0, 0);
+  if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return null;
+  return d;
+}
+
 // Parse an event's date defensively. The API may send a full ISO timestamp, a
 // bare YYYY-MM-DD, null, or junk. Returns a Date or null (never throws).
 export function parseEventDate(raw) {
   if (raw == null) return null;
+  if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? null : new Date(raw.getTime());
   const s = String(raw).trim();
   if (!s) return null;
+  const dateOnly = parseDateOnly(s);
+  if (dateOnly) return dateOnly;
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return null;
   return d;
@@ -53,7 +69,7 @@ export function parseEventDate(raw) {
 export function formatEventDate(raw) {
   const d = parseEventDate(raw);
   if (!d) return 'Date TBD';
-  const dateOnly = typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.trim());
+  const dateOnly = typeof raw === 'string' && DATE_ONLY_RE.test(raw.trim());
   const opts = dateOnly
     ? { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }
     : { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' };
@@ -77,6 +93,9 @@ export function normalizeEvent(raw) {
     format: ev.format != null ? String(ev.format) : '',
     play_format: ev.play_format != null ? String(ev.play_format) : '',
     date: ev.date != null ? String(ev.date) : null,
+    starts_at: ev.starts_at != null ? String(ev.starts_at) : null,
+    registration_deadline: ev.registration_deadline != null ? String(ev.registration_deadline) : null,
+    checkin_deadline: ev.checkin_deadline != null ? String(ev.checkin_deadline) : null,
     course_id: ev.course_id != null ? String(ev.course_id) : '',
     layout_id: ev.layout_id != null ? String(ev.layout_id) : '', // selected scoring layout (T4 tee-sign render)
     league_id: ev.league_id != null ? String(ev.league_id) : '',
