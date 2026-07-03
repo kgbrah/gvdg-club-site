@@ -573,11 +573,25 @@
                 .register-addon { font-size: 0.85rem; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 0.3rem; }
                 .register-card.live { border-color: var(--primary); }
                 .register-live-badge { display: inline-flex; align-items: center; min-height: 1.35rem; padding: 0.12rem 0.45rem; border-radius: 999px; background: var(--primary); color: #fff; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.04em; }
+                .register-final-badge, .register-cancelled-badge { display: inline-flex; align-items: center; min-height: 1.35rem; padding: 0.12rem 0.45rem; border-radius: 999px; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.04em; }
+                .register-final-badge { background: var(--text-muted); color: var(--bg-primary); }
+                .register-cancelled-badge { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
+                .register-status.cancelled { color: var(--primary); }
                 .register-subhead { color: var(--secondary-text); font-size: 0.78rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; margin: 1rem 0 0.35rem; }
                 .register-subhead:first-child { margin-top: 0; }
                 .casual-register-card .register-actions { margin-top: 0.75rem; }
                 .casual-register-players { color: var(--text-secondary); font-size: 0.85rem; line-height: 1.45; margin-top: 0.35rem; }
                 .casual-register-note { color: var(--text-muted); font-size: 0.85rem; line-height: 1.45; margin-top: 0.35rem; }
+                /* Post-a-casual-round form (moved here from the events page). */
+                .casual-form { border: 1px dashed var(--border-color); border-radius: 10px; padding: 1rem 1.25rem; margin-top: 0.75rem; background: var(--bg-secondary); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; align-items: end; }
+                .casual-field { display: flex; flex-direction: column; gap: 0.3rem; color: var(--text-secondary); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+                .casual-field.notes { grid-column: 1 / -1; }
+                .casual-field .form-input { text-transform: none; font-weight: 400; letter-spacing: 0; }
+                .casual-form .casual-notes { min-height: 42px; resize: vertical; }
+                .casual-form > .passkey-btn { grid-column: 1 / -1; justify-self: start; }
+                .casual-status { grid-column: 1 / -1; min-height: 1.1rem; color: var(--text-muted); font-size: 0.85rem; }
+                .casual-status.error { color: var(--primary); }
+                @media (max-width: 560px) { .casual-form { grid-template-columns: 1fr; } }
                 .club-meetings { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; }
                 .meeting-card { border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem 1.25rem; margin-top: 0.75rem; background: var(--bg-secondary); }
                 .meeting-head { display: flex; gap: 0.75rem; align-items: baseline; flex-wrap: wrap; margin-bottom: 0.5rem; }
@@ -1537,17 +1551,23 @@
                 return [];
             }
         }
-        function shortDate(value) {
-            if (!value) return '';
-            const d = new Date(value);
-            if (Number.isNaN(d.getTime())) return String(value);
-            return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'America/New_York' });
-        }
         function shortDateTime(value) {
             if (!value) return '';
             const d = new Date(value);
             if (Number.isNaN(d.getTime())) return String(value);
             return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' });
+        }
+        // An event's calendar day. A bare YYYY-MM-DD is rendered in UTC so it never slips back a day in
+        // Eastern (the old shortDate turned a July 4 event into "Jul 3"); a full timestamp renders Eastern.
+        function fmtEventDay(value) {
+            if (!value) return '';
+            const s = String(value).trim();
+            const d = new Date(s);
+            if (Number.isNaN(d.getTime())) return s;
+            const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(s);
+            return d.toLocaleDateString(undefined, dateOnly
+                ? { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }
+                : { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/New_York' });
         }
         function roundMeta(parts) {
             return parts.filter(Boolean).join(' · ');
@@ -1602,7 +1622,7 @@
             const eventRows = rounds.map((ev) => ({
                 kind: 'event',
                 title: ev.name || 'Live club event',
-                meta: roundMeta([shortDate(ev.date), ev.course_name, ev.layout_name, ev.division]),
+                meta: roundMeta([fmtEventDay(ev.date), ev.course_name, ev.layout_name, ev.division]),
                 href: 'score.html?event=' + encodeURIComponent(ev.id),
                 sort: Date.parse(ev.date || '') || 0
             }));
@@ -1618,6 +1638,11 @@
             wrap.appendChild(card);
         }
 
+        // Adapt a joined /my-registrations row into the event-shaped object registerCard expects, for
+        // events that have dropped out of the open-registration list (past or registration-closed).
+        function regAsEvent(r) {
+            return { _synth: true, id: r.event_id, name: r.event_name || 'Event', date: r.event_date || null, status: r.event_status || null, course_name: r.course_name || null, layout_name: r.layout_name || null };
+        }
         async function loadRegister() {
             const wrap = $('clubRegister'), list = $('registerList');
             const token = regToken();
@@ -1632,21 +1657,54 @@
             if (er && er.ok) events = (await er.json()).events || [];
             if (mr && mr.ok) myRegs = (await mr.json()).registrations || [];
             if (cr && cr.ok) casualRequests = (await cr.json()).requests || [];
-            if (!events.length && !casualRequests.length) { wrap.style.display = 'none'; return; }
+
+            // If there's nothing to show AND the post form can't even load courses, hide the panel rather
+            // than revealing an empty, non-functional one (e.g. a total backend outage). casualCourses()
+            // caches on success, so casualPostForm() below reuses this fetch on the happy path.
+            const courses = await casualCourses();
+            if (!events.length && !myRegs.length && !casualRequests.length && !courses.length) {
+                wrap.style.display = 'none';
+                return;
+            }
+
             const byEvent = new Map(myRegs.map((r) => [r.event_id, r]));
-            const liveEvents = events.filter((ev) => ev.status === 'live');
-            const scheduledEvents = events.filter((ev) => ev.status !== 'live');
+            const openById = new Map(events.map((ev) => [ev.id, ev]));
+            // Events open for sign-up that I'm NOT already registered for — the discovery list.
+            const openToJoin = events.filter((ev) => !byEvent.has(ev.id));
+            const liveToJoin = openToJoin.filter((ev) => ev.status === 'live');
+            const scheduledToJoin = openToJoin.filter((ev) => ev.status !== 'live');
+
             list.replaceChildren();
-            if (liveEvents.length) {
-                list.appendChild(elNode('h4', 'register-subhead', 'LIVE NOW'));
-                liveEvents.forEach((ev) => list.appendChild(registerCard(ev, byEvent.get(ev.id))));
+
+            // MY EVENTS — every event I'm registered for (live, upcoming, or past). Ordered live first,
+            // then soonest upcoming, then most-recent past. Uses the open event's full config when it's
+            // still open (so I can check in / pay / withdraw), otherwise details joined onto my reg.
+            if (myRegs.length) {
+                const statusRank = (s) => (s === 'live' ? 0 : s === 'scheduled' ? 1 : 2);
+                const myEvents = myRegs.slice().sort((a, b) => {
+                    const ra = statusRank(a.event_status), rb = statusRank(b.event_status);
+                    if (ra !== rb) return ra - rb;
+                    const da = a.event_date || '', db = b.event_date || '';
+                    return ra === 1 ? da.localeCompare(db) : db.localeCompare(da); // upcoming soonest-first; else most-recent-first
+                });
+                list.appendChild(elNode('h4', 'register-subhead', 'My events'));
+                myEvents.forEach((r) => list.appendChild(registerCard(openById.get(r.event_id) || regAsEvent(r), r)));
             }
-            if (scheduledEvents.length) {
-                list.appendChild(elNode('h4', 'register-subhead', 'Club events'));
-                scheduledEvents.forEach((ev) => list.appendChild(registerCard(ev, byEvent.get(ev.id))));
+
+            if (liveToJoin.length) {
+                list.appendChild(elNode('h4', 'register-subhead', 'Live now'));
+                liveToJoin.forEach((ev) => list.appendChild(registerCard(ev, null)));
             }
-            if (casualRequests.length) list.appendChild(elNode('h4', 'register-subhead', 'Casual round posts'));
+            if (scheduledToJoin.length) {
+                list.appendChild(elNode('h4', 'register-subhead', 'Open for registration'));
+                scheduledToJoin.forEach((ev) => list.appendChild(registerCard(ev, null)));
+            }
+
+            // CASUAL ROUNDS — post one (form is always available to members) or join an open post.
+            list.appendChild(elNode('h4', 'register-subhead', 'Casual rounds'));
+            list.appendChild(await casualPostForm());
             casualRequests.forEach((req) => list.appendChild(casualRegisterCard(req)));
+
             wrap.style.display = '';
         }
         function dollars(c) {
@@ -1707,13 +1765,21 @@
             const head = elNode('div', 'register-head');
             head.appendChild(elNode('span', 'register-name', ev.name));
             if (ev.status === 'live') head.appendChild(elNode('span', 'register-live-badge', 'LIVE NOW'));
-            if (ev.date) head.appendChild(elNode('span', 'register-date', ev.date));
+            else if (ev.status === 'final') head.appendChild(elNode('span', 'register-final-badge', 'Final'));
+            else if (ev.status === 'cancelled') head.appendChild(elNode('span', 'register-cancelled-badge', 'Cancelled'));
+            if (ev.date) head.appendChild(elNode('span', 'register-date', fmtEventDay(ev.date)));
             card.appendChild(head);
             const meta = [ev.course_name, ev.layout_name ? ev.layout_name + (ev.total_par != null ? ' · par ' + ev.total_par : '') : null].filter(Boolean).join(' · ');
             if (meta) card.appendChild(elNode('div', 'register-fee', meta));
-            card.appendChild(elNode('div', 'register-fee', (ev.entry_fee_cents ? dollars(ev.entry_fee_cents) + ' entry' : 'Free entry') + (ev.play_format ? ' · ' + ev.play_format : '')));
+            // Fee/format line only when we have the event's config (an open event). Synthesized cards for
+            // past/closed registrations have no fee data, so "Free entry" would be misleading.
+            if (!ev._synth) card.appendChild(elNode('div', 'register-fee', (ev.entry_fee_cents ? dollars(ev.entry_fee_cents) + ' entry' : 'Free entry') + (ev.play_format ? ' · ' + ev.play_format : '')));
             if (myReg) {
-                card.appendChild(elNode('div', 'register-status', '✅ Registered' + (myReg.division ? ' — ' + myReg.division : '') + (myReg.checked_in ? ' · checked in' : '')));
+                if (ev.status === 'cancelled') {
+                    card.appendChild(elNode('div', 'register-status cancelled', '⚠️ This event was cancelled' + (myReg.division ? ' — you were in ' + myReg.division : '')));
+                } else {
+                    card.appendChild(elNode('div', 'register-status', '✅ Registered' + (myReg.division ? ' — ' + myReg.division : '') + (myReg.checked_in ? ' · checked in' : '')));
+                }
                 let regAddons = {}; try { regAddons = JSON.parse(myReg.addons || '{}'); } catch (_e) {}
                 const owed = clientOwed(ev, regAddons);
                 if (myReg.paid_entry) {
@@ -1727,22 +1793,34 @@
                         card.appendChild(elNode('div', 'register-fee', 'Amount due: ' + dollars(owed) + ' — pay at the event (an admin will mark you paid).'));
                     }
                 }
+                // A live event gets a jump-to-scorecard link and still allows check-in. Withdraw is limited
+                // to a not-yet-started (scheduled) event: withdrawing mid-round would desync the registration
+                // roster from live scoring, and a finished/cancelled event can't be withdrawn from anyway.
+                const manageable = ev.status === 'scheduled' || ev.status === 'live';
                 const actions = elNode('div', 'register-actions');
-                if (!myReg.checked_in) {
+                if (ev.status === 'live') {
+                    const sc = elNode('a', 'passkey-btn', 'Open scorecard'); sc.href = 'score.html?event=' + encodeURIComponent(ev.id);
+                    actions.appendChild(sc);
+                }
+                if (manageable && !myReg.checked_in) {
                     const ci = elNode('button', 'passkey-btn', 'Check in'); ci.type = 'button';
                     ci.addEventListener('click', async () => { const r = await api('/events/' + ev.id + '/checkin', { method: 'POST', token: regToken() }); if (r.ok) loadRegister(); else alert('Check-in failed — please try again or see an admin.'); });
                     actions.appendChild(ci);
                 }
-                const wd = elNode('button', 'board-link danger', 'Withdraw'); wd.type = 'button';
-                wd.addEventListener('click', async () => {
-                    if (!confirm('Withdraw from ' + ev.name + '?')) return;
-                    const r = await api('/events/' + ev.id + '/register', { method: 'DELETE', token: regToken() });
-                    if (r.ok) { loadRegister(); return; }
-                    const e = await r.json().catch(() => ({}));
-                    alert(e.error === 'paid_contact_admin' ? "You've already paid — please contact an admin to withdraw and arrange a refund." : 'Withdraw failed — please try again.');
-                });
-                actions.appendChild(wd);
-                card.appendChild(actions);
+                if (ev.status === 'scheduled') {
+                    const wd = elNode('button', 'board-link danger', 'Withdraw'); wd.type = 'button';
+                    wd.addEventListener('click', async () => {
+                        if (!confirm('Withdraw from ' + ev.name + '?')) return;
+                        const r = await api('/events/' + ev.id + '/register', { method: 'DELETE', token: regToken() });
+                        if (r.ok) { loadRegister(); return; }
+                        const e = await r.json().catch(() => ({}));
+                        alert(e.error === 'paid_contact_admin' ? "You've already paid — please contact an admin to withdraw and arrange a refund."
+                            : e.error === 'event_started' ? 'This event has already started — please see an admin to withdraw.'
+                            : 'Withdraw failed — please try again.');
+                    });
+                    actions.appendChild(wd);
+                }
+                if (actions.children.length) card.appendChild(actions);
             } else {
                 const form = elNode('div', 'register-form');
                 let divs = []; try { divs = JSON.parse(ev.divisions || '[]'); } catch (_e) {}
@@ -1772,6 +1850,86 @@
                 card.appendChild(form);
             }
             return card;
+        }
+        // ---- Post a casual round (moved here from the events page) — course/layout/time/notes -> POST /casual-rounds ----
+        let casualCoursesCache = null;
+        const casualLayoutsCache = new Map();
+        // Cache ONLY on a successful response — a transient failure must not poison the cache with an empty
+        // list (which would permanently disable the post form for the session, since a later retry would
+        // never happen). On failure we return [] for this render but leave the cache unset to retry next time.
+        async function casualCourses() {
+            if (casualCoursesCache) return casualCoursesCache;
+            try { const r = await api('/courses'); if (r.ok) casualCoursesCache = (await r.json()).courses || []; }
+            catch (_e) {}
+            return casualCoursesCache || [];
+        }
+        async function casualLayouts(courseId) {
+            const key = String(courseId);
+            if (casualLayoutsCache.has(key)) return casualLayoutsCache.get(key);
+            try { const r = await api('/courses/' + encodeURIComponent(courseId) + '/layouts'); if (r.ok) casualLayoutsCache.set(key, (await r.json()).layouts || []); }
+            catch (_e) {}
+            return casualLayoutsCache.get(key) || [];
+        }
+        function localDateTimeValue(ms) {
+            const d = new Date(ms);
+            const pad = (n) => String(n).padStart(2, '0');
+            return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+        }
+        async function casualPostForm() {
+            const form = elNode('form', 'casual-form');
+            const courses = await casualCourses();
+
+            const courseField = elNode('label', 'casual-field'); courseField.appendChild(elNode('span', null, 'Course'));
+            const courseSel = document.createElement('select'); courseSel.className = 'form-input';
+            courses.forEach((c) => { if (c && c.id != null) { const o = document.createElement('option'); o.value = String(c.id); o.textContent = c.name || 'Course'; courseSel.appendChild(o); } });
+            courseField.appendChild(courseSel);
+
+            const layoutField = elNode('label', 'casual-field'); layoutField.appendChild(elNode('span', null, 'Layout'));
+            const layoutSel = document.createElement('select'); layoutSel.className = 'form-input';
+            layoutField.appendChild(layoutSel);
+
+            const timeField = elNode('label', 'casual-field'); timeField.appendChild(elNode('span', null, 'Time'));
+            const timeInput = document.createElement('input'); timeInput.type = 'datetime-local'; timeInput.className = 'form-input';
+            timeInput.min = localDateTimeValue(Date.now() - 5 * 60 * 60 * 1000);
+            timeInput.value = localDateTimeValue(Date.now() + 2 * 60 * 60 * 1000);
+            timeField.appendChild(timeInput);
+
+            const notesField = elNode('label', 'casual-field notes'); notesField.appendChild(elNode('span', null, 'Notes'));
+            const notes = document.createElement('textarea'); notes.className = 'form-input casual-notes'; notes.maxLength = 800; notes.rows = 2; notes.placeholder = 'Optional';
+            notesField.appendChild(notes);
+
+            const btn = elNode('button', 'passkey-btn', 'Post casual round'); btn.type = 'submit';
+            const status = elNode('div', 'casual-status');
+
+            async function fillLayouts() {
+                layoutSel.replaceChildren();
+                const layouts = courseSel.value ? await casualLayouts(courseSel.value) : [];
+                layouts.forEach((l) => { if (l && l.id != null) { const o = document.createElement('option'); o.value = String(l.id); o.textContent = l.name || 'Layout'; layoutSel.appendChild(o); } });
+                layoutSel.disabled = layouts.length === 0;
+                btn.disabled = courses.length === 0 || layouts.length === 0;
+                status.className = 'casual-status';
+                if (!courses.length) status.textContent = 'Courses are unavailable right now.';
+                else if (!layouts.length) status.textContent = 'No layouts for this course.';
+                else status.textContent = '';
+            }
+            courseSel.addEventListener('change', fillLayouts);
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const token = regToken();
+                const starts = new Date(timeInput.value);
+                status.className = 'casual-status';
+                if (!token) { status.textContent = 'Please sign in again.'; status.classList.add('error'); return; }
+                if (!courseSel.value || !layoutSel.value || Number.isNaN(starts.getTime())) { status.textContent = 'Pick a course, layout, and time.'; status.classList.add('error'); return; }
+                btn.disabled = true; status.textContent = 'Posting…';
+                const r = await api('/casual-rounds', { method: 'POST', token, body: { course_id: Number(courseSel.value), layout_id: Number(layoutSel.value), starts_at: starts.toISOString(), notes: notes.value.trim() || null } });
+                btn.disabled = false;
+                if (!r.ok) { status.textContent = r.status === 401 ? 'Please sign in again.' : 'Could not post — try again.'; status.classList.add('error'); return; }
+                await loadRegister();
+            });
+
+            form.appendChild(courseField); form.appendChild(layoutField); form.appendChild(timeField); form.appendChild(notesField); form.appendChild(btn); form.appendChild(status);
+            await fillLayouts();
+            return form;
         }
         function casualRegisterCard(req) {
             const card = elNode('div', 'register-card casual-register-card');

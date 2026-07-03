@@ -151,6 +151,10 @@ export async function handleClubRegistration(
     if (!memberId) return json({ error: "unauthorized" }, 401, origin);
     const reg = (await db.getMyRegistration(env.DB, eid, memberId)) as { paid_entry?: number } | null;
     if (reg?.paid_entry === 1) return json({ error: "paid_contact_admin" }, 403, origin);
+    // No self-withdraw once the event has started or finished — deleting the registration mid-round would
+    // desync the registration roster from live scoring / final results. An admin must handle those cases.
+    const status = await db.getEventStatus(env.DB, eid);
+    if (status === "live" || status === "final") return json({ error: "event_started" }, 409, origin);
     await db.withdrawRegistration(env.DB, eid, memberId);
     return json({ ok: true }, 200, origin);
   }

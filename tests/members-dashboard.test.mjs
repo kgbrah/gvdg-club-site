@@ -18,15 +18,28 @@ test('member dashboard registration loader includes casual round posts', () => {
   assert.match(source, /casualRegisterCard/);
 });
 
-test('member dashboard registration section stays visible for casual-only posts', () => {
+test('member dashboard registration section is always shown for logged-in members (casual posting available)', () => {
   const source = registerLoaderSource();
-  assert.match(source, /if \(!events\.length && !casualRequests\.length\)/);
+  // No "hide when there are no events/posts" early return — the panel must stay so the post form is reachable.
+  assert.doesNotMatch(source, /if \(!events\.length && !casualRequests\.length\)/);
+  assert.match(source, /casualPostForm\(\)/); // the post form is always appended
+  assert.match(source, /wrap\.style\.display = ''/); // and the panel is revealed unconditionally
 });
 
-test('member dashboard registration loader separates live events first', () => {
+test('member dashboard registration loader surfaces live events and lists every registered event', () => {
   const source = registerLoaderSource();
-  assert.match(source, /liveEvents = events\.filter\(\(ev\) => ev\.status === 'live'\)/);
-  assert.match(source, /'LIVE NOW'/);
+  assert.match(source, /liveToJoin = openToJoin\.filter\(\(ev\) => ev\.status === 'live'\)/);
+  assert.match(source, /'Live now'/);
+  assert.match(source, /'My events'/); // ALL registrations render, not just the open ones
+  assert.match(source, /regAsEvent/); // registrations no longer in the open list still render
+  assert.match(source, /api\('\/my-registrations'/);
+});
+
+test('member dashboard can post a casual round and jump to a live scorecard', () => {
+  const source = readFileSync('gvdg-members.html', 'utf8');
+  assert.match(source, /async function casualPostForm\(\)/);
+  assert.match(source, /api\('\/casual-rounds', \{ method: 'POST'/);
+  assert.match(source, /score\.html\?event=/); // live registered events link to their scorecard
 });
 
 test('member dashboard registration cards post pair label only for doubles events', () => {
