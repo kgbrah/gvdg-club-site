@@ -645,6 +645,21 @@ describe("LiveEventDO card-scoped scoring", () => {
     expect((await post(live, { "X-Auth-Admin": "true" }, { index: 7, hole: 1, strokes: 4 })).status).toBe(200);
   });
 
+  it("admin cancel resets the round to none; non-admin is forbidden", async () => {
+    const live = liveDO();
+    await start(live, [{ memberId: "m0", name: "A" }, { memberId: "m1", name: "B" }]);
+    await post(live, { "X-Auth-Admin": "true" }, { index: 0, hole: 1, strokes: 3 });
+    // non-admin cannot cancel
+    expect((await live.fetch(new Request("https://do/cancel", { method: "POST", headers: { "X-Auth-Member": "m0" } }))).status).toBe(403);
+    // admin cancel wipes the round
+    const cancelled = await live.fetch(new Request("https://do/cancel", { method: "POST", headers: { "X-Auth-Admin": "true" } }));
+    const snap = (await cancelled.json()) as { status: string; players: unknown[] };
+    expect(snap.status).toBe("none");
+    expect(snap.players).toEqual([]);
+    // score submissions on the reset round are rejected (not_live)
+    expect((await post(live, { "X-Auth-Admin": "true" }, { index: 0, hole: 1, strokes: 3 })).status).toBe(409);
+  });
+
   it("lets cardmates enter guest-token scorecards but not another member's scorecard", async () => {
     const live = liveDO();
     await start(live, [

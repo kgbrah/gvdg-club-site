@@ -73,10 +73,18 @@ export async function handleClubLive(
     return json(await r.json().catch(() => ({})), r.status, origin);
   }
 
-  // Round control stays admin-only: start, finalize, and the round-scoped hole override.
-  if (method === "POST" && (sub === "start" || sub === "finalize" || sub === "override")) {
+  // Round control stays admin-only: start, finalize, cancel, and the round-scoped hole override.
+  if (method === "POST" && (sub === "start" || sub === "finalize" || sub === "cancel" || sub === "override")) {
     const gate = await adminGate(request, env, origin);
     if (gate instanceof Response) return gate;
+
+    // Cancel a mis-started round: reset the DO and return the event to "scheduled" so it can be re-started.
+    if (sub === "cancel") {
+      const r = await stub.fetch("https://do/cancel", { method: "POST", headers: { "X-Auth-Admin": "true" } });
+      const data = await r.json().catch(() => ({}));
+      if (r.status === 200) await db.updateEvent(env.DB, eid, { status: "scheduled" });
+      return json(data, r.status, origin);
+    }
 
     if (sub === "start") {
       const startBody = (await readJson(request)) ?? {};
