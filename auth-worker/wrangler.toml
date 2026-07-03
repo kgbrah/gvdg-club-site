@@ -101,8 +101,10 @@ VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct"
 [env.staging]
 name = "gvdg-member-auth-staging"
 
-# The dev API custom domain (auth.gvdgclub.com) is managed in the Cloudflare dashboard. The CI token
-# can deploy Workers but does not need zone route permissions, so routes are intentionally omitted here.
+# ⚠️ THIS Worker (gvdg-member-auth-staging) is the LIVE production worker: auth.gvdgclub.com's custom
+# domain is attached to it (managed in the Cloudflare dashboard; routes omitted so the CI token needs no
+# zone perms). Despite the "-staging" name, `--env staging` deploys production. [env.gvdgclub] is an
+# identical alias to the same Worker; deploy either.
 
 [env.staging.observability]
 enabled = true
@@ -174,11 +176,13 @@ GEMINI_VISION_MODEL = "gemini-2.5-flash"
 OPENROUTER_VISION_MODEL = "nvidia/nemotron-nano-12b-v2-vl:free"
 VISION_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct"
 
-# GVDGCLUB LIVE API ALIAS -> auth.gvdgclub.com.
-# Mirrors [env.staging] but deploys to the legacy Worker name currently attached
-# to the live dev auth domain.
+# PRODUCTION auth env for gvdgclub.com. Deploys the SAME Worker that serves the live domain.
+# ⚠️ auth.gvdgclub.com's custom domain is attached to the Worker "gvdg-member-auth-staging" (verified
+# 2026-07-03 via GET /accounts/{id}/workers/domains). The old "gvdg-member-auth" Worker owned NO domain
+# and has been DELETED — deploying to it shipped nothing to production — so this env now targets the
+# domain's Worker. [env.staging] is the identical alias used for D1/migration tooling (`--env staging`).
 [env.gvdgclub]
-name = "gvdg-member-auth"
+name = "gvdg-member-auth-staging"
 
 [env.gvdgclub.observability]
 enabled = true

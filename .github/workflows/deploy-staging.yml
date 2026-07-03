@@ -47,19 +47,9 @@ jobs:
           command: pages deploy .pages-dist --project-name gvdg-club-site --branch main --commit-dirty=true
         env:
           CLOUDFLARE_ACCOUNT_ID: fdf77c2a9f4966b946b4d232eb7889a3
-      - name: Deploy Worker to the staging env
-        if: ${{ env.HAS_CF_TOKEN == 'true' }}
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          workingDirectory: auth-worker
-          environment: staging
-          secrets: |
-            GEMINI_API_KEY
-          command: deploy --env staging
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      - name: Deploy Worker to the gvdgclub auth env
+      # Deploy the LIVE worker ONCE. [env.gvdgclub] and [env.staging] now target the same Worker
+      # (gvdg-member-auth-staging = the one auth.gvdgclub.com is attached to), so one deploy suffices.
+      - name: Deploy Worker (production — auth.gvdgclub.com)
         if: ${{ env.HAS_CF_TOKEN == 'true' }}
         uses: cloudflare/wrangler-action@v3
         with:
