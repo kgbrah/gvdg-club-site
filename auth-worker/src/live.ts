@@ -56,6 +56,7 @@ export class LiveEventDO {
     if (action === "guest") return this.addGuest(authMember, (body as { name?: string }).name); // add a non-member to my card
     if (action === "remove") return this.removePlayer(body as RemoveBody, authMember, authAdmin); // drop a player (accidental/left/no-show)
     if (action === "pairs") return this.updatePairs(body as PairAssignmentBody, authMember, authAdmin);
+    if (action === "cancel") return this.cancel(authAdmin); // admin: scrap a mis-started round, reset to none
     if (action === "override") return this.override(body as OverrideBody);
     if (action === "finalize") return this.finalize(authMember, authAdmin, (body as { force?: boolean }).force === true);
     return j({ error: "not_found" }, 404);
@@ -245,6 +246,19 @@ export class LiveEventDO {
     }
     await this.persist();
     this.broadcast();
+    return j(this.snapshot());
+  }
+
+  /** Admin: scrap the current round entirely (mis-started, wrong layout/format, etc.) and reset the DO to
+   *  an empty "none" state. The Worker route separately returns the event to "scheduled" in D1. Refused
+   *  once finalized — that round's results are already written, so it must not be silently reset. */
+  private async cancel(authAdmin: boolean): Promise<Response> {
+    if (!authAdmin) return j({ error: "forbidden" }, 403);
+    if (this.meta?.status === "final") return j({ error: "round_already_final" }, 409);
+    this.meta = null;
+    this.players = [];
+    await this.persist();
+    this.broadcast(); // push the "none" snapshot so live viewers/scorekeepers see the round end
     return j(this.snapshot());
   }
 

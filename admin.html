@@ -562,7 +562,8 @@
                     <div id="scBoard" class="al-note"></div>
                     <div class="al-row" style="margin-top:0.75rem;">
                         <button type="button" class="admin-btn danger" id="scFinalizeBtn">🏁 Finalize results</button>
-                        <span class="al-note">Writes final places + breakdown to each player's record and closes the event.</span>
+                        <button type="button" class="admin-btn secondary" id="scCancelBtn">✖ Cancel scoring (back to Scheduled)</button>
+                        <span class="al-note">Finalize writes results + closes the event. Cancel scraps a mis-started round (wrong layout/format) — it wipes entered scores and returns the event to Scheduled to re-start.</span>
                     </div>
                 </div>
             </div>
@@ -1920,6 +1921,7 @@
             $('scStart').style.display = 'none'; $('scLive').style.display = '';
             const live = scSnap.status === 'live';
             $('scOverride').style.display = live ? '' : 'none'; // overrides only make sense mid-round
+            $('scCancelBtn').style.display = live ? '' : 'none'; // can't cancel a finalized round (results written)
             scRenderGrid(); scRenderBoard(); scRenderTeeSigns(); scPopulateOverrideHoles();
             if (live) scConnectWs(); // stream player/cardmate edits in real time
         }
@@ -2153,6 +2155,20 @@
         }
 
         function scFinalize() { return doFinalize(false); } // click handler (no args)
+        async function scCancel() {
+            if (!confirm('Cancel live scoring for this event? This wipes every entered score and returns the event to Scheduled so you can re-start it.')) return;
+            const r = await adminApi('/events/' + scEventId + '/live/cancel', { method: 'POST' });
+            if (r.ok) {
+                adminMsg('Scoring cancelled — event returned to Scheduled.', true);
+                try { if (scWs) scWs.close(); } catch (e) {} scWsEvent = null;
+                if ($('scEvent').selectedOptions[0]) $('scEvent').selectedOptions[0].dataset.status = 'scheduled';
+                $('scLive').style.display = 'none';
+                await scOnEventChange(); // re-show the start controls for the now-scheduled event
+                adminLoadEvents();
+                return;
+            }
+            adminMsg('Cancel failed (' + r.status + ')', false);
+        }
         async function doFinalize(force, skipConfirm) {
             if (!skipConfirm) {
                 const ask = force
@@ -2786,6 +2802,7 @@
             $('scEvent').addEventListener('change', scOnEventChange);
             $('scStartBtn').addEventListener('click', scStart);
             $('scFinalizeBtn').addEventListener('click', scFinalize);
+            $('scCancelBtn').addEventListener('click', scCancel);
             $('scOvApply').addEventListener('click', () => scApplyOverride(false));
             $('scOvClear').addEventListener('click', () => scApplyOverride(true));
             $('adminLeagueForm').addEventListener('submit', adminAddLeague);
