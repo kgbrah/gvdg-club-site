@@ -14,6 +14,8 @@ import {
   parseMatchGrid,
   parseMatchGridRows,
   parseScoreboard,
+  ryderWeekFormat,
+  seedPairNames,
 } from '../ryder-cup.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -53,11 +55,61 @@ test('parseMatchGrid: nine week groups including the Finale', () => {
 test('parseMatchGrid: Week 1 has 12 matchups', () => {
   const { weeks } = parseMatchGrid(gridCsv);
   assert.equal(weeks[0].matches.length, 12);
+  assert.equal(weeks[0].format, 'singles');
   // Matchup numbers run 1..12 in order.
   assert.deepEqual(
     weeks[0].matches.map((m) => m.num),
     [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
   );
+});
+
+test('parseMatchGrid: configured doubles weeks collapse to six seed-pair matches', () => {
+  const { weeks } = parseMatchGrid(gridCsv);
+  const doublesWeeks = weeks.filter((week) => week.format === 'doubles');
+  assert.deepEqual(doublesWeeks.map((week) => week.label), ['Week 2', 'Week 3', 'Week 5', 'Week 6', 'Week 8']);
+
+  const week2 = weeks[1];
+  assert.equal(week2.format, 'doubles');
+  assert.equal(week2.matches.length, 6);
+  assert.deepEqual(week2.matches.map((m) => m.num), [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(week2.matches[0].seeds, [1, 2]);
+  assert.deepEqual(week2.matches[5].seeds, [11, 12]);
+});
+
+test('parseMatchGridRows: doubles weeks use sheet-provided teammate rows when seedings change', () => {
+  const rows = parseCsv(gridCsv);
+  rows[5][10] = 'Juan';
+  rows[5][11] = 'Jesus';
+  rows[6][10] = 'Fazzini';
+  rows[6][11] = 'Castro';
+  rows[7][10] = 'Jackie';
+  rows[7][11] = 'Vee';
+  rows[8][10] = 'TJ Braley';
+  rows[8][11] = 'Blake S';
+
+  const { weeks } = parseMatchGridRows(rows);
+  const week3 = weeks[2];
+  assert.equal(week3.format, 'doubles');
+  assert.deepEqual(week3.matches[0].redPlayers, ['Juan', 'Fazzini']);
+  assert.deepEqual(week3.matches[0].bluePlayers, ['Jesus', 'Castro']);
+  assert.equal(week3.matches[0].red, 'Juan / Fazzini');
+  assert.equal(week3.matches[0].blue, 'Jesus / Castro');
+  assert.deepEqual(week3.matches[1].redPlayers, ['Jackie', 'TJ Braley']);
+  assert.deepEqual(week3.matches[1].bluePlayers, ['Vee', 'Blake S']);
+});
+
+test('seedPairNames resolves doubles partners from scoreboard seeding order', () => {
+  const scoreboard = parseScoreboard(scoreboardCsv);
+  assert.deepEqual(seedPairNames(scoreboard.red.players, [1, 2]), [
+    'Juan "Him" Martinez',
+    'Jarrett Wallace',
+  ]);
+  assert.deepEqual(seedPairNames(scoreboard.blue.players, [11, 12]), [
+    'Eric LaRoque',
+    'Leo Hernandez',
+  ]);
+  assert.equal(ryderWeekFormat('Week 8'), 'doubles');
+  assert.equal(ryderWeekFormat('Finale'), 'singles');
 });
 
 test('parseMatchGrid: known matchup 1 (Juan Martinez vs Jesus, 1&0, winner not derivable)', () => {

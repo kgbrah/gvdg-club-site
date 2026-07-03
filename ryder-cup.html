@@ -137,19 +137,26 @@
         [data-theme="dark"] .week-section { border-color: rgba(255, 255, 255, 0.05); }
         .week-header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 2px solid var(--border-color); }
         .week-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem; letter-spacing: 0.04em; color: var(--text-primary); }
+        .week-meta { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.45rem; align-items: center; }
         .week-date { color: var(--text-muted); font-size: 0.9rem; font-weight: 600; }
+        .week-format { border: 1px solid var(--border-color); border-radius: 999px; padding: 0.12rem 0.55rem; color: var(--secondary); background: var(--bg-primary); font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
         .week-tally { font-size: 0.85rem; color: var(--text-tertiary); font-weight: 600; }
 
         .match-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.85rem; }
         .match-card { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 0.5rem; background: var(--bg-tertiary); border-radius: 10px; padding: 0.85rem 0.9rem; border: 1px solid var(--border-color); position: relative; }
         .match-card.has-winner { border-color: var(--green); }
+        .match-card.doubles { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: stretch; }
         [data-theme="dark"] .match-card { background: var(--bg-primary); }
         .match-num { position: absolute; top: -8px; left: 10px; background: var(--dark); color: white; font-size: 0.7rem; font-weight: 700; padding: 0.1rem 0.5rem; border-radius: 8px; letter-spacing: 0.05em; }
         [data-theme="dark"] .match-num { background: var(--accent); color: var(--dark); }
         .player { font-size: 0.92rem; font-weight: 600; color: var(--text-secondary); padding: 0.35rem 0.4rem; border-radius: 6px; min-width: 0; word-break: break-word; }
         .player.red { text-align: left; }
         .player.blue { text-align: right; }
+        .player.pair { display: flex; flex-direction: column; gap: 0.25rem; justify-content: center; }
+        .pair-seeds { color: var(--text-muted); font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
+        .pair-name { display: block; line-height: 1.25; }
         .player.winner { background: var(--green); color: #fff; font-weight: 800; }
+        .player.winner .pair-seeds { color: rgba(255, 255, 255, 0.82); }
         .match-result { text-align: center; font-family: 'Bebas Neue', sans-serif; font-size: 1.05rem; letter-spacing: 0.04em; color: var(--text-primary); min-width: 46px; }
         .match-result.unplayed { color: var(--text-muted); font-weight: 400; }
         .match-result .res-tie { color: var(--accent); font-size: 0.85rem; font-family: 'Archivo', sans-serif; font-weight: 700; }
@@ -165,6 +172,9 @@
         .last-updated { text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-top: 1.5rem; }
         .back-link { display: inline-block; margin-top: 1rem; color: var(--text-muted); text-decoration: none; font-size: 0.9rem; }
         .back-link:hover { color: var(--primary); }
+        .league-nav { text-align: center; margin: -1rem 0 1.75rem; }
+        .league-nav .back-link { margin-top: 0; color: var(--secondary); font-weight: 700; }
+        .league-nav .back-link:hover { color: var(--primary); }
         .scoring-note { text-align: center; color: var(--text-muted); font-size: 0.8rem; margin: 0.5rem auto 2rem; max-width: 640px; line-height: 1.5; }
 
         /* ---- Footer (mirrors index.html) ---- */
@@ -194,12 +204,14 @@
     <main>
         <h1 class="page-title">Ryder Cup</h1>
         <p class="page-subtitle">Red vs Blue &mdash; team matchplay</p>
+        <p class="league-nav"><a class="back-link" href="events.html#league/4">View Ryder Cup League standings and events</a></p>
 
         <!-- Scoreboard header (populated by JS) -->
         <div id="scoreboard" class="scoreboard" hidden></div>
 
         <p class="scoring-note" id="scoringNote" hidden>
             Players highlighted green match the winners marked green on the live sheet.
+            Weeks 2, 3, 5, 6 and 8 are doubles; teammates are shown from the live sheet.
             Scores shown as <strong>A&amp;B</strong>; a win is worth 2 points and a tie awards 1 point each.
         </p>
 
@@ -220,7 +232,7 @@
     <footer><p>&copy; 2026 Greenville Disc Golf Club. All rights reserved. | Greenville, NC</p></footer>
 
     <script type="module">
-        import { parseMatchGrid, parseRyderWorkbook, parseScoreboard } from './ryder-cup.js';
+        import { parseMatchGrid, parseRyderWorkbook, parseScoreboard, seedPairNames } from './ryder-cup.js';
 
         // --- Theme toggle (mirrors index.html) ---
         const themeToggle = document.querySelector('.theme-toggle');
@@ -352,31 +364,59 @@
             return wrap;
         }
 
-        function renderWeek(week) {
+        function renderPlayerSide(match, side, week, scoreboard) {
+            const winnerClass = match.winner === side ? ' winner' : '';
+            if (week.format !== 'doubles') {
+                return el('div', `player ${side}${winnerClass}`, match[side] || '—');
+            }
+
+            const team = side === 'red' ? scoreboard.red : scoreboard.blue;
+            const teamLabel = side === 'red' ? 'Red Team' : 'Blue Team';
+            const wrap = el('div', `player ${side} pair${winnerClass}`);
+            const seeds = Array.isArray(match.seeds) ? match.seeds : [];
+            const sheetPlayers = Array.isArray(match[`${side}Players`])
+                ? match[`${side}Players`].filter((name) => String(name || '').trim())
+                : [];
+            wrap.appendChild(el('span', 'pair-seeds', teamLabel));
+            const names = sheetPlayers.length ? sheetPlayers : seedPairNames(team.players, seeds);
+            if (!names.length) {
+                wrap.appendChild(el('span', 'pair-name', match[side] || '—'));
+            } else {
+                names.forEach((name) => wrap.appendChild(el('span', 'pair-name', name)));
+            }
+            return wrap;
+        }
+
+        function renderWeek(week, scoreboard) {
             const section = el('section', 'week-section');
 
             const head = el('div', 'week-header');
             head.appendChild(el('h2', 'week-title', week.label || 'Week'));
-            if (week.dates) head.appendChild(el('span', 'week-date', week.dates));
+
+            const meta = el('div', 'week-meta');
+            if (week.dates) meta.appendChild(el('span', 'week-date', week.dates));
+            meta.appendChild(el('span', 'week-format', week.format === 'doubles' ? 'Doubles' : 'Singles'));
 
             const played = week.matches.filter((m) => (m.score || '').length > 0 || !!m.winner).length;
-            head.appendChild(
-                el('span', 'week-tally', played ? `${played} of ${week.matches.length} played` : 'Upcoming')
-            );
+            meta.appendChild(el('span', 'week-tally', played ? `${played} of ${week.matches.length} played` : 'Upcoming'));
+            head.appendChild(meta);
             section.appendChild(head);
 
             const grid = el('div', 'match-grid');
             for (const match of week.matches) {
-                const card = el('div', 'match-card' + (match.winner && match.winner !== 'tie' ? ' has-winner' : ''));
+                const card = el(
+                    'div',
+                    'match-card' +
+                        (week.format === 'doubles' ? ' doubles' : '') +
+                        (match.winner && match.winner !== 'tie' ? ' has-winner' : '')
+                );
                 card.appendChild(el('span', 'match-num', `#${match.num}`));
 
-                const redClass = 'player red' + (match.winner === 'red' ? ' winner' : '');
-                card.appendChild(el('div', redClass, match.red || '—'));
+                card.appendChild(renderPlayerSide(match, 'red', week, scoreboard));
 
                 card.appendChild(renderMatchResult(match));
 
-                const blueClass = 'player blue' + (match.winner === 'blue' ? ' winner' : '');
-                card.appendChild(el('div', blueClass, match.blue || '—'));
+                card.appendChild(renderPlayerSide(match, 'blue', week, scoreboard));
 
                 grid.appendChild(card);
             }
@@ -418,7 +458,7 @@
             if (!weeks.length) {
                 weeksEl.appendChild(el('p', 'status-box', 'No matchups posted yet.'));
             } else {
-                for (const week of weeks) weeksEl.appendChild(renderWeek(week));
+                for (const week of weeks) weeksEl.appendChild(renderWeek(week, scoreboard));
             }
 
             lastUpdatedEl.hidden = false;

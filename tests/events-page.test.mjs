@@ -42,3 +42,15 @@ test('public registration cards post pair label only for doubles config', () => 
   assert.match(source, /pairInput\.setAttribute\('data-register-pair', 'team'\)/);
   assert.match(source, /if \(pairInput\) body\.team = pairInput\.value\.trim\(\)/);
 });
+
+test('Ryder Cup schedule cards link to the league route', () => {
+  const eventsSource = readFileSync('events.html', 'utf8');
+  const homeSource = readFileSync('home-feeds.js', 'utf8');
+  const ryderSource = readFileSync('ryder-cup.html', 'utf8');
+  assert.match(eventsSource, /const RYDER_CUP_LEAGUE_ID = '4'/);
+  assert.match(eventsSource, /function ryderCupFeedHash\(item\)/);
+  assert.match(eventsSource, /function ryderCupEventHash\(ev\)/);
+  assert.match(eventsSource, /League \/ Results/);
+  assert.match(homeSource, /const RYDER_CUP_LEAGUE_URL = 'events\.html#league\/4'/);
+  assert.match(ryderSource, /events\.html#league\/4/);
+});

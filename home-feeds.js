@@ -18,6 +18,7 @@ export {
 
 const TOURNAMENT_FEED_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRz6V6BAwII4eoqITz4MW5zmM_3mYJqrtqtZl9xB87lAZgDT1E0Do1r2cp2aa1tvEKWevnPhb2zQu4s/pub?gid=0&single=true&output=csv';
 const EVENT_FEED_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTLTq17Bwgy6uW_9pG7dQODTmahv7vjxo9Y5EShHaeQYo9xPB2m7Nf5de8EcZvKgcrTbBLb97msMg4Q/pub?output=csv';
+const RYDER_CUP_LEAGUE_URL = 'events.html#league/4';
 const VISIBLE_LIMIT = 5;
 
 function textEl(tag, className, text) {
@@ -25,6 +26,10 @@ function textEl(tag, className, text) {
   if (className) el.className = className;
   el.textContent = text;
   return el;
+}
+
+function isRyderCupEvent(event) {
+  return /\bryder\s*cup\b/i.test(String((event && event.title) || ''));
 }
 
 function makeTournamentItem(tournament, index) {
@@ -75,7 +80,8 @@ function makeTournamentItem(tournament, index) {
 }
 
 function makeEventItem(event, index) {
-  const url = safeExternalUrl(event.url);
+  const localUrl = isRyderCupEvent(event) ? RYDER_CUP_LEAGUE_URL : '';
+  const url = localUrl || safeExternalUrl(event.url);
   const dateInfo = parseHomepageEventDate(event.date);
   const linked = url !== '';
   const hidden = index >= VISIBLE_LIMIT;
@@ -87,8 +93,10 @@ function makeEventItem(event, index) {
   node.className = classes.join(' ');
   if (linked) {
     node.href = url;
-    node.target = '_blank';
-    node.rel = 'noopener noreferrer';
+    if (!localUrl) {
+      node.target = '_blank';
+      node.rel = 'noopener noreferrer';
+    }
   }
 
   const date = document.createElement('div');

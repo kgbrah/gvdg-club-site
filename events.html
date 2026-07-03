@@ -425,6 +425,7 @@
         const REFRESH_MS = 60 * 1000; // ~60s background refresh on the hub
         const EVENTS_PAGE_SIZE = 200;
         const EVENTS_PAGE_MAX_LIMIT = 2000;
+        const RYDER_CUP_LEAGUE_ID = '4';
         const eventsLoadState = {
             events: [],
             offset: 0,
@@ -485,6 +486,24 @@
                 return '';
             }
         }
+        function isRyderCupName(value) {
+            return /\bryder\s*cup\b/i.test(String(value || ''));
+        }
+        function leagueHash(id) {
+            return `#league/${encodeURIComponent(String(id))}`;
+        }
+        function ryderCupLeagueHash() {
+            return leagueHash(RYDER_CUP_LEAGUE_ID);
+        }
+        function ryderCupFeedHash(item) {
+            return isRyderCupName(item && item.name) ? ryderCupLeagueHash() : '';
+        }
+        function ryderCupEventHash(ev) {
+            if (!ev) return '';
+            const leagueId = ev.league_id != null ? String(ev.league_id) : '';
+            if (leagueId && leagueId === RYDER_CUP_LEAGUE_ID) return leagueHash(leagueId);
+            return isRyderCupName(ev.name) ? ryderCupLeagueHash() : '';
+        }
 
         function setView(which) {
             statusEl.hidden = which !== 'status';
@@ -513,9 +532,16 @@
         function feedList(items) {
             const grid = el('div', 'events-grid');
             for (const it of items) {
-                const clean = sanitizeUrl(it.url);
+                const leagueTarget = ryderCupFeedHash(it);
+                const clean = leagueTarget || sanitizeUrl(it.url);
                 const card = el(clean ? 'a' : 'div', 'event-card');
-                if (clean) { card.href = clean; card.target = '_blank'; card.rel = 'noopener noreferrer'; }
+                if (leagueTarget) {
+                    card.href = leagueTarget;
+                } else if (clean) {
+                    card.href = clean;
+                    card.target = '_blank';
+                    card.rel = 'noopener noreferrer';
+                }
                 const top = el('div', 'event-card-top');
                 top.appendChild(el('h3', 'event-name', it.name));
                 card.appendChild(top);
@@ -532,7 +558,8 @@
                 }
                 card.appendChild(meta);
                 // When the schedule row carries a link (Disc Golf Scene / PDGA), make registering explicit.
-                if (clean) card.appendChild(el('div', 'event-cta', 'Register / Details ↗'));
+                if (leagueTarget) card.appendChild(el('div', 'event-cta', 'League / Results'));
+                else if (clean) card.appendChild(el('div', 'event-cta', 'Register / Details ↗'));
                 grid.appendChild(card);
             }
             return grid;
@@ -596,8 +623,9 @@
             // Use a <button> so the card is keyboard-focusable + screen-reader friendly.
             const card = el('button', 'event-card' + (ev.status === 'live' ? ' live' : ''));
             card.type = 'button';
+            const leagueTarget = ryderCupEventHash(ev);
             card.addEventListener('click', () => {
-                window.location.hash = `#event/${encodeURIComponent(ev.id)}`;
+                window.location.hash = leagueTarget || `#event/${encodeURIComponent(ev.id)}`;
             });
 
             const top = el('div', 'event-card-top');

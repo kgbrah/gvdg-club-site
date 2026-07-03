@@ -80,6 +80,25 @@ const cellFill = (row, idx) => {
 };
 const norm = (s) => String(s == null ? '' : s).trim();
 const isWinnerFill = (fill) => fill === 'FF00FF00' || fill === '00FF00';
+const DOUBLES_WEEKS = new Set([2, 3, 5, 6, 8]);
+
+export function ryderWeekFormat(label) {
+  const match = norm(label).match(/^week\s+(\d+)/i);
+  if (!match) return 'singles';
+  return DOUBLES_WEEKS.has(parseInt(match[1], 10)) ? 'doubles' : 'singles';
+}
+
+function seedPairForMatch(num) {
+  const first = (num - 1) * 2 + 1;
+  return [first, first + 1];
+}
+
+export function seedPairNames(players, seeds) {
+  return (Array.isArray(seeds) ? seeds : []).map((seed) => {
+    const player = Array.isArray(players) ? norm(players[seed - 1]) : '';
+    return player || `Seed ${seed}`;
+  });
+}
 
 // "A&B": A = holes the leader was up, B = holes remaining. The sheet does NOT encode
 // WHICH team (Red/Blue) won in the visible cells, so a match winner cannot be derived
@@ -89,7 +108,7 @@ const isWinnerFill = (fill) => fill === 'FF00FF00' || fill === '00FF00';
 function winnerFromScore(rawScore) {
   const s = norm(rawScore).toLowerCase();
   if (!s) return null; // unplayed
-  if (s === 'tie' || s === 'as' || s === 'halved' || s === 'a/s') return 'tie';
+  if (s === 'tie' || s === 'as' || s === 'halved' || s === 'a/s' || /^tie\b/.test(s)) return 'tie';
   const m = s.match(/^(\d+)\s*&\s*(\d+)$/);
   if (m && parseInt(m[1], 10) === 0) return 'tie';
   return null; // played, but the winning color is not derivable from the sheet
@@ -101,6 +120,11 @@ function winnerFromCells(rawScore, redFill, blueFill) {
   if (redWins && !blueWins) return 'red';
   if (blueWins && !redWins) return 'blue';
   return winnerFromScore(rawScore);
+}
+
+function playerCell(rawValue) {
+  const value = norm(rawValue);
+  return value && !/^\d+$/.test(value) ? value : '';
 }
 
 // Locate the week-group columns by scanning the "Match-ups" header row for the
@@ -136,7 +160,7 @@ function labelForColumn(headerRow, col) {
 /**
  * Parse the wide weekly match grid CSV.
  * @param {string} csvText
- * @returns {{ weeks: Array<{label:string, dates:string, matches:Array<{num:number, red:string, blue:string, score:string, winner:('red'|'blue'|'tie'|null)}>}>, teamPoints:{red:number, blue:number} }}
+ * @returns {{ weeks: Array<{label:string, dates:string, format:'singles'|'doubles', matches:Array<{num:number, red:string, blue:string, score:string, winner:('red'|'blue'|'tie'|null), seeds?:number[]}>}>, teamPoints:{red:number, blue:number} }}
  */
 export function parseMatchGrid(csvText) {
   return parseMatchGridRows(parseCsv(csvText));
@@ -198,8 +222,9 @@ export function parseMatchGridRows(rows) {
   const weeks = groups.map(({ redCol, blueCol, scoreCol }) => {
     const { label, col: labelCol } = labelForColumn(headerRow, redCol);
     const dates = norm(cellText(datesRow, labelCol >= 0 ? labelCol : redCol));
+    const format = ryderWeekFormat(label);
 
-    const matches = dataRows.map((row) => {
+    const singlesMatches = () => dataRows.map((row) => {
       const num = parseInt(norm(cellText(row, numCol)), 10);
       const red = norm(cellText(row, redCol));
       const blue = norm(cellText(row, blueCol));
@@ -213,7 +238,46 @@ export function parseMatchGridRows(rows) {
       };
     });
 
-    return { label, dates, matches };
+    const doublesMatches = () => {
+      const matches = new Map();
+      const matchSlot = (num) => {
+        let match = matches.get(num);
+        if (!match) {
+          match = {
+            num,
+            redPlayers: [],
+            bluePlayers: [],
+            score: '',
+            winner: null,
+            seeds: seedPairForMatch(num),
+          };
+          matches.set(num, match);
+        }
+        return match;
+      };
+
+      for (const row of dataRows) {
+        const rowSeed = parseInt(norm(cellText(row, numCol)), 10);
+        const num = Number.isInteger(rowSeed) ? Math.ceil(rowSeed / 2) : null;
+        if (!Number.isInteger(num) || num < 1 || num > 6) continue;
+        const match = matchSlot(num);
+        const red = playerCell(cellText(row, redCol));
+        const blue = playerCell(cellText(row, blueCol));
+        if (red) match.redPlayers.push(red);
+        if (blue) match.bluePlayers.push(blue);
+        const score = scoreCol != null ? norm(cellText(row, scoreCol)) : '';
+        if (score && !match.score) match.score = score;
+        const winner = winnerFromCells(score, cellFill(row, redCol), cellFill(row, blueCol));
+        if (winner && !match.winner) match.winner = winner;
+      }
+      return [...matches.values()].map((match) => ({
+        ...match,
+        red: match.redPlayers.join(' / '),
+        blue: match.bluePlayers.join(' / '),
+      })).sort((a, b) => a.num - b.num);
+    };
+
+    return { label, dates, format, matches: format === 'doubles' ? doublesMatches() : singlesMatches() };
   });
 
   return { weeks, teamPoints };
