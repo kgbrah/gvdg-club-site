@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v24";
+const CACHE = "gvdg-club-v25";
 const OFFLINE_PAGE = "gvdg-members.html";
 const ASSETS = [
   "site.webmanifest",
@@ -16,6 +16,7 @@ const ASSETS = [
   "weather-display.js",
 ];
 const STATIC_DESTINATIONS = new Set(["script", "style", "image", "font", "manifest"]);
+const NETWORK_FIRST_DESTINATIONS = new Set(["script", "style", "manifest"]);
 
 function cacheable(res) {
   return res && res.ok && res.status === 200 && res.type === "basic";
@@ -23,6 +24,28 @@ function cacheable(res) {
 
 function staticAsset(req, url) {
   return STATIC_DESTINATIONS.has(req.destination) || /\.(?:css|gif|ico|jpe?g|js|png|svg|webmanifest|webp)$/i.test(url.pathname);
+}
+
+function networkFirstAsset(req, url) {
+  return NETWORK_FIRST_DESTINATIONS.has(req.destination) || /\.(?:css|js|webmanifest)$/i.test(url.pathname);
+}
+
+function cacheResponse(req, res) {
+  if (cacheable(res)) {
+    const copy = res.clone();
+    caches.open(CACHE).then((cache) => cache.put(req, copy)).catch(() => {});
+  }
+  return res;
+}
+
+function refreshEventsClients() {
+  return self.clients.matchAll({ type: "window" }).then((clients) => Promise.all(clients.map((client) => {
+    const url = new URL(client.url);
+    if (url.origin === self.location.origin && /^\/events(?:\.html)?\/?$/.test(url.pathname)) {
+      return client.navigate(client.url).catch(() => null);
+    }
+    return null;
+  })));
 }
 
 self.addEventListener("install", (event) => {
@@ -34,6 +57,7 @@ self.addEventListener("activate", (event) => {
     caches.keys()
       .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
+      .then(refreshEventsClients)
   );
 });
 
@@ -59,17 +83,20 @@ self.addEventListener("fetch", (event) => {
 
   if (!staticAsset(req, url)) return;
 
+  if (networkFirstAsset(req, url)) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => cacheResponse(req, res))
+        .catch(() => caches.match(req).then((cached) => cached || Response.error()))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;
       return fetch(req)
-        .then((res) => {
-          if (cacheable(res)) {
-            const copy = res.clone();
-            caches.open(CACHE).then((cache) => cache.put(req, copy)).catch(() => {});
-          }
-          return res;
-        })
+        .then((res) => cacheResponse(req, res))
         .catch(() => (req.destination === "image" ? caches.match("img/logo.png") : Response.error()));
     })
   );

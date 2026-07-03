@@ -80,10 +80,13 @@ test('score course picker rows use themed text and app font', () => {
 
 test('shared service worker caches app install assets and member fallback', () => {
   const sw = readFileSync('sw.js', 'utf8');
-  assert.match(sw, /const CACHE = "gvdg-club-v24"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v25"/);
   assert.match(sw, /const OFFLINE_PAGE = "gvdg-members\.html"/);
   assert.match(sw, /const STATIC_DESTINATIONS = new Set/);
+  assert.match(sw, /const NETWORK_FIRST_DESTINATIONS = new Set\(\["script", "style", "manifest"\]\)/);
   assert.match(sw, /if \(!staticAsset\(req, url\)\) return/);
+  assert.match(sw, /if \(networkFirstAsset\(req, url\)\)/);
+  assert.match(sw, /fetch\(req\)\s*\.then\(\(res\) => cacheResponse\(req, res\)\)/s);
   for (const asset of [
     'site.webmanifest',
     'pwa.js',
