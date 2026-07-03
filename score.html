@@ -379,8 +379,10 @@
         }
         function applyRoundMeta(d) {
             if (!d) return;
-            S.format = d.format === 'matchplay' ? 'matchplay' : 'stroke';
-            S.playFormat = d.playFormat === 'doubles' || d.playFormat === 'teams' ? d.playFormat : 'singles';
+            const rawFormat = d.format || d.scoringFormat || d.scoring_format;
+            const rawPlay = d.playFormat || d.play_format;
+            S.format = rawFormat === 'matchplay' || rawFormat === 'match_play' ? 'matchplay' : 'stroke';
+            S.playFormat = rawPlay === 'doubles' || rawPlay === 'teams' ? rawPlay : 'singles';
             S.teamRequired = d.teamRequired === true || S.playFormat === 'doubles' || S.playFormat === 'teams';
         }
         function teamNameRequired() {
@@ -391,38 +393,112 @@
             const scoring = S.format === 'matchplay' ? 'Matchplay' : 'Stroke play';
             return play + ' · ' + scoring;
         }
+        function teamScoringRound() {
+            return S.teamRequired === true || S.playFormat === 'doubles' || S.playFormat === 'teams';
+        }
+        function playerLabel(p) {
+            return p.name + (p.isMe ? ' (you)' : '');
+        }
+        function scoreGroups() {
+            if (!teamScoringRound()) return S.cardmates.map((p) => ({ key: 'player:' + p.index, label: playerLabel(p), players: [p], names: '', division: p.division || '' }));
+            const groups = [];
+            const byKey = new Map();
+            S.cardmates.forEach((p) => {
+                const team = String(p.team || '').trim();
+                const key = team ? ('team:' + team.toLowerCase()) : ('player:' + p.index);
+                let group = byKey.get(key);
+                if (!group) {
+                    group = { key: key, label: team || playerLabel(p), players: [] };
+                    byKey.set(key, group);
+                    groups.push(group);
+                }
+                group.players.push(p);
+            });
+            return groups.map((group) => {
+                const divisions = [...new Set(group.players.map((p) => p.division).filter(Boolean))];
+                return Object.assign(group, {
+                    names: group.players.map(playerLabel).join(' / '),
+                    division: divisions.join(' / '),
+                });
+            });
+        }
+        function scoreForGroup(group, hole) {
+            const values = group.players.map((p) => strokesFor(p.index, hole)).filter((v) => typeof v === 'number');
+            const unique = [...new Set(values)];
+            return unique.length === 1 ? unique[0] : null;
+        }
+        function groupConflict(group, hole) {
+            const values = group.players.map((p) => strokesFor(p.index, hole)).filter((v) => typeof v === 'number');
+            return group.players.some((p) => conflictFor(p.index, hole)) || new Set(values).size > 1;
+        }
+        function matchLabelForGroup(group) {
+            const standings = (S.snap && S.snap.standings) || [];
+            const teams = group.players.map((p) => String(p.team || '').trim()).filter(Boolean);
+            const row = standings.find((s) => {
+                const name = String((s && (s.team || s.name)) || '').trim();
+                return name && (name === group.label || teams.includes(name));
+            });
+            return (row && row.matchLabel) || 'AS';
+        }
 
         async function postScore(index, hole, strokes) {
+            return postScoreTargets([index], hole, strokes);
+        }
+        async function postScoreTargets(indexes, hole, strokes) {
             const scorerIndex = currentScorerIndex();
             if (scorerIndex == null) { toast('Choose a scorecard'); return; }
-            const key = pendingKey(scorerIndex, index, hole);
+            const targets = [...new Set(indexes)].filter((index) => Number.isInteger(index));
+            if (!targets.length) return;
             // Snapshot the cell's prior value so a rejection can be rolled back even before any snapshot exists.
-            const cm0 = S.cardmates.find((p) => p.index === index);
-            const prevVote = cm0 && cm0.scorecards && cm0.scorecards[hole] ? cm0.scorecards[hole]['player:' + scorerIndex] : undefined;
-            const prevScore = cm0 && cm0.scores ? cm0.scores[hole] : undefined;
-            pending.set(key, (pending.get(key) || 0) + 1); // refcount so a later concurrent tap stays protected
-            setLocal(index, hole, strokes);
+            const before = targets.map((index) => {
+                const cm0 = S.cardmates.find((p) => p.index === index);
+                return {
+                    index,
+                    key: pendingKey(scorerIndex, index, hole),
+                    cm0,
+                    prevVote: cm0 && cm0.scorecards && cm0.scorecards[hole] ? cm0.scorecards[hole]['player:' + scorerIndex] : undefined,
+                    prevScore: cm0 && cm0.scores ? cm0.scores[hole] : undefined,
+                };
+            });
+            before.forEach((item) => {
+                pending.set(item.key, (pending.get(item.key) || 0) + 1); // refcount so a later concurrent tap stays protected
+                setLocal(item.index, hole, strokes);
+            });
             renderHole();
-            const r = await api(LIVE + '/score', { method: 'POST', body: { index: index, scorerIndex: scorerIndex, hole: hole, strokes: strokes } });
-            const n = (pending.get(key) || 0) - 1; if (n > 0) pending.set(key, n); else pending.delete(key);
-            if (r.ok) { S.snap = r.data; mergeFromSnap(); }
-            else if (r.neterr) { qAdd({ index: index, scorerIndex: scorerIndex, hole: hole, strokes: strokes }); setOnline(false); }
+            let hardError = null, hadNeterr = false, lastSnap = null;
+            for (const item of before) {
+                const r = await api(LIVE + '/score', { method: 'POST', body: { index: item.index, scorerIndex: scorerIndex, hole: hole, strokes: strokes } });
+                if (r.ok) lastSnap = r.data;
+                else if (r.neterr) { qAdd({ index: item.index, scorerIndex: scorerIndex, hole: hole, strokes: strokes }); hadNeterr = true; }
+                else if (!hardError) hardError = r.status || true;
+            }
+            before.forEach((item) => {
+                const n = (pending.get(item.key) || 0) - 1; if (n > 0) pending.set(item.key, n); else pending.delete(item.key);
+            });
+            if (hadNeterr) { setOnline(false); return; }
+            if (!hardError) {
+                if (lastSnap) { S.snap = lastSnap; mergeFromSnap(); }
+                return;
+            }
+            if (lastSnap) S.snap = lastSnap;
+            if (hardError === 403) toast('You can only score your own card');
+            else if (hardError === 401) toast('Session expired — sign in again');
+            else if (hardError === 429) toast('Easy there — one moment');
+            else if (hardError === 409) toast('Round isn’t live');
+            else toast('Could not save that score');
+            // Rejected — roll the phantom optimistic vote back. Reconcile from the snapshot if we have one;
+            // otherwise (no snapshot yet) restore the captured prior value directly.
+            if (S.snap) mergeFromSnap();
             else {
-                if (r.status === 403) toast('You can only score your own card');
-                else if (r.status === 401) toast('Session expired — sign in again');
-                else if (r.status === 429) toast('Easy there — one moment');
-                else if (r.status === 409) toast('Round isn’t live');
-                else toast('Could not save that score');
-                // Rejected — roll the phantom optimistic vote back. Reconcile from the snapshot if we have one;
-                // otherwise (no snapshot yet) restore the captured prior value directly.
-                if (S.snap) mergeFromSnap();
-                else if (cm0) {
+                before.forEach((item) => {
+                    const cm0 = item.cm0;
+                    if (!cm0) return;
                     cm0.scorecards = cm0.scorecards || {}; cm0.scorecards[hole] = Object.assign({}, cm0.scorecards[hole]);
-                    if (prevVote === undefined) delete cm0.scorecards[hole]['player:' + scorerIndex]; else cm0.scorecards[hole]['player:' + scorerIndex] = prevVote;
+                    if (item.prevVote === undefined) delete cm0.scorecards[hole]['player:' + scorerIndex]; else cm0.scorecards[hole]['player:' + scorerIndex] = item.prevVote;
                     cm0.scores = cm0.scores || {};
-                    if (prevScore === undefined) delete cm0.scores[hole]; else cm0.scores[hole] = prevScore;
-                    renderHole();
-                }
+                    if (item.prevScore === undefined) delete cm0.scores[hole]; else cm0.scores[hole] = item.prevScore;
+                });
+                renderHole();
             }
         }
 
@@ -638,6 +714,11 @@
                 actions.appendChild(share); actions.appendChild(add); actions.appendChild(manage);
                 bar.appendChild(left); bar.appendChild(actions);
                 c.appendChild(bar);
+            } else {
+                const bar = el('div', 'card');
+                bar.style.cssText = 'padding:0.6rem 0.85rem;';
+                bar.appendChild(el('div', 'muted', formatLabel()));
+                c.appendChild(bar);
             }
             const weather = roundWeatherNode();
             if (weather) c.appendChild(weather);
@@ -673,22 +754,24 @@
                 owner.appendChild(select);
                 box.appendChild(owner);
             }
-            S.cardmates.forEach((p) => {
-                const conflict = conflictFor(p.index, h.hole);
+            scoreGroups().forEach((group) => {
+                const conflict = groupConflict(group, h.hole);
                 const row = el('div', 'prow' + (conflict ? ' conflict' : ''));
                 const info = el('div', 'pinfo');
-                info.appendChild(el('div', 'pname', p.name + (p.isMe ? ' (you)' : '')));
-                if (p.division) info.appendChild(el('div', 'pmeta', p.division));
-                if (conflict) info.appendChild(el('div', 'pmeta conflict-text', '⚑ Conflict: ' + (conflict.values || []).join(' vs ') + ' — set yours to match'));
-                const cur = strokesFor(p.index, h.hole);
+                info.appendChild(el('div', 'pname', group.label));
+                if (group.names) info.appendChild(el('div', 'pmeta', group.names));
+                if (group.division) info.appendChild(el('div', 'pmeta', group.division));
+                if (conflict) info.appendChild(el('div', 'pmeta conflict-text', '⚑ Conflict — set yours to match'));
+                const cur = scoreForGroup(group, h.hole);
                 const step = el('div', 'stepper');
                 const minus = el('button', 'minus', '−');
                 const val = el('div', 'val');
                 const n = el('div', 'n', cur == null ? '–' : String(cur)); val.appendChild(n);
-                if (cur != null) { const d = cur - h.par; const rel = el('div', 'rel ' + relClass(d), relText(d)); val.appendChild(rel); }
+                if (cur != null && S.format !== 'matchplay') { const d = cur - h.par; const rel = el('div', 'rel ' + relClass(d), relText(d)); val.appendChild(rel); }
                 const plus = el('button', 'plus', '+');
-                minus.addEventListener('click', function () { const base = cur == null ? h.par : cur; const nv = Math.max(1, base - 1); postScore(p.index, h.hole, nv); });
-                plus.addEventListener('click', function () { const base = cur == null ? h.par - 1 : cur; const nv = Math.min(30, base + 1); postScore(p.index, h.hole, nv); });
+                const targets = group.players.map((p) => p.index);
+                minus.addEventListener('click', function () { const base = cur == null ? h.par : cur; const nv = Math.max(1, base - 1); postScoreTargets(targets, h.hole, nv); });
+                plus.addEventListener('click', function () { const base = cur == null ? h.par - 1 : cur; const nv = Math.min(30, base + 1); postScoreTargets(targets, h.hole, nv); });
                 step.appendChild(minus); step.appendChild(val); step.appendChild(plus);
                 row.appendChild(info); row.appendChild(step);
                 box.appendChild(row);
@@ -699,8 +782,11 @@
             if (me) {
                 let thru = 0, total = 0, toPar = 0;
                 S.holes.forEach((hh) => { const s = me.scores ? me.scores[hh.hole] : undefined; if (typeof s === 'number') { thru++; total += s; toPar += s - hh.par; } });
+                const myGroup = scoreGroups().find((group) => group.players.some((p) => p.index === me.index));
+                const totals = [['Thru', String(thru) + '/' + S.holes.length], ['Total', total ? String(total) : '–']];
+                totals.push(S.format === 'matchplay' ? ['Match', myGroup ? matchLabelForGroup(myGroup) : 'AS'] : ['To par', thru ? relText(toPar) : 'E']);
                 const tot = el('div', 'totbar');
-                [['Thru', String(thru) + '/' + S.holes.length], ['Total', total ? String(total) : '–'], ['To par', thru ? relText(toPar) : 'E']].forEach((kv) => {
+                totals.forEach((kv) => {
                     const d = el('div'); d.appendChild(el('div', 'k', kv[0])); d.appendChild(el('div', 'v', kv[1])); tot.appendChild(d);
                 });
                 box.appendChild(tot);

@@ -17,7 +17,19 @@ export function allowedOrigin(env: Env, request: Request): string | null {
   const origin = request.headers.get("Origin");
   if (!origin) return null;
   const allow = env.ALLOWED_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean);
-  return allow.includes(origin) ? origin : null;
+  if (allow.includes(origin)) return origin;
+  return isProjectPagesOrigin(origin) ? origin : null;
+}
+
+function isProjectPagesOrigin(origin: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:") return false;
+  return url.hostname === "gvdg-club-site.pages.dev" || url.hostname.endsWith(".gvdg-club-site.pages.dev");
 }
 
 export function corsHeaders(origin: string | null): Record<string, string> {
