@@ -2,3 +2,4 @@
 node_modules/
 .omo/
 .pages-dist/
+.deploy-log
