@@ -12,6 +12,7 @@ import { json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { asInt, asStr } from "./input.js";
 import { isLiveFormatError, normalizeLiveScoringConfig, type LiveScoringConfig } from "./live-format.js";
+import { weatherLocationForCourse } from "./weather.js";
 
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // unambiguous (no 0/O/1/I/L)
 function genCode(): string {
@@ -52,14 +53,15 @@ export async function handleCasualRounds(
     const holes = await db.getLayoutHoles(env.DB, layoutId);
     if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin);
     const layout = (await db.getLayout(env.DB, layoutId)) as { name?: string | null; course_id?: number | null } | null;
-    const course = layout?.course_id != null ? ((await db.getCourse(env.DB, layout.course_id)) as { name?: string | null; udisc_course_id?: string | null } | null) : null;
+    const course = layout?.course_id != null ? ((await db.getCourse(env.DB, layout.course_id)) as { name?: string | null; udisc_course_id?: string | null; lat?: number | null; lng?: number | null } | null) : null;
+    const weatherLocation = weatherLocationForCourse(course, layout); // null unless the course has coords
     const member = await getMember(env.ROSTER, claims.sub);
     const code = genCode();
     const pairLabel = asStr(b.pairLabel, 40) ?? asStr(b.pair_label, 40) ?? asStr(b.team, 40);
     const initialPlayer = { memberId: claims.sub, name: member?.name ?? "Player", ...(pairLabel ? { team: pairLabel } : {}) };
     const r = await roundStub(env, code).fetch("https://do/start", {
       method: "POST",
-      body: JSON.stringify({ casual: true, roundCode: code, courseId: layout?.course_id ?? null, layoutId, createdBy: claims.sub, courseName: course?.name ?? null, layoutName: layout?.name ?? null, udiscCourseId: course?.udisc_course_id ?? null, holes, players: [initialPlayer], liveScoringConfig, startedAt: new Date().toISOString() }),
+      body: JSON.stringify({ casual: true, roundCode: code, courseId: layout?.course_id ?? null, layoutId, createdBy: claims.sub, courseName: course?.name ?? null, layoutName: layout?.name ?? null, udiscCourseId: course?.udisc_course_id ?? null, weatherLocation, holes, players: [initialPlayer], liveScoringConfig, startedAt: new Date().toISOString() }),
     });
     if (r.status !== 200) return json({ error: "start_failed" }, 502, origin);
     return json({ code }, 201, origin);

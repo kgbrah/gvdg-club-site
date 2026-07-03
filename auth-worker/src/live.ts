@@ -11,8 +11,13 @@ import { finalizeLiveEvent } from "./live-finalize.js";
 import { updateLivePairs } from "./live-pairs.js";
 import { canEnterScorecard, findPlayer, invalidScoreTargetsResponse, scoreTargetForBody, scoringState, targetAnchor } from "./live-state.js";
 import { mineData, publicSnapshot } from "./live-snapshot.js";
-import { j, type LiveEnv, type LiveMeta, type LiveState, type OverrideBody, type PairAssignmentBody, type RemoveBody, type ScoreBody, type StartBody } from "./live-types.js";
+import { j, type LiveEnv, type LiveMeta, type LiveState, type OverrideBody, type PairAssignmentBody, type RemoveBody, type ScoreBody, type StartBody, type WeatherBody } from "./live-types.js";
 import { assignCards, type PlayerState } from "./scoring.js";
+import { createWeatherState, refreshWeatherState, WEATHER_REFRESH_MS } from "./weather.js";
+
+// Stop the background weather alarm for a round "live" longer than this — a safety bound so an abandoned
+// (started, never finalized) round can't keep polling Open-Meteo indefinitely.
+const WEATHER_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 export class LiveEventDO {
   private state: LiveState;
@@ -39,6 +44,46 @@ export class LiveEventDO {
     await this.state.storage.put("players", this.players);
   }
 
+  /** Fetch latest weather and fold into meta WITHOUT persisting — the caller persists once. */
+  private async refreshWeatherNow(): Promise<void> {
+    if (this.meta?.weather) this.meta.weather = await refreshWeatherState(this.meta.weather);
+  }
+  /** Ensure a weather-refresh alarm is scheduled for a live, weather-tracked round (idempotent — never stacks). */
+  private async scheduleWeatherAlarm(): Promise<void> {
+    if (this.meta?.status !== "live" || !this.meta.weather) return;
+    if ((await this.state.storage.getAlarm()) == null) await this.state.storage.setAlarm(Date.now() + WEATHER_REFRESH_MS);
+  }
+  /** DO alarm handler (Cloudflare invokes by name): refresh weather + reschedule while live; clear the
+   *  alarm once the round is final/none or past the max-age bound. */
+  async alarm(): Promise<void> {
+    await this.load();
+    const startedMs = Date.parse(this.meta?.startedAt ?? "");
+    const stale = Number.isFinite(startedMs) && Date.now() - startedMs > WEATHER_MAX_AGE_MS;
+    if (this.meta?.status !== "live" || !this.meta.weather || stale) {
+      await this.state.storage.deleteAlarm();
+      return;
+    }
+    this.meta.weather = await refreshWeatherState(this.meta.weather);
+    await this.persist();
+    this.broadcast();
+    await this.state.storage.setAlarm(Date.now() + WEATHER_REFRESH_MS);
+  }
+  /** One-time weather backfill for a live round that started before it had a location (or before weather
+   *  tracking existed): record the location, take an initial reading, and start the refresh alarm. */
+  private async ensureWeather(b: WeatherBody): Promise<Response> {
+    if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
+    if (!this.meta.weather && b.weatherLocation) {
+      this.meta.weather = createWeatherState(b.weatherLocation);
+      await this.refreshWeatherNow();
+      await this.persist();
+      await this.scheduleWeatherAlarm();
+      this.broadcast();
+      return j(this.snapshot());
+    }
+    await this.scheduleWeatherAlarm();
+    return j(this.snapshot());
+  }
+
   async fetch(request: Request): Promise<Response> {
     await this.load();
     const action = new URL(request.url).pathname.split("/").filter(Boolean).pop();
@@ -57,6 +102,7 @@ export class LiveEventDO {
     if (action === "remove") return this.removePlayer(body as RemoveBody, authMember, authAdmin); // drop a player (accidental/left/no-show)
     if (action === "pairs") return this.updatePairs(body as PairAssignmentBody, authMember, authAdmin);
     if (action === "cancel") return this.cancel(authAdmin); // admin: scrap a mis-started round, reset to none
+    if (action === "weather") return this.ensureWeather(body as WeatherBody); // one-time weather backfill
     if (action === "override") return this.override(body as OverrideBody);
     if (action === "finalize") return this.finalize(authMember, authAdmin, (body as { force?: boolean }).force === true);
     return j({ error: "not_found" }, 404);
@@ -78,7 +124,7 @@ export class LiveEventDO {
       if (isLiveFormatError(error)) return j({ error: "invalid_live_scoring_config", code: error.code, message: error.message }, 400);
       throw error;
     }
-    this.meta = { eventId: b.eventId ?? 0, casual: !!b.casual, roundCode: b.roundCode ?? null, courseId: b.courseId ?? null, layoutId: b.layoutId ?? null, createdBy: b.createdBy ?? null, courseName: b.courseName ?? null, layoutName: b.layoutName ?? null, udiscCourseId: b.udiscCourseId ?? null, holes, status: "live", startedAt: b.startedAt ?? "", roundConfig, overrides: {} };
+    this.meta = { eventId: b.eventId ?? 0, casual: !!b.casual, roundCode: b.roundCode ?? null, courseId: b.courseId ?? null, layoutId: b.layoutId ?? null, createdBy: b.createdBy ?? null, courseName: b.courseName ?? null, layoutName: b.layoutName ?? null, udiscCourseId: b.udiscCourseId ?? null, holes, status: "live", startedAt: b.startedAt ?? "", weather: createWeatherState(b.weatherLocation ?? null), roundConfig, overrides: {} };
     this.players = (Array.isArray(b.players) ? b.players : []).map((p) => ({
       memberId: p.memberId ?? null,
       name: String(p.name ?? "Player"),
@@ -90,7 +136,9 @@ export class LiveEventDO {
       scorecards: {},
     }));
     assignCards(this.players, b.cardSize); // group into cards (by starting hole, else buckets of 4)
+    await this.refreshWeatherNow(); // take an initial reading before the first persist so it's in the snapshot
     await this.persist();
+    await this.scheduleWeatherAlarm(); // keep weather fresh in the background for the life of the round
     this.broadcast();
     return j(this.snapshot());
   }
@@ -260,6 +308,7 @@ export class LiveEventDO {
     this.meta = null;
     this.players = [];
     await this.persist();
+    await this.state.storage.deleteAlarm(); // round reset — stop the background weather refresh
     this.broadcast(); // push the "none" snapshot so live viewers/scorekeepers see the round end
     return j(this.snapshot());
   }

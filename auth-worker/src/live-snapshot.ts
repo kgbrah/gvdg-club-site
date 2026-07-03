@@ -32,6 +32,7 @@ export function publicSnapshot(meta: LiveMeta | null, players: PlayerState[]) {
     courseName: meta?.courseName ?? null,
     layoutName: meta?.layoutName ?? null,
     udiscCourseId: meta?.udiscCourseId ?? null,
+    weather: meta?.weather ?? null,
     holes,
     players: players
       .map((player, index) => ({ player, index }))
@@ -83,6 +84,7 @@ export function mineData(meta: LiveMeta | null, players: PlayerState[], authMemb
     courseName: meta?.courseName ?? null,
     layoutName: meta?.layoutName ?? null,
     udiscCourseId: meta?.udiscCourseId ?? null,
+    weather: meta?.weather ?? null,
     status: meta?.status ?? "none",
     holes,
     standings,

@@ -32,9 +32,13 @@ class FakeSocket extends EventTarget {
 
 class FakeState {
   readonly accepted: LiveSocket[] = [];
+  alarmAt: number | null = null; // exposed so weather-alarm tests can trigger/inspect it
   readonly storage: {
     get<T = unknown>(key: string): Promise<T | undefined>;
     put(key: string, value: unknown): Promise<void>;
+    getAlarm(): Promise<number | null>;
+    setAlarm(scheduledTime: number): Promise<void>;
+    deleteAlarm(): Promise<void>;
   };
   private readonly stored: Record<string, unknown>;
 
@@ -44,6 +48,13 @@ class FakeState {
       get: async <T = unknown>(key: string) => this.stored[key] as T | undefined,
       put: async (key: string, value: unknown) => {
         this.stored[key] = value;
+      },
+      getAlarm: async () => this.alarmAt,
+      setAlarm: async (scheduledTime: number) => {
+        this.alarmAt = scheduledTime;
+      },
+      deleteAlarm: async () => {
+        this.alarmAt = null;
       },
     };
   }
@@ -357,7 +368,36 @@ function recordingDb(roundId = 7) {
 
 beforeEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers(); // weather tests use fake timers; reset so they never leak into other tests
 });
+
+type WeatherSnapshot = {
+  readonly weather: {
+    readonly location: { readonly label: string | null };
+    readonly current: { readonly observedAt: string; readonly rainIn: number | null; readonly windSpeedMph: number | null; readonly windGustMph: number | null } | null;
+    readonly history: readonly { readonly observedAt: string; readonly windSpeedMph: number | null; readonly windGustMph: number | null }[];
+    readonly error: string | null;
+  } | null;
+};
+
+function openMeteoSample(observedAt: string, windSpeedMph: number, rainIn: number): Record<string, unknown> {
+  return {
+    current: {
+      time: observedAt, temperature_2m: 82, apparent_temperature: 87, relative_humidity_2m: 72,
+      precipitation: rainIn, rain: rainIn, showers: 0, snowfall: 0, weather_code: rainIn > 0 ? 61 : 1,
+      cloud_cover: 44, wind_speed_10m: windSpeedMph, wind_direction_10m: 180, wind_gusts_10m: windSpeedMph + 6, is_day: 1,
+    },
+  };
+}
+
+function stubWeather(samples: readonly Record<string, unknown>[]): void {
+  let nextIndex = 0;
+  vi.stubGlobal("fetch", vi.fn(async () => {
+    const sample = samples[nextIndex] ?? samples[samples.length - 1] ?? openMeteoSample("2026-07-01T08:00", 0, 0);
+    nextIndex++;
+    return new Response(JSON.stringify(sample));
+  }));
+}
 
 describe("live route start payloads", () => {
   it("threads legacy doubles/matchplay config and registration teams into competition start payload", async () => {
@@ -671,6 +711,69 @@ describe("LiveEventDO card-scoped scoring", () => {
     expect(res.status).toBe(200);
     const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { players: { name: string; team: string | null }[] };
     expect(snap.players.find((p) => p.name === "C")?.team).toBe("Blue");
+  });
+
+  it("captures weather at start, schedules the alarm, and refreshes on the alarm (not on score)", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-01T12:00:00.000Z"));
+    stubWeather([openMeteoSample("2026-07-01T08:00", 6.5, 0), openMeteoSample("2026-07-01T08:15", 18.2, 0.2)]);
+    const state = new FakeState({});
+    const live = new LiveEventDO(state, { DB: db });
+    const started = await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      casual: true, courseName: "North Rec", startedAt: "2026-07-01T12:00:00.000Z", holes: [{ hole: 1, par: 3 }],
+      players: [{ memberId: "m_a", name: "A" }], weatherLocation: { lat: 35.631092, lng: -77.319923, label: "North Rec - Greenville, NC" },
+    }) }));
+    const startBody = (await started.json()) as WeatherSnapshot;
+    expect(startBody.weather?.location.label).toBe("North Rec - Greenville, NC");
+    expect(startBody.weather?.current?.windSpeedMph).toBe(6.5);
+    expect(startBody.weather?.current?.windGustMph).toBe(12.5);
+    expect(startBody.weather?.history.map((s) => s.observedAt)).toEqual(["2026-07-01T08:00"]);
+    expect(state.alarmAt).not.toBeNull(); // background weather alarm scheduled at start
+
+    // A score is PURE: never fetches weather, so the reading stays at the start value.
+    vi.setSystemTime(new Date("2026-07-01T12:11:00.000Z"));
+    const scored = await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify({ index: 0, scorerIndex: 0, hole: 1, strokes: 3 }) }));
+    expect(((await scored.json()) as WeatherSnapshot).weather?.current?.observedAt).toBe("2026-07-01T08:00");
+
+    // The background alarm firing refreshes weather, appends the changed sample, and reschedules while live.
+    await live.alarm();
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as WeatherSnapshot;
+    expect(snap.weather?.current).toMatchObject({ observedAt: "2026-07-01T08:15", rainIn: 0.2, windSpeedMph: 18.2, windGustMph: 24.2 });
+    expect(snap.weather?.history.map((s) => s.windSpeedMph)).toEqual([6.5, 18.2]);
+    expect(snap.weather?.error).toBeNull();
+    expect(state.alarmAt).not.toBeNull(); // rescheduled while the round is live
+  });
+
+  it("the weather alarm clears itself once the round is no longer live", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-01T12:00:00.000Z"));
+    stubWeather([openMeteoSample("2026-07-01T08:00", 6.5, 0)]);
+    const state = new FakeState({});
+    const live = new LiveEventDO(state, { DB: db });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      casual: true, courseName: "North Rec", startedAt: "2026-07-01T12:00:00.000Z", holes: [{ hole: 1, par: 3 }],
+      players: [{ memberId: "m_a", name: "A" }], weatherLocation: { lat: 35.6, lng: -77.3, label: "North Rec" },
+    }) }));
+    expect(state.alarmAt).not.toBeNull();
+    await live.fetch(new Request("https://do/cancel", { method: "POST", headers: { "X-Auth-Admin": "true" } }));
+    expect(state.alarmAt).toBeNull(); // cancel stops the background refresh
+  });
+
+  it("backfills weather for a live round that started before weather tracking", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-01T12:00:00.000Z"));
+    stubWeather([openMeteoSample("2026-07-01T08:00", 7.5, 0.1)]);
+    const live = new LiveEventDO(new FakeState({
+      meta: { eventId: 7, holes: [{ hole: 1, par: 3 }], status: "live", startedAt: "2026-07-01T11:30:00.000Z" },
+      players: [{ memberId: "m_a", name: "A", division: null, startingHole: null, scores: {} }],
+    }), { DB: db });
+    const filled = await live.fetch(new Request("https://do/weather", { method: "POST", body: JSON.stringify({
+      weatherLocation: { lat: 35.631092, lng: -77.319923, label: "North Rec - Greenville, NC" },
+    }) }));
+    const body = (await filled.json()) as WeatherSnapshot;
+    expect(body.weather?.location.label).toBe("North Rec - Greenville, NC");
+    expect(body.weather?.current).toMatchObject({ observedAt: "2026-07-01T08:00", rainIn: 0.1, windSpeedMph: 7.5, windGustMph: 13.5 });
+    expect(body.weather?.history.map((s) => s.observedAt)).toEqual(["2026-07-01T08:00"]);
   });
 
   it("lets cardmates enter guest-token scorecards but not another member's scorecard", async () => {
