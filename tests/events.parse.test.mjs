@@ -18,6 +18,11 @@ import {
   statusLabel,
   buildCourseIndex,
   courseNameFor,
+  playFormatForDisplay,
+  scoringFormatForDisplay,
+  isTeamRound,
+  roundFormatLabel,
+  liveStandingsForDisplay,
 } from '../events.js';
 
 // --- normalizeEvent -----------------------------------------------------------
@@ -46,6 +51,35 @@ test('normalizeEvent passes through the selected layout_id as a string (T4 tee-s
 test('normalizeEvent preserves play_format for event detail format labels', () => {
   assert.equal(normalizeEvent({ id: 1, format: 'matchplay', play_format: 'doubles' }).play_format, 'doubles');
   assert.equal(normalizeEvent({ id: 1 }).play_format, '');
+});
+
+test('round format helpers split play format from scoring format', () => {
+  const ev = normalizeEvent({ id: 1, format: 'matchplay', play_format: 'doubles' });
+  assert.equal(playFormatForDisplay(ev), 'doubles');
+  assert.equal(scoringFormatForDisplay(ev), 'matchplay');
+  assert.equal(isTeamRound(ev), true);
+  assert.equal(roundFormatLabel(ev), 'Doubles · Matchplay');
+  assert.equal(roundFormatLabel(normalizeEvent({ id: 2 })), '');
+});
+
+test('liveStandingsForDisplay adds doubles side player names without changing standings order', () => {
+  const rows = liveStandingsForDisplay({
+    format: 'matchplay',
+    playFormat: 'doubles',
+    teamRequired: true,
+    players: [
+      { name: 'Red 1', team: 'Red' },
+      { name: 'Red 2', team: 'Red' },
+      { name: 'Blue 1', team: 'Blue' },
+      { name: 'Blue 2', team: 'Blue' },
+    ],
+    standings: [
+      { name: 'Red', team: 'Red', matchLabel: '1 Up' },
+      { name: 'Blue', team: 'Blue', matchLabel: '1 Down' },
+    ],
+  });
+  assert.equal(rows[0].playersText, 'Red 1 / Red 2');
+  assert.equal(rows[1].playersText, 'Blue 1 / Blue 2');
 });
 
 test('normalizeEvent preserves an unknown status verbatim', () => {

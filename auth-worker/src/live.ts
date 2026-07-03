@@ -9,7 +9,7 @@
 import * as db from "./db.js";
 import { playFormatForRound, scoringFormatForRound, teamNameRequiredForFormat } from "./input.js";
 import { persistFinalizedRound } from "./live-finalize.js";
-import { normalizeScorecards, playerScorerId, purgeScorerVotes, recordScoreVote, scorecardConsensusIssues } from "./live-consensus.js";
+import { normalizeScorecards, playerScorerId, purgeScorerVotes, recordAuthoritativeScore, recordScoreVote, scorecardConsensusIssues } from "./live-consensus.js";
 import { assignCards, computeLeaderboardForFormat, finalizeStandingsForFormat, type PlayerState } from "./scoring.js";
 import { createWeatherState, refreshWeatherState, weatherRefreshDue, type WeatherLocation, type WeatherState } from "./weather.js";
 
@@ -73,6 +73,7 @@ interface ScoreBody {
   scorerIndex?: number | null;
   hole: number;
   strokes: number;
+  authoritative?: boolean;
 }
 interface OverrideBody {
   hole: number;
@@ -368,8 +369,9 @@ export class LiveEventDO {
     if (!scorer || scorer.removed) return j({ error: "bad_scorer" }, 400);
     if ((scorer.cardId ?? null) !== (player.cardId ?? null)) return j({ error: "scorer_wrong_card" }, 403);
     if (!authAdmin && !canEnterScorecard(scorer, authMember)) return j({ error: "wrong_scorer" }, 403);
-    const scorerId = playerScorerId(scorerIndex);
-    const conflict = recordScoreVote({ players: this.players, targetIndex, scorerId, hole, strokes });
+    const conflict = authAdmin && b.authoritative === true
+      ? (recordAuthoritativeScore({ players: this.players, targetIndex, hole, strokes }), null)
+      : recordScoreVote({ players: this.players, targetIndex, scorerId: playerScorerId(scorerIndex), hole, strokes });
     await this.refreshWeatherIfDue();
     await this.persist();
     if (conflict) {

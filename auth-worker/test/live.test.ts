@@ -312,8 +312,49 @@ describe("LiveEventDO card-scoped scoring", () => {
       ["Blue 2", "Blue"],
     ]);
     expect(snap.standings).toHaveLength(2);
-    expect(snap.standings[0]).toMatchObject({ name: "Red", team: "Red", holesWon: 2, holesLost: 1, matchPoints: 1, matchLabel: "+1" });
-    expect(snap.standings[1]).toMatchObject({ name: "Blue", team: "Blue", holesWon: 1, holesLost: 2, matchPoints: -1, matchLabel: "-1" });
+    expect(snap.standings[0]).toMatchObject({ name: "Red", team: "Red", holesWon: 2, holesLost: 1, matchPoints: 1, matchLabel: "1 Up" });
+    expect(snap.standings[1]).toMatchObject({ name: "Blue", team: "Blue", holesWon: 1, holesLost: 2, matchPoints: -1, matchLabel: "1 Down" });
+  });
+
+  it("lets one admin authoritatively score and finalize a doubles matchplay competition card", async () => {
+    const live = liveDO();
+    await live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({
+        eventId: 2,
+        format: "matchplay",
+        playFormat: "doubles",
+        teamRequired: true,
+        holes: [{ hole: 1, par: 3 }, { hole: 2, par: 4 }],
+        players: [
+          { memberId: "r1", name: "Red 1", team: "Red" },
+          { memberId: "r2", name: "Red 2", team: "Red" },
+          { memberId: "b1", name: "Blue 1", team: "Blue" },
+          { memberId: "b2", name: "Blue 2", team: "Blue" },
+        ],
+      }),
+    }));
+    for (const [index, hole, strokes] of [
+      [0, 1, 3], [1, 1, 3], [2, 1, 4], [3, 1, 4],
+      [0, 2, 5], [1, 2, 5], [2, 2, 4], [3, 2, 4],
+    ] as const) {
+      await post(live, { "X-Auth-Admin": "true" }, { index, hole, strokes, authoritative: true });
+    }
+
+    const snap = (await (await live.fetch(new Request("https://do/snapshot"))).json()) as FormatSnapshot & { conflicts: unknown[]; missing: unknown[] };
+
+    expect(snap.conflicts).toEqual([]);
+    expect(snap.missing).toEqual([]);
+    expect(snap.standings).toHaveLength(2);
+    expect(snap.standings[0]).toMatchObject({ name: "Blue", team: "Blue", holesWon: 1, holesLost: 1, matchPoints: 0, matchLabel: "AS" });
+    expect(snap.standings[1]).toMatchObject({ name: "Red", team: "Red", holesWon: 1, holesLost: 1, matchPoints: 0, matchLabel: "AS" });
+
+    const finalized = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" } }));
+    const body = (await finalized.json()) as { status: string; forced: boolean; standings: { name: string; matchLabel?: string }[] };
+
+    expect(finalized.status).toBe(200);
+    expect(body).toMatchObject({ status: "final", forced: false });
+    expect(body.standings.map((s) => [s.name, s.matchLabel])).toEqual([["Blue", "AS"], ["Red", "AS"]]);
   });
 
   it("keeps a player/hole conflicted until all cardmate scorecards match", async () => {

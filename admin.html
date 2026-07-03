@@ -198,6 +198,8 @@
         .al-holes td.sc-conflict { background: var(--over-soft); border-left: 3px solid var(--over); }
         .al-holes td.sc-conflict input { border-color: var(--over); box-shadow: 0 0 0 1px var(--over-soft); }
         .sc-conflict-flag { color: var(--over); font-weight: 800; margin-left: 0.3rem; }
+        .sc-team-grid .sc-side-label { font-weight: 800; color: var(--text-primary); }
+        .sc-team-grid .sc-side-players { color: var(--text-secondary); }
         .al-est { white-space: nowrap; font-variant-numeric: tabular-nums; }
         .al-est .src { font-size: 0.7rem; color: var(--text-muted); }
         .al-verified { font-size: 0.7rem; font-weight: 700; color: #2e9e44; background: rgba(46,158,68,0.16); border-radius: 999px; padding: 0.05rem 0.45rem; white-space: nowrap; }
@@ -232,6 +234,19 @@
             /* Wide builder/scoring/roster tables scroll inside their overflow-x wrapper instead of
                crushing every column to fit (which mashed the "Est." cell into "250 ft par"). */
             .al-holes { min-width: 500px; }
+            #scBoard .al-holes { min-width: 0; table-layout: fixed; font-size: 0.78rem; }
+            #scBoard .al-holes th, #scBoard .al-holes td { padding: 0.28rem 0.25rem; }
+            #scBoard .lb-name { word-break: break-word; }
+            #scGrid.sc-team-grid { min-width: 0; display: block; }
+            #scGrid.sc-team-grid thead { display: none; }
+            #scGrid.sc-team-grid tbody { display: grid; gap: 0.75rem; }
+            #scGrid.sc-team-grid tr { display: grid; gap: 0.35rem; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); }
+            #scGrid.sc-team-grid td { display: grid; grid-template-columns: minmax(4.25rem, auto) minmax(0, 1fr); align-items: center; gap: 0.55rem; width: 100%; padding: 0.25rem 0; border-bottom: 0; }
+            #scGrid.sc-team-grid td::before { content: attr(data-label); color: var(--text-muted); font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
+            #scGrid.sc-team-grid td.sc-side-label::before { content: ""; display: none; }
+            #scGrid.sc-team-grid td.sc-side-label { display: block; padding-bottom: 0.35rem; border-bottom: 1px solid var(--border-color); font-size: 1rem; }
+            #scGrid.sc-team-grid td.sc-hole-cell input { width: 4rem; max-width: 100%; }
+            #scGrid.sc-team-grid td.sc-total-cell { margin-top: 0.15rem; border-top: 1px solid var(--border-color); padding-top: 0.45rem; font-weight: 800; }
             .al-est .src { display: block; }
         }
         @media (max-width: 760px) {
@@ -1650,13 +1665,13 @@
         function scMarkConflicts() {
             const grid = $('scGrid');
             const holes = (scSnap && scSnap.holes) || [];
-            const players = (scSnap && scSnap.players) || [];
+            const groups = scScoreGroups();
             const rows = grid.querySelectorAll('tbody tr');
-            players.forEach((p) => {
-                const tr = rows[p.index]; if (!tr) return;
+            groups.forEach((group, rowIndex) => {
+                const tr = rows[rowIndex]; if (!tr) return;
                 holes.forEach((h, i) => {
                     const td = tr.children[3 + i]; if (!td) return;
-                    const conflict = scConflictFor(p.index, h.hole);
+                    const conflict = scGroupConflict(group, h.hole);
                     td.classList.toggle('sc-conflict', !!conflict);
                     let flag = td.querySelector('.sc-conflict-flag');
                     if (conflict && !flag) { flag = elx('span', 'sc-conflict-flag', '⚑'); td.appendChild(flag); }
@@ -1705,7 +1720,7 @@
             try {
                 const layoutId = $('scLayout').value ? Number($('scLayout').value) : null;
                 if (layoutId) {
-                    const pr = await adminApi('/admin/events/' + scEventId, { method: 'PATCH', body: { layout_id: layoutId } });
+                    const pr = await adminApi('/admin/events/' + scEventId, { method: 'PATCH', body: { layout_id: layoutId, confirm_event_details_update: true } });
                     if (!pr.ok) { adminMsg('Layout update failed (' + pr.status + ')', false); return; }
                     const opt = $('scEvent').selectedOptions[0];
                     if (opt) opt.dataset.layoutId = String(layoutId);
@@ -1862,46 +1877,145 @@
             } catch (e) { /* leave the placeholder */ }
         }
 
+        function scIsTeamRound() {
+            if (!scSnap) return false;
+            const play = scSnap.playFormat || scSnap.play_format || null;
+            const format = scSnap.format || null;
+            return scSnap.teamRequired === true || play === 'doubles' || play === 'teams' || format === 'doubles' || format === 'teams';
+        }
+        function scUniqueText(values) {
+            const out = [];
+            values.forEach((value) => {
+                const text = String(value || '').trim();
+                if (text && !out.includes(text)) out.push(text);
+            });
+            return out;
+        }
+        function scScoreGroups() {
+            const players = (scSnap && scSnap.players) || [];
+            if (!scIsTeamRound()) {
+                return players.map((p) => ({
+                    label: p.name || 'Player',
+                    sub: p.division || '—',
+                    start: p.startingHole != null ? String(p.startingHole) : '—',
+                    players: [p],
+                }));
+            }
+            const groups = new Map();
+            players.forEach((p) => {
+                const team = String(p.team || '').trim();
+                const key = team ? 'team:' + team.toLowerCase() : 'player:' + p.index;
+                if (!groups.has(key)) groups.set(key, { label: team || p.name || 'Team', players: [] });
+                groups.get(key).players.push(p);
+            });
+            return Array.from(groups.values()).map((group) => {
+                const names = scUniqueText(group.players.map((p) => p.name)).join(' / ');
+                const divisions = scUniqueText(group.players.map((p) => p.division));
+                const starts = scUniqueText(group.players.map((p) => p.startingHole != null ? String(p.startingHole) : ''));
+                return {
+                    label: group.label,
+                    sub: names || '—',
+                    division: divisions.length === 1 ? divisions[0] : null,
+                    start: starts.length ? starts.join(', ') : '—',
+                    players: group.players,
+                };
+            });
+        }
+        function scGroupScoreValues(group, hole) {
+            const values = [];
+            group.players.forEach((p) => {
+                const score = p.scores ? p.scores[hole] : null;
+                if (typeof score === 'number' && Number.isFinite(score) && !values.includes(score)) values.push(score);
+            });
+            return values.sort((a, b) => a - b);
+        }
+        function scGroupScore(group, hole) {
+            const values = scGroupScoreValues(group, hole);
+            return values.length === 1 ? values[0] : null;
+        }
+        function scGroupTotal(group, holes) {
+            let total = 0;
+            holes.forEach((h) => {
+                const score = scGroupScore(group, h.hole);
+                if (score != null) total += score;
+            });
+            return total;
+        }
+        function scGroupConflict(group, hole) {
+            for (const p of group.players) {
+                const conflict = scConflictFor(p.index, hole);
+                if (conflict) return conflict;
+            }
+            const values = scGroupScoreValues(group, hole);
+            return values.length > 1 ? { values } : null;
+        }
+
         function scRenderGrid() {
             const grid = $('scGrid'); grid.replaceChildren();
-            const holes = scSnap.holes || [], players = scSnap.players || [];
+            const holes = scSnap.holes || [], groups = scScoreGroups(), teamRound = scIsTeamRound();
+            grid.classList.toggle('sc-team-grid', teamRound);
             const thead = document.createElement('thead'); const htr = document.createElement('tr');
-            ['Player', 'Div', 'Start'].forEach((h) => htr.appendChild(elx('th', null, h)));
+            [teamRound ? 'Side' : 'Player', teamRound ? 'Players' : 'Div', 'Start'].forEach((h) => htr.appendChild(elx('th', null, h)));
             holes.forEach((h) => htr.appendChild(elx('th', h.overridden ? 'th-temp' : null, h.hole + ' (' + h.par + ')' + (h.overridden ? ' ⏱' : ''))));
             htr.appendChild(elx('th', null, 'Tot'));
             thead.appendChild(htr); grid.appendChild(thead);
             const tbody = document.createElement('tbody');
-            players.forEach((p) => {
+            groups.forEach((group) => {
                 const tr = document.createElement('tr');
-                tr.appendChild(elx('td', 'lb-name', p.name));
-                tr.appendChild(elx('td', null, p.division || '—'));
-                tr.appendChild(elx('td', null, p.startingHole != null ? String(p.startingHole) : '—'));
-                let tot = 0;
+                const labelCell = elx('td', teamRound ? 'sc-side-label' : 'lb-name', group.label);
+                labelCell.dataset.label = teamRound ? 'Side' : 'Player';
+                const subCell = elx('td', teamRound ? 'sc-side-players' : null, group.sub || group.division || '—');
+                subCell.dataset.label = teamRound ? 'Players' : 'Div';
+                const startCell = elx('td', null, group.start || '—');
+                startCell.dataset.label = 'Start';
+                tr.appendChild(labelCell);
+                tr.appendChild(subCell);
+                tr.appendChild(startCell);
                 holes.forEach((h) => {
                     const td = document.createElement('td');
-                    const conflict = scConflictFor(p.index, h.hole);
-                    if (conflict) td.className = 'sc-conflict';
+                    td.classList.add('sc-hole-cell');
+                    td.dataset.label = 'Hole ' + h.hole + ' (' + h.par + ')';
+                    const conflict = scGroupConflict(group, h.hole);
+                    if (conflict) td.classList.add('sc-conflict');
                     const inp = document.createElement('input'); inp.type = 'number'; inp.min = '1'; inp.max = '30'; inp.style.width = '3rem';
-                    const v = p.scores ? p.scores[h.hole] : null; if (v != null) { inp.value = v; tot += v; }
-                    inp.addEventListener('change', () => scPostScore(p.index, h.hole, inp.value));
+                    const v = scGroupScore(group, h.hole);
+                    if (v != null) inp.value = v;
+                    inp.addEventListener('change', () => scPostScores(group.players.map((p) => p.index), h.hole, inp.value));
                     td.appendChild(inp);
                     if (conflict) { const flag = elx('span', 'sc-conflict-flag', '⚑'); flag.title = scConflictTitle(conflict); td.appendChild(flag); }
                     tr.appendChild(td);
                 });
-                tr.appendChild(elx('td', null, tot ? String(tot) : '—'));
+                const tot = scGroupTotal(group, holes);
+                const totalCell = elx('td', 'sc-total-cell', tot ? String(tot) : '—');
+                totalCell.dataset.label = 'Total';
+                tr.appendChild(totalCell);
                 tbody.appendChild(tr);
             });
             grid.appendChild(tbody);
         }
 
         async function scPostScore(index, hole, value) {
+            return scPostScores([index], hole, value);
+        }
+        async function scPostScores(indexes, hole, value) {
             const strokes = parseInt(value, 10);
             if (!(strokes >= 1 && strokes <= 30)) { adminMsg('Strokes must be 1–30', false); return; }
-            const r = await adminApi('/events/' + scEventId + '/live/score', { method: 'POST', body: { index, hole, strokes } });
-            if (r.ok) { scSnap = await r.json(); scRenderWeather(); scUpdateTotals(); scRenderBoard(); scRenderGrid(); } else { adminMsg('Score save failed', false); }
+            let latest = null;
+            for (const index of indexes) {
+                const r = await adminApi('/events/' + scEventId + '/live/score', { method: 'POST', body: { index, hole, strokes, authoritative: true } });
+                if (!r.ok) { adminMsg('Score save failed', false); return; }
+                latest = await r.json();
+            }
+            if (latest) {
+                scSnap = latest;
+                scRenderWeather();
+                scRenderBoard();
+                scRenderGrid();
+            }
         }
         // Update each grid row's running Total cell without re-rendering inputs (keeps focus).
         function scUpdateTotals() {
+            if (scIsTeamRound()) return;
             const rows = $('scGrid').querySelectorAll('tbody tr');
             (scSnap.players || []).forEach((p) => {
                 const tr = rows[p.index]; if (!tr) return;
@@ -1915,7 +2029,7 @@
             const standings = (scSnap && scSnap.standings) || [];
             if (!standings.length) { wrap.textContent = 'No scores yet.'; return; }
             const matchplay = scSnap && (scSnap.format === 'matchplay' || standings.some((s) => s && s.matchLabel));
-            const table = document.createElement('table'); table.className = 'al-holes';
+            const table = document.createElement('table'); table.className = 'al-holes sc-board-table';
             const thead = document.createElement('thead'); const htr = document.createElement('tr');
             ['Pos', matchplay ? 'Side' : 'Player', 'Thru', 'Total', matchplay ? 'Match' : 'To Par'].forEach((h) => htr.appendChild(elx('th', null, h)));
             thead.appendChild(htr); table.appendChild(thead);

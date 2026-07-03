@@ -33,6 +33,12 @@ export interface RecordScoreVoteInput {
   hole: number;
   strokes: number;
 }
+export interface RecordAuthoritativeScoreInput {
+  players: PlayerState[];
+  targetIndex: number;
+  hole: number;
+  strokes: number;
+}
 
 export function playerScorerId(index: number): string {
   return "player:" + index;
@@ -69,6 +75,17 @@ export function recordScoreVote(input: RecordScoreVoteInput): ScoreConflict | nu
   votes[input.scorerId] = input.strokes;
   syncConsensusScore(input.players, target, input.hole);
   return scoreConflictFor(input.players, input.targetIndex, input.hole);
+}
+
+export function recordAuthoritativeScore(input: RecordAuthoritativeScoreInput): void {
+  const target = input.players[input.targetIndex];
+  if (!target || target.removed) return;
+  target.scores = target.scores ?? {};
+  target.scores[input.hole] = input.strokes;
+  const scorecards = (target.scorecards ??= {});
+  const votes: Record<string, number> = (scorecards[input.hole] = {});
+  for (const scorerId of cardScorerIds(input.players, target)) votes[scorerId] = input.strokes;
+  syncConsensusScore(input.players, target, input.hole);
 }
 
 export function scoreConflicts(players: PlayerState[], holes: ScoreHole[]): ScoreConflict[] {

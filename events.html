@@ -252,6 +252,21 @@
         @keyframes lbflash { from { background: rgba(255,107,53,0.18); } to { background: transparent; } }
         .lb-table tbody tr.lb-upd td { animation: lbflash 0.9s ease-out; }
 
+        @media (max-width: 560px) {
+            main { padding-left: 1rem; padding-right: 1rem; }
+            .detail-card { padding: 1.2rem 1rem; border-radius: 14px; }
+            .detail-facts { grid-template-columns: 1fr; gap: 0.75rem; }
+            .live-banner { align-items: flex-start; flex-wrap: wrap; padding: 0.85rem 1rem; }
+            .lb-conn { margin-left: 0; flex-basis: 100%; }
+            .lb-table { table-layout: fixed; font-size: 0.82rem; }
+            .lb-table th, .lb-table td { padding: 0.4rem 0.28rem; }
+            .lb-pos { width: 2rem; }
+            .lb-name { word-break: break-word; }
+            .lb-topar { text-align: left; }
+            body #crotts-fab,
+            body #crotts-panel { display: none !important; }
+        }
+
         .roster-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; letter-spacing: 0.03em; color: var(--text-primary); margin: 1.75rem 0 1rem; }
         .division-group { margin-bottom: 1.5rem; }
         .division-name { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--primary); font-weight: 700; margin-bottom: 0.6rem; }
@@ -358,9 +373,12 @@
             bucketEvents,
             normalizeEvent,
             groupPlayersByDivision,
+            isTeamRound,
+            liveStandingsForDisplay,
             buildCourseIndex,
             courseNameFor,
             formatEventDate,
+            roundFormatLabel,
             typeLabel,
             statusLabel,
         } from './events.js';
@@ -1262,25 +1280,27 @@
         }
         function fmtToPar(n) { n = n || 0; return n === 0 ? 'E' : (n > 0 ? '+' + n : String(n)); }
         function renderStandings(container, snap) {
-            const standings = (snap && snap.standings) || [];
+            const standings = liveStandingsForDisplay(snap);
             container.replaceChildren();
             if (!standings.length) { container.appendChild(el('p', 'lb-empty', 'Waiting for the first scores…')); return; }
             const hasDiv = standings.some((s) => s && s.division);
             const matchplay = snap && (snap.format === 'matchplay' || standings.some((s) => s && s.matchLabel));
+            const nameHeading = isTeamRound(snap) ? 'Side' : 'Player';
             const table = el('table', 'lb-table');
             const thead = el('thead'); const htr = el('tr');
-            const cols = hasDiv ? ['Pos', matchplay ? 'Side' : 'Player', 'Div', 'Thru', 'Total', matchplay ? 'Match' : 'To Par'] : ['Pos', matchplay ? 'Side' : 'Player', 'Thru', 'Total', matchplay ? 'Match' : 'To Par'];
+            const cols = hasDiv ? ['Pos', matchplay ? 'Side' : nameHeading, 'Div', 'Thru', 'Total', matchplay ? 'Match' : 'To Par'] : ['Pos', matchplay ? 'Side' : nameHeading, 'Thru', 'Total', matchplay ? 'Match' : 'To Par'];
             cols.forEach((h) => htr.appendChild(el('th', null, h)));
             thead.appendChild(htr); table.appendChild(thead);
             const tbody = el('tbody');
             standings.forEach((s, i) => {
                 const tr = el('tr');
                 tr.appendChild(el('td', 'lb-pos', String(i + 1)));
-                tr.appendChild(el('td', 'lb-name', s && s.name != null ? String(s.name) : 'Player'));
+                const nameText = s && s.name != null ? String(s.name) : nameHeading;
+                tr.appendChild(el('td', 'lb-name', s && s.playersText ? nameText + ' · ' + s.playersText : nameText));
                 if (hasDiv) tr.appendChild(el('td', null, (s && s.division) || '—'));
                 tr.appendChild(el('td', null, s && s.thru ? String(s.thru) : '—'));
                 tr.appendChild(el('td', null, s && s.total != null && s.thru ? String(s.total) : '—'));
-                const tp = el('td', 'lb-topar', matchplay ? ((s && s.matchLabel) || 'E') : (s && s.thru ? fmtToPar(s.toPar) : '—'));
+                const tp = el('td', 'lb-topar', matchplay ? ((s && s.matchLabel) || 'AS') : (s && s.thru ? fmtToPar(s.toPar) : '—'));
                 if (s && s.thru && !matchplay) { if ((s.toPar || 0) < 0) tp.classList.add('under'); else if ((s.toPar || 0) > 0) tp.classList.add('over'); }
                 tr.appendChild(tp);
                 tbody.appendChild(tr);
@@ -1482,11 +1502,8 @@
 
             const facts = el('div', 'detail-facts');
             facts.appendChild(fact('Date', formatEventDate(ev.date)));
-            if (ev.format || ev.play_format) {
-                const play = ev.play_format === 'doubles' || ev.format === 'doubles' ? 'Doubles' : ev.play_format === 'teams' ? 'Teams' : 'Singles';
-                const scoring = ev.format === 'matchplay' ? 'Matchplay' : 'Stroke play';
-                facts.appendChild(fact('Format', play + ' · ' + scoring));
-            }
+            const formatLabel = roundFormatLabel(ev);
+            if (formatLabel) facts.appendChild(fact('Format', formatLabel));
 
             const courseName = courseNameFor(courseIndex, ev.course_id);
             const course = courseIndex.get(String(ev.course_id));

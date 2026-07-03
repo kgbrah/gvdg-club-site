@@ -205,7 +205,9 @@ function finalStandingForGroup(holes: Hole[], group: PlayerGroup): UnplacedFinal
 }
 
 function matchLabel(points: number): string {
-  return points > 0 ? "+" + points : points < 0 ? String(points) : "E";
+  if (points === 0) return "AS";
+  const holes = Math.abs(points);
+  return holes + " " + (points > 0 ? "Up" : "Down");
 }
 
 function computeMatchplayGroupStandings(holes: Hole[], players: PlayerState[], format: PlayFormat): MatchStanding[] {
@@ -217,7 +219,7 @@ function computeMatchplayGroupStandings(holes: Hole[], players: PlayerState[], f
     holesLost: 0,
     holesTied: 0,
     matchPoints: 0,
-    matchLabel: "E",
+    matchLabel: "AS",
   }));
   const byKey = new Map(standings.map((standing) => [standing.groupKey, standing]));
 
@@ -388,7 +390,7 @@ function finalizeMatchplayStandings(holes: Hole[], players: PlayerState[], forma
       holesLost: match?.holesLost ?? 0,
       holesTied: match?.holesTied ?? 0,
       matchPoints: match?.matchPoints ?? 0,
-      matchLabel: match?.matchLabel ?? "E",
+      matchLabel: match?.matchLabel ?? "AS",
     };
   });
   return rankFinalRows(

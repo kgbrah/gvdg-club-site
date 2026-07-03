@@ -68,8 +68,20 @@ describe("matchplay leaderboard formats", () => {
 
     const lb = computeLeaderboardForFormat(holes, players, "matchplay", "singles");
 
-    expect(lb[0]).toMatchObject({ name: "Ann", holesWon: 2, holesLost: 1, matchPoints: 1, matchLabel: "+1" });
-    expect(lb[1]).toMatchObject({ name: "Bo", holesWon: 1, holesLost: 2, matchPoints: -1, matchLabel: "-1" });
+    expect(lb[0]).toMatchObject({ name: "Ann", holesWon: 2, holesLost: 1, matchPoints: 1, matchLabel: "1 Up" });
+    expect(lb[1]).toMatchObject({ name: "Bo", holesWon: 1, holesLost: 2, matchPoints: -1, matchLabel: "1 Down" });
+  });
+
+  it("labels tied singles matchplay as all square", () => {
+    const players: PlayerState[] = [
+      { memberId: "a", name: "Ann", scores: { 1: 3, 2: 5, 3: 3 } },
+      { memberId: "b", name: "Bo", scores: { 1: 4, 2: 4, 3: 3 } },
+    ];
+
+    const lb = computeLeaderboardForFormat(holes, players, "matchplay", "singles");
+
+    expect(lb[0]).toMatchObject({ name: "Ann", holesWon: 1, holesLost: 1, holesTied: 1, matchPoints: 0, matchLabel: "AS" });
+    expect(lb[1]).toMatchObject({ name: "Bo", holesWon: 1, holesLost: 1, holesTied: 1, matchPoints: 0, matchLabel: "AS" });
   });
 
   it("scores doubles matchplay by team hole wins", () => {
@@ -83,8 +95,23 @@ describe("matchplay leaderboard formats", () => {
     const lb = computeLeaderboardForFormat(holes, players, "matchplay", "doubles");
 
     expect(lb).toHaveLength(2);
-    expect(lb[0]).toMatchObject({ name: "Red", team: "Red", holesWon: 2, holesLost: 1, matchPoints: 1, matchLabel: "+1" });
-    expect(lb[1]).toMatchObject({ name: "Blue", team: "Blue", holesWon: 1, holesLost: 2, matchPoints: -1, matchLabel: "-1" });
+    expect(lb[0]).toMatchObject({ name: "Red", team: "Red", holesWon: 2, holesLost: 1, matchPoints: 1, matchLabel: "1 Up" });
+    expect(lb[1]).toMatchObject({ name: "Blue", team: "Blue", holesWon: 1, holesLost: 2, matchPoints: -1, matchLabel: "1 Down" });
+  });
+
+  it("labels tied doubles matchplay as all square", () => {
+    const players: PlayerState[] = [
+      { memberId: "r1", name: "Red 1", team: "Red", scores: { 1: 3, 2: 5, 3: 3 } },
+      { memberId: "r2", name: "Red 2", team: "Red", scores: { 1: 4, 2: 6, 3: 4 } },
+      { memberId: "b1", name: "Blue 1", team: "Blue", scores: { 1: 4, 2: 4, 3: 3 } },
+      { memberId: "b2", name: "Blue 2", team: "Blue", scores: { 1: 5, 2: 5, 3: 4 } },
+    ];
+
+    const lb = computeLeaderboardForFormat(holes, players, "matchplay", "doubles");
+
+    expect(lb).toHaveLength(2);
+    expect(lb.find((row) => row.name === "Red")).toMatchObject({ name: "Red", team: "Red", holesWon: 1, holesLost: 1, holesTied: 1, matchPoints: 0, matchLabel: "AS" });
+    expect(lb.find((row) => row.name === "Blue")).toMatchObject({ name: "Blue", team: "Blue", holesWon: 1, holesLost: 1, holesTied: 1, matchPoints: 0, matchLabel: "AS" });
   });
 
   it("finalizes doubles matchplay as ranked team rows", () => {

@@ -166,3 +166,65 @@ export function courseNameFor(courseIndex, courseId) {
   const course = courseIndex instanceof Map ? courseIndex.get(String(courseId)) : null;
   return course && course.name ? String(course.name) : '';
 }
+
+function rawPlayFormat(value) {
+  if (!value || typeof value !== 'object') return '';
+  return value.playFormat != null ? String(value.playFormat) : value.play_format != null ? String(value.play_format) : '';
+}
+
+function rawScoringFormat(value) {
+  if (!value || typeof value !== 'object') return '';
+  return value.format != null ? String(value.format) : '';
+}
+
+export function playFormatForDisplay(value) {
+  const play = rawPlayFormat(value);
+  const format = rawScoringFormat(value);
+  if (play === 'doubles' || play === 'teams') return play;
+  if (format === 'doubles' || format === 'teams') return format;
+  return 'singles';
+}
+
+export function scoringFormatForDisplay(value) {
+  return rawScoringFormat(value) === 'matchplay' ? 'matchplay' : 'stroke';
+}
+
+export function isTeamRound(value) {
+  const play = playFormatForDisplay(value);
+  return !!(value && typeof value === 'object' && value.teamRequired === true) || play === 'doubles' || play === 'teams';
+}
+
+export function roundFormatLabel(value) {
+  const hasExplicitFormat = rawPlayFormat(value) || rawScoringFormat(value) || (value && typeof value === 'object' && value.teamRequired === true);
+  if (!hasExplicitFormat) return '';
+  const play = playFormatForDisplay(value);
+  const scoring = scoringFormatForDisplay(value);
+  const playLabel = play === 'doubles' ? 'Doubles' : play === 'teams' ? 'Teams' : 'Singles';
+  const scoringLabel = scoring === 'matchplay' ? 'Matchplay' : 'Stroke play';
+  return `${playLabel} · ${scoringLabel}`;
+}
+
+export function liveStandingsForDisplay(snapshot) {
+  const snap = snapshot && typeof snapshot === 'object' ? snapshot : {};
+  const standings = Array.isArray(snap.standings) ? snap.standings : [];
+  if (!isTeamRound(snap)) return standings;
+  const players = Array.isArray(snap.players) ? snap.players : [];
+  if (!players.length) return standings;
+  const namesByTeam = new Map();
+  for (const p of players) {
+    if (!p || typeof p !== 'object') continue;
+    const team = String(p.team || '').trim();
+    const name = String(p.name || '').trim();
+    if (!team || !name) continue;
+    const key = team.toLowerCase();
+    if (!namesByTeam.has(key)) namesByTeam.set(key, []);
+    const names = namesByTeam.get(key);
+    if (!names.includes(name)) names.push(name);
+  }
+  return standings.map((row) => {
+    if (!row || typeof row !== 'object') return row;
+    const team = String(row.team || row.name || '').trim().toLowerCase();
+    const names = namesByTeam.get(team);
+    return names && names.length ? { ...row, playersText: names.join(' / ') } : row;
+  });
+}
