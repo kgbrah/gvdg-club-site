@@ -490,13 +490,16 @@
         // ---------- merge a snapshot's scores into our cardmates (respecting pending optimistic edits) ----------
         function mergeFromSnap() {
             const snap = S.snap; if (!snap || !Array.isArray(snap.players)) return;
+            // Apply weather FIRST, in place: the background weather refresh broadcasts a same-rev snapshot
+            // (weather isn't a scoring change), so the rev gate below would otherwise drop it and the strip
+            // would never update. Updating just the strip avoids a full renderHole that resets scroll/inputs.
+            if (Object.prototype.hasOwnProperty.call(snap, 'weather')) { S.weather = snap.weather || null; refreshWeatherStrip(); }
             // Drop a stale/out-of-order snapshot (a newer one from another device was already applied).
             if (snap.rev != null) { if (snap.rev <= S.lastRev) return; S.lastRev = snap.rev; }
             if (snap.status) S.status = snap.status; // reflect a finalize (or start) that happened on another device
             S.roundConfig = snap.roundConfig || S.roundConfig;
             S.scoreTargets = Array.isArray(snap.scoreTargets) ? snap.scoreTargets : S.scoreTargets;
             S.scoreTargetError = snap.scoreTargetError || null;
-            if (Object.prototype.hasOwnProperty.call(snap, 'weather')) S.weather = snap.weather || null;
             setConflicts(snap.conflicts);
             setMissing(snap.missing);
             const byIndex = new Map(snap.players.map((p) => [p.index, p]));
@@ -687,6 +690,14 @@
             // sensors begin now; iOS needs a user gesture, so there it stays north-up until the arrow is tapped.
             if (S.weather && S.weather.current && window.GVDGWeather.enableCompass) window.GVDGWeather.enableCompass();
             return window.GVDGWeather.buildWeatherStrip(document, S.weather, { title: 'Round weather' });
+        }
+        // Swap the weather strip in place (no full renderHole) when a background refresh arrives, so the
+        // scorecard's scroll position and any open scorer dropdown survive the 5-minute weather update.
+        function refreshWeatherStrip() {
+            const holder = document.querySelector('.weather-strip');
+            if (!holder) return; // no strip rendered yet — the next renderHole will place it
+            const fresh = roundWeatherNode();
+            if (fresh) holder.replaceWith(fresh); else holder.remove();
         }
         function renderHole() {
             if (!S.holes.length) return;

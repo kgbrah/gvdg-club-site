@@ -148,7 +148,9 @@ async function updateRoundRating(db: D1Database, row: RecomputedRoundRating): Pr
     )
     .bind(row.roundRating, row.ssa, row.ppt, row.windGustMph, row.weatherAdjustment, row.propagatorCount, row.ratingMethod, row.id)
     .run();
-  if (row.stream === "competition" && row.eventId != null) {
+  // Only mirror a real rating onto the displayed results row. A re-solve that comes back unrated
+  // (roundRating null) must NOT wipe a rating that was previously stored + shown — leave it as-is.
+  if (row.stream === "competition" && row.eventId != null && row.roundRating != null) {
     await db.prepare("UPDATE results SET rating = ? WHERE event_id = ? AND member_id = ?").bind(row.roundRating, row.eventId, row.memberId).run();
   }
 }

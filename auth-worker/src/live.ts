@@ -64,7 +64,10 @@ export class LiveEventDO {
       return;
     }
     this.meta.weather = await refreshWeatherState(this.meta.weather);
-    await this.persist();
+    // Persist WITHOUT bumping rev: a weather refresh is not a scoring change, so it must not force every
+    // scorekeeper's client to re-render the scorecard (which would reset scroll + any open dropdown). The
+    // snapshot keeps its current rev; clients apply the new weather in-place off this same-rev broadcast.
+    await this.state.storage.put("meta", this.meta);
     this.broadcast();
     await this.state.storage.setAlarm(Date.now() + WEATHER_REFRESH_MS);
   }
@@ -136,9 +139,11 @@ export class LiveEventDO {
       scorecards: {},
     }));
     assignCards(this.players, b.cardSize); // group into cards (by starting hole, else buckets of 4)
-    await this.refreshWeatherNow(); // take an initial reading before the first persist so it's in the snapshot
     await this.persist();
-    await this.scheduleWeatherAlarm(); // keep weather fresh in the background for the life of the round
+    // Take the FIRST weather reading OFF the round-start path: fire the alarm immediately rather than
+    // blocking the start response on an Open-Meteo fetch. The alarm populates + broadcasts weather a moment
+    // later, and then reschedules itself every 5 min for the life of the round.
+    if (this.meta?.weather) await this.state.storage.setAlarm(Date.now());
     this.broadcast();
     return j(this.snapshot());
   }

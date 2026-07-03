@@ -128,8 +128,9 @@ function casualRoundId(value: unknown): number | null {
 }
 
 /** Write round_ratings for a just-finalized round. BEST-EFFORT: any failure is logged, never thrown, so
- *  a rating glitch can never block or roll back a finalize (results are authoritative). The daily ratings
- *  cron re-solves everything with official PDGA anchors, so a miss here self-heals. */
+ *  a rating glitch can never block or roll back a finalize (results are authoritative). NOTE: the daily
+ *  ratings cron only RE-SOLVES existing round_ratings rows (it does not create them), so if this write
+ *  fails the round stays unrated until finalize is run again (an admin force-finalize re-attempts it). */
 async function persistRatingsBestEffort(env: LiveEnv, meta: LiveMeta, standings: FinalLiveStanding[]): Promise<void> {
   try {
     await persistRoundRatings(env, meta, standings);
@@ -152,11 +153,10 @@ async function persistRoundRatings(env: LiveEnv, meta: LiveMeta, standings: Fina
     const baseline = await getLayoutRatingBaseline(env.DB, meta.layoutId ?? null);
     context = baseline ? { ssa: baseline.ssa, ppt: baseline.ppt, propagatorCount: baseline.propagatorCount, ratingMethod: "layout" } : null;
   } else {
+    // Look up every finisher's anchor concurrently (local player_ratings; the cron later upgrades with PDGA).
+    const anchors = await Promise.all(ranked.map((s) => findRatingAnchor(env.DB, { memberId: s.memberId })));
     const propagators: Propagator[] = [];
-    for (const s of ranked) {
-      const anchor = await findRatingAnchor(env.DB, { memberId: s.memberId }); // local player_ratings anchor; cron upgrades with PDGA
-      if (anchor != null) propagators.push({ score: s.total, rating: anchor });
-    }
+    ranked.forEach((s, i) => { if (anchors[i] != null) propagators.push({ score: s.total, rating: anchors[i] as number }); });
     const solved = solveSsa(propagators);
     context = solved ? { ssa: solved.ssa, ppt: solved.ppt, propagatorCount: solved.propagatorCount, ratingMethod: solved.status } : null;
   }
@@ -165,9 +165,9 @@ async function persistRoundRatings(env: LiveEnv, meta: LiveMeta, standings: Fina
   if (stream === "competition") await clearRoundRatingsForEvent(env.DB, meta.eventId);
   else if (meta.roundCode) await clearRoundRatingsForCasualRound(env.DB, meta.roundCode);
 
-  for (const s of ranked) {
+  await Promise.all(ranked.map((s) => {
     const rr = context ? roundRatingForScoreWithWeather({ score: s.total, ssa: context.ssa, ppt: context.ppt, weather: context.ratingMethod === "layout" ? ratingWeather : null }) : null;
-    await createRoundRating(env.DB, {
+    return createRoundRating(env.DB, {
       memberId: s.memberId as string,
       playerName: s.name,
       stream,
@@ -186,7 +186,7 @@ async function persistRoundRatings(env: LiveEnv, meta: LiveMeta, standings: Fina
       propagatorCount: context ? context.propagatorCount : 0,
       ratingMethod: context ? context.ratingMethod : "unrated",
     });
-  }
+  }));
 
   // Competition rounds refresh the per-layout SSA baseline that casual rounds lean on.
   if (stream === "competition" && context && meta.layoutId != null) {
