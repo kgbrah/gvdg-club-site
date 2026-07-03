@@ -14,8 +14,26 @@ export async function getMyRegistration(db: D1Like, eventId: number, memberId: s
   return db.prepare("SELECT * FROM registrations WHERE event_id = ? AND member_id = ?").bind(eventId, memberId).first();
 }
 
+// A member's registrations joined with the event they're for, so the dashboard can show EVERY event a
+// player signed up for — not just the ones still open for registration. Event columns are aliased
+// (event_name/event_date/…) so they never collide with the registration's own name/division/etc.
 export async function listMyRegistrations(db: D1Like, memberId: string) {
-  return (await db.prepare("SELECT * FROM registrations WHERE member_id = ? ORDER BY event_id DESC").bind(memberId).all()).results;
+  return (
+    await db
+      .prepare(
+        `SELECT r.*,
+                e.name AS event_name, e.date AS event_date, e.status AS event_status,
+                c.name AS course_name, l.name AS layout_name
+         FROM registrations r
+         LEFT JOIN events e ON e.id = r.event_id
+         LEFT JOIN courses c ON c.id = e.course_id
+         LEFT JOIN course_layouts l ON l.id = e.layout_id
+         WHERE r.member_id = ?
+         ORDER BY COALESCE(e.date, '') DESC, r.event_id DESC`,
+      )
+      .bind(memberId)
+      .all()
+  ).results;
 }
 
 export async function listRegistrations(db: D1Like, eventId: number) {

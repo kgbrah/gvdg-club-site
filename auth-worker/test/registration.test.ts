@@ -17,7 +17,20 @@ function mockDb(cfg: Record<string, unknown> | null, status = "scheduled") {
     let binds: unknown[] = [];
     return ({
     bind(...values: unknown[]) { binds = values; return this; },
-    all: async () => ({ results: [], success: true }),
+    all: async () => {
+      // /my-registrations now joins the event onto each registration row.
+      if (/FROM registrations r/i.test(sql) && /event_name/i.test(sql)) {
+        return {
+          results: [
+            { id: 1, event_id: 5, member_id: "m_jane", division: "MA1", checked_in: 0, paid_entry: 0,
+              event_name: "Saturday Doubles", event_date: "2026-07-04", event_status: "scheduled",
+              event_type: "league_round", course_name: "River Park North", layout_name: "Blue" },
+          ],
+          success: true,
+        };
+      }
+      return { results: [], success: true };
+    },
     first: async () => {
       if (/SELECT status FROM events/i.test(sql)) return { status }; // getEventStatus
       if (/INSERT INTO event_config/i.test(sql) || /FROM event_config/i.test(sql)) return cfg;
@@ -79,9 +92,19 @@ describe("Track G — event registration", () => {
   it("lets a member check in (200)", async () => {
     expect((await call("/events/5/checkin", "POST", await tok("m_jane"), {}, OPEN)).status).toBe(200);
   });
+  it("blocks self-withdraw once the event is live or final, but allows it while scheduled", async () => {
+    expect((await call("/events/5/register", "DELETE", await tok("m_jane"), null, OPEN, "live")).status).toBe(409);
+    expect((await call("/events/5/register", "DELETE", await tok("m_jane"), null, OPEN, "final")).status).toBe(409);
+    expect((await call("/events/5/register", "DELETE", await tok("m_jane"), null, OPEN, "scheduled")).status).toBe(200);
+  });
   it("GET /my-registrations is authed (401 without token, 200 with)", async () => {
     expect((await call("/my-registrations", "GET", undefined, undefined, OPEN)).status).toBe(401);
     expect((await call("/my-registrations", "GET", await tok("m_jane"), undefined, OPEN)).status).toBe(200);
+  });
+  it("GET /my-registrations carries joined event details for the dashboard", async () => {
+    const res = await call("/my-registrations", "GET", await tok("m_jane"), undefined, OPEN);
+    const body = (await res.json()) as { registrations: Array<Record<string, unknown>> };
+    expect(body.registrations[0]).toMatchObject({ event_id: 5, event_name: "Saturday Doubles", event_status: "scheduled", course_name: "River Park North" });
   });
   it("admin can set event config + read the roster; non-admin cannot", async () => {
     expect((await call("/admin/events/5/config", "PUT", await tok("m_jane"), { registration_open: true }, OPEN)).status).toBe(403);
