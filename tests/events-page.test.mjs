@@ -88,8 +88,11 @@ test('Ryder Cup schedule cards link to the league route', () => {
 
 test('archive subdomain redirect is not part of the Events page flow', () => {
   const eventsSource = readFileSync('events.html', 'utf8');
+  const archiveSource = readFileSync('archive.html', 'utf8');
   const indexSource = readFileSync('index.html', 'utf8');
   assert.doesNotMatch(eventsSource, /ARCHIVE_BASE_URL/);
   assert.doesNotMatch(eventsSource, /archive\.html/);
   assert.doesNotMatch(indexSource, /archive\.gvdgclub\.com/);
+  assert.match(archiveSource, /events\.html#previousResultsSection/);
+  assert.doesNotMatch(archiveSource, /const INITIAL_VISIBLE = 3/);
 });
