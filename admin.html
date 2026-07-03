@@ -259,7 +259,7 @@
         .admin-pane select, .admin-pane input, .admin-pane textarea { max-width: 100%; }
         .al-row span, .al-row select, .al-row input, .order-controls select, .order-controls input { min-width: 0; }
         #rgDivisions { width: 100%; } /* size="40" forced ~412px; fill its (now shrinkable) span instead */
-        #alCourse, #scEvent, #rgEvent { display: block; width: 100%; max-width: 520px; margin-top: 0.3rem; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95rem; }
+        #alCourse, #scEvent, #scLayout, #rgEvent { display: block; width: 100%; max-width: 520px; margin-top: 0.3rem; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95rem; }
         body.admin-page #crotts-fab, body.admin-page #crotts-panel { display: none !important; }
         .admin-btn { background: var(--primary); color: #fff; border: none; padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
         .admin-btn.secondary { background: transparent; border: 1px solid var(--secondary-text); color: var(--secondary-text); }
@@ -1245,6 +1245,7 @@
                 const sel = document.createElement('select');
                 ['scheduled', 'live', 'final', 'cancelled'].forEach((s) => { const o = document.createElement('option'); o.value = s; o.textContent = s; if (s === ev.status) o.selected = true; sel.appendChild(o); });
                 sel.addEventListener('change', async () => {
+                    if (!confirm('Change “' + ev.name + '” status to ' + sel.value + '?')) { sel.value = ev.status || 'scheduled'; return; }
                     const r = await adminApi('/admin/events/' + ev.id, { method: 'PATCH', body: { status: sel.value } });
                     adminMsg(r.ok ? 'Updated “' + ev.name + '” → ' + sel.value : 'Update failed', r.ok);
                     if (r.ok) adminLoadEvents();
@@ -1657,6 +1658,7 @@
             else adminMsg('Add position failed (' + r.status + ')', false);
         }
         async function alDeletePosition(id) {
+            if (!confirm('Delete this tee/target position?')) return;
             const r = await adminApi('/admin/courses/' + alCourseId + '/positions/' + id, { method: 'DELETE' });
             if (r.ok) alLoadPool(); else adminMsg('Remove failed', false);
         }
@@ -2284,7 +2286,7 @@
                 const goal = f.goal_cents != null ? ' · goal $' + (f.goal_cents / 100) : '';
                 row.appendChild(elx('span', 'ev-name', f.title + ' [' + f.status + ']' + goal));
                 const close = elx('button', 'admin-btn secondary', f.status === 'active' ? 'Close' : 'Reopen');
-                close.addEventListener('click', async () => { const r = await adminApi('/admin/fundraisers/' + f.id, { method: 'PATCH', body: { status: f.status === 'active' ? 'closed' : 'active' } }); if (r.ok) { adminMsg('Updated', true); adminLoadFundraisers(); } });
+                close.addEventListener('click', async () => { if (!confirm((f.status === 'active' ? 'Close' : 'Reopen') + ' fundraiser “' + f.title + '”?')) return; const r = await adminApi('/admin/fundraisers/' + f.id, { method: 'PATCH', body: { status: f.status === 'active' ? 'closed' : 'active' } }); if (r.ok) { adminMsg('Updated', true); adminLoadFundraisers(); } });
                 const del = elx('button', 'admin-btn danger', 'Delete');
                 del.addEventListener('click', async () => { if (!confirm('Delete fundraiser “' + f.title + '”?')) return; const r = await adminApi('/admin/fundraisers/' + f.id, { method: 'DELETE' }); if (r.ok) { adminMsg('Deleted', true); adminLoadFundraisers(); } });
                 row.appendChild(close); row.appendChild(del);
@@ -2786,7 +2788,7 @@
                 const award = elx('button', 'admin-btn secondary', 'Award credit'); award.type = 'button';
                 award.addEventListener('click', () => rgAwardCtpCredit(c, member, win, credit));
                 const del = elx('button', 'admin-btn danger', 'Delete');
-                del.addEventListener('click', async () => { const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + c.id, { method: 'DELETE' }); if (r.ok) rgLoadCtps(); });
+                del.addEventListener('click', async () => { if (!confirm('Delete this CTP for hole ' + (c.hole ?? '?') + '?')) return; const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + c.id, { method: 'DELETE' }); if (r.ok) rgLoadCtps(); });
                 row.appendChild(win); row.appendChild(member); row.appendChild(setW); row.appendChild(credit); row.appendChild(award); row.appendChild(del);
                 list.appendChild(row);
             });
@@ -2882,8 +2884,8 @@
             $('rgAssignCards').addEventListener('click', () => rgAssign('assign-starting-holes', { shuffle: true, groupSize: parseInt($('rgCardSize').value, 10) || 4 }));
             $('rgCtpAdd').addEventListener('click', rgAddCtp);
             $('rgAceSave').addEventListener('click', () => rgAcePut({ carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100), status: 'active' }));
-            $('rgAcePayout').addEventListener('click', () => rgAcePut({ status: 'paid_out', winner_name: $('rgAceWinner').value.trim() || null, carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100) }));
-            $('rgAceCarryNext').addEventListener('click', () => rgAcePut({ status: 'carried', carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100) }));
+            $('rgAcePayout').addEventListener('click', () => { if (!confirm('Mark ace pot paid out' + ($('rgAceWinner').value.trim() ? ' to ' + $('rgAceWinner').value.trim() : '') + '? This resolves the ace pot for this event.')) return; rgAcePut({ status: 'paid_out', winner_name: $('rgAceWinner').value.trim() || null, carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100) }); });
+            $('rgAceCarryNext').addEventListener('click', () => { if (!confirm('Carry this ace pot to the next event? This resolves the ace pot for this event.')) return; rgAcePut({ status: 'carried', carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100) }); });
             $('dxEndpointForm').addEventListener('submit', adminSaveDataArchiveEndpoint);
             $('dxEndpointCancel').addEventListener('click', resetDataArchiveEndpointForm);
             $('dxRunExport').addEventListener('click', adminRunArchiveExport);
