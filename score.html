@@ -64,6 +64,12 @@
         /* ---- generic ---- */
         .card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 16px; box-shadow: 0 2px 10px var(--shadow); padding: 1rem; margin-bottom: 0.85rem; }
         .muted { color: var(--text-muted); }
+        .weather-strip { background: var(--bg-secondary); border: 1px solid var(--border-color); border-left: 4px solid var(--secondary); border-radius: 14px; box-shadow: 0 2px 10px var(--shadow); padding: 0.75rem 0.85rem; margin-bottom: 0.85rem; }
+        .weather-title { font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 0.45rem; }
+        .weather-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+        .weather-chip { display: inline-flex; align-items: baseline; gap: 0.3rem; border: 1px solid var(--border-color); border-radius: 999px; background: var(--bg-tertiary); color: var(--text-secondary); padding: 0.22rem 0.55rem; font-size: 0.78rem; line-height: 1.25; }
+        .weather-chip strong { font-size: 0.64rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+        .weather-note { margin-top: 0.45rem; color: var(--text-muted); font-size: 0.72rem; line-height: 1.35; }
         .center { text-align: center; }
         .stack > * + * { margin-top: 0.7rem; }
         h2.section { font-family: 'Bebas Neue'; font-weight: 400; font-size: 1.5rem; letter-spacing: 0.5px; margin-bottom: 0.5rem; }
@@ -190,6 +196,7 @@
         <main id="app"><div class="spin"></div></main>
     </div>
     <script src="udisc-export.js"></script>
+    <script src="weather-display.js"></script>
     <script>
     (function () {
         "use strict";
@@ -211,7 +218,7 @@
         const GUEST_TOKEN = MODE === 'event' ? (params.get('gt') || guestTokenStored()) : null;
 
         const app = document.getElementById('app');
-        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, roundConfig: null, scoreTargets: [], scoreTargetError: null };
+        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, roundConfig: null, scoreTargets: [], scoreTargetError: null, weather: null };
         const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
         const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
 
@@ -489,6 +496,7 @@
             S.roundConfig = snap.roundConfig || S.roundConfig;
             S.scoreTargets = Array.isArray(snap.scoreTargets) ? snap.scoreTargets : S.scoreTargets;
             S.scoreTargetError = snap.scoreTargetError || null;
+            if (Object.prototype.hasOwnProperty.call(snap, 'weather')) S.weather = snap.weather || null;
             setConflicts(snap.conflicts);
             setMissing(snap.missing);
             const byIndex = new Map(snap.players.map((p) => [p.index, p]));
@@ -673,11 +681,20 @@
             return card;
         }
 
+        function roundWeatherNode() {
+            if (!window.GVDGWeather) return null;
+            // Best-effort: start the compass so the wind arrow tracks the player's facing. Android/desktop
+            // sensors begin now; iOS needs a user gesture, so there it stays north-up until the arrow is tapped.
+            if (S.weather && S.weather.current && window.GVDGWeather.enableCompass) window.GVDGWeather.enableCompass();
+            return window.GVDGWeather.buildWeatherStrip(document, S.weather, { title: 'Round weather' });
+        }
         function renderHole() {
             if (!S.holes.length) return;
             const h = holeMeta(S.holeIdx);
             document.getElementById('lbBtn').hidden = false;
             const c = el('div');
+            const weatherNode = roundWeatherNode();
+            if (weatherNode) c.appendChild(weatherNode);
 
             // Casual round: share the code + add walk-on players to the card.
             if (MODE === 'round') {
@@ -903,6 +920,7 @@
             S.cardId = d.cardId; S.myIndex = d.playerIndex; S.cardmates = d.cardmates;
             S.roundConfig = d.roundConfig || null; S.scoreTargets = Array.isArray(d.scoreTargets) ? d.scoreTargets : []; S.scoreTargetError = d.scoreTargetError || null;
             S.courseName = d.courseName || null; S.layoutName = d.layoutName || null; S.udiscCourseId = d.udiscCourseId || null;
+            S.weather = d.weather || null;
             S.scorerIndex = d.playerIndex;
             if (MODE === 'round') rememberRecentRound({ code: ROUND_CODE, label: 'Casual round ' + ROUND_CODE });
             currentScorerIndex();
