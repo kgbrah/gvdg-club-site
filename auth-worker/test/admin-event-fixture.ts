@@ -13,6 +13,8 @@ const MEMBERS = {
 export type DbState = {
   layoutBinds?: unknown[];
   eventBinds?: unknown[];
+  eventConfigBinds?: unknown[];
+  eventConfigUpdateBinds?: unknown[];
   updateEventBinds?: unknown[];
   registrationUpdateBinds?: unknown[];
   playerBinds?: unknown[];
@@ -150,6 +152,14 @@ class AdminEventStatement implements D1PreparedStatement {
     if (/INSERT INTO events/i.test(this.sql)) {
       this.state.eventBinds = this.binds;
       return { id: 12, type: this.binds[0], name: this.binds[1], course_id: this.binds[5], layout_id: this.binds[6], created_by: this.binds[11] };
+    }
+    if (/UPDATE event_config SET play_format = \?/i.test(this.sql)) {
+      this.state.eventConfigUpdateBinds = this.binds;
+      return null;
+    }
+    if (/INSERT INTO event_config/i.test(this.sql)) {
+      this.state.eventConfigBinds = this.binds;
+      return { event_id: this.binds[0], play_format: this.binds[1] ?? this.binds[6] };
     }
     if (/INSERT INTO event_players/i.test(this.sql)) {
       this.state.playerBinds = this.binds;

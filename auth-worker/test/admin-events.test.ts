@@ -24,6 +24,20 @@ describe("admin event management", () => {
     expect(holes.every((h) => h.par === 3)).toBe(true);
   });
 
+  it("creates a doubles matchplay event with separate play and scoring formats", async () => {
+    const state: DbState = {};
+    const res = await call("/admin/events", "POST", {
+      type: "league_round",
+      name: "Friday Doubles",
+      format: "matchplay",
+      play_format: "doubles",
+    }, await token("m_admin"), state);
+
+    expect(res.status).toBe(201);
+    expect(state.eventBinds?.[3]).toBe("matchplay");
+    expect(state.eventConfigBinds).toEqual([12, "doubles"]);
+  });
+
   it("lets admins add and remove manual event players", async () => {
     const state: DbState = {};
     const jwt = await token("m_admin");

@@ -331,6 +331,23 @@ export async function upsertEventConfig(db: D1Like, eventId: number, c: EventCon
     .bind(eventId, c.registration_open ?? 0, c.entry_fee_cents ?? null, c.ctp_fee_cents ?? null, c.ace_fee_cents ?? null, c.divisions ?? null, c.play_format ?? null, c.notes ?? null)
     .first();
 }
+export async function setEventPlayFormat(
+  db: D1Like,
+  input: { readonly eventId: number; readonly playFormat: string | null; readonly createIfMissing?: boolean },
+) {
+  if (!input.createIfMissing) {
+    await db.prepare("UPDATE event_config SET play_format = ? WHERE event_id = ?").bind(input.playFormat, input.eventId).run();
+    return null;
+  }
+  return db
+    .prepare(
+      `INSERT INTO event_config (event_id, registration_open, entry_fee_cents, ctp_fee_cents, ace_fee_cents, divisions, play_format, notes)
+       VALUES (?, 0, NULL, NULL, NULL, NULL, ?, NULL)
+       ON CONFLICT(event_id) DO UPDATE SET play_format=excluded.play_format RETURNING *`,
+    )
+    .bind(input.eventId, input.playFormat)
+    .first();
+}
 /** Open events (scheduled, registration_open) joined with their config — for the member sign-up list. */
 export async function listOpenRegistrationEvents(db: D1Like) {
   return (

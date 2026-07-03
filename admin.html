@@ -413,7 +413,8 @@
                     <div><label for="aeName">Name</label><input id="aeName" maxlength="200" required></div>
                     <div><label for="aeDate">Date</label><input id="aeDate" type="date"></div>
                     <div><label for="aeStatus">Status</label><select id="aeStatus"><option value="scheduled">Scheduled</option><option value="cancelled">Cancelled</option></select></div>
-                    <div><label for="aeFormat">Format</label><select id="aeFormat"><option value="">—</option><option value="stroke">Stroke</option><option value="matchplay">Matchplay</option><option value="doubles">Doubles</option></select></div>
+                    <div><label for="aePlayFormat">Play format</label><select id="aePlayFormat"><option value="">—</option><option value="singles">Singles</option><option value="doubles">Doubles</option></select></div>
+                    <div><label for="aeFormat">Scoring</label><select id="aeFormat"><option value="">—</option><option value="stroke">Stroke play</option><option value="matchplay">Matchplay</option></select></div>
                     <div><label for="aeCourse">Course</label><select id="aeCourse"><option value="">—</option></select></div>
                     <div><label for="aeLayout">Layout</label><select id="aeLayout"><option value="">— no layout yet —</option></select></div>
                     <div id="aeQuickLayout" class="al-section" style="display:none;margin:0;">
@@ -1044,6 +1045,7 @@
                 type: $('aeType').value,
                 name: $('aeName').value.trim(),
                 date: $('aeDate').value || null,
+                play_format: $('aePlayFormat').value || null,
                 format: $('aeFormat').value || null,
                 course_id: $('aeCourse').value ? Number($('aeCourse').value) : null,
                 league_id: $('aeLeague').value ? Number($('aeLeague').value) : null,
@@ -1066,7 +1068,8 @@
             $('aeName').value = ev.name || '';
             $('aeDate').value = ev.date || '';
             setEventStatusSelect($('aeStatus'), ev.status || 'scheduled');
-            $('aeFormat').value = ev.format || '';
+            $('aePlayFormat').value = (ev.play_format || ev.playFormat || (ev.format === 'doubles' ? 'doubles' : '')) || '';
+            $('aeFormat').value = ev.format === 'matchplay' ? 'matchplay' : ev.format === 'stroke' || ev.format === 'doubles' ? 'stroke' : '';
             $('aeCourse').value = ev.course_id == null ? '' : String(ev.course_id);
             $('aeLeague').value = ev.league_id == null ? '' : String(ev.league_id);
             $('aeNotes').value = ev.notes || '';
