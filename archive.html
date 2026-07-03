@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Archive | Greenville Disc Golf Club</title>
+    <meta name="description" content="Past Greenville Disc Golf Club tournaments, league rounds, and club events.">
+    <meta name="theme-color" content="#FF6B35">
+    <link rel="icon" type="image/png" href="img/logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #FF6B35;
+            --secondary: #004E89;
+            --secondary-text: #004E89;
+            --accent: #F7B801;
+            --green: #2D5016;
+            --bg-primary: #F4F4F9;
+            --bg-secondary: #FFFFFF;
+            --bg-tertiary: #F4F4F9;
+            --text-primary: #1A1A2E;
+            --text-secondary: #333333;
+            --text-tertiary: #555555;
+            --text-muted: #666666;
+            --border-color: #F4F4F9;
+            --card-shadow: rgba(0, 0, 0, 0.1);
+            --card-shadow-hover: rgba(0, 0, 0, 0.15);
+        }
+        [data-theme="dark"] {
+            --bg-primary: #0F0F1E;
+            --bg-secondary: #1A1A2E;
+            --bg-tertiary: #252538;
+            --text-primary: #F4F4F9;
+            --secondary-text: #6cb4e8;
+            --text-secondary: #E0E0E0;
+            --text-tertiary: #C0C0C0;
+            --text-muted: #A0A0A0;
+            --border-color: #2A2A3E;
+            --card-shadow: rgba(0, 0, 0, 0.3);
+            --card-shadow-hover: rgba(0, 0, 0, 0.5);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            font-family: 'Archivo', system-ui, -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            position: relative;
+        }
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background: linear-gradient(to bottom, rgba(244,244,249,0.25), rgba(244,244,249,0.15)), url("img/bg/forest-bg.png");
+            background-repeat: no-repeat;
+            background-position: center bottom;
+            background-size: cover;
+        }
+        [data-theme="dark"] body::before {
+            background: linear-gradient(to bottom, rgba(15,15,30,0.25), rgba(15,15,30,0.15)), url("img/bg/forest-bg.png");
+            background-repeat: no-repeat;
+            background-position: center bottom;
+            background-size: cover;
+        }
+        header { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: rgba(26, 26, 46, 0.95); backdrop-filter: blur(10px); padding: 1rem 1.5rem; transition: all 0.3s ease; }
+        [data-theme="dark"] header { background: rgba(15, 15, 30, 0.95); }
+        header.scrolled { box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2); padding: 0.75rem 1.5rem; }
+        nav { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .logo { display: flex; align-items: center; text-decoration: none; transition: transform 0.3s ease; }
+        .logo-image { height: 50px; width: auto; transition: transform 0.3s ease; }
+        header.scrolled .logo-image { height: 40px; }
+        .logo:hover .logo-image { transform: scale(1.05); }
+        .nav-right { display: flex; align-items: center; gap: 1.5rem; }
+        .theme-toggle { background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.3); color: white; width: 44px; height: 44px; min-width: 44px; min-height: 44px; border-radius: 50%; cursor: pointer; font-size: 1.3rem; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; backdrop-filter: blur(5px); }
+        .theme-toggle:hover { background: rgba(255, 255, 255, 0.2); transform: rotate(20deg) scale(1.1); }
+        .nav-links { display: flex; gap: 2.5rem; list-style: none; }
+        .nav-links a { color: white; text-decoration: none; font-weight: 600; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; position: relative; transition: color 0.3s ease; }
+        .nav-links a::after { content: ''; position: absolute; bottom: -5px; left: 0; width: 0; height: 2px; background: var(--primary); transition: width 0.3s ease; }
+        .nav-links a:hover::after { width: 100%; }
+        .nav-links a:hover { color: var(--primary); }
+        .menu-toggle { display: none; background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 0.5rem; min-width: 44px; min-height: 44px; }
+        @media (max-width: 768px) {
+            header { padding: 1rem; }
+            .logo-image { height: 40px; }
+            header.scrolled .logo-image { height: 35px; }
+            .menu-toggle { display: flex; align-items: center; justify-content: center; }
+            .nav-right { gap: 1rem; }
+            .nav-links { position: fixed; top: 70px; left: 0; right: 0; background: rgba(26, 26, 46, 0.98); flex-direction: column; gap: 0; padding: 2rem; transform: translateY(-100%); opacity: 0; transition: all 0.3s ease; pointer-events: none; max-height: calc(100vh - 70px); overflow-y: auto; }
+            [data-theme="dark"] .nav-links { background: rgba(15, 15, 30, 0.98); }
+            .nav-links.active { transform: translateY(0); opacity: 1; pointer-events: all; }
+            .nav-links li { padding: 1.25rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+            .nav-links li:last-child { border-bottom: none; }
+            .nav-links a { font-size: 1.1rem; display: block; padding: 0.5rem 0; }
+        }
+        main { flex: 1; width: 100%; padding-top: 110px; max-width: 1200px; margin: 0 auto; padding-left: 1.5rem; padding-right: 1.5rem; padding-bottom: 4rem; }
+        .page-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(2.4rem, 7vw, 4rem); text-align: center; letter-spacing: 0.05em; color: var(--text-primary); margin: 1rem 0 0.25rem; }
+        .page-subtitle { text-align: center; color: rgba(255, 255, 255, 0.94); font-size: 1rem; margin-bottom: 2rem; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45); }
+        .archive-panel { background: rgba(255, 255, 255, 0.94); border: 1px solid rgba(0, 78, 137, 0.08); border-radius: 18px; padding: clamp(1.2rem, 3vw, 2rem); box-shadow: 0 10px 40px var(--card-shadow); }
+        [data-theme="dark"] .archive-panel { background: rgba(26, 26, 46, 0.92); border-color: rgba(255, 255, 255, 0.05); }
+        .status-box { background: var(--bg-secondary); border-radius: 16px; padding: 2rem; text-align: center; box-shadow: 0 10px 30px var(--card-shadow); color: var(--text-secondary); }
+        .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--border-color); border-top-color: var(--primary); animation: spin 0.8s linear infinite; margin: 0 auto 1rem; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .events-section-head { display: flex; align-items: baseline; gap: 0.75rem; margin-bottom: 1.25rem; padding-bottom: 0.6rem; border-bottom: 2px solid var(--border-color); }
+        .events-section-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(1.9rem, 5vw, 2.6rem); letter-spacing: 0.04em; color: var(--text-primary); }
+        .events-section-count { color: var(--text-muted); font-size: 0.85rem; font-weight: 600; }
+        .events-empty { color: var(--text-muted); padding: 0.4rem 0 1rem; }
+        .events-grid { display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+        @media (max-width: 560px) { .events-grid { grid-template-columns: 1fr; } }
+        .event-card { background: var(--bg-secondary); border-radius: 15px; overflow: hidden; border: 2px solid var(--border-color); transition: all 0.3s ease; cursor: default; text-align: left; width: 100%; font: inherit; color: inherit; display: flex; flex-direction: column; padding: 1.4rem; gap: 0.7rem; box-shadow: 0 6px 24px var(--card-shadow); text-decoration: none; }
+        a.event-card { cursor: pointer; }
+        a.event-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px var(--card-shadow-hover); border-color: var(--primary); }
+        .event-card:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+        .event-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+        .event-name { font-family: 'Bebas Neue', sans-serif; font-size: 1.45rem; line-height: 1.1; color: var(--text-primary); letter-spacing: 0.02em; }
+        .event-meta { font-size: 0.9rem; color: var(--text-tertiary); display: flex; flex-direction: column; gap: 0.3rem; }
+        .meta-row { display: flex; align-items: center; gap: 0.4rem; }
+        .meta-label { min-width: 4.4rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.04em; }
+        .badge { padding: 0.3rem 0.7rem; border-radius: 20px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border-color); }
+        .type-badge.tournament { background: linear-gradient(135deg, var(--primary), #cc4a1a); color: white; border: none; }
+        .type-badge.league_round { background: linear-gradient(135deg, var(--secondary), var(--green)); color: white; border: none; }
+        .status-badge.final, .status-badge.cancelled { background: var(--bg-tertiary); color: var(--text-muted); border: 1px solid var(--border-color); }
+        .event-cta { margin-top: auto; font-weight: 800; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--primary); }
+        .archive-controls { display: flex; align-items: center; justify-content: center; gap: 0.75rem; flex-wrap: wrap; margin: 1.5rem 0 0; }
+        .archive-status { color: var(--text-muted); font-size: 0.85rem; flex-basis: 100%; text-align: center; }
+        .archive-btn { background: var(--secondary); color: white; border: none; padding: 0.65rem 1.7rem; border-radius: 999px; font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: background 0.15s ease; }
+        .archive-btn:hover { background: #003d6d; }
+        .archive-btn.secondary { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
+        .back-link { display: inline-block; margin-top: 2rem; color: var(--primary); text-decoration: none; font-weight: 700; }
+        .back-link:hover { text-decoration: underline; }
+        footer { text-align: center; padding: 2rem; background: var(--bg-secondary); color: var(--text-muted); margin-top: auto; }
+    </style>
+    <script src="nav.js" defer></script>
+</head>
+<body data-api-base="">
+    <header>
+        <nav>
+            <a href="index.html" class="logo">
+                <img src="img/logo.png" alt="Greenville DGC Logo" class="logo-image">
+            </a>
+            <ul class="nav-links" id="navLinks"></ul>
+            <div class="nav-right">
+                <button class="menu-toggle" aria-label="Toggle menu">☰</button>
+                <button class="theme-toggle" aria-label="Toggle dark mode">
+                    <span class="theme-icon">🌙</span>
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <h1 class="page-title">Event Archive</h1>
+        <p class="page-subtitle">Past tournaments, league rounds, and club events</p>
+
+        <div id="status" class="status-box">
+            <div class="spinner"></div>
+            <div>Loading archive...</div>
+        </div>
+
+        <section id="archivePanel" class="archive-panel" hidden></section>
+
+        <div style="text-align:center;">
+            <a href="events.html" class="back-link">&larr; Back to current events</a>
+        </div>
+    </main>
+
+    <footer><p>&copy; 2026 Greenville Disc Golf Club. All rights reserved. | Greenville, NC</p></footer>
+
+    <script type="module">
+        import {
+            normalizeEvent,
+            parseEventDate,
+            buildCourseIndex,
+            courseNameFor,
+            formatEventDate,
+            typeLabel,
+            statusLabel,
+        } from './events.js';
+        import {
+            isClubEvent,
+            parseHomepageEventCsv,
+            parseHomepageEventDate,
+            parseTournamentCsv,
+        } from './home-feed-parse.js';
+
+        const TOURNAMENT_FEED_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRz6V6BAwII4eoqITz4MW5zmM_3mYJqrtqtZl9xB87lAZgDT1E0Do1r2cp2aa1tvEKWevnPhb2zQu4s/pub?gid=0&single=true&output=csv';
+        const EVENT_FEED_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTLTq17Bwgy6uW_9pG7dQODTmahv7vjxo9Y5EShHaeQYo9xPB2m7Nf5de8EcZvKgcrTbBLb97msMg4Q/pub?output=csv';
+        const MAIN_EVENTS_URL = 'https://gvdgclub.com/events.html';
+        const RYDER_CUP_LEAGUE_ID = '4';
+        const INITIAL_VISIBLE = 3;
+        const PAGE_INCREMENT = 12;
+
+        const LOCAL_API_BASE = ['127.0.0.1', 'localhost'].includes(location.hostname)
+            ? 'http://127.0.0.1:8788'
+            : '';
+        const _h = location.hostname;
+        const API_BASE = (
+            LOCAL_API_BASE ||
+            (document.body.dataset.apiBase || '').trim() ||
+            ((_h === 'greenvillediscgolf.com' || _h === 'www.greenvillediscgolf.com')
+                ? 'https://auth.greenvillediscgolf.com' : 'https://auth.gvdgclub.com')
+        ).trim().replace(/\/+$/, '');
+
+        const statusEl = document.getElementById('status');
+        const archivePanel = document.getElementById('archivePanel');
+        const themeToggle = document.querySelector('.theme-toggle');
+        const themeIcon = document.querySelector('.theme-icon');
+        const html = document.documentElement;
+        const menuToggle = document.querySelector('.menu-toggle');
+        const navLinks = document.querySelector('.nav-links');
+        const header = document.querySelector('header');
+
+        let courseIndex = new Map();
+        let archiveItems = [];
+        let visibleCount = INITIAL_VISIBLE;
+
+        const currentTheme = localStorage.getItem('theme') || 'light';
+        html.setAttribute('data-theme', currentTheme);
+        themeIcon.textContent = currentTheme === 'dark' ? '☀️' : '🌙';
+        themeToggle.addEventListener('click', () => {
+            const t = html.getAttribute('data-theme');
+            const n = t === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', n);
+            localStorage.setItem('theme', n);
+            themeIcon.textContent = n === 'dark' ? '☀️' : '🌙';
+        });
+        menuToggle.addEventListener('click', () => {
+            navLinks.classList.toggle('active');
+            menuToggle.textContent = navLinks.classList.contains('active') ? '✕' : '☰';
+        });
+        document.querySelectorAll('.nav-links a').forEach((l) =>
+            l.addEventListener('click', () => {
+                navLinks.classList.remove('active');
+                menuToggle.textContent = '☰';
+            })
+        );
+        window.addEventListener('scroll', () => {
+            window.scrollY > 100 ? header.classList.add('scrolled') : header.classList.remove('scrolled');
+        });
+
+        function el(tag, className, text) {
+            const node = document.createElement(tag);
+            if (className) node.className = className;
+            if (text != null) node.textContent = text;
+            return node;
+        }
+        function sanitizeUrl(raw) {
+            if (!raw) return '';
+            try {
+                const u = new URL(String(raw), window.location.href);
+                return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : '';
+            } catch (_e) {
+                return '';
+            }
+        }
+        function startOfToday() {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            return today;
+        }
+        function feedDateInfo(item) {
+            const epoch = Number(item && item.epoch);
+            if (Number.isFinite(epoch) && epoch > 0) {
+                const ms = epoch < 100000000000 ? epoch * 1000 : epoch;
+                const fromEpoch = new Date(ms);
+                if (!Number.isNaN(fromEpoch.getTime())) {
+                    return { dateObj: fromEpoch, isPast: fromEpoch < startOfToday(), isTBD: false };
+                }
+            }
+            return parseHomepageEventDate(String((item && item.date) || ''));
+        }
+        function isPastFeedItem(item) {
+            const info = feedDateInfo(item);
+            return !info.isTBD && info.isPast;
+        }
+        function isArchivedClubEvent(raw) {
+            const ev = normalizeEvent(raw);
+            if (ev.status === 'live') return false;
+            if (ev.status === 'final' || ev.status === 'cancelled') return true;
+            const d = parseEventDate(ev.date || ev.starts_at);
+            return d ? d < startOfToday() : false;
+        }
+        function isRyderCupName(value) {
+            return /\bryder\s*cup\b/i.test(String(value || ''));
+        }
+        function eventHref(ev) {
+            if (!ev || !ev.id) return '';
+            if (String(ev.league_id || '') === RYDER_CUP_LEAGUE_ID || isRyderCupName(ev.name)) {
+                return MAIN_EVENTS_URL + '#league/' + encodeURIComponent(RYDER_CUP_LEAGUE_ID);
+            }
+            return MAIN_EVENTS_URL + '#event/' + encodeURIComponent(ev.id);
+        }
+        async function fetchJson(path) {
+            const res = await fetch(API_BASE + path, { cache: 'no-store', headers: { Accept: 'application/json' } });
+            if (!res.ok) throw new Error('Request failed');
+            return res.json();
+        }
+        async function fetchText(url) {
+            const res = await fetch(url + (url.includes('?') ? '&' : '?') + '_cb=' + Date.now(), { cache: 'no-store' });
+            if (!res.ok) throw new Error('Feed failed');
+            return res.text();
+        }
+        function formatArchiveDate(dateObj, fallback) {
+            if (dateObj && !Number.isNaN(dateObj.getTime())) {
+                return dateObj.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+            }
+            return fallback || 'Date TBD';
+        }
+        function archivedFeedItem(item, group) {
+            const info = feedDateInfo(item);
+            const href = isRyderCupName(item && item.name)
+                ? MAIN_EVENTS_URL + '#league/' + encodeURIComponent(RYDER_CUP_LEAGUE_ID)
+                : sanitizeUrl(item && item.url);
+            return {
+                name: String((item && item.name) || 'Archived event'),
+                dateObj: info.dateObj,
+                dateText: formatArchiveDate(info.dateObj, item && item.date),
+                detail: String((item && item.detail) || ''),
+                tag: group,
+                href,
+                cta: href ? (href.includes('gvdgclub.com/events.html') ? 'View results' : 'Details') : '',
+            };
+        }
+        function archivedClubItem(raw) {
+            const ev = normalizeEvent(raw);
+            const d = parseEventDate(ev.date || ev.starts_at);
+            const courseName = courseNameFor(courseIndex, ev.course_id);
+            return {
+                name: ev.name,
+                dateObj: d,
+                dateText: formatEventDate(ev.date || ev.starts_at),
+                detail: [courseName, statusLabel(ev.status)].filter(Boolean).join(' · '),
+                tag: typeLabel(ev.type),
+                href: eventHref(ev),
+                cta: 'View results',
+                status: ev.status,
+                type: ev.type,
+            };
+        }
+        function metaRow(label, value) {
+            const row = el('div', 'meta-row');
+            row.appendChild(el('span', 'meta-label', label));
+            row.appendChild(el('span', null, value || 'TBD'));
+            return row;
+        }
+        function archiveCard(item) {
+            const href = sanitizeUrl(item.href);
+            const card = el(href ? 'a' : 'div', 'event-card');
+            if (href) {
+                card.href = href;
+                const url = new URL(href, window.location.href);
+                if (!/gvdgclub\.com$/.test(url.hostname)) {
+                    card.target = '_blank';
+                    card.rel = 'noopener noreferrer';
+                }
+            }
+            const top = el('div', 'event-card-top');
+            top.appendChild(el('h3', 'event-name', item.name));
+            top.appendChild(el('span', 'badge type-badge ' + (item.type || ''), item.tag || 'Event'));
+            card.appendChild(top);
+            const meta = el('div', 'event-meta');
+            meta.appendChild(metaRow('Date', item.dateText));
+            if (item.detail) meta.appendChild(metaRow('Detail', item.detail));
+            card.appendChild(meta);
+            if (item.status) card.appendChild(el('span', 'badge status-badge ' + item.status, statusLabel(item.status)));
+            if (href && item.cta) card.appendChild(el('div', 'event-cta', item.cta));
+            return card;
+        }
+        function renderArchive() {
+            statusEl.hidden = true;
+            archivePanel.hidden = false;
+            archivePanel.replaceChildren();
+            const head = el('div', 'events-section-head');
+            head.appendChild(el('h2', 'events-section-title', 'Past events'));
+            head.appendChild(el('span', 'events-section-count', archiveItems.length + ' archived'));
+            archivePanel.appendChild(head);
+            if (!archiveItems.length) {
+                archivePanel.appendChild(el('p', 'events-empty', 'No past events are archived yet.'));
+                return;
+            }
+            const grid = el('div', 'events-grid');
+            archiveItems.slice(0, visibleCount).forEach((item) => grid.appendChild(archiveCard(item)));
+            archivePanel.appendChild(grid);
+            if (archiveItems.length > INITIAL_VISIBLE) {
+                const controls = el('div', 'archive-controls');
+                controls.appendChild(el('div', 'archive-status', 'Showing ' + Math.min(visibleCount, archiveItems.length) + ' of ' + archiveItems.length));
+                if (visibleCount < archiveItems.length) {
+                    const loadMoreBtn = el('button', 'archive-btn', 'Load more');
+                    loadMoreBtn.type = 'button';
+                    loadMoreBtn.addEventListener('click', () => {
+                        visibleCount = Math.min(archiveItems.length, visibleCount + PAGE_INCREMENT);
+                        renderArchive();
+                    });
+                    controls.appendChild(loadMoreBtn);
+                }
+                if (visibleCount > INITIAL_VISIBLE) {
+                    const showLessBtn = el('button', 'archive-btn secondary', 'Show less');
+                    showLessBtn.type = 'button';
+                    showLessBtn.addEventListener('click', () => {
+                        visibleCount = INITIAL_VISIBLE;
+                        renderArchive();
+                    });
+                    controls.appendChild(showLessBtn);
+                }
+                archivePanel.appendChild(controls);
+            }
+        }
+        async function loadArchive() {
+            statusEl.hidden = false;
+            archivePanel.hidden = true;
+            try {
+                const [courses, d1, tournamentsCsv, eventCsv] = await Promise.all([
+                    fetchJson('/courses').catch(() => ({ courses: [] })),
+                    fetchJson('/events?limit=2000&offset=0').catch(() => ({ events: [] })),
+                    fetchText(TOURNAMENT_FEED_URL).catch(() => ''),
+                    fetchText(EVENT_FEED_URL).catch(() => ''),
+                ]);
+                courseIndex = buildCourseIndex((courses && courses.courses) || []);
+                const tournamentItems = parseTournamentCsv(tournamentsCsv || '')
+                    .map((t) => ({ name: t.name, date: t.date, detail: [t.location, t.tier].filter(Boolean).join(' · '), url: t.url }))
+                    .filter(isPastFeedItem)
+                    .map((item) => archivedFeedItem(item, 'Tournament'));
+                const eventItems = parseHomepageEventCsv(eventCsv || '')
+                    .map((e) => ({ name: e.title, date: e.date, detail: e.description, url: e.url, club: isClubEvent(e) }))
+                    .filter(isPastFeedItem)
+                    .map((item) => archivedFeedItem(item, item.club ? 'Club Event' : 'League Round'));
+                const clubItems = ((d1 && d1.events) || [])
+                    .filter(isArchivedClubEvent)
+                    .map(archivedClubItem);
+                archiveItems = [...clubItems, ...tournamentItems, ...eventItems]
+                    .sort((a, b) => {
+                        const ad = a.dateObj && !Number.isNaN(a.dateObj.getTime()) ? a.dateObj.getTime() : 0;
+                        const bd = b.dateObj && !Number.isNaN(b.dateObj.getTime()) ? b.dateObj.getTime() : 0;
+                        return bd - ad;
+                    });
+                visibleCount = INITIAL_VISIBLE;
+                renderArchive();
+            } catch (_e) {
+                statusEl.className = 'status-box';
+                statusEl.replaceChildren(el('div', null, 'Archive could not load right now. Please try again.'));
+            }
+        }
+
+        loadArchive();
+    </script>
+</body>
+</html>

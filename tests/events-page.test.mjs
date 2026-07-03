@@ -5,9 +5,9 @@ import test from 'node:test';
 function renderPageSource() {
   const html = readFileSync('events.html', 'utf8');
   const start = html.indexOf('function renderPage(feed, d1events)');
-  const end = html.indexOf('async function loadMoreClubEvents()');
+  const end = html.indexOf('async function loadHub');
   assert.notEqual(start, -1, 'renderPage function should exist');
-  assert.notEqual(end, -1, 'loadMoreClubEvents should follow renderPage');
+  assert.notEqual(end, -1, 'loadHub should follow renderPage');
   return html.slice(start, end);
 }
 
@@ -22,15 +22,30 @@ test('public Events page pins Live Now to the top section, above the schedule fe
   assert.equal(source.includes("hubEl.appendChild(section('Live Now'"), false, 'Live Now should not be rendered below the schedule feed');
 });
 
-test('public Events page collapses past events and moves casual rounds to the dashboard', () => {
+test('public Events page removes past events and casual rounds from the active page', () => {
   const source = readFileSync('events.html', 'utf8');
-  // Only upcoming (+ live) render in the main flow; past events go behind a toggle.
-  assert.match(source, /function renderPastSection\(past\)/);
-  assert.match(source, /past-toggle/);
+  // Only current/upcoming render in the main flow; past events move to the archive subdomain.
+  assert.match(source, /function splitFeedByDate\(items\)/);
+  assert.match(source, /function isArchivedClubEvent\(raw\)/);
+  assert.match(source, /function renderArchiveCta\(archivedCount\)/);
+  assert.match(source, /archive\.gvdgclub\.com/);
+  assert.doesNotMatch(source, /function renderPastSection\(past\)/);
+  assert.doesNotMatch(source, /past-toggle/);
   assert.equal(source.includes("hubEl.appendChild(section('Club-scored — Past'"), false, 'past events should not render inline in the hub');
-  // Casual posting/joining moved to the member dashboard — only a signpost CTA remains here.
-  assert.match(source, /function renderCasualCta\(\)/);
+  // Casual posting/joining moved to the member dashboard — no Events-page signpost remains.
+  assert.doesNotMatch(source, /function renderCasualCta\(\)/);
+  assert.doesNotMatch(source, /casualCta/);
+  assert.doesNotMatch(source, /casual-cta/);
   assert.doesNotMatch(source, /async function loadCasualRounds\(\)/);
+});
+
+test('public Events page parses feed dates before archiving rows', () => {
+  const source = readFileSync('events.html', 'utf8');
+  assert.match(source, /function feedDateInfo\(item\)/);
+  assert.match(source, /Number\(item && item\.epoch\)/);
+  assert.match(source, /parseHomepageEventDate\(String\(\(item && item\.date\) \|\| ''\)\)/);
+  assert.match(source, /function isPastFeedItem\(item\)/);
+  assert.match(source, /isPastFeedItem\(item\) \? archived : active/);
 });
 
 test('public registration cards post pair label only for doubles config', () => {
@@ -41,6 +56,8 @@ test('public registration cards post pair label only for doubles config', () => 
   assert.match(source, /if \(isDoublesRegistration\(ev\)\)/);
   assert.match(source, /pairInput\.setAttribute\('data-register-pair', 'team'\)/);
   assert.match(source, /if \(pairInput\) body\.team = pairInput\.value\.trim\(\)/);
+  assert.match(source, /Currently Registering/);
+  assert.match(source, /registerEl\.hidden = true/);
 });
 
 test('Ryder Cup schedule cards link to the league route', () => {
@@ -53,4 +70,16 @@ test('Ryder Cup schedule cards link to the league route', () => {
   assert.match(eventsSource, /League \/ Results/);
   assert.match(homeSource, /const RYDER_CUP_LEAGUE_URL = 'events\.html#league\/4'/);
   assert.match(ryderSource, /events\.html#league\/4/);
+});
+
+test('archive page lists the latest three past events with load more and show less controls', () => {
+  const archiveSource = readFileSync('archive.html', 'utf8');
+  const indexSource = readFileSync('index.html', 'utf8');
+  assert.match(archiveSource, /const INITIAL_VISIBLE = 3/);
+  assert.match(archiveSource, /Load more/);
+  assert.match(archiveSource, /Show less/);
+  assert.match(archiveSource, /parseHomepageEventDate/);
+  assert.match(archiveSource, /filter\(isPastFeedItem\)/);
+  assert.match(archiveSource, /sort\(\(a, b\) =>/);
+  assert.match(indexSource, /archive\.gvdgclub\.com/);
 });

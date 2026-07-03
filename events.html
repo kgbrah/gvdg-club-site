@@ -116,11 +116,11 @@
         .events-empty { color: var(--text-muted); padding: 0.4rem 0 1rem; }
         .events-section.live .events-section-title { color: var(--primary); }
         .events-section-count { color: var(--text-muted); font-size: 0.85rem; font-weight: 600; }
-        .events-load-more { text-align: center; margin: 1rem 0; }
-        .events-load-btn { background: var(--secondary); color: white; border: none; padding: 0.65rem 1.7rem; border-radius: 999px; font-weight: 700; font-size: 0.85rem; cursor: pointer; transition: background 0.15s ease; }
-        .events-load-btn:hover { background: #003d6d; }
-        .events-load-btn:disabled { opacity: 0.6; cursor: default; }
-        .events-load-status { color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.45rem; }
+        .archive-cta { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 14px; padding: 1rem 1.15rem; margin: 0 0 2rem; box-shadow: 0 4px 18px var(--card-shadow); }
+        .archive-cta-body { display: flex; flex-direction: column; gap: 0.15rem; flex: 1 1 260px; color: var(--text-secondary); }
+        .archive-cta-body strong { color: var(--text-primary); }
+        .archive-cta-body span { color: var(--text-muted); font-size: 0.9rem; line-height: 1.45; }
+        .archive-cta-link { margin-left: auto; white-space: nowrap; text-decoration: none; }
         .live-dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--primary); display: inline-block; box-shadow: 0 0 0 0 rgba(255,107,53,0.6); animation: pulse 1.8s infinite; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,107,53,0.6); } 70% { box-shadow: 0 0 0 10px rgba(255,107,53,0); } 100% { box-shadow: 0 0 0 0 rgba(255,107,53,0); } }
 
@@ -151,20 +151,8 @@
         #registerSection { background: rgba(244, 244, 249, 0.94); margin: 0 -1.5rem 2rem; padding: 1.25rem 1.5rem 1.5rem; border-radius: 16px; }
         [data-theme="dark"] #registerSection { background: rgba(15, 15, 30, 0.86); }
         #registerSection .events-group-head { margin-top: 0; }
-        .casual-link { text-decoration: none; display: inline-flex; align-items: center; }
-        /* Casual rounds moved to the Player Dashboard — this is just the signpost card left on the events page. */
-        .casual-cta { display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 14px; padding: 0.9rem 1.1rem; margin: 0 0 2rem; box-shadow: 0 4px 18px var(--card-shadow); }
-        .casual-cta-icon { font-size: 1.5rem; line-height: 1; }
-        .casual-cta-body { display: flex; flex-direction: column; gap: 0.15rem; flex: 1 1 220px; }
-        .casual-cta-body strong { color: var(--text-primary); }
-        .casual-cta-body span { color: var(--text-secondary); font-size: 0.9rem; }
-        .casual-cta-link { margin-left: auto; white-space: nowrap; }
-        /* Past events tucked behind a toggle at the bottom of the page. */
-        .past-toggle { display: inline-flex; align-items: center; gap: 0.4rem; background: transparent; border: 1px solid var(--border-color); border-radius: 999px; color: var(--text-secondary); font-weight: 700; font-size: 0.9rem; padding: 0.5rem 1rem; cursor: pointer; margin: 0.5rem 0 1rem; }
-        .past-toggle:hover { border-color: var(--primary); color: var(--primary); }
-        .past-body { margin-top: 0.25rem; }
         @media (max-width: 760px) {
-            .casual-cta-link { margin-left: 0; }
+            .archive-cta-link { margin-left: 0; }
         }
         /* Keep-score CTA on a live event */
         .btn-keep-score { display: inline-block; margin: 0.25rem 0 0.75rem; background: var(--primary); color: #fff; text-decoration: none; font-weight: 800; padding: 0.7rem 1.3rem; border-radius: 50px; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.9rem; }
@@ -333,18 +321,13 @@
         <!-- EVENTS: disc golf tournaments & league rounds (schedule feed + any club-scored upcoming events) -->
         <div id="calendarEvents" hidden></div>
         <div id="hub" hidden></div>
+        <div id="archiveSection" hidden></div>
         <div id="leaguesSection" hidden></div>
 
         <!-- CLUB EVENTS: fundraisers, meetings & minutes -->
         <div id="clubEventsSection" hidden></div>
         <div id="fundraisersSection" hidden></div>
         <div id="meetingsSection" hidden></div>
-
-        <!-- CASUAL ROUNDS moved to the Player Dashboard — signpost only -->
-        <div id="casualCta" hidden></div>
-
-        <!-- PAST EVENTS: tucked away behind a toggle to declutter -->
-        <div id="pastSection" hidden></div>
 
         <!-- Detail view (single event) -->
         <div id="detail" hidden></div>
@@ -361,6 +344,7 @@
         import {
             bucketEvents,
             normalizeEvent,
+            parseEventDate,
             groupPlayersByDivision,
             buildCourseIndex,
             courseNameFor,
@@ -370,6 +354,7 @@
             statusLabel,
         } from './events.js';
         import { teeSignNode } from './tee-sign.js';
+        import { parseHomepageEventDate } from './home-feed-parse.js';
 
         // --- Theme toggle (mirrors index.html) ---
         const themeToggle = document.querySelector('.theme-toggle');
@@ -422,25 +407,22 @@
         )
             .trim()
             .replace(/\/+$/, ''); // strip trailing slashes
+        const ARCHIVE_BASE_URL = ((document.body.dataset.archiveUrl || '').trim() || 'https://archive.gvdgclub.com').replace(/\/+$/, '');
         const REFRESH_MS = 60 * 1000; // ~60s background refresh on the hub
-        const EVENTS_PAGE_SIZE = 200;
+        const EVENTS_PAGE_SIZE = 2000;
         const EVENTS_PAGE_MAX_LIMIT = 2000;
         const RYDER_CUP_LEAGUE_ID = '4';
         const eventsLoadState = {
             events: [],
-            offset: 0,
-            hasMore: false,
             loading: false,
-            shown: 0,
         };
 
         const statusEl = document.getElementById('status');
         const liveNowEl = document.getElementById('liveNowSection');
         const registerEl = document.getElementById('registerSection');
-        const casualCtaEl = document.getElementById('casualCta');
-        const pastEl = document.getElementById('pastSection');
         const calendarEl = document.getElementById('calendarEvents');
         const hubEl = document.getElementById('hub');
+        const archiveEl = document.getElementById('archiveSection');
         const leaguesEl = document.getElementById('leaguesSection');
         const clubEl = document.getElementById('clubEventsSection');
         const fundraisersEl = document.getElementById('fundraisersSection');
@@ -453,7 +435,6 @@
         let coursesCache = [];
         let coursesLoaded = false;
         let refreshTimer = null;
-        let pastExpanded = false; // whether the "past events" toggle is open — persists across background refreshes
 
         // --- XSS-safe DOM helper (mirrors ryder-cup.html) ---
         // Every piece of API data lands here as a text node; we NEVER assign
@@ -511,12 +492,11 @@
             registerEl.hidden = which !== 'hub';
             calendarEl.hidden = which !== 'hub';
             hubEl.hidden = which !== 'hub';
+            archiveEl.hidden = which !== 'hub';
             leaguesEl.hidden = which !== 'hub';
             clubEl.hidden = which !== 'hub';
             fundraisersEl.hidden = which !== 'hub';
             meetingsEl.hidden = which !== 'hub';
-            casualCtaEl.hidden = which !== 'hub';
-            pastEl.hidden = which !== 'hub';
             detailEl.hidden = which !== 'detail';
         }
 
@@ -563,6 +543,76 @@
                 grid.appendChild(card);
             }
             return grid;
+        }
+
+        function startOfToday() {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            return today;
+        }
+
+        function feedDateInfo(item) {
+            const epoch = Number(item && item.epoch);
+            if (Number.isFinite(epoch) && epoch > 0) {
+                const ms = epoch < 100000000000 ? epoch * 1000 : epoch;
+                const fromEpoch = new Date(ms);
+                if (!Number.isNaN(fromEpoch.getTime())) {
+                    return { dateObj: fromEpoch, isPast: fromEpoch < startOfToday(), isTBD: false };
+                }
+            }
+            return parseHomepageEventDate(String((item && item.date) || ''));
+        }
+
+        function isPastFeedItem(item) {
+            const info = feedDateInfo(item);
+            return !info.isTBD && info.isPast;
+        }
+
+        function isArchivedClubEvent(raw) {
+            const ev = normalizeEvent(raw);
+            if (ev.status === 'live') return false;
+            if (ev.status === 'final' || ev.status === 'cancelled') return true;
+            const d = parseEventDate(ev.date || ev.starts_at);
+            return d ? d < startOfToday() : false;
+        }
+
+        function splitFeedByDate(items) {
+            const active = [];
+            const archived = [];
+            for (const item of items || []) {
+                (isPastFeedItem(item) ? archived : active).push(item);
+            }
+            const byDate = (a, b) => feedDateInfo(a).dateObj - feedDateInfo(b).dateObj;
+            active.sort(byDate);
+            archived.sort((a, b) => feedDateInfo(b).dateObj - feedDateInfo(a).dateObj);
+            return { active, archived };
+        }
+
+        function splitClubEventsByDate(items) {
+            const active = [];
+            const archived = [];
+            for (const raw of items || []) {
+                const ev = normalizeEvent(raw);
+                (isArchivedClubEvent(ev) ? archived : active).push(ev);
+            }
+            return { active, archived };
+        }
+
+        function renderArchiveCta(archivedCount) {
+            archiveEl.replaceChildren();
+            const archiveUrl = sanitizeUrl(ARCHIVE_BASE_URL) || 'archive.html';
+            const card = el('div', 'archive-cta');
+            const body = el('div', 'archive-cta-body');
+            body.appendChild(el('strong', null, 'Past events archive'));
+            const countText = archivedCount > 0
+                ? `${archivedCount} past event${archivedCount === 1 ? '' : 's'} from this calendar moved to the archive.`
+                : 'Past tournaments, league rounds, and club events live on the archive site.';
+            body.appendChild(el('span', null, countText));
+            card.appendChild(body);
+            const link = el('a', 'reg-btn secondary archive-cta-link', 'Open archive');
+            link.href = archiveUrl;
+            card.appendChild(link);
+            archiveEl.appendChild(card);
         }
 
         function showStatus(message, isError, onRetry) {
@@ -669,73 +719,14 @@
             wrap.appendChild(grid);
             return wrap;
         }
-        function eventsLoadMoreControl() {
-            if (!eventsLoadState.shown) return null;
-            const wrap = el('div', 'events-load-more');
-            wrap.appendChild(el('div', 'events-load-status', `Showing ${eventsLoadState.shown} club-scored event${eventsLoadState.shown === 1 ? '' : 's'}`));
-            if (eventsLoadState.loading) {
-                const btn = el('button', 'events-load-btn', 'Loading more club-scored events…');
-                btn.type = 'button';
-                btn.disabled = true;
-                wrap.appendChild(btn);
-                return wrap;
-            }
-            if (!eventsLoadState.hasMore) return wrap;
-            const loadMore = el('button', 'events-load-btn', 'Load more club-scored events');
-            loadMore.type = 'button';
-            loadMore.disabled = false;
-            loadMore.addEventListener('click', () => { loadMoreClubEvents(); });
-            wrap.appendChild(loadMore);
-            return wrap;
-        }
-
-        // Past club-scored events sit behind a toggle at the bottom of the page. Collapsed by default;
-        // the button reveals/hides the list in place (no refetch) so the main view stays focused on
-        // what's live and upcoming. The open/closed state (pastExpanded) is module-level so a background
-        // refresh doesn't collapse it out from under a reader, and the (potentially large) card list is
-        // built lazily — only when the section is actually open.
-        function renderPastSection(past) {
-            pastEl.replaceChildren();
-            if (!past.length) { pastExpanded = false; return; }
-            const body = el('div', 'past-body');
-            let built = false;
-            const buildBody = () => { if (!built) { body.appendChild(section('Club-scored — Past', past)); built = true; } };
-            const toggle = el('button', 'past-toggle');
-            toggle.type = 'button';
-            const label = () => `${pastExpanded ? '▾ Hide' : '▸ Show'} past events (${past.length})`;
-            const sync = () => {
-                if (pastExpanded) buildBody();
-                body.hidden = !pastExpanded;
-                toggle.setAttribute('aria-expanded', pastExpanded ? 'true' : 'false');
-                toggle.textContent = label();
-            };
-            toggle.addEventListener('click', () => { pastExpanded = !pastExpanded; sync(); });
-            pastEl.appendChild(toggle);
-            pastEl.appendChild(body);
-            sync(); // restore prior state across refreshes; builds the list only if currently expanded
-        }
-
-        // Casual rounds now live on the Player Dashboard (members post & join there). Leave a slim
-        // signpost on the events page so members know where to go.
-        function renderCasualCta() {
-            casualCtaEl.replaceChildren();
-            const card = el('div', 'casual-cta');
-            card.appendChild(el('span', 'casual-cta-icon', '🥏'));
-            const body = el('div', 'casual-cta-body');
-            body.appendChild(el('strong', null, 'Casual rounds'));
-            body.appendChild(el('span', null, 'Post or join a pickup round from your Player Dashboard.'));
-            card.appendChild(body);
-            const link = safeLink('gvdg-members.html', 'Go to Dashboard →');
-            link.className = 'reg-btn secondary casual-cta-link';
-            card.appendChild(link);
-            casualCtaEl.appendChild(card);
-        }
-
         // Render the two club categories: Events (schedule feed + any club-scored D1 events) and the
         // Club Events heading (fundraisers/meetings render into their own sections just below).
         function renderPage(feed, d1events) {
-            const feedEvents = (feed && feed.events) || [];
-            const { live, upcoming, past } = bucketEvents(d1events || []);
+            const { active: feedEvents, archived: feedArchived } = splitFeedByDate((feed && feed.events) || []);
+            const { active: feedClub, archived: feedClubArchived } = splitFeedByDate((feed && feed.clubEvents) || []);
+            const { active: activeD1, archived: d1Archived } = splitClubEventsByDate(d1events || []);
+            const { live, upcoming } = bucketEvents(activeD1);
+            const archivedCount = feedArchived.length + feedClubArchived.length + d1Archived.length;
 
             // LIVE NOW — pinned to the very top so an in-progress event is impossible to miss.
             liveNowEl.replaceChildren();
@@ -746,24 +737,18 @@
             if (feedEvents.length) calendarEl.appendChild(feedList(feedEvents));
 
             hubEl.replaceChildren();
-            if (upcoming.length) hubEl.appendChild(section('Club-scored — Upcoming', upcoming));
-            // Empty-state reflects the MAIN flow only (live/upcoming/feed). Past events live in the collapsed
-            // bottom section, so their presence must not suppress the "nothing scheduled" message.
+            if (upcoming.length) hubEl.appendChild(section('Upcoming', upcoming));
+            // Empty-state reflects the MAIN flow only (live/upcoming/feed). Past events live on archive.gvdgclub.com,
+            // so their presence must not suppress the "nothing scheduled" message.
             if (!feedEvents.length && !live.length && !upcoming.length) {
                 calendarEl.appendChild(el('p', 'events-empty', 'No tournaments or league rounds are on the schedule right now.'));
             }
 
-            // PAST — moved out of the main flow into a collapsed section at the bottom of the page.
-            renderPastSection(past);
+            renderArchiveCta(archivedCount);
 
             clubEl.replaceChildren();
             clubEl.appendChild(groupHeading('Club Events', 'Fundraisers, meetings & minutes'));
-            const feedClub = (feed && feed.clubEvents) || [];
             if (feedClub.length) clubEl.appendChild(feedList(feedClub));
-            const more = eventsLoadMoreControl();
-            if (more) hubEl.appendChild(more);
-
-            renderCasualCta();
 
             setView('hub');
             lastUpdatedEl.hidden = false;
@@ -771,32 +756,11 @@
                 'Last updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         }
 
-        async function loadMoreClubEvents() {
-            if (eventsLoadState.loading || !eventsLoadState.hasMore) return;
-            const btn = document.querySelector('.events-load-btn');
-            if (btn) {
-                btn.disabled = true;
-                btn.textContent = 'Loading more club-scored events…';
-            }
-            try {
-                await loadHub({ reset: false, quiet: true });
-            } finally {
-                if (btn && btn.isConnected) {
-                    btn.disabled = false;
-                    btn.textContent = 'Load more club-scored events';
-                }
-            }
-        }
-        async function loadHub({ reset = true, preserveCount = false, quiet = false } = {}) {
+        async function loadHub({ quiet = false } = {}) {
             teardownLive(); // close any live socket from a detail view
             if (eventsLoadState.loading) return;
-            const requestedLimit = reset
-                ? (preserveCount ? (eventsLoadState.shown || EVENTS_PAGE_SIZE) : EVENTS_PAGE_SIZE)
-                : EVENTS_PAGE_SIZE;
-            const limit = Math.min(requestedLimit, EVENTS_PAGE_MAX_LIMIT);
-            const offset = reset ? 0 : eventsLoadState.offset;
+            const limit = Math.min(EVENTS_PAGE_SIZE, EVENTS_PAGE_MAX_LIMIT);
             const state = eventsLoadState;
-            const mergedBase = reset ? [] : state.events;
             if (!quiet) showStatus('Loading…', false);
             state.loading = true;
             try {
@@ -804,13 +768,10 @@
                 await ensureCourses();
                 const [feed, d1] = await Promise.all([
                     fetchJson('/club-feed').catch(() => ({ events: [], clubEvents: [] })),
-                    fetchJson('/events?limit=' + encodeURIComponent(String(limit)) + '&offset=' + encodeURIComponent(String(offset))).catch(() => ({ events: [] })),
+                    fetchJson('/events?limit=' + encodeURIComponent(String(limit)) + '&offset=0').catch(() => ({ events: [] })),
                 ]);
                 const next = (d1 && d1.events) || [];
-                state.events = mergedBase.concat(next);
-                state.offset = (reset ? 0 : state.offset) + next.length;
-                state.shown = state.events.length;
-                state.hasMore = next.length === limit;
+                state.events = next;
                 renderPage(feed, state.events);
                 loadRegistration(); // best-effort; club events open for sign-up
                 loadLeaguesList(); // best-effort; standings live behind each league
@@ -927,16 +888,19 @@
         }
         async function loadRegistration() {
             registerEl.replaceChildren();
+            registerEl.hidden = true;
             let events = [];
             try { const d = await fetchJson('/registration/open'); events = (d && d.events) || []; } catch (_e) { return; }
+            events = events.filter((ev) => !isArchivedClubEvent(ev));
             if (!events.length) return; // nothing open — show nothing rather than an empty heading
+            registerEl.hidden = false;
             let myRegs = {};
             const tok = memberToken();
             if (tok) {
                 try { const r = await regApi('/my-registrations', { token: tok }); if (r.ok) ((await r.json()).registrations || []).forEach((x) => { myRegs[x.event_id] = x; }); } catch (_e) {}
             }
             const gr = guestRegs();
-            registerEl.appendChild(groupHeading('Register', 'Sign up for upcoming club events — members or guests'));
+            registerEl.appendChild(groupHeading('Currently Registering', 'Sign up for upcoming club events — members or guests'));
             const grid = el('div', 'events-grid');
             events.forEach((ev) => grid.appendChild(regCard(ev, myRegs[ev.id] || null, gr[ev.id] || null)));
             registerEl.appendChild(grid);
