@@ -242,6 +242,15 @@ export async function decrementStoreProductStock(db: D1Like, id: number, quantit
   return (result.meta?.changes ?? result.meta?.rows_written ?? 0) > 0;
 }
 
+export async function getStoreOrderById(db: D1Like, id: number) {
+  return db.prepare("SELECT * FROM store_orders WHERE id = ?").bind(id).first();
+}
+
+// Restore stock reserved by a decrement — used to roll back an order whose payment/debit failed.
+export async function incrementStoreProductStock(db: D1Like, id: number, quantity: number): Promise<void> {
+  await db.prepare("UPDATE store_products SET stock_qty = stock_qty + ?, updated_at = datetime('now') WHERE id = ?").bind(quantity, id).run();
+}
+
 export async function addStoreOrderLinesAndDecrementStock(db: D1Like, orderId: number, lines: readonly StoreOrderLineInput[]): Promise<boolean> {
   if (!lines.length) return false;
   if (!db.batch) {

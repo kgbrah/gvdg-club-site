@@ -572,18 +572,21 @@
             else setStatus('That is all the stock available for this product.', 'error');
             renderCart();
         }
+        let checkoutKey = null; // stable across retries of the SAME cart so a double-submit dedups; cleared on success
         async function checkout() {
             const token = sessionStorage.getItem(TOKEN_KEY);
             if (!token) { setStatus('Log in on the Members page before spending store credit.', 'error'); return; }
             if (!ensureCartStillAvailable()) return;
             const items = Array.from(cart.entries()).map(([productId, quantity]) => ({ product_id: productId, quantity }));
+            if (!checkoutKey) checkoutKey = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
             const btn = $('checkoutBtn');
             btn.disabled = true;
             try {
-                const r = await api('/shop/orders', { method: 'POST', token, body: { items } });
+                const r = await api('/shop/orders', { method: 'POST', token, body: { items, idempotency_key: checkoutKey } });
                 const data = await r.json().catch(() => ({}));
-                if (r.status === 201) {
+                if (r.status === 201 || r.status === 200) { // 200 = idempotent replay of an already-placed order
                     cart.clear();
+                    checkoutKey = null; // next distinct order gets a fresh key
                     walletBalance = data.balance_cents || 0;
                     $('walletBalance').textContent = money(walletBalance);
                     setStatus('Order submitted. The club will have it ready for pickup.', 'success');

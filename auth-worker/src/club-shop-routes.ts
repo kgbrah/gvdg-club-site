@@ -8,6 +8,7 @@ import { notifyNewOrder } from "./order-notify.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { clientIp, json, readJson } from "./http.js";
 import { asInt, asStr } from "./input.js";
+import { createWalletDebitOnce, findWalletTransactionByIdempotencyKey } from "./wallet-idempotency.js";
 
 type CartItem = {
   productId: number;
@@ -284,24 +285,68 @@ export async function handleClubShop(
   }
 
   if (method === "POST" && seg[1] === "orders") {
-    const items = cartItems(await readJson(request));
+    const body = (await readJson(request)) ?? {};
+    const items = cartItems(body);
     if (!items) return json({ error: "invalid_order" }, 400, origin);
+    // A client idempotency key makes the WHOLE checkout idempotent: a retried/double-submitted request with
+    // the same key returns the original order + debit instead of charging twice. Optional — without it the
+    // debit is still atomic per order (can't overdraw), but a double-submit isn't deduped.
+    const idemKey = asStr(body.idempotency_key, 160);
+    const debitKey = idemKey ? "store_order:" + claims.sub + ":" + idemKey : null;
+    if (debitKey) {
+      const prior = await findWalletTransactionByIdempotencyKey(env.DB, debitKey);
+      if (prior) {
+        const priorOrderId = asInt((prior as Record<string, unknown>).order_id) ?? 0;
+        const priorOrder = priorOrderId ? await shopDb.getStoreOrderById(env.DB, priorOrderId) : null;
+        return json({ order: priorOrder, transaction: prior, balance_cents: await shopDb.walletBalance(env.DB, claims.sub) }, 200, origin);
+      }
+    }
     const priced = await priceCart(env.DB, items);
     if (!priced.ok) return json(priced.body, priced.status, origin);
+    // Early, friendly balance check so the common "too short" case is a clean 402 without creating an order.
+    // It is NOT the safety guarantee — the atomic debit below is.
     const balance = await shopDb.walletBalance(env.DB, claims.sub);
     if (balance < priced.total) return json({ error: "insufficient_store_credit", balance_cents: balance, total_cents: priced.total }, 402, origin);
     const submitted = await submitStoreOrder(env, ctx, claims.sub, member.name, priced.total, priced.lines, { method: "store_credit" });
     if (!submitted.ok) return json(submitted.body, submitted.status, origin);
-    const transaction = await shopDb.createWalletTransaction(env.DB, {
-      member_id: claims.sub,
-      member_name: member.name,
-      amount_cents: -priced.total,
-      transaction_type: "debit",
-      source: "store_purchase",
-      order_id: submitted.orderId,
-      note: "Pro shop order #" + submitted.orderId,
-    });
-    return json({ order: submitted.order, transaction, balance_cents: await shopDb.walletBalance(env.DB, claims.sub) }, 201, origin);
+    // Atomic, idempotent debit: balance-checked INSIDE the INSERT so two concurrent debits can never
+    // overdraw the wallet (the fix for the old check-then-debit race). matchOrderId:false — the key
+    // identifies the purchase, and a deduped concurrent attempt legitimately carries a different order_id.
+    const debit = await createWalletDebitOnce(
+      env.DB,
+      {
+        member_id: claims.sub,
+        member_name: member.name,
+        amount_cents: -priced.total,
+        transaction_type: "debit",
+        source: "store_purchase",
+        order_id: submitted.orderId,
+        note: "Pro shop order #" + submitted.orderId,
+        idempotency_key: debitKey ?? "store_order:" + submitted.orderId,
+      },
+      { matchOrderId: false },
+    );
+    // Roll the just-created order back (delete + restore stock) whenever the debit didn't create a fresh
+    // charge for THIS order — insufficient funds, a key conflict, or a dedup to a concurrent winner — so the
+    // member is never left with an unpaid order or stock they didn't pay for.
+    const rollback = async () => {
+      await shopDb.deleteStoreOrder(env.DB, submitted.orderId);
+      for (const line of priced.lines) await shopDb.incrementStoreProductStock(env.DB, line.product_id, line.quantity);
+    };
+    if (!debit.ok) {
+      await rollback();
+      const balanceNow = await shopDb.walletBalance(env.DB, claims.sub);
+      if (debit.error === "insufficient_balance") return json({ error: "insufficient_store_credit", balance_cents: balanceNow, total_cents: priced.total }, 402, origin);
+      return json({ error: "order_failed" }, 409, origin);
+    }
+    if (!debit.created) {
+      // Deduped to a concurrent same-key winner: drop our duplicate order, return the one that was paid for.
+      await rollback();
+      const priorOrderId = asInt((debit.transaction as Record<string, unknown>).order_id) ?? 0;
+      const priorOrder = priorOrderId ? await shopDb.getStoreOrderById(env.DB, priorOrderId) : submitted.order;
+      return json({ order: priorOrder, transaction: debit.transaction, balance_cents: await shopDb.walletBalance(env.DB, claims.sub) }, 200, origin);
+    }
+    return json({ order: submitted.order, transaction: debit.transaction, balance_cents: await shopDb.walletBalance(env.DB, claims.sub) }, 201, origin);
   }
 
   return json({ error: "not_found" }, 404, origin);
