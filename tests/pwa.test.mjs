@@ -84,6 +84,8 @@ test('shared service worker caches app install assets and member fallback', () =
   assert.match(sw, /const OFFLINE_PAGE = "gvdg-members\.html"/);
   assert.match(sw, /const STATIC_DESTINATIONS = new Set/);
   assert.match(sw, /const NETWORK_FIRST_DESTINATIONS = new Set\(\["script", "style", "manifest"\]\)/);
+  assert.match(sw, /const oldAppCaches = keys\.filter\(\(key\) => key !== CACHE && \/\^gvdg-club-v\/\.test\(key\)\)/);
+  assert.match(sw, /oldAppCaches\.length \? refreshEventsClients\(\) : null/);
   assert.match(sw, /if \(!staticAsset\(req, url\)\) return/);
   assert.match(sw, /if \(networkFirstAsset\(req, url\)\)/);
   assert.match(sw, /fetch\(req\)\s*\.then\(\(res\) => cacheResponse\(req, res\)\)/s);

@@ -137,3 +137,41 @@ test('events page ignores stale service-worker cached events helper and renders 
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test('events page first service-worker install renders without refreshing the active page', async () => {
+  const { server, base } = await staticServer();
+  const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  const consoleErrors = [];
+  const navigations = [];
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame() && frame.url().startsWith(`${base}/events.html`)) {
+      navigations.push(frame.url());
+    }
+  });
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  page.on('pageerror', (error) => consoleErrors.push(error.message));
+
+  try {
+    await installApiRoutes(page);
+    await page.goto(`${base}/events.html`, { waitUntil: 'domcontentloaded' });
+    await page.locator('.event-card').first().waitFor({ timeout: 5000 });
+    await page.evaluate(() => navigator.serviceWorker.ready.then(() => true));
+    await page.waitForTimeout(750);
+
+    const cards = await page.locator('.event-card').count();
+    const bodyText = await page.locator('body').textContent();
+
+    assert.equal(cards > 0, true, `expected first-install event cards to render; body=${JSON.stringify((bodyText || '').slice(0, 400))} errors=${JSON.stringify(consoleErrors)}`);
+    assert.match(bodyText || '', /Doubles Matchplay Live/);
+    assert.deepEqual(navigations, [`${base}/events.html`]);
+    assert.deepEqual(consoleErrors, []);
+  } finally {
+    await context.close();
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

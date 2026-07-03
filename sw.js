@@ -55,9 +55,12 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
-      .then(() => self.clients.claim())
-      .then(refreshEventsClients)
+      .then((keys) => {
+        const oldAppCaches = keys.filter((key) => key !== CACHE && /^gvdg-club-v/.test(key));
+        return Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))
+          .then(() => self.clients.claim())
+          .then(() => (oldAppCaches.length ? refreshEventsClients() : null));
+      })
   );
 });
 
