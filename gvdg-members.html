@@ -104,16 +104,14 @@
         .menu-toggle { display: none; background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 0.5rem; }
 
         @media (max-width: 768px) {
-            header { position: relative; }
             .menu-toggle { display: block; }
             .nav-links {
-                position: absolute; top: 100%; left: 0; right: 0;
+                position: fixed; top: 70px; left: 0; right: 0;
                 background: rgba(26, 26, 46, 0.98); flex-direction: column; gap: 0; padding: 2rem;
-                transform: translateY(-0.75rem); opacity: 0; transition: all 0.3s ease; pointer-events: none; visibility: hidden;
+                transform: translateY(-100%); opacity: 0; transition: all 0.3s ease; pointer-events: none;
             }
-            .nav-links.active { transform: translateY(0); opacity: 1; pointer-events: all; visibility: visible; }
+            .nav-links.active { transform: translateY(0); opacity: 1; pointer-events: all; }
             .nav-links li { padding: 1rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
-            .members-content { padding-top: 0; }
         }
 
         /* Login Gate */
@@ -510,11 +508,9 @@
                 .dashboard-action.primary { background: var(--green); border-color: var(--green); color: #fff; }
                 .live-round-list { display: grid; gap: 0.7rem; margin-top: 0.35rem; }
                 .live-round-card { display: grid; grid-template-columns: 1fr auto; gap: 0.85rem; align-items: center; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.8rem 0.9rem; background: var(--bg-secondary); }
-                .live-round-card.live-now { border-color: rgba(255, 107, 53, 0.45); box-shadow: 0 6px 20px rgba(255, 107, 53, 0.12); }
                 .live-round-title { font-weight: 800; color: var(--text-primary); line-height: 1.25; overflow-wrap: anywhere; }
                 .live-round-meta { color: var(--text-muted); font-size: 0.82rem; margin-top: 0.2rem; line-height: 1.4; }
                 .live-round-badge { display: inline-flex; align-items: center; min-height: 1.35rem; padding: 0.12rem 0.45rem; border-radius: 999px; background: rgba(45, 80, 22, 0.12); color: var(--green); font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.3rem; }
-                .live-round-badge.live-now { background: rgba(255, 107, 53, 0.15); color: var(--primary); }
                 .live-round-actions { display: flex; gap: 0.55rem; flex-wrap: wrap; margin-top: 0.85rem; }
                 @media (max-width: 620px) { .live-round-card { grid-template-columns: 1fr; } .live-round-card .passkey-btn { width: 100%; text-align: center; } }
                 .wallet-panel { display: grid; grid-template-columns: minmax(9rem, 1fr) auto; gap: 0.8rem 1rem; align-items: center; padding: 0.9rem 0 1rem; margin: 0 0 1.25rem; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); }
@@ -1320,24 +1316,6 @@
         function roundMeta(parts) {
             return parts.filter(Boolean).join(' · ');
         }
-        function labelToken(raw) {
-            return String(raw || '').trim().toLowerCase();
-        }
-        function titleToken(raw) {
-            const token = labelToken(raw);
-            if (!token) return '';
-            return token.replace(/[-_]+/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
-        }
-        function liveRoundFormatLabel(ev) {
-            const format = labelToken(ev && ev.format);
-            const play = labelToken((ev && (ev.play_format || ev.playFormat)) || (format === 'doubles' || format === 'teams' ? format : ''));
-            const scoring = format === 'doubles' || format === 'teams' ? 'stroke' : format;
-            const scoringLabel = scoring === 'stroke' ? 'Stroke play' : scoring === 'matchplay' ? 'Matchplay' : titleToken(scoring);
-            return roundMeta([titleToken(play), scoringLabel]);
-        }
-        function liveEventMeta(ev) {
-            return roundMeta([shortDate(ev && ev.date), ev && (ev.course_name || ev.courseName), ev && (ev.layout_name || ev.layoutName), liveRoundFormatLabel(ev)]);
-        }
         async function loadRecentCasualRounds(token) {
             const checks = recentCasualRounds().map(async (row) => {
                 try {
@@ -1366,60 +1344,36 @@
             const token = regToken();
             if (!token) { wrap.style.display = 'none'; return; }
             const card = elNode('div', 'club-board');
-            card.appendChild(elNode('h3', 'my-dashboard-title', 'Live Now & Scorecards'));
+            card.appendChild(elNode('h3', 'my-dashboard-title', 'Live Scoring'));
+            const list = elNode('div', 'live-round-list');
             const mkRow = (item) => {
-                const row = elNode('div', 'live-round-card' + (item.kind === 'live' ? ' live-now' : ''));
+                const row = elNode('div', 'live-round-card');
                 const body = elNode('div');
-                const badge = item.kind === 'live' ? 'Live now' : item.kind === 'event' ? 'My club event' : 'Casual round';
-                body.appendChild(elNode('span', 'live-round-badge' + (item.kind === 'live' ? ' live-now' : ''), badge));
+                body.appendChild(elNode('span', 'live-round-badge', item.kind === 'event' ? 'Club event' : 'Casual round'));
                 body.appendChild(elNode('div', 'live-round-title', item.title));
                 if (item.meta) body.appendChild(elNode('div', 'live-round-meta', item.meta));
-                const a = elNode('a', 'passkey-btn', item.action || 'Rejoin scorecard');
+                const a = elNode('a', 'passkey-btn', 'Rejoin scorecard');
                 a.href = item.href;
                 row.appendChild(body);
                 row.appendChild(a);
-                return row;
+                list.appendChild(row);
             };
-            let liveEvents = [];
-            try {
-                const r = await api('/events?status=live');
-                if (r.ok) liveEvents = ((await r.json()).events) || [];
-            } catch (_e) {}
             let rounds = [];
             try {
                 const r = await api('/my-live-rounds', { token });
                 if (r.ok) rounds = ((await r.json()).rounds) || [];
             } catch (_e) {}
-            const publicRows = liveEvents.map((ev) => ({
-                kind: 'live',
-                title: ev.name || 'Live club event',
-                meta: liveEventMeta(ev),
-                href: 'events.html#event/' + encodeURIComponent(ev.id),
-                action: 'View event',
-                sort: Date.parse(ev.date || '') || 0
-            }));
             const eventRows = rounds.map((ev) => ({
                 kind: 'event',
                 title: ev.name || 'Live club event',
-                meta: roundMeta([shortDate(ev.date), ev.course_name, ev.layout_name, ev.division, liveRoundFormatLabel(ev)]),
+                meta: roundMeta([shortDate(ev.date), ev.course_name, ev.layout_name, ev.division]),
                 href: 'score.html?event=' + encodeURIComponent(ev.id),
                 sort: Date.parse(ev.date || '') || 0
             }));
             const casualRows = await loadRecentCasualRounds(token);
-            if (publicRows.length) {
-                card.appendChild(elNode('h4', 'dash-subtitle', 'Live Now'));
-                const liveList = elNode('div', 'live-round-list');
-                publicRows.sort((a, b) => (b.sort || 0) - (a.sort || 0)).forEach((item) => liveList.appendChild(mkRow(item)));
-                card.appendChild(liveList);
-            }
-            const personalRows = [...eventRows, ...casualRows].sort((a, b) => (b.sort || 0) - (a.sort || 0));
-            if (personalRows.length) {
-                card.appendChild(elNode('h4', 'dash-subtitle', 'My Active Scorecards'));
-                const personalList = elNode('div', 'live-round-list');
-                personalRows.forEach((item) => personalList.appendChild(mkRow(item)));
-                card.appendChild(personalList);
-            }
-            if (!publicRows.length && !personalRows.length) card.appendChild(elNode('p', 'dash-note', 'No live events or active scorecards right now.'));
+            [...eventRows, ...casualRows].sort((a, b) => (b.sort || 0) - (a.sort || 0)).forEach(mkRow);
+            if (!list.children.length) list.appendChild(elNode('p', 'dash-note', 'No active scorecards right now.'));
+            card.appendChild(list);
             const actions = elNode('div', 'live-round-actions');
             const start = elNode('a', 'passkey-btn', 'Start / join a casual round'); start.href = 'score.html';
             actions.appendChild(start);

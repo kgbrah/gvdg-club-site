@@ -12,8 +12,6 @@ const LIVE_ROWS = [
     type: "league_round",
     date: "2026-07-07",
     status: "live",
-    format: "matchplay",
-    play_format: "doubles",
     course_name: "West Meadowbrook",
     layout_name: "Longs",
     division: "MA1",
@@ -79,6 +77,6 @@ describe("member live rounds", () => {
     const res = await get("/my-live-rounds", token);
     expect(res.status).toBe(200);
     const rounds = arrayField(await jsonObject(res), "rounds");
-    expect(rounds[0]).toMatchObject({ id: 7, name: "Tuesday League", status: "live", format: "matchplay", play_format: "doubles", layout_name: "Longs" });
+    expect(rounds[0]).toMatchObject({ id: 7, name: "Tuesday League", status: "live", layout_name: "Longs" });
   });
 });

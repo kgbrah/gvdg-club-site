@@ -13,15 +13,9 @@ const MEMBERS = {
 export type DbState = {
   layoutBinds?: unknown[];
   eventBinds?: unknown[];
-  eventConfigBinds?: unknown[];
-  eventConfigUpdateBinds?: unknown[];
   updateEventBinds?: unknown[];
   registrationUpdateBinds?: unknown[];
   playerBinds?: unknown[];
-  eventRow?: Record<string, unknown> | null;
-  publicEventRow?: Record<string, unknown> | null;
-  publicEvents?: Record<string, unknown>[];
-  eventConfigRow?: Record<string, unknown> | null;
   acePotBinds?: unknown[];
   removedPlayer?: number;
   deleteEventId?: number;
@@ -71,21 +65,6 @@ class AdminEventStatement implements D1PreparedStatement {
   }
 
   async all<T = Record<string, unknown>>(): Promise<D1Result<T>> {
-    if (/SELECT e\.\*, cfg\.play_format/i.test(this.sql)) {
-      return d1Result<T>((this.state.publicEvents ?? [
-        {
-          id: 9,
-          name: "Summer Flex",
-          date: "2026-07-12",
-          type: "tournament",
-          status: "live",
-          format: "matchplay",
-          play_format: "doubles",
-          course_name: "West Meadowbrook",
-          layout_name: "Gold",
-        },
-      ]) as T[]);
-    }
     if (/FROM events e JOIN event_config c/i.test(this.sql)) {
       return d1Result<T>([
         {
@@ -138,13 +117,6 @@ class AdminEventStatement implements D1PreparedStatement {
     if (/SELECT COUNT\(\*\) AS n FROM ctps WHERE event_id = \?/i.test(this.sql)) return { n: this.state.eventDeleteBlockers?.ctps ?? 0 };
     if (/SELECT COUNT\(\*\) AS n FROM wallet_transactions WHERE event_id = \?/i.test(this.sql)) return { n: this.state.eventDeleteBlockers?.wallet_transactions ?? 0 };
     if (/SELECT COUNT\(\*\) AS n FROM ace_pots WHERE event_id = \?/i.test(this.sql)) return { n: this.state.eventDeleteBlockers?.ace_pots ?? 0 };
-    if (/SELECT \* FROM events WHERE id = \?/i.test(this.sql)) return this.state.eventRow === undefined ? null : this.state.eventRow;
-    if (/SELECT e\.\*, cfg\.play_format/i.test(this.sql)) {
-      return this.state.publicEventRow === undefined
-        ? { id: this.binds[0], name: "Summer Flex", status: "live", format: "matchplay", play_format: "doubles", course_name: "West Meadowbrook", layout_name: "Gold" }
-        : this.state.publicEventRow;
-    }
-    if (/SELECT \* FROM event_config WHERE event_id = \?/i.test(this.sql)) return this.state.eventConfigRow === undefined ? null : this.state.eventConfigRow;
     if (/INSERT INTO course_layouts/i.test(this.sql)) {
       this.state.layoutBinds = this.binds;
       return { id: 44, course_id: this.binds[0], name: this.binds[1], holes: this.binds[2], total_par: this.binds[3] };
@@ -152,14 +124,6 @@ class AdminEventStatement implements D1PreparedStatement {
     if (/INSERT INTO events/i.test(this.sql)) {
       this.state.eventBinds = this.binds;
       return { id: 12, type: this.binds[0], name: this.binds[1], course_id: this.binds[5], layout_id: this.binds[6], created_by: this.binds[11] };
-    }
-    if (/UPDATE event_config SET play_format = \?/i.test(this.sql)) {
-      this.state.eventConfigUpdateBinds = this.binds;
-      return null;
-    }
-    if (/INSERT INTO event_config/i.test(this.sql)) {
-      this.state.eventConfigBinds = this.binds;
-      return { event_id: this.binds[0], play_format: this.binds[1] ?? this.binds[6] };
     }
     if (/INSERT INTO event_players/i.test(this.sql)) {
       this.state.playerBinds = this.binds;

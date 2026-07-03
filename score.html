@@ -46,24 +46,20 @@
             padding: calc(0.7rem + var(--safe-top)) 0.9rem 0.7rem; background: var(--bg-secondary);
             border-bottom: 1px solid var(--border-color); box-shadow: 0 1px 8px var(--shadow);
         }
-        .topbar .logo { height: 30px; width: auto; flex: 0 0 auto; }
-        .topbar h1 { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; letter-spacing: 0.5px; font-weight: 400; flex: 1 1 auto; line-height: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .topbar h1 small { display: block; font-family: 'Archivo'; font-size: 0.62rem; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .topbar .logo { height: 30px; width: auto; }
+        .topbar h1 { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; letter-spacing: 0.5px; font-weight: 400; flex: 1; line-height: 1; min-width: 0; }
+        .topbar h1 small { display: block; font-family: 'Archivo'; font-size: 0.62rem; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
         .top-link {
             display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 0.65rem;
             border: 1px solid var(--border-color); border-radius: 11px; background: var(--bg-tertiary); color: var(--primary);
-            font-size: 0.78rem; font-weight: 700; text-decoration: none; flex: 0 0 auto;
+            font-size: 0.78rem; font-weight: 700; text-decoration: none;
         }
         .iconbtn {
             border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary);
-            width: 40px; height: 40px; border-radius: 11px; font-size: 1.1rem; cursor: pointer; display: grid; place-items: center; flex: 0 0 auto;
+            width: 40px; height: 40px; border-radius: 11px; font-size: 1.1rem; cursor: pointer; display: grid; place-items: center;
         }
         .iconbtn[hidden] { display: none; }
         .iconbtn:active { transform: scale(0.94); }
-        @media (max-width: 480px) {
-            .topbar { gap: 0.45rem; padding-left: 0.7rem; padding-right: 0.7rem; }
-            .topbar .logo { width: 34px; object-fit: cover; object-position: left center; }
-        }
         main { flex: 1; padding: 1rem 0.9rem calc(1.2rem + var(--safe-bottom)); }
         /* ---- generic ---- */
         .card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 16px; box-shadow: 0 2px 10px var(--shadow); padding: 1rem; margin-bottom: 0.85rem; }
@@ -81,15 +77,12 @@
         .btn.ghost { background: transparent; color: var(--primary); border: 1.5px solid var(--primary); }
         .btn:disabled { opacity: 0.5; cursor: default; }
         .btn.small { min-height: 40px; width: auto; font-size: 0.85rem; padding: 0 0.85rem; border-radius: 10px; }
-        input.field, select.field {
+        input.field {
             width: 100%; min-height: 50px; padding: 0 0.9rem; border: 1.5px solid var(--border-color);
             border-radius: 12px; background: var(--bg-primary); color: var(--text-primary); font-size: 1rem; font-family: 'Archivo';
         }
-        input.field:focus, select.field:focus { outline: none; border-color: var(--primary); }
+        input.field:focus { outline: none; border-color: var(--primary); }
         label.lbl { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); display: block; margin: 0 0 0.3rem 0.2rem; }
-        .field-error { color: var(--over); font-size: 0.82rem; font-weight: 700; margin: 0.15rem 0 0; }
-        .sheet-actions { display: flex; gap: 0.6rem; margin-top: 1rem; }
-        .sheet-actions .btn { flex: 1; }
         .pill { display: inline-block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 0.2rem 0.5rem; border-radius: 999px; background: var(--bg-tertiary); color: var(--text-secondary); }
         .pill.live { background: var(--primary); color: #fff; }
         .weather-strip { background: var(--bg-secondary); border: 1px solid var(--border-color); border-left: 4px solid var(--secondary); border-radius: 14px; box-shadow: 0 2px 10px var(--shadow); padding: 0.75rem 0.85rem; margin-bottom: 0.85rem; }
@@ -215,7 +208,7 @@
         const GUEST_TOKEN = MODE === 'event' ? (params.get('gt') || guestTokenStored()) : null;
 
         const app = document.getElementById('app');
-        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, format: null, playFormat: null, teamRequired: false, lastRev: -1, udiscCourseId: null, weather: null };
+        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, weather: null };
         const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
         const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
 
@@ -236,32 +229,6 @@
         }
         function relClass(d) { return d < 0 ? 'under' : d > 0 ? 'over' : 'even'; }
         function relText(d) { return d === 0 ? 'E' : d > 0 ? '+' + d : String(d); }
-        function scoringFormatValue(format) {
-            if (format === 'matchplay') return 'matchplay';
-            if (format === 'stroke' || format === 'singles' || format === 'doubles' || format === 'teams') return 'stroke';
-            return null;
-        }
-        function playFormatValue(playFormat, format) {
-            const value = playFormat || format;
-            if (value === 'doubles' || value === 'teams') return value;
-            if (value === 'singles' || value === 'stroke' || value === 'matchplay') return 'singles';
-            return null;
-        }
-        function playFormatRequiresTeam(playFormat) { return playFormat === 'doubles' || playFormat === 'teams'; }
-        function teamNameRequired() { return S.teamRequired === true || playFormatRequiresTeam(S.playFormat); }
-        function isTeamRound() { return teamNameRequired(); }
-        function applyRoundMeta(data) {
-            if (!data) return;
-            const scoringFormat = typeof data.format === 'string' ? scoringFormatValue(data.format) : null;
-            if (scoringFormat) S.format = scoringFormat;
-            const formatText = typeof data.format === 'string' ? data.format : null;
-            const legacyPlayFormat = formatText === 'singles' || formatText === 'doubles' || formatText === 'teams' ? formatText : null;
-            const playFormat = typeof data.playFormat === 'string' ? playFormatValue(data.playFormat, null) : (legacyPlayFormat ? playFormatValue(null, legacyPlayFormat) : null);
-            if (playFormat) S.playFormat = playFormat;
-            if (!S.format) S.format = 'stroke';
-            if (!S.playFormat) S.playFormat = 'singles';
-            S.teamRequired = data.teamRequired === true || playFormatRequiresTeam(S.playFormat);
-        }
         function toast(msg) {
             const t = el('div', 'toast', msg); document.body.appendChild(t);
             setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; }, 1800);
@@ -410,55 +377,6 @@
         function roundWeatherNode() {
             return window.GVDGWeather ? window.GVDGWeather.buildWeatherStrip(document, S.weather, { title: 'Round weather' }) : null;
         }
-        function uniqueStrings(values) {
-            const out = [];
-            values.forEach(function (value) {
-                const text = String(value || '').trim();
-                if (text && out.indexOf(text) < 0) out.push(text);
-            });
-            return out;
-        }
-        function scoreUnits() {
-            if (!isTeamRound()) {
-                return S.cardmates.map(function (p) {
-                    return { type: 'player', key: 'player:' + p.index, label: p.name, players: [p], isMe: !!p.isMe, meta: [p.team, p.division].filter(Boolean) };
-                });
-            }
-            const byTeam = new Map();
-            S.cardmates.forEach(function (p) {
-                const label = String(p.team || p.name || 'Team').trim();
-                const key = label.toLowerCase() || ('player:' + p.index);
-                if (!byTeam.has(key)) byTeam.set(key, { type: 'team', key: key, label: label, players: [], isMe: false, meta: [] });
-                const unit = byTeam.get(key);
-                unit.players.push(p);
-                if (p.isMe) unit.isMe = true;
-            });
-            return Array.from(byTeam.values()).map(function (unit) {
-                const names = unit.players.map(function (p) { return p.name; }).join(' / ');
-                const divisions = uniqueStrings(unit.players.map(function (p) { return p.division; }));
-                unit.meta = [names].concat(divisions);
-                return unit;
-            });
-        }
-        function unitStrokes(unit, hole) {
-            const values = uniqueStrings(unit.players.map(function (p) {
-                const strokes = strokesFor(p.index, hole);
-                return typeof strokes === 'number' ? String(strokes) : '';
-            })).map(Number);
-            return values.length === 1 ? values[0] : null;
-        }
-        function unitHasMixedScores(unit, hole) {
-            return uniqueStrings(unit.players.map(function (p) {
-                const strokes = strokesFor(p.index, hole);
-                return typeof strokes === 'number' ? String(strokes) : '';
-            })).length > 1;
-        }
-        function unitConflict(unit, hole) {
-            return unit.players.some(function (p) { return conflictFor(p.index, hole); });
-        }
-        async function postUnitScore(unit, hole, strokes) {
-            for (const p of unit.players) await postScore(p.index, hole, strokes);
-        }
 
         async function postScore(index, hole, strokes) {
             const scorerIndex = currentScorerIndex();
@@ -549,7 +467,7 @@
                 let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
                 // Two scorers on the same card disagreed on a hole — alert this card immediately to reconcile.
                 if (msg && msg.type === 'conflict') { if (msg.cardId === S.cardId) { upsertConflict(msg); conflictAlert(msg); renderHole(); } return; }
-                if (msg && msg.type === 'snapshot') { S.snap = msg; applyRoundMeta(msg); mergeFromSnap(); }
+                if (msg && msg.type === 'snapshot') { S.snap = msg; mergeFromSnap(); }
             });
             ws.addEventListener('close', function () { if (S.wsTimer) return; S.wsTimer = setTimeout(function () { S.wsTimer = null; connectWs(); }, 4000); });
             ws.addEventListener('error', function () { try { ws.close(); } catch (e) {} });
@@ -699,7 +617,7 @@
                 const strong = document.createElement('strong'); strong.textContent = ROUND_CODE; strong.style.letterSpacing = '1.5px'; left.appendChild(strong);
                 const actions = el('div'); actions.style.cssText = 'display:flex;gap:0.4rem;';
                 const share = el('button', 'btn small secondary', 'Share'); share.addEventListener('click', shareRound);
-                const add = el('button', 'btn small secondary', '+ Player'); add.addEventListener('click', openAddPlayerSheet);
+                const add = el('button', 'btn small secondary', '+ Player'); add.addEventListener('click', addGuestPrompt);
                 const manage = el('button', 'btn small secondary', 'Manage'); manage.addEventListener('click', openManagePlayers);
                 actions.appendChild(share); actions.appendChild(add); actions.appendChild(manage);
                 bar.appendChild(left); bar.appendChild(actions);
@@ -739,24 +657,22 @@
                 owner.appendChild(select);
                 box.appendChild(owner);
             }
-            const units = scoreUnits();
-            units.forEach((unit) => {
-                const conflict = unitConflict(unit, h.hole);
+            S.cardmates.forEach((p) => {
+                const conflict = conflictFor(p.index, h.hole);
                 const row = el('div', 'prow' + (conflict ? ' conflict' : ''));
                 const info = el('div', 'pinfo');
-                info.appendChild(el('div', 'pname', unit.label + (unit.isMe ? ' (you)' : '')));
-                unit.meta.forEach(function (text) { if (text) info.appendChild(el('div', 'pmeta', text)); });
-                if (unitHasMixedScores(unit, h.hole)) info.appendChild(el('div', 'pmeta conflict-text', '⚑ Team scores differ — set one team score'));
-                else if (conflict) info.appendChild(el('div', 'pmeta conflict-text', '⚑ Conflict — set yours to match'));
-                const cur = unitStrokes(unit, h.hole);
+                info.appendChild(el('div', 'pname', p.name + (p.isMe ? ' (you)' : '')));
+                if (p.division) info.appendChild(el('div', 'pmeta', p.division));
+                if (conflict) info.appendChild(el('div', 'pmeta conflict-text', '⚑ Conflict: ' + (conflict.values || []).join(' vs ') + ' — set yours to match'));
+                const cur = strokesFor(p.index, h.hole);
                 const step = el('div', 'stepper');
                 const minus = el('button', 'minus', '−');
                 const val = el('div', 'val');
                 const n = el('div', 'n', cur == null ? '–' : String(cur)); val.appendChild(n);
                 if (cur != null) { const d = cur - h.par; const rel = el('div', 'rel ' + relClass(d), relText(d)); val.appendChild(rel); }
                 const plus = el('button', 'plus', '+');
-                minus.addEventListener('click', function () { const base = cur == null ? h.par : cur; const nv = Math.max(1, base - 1); postUnitScore(unit, h.hole, nv); });
-                plus.addEventListener('click', function () { const base = cur == null ? h.par - 1 : cur; const nv = Math.min(30, base + 1); postUnitScore(unit, h.hole, nv); });
+                minus.addEventListener('click', function () { const base = cur == null ? h.par : cur; const nv = Math.max(1, base - 1); postScore(p.index, h.hole, nv); });
+                plus.addEventListener('click', function () { const base = cur == null ? h.par - 1 : cur; const nv = Math.min(30, base + 1); postScore(p.index, h.hole, nv); });
                 step.appendChild(minus); step.appendChild(val); step.appendChild(plus);
                 row.appendChild(info); row.appendChild(step);
                 box.appendChild(row);
@@ -764,13 +680,9 @@
 
             // my totals
             const me = S.cardmates.find((p) => p.isMe);
-            const myUnit = isTeamRound() ? units.find(function (unit) { return unit.isMe; }) : null;
-            if (me || myUnit) {
+            if (me) {
                 let thru = 0, total = 0, toPar = 0;
-                S.holes.forEach((hh) => {
-                    const s = myUnit ? unitStrokes(myUnit, hh.hole) : (me && me.scores ? me.scores[hh.hole] : undefined);
-                    if (typeof s === 'number') { thru++; total += s; toPar += s - hh.par; }
-                });
+                S.holes.forEach((hh) => { const s = me.scores ? me.scores[hh.hole] : undefined; if (typeof s === 'number') { thru++; total += s; toPar += s - hh.par; } });
                 const tot = el('div', 'totbar');
                 [['Thru', String(thru) + '/' + S.holes.length], ['Total', total ? String(total) : '–'], ['To par', thru ? relText(toPar) : 'E']].forEach((kv) => {
                     const d = el('div'); d.appendChild(el('div', 'k', kv[0])); d.appendChild(el('div', 'v', kv[1])); tot.appendChild(d);
@@ -783,8 +695,7 @@
             const grid = el('div', 'holegrid');
             S.holes.forEach((hh, i) => {
                 const b = el('button', i === S.holeIdx ? 'cur' : '', String(hh.hole));
-                const doneScore = myUnit ? unitStrokes(myUnit, hh.hole) : (me && me.scores ? me.scores[hh.hole] : undefined);
-                if (typeof doneScore === 'number') b.className += ' done';
+                if (me && me.scores && typeof me.scores[hh.hole] === 'number') b.className += ' done';
                 if (holeHasConflict(hh.hole)) b.className += ' conflict';
                 b.addEventListener('click', function () { S.holeIdx = i; renderHole(); });
                 grid.appendChild(b);
@@ -908,7 +819,6 @@
             S.holes = Array.isArray(d.holes) ? d.holes : [];
             S.cardId = d.cardId; S.myIndex = d.playerIndex; S.cardmates = d.cardmates;
             S.courseName = d.courseName || null; S.layoutName = d.layoutName || null; S.udiscCourseId = d.udiscCourseId || null;
-            applyRoundMeta(d);
             S.weather = d.weather || null;
             S.scorerIndex = d.playerIndex;
             if (MODE === 'round') rememberRecentRound({ code: ROUND_CODE, label: 'Casual round ' + ROUND_CODE });
@@ -975,130 +885,23 @@
                 const row = el('button', 'tap-row'); const g = el('div', 'grow');
                 g.appendChild(el('div', 'title', L.name || 'Layout')); g.appendChild(el('div', 'sub', L.total_par != null ? ('Par ' + L.total_par) : ''));
                 row.appendChild(g); row.appendChild(el('div', 'chev', '›'));
-                row.addEventListener('click', function () { renderRoundOptions(course, L); });
+                row.addEventListener('click', function () { createRound(course, L); });
                 c.appendChild(row);
             });
             shell(c);
         }
-        function casualPlayFormatRequiresTeam(playFormat) { return playFormat === 'doubles' || playFormat === 'teams'; }
-        function renderRoundOptions(course, layout) {
-            const c = el('div', 'stack');
-            const back = el('button', 'btn ghost small', '‹ Back'); back.addEventListener('click', function () { renderLayoutPick(course); }); c.appendChild(back);
-            c.appendChild(el('h2', 'section', 'Round options'));
-            const meta = el('p', 'muted', course.name + ' · ' + (layout.name || 'Layout'));
-            c.appendChild(meta);
-            c.appendChild(el('label', 'lbl', 'Play format'));
-            const playFormat = el('select', 'field');
-            [
-                ['singles', 'Singles'],
-                ['doubles', 'Doubles'],
-            ].forEach(function (pair) {
-                const o = document.createElement('option');
-                o.value = pair[0]; o.textContent = pair[1];
-                playFormat.appendChild(o);
-            });
-            c.appendChild(playFormat);
-            c.appendChild(el('label', 'lbl', 'Scoring'));
-            const scoring = el('select', 'field');
-            [
-                ['stroke', 'Stroke play'],
-                ['matchplay', 'Matchplay'],
-            ].forEach(function (pair) {
-                const o = document.createElement('option');
-                o.value = pair[0]; o.textContent = pair[1];
-                scoring.appendChild(o);
-            });
-            c.appendChild(scoring);
-            const teamWrap = el('div');
-            teamWrap.appendChild(el('label', 'lbl', 'Your team name'));
-            const team = el('input', 'field');
-            team.maxLength = 40;
-            team.autocomplete = 'organization';
-            teamWrap.appendChild(team);
-            c.appendChild(teamWrap);
-            const updateTeam = function () { teamWrap.style.display = casualPlayFormatRequiresTeam(playFormat.value) ? '' : 'none'; };
-            playFormat.addEventListener('change', updateTeam);
-            updateTeam();
-            const start = el('button', 'btn', 'Start round');
-            start.addEventListener('click', function () {
-                const fmt = scoring.value || 'stroke';
-                const play = playFormat.value || 'singles';
-                const teamName = team.value.trim();
-                if (casualPlayFormatRequiresTeam(play) && !teamName) { toast('Team name required'); team.focus(); return; }
-                createRound(course, layout, { format: fmt, playFormat: play, team: teamName });
-            });
-            c.appendChild(start);
-            shell(c);
-        }
-        async function createRound(course, layout, options) {
+        async function createRound(course, layout) {
             shell(spinner());
-            const body = { course_id: course.id, layout_id: layout.id };
-            if (options && options.format) body.format = options.format;
-            if (options && options.playFormat) body.playFormat = options.playFormat;
-            if (options && options.team) body.team = options.team;
-            const r = await api('/rounds', { method: 'POST', body: body });
+            const r = await api('/rounds', { method: 'POST', body: { course_id: course.id, layout_id: layout.id } });
             if (r.ok && r.data && r.data.code) { location.search = '?round=' + r.data.code; return; }
-            renderMessage('Could not start round', (r.data && r.data.error === 'no_layout_holes') ? 'That layout has no holes/pars yet.' : r.data && r.data.error === 'team_required' ? 'Team name required for that format.' : 'Please try again.', false);
+            renderMessage('Could not start round', (r.data && r.data.error === 'no_layout_holes') ? 'That layout has no holes/pars yet.' : 'Please try again.', false);
         }
-        function openAddPlayerSheet() {
-            const overlay = el('div', 'overlay'); overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
-            const sheet = el('div', 'sheet'); sheet.appendChild(el('div', 'grab'));
-            sheet.appendChild(el('h2', 'section', 'Add player'));
-            const form = el('form', 'stack');
-            form.appendChild(el('label', 'lbl', 'Player name'));
-            const nameInput = el('input', 'field');
-            nameInput.maxLength = 60;
-            nameInput.required = true;
-            nameInput.autocomplete = 'name';
-            form.appendChild(nameInput);
-            let teamInput = null;
-            if (teamNameRequired()) {
-                form.appendChild(el('label', 'lbl', 'Team name'));
-                teamInput = el('input', 'field');
-                teamInput.maxLength = 40;
-                teamInput.required = true;
-                teamInput.autocomplete = 'organization';
-                form.appendChild(teamInput);
-            }
-            const err = el('p', 'field-error', '');
-            err.hidden = true;
-            form.appendChild(err);
-            const actions = el('div', 'sheet-actions');
-            const cancel = el('button', 'btn secondary', 'Cancel');
-            cancel.type = 'button';
-            cancel.addEventListener('click', function () { overlay.remove(); });
-            const submit = el('button', 'btn', 'Add player');
-            submit.type = 'submit';
-            actions.appendChild(cancel); actions.appendChild(submit);
-            form.appendChild(actions);
-            form.addEventListener('submit', async function (e) {
-                e.preventDefault();
-                const name = nameInput.value.trim();
-                const team = teamInput ? teamInput.value.trim() : '';
-                if (!name) { err.textContent = 'Player name required'; err.hidden = false; nameInput.focus(); return; }
-                if (teamNameRequired() && !team) { err.textContent = 'Team name required'; err.hidden = false; if (teamInput) teamInput.focus(); return; }
-                const body = { name: name };
-                if (team) body.team = team;
-                submit.disabled = true;
-                try {
-                    const r = await api('/rounds/' + ROUND_CODE + '/guest', { method: 'POST', body: body });
-                    if (r.ok && r.data && Array.isArray(r.data.cardmates)) {
-                        S.cardmates = r.data.cardmates;
-                        currentScorerIndex();
-                        overlay.remove();
-                        renderHole();
-                        toast(name + ' added');
-                    } else {
-                        err.textContent = r.data && r.data.error === 'team_required' ? 'Team name required' : 'Could not add player';
-                        err.hidden = false;
-                    }
-                } finally {
-                    submit.disabled = false;
-                }
-            });
-            sheet.appendChild(form);
-            overlay.appendChild(sheet); document.body.appendChild(overlay);
-            setTimeout(function () { nameInput.focus(); }, 0);
+        async function addGuestPrompt() {
+            const name = (window.prompt('Add a player to your card (their name):') || '').trim();
+            if (!name) return;
+            const r = await api('/rounds/' + ROUND_CODE + '/guest', { method: 'POST', body: { name: name } });
+            if (r.ok && r.data && Array.isArray(r.data.cardmates)) { S.cardmates = r.data.cardmates; currentScorerIndex(); renderHole(); toast(name + ' added'); }
+            else toast('Could not add player');
         }
         // Manage players: remove someone who joined by accident, had to leave, or no-showed (casual round).
         function openManagePlayers() {

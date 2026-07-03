@@ -9,14 +9,6 @@ type DbState = {
   eventStatus?: string | null;
   scorecardCancelled?: boolean;
   eventStatusUpdated?: boolean;
-  eventRow?: Record<string, unknown> | null;
-  configRow?: Record<string, unknown> | null;
-  layoutRow?: Record<string, unknown> | null;
-  courseRow?: Record<string, unknown> | null;
-  registrations?: Record<string, unknown>[];
-  startedBody?: Record<string, unknown>;
-  liveSnapshot?: Record<string, unknown>;
-  liveMine?: Record<string, unknown>;
 };
 
 const SECRET = "x".repeat(40);
@@ -46,21 +38,13 @@ function db(state: DbState): D1Like {
           binds = values;
           return this;
         },
-        all: async <T = Record<string, unknown>>() => {
-          if (/SELECT \* FROM registrations WHERE event_id = \? ORDER BY division, name/i.test(sql)) {
-            return { results: (state.registrations ?? []) as T[], success: true };
-          }
-          return { results: emptyRows<T>(), success: true };
-        },
+        all: async <T = Record<string, unknown>>() => ({ results: emptyRows<T>(), success: true }),
         first: async <T = Record<string, unknown>>() => {
           let row: Record<string, unknown> | null = null;
           if (/SELECT status FROM events WHERE id = \?/i.test(sql)) {
             row = state.eventStatus == null ? null : { status: state.eventStatus };
           }
-          else if (/SELECT \* FROM events WHERE id = \?/i.test(sql)) row = state.eventRow === undefined ? null : state.eventRow;
-          else if (/SELECT \* FROM event_config WHERE event_id = \?/i.test(sql)) row = state.configRow === undefined ? null : state.configRow;
-          else if (/SELECT \* FROM course_layouts WHERE id = \?/i.test(sql)) row = state.layoutRow === undefined ? null : state.layoutRow;
-          else if (/SELECT \* FROM courses WHERE id = \?/i.test(sql)) row = state.courseRow === undefined ? null : state.courseRow;
+          else if (/SELECT \* FROM events WHERE id = \?/i.test(sql)) row = null;
           if (/SELECT \* FROM courses WHERE lower\(name\) = lower\(\?\)/i.test(sql)) {
             expect(binds).toEqual(["West Meadowbrook Park"]);
             row = { id: 2, name: "West Meadowbrook Park", location: "Greenville, NC", lat: 35.6264, lng: -77.375 };
@@ -83,7 +67,7 @@ function db(state: DbState): D1Like {
 }
 
 function env(state: DbState): ClubLiveEnv {
-  const snapshot = state.liveSnapshot ?? {
+  const snapshot = {
     status: "live",
     eventId: 2,
     courseName: "West Meadowbrook Park",
@@ -96,14 +80,9 @@ function env(state: DbState): ClubLiveEnv {
     fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/snapshot")) return new Response(JSON.stringify(snapshot));
-      if (url.endsWith("/mine")) return new Response(JSON.stringify(state.liveMine ?? { ...snapshot, cardId: "h1", playerIndex: 0, cardmates: [] }));
       if (url.endsWith("/weather")) {
         state.weatherLocation = JSON.parse(String(init?.body ?? "{}")).weatherLocation;
         return new Response(JSON.stringify({ ...snapshot, weather: { location: state.weatherLocation, current: null, history: [], error: null } }));
-      }
-      if (url.endsWith("/start")) {
-        state.startedBody = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
-        return new Response(JSON.stringify({ status: "live", players: [] }));
       }
       if (url.endsWith("/cancel")) {
         state.scorecardCancelled = true;
@@ -138,118 +117,6 @@ describe("club live weather backfill", () => {
     const body = (await res?.json()) as { weather?: { location?: unknown } };
     expect(state.weatherLocation).toEqual({ lat: 35.6264, lng: -77.375, label: "West Meadowbrook Park - Greenville, NC" });
     expect(body.weather?.location).toEqual(state.weatherLocation);
-  });
-
-  it("enriches existing live event snapshots with D1 play format metadata", async () => {
-    const state: DbState = {
-      eventRow: { id: 2, format: "matchplay", course_id: 2, layout_id: 1 },
-      configRow: { play_format: "doubles" },
-      liveSnapshot: { status: "live", eventId: 2, weather: { current: null }, format: "matchplay", teamRequired: false, holes: [], players: [], standings: [] },
-    };
-    const res = await handleClubLive(new Request("https://w/events/2/live"), env(state), null, "GET", ["events", "2", "live"]);
-
-    expect(res?.status).toBe(200);
-    await expect(res?.json()).resolves.toMatchObject({ format: "matchplay", playFormat: "doubles", teamRequired: true });
-  });
-
-  it("enriches existing player cards with D1 play format metadata", async () => {
-    const state: DbState = {
-      eventRow: { id: 2, format: "matchplay", course_id: 2, layout_id: 1 },
-      configRow: { play_format: "doubles" },
-      liveMine: { status: "live", eventId: 2, weather: { current: null }, format: "matchplay", teamRequired: false, cardId: "h1", playerIndex: 0, cardmates: [] },
-    };
-    const res = await handleClubLive(
-      new Request("https://w/events/2/live/mine", { headers: await adminHeader() }),
-      env(state),
-      null,
-      "GET",
-      ["events", "2", "live", "mine"],
-    );
-
-    expect(res?.status).toBe(200);
-    await expect(res?.json()).resolves.toMatchObject({ format: "matchplay", playFormat: "doubles", teamRequired: true });
-  });
-});
-
-describe("club live scorecard start", () => {
-  it("forwards event format, team requirement, and registration teams to the live round", async () => {
-    const state: DbState = {
-      eventRow: { id: 2, format: "matchplay", course_id: 2, layout_id: 1 },
-      configRow: { play_format: "doubles" },
-      layoutRow: { id: 1, course_id: 2, name: "Yard Gnome Layout", holes: JSON.stringify([{ hole: 1, par: 3 }]) },
-      courseRow: { id: 2, name: "West Meadowbrook Park", location: "Greenville, NC", lat: 35.6264, lng: -77.375 },
-      registrations: [
-        { member_id: "m_jane", name: "Jane", division: "MA1", starting_hole: null, team: "Team Fox" },
-        { member_id: "m_sam", name: "Sam", division: "MA1", starting_hole: null, team: "Team Owl" },
-      ],
-    };
-    const res = await handleClubLive(
-      new Request("https://w/events/2/live/start", { method: "POST", headers: await adminHeader(), body: JSON.stringify({}) }),
-      env(state),
-      null,
-      "POST",
-      ["events", "2", "live", "start"],
-    );
-
-    if (!res) throw new Error("missing_response");
-    expect(res.status).toBe(200);
-    expect(state.startedBody).toMatchObject({
-      eventId: 2,
-      format: "matchplay",
-      playFormat: "doubles",
-      teamRequired: true,
-      players: [
-        { memberId: "m_jane", name: "Jane", division: "MA1", startingHole: null, team: "Team Fox" },
-        { memberId: "m_sam", name: "Sam", division: "MA1", startingHole: null, team: "Team Owl" },
-      ],
-    });
-  });
-
-  it("rejects team-required starts when a registered player is missing a team", async () => {
-    const state: DbState = {
-      eventRow: { id: 2, format: "matchplay", course_id: 2, layout_id: 1 },
-      configRow: { play_format: "doubles" },
-      layoutRow: { id: 1, course_id: 2, name: "Yard Gnome Layout", holes: JSON.stringify([{ hole: 1, par: 3 }]) },
-      courseRow: { id: 2, name: "West Meadowbrook Park", location: "Greenville, NC", lat: 35.6264, lng: -77.375 },
-      registrations: [{ member_id: "m_tj", name: "TJ Braley", division: "Ryder Cup", starting_hole: null, team: null }],
-    };
-    const res = await handleClubLive(
-      new Request("https://w/events/2/live/start", { method: "POST", headers: await adminHeader(), body: JSON.stringify({}) }),
-      env(state),
-      null,
-      "POST",
-      ["events", "2", "live", "start"],
-    );
-
-    if (!res) throw new Error("missing_response");
-    expect(res.status).toBe(400);
-    await expect(res.json()).resolves.toMatchObject({ error: "team_required", player: "TJ Braley" });
-    expect(state.startedBody).toBeUndefined();
-  });
-
-  it("rejects team-required starts without at least two teams", async () => {
-    const state: DbState = {
-      eventRow: { id: 2, format: "matchplay", course_id: 2, layout_id: 1 },
-      configRow: { play_format: "doubles" },
-      layoutRow: { id: 1, course_id: 2, name: "Yard Gnome Layout", holes: JSON.stringify([{ hole: 1, par: 3 }]) },
-      courseRow: { id: 2, name: "West Meadowbrook Park", location: "Greenville, NC", lat: 35.6264, lng: -77.375 },
-      registrations: [
-        { member_id: "m_a", name: "A", division: "Ryder Cup", starting_hole: null, team: "Team Fox" },
-        { member_id: "m_b", name: "B", division: "Ryder Cup", starting_hole: null, team: "Team Fox" },
-      ],
-    };
-    const res = await handleClubLive(
-      new Request("https://w/events/2/live/start", { method: "POST", headers: await adminHeader(), body: JSON.stringify({}) }),
-      env(state),
-      null,
-      "POST",
-      ["events", "2", "live", "start"],
-    );
-
-    if (!res) throw new Error("missing_response");
-    expect(res.status).toBe(400);
-    await expect(res.json()).resolves.toMatchObject({ error: "not_enough_teams" });
-    expect(state.startedBody).toBeUndefined();
   });
 });
 

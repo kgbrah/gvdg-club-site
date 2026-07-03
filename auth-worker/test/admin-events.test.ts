@@ -24,20 +24,6 @@ describe("admin event management", () => {
     expect(holes.every((h) => h.par === 3)).toBe(true);
   });
 
-  it("creates a doubles matchplay event with separate play and scoring formats", async () => {
-    const state: DbState = {};
-    const res = await call("/admin/events", "POST", {
-      type: "league_round",
-      name: "Friday Doubles",
-      format: "matchplay",
-      play_format: "doubles",
-    }, await token("m_admin"), state);
-
-    expect(res.status).toBe(201);
-    expect(state.eventBinds?.[3]).toBe("matchplay");
-    expect(state.eventConfigBinds).toEqual([12, "doubles"]);
-  });
-
   it("lets admins add and remove manual event players", async () => {
     const state: DbState = {};
     const jwt = await token("m_admin");
@@ -54,48 +40,11 @@ describe("admin event management", () => {
     expect(state.removedPlayer).toBe(88);
   });
 
-  it("requires a team when admins add manual players to a team-format event", async () => {
-    const state: DbState = {
-      eventRow: { id: 9, format: "matchplay" },
-      eventConfigRow: { play_format: "doubles" },
-    };
-    const res = await call("/admin/events/9/players", "POST", { name: "Walk On" }, await token("m_admin"), state);
-
-    expect(res.status).toBe(400);
-    await expect(res.json()).resolves.toMatchObject({ error: "team_required" });
-    expect(state.playerBinds).toBeUndefined();
-  });
-
-  it("does not require a team when admins add manual players to matchplay singles", async () => {
-    const state: DbState = {
-      eventRow: { id: 9, format: "matchplay" },
-      eventConfigRow: { play_format: "singles" },
-    };
-    const res = await call("/admin/events/9/players", "POST", { name: "Walk On" }, await token("m_admin"), state);
-
-    expect(res.status).toBe(201);
-    expect(state.playerBinds).toEqual([9, null, "Walk On", null, null, null]);
-  });
-
   it("includes course and layout details for open registration events", async () => {
     const res = await call("/registration/open", "GET");
     expect(res.status).toBe(200);
     const body = (await res.json()) as { events: { course_name?: string; layout_name?: string; total_par?: number }[] };
     expect(body.events[0]).toMatchObject({ course_name: "West Meadowbrook", layout_name: "Gold", total_par: 54 });
-  });
-
-  it("includes play format and course details on public event lists", async () => {
-    const res = await call("/events?status=live", "GET");
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { events: { play_format?: string; course_name?: string; layout_name?: string }[] };
-    expect(body.events[0]).toMatchObject({ play_format: "doubles", course_name: "West Meadowbrook", layout_name: "Gold" });
-  });
-
-  it("includes play format and course details on public event detail", async () => {
-    const res = await call("/events/9", "GET");
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { event: { play_format?: string; course_name?: string; layout_name?: string; players?: unknown[] } };
-    expect(body.event).toMatchObject({ play_format: "doubles", course_name: "West Meadowbrook", layout_name: "Gold", players: [] });
   });
 
   it("scopes admin registration updates to the selected event", async () => {
@@ -104,14 +53,6 @@ describe("admin event management", () => {
 
     expect(res.status).toBe(200);
     expect(state.registrationUpdateBinds).toEqual([7, 1, 44, 9]);
-  });
-
-  it("lets admins edit a registered player's team name", async () => {
-    const state: DbState = {};
-    const res = await call("/admin/events/9/registrations/44", "PATCH", { team: "Team Fox" }, await token("m_admin"), state);
-
-    expect(res.status).toBe(200);
-    expect(state.registrationUpdateBinds).toEqual(["Team Fox", 44, 9]);
   });
 
   it("clears nullable admin registration fields when explicitly sent as null", async () => {

@@ -12,11 +12,8 @@ import {
   normalizeEvent,
   bucketEvents,
   groupPlayersByDivision,
-  isTeamRound,
-  liveStandingsForDisplay,
   parseEventDate,
   formatEventDate,
-  roundFormatLabel,
   typeLabel,
   statusLabel,
   buildCourseIndex,
@@ -44,14 +41,6 @@ test('normalizeEvent is null-safe', () => {
 test('normalizeEvent passes through the selected layout_id as a string (T4 tee-sign render)', () => {
   assert.equal(normalizeEvent({ id: 1, layout_id: 99 }).layout_id, '99');
   assert.equal(normalizeEvent({ id: 1 }).layout_id, '');
-});
-
-test('normalizeEvent preserves live round play-format metadata', () => {
-  const ev = normalizeEvent({ id: 1, format: 'matchplay', play_format: 'doubles', teamRequired: true });
-  assert.equal(ev.format, 'matchplay');
-  assert.equal(ev.play_format, 'doubles');
-  assert.equal(ev.playFormat, 'doubles');
-  assert.equal(ev.teamRequired, true);
 });
 
 test('normalizeEvent preserves an unknown status verbatim', () => {
@@ -90,12 +79,6 @@ test('formatEventDate never throws and labels missing dates', () => {
   assert.ok(out.length > 0);
   // Date-only renders without a time component.
   assert.ok(!/\d:\d\d/.test(out), `expected no time in "${out}"`);
-});
-
-test('roundFormatLabel separates play format from scoring format', () => {
-  assert.equal(roundFormatLabel({ format: 'matchplay', playFormat: 'doubles' }), 'Doubles · Matchplay');
-  assert.equal(roundFormatLabel({ format: 'stroke', play_format: 'singles' }), 'Singles · Stroke play');
-  assert.equal(roundFormatLabel({ format: 'doubles' }), 'Doubles · Stroke play');
 });
 
 // --- bucketEvents -------------------------------------------------------------
@@ -141,37 +124,6 @@ test('groupPlayersByDivision preserves first-seen order; null division -> Open',
 test('groupPlayersByDivision is array-safe', () => {
   assert.deepEqual(groupPlayersByDivision(undefined), []);
   assert.deepEqual(groupPlayersByDivision([]), []);
-});
-
-// --- live display helpers -----------------------------------------------------
-test('liveStandingsForDisplay rolls a doubles card up to team rows', () => {
-  const snap = {
-    format: 'matchplay',
-    playFormat: 'doubles',
-    teamRequired: true,
-    holes: [{ hole: 1, par: 3 }, { hole: 2, par: 4 }],
-    players: [
-      { name: 'TJ Braley', team: 'Blue', division: 'MPO', scores: { 1: 3, 2: 4 } },
-      { name: 'Jane Doe', team: 'Blue', division: 'MPO', scores: { 1: 3, 2: 4 } },
-      { name: 'Sam Smith', team: 'Red', division: 'MPO', scores: { 1: 4, 2: 5 } },
-      { name: 'Riley Jones', team: 'Red', division: 'MPO', scores: { 1: 4, 2: 5 } },
-    ],
-  };
-
-  assert.equal(isTeamRound(snap), true);
-  assert.deepEqual(
-    liveStandingsForDisplay(snap).map((row) => ({
-      name: row.name,
-      playersText: row.playersText,
-      thru: row.thru,
-      total: row.total,
-      toPar: row.toPar,
-    })),
-    [
-      { name: 'Blue', playersText: 'TJ Braley / Jane Doe', thru: 2, total: 7, toPar: 0 },
-      { name: 'Red', playersText: 'Sam Smith / Riley Jones', thru: 2, total: 9, toPar: 2 },
-    ],
-  );
 });
 
 // --- course index -------------------------------------------------------------
