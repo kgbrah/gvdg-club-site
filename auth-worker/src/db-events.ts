@@ -3,6 +3,7 @@ import type { D1Like } from "./db-types.js";
 export type EventPatch = {
   type?: string | null; name?: string | null; status?: string | null; format?: string | null; date?: string | null;
   course_id?: number | null; layout_id?: number | null; league_id?: number | null; notes?: string | null;
+  starts_at?: string | null; registration_deadline?: string | null; checkin_deadline?: string | null;
 };
 
 export interface EventInput {
@@ -18,6 +19,9 @@ export interface EventInput {
   external_url?: string | null;
   notes?: string | null;
   created_by?: string | null;
+  starts_at?: string | null;
+  registration_deadline?: string | null;
+  checkin_deadline?: string | null;
 }
 
 export async function listEvents(
@@ -50,13 +54,14 @@ export async function getEvent(db: D1Like, id: number) {
 export async function createEvent(db: D1Like, e: EventInput) {
   return db
     .prepare(
-      `INSERT INTO events (type, name, status, format, date, course_id, layout_id, league_id, source, external_url, notes, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
+      `INSERT INTO events (type, name, status, format, date, course_id, layout_id, league_id, source, external_url, notes, created_by, starts_at, registration_deadline, checkin_deadline)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
     )
     .bind(
       e.type, e.name, e.status ?? "scheduled", e.format ?? null, e.date ?? null,
       e.course_id ?? null, e.layout_id ?? null, e.league_id ?? null,
       e.source ?? "manual", e.external_url ?? null, e.notes ?? null, e.created_by ?? null,
+      e.starts_at ?? null, e.registration_deadline ?? null, e.checkin_deadline ?? null,
     )
     .first();
 }
@@ -73,6 +78,9 @@ export async function updateEvent(db: D1Like, id: number, e: EventPatch) {
         layout_id=CASE WHEN ? THEN ? ELSE layout_id END,
         league_id=CASE WHEN ? THEN ? ELSE league_id END,
         notes=CASE WHEN ? THEN ? ELSE notes END,
+        starts_at=CASE WHEN ? THEN ? ELSE starts_at END,
+        registration_deadline=CASE WHEN ? THEN ? ELSE registration_deadline END,
+        checkin_deadline=CASE WHEN ? THEN ? ELSE checkin_deadline END,
         updated_at=datetime('now') WHERE id=? RETURNING *`,
     )
     .bind(
@@ -85,6 +93,9 @@ export async function updateEvent(db: D1Like, id: number, e: EventPatch) {
       e.layout_id !== undefined ? 1 : 0, e.layout_id ?? null,
       e.league_id !== undefined ? 1 : 0, e.league_id ?? null,
       e.notes !== undefined ? 1 : 0, e.notes ?? null,
+      e.starts_at !== undefined ? 1 : 0, e.starts_at ?? null,
+      e.registration_deadline !== undefined ? 1 : 0, e.registration_deadline ?? null,
+      e.checkin_deadline !== undefined ? 1 : 0, e.checkin_deadline ?? null,
       id,
     )
     .first();
@@ -156,6 +167,11 @@ export async function listOpenRegistrationEvents(db: D1Like) {
 export async function getEventStatus(db: D1Like, id: number): Promise<string | null> {
   const r = (await db.prepare("SELECT status FROM events WHERE id = ?").bind(id).first()) as { status?: string } | null;
   return r?.status ?? null;
+}
+
+// Lightweight schedule/cutoff fetch for the registration + check-in gates.
+export async function getEventSchedule(db: D1Like, id: number) {
+  return db.prepare("SELECT status, starts_at, registration_deadline, checkin_deadline FROM events WHERE id = ?").bind(id).first();
 }
 
 export async function listMemberLiveEvents(db: D1Like, memberId: string) {

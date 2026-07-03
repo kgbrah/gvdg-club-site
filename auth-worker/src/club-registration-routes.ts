@@ -7,6 +7,7 @@ import { clientIp, json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { notifyRegistration } from "./register-notify.js";
 import { asInt, asStr } from "./input.js";
+import { deadlinePassed } from "./event-deadlines.js";
 
 const GUEST_REGISTER_IP_LIMIT = 15; // guest sign-ups per IP per minute
 
@@ -129,6 +130,11 @@ export async function handleClubRegistration(
       const owedNow = computeOwed(cfg as unknown as OwedConfig, addons ? (JSON.parse(addons) as { ctp?: boolean; ace?: boolean }) : {});
       if (owedNow > (existing.amount_paid_cents ?? 0)) return json({ error: "paid_addons_locked" }, 409, origin);
     }
+    if (!existing) {
+      // A passed registration deadline closes NEW sign-ups; an existing registrant can still edit/withdraw.
+      const sched = (await db.getEventSchedule(env.DB, eid)) as { registration_deadline?: string | null } | null;
+      if (deadlinePassed(sched?.registration_deadline)) return json({ error: "registration_closed" }, 403, origin);
+    }
     const row = await db.registerForEvent(env.DB, { event_id: eid, member_id: memberId, name, division, team: asStr(b.team, 40), addons, email });
     // Email a guest (who gave an address) a confirmation + manage/cancel link so they can withdraw from
     // any device. Members manage via their account; this is a no-op unless RESEND_API_KEY is configured.
@@ -152,6 +158,8 @@ export async function handleClubRegistration(
     const b = (await readJson(request)) ?? {};
     const memberId = claims ? claims.sub : guestMemberId(request, b);
     if (!memberId) return json({ error: "unauthorized" }, 401, origin);
+    const sched = (await db.getEventSchedule(env.DB, eid)) as { checkin_deadline?: string | null } | null;
+    if (deadlinePassed(sched?.checkin_deadline)) return json({ error: "checkin_closed" }, 403, origin);
     const row = await db.setCheckedIn(env.DB, eid, memberId, true);
     return row ? json({ registration: row }, 200, origin) : json({ error: "not_registered" }, 404, origin);
   }
