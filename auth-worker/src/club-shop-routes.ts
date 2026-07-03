@@ -142,6 +142,7 @@ async function submitStoreOrder(
   total: number,
   lines: StoreOrderLine[],
   payment: { method: string; ref?: string | null },
+  notify = true, // store-credit defers the club email until the debit succeeds (see checkout); PayPal notifies here
 ): Promise<{ ok: true; order: unknown; orderId: number } | { ok: false; status: number; body: Record<string, unknown> }> {
   const order = await shopDb.createStoreOrder(env.DB, { member_id: memberId, member_name: memberName, total_cents: total, payment_method: payment.method, payment_ref: payment.ref ?? null });
   const orderId = isRecord(order) ? rowNumber(order, "id") : 0;
@@ -152,7 +153,7 @@ async function submitStoreOrder(
     return { ok: false, status: 409, body: { error: "insufficient_stock" } };
   }
   // New-order email to the club if configured (the admin Orders tab always shows it). Fire-and-forget.
-  ctx?.waitUntil(notifyNewOrder(env, order, lines));
+  if (notify) ctx?.waitUntil(notifyNewOrder(env, order, lines));
   return { ok: true, order, orderId };
 }
 
@@ -307,7 +308,7 @@ export async function handleClubShop(
     // It is NOT the safety guarantee — the atomic debit below is.
     const balance = await shopDb.walletBalance(env.DB, claims.sub);
     if (balance < priced.total) return json({ error: "insufficient_store_credit", balance_cents: balance, total_cents: priced.total }, 402, origin);
-    const submitted = await submitStoreOrder(env, ctx, claims.sub, member.name, priced.total, priced.lines, { method: "store_credit" });
+    const submitted = await submitStoreOrder(env, ctx, claims.sub, member.name, priced.total, priced.lines, { method: "store_credit" }, false); // defer the club email until the debit lands
     if (!submitted.ok) return json(submitted.body, submitted.status, origin);
     // Atomic, idempotent debit: balance-checked INSIDE the INSERT so two concurrent debits can never
     // overdraw the wallet (the fix for the old check-then-debit race). matchOrderId:false — the key
@@ -346,6 +347,8 @@ export async function handleClubShop(
       const priorOrder = priorOrderId ? await shopDb.getStoreOrderById(env.DB, priorOrderId) : submitted.order;
       return json({ order: priorOrder, transaction: debit.transaction, balance_cents: await shopDb.walletBalance(env.DB, claims.sub) }, 200, origin);
     }
+    // Debit succeeded and this order is the real charge — NOW notify the club (rolled-back orders never do).
+    ctx?.waitUntil(notifyNewOrder(env, submitted.order, priced.lines));
     return json({ order: submitted.order, transaction: debit.transaction, balance_cents: await shopDb.walletBalance(env.DB, claims.sub) }, 201, origin);
   }
 

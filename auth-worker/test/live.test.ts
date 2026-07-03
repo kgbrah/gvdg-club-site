@@ -713,7 +713,7 @@ describe("LiveEventDO card-scoped scoring", () => {
     expect(snap.players.find((p) => p.name === "C")?.team).toBe("Blue");
   });
 
-  it("captures weather at start, schedules the alarm, and refreshes on the alarm (not on score)", async () => {
+  it("captures weather location at start, reads it via the alarm (off the start path, not on score)", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-01T12:00:00.000Z"));
     stubWeather([openMeteoSample("2026-07-01T08:00", 6.5, 0), openMeteoSample("2026-07-01T08:15", 18.2, 0.2)]);
@@ -723,19 +723,22 @@ describe("LiveEventDO card-scoped scoring", () => {
       casual: true, courseName: "North Rec", startedAt: "2026-07-01T12:00:00.000Z", holes: [{ hole: 1, par: 3 }],
       players: [{ memberId: "m_a", name: "A" }], weatherLocation: { lat: 35.631092, lng: -77.319923, label: "North Rec - Greenville, NC" },
     }) }));
+    // Start records the location + schedules an immediate alarm, but does NOT block on the weather fetch.
     const startBody = (await started.json()) as WeatherSnapshot;
     expect(startBody.weather?.location.label).toBe("North Rec - Greenville, NC");
-    expect(startBody.weather?.current?.windSpeedMph).toBe(6.5);
-    expect(startBody.weather?.current?.windGustMph).toBe(12.5);
-    expect(startBody.weather?.history.map((s) => s.observedAt)).toEqual(["2026-07-01T08:00"]);
-    expect(state.alarmAt).not.toBeNull(); // background weather alarm scheduled at start
+    expect(startBody.weather?.current).toBeNull(); // no reading yet — the alarm takes the first one
+    expect(state.alarmAt).not.toBeNull();
 
-    // A score is PURE: never fetches weather, so the reading stays at the start value.
+    // The first alarm takes the initial reading.
+    await live.alarm();
+    expect(((await (await live.fetch(new Request("https://do/"))).json()) as WeatherSnapshot).weather?.current).toMatchObject({ observedAt: "2026-07-01T08:00", windSpeedMph: 6.5, windGustMph: 12.5 });
+
+    // A score is PURE: never fetches weather, so the reading stays at the last alarm value.
     vi.setSystemTime(new Date("2026-07-01T12:11:00.000Z"));
     const scored = await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify({ index: 0, scorerIndex: 0, hole: 1, strokes: 3 }) }));
     expect(((await scored.json()) as WeatherSnapshot).weather?.current?.observedAt).toBe("2026-07-01T08:00");
 
-    // The background alarm firing refreshes weather, appends the changed sample, and reschedules while live.
+    // The next alarm refreshes weather, appends the changed sample, and reschedules while live.
     await live.alarm();
     const snap = (await (await live.fetch(new Request("https://do/"))).json()) as WeatherSnapshot;
     expect(snap.weather?.current).toMatchObject({ observedAt: "2026-07-01T08:15", rainIn: 0.2, windSpeedMph: 18.2, windGustMph: 24.2 });

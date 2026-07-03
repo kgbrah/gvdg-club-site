@@ -146,39 +146,3 @@ export async function createWalletDebitOnce(
   }
 }
 
-export async function createWalletTransactionOnce(
-  db: D1Like,
-  input: IdempotentWalletTransactionInput,
-): Promise<IdempotentWalletTransactionResult> {
-  const existing = await checkWalletTransactionIdempotency(db, input);
-  if (!existing.ok) return existing;
-  if (existing.transaction) return { ok: true, transaction: existing.transaction, created: false };
-
-  try {
-    const transaction = await db
-      .prepare(
-        `INSERT INTO wallet_transactions (member_id, member_name, amount_cents, transaction_type, source, event_id, order_id, note, created_by, idempotency_key)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
-      )
-      .bind(
-        input.member_id,
-        input.member_name ?? null,
-        input.amount_cents,
-        input.transaction_type,
-        input.source,
-        input.event_id ?? null,
-        input.order_id ?? null,
-        input.note ?? null,
-        input.created_by ?? null,
-        input.idempotency_key,
-      )
-      .first();
-    if (!transaction) throw new Error("wallet_transaction_insert_failed");
-    return { ok: true, transaction, created: true };
-  } catch (e) {
-    if (!isUniqueViolation(e)) throw e;
-    const raced = await findWalletTransactionByIdempotencyKey(db, input.idempotency_key);
-    if (!raced) throw e;
-    return existingResult(raced, input);
-  }
-}
