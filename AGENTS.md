@@ -75,3 +75,13 @@ wrangler pages deployment list --project-name gvdg-club-site   # Cloudflare's ow
 
 Machine-wide at `${TMPDIR:-/tmp}/gvdg-deploy.lock`, auto-reclaimed after 15 min if stale. One deploy at a
 time. If the guard says a deploy is in progress, wait — don't work around it.
+
+## The watchdog (backstop)
+
+A systemd `--user` timer (`scripts/gvdg-deploy-watchdog.sh`) polls `gvdgclub.com/version.json` every ~3
+min. If it ever sees a live commit that **`origin/main` is not an ancestor of** (a clobber — a deploy
+missing main's work), it **re-asserts `origin/main`** from an isolated `git archive` export (never touches
+any working tree). This is a safety net, not a license to deploy raw — a clobbered deploy still flaps the
+site until the next poll. **Push `main` before deploying it** so the watchdog sees newer main and doesn't
+mistake it for a clobber. Manage: `scripts/gvdg-deploy-watchdog.sh --status | --install | --uninstall`;
+log at `~/.local/state/gvdg-watchdog.log`.
