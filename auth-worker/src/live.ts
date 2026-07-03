@@ -63,12 +63,19 @@ export class LiveEventDO {
       await this.state.storage.deleteAlarm();
       return;
     }
-    this.meta.weather = await refreshWeatherState(this.meta.weather);
-    // Persist WITHOUT bumping rev: a weather refresh is not a scoring change, so it must not force every
-    // scorekeeper's client to re-render the scorecard (which would reset scroll + any open dropdown). The
-    // snapshot keeps its current rev; clients apply the new weather in-place off this same-rev broadcast.
-    await this.state.storage.put("meta", this.meta);
-    this.broadcast();
+    // The alarm MUST NOT throw: an uncaught error here retries + wedges the Durable Object, making every
+    // subsequent request (score/cancel/finalize) fail with "internal error". Guard the refresh + broadcast,
+    // and always reschedule while the round is live so a transient hiccup doesn't stop weather updates.
+    try {
+      this.meta.weather = await refreshWeatherState(this.meta.weather);
+      // Persist WITHOUT bumping rev: a weather refresh is not a scoring change, so it must not force every
+      // scorekeeper's client to re-render the scorecard (which would reset scroll + any open dropdown). The
+      // snapshot keeps its current rev; clients apply the new weather in-place off this same-rev broadcast.
+      await this.state.storage.put("meta", this.meta);
+      this.broadcast();
+    } catch (error) {
+      console.error(JSON.stringify({ message: "weather_alarm_failed", eventId: this.meta?.eventId ?? null, error: error instanceof Error ? error.message : String(error) }));
+    }
     await this.state.storage.setAlarm(Date.now() + WEATHER_REFRESH_MS);
   }
   /** One-time weather backfill for a live round that started before it had a location (or before weather
