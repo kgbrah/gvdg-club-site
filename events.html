@@ -1508,14 +1508,15 @@
             if (!holeNums.size) return; // nothing confirmed yet → no section (capture CTA lives on the members page)
             // Matchplay: tint each hole by the team that won it (yellow = halved). Final rounds read the
             // finalized results; a live round reads the snapshot. Non-matchplay / no-scorecard → uncolored.
+            const holeList = [...holeNums].map((n) => ({ hole: n })); // color the holes actually shown (photos or SVG), not just layout holes
             let holeWins = {};
             try {
                 if (ev.status === 'final') {
                     const rd = await fetchJson(`/events/${encodeURIComponent(ev.id)}/results`).catch(() => null);
-                    holeWins = holeWinners(holes, playersFromResults((rd && rd.results) || []));
+                    holeWins = holeWinners(holeList, playersFromResults((rd && rd.results) || []));
                 } else {
                     const sd = await fetchJson(`/events/${encodeURIComponent(ev.id)}/live`).catch(() => null);
-                    if (sd && sd.roundConfig && sd.roundConfig.scoringStyle === 'matchplay') holeWins = holeWinners((sd.holes && sd.holes.length) ? sd.holes : holes, sd.players || []);
+                    if (sd && sd.roundConfig && sd.roundConfig.scoringStyle === 'matchplay') holeWins = holeWinners((sd.holes && sd.holes.length) ? sd.holes : holeList, sd.players || []);
                 }
             } catch (_e) {}
             card.appendChild(el('h3', 'roster-title', '🪧 Tee Signs' + (layout ? ' — ' + layout.name : '')));
