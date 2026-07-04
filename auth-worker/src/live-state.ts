@@ -75,7 +75,7 @@ export function findPlayer(body: Pick<ScoreBody, "memberId" | "index" | "name">,
 }
 
 export function scorecardIssues(meta: LiveMeta | null, players: PlayerState[], holes: { hole: number }[], scoring: ScoringState) {
-  return scoring.error ? { conflicts: [], missing: [] } : scorecardConsensusIssues(players, holes, scoring.targets, { casual: !!meta?.casual });
+  return scoring.error ? { conflicts: [], missing: [] } : scorecardConsensusIssues(players, holes, scoring.targets, { casual: !!meta?.casual, config: scoring.config });
 }
 
 export function computeRoundStandings(input: {

@@ -1,4 +1,4 @@
-import type { ScoreTarget } from "./live-format.js";
+import type { LiveScoringConfig, ScoreTarget } from "./live-format.js";
 import type { PlayerState } from "./scoring.js";
 import { scoreTargetConflicts, scoreTargetConsensusIssues } from "./live-target-consensus.js";
 
@@ -101,7 +101,7 @@ export function scoreConflicts(players: PlayerState[], holes: ScoreHole[], targe
   return conflicts;
 }
 
-export function scorecardConsensusIssues(players: PlayerState[], holes: ScoreHole[], targets?: readonly ScoreTarget[], opts: { readonly casual?: boolean } = {}): ConsensusIssues {
+export function scorecardConsensusIssues(players: PlayerState[], holes: ScoreHole[], targets?: readonly ScoreTarget[], opts: { readonly casual?: boolean; readonly config?: LiveScoringConfig } = {}): ConsensusIssues {
   if (targets) return scoreTargetConsensusIssues(players, holes, targets, opts);
   const missing: MissingScoreConsensus[] = [];
   for (let index = 0; index < players.length; index++) {

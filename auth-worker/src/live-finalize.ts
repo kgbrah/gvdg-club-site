@@ -1,5 +1,6 @@
 import * as db from "./db.js";
 import { scorecardConsensusIssues } from "./live-consensus.js";
+import type { LiveScoringConfig } from "./live-format.js";
 import { finalizeStandings, type FinalLiveStanding, type PlayerState } from "./scoring.js";
 import { finalizeRoundStandings, invalidScoreTargetsResponse, resolvedHoles, roundConfig, scoringState } from "./live-state.js";
 import { j, metadataJson, type LiveEnv, type LiveMeta } from "./live-types.js";
@@ -33,7 +34,7 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
   const holes = resolvedHoles(meta);
   const scoring = scoringState(meta, input.players);
   if (scoring.error) return invalidScoreTargetsResponse(scoring.error);
-  const issues = scorecardConsensusIssues(input.players, holes, scoring.targets, { casual: !!meta.casual });
+  const issues = scorecardConsensusIssues(input.players, holes, scoring.targets, { casual: !!meta.casual, config: scoring.config });
   const incomplete = issues.conflicts.length > 0 || issues.missing.length > 0;
   if (incomplete && !(input.authAdmin && input.force)) {
     return j({ error: "scorecard_incomplete", conflicts: issues.conflicts, missing: issues.missing }, 409);
@@ -139,7 +140,15 @@ async function persistRatingsBestEffort(env: LiveEnv, meta: LiveMeta, standings:
   }
 }
 
+/** PDGA-style round ratings are computed from an individual's own STROKE total, so only a singles stroke
+ *  round earns them. Matchplay has no stroke rating; doubles partners share one team total (so a rating
+ *  would enter a team score as each member's individual round). Both are excluded. */
+export function roundEarnsRatings(config: LiveScoringConfig): boolean {
+  return config.scoringStyle === "stroke" && config.groupFormat === "singles";
+}
+
 async function persistRoundRatings(env: LiveEnv, meta: LiveMeta, standings: FinalLiveStanding[]): Promise<void> {
+  if (!roundEarnsRatings(roundConfig(meta))) return; // matchplay / doubles rounds are never rated
   const stream: RatingStream = meta.casual ? "casual" : "competition";
   if (stream === "casual" && !meta.roundCode) return; // no durable key → nothing to attach ratings to
   const now = new Date().toISOString();
