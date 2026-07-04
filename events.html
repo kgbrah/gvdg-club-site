@@ -1222,13 +1222,41 @@
             card.appendChild(head);
             if (lg.description) card.appendChild(el('div', 'detail-notes', lg.description));
 
-            card.appendChild(el('h3', 'roster-title', 'Standings'));
+            // Team standings (Red vs Blue) for a matchplay league — each match is 2 (win) / 1 (tie) / 0 (loss).
+            const teamStandings = data.teamStandings || [];
+            const isMatch = teamStandings.length > 0;
+            if (isMatch) {
+                card.appendChild(el('h3', 'roster-title', 'Team standings'));
+                const tt = el('table', 'lb-table');
+                const th = el('thead'); const thr = el('tr');
+                ['Team', 'Pts', 'W', 'T', 'L', 'Matches'].forEach((h) => thr.appendChild(el('th', null, h)));
+                th.appendChild(thr); tt.appendChild(th);
+                const tb = el('tbody');
+                teamStandings.forEach((t) => {
+                    const tr = el('tr');
+                    const nameTd = el('td', 'lb-name', t.teamName || t.team || 'Team');
+                    const key = String(t.team || '').toLowerCase();
+                    const dot = el('span', null, '● ');
+                    dot.style.color = key === 'red' ? '#d33' : key === 'blue' ? '#37c' : 'inherit';
+                    nameTd.prepend(dot);
+                    tr.appendChild(nameTd);
+                    tr.appendChild(el('td', null, String(t.points)));
+                    tr.appendChild(el('td', null, String(t.wins)));
+                    tr.appendChild(el('td', null, String(t.ties)));
+                    tr.appendChild(el('td', null, String(t.losses)));
+                    tr.appendChild(el('td', null, String(t.matches)));
+                    tb.appendChild(tr);
+                });
+                tt.appendChild(tb); card.appendChild(tt);
+            }
+
+            card.appendChild(el('h3', 'roster-title', isMatch ? 'Player records' : 'Standings'));
             if (!standings.length) {
                 card.appendChild(el('p', 'lb-empty', 'No finalized rounds yet — standings appear once rounds are scored.'));
             } else {
                 const table = el('table', 'lb-table');
                 const thead = el('thead'); const htr = el('tr');
-                ['Pos', 'Player', 'Pts', 'Played', 'Wins', 'To Par'].forEach((h) => htr.appendChild(el('th', null, h)));
+                (isMatch ? ['Pos', 'Player', 'Pts', 'Played', 'Wins'] : ['Pos', 'Player', 'Pts', 'Played', 'Wins', 'To Par']).forEach((h) => htr.appendChild(el('th', null, h)));
                 thead.appendChild(htr); table.appendChild(thead);
                 const tbody = el('tbody');
                 standings.forEach((s, i) => {
@@ -1238,9 +1266,11 @@
                     tr.appendChild(el('td', null, String(s.points)));
                     tr.appendChild(el('td', null, String(s.events)));
                     tr.appendChild(el('td', null, String(s.wins)));
-                    const tp = el('td', 'lb-topar', fmtToPar(s.total_to_par));
-                    if (s.total_to_par < 0) tp.classList.add('under'); else if (s.total_to_par > 0) tp.classList.add('over');
-                    tr.appendChild(tp);
+                    if (!isMatch) {
+                        const tp = el('td', 'lb-topar', fmtToPar(s.total_to_par));
+                        if (s.total_to_par < 0) tp.classList.add('under'); else if (s.total_to_par > 0) tp.classList.add('over');
+                        tr.appendChild(tp);
+                    }
                     tbody.appendChild(tr);
                 });
                 table.appendChild(tbody); card.appendChild(table);

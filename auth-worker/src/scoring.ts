@@ -135,12 +135,27 @@ export interface LeagueStanding {
   points: number;
 }
 
-// Season points by finishing place (tunable).
+// Season points by finishing place, for STROKE rounds (tunable).
 const placePoints = (place: number | null): number =>
   place == null ? 0 : place === 1 ? 10 : place === 2 ? 7 : place === 3 ? 5 : place === 4 ? 3 : place <= 10 ? 1 : 0;
 
-/** Aggregate a league's per-event result rows into a season standings table: points/wins/podiums/
- *  cumulative to-par per player. Members keyed by member_id; guests grouped by name. */
+function parseOutcome(matchResult: string | null | undefined): string | null {
+  if (!matchResult) return null;
+  try {
+    const m = JSON.parse(matchResult) as { outcome?: unknown };
+    return typeof m?.outcome === "string" ? m.outcome : null;
+  } catch {
+    return null;
+  }
+}
+const isWinOutcome = (o: string | null): boolean => o === "won" || o === "leading";
+const isTieOutcome = (o: string | null): boolean => o === "draw";
+// Matchplay points: 2 for a win, 1 for a tie, 0 for a loss.
+const matchplayPoints = (o: string | null): number => (isWinOutcome(o) ? 2 : isTieOutcome(o) ? 1 : 0);
+
+/** Aggregate a league's per-event result rows into a per-PLAYER season standings table. Matchplay rounds
+ *  (a stored match_result) score 2/1/0 by outcome; stroke rounds keep place-points + cumulative to-par.
+ *  Members keyed by member_id; guests grouped by name. See computeTeamStandings for the Red/Blue view. */
 export function computeLeagueStandings(
   rows: { member_id: string | null; name: string; place: number | null; to_par: number | null; match_result?: string | null }[],
 ): LeagueStanding[] {
@@ -154,13 +169,73 @@ export function computeLeagueStandings(
     }
     s.name = r.name; // keep the most recent display name
     s.events++;
-    if (r.place === 1) s.wins++;
-    if (r.place != null && r.place <= 3) s.podiums++;
-    if (r.to_par != null && !r.match_result) s.total_to_par += r.to_par; // matchplay to_par is a stroke artifact — skip it
+    const outcome = parseOutcome(r.match_result);
+    if (outcome) {
+      // matchplay: points + wins come from the match outcome; to_par/podiums don't apply.
+      s.points += matchplayPoints(outcome);
+      if (isWinOutcome(outcome)) s.wins++;
+    } else {
+      if (r.place === 1) s.wins++;
+      if (r.place != null && r.place <= 3) s.podiums++;
+      if (r.to_par != null) s.total_to_par += r.to_par;
+      s.points += placePoints(r.place);
+    }
     if (r.place != null && (s.best_place == null || r.place < s.best_place)) s.best_place = r.place;
-    s.points += placePoints(r.place);
   }
   return [...map.values()].sort(
     (a, b) => b.points - a.points || b.wins - a.wins || a.total_to_par - b.total_to_par || a.name.localeCompare(b.name),
   );
+}
+
+export interface TeamStanding {
+  team: string;
+  teamName: string | null;
+  matches: number;
+  wins: number;
+  ties: number;
+  losses: number;
+  points: number;
+}
+
+/** Team (Red vs Blue) standings for a matchplay league. Each MATCH scores 2 to the winner / 1 to each side
+ *  on a tie / 0 to the loser, counted ONCE per (event, team) — so a doubles match's several result rows per
+ *  team count as one team result. Rows lacking a team scoring_group + match outcome (stroke rounds) are
+ *  ignored. Returns [] when the league has no matchplay team rounds. */
+export function computeTeamStandings(
+  rows: { event_id?: number | null; scoring_group?: string | null; match_result?: string | null }[],
+): TeamStanding[] {
+  const seen = new Set<string>();
+  const map = new Map<string, TeamStanding>();
+  for (const r of rows) {
+    const outcome = parseOutcome(r.match_result);
+    if (!outcome || !r.scoring_group) continue;
+    let group: { label?: unknown; teamName?: unknown } | null = null;
+    try {
+      group = JSON.parse(r.scoring_group);
+    } catch {
+      group = null;
+    }
+    const team = typeof group?.label === "string" ? group.label : null;
+    if (!team) continue;
+    const dedup = String(r.event_id ?? "") + "|" + team;
+    if (seen.has(dedup)) continue; // count each match once per team
+    seen.add(dedup);
+    let t = map.get(team);
+    if (!t) {
+      t = { team, teamName: typeof group?.teamName === "string" ? group.teamName : null, matches: 0, wins: 0, ties: 0, losses: 0, points: 0 };
+      map.set(team, t);
+    }
+    if (typeof group?.teamName === "string") t.teamName = group.teamName;
+    t.matches++;
+    if (isWinOutcome(outcome)) {
+      t.wins++;
+      t.points += 2;
+    } else if (isTieOutcome(outcome)) {
+      t.ties++;
+      t.points += 1;
+    } else {
+      t.losses++;
+    }
+  }
+  return [...map.values()].sort((a, b) => b.points - a.points || b.wins - a.wins || a.team.localeCompare(b.team));
 }
