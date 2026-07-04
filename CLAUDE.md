@@ -211,6 +211,29 @@ ratings (`0022`), event schedule/deadlines (`0024`).
   both `PAYPAL_CLIENT_ID`+`PAYPAL_SECRET` (else 503 → manual flag); Crotts/vision degrade down their chains;
   email is a no-op without `RESEND_API_KEY`. A missing credential looks like "nothing happened," not an error.
 
+### Ryder Cup / matchplay leagues
+
+Matchplay league scoring is **team-based Ryder Cup style**, not stroke place-points:
+
+- **Points (`scoring.ts`):** a match is worth **2 to the winner / 1 to each side on a tie / 0 to the loser**,
+  by `match_result.outcome`. `computeLeagueStandings` is the per-player view; `computeTeamStandings` is the
+  Red-vs-Blue team view, counting each match **once per `(event_id, team)`** so a doubles match's several
+  result rows don't double-count; `computeRoundWinners` gives each round's winning side. `GET /leagues/:id`
+  returns `standings` + `teamStandings` + `roundWinners`; `GET /leagues/active` (member dashboards) returns
+  active leagues (a live or last-60-day round) + live events.
+- **Winner coloring (`matchplay-colors.js` — pure, node-tested `tests/matchplay-colors.test.mjs`):**
+  `holeWinners()` decides each hole by comparing the two teams' scores (doubles alt-shot = the pair's shared
+  score; equal = tie; unscored = `null` → uncolored). Colors: Red `#dc3545`, Blue `#2f6fd0`, tie `#e6b400`.
+  Applied to the scoring app (current hole's tee sign; halves left **as-is**), the event scoreboard + round-
+  results tee signs (halves = **yellow**), and the league rounds list (round winner). It's an ES module in
+  `events.html` and `window.GVDGMatchplay` (dual global) for classic pages (`score.html`, `gvdg-members.html`).
+- **Ryder Cup data (league_id 4):** Red = *Juan Team*, Blue = *Jesus Team*. The season was **backfilled from
+  the `ryder-cup.html` Google Sheet** — winners are read from the **rendered green-highlighted page** (the CSV
+  drops the highlight), imported as one event per match with `source='ryder-import'` (idempotent: re-import
+  DELETEs by that source, event 6 is `source='manual'`). ⚠️ **Event 6 (the app-scored alt-shot round) IS the
+  sheet's Week 3 #5** — skip it in any re-import to avoid a duplicate. Non-member sheet players are recorded
+  name-only (`member_id` null); linking them to member accounts is a manual admin step.
+
 ### Frontend & PWA
 
 Pages find the API via the host-fallback logic above (duplicated in every page + `crotts.js`). Data
