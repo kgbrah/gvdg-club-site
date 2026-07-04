@@ -1,7 +1,7 @@
 // @ts-nocheck — exercises provision.mjs, a standalone plain-JS operator script (not part
 // of the Worker bundle). Runtime-verified by the assertions below; kept out of strict TS.
 import { describe, it, expect } from "vitest";
-import { verifyPin } from "../src/crypto.js";
+import { hashPin as workerHashPin, verifyPin } from "../src/crypto.js";
 // The provisioning tool is plain ESM JS with no deps; its pure helpers are importable
 // because the CLI is guarded behind an import.meta.main check.
 import {
@@ -35,18 +35,28 @@ describe("provision.hashPin <-> src/crypto.verifyPin (cross-module correctness)"
     expect(await verifyPin(pin, stored)).toBe(true);
   });
 
+  it("hashes at the SAME PBKDF2 iteration count as the Worker (workerd caps at 100k and THROWS above it)", async () => {
+    // A hash verifies in Node at any iteration count, but the DEPLOYED Worker (workerd) rejects PBKDF2
+    // above 100_000 — so a provision-seeded member whose hash encodes a higher count can never log in.
+    // provision.mjs must therefore match src/crypto.ts exactly.
+    const provIters = Number((await hashPin("1234")).split("$")[2]);
+    const workerIters = Number((await workerHashPin("1234")).split("$")[2]);
+    expect(provIters).toBe(workerIters);
+    expect(provIters).toBeLessThanOrEqual(100000);
+  });
+
   it("the hash does NOT verify against a different PIN", async () => {
     const stored = await hashPin("4821");
     expect(await verifyPin("4821", stored)).toBe(true);
     expect(await verifyPin("1234", stored)).toBe(false);
   });
 
-  it("emits the documented encoded format pbkdf2$sha256$120000$<salt>$<hash>", async () => {
+  it("emits the documented encoded format pbkdf2$sha256$100000$<salt>$<hash>", async () => {
     const parts = (await hashPin("0000")).split("$");
     expect(parts).toHaveLength(5);
     expect(parts[0]).toBe("pbkdf2");
     expect(parts[1]).toBe("sha256");
-    expect(Number(parts[2])).toBe(120000);
+    expect(Number(parts[2])).toBe(100000); // workerd-safe (was 120000 — a hash the live Worker can't verify)
   });
 });
 

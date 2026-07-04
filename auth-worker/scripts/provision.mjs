@@ -5,9 +5,11 @@
 //                         (member records + login indexes; values hold ONLY the PIN hash)
 //   2. default-pins.csv -> the cleartext one-time PINs to hand to each member. SENSITIVE.
 //
-// Reproduces src/crypto.ts hashPin() exactly (PBKDF2-HMAC-SHA256, 120k iters, 16-byte salt,
+// Reproduces src/crypto.ts hashPin() exactly (PBKDF2-HMAC-SHA256, 100k iters, 16-byte salt,
 // b64url, format `pbkdf2$sha256$<iters>$<salt>$<hash>`) so a provisioned member can log in
-// against the real Worker and verifyPin() accepts the generated default PIN.
+// against the real Worker and verifyPin() accepts the generated default PIN. NOTE: the iteration
+// count MUST stay <=100_000 — workerd (the deployed runtime) hard-caps PBKDF2 at 100k and throws
+// above it, so a higher count hashes fine here in Node but can never be verified live.
 //
 // WebCrypto + Node stdlib only — no dependencies. Runs on Node 22 (same crypto.subtle as the
 // Workers runtime). The CLI is guarded so this file can also be imported as a pure module
@@ -22,8 +24,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-// --- format constants: MUST match src/crypto.ts ---
-const ITERATIONS = 120_000;
+// --- format constants: MUST match src/crypto.ts (and stay <=100_000 for the workerd PBKDF2 cap) ---
+const ITERATIONS = 100_000;
 const SALT_BYTES = 16;
 const HASH_BITS = 256;
 
