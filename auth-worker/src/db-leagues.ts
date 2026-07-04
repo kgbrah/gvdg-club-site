@@ -39,6 +39,31 @@ export async function listLeagueEvents(db: D1Like, leagueId: number) {
   return (await db.prepare("SELECT * FROM events WHERE league_id = ? ORDER BY date DESC, id DESC").bind(leagueId).all()).results;
 }
 
+// Leagues that are "active": they have a currently-live round OR a finalized round within the last 60 days.
+// Drives the club standings shown on member dashboards; auto-appears/disappears as play happens.
+export async function listActiveLeagues(db: D1Like) {
+  return (
+    await db
+      .prepare(
+        `SELECT * FROM leagues WHERE id IN (
+           SELECT DISTINCT league_id FROM events
+           WHERE league_id IS NOT NULL
+             AND (status = 'live' OR (status = 'final' AND COALESCE(date, substr(created_at, 1, 10)) >= date('now', '-60 days')))
+         ) ORDER BY season DESC, name`,
+      )
+      .all()
+  ).results;
+}
+
+// Events currently being scored live (any league or standalone) — for the inline live leaderboards on the dashboard.
+export async function listLiveEvents(db: D1Like) {
+  return (
+    await db
+      .prepare("SELECT id, type, name, status, format, date, course_id, layout_id, league_id FROM events WHERE status = 'live' ORDER BY date DESC, id DESC")
+      .all()
+  ).results;
+}
+
 export async function leagueResultRows(db: D1Like, leagueId: number) {
   return (
     await db

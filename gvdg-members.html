@@ -370,6 +370,7 @@
         .doubles-table tbody tr.clickable-row { cursor: pointer; }
     </style>
   <script src="nav.js" defer></script>
+  <script type="module" src="matchplay-colors.js"></script>
   <script src="pwa.js" defer></script>
   <script src="udisc-export.js" defer></script>
 </head>
@@ -498,6 +499,12 @@
                 .dash-tile-delta { font-size: 0.8rem; opacity: 0.9; margin-top: 0.2rem; }
                 .dash-tile-label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.95; margin-top: 0.35rem; }
                 .dash-subtitle { font-weight: 700; color: var(--secondary-text); margin: 0.5rem 0 0.75rem; font-size: 1rem; }
+                .active-standings { margin: 0.25rem 0 1rem; }
+                .dash-standings-card { background: var(--bg-tertiary, rgba(127,127,127,0.06)); border: 1px solid var(--border-color, rgba(127,127,127,0.25)); border-radius: 10px; padding: 0.7rem 0.9rem; margin-bottom: 0.75rem; }
+                .dash-standings-card .dash-subtitle { margin-top: 0; }
+                .dash-standings-card .lb-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+                .dash-standings-card .lb-table th { text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.4px; color: var(--secondary-text); padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--border-color, rgba(127,127,127,0.25)); }
+                .dash-standings-card .lb-table td { padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--border-color, rgba(127,127,127,0.12)); }
                 .dash-event { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); margin-bottom: 0.5rem; flex-wrap: wrap; }
                 .dash-event-name { font-weight: 600; color: var(--text-primary); }
                 .dash-event-date { font-size: 0.8rem; color: var(--text-muted); }
@@ -698,6 +705,7 @@
                     <a class="dashboard-action primary" href="pro-shop.html">Shop with credit</a>
                     <div id="walletLedger" class="wallet-ledger"></div>
                 </div>
+                <div id="activeStandings" class="active-standings" style="display:none;"></div>
                 <div id="dashLoading" class="dash-note">Loading your stats…</div>
                 <div id="dashEmpty" class="dash-note" style="display:none;"></div>
                 <div id="dashBody" style="display:none;">
@@ -2260,6 +2268,102 @@
             }
         }
 
+        // ---- Club standings on the dashboard: active leagues (team + expandable player records) + live events ----
+        let activeStandingsTimers = [];
+        function mkEl(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+        function teamDot(team) { const k = String(team || '').toLowerCase(); const d = mkEl('span', null, '● '); d.style.color = k === 'red' ? '#dc3545' : k === 'blue' ? '#2f6fd0' : 'inherit'; return d; }
+        function fmtDashToPar(n) { n = n || 0; return n === 0 ? 'E' : (n > 0 ? '+' + n : String(n)); }
+
+        function renderDashLeague(lg) {
+            const card = mkEl('div', 'dash-standings-card');
+            const league = lg.league || {};
+            card.appendChild(mkEl('h4', 'dash-subtitle', '🏆 ' + (league.name || 'League') + (league.season ? ' · ' + league.season : '') + ' — Standings'));
+            const teams = lg.teamStandings || [];
+            if (teams.length) {
+                const t = mkEl('table', 'lb-table'); const thead = mkEl('thead'); const htr = mkEl('tr');
+                ['Team', 'Pts', 'W', 'T', 'L'].forEach((h) => htr.appendChild(mkEl('th', null, h)));
+                thead.appendChild(htr); t.appendChild(thead);
+                const tb = mkEl('tbody');
+                teams.forEach((tm) => {
+                    const tr = mkEl('tr');
+                    const nameTd = mkEl('td', null, tm.teamName || tm.team || 'Team'); nameTd.prepend(teamDot(tm.team));
+                    tr.appendChild(nameTd);
+                    [tm.points, tm.wins, tm.ties, tm.losses].forEach((v) => tr.appendChild(mkEl('td', null, String(v))));
+                    tb.appendChild(tr);
+                });
+                t.appendChild(tb); card.appendChild(t);
+            }
+            const players = lg.standings || [];
+            if (players.length) {
+                const det = document.createElement('details');
+                const sum = document.createElement('summary'); sum.textContent = 'Player records (' + players.length + ')';
+                sum.style.cssText = 'cursor:pointer;font-weight:700;margin:0.5rem 0;';
+                det.appendChild(sum);
+                const pt = mkEl('table', 'lb-table'); const pth = mkEl('thead'); const pthr = mkEl('tr');
+                ['Pos', 'Player', 'Pts', 'Played', 'Wins'].forEach((h) => pthr.appendChild(mkEl('th', null, h)));
+                pth.appendChild(pthr); pt.appendChild(pth);
+                const ptb = mkEl('tbody');
+                players.forEach((s, i) => {
+                    const tr = mkEl('tr');
+                    [String(i + 1), s.name != null ? String(s.name) : 'Player', String(s.points), String(s.events), String(s.wins)].forEach((v) => tr.appendChild(mkEl('td', null, v)));
+                    ptb.appendChild(tr);
+                });
+                pt.appendChild(ptb); det.appendChild(pt); card.appendChild(det);
+            }
+            return card;
+        }
+
+        function renderDashLiveEvent(ev) {
+            const card = mkEl('div', 'dash-standings-card');
+            const title = mkEl('h4', 'dash-subtitle', '🔴 LIVE — ' + (ev.name || 'Event'));
+            const link = mkEl('a', null, 'Open ›'); link.href = 'events.html#event/' + encodeURIComponent(ev.id); link.style.cssText = 'float:right;font-size:0.85rem;';
+            title.appendChild(link); card.appendChild(title);
+            const body = mkEl('div'); card.appendChild(body);
+            const render = (snap) => {
+                body.replaceChildren();
+                const st = (snap && snap.standings) || [];
+                if (!st.length) { body.appendChild(mkEl('div', 'dash-note', 'Waiting for the first scores…')); return; }
+                const cfg = (snap && snap.roundConfig) || {};
+                const mp = cfg.scoringStyle === 'matchplay';
+                const t = mkEl('table', 'lb-table'); const thead = mkEl('thead'); const htr = mkEl('tr');
+                (mp ? ['Pos', cfg.groupFormat === 'doubles' ? 'Team' : 'Player', 'Thru', 'Match'] : ['Pos', 'Player', 'Thru', 'Total', 'To Par']).forEach((h) => htr.appendChild(mkEl('th', null, h)));
+                thead.appendChild(htr); t.appendChild(thead);
+                const tb = mkEl('tbody');
+                st.forEach((s, i) => {
+                    const tr = mkEl('tr');
+                    tr.appendChild(mkEl('td', null, String(i + 1)));
+                    tr.appendChild(mkEl('td', null, s.name != null ? String(s.name) : 'Player'));
+                    tr.appendChild(mkEl('td', null, s.thru ? String(s.thru) : '—'));
+                    if (mp) tr.appendChild(mkEl('td', null, (s.match && s.match.status) || 'AS'));
+                    else {
+                        tr.appendChild(mkEl('td', null, (s.total != null && s.thru) ? String(s.total) : '—'));
+                        tr.appendChild(mkEl('td', null, s.thru ? fmtDashToPar(s.toPar) : '—'));
+                    }
+                    tb.appendChild(tr);
+                });
+                t.appendChild(tb); body.appendChild(t);
+            };
+            const poll = async () => { try { const d = await fetchJson(AUTH_BASE + '/events/' + encodeURIComponent(ev.id) + '/live'); render(d); } catch (_e) {} };
+            poll();
+            activeStandingsTimers.push(setInterval(poll, 5000)); // auto-updating; cleared on next dashboard load
+            return card;
+        }
+
+        async function loadActiveStandings() {
+            const wrap = $('activeStandings');
+            if (!wrap) return;
+            activeStandingsTimers.forEach(clearInterval); activeStandingsTimers = [];
+            let data;
+            try { data = await fetchJson(AUTH_BASE + '/leagues/active'); } catch (_e) { return; }
+            const leagues = (data && data.leagues) || [];
+            const liveEvents = (data && data.liveEvents) || [];
+            wrap.replaceChildren();
+            if (!leagues.length && !liveEvents.length) { wrap.style.display = 'none'; return; }
+            liveEvents.forEach((ev) => wrap.appendChild(renderDashLiveEvent(ev)));
+            leagues.forEach((lg) => wrap.appendChild(renderDashLeague(lg)));
+            wrap.style.display = '';
+        }
+
         async function loadDashboard() {
             const loading = $('dashLoading'), empty = $('dashEmpty'), body = $('dashBody');
             $('myDashboard').style.display = '';
@@ -2270,6 +2374,7 @@
             loadMeetings();
             loadBoard();
             loadTeeSigns();
+            loadActiveStandings();
             loading.style.display = ''; empty.style.display = 'none'; body.style.display = 'none';
             const avatar = $('dashAvatar');
             const showAvatar = (url) => {

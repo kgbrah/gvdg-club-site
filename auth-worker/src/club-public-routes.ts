@@ -16,6 +16,17 @@ export async function handleClubPublic(
 ): Promise<Response | null> {
   if (method === "GET" && pathname === "/courses") return json({ courses: await db.listCourses(env.DB) }, 200, origin);
   if (method === "GET" && pathname === "/leagues") return json({ leagues: await db.listLeagues(env.DB) }, 200, origin);
+  // Club standings for member dashboards: active leagues (with team + player standings) + any live events.
+  if (method === "GET" && pathname === "/leagues/active") {
+    const active = (await db.listActiveLeagues(env.DB)) as { id: number }[];
+    const leagues = await Promise.all(
+      active.map(async (lg) => {
+        const rows = (await db.leagueResultRows(env.DB, lg.id)) as { event_id?: number | null; member_id: string | null; name: string; place: number | null; to_par: number | null; match_result?: string | null; scoring_group?: string | null }[];
+        return { league: lg, teamStandings: computeTeamStandings(rows), standings: computeLeagueStandings(rows), roundWinners: computeRoundWinners(rows) };
+      }),
+    );
+    return json({ leagues, liveEvents: await db.listLiveEvents(env.DB) }, 200, origin);
+  }
   if (method === "GET" && seg[0] === "leagues" && seg.length === 2) {
     const lid = asInt(seg[1]);
     const league = lid == null ? null : await db.getLeague(env.DB, lid);
