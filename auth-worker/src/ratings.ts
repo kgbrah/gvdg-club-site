@@ -21,6 +21,8 @@ export interface RatingRound {
   readonly to_par: number | null;
   readonly rating: number | null;
   readonly rating_source: RatingSource;
+  readonly match_result: string | null;
+  readonly scoring_group: string | null;
   readonly scorecard: string | null;
   readonly udisc_course_id: string | null;
 }
@@ -92,7 +94,10 @@ function casualLabel(row: Record<string, unknown>): string {
 }
 
 function ratingRound(kind: RatingKind, row: Record<string, unknown>): RatingRound {
-  const rating = ratingForRound(row);
+  // A matchplay round (identified by a stored match_result) has no stroke rating — surface the match
+  // result instead and leave it unrated, so it never contributes to the member's live rating.
+  const matchResult = stringOrNull(row.match_result);
+  const rating: RatingValue = matchResult ? { rating: null, source: "unrated" } : ratingForRound(row);
   return {
     kind,
     id: intOrNull(row.id),
@@ -106,6 +111,8 @@ function ratingRound(kind: RatingKind, row: Record<string, unknown>): RatingRoun
     to_par: intOrNull(row.to_par),
     rating: rating.rating,
     rating_source: rating.source,
+    match_result: matchResult,
+    scoring_group: stringOrNull(row.scoring_group),
     scorecard: stringOrNull(row.scorecard),
     udisc_course_id: stringOrNull(row.udisc_course_id),
   };

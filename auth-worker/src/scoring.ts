@@ -142,7 +142,7 @@ const placePoints = (place: number | null): number =>
 /** Aggregate a league's per-event result rows into a season standings table: points/wins/podiums/
  *  cumulative to-par per player. Members keyed by member_id; guests grouped by name. */
 export function computeLeagueStandings(
-  rows: { member_id: string | null; name: string; place: number | null; to_par: number | null }[],
+  rows: { member_id: string | null; name: string; place: number | null; to_par: number | null; match_result?: string | null }[],
 ): LeagueStanding[] {
   const map = new Map<string, LeagueStanding>();
   for (const r of rows) {
@@ -156,7 +156,7 @@ export function computeLeagueStandings(
     s.events++;
     if (r.place === 1) s.wins++;
     if (r.place != null && r.place <= 3) s.podiums++;
-    if (r.to_par != null) s.total_to_par += r.to_par;
+    if (r.to_par != null && !r.match_result) s.total_to_par += r.to_par; // matchplay to_par is a stroke artifact — skip it
     if (r.place != null && (s.best_place == null || r.place < s.best_place)) s.best_place = r.place;
     s.points += placePoints(r.place);
   }

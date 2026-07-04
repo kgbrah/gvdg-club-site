@@ -1288,27 +1288,49 @@
             activeLive = null;
         }
         function fmtToPar(n) { n = n || 0; return n === 0 ? 'E' : (n > 0 ? '+' + n : String(n)); }
+        // Matchplay display helpers — a matchplay round reports its result as a match status ("won 3&2",
+        // "2 up", "AS"), never a stroke score. matchText reads a live standing's .match; parseMatchResult
+        // reads a finalized result row's match_result JSON (null → the row is stroke play).
+        // The match status ("won 3&2") is match-level and shared by both sides; label the losing side "lost 3&2".
+        function matchLabel(m) { if (!m || !m.status) return 'AS'; return (m.outcome === 'lost' || m.outcome === 'trailing') ? m.status.replace(/^won /, 'lost ') : m.status; }
+        function matchText(m) { if (!m || !m.status) return 'AS'; return (m.dormie ? '⚑ ' : '') + matchLabel(m); }
+        function parseMatchResult(raw) { if (!raw) return null; try { const m = JSON.parse(raw); return m && m.status ? m : null; } catch (_e) { return null; } }
+        function standingNameCell(s, dbl) {
+            const td = el('td', 'lb-name', s && s.name != null ? String(s.name) : 'Player');
+            if (dbl && s && Array.isArray(s.members) && s.members.length) td.appendChild(el('span', 'lb-members', ' (' + s.members.join(' & ') + ')'));
+            return td;
+        }
         function renderStandings(container, snap) {
             const standings = (snap && snap.standings) || [];
             container.replaceChildren();
             if (!standings.length) { container.appendChild(el('p', 'lb-empty', 'Waiting for the first scores…')); return; }
-            const hasDiv = standings.some((s) => s && s.division);
+            const cfg = (snap && snap.roundConfig) || {};
+            const mp = cfg.scoringStyle === 'matchplay';
+            const dbl = cfg.groupFormat === 'doubles';
+            const hasDiv = !mp && standings.some((s) => s && s.division);
             const table = el('table', 'lb-table');
             const thead = el('thead'); const htr = el('tr');
-            const cols = hasDiv ? ['Pos', 'Player', 'Div', 'Thru', 'Total', 'To Par'] : ['Pos', 'Player', 'Thru', 'Total', 'To Par'];
+            const cols = mp
+                ? ['Pos', dbl ? 'Team' : 'Player', 'Thru', 'Match']
+                : (hasDiv ? ['Pos', 'Player', 'Div', 'Thru', 'Total', 'To Par'] : ['Pos', 'Player', 'Thru', 'Total', 'To Par']);
             cols.forEach((h) => htr.appendChild(el('th', null, h)));
             thead.appendChild(htr); table.appendChild(thead);
             const tbody = el('tbody');
             standings.forEach((s, i) => {
                 const tr = el('tr');
                 tr.appendChild(el('td', 'lb-pos', String(i + 1)));
-                tr.appendChild(el('td', 'lb-name', s && s.name != null ? String(s.name) : 'Player'));
-                if (hasDiv) tr.appendChild(el('td', null, (s && s.division) || '—'));
-                tr.appendChild(el('td', null, s && s.thru ? String(s.thru) : '—'));
-                tr.appendChild(el('td', null, s && s.total != null && s.thru ? String(s.total) : '—'));
-                const tp = el('td', 'lb-topar', s && s.thru ? fmtToPar(s.toPar) : '—');
-                if (s && s.thru) { if ((s.toPar || 0) < 0) tp.classList.add('under'); else if ((s.toPar || 0) > 0) tp.classList.add('over'); }
-                tr.appendChild(tp);
+                tr.appendChild(standingNameCell(s, dbl));
+                if (mp) {
+                    tr.appendChild(el('td', null, s && s.thru ? String(s.thru) : '—'));
+                    tr.appendChild(el('td', 'lb-match', matchText(s && s.match)));
+                } else {
+                    if (hasDiv) tr.appendChild(el('td', null, (s && s.division) || '—'));
+                    tr.appendChild(el('td', null, s && s.thru ? String(s.thru) : '—'));
+                    tr.appendChild(el('td', null, s && s.total != null && s.thru ? String(s.total) : '—'));
+                    const tp = el('td', 'lb-topar', s && s.thru ? fmtToPar(s.toPar) : '—');
+                    if (s && s.thru) { if ((s.toPar || 0) < 0) tp.classList.add('under'); else if ((s.toPar || 0) > 0) tp.classList.add('over'); }
+                    tr.appendChild(tp);
+                }
                 tbody.appendChild(tr);
             });
             table.appendChild(tbody);
@@ -1320,19 +1342,28 @@
         }
         function mountLiveLeaderboard(eventId, container, statusEl, weatherEl) {
             teardownLive();
-            const ctx = { ws: null, poll: null, gotWs: false };
+            const ctx = { ws: null, poll: null, gotWs: false, done: false };
             activeLive = ctx;
             const setConn = (t) => { if (statusEl) statusEl.textContent = t; };
-            const pollOnce = async () => { try { const d = await fetchJson(`/events/${encodeURIComponent(eventId)}/live`); if (activeLive === ctx) renderLiveSnapshot(container, weatherEl, d); } catch (_e) {} };
-            const startPolling = () => { if (ctx.poll || activeLive !== ctx) return; setConn('live (auto-refresh)'); pollOnce(); ctx.poll = setInterval(pollOnce, 5000); };
+            const render = (snap) => {
+                if (activeLive !== ctx) return;
+                renderLiveSnapshot(container, weatherEl, snap);
+                // Round finalized/cancelled → stop polling; the detail view swaps to final results on next load.
+                if (snap && snap.status && snap.status !== 'live') { ctx.done = true; if (ctx.poll) { clearInterval(ctx.poll); ctx.poll = null; } setConn('final'); }
+            };
+            const pollOnce = async () => { try { const d = await fetchJson(`/events/${encodeURIComponent(eventId)}/live`); render(d); } catch (_e) {} };
+            const startPolling = () => { if (ctx.poll || ctx.done || activeLive !== ctx) return; setConn('live (auto-refresh)'); pollOnce(); ctx.poll = setInterval(pollOnce, 5000); };
             try {
                 const wsUrl = API_BASE.replace(/^http/, 'ws') + `/events/${encodeURIComponent(eventId)}/live/ws`;
                 const ws = new WebSocket(wsUrl);
                 ctx.ws = ws;
                 ws.onopen = () => { ctx.gotWs = true; setConn('● live'); };
-                ws.onmessage = (e) => { try { if (activeLive === ctx) renderLiveSnapshot(container, weatherEl, JSON.parse(e.data)); } catch (_e) {} };
-                ws.onerror = () => { if (!ctx.gotWs) startPolling(); };
-                ws.onclose = () => { if (!ctx.gotWs && activeLive === ctx) startPolling(); };
+                ws.onmessage = (e) => { try { render(JSON.parse(e.data)); } catch (_e) {} };
+                // A dropped socket (common on a phone over a full round, or a CF edge recycle) must NOT freeze
+                // the board. Fall back to polling on ANY close/error — previously this was gated on !gotWs, so
+                // a mid-round drop left the leaderboard stuck on its last frame with no updates.
+                ws.onerror = () => { startPolling(); };
+                ws.onclose = () => { startPolling(); };
                 setTimeout(() => { if (!ctx.gotWs) startPolling(); }, 4000); // fallback if the upgrade stalls
             } catch (_e) { startPolling(); }
         }
@@ -1351,19 +1382,30 @@
             container.replaceChildren();
             container.appendChild(el('h3', 'roster-title', 'Final results'));
             if (!results.length) { container.appendChild(el('p', 'lb-empty', 'Results not posted yet.')); return; }
+            // A finalized matchplay round records its result in match_result (e.g. "won 3&2"); its stroke
+            // to_par is a meaningless artifact, so show the Match column instead of Total/To Par.
+            const mp = results.some((r) => parseMatchResult(r.match_result));
             const table = el('table', 'lb-table');
             const thead = el('thead'); const htr = el('tr');
-            ['Pos', 'Player', 'Total', 'To Par', 'Scoring'].forEach((h) => htr.appendChild(el('th', null, h)));
+            (mp ? ['Pos', 'Player', 'Match', 'Scoring'] : ['Pos', 'Player', 'Total', 'To Par', 'Scoring']).forEach((h) => htr.appendChild(el('th', null, h)));
             thead.appendChild(htr); table.appendChild(thead);
             const tbody = el('tbody');
             results.forEach((r) => {
                 const tr = el('tr');
                 tr.appendChild(el('td', 'lb-pos', r.place != null ? String(r.place) : '—'));
-                tr.appendChild(el('td', 'lb-name', r.name != null ? String(r.name) : 'Player'));
-                tr.appendChild(el('td', null, r.total != null ? String(r.total) : '—'));
-                const tp = el('td', 'lb-topar', r.to_par != null ? fmtToPar(r.to_par) : '—');
-                if (r.to_par < 0) tp.classList.add('under'); else if (r.to_par > 0) tp.classList.add('over');
-                tr.appendChild(tp);
+                const nameTd = el('td', 'lb-name', r.name != null ? String(r.name) : 'Player');
+                let sgLabel = null; try { const sg = JSON.parse(r.scoring_group || 'null'); if (sg && sg.label) sgLabel = String(sg.label); } catch (_e) {}
+                if (sgLabel) nameTd.appendChild(el('span', 'lb-members', ' · ' + sgLabel));
+                tr.appendChild(nameTd);
+                if (mp) {
+                    const m = parseMatchResult(r.match_result);
+                    tr.appendChild(el('td', 'lb-match', m ? matchLabel(m) : '—'));
+                } else {
+                    tr.appendChild(el('td', null, r.total != null ? String(r.total) : '—'));
+                    const tp = el('td', 'lb-topar', r.to_par != null ? fmtToPar(r.to_par) : '—');
+                    if (r.to_par < 0) tp.classList.add('under'); else if (r.to_par > 0) tp.classList.add('over');
+                    tr.appendChild(tp);
+                }
                 tr.appendChild(el('td', 'res-chips', fmtBreakdown(r.breakdown)));
                 tbody.appendChild(tr);
             });

@@ -1247,6 +1247,7 @@
 
         // ---- GVDG round ratings: finalized competitive + casual rounds, kept separate ----
         function fmtClubToPar(n) { n = n || 0; return n === 0 ? 'E' : (n > 0 ? '+' + n : String(n)); }
+        function parseMatchStr(raw) { if (!raw) return null; try { const m = JSON.parse(raw); return m && m.status ? m : null; } catch (_e) { return null; } }
         function fmtRatingValue(n) { return n == null ? '—' : String(n); }
         function plural(n, one, many) { return n === 1 ? one : many; }
         function ratingStateFor(key) { return ratingLoadState[key] || null; }
@@ -1293,7 +1294,15 @@
             const parts = [];
             const when = ratingDate(round.date);
             if (when) parts.push(when);
-            if (round.total != null) parts.push(round.total + ' (' + fmtClubToPar(round.to_par) + ')');
+            // Matchplay rounds show their match result ("Blue — won 3&2"), not a stroke score.
+            const matchResult = parseMatchStr(round.match_result);
+            if (matchResult) {
+                let team = ''; try { const sg = JSON.parse(round.scoring_group || 'null'); if (sg && sg.label) team = sg.label + ' — '; } catch (_e) {}
+                const label = (matchResult.outcome === 'lost' || matchResult.outcome === 'trailing') ? matchResult.status.replace(/^won /, 'lost ') : matchResult.status;
+                parts.push(team + label);
+            } else if (round.total != null) {
+                parts.push(round.total + ' (' + fmtClubToPar(round.to_par) + ')');
+            }
             if (round.round_code) parts.push('Round ' + round.round_code);
             meta.textContent = parts.join(' • ');
             main.appendChild(title);
