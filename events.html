@@ -360,6 +360,7 @@
             statusLabel,
         } from './events.js';
         import { teeSignNode } from './tee-sign.js';
+        import { holeWinners, playersFromResults, winnerColor } from './matchplay-colors.js';
         import { parseHomepageEventDate } from './home-feed-parse.js';
 
         // --- Theme toggle (mirrors index.html) ---
@@ -1279,10 +1280,13 @@
             if (rounds.length) {
                 card.appendChild(el('h3', 'roster-title', `Rounds (${rounds.length})`));
                 const list = el('div', 'player-list');
+                const roundWinners = data.roundWinners || {};
                 rounds.forEach((ev) => {
                     const row = el('button', 'player-row');
                     row.type = 'button';
                     row.style.cursor = 'pointer';
+                    const rc = winnerColor(roundWinners[ev.id]); // winning team's color; yellow for a tie
+                    if (rc) { row.style.borderLeft = '5px solid ' + rc; row.style.paddingLeft = '0.85rem'; }
                     row.appendChild(el('span', 'player-name', ev.name));
                     if (ev.date) row.appendChild(el('span', 'player-pdga', ev.date));
                     row.appendChild(el('span', 'player-team', statusLabel(ev.status)));
@@ -1502,12 +1506,26 @@
             const holeData = new Map(holes.map((h) => [Number(h.hole), h]));
             const holeNums = new Set([...holeData.keys(), ...officialByHole.keys()]);
             if (!holeNums.size) return; // nothing confirmed yet → no section (capture CTA lives on the members page)
+            // Matchplay: tint each hole by the team that won it (yellow = halved). Final rounds read the
+            // finalized results; a live round reads the snapshot. Non-matchplay / no-scorecard → uncolored.
+            let holeWins = {};
+            try {
+                if (ev.status === 'final') {
+                    const rd = await fetchJson(`/events/${encodeURIComponent(ev.id)}/results`).catch(() => null);
+                    holeWins = holeWinners(holes, playersFromResults((rd && rd.results) || []));
+                } else {
+                    const sd = await fetchJson(`/events/${encodeURIComponent(ev.id)}/live`).catch(() => null);
+                    if (sd && sd.roundConfig && sd.roundConfig.scoringStyle === 'matchplay') holeWins = holeWinners((sd.holes && sd.holes.length) ? sd.holes : holes, sd.players || []);
+                }
+            } catch (_e) {}
             card.appendChild(el('h3', 'roster-title', '🪧 Tee Signs' + (layout ? ' — ' + layout.name : '')));
             const grid = el('div', 'tee-signs-grid');
             const courseName = courseNameFor(courseIndex, ev.course_id) || '';
             for (const hn of [...holeNums].sort((a, b) => a - b)) {
                 const h = holeData.get(hn) || { hole: hn };
                 const holeCard = el('div', 'ts-hole-card');
+                const wc = winnerColor(holeWins[hn]); // team color for a won hole; yellow for a halve
+                if (wc) { holeCard.style.boxShadow = '0 0 0 3px ' + wc; holeCard.style.borderRadius = '10px'; }
                 const signId = officialByHole.get(hn);
                 if (signId != null) {
                     const img = el('img', 'ts-hole-photo');

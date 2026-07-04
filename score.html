@@ -198,6 +198,7 @@
     </div>
     <script src="udisc-export.js"></script>
     <script src="weather-display.js"></script>
+    <script type="module" src="matchplay-colors.js"></script>
     <script>
     (function () {
         "use strict";
@@ -677,6 +678,13 @@
             const id = Number(h && h.tee_sign_id);
             if (!id) return null;
             const card = el('div', 'card tee-sign-card');
+            // Matchplay: tint this hole's tee sign in the winning team's color. Halved holes stay as-is
+            // (no color) in the scoring app, per spec.
+            if (isMatchplayScoring() && window.GVDGMatchplay) {
+                const w = window.GVDGMatchplay.holeWinners([{ hole: h.hole }], S.cardmates)[h.hole];
+                const c = window.GVDGMatchplay.winnerColor(w, { tie: false });
+                if (c) card.style.boxShadow = '0 0 0 3px ' + c;
+            }
             const img = el('img');
             img.src = API_BASE + '/tee-signs/' + id + '/image';
             img.alt = 'Tee sign for hole ' + h.hole;

@@ -239,3 +239,35 @@ export function computeTeamStandings(
   }
   return [...map.values()].sort((a, b) => b.points - a.points || b.wins - a.wins || a.team.localeCompare(b.team));
 }
+
+function teamSide(label: unknown): "red" | "blue" | null {
+  const t = String(label ?? "").toLowerCase();
+  return t.includes("red") ? "red" : t.includes("blue") ? "blue" : null;
+}
+
+/** Which side won each matchplay round: event_id -> "red" | "blue" | "tie". Used to tint the rounds list on
+ *  the league standings page. A draw outcome on any row makes the round a tie. */
+export function computeRoundWinners(
+  rows: { event_id?: number | null; scoring_group?: string | null; match_result?: string | null }[],
+): Record<number, "red" | "blue" | "tie"> {
+  const out: Record<number, "red" | "blue" | "tie"> = {};
+  for (const r of rows) {
+    const outcome = parseOutcome(r.match_result);
+    if (!outcome || r.event_id == null) continue;
+    if (isTieOutcome(outcome)) {
+      out[r.event_id] = "tie";
+      continue;
+    }
+    if (out[r.event_id] === "tie") continue; // a recorded tie wins over stragglers
+    if (!isWinOutcome(outcome) || !r.scoring_group) continue;
+    let label: unknown = null;
+    try {
+      label = (JSON.parse(r.scoring_group) as { label?: unknown }).label;
+    } catch {
+      label = null;
+    }
+    const side = teamSide(label);
+    if (side) out[r.event_id] = side;
+  }
+  return out;
+}

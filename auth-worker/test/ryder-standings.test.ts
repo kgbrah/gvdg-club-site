@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeLeagueStandings, computeTeamStandings } from "../src/scoring.js";
+import { computeLeagueStandings, computeRoundWinners, computeTeamStandings } from "../src/scoring.js";
 
 // Ryder Cup / matchplay league scoring: a match is worth 2 pts to the winning side, 1 pt to EACH side on a
 // tie/draw, 0 to the loser — replacing the stroke-tournament place-points. Team standings count each MATCH
@@ -43,6 +43,19 @@ describe("team standings (Red vs Blue, per-match)", () => {
     expect(red?.points).toBe(0);
     expect(red?.matches).toBe(1);
     expect(red?.losses).toBe(1);
+  });
+
+  it("computeRoundWinners maps each round to its winning side (tie wins over stragglers)", () => {
+    const winners = computeRoundWinners([
+      { event_id: 6, scoring_group: sg("Blue", "Jesus"), match_result: mr("won") },
+      { event_id: 6, scoring_group: sg("Red", "Juan"), match_result: mr("lost") },
+      { event_id: 7, scoring_group: sg("Red", "Juan"), match_result: mr("won") },
+      { event_id: 9, scoring_group: sg("Blue", "Jesus"), match_result: mr("draw") },
+      { event_id: 9, scoring_group: sg("Red", "Juan"), match_result: mr("draw") },
+    ]);
+    expect(winners[6]).toBe("blue");
+    expect(winners[7]).toBe("red");
+    expect(winners[9]).toBe("tie");
   });
 
   it("a tie gives BOTH teams 1 point", () => {

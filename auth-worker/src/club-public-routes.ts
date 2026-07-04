@@ -1,6 +1,6 @@
 import type { Env } from "./env.js";
 import * as db from "./db.js";
-import { computeLeagueStandings, computeTeamStandings } from "./scoring.js";
+import { computeLeagueStandings, computeRoundWinners, computeTeamStandings } from "./scoring.js";
 import { verifySession } from "./jwt.js";
 import { bearer, json } from "./http.js";
 import { RECORD_PAGE_DEFAULTS, asInt, parseWindow } from "./input.js";
@@ -23,7 +23,8 @@ export async function handleClubPublic(
     const rows = (await db.leagueResultRows(env.DB, lid!)) as { event_id?: number | null; member_id: string | null; name: string; place: number | null; to_par: number | null; match_result?: string | null; scoring_group?: string | null }[];
     const standings = computeLeagueStandings(rows);
     const teamStandings = computeTeamStandings(rows);
-    return json({ league, standings, teamStandings, events: await db.listLeagueEvents(env.DB, lid!) }, 200, origin);
+    const roundWinners = computeRoundWinners(rows);
+    return json({ league, standings, teamStandings, roundWinners, events: await db.listLeagueEvents(env.DB, lid!) }, 200, origin);
   }
   if (method === "GET" && pathname === "/fundraisers") return json({ fundraisers: await db.listFundraisers(env.DB) }, 200, origin);
   if (method === "GET" && seg[0] === "fundraisers" && seg.length === 2) {
