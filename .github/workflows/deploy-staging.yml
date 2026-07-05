@@ -13,6 +13,8 @@ jobs:
     env:
       HAS_CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
       HAS_CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+      HAS_QA_TOKEN: ${{ secrets.GVDG_STAGING_QA_TOKEN != '' }}
+      HAS_QA_LOGIN: ${{ secrets.GVDG_STAGING_QA_IDENTIFIER != '' && secrets.GVDG_STAGING_QA_PIN != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -71,6 +73,19 @@ jobs:
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      - name: Install Playwright Chromium
+        if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_CF_ACCOUNT == 'true' && (env.HAS_QA_TOKEN == 'true' || env.HAS_QA_LOGIN == 'true') }}
+        run: npx playwright install --with-deps chromium
+      - name: Post-deploy live-scoring E2E
+        if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_CF_ACCOUNT == 'true' && (env.HAS_QA_TOKEN == 'true' || env.HAS_QA_LOGIN == 'true') }}
+        env:
+          GVDG_STAGING_QA_TOKEN: ${{ secrets.GVDG_STAGING_QA_TOKEN }}
+          GVDG_STAGING_QA_IDENTIFIER: ${{ secrets.GVDG_STAGING_QA_IDENTIFIER }}
+          GVDG_STAGING_QA_PIN: ${{ secrets.GVDG_STAGING_QA_PIN }}
+        run: npm run qa:staging-live-scoring
+      - name: Live-scoring E2E skip notice
+        if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_CF_ACCOUNT == 'true' && env.HAS_QA_TOKEN != 'true' && env.HAS_QA_LOGIN != 'true' }}
+        run: echo "::notice::Staging live-scoring E2E skipped; configure GVDG_STAGING_QA_TOKEN or GVDG_STAGING_QA_IDENTIFIER plus GVDG_STAGING_QA_PIN."
       - name: Skip notice
         if: ${{ env.HAS_CF_TOKEN != 'true' || env.HAS_CF_ACCOUNT != 'true' }}
         run: echo "::notice::Cloudflare deploy secret(s) are not fully configured; deploy skipped after tests."
