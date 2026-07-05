@@ -2,8 +2,8 @@ import * as db from "./db.js";
 import { scorecardConsensusIssues } from "./live-consensus.js";
 import type { LiveScoringConfig } from "./live-format.js";
 import { finalizeStandings, type FinalLiveStanding, type PlayerState } from "./scoring.js";
-import { finalizeRoundStandings, invalidScoreTargetsResponse, resolvedHoles, roundConfig, scoringState } from "./live-state.js";
-import { j, metadataJson, type LiveEnv, type LiveMeta } from "./live-types.js";
+import { finalizeRoundStandings, healthyTargets, invalidScoreTargetsResponse, resolvedHoles, roundConfig, scoringState } from "./live-state.js";
+import { j, metadataJson, type LiveEnv, type LiveMeta, type ScoringState } from "./live-types.js";
 import { roundRatingForScoreWithWeather, solveSsa, type Propagator, type RatingMethod, type RatingStream } from "./rating-engine.js";
 import { clearRoundRatingsForCasualRound, clearRoundRatingsForEvent, createRoundRating, findRatingAnchor, getLayoutRatingBaseline, upsertLayoutRatingBaseline, upsertPlayerRatingFromRounds } from "./rating-store.js";
 import { ratingWeatherFromJson } from "./weather.js";
@@ -28,21 +28,27 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
   if (meta.status === "final") {
     const scoring = scoringState(meta, input.players);
     const holes = resolvedHoles(meta);
-    const standings = scoring.error ? finalizeStandings(holes, input.players) : finalizeRoundStandings({ holes, players: input.players, config: scoring.config, targets: scoring.targets });
-    return j({ status: "final", standings });
+    return j({ status: "final", standings: finalizeMixedStandings(holes, input.players, scoring) });
   }
   const holes = resolvedHoles(meta);
   const scoring = scoringState(meta, input.players);
   let standings: FinalLiveStanding[];
   let forced: boolean;
-  if (scoring.error) {
-    // A malformed score-target config — e.g. a doubles/matchplay pair left with only ONE active player
-    // after a partner is removed — makes scoringState throw, which otherwise wedges the WHOLE round and
-    // blocks finalize for EVERYONE with no recovery (short of destroying data). An admin may force past
-    // it: finalize on per-player STROKE standings (no match results), the same fallback the already-final
-    // branch uses. Non-admins (and un-forced calls) still get the error so it can be repaired first.
-    if (!(input.authAdmin && input.force)) return invalidScoreTargetsResponse(scoring.error);
+  if (scoring.globalError) {
+    // The WHOLE round is unscorable (a corrupt round config). An admin may force past it onto per-player
+    // STROKE standings for the whole field; everyone else gets the error so it can be repaired first.
+    if (!(input.authAdmin && input.force)) return invalidScoreTargetsResponse(scoring.globalError);
     standings = finalizeStandings(holes, input.players);
+    forced = true;
+  } else if (scoring.cardErrors.length) {
+    // One or more broken cards — e.g. a doubles/matchplay pair left with ONE active player after a partner
+    // was removed. Non-admins / un-forced calls get the error so the card can be repaired (rejoin/withdraw).
+    // An admin force finalizes HEALTHY cards in their REAL format and the broken card(s) as UNRANKED stroke
+    // rows — so healthy standings are preserved instead of the whole field degrading to stroke.
+    if (!(input.authAdmin && input.force)) {
+      return j({ error: "invalid_score_targets", code: scoring.error?.code, message: scoring.error?.message, cardErrors: scoring.cardErrors }, 400);
+    }
+    standings = finalizeMixedStandings(holes, input.players, scoring);
     forced = true;
   } else {
     const issues = scorecardConsensusIssues(input.players, holes, scoring.targets, { casual: !!meta.casual, config: scoring.config });
@@ -95,6 +101,27 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
   input.broadcast();
   await persistRatingsBestEffort(input.env, meta, standings); // ratings never gate the finalize
   return j({ status: "final", standings, forced });
+}
+
+/** Finalize a round that may mix healthy and broken cards. Healthy cards finalize in their REAL format
+ *  (matchplay match_result / doubles teams); a broken card's players finalize as per-player STROKE rows
+ *  written place=null (UNRANKED) — so they never collide on place with a healthy winner and, being unranked
+ *  with no match_result, earn zero league place-points (computeLeagueStandings.placePoints). A whole-round
+ *  globalError still finalizes the entire field as stroke (the pre-existing force fallback). */
+function finalizeMixedStandings(holes: { hole: number; par: number }[], players: PlayerState[], scoring: ScoringState): FinalLiveStanding[] {
+  if (scoring.globalError) return finalizeStandings(holes, players);
+  if (scoring.cardErrors.length === 0) {
+    return finalizeRoundStandings({ holes, players, config: scoring.config, targets: scoring.targets });
+  }
+  const healthy = healthyTargets(scoring);
+  const healthyRows = finalizeRoundStandings({ holes, players, config: scoring.config, targets: healthy });
+  // The broken pass is everyone the healthy pass did NOT cover — derived from the same targets, so every
+  // non-removed player lands in EXACTLY one pass (no drop, no double-count even if a pair spans cards).
+  const covered = new Set<number>();
+  for (const target of healthy) for (const index of target.playerIndexes) covered.add(index);
+  const brokenPlayers = players.filter((p, index) => !p.removed && !covered.has(index));
+  const brokenRows = finalizeStandings(holes, brokenPlayers).map((row) => ({ ...row, place: null }));
+  return [...healthyRows, ...brokenRows];
 }
 
 async function persistCasualResults(env: LiveEnv, meta: LiveMeta, players: PlayerState[], standings: FinalLiveStanding[]): Promise<void> {

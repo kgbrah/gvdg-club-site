@@ -1,15 +1,15 @@
 import type { ScoreConflict } from "./live-consensus.js";
 import type { PlayerState } from "./scoring.js";
-import { canEnterScorecard, computeRoundStandings, publicScoreTargets, resolvedHoles, scorecardIssues, scoringState } from "./live-state.js";
+import { canEnterScorecard, computeRoundStandings, healthyTargets, publicScoreTargets, resolvedHoles, scorecardIssues, scoringState } from "./live-state.js";
 import type { LiveMeta } from "./live-types.js";
 
 export function publicSnapshot(meta: LiveMeta | null, players: PlayerState[]) {
   const holes = resolvedHoles(meta);
   const scoring = scoringState(meta, players);
   const issues = scorecardIssues(meta, players, holes, scoring);
-  const standings = scoring.error
+  const standings = scoring.globalError
     ? []
-    : computeRoundStandings({ holes, players, config: scoring.config, targets: scoring.targets }).map((standing) => ({
+    : computeRoundStandings({ holes, players, config: scoring.config, targets: healthyTargets(scoring) }).map((standing) => ({
         name: standing.name,
         division: standing.division,
         thru: standing.thru,
@@ -28,7 +28,10 @@ export function publicSnapshot(meta: LiveMeta | null, players: PlayerState[]) {
     eventId: meta?.eventId ?? null,
     roundConfig: scoring.config,
     scoreTargets: publicScoreTargets(players, scoring.targets),
-    scoreTargetError: scoring.error,
+    // Public /ws broadcast: only a WHOLE-round error rides the global field (a per-card break must NOT bleed
+    // into every viewer's global state). Per-card detail is in the additive scoreTargetErrors array.
+    scoreTargetError: scoring.globalError,
+    scoreTargetErrors: scoring.cardErrors,
     courseName: meta?.courseName ?? null,
     layoutName: meta?.layoutName ?? null,
     udiscCourseId: meta?.udiscCourseId ?? null,
@@ -57,9 +60,9 @@ export function publicSnapshot(meta: LiveMeta | null, players: PlayerState[]) {
 export function mineData(meta: LiveMeta | null, players: PlayerState[], authMember: string | null): Record<string, unknown> {
   const holes = resolvedHoles(meta);
   const scoring = scoringState(meta, players);
-  const standings = scoring.error
+  const standings = scoring.globalError
     ? []
-    : computeRoundStandings({ holes, players, config: scoring.config, targets: scoring.targets }).map((standing) => ({
+    : computeRoundStandings({ holes, players, config: scoring.config, targets: healthyTargets(scoring) }).map((standing) => ({
         name: standing.name,
         division: standing.division,
         thru: standing.thru,
@@ -75,12 +78,21 @@ export function mineData(meta: LiveMeta | null, players: PlayerState[], authMemb
   const meRaw = authMember ? players.findIndex((player) => player.memberId === authMember) : -1;
   const foundPlayer = meRaw >= 0 ? players[meRaw] : undefined;
   const meIdx = foundPlayer && !foundPlayer.removed ? meRaw : -1;
+  // Scope the caller's scoreTargetError to THEIR OWN situation: a member on a healthy pair sees null (so
+  // their scorecard renders and /score succeeds) even if another pair on their card is broken; a member
+  // whose own pair/card is broken sees exactly that error.
+  const myCard = meIdx >= 0 ? (players[meIdx]?.cardId ?? null) : null;
+  const iAmBroken = meIdx >= 0 && scoring.brokenPlayers.includes(meIdx);
+  const myError =
+    scoring.globalError ??
+    (iAmBroken ? (scoring.cardErrors.find((e) => e.playerIndexes.includes(meIdx)) ?? scoring.cardErrors.find((e) => e.cardId === myCard) ?? scoring.error) : null);
   const base = {
     eventId: meta?.eventId ?? 0,
     casual: !!meta?.casual,
     roundConfig: scoring.config,
     scoreTargets: publicScoreTargets(players, scoring.targets),
-    scoreTargetError: scoring.error,
+    scoreTargetError: myError ? { code: myError.code, message: myError.message } : null,
+    scoreTargetErrors: scoring.cardErrors,
     courseName: meta?.courseName ?? null,
     layoutName: meta?.layoutName ?? null,
     udiscCourseId: meta?.udiscCourseId ?? null,

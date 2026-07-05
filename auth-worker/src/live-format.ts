@@ -97,28 +97,60 @@ export function isLiveFormatError(error: unknown): error is LiveFormatError {
   return error instanceof LiveFormatError;
 }
 
+export type PairTargetError = {
+  readonly playerIndexes: readonly number[];
+  readonly code: LiveFormatErrorCode;
+  readonly message: string;
+};
+
+export type SafeScoreTargets = {
+  readonly targets: ScoreTarget[];
+  readonly errors: PairTargetError[];
+};
+
 export function scoreTargetsForPlayers(players: readonly ScoreTargetPlayer[], configValue?: unknown): ScoreTarget[] {
   const config = normalizeLiveScoringConfig(configValue);
   switch (config.groupFormat) {
     case "singles":
-      return players.flatMap((player, index): ScoreTarget[] =>
-        player.removed
-          ? []
-          : [
-              {
-                type: "player",
-                id: `player:${index}`,
-                label: player.name,
-                playerIndexes: [index],
-                memberIds: [player.memberId ?? null],
-              },
-            ],
-      );
+      return singlesTargetsForPlayers(players);
     case "doubles":
       return pairTargetsForPlayers(players);
     default:
       return assertNever(config.groupFormat);
   }
+}
+
+/** Like scoreTargetsForPlayers, but NON-THROWING: a malformed doubles pair (no label, or ≠2 active
+ *  players after a tombstone) becomes an error entry carrying the offending GLOBAL player indexes,
+ *  instead of throwing and collapsing the whole field. This is what lets scoringState isolate a broken
+ *  card. Singles never error. The grouping/keys/ids are IDENTICAL to the throwing path (they share
+ *  pairTargetsForPlayersSafe), so `pair:${key}` stays globally unique across the field. */
+export function scoreTargetsForPlayersSafe(players: readonly ScoreTargetPlayer[], configValue?: unknown): SafeScoreTargets {
+  const config = normalizeLiveScoringConfig(configValue);
+  switch (config.groupFormat) {
+    case "singles":
+      return { targets: singlesTargetsForPlayers(players), errors: [] };
+    case "doubles":
+      return pairTargetsForPlayersSafe(players);
+    default:
+      return assertNever(config.groupFormat);
+  }
+}
+
+function singlesTargetsForPlayers(players: readonly ScoreTargetPlayer[]): ScoreTarget[] {
+  return players.flatMap((player, index): ScoreTarget[] =>
+    player.removed
+      ? []
+      : [
+          {
+            type: "player",
+            id: `player:${index}`,
+            label: player.name,
+            playerIndexes: [index],
+            memberIds: [player.memberId ?? null],
+          },
+        ],
+  );
 }
 
 export function validateCardTargetsForScoring(targets: readonly ScoreTarget[], configValue?: unknown): void {
@@ -137,12 +169,25 @@ export function validateCardTargetsForScoring(targets: readonly ScoreTarget[], c
 }
 
 function pairTargetsForPlayers(players: readonly ScoreTargetPlayer[]): ScoreTarget[] {
+  const { targets, errors } = pairTargetsForPlayersSafe(players);
+  const first = errors[0];
+  if (first) throw new LiveFormatError(first.code, first.message); // preserve throw-on-first-bad-pair semantics
+  return targets;
+}
+
+// The single source of truth for doubles pair grouping. Builds the field-wide lowercased-label Map with
+// GLOBAL player indexes (so `pair:${key}` ids are globally unique and two cards labeled the same still
+// collapse+error exactly as before), collecting per-pair errors instead of throwing. A labelless active
+// player and a pair whose active count ≠ 2 each become an error carrying that pair's global indexes.
+function pairTargetsForPlayersSafe(players: readonly ScoreTargetPlayer[]): SafeScoreTargets {
   const pairs = new Map<string, { readonly label: string; readonly playerIndexes: number[]; readonly memberIds: (string | null)[] }>();
+  const errors: PairTargetError[] = [];
   players.forEach((player, index) => {
     if (player.removed) return;
     const label = normalizePairLabel(player.team);
     if (label == null) {
-      throw new LiveFormatError("missing_pair_label", `doubles scoring requires a pair label for ${player.name}`);
+      errors.push({ playerIndexes: [index], code: "missing_pair_label", message: `doubles scoring requires a pair label for ${player.name}` });
+      return;
     }
     const key = label.toLocaleLowerCase("en-US");
     const existing = pairs.get(key);
@@ -154,20 +199,23 @@ function pairTargetsForPlayers(players: readonly ScoreTargetPlayer[]): ScoreTarg
     pairs.set(key, { label, playerIndexes: [index], memberIds: [player.memberId ?? null] });
   });
 
-  return [...pairs.entries()].map(([key, pair]) => {
+  const targets: ScoreTarget[] = [];
+  for (const [key, pair] of pairs.entries()) {
     const [firstIndex, secondIndex] = pair.playerIndexes;
     const [firstMemberId, secondMemberId] = pair.memberIds;
     if (pair.playerIndexes.length !== 2 || firstIndex == null || secondIndex == null || firstMemberId === undefined || secondMemberId === undefined) {
-      throw new LiveFormatError("invalid_pair_size", `doubles scoring pair "${pair.label}" must have exactly two active players`);
+      errors.push({ playerIndexes: [...pair.playerIndexes], code: "invalid_pair_size", message: `doubles scoring pair "${pair.label}" must have exactly two active players` });
+      continue;
     }
-    return {
+    targets.push({
       type: "pair",
       id: `pair:${key}`,
       label: pair.label,
       playerIndexes: [firstIndex, secondIndex],
       memberIds: [firstMemberId, secondMemberId],
-    };
-  });
+    });
+  }
+  return { targets, errors };
 }
 
 function parseGroupFormat(value: unknown): LiveGroupFormat {

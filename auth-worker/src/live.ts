@@ -166,9 +166,27 @@ export class LiveEventDO {
     if (!this.meta.holes.some((h) => h.hole === hole)) return j({ error: "bad_hole" }, 400);
     if (!Number.isInteger(strokes) || strokes < 1 || strokes > 30) return j({ error: "bad_strokes" }, 400);
     const scoring = scoringState(this.meta, this.players);
-    if (scoring.error) return invalidScoreTargetsResponse(scoring.error);
+    if (scoring.globalError) return invalidScoreTargetsResponse(scoring.globalError); // whole round unscorable (bad config)
     const target = scoreTargetForBody(b, this.players, scoring.targets);
     const anchor = target ? targetAnchor(this.players, target) : null;
+    // Isolate a broken pair/card: block ONLY submissions touching a broken player (the target's anchor, else
+    // the body player, else the scorer's own slot). A healthy pair keeps scoring even sharing a card — or a
+    // single-card casual round — with a broken one.
+    if (scoring.brokenPlayers.length) {
+      const broken = new Set(scoring.brokenPlayers);
+      const bodyPlayer = this.findPlayer(b);
+      const touchedIndex = anchor
+        ? anchor.index
+        : bodyPlayer
+          ? this.players.indexOf(bodyPlayer)
+          : authMember
+            ? this.players.findIndex((p) => p.memberId === authMember && !p.removed)
+            : -1;
+      if (touchedIndex >= 0 && broken.has(touchedIndex)) {
+        const err = scoring.cardErrors.find((e) => e.playerIndexes.includes(touchedIndex)) ?? scoring.error;
+        if (err) return invalidScoreTargetsResponse({ code: err.code, message: err.message });
+      }
+    }
     if (!target || !anchor) return j({ error: b.targetId ? "no_target" : "no_player" }, 404); // a removed player is no longer scorable
     const meIndex = authMember ? this.players.findIndex((p) => p.memberId === authMember && !p.removed) : -1;
     const me = meIndex >= 0 ? this.players[meIndex] : undefined;

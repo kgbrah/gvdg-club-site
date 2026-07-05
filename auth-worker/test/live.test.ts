@@ -9,7 +9,7 @@ import {
 import worker from "../src/index.js";
 import { signSession } from "../src/jwt.js";
 import { LiveEventDO } from "../src/live.js";
-import type { ScoreTarget } from "../src/live-format.js";
+import { scoreTargetsForPlayersSafe, type ScoreTarget } from "../src/live-format.js";
 import type { LiveSocket } from "../src/live-types.js";
 import type { PlayerState } from "../src/scoring.js";
 
@@ -1448,11 +1448,12 @@ describe("LiveEventDO config-aware score targets and final results", () => {
     }));
 
     expect(started.status).toBe(200);
+    // The public snapshot's global scoreTargetError stays null for a per-card issue (it must not broadcast
+    // over /ws into every viewer's state); the unpaired card surfaces in the additive scoreTargetErrors array.
     await expect(started.json()).resolves.toMatchObject({
       status: "live",
-      scoreTargetError: {
-        code: "missing_pair_label",
-      },
+      scoreTargetError: null,
+      scoreTargetErrors: [{ cardId: "c0", code: "missing_pair_label" }],
     });
     expect(state.getStored("meta")).toMatchObject({ casual: true, roundCode: "PAIR12" });
   });
@@ -1629,6 +1630,233 @@ describe("LiveEventDO config-aware score targets and final results", () => {
     expect(result?.args[2]).toBe("Legacy");
     expect(result?.args[9]).toBeNull();
     expect(result?.args[10]).toBeNull();
+  });
+});
+
+describe("LiveEventDO per-card scoring isolation (P2-C)", () => {
+  const holes = [{ hole: 1, par: 3 }, { hole: 2, par: 3 }];
+  const doublesConfig = { groupFormat: "doubles", scoringStyle: "stroke" };
+  const matchplayConfig = { groupFormat: "singles", scoringStyle: "matchplay" };
+
+  const post = (live: LiveEventDO, headers: Record<string, string>, body: unknown) =>
+    live.fetch(new Request("https://do/score", { method: "POST", headers, body: JSON.stringify(body) }));
+  const memberScore = (live: LiveEventDO, member: string, body: unknown) => post(live, { "X-Auth-Member": member }, body);
+  const removeByAdmin = (live: LiveEventDO, memberId: string) =>
+    live.fetch(new Request("https://do/remove", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify({ memberId }) }));
+  const snapshot = async (live: LiveEventDO) => (await (await live.fetch(new Request("https://do/"))).json()) as SnapshotBody & {
+    readonly scoreTargetError: unknown;
+    readonly scoreTargetErrors: readonly { readonly cardId: string | null; readonly code: string; readonly message: string }[];
+  };
+  const mine = async (live: LiveEventDO, member: string) =>
+    (await (await live.fetch(new Request("https://do/mine", { headers: { "X-Auth-Member": member } }))).json()) as {
+      readonly scoreTargetError: { readonly code: string; readonly message: string } | null;
+    };
+  const adminForceFinalize = (live: LiveEventDO) =>
+    live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify({ force: true }) }));
+
+  const startTwoCardDoubles = (live: LiveEventDO) =>
+    live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      eventId: 20, holes, liveScoringConfig: doublesConfig,
+      players: [
+        { memberId: "m_ann", name: "Ann", team: "Alpha", cardId: "cA" },
+        { memberId: "m_bo", name: "Bo", team: "Alpha", cardId: "cA" },
+        { memberId: "m_cy", name: "Cy", team: "Beta", cardId: "cB" },
+        { memberId: "m_dee", name: "Dee", team: "Beta", cardId: "cB" },
+      ],
+    }) }));
+
+  const startTwoCardMatchplay = (live: LiveEventDO) =>
+    live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      eventId: 21, holes, liveScoringConfig: matchplayConfig,
+      players: [
+        { memberId: "m_a", name: "A", startingHole: 1 },
+        { memberId: "m_b", name: "B", startingHole: 1 },
+        { memberId: "m_c", name: "C", startingHole: 2 },
+        { memberId: "m_d", name: "D", startingHole: 2 },
+      ],
+    }) }));
+
+  it("keeps GLOBAL player indexes and reports per-pair errors after a tombstone (scoreTargetsForPlayersSafe)", () => {
+    const players = [
+      { memberId: "m_ann", name: "Ann", team: "Alpha" },
+      { memberId: "m_bo", name: "Bo", team: "Alpha", removed: true }, // tombstoned partner
+      { memberId: "m_cy", name: "Cy", team: "Beta" },
+      { memberId: "m_dee", name: "Dee", team: "Beta" },
+    ];
+    const { targets, errors } = scoreTargetsForPlayersSafe(players, doublesConfig);
+    // Beta survives with its GLOBAL indexes [2,3]; Alpha becomes a per-pair error carrying global index 0.
+    expect(targets).toEqual([{ type: "pair", id: "pair:beta", label: "Beta", playerIndexes: [2, 3], memberIds: ["m_cy", "m_dee"] }]);
+    expect(errors).toEqual([{ playerIndexes: [0], code: "invalid_pair_size", message: expect.any(String) }]);
+  });
+
+  it("isolates a broken doubles pair to its own card — the other card keeps scoring", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await startTwoCardDoubles(live);
+    await memberScore(live, "m_ann", { targetId: "pair:alpha", hole: 1, strokes: 3 });
+    await memberScore(live, "m_cy", { targetId: "pair:beta", hole: 1, strokes: 4 });
+
+    expect((await removeByAdmin(live, "m_bo")).status).toBe(200); // a partner leaves card cA -> pair Alpha broken
+
+    // healthy card cB keeps scoring; broken card cA is blocked (its lone member can't score)
+    expect((await memberScore(live, "m_cy", { targetId: "pair:beta", hole: 2, strokes: 4 })).status).toBe(200);
+    const blocked = await memberScore(live, "m_ann", { index: 0, hole: 2, strokes: 3 });
+    expect(blocked.status).toBe(400);
+    await expect(blocked.json()).resolves.toMatchObject({ error: "invalid_score_targets", code: "invalid_pair_size" });
+
+    const snap = await snapshot(live);
+    expect(snap.scoreTargetError).toBeNull(); // a per-card break does NOT ride the public global field
+    expect(snap.scoreTargetErrors).toEqual([{ cardId: "cA", playerIndexes: [0], code: "invalid_pair_size", message: expect.any(String) }]);
+    expect(snap.standings?.map((s) => s.targetId)).toEqual(["pair:beta"]); // only the healthy card ranks
+
+    expect((await mine(live, "m_cy")).scoreTargetError).toBeNull(); // healthy-card member: no false warning
+    expect((await mine(live, "m_ann")).scoreTargetError?.code).toBe("invalid_pair_size"); // broken-card member: their error
+  });
+
+  it("isolates a broken pair to JUST that pair on a SHARED card (casual 2v2) — the other pair keeps scoring", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    // All four players on ONE physical card c0 — exactly how a casual 2v2 foursome is shaped, and the ONLY
+    // HTTP-reachable mid-round break. Card-level isolation would wrongly wedge Beta too; pair-level must not.
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      casual: true, roundCode: "SHARE1", holes, liveScoringConfig: doublesConfig,
+      players: [
+        { memberId: "m_ann", name: "Ann", team: "Alpha", cardId: "c0" },
+        { memberId: "m_bo", name: "Bo", team: "Alpha", cardId: "c0" },
+        { memberId: "m_cy", name: "Cy", team: "Beta", cardId: "c0" },
+        { memberId: "m_dee", name: "Dee", team: "Beta", cardId: "c0" },
+      ],
+    }) }));
+    await memberScore(live, "m_ann", { targetId: "pair:alpha", hole: 1, strokes: 3 });
+    await memberScore(live, "m_cy", { targetId: "pair:beta", hole: 1, strokes: 4 });
+    await removeByAdmin(live, "m_bo"); // pair Alpha breaks, but Beta shares the SAME card c0
+
+    expect((await memberScore(live, "m_cy", { targetId: "pair:beta", hole: 2, strokes: 4 })).status).toBe(200); // Beta keeps scoring
+    const blocked = await memberScore(live, "m_ann", { targetId: "pair:alpha", hole: 2, strokes: 3 });
+    expect(blocked.status).toBe(400);
+    await expect(blocked.json()).resolves.toMatchObject({ error: "invalid_score_targets", code: "invalid_pair_size" });
+
+    const snap = await snapshot(live);
+    expect(snap.scoreTargetErrors.map((e) => e.code)).toEqual(["invalid_pair_size"]);
+    expect(snap.standings?.map((s) => s.targetId)).toEqual(["pair:beta"]); // Beta ranks despite sharing c0 with broken Alpha
+    expect((await mine(live, "m_cy")).scoreTargetError).toBeNull(); // healthy Beta member: no false warning
+    expect((await mine(live, "m_ann")).scoreTargetError?.code).toBe("invalid_pair_size"); // broken Alpha survivor: their error
+  });
+
+  it("does not double-count a player whose pair spans two physical cards at finalize", async () => {
+    const { database, inserts } = recordingDb();
+    const live = new LiveEventDO(new FakeState({}), { DB: database });
+    // Alpha's partners sit on DIFFERENT physical cards (cX/cY); Beta breaks on cY. The old card-keyed logic
+    // put A2 in BOTH the healthy pass (via Alpha's target) AND the broken pass (via its own cY cardId).
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      eventId: 22, holes, liveScoringConfig: doublesConfig,
+      players: [
+        { memberId: "m_a1", name: "A1", team: "Alpha", cardId: "cX" },
+        { memberId: "m_a2", name: "A2", team: "Alpha", cardId: "cY" },
+        { memberId: "m_b1", name: "B1", team: "Beta", cardId: "cY" },
+        { memberId: "m_b2", name: "B2", team: "Beta", cardId: "cY" },
+      ],
+    }) }));
+    for (const hole of [1, 2]) {
+      await post(live, { "X-Auth-Admin": "true" }, { targetId: "pair:alpha", scorerIndex: 0, hole, strokes: 3 });
+      await post(live, { "X-Auth-Admin": "true" }, { targetId: "pair:beta", scorerIndex: 2, hole, strokes: 4 });
+    }
+    await removeByAdmin(live, "m_b2"); // Beta breaks (B1 orphaned)
+
+    const finalized = await adminForceFinalize(live);
+    expect(finalized.status).toBe(200);
+    const rows = inserts.filter((i) => /INSERT INTO results/i.test(i.sql));
+    expect(rows.filter((i) => i.args[2] === "A2")).toHaveLength(1); // A2 persisted EXACTLY once (no double-count)
+    const place = Object.fromEntries(rows.map((i) => [i.args[2] as string, i.args[3]]));
+    expect(place["A1"]).toBe(1); // Alpha ranked
+    expect(place["A2"]).toBe(1);
+    expect(place["B1"]).toBeNull(); // orphaned Beta survivor: unranked stroke row
+  });
+
+  it("force-finalizes healthy cards in real format and the broken card as UNRANKED stroke rows (doubles-stroke)", async () => {
+    const { database, inserts } = recordingDb();
+    const live = new LiveEventDO(new FakeState({}), { DB: database });
+    await startTwoCardDoubles(live);
+    for (const hole of [1, 2]) {
+      for (const [member, target, strokes] of [["m_ann", "pair:alpha", 3], ["m_bo", "pair:alpha", 3], ["m_cy", "pair:beta", 4], ["m_dee", "pair:beta", 4]] as const) {
+        await memberScore(live, member, { targetId: target, hole, strokes });
+      }
+    }
+    await removeByAdmin(live, "m_bo"); // Alpha broken
+
+    // a non-admin cannot finalize past the broken card
+    const denied = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Member": "m_cy" }, body: "{}" }));
+    expect(denied.status).toBe(400);
+    await expect(denied.json()).resolves.toMatchObject({ error: "invalid_score_targets", code: "invalid_pair_size" });
+
+    const finalized = await adminForceFinalize(live);
+    expect(finalized.status).toBe(200);
+    await expect(finalized.json()).resolves.toMatchObject({ status: "final", forced: true });
+
+    const rows = inserts.filter((i) => /INSERT INTO results/i.test(i.sql));
+    const byName = Object.fromEntries(rows.map((i) => [i.args[2] as string, { place: i.args[3], group: i.args[9], match: i.args[10] }]));
+    expect(JSON.parse(must(byName["Cy"]).group as string)).toMatchObject({ targetId: "pair:beta", label: "Beta" }); // healthy: real doubles format
+    expect([must(byName["Cy"]).place, must(byName["Dee"]).place]).toEqual([1, 1]);
+    expect(must(byName["Ann"]).place).toBeNull(); // broken survivor: UNRANKED stroke (kills the double place=1 + league double-count)
+    expect(must(byName["Ann"]).group).toBeNull();
+    expect(must(byName["Ann"]).match).toBeNull();
+    expect(byName["Bo"]).toBeUndefined(); // removed player is not persisted
+  });
+
+  it("isolates a broken matchplay card and finalizes the healthy match while stroke-falling-back the broken one", async () => {
+    const { database, inserts } = recordingDb();
+    const live = new LiveEventDO(new FakeState({}), { DB: database });
+    await startTwoCardMatchplay(live);
+    for (const hole of [1, 2]) {
+      for (const [member, target, strokes] of [
+        ["m_a", "player:0", 3], ["m_b", "player:0", 3], ["m_a", "player:1", 4], ["m_b", "player:1", 4],
+        ["m_c", "player:2", 3], ["m_d", "player:2", 3], ["m_c", "player:3", 5], ["m_d", "player:3", 5],
+      ] as const) {
+        await memberScore(live, member, { targetId: target, hole, strokes });
+      }
+    }
+    await removeByAdmin(live, "m_b"); // card h1 drops to one target -> invalid_matchplay_targets
+
+    expect((await memberScore(live, "m_c", { targetId: "player:2", hole: 2, strokes: 3 })).status).toBe(200); // healthy card scores
+    const blocked = await memberScore(live, "m_a", { targetId: "player:0", hole: 2, strokes: 3 });
+    expect(blocked.status).toBe(400);
+    await expect(blocked.json()).resolves.toMatchObject({ error: "invalid_score_targets", code: "invalid_matchplay_targets" });
+
+    const snap = await snapshot(live);
+    expect(snap.scoreTargetErrors).toEqual([{ cardId: "h1", playerIndexes: [0], code: "invalid_matchplay_targets", message: expect.any(String) }]);
+    expect(snap.standings?.map((s) => s.name).sort()).toEqual(["C", "D"]); // only the healthy match ranks
+
+    const finalized = await adminForceFinalize(live);
+    expect(finalized.status).toBe(200);
+    const rows = inserts.filter((i) => /INSERT INTO results/i.test(i.sql));
+    const byName = Object.fromEntries(rows.map((i) => [i.args[2] as string, { place: i.args[3], match: i.args[10] }]));
+    expect(JSON.parse(must(byName["C"]).match as string).outcome).toBe("won"); // healthy match keeps its match_result
+    expect(must(byName["C"]).place).toBe(1);
+    expect(must(byName["D"]).place).toBe(2);
+    expect(must(byName["A"]).place).toBeNull(); // broken survivor: unranked stroke, no match_result
+    expect(must(byName["A"]).match).toBeNull();
+  });
+
+  it("withdrawing the remaining partner repairs the card (error clears)", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await startTwoCardDoubles(live);
+    await removeByAdmin(live, "m_bo");
+    expect((await snapshot(live)).scoreTargetErrors).toHaveLength(1);
+    await removeByAdmin(live, "m_ann"); // Alpha now has 0 active players -> no target, no error
+    expect((await snapshot(live)).scoreTargetErrors).toHaveLength(0);
+    expect((await memberScore(live, "m_cy", { targetId: "pair:beta", hole: 1, strokes: 4 })).status).toBe(200);
+  });
+
+  it("rejoining a removed partner reforms the pair and clears the block (casual, no WS resync)", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      casual: true, roundCode: "REJOIN1", holes, liveScoringConfig: doublesConfig,
+      players: [{ memberId: "m_ann", name: "Ann", team: "Alpha" }, { memberId: "m_bo", name: "Bo", team: "Alpha" }],
+    }) }));
+    await live.fetch(new Request("https://do/remove", { method: "POST", headers: { "X-Auth-Member": "m_bo" }, body: JSON.stringify({ memberId: "m_bo" }) }));
+    expect((await snapshot(live)).scoreTargetErrors).toHaveLength(1);
+    const rejoined = await live.fetch(new Request("https://do/join", { method: "POST", headers: { "X-Auth-Member": "m_bo" }, body: JSON.stringify({ name: "Bo" }) }));
+    expect(rejoined.status).toBe(200);
+    expect((await snapshot(live)).scoreTargetErrors).toHaveLength(0); // pair reformed (team label retained on the tombstoned slot)
+    expect((await memberScore(live, "m_ann", { targetId: "pair:alpha", hole: 1, strokes: 3 })).status).toBe(200);
   });
 });
 

@@ -117,8 +117,11 @@ export async function handleClubLive(
       const validationPlayers: PlayerState[] = players.map((player) => ({ ...player, scores: {}, scorecards: {} }));
       assignCards(validationPlayers);
       const targetValidation = scoringState({ eventId: eid, holes, status: "live", startedAt: "", roundConfig: liveScoringConfig }, validationPlayers);
-      if (targetValidation.error) {
-        return json({ error: "invalid_score_targets", code: targetValidation.error.code, message: targetValidation.error.message }, 400, origin);
+      // Refuse a malformed prospective roster at start (odd/mis-paired card). Read globalError/cardErrors
+      // explicitly rather than the `error` summary so this guard can't silently regress if the summary changes.
+      const startError = targetValidation.globalError ?? targetValidation.cardErrors[0] ?? null;
+      if (startError) {
+        return json({ error: "invalid_score_targets", code: startError.code, message: startError.message }, 400, origin);
       }
       const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, courseName: evCourse?.name ?? null, layoutName: evLayout?.name ?? null, holes, players, liveScoringConfig, startedAt: new Date().toISOString(), weatherLocation }) });
       const data = await r.json().catch(() => ({}));

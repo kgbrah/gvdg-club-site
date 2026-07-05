@@ -99,9 +99,27 @@ export type ResolvedHole = {
   readonly overridden: boolean;
 };
 
-export type ScoringState =
-  | { readonly config: LiveScoringConfig; readonly targets: readonly ScoreTarget[]; readonly error: null }
-  | { readonly config: LiveScoringConfig; readonly targets: readonly ScoreTarget[]; readonly error: { readonly code: string; readonly message: string } };
+export type ScoreTargetError = { readonly code: string; readonly message: string };
+
+/** A score-target failure and the GLOBAL player indexes it makes unscorable. For doubles-STROKE this is
+ *  one broken pair (its orphaned player); for MATCHPLAY it is the whole card (a match needs both sides),
+ *  so `playerIndexes` covers every active player on that card. `cardId` is the RAW cardId (?? null),
+ *  never the "card:null" grouping sentinel. */
+export type CardScoringError = { readonly cardId: string | null; readonly playerIndexes: readonly number[]; readonly code: string; readonly message: string };
+
+/** Score-target state for a round. `targets` is the healthy union (valid targets). `globalError` is set
+ *  ONLY when the whole round is unscorable (a corrupt round config). `brokenPlayers` are the GLOBAL player
+ *  indexes that cannot currently be scored/ranked — pair-level for stroke (only the broken pair), card-level
+ *  for matchplay — so a healthy pair keeps scoring even sharing a card with a broken one. `cardErrors` is
+ *  the display detail; `error` is a retained back-compat SUMMARY (globalError ?? cardErrors[0] ?? null). */
+export type ScoringState = {
+  readonly config: LiveScoringConfig;
+  readonly targets: readonly ScoreTarget[];
+  readonly cardErrors: readonly CardScoringError[];
+  readonly brokenPlayers: readonly number[];
+  readonly globalError: ScoreTargetError | null;
+  readonly error: ScoreTargetError | null;
+};
 
 export type PublicScoreTarget = {
   readonly id: string;
