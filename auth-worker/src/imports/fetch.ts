@@ -57,6 +57,29 @@ export function isAllowedUrl(raw: string, bases: string[]): boolean {
   return bases.some((b) => host === b || host.endsWith("." + b));
 }
 
+/** SSRF guard for an outbound URL to an ADMIN-CONFIGURED, arbitrary public host (e.g. a data-export
+ *  webhook) — no fixed allowlist, so it can't use isAllowedUrl. Requires https, forbids credentials, and
+ *  rejects anything that could target the internal network: IPv4/IPv6 literals (covers 127.*, 10.*,
+ *  192.168.*, and the 169.254.169.254 cloud-metadata address), `localhost`, bare/no-dot hostnames, and
+ *  internal-only TLD suffixes. Any real public FQDN passes. */
+export function isPublicHttpsUrl(raw: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== "https:") return false;
+  if (u.username || u.password) return false;
+  const host = u.hostname.toLowerCase();
+  if (host.includes(":")) return false; // IPv6 literal
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return false; // IPv4 literal (private + loopback + link-local)
+  if (host === "localhost" || host.endsWith(".localhost")) return false;
+  if (!host.includes(".")) return false; // bare hostname → internal
+  if (/\.(local|internal|lan|home|corp|intranet)$/.test(host)) return false; // internal-only TLDs
+  return true;
+}
+
 export async function safeFetch(
   url: string,
   allowHosts: string[],

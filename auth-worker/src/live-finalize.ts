@@ -75,10 +75,12 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
     return j({ status: "final", standings, forced });
   }
   try {
-    await db.clearResults(input.env.DB, meta.eventId);
-    await Promise.all(
-      standings.map((standing) =>
-        db.createResult(input.env.DB, {
+    // Atomic: clear + all result rows in ONE D1 transaction, so a mid-write failure can't leave a partial
+    // leaderboard (some players persisted, others not). Ratings below stay best-effort and never gate this.
+    await db.runBatch(input.env.DB, [
+      db.clearResultsStmt(input.env.DB, meta.eventId),
+      ...standings.map((standing) =>
+        db.createResultStmt(input.env.DB, {
           event_id: meta.eventId,
           member_id: standing.memberId,
           name: standing.name,
@@ -91,7 +93,7 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
           match_result: metadataJson(standing.matchResult),
         }),
       ),
-    );
+    ]);
     await db.updateEvent(input.env.DB, meta.eventId, { status: "final" });
   } catch (error) {
     meta.status = "live";
@@ -142,9 +144,11 @@ async function persistCasualResults(env: LiveEnv, meta: LiveMeta, players: Playe
   });
   const roundId = casualRoundId(round);
   if (roundId == null) throw new Error("casual_round_insert_failed");
-  await Promise.all(
+  // The round row must be inserted first (its id keys the results), then all result rows land atomically.
+  await db.runBatch(
+    env.DB,
     standings.map((standing) =>
-      db.createCasualResult(env.DB, {
+      db.createCasualResultStmt(env.DB, {
         casual_round_id: roundId,
         member_id: standing.memberId,
         name: standing.name,

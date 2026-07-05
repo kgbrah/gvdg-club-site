@@ -1,4 +1,16 @@
-import type { D1Like } from "./db-types.js";
+import type { D1Like, D1StatementLike } from "./db-types.js";
+
+/** Run statements as ONE atomic D1 transaction when the binding supports batch() (real D1 does); otherwise
+ *  fall back to sequential execution (the d1kv fallback and test stubs don't implement batch). Used to make
+ *  a finalize write all-or-nothing so a mid-write failure can't leave a partial leaderboard. */
+export async function runBatch(db: D1Like, statements: D1StatementLike[]): Promise<void> {
+  if (statements.length === 0) return;
+  if (typeof db.batch === "function") {
+    await db.batch(statements);
+    return;
+  }
+  for (const s of statements) await s.run();
+}
 
 export interface ResultInput {
   event_id: number;
@@ -24,7 +36,19 @@ export async function createResult(db: D1Like, r: ResultInput) {
 }
 
 export async function clearResults(db: D1Like, eventId: number) {
-  await db.prepare("DELETE FROM results WHERE event_id = ?").bind(eventId).run();
+  await clearResultsStmt(db, eventId).run();
+}
+
+// Statement builders (no RETURNING, not executed) so a finalize can write clear + all inserts in one
+// atomic db.batch() — see runBatch.
+export function clearResultsStmt(db: D1Like, eventId: number): D1StatementLike {
+  return db.prepare("DELETE FROM results WHERE event_id = ?").bind(eventId);
+}
+
+export function createResultStmt(db: D1Like, r: ResultInput): D1StatementLike {
+  return db
+    .prepare("INSERT INTO results (event_id, member_id, name, place, total, to_par, rating, breakdown, scorecard, scoring_group, match_result) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(r.event_id, r.member_id ?? null, r.name, r.place ?? null, r.total ?? null, r.to_par ?? null, r.rating ?? null, r.breakdown ?? null, r.scorecard ?? null, r.scoring_group ?? null, r.match_result ?? null);
 }
 
 export async function listResults(db: D1Like, eventId: number) {
@@ -105,6 +129,14 @@ export async function createCasualResult(db: D1Like, r: CasualResultInput) {
     )
     .bind(r.casual_round_id, r.member_id ?? null, r.name, r.division ?? null, r.place ?? null, r.total ?? null, r.to_par ?? null, r.breakdown ?? null, r.scorecard ?? null, r.scoring_group ?? null, r.match_result ?? null)
     .first();
+}
+
+export function createCasualResultStmt(db: D1Like, r: CasualResultInput): D1StatementLike {
+  return db
+    .prepare(
+      "INSERT INTO casual_results (casual_round_id, member_id, name, division, place, total, to_par, breakdown, scorecard, scoring_group, match_result) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(r.casual_round_id, r.member_id ?? null, r.name, r.division ?? null, r.place ?? null, r.total ?? null, r.to_par ?? null, r.breakdown ?? null, r.scorecard ?? null, r.scoring_group ?? null, r.match_result ?? null);
 }
 
 export async function listCasualRoundResults(db: D1Like, roundCode: string) {

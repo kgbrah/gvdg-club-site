@@ -2,6 +2,7 @@ import type { Env } from "./env.js";
 import * as db from "./db.js";
 import { json, readJson } from "./http.js";
 import { asInt, asStr } from "./input.js";
+import { isPublicHttpsUrl } from "./imports/fetch.js";
 
 interface ExportPayload {
   exportedAt: string;
@@ -239,6 +240,11 @@ async function buildExportSnapshot(
 }
 
 async function postToEndpoint(endpoint: db.DataArchiveEndpoint, payload: ExportPayload) {
+  // SSRF guard: the endpoint URL is admin-configured and arbitrary, so refuse anything that could target
+  // the internal network (IP literals, localhost, internal hosts) or leak auth over http.
+  if (!isPublicHttpsUrl(endpoint.endpoint_url)) {
+    return { ok: false, status: 0, preview: "blocked: endpoint must be a public https URL (no IP literals, localhost, or internal hosts)" };
+  }
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (endpoint.auth_header && endpoint.auth_token) {
     const token = endpoint.auth_prefix ? `${endpoint.auth_prefix} ${endpoint.auth_token}` : endpoint.auth_token;
@@ -249,12 +255,16 @@ async function postToEndpoint(endpoint: db.DataArchiveEndpoint, payload: ExportP
     method: "POST",
     headers,
     body: JSON.stringify(payload),
+    redirect: "manual", // don't let a 3xx to an internal host bypass the guard above
   };
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), EXPORT_FETCH_TIMEOUT_MS);
   try {
     const response = await fetch(endpoint.endpoint_url, { ...init, signal: controller.signal });
+    if (response.status >= 300 && response.status < 400) {
+      return { ok: false, status: response.status, preview: "blocked: endpoint must not redirect (a redirect could bypass the SSRF guard)" };
+    }
     const preview = (await response.text()).slice(0, 1200);
     return { ok: response.ok, status: response.status, preview };
   } finally {
@@ -283,7 +293,7 @@ export async function handleAdminExport(
       const label = asStr(body.label, 120);
       const endpointUrl = asStr(body.endpoint_url, 1000);
       const active = hasProperty(body, "is_active") ? parseBoolean(body.is_active) : null;
-      if (!label || !endpointUrl || !/^https?:\/\//.test(endpointUrl)) return json({ error: "invalid_destination" }, 400, origin);
+      if (!label || !endpointUrl || !isPublicHttpsUrl(endpointUrl)) return json({ error: "invalid_destination" }, 400, origin);
       if (hasProperty(body, "is_active") && active == null) return json({ error: "invalid_destination" }, 400, origin);
       const authHeader = hasProperty(body, "auth_header")
         ? (body.auth_header == null ? null : asStr(body.auth_header, 80) ?? (body.auth_header === "" ? null : null))
@@ -319,7 +329,7 @@ export async function handleAdminExport(
       }
       if (hasProperty(body, "endpoint_url")) {
         const value = asStr(body.endpoint_url, 1000);
-        if (!value || !/^https?:\/\//.test(value)) return json({ error: "invalid_destination" }, 400, origin);
+        if (!value || !isPublicHttpsUrl(value)) return json({ error: "invalid_destination" }, 400, origin);
         update = { ...update, endpoint_url: value };
       }
       if (hasProperty(body, "auth_header")) {

@@ -11,6 +11,7 @@ import { signSession } from "../src/jwt.js";
 import { LiveEventDO } from "../src/live.js";
 import { scoreTargetsForPlayersSafe, type ScoreTarget } from "../src/live-format.js";
 import type { LiveSocket } from "../src/live-types.js";
+import type { D1StatementLike } from "../src/db-types.js";
 import type { PlayerState } from "../src/scoring.js";
 
 type Stored = {
@@ -1857,6 +1858,63 @@ describe("LiveEventDO per-card scoring isolation (P2-C)", () => {
     expect(rejoined.status).toBe(200);
     expect((await snapshot(live)).scoreTargetErrors).toHaveLength(0); // pair reformed (team label retained on the tombstoned slot)
     expect((await memberScore(live, "m_ann", { targetId: "pair:alpha", hole: 1, strokes: 3 })).status).toBe(200);
+  });
+});
+
+describe("LiveEventDO finalize atomicity (db.batch)", () => {
+  // A D1 stub that records batch() calls (and can be made to fail) so we can assert finalize writes results
+  // in ONE atomic transaction rather than row-by-row.
+  function batchDb(opts: { failBatch?: boolean } = {}) {
+    const calls = { batches: [] as string[][], runs: 0 };
+    const database = {
+      prepare(sql: string) {
+        const s = {
+          sql,
+          bind() { return s; },
+          run: async () => { calls.runs++; return { results: [], success: true }; },
+          all: async () => ({ results: [], success: true }),
+          first: async <T = Record<string, unknown>>() => rowValue<T>(/casual_rounds/.test(sql) ? { id: 7 } : null),
+        };
+        return s;
+      },
+      batch: async (statements: D1StatementLike[]) => {
+        calls.batches.push(statements.map((st) => (st as unknown as { sql: string }).sql));
+        if (opts.failBatch) throw new Error("d1_batch_boom");
+        await Promise.all(statements.map((st) => st.run()));
+        return statements.map(() => ({ results: [], success: true }));
+      },
+    };
+    return { database, calls };
+  }
+  const startStroke = (live: LiveEventDO) =>
+    live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ eventId: 30, holes: [{ hole: 1, par: 3 }], players: [{ memberId: "m0", name: "A" }, { memberId: "m1", name: "B" }] }) }));
+  const adminScore = (live: LiveEventDO, index: number, strokes: number) =>
+    live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify({ index, scorerIndex: index, hole: 1, strokes }) }));
+
+  it("writes event results as ONE atomic batch (clear + all inserts), not row-by-row", async () => {
+    const { database, calls } = batchDb();
+    const live = new LiveEventDO(new FakeState({}), { DB: database });
+    await startStroke(live);
+    await adminScore(live, 0, 3);
+    await adminScore(live, 1, 4);
+    const r = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify({ force: true }) }));
+    expect(r.status).toBe(200);
+    expect(calls.batches).toHaveLength(1); // a single transaction
+    const sqls = must(calls.batches[0]);
+    expect(sqls.filter((s) => /DELETE FROM results/.test(s))).toHaveLength(1);
+    expect(sqls.filter((s) => /INSERT INTO results/.test(s))).toHaveLength(2);
+  });
+
+  it("leaves the round LIVE and writes no partial results when the finalize batch fails", async () => {
+    const { database, calls } = batchDb({ failBatch: true });
+    const state = new FakeState({});
+    const live = new LiveEventDO(state, { DB: database });
+    await startStroke(live);
+    await adminScore(live, 0, 3);
+    await adminScore(live, 1, 4);
+    await expect(live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify({ force: true }) }))).rejects.toThrow();
+    expect(calls.runs).toBe(0); // no individual result INSERT ran (the batch is all-or-nothing)
+    expect(state.getStored<{ status: string }>("meta")?.status).toBe("live"); // not marked final; can be retried
   });
 });
 

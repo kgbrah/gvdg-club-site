@@ -1,7 +1,41 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { isAllowedUrl, parseCsvRows, normalizeDgs, safeFetch } from "../src/imports.js";
+import { isAllowedUrl, isPublicHttpsUrl, parseCsvRows, normalizeDgs, safeFetch } from "../src/imports.js";
 
 afterEach(() => vi.unstubAllGlobals());
+
+describe("isPublicHttpsUrl — SSRF guard for arbitrary admin-configured webhooks", () => {
+  it("accepts a real public https FQDN", () => {
+    expect(isPublicHttpsUrl("https://hooks.example.com/gvdg/export")).toBe(true);
+    expect(isPublicHttpsUrl("https://api.airtable.com/v0/appX/tbl")).toBe(true);
+  });
+  it("rejects http (would leak the auth header in clear)", () => {
+    expect(isPublicHttpsUrl("http://hooks.example.com/x")).toBe(false);
+  });
+  it("rejects userinfo credentials", () => {
+    expect(isPublicHttpsUrl("https://user:pass@hooks.example.com/x")).toBe(false);
+  });
+  it("rejects IPv4 literals incl. private, loopback, and cloud metadata", () => {
+    expect(isPublicHttpsUrl("https://169.254.169.254/latest/meta-data")).toBe(false);
+    expect(isPublicHttpsUrl("https://127.0.0.1/x")).toBe(false);
+    expect(isPublicHttpsUrl("https://10.0.0.5/x")).toBe(false);
+    expect(isPublicHttpsUrl("https://192.168.1.1/x")).toBe(false);
+  });
+  it("rejects IPv6 literals", () => {
+    expect(isPublicHttpsUrl("https://[::1]/x")).toBe(false);
+    expect(isPublicHttpsUrl("https://[fd00::1]/x")).toBe(false);
+  });
+  it("rejects localhost, bare hostnames, and internal TLDs", () => {
+    expect(isPublicHttpsUrl("https://localhost/x")).toBe(false);
+    expect(isPublicHttpsUrl("https://intranet/x")).toBe(false); // no dot
+    expect(isPublicHttpsUrl("https://db.internal/x")).toBe(false);
+    expect(isPublicHttpsUrl("https://printer.local/x")).toBe(false);
+  });
+  it("rejects malformed input", () => {
+    expect(isPublicHttpsUrl("not a url")).toBe(false);
+    expect(isPublicHttpsUrl("")).toBe(false);
+    expect(isPublicHttpsUrl("ftp://hooks.example.com/x")).toBe(false);
+  });
+});
 
 describe("isAllowedUrl — SSRF guard", () => {
   const allow = ["udisc.com", "discgolfscene.com"];
