@@ -15,41 +15,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="tokens.css">
+    <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('theme')||'light')}catch(e){}</script>
     <style>
-        :root {
-            --primary: #FF6B35;
-            --secondary: #004E89; --secondary-text: #004E89; /* navy link/accent text → readable light blue in dark mode */
-            --accent: #F7B801;
-            --dark: #1A1A2E;
-            --light: #F4F4F9;
-            --green: #2D5016;
-            --bg-primary: #F4F4F9;
-            --bg-secondary: #FFFFFF;
-            --bg-tertiary: #F4F4F9;
-            --text-primary: #1A1A2E;
-            --text-secondary: #333333;
-            --text-tertiary: #555555;
-            --text-muted: #666666;
-            --border-color: #E0E0E0;
-            --card-shadow: rgba(0, 0, 0, 0.1);
-            --card-shadow-hover: rgba(0, 0, 0, 0.15);
-        }
 
-        [data-theme="dark"] {
-            --bg-primary: #0F0F1E;
-            --bg-secondary: #1A1A2E;
-            --bg-tertiary: #252538;
-            --text-primary: #F4F4F9; --secondary-text: #6cb4e8;
-            --text-secondary: #E0E0E0;
-            --text-tertiary: #C0C0C0;
-            --text-muted: #A0A0A0;
-            --border-color: #2A2A3E;
-            --card-shadow: rgba(0, 0, 0, 0.3);
-            --card-shadow-hover: rgba(0, 0, 0, 0.5);
-        }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html { overflow-x: hidden; }
+        
 
         body {
             font-family: 'Archivo', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -128,7 +100,7 @@
         .form-input::placeholder { color: var(--text-muted); }
         .form-hint { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem; }
 
-        .login-btn { background: var(--primary); color: white; border: none; padding: 1rem 2rem; border-radius: 8px; font-size: 1rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer; transition: background 0.2s ease; margin-top: 1rem; }
+        .login-btn { background: var(--primary-strong); color: white; border: none; padding: 1rem 2rem; border-radius: 8px; font-size: 1rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer; transition: background 0.2s ease; margin-top: 1rem; }
         .login-btn:hover { background: #e55a2b; }
 
         .login-error { background: rgba(220, 53, 69, 0.1); color: #dc3545; padding: 1rem; border-radius: 10px; margin-top: 1rem; display: none; font-weight: 600; }
@@ -474,7 +446,7 @@
                 .dash-tabs::-webkit-scrollbar { display: none; }
                 .dash-tab { flex: 0 0 auto; background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.5rem 1.05rem; font-weight: 700; font-size: 0.88rem; cursor: pointer; white-space: nowrap; transition: background .15s ease, color .15s ease; }
                 .dash-tab:hover { color: var(--text-primary); }
-                .dash-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+                .dash-tab.active { background: var(--primary-strong); color: #fff; border-color: var(--primary); }
                 .dtab-off { display: none !important; }
             </style>
             <div class="dash-tabs" id="dashTabs" role="tablist" style="display:none;">
@@ -579,7 +551,7 @@
                 .register-form select, .register-form input { padding: 0.4rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
                 .register-addon { font-size: 0.85rem; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 0.3rem; }
                 .register-card.live { border-color: var(--primary); }
-                .register-live-badge { display: inline-flex; align-items: center; min-height: 1.35rem; padding: 0.12rem 0.45rem; border-radius: 999px; background: var(--primary); color: #fff; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.04em; }
+                .register-live-badge { display: inline-flex; align-items: center; min-height: 1.35rem; padding: 0.12rem 0.45rem; border-radius: 999px; background: var(--primary-strong); color: #fff; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.04em; }
                 .register-final-badge, .register-cancelled-badge { display: inline-flex; align-items: center; min-height: 1.35rem; padding: 0.12rem 0.45rem; border-radius: 999px; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.04em; }
                 .register-final-badge { background: var(--text-muted); color: var(--bg-primary); }
                 .register-cancelled-badge { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
@@ -677,7 +649,7 @@
                 .ts-chip { font-size: 0.78rem; color: var(--text-secondary); background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.2rem 0.5rem; }
                 .ts-guess-pending { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.4rem; }
             </style>
-            <style>.admin-portal-link{display:inline-block;margin-bottom:1.5rem;background:var(--primary);color:#fff;padding:0.6rem 1.25rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.9rem;}.admin-portal-link:hover{background:#e55a2b;}</style>
+            <style>.admin-portal-link{display:inline-block;margin-bottom:1.5rem;background: var(--primary-strong);color: #fff;padding:0.6rem 1.25rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.9rem;}.admin-portal-link:hover{background:#e55a2b;}</style>
             <a id="adminPortalLink" href="admin.html" class="admin-portal-link" style="display:none;">🛠 Admin Portal — manage events &amp; courses →</a>
 
             <div id="myDashboard" class="my-dashboard" style="display:none;">

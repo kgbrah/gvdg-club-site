@@ -16,41 +16,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="pwa.js" defer></script>
+    <link rel="stylesheet" href="tokens.css">
+    <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('theme')||'light')}catch(e){}</script>
     <style>
-        :root {
-            --primary: #FF6B35;
-            --secondary: #004E89; --secondary-text: #004E89; /* navy link/accent text → readable light blue in dark mode */
-            --accent: #F7B801;
-            --dark: #1A1A2E;
-            --light: #F4F4F9;
-            --green: #2D5016;
-            --bg-primary: #F4F4F9;
-            --bg-secondary: #FFFFFF;
-            --bg-tertiary: #F4F4F9;
-            --text-primary: #1A1A2E;
-            --text-secondary: #333333;
-            --text-tertiary: #555555;
-            --text-muted: #666666;
-            --border-color: #E2E2EA;
-            --card-shadow: rgba(0, 0, 0, 0.1);
-            --card-shadow-hover: rgba(0, 0, 0, 0.15);
-            --over: #C8472E;
-            --over-soft: rgba(200, 71, 46, 0.10);
-        }
-        [data-theme="dark"] {
-            --bg-primary: #0F0F1E;
-            --bg-secondary: #1A1A2E;
-            --bg-tertiary: #252538;
-            --text-primary: #F4F4F9; --secondary-text: #6cb4e8;
-            --text-secondary: #E0E0E0;
-            --text-tertiary: #C0C0C0;
-            --text-muted: #A0A0A0;
-            --border-color: #2A2A3E;
-            --card-shadow: rgba(0, 0, 0, 0.3);
-            --card-shadow-hover: rgba(0, 0, 0, 0.5);
-            --over: #FF7A5C;
-            --over-soft: rgba(255, 122, 92, 0.16);
-        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Archivo', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -124,7 +92,7 @@
         .admin-gate .gate-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
         .admin-gate .gate-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem; letter-spacing: 0.03em; color: var(--text-primary); margin-bottom: 0.5rem; }
         .admin-gate .gate-msg { color: var(--text-secondary); font-size: 1rem; line-height: 1.5; margin-bottom: 1.25rem; }
-        .gate-btn { display: inline-block; background: var(--primary); color: #fff; text-decoration: none; padding: 0.75rem 1.75rem; min-height: 44px; border-radius: 50px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; transition: all 0.3s ease; }
+        .gate-btn { display: inline-block; background: var(--primary-strong); color: #fff; text-decoration: none; padding: 0.75rem 1.75rem; min-height: 44px; border-radius: 50px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; transition: all 0.3s ease; }
         .gate-btn:hover { background: #ff7f4d; transform: translateY(-2px); }
 
         /* ---- Header account row (log out / back to members) ---- */
@@ -261,7 +229,7 @@
         #rgDivisions { width: 100%; } /* size="40" forced ~412px; fill its (now shrinkable) span instead */
         #alCourse, #scEvent, #scLayout, #rgEvent { display: block; width: 100%; max-width: 520px; margin-top: 0.3rem; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95rem; }
         body.admin-page #crotts-fab, body.admin-page #crotts-panel { display: none !important; }
-        .admin-btn { background: var(--primary); color: #fff; border: none; padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
+        .admin-btn { background: var(--primary-strong); color: #fff; border: none; padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
         .admin-btn.secondary { background: transparent; border: 1px solid var(--secondary-text); color: var(--secondary-text); }
         .admin-btn.danger { background: transparent; border: 1px solid #dc3545; color: #dc3545; padding: 0.35rem 0.7rem; font-size: 0.8rem; }
         .admin-form-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
@@ -294,7 +262,7 @@
         .wallet-row .debit { color: var(--primary); font-weight: 700; }
         .credit-award { display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
         .credit-award input { width: 5rem; padding: 0.3rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
-        .orders-badge { display: inline-flex; min-width: 1.2rem; height: 1.2rem; padding: 0 0.35rem; border-radius: 999px; background: var(--primary); color: #fff; font-size: 0.7rem; font-weight: 700; align-items: center; justify-content: center; }
+        .orders-badge { display: inline-flex; min-width: 1.2rem; height: 1.2rem; padding: 0 0.35rem; border-radius: 999px; background: var(--primary-strong); color: #fff; font-size: 0.7rem; font-weight: 700; align-items: center; justify-content: center; }
         .orders-list { display: grid; gap: 0.75rem; }
         .order-card { border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-secondary); padding: 0.75rem 0.9rem; }
         .order-card.unfulfilled { border-left: 3px solid var(--primary); }

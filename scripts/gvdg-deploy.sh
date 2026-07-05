@@ -130,8 +130,8 @@ fi
 if [ "${GVDG_SKIP_GATE:-0}" = 1 ]; then
   log "⚠ correctness gate SKIPPED (GVDG_SKIP_GATE=1) — shipping UNVERIFIED code."
 else
-  log "correctness gate: static tests…"
-  ( cd "$REPO_ROOT" && npm test ) || die "GATE FAILED: static frontend tests. Fix before deploying (or GVDG_SKIP_GATE=1 if you are CERTAIN)."
+  log "correctness gate: static tests + hex-lint…"
+  ( cd "$REPO_ROOT" && npm test && node scripts/lint-hex.mjs ) || die "GATE FAILED: static frontend tests / hex-lint (raw hex outside tokens.css increased). Fix before deploying (or GVDG_SKIP_GATE=1 if you are CERTAIN)."
   if [ "$MODE_WORKER" = 1 ]; then
     log "correctness gate: worker typegen + typecheck + tests + config validation…"
     ( cd "$REPO_ROOT/auth-worker" \
@@ -149,7 +149,7 @@ DEPLOYER="${GVDG_AGENT:-$(whoami)}"
 NOW="$(date -u +%FT%TZ)"
 DIST="$REPO_ROOT/.pages-dist"
 rm -rf "$DIST"; mkdir "$DIST"
-cp -R ./*.html ./*.js img _headers CNAME site.webmanifest "$DIST/"
+cp -R ./*.html ./*.js ./*.css img _headers CNAME site.webmanifest "$DIST/"
 printf '{"commit":"%s","branch":"%s","deployedAt":"%s","deployer":"%s"}\n' "$HEAD_SHA" "$BRANCH" "$NOW" "$DEPLOYER" > "$DIST/version.json"
 log "artifact built @ $HEAD_SHORT ($BRANCH) by $DEPLOYER; version.json stamped."
 

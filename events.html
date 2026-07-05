@@ -15,37 +15,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="tokens.css">
+    <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('theme')||'light')}catch(e){}</script>
     <style>
-        :root {
-            --primary: #FF6B35;
-            --secondary: #004E89; --secondary-text: #004E89; /* navy link/accent text → readable light blue in dark mode */
-            --accent: #F7B801;
-            --dark: #1A1A2E;
-            --light: #F4F4F9;
-            --green: #2D5016;
-            --bg-primary: #F4F4F9;
-            --bg-secondary: #FFFFFF;
-            --bg-tertiary: #F4F4F9;
-            --text-primary: #1A1A2E;
-            --text-secondary: #333333;
-            --text-tertiary: #555555;
-            --text-muted: #666666;
-            --border-color: #E2E2EA;
-            --card-shadow: rgba(0, 0, 0, 0.1);
-            --card-shadow-hover: rgba(0, 0, 0, 0.15);
-        }
-        [data-theme="dark"] {
-            --bg-primary: #0F0F1E;
-            --bg-secondary: #1A1A2E;
-            --bg-tertiary: #252538;
-            --text-primary: #F4F4F9; --secondary-text: #6cb4e8;
-            --text-secondary: #E0E0E0;
-            --text-tertiary: #C0C0C0;
-            --text-muted: #A0A0A0;
-            --border-color: #2A2A3E;
-            --card-shadow: rgba(0, 0, 0, 0.3);
-            --card-shadow-hover: rgba(0, 0, 0, 0.5);
-        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Archivo', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -153,7 +125,7 @@
         .register-form { display: flex; flex-direction: column; gap: 0.55rem; margin-top: 0.2rem; }
         .reg-input { padding: 0.55rem 0.65rem; border: 1px solid var(--border-color); border-radius: 8px; font: inherit; font-size: 0.9rem; background: var(--bg-primary); color: var(--text-primary); }
         .register-addon { display: flex; align-items: center; gap: 0.45rem; font-size: 0.88rem; color: var(--text-secondary); cursor: pointer; }
-        .reg-btn { margin-top: 0.35rem; background: var(--primary); color: #fff; border: none; padding: 0.6rem 1.4rem; min-height: 42px; border-radius: 50px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; cursor: pointer; align-self: flex-start; transition: filter 0.2s ease; }
+        .reg-btn { margin-top: 0.35rem; background: var(--primary-strong); color: #fff; border: none; padding: 0.6rem 1.4rem; min-height: 42px; border-radius: 50px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; cursor: pointer; align-self: flex-start; transition: filter 0.2s ease; }
         .reg-btn:hover { filter: brightness(1.07); }
         .reg-btn:disabled { opacity: 0.6; cursor: default; }
         .reg-btn.secondary { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
@@ -161,7 +133,7 @@
         [data-theme="dark"] #registerSection { background: rgba(15, 15, 30, 0.86); }
         #registerSection .events-group-head { margin-top: 0; }
         /* Keep-score CTA on a live event */
-        .btn-keep-score { display: inline-block; margin: 0.25rem 0 0.75rem; background: var(--primary); color: #fff; text-decoration: none; font-weight: 800; padding: 0.7rem 1.3rem; border-radius: 50px; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.9rem; }
+        .btn-keep-score { display: inline-block; margin: 0.25rem 0 0.75rem; background: var(--primary-strong); color: #fff; text-decoration: none; font-weight: 800; padding: 0.7rem 1.3rem; border-radius: 50px; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.9rem; }
         .btn-keep-score:hover { filter: brightness(1.07); }
         .event-meta .meta-icon { opacity: 0.8; }
 
@@ -174,7 +146,7 @@
         .type-badge.fundraiser { background: linear-gradient(135deg, var(--accent), #e5a600); color: var(--dark); border: none; }
         .type-badge.meeting { background: var(--bg-tertiary); color: var(--text-secondary); }
         .status-badge { font-size: 0.68rem; }
-        .status-badge.live { background: var(--primary); color: white; }
+        .status-badge.live { background: var(--primary-strong); color: white; }
         .status-badge.scheduled { background: rgba(0, 78, 137, 0.15); color: var(--secondary-text); }
         [data-theme="dark"] .status-badge.scheduled { background: rgba(47, 127, 196, 0.25); color: #7fb3e0; }
         .status-badge.final { background: var(--bg-tertiary); color: var(--text-muted); border: 1px solid var(--border-color); }
@@ -259,7 +231,7 @@
         .status-box.error { color: #c8102e; }
         [data-theme="dark"] .status-box.error { color: #e63950; }
         .status-box .empty-icon { font-size: 2.5rem; opacity: 0.6; margin-bottom: 0.5rem; }
-        .retry-btn { margin-top: 1rem; background: var(--primary); color: white; border: none; padding: 0.75rem 1.75rem; min-height: 44px; border-radius: 50px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer; transition: all 0.3s ease; }
+        .retry-btn { margin-top: 1rem; background: var(--primary-strong); color: white; border: none; padding: 0.75rem 1.75rem; min-height: 44px; border-radius: 50px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer; transition: all 0.3s ease; }
         .retry-btn:hover { background: #ff7f4d; transform: translateY(-2px); }
         .last-updated { text-align: center; color: rgba(255, 255, 255, 0.9); font-size: 0.8rem; margin-top: 1.5rem; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45); }
         .back-link { display: inline-block; margin-top: 0.5rem; color: rgba(255, 255, 255, 0.94); text-decoration: none; font-size: 0.95rem; background: none; border: none; cursor: pointer; font: inherit; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45); }

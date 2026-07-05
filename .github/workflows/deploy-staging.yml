@@ -19,8 +19,10 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: auth-worker/package-lock.json
-      - name: Static site tests
-        run: npm test
+      - name: Static site tests + hex-lint
+        run: |
+          npm test
+          node scripts/lint-hex.mjs
       - name: Install dependencies
         working-directory: auth-worker
         run: npm ci

@@ -18,41 +18,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="tokens.css">
     <style>
-        :root {
-            --primary: #FF6B35;
-            /* Accessible fill of the brand orange: white text on #C8410F clears WCAG AA (4.5:1),
-               unlike white-on-#FF6B35 (~2.8:1). Use for CTA/button fills that carry white text;
-               keep --primary for large/decorative accents. */
-            --primary-strong: #C8410F;
-            --secondary: #004E89; --secondary-text: #004E89; /* navy link/accent text → readable light blue in dark mode */
-            --accent: #F7B801;
-            --dark: #1A1A2E;
-            --light: #F4F4F9;
-            --green: #2D5016;
-            --bg-primary: #F4F4F9;
-            --bg-secondary: #FFFFFF;
-            --bg-tertiary: #F4F4F9;
-            --text-primary: #1A1A2E;
-            --text-secondary: #333333;
-            --text-tertiary: #555555;
-            --text-muted: #666666;
-            --border-color: #E2E2EA;
-            --card-shadow: rgba(0, 0, 0, 0.1);
-            --card-shadow-hover: rgba(0, 0, 0, 0.15);
-        }
-        [data-theme="dark"] {
-            --bg-primary: #0F0F1E;
-            --bg-secondary: #1A1A2E;
-            --bg-tertiary: #252538;
-            --text-primary: #F4F4F9; --secondary-text: #6cb4e8;
-            --text-secondary: #E0E0E0;
-            --text-tertiary: #C0C0C0;
-            --text-muted: #A0A0A0;
-            --border-color: #2A2A3E;
-            --card-shadow: rgba(0, 0, 0, 0.3);
-            --card-shadow-hover: rgba(0, 0, 0, 0.5);
-        }
+        /* Design tokens (color / surfaces / text) live in tokens.css, linked above — one source of truth. */
         * { margin: 0; padding: 0; box-sizing: border-box; }
 body{ position: relative; }
 body::before{
@@ -219,7 +187,7 @@ body::before{
             gap: 2rem;
             margin-top: 1.25rem;
         }
-        .carousel-btn { background: var(--primary); color: white; border: none; width: 50px; height: 50px; border-radius: 50%; cursor: pointer; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; }
+        .carousel-btn { background: var(--primary-strong); color: white; border: none; width: 50px; height: 50px; border-radius: 50%; cursor: pointer; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; }
         .carousel-btn:hover { background: var(--secondary); transform: scale(1.1); }
         .carousel-btn:disabled { opacity: 0.3; cursor: not-allowed; }
         .carousel-indicators { display: flex; gap: 0.8rem; align-items: center; }
@@ -262,7 +230,7 @@ body::before{
 .event-list.expanded .event-item.hidden-extra { display: flex; }
 .event-toggle { text-align: center; margin-top: 1.5rem; }
 .event-toggle .toggle-btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; background: transparent; border: 2px solid var(--primary); border-radius: 8px; color: var(--primary); font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease; -webkit-tap-highlight-color: transparent; }
-.event-toggle .toggle-btn:hover { background: var(--primary); color: white; }
+.event-toggle .toggle-btn:hover { background: var(--primary-strong); color: white; }
 .event-toggle .toggle-btn .toggle-icon { transition: transform 0.3s ease; }
 .event-toggle .toggle-btn.expanded .toggle-icon { transform: rotate(180deg); }
 .event-date.tbd { display: flex; align-items: center; justify-content: center; }
@@ -294,7 +262,7 @@ body::before{
         .tournament-distance { font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem; }
         .tournament-spots { font-size: 0.85rem; color: var(--primary); font-weight: 600; }
         .tournament-card-link { display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.75rem; background: transparent; color: var(--primary); text-decoration: none; font-weight: 600; font-size: 0.9rem; border-top: 1px solid var(--border-color); transition: all 0.2s ease; }
-        .tournament-card-link:hover { background: var(--primary); color: white; }
+        .tournament-card-link:hover { background: var(--primary-strong); color: white; }
         .tournament-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem; color: var(--text-muted); }
         .tournament-loading .spinner { width: 40px; height: 40px; border: 3px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 1rem; }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -460,11 +428,11 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
 .slide-header-nav { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-bottom: 1.5rem; }
 .slide-header-nav .slide-header { margin-bottom: 0; flex: 0 1 auto; text-align: center; min-width: 0; }
 .slide-nav-arrow { flex-shrink: 0; width: 44px; height: 44px; min-width: 44px; min-height: 44px; border-radius: 50%; border: 2px solid var(--primary); background: transparent; color: var(--primary); font-size: 1.4rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; -webkit-tap-highlight-color: transparent; line-height: 1; }
-.slide-nav-arrow:hover:not(:disabled) { background: var(--primary); color: white; transform: scale(1.1); }
+.slide-nav-arrow:hover:not(:disabled) { background: var(--primary-strong); color: white; transform: scale(1.1); }
 .slide-nav-arrow:active:not(:disabled) { transform: scale(0.95); }
 .slide-nav-arrow:disabled { opacity: 0.2; cursor: not-allowed; transform: none !important; background: transparent !important; color: var(--primary) !important; }
 [data-theme="dark"] .slide-nav-arrow { border-color: var(--primary); color: var(--primary); }
-[data-theme="dark"] .slide-nav-arrow:hover:not(:disabled) { background: var(--primary); color: white; }
+[data-theme="dark"] .slide-nav-arrow:hover:not(:disabled) { background: var(--primary-strong); color: white; }
 @media (max-width: 480px) { .slide-header-nav { gap: 0.5rem; margin-bottom: 1rem; } .slide-nav-arrow { width: 38px; height: 38px; min-width: 38px; min-height: 38px; font-size: 1.2rem; } .slide-header-nav .slide-title { font-size: 1.5rem; } .slide-header-nav .slide-subtitle { font-size: 0.8rem; } }
     </style>
   <script src="nav.js" defer></script>

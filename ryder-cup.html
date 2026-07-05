@@ -15,44 +15,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="tokens.css">
+    <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('theme')||'light')}catch(e){}</script>
     <style>
-        :root {
-            --primary: #FF6B35;
-            --secondary: #004E89;
-            --accent: #F7B801;
-            --dark: #1A1A2E;
-            --light: #F4F4F9;
-            --green: #2D5016;
-            --bg-primary: #F4F4F9;
-            --bg-secondary: #FFFFFF;
-            --bg-tertiary: #F4F4F9;
-            --text-primary: #1A1A2E;
-            --text-secondary: #333333;
-            --text-tertiary: #555555;
-            --text-muted: #666666;
-            --border-color: #F4F4F9;
-            --card-shadow: rgba(0, 0, 0, 0.1);
-            --card-shadow-hover: rgba(0, 0, 0, 0.15);
-            /* Ryder Cup team colors */
-            --team-red: #C8102E;
-            --team-red-dark: #9b0c23;
-            --team-blue: #004E89;
-            --team-blue-dark: #003a66;
-        }
-        [data-theme="dark"] {
-            --bg-primary: #0F0F1E;
-            --bg-secondary: #1A1A2E;
-            --bg-tertiary: #252538;
-            --text-primary: #F4F4F9;
-            --text-secondary: #E0E0E0;
-            --text-tertiary: #C0C0C0;
-            --text-muted: #A0A0A0;
-            --border-color: #2A2A3E;
-            --card-shadow: rgba(0, 0, 0, 0.3);
-            --card-shadow-hover: rgba(0, 0, 0, 0.5);
-            --team-red: #e63950;
-            --team-blue: #2f7fc4;
-        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Archivo', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -167,7 +132,7 @@
         .status-box .spinner { width: 42px; height: 42px; border: 4px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; margin: 0 auto 1rem; animation: spin 0.9s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .status-box.error { color: var(--team-red); }
-        .retry-btn { margin-top: 1rem; background: var(--primary); color: white; border: none; padding: 0.75rem 1.75rem; min-height: 44px; border-radius: 50px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer; transition: all 0.3s ease; }
+        .retry-btn { margin-top: 1rem; background: var(--primary-strong); color: white; border: none; padding: 0.75rem 1.75rem; min-height: 44px; border-radius: 50px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer; transition: all 0.3s ease; }
         .retry-btn:hover { background: #ff7f4d; transform: translateY(-2px); }
         .last-updated { text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-top: 1.5rem; }
         .back-link { display: inline-block; margin-top: 1rem; color: var(--text-muted); text-decoration: none; font-size: 0.9rem; }

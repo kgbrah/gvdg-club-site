@@ -1,0 +1,71 @@
+/* GVDG design tokens — the SINGLE source of truth for color, previously copy-pasted (and drifted)
+   into the :root/[data-theme=dark] block of every page. Link this FIRST in <head>, before each page's
+   inline <style>, so page CSS reads these tokens. Theme is driven by the data-theme attribute set by the
+   pre-paint <head> init (see the pages) + the header toggle. Raw hex outside this file is linted in CI
+   (scripts/lint-hex.mjs). */
+:root {
+  /* Brand */
+  --primary: #FF6B35;          /* brand orange — decorative / large text / on-dark only */
+  --primary-strong: #C8410F;   /* accessible orange — use for CTA fills w/ white text AND link text on light (>=4.5:1) */
+  --secondary: #004E89;
+  --accent: #F7B801;
+  --green: #2D5016;
+  --dark: #1A1A2E;
+  --light: #F4F4F9;
+
+  /* Surfaces */
+  --bg-primary: #F4F4F9;
+  --bg-secondary: #FFFFFF;
+  --bg-tertiary: #F4F4F9;
+  --border-color: #E2E2EA;     /* a real hairline — must NOT equal --bg-primary (that made borders invisible) */
+  --card-shadow: rgba(0, 0, 0, 0.1);
+  --card-shadow-hover: rgba(0, 0, 0, 0.15);
+  --shadow: rgba(0, 0, 0, 0.10);
+
+  /* Text */
+  --text-primary: #1A1A2E;
+  --text-secondary: #333333;
+  --text-tertiary: #555555;
+  --text-muted: #666666;
+  --secondary-text: #004E89;
+
+  /* Live scoring (score.html) */
+  --over: #C8472E;
+  --under: #15743A;
+  --even: #6A6A78;
+  --over-soft: rgba(200, 71, 46, 0.10);
+
+  /* Ryder Cup teams */
+  --team-red: #C8102E;
+  --team-red-dark: #9b0c23;
+  --team-blue: #004E89;
+  --team-blue-dark: #003a66;
+
+  /* Mobile safe areas */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+:root[data-theme="dark"] {
+  --bg-primary: #0F0F1E;
+  --bg-secondary: #1A1A2E;
+  --bg-tertiary: #252538;
+  --border-color: #2A2A3E;
+  --card-shadow: rgba(0, 0, 0, 0.3);
+  --card-shadow-hover: rgba(0, 0, 0, 0.5);
+  --shadow: rgba(0, 0, 0, 0.4);
+
+  --text-primary: #F4F4F9;
+  --text-secondary: #E0E0E0;
+  --text-tertiary: #C0C0C0;
+  --text-muted: #A0A0A0;
+  --secondary-text: #6cb4e8;
+
+  --over: #FF7A5C;
+  --under: #4FD37E;
+  --even: #9A9AAC;             /* was undefined in dark -> even-par scores rendered near-invisible */
+  --over-soft: rgba(255, 122, 92, 0.16);
+
+  --team-red: #e63950;
+  --team-blue: #2f7fc4;
+}

@@ -15,18 +15,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="tokens.css">
+    <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('theme')||'light')}catch(e){}</script>
     <style>
-        :root {
-            --primary: #FF6B35; --secondary: #004E89; --secondary-text: #004E89; --accent: #F7B801; --dark: #1A1A2E; --green: #2D5016;
-            --bg-primary: #F4F4F9; --bg-secondary: #FFFFFF; --bg-tertiary: #F4F4F9;
-            --text-primary: #1A1A2E; --text-secondary: #333333; --text-muted: #666666;
-            --border-color: #E2E2EA; --card-shadow: rgba(0, 0, 0, 0.1); --card-shadow-hover: rgba(0, 0, 0, 0.15);
-        }
-        [data-theme="dark"] {
-            --bg-primary: #0F0F1E; --bg-secondary: #1A1A2E; --bg-tertiary: #252538;
-            --text-primary: #F4F4F9; --text-secondary: #E0E0E0; --text-muted: #A0A0A0; --secondary-text: #6cb4e8;
-            --border-color: #2A2A3E; --card-shadow: rgba(0, 0, 0, 0.3); --card-shadow-hover: rgba(0, 0, 0, 0.5);
-        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { min-height: 100vh; font-family: 'Archivo', system-ui, sans-serif; background: var(--bg-primary); color: var(--text-primary); display: flex; flex-direction: column; }
         body::before { content: ""; position: fixed; inset: 0; z-index: -1; background: linear-gradient(to bottom, rgba(244,244,249,0.24), rgba(244,244,249,0.12)), url("img/bg/forest-bg.png") center bottom / cover no-repeat; }
@@ -81,7 +72,7 @@
         .product-meta { color: var(--text-muted); font-size: 0.8rem; line-height: 1.35; }
         .product-bottom { margin-top: auto; display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding-top: 0.5rem; }
         .product-price { font-family: 'Bebas Neue', sans-serif; color: var(--secondary-text); font-size: 1.6rem; letter-spacing: 0.03em; }
-        .shop-btn { border: none; border-radius: 8px; background: var(--primary); color: #fff; font-weight: 800; padding: 0.6rem 0.8rem; cursor: pointer; min-height: 40px; }
+        .shop-btn { border: none; border-radius: 8px; background: var(--primary-strong); color: #fff; font-weight: 800; padding: 0.6rem 0.8rem; cursor: pointer; min-height: 40px; }
         .shop-btn.secondary { background: transparent; border: 1px solid var(--secondary-text); color: var(--secondary-text); }
         .shop-btn:disabled { opacity: 0.55; cursor: default; }
         .cart { position: sticky; top: 96px; background: var(--bg-secondary); border: 2px solid var(--border-color); border-radius: 10px; padding: 1rem; box-shadow: 0 8px 28px var(--card-shadow); }
