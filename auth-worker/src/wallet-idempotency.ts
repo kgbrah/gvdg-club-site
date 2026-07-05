@@ -146,3 +146,49 @@ export async function createWalletDebitOnce(
   }
 }
 
+export type WalletCreditResult =
+  | { readonly ok: true; readonly transaction: WalletTransactionRow; readonly created: boolean }
+  | { readonly ok: false; readonly error: "idempotency_key_conflict" };
+
+/**
+ * An idempotent CREDIT (non-negative amount). Mirrors {@link createWalletDebitOnce} but with NO balance
+ * guard — a credit can never overdraw — so it is a plain keyed insert that dedups on idempotency_key.
+ * Used to refund store credit exactly once when an order is reversed: a double-cancel, or a cancel then
+ * delete of the same order, reuses the key and returns the existing row (created:false) instead of
+ * granting the refund twice. The club's store-credit liability is otherwise wide open to double-grant.
+ */
+export async function createWalletCreditOnce(db: D1Like, input: IdempotentWalletTransactionInput): Promise<WalletCreditResult> {
+  if (input.amount_cents < 0) throw new Error("createWalletCreditOnce requires a non-negative amount");
+  const existing = await checkWalletTransactionIdempotency(db, input);
+  if (!existing.ok) return existing;
+  if (existing.transaction) return { ok: true, transaction: existing.transaction, created: false };
+  try {
+    const transaction = await db
+      .prepare(
+        `INSERT INTO wallet_transactions (member_id, member_name, amount_cents, transaction_type, source, event_id, order_id, note, created_by, idempotency_key)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         RETURNING *`,
+      )
+      .bind(
+        input.member_id,
+        input.member_name ?? null,
+        input.amount_cents,
+        input.transaction_type,
+        input.source,
+        input.event_id ?? null,
+        input.order_id ?? null,
+        input.note ?? null,
+        input.created_by ?? null,
+        input.idempotency_key,
+      )
+      .first();
+    if (!transaction) return { ok: false, error: "idempotency_key_conflict" };
+    return { ok: true, transaction, created: true };
+  } catch (e) {
+    if (!isUniqueViolation(e)) throw e;
+    const raced = await findWalletTransactionByIdempotencyKey(db, input.idempotency_key);
+    if (!raced) throw e;
+    return existingResult(raced, input);
+  }
+}
+

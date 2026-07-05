@@ -3,7 +3,7 @@ import type { D1Like } from "./db.js";
 import * as shopDb from "./shop-db.js";
 import { requireAuth } from "./authz.js";
 import { getMember } from "./roster.js";
-import { paypalBase, createOrder as ppCreateOrder, captureOrder as ppCaptureOrder } from "./payments.js";
+import { paypalBase, createOrder as ppCreateOrder, captureOrder as ppCaptureOrder, isCaptureSettled } from "./payments.js";
 import { notifyNewOrder } from "./order-notify.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { clientIp, json, readJson } from "./http.js";
@@ -254,7 +254,7 @@ export async function handleClubShop(
       const cap = await ppCaptureOrder(creds, orderId);
       // Require the ORDER and the CAPTURE itself to be COMPLETED in the expected currency — a COMPLETED
       // order can still carry a PENDING eCheck/bank capture (unsettled funds) that must not be fulfilled.
-      if (cap.status !== "COMPLETED" || cap.captureStatus !== "COMPLETED" || cap.currency !== "USD" || cap.amountCents < total) {
+      if (!isCaptureSettled(cap, total)) {
         return json({ error: "payment_incomplete" }, 402, origin);
       }
       const afterCaptureOrder = await shopDb.getStoreOrderByPaymentRef(env.DB, orderId);

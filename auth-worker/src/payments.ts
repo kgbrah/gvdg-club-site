@@ -80,3 +80,19 @@ export async function captureOrder(
     amountCents: Math.round(parseFloat(cap?.amount?.value || "0") * 100),
   };
 }
+
+/** The settled-funds shape returned by {@link captureOrder}. */
+export type CaptureResult = { status: string; captureStatus: string; currency: string; amountCents: number };
+
+/** The single source of truth for "is this PayPal capture safe to treat as paid?" — used by BOTH the
+ *  pro-shop and event-registration money paths so they cannot drift. Requires the order AND the capture
+ *  to be COMPLETED (a COMPLETED order can still carry a PENDING eCheck/bank capture — unsettled funds),
+ *  the currency to be USD, and the captured amount to cover what is owed. */
+export function isCaptureSettled(cap: CaptureResult, owedCents: number): boolean {
+  return (
+    cap.status === "COMPLETED" &&
+    cap.captureStatus === "COMPLETED" &&
+    cap.currency === "USD" &&
+    cap.amountCents >= owedCents
+  );
+}

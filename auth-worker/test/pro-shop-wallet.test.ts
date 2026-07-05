@@ -119,22 +119,41 @@ describe("pro shop and player wallets", () => {
     expect(body.transactions).toHaveLength(1);
   });
 
-  it("cancels admin orders", async () => {
-    const dbState = makeDb();
+  it("cancels a store-credit order: restocks, refunds the wallet, and marks it cancelled", async () => {
+    const dbState = makeDb({ products: [{ id: 1, category: "disc", name: "Roc", brand: "Innova", price_cents: 1800, stock_qty: 5, active: 1 }] });
     dbState.state.orders.push({ id: 10, member_id: "m_jane", member_name: "Jane", total_cents: 1800, payment_method: "store_credit", status: "submitted" });
+    dbState.state.orderItems.push({ id: 20, order_id: 10, product_id: 1, name_snapshot: "Roc", price_cents: 1800, quantity: 1 });
     const res = await call("/admin/orders/10", "PATCH", await token("m_admin"), { status: "cancelled" }, dbState);
     expect(res.status).toBe(200);
+    const body = (await res.json()) as { reversal: { refund: string; restocked: number } };
+    expect(body.reversal).toEqual({ refund: "store_credit", restocked: 1 });
     expect(dbState.state.orders[0]?.status).toBe("cancelled");
+    expect(Number(dbState.state.products[0]!.stock_qty)).toBe(6); // restocked +1
+    expect(dbState.state.balanceCents).toBe(1800); // wallet refunded
   });
 
-  it("deletes admin orders and their line items", async () => {
-    const dbState = makeDb();
-    dbState.state.orders.push({ id: 10, member_id: "m_jane", member_name: "Jane", total_cents: 1800, payment_method: "store_credit", status: "cancelled" });
+  it("cancelling is idempotent — a second cancel does not double-refund or double-restock", async () => {
+    const dbState = makeDb({ products: [{ id: 1, category: "disc", name: "Roc", brand: "Innova", price_cents: 1800, stock_qty: 5, active: 1 }] });
+    dbState.state.orders.push({ id: 10, member_id: "m_jane", member_name: "Jane", total_cents: 1800, payment_method: "store_credit", status: "submitted" });
+    dbState.state.orderItems.push({ id: 20, order_id: 10, product_id: 1, name_snapshot: "Roc", price_cents: 1800, quantity: 1 });
+    await call("/admin/orders/10", "PATCH", await token("m_admin"), { status: "cancelled" }, dbState);
+    const second = await call("/admin/orders/10", "PATCH", await token("m_admin"), { status: "cancelled" }, dbState);
+    expect(second.status).toBe(200);
+    expect((await second.json() as { reversal: { restocked: number } }).reversal.restocked).toBe(0); // no-op
+    expect(Number(dbState.state.products[0]!.stock_qty)).toBe(6); // still +1, not +2
+    expect(dbState.state.balanceCents).toBe(1800); // still one refund
+  });
+
+  it("deletes a paid order: reverses (restock + refund) first, then removes it and its items", async () => {
+    const dbState = makeDb({ products: [{ id: 1, category: "disc", name: "Roc", brand: "Innova", price_cents: 1800, stock_qty: 5, active: 1 }] });
+    dbState.state.orders.push({ id: 10, member_id: "m_jane", member_name: "Jane", total_cents: 1800, payment_method: "store_credit", status: "submitted" });
     dbState.state.orderItems.push({ id: 20, order_id: 10, product_id: 1, name_snapshot: "Roc", price_cents: 1800, quantity: 1 });
     const res = await call("/admin/orders/10", "DELETE", await token("m_admin"), undefined, dbState);
     expect(res.status).toBe(200);
     expect(dbState.state.orders).toHaveLength(0);
     expect(dbState.state.orderItems).toHaveLength(0);
+    expect(Number(dbState.state.products[0]!.stock_qty)).toBe(6); // restocked before delete
+    expect(dbState.state.balanceCents).toBe(1800); // refunded before delete
   });
 
   it("rejects checkout when store credit is short", async () => {

@@ -126,6 +126,7 @@ function allRows(sql: string, args: unknown[], state: MockState): Row[] {
     const ids = new Set(args.map((v) => Number(v)));
     return state.orderItems.filter((item) => ids.has(numberArg(item.order_id)));
   }
+  if (/FROM store_order_items WHERE order_id = \?/i.test(sql)) return state.orderItems.filter((item) => numberArg(item.order_id) === numberArg(args[0]));
   if (/FROM store_orders WHERE member_id/i.test(sql)) return state.orders.filter((o) => o.member_id === args[0]);
   if (/FROM store_orders/i.test(sql)) return orderRows(sql, args, state);
   if (/FROM wallet_transactions WHERE event_id/i.test(sql)) {
@@ -143,6 +144,14 @@ function firstRow(sql: string, args: unknown[], state: MockState): Row | null {
   // that INSERT here and never record the debit.
   if (/^\s*SELECT COALESCE\(SUM\(amount_cents\)/i.test(sql)) return { balance_cents: state.balanceCents };
   if (/SELECT \* FROM store_orders WHERE payment_ref/i.test(sql)) return state.orders.find((o) => o.payment_ref === args[0]) ?? null;
+  if (/SELECT \* FROM store_orders WHERE id = \?/i.test(sql)) return state.orders.find((o) => numberArg(o.id) === numberArg(args[0])) ?? null;
+  // claimStoreOrderReversal: atomic "flip to cancelled ONLY if not already cancelled", returns the row iff it won.
+  if (/UPDATE store_orders SET status = 'cancelled'/i.test(sql) && /status != 'cancelled'/i.test(sql)) {
+    const row = state.orders.find((o) => numberArg(o.id) === numberArg(args[0]));
+    if (!row || row.status === "cancelled") return null;
+    row.status = "cancelled";
+    return row;
+  }
   if (/SELECT \* FROM store_payment_sessions WHERE paypal_order_id/i.test(sql)) return state.paymentSessions.find((session) => session.paypal_order_id === args[0]) ?? null;
   if (/SELECT \* FROM events WHERE id = \?/i.test(sql)) {
     return state.eventExists ? { id: numberArg(args[0]), name: "League Night", date: "2026-06-01", status: "scheduled" } : null;
@@ -282,6 +291,13 @@ function capturePaymentSession(args: unknown[], state: MockState): Row | null {
 }
 
 function runSql(sql: string, args: unknown[], state: MockState): MockResult {
+  if (/UPDATE store_products SET stock_qty = stock_qty \+ \?/i.test(sql)) {
+    // restock: incrementStoreProductStock binds (quantity, id)
+    const row = state.products.find((p) => numberArg(p.id) === numberArg(args[1]));
+    if (row) row.stock_qty = numberArg(row.stock_qty) + numberArg(args[0]);
+    const changes = row ? 1 : 0;
+    return { results: [], success: true, meta: { changes, rows_written: changes } };
+  }
   if (/UPDATE store_products SET stock_qty = stock_qty - \?/i.test(sql)) {
     const row = state.products.find((p) => (
       numberArg(p.id) === numberArg(args[1])

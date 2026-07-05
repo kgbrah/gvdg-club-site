@@ -2,7 +2,7 @@ import type { Env } from "./env.js";
 import * as db from "./db.js";
 import { requireAuth } from "./authz.js";
 import { getMember } from "./roster.js";
-import { computeOwed, paypalBase, createOrder as ppCreateOrder, captureOrder as ppCaptureOrder, type OwedConfig } from "./payments.js";
+import { computeOwed, paypalBase, createOrder as ppCreateOrder, captureOrder as ppCaptureOrder, isCaptureSettled, type CaptureResult, type OwedConfig } from "./payments.js";
 import { clientIp, json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { notifyRegistration } from "./register-notify.js";
@@ -71,14 +71,16 @@ export async function handleClubRegistration(
         if (!(await db.reserveCapture(env.DB, reg.id, orderId))) {
           return json({ error: "capture_in_progress" }, 409, origin);
         }
-        let cap: { status: string; amountCents: number };
+        let cap: CaptureResult;
         try {
           cap = await ppCaptureOrder(creds, orderId);
         } catch (e) {
           await db.releaseCapture(env.DB, reg.id, orderId);
           throw e;
         }
-        if (cap.status !== "COMPLETED" || cap.amountCents < owed) {
+        // Same settled-funds gate as the pro-shop path: reject unsettled (PENDING eCheck) or
+        // wrong-currency captures so a registration is never marked PAID on money that may not clear.
+        if (!isCaptureSettled(cap, owed)) {
           await db.releaseCapture(env.DB, reg.id, orderId);
           return json({ error: "payment_incomplete" }, 402, origin);
         }

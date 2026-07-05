@@ -70,11 +70,14 @@ async function call(path: string, method = "GET", token?: string, body?: unknown
   return worker.fetch(new Request("https://w" + path, { method, headers: h, body: body ? JSON.stringify(body) : undefined }), e);
 }
 // Stub the PayPal REST API by URL.
-function stubPayPal(captureValue = "15.00", captureStatus = "COMPLETED") {
+// Faithful PayPal capture stub: a real capture reply carries BOTH an order-level status and a
+// capture-level status (a COMPLETED order can hold a PENDING eCheck capture) plus a currency_code.
+// isCaptureSettled() requires all of them, so the mock must supply all of them.
+function stubPayPal(captureValue = "15.00", orderStatus = "COMPLETED", captureStatus = orderStatus, currency = "USD") {
   vi.stubGlobal("fetch", vi.fn(async (url: string | URL) => {
     const u = String(url);
     if (u.includes("/oauth2/token")) return new Response(JSON.stringify({ access_token: "tok" }), { status: 200 });
-    if (u.includes("/capture")) return new Response(JSON.stringify({ status: captureStatus, purchase_units: [{ payments: { captures: [{ amount: { value: captureValue } }] } }] }), { status: 200 });
+    if (u.includes("/capture")) return new Response(JSON.stringify({ status: orderStatus, purchase_units: [{ payments: { captures: [{ status: captureStatus, amount: { value: captureValue, currency_code: currency } }] } }] }), { status: 200 });
     if (u.includes("/v2/checkout/orders")) return new Response(JSON.stringify({ id: "ORDER123" }), { status: 200 });
     return new Response("{}", { status: 404 });
   }));
@@ -104,6 +107,14 @@ describe("Track G G2 — PayPal Checkout", () => {
   });
   it("rejects an underpaid capture (402) — does not mark paid", async () => {
     stubPayPal("5.00"); // 500 cents < 1500 owed
+    expect((await call("/events/5/pay/capture", "POST", await tok(), { orderId: "ORDER123" })).status).toBe(402);
+  });
+  it("rejects an unsettled capture — COMPLETED order but PENDING eCheck capture (402)", async () => {
+    stubPayPal("15.00", "COMPLETED", "PENDING"); // right amount, but funds not settled
+    expect((await call("/events/5/pay/capture", "POST", await tok(), { orderId: "ORDER123" })).status).toBe(402);
+  });
+  it("rejects a wrong-currency capture (402)", async () => {
+    stubPayPal("15.00", "COMPLETED", "COMPLETED", "CAD");
     expect((await call("/events/5/pay/capture", "POST", await tok(), { orderId: "ORDER123" })).status).toBe(402);
   });
   it("requires auth", async () => {

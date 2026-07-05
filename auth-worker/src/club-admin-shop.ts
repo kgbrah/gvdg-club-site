@@ -3,6 +3,7 @@ import * as shopDb from "./shop-db.js";
 import { resolveMemberFlexible, type KVListLike } from "./roster.js";
 import { json, readJson } from "./http.js";
 import { asInt, asStr, inSet } from "./input.js";
+import { reverseStoreOrder } from "./order-reversal.js";
 
 const PRODUCT_CATEGORIES = ["disc", "accessory"] as const;
 const PRODUCT_ADMIN_STATUSES = ["active", "inactive", "all"] as const;
@@ -201,13 +202,29 @@ export async function handleAdminShop(
       if ("tracking_carrier" in body) patch.tracking_carrier = asStr(body.tracking_carrier, 60);
       if ("tracking_number" in body) patch.tracking_number = asStr(body.tracking_number, 120);
       if ("admin_note" in body) patch.admin_note = asStr(body.admin_note, 500);
+      // Cancelling an order must make the member whole — restock and refund store credit — not just flip
+      // the status. Route the cancel through the reversal primitive (idempotent), then apply any other
+      // patch fields (tracking/note) without re-setting status.
+      if (patch.status === "cancelled") {
+        const rev = await reverseStoreOrder(env, id, { by: adminId });
+        if (!(await shopDb.getStoreOrderById(env.DB, id))) return json({ error: "not_found" }, 404, origin);
+        delete patch.status;
+        if (Object.keys(patch).length) await shopDb.updateStoreOrderFulfillment(env.DB, id, patch);
+        return json({ order: await shopDb.getStoreOrderById(env.DB, id), reversal: { refund: rev.refund, restocked: rev.restocked } }, 200, origin);
+      }
       const updated = await shopDb.updateStoreOrderFulfillment(env.DB, id, patch);
       if (!updated) return json({ error: "not_found" }, 404, origin);
       return json({ order: updated }, 200, origin);
     }
     if (method === "DELETE" && id != null) {
+      // Deleting an order still owes the member their money/stock back — reverse before the row (and its
+      // ON DELETE CASCADE items) are gone.
+      if (!(await shopDb.getStoreOrderById(env.DB, id))) return json({ error: "not_found" }, 404, origin);
+      const rev = await reverseStoreOrder(env, id, { by: adminId });
       const deleted = await shopDb.deleteStoreOrder(env.DB, id);
-      return deleted ? json({ order: deleted, deleted: true }, 200, origin) : json({ error: "not_found" }, 404, origin);
+      return deleted
+        ? json({ order: deleted, deleted: true, reversal: { refund: rev.refund, restocked: rev.restocked } }, 200, origin)
+        : json({ error: "not_found" }, 404, origin);
     }
   }
 

@@ -251,6 +251,22 @@ export async function incrementStoreProductStock(db: D1Like, id: number, quantit
   await db.prepare("UPDATE store_products SET stock_qty = stock_qty + ?, updated_at = datetime('now') WHERE id = ?").bind(quantity, id).run();
 }
 
+/** All line items for one order (product_id + quantity + snapshot) — the source of what to restock. */
+export async function getStoreOrderItems(db: D1Like, orderId: number): Promise<Record<string, unknown>[]> {
+  return (await db.prepare("SELECT * FROM store_order_items WHERE order_id = ? ORDER BY id").bind(orderId).all()).results as Record<string, unknown>[];
+}
+
+/** Atomically claim an order for reversal by flipping it to 'cancelled' ONLY if it isn't already
+ *  cancelled, returning the row iff THIS call won the transition. SQLite serializes writers, so a
+ *  concurrent double-cancel (or cancel-then-delete) claims exactly once — the caller can then restock
+ *  and refund exactly once. Returns null when the order is missing or already cancelled. */
+export async function claimStoreOrderReversal(db: D1Like, id: number): Promise<Record<string, unknown> | null> {
+  return db
+    .prepare("UPDATE store_orders SET status = 'cancelled', status_updated_at = datetime('now') WHERE id = ? AND status != 'cancelled' RETURNING *")
+    .bind(id)
+    .first();
+}
+
 export async function addStoreOrderLinesAndDecrementStock(db: D1Like, orderId: number, lines: readonly StoreOrderLineInput[]): Promise<boolean> {
   if (!lines.length) return false;
   if (!db.batch) {
