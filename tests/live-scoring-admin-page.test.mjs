@@ -13,7 +13,10 @@ test('admin live start area sends normalized scoring config', () => {
   assert.match(source, /class="fmt-btn" data-val="matchplay"/);
   assert.doesNotMatch(source, /<select id="scGroupFormat"/);
   assert.match(source, /function scCurrentConfig\(\)/);
-  assert.match(source, /const body = \$\('scUseManualPlayers'\)\.checked \? \{ from: 'players', liveScoringConfig \} : \{ liveScoringConfig \}/);
+  // The round always seeds from BOTH registered players AND manually-added walk-ons (unioned server-side),
+  // so there is no manual-roster checkbox and the start body is just the config.
+  assert.match(source, /body: \{ liveScoringConfig \}/);
+  assert.doesNotMatch(source, /scUseManualPlayers/);
 });
 
 test('admin start defaults preserve saved and legacy format fields separately', () => {
