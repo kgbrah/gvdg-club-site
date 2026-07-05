@@ -42,6 +42,20 @@ if [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
   export CLOUDFLARE_ACCOUNT_ID
 fi
 
+discover_cloudflare_account_id() {
+  [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] && return 0
+  command -v wrangler >/dev/null || return 0
+
+  local out ids count
+  out="$(wrangler whoami 2>/dev/null || true)"
+  ids="$(printf '%s\n' "$out" | grep -Eo '[0-9a-f]{32}' | sort -u || true)"
+  count="$(printf '%s\n' "$ids" | sed '/^$/d' | wc -l | tr -d ' ')"
+  if [ "$count" = 1 ]; then
+    CLOUDFLARE_ACCOUNT_ID="$(printf '%s\n' "$ids" | sed -n '1p')"
+    export CLOUDFLARE_ACCOUNT_ID
+  fi
+}
+
 mkdir -p "$(dirname "$LOG")"
 log() { printf '%s  %s\n' "$(date -u +%FT%TZ 2>/dev/null || date)" "$*" >> "$LOG"; }
 say() { printf '%s\n' "$*"; }
@@ -57,8 +71,9 @@ version_reachable() { # true unless the network/site is entirely unreachable
 reassert() { # $1 = full origin/main sha, $2 = reason, $3 = dryrun(0/1)
   local sha="$1" reason="$2" dry="${3:-0}"
   if [ "$dry" = 1 ]; then say "WOULD RE-ASSERT origin/main ($sha) — $reason"; log "DRY-RUN would re-assert ($reason)"; return; fi
+  discover_cloudflare_account_id
   if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
-    log "ERROR: CLOUDFLARE_ACCOUNT_ID is not set; cannot re-assert Pages. Set it in the environment or $REPO/.gvdg-deploy.env."
+    log "ERROR: CLOUDFLARE_ACCOUNT_ID is not set; cannot re-assert Pages. Set it in the environment, $REPO/.gvdg-deploy.env, or refresh Wrangler OAuth auth."
     return
   fi
   log "CLOBBER DETECTED: $reason — re-asserting origin/main ($sha)…"
@@ -67,7 +82,7 @@ reassert() { # $1 = full origin/main sha, $2 = reason, $3 = dryrun(0/1)
   trap "rm -rf '$build'" RETURN
   git -C "$REPO" archive origin/main | tar -x -C "$build"
   mkdir -p "$build/.pages-dist"
-  if ! ( cd "$build" && npm ci >>"$LOG" 2>&1 && npm run build >>"$LOG" 2>&1 && cp -R ./*.html ./*.js ./*.css score-app img _headers CNAME site.webmanifest .pages-dist/ >>"$LOG" 2>&1 ); then
+  if ! ( cd "$build" && npm ci >>"$LOG" 2>&1 && npm run build >>"$LOG" 2>&1 && cp -R ./*.html ./*.js ./*.css members-app score-app img _headers CNAME site.webmanifest .pages-dist/ >>"$LOG" 2>&1 ); then
     log "ERROR: static artifact build failed; cannot re-assert Pages."
     return
   fi

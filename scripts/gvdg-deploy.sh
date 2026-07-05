@@ -64,8 +64,23 @@ if [ -n "${GVDG_STAGING_API_URL:-}" ]; then
   export GVDG_STAGING_API_URL
 fi
 
+discover_cloudflare_account_id() {
+  [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] && return 0
+  command -v npx >/dev/null || return 0
+
+  local out ids count
+  out="$(npx wrangler whoami 2>/dev/null || true)"
+  ids="$(printf '%s\n' "$out" | grep -Eo '[0-9a-f]{32}' | sort -u || true)"
+  count="$(printf '%s\n' "$ids" | sed '/^$/d' | wc -l | tr -d ' ')"
+  if [ "$count" = 1 ]; then
+    CLOUDFLARE_ACCOUNT_ID="$(printf '%s\n' "$ids" | sed -n '1p')"
+    export CLOUDFLARE_ACCOUNT_ID
+  fi
+}
+
 require_cloudflare_account_id() {
-  [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] || die "CLOUDFLARE_ACCOUNT_ID is not set. Keep the account ID private and provide it via your shell, .gvdg-deploy.env, or CI secrets."
+  discover_cloudflare_account_id
+  [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] || die "CLOUDFLARE_ACCOUNT_ID is not set. Keep the account ID private and provide it via your shell, .gvdg-deploy.env, CI secrets, or a Wrangler OAuth login with exactly one account."
 }
 
 has_staging_live_scoring_qa_creds() {
@@ -134,6 +149,7 @@ live_commit() {
   sha="$(printf '%s' "$j" | grep -oE '"commit"[^,]*' | grep -oE '[0-9a-f]{7,40}' | head -1 || true)"
   if [ -n "$sha" ]; then printf '%s' "$sha"; return; fi
   # Fallback (bootstrap, pre-marker): the Source column of the newest Production Pages deployment.
+  discover_cloudflare_account_id
   [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] || return 0
   npx wrangler pages deployment list --project-name "$PROJECT" 2>/dev/null \
     | awk -F'│' '/Production/ { gsub(/ /,"",$5); print $5; exit }'
