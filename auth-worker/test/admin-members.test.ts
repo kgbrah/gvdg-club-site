@@ -143,4 +143,11 @@ describe("admin member role toggle", () => {
     expect(r.status).toBe(200);
     expect((await json(r)).member.isAdmin).toBe(true);
   });
+
+  it("demoting a non-admin is a no-op 200 (never trips last-admin)", async () => {
+    const t = await login("1", "4821");
+    const r = await worker.fetch(req("/admin/members/set-role", "POST", t, { memberId: "m_999", isAdmin: false }), env);
+    expect(r.status).toBe(200);
+    expect((await json(r)).member.isAdmin).toBe(false);
+  });
 });

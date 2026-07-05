@@ -70,15 +70,32 @@ export async function handleAdminMembers(
     const target = await getMember(env.ROSTER, memberId);
     if (!target) return json({ error: "not_found" }, 404, origin);
 
+    const was = target.isAdmin === true;
+    // No state change: return without writing or logging (avoids phantom audit entries).
+    if (was === isAdmin) return json({ member: pub(target) }, 200, origin);
+
     // Never remove the final admin — also blocks the sole admin from self-demoting.
-    if (!isAdmin && target.isAdmin === true) {
+    if (!isAdmin) {
       const admins = await countAdmins(env.ROSTER as unknown as KVListLike);
       if (admins <= 1) return json({ error: "last_admin" }, 409, origin);
     }
 
     const updated = await setMemberAdmin(env.ROSTER, memberId, isAdmin);
     if (!updated) return json({ error: "not_found" }, 404, origin);
-    console.log(JSON.stringify({ evt: "role_change", actor: adminId, target: memberId, isAdmin }));
+
+    // Defense-in-depth: the count-then-write guard above is NOT atomic on eventually-consistent KV,
+    // so a concurrent demote could slip past it and drop the club to zero admins. Re-check after the
+    // write and roll this demotion back if it removed the last admin, converging to a safe state.
+    // (A single-writer Durable Object owning the admin count is the fully race-free fix — follow-up.)
+    if (!isAdmin) {
+      const remaining = await countAdmins(env.ROSTER as unknown as KVListLike);
+      if (remaining === 0) {
+        await setMemberAdmin(env.ROSTER, memberId, true);
+        return json({ error: "last_admin" }, 409, origin);
+      }
+    }
+
+    console.log(JSON.stringify({ evt: "role_change", actor: adminId, target: memberId, from: was, to: isAdmin, at: Date.now() }));
     return json({ member: pub(updated) }, 200, origin);
   }
 

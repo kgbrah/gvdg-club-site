@@ -58,11 +58,31 @@ upstream). New branch in `handleAdminMembers`:
 4. `setMemberAdmin(...)`; return `{ member: pub(updated) }` (the existing public-safe view).
 5. **Idempotent:** setting the flag to its current value succeeds as a no-op 200.
 
-**Audit:** thread the acting admin's `memberId` into `handleAdminMembers` (currently
-`(request, env, origin, method, seg)` — add the `claims`/actor already resolved by
-`adminGate` at the `club-admin-routes.ts` call site) and emit one structured
-`console.log({evt:'role_change', actor, target: memberId, isAdmin})` (Workers observability
+**Audit:** thread the acting admin's `memberId` into `handleAdminMembers` (add the `adminId`
+resolved by `adminGate` at the `club-admin-routes.ts` call site) and emit — **only on a real
+transition** (`was !== now`) — a structured
+`console.log({evt:'role_change', actor, target, from, to, at})` (Workers observability
 captures it). No new D1 table for v1.
+
+**Hardening from the security review (2026-07-05):**
+- **No-op short-circuit:** if the requested value equals the current value, return `200` without
+  writing or logging (kills phantom audit entries + a needless KV write).
+- **Last-admin race (defense-in-depth):** the pre-write `countAdmins()<=1` guard is a non-atomic
+  count-then-write over eventually-consistent KV, so a concurrent/rapid pair of demotes could slip
+  past it to **zero admins** (club lockout — availability only, trusted-admin actor). After the demote
+  write, **re-check `countAdmins()`; if `0`, roll the demotion back (`setMemberAdmin(true)`) and return
+  `409`.** Concurrent demotes both write→both re-count 0→both roll back, converging to a safe state.
+  The **fully** race-free fix is a single-writer Durable Object that owns the admin-count invariant —
+  deferred as a follow-up.
+
+**Known limitation (pre-existing, NOT introduced here):** `setMemberAdmin` does a whole-record
+read-modify-write, so a role toggle racing a concurrent `setPin`/`resetMemberPin`/`updateProfile` can
+lost-update `pinVer`/`pinHash` (could un-revoke a session). This is the **same non-atomic-KV pattern
+`updateProfile`/`setPin` already use** (CLAUDE.md documents KV get-then-put as non-atomic); this feature
+does not add a new class. Proper fix = decouple the admin flag to a separate `admin:<id>` key **or**
+serialize member-record mutations through a per-member DO/CAS — tracked as a cross-cutting hardening task
+(candidate for Batch 4). Also relevant: `scripts/provision.mjs` still hashes at 120k PBKDF2 (workerd caps
+at 100k and throws), so the documented lockout-recovery path is itself broken — one-line fix, separate.
 
 ### 3.3 Admin UI (`admin.html` Members tab)
 
