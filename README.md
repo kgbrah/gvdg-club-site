@@ -4,7 +4,7 @@ The official website and member platform for the **Greenville Disc Golf Club** (
 
 It is two things in one repository, deployed together:
 
-1. **A static frontend** — hand-written HTML + vanilla JavaScript at the repo root (`index.html`, `gvdg-members.html`, `admin.html`, `events.html`, …), with `score.html` now loading a small Vite/Preact bundle generated into `score-app/`.
+1. **A static frontend** — hand-written HTML + vanilla JavaScript at the repo root (`index.html`, `gvdg-members.html`, `admin.html`, `events.html`, …), with `score.html` now loading a small Vite/React bundle generated into `score-app/`.
 2. **A Cloudflare Worker** (`auth-worker/`, TypeScript) — the only server-side code. It handles member authentication, the club-operations API, live scoring, the pro shop, ratings, and the "Crotts" AI assistant. Every dynamic thing the pages show comes from this Worker over HTTPS.
 
 There is **no traditional backend or database server to boot** for the site itself — the pages are static files, and all data flows through the Worker.
@@ -128,7 +128,7 @@ All D1 access is **parameterized** (`.bind()` with `?`). Migrations in `auth-wor
 
 ## Tech stack
 
-- **Frontend:** hand-written HTML5 + vanilla ES modules, CSS custom-property design tokens (`tokens.css`), a Vite/Preact bundle for `score.html`, a service worker (`sw.js`, manually versioned) + PWA manifest.
+- **Frontend:** hand-written HTML5 + vanilla ES modules, CSS custom-property design tokens (`tokens.css`), a Vite/React bundle for `score.html`, a service worker (`sw.js`, manually versioned) + PWA manifest.
 - **Backend:** Cloudflare Workers (TypeScript), Workers KV, D1 (SQLite), Durable Objects, R2, Workers AI. Auth via PBKDF2-HMAC-SHA256 PIN hashing + HS256 JWT (`jose`) + passkeys (`@simplewebauthn/server`).
 - **Tooling:** `wrangler`, `vitest` (Worker tests), `node --test` (frontend helper tests), `playwright` (browser QA), `tsc` (typecheck).
 
@@ -143,7 +143,7 @@ All D1 access is **parameterized** (`.bind()` with `?`). Migrations in `auth-wor
   admin.html              admin control panel (16 tabs)
   events.html             public events hub + detail
   score.html              live scoring HTML shell
-  src/score-app/          Preact shell + live-scoring app entry
+  src/score-app/          React shell + live-scoring app entry
   vite.score.config.mjs   Vite build for the generated score-app/ bundle
   score-app/              generated score bundle (created by npm run build, git-ignored)
   pro-shop.html           pro shop + member wallet
@@ -237,6 +237,7 @@ npm run audit                 # npm audit --audit-level=moderate
 # Frontend helpers (from repo root)
 npm run build                 # builds score-app/ for score.html
 npm test                      # node --test tests/*.test.mjs
+npm run qa:react              # react-doctor static scan for the score app island
 npm run qa:live-scoring       # Playwright live-scoring browser QA
 npm run qa:staging-live-scoring  # live gvdgclub.com scoring E2E; requires QA credentials
 ```

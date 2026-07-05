@@ -29,7 +29,7 @@ Production `www.greenvillediscgolf.com` (GitHub Pages, pinned by the `CNAME` fil
 The website for the **Greenville Disc Golf Club**. Two halves in one repo, deployed together:
 
 1. **A static frontend** — the root `*.html` / `*.js` files. Most pages are plain hand-written HTML +
-   vanilla JS served as-is; `score.html` loads a small Vite/Preact bundle generated into `score-app/`.
+   vanilla JS served as-is; `score.html` loads a small Vite/React bundle generated into `score-app/`.
    Some pages are large single-file monoliths (`gvdg-members.html` ~334 KB, `admin.html` ~206 KB).
 2. **A Cloudflare Worker** in `auth-worker/` (TypeScript, ~82 modules). The **only** server-side code:
    member auth, the club-operations API, live scoring, pro-shop, ratings, and the "Crotts" AI assistant.

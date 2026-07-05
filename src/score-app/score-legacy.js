@@ -178,17 +178,18 @@ export function startScoreApp() {
                 return S.cardmates.map(function (p) { return { type: 'player', index: p.index, label: p.name + (p.isMe ? ' (you)' : ''), meta: p.division || '', playerIndexes: [p.index] }; });
             }
             const cardIndexes = new Set(S.cardmates.map(function (p) { return p.index; }));
-            return (S.scoreTargets || [])
-                .filter(function (target) { return target && target.type === 'pair' && target.playerIndexes.some(function (index) { return cardIndexes.has(index); }); })
-                .map(function (target) {
-                    return {
+            return (S.scoreTargets || []).reduce(function (rows, target) {
+                if (target && target.type === 'pair' && target.playerIndexes.some(function (index) { return cardIndexes.has(index); })) {
+                    rows.push({
                         type: 'pair',
                         targetId: target.id,
                         label: target.label,
                         meta: (target.members || []).join(' / '),
                         playerIndexes: target.playerIndexes || []
-                    };
-                });
+                    });
+                }
+                return rows;
+            }, []);
         }
         function strokesFor(index, hole) {
             const cm = S.cardmates.find((p) => p.index === index);
@@ -339,7 +340,7 @@ export function startScoreApp() {
             // another device)? The snapshot omits removed players and includes new ones; rebuild from /mine
             // (which carries isMe/canEnterScorecard the public snapshot lacks) so removed players don't
             // linger as ghost rows, joins appear, and a selector pointing at a removed scorer is reset.
-            const snapMine = snap.players.filter((p) => (p.cardId ?? null) === S.cardId).map((p) => p.index).sort((a, b) => a - b);
+            const snapMine = snap.players.reduce((indexes, p) => { if ((p.cardId ?? null) === S.cardId) indexes.push(p.index); return indexes; }, []).sort((a, b) => a - b);
             const haveMine = S.cardmates.map((c) => c.index).sort((a, b) => a - b);
             if (snapMine.join(',') !== haveMine.join(',')) { loadMine(); return; }
             S.cardmates.forEach((cm) => {

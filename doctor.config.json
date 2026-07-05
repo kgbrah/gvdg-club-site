@@ -1,0 +1,22 @@
+{
+  "ignore": {
+    "files": [
+      ".pages-dist/**",
+      ".github/**",
+      "auth-worker/**",
+      "docs/**",
+      "score-app/**",
+      "scripts/**",
+      "tests/**",
+      "*.html",
+      "*.js",
+      "*.mjs"
+    ],
+    "overrides": [
+      {
+        "files": ["src/score-app/score-legacy.js"],
+        "rules": ["react-doctor/async-await-in-loop"]
+      }
+    ]
+  }
+}

@@ -1,8 +1,20 @@
-import { h, render } from "preact";
+import React from "react";
+import { createRoot } from "react-dom/client";
 
 import { startScoreApp } from "./score-legacy.js";
 
+if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
+  void import("react-grab");
+  void import("react-scan");
+}
+
+const h = React.createElement;
+
 function ScoreShell() {
+  React.useEffect(() => {
+    startScoreApp();
+  }, []);
+
   return h("div", { class: "wrap" }, [
     h("header", { class: "topbar" }, [
       h("img", { src: "img/logo.png", alt: "GVDG", class: "logo" }),
@@ -31,5 +43,4 @@ if (!root) {
   throw new Error("Missing scoreRoot mount element");
 }
 
-render(h(ScoreShell), root);
-startScoreApp();
+createRoot(root).render(h(ScoreShell));
