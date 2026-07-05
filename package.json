@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "qa:live-scoring": "node .omo/qa/live-scoring-browser-qa.mjs",
+    "qa:live-scoring": "node scripts/qa/live-scoring-browser-qa.mjs",
     "test": "node --test tests/*.test.mjs"
   },
   "devDependencies": {
