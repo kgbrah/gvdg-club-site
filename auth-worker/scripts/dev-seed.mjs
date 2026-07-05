@@ -5,7 +5,9 @@
 //   npx wrangler kv bulk put seed.local.json --binding=ROSTER --local
 // (The full, production roster-provisioning tool is slice B2.)
 
-const ITERATIONS = 120_000;
+// Must match src/crypto.ts ITERATIONS exactly (100_000). workerd caps PBKDF2 at 100k and THROWS
+// above it, so a 120k hash here produces members that CANNOT log in on the deployed Worker.
+const ITERATIONS = 100_000;
 
 function toB64url(bytes) {
   let bin = "";

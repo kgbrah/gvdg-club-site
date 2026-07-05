@@ -18,6 +18,9 @@ export interface Member {
   isAdmin?: boolean;
   pinHash: string;
   mustChangePin: boolean;
+  /** Monotonic PIN-version. Bumped on every PIN change/reset so tokens minted earlier are rejected
+   *  server-side (see authz.requireAuth). Absent = 0 for legacy records. */
+  pinVer?: number;
 }
 
 export type ProfilePatch = { pdgaNo?: string | null; udisc?: string | null; photo?: string | null };
@@ -81,13 +84,16 @@ export async function resolveMember(kv: KVLike, identifier: string): Promise<Mem
   return null;
 }
 
-/** Replace a member's PIN hash and clear the forced-change flag. */
-export async function setPin(kv: KVLike, memberId: string, pinHash: string): Promise<void> {
+/** Replace a member's PIN hash, clear the forced-change flag, and bump pinVer so every token issued
+ *  before this change is revoked. Returns the new pinVer so the caller can mint a fresh, valid token. */
+export async function setPin(kv: KVLike, memberId: string, pinHash: string): Promise<number> {
   const m = await getMember(kv, memberId);
   if (!m) throw new Error(`unknown member: ${memberId}`);
   m.pinHash = pinHash;
   m.mustChangePin = false;
+  m.pinVer = (m.pinVer ?? 0) + 1;
   await kv.put(RECORD(memberId), JSON.stringify(m));
+  return m.pinVer;
 }
 
 /**
@@ -191,6 +197,7 @@ export async function resetMemberPin(kv: KVLike, identifier: string, pinHash: st
   if (!m) return null;
   m.pinHash = pinHash;
   m.mustChangePin = true;
+  m.pinVer = (m.pinVer ?? 0) + 1;
   await kv.put(RECORD(m.memberId), JSON.stringify(m));
   return m;
 }

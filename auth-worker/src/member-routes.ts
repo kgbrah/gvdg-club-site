@@ -55,7 +55,7 @@ export async function handleLogin(request: Request, env: Env, origin: string | n
   }
 
   await clearAttempts(env.RATELIMIT, rk);
-  const token = await signSession({ sub: member.memberId, mustChangePin: member.mustChangePin }, env.JWT_SECRET, ttl(env));
+  const token = await signSession({ sub: member.memberId, mustChangePin: member.mustChangePin, pinVer: member.pinVer ?? 0 }, env.JWT_SECRET, ttl(env));
   return json(
     {
       token,
@@ -267,7 +267,7 @@ export async function handleSetPin(request: Request, env: Env, origin: string | 
     }
   }
 
-  await setPin(env.ROSTER, claims.sub, await hashPin(newPin));
-  const fresh = await signSession({ sub: claims.sub, mustChangePin: false }, env.JWT_SECRET, ttl(env));
+  const newVer = await setPin(env.ROSTER, claims.sub, await hashPin(newPin));
+  const fresh = await signSession({ sub: claims.sub, mustChangePin: false, pinVer: newVer }, env.JWT_SECRET, ttl(env));
   return json({ token: fresh, mustChangePin: false }, 200, origin);
 }
