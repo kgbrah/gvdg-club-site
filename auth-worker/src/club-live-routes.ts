@@ -10,6 +10,38 @@ import { scoringState } from "./live-state.js";
 import { assignCards, type PlayerState } from "./scoring.js";
 import { weatherLocationForCourse } from "./weather.js";
 
+type RosterPlayer = { memberId: string | null; name: string; division: string | null; startingHole: number | null; team: string | null };
+
+/** Merge a live event's REGISTERED players with its manually-added (event_players) walk-ons into one roster
+ *  so neither is dropped. Dedupe the same member (by member_id) and the same walk-on (member-less, by name);
+ *  registrations are added first, so a member entered both ways keeps their registration (division / starting
+ *  hole / team). A member-less walk-on is never deduped against a member, so distinct people both play. */
+export function unionRosterPlayers(
+  regs: readonly { member_id?: string | null; name?: string | null; division?: string | null; starting_hole?: number | null; team?: string | null }[],
+  manual: readonly Record<string, unknown>[],
+): RosterPlayer[] {
+  const out: RosterPlayer[] = [];
+  const seenMember = new Set<string>();
+  const seenName = new Set<string>();
+  const norm = (v: unknown) => String(v ?? "").trim().toLowerCase();
+  const add = (p: RosterPlayer) => {
+    if (p.memberId) {
+      if (seenMember.has(p.memberId)) return;
+      seenMember.add(p.memberId);
+    } else {
+      const n = norm(p.name);
+      if (n) {
+        if (seenName.has(n)) return;
+        seenName.add(n);
+      }
+    }
+    out.push(p);
+  };
+  for (const r of regs) add({ memberId: r.member_id ?? null, name: String(r.name ?? "Player"), division: r.division ?? null, startingHole: r.starting_hole ?? null, team: r.team ?? null });
+  for (const m of manual) add({ memberId: typeof m.member_id === "string" ? m.member_id : null, name: String(m.name ?? "Player"), division: typeof m.division === "string" ? m.division : null, startingHole: null, team: typeof m.team === "string" ? m.team : null });
+  return out;
+}
+
 const LIVE_SCORE_IP_LIMIT = 180; // score writes per identity per minute (a card rarely exceeds a few)
 
 async function liveProxy(stub: DurableObjectStub, path: string, init: RequestInit | undefined, origin: string | null): Promise<Response> {
@@ -110,10 +142,10 @@ export async function handleClubLive(
         throw error;
       }
       const regs = (await db.listRegistrations(env.DB, eid)) as { member_id?: string; name?: string; division?: string | null; starting_hole?: number | null; team?: string | null }[];
-      const players =
-        regs.length && startBody!.from !== "players"
-          ? regs.map((r) => ({ memberId: r.member_id ?? null, name: String(r.name ?? "Player"), division: r.division ?? null, startingHole: r.starting_hole ?? null, team: r.team ?? null }))
-          : (Array.isArray(ev.players) ? ev.players : []).map((p) => ({ memberId: (p.member_id as string) ?? null, name: String(p.name ?? "Player"), division: (p.division as string) ?? null, startingHole: null, team: (p.team as string) ?? null }));
+      // Seed the round with BOTH registered players AND manually-added (event_players) walk-ons — nobody is
+      // dropped regardless of how they were entered. (A registered player who was also manually added shows
+      // once; the registration wins since it carries division / starting hole / check-in.)
+      const players = unionRosterPlayers(regs, Array.isArray(ev.players) ? ev.players : []);
       const validationPlayers: PlayerState[] = players.map((player) => ({ ...player, scores: {}, scorecards: {} }));
       assignCards(validationPlayers);
       const targetValidation = scoringState({ eventId: eid, holes, status: "live", startedAt: "", roundConfig: liveScoringConfig }, validationPlayers);

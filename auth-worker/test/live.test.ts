@@ -10,6 +10,7 @@ import worker from "../src/index.js";
 import { signSession } from "../src/jwt.js";
 import { LiveEventDO } from "../src/live.js";
 import { scoreTargetsForPlayersSafe, type ScoreTarget } from "../src/live-format.js";
+import { unionRosterPlayers } from "../src/club-live-routes.js";
 import type { LiveSocket } from "../src/live-types.js";
 import type { D1StatementLike } from "../src/db-types.js";
 import type { PlayerState } from "../src/scoring.js";
@@ -427,6 +428,49 @@ describe("live route start payloads", () => {
       { memberId: "m_d", name: "D", division: "MA1", startingHole: 1, team: "Pair 2" },
     ]);
     expect(state.updatedStatus).toBe("live");
+  });
+
+  it("unionRosterPlayers merges registered + manual, dedupes by member then name, registration wins", () => {
+    const out = unionRosterPlayers(
+      [{ member_id: "m1", name: "Reg One", division: "MA1", starting_hole: 3, team: "Red" }],
+      [
+        { member_id: "m1", name: "Dup Of Reg", division: "X", team: "Blue" }, // same member -> deduped, reg kept
+        { member_id: null, name: "Walk On", division: "Rec", team: null }, // name-only walk-on
+        { member_id: null, name: "walk on", team: null }, // duplicate walk-on name -> dropped
+      ],
+    );
+    expect(out).toEqual([
+      { memberId: "m1", name: "Reg One", division: "MA1", startingHole: 3, team: "Red" },
+      { memberId: null, name: "Walk On", division: "Rec", startingHole: null, team: null },
+    ]);
+  });
+
+  it("seeds the live round with BOTH registered players and manually-added walk-ons (no drop)", async () => {
+    const state: LiveRouteState = {
+      starts: [],
+      registrations: [
+        { member_id: "m_a", name: "Alice", division: "MA1", starting_hole: 1, team: null },
+        { member_id: "m_b", name: "Bob", division: "MA1", starting_hole: 1, team: null },
+      ],
+      eventPlayers: [
+        { member_id: null, name: "Walkon Wanda", division: "Rec", team: null }, // manual, name-only
+        { member_id: "m_a", name: "Alice", division: "MA1", team: null }, // also manually added -> deduped
+      ],
+    };
+    const res = await liveRouteCall("/events/9/live/start", "POST", {}, state);
+    expect(res.status).toBe(200);
+    expect((must(state.starts[0]).players ?? []).map((p) => p.name)).toEqual(["Alice", "Bob", "Walkon Wanda"]);
+  });
+
+  it("the legacy from:'players' flag no longer drops registrants — it still unions both sources", async () => {
+    const state: LiveRouteState = {
+      starts: [],
+      registrations: [{ member_id: "m_a", name: "Alice", division: null, starting_hole: null, team: null }],
+      eventPlayers: [{ member_id: null, name: "Walkon", division: null, team: null }],
+    };
+    const res = await liveRouteCall("/events/9/live/start", "POST", { from: "players" }, state);
+    expect(res.status).toBe(200);
+    expect((must(state.starts[0]).players ?? []).map((p) => p.name).sort()).toEqual(["Alice", "Walkon"]); // registrant NOT dropped
   });
 
   it("rejects invalid competition doubles starts before calling the Durable Object", async () => {
