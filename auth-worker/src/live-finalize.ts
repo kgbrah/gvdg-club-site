@@ -33,15 +33,27 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
   }
   const holes = resolvedHoles(meta);
   const scoring = scoringState(meta, input.players);
-  if (scoring.error) return invalidScoreTargetsResponse(scoring.error);
-  const issues = scorecardConsensusIssues(input.players, holes, scoring.targets, { casual: !!meta.casual, config: scoring.config });
-  const incomplete = issues.conflicts.length > 0 || issues.missing.length > 0;
-  if (incomplete && !(input.authAdmin && input.force)) {
-    return j({ error: "scorecard_incomplete", conflicts: issues.conflicts, missing: issues.missing }, 409);
+  let standings: FinalLiveStanding[];
+  let forced: boolean;
+  if (scoring.error) {
+    // A malformed score-target config — e.g. a doubles/matchplay pair left with only ONE active player
+    // after a partner is removed — makes scoringState throw, which otherwise wedges the WHOLE round and
+    // blocks finalize for EVERYONE with no recovery (short of destroying data). An admin may force past
+    // it: finalize on per-player STROKE standings (no match results), the same fallback the already-final
+    // branch uses. Non-admins (and un-forced calls) still get the error so it can be repaired first.
+    if (!(input.authAdmin && input.force)) return invalidScoreTargetsResponse(scoring.error);
+    standings = finalizeStandings(holes, input.players);
+    forced = true;
+  } else {
+    const issues = scorecardConsensusIssues(input.players, holes, scoring.targets, { casual: !!meta.casual, config: scoring.config });
+    const incomplete = issues.conflicts.length > 0 || issues.missing.length > 0;
+    if (incomplete && !(input.authAdmin && input.force)) {
+      return j({ error: "scorecard_incomplete", conflicts: issues.conflicts, missing: issues.missing }, 409);
+    }
+    forced = incomplete;
+    standings = finalizeRoundStandings({ holes, players: input.players, config: scoring.config, targets: scoring.targets });
   }
-  const forced = incomplete;
   meta.status = "final";
-  const standings = finalizeRoundStandings({ holes, players: input.players, config: scoring.config, targets: scoring.targets });
   if (meta.casual || !meta.eventId) {
     if (meta.casual && meta.roundCode) {
       try {
