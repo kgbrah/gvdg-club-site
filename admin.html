@@ -2159,8 +2159,18 @@
 
         function scRenderBoard() {
             const wrap = $('scBoard'); wrap.replaceChildren();
+            // Surface a broken pair/card (e.g. a doubles partner left mid-round) with a repair hint. Healthy
+            // pairs keep scoring; the round closes once the pair rejoins/withdraws or an admin force-finalizes.
+            const errs = (scSnap && Array.isArray(scSnap.scoreTargetErrors)) ? scSnap.scoreTargetErrors : [];
+            if (errs.length) {
+                const note = elx('div', 'al-note');
+                note.style.color = 'var(--over)'; note.style.fontWeight = '600'; note.style.marginBottom = '.5rem';
+                note.textContent = '⚠ ' + errs.map((e) => (e && e.message) ? e.message : 'A card has an invalid pair').join(' · ')
+                    + ' — the pair can rejoin or the team withdraw; otherwise admin-force finalize to close the round.';
+                wrap.appendChild(note);
+            }
             const standings = (scSnap && scSnap.standings) || [];
-            if (!standings.length) { wrap.textContent = 'No scores yet.'; return; }
+            if (!standings.length) { wrap.appendChild(elx('div', null, 'No scores yet.')); return; }
             const table = document.createElement('table'); table.className = 'al-holes';
             const thead = document.createElement('thead'); const htr = document.createElement('tr');
             ['Pos', scIsDoubles() ? 'Pair' : 'Player', 'Thru', 'Total', scIsMatchplay() ? 'Match' : 'To Par'].forEach((h) => htr.appendChild(elx('th', null, h)));

@@ -496,6 +496,18 @@
         }
 
         // ---------- merge a snapshot's scores into our cardmates (respecting pending optimistic edits) ----------
+        // My own score-target error: a whole-round error (public scoreTargetError) else the per-pair error
+        // covering MY player index. The public snapshot narrows scoreTargetError to null on a per-PAIR break
+        // (so it can't bleed to every viewer over /ws), exposing the detail in the additive scoreTargetErrors[]
+        // — deriving from it here keeps a broken-pair member's banner alive across WS snapshots while a healthy
+        // pair on the same card stays clear.
+        function myScoreTargetError(snap) {
+            if (snap && snap.scoreTargetError) return snap.scoreTargetError;
+            const errs = snap && Array.isArray(snap.scoreTargetErrors) ? snap.scoreTargetErrors : [];
+            if (!errs.length) return null;
+            const mine = S.myIndex != null ? errs.find((e) => e && Array.isArray(e.playerIndexes) && e.playerIndexes.indexOf(S.myIndex) >= 0) : null;
+            return mine || errs.find((e) => e && (e.cardId ?? null) === S.cardId) || null;
+        }
         function mergeFromSnap() {
             const snap = S.snap; if (!snap || !Array.isArray(snap.players)) return;
             // Apply weather FIRST, in place: the background weather refresh broadcasts a same-rev snapshot
@@ -507,7 +519,7 @@
             if (snap.status) S.status = snap.status; // reflect a finalize (or start) that happened on another device
             S.roundConfig = snap.roundConfig || S.roundConfig;
             S.scoreTargets = Array.isArray(snap.scoreTargets) ? snap.scoreTargets : S.scoreTargets;
-            S.scoreTargetError = snap.scoreTargetError || null;
+            S.scoreTargetError = myScoreTargetError(snap);
             setConflicts(snap.conflicts);
             setMissing(snap.missing);
             const byIndex = new Map(snap.players.map((p) => [p.index, p]));
@@ -775,8 +787,13 @@
                 box.appendChild(owner);
             }
             const rows = scoreRows();
-            if (isDoublesScoring() && !rows.length) {
-                const warn = el('p', 'muted', S.scoreTargetError && S.scoreTargetError.message ? S.scoreTargetError.message : 'Set pairs in Manage before scoring doubles.');
+            // My pair/card is broken (e.g. a partner left): show its exact message even if I still have rows
+            // (the intact side of a broken matchplay match). Otherwise, if doubles has no rows yet, prompt to
+            // set pairs. A healthy pair sharing a card with a broken one has scoreTargetError null → no banner.
+            const warnMsg = (S.scoreTargetError && S.scoreTargetError.message) ? S.scoreTargetError.message
+                : (isDoublesScoring() && !rows.length) ? 'Set pairs in Manage before scoring doubles.' : null;
+            if (warnMsg) {
+                const warn = el('p', 'muted', warnMsg);
                 warn.style.color = 'var(--over)';
                 box.appendChild(warn);
             }
