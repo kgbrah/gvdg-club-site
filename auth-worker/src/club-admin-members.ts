@@ -2,7 +2,7 @@ import type { Env } from "./env.js";
 import { json, readJson } from "./http.js";
 import { asStr } from "./input.js";
 import { generatePin, hashPin } from "./crypto.js";
-import { createMember, listMembers, resetMemberPin, type AdminMember, type KVListLike, type Member } from "./roster.js";
+import { createMember, listMembers, resetMemberPin, getMember, setMemberAdmin, countAdmins, type AdminMember, type KVListLike, type Member } from "./roster.js";
 
 // Admin member onboarding: create a member (or reissue) and return a one-time TEMPORARY PIN for the
 // admin to hand off. The member logs in with PDGA#/UDisc + temp PIN, then is forced to set their own
@@ -22,6 +22,7 @@ export async function handleAdminMembers(
   origin: string | null,
   method: string,
   seg: string[],
+  adminId: string,
 ): Promise<Response | null> {
   // GET /admin/members — list members (public-safe fields, never the PIN hash)
   if (method === "GET" && seg.length === 2) {
@@ -56,6 +57,29 @@ export async function handleAdminMembers(
     const m = await resetMemberPin(env.ROSTER, identifier, await hashPin(tempPin, env.PIN_PEPPER));
     if (!m) return json({ error: "not_found" }, 404, origin);
     return json({ tempPin, member: pub(m) }, 200, origin);
+  }
+
+  // POST /admin/members/set-role — promote/demote an existing member (last-admin protected)
+  if (method === "POST" && seg.length === 3 && seg[2] === "set-role") {
+    const b = (await readJson(request)) ?? {};
+    const memberId = asStr(b.memberId, 80);
+    if (!memberId) return json({ error: "member_required" }, 400, origin);
+    if (typeof b.isAdmin !== "boolean") return json({ error: "isAdmin_required" }, 400, origin);
+    const isAdmin = b.isAdmin;
+
+    const target = await getMember(env.ROSTER, memberId);
+    if (!target) return json({ error: "not_found" }, 404, origin);
+
+    // Never remove the final admin — also blocks the sole admin from self-demoting.
+    if (!isAdmin && target.isAdmin === true) {
+      const admins = await countAdmins(env.ROSTER as unknown as KVListLike);
+      if (admins <= 1) return json({ error: "last_admin" }, 409, origin);
+    }
+
+    const updated = await setMemberAdmin(env.ROSTER, memberId, isAdmin);
+    if (!updated) return json({ error: "not_found" }, 404, origin);
+    console.log(JSON.stringify({ evt: "role_change", actor: adminId, target: memberId, isAdmin }));
+    return json({ member: pub(updated) }, 200, origin);
   }
 
   return null;

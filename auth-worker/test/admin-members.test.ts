@@ -102,3 +102,45 @@ describe("admin members onboarding", () => {
     expect(j.members.every((m: any) => !("pinHash" in m))).toBe(true);
   });
 });
+
+describe("admin member role toggle", () => {
+  it("promotes a member and it shows in the list", async () => {
+    const t = await login("1", "4821");
+    const r = await worker.fetch(req("/admin/members/set-role", "POST", t, { memberId: "m_999", isAdmin: true }), env);
+    expect(r.status).toBe(200);
+    expect((await json(r)).member).toMatchObject({ memberId: "m_999", isAdmin: true });
+    const list = await json(await worker.fetch(req("/admin/members", "GET", t), env));
+    expect(list.members.find((m: any) => m.memberId === "m_999").isAdmin).toBe(true);
+  });
+
+  it("demotes a member once another admin exists", async () => {
+    const t = await login("1", "4821");
+    await worker.fetch(req("/admin/members/set-role", "POST", t, { memberId: "m_999", isAdmin: true }), env);
+    const r = await worker.fetch(req("/admin/members/set-role", "POST", t, { memberId: "m_1", isAdmin: false }), env);
+    expect(r.status).toBe(200);
+    expect((await json(r)).member.isAdmin).toBe(false);
+  });
+
+  it("refuses to demote the last admin (409)", async () => {
+    const t = await login("1", "4821");
+    const r = await worker.fetch(req("/admin/members/set-role", "POST", t, { memberId: "m_1", isAdmin: false }), env);
+    expect(r.status).toBe(409);
+    expect((await json(r)).error).toBe("last_admin");
+  });
+
+  it("404 unknown member, 400 bad body, 403 for a non-admin", async () => {
+    const t = await login("1", "4821");
+    expect((await worker.fetch(req("/admin/members/set-role", "POST", t, { memberId: "m_nope", isAdmin: true }), env)).status).toBe(404);
+    expect((await worker.fetch(req("/admin/members/set-role", "POST", t, { isAdmin: true }), env)).status).toBe(400);
+    expect((await worker.fetch(req("/admin/members/set-role", "POST", t, { memberId: "m_999" }), env)).status).toBe(400);
+    const nt = await login("999", "4821");
+    expect((await worker.fetch(req("/admin/members/set-role", "POST", nt, { memberId: "m_1", isAdmin: false }), env)).status).toBe(403);
+  });
+
+  it("is idempotent (setting the current value is a 200 no-op)", async () => {
+    const t = await login("1", "4821");
+    const r = await worker.fetch(req("/admin/members/set-role", "POST", t, { memberId: "m_1", isAdmin: true }), env);
+    expect(r.status).toBe(200);
+    expect((await json(r)).member.isAdmin).toBe(true);
+  });
+});
