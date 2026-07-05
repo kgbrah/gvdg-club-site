@@ -41,7 +41,7 @@ export async function handleAdminMembers(
     if (udisc && !UDISC_RE.test(udisc)) return json({ error: "invalid_udisc" }, 400, origin);
 
     const tempPin = generatePin();
-    const result = await createMember(env.ROSTER, { name, pdgaNo, udisc, isAdmin }, await hashPin(tempPin));
+    const result = await createMember(env.ROSTER, { name, pdgaNo, udisc, isAdmin }, await hashPin(tempPin, env.PIN_PEPPER));
     if (!result.ok) return json({ error: "member_" + result.reason }, result.reason === "invalid" ? 400 : 409, origin);
     return json({ tempPin, member: pub(result.member) }, 201, origin);
   }
@@ -53,7 +53,7 @@ export async function handleAdminMembers(
     if (!identifier) return json({ error: "identifier_required" }, 400, origin);
 
     const tempPin = generatePin();
-    const m = await resetMemberPin(env.ROSTER, identifier, await hashPin(tempPin));
+    const m = await resetMemberPin(env.ROSTER, identifier, await hashPin(tempPin, env.PIN_PEPPER));
     if (!m) return json({ error: "not_found" }, 404, origin);
     return json({ tempPin, member: pub(m) }, 200, origin);
   }

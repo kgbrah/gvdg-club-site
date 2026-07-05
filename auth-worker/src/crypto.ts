@@ -31,10 +31,10 @@ function fromB64url(s: string): Uint8Array {
   return out;
 }
 
-async function derive(pin: string, salt: Uint8Array, iterations: number): Promise<Uint8Array> {
+async function derive(password: Uint8Array, salt: Uint8Array, iterations: number): Promise<Uint8Array> {
   const key = await crypto.subtle.importKey(
     "raw",
-    new TextEncoder().encode(pin),
+    password as BufferSource,
     "PBKDF2",
     false,
     ["deriveBits"],
@@ -45,6 +45,27 @@ async function derive(pin: string, salt: Uint8Array, iterations: number): Promis
     HASH_BYTES * 8,
   );
   return new Uint8Array(bits);
+}
+
+/** HMAC-SHA256(pepper, pin) — the "pepper" is a server-held secret NOT stored in KV. Layering it under
+ *  PBKDF2 means a leaked roster alone can't brute-force the 4-digit PIN space offline: the attacker also
+ *  needs the pepper. Absent a pepper we fall back to un-peppered hashing (see hashPin), so this is
+ *  strictly additive and safe to ship before the secret exists. */
+async function pepperPin(pepper: string, pin: string): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(pepper) as BufferSource,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(pin) as BufferSource);
+  return new Uint8Array(sig);
+}
+
+// PBKDF2 password bytes for a PIN: HMAC-peppered when a pepper is configured, else the raw PIN.
+async function pinPassword(pin: string, pepper?: string): Promise<Uint8Array> {
+  return pepper ? await pepperPin(pepper, pin) : new TextEncoder().encode(pin);
 }
 
 /** Compare two byte arrays without short-circuiting on the first differing byte. */
@@ -68,27 +89,44 @@ export function generatePin(): string {
   return String(pair()).padStart(2, "0") + String(pair()).padStart(2, "0");
 }
 
-/** Hash a PIN into the encoded form `pbkdf2$sha256$<iters>$<saltB64url>$<hashB64url>`. */
-export async function hashPin(pin: string): Promise<string> {
+/** Hash a PIN. With a pepper: `pbkdf2h$sha256$<iters>$<salt>$<hash>` (hash over HMAC(pepper,pin)).
+ *  Without: the legacy `pbkdf2$…` form. The scheme marker lets verifyPin tell them apart. */
+export async function hashPin(pin: string, pepper?: string): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
-  const hash = await derive(pin, salt, ITERATIONS);
-  return `pbkdf2$sha256$${ITERATIONS}$${toB64url(salt)}$${toB64url(hash)}`;
+  const hash = await derive(await pinPassword(pin, pepper), salt, ITERATIONS);
+  const scheme = pepper ? "pbkdf2h" : "pbkdf2";
+  return `${scheme}$sha256$${ITERATIONS}$${toB64url(salt)}$${toB64url(hash)}`;
 }
 
-/** Verify a PIN against a stored encoded hash. Returns false (never throws) on any malformed input. */
-export async function verifyPin(pin: string, stored: string): Promise<boolean> {
+/** Verify a PIN against a stored encoded hash. Returns false (never throws) on malformed input.
+ *  Legacy `pbkdf2` hashes verify WITHOUT the pepper (so a pre-pepper roster keeps working); `pbkdf2h`
+ *  hashes require the pepper (a peppered hash with no pepper configured is an operational error -> false,
+ *  never a silent pass). This dual-verify is what makes rolling the pepper out non-breaking. */
+export async function verifyPin(pin: string, stored: string, pepper?: string): Promise<boolean> {
   try {
     const parts = stored.split("$");
     if (parts.length !== 5) return false;
     const [scheme, algo, itersStr, saltStr, hashStr] = parts as [string, string, string, string, string];
-    if (scheme !== "pbkdf2" || algo !== "sha256") return false;
+    if (algo !== "sha256") return false;
+    let password: Uint8Array;
+    if (scheme === "pbkdf2") password = new TextEncoder().encode(pin);
+    else if (scheme === "pbkdf2h") {
+      if (!pepper) return false;
+      password = await pepperPin(pepper, pin);
+    } else return false;
     const iterations = Number(itersStr);
     if (!Number.isInteger(iterations) || iterations < 1) return false;
     const salt = fromB64url(saltStr);
     const expected = fromB64url(hashStr);
-    const actual = await derive(pin, salt, iterations);
+    const actual = await derive(password, salt, iterations);
     return constantTimeEqual(actual, expected);
   } catch {
     return false;
   }
+}
+
+/** True when `stored` is a legacy (un-peppered) hash and a pepper IS configured — i.e. it should be
+ *  transparently re-hashed to the peppered form on the member's next successful login. */
+export function pinHashNeedsUpgrade(stored: string, pepperConfigured: boolean): boolean {
+  return pepperConfigured && stored.startsWith("pbkdf2$");
 }

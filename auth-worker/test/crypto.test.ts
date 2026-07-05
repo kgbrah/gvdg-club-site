@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hashPin, verifyPin, constantTimeEqual } from "../src/crypto.js";
+import { hashPin, verifyPin, constantTimeEqual, pinHashNeedsUpgrade } from "../src/crypto.js";
 
 describe("PIN hashing (PBKDF2 via WebCrypto)", () => {
   it("verifies a correct PIN against its stored hash", async () => {
@@ -46,5 +46,37 @@ describe("constantTimeEqual", () => {
   });
   it("is false for arrays of differing length", () => {
     expect(constantTimeEqual(new Uint8Array([1, 2, 3]), new Uint8Array([1, 2]))).toBe(false);
+  });
+});
+
+describe("PIN pepper (HMAC-peppered hashing + non-breaking migration)", () => {
+  const PEPPER = "server-side-pepper-secret-at-least-32-bytes!";
+
+  it("a peppered hash uses the pbkdf2h scheme and verifies with the same pepper", async () => {
+    const stored = await hashPin("4821", PEPPER);
+    expect(stored.startsWith("pbkdf2h$")).toBe(true);
+    expect(await verifyPin("4821", stored, PEPPER)).toBe(true);
+    expect(await verifyPin("0000", stored, PEPPER)).toBe(false);
+  });
+
+  it("a peppered hash CANNOT be verified without the pepper (a leaked roster is useless alone)", async () => {
+    const stored = await hashPin("4821", PEPPER);
+    expect(await verifyPin("4821", stored)).toBe(false); // no pepper
+    expect(await verifyPin("4821", stored, "the-wrong-pepper-entirely-xxxxxxxxxxxxxx")).toBe(false);
+  });
+
+  it("a legacy (un-peppered) hash still verifies even when a pepper is configured — non-breaking rollout", async () => {
+    const legacy = await hashPin("4821"); // pre-pepper hash, scheme pbkdf2
+    expect(legacy.startsWith("pbkdf2$")).toBe(true);
+    expect(await verifyPin("4821", legacy, PEPPER)).toBe(true); // dual-verify: legacy path ignores the pepper
+    expect(await verifyPin("4821", legacy)).toBe(true);
+  });
+
+  it("pinHashNeedsUpgrade flags exactly the legacy hashes once a pepper exists", async () => {
+    const legacy = await hashPin("4821");
+    const peppered = await hashPin("4821", PEPPER);
+    expect(pinHashNeedsUpgrade(legacy, true)).toBe(true);   // legacy + pepper configured -> upgrade
+    expect(pinHashNeedsUpgrade(legacy, false)).toBe(false); // no pepper -> nothing to upgrade to
+    expect(pinHashNeedsUpgrade(peppered, true)).toBe(false); // already peppered
   });
 });

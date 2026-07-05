@@ -290,6 +290,7 @@ function liveRouteEnv(state: LiveRouteState) {
     VISION_DEV_STUB: "1",
     ALLOWED_ORIGINS: ORIGIN,
     PAYPAL_API_BASE: "https://paypal.test",
+    PIN_PEPPER: "",
     LIVE: liveNamespace(state),
     ASSISTANT_RL: missingBinding<RateLimit>("ASSISTANT_RL"),
   } satisfies WorkerEnv;

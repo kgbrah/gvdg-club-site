@@ -96,6 +96,16 @@ export async function setPin(kv: KVLike, memberId: string, pinHash: string): Pro
   return m.pinVer;
 }
 
+/** Replace ONLY a member's PIN hash (used for the transparent pepper re-hash on login). Unlike setPin,
+ *  it leaves mustChangePin and pinVer untouched, so silently upgrading the hash never revokes the
+ *  member's other sessions or re-triggers a forced change. No-op if the member vanished mid-request. */
+export async function rehashPin(kv: KVLike, memberId: string, pinHash: string): Promise<void> {
+  const m = await getMember(kv, memberId);
+  if (!m) return;
+  m.pinHash = pinHash;
+  await kv.put(RECORD(memberId), JSON.stringify(m));
+}
+
 /**
  * Update a member's self-service profile fields (PDGA #, UDisc username, photo) and keep
  * the login indexes in sync. A field left `undefined` is unchanged; `null`/"" clears it.

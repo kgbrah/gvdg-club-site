@@ -1,8 +1,8 @@
 import type { Env } from "./env.js";
-import { hashPin, verifyPin } from "./crypto.js";
+import { hashPin, verifyPin, pinHashNeedsUpgrade } from "./crypto.js";
 import { signSession, verifySession } from "./jwt.js";
 import { checkLockout, clearAttempts, recordFailure } from "./ratelimit.js";
-import { canonicalLoginKey, getMember, resolveMember, setPin, updateProfile, type ProfilePatch } from "./roster.js";
+import { canonicalLoginKey, getMember, rehashPin, resolveMember, setPin, updateProfile, type ProfilePatch } from "./roster.js";
 import * as db from "./db.js";
 import { bearer, clientIp, json, readJson } from "./http.js";
 import { requireAuth, ttl } from "./authz.js";
@@ -47,7 +47,7 @@ export async function handleLogin(request: Request, env: Env, origin: string | n
   }
 
   const member = await resolveMember(env.ROSTER, identifier);
-  const ok = await verifyPin(pin, member?.pinHash ?? DUMMY_HASH);
+  const ok = await verifyPin(pin, member?.pinHash ?? DUMMY_HASH, env.PIN_PEPPER);
 
   if (!member || !ok) {
     await recordFailure(env.RATELIMIT, rk, now);
@@ -55,6 +55,11 @@ export async function handleLogin(request: Request, env: Env, origin: string | n
   }
 
   await clearAttempts(env.RATELIMIT, rk);
+  // Transparently upgrade a legacy (un-peppered) hash to the peppered form now that we hold the plaintext
+  // PIN and the login succeeded — one-time re-hash, no pinVer/mustChangePin change so sessions aren't disturbed.
+  if (pinHashNeedsUpgrade(member.pinHash, !!env.PIN_PEPPER)) {
+    try { await rehashPin(env.ROSTER, member.memberId, await hashPin(pin, env.PIN_PEPPER)); } catch { /* best-effort; login still succeeds */ }
+  }
   const token = await signSession({ sub: member.memberId, mustChangePin: member.mustChangePin, pinVer: member.pinVer ?? 0 }, env.JWT_SECRET, ttl(env));
   return json(
     {
@@ -262,12 +267,12 @@ export async function handleSetPin(request: Request, env: Env, origin: string | 
     const member = await getMember(env.ROSTER, claims.sub);
     if (!member) return json({ error: "unauthorized" }, 401, origin);
     const currentPin = typeof body?.currentPin === "string" ? body.currentPin : "";
-    if (!(await verifyPin(currentPin, member.pinHash))) {
+    if (!(await verifyPin(currentPin, member.pinHash, env.PIN_PEPPER))) {
       return json({ error: "invalid_credentials" }, 401, origin);
     }
   }
 
-  const newVer = await setPin(env.ROSTER, claims.sub, await hashPin(newPin));
+  const newVer = await setPin(env.ROSTER, claims.sub, await hashPin(newPin, env.PIN_PEPPER));
   const fresh = await signSession({ sub: claims.sub, mustChangePin: false, pinVer: newVer }, env.JWT_SECRET, ttl(env));
   return json({ token: fresh, mustChangePin: false }, 200, origin);
 }
