@@ -251,7 +251,7 @@ rendering is **XSS-safe by construction**: live/API data is built with `createEl
 still power the homepage feeds and Ryder Cup (gviz has no CORS → the sheet must be publish-to-web;
 overridable via `data-grid-csv`/`data-scoreboard-csv`). `score.html` is a thin shell mounted by
 `src/score-app/main.js`; run `npm run build` before serving or deploying it. The **service worker**
-(`sw.js`) is **manually versioned** (`CACHE="gvdg-club-v19"`) — bump it on any precached-asset change or
+(`sw.js`) is **manually versioned** (`CACHE="gvdg-club-v20"`) — bump it on any precached-asset change or
 users get stale `nav.js`/`crotts.js`/`score.html`/`score-app/score-app.js`; offline navigation falls back
 to `gvdg-members.html`.
 

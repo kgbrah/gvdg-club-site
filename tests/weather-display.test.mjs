@@ -41,6 +41,27 @@ test('formats current round weather with wind, precipitation, humidity, and upda
   assert.match(weather.formatLiveWeather(state), /Precip: Rain 0\.03 in/);
 });
 
+test('maps open-meteo weather codes to accessible condition graphics', async () => {
+  const weather = await loadWeatherDisplay();
+  const cases = [
+    [{ weatherCode: 0, isDay: true }, '☀️', 'Clear'],
+    [{ weatherCode: 0, isDay: false }, '🌙', 'Clear'],
+    [{ weatherCode: 2 }, '⛅', 'Partly cloudy'],
+    [{ weatherCode: 45 }, '🌫️', 'Fog'],
+    [{ weatherCode: 63 }, '🌧️', 'Rain'],
+    [{ weatherCode: 71 }, '❄️', 'Light snow'],
+    [{ weatherCode: 85 }, '🌨️', 'Snow showers'],
+    [{ weatherCode: 95 }, '⛈️', 'Thunderstorm'],
+    [{ weatherCode: null, precipitationIn: 0.03 }, '🌧️', 'Rain'],
+    [{ weatherCode: 2, precipitationIn: 0.03 }, '🌧️', 'Rain'],
+  ];
+  for (const [input, icon, label] of cases) {
+    const graphic = weather.conditionGraphic(input);
+    assert.equal(graphic.icon, icon);
+    assert.equal(graphic.label, label);
+  }
+});
+
 function fakeDoc() {
   function el() {
     return {
@@ -111,6 +132,10 @@ test('compact weather strip promotes condition, wind, and secondary meta without
   assert.equal(findByClass(strip, 'weather-temp').textContent, '82°');
   assert.match(textOf(findByClass(strip, 'weather-copy')), /Rain/);
   assert.match(textOf(findByClass(strip, 'weather-copy')), /Feels 88°/);
+  const graphic = findByClass(strip, 'weather-graphic');
+  assert.equal(graphic.getAttribute('role'), 'img');
+  assert.equal(graphic.getAttribute('aria-label'), 'Light rain');
+  assert.match(textOf(graphic), /🌧️/);
   assert.match(textOf(findByClass(strip, 'weather-wind')), /SW 8 mph/);
   assert.match(textOf(findByClass(strip, 'weather-wind')), /gust 18/);
   assert.match(textOf(findByClass(strip, 'weather-wind')), /North-up/);

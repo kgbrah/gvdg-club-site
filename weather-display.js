@@ -210,6 +210,34 @@
         return CODES[current.weatherCode] || "Current";
     }
 
+    function conditionGraphic(current) {
+        if (!current) return null;
+        const code = finite(current.weatherCode);
+        const label = code == null
+            ? conditionLabel(current) || "Current conditions"
+            : CODES[code] || conditionLabel(current) || "Current conditions";
+        const snow = finite(current.snowfallIn);
+        const rain = Math.max(
+            finite(current.rainIn) || 0,
+            finite(current.showersIn) || 0,
+            finite(current.precipitationIn) || 0,
+        );
+        if (code >= 95 && code <= 99) return { icon: "⛈️", label };
+        if (code >= 85 && code <= 86) return { icon: "🌨️", label };
+        if (code >= 71 && code <= 77) return { icon: "❄️", label };
+        if (snow && snow > 0) return { icon: "❄️", label: "Snow" };
+        if (code >= 51 && code <= 57) return { icon: "🌦️", label };
+        if (code >= 61 && code <= 67) return { icon: "🌧️", label };
+        if (code >= 80 && code <= 82) return { icon: "🌦️", label };
+        if (rain > 0) return { icon: "🌧️", label: "Rain" };
+        if (code === 0) return { icon: current.isDay === false ? "🌙" : "☀️", label };
+        if (code === 1) return { icon: current.isDay === false ? "🌙" : "🌤️", label };
+        if (code === 2) return { icon: "⛅", label };
+        if (code === 3) return { icon: "☁️", label };
+        if (code === 45 || code === 48) return { icon: "🌫️", label };
+        return { icon: "🌡️", label };
+    }
+
     function precipAmount(current) {
         if (!current) return 0;
         return Math.max(
@@ -350,6 +378,7 @@
             humidityText: humidity == null ? null : "Humidity " + humidity + "%",
             precipText: precip,
             changes: weatherChanges(weather),
+            graphic: conditionGraphic(current),
             updatedText: observed ? "Updated " + observed : null,
         };
     }
@@ -409,6 +438,19 @@
             condition.appendChild(temp);
             condition.appendChild(copy);
             main.appendChild(condition);
+
+            if (summary.graphic) {
+                const graphic = doc.createElement("div");
+                graphic.className = "weather-graphic";
+                graphic.setAttribute("role", "img");
+                graphic.setAttribute("aria-label", summary.graphic.label);
+                const icon = doc.createElement("span");
+                icon.className = "weather-graphic-icon";
+                icon.setAttribute("aria-hidden", "true");
+                icon.textContent = summary.graphic.icon;
+                graphic.appendChild(icon);
+                main.appendChild(graphic);
+            }
 
             if (summary.windText) {
                 const wind = doc.createElement("button");
@@ -474,6 +516,7 @@
 
     root.GVDGWeather = {
         buildWeatherStrip,
+        conditionGraphic,
         conditionLabel,
         enableCompass,
         formatLiveWeather,

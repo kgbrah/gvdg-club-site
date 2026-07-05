@@ -140,11 +140,11 @@ Spacing follows a 4px base through rem values.
 
 ### Round Weather
 
-- Structure: compact header, primary temperature/condition group, wind action, secondary meta pills, and course-location note.
-- Variants: pending/unavailable states use a single empty message; live weather promotes condition, feels-like temperature, and wind while keeping humidity, precipitation, and changes secondary.
-- Spacing: one-column on narrow phones; two-column condition plus wind control above `420px`.
+- Structure: compact header, primary temperature/condition group, condition graphic, wind action, secondary meta pills, and course-location note.
+- Variants: pending/unavailable states use a single empty message; live weather promotes condition, feels-like temperature, a graphic condition cue, and wind while keeping humidity, precipitation, and changes secondary.
+- Spacing: condition and graphic share the first row on narrow phones with wind below; condition, graphic, and wind form a compact three-part row above `420px`.
 - States: wind starts `North-up`, moves through `Listening...`, and changes to `Phone-relative` when device orientation produces a heading.
-- Accessibility: wind is a real button with an arrow title/label that explains whether the arrow is north-up or phone-relative.
+- Accessibility: wind is a real button with an arrow title/label that explains whether the arrow is north-up or phone-relative; the condition graphic is a labeled image cue and does not replace the text condition.
 - Motion: only the wind arrow rotates, using a short transform transition.
 
 ## 6. Motion & Interaction
