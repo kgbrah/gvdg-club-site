@@ -92,6 +92,11 @@ export async function handleCasualRounds(
   if (!claims) return json({ error: "unauthorized" }, 401, origin);
   const hdr = { "X-Auth-Member": claims.sub };
 
+  if (method === "POST" && sub === "cancel") {
+    const member = await getMember(env.ROSTER, claims.sub);
+    if (member?.isAdmin !== true) return json({ error: "forbidden" }, 403, origin);
+    return proxy(stub, "/cancel", { method: "POST", headers: { ...hdr, "X-Auth-Admin": "true" } }, origin);
+  }
   if (method === "POST" && sub === "join") {
     if (await kvRateLimited(env, "round-join:" + claims.sub, 60, 60)) return json({ error: "rate_limited" }, 429, origin);
     const member = await getMember(env.ROSTER, claims.sub);

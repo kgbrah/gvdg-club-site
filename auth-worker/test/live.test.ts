@@ -100,6 +100,7 @@ type StartPayload = {
 };
 type LiveRouteState = {
   readonly starts: StartPayload[];
+  readonly cancellations?: { readonly isAdmin: boolean; readonly member: string | null }[];
   readonly pairUpdates?: { readonly body: unknown; readonly isAdmin: boolean; readonly member: string | null }[];
   readonly registrations?: readonly Record<string, unknown>[];
   readonly eventPlayers?: readonly Record<string, unknown>[];
@@ -164,6 +165,16 @@ function liveNamespace(state: LiveRouteState) {
     fetch: async (url: string, init?: RequestInit) => {
       const payload = init?.body ? (JSON.parse(String(init.body)) as StartPayload) : {};
       const action = new URL(url).pathname.split("/").filter(Boolean).pop();
+      if (action === "cancel") {
+        state.cancellations?.push({
+          isAdmin: headerValue(init?.headers, "X-Auth-Admin") === "true",
+          member: headerValue(init?.headers, "X-Auth-Member"),
+        });
+        return new Response(JSON.stringify({ status: "none" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
       if (action === "pairs") {
         state.pairUpdates?.push({
           body: payload,
@@ -559,6 +570,17 @@ describe("live route start payloads", () => {
       },
     ]);
   });
+
+  it("lets only admins cancel a casual round through trusted Durable Object headers", async () => {
+    const state: LiveRouteState = { starts: [], cancellations: [] };
+
+    const denied = await liveRouteCall("/rounds/QA1234/cancel", "POST", {}, state, "m_jane");
+    const allowed = await liveRouteCall("/rounds/QA1234/cancel", "POST", {}, state, "m_admin");
+
+    expect(denied.status).toBe(403);
+    expect(allowed.status).toBe(200);
+    expect(state.cancellations).toEqual([{ isAdmin: true, member: "m_admin" }]);
+  });
 });
 
 describe("live consensus score targets", () => {
@@ -928,7 +950,7 @@ describe("LiveEventDO card-scoped scoring", () => {
     await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m0" }, body: JSON.stringify({ index: 1, hole: 1, strokes: 3 }) }));
     await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m1" }, body: JSON.stringify({ index: 1, hole: 1, strokes: 4 }) }));
     const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { players: { index: number; scores: Record<string, number>; scorecards: Record<string, Record<string, number>> }[] };
-    const target = snap.players.find((p) => p.index === 1)!;
+    const target = must(snap.players.find((p) => p.index === 1));
     expect(target.scores).not.toHaveProperty("1"); // consensus blank during conflict…
     expect(target.scorecards["1"]).toEqual({ "player:0": 3, "player:1": 4 }); // …but each scorer's own vote is visible
     const mine = (await (await live.fetch(new Request("https://do/mine", { headers: { "X-Auth-Member": "m0" } }))).json()) as { cardmates: { index: number; scorecards: Record<string, Record<string, number>> }[] };
@@ -1910,6 +1932,10 @@ describe("LiveEventDO finalize atomicity (db.batch)", () => {
   // in ONE atomic transaction rather than row-by-row.
   function batchDb(opts: { failBatch?: boolean } = {}) {
     const calls = { batches: [] as string[][], runs: 0 };
+    const statementSql = (statement: D1StatementLike) => {
+      if ("sql" in statement && typeof statement.sql === "string") return statement.sql;
+      throw new Error("test D1 statement missing sql");
+    };
     const database = {
       prepare(sql: string) {
         const s = {
@@ -1922,7 +1948,7 @@ describe("LiveEventDO finalize atomicity (db.batch)", () => {
         return s;
       },
       batch: async (statements: D1StatementLike[]) => {
-        calls.batches.push(statements.map((st) => (st as unknown as { sql: string }).sql));
+        calls.batches.push(statements.map(statementSql));
         if (opts.failBatch) throw new Error("d1_batch_boom");
         await Promise.all(statements.map((st) => st.run()));
         return statements.map(() => ({ results: [], success: true }));

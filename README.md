@@ -238,6 +238,7 @@ npm run audit                 # npm audit --audit-level=moderate
 npm run build                 # builds score-app/ for score.html
 npm test                      # node --test tests/*.test.mjs
 npm run qa:live-scoring       # Playwright live-scoring browser QA
+npm run qa:staging-live-scoring  # live gvdgclub.com scoring E2E; requires QA credentials
 ```
 
 **Live verification is required for anything user-facing:** unit tests and static review are necessary but not sufficient. Stand up the Worker + served frontend and drive the actual flow before calling a change done.
@@ -258,6 +259,11 @@ GVDG_AGENT=<your-name> ./scripts/gvdg-deploy.sh    # full deploy (also --pages-o
 ./scripts/gvdg-deploy.sh --dry-run                 # run every gate, deploy nothing
 curl -s https://gvdgclub.com/version.json          # check what's live
 ```
+
+The deploy wrapper runs the live scoring staging E2E after deploy when a private QA credential is configured:
+set `GVDG_STAGING_QA_TOKEN`, or set `GVDG_STAGING_QA_IDENTIFIER` plus `GVDG_STAGING_QA_PIN`. The QA member must
+be an admin so the test can cancel the temporary round it creates. Use `GVDG_SKIP_STAGING_QA=1` only when the
+staging QA account is unavailable and the rest of the deploy gate still needs to run.
 
 Production (`www.greenvillediscgolf.com`, GitHub Pages, pinned by `CNAME`) is **separate** and is not touched by any dev-deploy command.
 
@@ -289,8 +295,8 @@ All authorization is re-checked server-side. Base URL is the Worker (`auth.gvdgc
 ### Registration & shop (member, some guest-optional)
 `GET /events/:id/registration` · `POST /events/:id/{register,checkin}` · `POST /events/:id/pay/{create-order,capture}` · `GET /shop/products` · `POST /shop/pay/{create-order,capture}` · `GET /shop/wallet` · `GET /shop/orders`.
 
-### Admin-gated (`/admin/*`, all behind `adminGate`)
-`/admin/events`, `/admin/courses`, `/admin/layouts`, `/admin/leagues`, `/admin/fundraisers`, `/admin/meetings`, `/admin/import`, `/admin/tee-signs`, `/admin/shop`, `/admin/wallets`, `/admin/orders`, `/admin/export`, and **`/admin/members`** (list / create / `reset-pin` / **`set-role`** — promote/demote admins, with last-admin protection) + event live-scoring lifecycle (`start` / `finalize`).
+### Admin-gated and admin-only
+`/admin/events`, `/admin/courses`, `/admin/layouts`, `/admin/leagues`, `/admin/fundraisers`, `/admin/meetings`, `/admin/import`, `/admin/tee-signs`, `/admin/shop`, `/admin/wallets`, `/admin/orders`, `/admin/export`, and **`/admin/members`** (list / create / `reset-pin` / **`set-role`** — promote/demote admins, with last-admin protection) + event live-scoring lifecycle (`start` / `finalize`) and admin-only casual round cancel (`POST /rounds/:code/cancel`).
 
 ---
 

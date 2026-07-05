@@ -77,6 +77,18 @@ wrangler kv bulk put ./out/kv-bulk.json --binding ROSTER --env staging
 3. Devs live-drive `gvdgclub.com` / the preview URL against **isolated** dev data.
 4. Merge to `main` when ready. Prod data remains untouched until production resource ids are configured.
 
+Optional live-scoring E2E gate:
+
+```bash
+GVDG_STAGING_QA_TOKEN=<admin-member-jwt> npm run qa:staging-live-scoring
+# or:
+GVDG_STAGING_QA_IDENTIFIER=<member-login> GVDG_STAGING_QA_PIN=<pin> npm run qa:staging-live-scoring
+```
+
+The QA member must be an admin because the test creates a casual round, scores one hole through
+`score.html`, verifies the saved Worker state, then calls `POST /rounds/:code/cancel` to clean it up.
+`scripts/gvdg-deploy.sh` runs this after deploy when those private QA credentials are present.
+
 > The staging CI needs only the `CLOUDFLARE_API_TOKEN` repo secret (same one prod uses). It does **not**
 > sync app secrets — set those once with `wrangler secret put JWT_SECRET --env staging` (+ `OPENROUTER_API_KEY`,
 > optional PayPal); Worker secrets persist across deploys. The workflow stays red until the

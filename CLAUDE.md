@@ -77,6 +77,7 @@ node scripts/provision.mjs --roster roster.json --out-dir ./out   # seed members
 npm run build            # builds score-app/ for score.html
 npm test                 # node --test tests/*.test.mjs (events/ryder-cup/home-feeds/safe-url/pwa/… parsers)
 npm run qa:live-scoring  # Playwright live-scoring browser QA
+npm run qa:staging-live-scoring  # live gvdgclub.com scoring E2E; needs private QA credentials
 ```
 
 ### Deploy (the ONLY sanctioned path — see AGENTS.md)
@@ -87,6 +88,10 @@ GVDG_AGENT=<name> ./scripts/gvdg-deploy.sh          # Pages + worker (also --pag
 ./scripts/gvdg-deploy.sh --dry-run                  # run every gate, deploy nothing
 scripts/gvdg-deploy-watchdog.sh --status|--install  # systemd --user backstop that re-asserts origin/main
 ```
+
+`gvdg-deploy.sh` runs `npm run qa:staging-live-scoring` after deploy when `GVDG_STAGING_QA_TOKEN` is set, or
+when `GVDG_STAGING_QA_IDENTIFIER` + `GVDG_STAGING_QA_PIN` are set. The QA member must be an admin so the test
+can cancel its temporary casual round. `GVDG_SKIP_STAGING_QA=1` skips only that post-deploy smoke.
 
 `.github/workflows/deploy-worker.yml` (push to `main` touching `auth-worker/**`) only **tests** — its
 deploy step is skipped while the top-level config holds `REPLACE_WITH_*` placeholders. The actual gvdgclub

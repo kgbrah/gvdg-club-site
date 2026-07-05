@@ -48,9 +48,41 @@ fi
 if [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
   export CLOUDFLARE_ACCOUNT_ID
 fi
+if [ -n "${GVDG_STAGING_QA_TOKEN:-}" ]; then
+  export GVDG_STAGING_QA_TOKEN
+fi
+if [ -n "${GVDG_STAGING_QA_IDENTIFIER:-}" ]; then
+  export GVDG_STAGING_QA_IDENTIFIER
+fi
+if [ -n "${GVDG_STAGING_QA_PIN:-}" ]; then
+  export GVDG_STAGING_QA_PIN
+fi
+if [ -n "${GVDG_STAGING_SITE_URL:-}" ]; then
+  export GVDG_STAGING_SITE_URL
+fi
+if [ -n "${GVDG_STAGING_API_URL:-}" ]; then
+  export GVDG_STAGING_API_URL
+fi
 
 require_cloudflare_account_id() {
   [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] || die "CLOUDFLARE_ACCOUNT_ID is not set. Keep the account ID private and provide it via your shell, .gvdg-deploy.env, or CI secrets."
+}
+
+has_staging_live_scoring_qa_creds() {
+  [ -n "${GVDG_STAGING_QA_TOKEN:-}" ] || { [ -n "${GVDG_STAGING_QA_IDENTIFIER:-}" ] && [ -n "${GVDG_STAGING_QA_PIN:-}" ]; }
+}
+
+run_staging_live_scoring_qa() {
+  if [ "${GVDG_SKIP_STAGING_QA:-0}" = 1 ]; then
+    log "post-deploy smoke: staging live-scoring E2E skipped (GVDG_SKIP_STAGING_QA=1)."
+    return
+  fi
+  if ! has_staging_live_scoring_qa_creds; then
+    warn "post-deploy smoke: staging live-scoring E2E skipped. Set GVDG_STAGING_QA_TOKEN, or GVDG_STAGING_QA_IDENTIFIER plus GVDG_STAGING_QA_PIN, to enable it."
+    return
+  fi
+  log "post-deploy smoke: staging live-scoring E2E…"
+  ( cd "$REPO_ROOT" && npm run qa:staging-live-scoring ) || die "POST-DEPLOY SMOKE FAILED: staging live-scoring E2E. Check the deployed site/API and rerun after fixing."
 }
 
 MODE_PAGES=1; MODE_WORKER=1; DRY_RUN=0; STATUS_ONLY=0
@@ -193,4 +225,5 @@ if [ -n "$SEEN" ] && git merge-base --is-ancestor "$SEEN" HEAD 2>/dev/null && gi
 else
   warn "version.json shows ${SEEN:-<none>} (custom-domain propagation can lag ~15s; re-check with --status)."
 fi
+run_staging_live_scoring_qa
 log "done — $HEAD_SHORT ($BRANCH) deployed to $PAGES_URL by $DEPLOYER."
