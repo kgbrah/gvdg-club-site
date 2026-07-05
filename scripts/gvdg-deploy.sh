@@ -123,6 +123,27 @@ if [ -n "${LIVE:-}" ] && git cat-file -e "$LIVE" 2>/dev/null; then
   fi
 fi
 
+# ---------- correctness gate (never ship red code to the shared env) ----------
+# The freshness gate above only proves you deploy FORWARD; it says nothing about whether the code works.
+# Mirror the CI gate (deploy-staging.yml) here so the local deploy path can't ship type-broken,
+# test-failing, or mis-bound auth/payments/scoring code. Emergency override: GVDG_SKIP_GATE=1.
+if [ "${GVDG_SKIP_GATE:-0}" = 1 ]; then
+  log "⚠ correctness gate SKIPPED (GVDG_SKIP_GATE=1) — shipping UNVERIFIED code."
+else
+  log "correctness gate: static tests…"
+  ( cd "$REPO_ROOT" && npm test ) || die "GATE FAILED: static frontend tests. Fix before deploying (or GVDG_SKIP_GATE=1 if you are CERTAIN)."
+  if [ "$MODE_WORKER" = 1 ]; then
+    log "correctness gate: worker typegen + typecheck + tests + config validation…"
+    ( cd "$REPO_ROOT/auth-worker" \
+        && npm run typegen:check \
+        && npm run typecheck \
+        && npm test \
+        && node scripts/validate-wrangler-config.mjs --env "$WORKER_ENV" ) \
+      || die "GATE FAILED: worker typecheck/tests/config. Fix before deploying (or GVDG_SKIP_GATE=1 if you are CERTAIN)."
+  fi
+  log "correctness gate passed ✔"
+fi
+
 # ---------- build artifact with a version marker ----------
 DEPLOYER="${GVDG_AGENT:-$(whoami)}"
 NOW="$(date -u +%FT%TZ)"
