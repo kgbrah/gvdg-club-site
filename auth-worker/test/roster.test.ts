@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { putMember, resolveMember, getMember, setPin, updateProfile, resolveMemberFlexible, type KVListLike, type Member } from "../src/roster.js";
+import { putMember, resolveMember, getMember, setPin, setMemberAdmin, countAdmins, updateProfile, resolveMemberFlexible, type KVListLike, type Member } from "../src/roster.js";
 import type { KVLike } from "../src/ratelimit.js";
 
 function makeKV(): KVLike {
@@ -129,5 +129,46 @@ describe("resolveMemberFlexible (admin member lookup by any identifier)", () => 
     const amb = await resolveMemberFlexible(kv, "Jane Doe");
     expect(amb.ok).toBe(false);
     if (!amb.ok) expect(amb.reason).toBe("ambiguous");
+  });
+});
+
+describe("member admin flag", () => {
+  function makeListKV(): KVListLike {
+    const m = new Map<string, string>();
+    return {
+      get: async (k) => (m.has(k) ? m.get(k)! : null),
+      put: async (k, v) => void m.set(k, v),
+      delete: async (k) => void m.delete(k),
+      list: async ({ prefix = "" }: { prefix?: string; cursor?: string } = {}) => ({
+        keys: [...m.keys()].filter((k) => k.startsWith(prefix)).map((name) => ({ name })),
+        list_complete: true,
+      }),
+    };
+  }
+
+  it("promotes then demotes, clearing the key on demote", async () => {
+    const kv = makeKV();
+    await putMember(kv, SAMPLE);
+    const up = await setMemberAdmin(kv, "m_abc123", true);
+    expect(up?.isAdmin).toBe(true);
+    expect((await getMember(kv, "m_abc123"))?.isAdmin).toBe(true);
+
+    const down = await setMemberAdmin(kv, "m_abc123", false);
+    expect(down?.isAdmin).toBeUndefined();
+    expect("isAdmin" in ((await getMember(kv, "m_abc123")) as Member)).toBe(false);
+  });
+
+  it("returns null for an unknown member", async () => {
+    const kv = makeKV();
+    expect(await setMemberAdmin(kv, "m_nope", true)).toBeNull();
+  });
+
+  it("countAdmins counts only admins", async () => {
+    const kv = makeListKV();
+    await putMember(kv, { memberId: "m_1", name: "A", pinHash: "h", mustChangePin: false, isAdmin: true });
+    await putMember(kv, { memberId: "m_2", name: "B", pinHash: "h", mustChangePin: false });
+    expect(await countAdmins(kv)).toBe(1);
+    await setMemberAdmin(kv, "m_2", true);
+    expect(await countAdmins(kv)).toBe(2);
   });
 });

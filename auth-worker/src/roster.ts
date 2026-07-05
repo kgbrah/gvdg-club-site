@@ -96,6 +96,18 @@ export async function setPin(kv: KVLike, memberId: string, pinHash: string): Pro
   return m.pinVer;
 }
 
+/** Grant or revoke a member's admin flag. Read-modify-write; all other fields untouched.
+ *  Clears the key entirely when false to match the "absent = not admin" convention that
+ *  createMember follows. Returns the updated member, or null if the member doesn't exist. */
+export async function setMemberAdmin(kv: KVLike, memberId: string, isAdmin: boolean): Promise<Member | null> {
+  const m = await getMember(kv, memberId);
+  if (!m) return null;
+  if (isAdmin) m.isAdmin = true;
+  else delete m.isAdmin;
+  await kv.put(RECORD(memberId), JSON.stringify(m));
+  return m;
+}
+
 /** Replace ONLY a member's PIN hash (used for the transparent pepper re-hash on login). Unlike setPin,
  *  it leaves mustChangePin and pinVer untouched, so silently upgrading the hash never revokes the
  *  member's other sessions or re-triggers a forced change. No-op if the member vanished mid-request. */
@@ -226,6 +238,11 @@ export async function listMembers(kv: KVListLike): Promise<AdminMember[]> {
   } while (cursor);
   out.sort((a, b) => a.name.localeCompare(b.name));
   return out;
+}
+
+/** Count current admins — used for last-admin protection so the club can't lock itself out. */
+export async function countAdmins(kv: KVListLike): Promise<number> {
+  return (await listMembers(kv)).filter((m) => m.isAdmin).length;
 }
 
 /** Resolve a member for admin tools by ANY of: internal memberId (`m_…`), PDGA# (digits), UDisc
