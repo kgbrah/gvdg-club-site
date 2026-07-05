@@ -129,6 +129,8 @@ fi
 if [ -n "${LIVE:-}" ] && git cat-file -e "$LIVE" 2>/dev/null; then
   if git merge-base --is-ancestor "$LIVE" HEAD 2>/dev/null; then
     log "live is $(git rev-parse --short "$LIVE") — your HEAD ($HEAD_SHORT) contains it. Forward move, OK."
+  elif [ "${GVDG_FORCE:-0}" = 1 ]; then
+    warn "freshness gate OVERRIDDEN (GVDG_FORCE=1): live is $(git rev-parse --short "$LIVE"), current HEAD is $HEAD_SHORT. Use only after confirming this is not a regression."
   else
     die "REGRESSION BLOCKED. Live is $(git rev-parse --short "$LIVE") on gvdgclub.com, but your branch ($BRANCH @ $HEAD_SHORT) does NOT contain it. Deploying would wipe that work. Merge/rebase origin's live commit into your branch first, or coordinate. (Override only if you are CERTAIN: GVDG_FORCE=1.)"
   fi
