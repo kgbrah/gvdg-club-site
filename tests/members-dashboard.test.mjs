@@ -50,3 +50,15 @@ test('member dashboard registration cards post pair label only for doubles event
   assert.match(source, /pairInput\.setAttribute\('data-register-pair', 'team'\)/);
   assert.match(source, /if \(pairInput\) body\.team = pairInput\.value\.trim\(\)/);
 });
+
+test('member dashboard mounts the React shell as a fallback-safe island', () => {
+  const html = readFileSync('gvdg-members.html', 'utf8');
+  const app = readFileSync('src/members-app/main.js', 'utf8');
+  assert.match(html, /id="membersReactDashboardShell"/);
+  assert.match(html, /<script type="module" src="members-app\/members-app\.js"><\/script>/);
+  assert.match(html, /window\.addEventListener\('gvdg:select-dashboard-tab'/);
+  assert.match(html, /emitDashboardState\('gvdg:dashboard-tab-selected'\)/);
+  assert.match(app, /createRoot\(mount\)\.render/);
+  assert.match(app, /gvdg:select-dashboard-tab/);
+  assert.match(app, /gvdg:dashboard-tab-selected/);
+});

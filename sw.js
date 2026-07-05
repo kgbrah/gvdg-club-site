@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v20";
+const CACHE = "gvdg-club-v21";
 const OFFLINE_PAGE = "gvdg-members.html";
 const ASSETS = [
   "tokens.css",
@@ -12,6 +12,7 @@ const ASSETS = [
   "img/icons/maskable-icon-512.png",
   "img/icons/apple-touch-icon.png",
   OFFLINE_PAGE,
+  "members-app/members-app.js",
   "score.html",
   "score-app/score-app.js",
   "matchplay-colors.js"

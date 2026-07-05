@@ -3,11 +3,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run build:score",
+    "build": "npm run build:score && npm run build:members",
+    "build:members": "vite build --config vite.members.config.mjs",
     "build:score": "vite build --config vite.score.config.mjs",
     "doctor": "react-doctor --no-dead-code --no-score --blocking none",
+    "qa:ensure-staging-dashboard-data": "node scripts/qa/ensure-staging-dashboard-data.mjs",
     "qa:live-scoring": "npm run build:score && node scripts/qa/live-scoring-browser-qa.mjs",
+    "qa:members-dashboard": "npm run build:members && node scripts/qa/members-dashboard-browser-qa.mjs",
     "qa:react": "npm run doctor",
+    "qa:staging-member-dashboard": "node scripts/qa/staging-member-dashboard-e2e.mjs",
     "qa:staging-live-scoring": "node scripts/qa/staging-live-scoring-e2e.mjs",
     "test": "node --test tests/*.test.mjs"
   },

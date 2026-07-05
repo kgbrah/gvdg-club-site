@@ -5,6 +5,7 @@
       ".github/**",
       "auth-worker/**",
       "docs/**",
+      "members-app/**",
       "score-app/**",
       "scripts/**",
       "tests/**",

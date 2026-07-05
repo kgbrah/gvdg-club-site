@@ -48,7 +48,7 @@ jobs:
         run: |
           rm -rf .pages-dist
           mkdir .pages-dist
-          cp -R *.html *.js *.css score-app img _headers CNAME site.webmanifest .pages-dist/
+          cp -R *.html *.js *.css members-app score-app img _headers CNAME site.webmanifest .pages-dist/
           printf '{"commit":"%s","branch":"%s","deployedAt":"%s","deployer":"github-actions"}\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" "$(date -u +%FT%TZ)" > .pages-dist/version.json
       - name: Deploy static site to Cloudflare Pages
         if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_CF_ACCOUNT == 'true' }}
@@ -84,6 +84,13 @@ jobs:
           GVDG_STAGING_QA_IDENTIFIER: ${{ secrets.GVDG_STAGING_QA_IDENTIFIER }}
           GVDG_STAGING_QA_PIN: ${{ secrets.GVDG_STAGING_QA_PIN }}
         run: npm run qa:staging-live-scoring
+      - name: Post-deploy member dashboard E2E
+        if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_CF_ACCOUNT == 'true' && (env.HAS_QA_TOKEN == 'true' || env.HAS_QA_LOGIN == 'true') }}
+        env:
+          GVDG_STAGING_QA_TOKEN: ${{ secrets.GVDG_STAGING_QA_TOKEN }}
+          GVDG_STAGING_QA_IDENTIFIER: ${{ secrets.GVDG_STAGING_QA_IDENTIFIER }}
+          GVDG_STAGING_QA_PIN: ${{ secrets.GVDG_STAGING_QA_PIN }}
+        run: npm run qa:staging-member-dashboard
       - name: Live-scoring E2E skip notice
         if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_CF_ACCOUNT == 'true' && env.HAS_QA_TOKEN != 'true' && env.HAS_QA_LOGIN != 'true' }}
         run: echo "::notice::Staging live-scoring E2E skipped; configure GVDG_STAGING_QA_TOKEN or GVDG_STAGING_QA_IDENTIFIER plus GVDG_STAGING_QA_PIN."

@@ -1,0 +1,154 @@
+import { chromium } from "playwright";
+
+const DEFAULT_SITE_URL = "https://gvdgclub.com";
+const DEFAULT_API_URL = "https://auth.gvdgclub.com";
+const TOKEN_KEY = "gvdg_member_token";
+
+function env(name) {
+  return (process.env[name] || "").trim();
+}
+
+function cleanUrl(value, fallback) {
+  return (value || fallback).replace(/\/+$/, "");
+}
+
+function jsonHeaders(token) {
+  const headers = { Accept: "application/json" };
+  if (token) headers.Authorization = "Bearer " + token;
+  return headers;
+}
+
+async function requestJson(apiBase, path, options = {}) {
+  const headers = jsonHeaders(options.token);
+  const init = {
+    method: options.method || "GET",
+    headers,
+    signal: AbortSignal.timeout(options.timeoutMs || 15_000),
+  };
+  if (options.body !== undefined) {
+    headers["Content-Type"] = "application/json";
+    init.body = JSON.stringify(options.body);
+  }
+
+  const response = await fetch(apiBase + path, init);
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!response.ok) {
+    const message = data && typeof data.error === "string" ? data.error : text.slice(0, 200);
+    throw new Error(`API ${init.method} ${path} failed with ${response.status}: ${message}`);
+  }
+  return data;
+}
+
+async function qaToken(apiBase) {
+  const token = env("GVDG_STAGING_QA_TOKEN");
+  if (token) return token;
+
+  const identifier = env("GVDG_STAGING_QA_IDENTIFIER");
+  const pin = env("GVDG_STAGING_QA_PIN");
+  if (!identifier || !pin) {
+    throw new Error("Set GVDG_STAGING_QA_TOKEN, or GVDG_STAGING_QA_IDENTIFIER plus GVDG_STAGING_QA_PIN.");
+  }
+
+  const data = await requestJson(apiBase, "/login", {
+    method: "POST",
+    body: { identifier, pin },
+  });
+  if (!data || typeof data.token !== "string") throw new Error("Login succeeded without a token.");
+  return data.token;
+}
+
+function collectPageErrors(page) {
+  const errors = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  page.on("pageerror", (error) => errors.push(error.message));
+  return errors;
+}
+
+async function usefulStats(apiBase, pdgaNo) {
+  const data = await requestJson(apiBase, `/pdga-stats?pdga=${encodeURIComponent(pdgaNo)}`);
+  const hasRatings = data && (data.live_rating != null || data.official_rating != null || data.peak_rating != null);
+  const hasEvents = Array.isArray(data?.events) && data.events.length > 0;
+  if (!hasRatings && !hasEvents) {
+    throw new Error(
+      `QA member PDGA #${pdgaNo} has no dashboard stats. Run npm run qa:ensure-staging-dashboard-data.`,
+    );
+  }
+}
+
+async function waitForText(page, selector, expected, label) {
+  try {
+    await page.waitForFunction(
+      ({ selector: query, expected: text }) => document.querySelector(query)?.textContent?.includes(text),
+      { selector, expected },
+      { timeout: 15_000 },
+    );
+  } catch {
+    const body = await page.locator("body").innerText().catch(() => "");
+    throw new Error(`Timed out waiting for ${label} to include ${expected}. Page text:\n${body}`);
+  }
+}
+
+async function runBrowserQa({ siteUrl, token, member }) {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await context.newPage();
+    const errors = collectPageErrors(page);
+    await page.addInitScript(
+      ({ key, value }) => sessionStorage.setItem(key, value),
+      { key: TOKEN_KEY, value: token },
+    );
+
+    await page.goto(`${siteUrl}/gvdg-members.html`, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector("#members.members-react-shell-ready", { timeout: 15_000 });
+    await waitForText(page, "#membersReactDashboardShell", "Player Dashboard", "React dashboard title");
+    await waitForText(page, "#dashBody", "Live", "rating dashboard body");
+
+    const legacyTabsHidden = await page.locator("#dashTabs").evaluate((node) => getComputedStyle(node).display === "none");
+    if (!legacyTabsHidden) throw new Error("Legacy dashboard tabs were visible after React shell mounted.");
+
+    const liveRating = (await page.locator("#dashLive").innerText()).trim();
+    if (!/^\d{3,4}$/.test(liveRating)) throw new Error(`Expected a numeric live rating, got ${liveRating}`);
+
+    await page.getByRole("tab", { name: "Events" }).click();
+    await waitForText(page, "#membersReactDashboardShell", "Event Registration", "events tab title");
+    const registerVisible = await page.locator("#clubRegister").evaluate((node) => !node.classList.contains("dtab-off"));
+    if (!registerVisible) throw new Error("Events tab did not reveal the registration panel.");
+
+    await page.getByRole("tab", { name: "Club" }).click();
+    await waitForText(page, "#membersReactDashboardShell", "GVDG Member Directory", "club tab title");
+    const clubVisible = await page.locator("#membersGrid").evaluate((node) => !node.classList.contains("dtab-off"));
+    if (!clubVisible) throw new Error("Club tab did not reveal the member directory.");
+
+    const width = await page.evaluate(() => document.documentElement.scrollWidth);
+    const viewport = page.viewportSize()?.width || 390;
+    if (width > viewport + 1) throw new Error(`Members dashboard has horizontal overflow: ${width}px > ${viewport}px.`);
+    if (errors.length) throw new Error(errors.join("\n"));
+    await context.close();
+  } finally {
+    await browser.close();
+  }
+}
+
+async function main() {
+  const siteUrl = cleanUrl(env("GVDG_STAGING_SITE_URL"), DEFAULT_SITE_URL);
+  const apiBase = cleanUrl(env("GVDG_STAGING_API_URL"), DEFAULT_API_URL);
+  const token = await qaToken(apiBase);
+  const member = await requestJson(apiBase, "/me", { token });
+  if (!member || typeof member.name !== "string") throw new Error("QA token did not resolve to a named member.");
+  if (!member.pdgaNo) throw new Error("QA member has no linked PDGA number. Run npm run qa:ensure-staging-dashboard-data.");
+
+  await usefulStats(apiBase, member.pdgaNo);
+  await runBrowserQa({ siteUrl, token, member });
+  console.log("staging member dashboard E2E passed");
+}
+
+try {
+  await main();
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+}

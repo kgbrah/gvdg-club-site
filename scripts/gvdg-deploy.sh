@@ -85,6 +85,19 @@ run_staging_live_scoring_qa() {
   ( cd "$REPO_ROOT" && npm run qa:staging-live-scoring ) || die "POST-DEPLOY SMOKE FAILED: staging live-scoring E2E. Check the deployed site/API and rerun after fixing."
 }
 
+run_staging_member_dashboard_qa() {
+  if [ "${GVDG_SKIP_STAGING_QA:-0}" = 1 ]; then
+    log "post-deploy smoke: staging member dashboard E2E skipped (GVDG_SKIP_STAGING_QA=1)."
+    return
+  fi
+  if ! has_staging_live_scoring_qa_creds; then
+    warn "post-deploy smoke: staging member dashboard E2E skipped. Set GVDG_STAGING_QA_TOKEN, or GVDG_STAGING_QA_IDENTIFIER plus GVDG_STAGING_QA_PIN, to enable it."
+    return
+  fi
+  log "post-deploy smoke: staging member dashboard E2E…"
+  ( cd "$REPO_ROOT" && npm run qa:staging-member-dashboard ) || die "POST-DEPLOY SMOKE FAILED: staging member dashboard E2E. Run npm run qa:ensure-staging-dashboard-data if the QA member has no dashboard stats."
+}
+
 MODE_PAGES=1; MODE_WORKER=1; DRY_RUN=0; STATUS_ONLY=0
 for arg in "$@"; do
   case "$arg" in
@@ -194,7 +207,7 @@ DEPLOYER="${GVDG_AGENT:-$(whoami)}"
 NOW="$(date -u +%FT%TZ)"
 DIST="$REPO_ROOT/.pages-dist"
 rm -rf "$DIST"; mkdir "$DIST"
-cp -R ./*.html ./*.js ./*.css score-app img _headers CNAME site.webmanifest "$DIST/"
+cp -R ./*.html ./*.js ./*.css members-app score-app img _headers CNAME site.webmanifest "$DIST/"
 printf '{"commit":"%s","branch":"%s","deployedAt":"%s","deployer":"%s"}\n' "$HEAD_SHA" "$BRANCH" "$NOW" "$DEPLOYER" > "$DIST/version.json"
 log "artifact built @ $HEAD_SHORT ($BRANCH) by $DEPLOYER; version.json stamped."
 
@@ -226,4 +239,5 @@ else
   warn "version.json shows ${SEEN:-<none>} (custom-domain propagation can lag ~15s; re-check with --status)."
 fi
 run_staging_live_scoring_qa
+run_staging_member_dashboard_qa
 log "done — $HEAD_SHORT ($BRANCH) deployed to $PAGES_URL by $DEPLOYER."
