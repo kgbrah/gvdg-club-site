@@ -23,7 +23,7 @@ Greenville Disc Golf Club should feel local, energetic, outdoors-focused, and ea
 | Text/secondary | `--text-secondary` | `#333333` | `#E0E0E0` | Body copy |
 | Text/tertiary | `--text-tertiary` | `#555555` | `#C0C0C0` | Supporting metadata |
 | Text/muted | `--text-muted` | `#666666` | `#A0A0A0` | Captions, empty states |
-| Border/default | `--border-color` | `#F4F4F9` | `#2A2A3E` | Cards, dividers, outlines |
+| Border/default | `--border-color` | `#E2E2EA` | `#2A2A3E` | Cards, dividers, outlines |
 | Shadow/default | `--card-shadow` | `rgba(0, 0, 0, 0.1)` | `rgba(0, 0, 0, 0.3)` | Section and card elevation |
 | Shadow/hover | `--card-shadow-hover` | `rgba(0, 0, 0, 0.15)` | `rgba(0, 0, 0, 0.5)` | Hover elevation |
 
