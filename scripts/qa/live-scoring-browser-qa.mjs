@@ -18,18 +18,63 @@ const mimeTypes = new Map([
   [".webmanifest", "application/manifest+json; charset=utf-8"],
 ]);
 
-const holes = [
-  { hole: 1, par: 3, distance_ft: 285 },
-  { hole: 2, par: 4, distance_ft: 420 },
-  { hole: 3, par: 3, distance_ft: 250 },
-];
+const holes = Array.from({ length: 18 }, (_, index) => ({
+  hole: index + 1,
+  par: 3,
+  distance_ft: 260 + index * 12,
+}));
+
+const qaCourse = {
+  id: 1,
+  name: "ECU North Rec Complex",
+  location: "Greenville, NC",
+  lat: 35.631092,
+  lng: -77.319923,
+};
+
+const qaLayout = {
+  id: 11,
+  name: "Pee Dee's Treasure Map",
+  total_par: 54,
+  holes: JSON.stringify(holes),
+};
+
+const weather = {
+  location: {
+    lat: qaCourse.lat,
+    lng: qaCourse.lng,
+    label: `${qaCourse.name} - ${qaCourse.location}`,
+  },
+  current: {
+    source: "open-meteo",
+    observedAt: "2026-07-05T18:15",
+    fetchedAt: "2026-07-05T22:20:00.020Z",
+    temperatureF: 96.4,
+    apparentTemperatureF: 101.3,
+    relativeHumidity: 42,
+    precipitationIn: 0,
+    rainIn: 0,
+    showersIn: 0,
+    snowfallIn: 0,
+    weatherCode: 0,
+    cloudCover: 0,
+    windSpeedMph: 6.7,
+    windDirectionDeg: 154,
+    windGustMph: 8.1,
+    isDay: true,
+  },
+  history: [],
+  updatedAt: "2026-07-05T22:20:00.020Z",
+  nextRefreshAt: "2026-07-05T22:25:00.020Z",
+  error: null,
+};
 
 const courses = [
-  { id: 1, name: "West Meadowbrook", location: "Greenville, NC", udisc_url: "https://udisc.com/courses/test" },
+  qaCourse,
 ];
 
 const layouts = [
-  { id: 10, name: "Gold", total_par: 10, holes: JSON.stringify(holes) },
+  qaLayout,
 ];
 
 const events = [
@@ -41,8 +86,8 @@ const events = [
     format: "stroke",
     play_format: "singles",
     date: "2026-07-04",
-    course_id: 1,
-    layout_id: 10,
+    course_id: qaCourse.id,
+    layout_id: qaLayout.id,
     liveScoringConfig: { groupFormat: "singles", scoringStyle: "stroke" },
   },
 ];
@@ -88,9 +133,9 @@ function makeLiveSnapshot({ eventId = null, roundCode = null, roundConfig, playe
     format: roundConfig.scoringStyle,
     playFormat: roundConfig.groupFormat,
     roundConfig,
-    courseName: "West Meadowbrook",
-    layoutName: "Gold",
-    weather: null,
+    courseName: qaCourse.name,
+    layoutName: qaLayout.name,
+    weather,
     holes,
     players,
     cardId: "card-a",
@@ -231,17 +276,49 @@ async function runCasualRoundQa(browser, origin) {
   await installApiRoutes(page);
   await page.addInitScript(() => {
     sessionStorage.setItem("gvdg_member_token", "qa-token");
+    class MockDeviceOrientationEvent extends Event {
+      constructor(type, init = {}) {
+        super(type);
+        this.absolute = Boolean(init.absolute);
+        this.alpha = init.alpha;
+        this.webkitCompassHeading = init.webkitCompassHeading;
+      }
+    }
+    MockDeviceOrientationEvent.requestPermission = (absolute) => {
+      window.__gvdgOrientationPermission = absolute;
+      return Promise.resolve("granted");
+    };
+    Object.defineProperty(window, "DeviceOrientationEvent", { configurable: true, value: MockDeviceOrientationEvent });
   });
 
   await page.goto(`${origin}/score.html`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /Start a casual round/ }).click();
-  await page.getByRole("button", { name: /West Meadowbrook/ }).click();
-  await page.getByRole("button", { name: /Gold/ }).click();
+  await page.getByRole("button", { name: /ECU North Rec Complex/ }).click();
+  await page.getByRole("button", { name: /Pee Dee/ }).click();
   await page.locator("[data-group-format='singles']").click();
   await page.locator("[data-scoring-style='stroke']").click();
   await page.locator("[data-create-round='casual']").click();
   await page.waitForURL(/round=QA1234/);
   await page.waitForSelector(".hole-head");
+  await waitForPageText(page, ".weather-strip", "Round weather", "casual weather title");
+  await waitForPageText(page, ".weather-strip", "Clear", "casual weather condition");
+  await waitForPageText(page, ".weather-wind", "SSE 7 mph", "casual weather wind");
+  await waitForPageText(page, ".weather-strip", qaCourse.name, "casual weather course label");
+  await page.locator(".weather-wind").click();
+  await page.evaluate(() => {
+    window.dispatchEvent(new DeviceOrientationEvent("deviceorientation", { absolute: true, alpha: 90 }));
+  });
+  await waitForPageText(page, ".weather-wind", "Phone-relative", "casual weather wind device orientation mode");
+  const windArrow = await page.locator(".weather-wind-arrow").evaluate((arrow) => ({
+    relative: arrow.getAttribute("data-relative"),
+    status: arrow.getAttribute("data-compass-status"),
+    transform: arrow.style.transform,
+    permission: window.__gvdgOrientationPermission,
+  }));
+  if (windArrow.permission !== true) throw new Error(`Expected absolute orientation permission request, got ${windArrow.permission}`);
+  if (windArrow.relative !== "facing" || windArrow.status !== "active" || windArrow.transform !== "rotate(64deg)") {
+    throw new Error(`Unexpected relative wind arrow state: ${JSON.stringify(windArrow)}`);
+  }
 
   if (createdRoundBody?.liveScoringConfig?.groupFormat !== "singles") {
     throw new Error(`Expected singles config, got ${JSON.stringify(createdRoundBody)}`);
@@ -251,7 +328,7 @@ async function runCasualRoundQa(browser, origin) {
   }
 
   await page.locator(".prow").filter({ hasText: "Ava King" }).locator("button.plus").click();
-  await waitForPageText(page, ".totbar", "1/3", "casual score total");
+  await waitForPageText(page, ".totbar", "1/18", "casual score total");
   await page.locator("#lbBtn").click();
   await page.waitForSelector(".sheet");
   const leaderboard = await page.locator(".sheet").innerText();

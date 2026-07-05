@@ -62,6 +62,8 @@
     const ARROW_NS = "http://www.w3.org/2000/svg";
     let compassHeading = null; // player facing, degrees (0 = N, clockwise); null = unknown -> arrow is north-up
     let compassEnabled = false;
+    let compassStatus = "off"; // off | starting | active | denied | unavailable
+    let compassFallbackTimer = null;
 
     function normalizeDeg(value) {
         const n = finite(value);
@@ -74,11 +76,20 @@
         const rel = normalizeDeg(blowTo - (compassHeading == null ? 0 : compassHeading));
         arrow.style.transform = "rotate(" + rel + "deg)";
         arrow.setAttribute("data-relative", compassHeading == null ? "north" : "facing");
+        arrow.setAttribute("data-compass-status", compassStatus);
         const label = compassHeading == null
-            ? "Wind blowing this way (north is up — tap to orient to your facing)"
+            ? "Wind blowing this way. Tap to orient it to your phone heading."
             : "Wind blowing this way, relative to the way you're facing";
         arrow.setAttribute("aria-label", label);
         if (arrow.__titleEl) arrow.__titleEl.textContent = label;
+        const control = arrow.__windControl || arrow.closest && arrow.closest(".weather-wind");
+        if (control) {
+            control.setAttribute("data-relative", compassHeading == null ? "north" : "facing");
+            control.setAttribute("data-compass-status", compassStatus);
+            control.setAttribute("aria-label", label);
+            const mode = control.querySelector && control.querySelector(".weather-wind-mode");
+            if (mode) mode.textContent = compassModeText();
+        }
     }
 
     function refreshWindArrows(doc) {
@@ -88,35 +99,72 @@
 
     function onOrientation(event) {
         let heading = null;
-        if (typeof event.webkitCompassHeading === "number" && Number.isFinite(event.webkitCompassHeading)) {
+        if (typeof event.webkitCompassHeading === "number" && Number.isFinite(event.webkitCompassHeading) && event.webkitCompassHeading >= 0) {
             heading = event.webkitCompassHeading; // iOS: already a compass heading (0 = N, clockwise)
         } else if (event.absolute === true && typeof event.alpha === "number" && Number.isFinite(event.alpha)) {
             heading = 360 - event.alpha; // Android absolute orientation -> compass heading of the device top
         }
         if (heading == null) return;
         compassHeading = normalizeDeg(heading);
+        compassStatus = "active";
+        if (compassFallbackTimer != null && typeof window !== "undefined" && window.clearTimeout) {
+            window.clearTimeout(compassFallbackTimer);
+            compassFallbackTimer = null;
+        }
         refreshWindArrows();
     }
 
     // Start (once) listening to the device compass so the arrow tracks the player's facing. iOS 13+ requires
-    // this be triggered from a user gesture (we call it from the arrow's click). Returns a Promise<boolean>.
+    // this be triggered from a user gesture (we call it from the wind control click). Returns a Promise<boolean>.
     function enableCompass() {
         if (compassEnabled) return Promise.resolve(true);
+        if (typeof window === "undefined") return Promise.resolve(false);
         const attach = function () {
             compassEnabled = true;
+            compassStatus = "starting";
             window.addEventListener("deviceorientationabsolute", onOrientation, true);
             window.addEventListener("deviceorientation", onOrientation, true);
+            if (window.setTimeout) {
+                compassFallbackTimer = window.setTimeout(function () {
+                    if (compassHeading == null) {
+                        compassStatus = "unavailable";
+                        refreshWindArrows();
+                    }
+                }, 3000);
+            }
+            refreshWindArrows();
             return true;
         };
         try {
             const DOE = window.DeviceOrientationEvent;
             if (DOE && typeof DOE.requestPermission === "function") {
-                return DOE.requestPermission().then(function (res) { return res === "granted" ? attach() : false; }).catch(function () { return false; });
+                let permission;
+                try { permission = DOE.requestPermission(true); } // request magnetometer-backed absolute orientation when supported
+                catch (_err) { permission = DOE.requestPermission(); }
+                return Promise.resolve(permission).then(function (res) {
+                    if (res === "granted") return attach();
+                    compassStatus = "denied";
+                    refreshWindArrows();
+                    return false;
+                }).catch(function () {
+                    compassStatus = "denied";
+                    refreshWindArrows();
+                    return false;
+                });
             }
             return Promise.resolve(attach());
         } catch (_e) {
+            compassStatus = "unavailable";
+            refreshWindArrows();
             return Promise.resolve(false);
         }
+    }
+
+    function compassModeText() {
+        if (compassHeading != null) return "Phone-relative";
+        if (compassStatus === "starting") return "Listening...";
+        if (compassStatus === "denied") return "Permission off";
+        return "North-up";
     }
 
     function windArrow(doc, windFromDeg) {
@@ -129,12 +177,8 @@
         svg.setAttribute("height", "15");
         svg.setAttribute("data-blowto", String(blowTo));
         svg.setAttribute("role", "img");
-        svg.style.display = "inline-block";
-        svg.style.verticalAlign = "-2px";
-        svg.style.marginRight = "4px";
         svg.style.transformOrigin = "center";
         svg.style.transition = "transform 0.25s ease-out";
-        svg.style.cursor = "pointer";
         const title = doc.createElementNS(ARROW_NS, "title");
         svg.appendChild(title);
         svg.__titleEl = title;
@@ -142,7 +186,6 @@
         path.setAttribute("d", "M12 2 L19 21 L12 16 L5 21 Z"); // an arrowhead-with-notch pointing up (blow-to)
         path.setAttribute("fill", "currentColor");
         svg.appendChild(path);
-        svg.addEventListener("click", function () { enableCompass(); }); // tap to orient to your facing (iOS gesture)
         applyArrowRotation(svg);
         return svg;
     }
@@ -286,6 +329,31 @@
         return chips;
     }
 
+    function currentWeatherSummary(weather) {
+        const current = weather && weather.current;
+        if (!current) return null;
+        const temp = round(current.temperatureF);
+        const feels = round(current.apparentTemperatureF);
+        const condition = conditionLabel(current) || "Current";
+        const wind = round(current.windSpeedMph);
+        const gust = round(current.windGustMph);
+        const windDir = direction(current.windDirectionDeg);
+        const humidity = round(current.relativeHumidity);
+        const precip = precipLabel(current);
+        const observed = timeLabel(current.fetchedAt) || timeLabel(weather.updatedAt) || timeLabel(current.observedAt);
+        return {
+            condition,
+            tempText: temp == null ? "--" : temp + "°",
+            feelsText: feels != null && temp != null && Math.abs(feels - temp) >= 4 ? "Feels " + feels + "°" : null,
+            windText: wind == null ? null : (windDir ? windDir + " " : "") + wind + " mph",
+            gustText: gust != null && wind != null && gust > wind + 2 ? "gust " + gust : null,
+            humidityText: humidity == null ? null : "Humidity " + humidity + "%",
+            precipText: precip,
+            changes: weatherChanges(weather),
+            updatedText: observed ? "Updated " + observed : null,
+        };
+    }
+
     function formatLiveWeather(weather) {
         return weatherChips(weather).map((chip) => chip.label + ": " + chip.value).join(" - ");
     }
@@ -297,30 +365,94 @@
         const wrap = doc.createElement("div");
         wrap.className = "weather-strip";
 
+        const head = doc.createElement("div");
+        head.className = "weather-head";
         const title = doc.createElement("div");
         title.className = "weather-title";
         title.textContent = opts.title || "Round weather";
-        wrap.appendChild(title);
+        head.appendChild(title);
 
-        const row = doc.createElement("div");
-        row.className = "weather-chips";
         const current = weather && weather.current;
-        chips.forEach((chip) => {
-            const item = doc.createElement("span");
-            item.className = "weather-chip";
-            const label = doc.createElement("strong");
-            label.textContent = chip.label;
-            item.appendChild(label);
-            // The wind chip gets a direction arrow next to the speed — points where the wind pushes the disc,
-            // relative to the player's facing once the compass is enabled (tap the arrow), else north-up.
-            if (chip.label === "Wind" && current) {
-                const arrow = windArrow(doc, current.windDirectionDeg);
-                if (arrow) item.appendChild(arrow);
+        const summary = currentWeatherSummary(weather);
+        if (summary && summary.updatedText) {
+            const updated = doc.createElement("div");
+            updated.className = "weather-updated";
+            updated.textContent = summary.updatedText;
+            head.appendChild(updated);
+        }
+        wrap.appendChild(head);
+
+        if (!summary) {
+            const empty = doc.createElement("div");
+            empty.className = "weather-empty";
+            empty.textContent = chips.map((chip) => chip.value).join(" ");
+            wrap.appendChild(empty);
+        } else {
+            const main = doc.createElement("div");
+            main.className = "weather-main";
+
+            const condition = doc.createElement("div");
+            condition.className = "weather-condition";
+            const temp = doc.createElement("div");
+            temp.className = "weather-temp";
+            temp.textContent = summary.tempText;
+            const copy = doc.createElement("div");
+            copy.className = "weather-copy";
+            const name = doc.createElement("strong");
+            name.textContent = summary.condition;
+            copy.appendChild(name);
+            if (summary.feelsText) {
+                const feels = doc.createElement("span");
+                feels.textContent = summary.feelsText;
+                copy.appendChild(feels);
             }
-            item.appendChild(doc.createTextNode(chip.value));
-            row.appendChild(item);
-        });
-        wrap.appendChild(row);
+            condition.appendChild(temp);
+            condition.appendChild(copy);
+            main.appendChild(condition);
+
+            if (summary.windText) {
+                const wind = doc.createElement("button");
+                wind.className = "weather-wind";
+                wind.type = "button";
+                wind.title = "Tap to orient wind to your phone heading";
+                wind.addEventListener("click", function () { enableCompass(); });
+                const arrow = windArrow(doc, current.windDirectionDeg);
+                if (arrow) {
+                    arrow.__windControl = wind;
+                    wind.appendChild(arrow);
+                }
+                const windCopy = doc.createElement("span");
+                windCopy.className = "weather-wind-copy";
+                const speed = doc.createElement("strong");
+                speed.textContent = summary.windText;
+                windCopy.appendChild(speed);
+                if (summary.gustText) {
+                    const gust = doc.createElement("span");
+                    gust.textContent = summary.gustText;
+                    windCopy.appendChild(gust);
+                }
+                const mode = doc.createElement("span");
+                mode.className = "weather-wind-mode";
+                mode.textContent = compassModeText();
+                windCopy.appendChild(mode);
+                wind.appendChild(windCopy);
+                if (arrow) applyArrowRotation(arrow);
+                main.appendChild(wind);
+            }
+            wrap.appendChild(main);
+
+            const meta = [summary.humidityText, summary.precipText].filter(Boolean).concat(summary.changes);
+            if (meta.length) {
+                const metaRow = doc.createElement("div");
+                metaRow.className = "weather-meta";
+                meta.forEach(function (text) {
+                    const item = doc.createElement("span");
+                    item.textContent = text;
+                    metaRow.appendChild(item);
+                });
+                wrap.appendChild(metaRow);
+            }
+        }
 
         if (weather && weather.location && weather.location.label) {
             const note = doc.createElement("div");

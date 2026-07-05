@@ -1,5 +1,6 @@
-export function startScoreApp() {
+export function startScoreApp(options) {
         "use strict";
+        options = options || {};
         // --- API base: explicit data-api-base wins; else resolve by host (prod vs gvdgclub.com dev/previews). ---
         const _h = location.hostname;
         const LOCAL = ['127.0.0.1', 'localhost'].includes(_h) ? 'http://127.0.0.1:8788' : '';
@@ -18,6 +19,7 @@ export function startScoreApp() {
         const GUEST_TOKEN = MODE === 'event' ? (params.get('gt') || guestTokenStored()) : null;
 
         const app = document.getElementById('app');
+        const setupFlow = options && options.setupFlow;
         const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, roundConfig: null, scoreTargets: [], scoreTargetError: null, weather: null };
         const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
         const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
@@ -389,7 +391,15 @@ export function startScoreApp() {
         }
 
         // ---------- views ----------
-        function shell(node) { app.replaceChildren(node); }
+        function clearSetupFlow() {
+            if (setupFlow && typeof setupFlow.clear === 'function') setupFlow.clear();
+        }
+        function renderSetupFlow(props) {
+            if (!setupFlow || typeof setupFlow.render !== 'function') return false;
+            setupFlow.render(props);
+            return true;
+        }
+        function shell(node) { clearSetupFlow(); app.replaceChildren(node); }
 
         function renderMessage(title, sub, withRetry) {
             const c = el('div', 'card center stack');
@@ -549,14 +559,14 @@ export function startScoreApp() {
 
             // Casual round: share the code + add walk-on players to the card.
             if (MODE === 'round') {
-                const bar = el('div', 'card');
-                bar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:0.5rem;padding:0.55rem 0.85rem;';
+                const bar = el('div', 'card round-tools');
                 const left = el('div');
+                left.className = 'round-code';
                 left.appendChild(el('span', 'muted', 'Code '));
                 const strong = document.createElement('strong'); strong.textContent = ROUND_CODE; strong.style.letterSpacing = '1.5px'; left.appendChild(strong);
-                const actions = el('div'); actions.style.cssText = 'display:flex;gap:0.4rem;';
+                const actions = el('div', 'round-actions');
                 const share = el('button', 'btn small secondary', 'Share'); share.addEventListener('click', shareRound);
-                const add = el('button', 'btn small secondary', '+ Player'); add.addEventListener('click', addGuestPrompt);
+                const add = el('button', 'btn small secondary', 'Add'); add.title = 'Add player'; add.setAttribute('aria-label', 'Add player'); add.addEventListener('click', addGuestPrompt);
                 const manage = el('button', 'btn small secondary', 'Manage'); manage.addEventListener('click', openManagePlayers);
                 actions.appendChild(share); actions.appendChild(add); actions.appendChild(manage);
                 bar.appendChild(left); bar.appendChild(actions);
@@ -797,7 +807,21 @@ export function startScoreApp() {
 
         // ---- casual round: home, course/layout pickers, create, add guest ----
         function spinner() { return (function () { const d = el('div', 'center'); d.appendChild(el('div', 'spin')); return d; })(); }
+        function cleanRoundCode(value) { return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+        function joinRoundCode(value) {
+            const code = cleanRoundCode(value);
+            if (code.length >= 4) location.search = '?round=' + code;
+            else toast('Enter a valid code');
+        }
+        function signOut() { try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {} renderLogin(); }
         function renderHome() {
+            if (renderSetupFlow({
+                view: 'home',
+                onStart: renderCoursePick,
+                onJoin: joinRoundCode,
+                onInvalidCode: function () { toast('Enter a valid code'); },
+                onSignOut: signOut
+            })) return;
             const c = el('div', 'stack');
             const h = el('div', 'card stack');
             h.appendChild(el('h2', 'section', 'Keep score'));
@@ -810,7 +834,7 @@ export function startScoreApp() {
             jb.addEventListener('click', function () { const code = (ji.value || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); if (code.length >= 4) location.search = '?round=' + code; else toast('Enter a valid code'); });
             h.appendChild(ji); h.appendChild(jb);
             c.appendChild(h);
-            const out = el('button', 'btn ghost', 'Sign out'); out.addEventListener('click', function () { try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {} renderLogin(); });
+            const out = el('button', 'btn ghost', 'Sign out'); out.addEventListener('click', signOut);
             c.appendChild(out);
             shell(c);
         }
@@ -818,6 +842,12 @@ export function startScoreApp() {
             shell(spinner());
             const r = await api('/courses', { auth: false });
             const courses = (r.ok && r.data && r.data.courses) || [];
+            if (renderSetupFlow({
+                view: 'coursePick',
+                courses: courses,
+                onBack: renderHome,
+                onSelect: renderLayoutPick
+            })) return;
             const c = el('div', 'stack');
             const back = el('button', 'btn ghost small', '‹ Back'); back.addEventListener('click', renderHome); c.appendChild(back);
             c.appendChild(el('h2', 'section', 'Pick a course'));
@@ -835,6 +865,13 @@ export function startScoreApp() {
             shell(spinner());
             const r = await api('/courses/' + encodeURIComponent(course.id) + '/layouts', { auth: false });
             const layouts = (r.ok && r.data && r.data.layouts) || [];
+            if (renderSetupFlow({
+                view: 'layoutPick',
+                course: course,
+                layouts: layouts,
+                onBack: renderCoursePick,
+                onSelect: function (layout) { renderSetupPick(course, layout); }
+            })) return;
             const c = el('div', 'stack');
             const back = el('button', 'btn ghost small', '‹ Back'); back.addEventListener('click', renderCoursePick); c.appendChild(back);
             c.appendChild(el('h2', 'section', course.name));
@@ -852,6 +889,14 @@ export function startScoreApp() {
             return { groupFormat: 'singles', scoringStyle: 'stroke' };
         }
         function renderSetupPick(course, layout) {
+            if (renderSetupFlow({
+                view: 'setupPick',
+                course: course,
+                layout: layout,
+                defaultConfig: defaultLiveScoringConfig(),
+                onBack: function () { renderLayoutPick(course); },
+                onCreate: function (selected) { createRound(course, layout, selected); }
+            })) return;
             const selected = defaultLiveScoringConfig();
             const c = el('div', 'stack');
             const back = el('button', 'btn ghost small', '‹ Back'); back.addEventListener('click', function () { renderLayoutPick(course); }); c.appendChild(back);

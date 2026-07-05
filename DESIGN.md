@@ -120,6 +120,33 @@ Spacing follows a 4px base through rem values.
 - Accessibility: each panel is labelled by its category heading.
 - Motion: static display; no layout-shifting animation.
 
+### Score App Shell
+
+- Structure: sticky topbar with fixed square logo, truncating title/subtitle, members shortcut, leaderboard control, and theme toggle.
+- Variants: home/setup state hides leaderboard; live card state shows leaderboard and replaces the subtitle with course/layout context. Live casual rounds also use a compact `Share / Add / Manage` tools row below the topbar.
+- Spacing: compact mobile-first controls at `38px-40px`, with gaps from the tight/compact spacing scale.
+- States: icon buttons use stable dimensions and active transform only; hidden controls must not reserve layout space.
+- Accessibility: action controls expose text labels through `aria-label`, `title`, or visually hidden text; icons are decorative.
+- Motion: static except for the existing active press scale.
+
+### Score Setup Flow
+
+- Structure: stacked cards for home, course pick, layout pick, and casual round setup, rendered as React components inside the existing score app shell.
+- Variants: empty course/layout states, selected setup options, and back navigation.
+- Spacing: reuses `.card`, `.stack`, `.tap-row`, `.setup-grid`, and `.setup-option` primitives from the score app.
+- States: setup options use `aria-pressed` and tokenized borders/backgrounds for selected state.
+- Accessibility: course/layout rows and setup options are real buttons; join-code entry submits on Enter.
+- Motion: no decorative animation; navigation is immediate and preserves the existing active press feedback.
+
+### Round Weather
+
+- Structure: compact header, primary temperature/condition group, wind action, secondary meta pills, and course-location note.
+- Variants: pending/unavailable states use a single empty message; live weather promotes condition, feels-like temperature, and wind while keeping humidity, precipitation, and changes secondary.
+- Spacing: one-column on narrow phones; two-column condition plus wind control above `420px`.
+- States: wind starts `North-up`, moves through `Listening...`, and changes to `Phone-relative` when device orientation produces a heading.
+- Accessibility: wind is a real button with an arrow title/label that explains whether the arrow is north-up or phone-relative.
+- Motion: only the wind arrow rotates, using a short transform transition.
+
 ## 6. Motion & Interaction
 
 ### Timing
