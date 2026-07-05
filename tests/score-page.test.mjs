@@ -3,12 +3,12 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 function scoreSetupSource() {
-  const html = readFileSync('score.html', 'utf8');
-  const start = html.indexOf('async function renderLayoutPick(course)');
-  const end = html.indexOf('async function addGuestPrompt()');
+  const source = readFileSync('src/score-app/score-legacy.js', 'utf8');
+  const start = source.indexOf('async function renderLayoutPick(course)');
+  const end = source.indexOf('async function addGuestPrompt()');
   assert.notEqual(start, -1, 'renderLayoutPick function should exist');
   assert.notEqual(end, -1, 'addGuestPrompt should follow createRound');
-  return html.slice(start, end);
+  return source.slice(start, end);
 }
 
 test('casual round flow shows setup after layout selection', () => {
@@ -36,7 +36,7 @@ test('createRound sends explicit live scoring config defaults and selections', (
 });
 
 test('player score page supports pair target rows and target-id offline replay', () => {
-  const source = readFileSync('score.html', 'utf8');
+  const source = readFileSync('src/score-app/score-legacy.js', 'utf8');
   assert.match(source, /function scoreRows\(\)/);
   assert.match(source, /target\.type === 'pair'/);
   assert.match(source, /let flushQueuePromise = null/);
@@ -48,7 +48,7 @@ test('player score page supports pair target rows and target-id offline replay',
 });
 
 test('player leaderboard renders matchplay and pair labels without primary to-par ranking', () => {
-  const source = readFileSync('score.html', 'utf8');
+  const source = readFileSync('src/score-app/score-legacy.js', 'utf8');
   assert.match(source, /const resultHead = isMatchplayScoring\(\) \? 'Match' : 'To par'/);
   assert.ok(source.includes("s.members.join(' / ')"));
   assert.match(source, /s\.match && s\.match\.status/);

@@ -28,9 +28,9 @@ Production `www.greenvillediscgolf.com` (GitHub Pages, pinned by the `CNAME` fil
 
 The website for the **Greenville Disc Golf Club**. Two halves in one repo, deployed together:
 
-1. **A static frontend** — the root `*.html` / `*.js` files. Plain hand-written HTML + vanilla JS,
-   **no build step, no framework**, served as-is. Some pages are large single-file monoliths
-   (`gvdg-members.html` ~334 KB, `admin.html` ~206 KB).
+1. **A static frontend** — the root `*.html` / `*.js` files. Most pages are plain hand-written HTML +
+   vanilla JS served as-is; `score.html` loads a small Vite/Preact bundle generated into `score-app/`.
+   Some pages are large single-file monoliths (`gvdg-members.html` ~334 KB, `admin.html` ~206 KB).
 2. **A Cloudflare Worker** in `auth-worker/` (TypeScript, ~82 modules). The **only** server-side code:
    member auth, the club-operations API, live scoring, pro-shop, ratings, and the "Crotts" AI assistant.
    The static pages reach all dynamic data through it over HTTPS.
@@ -74,6 +74,7 @@ node scripts/provision.mjs --roster roster.json --out-dir ./out   # seed members
 ### Static frontend tests (repo root — pure-helper tests, no DOM)
 
 ```bash
+npm run build            # builds score-app/ for score.html
 npm test                 # node --test tests/*.test.mjs (events/ryder-cup/home-feeds/safe-url/pwa/… parsers)
 npm run qa:live-scoring  # Playwright live-scoring browser QA
 ```
@@ -243,9 +244,11 @@ rendering is **XSS-safe by construction**: live/API data is built with `createEl
 (The one `innerHTML`-with-data is `gvdg-members.html`'s doubles league, whose source is build-time-trusted
 `DOUBLES_DATA_EMBEDDED` JSON, still run through `escHtml()`.) **Legacy Google-Sheet published-CSV rails**
 still power the homepage feeds and Ryder Cup (gviz has no CORS → the sheet must be publish-to-web;
-overridable via `data-grid-csv`/`data-scoreboard-csv`). The **service worker** (`sw.js`) is
-**manually versioned** (`CACHE="gvdg-club-v13"`) — bump it on any precached-asset change or users get stale
-`nav.js`/`crotts.js`/`score.html`; offline navigation falls back to `gvdg-members.html`.
+overridable via `data-grid-csv`/`data-scoreboard-csv`). `score.html` is a thin shell mounted by
+`src/score-app/main.js`; run `npm run build` before serving or deploying it. The **service worker**
+(`sw.js`) is **manually versioned** (`CACHE="gvdg-club-v18"`) — bump it on any precached-asset change or
+users get stale `nav.js`/`crotts.js`/`score.html`/`score-app/score-app.js`; offline navigation falls back
+to `gvdg-members.html`.
 
 ## Security & correctness invariants (uphold in any change)
 

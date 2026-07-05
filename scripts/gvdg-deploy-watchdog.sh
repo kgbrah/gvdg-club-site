@@ -67,7 +67,10 @@ reassert() { # $1 = full origin/main sha, $2 = reason, $3 = dryrun(0/1)
   trap "rm -rf '$build'" RETURN
   git -C "$REPO" archive origin/main | tar -x -C "$build"
   mkdir -p "$build/.pages-dist"
-  ( cd "$build" && cp -R ./*.html ./*.js img _headers CNAME site.webmanifest .pages-dist/ 2>/dev/null ) || true
+  if ! ( cd "$build" && npm ci >>"$LOG" 2>&1 && npm run build >>"$LOG" 2>&1 && cp -R ./*.html ./*.js ./*.css score-app img _headers CNAME site.webmanifest .pages-dist/ >>"$LOG" 2>&1 ); then
+    log "ERROR: static artifact build failed; cannot re-assert Pages."
+    return
+  fi
   printf '{"commit":"%s","branch":"main","deployedAt":"%s","deployer":"watchdog"}\n' \
     "$sha" "$(date -u +%FT%TZ)" > "$build/.pages-dist/version.json"
   if wrangler pages deploy "$build/.pages-dist" --project-name "$PROJECT" --branch main --commit-dirty=true >>"$LOG" 2>&1; then

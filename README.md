@@ -4,7 +4,7 @@ The official website and member platform for the **Greenville Disc Golf Club** (
 
 It is two things in one repository, deployed together:
 
-1. **A static frontend** — hand-written HTML + vanilla JavaScript at the repo root (`index.html`, `gvdg-members.html`, `admin.html`, `events.html`, `score.html`, …). **No framework, no build step** — the pages are served exactly as written.
+1. **A static frontend** — hand-written HTML + vanilla JavaScript at the repo root (`index.html`, `gvdg-members.html`, `admin.html`, `events.html`, …), with `score.html` now loading a small Vite/Preact bundle generated into `score-app/`.
 2. **A Cloudflare Worker** (`auth-worker/`, TypeScript) — the only server-side code. It handles member authentication, the club-operations API, live scoring, the pro shop, ratings, and the "Crotts" AI assistant. Every dynamic thing the pages show comes from this Worker over HTTPS.
 
 There is **no traditional backend or database server to boot** for the site itself — the pages are static files, and all data flows through the Worker.
@@ -128,7 +128,7 @@ All D1 access is **parameterized** (`.bind()` with `?`). Migrations in `auth-wor
 
 ## Tech stack
 
-- **Frontend:** hand-written HTML5 + vanilla ES modules, CSS custom-property design tokens (`tokens.css`), a service worker (`sw.js`, manually versioned) + PWA manifest. No framework, no bundler.
+- **Frontend:** hand-written HTML5 + vanilla ES modules, CSS custom-property design tokens (`tokens.css`), a Vite/Preact bundle for `score.html`, a service worker (`sw.js`, manually versioned) + PWA manifest.
 - **Backend:** Cloudflare Workers (TypeScript), Workers KV, D1 (SQLite), Durable Objects, R2, Workers AI. Auth via PBKDF2-HMAC-SHA256 PIN hashing + HS256 JWT (`jose`) + passkeys (`@simplewebauthn/server`).
 - **Tooling:** `wrangler`, `vitest` (Worker tests), `node --test` (frontend helper tests), `playwright` (browser QA), `tsc` (typecheck).
 
@@ -142,7 +142,10 @@ All D1 access is **parameterized** (`.bind()` with `?`). Migrations in `auth-wor
   gvdg-members.html       member dashboard + directory + login
   admin.html              admin control panel (16 tabs)
   events.html             public events hub + detail
-  score.html              live scoring app
+  score.html              live scoring HTML shell
+  src/score-app/          Preact shell + live-scoring app entry
+  vite.score.config.mjs   Vite build for the generated score-app/ bundle
+  score-app/              generated score bundle (created by npm run build, git-ignored)
   pro-shop.html           pro shop + member wallet
   ryder-cup.html          Ryder Cup standings
   gvdg-blog.html          blog
@@ -170,15 +173,20 @@ Key docs: **[CLAUDE.md](CLAUDE.md)** (architecture map), **[AGENTS.md](AGENTS.md
 
 ## Local development
 
-**Prerequisites:** Node.js, and `wrangler` (`npm i -g wrangler`). No build step for the frontend.
+**Prerequisites:** Node.js, and `wrangler` (`npm i -g wrangler`). Run the root build before serving `score.html`.
 
-### 1. Install Worker dependencies
+### 1. Install root frontend/tooling dependencies
+```bash
+npm install
+```
+
+### 2. Install Worker dependencies
 ```bash
 cd auth-worker
 npm install
 ```
 
-### 2. Provide local secrets & vars
+### 3. Provide local secrets & vars
 Create `auth-worker/.dev.vars` (git-ignored) with at least:
 ```
 JWT_SECRET=<any string ≥ 32 characters>
@@ -187,13 +195,13 @@ SESSION_TTL_SEC=43200
 ```
 CORS is an **exact-match allowlist**, so the origin you serve the site from must be listed.
 
-### 3. Run the Worker (local)
+### 4. Run the Worker (local)
 ```bash
 cd auth-worker
 npm run dev            # wrangler dev — local KV / D1 / R2 / DO on http://127.0.0.1:8788
 ```
 
-### 4. Seed local data
+### 5. Seed local data
 Apply migrations and seed a member into local KV:
 ```bash
 # D1 schema (from auth-worker/)
@@ -205,9 +213,10 @@ wrangler kv bulk put seed.local.json --binding=ROSTER --local
 ```
 > Note: the roster is in **KV** (`member:<id>`), not D1. `dev-seed.mjs` creates a member with `mustChangePin: true`; edit the generated JSON to add `"isAdmin": true` / `"mustChangePin": false` if you need an admin who skips the forced PIN change.
 
-### 5. Serve the static site
+### 6. Build and serve the static site
 ```bash
 # from the repo root
+npm run build
 python3 -m http.server 8080 --bind 127.0.0.1
 ```
 Open `http://127.0.0.1:8080/` — the pages auto-resolve the API to `http://127.0.0.1:8788`.
@@ -226,6 +235,7 @@ npm run typecheck             # tsc --noEmit
 npm run audit                 # npm audit --audit-level=moderate
 
 # Frontend helpers (from repo root)
+npm run build                 # builds score-app/ for score.html
 npm test                      # node --test tests/*.test.mjs
 npm run qa:live-scoring       # Playwright live-scoring browser QA
 ```

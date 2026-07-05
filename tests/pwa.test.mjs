@@ -56,9 +56,13 @@ test('app entry pages link manifest, touch icon, theme color, and pwa registrar'
 
 test('live scoring links back to the members dashboard', () => {
   const html = readFileSync('score.html', 'utf8');
-  assert.match(html, /Return to members/);
-  assert.match(html, /membersLink\.href = 'gvdg-members\.html'/);
-  assert.match(html, /<a class="top-link" href="gvdg-members\.html" aria-label="Return to members">Members<\/a>/);
+  const shellSource = readFileSync('src/score-app/main.js', 'utf8');
+  const scoringSource = readFileSync('src/score-app/score-legacy.js', 'utf8');
+  assert.match(html, /<script type="module" src="score-app\/score-app\.js"><\/script>/);
+  assert.match(shellSource, /href: "gvdg-members\.html"/);
+  assert.match(shellSource, /"aria-label": "Return to members"/);
+  assert.match(scoringSource, /Return to members/);
+  assert.match(scoringSource, /membersLink\.href = 'gvdg-members\.html'/);
   assert.match(html, /\.iconbtn\[hidden\] \{ display: none; \}/);
 });
 
@@ -71,6 +75,7 @@ test('shared service worker caches app install assets and member fallback', () =
   for (const asset of [
     'site.webmanifest',
     'pwa.js',
+    'score-app/score-app.js',
     'img/icons/app-icon-192.png',
     'img/icons/app-icon-512.png',
     'img/icons/maskable-icon-512.png',
