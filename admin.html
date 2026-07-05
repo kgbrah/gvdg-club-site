@@ -857,6 +857,7 @@
         const NAME_KEY = 'gvdg_member_name';
         const PDGA_KEY = 'gvdg_member_pdga';
         const $ = (id) => document.getElementById(id);
+        let ME_ID = null;   // the signed-in admin's memberId (from /me .sub), for the self-demote warning
 
         // Shared fetch helper (mirrors gvdg-members.html `api()`).
         function api(path, { method = 'GET', token, body } = {}) {
@@ -912,6 +913,7 @@
                 const res = await api('/me', { token });
                 if (res.status === 200) {
                     const data = await res.json();
+                    ME_ID = data && data.sub ? data.sub : null;
                     if (data && data.isAdmin === true) {
                         showAdminPanel();
                     } else {
@@ -2328,6 +2330,7 @@
             try { const r = await adminApi('/admin/members'); if (r.ok) members = (await r.json()).members || []; } catch (e) {}
             list.textContent = '';
             if (!members.length) { list.appendChild(elx('p', 'al-note', 'No members yet.')); return; }
+            const adminCount = members.filter((x) => x.isAdmin).length;
             members.forEach((m) => {
                 const id = m.pdgaNo || m.udisc || m.memberId;
                 const row = elx('div', 'admin-evrow');
@@ -2340,6 +2343,26 @@
                     else adminMsg('Reissue failed (' + r.status + ')', false);
                 });
                 row.appendChild(re);
+                const roleBtn = elx('button', 'admin-btn', m.isAdmin ? 'Remove admin' : 'Make admin');
+                roleBtn.type = 'button';
+                if (m.isAdmin && adminCount <= 1) { roleBtn.disabled = true; roleBtn.title = "Can't remove the last admin"; }
+                roleBtn.addEventListener('click', async () => {
+                    const promoting = !m.isAdmin;
+                    const self = ME_ID && ME_ID === m.memberId;
+                    const ask = promoting
+                        ? 'Grant admin rights to ' + m.name + '?'
+                        : (self ? "Remove your OWN admin access? You'll lose this panel." : 'Remove admin rights from ' + m.name + '?');
+                    if (!confirm(ask)) return;
+                    roleBtn.disabled = true;
+                    const r = await adminApi('/admin/members/set-role', { method: 'POST', body: { memberId: m.memberId, isAdmin: promoting } });
+                    if (r.ok) { adminMsg((promoting ? 'Promoted ' : 'Demoted ') + m.name, true); adminLoadMembers(); }
+                    else {
+                        let err = {}; try { err = await r.json(); } catch (e) {}
+                        adminMsg(err.error === 'last_admin' ? "Can't remove the last admin" : ('Role change failed (' + r.status + ')'), false);
+                        roleBtn.disabled = false;
+                    }
+                });
+                row.appendChild(roleBtn);
                 list.appendChild(row);
             });
         }
