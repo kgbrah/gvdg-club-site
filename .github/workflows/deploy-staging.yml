@@ -26,10 +26,11 @@ jobs:
             auth-worker/package-lock.json
       - name: Install static dependencies
         run: npm ci
-      - name: Static site tests + build + hex-lint
+      - name: Static site tests + build + React QA + hex-lint
         run: |
           npm test
           npm run build
+          npm run qa:react
           node scripts/lint-hex.mjs
       - name: Install dependencies
         working-directory: auth-worker

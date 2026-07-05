@@ -175,8 +175,8 @@ fi
 if [ "${GVDG_SKIP_GATE:-0}" = 1 ]; then
   log "⚠ correctness gate SKIPPED (GVDG_SKIP_GATE=1) — shipping UNVERIFIED code."
 else
-  log "correctness gate: static tests + score build + hex-lint…"
-  ( cd "$REPO_ROOT" && npm test && npm run build && node scripts/lint-hex.mjs ) || die "GATE FAILED: static frontend tests / score build / hex-lint (raw hex outside tokens.css increased). Fix before deploying (or GVDG_SKIP_GATE=1 if you are CERTAIN)."
+  log "correctness gate: static tests + score build + React QA + hex-lint…"
+  ( cd "$REPO_ROOT" && npm test && npm run build && npm run qa:react && node scripts/lint-hex.mjs ) || die "GATE FAILED: static frontend tests / score build / React QA / hex-lint (raw hex outside tokens.css increased). Fix before deploying (or GVDG_SKIP_GATE=1 if you are CERTAIN)."
   if [ "$MODE_WORKER" = 1 ]; then
     log "correctness gate: worker typegen + typecheck + tests + config validation…"
     ( cd "$REPO_ROOT/auth-worker" \
