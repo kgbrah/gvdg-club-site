@@ -46,6 +46,7 @@ jobs:
           rm -rf .pages-dist
           mkdir .pages-dist
           cp -R *.html *.js *.css score-app img _headers CNAME site.webmanifest .pages-dist/
+          printf '{"commit":"%s","branch":"%s","deployedAt":"%s","deployer":"github-actions"}\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" "$(date -u +%FT%TZ)" > .pages-dist/version.json
       - name: Deploy static site to Cloudflare Pages
         if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_CF_ACCOUNT == 'true' }}
         uses: cloudflare/wrangler-action@v3
