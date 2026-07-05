@@ -50,7 +50,8 @@ There is **no traditional backend or database server to boot** for the site itse
   data**; there is no separate staging DB.
 - The base `[name] = gvdg-member-auth` block is a **dead placeholder** (its Worker owned no domain and was
   deleted). A bare `wrangler deploy` (no `--env`) ships **nothing live** — always use `--env gvdgclub`.
-- Cloudflare account `<private-cloudflare-account-id>` (`<private-cloudflare-account-owner>`).
+- Cloudflare account owner/id are private operational details. Set `CLOUDFLARE_ACCOUNT_ID` locally or as a
+  GitHub secret before Pages deploy/list commands.
 
 ## Commands
 

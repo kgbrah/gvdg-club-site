@@ -15,7 +15,8 @@ run anything that touches the shared dev environment.
 | Static site | Pages project `gvdg-club-site`, branch `main` → **gvdgclub.com** | `wrangler pages deploy … --project-name gvdg-club-site --branch main` |
 | API worker | `gvdg-member-auth-staging`, `--env gvdgclub` → **auth.gvdgclub.com** | `wrangler deploy --env gvdgclub` |
 
-Account: `<private-cloudflare-account-owner>` / `<private-cloudflare-account-id>`. D1 `gvdg-staging` is shared too.
+The Cloudflare account owner and account ID are intentionally not committed. Set `CLOUDFLARE_ACCOUNT_ID`
+locally or as a GitHub secret before any Pages deploy/list command. D1 `gvdg-staging` is shared too.
 Production (greenvillediscgolf.com) is separate (GitHub Pages) and is **not** touched by these commands.
 
 ## Why this file exists (the failure it prevents)
@@ -31,7 +32,7 @@ sessions thought their work was live; neither was. Nothing warned them.
    **`./scripts/gvdg-deploy.sh`**. It takes a machine-wide lock, runs a freshness gate, stamps a version
    marker, and deploys Pages + worker together.
    ```bash
-   GVDG_AGENT=<your-name> ./scripts/gvdg-deploy.sh            # Pages + worker
+   CLOUDFLARE_ACCOUNT_ID=<private-account-id> GVDG_AGENT=<your-name> ./scripts/gvdg-deploy.sh
    ./scripts/gvdg-deploy.sh --status                          # what's live vs your HEAD (read-only)
    ./scripts/gvdg-deploy.sh --dry-run                         # run all gates, deploy nothing
    ```
@@ -59,7 +60,7 @@ sessions thought their work was live; neither was. Nothing warned them.
 ```bash
 curl -s https://gvdgclub.com/version.json           # {commit, branch, deployedAt, deployer}
 ./scripts/gvdg-deploy.sh --status                   # compares that to your HEAD
-wrangler pages deployment list --project-name gvdg-club-site   # Cloudflare's own history (Source = commit)
+CLOUDFLARE_ACCOUNT_ID=<private-account-id> wrangler pages deployment list --project-name gvdg-club-site
 ```
 
 ## Branch hygiene

@@ -27,7 +27,6 @@
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export PATH="/usr/bin:/bin:$REPO/auth-worker/node_modules/.bin:${PATH:-}"
-export CLOUDFLARE_ACCOUNT_ID="<private-cloudflare-account-id>"
 PROJECT="gvdg-club-site"
 PAGES_URL="https://gvdgclub.com"
 INTERVAL_SEC=180
@@ -35,6 +34,13 @@ LOG="${XDG_STATE_HOME:-$HOME/.local/state}/gvdg-watchdog.log"
 LOCK="${TMPDIR:-/tmp}/gvdg-watchdog.lock"
 UNIT_DIR="$HOME/.config/systemd/user"
 SELF="$REPO/scripts/gvdg-deploy-watchdog.sh"
+
+if [ -f "$REPO/.gvdg-deploy.env" ]; then
+  . "$REPO/.gvdg-deploy.env"
+fi
+if [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+  export CLOUDFLARE_ACCOUNT_ID
+fi
 
 mkdir -p "$(dirname "$LOG")"
 log() { printf '%s  %s\n' "$(date -u +%FT%TZ 2>/dev/null || date)" "$*" >> "$LOG"; }
@@ -51,6 +57,10 @@ version_reachable() { # true unless the network/site is entirely unreachable
 reassert() { # $1 = full origin/main sha, $2 = reason, $3 = dryrun(0/1)
   local sha="$1" reason="$2" dry="${3:-0}"
   if [ "$dry" = 1 ]; then say "WOULD RE-ASSERT origin/main ($sha) — $reason"; log "DRY-RUN would re-assert ($reason)"; return; fi
+  if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+    log "ERROR: CLOUDFLARE_ACCOUNT_ID is not set; cannot re-assert Pages. Set it in the environment or $REPO/.gvdg-deploy.env."
+    return
+  fi
   log "CLOBBER DETECTED: $reason — re-asserting origin/main ($sha)…"
   local build; build="$(mktemp -d)"
   # shellcheck disable=SC2064

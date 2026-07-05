@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       HAS_CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+      HAS_CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -41,18 +42,18 @@ jobs:
           mkdir .pages-dist
           cp -R *.html *.js img _headers CNAME site.webmanifest .pages-dist/
       - name: Deploy static site to Cloudflare Pages
-        if: ${{ env.HAS_CF_TOKEN == 'true' }}
+        if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_CF_ACCOUNT == 'true' }}
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           wranglerVersion: 4.105.0
           command: pages deploy .pages-dist --project-name gvdg-club-site --branch main --commit-dirty=true
         env:
-          CLOUDFLARE_ACCOUNT_ID: <private-cloudflare-account-id>
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       # Deploy the LIVE worker ONCE. [env.gvdgclub] and [env.staging] now target the same Worker
       # (gvdg-member-auth-staging = the one auth.gvdgclub.com is attached to), so one deploy suffices.
       - name: Deploy Worker (production — auth.gvdgclub.com)
-        if: ${{ env.HAS_CF_TOKEN == 'true' }}
+        if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_CF_ACCOUNT == 'true' }}
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -62,7 +63,8 @@ jobs:
             GEMINI_API_KEY
           command: deploy --env gvdgclub
         env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       - name: Skip notice
-        if: ${{ env.HAS_CF_TOKEN != 'true' }}
-        run: echo "::notice::CLOUDFLARE_API_TOKEN is not configured; staging deploy skipped after tests."
+        if: ${{ env.HAS_CF_TOKEN != 'true' || env.HAS_CF_ACCOUNT != 'true' }}
+        run: echo "::notice::Cloudflare deploy secret(s) are not fully configured; deploy skipped after tests."

@@ -30,7 +30,6 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 PROJECT="gvdg-club-site"
-ACCOUNT_ID="<private-cloudflare-account-id>"
 PAGES_URL="https://gvdgclub.com"
 WORKER_ENV="gvdgclub"
 LOCK_DIR="${TMPDIR:-/tmp}/gvdg-deploy.lock"   # machine-wide, shared across sessions
@@ -42,6 +41,17 @@ c() { printf '\033[%sm' "$1"; }
 log()  { printf '%s[deploy]%s %s\n' "$(c '1;36')" "$(c 0)" "$*"; }
 warn() { printf '%s[deploy] WARN:%s %s\n' "$(c '1;33')" "$(c 0)" "$*" >&2; }
 die()  { printf '%s[deploy] ABORT:%s %s\n' "$(c '1;31')" "$(c 0)" "$*" >&2; release_lock; exit 1; }
+
+if [ -f "$REPO_ROOT/.gvdg-deploy.env" ]; then
+  . "$REPO_ROOT/.gvdg-deploy.env"
+fi
+if [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+  export CLOUDFLARE_ACCOUNT_ID
+fi
+
+require_cloudflare_account_id() {
+  [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] || die "CLOUDFLARE_ACCOUNT_ID is not set. Keep the account ID private and provide it via your shell, .gvdg-deploy.env, or CI secrets."
+}
 
 MODE_PAGES=1; MODE_WORKER=1; DRY_RUN=0; STATUS_ONLY=0
 for arg in "$@"; do
@@ -79,7 +89,8 @@ live_commit() {
   sha="$(printf '%s' "$j" | grep -oE '"commit"[^,]*' | grep -oE '[0-9a-f]{7,40}' | head -1 || true)"
   if [ -n "$sha" ]; then printf '%s' "$sha"; return; fi
   # Fallback (bootstrap, pre-marker): the Source column of the newest Production Pages deployment.
-  CLOUDFLARE_ACCOUNT_ID="$ACCOUNT_ID" npx wrangler pages deployment list --project-name "$PROJECT" 2>/dev/null \
+  [ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ] || return 0
+  npx wrangler pages deployment list --project-name "$PROJECT" 2>/dev/null \
     | awk -F'│' '/Production/ { gsub(/ /,"",$5); print $5; exit }'
 }
 
@@ -160,8 +171,9 @@ fi
 
 # ---------- deploy ----------
 if [ "$MODE_PAGES" = 1 ]; then
+  require_cloudflare_account_id
   log "deploying Pages ($PROJECT / main)…"
-  CLOUDFLARE_ACCOUNT_ID="$ACCOUNT_ID" npx wrangler pages deploy "$DIST" --project-name "$PROJECT" --branch main --commit-dirty=true
+  npx wrangler pages deploy "$DIST" --project-name "$PROJECT" --branch main --commit-dirty=true
 fi
 if [ "$MODE_WORKER" = 1 ]; then
   log "deploying worker (--env $WORKER_ENV)…"

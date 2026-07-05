@@ -3,3 +3,4 @@ node_modules/
 .omo/
 .pages-dist/
 .deploy-log
+.gvdg-deploy.env
