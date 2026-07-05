@@ -32,8 +32,9 @@ triggers of the 3 modals it migrates**.
 
 Good patterns to preserve: `pro-shop #shopStatus` and `gvdg-members #boardStatus`
 already use `role="status" aria-live="polite"`. **No `.sr-only` class exists** anywhere.
-`crotts.js` (deferred, injects fixed `#crotts-fab` z-9998) loads on **index + members**
-(not score).
+`crotts.js` (deferred, injects fixed `#crotts-fab` z-9998 bottom-left + `#crotts-panel`
+z-9999) currently loads on **7 pages**: `index, gvdg-blog, events, ryder-cup, pro-shop,
+gvdg-members, admin` (not score.html). See §4a for the placement change.
 
 ## 3. Architecture
 
@@ -153,6 +154,25 @@ inset `box-shadow` ring instead.
 
 **`score.html` (leaderboard sheet + Manage).** Refactor so `openLeaderboard()` builds the `.overlay/.sheet`, adds `id="lbSheetHeading"` to the sheet `<h2>`, and calls `makeDialog(overlay,{ panel:'.sheet', labelledBy:'lbSheetHeading', label:'Live leaderboard', onClose:()=>{overlay.remove(); lbSheet=null; lbOpen=false;} }).open()` **once**; `renderLeaderboard()` becomes `controller.setContent()` and only replaces the panel's inner children while open (never `lbSheet.remove()`+rebuild, never re-`open()`). Same pattern for `openManagePlayers` (its own heading id + `label:'Manage players'`). Route `closeLeaderboard`, both Close buttons, and every Manage close/save/remove path exclusively through `controller.close()` (no direct `.remove()`). `initialFocus` = the sheet heading (`tabindex=-1`), so focus never lands on "🏁 Finish round". Openers `#lbBtn`/`Manage`: `#lbBtn` is stable; for Manage (opener detached by `app.replaceChildren` on snapshot) add `tabindex="-1"` to `<main id="app">` and pass `returnFocus:'#lbBtn'`.
 
+## 4a. Crotts assistant placement (new requirement)
+
+Crotts should appear **only on non-member/public surfaces** and must **never impede
+controls or obscure scoring**.
+
+- **Remove** `<script src="crotts.js" defer></script>` from the member/admin surfaces:
+  **`gvdg-members.html`** and **`admin.html`** (score.html already has none). This also
+  eliminates the deferred-FAB-over-modal escape-hatch on those pages entirely.
+- **Keep** on the public pages: `index.html`, `gvdg-blog.html`, `events.html`,
+  `ryder-cup.html`, `pro-shop.html`. (pro-shop/events carry member controls but the FAB is
+  bottom-left and content controls are in-flow; the yield rule below covers any overlap —
+  flag for user if either should also drop Crotts.)
+- **Yield to overlays** (on the pages that keep it): while any `GVDGa11y` dialog is open,
+  hide `#crotts-fab`/`#crotts-panel` (a `body.dialog-open` class toggled by makeDialog, or a
+  direct hide in `onOpen`/`onClose`) so the FAB never paints over or blocks a modal; and the
+  z-index token scale (§6) keeps overlays above the FAB as a backstop. On the public pages
+  that keep Crotts, makeDialog's MutationObserver still isolates the late-injected FAB for the
+  duration a modal is open (index course modal).
+
 ## 5. Live-region toasts/alerts in `score.html`
 
 Rule: **every visible toast/alert string gets a matching `announce()`** — not just
@@ -170,12 +190,13 @@ Keep the visual `.toast`. `pro-shop`/`gvdg-members` status regions already annou
 
 - **iOS scroll-lock (score sheet):** on open save `scrollY`, set body `{position:fixed; top:-scrollY; left:0; right:0; width:100%}`; on close remove and `window.scrollTo(0, scrollY)`. Add `overscroll-behavior:contain` to the **`.sheet`** scroll container; change `.sheet max-height:82vh → 82dvh` with a `vh` fallback. (Drop the earlier spurious `--safe-*` coupling.)
 - **`prefers-reduced-motion`:** gate score.html's JS-set toast/transition (`t.style.transition`, `.toast.conflict`, course-modal scale) behind `matchMedia('(prefers-reduced-motion: reduce)')`; add the global reduced-motion reset (present in index.html L321/347) to **score.html** and **gvdg-members.html**.
-- **z-index contract:** add a z-index token scale to `tokens.css` (overlay/panel/announcer/toast) and reference it from the overlay + toast CSS so alerts layer predictably over modals.
+- **z-index contract:** add a z-index token scale to `tokens.css` (FAB < overlay < panel < toast/announcer) and reference it from the overlay + toast + Crotts CSS so overlays always sit above the `#crotts-fab`/`#crotts-panel` (z-9998/9999) and alerts layer predictably over modals.
 
 ## 7. Service worker & deploy
 
 - Add `a11y.js` to `sw.js` `ASSETS`; bump `CACHE` `v17` → `v18`.
 - Add the sync `<head>` `<script>` to `index.html`, `gvdg-members.html`, `score.html`.
+- Remove the `crotts.js` script tag from `gvdg-members.html` and `admin.html` (§4a); `admin.html` gets no a11y.js (no migrated modal there in Slice 1) but is touched by the Crotts removal — bump `sw.js` accordingly and re-verify admin still loads.
 - Document `window.GVDGa11y` (makeDialog + announce, the isolate-body-children model, the sync load-order rule) in `DESIGN.md`.
 - Frontend-only → **full** deploy via `./scripts/gvdg-deploy.sh` (self-gates static tests + hex-lint + worker typecheck). Push `origin/main` **before** deploy (shared-main freshness gate).
 
@@ -184,7 +205,7 @@ Keep the visual `.toast`. `pro-shop`/`gvdg-members` status regions already annou
 **Reality:** the only devDep is `playwright`; `tests/*.mjs` are `readFileSync`+regex over
 HTML source under `node --test`. Runtime behavior (inert/focus/Escape) **cannot** be asserted there.
 
-- **Static (deploy-gated) — `tests/a11y.test.mjs` + extend `tests/score-page.test.mjs`:** source-structure checks only — a11y.js defines `makeDialog`+`announce`; each page loads the **sync** (non-defer) `a11y.js` in `<head>`; legacy `.active`/`.remove()` close handlers are gone from the 3 pages; migrations pass **both** `labelledBy` and `label`; `conflictAlert`/offline paths call `announce`; `sw.js` CACHE bumped and `a11y.js` in ASSETS; no raw hex.
+- **Static (deploy-gated) — `tests/a11y.test.mjs` + extend `tests/score-page.test.mjs`:** source-structure checks only — a11y.js defines `makeDialog`+`announce`; each page loads the **sync** (non-defer) `a11y.js` in `<head>`; legacy `.active`/`.remove()` close handlers are gone from the 3 pages; migrations pass **both** `labelledBy` and `label`; `conflictAlert`/offline paths call `announce`; `sw.js` CACHE bumped and `a11y.js` in ASSETS; no raw hex; **Crotts placement** — `crotts.js` absent from `gvdg-members.html` + `admin.html`, present on the 5 public pages; makeDialog toggles the FAB-hide.
 - **Behavioral (Playwright, part of the required live-verify gate):** an automated Playwright script (playwright is available) drives each of the 3 modals **keyboard-only**: Tab→trigger→Enter/Space opens → focus lands on the heading → Tab stays trapped (background isolated) → Escape closes → **focus returns to the opener**; `×`/backdrop close leaves **zero** isolated body nodes; `pageshow(persisted)` leaves zero isolated nodes; `announce` fires (polite + assertive regions populate) on a real save and a forced conflict; score sheet stays put (no scroll-jump, no focus loss) across a simulated WS snapshot while open. Verify **light + dark**, **0 console errors**, and (manually) with iOS VoiceOver if a device is available.
 
 ## 9. Follow-ups (Slice 2/3)
