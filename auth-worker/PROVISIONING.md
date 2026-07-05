@@ -107,3 +107,18 @@ The repo `.gitignore` already ignores `seed.local.json`. The provisioning output
 
 > The repo's `auth-worker/.gitignore` already ignores `out/`, `default-pins.csv`, `kv-bulk.json`, and
 > `seed-*.json`, so these provisioning outputs won't be committed by accident.
+
+## PIN pepper (`PIN_PEPPER` secret) — do not lose it
+
+PIN hashes are additionally protected by an HMAC **pepper** (a server-held secret, `PIN_PEPPER`), layered
+under PBKDF2, so a leaked KV roster alone can't brute-force the 4-digit PINs offline (`src/crypto.ts`).
+
+- **Activated on gvdgclub** (2026-07): a strong random value is set via `wrangler secret put PIN_PEPPER
+  --env gvdgclub`. New/changed PINs are hashed as `pbkdf2h$…`; pre-pepper members' legacy `pbkdf2$…`
+  hashes still verify (the pepper is ignored for them) and are transparently upgraded on their next login.
+- **⚠️ Once set, `PIN_PEPPER` must never be lost or changed** — exactly like `JWT_SECRET`. Losing it locks
+  out every member whose hash has been upgraded to `pbkdf2h`. Cloudflare stores it, but back the value up
+  in the club's password manager for disaster recovery, and add it to the CI secret set if CI ever runs a
+  secret-sync deploy.
+- To activate a fresh env: `printf '%s' "<48+ random chars>" | wrangler secret put PIN_PEPPER --env <env>`.
+  Rolling it (rare) requires re-hashing every member — avoid unless the secret is believed compromised.
