@@ -11,6 +11,14 @@ function scoreAuthSource() {
   return readFileSync('src/score-app/auth-flow.js', 'utf8');
 }
 
+function scoreStatusSource() {
+  return readFileSync('src/score-app/status-view.js', 'utf8');
+}
+
+function scoreNotificationsSource() {
+  return readFileSync('src/score-app/notifications.js', 'utf8');
+}
+
 function scoreLegacySetupSource() {
   const source = readFileSync('src/score-app/score-legacy.js', 'utf8');
   const start = source.indexOf('async function renderLayoutPick(course)');
@@ -29,12 +37,34 @@ function scoreLegacyAuthSource() {
   return source.slice(start, end);
 }
 
+function scoreLegacyStatusSource() {
+  const source = readFileSync('src/score-app/score-legacy.js', 'utf8');
+  const start = source.indexOf('function renderStatusView(props)');
+  const end = source.indexOf('// ---------- passkey login + forced PIN change');
+  assert.notEqual(start, -1, 'status section should exist');
+  assert.notEqual(end, -1, 'auth section should follow status section');
+  return source.slice(start, end);
+}
+
+function scoreLegacyNotificationSource() {
+  const source = readFileSync('src/score-app/score-legacy.js', 'utf8');
+  const start = source.indexOf('function toast(msg)');
+  const end = source.indexOf('// ---------- theme ----------');
+  assert.notEqual(start, -1, 'notification section should exist');
+  assert.notEqual(end, -1, 'theme section should follow notification section');
+  return source.slice(start, end);
+}
+
 function scoreLeaderboardSource() {
   return readFileSync('src/score-app/leaderboard-sheet.js', 'utf8');
 }
 
 function scoreManagePlayersSource() {
   return readFileSync('src/score-app/manage-players-sheet.js', 'utf8');
+}
+
+function scorecardViewSource() {
+  return readFileSync('src/score-app/scorecard-view.js', 'utf8');
 }
 
 function scoreLegacyLeaderboardSource() {
@@ -52,6 +82,15 @@ function scoreLegacyManagePlayersSource() {
   const end = source.indexOf('function shareRound()');
   assert.notEqual(start, -1, 'manage players section should exist');
   assert.notEqual(end, -1, 'share round should follow manage players section');
+  return source.slice(start, end);
+}
+
+function scoreLegacyHoleSource() {
+  const source = readFileSync('src/score-app/score-legacy.js', 'utf8');
+  const start = source.indexOf('function liveTeeSignView(h)');
+  const end = source.indexOf('// ---------- leaderboard sheet ----------');
+  assert.notEqual(start, -1, 'scorecard section should exist');
+  assert.notEqual(end, -1, 'leaderboard section should follow scorecard section');
   return source.slice(start, end);
 }
 
@@ -108,6 +147,40 @@ test('score auth screens are React-owned without legacy DOM fallbacks', () => {
   assert.doesNotMatch(legacy, /np\.placeholder = 'New 4-digit PIN'/);
 });
 
+test('score status screens are React-owned without legacy message DOM fallbacks', () => {
+  const status = scoreStatusSource();
+  const legacy = scoreLegacyStatusSource();
+  const fullLegacy = readFileSync('src/score-app/score-legacy.js', 'utf8');
+  assert.match(fullLegacy, /createScoreStatusViewRenderer\(\)/);
+  assert.match(legacy, /statusView\.render\(props\)/);
+  assert.match(status, /function LoadingView\(\)/);
+  assert.match(status, /function MessageView\(props\)/);
+  assert.match(status, /createRoot\(app\)/);
+  assert.match(status, /View live leaderboard/);
+  assert.doesNotMatch(legacy, /const c = el\('div', 'card center stack'\)/);
+  assert.doesNotMatch(fullLegacy, /function spinner\(\)/);
+  assert.doesNotMatch(fullLegacy, /shell\(spinner\(\)\)/);
+  assert.doesNotMatch(fullLegacy, /🏆 View live leaderboard/);
+});
+
+test('score notifications are React-owned without legacy body DOM fallbacks', () => {
+  const notifications = scoreNotificationsSource();
+  const legacy = scoreLegacyNotificationSource();
+  const fullLegacy = readFileSync('src/score-app/score-legacy.js', 'utf8');
+  assert.match(fullLegacy, /createScoreNotificationsRenderer\(\)/);
+  assert.match(legacy, /notifications\.showToast\(msg\)/);
+  assert.match(legacy, /notifications\.showConflict\(text\)/);
+  assert.match(fullLegacy, /notifications\.setOnline\(on\)/);
+  assert.match(notifications, /function ScoreNotifications\(props\)/);
+  assert.match(notifications, /function ToastItem\(props\)/);
+  assert.match(notifications, /createRoot\(host\)/);
+  assert.match(notifications, /Offline - scores sync when reconnected/);
+  assert.doesNotMatch(fullLegacy, /function el\(/);
+  assert.doesNotMatch(fullLegacy, /document\.body\.appendChild/);
+  assert.doesNotMatch(fullLegacy, /offlineBar/);
+  assert.doesNotMatch(fullLegacy, /toast conflict/);
+});
+
 test('player score page supports pair target rows and target-id offline replay', () => {
   const source = readFileSync('src/score-app/score-legacy.js', 'utf8');
   assert.match(source, /function scoreRows\(\)/);
@@ -152,4 +225,22 @@ test('manage players sheet is React-owned without legacy overlay DOM constructio
   assert.doesNotMatch(legacy, /const sheet = el\('div', 'sheet'\)/);
   assert.doesNotMatch(legacy, /pairInputs\.push/);
   assert.doesNotMatch(legacy, /overlay\.appendChild\(sheet\)/);
+});
+
+test('scorecard view is React-owned without legacy hole DOM construction', () => {
+  const legacy = scoreLegacyHoleSource();
+  const scorecard = scorecardViewSource();
+  const fullLegacy = readFileSync('src/score-app/score-legacy.js', 'utf8');
+  assert.match(fullLegacy, /createScorecardViewRenderer\(\)/);
+  assert.match(legacy, /scorecardView\.render\(\{/);
+  assert.match(scorecard, /function ScorecardView\(props\)/);
+  assert.match(scorecard, /function ScoreRow\(props\)/);
+  assert.match(scorecard, /function HoleGrid\(props\)/);
+  assert.match(scorecard, /createRoot\(app\)/);
+  assert.match(scorecard, /WeatherSlot/);
+  assert.doesNotMatch(legacy, /const head = el\('div', 'hole-head'\)/);
+  assert.doesNotMatch(legacy, /const box = el\('div', 'card'\)/);
+  assert.doesNotMatch(legacy, /const row = el\('div', 'prow'/);
+  assert.doesNotMatch(legacy, /const grid = el\('div', 'holegrid'\)/);
+  assert.doesNotMatch(legacy, /document\.createElement\('select'\)/);
 });

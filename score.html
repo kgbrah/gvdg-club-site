@@ -115,13 +115,18 @@
         .stack > label.lbl { margin-top: 0.8rem; }
         .pill { display: inline-block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 0.2rem 0.5rem; border-radius: 999px; background: var(--bg-tertiary); color: var(--text-secondary); }
         .pill.live { background: var(--primary-strong); color: #fff; }
-        .offline-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 60; background: var(--over); color: #fff; text-align: center; font-size: 0.78rem; font-weight: 700; padding: calc(0.3rem + var(--safe-top)) 0.5rem 0.3rem; }
+        .offline-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 60; background: var(--over); color: #fff; text-align: center; font-size: 0.78rem; font-weight: 700; line-height: 1.25; padding: calc(0.3rem + var(--safe-top)) 0.5rem 0.3rem; display: flex; align-items: center; justify-content: center; gap: 0.4rem; }
+        .offline-bar svg { width: 16px; height: 16px; flex: 0 0 16px; }
         .toast {
             position: fixed; left: 50%; bottom: calc(1.2rem + var(--safe-bottom)); transform: translateX(-50%);
+            display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem; line-height: 1.3;
             background: var(--text-primary); color: var(--bg-secondary); padding: 0.7rem 1.1rem; border-radius: 12px;
             font-size: 0.9rem; font-weight: 600; box-shadow: 0 4px 16px var(--shadow); z-index: 50; max-width: 90%; text-align: center;
         }
         .toast.conflict { bottom: auto; top: calc(0.8rem + var(--safe-top)); background: var(--over); color: #fff; font-weight: 700; max-width: 94%; cursor: pointer; transition: opacity .5s; z-index: 70; }
+        .toast.conflict.with-offline { top: calc(2.4rem + var(--safe-top)); }
+        .toast.is-hiding { opacity: 0; transition: opacity .3s; }
+        .toast svg { flex: 0 0 18px; }
         /* ---- event / card pickers ---- */
         .tap-row {
             display: flex; align-items: center; gap: 0.75rem; width: 100%; text-align: left;
@@ -154,9 +159,11 @@
         .round-tools { display: flex; align-items: center; justify-content: space-between; gap: 0.55rem; padding: 0.55rem 0.85rem; }
         .round-code { flex: 0 0 auto; line-height: 1.05; }
         .round-code .muted { display: block; }
+        .round-code strong { letter-spacing: 1.5px; }
         .round-actions { display: flex; flex: 1 1 auto; justify-content: flex-end; gap: 0.4rem; min-width: 0; }
         .round-actions .btn { width: auto; min-width: 64px; white-space: nowrap; padding-inline: 0.65rem; }
-        .navbtn { width: 46px; height: 46px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); font-size: 1.4rem; cursor: pointer; }
+        .navbtn { width: 46px; height: 46px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); font-size: 1.4rem; cursor: pointer; display: grid; place-items: center; }
+        .navbtn svg { width: 20px; height: 20px; }
         .navbtn:disabled { opacity: 0.35; }
         .tee-sign-card { padding: 0.55rem; overflow: hidden; }
         .tee-sign-card img { display: block; width: 100%; aspect-ratio: 16 / 10; max-height: 230px; object-fit: cover; object-position: center; border-radius: 8px; background: var(--bg-tertiary); border: 1px solid var(--border-color); }

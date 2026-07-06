@@ -1,6 +1,9 @@
 import { createScoreAuthFlowRenderer } from "./auth-flow.js";
 import { createLeaderboardSheetRenderer } from "./leaderboard-sheet.js";
 import { createManagePlayersSheetRenderer } from "./manage-players-sheet.js";
+import { createScoreNotificationsRenderer } from "./notifications.js";
+import { createScorecardViewRenderer } from "./scorecard-view.js";
+import { createScoreStatusViewRenderer } from "./status-view.js";
 
 export function startScoreApp(options) {
         "use strict";
@@ -22,15 +25,16 @@ export function startScoreApp(options) {
         function guestTokenStored() { try { const a = JSON.parse(localStorage.getItem(GUESTREG_KEY) || '{}'); return (a[EVENT_ID] && a[EVENT_ID].guestToken) || null; } catch (e) { return null; } }
         const GUEST_TOKEN = MODE === 'event' ? (params.get('gt') || guestTokenStored()) : null;
 
-        const app = document.getElementById('app');
         const authFlow = createScoreAuthFlowRenderer();
+        const notifications = createScoreNotificationsRenderer();
+        const scorecardView = createScorecardViewRenderer();
+        const statusView = createScoreStatusViewRenderer();
         const setupFlow = options && options.setupFlow;
         const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, roundConfig: null, scoreTargets: [], scoreTargetError: null, weather: null };
         const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
         const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
 
         // ---------- tiny helpers ----------
-        function el(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
         function memberToken() { try { return sessionStorage.getItem(TOKEN_KEY); } catch (e) { return null; } }
         function rememberRecentRound(entry) {
             try {
@@ -47,20 +51,14 @@ export function startScoreApp(options) {
         function relClass(d) { return d < 0 ? 'under' : d > 0 ? 'over' : 'even'; }
         function relText(d) { return d === 0 ? 'E' : d > 0 ? '+' + d : String(d); }
         function toast(msg) {
-            const t = el('div', 'toast', msg); document.body.appendChild(t);
-            setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; }, 1800);
-            setTimeout(() => t.remove(), 2200);
+            notifications.showToast(msg);
         }
         // A loud, sticky, top-of-screen alert (with a buzz) when the card has a scoring conflict. Tap to dismiss.
         function conflictAlert(msg) {
             if (navigator.vibrate) { try { navigator.vibrate([120, 60, 120]); } catch (e) {} }
             const values = Array.isArray(msg.values) && msg.values.length ? msg.values.join(' vs ') : ((msg.from != null && msg.to != null) ? (msg.from + ' vs ' + msg.to) : 'scores do not match');
-            const text = '⚠️ Scoring conflict — Hole ' + msg.hole + ', ' + (msg.playerName || 'a player') + ': ' + values + '. Confirm with your card.';
-            const t = el('div', 'toast conflict', text);
-            t.addEventListener('click', () => t.remove());
-            document.body.appendChild(t);
-            setTimeout(() => { t.style.opacity = '0'; }, 6500);
-            setTimeout(() => t.remove(), 7100);
+            const text = 'Scoring conflict - Hole ' + msg.hole + ', ' + (msg.playerName || 'a player') + ': ' + values + '. Confirm with your card.';
+            notifications.showConflict(text);
         }
 
         // ---------- theme ----------
@@ -124,11 +122,9 @@ export function startScoreApp(options) {
                     // Never silently lose a score AND never lie with a "Synced" toast. Tell the scorer exactly
                     // which holes the server refused so they can re-enter them.
                     const holes = rejected.map(function (it) { return it.hole; }).sort(function (a, b) { return a - b; }).join(', ');
-                    const alert = el('div', 'toast conflict',
-                        '⚠️ ' + rejected.length + ' offline score' + (rejected.length > 1 ? 's were' : ' was') +
+                    notifications.showConflict(
+                        rejected.length + ' offline score' + (rejected.length > 1 ? 's were' : ' was') +
                         ' rejected and NOT saved (hole' + (rejected.length > 1 ? 's' : '') + ' ' + holes + '). Please re-enter. Tap to dismiss.');
-                    alert.addEventListener('click', function () { alert.remove(); });
-                    document.body.appendChild(alert);
                     if (navigator.vibrate) { try { navigator.vibrate([120, 60, 120]); } catch (e) {} }
                 } else if (q.length && !remain.length) {
                     toast('Synced offline scores');
@@ -139,10 +135,8 @@ export function startScoreApp(options) {
         }
 
         // ---------- offline bar ----------
-        let offlineBar = null;
         function setOnline(on) {
-            if (on && offlineBar) { offlineBar.remove(); offlineBar = null; }
-            else if (!on && !offlineBar) { offlineBar = el('div', 'offline-bar', '⚠ Offline — scores save on your phone and sync when you reconnect'); document.body.appendChild(offlineBar); }
+            notifications.setOnline(on);
         }
         window.addEventListener('online', function () { setOnline(true); flushQueue(); connectWs(); });
         window.addEventListener('offline', function () { setOnline(false); });
@@ -403,28 +397,46 @@ export function startScoreApp(options) {
         function clearAuthFlow() {
             if (authFlow && typeof authFlow.clear === 'function') authFlow.clear();
         }
+        function clearScorecardView() {
+            if (scorecardView && typeof scorecardView.clear === 'function') scorecardView.clear();
+        }
+        function clearStatusView() {
+            if (statusView && typeof statusView.clear === 'function') statusView.clear();
+        }
         function renderAuthFlow(props) {
             clearSetupFlow();
+            clearScorecardView();
+            clearStatusView();
             authFlow.render(props);
             return true;
         }
         function renderSetupFlow(props) {
             if (!setupFlow || typeof setupFlow.render !== 'function') throw new Error('Missing score setup renderer');
             clearAuthFlow();
+            clearScorecardView();
+            clearStatusView();
             setupFlow.render(props);
             return true;
         }
-        function shell(node) { clearSetupFlow(); clearAuthFlow(); app.replaceChildren(node); }
-
+        function renderStatusView(props) {
+            clearSetupFlow();
+            clearAuthFlow();
+            clearScorecardView();
+            statusView.render(props);
+            return true;
+        }
+        function renderLoading() {
+            return renderStatusView({ mode: 'loading' });
+        }
         function renderMessage(title, sub, withRetry) {
-            const c = el('div', 'card center stack');
-            c.appendChild(el('h2', 'section', title));
-            if (sub) c.appendChild(el('p', 'muted', sub));
-            if (withRetry) { const b = el('button', 'btn', 'Try again'); b.addEventListener('click', boot); c.appendChild(b); }
-            const lb = el('button', 'btn secondary', '🏆 View live leaderboard');
-            lb.addEventListener('click', openLeaderboard);
-            c.appendChild(lb);
-            shell(c);
+            renderStatusView({
+                mode: 'message',
+                onLeaderboard: openLeaderboard,
+                onRetry: boot,
+                sub: sub,
+                title: title,
+                withRetry: withRetry,
+            });
         }
 
         // ---------- passkey login + forced PIN change (mirrors the members page) ----------
@@ -507,29 +519,23 @@ export function startScoreApp(options) {
         }
 
         function holeMeta(idx) { return S.holes[idx] || { hole: idx + 1, par: 3 }; }
-        function renderLiveTeeSign(h) {
+        function liveTeeSignView(h) {
             const id = Number(h && h.tee_sign_id);
             if (!id) return null;
-            const card = el('div', 'card tee-sign-card');
             // Matchplay: tint this hole's tee sign in the winning team's color. Halved holes stay as-is
             // (no color) in the scoring app, per spec.
+            let highlightColor = null;
             if (isMatchplayScoring() && window.GVDGMatchplay) {
                 const w = window.GVDGMatchplay.holeWinners([{ hole: h.hole }], S.cardmates)[h.hole];
                 const c = window.GVDGMatchplay.winnerColor(w, { tie: false });
-                if (c) card.style.boxShadow = '0 0 0 3px ' + c;
+                if (c) highlightColor = c;
             }
-            const img = el('img');
-            img.src = API_BASE + '/tee-signs/' + id + '/image';
-            img.alt = 'Tee sign for hole ' + h.hole;
-            img.loading = 'lazy';
-            img.width = 640;
-            img.height = 400;
-            card.appendChild(img);
-            const caption = el('div', 'tee-sign-caption');
-            caption.appendChild(el('span', null, 'Tee sign'));
-            caption.appendChild(el('span', null, 'Hole ' + h.hole));
-            card.appendChild(caption);
-            return card;
+            return {
+                alt: 'Tee sign for hole ' + h.hole,
+                highlightColor: highlightColor,
+                hole: h.hole,
+                src: API_BASE + '/tee-signs/' + id + '/image',
+            };
         }
 
         function roundWeatherNode() {
@@ -551,121 +557,79 @@ export function startScoreApp(options) {
             if (!S.holes.length) return;
             const h = holeMeta(S.holeIdx);
             document.getElementById('lbBtn').hidden = false;
-            const c = el('div');
-            const weatherNode = roundWeatherNode();
-            if (weatherNode) c.appendChild(weatherNode);
-
-            // Casual round: share the code + add walk-on players to the card.
-            if (MODE === 'round') {
-                const bar = el('div', 'card round-tools');
-                const left = el('div');
-                left.className = 'round-code';
-                left.appendChild(el('span', 'muted', 'Code '));
-                const strong = document.createElement('strong'); strong.textContent = ROUND_CODE; strong.style.letterSpacing = '1.5px'; left.appendChild(strong);
-                const actions = el('div', 'round-actions');
-                const share = el('button', 'btn small secondary', 'Share'); share.addEventListener('click', shareRound);
-                const add = el('button', 'btn small secondary', 'Add'); add.title = 'Add player'; add.setAttribute('aria-label', 'Add player'); add.addEventListener('click', addGuestPrompt);
-                const manage = el('button', 'btn small secondary', 'Manage'); manage.addEventListener('click', openManagePlayers);
-                actions.appendChild(share); actions.appendChild(add); actions.appendChild(manage);
-                bar.appendChild(left); bar.appendChild(actions);
-                c.appendChild(bar);
-            }
-
-            // hole header + nav
-            const head = el('div', 'hole-head');
-            const prev = el('button', 'navbtn', '‹'); prev.disabled = S.holeIdx === 0; prev.addEventListener('click', function () { S.holeIdx = Math.max(0, S.holeIdx - 1); renderHole(); });
-            const mid = el('div'); mid.style.flex = '1'; mid.style.textAlign = 'center';
-            mid.appendChild(el('div', 'hnum', 'Hole ' + h.hole));
-            mid.appendChild(el('div', 'hpar', 'Par ' + h.par + (h.distance_ft ? ' · ' + h.distance_ft + ' ft' : '') + (h.overridden ? ' (today)' : '')));
-            if (isMatchplayScoring()) {
-                const status = matchStatusText();
-                if (status) mid.appendChild(el('div', 'pmeta', status));
-                if (isMatchDormie()) mid.appendChild(el('div', 'dormie-badge', '⚑ DORMIE — win or halve this hole to close it'));
-            }
-            const next = el('button', 'navbtn', '›'); next.disabled = S.holeIdx >= S.holes.length - 1; next.addEventListener('click', function () { S.holeIdx = Math.min(S.holes.length - 1, S.holeIdx + 1); renderHole(); });
-            head.appendChild(prev); head.appendChild(mid); head.appendChild(next);
-            c.appendChild(head);
-            const teeSign = renderLiveTeeSign(h);
-            if (teeSign) c.appendChild(teeSign);
-
-            // player rows with steppers
-            const box = el('div', 'card');
             const choices = scorecardChoices();
             const scorerIndex = currentScorerIndex();
-            if (choices.length > 1) {
-                const owner = el('div', 'scorecard-owner');
-                owner.appendChild(el('label', null, 'Scorecard'));
-                const select = document.createElement('select');
-                choices.forEach((p) => {
-                    const opt = document.createElement('option');
-                    opt.value = String(p.index);
-                    opt.textContent = p.name + (p.isMe ? ' (you)' : '');
-                    select.appendChild(opt);
-                });
-                select.value = String(scorerIndex);
-                select.addEventListener('change', function () { S.scorerIndex = Number(select.value); renderHole(); });
-                owner.appendChild(select);
-                box.appendChild(owner);
-            }
             const rows = scoreRows();
             // My pair/card is broken (e.g. a partner left): show its exact message even if I still have rows
             // (the intact side of a broken matchplay match). Otherwise, if doubles has no rows yet, prompt to
             // set pairs. A healthy pair sharing a card with a broken one has scoreTargetError null → no banner.
             const warnMsg = (S.scoreTargetError && S.scoreTargetError.message) ? S.scoreTargetError.message
                 : (isDoublesScoring() && !rows.length) ? 'Set pairs in Manage before scoring doubles.' : null;
-            if (warnMsg) {
-                const warn = el('p', 'muted', warnMsg);
-                warn.style.color = 'var(--over)';
-                box.appendChild(warn);
-            }
-            rows.forEach((rowData) => {
+            const rowViews = rows.map((rowData) => {
                 const conflict = conflictForRow(rowData, h.hole);
-                const row = el('div', 'prow' + (conflict ? ' conflict' : ''));
-                const info = el('div', 'pinfo');
-                info.appendChild(el('div', 'pname', rowData.label));
-                if (rowData.meta) info.appendChild(el('div', 'pmeta', rowData.meta));
-                if (conflict) info.appendChild(el('div', 'pmeta conflict-text', '⚑ Conflict: ' + (conflict.values || []).join(' vs ') + ' — set yours to match'));
                 const cur = strokesForRow(rowData, h.hole);
-                const step = el('div', 'stepper');
-                const minus = el('button', 'minus', '−');
-                const val = el('div', 'val');
-                const n = el('div', 'n', cur == null ? '–' : String(cur)); val.appendChild(n);
-                if (cur != null) { const d = cur - h.par; const rel = el('div', 'rel ' + relClass(d), relText(d)); val.appendChild(rel); }
-                const plus = el('button', 'plus', '+');
-                minus.addEventListener('click', function () { const base = cur == null ? h.par : cur; const nv = Math.max(1, base - 1); postScore(rowData, h.hole, nv); });
-                plus.addEventListener('click', function () { const base = cur == null ? h.par - 1 : cur; const nv = Math.min(30, base + 1); postScore(rowData, h.hole, nv); });
-                step.appendChild(minus); step.appendChild(val); step.appendChild(plus);
-                row.appendChild(info); row.appendChild(step);
-                box.appendChild(row);
+                const d = cur == null ? null : cur - h.par;
+                return {
+                    conflictText: conflict ? 'Conflict: ' + (conflict.values || []).join(' vs ') + ' - set yours to match' : '',
+                    currentScore: cur,
+                    key: rowData.targetId || rowData.index,
+                    label: rowData.label,
+                    meta: rowData.meta,
+                    relative: d == null ? null : { className: relClass(d), text: relText(d) },
+                    source: rowData,
+                };
             });
 
             // my totals
             const meRow = myScoreRow();
+            let totals = [];
             if (meRow) {
                 let thru = 0, total = 0, toPar = 0;
                 S.holes.forEach((hh) => { const s = strokesForRow(meRow, hh.hole); if (typeof s === 'number') { thru++; total += s; toPar += s - hh.par; } });
-                const tot = el('div', 'totbar');
                 const resultLabel = isMatchplayScoring() ? 'Match' : 'To par';
                 const resultValue = isMatchplayScoring() ? (matchStatusText().replace(/^Match: /, '') || 'AS') : (thru ? relText(toPar) : 'E');
-                [['Thru', String(thru) + '/' + S.holes.length], ['Total', total ? String(total) : '–'], [resultLabel, resultValue]].forEach((kv) => {
-                    const d = el('div'); d.appendChild(el('div', 'k', kv[0])); d.appendChild(el('div', 'v', kv[1])); tot.appendChild(d);
-                });
-                box.appendChild(tot);
+                totals = [{ label: 'Thru', value: String(thru) + '/' + S.holes.length }, { label: 'Total', value: total ? String(total) : '-' }, { label: resultLabel, value: resultValue }];
             }
-            c.appendChild(box);
 
             // hole jump grid
-            const grid = el('div', 'holegrid');
-            S.holes.forEach((hh, i) => {
-                const b = el('button', i === S.holeIdx ? 'cur' : '', String(hh.hole));
-                if (meRow && strokesForRow(meRow, hh.hole) != null) b.className += ' done';
-                if (holeHasConflict(hh.hole)) b.className += ' conflict';
-                b.addEventListener('click', function () { S.holeIdx = i; renderHole(); });
-                grid.appendChild(b);
+            const holeGrid = S.holes.map((hh, i) => ({
+                conflict: holeHasConflict(hh.hole),
+                current: i === S.holeIdx,
+                done: !!(meRow && strokesForRow(meRow, hh.hole) != null),
+                hole: hh.hole,
+                index: i,
+            }));
+            clearSetupFlow();
+            clearAuthFlow();
+            clearStatusView();
+            scorecardView.render({
+                atEnd: S.holeIdx >= S.holes.length - 1,
+                atStart: S.holeIdx === 0,
+                buildWeatherNode: roundWeatherNode,
+                choices: choices,
+                dormie: isMatchDormie(),
+                hole: h,
+                holeGrid: holeGrid,
+                holeMeta: 'Par ' + h.par + (h.distance_ft ? ' · ' + h.distance_ft + ' ft' : '') + (h.overridden ? ' (today)' : ''),
+                matchStatus: isMatchplayScoring() ? matchStatusText() : '',
+                onAddPlayer: addGuestPrompt,
+                onJumpHole: function (index) { S.holeIdx = index; renderHole(); },
+                onManagePlayers: openManagePlayers,
+                onNext: function () { S.holeIdx = Math.min(S.holes.length - 1, S.holeIdx + 1); renderHole(); },
+                onPrevious: function () { S.holeIdx = Math.max(0, S.holeIdx - 1); renderHole(); },
+                onScore: postScore,
+                onScorerChange: function (index) { S.scorerIndex = index; renderHole(); },
+                onShare: shareRound,
+                roundCode: ROUND_CODE,
+                rows: rowViews,
+                scorerIndex: scorerIndex,
+                show: MODE === 'round',
+                showWeather: !!(S.weather && window.GVDGWeather),
+                teeSign: liveTeeSignView(h),
+                totals: totals,
+                warning: warnMsg,
+                weatherVersion: S.weather && (S.weather.updatedAt || S.weather.nextRefreshAt || (S.weather.current && S.weather.current.fetchedAt) || ''),
             });
-            c.appendChild(grid);
-
-            shell(c);
         }
 
         // ---------- leaderboard sheet ----------
@@ -717,7 +681,7 @@ export function startScoreApp(options) {
             const r = await api('/rounds/' + ROUND_CODE + '/finalize', { method: 'POST', body: {} });
             if (r.ok && r.data && r.data.status === 'final') {
                 S.status = 'final';
-                toast('Round finished 🏁');
+                toast('Round finished');
                 if (lbOpen) renderLeaderboard();
             } else if (r.status === 409) {
                 toast('Can’t finish yet — scorecards don’t agree');
@@ -768,7 +732,6 @@ export function startScoreApp(options) {
         }
 
         // ---- casual round: home, course/layout pickers, create, add guest ----
-        function spinner() { return (function () { const d = el('div', 'center'); d.appendChild(el('div', 'spin')); return d; })(); }
         function cleanRoundCode(value) { return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
         function joinRoundCode(value) {
             const code = cleanRoundCode(value);
@@ -786,7 +749,7 @@ export function startScoreApp(options) {
             });
         }
         async function renderCoursePick() {
-            shell(spinner());
+            renderLoading();
             const r = await api('/courses', { auth: false });
             const courses = (r.ok && r.data && r.data.courses) || [];
             renderSetupFlow({
@@ -797,7 +760,7 @@ export function startScoreApp(options) {
             });
         }
         async function renderLayoutPick(course) {
-            shell(spinner());
+            renderLoading();
             const r = await api('/courses/' + encodeURIComponent(course.id) + '/layouts', { auth: false });
             const layouts = (r.ok && r.data && r.data.layouts) || [];
             renderSetupFlow({
@@ -822,7 +785,7 @@ export function startScoreApp(options) {
             });
         }
         async function createRound(course, layout, config) {
-            shell(spinner());
+            renderLoading();
             const liveScoringConfig = config || defaultLiveScoringConfig();
             const r = await api('/rounds', { method: 'POST', body: { course_id: course.id, layout_id: layout.id, liveScoringConfig: { groupFormat: liveScoringConfig.groupFormat, scoringStyle: liveScoringConfig.scoringStyle } } });
             if (r.ok && r.data && r.data.code) { location.search = '?round=' + r.data.code; return; }
@@ -899,7 +862,7 @@ export function startScoreApp(options) {
             setOnline(navigator.onLine);
             if (MODE === 'home') { if (!memberToken()) { renderLogin(); return; } renderHome(); return; }
             if (!memberToken() && !GUEST_TOKEN) { renderLogin(); return; }
-            shell(spinner());
+            renderLoading();
             await loadMine();
         }
         boot();

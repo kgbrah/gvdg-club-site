@@ -201,6 +201,33 @@ Spacing follows a 4px base through rem values.
 - Accessibility: pair fields use real labels, remove/leave/close/save are real buttons, and no icon-only actions appear in this management sheet.
 - Motion: static bottom sheet; button active states use the existing score app press feedback.
 
+### Scorecard View
+
+- Structure: React-owned live hole screen with weather mount, casual-round tools, hole navigation, optional tee-sign card, scorecard selector, player/pair steppers, totals bar, and hole jump grid; the legacy score controller supplies derived rows and callbacks only.
+- Variants: event card, casual round with share/add/manage tools, singles rows, doubles pair rows, matchplay status, dormie badge, tee-sign highlight, score conflicts, score-target warning, completed holes, and current-hole states.
+- Spacing: reuses `.weather-strip`, `.round-tools`, `.hole-head`, `.tee-sign-card`, `.scorecard-owner`, `.prow`, `.stepper`, `.totbar`, and `.holegrid` primitives so the migrated view keeps the existing mobile rhythm.
+- States: scorer changes, hole navigation, jump-grid taps, and plus/minus steppers rerender through React; weather remains a DOM mount for the shared weather renderer so compass updates and refresh replacement stay intact.
+- Accessibility: navigation and score steppers expose action labels, scorer selection has a label, tool buttons pair Lucide icons with text, and hole jump buttons expose hole labels.
+- Motion: static layout; only existing active press feedback and weather wind-arrow rotation apply.
+
+### Score Status View
+
+- Structure: React-owned loading state and blocking message card mounted in the score app shell; the legacy score controller supplies retry and leaderboard callbacks only.
+- Variants: spinner, retryable error, informational blocker, and leaderboard shortcut.
+- Spacing: reuses `.center`, `.spin`, `.card`, `.stack`, `.section`, `.muted`, and `.btn` primitives.
+- States: retry buttons call the normal boot path; leaderboard shortcut opens the React-owned leaderboard sheet.
+- Accessibility: loading uses a status role, message actions are real buttons, and Lucide icons are decorative.
+- Motion: spinner uses the existing rotation animation; no other motion is added.
+
+### Score Notifications
+
+- Structure: React-owned document-level notification mount for transient toasts, scoring-conflict alerts, offline-sync rejection alerts, and the offline bar; the legacy score controller supplies notification messages and online state only.
+- Variants: default bottom toast, top conflict alert, rejected offline-score alert, and persistent offline bar.
+- Spacing: reuses `.toast`, `.toast.conflict`, and `.offline-bar`; icon-to-text gaps use the tight spacing scale.
+- States: toasts fade out on timers and dismiss on tap; conflict alerts stay longer, stack below the offline bar when needed, and use the score conflict token; offline state persists until connectivity returns.
+- Accessibility: transient notices use status or alert roles according to severity, and icons are decorative Lucide symbols rather than emoji.
+- Motion: opacity fade only; no layout animation.
+
 ### Round Weather
 
 - Structure: compact header, primary temperature/condition group, condition graphic, wind action, secondary meta pills, and course-location note.
