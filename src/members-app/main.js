@@ -6,7 +6,9 @@ import { MemberBoardPanel } from "./board-panel.js";
 import { MemberClubPanel } from "./club-panel.js";
 import { MemberDashboardShell } from "./dashboard-shell.js";
 import { installDashboardRouter } from "./dashboard-router.js";
+import { installMemberAuthController } from "./member-auth-controller.js";
 import { MemberOverviewDashboard } from "./overview-dashboard.js";
+import { installMemberPageChrome } from "./page-chrome.js";
 import { MemberRegistrationPanel } from "./registration-panel.js";
 import { MemberTeeSignsPanel } from "./tee-signs-panel.js";
 
@@ -17,6 +19,8 @@ if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") 
 
 const h = React.createElement;
 
+installMemberPageChrome();
+installMemberAuthController();
 installDashboardRouter();
 
 const authMount = document.getElementById("membersReactAuthGate");
