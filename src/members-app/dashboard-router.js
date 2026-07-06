@@ -1,14 +1,6 @@
 import { NAME_KEY, PDGA_KEY, storageGet } from "./api.js";
 import { readMemberContext } from "./member-context.js";
 
-const DASH_TABS = {
-  overview: ["#myDashboard", "#clubRegister"],
-  events: ["#clubRegister"],
-  board: ["#clubBoard"],
-  tee: ["#teeCapture"],
-  club: ["#membersReactClubPanel"],
-};
-
 const DASH_TITLES = {
   overview: "Player Dashboard",
   events: "Event Registration",
@@ -17,15 +9,11 @@ const DASH_TITLES = {
   club: "GVDG Member Directory",
 };
 
-const DASH_ALL_SELECTORS = [...new Set(Object.values(DASH_TABS).flat())];
+const DASH_TABS = new Set(Object.keys(DASH_TITLES));
 let selectedDashTab = "overview";
 
-function byId(id) {
-  return document.getElementById(id);
-}
-
 function safeTab(tab) {
-  return DASH_TABS[tab] ? tab : "overview";
+  return DASH_TABS.has(tab) ? tab : "overview";
 }
 
 function dashboardDetail(tab, extra = {}) {
@@ -36,6 +24,7 @@ function dashboardDetail(tab, extra = {}) {
     title: DASH_TITLES[tab] || DASH_TITLES.overview,
     name: context.name || storageGet(NAME_KEY) || null,
     pdgaNo: context.pdgaNo || storageGet(PDGA_KEY) || null,
+    scroll: extra.scroll === true,
   };
 }
 
@@ -43,17 +32,10 @@ function emitDashboardState(eventName, tab, extra = {}) {
   window.dispatchEvent(new CustomEvent(eventName, { detail: dashboardDetail(tab, extra) }));
 }
 
-export function selectDashboardTab(tabValue) {
+export function selectDashboardTab(tabValue, options = {}) {
   const tab = safeTab(tabValue);
   selectedDashTab = tab;
-  DASH_ALL_SELECTORS.forEach((selector) => {
-    document.querySelectorAll(selector).forEach((el) => el.classList.add("dtab-off"));
-  });
-  DASH_TABS[tab].forEach((selector) => {
-    document.querySelectorAll(selector).forEach((el) => el.classList.remove("dtab-off"));
-  });
-  emitDashboardState("gvdg:dashboard-tab-selected", tab);
-  byId("membersReactDashboardShell")?.scrollIntoView({ block: "start", behavior: "smooth" });
+  emitDashboardState("gvdg:dashboard-tab-selected", tab, { scroll: options.scroll !== false });
 }
 
 export function openMemberDashboard(detail = {}) {

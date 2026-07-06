@@ -26,7 +26,7 @@ function tabTitle(key) {
 function initialState() {
   const tab = DEFAULT_TAB.key;
   const context = readMemberContext();
-  return { ...context, tab, title: tabTitle(tab) };
+  return { ...context, scrollVersion: 0, tab, title: tabTitle(tab) };
 }
 
 function nextState(previous, detail = null) {
@@ -34,6 +34,7 @@ function nextState(previous, detail = null) {
   const context = readMemberContext(detail);
   return {
     ...context,
+    scrollVersion: detail?.scroll === true ? previous.scrollVersion + 1 : previous.scrollVersion,
     tab: nextTab,
     title: detail?.title || tabTitle(nextTab),
   };
@@ -49,6 +50,19 @@ export function requestLogout() {
 
 export function MemberDashboardShell() {
   const [state, setState] = React.useState(initialState);
+  const shellRef = React.useRef(null);
+
+  React.useEffect(() => {
+    document.body.dataset.memberDashboardTab = state.tab;
+    return () => {
+      if (document.body.dataset.memberDashboardTab === state.tab) delete document.body.dataset.memberDashboardTab;
+    };
+  }, [state.tab]);
+
+  React.useEffect(() => {
+    if (!state.scrollVersion) return;
+    shellRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [state.scrollVersion]);
 
   React.useEffect(() => {
     function update(event) {
@@ -80,7 +94,7 @@ export function MemberDashboardShell() {
     )
     : null;
 
-  return h(React.Fragment, null, [
+  return h("div", { className: "member-dashboard-shell-chrome", "data-member-dashboard-shell": state.tab, ref: shellRef }, [
     h("h2", { className: "section-title", id: "membersReactDashboardTitle", key: "title" }, state.title),
     h(
       "div",

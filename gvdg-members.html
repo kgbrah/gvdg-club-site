@@ -389,6 +389,18 @@
                 #members.members-react-tee-signs-ready #membersReactTeeSignsPanel { display: block; }
                 #membersReactClubPanel { display: none; }
                 #members.members-react-club-ready #membersReactClubPanel { display: block; }
+                body[data-member-dashboard-tab] #myDashboard,
+                body[data-member-dashboard-tab] #clubRegister,
+                body[data-member-dashboard-tab] #clubBoard,
+                body[data-member-dashboard-tab] #teeCapture,
+                body[data-member-dashboard-tab] #membersReactClubPanel { display: none; }
+                body[data-member-dashboard-tab] #members.members-react-club-ready #membersReactClubPanel { display: none; }
+                body[data-member-dashboard-tab="overview"] #myDashboard,
+                body[data-member-dashboard-tab="overview"] #clubRegister,
+                body[data-member-dashboard-tab="events"] #clubRegister,
+                body[data-member-dashboard-tab="board"] #clubBoard,
+                body[data-member-dashboard-tab="tee"] #teeCapture,
+                body[data-member-dashboard-tab="club"] #members.members-react-club-ready #membersReactClubPanel { display: block; }
                 .dash-tabs { display: flex; gap: 0.45rem; overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 0.3rem 0 0.85rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border-color); scrollbar-width: none; }
                 .dash-tabs::-webkit-scrollbar { display: none; }
                 .dash-tab { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.5rem 1.05rem; font-weight: 700; font-size: 0.88rem; cursor: pointer; white-space: nowrap; transition: background .15s ease, color .15s ease; }
@@ -396,7 +408,6 @@
                 .dash-tab.active { background: var(--primary-strong); color: #fff; border-color: var(--primary); }
                 .members-react-tabs .dash-tab { background: none !important; background-color: var(--bg-secondary) !important; color: var(--text-secondary) !important; border-color: var(--border-color) !important; }
                 .members-react-tabs .dash-tab.active { background: none !important; background-color: var(--primary-strong) !important; color: white !important; border-color: var(--primary) !important; }
-                .dtab-off { display: none !important; }
                 .members-react-club-panel { display: grid; gap: 2rem; margin-bottom: 2rem; min-width: 0; max-width: 100%; }
                 .members-react-club-panel > * { min-width: 0; max-width: 100%; }
                 .members-stat-icon svg,

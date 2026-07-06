@@ -11,6 +11,14 @@ const repoRoot = path.resolve(scriptDir, "../..");
 const apiBase = "http://127.0.0.1:8788";
 const evidenceDir = path.join(repoRoot, ".omo/evidence/members-dashboard-react");
 const teeUploadPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p94AAAAASUVORK5CYII=", "base64");
+const dashboardPanels = ["#myDashboard", "#clubRegister", "#clubBoard", "#teeCapture", "#membersReactClubPanel"];
+const visibleDashboardPanels = {
+  overview: ["#myDashboard", "#clubRegister"],
+  events: ["#clubRegister"],
+  board: ["#clubBoard"],
+  tee: ["#teeCapture"],
+  club: ["#membersReactClubPanel"],
+};
 
 const mimeTypes = new Map([
   [".css", "text/css; charset=utf-8"],
@@ -79,6 +87,23 @@ async function waitForText(page, selector, expected, label) {
 async function expectReactTab(page, name) {
   const selected = await page.getByRole("tab", { name }).getAttribute("aria-selected");
   if (selected !== "true") throw new Error(`Expected React tab ${name} to be selected, got ${selected}`);
+}
+
+async function expectDashboardPanel(page, tab, selector, label) {
+  const result = await page.evaluate(({ panels, tab: expectedTab, visiblePanels }) => {
+    const displays = Object.fromEntries(panels.map((panelSelector) => {
+      const panel = document.querySelector(panelSelector);
+      return [panelSelector, panel ? getComputedStyle(panel).display : "<missing>"];
+    }));
+    const visible = new Set(visiblePanels);
+    return {
+      displays,
+      ok: document.body.dataset.memberDashboardTab === expectedTab
+        && panels.every((panelSelector) => visible.has(panelSelector) ? displays[panelSelector] !== "none" : displays[panelSelector] === "none"),
+      tab: document.body.dataset.memberDashboardTab || "<unset>",
+    };
+  }, { panels: dashboardPanels, tab, visiblePanels: visibleDashboardPanels[tab] || [selector] });
+  if (!result.ok) throw new Error(`${label} did not isolate tab ${tab}: ${JSON.stringify(result)}`);
 }
 
 async function captureFullPage(page, filePath) {
@@ -208,6 +233,7 @@ async function captureState(browser, origin, viewport, slug) {
   await page.getByRole("tab", { name: "Events" }).click();
   await waitForText(page, "#membersReactDashboardShell", "Event Registration", "events title");
   await expectReactTab(page, "Events");
+  await expectDashboardPanel(page, "events", "#clubRegister", "Events tab");
   if (await page.locator("[data-react-admin-portal]").count()) {
     throw new Error("React admin portal link should only render on the overview tab.");
   }
@@ -241,6 +267,7 @@ async function captureState(browser, origin, viewport, slug) {
   await page.getByRole("tab", { name: "Board" }).click();
   await waitForText(page, "#membersReactDashboardShell", "Member Board", "board title");
   await expectReactTab(page, "Board");
+  await expectDashboardPanel(page, "board", "#clubBoard", "Board tab");
   await page.locator('[data-react-board-panel="ready"]').waitFor({ state: "visible", timeout: 10_000 });
   await waitForText(page, "[data-react-board-panel]", "League night", "React board fixture");
   await page.locator("[data-react-board-panel] .board-compose textarea").fill(`QA board post ${slug}`);
@@ -267,6 +294,7 @@ async function captureState(browser, origin, viewport, slug) {
   await page.getByRole("tab", { name: "Tee Signs" }).click();
   await waitForText(page, "#membersReactDashboardShell", "Tee Sign Capture", "tee signs title");
   await expectReactTab(page, "Tee Signs");
+  await expectDashboardPanel(page, "tee", "#teeCapture", "Tee Signs tab");
   await page.locator('[data-react-tee-signs-panel="ready"]').waitFor({ state: "visible", timeout: 10_000 });
   await waitForText(page, "[data-react-tee-signs-panel]", "Blue - Par 3", "React tee sign fixture");
   await page.setInputFiles('[data-react-tee-file]', {
@@ -287,6 +315,7 @@ async function captureState(browser, origin, viewport, slug) {
   await page.getByRole("tab", { name: "Club" }).click();
   await waitForText(page, "#membersReactDashboardShell", "GVDG Member Directory", "club title");
   await expectReactTab(page, "Club");
+  await expectDashboardPanel(page, "club", "#membersReactClubPanel", "Club tab");
   await page.locator('[data-react-club-panel="ready"]').waitFor({ state: "visible", timeout: 10_000 });
   const clubPanel = page.locator('[data-react-club-panel]');
   const doublesPanel = clubPanel.locator('[data-react-doubles-league="ready"]');

@@ -58,7 +58,8 @@ test('member dashboard React club panel owns directory search, filters, load-mor
   const minutes = readFileSync('src/members-app/meeting-minutes-panel.js', 'utf8');
   assert.match(html, /id="membersReactClubPanel"/);
   assert.match(html, /members-react-club-ready/);
-  assert.match(router, /club: \["#membersReactClubPanel"\]/);
+  assert.match(html, /body\[data-member-dashboard-tab="club"\] #members\.members-react-club-ready #membersReactClubPanel/);
+  assert.doesNotMatch(router, /querySelector|classList|dtab-off/);
   assert.doesNotMatch(html, /id="legacyClubDirectoryPanel"/);
   assert.doesNotMatch(html, /id="legacyMeetingMinutesPanel"/);
   assert.doesNotMatch(html, /id="doublesLeague"/);
