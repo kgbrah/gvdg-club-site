@@ -1,4 +1,5 @@
 import { createLeaderboardSheetRenderer } from "./leaderboard-sheet.js";
+import { createManagePlayersSheetRenderer } from "./manage-players-sheet.js";
 
 export function startScoreApp(options) {
         "use strict";
@@ -372,6 +373,7 @@ export function startScoreApp(options) {
             });
             renderHole();
             if (lbOpen) renderLeaderboard();
+            if (managePlayersOpen) renderManagePlayers();
         }
 
         // ---------- WebSocket live sync ----------
@@ -847,47 +849,20 @@ export function startScoreApp(options) {
             else toast('Could not add player');
         }
         // Manage players: remove someone who joined by accident, had to leave, or no-showed (casual round).
-        function openManagePlayers() {
-            const overlay = el('div', 'overlay'); overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
-            const sheet = el('div', 'sheet'); sheet.appendChild(el('div', 'grab'));
-            sheet.appendChild(el('h2', 'section', 'Players'));
-            sheet.appendChild(el('p', 'muted', 'Remove a player who registered by accident, had to leave, or didn’t show. Their scores are cleared.'));
-            const pairInputs = [];
-            if (isDoublesScoring()) {
-                const pairBox = el('div', 'card stack');
-                pairBox.style.margin = '0.75rem 0';
-                pairBox.appendChild(el('label', 'lbl', 'Doubles pairs'));
-                pairBox.appendChild(el('p', 'muted', 'Use the same pair label for exactly two active players before scoring starts.'));
-                (S.cardmates || []).forEach(function (p) {
-                    const wrap = el('label', 'lbl');
-                    wrap.textContent = p.name + (p.isMe ? ' (you)' : '');
-                    const input = el('input', 'field');
-                    input.maxLength = 40;
-                    input.value = p.team || '';
-                    input.placeholder = 'Pair label';
-                    wrap.appendChild(input);
-                    pairInputs.push({ player: p, input: input });
-                    pairBox.appendChild(wrap);
-                });
-                const savePairs = el('button', 'btn small secondary', 'Save pairs');
-                savePairs.addEventListener('click', function () { savePairLabels(pairInputs, overlay); });
-                pairBox.appendChild(savePairs);
-                sheet.appendChild(pairBox);
-            }
-            (S.cardmates || []).forEach(function (p) {
-                const row = el('div', 'prow');
-                row.appendChild(el('div', 'pname', p.name + (p.isMe ? ' (you)' : '')));
-                const rm = el('button', 'btn small ghost', p.isMe ? 'Leave round' : 'Remove');
-                rm.addEventListener('click', function () { removeFromRound(p, overlay); });
-                row.appendChild(rm);
-                sheet.appendChild(row);
+        let managePlayersOpen = false;
+        const managePlayersSheet = createManagePlayersSheetRenderer();
+        function openManagePlayers() { managePlayersOpen = true; renderManagePlayers(); }
+        function closeManagePlayers() { managePlayersOpen = false; managePlayersSheet.close(); }
+        function renderManagePlayers() {
+            managePlayersSheet.render({
+                isDoubles: isDoublesScoring(),
+                onClose: closeManagePlayers,
+                onRemove: removeFromRound,
+                onSavePairs: savePairLabels,
+                players: S.cardmates || [],
             });
-            const close = el('button', 'btn secondary', 'Close'); close.style.marginTop = '1rem'; close.addEventListener('click', function () { overlay.remove(); });
-            sheet.appendChild(close);
-            overlay.appendChild(sheet); document.body.appendChild(overlay);
         }
-        async function savePairLabels(pairInputs, overlay) {
-            const assignments = pairInputs.map(function (item) { return { index: item.player.index, pairLabel: item.input.value.trim() }; });
+        async function savePairLabels(assignments) {
             const r = await api('/rounds/' + ROUND_CODE + '/pairs', { method: 'POST', body: { assignments: assignments } });
             if (!r.ok) {
                 if (r.status === 409) toast(r.data && r.data.error === 'scores_exist' ? 'Pair changes are blocked after scoring starts' : 'Could not save pairs');
@@ -895,7 +870,7 @@ export function startScoreApp(options) {
                 else toast('Could not save pairs');
                 return;
             }
-            if (overlay) overlay.remove();
+            closeManagePlayers();
             if (r.data) {
                 S.cardId = r.data.cardId || S.cardId;
                 S.myIndex = r.data.playerIndex == null ? S.myIndex : r.data.playerIndex;
@@ -907,11 +882,11 @@ export function startScoreApp(options) {
             renderHole();
             toast('Pairs saved');
         }
-        async function removeFromRound(p, overlay) {
+        async function removeFromRound(p) {
             const msg = p.isMe ? 'Leave this round? Your scores will be cleared.' : ('Remove ' + p.name + ' from this round? Their scores will be cleared.');
             if (!window.confirm(msg)) return;
             const r = await api('/rounds/' + ROUND_CODE + '/remove', { method: 'POST', body: { index: p.index, name: p.name } });
-            if (overlay) overlay.remove();
+            closeManagePlayers();
             if (r.status === 409 && r.data && r.data.error === 'player_moved') { await loadMine(); toast('Card changed — open Manage again'); return; }
             if (!r.ok || !r.data) { toast('Could not remove player'); return; }
             if (r.data.cardId == null) { location.href = location.pathname; return; } // I left the round → back to home

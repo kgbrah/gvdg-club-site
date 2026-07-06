@@ -183,6 +183,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: close and finish actions are real buttons; table headers label rank/player/thru/result columns; export UI remains mounted as live DOM inside an explicit React mount container.
 - Motion: bottom sheet remains static; only existing button active states apply.
 
+### Score Manage Players Sheet
+
+- Structure: React-owned bottom sheet overlay with grab handle, player rows, optional doubles pair editor, and close action; the legacy score controller supplies players, scoring mode, and save/remove callbacks only.
+- Variants: singles remove list, doubles pair labels, current-player leave action, other-player remove action, and live re-render when cardmates change while the sheet is open.
+- Spacing: reuses `.overlay`, `.sheet`, `.card`, `.stack`, `.prow`, `.btn`, and `.field` primitives; pair inputs are compact grid labels inside an inset card.
+- States: overlay backdrop click and close button dismiss the sheet; saving pairs closes only after the server accepts; remove/leave prompts confirm before closing and posting.
+- Accessibility: pair fields use real labels, remove/leave/close/save are real buttons, and no icon-only actions appear in this management sheet.
+- Motion: static bottom sheet; button active states use the existing score app press feedback.
+
 ### Round Weather
 
 - Structure: compact header, primary temperature/condition group, condition graphic, wind action, secondary meta pills, and course-location note.

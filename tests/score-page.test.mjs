@@ -20,12 +20,25 @@ function scoreLeaderboardSource() {
   return readFileSync('src/score-app/leaderboard-sheet.js', 'utf8');
 }
 
+function scoreManagePlayersSource() {
+  return readFileSync('src/score-app/manage-players-sheet.js', 'utf8');
+}
+
 function scoreLegacyLeaderboardSource() {
   const source = readFileSync('src/score-app/score-legacy.js', 'utf8');
   const start = source.indexOf('// ---------- leaderboard sheet ----------');
   const end = source.indexOf('// What (if anything) is stopping this card from finalizing');
   assert.notEqual(start, -1, 'leaderboard section should exist');
   assert.notEqual(end, -1, 'finalize blockers should follow leaderboard section');
+  return source.slice(start, end);
+}
+
+function scoreLegacyManagePlayersSource() {
+  const source = readFileSync('src/score-app/score-legacy.js', 'utf8');
+  const start = source.indexOf('// Manage players: remove someone');
+  const end = source.indexOf('function shareRound()');
+  assert.notEqual(start, -1, 'manage players section should exist');
+  assert.notEqual(end, -1, 'share round should follow manage players section');
   return source.slice(start, end);
 }
 
@@ -75,7 +88,7 @@ test('player score page supports pair target rows and target-id offline replay',
   assert.match(source, /body\.targetId = item\.targetId/);
   assert.match(source, /body\.targetId = row\.targetId/);
   assert.match(source, /qAdd\(row\.targetId \?/);
-  assert.match(source, /savePairLabels\(pairInputs, overlay\)/);
+  assert.match(source, /function savePairLabels\(assignments\)/);
 });
 
 test('player leaderboard renders matchplay and pair labels without primary to-par ranking', () => {
@@ -96,4 +109,18 @@ test('player leaderboard sheet is React-owned without legacy overlay DOM constru
   assert.doesNotMatch(legacy, /const overlay = el\('div', 'overlay'\)/);
   assert.doesNotMatch(legacy, /const table = el\('table', 'lb'\)/);
   assert.doesNotMatch(legacy, /sheet\.appendChild\(el\('h2', 'section', 'Live Leaderboard'\)\)/);
+});
+
+test('manage players sheet is React-owned without legacy overlay DOM construction', () => {
+  const legacy = scoreLegacyManagePlayersSource();
+  const manage = scoreManagePlayersSource();
+  assert.match(legacy, /createManagePlayersSheetRenderer\(\)/);
+  assert.match(legacy, /managePlayersSheet\.render\(\{/);
+  assert.match(manage, /function ManagePlayersSheet\(props\)/);
+  assert.match(manage, /function PairEditor\(\{ players, onSavePairs \}\)/);
+  assert.match(manage, /createRoot\(host\)/);
+  assert.doesNotMatch(legacy, /const overlay = el\('div', 'overlay'\)/);
+  assert.doesNotMatch(legacy, /const sheet = el\('div', 'sheet'\)/);
+  assert.doesNotMatch(legacy, /pairInputs\.push/);
+  assert.doesNotMatch(legacy, /overlay\.appendChild\(sheet\)/);
 });
