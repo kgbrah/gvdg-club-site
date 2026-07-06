@@ -185,9 +185,11 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   assert.match(html, /id="membersReactBoardPanel"/);
   assert.match(html, /id="membersReactTeeSignsPanel"/);
   assert.match(html, /id="membersReactClubPanel"/);
-  assert.match(html, /id="passkeyRow"/);
-  assert.match(html, /id="enablePasskeyBtn"/);
-  assert.match(html, /id="editProfileBtn"/);
+  assert.doesNotMatch(html, /id="passkeyRow"/);
+  assert.doesNotMatch(html, /id="enablePasskeyBtn"/);
+  assert.doesNotMatch(html, /id="editProfileBtn"/);
+  assert.match(html, /gvdg:member-add-passkey-requested/);
+  assert.match(html, /gvdg:member-edit-profile-requested/);
   assertNoLegacyMemberFallbacks(html);
   assert.match(html, /<script type="module" src="members-app\/members-app\.js"><\/script>/);
   assert.match(html, /window\.addEventListener\('gvdg:select-dashboard-tab'/);
@@ -206,6 +208,11 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   assert.match(app, /members-react-club-ready/);
   assert.match(overview, /data-react-overview-dashboard/);
   assert.match(overview, /data-react-dashboard-actions/);
+  assert.match(overview, /data-react-account-tools/);
+  assert.match(overview, /id: "enablePasskeyBtn"/);
+  assert.match(overview, /id: "editProfileBtn"/);
+  assert.match(overview, /gvdg:member-add-passkey-requested/);
+  assert.match(overview, /gvdg:member-edit-profile-requested/);
   assert.match(pdga, /id: "membersReactRatingPanel"/);
   assert.match(pdga, /data-react-pdga-dashboard/);
   assert.match(pdga, /data-react-live-rating/);

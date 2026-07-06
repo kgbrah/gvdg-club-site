@@ -46,6 +46,40 @@ function DashboardActions() {
   ]);
 }
 
+function AccountTools() {
+  const [supportsPasskeys, setSupportsPasskeys] = React.useState(false);
+
+  React.useEffect(() => {
+    setSupportsPasskeys(typeof window.PublicKeyCredential !== "undefined");
+  }, []);
+
+  function request(eventName) {
+    window.dispatchEvent(new CustomEvent(eventName));
+  }
+
+  return h("div", { className: "dashboard-utility-panel account-dashboard-utility react-account-tools", "data-react-account-tools": "ready", "aria-label": "Account tools" }, [
+    h("div", { className: "passkey-row", key: "row" }, [
+      supportsPasskeys
+        ? h("button", {
+          type: "button",
+          className: "passkey-btn",
+          id: "enablePasskeyBtn",
+          onClick: () => request("gvdg:member-add-passkey-requested"),
+          key: "passkey",
+        }, "Add a passkey")
+        : null,
+      h("button", {
+        type: "button",
+        className: "passkey-btn",
+        id: "editProfileBtn",
+        onClick: () => request("gvdg:member-edit-profile-requested"),
+        key: "profile",
+      }, "Edit profile"),
+      h("span", { className: "passkey-status", id: "passkeyStatus", key: "status" }),
+    ].filter(Boolean)),
+  ]);
+}
+
 export function MemberOverviewDashboard() {
   const context = useMemberContext();
   const token = storageGet(TOKEN_KEY);
@@ -61,5 +95,6 @@ export function MemberOverviewDashboard() {
     h(LiveScoringPanel, { token, key: "live-scoring" }),
     h(DashboardActions, { key: "actions" }),
     h(WalletPanel, { token, key: "wallet" }),
+    h(AccountTools, { key: "account-tools" }),
   ]);
 }

@@ -110,8 +110,10 @@ async function captureState(browser, origin, viewport, slug) {
   await page.waitForSelector('[data-react-club-ratings="ready"]', { timeout: 10_000 });
   await page.waitForSelector('[data-react-live-scoring="ready"]', { timeout: 10_000 });
   await page.waitForSelector('[data-react-wallet="ready"]', { timeout: 10_000 });
+  await page.waitForSelector('[data-react-account-tools="ready"]', { timeout: 10_000 });
   await waitForText(page, "[data-react-club-ratings]", "906", "React club ratings");
   await waitForText(page, "[data-react-wallet]", "$12.50", "React wallet balance");
+  await waitForText(page, "[data-react-account-tools]", "Edit profile", "React account tools");
   await waitForText(page, "[data-react-registration-panel]", "GVDG QA Doubles", "React registration event");
   await waitForText(page, "[data-react-registration-panel]", "Warm-up round before league", "React casual round");
   const migratedLegacyNodes = await page.locator([
@@ -127,6 +129,7 @@ async function captureState(browser, origin, viewport, slug) {
     "#legacyBoardPanel",
     "#legacyTeeSignsPanel",
     "#clubMeetings",
+    "#passkeyRow",
     "#legacyClubDirectoryPanel",
     "#legacyMeetingMinutesPanel",
     "#membersGrid",

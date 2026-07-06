@@ -709,13 +709,6 @@
 
             <div id="myDashboard" class="my-dashboard" style="display:none;">
                 <div id="membersReactOverviewPanel"></div>
-                <div class="dashboard-utility-panel account-dashboard-utility" aria-label="Account tools">
-                    <div class="passkey-row" id="passkeyRow" style="display:none;">
-                        <button type="button" class="passkey-btn" id="enablePasskeyBtn">Add a passkey</button>
-                        <button type="button" class="passkey-btn" id="editProfileBtn">Edit profile</button>
-                        <span class="passkey-status" id="passkeyStatus"></span>
-                    </div>
-                </div>
             </div>
 
             <div id="clubRegister" class="club-register" style="display:none;">
@@ -888,10 +881,6 @@
             const banner = document.querySelector('.welcome-text strong');
             if (banner && name) banner.textContent = 'Welcome back, ' + name + '!';
             revealDashboardSections();
-            const passkeyRow = $('passkeyRow');
-            if (passkeyRow) passkeyRow.style.display = '';
-            const passkeyBtn = $('enablePasskeyBtn');
-            if (passkeyBtn) passkeyBtn.style.display = passkeysSupported() ? '' : 'none';
             const passkeyStatus = $('passkeyStatus');
             if (passkeyStatus) passkeyStatus.textContent = '';
             const adminLink = $('adminPortalLink');
@@ -930,7 +919,7 @@
         async function enablePasskey() {
             const status = $('passkeyStatus'), btn = $('enablePasskeyBtn');
             const token = sessionStorage.getItem(TOKEN_KEY);
-            if (!token || !passkeysSupported()) return;
+            if (!status || !btn || !token || !passkeysSupported()) return;
             status.textContent = ''; btn.disabled = true;
             try {
                 const r = await api('/webauthn/register/options', { method: 'POST', token });
@@ -1208,8 +1197,8 @@
         $('profileSkipBtn').addEventListener('click', () => showMembersContent(sessionStorage.getItem(NAME_KEY)));
         $('photoInput').addEventListener('change', onPhotoChosen);
         $('passkeyBtn').addEventListener('click', loginWithPasskey);
-        $('enablePasskeyBtn').addEventListener('click', enablePasskey);
-        $('editProfileBtn').addEventListener('click', showProfileSetup);
+        window.addEventListener('gvdg:member-add-passkey-requested', enablePasskey);
+        window.addEventListener('gvdg:member-edit-profile-requested', showProfileSetup);
         $('logoutBtn').addEventListener('click', logout);
 
         document.querySelector('.menu-toggle').addEventListener('click', function() {

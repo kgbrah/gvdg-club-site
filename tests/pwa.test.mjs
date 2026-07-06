@@ -70,7 +70,7 @@ test('shared service worker caches app install assets and member fallback', () =
   const sw = readFileSync('sw.js', 'utf8');
   const cacheVersion = sw.match(/const CACHE = "gvdg-club-v(\d+)"/);
   assert.ok(cacheVersion, 'service worker cache version is present');
-  assert.ok(Number(cacheVersion[1]) >= 29, 'React-only member dashboard migration requires v29 or newer');
+  assert.ok(Number(cacheVersion[1]) >= 30, 'React account tools migration requires v30 or newer');
   assert.match(sw, /const OFFLINE_PAGE = "gvdg-members\.html"/);
   assert.match(sw, /const STATIC_DESTINATIONS = new Set/);
   assert.match(sw, /if \(!staticAsset\(req, url\)\) return/);

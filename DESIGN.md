@@ -113,8 +113,8 @@ Spacing follows a 4px base through rem values.
 
 ### Member Dashboard Shell
 
-- Structure: React-owned title, tablist, overview, event registration, board, tee-sign capture, and club panels mounted into stable HTML wrappers.
-- Variants: overview, events, board, tee signs, and club tabs; account tools remain a small non-React row for passkey setup and profile editing.
+- Structure: React-owned title, tablist, overview, account tools, event registration, board, tee-sign capture, and club panels mounted into stable HTML wrappers.
+- Variants: overview, events, board, tee signs, and club tabs; account tools dispatch passkey/profile events while the existing auth script performs the secure flows.
 - Spacing: dashboard wrappers keep the existing `my-dashboard`, `club-register`, `club-board`, and `tee-capture` surfaces so migrated panels retain the same mobile rhythm.
 - States: migrated legacy fallback nodes must be absent, not hidden; tab selection is driven by `gvdg:select-dashboard-tab` and wrapper `dtab-off` state.
 - Accessibility: React tabs expose `role="tab"` and `aria-selected`; account actions are real buttons.

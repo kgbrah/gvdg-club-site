@@ -155,6 +155,8 @@ async function runBrowserQa({ siteUrl, token }) {
     await page.locator('[data-react-tee-signs-panel="ready"]').waitFor({ state: "attached", timeout: 15_000 });
     await page.locator('[data-react-club-panel="ready"]').waitFor({ state: "attached", timeout: 15_000 });
     await page.locator('[data-react-pdga-dashboard="ready"]').waitFor({ state: "visible", timeout: 15_000 });
+    await page.locator('[data-react-account-tools="ready"]').waitFor({ state: "visible", timeout: 15_000 });
+    await waitForText(page, "[data-react-account-tools]", "Edit profile", "React account tools");
 
     const migratedLegacyNodes = await page.locator([
       "#dashTabs",
@@ -169,6 +171,7 @@ async function runBrowserQa({ siteUrl, token }) {
       "#legacyBoardPanel",
       "#legacyTeeSignsPanel",
       "#clubMeetings",
+      "#passkeyRow",
       "#legacyClubDirectoryPanel",
       "#legacyMeetingMinutesPanel",
       "#membersGrid",
