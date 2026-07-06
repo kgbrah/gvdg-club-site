@@ -448,6 +448,9 @@
                 #members.members-react-shell-ready #membersReactDashboardShell { display: block; }
                 #members.members-react-shell-ready #memberSectionTitle,
                 #members.members-react-shell-ready #dashTabs { display: none !important; }
+                #membersReactRatingPanel { display: none; }
+                #members.members-react-ratings-ready #membersReactRatingPanel { display: block; }
+                #members.members-react-ratings-ready #legacyPdgaDashboard { display: none !important; }
                 .dash-tabs { display: flex; gap: 0.45rem; overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 0.3rem 0 0.85rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border-color); scrollbar-width: none; }
                 .dash-tabs::-webkit-scrollbar { display: none; }
                 .dash-tab { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.5rem 1.05rem; font-weight: 700; font-size: 0.88rem; cursor: pointer; white-space: nowrap; transition: background .15s ease, color .15s ease; }
@@ -498,6 +501,11 @@
                 .dash-event-name { font-weight: 600; color: var(--text-primary); }
                 .dash-event-date { font-size: 0.8rem; color: var(--text-muted); }
                 .dash-event-ratings { font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; color: var(--secondary-text); }
+                .react-pdga-dashboard { margin-bottom: 1rem; }
+                .react-pdga-dashboard .dash-rating-row { margin-bottom: 1rem; }
+                .react-pdga-status { color: var(--text-muted); font-size: 0.95rem; padding: 0.5rem 0 0.85rem; }
+                .react-pdga-status.error { color: var(--primary); font-weight: 700; }
+                .react-pdga-meta { color: var(--text-muted); font-size: 0.82rem; line-height: 1.45; margin: -0.25rem 0 0.85rem; }
                 .club-ratings { margin-top: 1.35rem; }
                 .club-rating-grid { display: grid; grid-template-columns: 1fr; gap: 0.85rem; }
                 @media (min-width: 780px) { .club-rating-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -589,6 +597,7 @@
                 .casual-form > .passkey-btn { grid-column: 1 / -1; justify-self: start; }
                 .casual-status { grid-column: 1 / -1; min-height: 1.1rem; color: var(--text-muted); font-size: 0.85rem; }
                 .casual-status.error { color: var(--primary); }
+                @media (min-width: 561px) and (max-width: 860px) { .casual-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } .casual-field.time { grid-column: 1 / -1; } }
                 @media (max-width: 560px) { .casual-form { grid-template-columns: 1fr; padding: 0.85rem; } .casual-form > .passkey-btn { width: 100%; } }
                 .club-meetings { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; }
                 .meeting-card { border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem 1.25rem; margin-top: 0.75rem; background: var(--bg-secondary); }
@@ -689,18 +698,21 @@
                     <img id="dashAvatar" class="dash-avatar" alt="" style="display:none;">
                     <h3 class="my-dashboard-title">My Player Dashboard</h3>
                 </div>
-                <div id="dashLoading" class="dash-note">Loading your stats…</div>
-                <div id="dashEmpty" class="dash-note" style="display:none;"></div>
-                <div id="dashBody" style="display:none;">
-                    <div class="dash-rating-row">
-                        <div class="dash-tile"><div class="dash-tile-num" id="dashLive">—</div><div class="dash-tile-delta" id="dashDelta"></div><div class="dash-tile-label">Live Rating</div></div>
-                        <div class="dash-tile"><div class="dash-tile-num" id="dashOfficial">—</div><div class="dash-tile-label">Official</div></div>
-                        <div class="dash-tile"><div class="dash-tile-num" id="dashPeak">—</div><div class="dash-tile-label">Peak</div></div>
-                        <div class="dash-tile"><div class="dash-tile-num" id="dashEvents">—</div><div class="dash-tile-label">Events</div></div>
-                    </div>
-                    <div id="dashEventsWrap" style="display:none;">
-                        <h4 class="dash-subtitle">Recent Tournaments</h4>
-                        <div id="dashEventsList"></div>
+                <div id="membersReactRatingPanel"></div>
+                <div id="legacyPdgaDashboard">
+                    <div id="dashLoading" class="dash-note">Loading your stats…</div>
+                    <div id="dashEmpty" class="dash-note" style="display:none;"></div>
+                    <div id="dashBody" style="display:none;">
+                        <div class="dash-rating-row">
+                            <div class="dash-tile"><div class="dash-tile-num" id="dashLive">—</div><div class="dash-tile-delta" id="dashDelta"></div><div class="dash-tile-label">Live Rating</div></div>
+                            <div class="dash-tile"><div class="dash-tile-num" id="dashOfficial">—</div><div class="dash-tile-label">Official</div></div>
+                            <div class="dash-tile"><div class="dash-tile-num" id="dashPeak">—</div><div class="dash-tile-label">Peak</div></div>
+                            <div class="dash-tile"><div class="dash-tile-num" id="dashEvents">—</div><div class="dash-tile-label">Events</div></div>
+                        </div>
+                        <div id="dashEventsWrap" style="display:none;">
+                            <h4 class="dash-subtitle">Recent Tournaments</h4>
+                            <div id="dashEventsList"></div>
+                        </div>
                     </div>
                 </div>
                 <div id="activeStandings" class="active-standings" style="display:none;"></div>
@@ -1124,10 +1136,24 @@
 
         let memberProfile = { pdgaNo: null, udisc: null, photo: null, isAdmin: false, sub: null, name: null };
         let pendingPhoto = null; // a chosen-but-unsaved uploaded photo (data URL)
+        function memberDashboardContext() {
+            return {
+                pdgaNo: memberProfile.pdgaNo || sessionStorage.getItem(PDGA_KEY) || null,
+                photo: memberProfile.photo || null,
+                isAdmin: memberProfile.isAdmin === true,
+                name: memberProfile.name || sessionStorage.getItem(NAME_KEY) || null,
+            };
+        }
+        function publishMemberProfile() {
+            const detail = memberDashboardContext();
+            window.GVDG_MEMBER_DASHBOARD_CONTEXT = detail;
+            window.dispatchEvent(new CustomEvent('gvdg:member-profile-updated', { detail }));
+        }
         function applyProfile(data) {
             memberProfile = { pdgaNo: data.pdgaNo || null, udisc: data.udisc || null, photo: data.photo || null, isAdmin: data.isAdmin === true, sub: data.sub || memberProfile.sub || null, name: data.name || memberProfile.name || null };
             if (data.name) sessionStorage.setItem(NAME_KEY, data.name);
             if (data.pdgaNo) sessionStorage.setItem(PDGA_KEY, data.pdgaNo); else sessionStorage.removeItem(PDGA_KEY);
+            publishMemberProfile();
         }
 
         function showError(el, msg) { el.textContent = '❌ ' + msg; el.classList.add('show'); }
@@ -1205,6 +1231,8 @@
                     title: DASH_TITLES[selectedDashTab] || DASH_TITLES.overview,
                     isAdmin: memberProfile.isAdmin === true,
                     name: memberProfile.name || sessionStorage.getItem(NAME_KEY) || null,
+                    pdgaNo: memberProfile.pdgaNo || sessionStorage.getItem(PDGA_KEY) || null,
+                    photo: memberProfile.photo || null,
                     ...(extra || {}),
                 },
             }));
@@ -1256,6 +1284,8 @@
             sessionStorage.removeItem(TOKEN_KEY);
             sessionStorage.removeItem(NAME_KEY);
             sessionStorage.removeItem(PDGA_KEY);
+            window.GVDG_MEMBER_DASHBOARD_CONTEXT = null;
+            window.dispatchEvent(new CustomEvent('gvdg:member-profile-updated', { detail: { pdgaNo: null, photo: null, isAdmin: false, name: null } }));
             $('pinInput').value = '';
             showLogin();
         }
@@ -1941,7 +1971,7 @@
             const layoutSel = document.createElement('select'); layoutSel.className = 'form-input';
             layoutField.appendChild(layoutSel);
 
-            const timeField = elNode('label', 'casual-field'); timeField.appendChild(elNode('span', null, 'Time'));
+            const timeField = elNode('label', 'casual-field time'); timeField.appendChild(elNode('span', null, 'Time'));
             const timeInput = document.createElement('input'); timeInput.type = 'datetime-local'; timeInput.className = 'form-input';
             timeInput.min = localDateTimeValue(Date.now() - 5 * 60 * 60 * 1000);
             timeInput.value = localDateTimeValue(Date.now() + 2 * 60 * 60 * 1000);

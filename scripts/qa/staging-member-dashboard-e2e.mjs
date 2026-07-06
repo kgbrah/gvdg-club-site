@@ -112,15 +112,21 @@ async function waitForText(page, selector, expected, label) {
 async function waitForLiveRating(page) {
   try {
     await page.waitForFunction(
-      () => /^\d{3,4}$/.test(document.querySelector("#dashLive")?.textContent?.trim() || ""),
+      () => /^\d{3,4}$/.test(document.querySelector("[data-react-live-rating] .dash-tile-num")?.textContent?.trim() || ""),
       null,
       { timeout: 15_000 },
     );
   } catch {
     const body = await page.locator("body").innerText().catch(() => "");
-    throw new Error(`Expected a numeric live rating, got ${(await page.locator("#dashLive").innerText()).trim()}. Page text:\n${body}`);
+    const actual = await page.locator("[data-react-live-rating] .dash-tile-num").innerText().catch(() => "<missing>");
+    throw new Error(`Expected a numeric React live rating, got ${actual.trim()}. Page text:\n${body}`);
   }
-  return (await page.locator("#dashLive").innerText()).trim();
+  return (await page.locator("[data-react-live-rating] .dash-tile-num").innerText()).trim();
+}
+
+async function expectReactTab(page, name) {
+  const selected = await page.getByRole("tab", { name }).getAttribute("aria-selected");
+  if (selected !== "true") throw new Error(`Expected React tab ${name} to be selected, got ${selected}`);
 }
 
 async function runBrowserQa({ siteUrl, token, member }) {
@@ -137,20 +143,25 @@ async function runBrowserQa({ siteUrl, token, member }) {
     await page.goto(`${siteUrl}/gvdg-members.html`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector("#members.members-react-shell-ready", { timeout: 15_000 });
     await waitForText(page, "#membersReactDashboardShell", "Player Dashboard", "React dashboard title");
-    await page.locator("#dashBody").waitFor({ state: "visible", timeout: 15_000 });
+    await expectReactTab(page, "Overview");
+    await page.locator('[data-react-pdga-dashboard="ready"]').waitFor({ state: "visible", timeout: 15_000 });
 
     const legacyTabsHidden = await page.locator("#dashTabs").evaluate((node) => getComputedStyle(node).display === "none");
     if (!legacyTabsHidden) throw new Error("Legacy dashboard tabs were visible after React shell mounted.");
+    const legacyRatingsHidden = await page.locator("#legacyPdgaDashboard").evaluate((node) => getComputedStyle(node).display === "none");
+    if (!legacyRatingsHidden) throw new Error("Legacy PDGA dashboard remained visible after React rating panel mounted.");
 
     await waitForLiveRating(page);
 
     await page.getByRole("tab", { name: "Events" }).click();
     await waitForText(page, "#membersReactDashboardShell", "Event Registration", "events tab title");
+    await expectReactTab(page, "Events");
     const registerVisible = await page.locator("#clubRegister").evaluate((node) => !node.classList.contains("dtab-off"));
     if (!registerVisible) throw new Error("Events tab did not reveal the registration panel.");
 
     await page.getByRole("tab", { name: "Club" }).click();
     await waitForText(page, "#membersReactDashboardShell", "GVDG Member Directory", "club tab title");
+    await expectReactTab(page, "Club");
     const clubVisible = await page.locator("#membersGrid").evaluate((node) => !node.classList.contains("dtab-off"));
     if (!clubVisible) throw new Error("Club tab did not reveal the member directory.");
 

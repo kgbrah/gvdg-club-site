@@ -124,6 +124,11 @@ async function waitForText(page, selector, expected, label) {
   }
 }
 
+async function expectReactTab(page, name) {
+  const selected = await page.getByRole("tab", { name }).getAttribute("aria-selected");
+  if (selected !== "true") throw new Error(`Expected React tab ${name} to be selected, got ${selected}`);
+}
+
 async function captureState(browser, origin, viewport, slug) {
   const context = await browser.newContext({ viewport });
   const page = await context.newPage();
@@ -133,15 +138,21 @@ async function captureState(browser, origin, viewport, slug) {
 
   await page.goto(`${origin}/gvdg-members.html`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("#members.members-react-shell-ready", { timeout: 10_000 });
-  await waitForText(page, "#dashBody", "941", "live rating");
+  await expectReactTab(page, "Overview");
+  await page.waitForSelector('[data-react-pdga-dashboard="ready"]', { timeout: 10_000 });
+  await waitForText(page, "#membersReactRatingPanel", "941", "React live rating");
+  const legacyHidden = await page.locator("#legacyPdgaDashboard").evaluate((node) => getComputedStyle(node).display === "none");
+  if (!legacyHidden) throw new Error("Legacy PDGA dashboard remained visible after React rating panel mounted.");
   await page.screenshot({ path: path.join(evidenceDir, `${slug}-overview.png`), fullPage: true });
 
   await page.getByRole("tab", { name: "Events" }).click();
   await waitForText(page, "#membersReactDashboardShell", "Event Registration", "events title");
+  await expectReactTab(page, "Events");
   await page.screenshot({ path: path.join(evidenceDir, `${slug}-events.png`), fullPage: true });
 
   await page.getByRole("tab", { name: "Club" }).click();
   await waitForText(page, "#membersReactDashboardShell", "GVDG Member Directory", "club title");
+  await expectReactTab(page, "Club");
   await page.screenshot({ path: path.join(evidenceDir, `${slug}-club.png`), fullPage: true });
 
   const overflow = await page.evaluate(() => {

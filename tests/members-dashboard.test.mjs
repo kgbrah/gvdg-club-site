@@ -55,10 +55,18 @@ test('member dashboard mounts the React shell as a fallback-safe island', () => 
   const html = readFileSync('gvdg-members.html', 'utf8');
   const app = readFileSync('src/members-app/main.js', 'utf8');
   assert.match(html, /id="membersReactDashboardShell"/);
+  assert.match(html, /id="membersReactRatingPanel"/);
+  assert.match(html, /id="legacyPdgaDashboard"/);
   assert.match(html, /<script type="module" src="members-app\/members-app\.js"><\/script>/);
   assert.match(html, /window\.addEventListener\('gvdg:select-dashboard-tab'/);
+  assert.match(html, /window\.dispatchEvent\(new CustomEvent\('gvdg:member-profile-updated'/);
   assert.match(html, /emitDashboardState\('gvdg:dashboard-tab-selected'\)/);
   assert.match(app, /createRoot\(mount\)\.render/);
+  assert.match(app, /createRoot\(ratingMount\)\.render/);
+  assert.match(app, /data-react-pdga-dashboard/);
+  assert.match(app, /data-react-live-rating/);
+  assert.match(app, /\/pdga-stats\?pdga=/);
   assert.match(app, /gvdg:select-dashboard-tab/);
   assert.match(app, /gvdg:dashboard-tab-selected/);
+  assert.match(app, /gvdg:member-profile-updated/);
 });
