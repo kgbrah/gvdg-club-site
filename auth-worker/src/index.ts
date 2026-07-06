@@ -2,7 +2,6 @@ import type { Env, RawEnv } from "./env.js";
 import { secretOk } from "./authz.js";
 import { allowedOrigin, corsHeaders, json, RequestBodyTooLargeError } from "./http.js";
 import {
-  handleBoard,
   handleLogin,
   handleMe,
   handleMyLiveRounds,
@@ -12,6 +11,7 @@ import {
   handleProfile,
   handleSetPin,
 } from "./member-routes.js";
+import { handleBoard } from "./member-board-routes.js";
 import { handleAssistant } from "./assistant-route.js";
 import { handleWebAuthnRoute } from "./webauthn-routes.js";
 import { handleMyTeeSigns, handleTeeSignUpload } from "./tee-sign-routes.js";

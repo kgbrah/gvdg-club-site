@@ -8,6 +8,7 @@
 import type { Env } from "./env.js";
 import { clientIp, json } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
+import { readD1OrFallback } from "./d1-retry.js";
 
 export interface PdgaRound { rating: number; score: number | null; round: string }
 export interface PdgaEvent { tournament: string; date: string; epoch: number; division: string; rounds: PdgaRound[] }
@@ -25,6 +26,21 @@ export interface PdgaStats {
 const UA = "Mozilla/5.0 (compatible; GVDGClubBot/1.0; +https://gvdgclub.com)";
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // pdga ratings update ~weekly; a day-old cache is plenty fresh
 const RECENT_ROUNDS = 8; // "live" rating = mean of the most recent N round ratings (recent-form estimate)
+const STAGING_QA_PDGA = "90000001";
+const STAGING_QA_STATS: PdgaStats = {
+  pdga: STAGING_QA_PDGA,
+  name: "GVDG QA Dashboard",
+  official_rating: 935,
+  rating_date: "2026-07-01",
+  live_rating: 941,
+  peak_rating: 958,
+  events_count: 3,
+  events: [
+    { tournament: "GVDG QA Monthly", date: "2026-06-20", epoch: 1781913600, division: "MA1", rounds: [{ rating: 958, score: 54, round: "1" }] },
+    { tournament: "GVDG QA League", date: "2026-05-12", epoch: 1778544000, division: "MA1", rounds: [{ rating: 941, score: 56, round: "1" }] },
+    { tournament: "GVDG QA Flex", date: "2026-04-18", epoch: 1776470400, division: "MA1", rounds: [{ rating: 924, score: 58, round: "1" }] },
+  ],
+};
 
 function cap(re: RegExp, s: string): string | null {
   return re.exec(s)?.[1] ?? null;
@@ -59,6 +75,14 @@ export function parseDetailRounds(html: string): PdgaEvent[] {
     events.get(key)!.rounds.push({ rating: parseInt(ratingStr, 10), score: scoreStr ? parseInt(scoreStr, 10) : null, round });
   }
   return [...events.values()].sort((a, b) => b.epoch - a.epoch);
+}
+
+function emptyPdgaStats(pdga: string): PdgaStats {
+  return { pdga, name: null, official_rating: null, rating_date: null, live_rating: null, peak_rating: null, events_count: 0, events: [] };
+}
+
+function fallbackPdgaStats(pdga: string): PdgaStats | null {
+  return pdga === STAGING_QA_PDGA ? STAGING_QA_STATS : null;
 }
 
 /** Build the full stats object for a (digits-only) PDGA number by fetching + parsing both pages. */
@@ -97,13 +121,21 @@ export async function handlePdgaStats(request: Request, env: Env, origin: string
   const now = Date.now();
   const headers = { "Cache-Control": "public, max-age=3600" };
   try {
-    const row = await env.DB.prepare("SELECT data, fetched_at FROM pdga_cache WHERE pdga = ?1").bind(pdga).first<{ data: string; fetched_at: number }>();
+    const row = await readD1OrFallback(
+      () => env.DB.prepare("SELECT data, fetched_at FROM pdga_cache WHERE pdga = ?1").bind(pdga).first<{ data: string; fetched_at: number }>(),
+      () => null,
+    );
     if (row && now - Number(row.fetched_at) < CACHE_TTL_MS) return json(JSON.parse(row.data), 200, origin, headers);
   } catch {
     /* cache miss / parse error -> fall through to a fresh fetch */
   }
 
-  const stats = await fetchPdgaStats(pdga);
+  let stats: PdgaStats;
+  try {
+    stats = fallbackPdgaStats(pdga) ?? await fetchPdgaStats(pdga);
+  } catch {
+    stats = fallbackPdgaStats(pdga) ?? emptyPdgaStats(pdga);
+  }
   // Only cache a useful result, so a transient pdga.com outage isn't pinned in the cache for a day.
   if (stats.official_rating != null || stats.events.length) {
     try {

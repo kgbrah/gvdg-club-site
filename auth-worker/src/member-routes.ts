@@ -7,8 +7,8 @@ import * as db from "./db.js";
 import { bearer, clientIp, json, readJson } from "./http.js";
 import { requireAuth, ttl } from "./authz.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
-import { RECORD_PAGE_DEFAULTS, asInt, parseWindow } from "./input.js";
-import { getMemberRatings } from "./ratings.js";
+import { RECORD_PAGE_DEFAULTS, parseWindow } from "./input.js";
+import { getMemberRatings, summarizeRatingRows } from "./ratings.js";
 import { readD1OrFallback } from "./d1-retry.js";
 
 // Iteration count must stay <=100000 to match crypto.ts / the workerd PBKDF2 cap, so the
@@ -19,7 +19,6 @@ const LOGIN_BODY_BYTES = 2_048;
 const PROFILE_BODY_BYTES = 350_000;
 const LOGIN_IP_LIMIT = 20;
 const LOGIN_IDENTIFIER_IP_LIMIT = 10;
-const BOARD_LIMIT = 15;
 const SETPIN_LIMIT = 5;
 const MAX_PHOTO_LEN = 200_000;
 
@@ -106,7 +105,8 @@ export async function handleMyResults(request: Request, env: Env, origin: string
     maxLimit: RECORD_PAGE_DEFAULTS.memberResults.maxLimit,
   });
   const requestedLimit = q.get("all") === "1" ? RECORD_PAGE_DEFAULTS.memberResults.maxLimit : limit;
-  return json({ results: await db.listMemberResults(env.DB, claims.sub, { limit: requestedLimit, offset }) }, 200, origin);
+  const results = await readD1OrFallback(() => db.listMemberResults(env.DB, claims.sub, { limit: requestedLimit, offset }), () => []);
+  return json({ results }, 200, origin);
 }
 
 export async function handleMyRatings(request: Request, env: Env, origin: string | null): Promise<Response> {
@@ -125,16 +125,19 @@ export async function handleMyRatings(request: Request, env: Env, origin: string
     offsetParam: "casualOffset",
   });
 
-  return json(
-    await getMemberRatings(env.DB, claims.sub, {
+  const ratings = await readD1OrFallback(
+    () => getMemberRatings(env.DB, claims.sub, {
       competitiveLimit: all ? RECORD_PAGE_DEFAULTS.memberRatings.maxLimit : competitive.limit,
       competitiveOffset: competitive.offset,
       casualLimit: all ? RECORD_PAGE_DEFAULTS.memberRatings.maxLimit : casual.limit,
       casualOffset: casual.offset,
     }),
-    200,
-    origin,
+    () => ({
+      competitive: summarizeRatingRows("competitive", []),
+      casual: summarizeRatingRows("casual", []),
+    }),
   );
+  return json(ratings, 200, origin);
 }
 
 export async function handleMyRegistrations(request: Request, env: Env, origin: string | null): Promise<Response> {
@@ -147,66 +150,8 @@ export async function handleMyRegistrations(request: Request, env: Env, origin: 
 export async function handleMyLiveRounds(request: Request, env: Env, origin: string | null): Promise<Response> {
   const claims = await requireAuth(request, env);
   if (!claims) return json({ error: "unauthorized" }, 401, origin);
-  return json({ rounds: await db.listMemberLiveEvents(env.DB, claims.sub) }, 200, origin);
-}
-
-/** Distinct board authors' profile photos (from KV), keyed by member_id, so the UI can render avatars.
- *  Only authors who have set a photo are included; deduped across posts+replies and fetched in parallel. */
-async function boardAuthorPhotos(env: Env, posts: Record<string, unknown>[]): Promise<Record<string, string>> {
-  const ids = new Set<string>();
-  const collect = (p: Record<string, unknown>) => {
-    if (p && typeof p.member_id === "string") ids.add(p.member_id);
-  };
-  for (const p of posts) {
-    collect(p);
-    for (const r of (p.replies as Record<string, unknown>[]) ?? []) collect(r);
-  }
-  const out: Record<string, string> = {};
-  await Promise.all(
-    [...ids].map(async (id) => {
-      const m = await getMember(env.ROSTER, id);
-      if (m?.photo) out[id] = m.photo;
-    }),
-  );
-  return out;
-}
-
-export async function handleBoard(request: Request, env: Env, origin: string | null): Promise<Response> {
-  const claims = await requireAuth(request, env);
-  if (!claims) return json({ error: "unauthorized" }, 401, origin);
-  const seg = new URL(request.url).pathname.split("/").filter(Boolean);
-  const method = request.method.toUpperCase();
-
-  if (method === "GET" && seg.length === 1) {
-    const posts = await db.getBoardFeed(env.DB, 50);
-    return json({ posts, authors: await boardAuthorPhotos(env, posts) }, 200, origin);
-  }
-  if (method === "POST" && seg.length === 1) {
-    if (await kvRateLimited(env, "board:" + claims.sub, BOARD_LIMIT, 60)) return json({ error: "rate_limited" }, 429, origin);
-    const b = await readJson(request);
-    const body = b && typeof b.body === "string" ? b.body.trim() : "";
-    if (!body) return json({ error: "empty_post" }, 400, origin);
-    if (body.length > 4000) return json({ error: "post_too_long" }, 413, origin);
-    const parentId = b!.parent_id == null ? null : asInt(b!.parent_id);
-    if (parentId != null) {
-      const parent = (await db.getBoardPost(env.DB, parentId)) as { parent_id?: number | null } | null;
-      if (!parent || parent.parent_id != null) return json({ error: "bad_parent" }, 400, origin);
-    }
-    const member = await getMember(env.ROSTER, claims.sub);
-    const row = await db.createBoardPost(env.DB, { parent_id: parentId, member_id: claims.sub, author_name: member?.name ?? "Member", body });
-    return json({ post: row }, 201, origin);
-  }
-  if (method === "DELETE" && seg.length === 2) {
-    const id = asInt(seg[1]);
-    if (id == null) return json({ error: "not_found" }, 404, origin);
-    const post = (await db.getBoardPost(env.DB, id)) as { member_id?: string } | null;
-    if (!post) return json({ error: "not_found" }, 404, origin);
-    const member = await getMember(env.ROSTER, claims.sub);
-    if (post.member_id !== claims.sub && member?.isAdmin !== true) return json({ error: "forbidden" }, 403, origin);
-    await db.deleteBoardPost(env.DB, id);
-    return json({ ok: true }, 200, origin);
-  }
-  return json({ error: "not_found" }, 404, origin);
+  const rounds = await readD1OrFallback(() => db.listMemberLiveEvents(env.DB, claims.sub), () => []);
+  return json({ rounds }, 200, origin);
 }
 
 export async function handleProfile(request: Request, env: Env, origin: string | null): Promise<Response> {
