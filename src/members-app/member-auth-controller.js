@@ -1,5 +1,5 @@
 import { NAME_KEY, PDGA_KEY, TOKEN_KEY, authBase, request, storageGet } from "./api.js";
-import { byId, clearError, setBusy, showError, showLoginShell, showMembersShell, showPinChangeShell } from "./member-auth-dom.js";
+import { clearAuthError, setAuthBusy, setAuthFormValues, showAuthError, showLoginShell, showMembersShell, showPinChangeShell } from "./member-auth-dom.js";
 import { applyProfile, memberDashboardContext, resetMemberProfile } from "./member-auth-state.js";
 import { createPasskeyController, passkeysSupported } from "./member-passkeys.js";
 import { createProfileController } from "./member-profile-controller.js";
@@ -21,6 +21,11 @@ function storageSet(key, value) {
   }
 }
 
+function detailString(event, key) {
+  const value = event.detail?.[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
 export function installMemberAuthController() {
   if (installed) return;
   installed = true;
@@ -33,7 +38,7 @@ export function installMemberAuthController() {
     sessionExpiredShown = true;
     storageRemove(TOKEN_KEY);
     showLogin();
-    showError(byId("loginError"), "Your session expired - please sign in again.");
+    showAuthError("login", "Your session expired - please sign in again.");
     setTimeout(() => {
       sessionExpiredShown = false;
     }, 4000);
@@ -65,64 +70,59 @@ export function installMemberAuthController() {
     storageRemove(NAME_KEY);
     storageRemove(PDGA_KEY);
     resetMemberProfile();
-    const pinInput = byId("pinInput");
-    if (pinInput) pinInput.value = "";
+    setAuthFormValues("login", { pin: "" });
     showLogin();
   }
 
-  async function handleLogin() {
-    const identifier = byId("identifierInput")?.value.trim() || "";
-    const pin = byId("pinInput")?.value.trim() || "";
-    const errorElement = byId("loginError");
-    clearError(errorElement);
+  async function handleLogin(event) {
+    const identifier = detailString(event, "identifier");
+    const pin = detailString(event, "pin");
+    clearAuthError("login");
     if (!authBase()) {
-      showError(errorElement, "Login is not configured yet - contact an admin.");
+      showAuthError("login", "Login is not configured yet - contact an admin.");
       return;
     }
     if (!identifier || !pin) {
-      showError(errorElement, "Enter your PDGA #/UDisc and PIN.");
+      showAuthError("login", "Enter your PDGA #/UDisc and PIN.");
       return;
     }
 
-    const button = byId("loginBtn");
-    setBusy(button, true);
+    setAuthBusy("login", "login", true);
     try {
       const response = await api("/login", { method: "POST", body: { identifier, pin } });
       if (response.status === 200) {
         const data = await response.json();
         storageSet(TOKEN_KEY, data.token);
         applyProfile(data);
-        const pinInput = byId("pinInput");
-        if (pinInput) pinInput.value = "";
+        setAuthFormValues("login", { pin: "" });
         if (data.mustChangePin) showPinChange();
         else showMembersContent(data.name);
       } else if (response.status === 423) {
         const data = await response.json().catch(() => ({}));
         const minutes = Math.ceil((data.retryAfterSec || 900) / 60);
-        showError(errorElement, `Too many attempts. Try again in ~${minutes} min.`);
+        showAuthError("login", `Too many attempts. Try again in ~${minutes} min.`);
       } else if (response.status === 401) {
-        showError(errorElement, "Invalid PDGA #/UDisc or PIN.");
+        showAuthError("login", "Invalid PDGA #/UDisc or PIN.");
       } else {
-        showError(errorElement, "Something went wrong. Please try again.");
+        showAuthError("login", "Something went wrong. Please try again.");
       }
     } catch {
-      showError(errorElement, "Network error. Please check your connection.");
+      showAuthError("login", "Network error. Please check your connection.");
     } finally {
-      setBusy(button, false);
+      setAuthBusy("login", "login", false);
     }
   }
 
-  async function handleSetPin() {
-    const newPin = byId("newPinInput")?.value.trim() || "";
-    const confirmPin = byId("confirmPinInput")?.value.trim() || "";
-    const errorElement = byId("pinChangeError");
-    clearError(errorElement);
+  async function handleSetPin(event) {
+    const newPin = detailString(event, "newPin");
+    const confirmPin = detailString(event, "confirmPin");
+    clearAuthError("pin");
     if (!/^\d{4}$/.test(newPin)) {
-      showError(errorElement, "PIN must be exactly 4 digits.");
+      showAuthError("pin", "PIN must be exactly 4 digits.");
       return;
     }
     if (newPin !== confirmPin) {
-      showError(errorElement, "PINs do not match.");
+      showAuthError("pin", "PINs do not match.");
       return;
     }
 
@@ -132,27 +132,23 @@ export function installMemberAuthController() {
       return;
     }
 
-    const button = byId("setPinBtn");
-    setBusy(button, true);
+    setAuthBusy("pin", "pin", true);
     try {
       const response = await api("/set-pin", { method: "POST", token, body: { newPin } });
       if (response.status === 200) {
         const data = await response.json();
         storageSet(TOKEN_KEY, data.token);
-        const newPinInput = byId("newPinInput");
-        const confirmPinInput = byId("confirmPinInput");
-        if (newPinInput) newPinInput.value = "";
-        if (confirmPinInput) confirmPinInput.value = "";
+        setAuthFormValues("pin", { newPin: "", confirmPin: "" });
         profile.showProfileSetup();
       } else if (response.status === 401) {
         showLogin();
       } else {
-        showError(errorElement, "Could not update PIN. Please try again.");
+        showAuthError("pin", "Could not update PIN. Please try again.");
       }
     } catch {
-      showError(errorElement, "Network error. Please try again.");
+      showAuthError("pin", "Network error. Please try again.");
     } finally {
-      setBusy(button, false);
+      setAuthBusy("pin", "pin", false);
     }
   }
 

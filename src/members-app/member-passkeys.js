@@ -1,5 +1,5 @@
 import { TOKEN_KEY, authBase, storageGet } from "./api.js";
-import { byId, clearError, setBusy, showError } from "./member-auth-dom.js";
+import { clearAuthError, setAuthBusy, showAuthError } from "./member-auth-dom.js";
 import { applyProfile } from "./member-auth-state.js";
 
 const PASSKEY_REFRESH_MS = 170_000;
@@ -105,19 +105,17 @@ export function createPasskeyController({ api, showMembersContent, showPinChange
   }
 
   async function loginWithPasskey() {
-    const errorElement = byId("loginError");
-    clearError(errorElement);
+    clearAuthError("login");
     if (!authBase()) {
-      showError(errorElement, "Login is not configured yet - contact an admin.");
+      showAuthError("login", "Login is not configured yet - contact an admin.");
       return;
     }
     if (!passkeysSupported()) {
-      showError(errorElement, "Passkeys are not supported on this device.");
+      showAuthError("login", "Passkeys are not supported on this device.");
       return;
     }
 
-    const button = byId("passkeyBtn");
-    setBusy(button, true);
+    setAuthBusy("login", "passkey", true);
     try {
       const prefetched = passkeyPrefetch;
       passkeyPrefetch = null;
@@ -158,7 +156,7 @@ export function createPasskeyController({ api, showMembersContent, showPinChange
       };
       const verifyResponse = await api("/webauthn/auth/verify", { method: "POST", body });
       if (verifyResponse.status !== 200) {
-        showError(errorElement, "Passkey sign-in failed. Use your PIN instead.");
+        showAuthError("login", "Passkey sign-in failed. Use your PIN instead.");
         return;
       }
       const data = await verifyResponse.json();
@@ -167,11 +165,11 @@ export function createPasskeyController({ api, showMembersContent, showPinChange
       if (data.mustChangePin) showPinChange();
       else showMembersContent(data.name);
     } catch (error) {
-      showError(errorElement, error?.name === "NotAllowedError"
+      showAuthError("login", error?.name === "NotAllowedError"
         ? "Passkey sign-in cancelled."
         : "Passkey sign-in failed. Use your PIN instead.");
     } finally {
-      setBusy(button, false);
+      setAuthBusy("login", "passkey", false);
       void prefetchPasskey();
     }
   }

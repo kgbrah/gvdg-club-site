@@ -132,6 +132,42 @@ async function waitForLiveRating(page) {
   return (await page.locator("[data-react-live-rating] .dash-tile-num").innerText()).trim();
 }
 
+async function installAuthSubmitCapture(page) {
+  await page.addInitScript(() => {
+    window.__gvdgQaAuthCaptureEnabled = false;
+    window.__gvdgQaAuthSubmits = {};
+    [
+      "gvdg:member-login-requested",
+      "gvdg:member-pin-change-requested",
+      "gvdg:member-profile-save-requested",
+    ].forEach((eventName) => {
+      window.addEventListener(eventName, (event) => {
+        if (!window.__gvdgQaAuthCaptureEnabled) return;
+        event.stopImmediatePropagation();
+        window.__gvdgQaAuthSubmits[eventName] = event.detail || {};
+        window.__gvdgQaAuthCaptureEnabled = false;
+      }, { capture: true });
+    });
+  });
+}
+
+async function captureNextAuthSubmit(page) {
+  await page.evaluate(() => {
+    window.__gvdgQaAuthCaptureEnabled = true;
+  });
+}
+
+async function expectAuthSubmitDetail(page, eventName, expected) {
+  await page.waitForFunction(
+    ({ eventName: name, expected: detail }) => {
+      const actual = window.__gvdgQaAuthSubmits?.[name];
+      return actual && Object.entries(detail).every(([key, value]) => actual[key] === value);
+    },
+    { eventName, expected },
+    { timeout: 15_000 },
+  );
+}
+
 async function expectReactTab(page, name) {
   const selected = await page.getByRole("tab", { name }).getAttribute("aria-selected");
   if (selected !== "true") throw new Error(`Expected React tab ${name} to be selected, got ${selected}`);
@@ -177,19 +213,51 @@ async function runAuthGateQa(browser, siteUrl) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
   const errors = collectPageErrors(page);
+  await installAuthSubmitCapture(page);
 
   await page.goto(`${siteUrl}/gvdg-members.html`, { waitUntil: "domcontentloaded" });
   await page.locator('[data-react-auth-gate="login"]').waitFor({ state: "visible", timeout: 15_000 });
   await waitForText(page, "[data-react-auth-gate]", "Members Only", "React auth gate");
   await waitForText(page, "[data-react-auth-gate]", "PDGA # or UDisc Username", "React auth login form");
   await page.getByRole("button", { name: "Log In", exact: true }).click();
-  await waitForText(page, "#loginError", "Enter your PDGA #/UDisc and PIN.", "empty login validation");
+  await waitForText(page, '[data-react-auth-error="login"]', "Enter your PDGA #/UDisc and PIN.", "empty login validation");
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("gvdg:member-auth-form-state", {
+      detail: { form: "login", busyAction: "login" },
+    }));
+  });
+  await page.getByRole("button", { name: "Please wait..." }).waitFor({ state: "visible", timeout: 15_000 });
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("gvdg:member-auth-form-state", {
+      detail: { form: "login", busyAction: "" },
+    }));
+  });
+  await page.locator("#identifierInput").fill("qa-member");
+  await page.locator("#pinInput").fill("2468");
+  await captureNextAuthSubmit(page);
+  await page.getByRole("button", { name: "Log In", exact: true }).click();
+  await expectAuthSubmitDetail(page, "gvdg:member-login-requested", { identifier: "qa-member", pin: "2468" });
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("gvdg:member-auth-form-state", {
+      detail: { form: "login", values: { identifier: "", pin: "" } },
+    }));
+  });
 
   await page.evaluate(() => {
     window.dispatchEvent(new CustomEvent("gvdg:member-auth-mode", { detail: { mode: "pin", passkeysSupported: false } }));
   });
   await page.locator("#pinChangeForm").waitFor({ state: "visible", timeout: 15_000 });
   await waitForText(page, "[data-react-auth-gate]", "Choose your own to continue", "React auth PIN form");
+  await page.locator("#newPinInput").fill("1357");
+  await page.locator("#confirmPinInput").fill("1357");
+  await captureNextAuthSubmit(page);
+  await page.locator('[data-react-auth-action="pin"]').click();
+  await expectAuthSubmitDetail(page, "gvdg:member-pin-change-requested", { newPin: "1357", confirmPin: "1357" });
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("gvdg:member-auth-form-state", {
+      detail: { form: "pin", values: { newPin: "", confirmPin: "" } },
+    }));
+  });
 
   await page.evaluate(() => {
     window.dispatchEvent(new CustomEvent("gvdg:member-auth-mode", { detail: { mode: "profile", passkeysSupported: false } }));
@@ -202,10 +270,30 @@ async function runAuthGateQa(browser, siteUrl) {
     }));
   });
   await page.locator('[data-react-profile-preview="ready"]').waitFor({ state: "visible", timeout: 15_000 });
+  await page.locator("#profilePdgaInput").fill("167210");
+  await page.locator("#profileUdiscInput").fill("qa_udisc");
+  await captureNextAuthSubmit(page);
+  await page.locator('[data-react-auth-action="profile-save"]').click();
+  await expectAuthSubmitDetail(page, "gvdg:member-profile-save-requested", { pdga: "167210", udisc: "qa_udisc" });
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("gvdg:member-auth-form-state", {
+      detail: { form: "profile", values: { pdga: "", udisc: "" } },
+    }));
+  });
 
   const width = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth));
   const viewport = page.viewportSize()?.width || 390;
   if (width > viewport + 1) throw new Error(`React auth gate has horizontal overflow: ${width}px > ${viewport}px.`);
+  const legacyAuthNodes = await page.locator([
+    "#loginError",
+    "#pinChangeError",
+    "#profileError",
+    "#loginBtn",
+    "#passkeyBtn",
+    "#setPinBtn",
+    "#profileSaveBtn",
+  ].join(", ")).count();
+  if (legacyAuthNodes !== 0) throw new Error("Legacy auth error/button nodes are still present.");
   if (errors.length) throw new Error(errors.join("\n"));
   await context.close();
 }
@@ -270,6 +358,13 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
       "#clubWallet",
       "#legacyRegisterTitle",
       "#registerList",
+      "#loginError",
+      "#pinChangeError",
+      "#profileError",
+      "#loginBtn",
+      "#passkeyBtn",
+      "#setPinBtn",
+      "#profileSaveBtn",
       "#profilePhotoPreview",
       "#enablePasskeyBtn",
       "#passkeyStatus",

@@ -119,6 +119,42 @@ async function captureFullPage(page, filePath) {
   await page.screenshot({ path: filePath, fullPage: true });
 }
 
+async function installAuthSubmitCapture(page) {
+  await page.addInitScript(() => {
+    window.__gvdgQaAuthCaptureEnabled = false;
+    window.__gvdgQaAuthSubmits = {};
+    [
+      "gvdg:member-login-requested",
+      "gvdg:member-pin-change-requested",
+      "gvdg:member-profile-save-requested",
+    ].forEach((eventName) => {
+      window.addEventListener(eventName, (event) => {
+        if (!window.__gvdgQaAuthCaptureEnabled) return;
+        event.stopImmediatePropagation();
+        window.__gvdgQaAuthSubmits[eventName] = event.detail || {};
+        window.__gvdgQaAuthCaptureEnabled = false;
+      }, { capture: true });
+    });
+  });
+}
+
+async function captureNextAuthSubmit(page) {
+  await page.evaluate(() => {
+    window.__gvdgQaAuthCaptureEnabled = true;
+  });
+}
+
+async function expectAuthSubmitDetail(page, eventName, expected) {
+  await page.waitForFunction(
+    ({ eventName: name, expected: detail }) => {
+      const actual = window.__gvdgQaAuthSubmits?.[name];
+      return actual && Object.entries(detail).every(([key, value]) => actual[key] === value);
+    },
+    { eventName, expected },
+    { timeout: 10_000 },
+  );
+}
+
 async function assertNoHorizontalOverflow(page, label) {
   const overflow = await page.evaluate(() =>
     Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - window.innerWidth,
@@ -145,13 +181,35 @@ async function captureAuthGate(browser, origin, viewport, slug) {
   const page = await context.newPage();
   const errors = collectPageErrors(page);
   await installMemberDashboardApiRoutes(page, apiBase);
+  await installAuthSubmitCapture(page);
 
   await page.goto(`${origin}/gvdg-members.html`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector('[data-react-auth-gate="login"]', { timeout: 10_000 });
   await waitForText(page, "[data-react-auth-gate]", "Members Only", "React auth gate");
   await waitForText(page, "[data-react-auth-gate]", "PDGA # or UDisc Username", "React auth login form");
   await page.getByRole("button", { name: "Log In", exact: true }).click();
-  await waitForText(page, "#loginError", "Enter your PDGA #/UDisc and PIN.", "empty login validation");
+  await waitForText(page, '[data-react-auth-error="login"]', "Enter your PDGA #/UDisc and PIN.", "empty login validation");
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("gvdg:member-auth-form-state", {
+      detail: { form: "login", busyAction: "login" },
+    }));
+  });
+  await page.getByRole("button", { name: "Please wait..." }).waitFor({ state: "visible", timeout: 10_000 });
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("gvdg:member-auth-form-state", {
+      detail: { form: "login", busyAction: "" },
+    }));
+  });
+  await page.locator("#identifierInput").fill("qa-member");
+  await page.locator("#pinInput").fill("2468");
+  await captureNextAuthSubmit(page);
+  await page.getByRole("button", { name: "Log In", exact: true }).click();
+  await expectAuthSubmitDetail(page, "gvdg:member-login-requested", { identifier: "qa-member", pin: "2468" });
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("gvdg:member-auth-form-state", {
+      detail: { form: "login", values: { identifier: "", pin: "" } },
+    }));
+  });
   await assertNoHorizontalOverflow(page, `${slug} auth login`);
   await captureFullPage(page, path.join(evidenceDir, `${slug}-auth-login.png`));
 
@@ -160,6 +218,16 @@ async function captureAuthGate(browser, origin, viewport, slug) {
   });
   await page.locator("#pinChangeForm").waitFor({ state: "visible", timeout: 10_000 });
   await waitForText(page, "[data-react-auth-gate]", "Choose your own to continue", "React auth PIN form");
+  await page.locator("#newPinInput").fill("1357");
+  await page.locator("#confirmPinInput").fill("1357");
+  await captureNextAuthSubmit(page);
+  await page.locator('[data-react-auth-action="pin"]').click();
+  await expectAuthSubmitDetail(page, "gvdg:member-pin-change-requested", { newPin: "1357", confirmPin: "1357" });
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("gvdg:member-auth-form-state", {
+      detail: { form: "pin", values: { newPin: "", confirmPin: "" } },
+    }));
+  });
   await assertNoHorizontalOverflow(page, `${slug} auth PIN`);
   await captureFullPage(page, path.join(evidenceDir, `${slug}-auth-pin.png`));
 
@@ -174,11 +242,31 @@ async function captureAuthGate(browser, origin, viewport, slug) {
     }));
   });
   await page.locator('[data-react-profile-preview="ready"]').waitFor({ state: "visible", timeout: 10_000 });
+  await page.locator("#profilePdgaInput").fill("167210");
+  await page.locator("#profileUdiscInput").fill("qa_udisc");
+  await captureNextAuthSubmit(page);
+  await page.locator('[data-react-auth-action="profile-save"]').click();
+  await expectAuthSubmitDetail(page, "gvdg:member-profile-save-requested", { pdga: "167210", udisc: "qa_udisc" });
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("gvdg:member-auth-form-state", {
+      detail: { form: "profile", values: { pdga: "", udisc: "" } },
+    }));
+  });
   await assertNoHorizontalOverflow(page, `${slug} auth profile`);
   await captureFullPage(page, path.join(evidenceDir, `${slug}-auth-profile.png`));
 
   const staticAuthFallbacks = await page.locator("#membersReactAuthGate + .login-card").count();
   if (staticAuthFallbacks !== 0) throw new Error("Static auth card fallback is still present beside the React auth gate.");
+  const legacyAuthNodes = await page.locator([
+    "#loginError",
+    "#pinChangeError",
+    "#profileError",
+    "#loginBtn",
+    "#passkeyBtn",
+    "#setPinBtn",
+    "#profileSaveBtn",
+  ].join(", ")).count();
+  if (legacyAuthNodes !== 0) throw new Error("Legacy auth error/button nodes are still present.");
   if (errors.length) throw new Error(errors.join("\n"));
   await context.close();
 }
@@ -241,6 +329,13 @@ async function captureState(browser, origin, viewport, slug) {
     "#clubWallet",
     "#legacyRegisterTitle",
     "#registerList",
+    "#loginError",
+    "#pinChangeError",
+    "#profileError",
+    "#loginBtn",
+    "#passkeyBtn",
+    "#setPinBtn",
+    "#profileSaveBtn",
     "#profilePhotoPreview",
     "#enablePasskeyBtn",
     "#passkeyStatus",

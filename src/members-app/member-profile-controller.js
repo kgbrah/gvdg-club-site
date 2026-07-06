@@ -1,5 +1,5 @@
 import { NAME_KEY, TOKEN_KEY, storageGet } from "./api.js";
-import { byId, clearError, setAuthMode, setBusy, showError } from "./member-auth-dom.js";
+import { clearAuthError, setAuthBusy, setAuthFormValues, setAuthMode, showAuthError } from "./member-auth-dom.js";
 import { applyProfile, memberAuthProfile } from "./member-auth-state.js";
 import { passkeysSupported } from "./member-passkeys.js";
 
@@ -40,16 +40,20 @@ function resizeImageFile(file, maxPx) {
   });
 }
 
+function detailString(event, key) {
+  const value = event.detail?.[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
 export function createProfileController({ api, showLogin, showMembersContent }) {
   function showProfileSetup() {
     const profile = memberAuthProfile();
     setAuthMode("profile", passkeysSupported());
-    clearError(byId("profileError"));
-
-    const pdgaInput = byId("profilePdgaInput");
-    const udiscInput = byId("profileUdiscInput");
-    if (pdgaInput) pdgaInput.value = profile.pdgaNo || "";
-    if (udiscInput) udiscInput.value = profile.udisc || "";
+    clearAuthError("profile");
+    setAuthFormValues("profile", {
+      pdga: profile.pdgaNo || "",
+      udisc: profile.udisc || "",
+    });
     pendingPhoto = null;
     setProfilePreview(profile.photo || "");
   }
@@ -59,34 +63,32 @@ export function createProfileController({ api, showLogin, showMembersContent }) 
     if (!file) return;
     const dataUrl = await resizeImageFile(file, 256);
     if (!dataUrl || dataUrl.length > 190_000) {
-      showError(byId("profileError"), "That image is too large - please pick a smaller one.");
+      showAuthError("profile", "That image is too large - please pick a smaller one.");
       return;
     }
-    clearError(byId("profileError"));
+    clearAuthError("profile");
     pendingPhoto = dataUrl;
     setProfilePreview(dataUrl);
   }
 
-  async function saveProfile() {
-    const errorElement = byId("profileError");
-    clearError(errorElement);
+  async function saveProfile(event) {
+    clearAuthError("profile");
     const token = storageGet(TOKEN_KEY);
     if (!token) {
       showLogin();
       return;
     }
 
-    const pdga = byId("profilePdgaInput")?.value.trim() || "";
-    const udisc = byId("profileUdiscInput")?.value.trim() || "";
+    const pdga = detailString(event, "pdga");
+    const udisc = detailString(event, "udisc");
     if (pdga && !/^\d+$/.test(pdga)) {
-      showError(errorElement, "PDGA # must be digits only.");
+      showAuthError("profile", "PDGA # must be digits only.");
       return;
     }
 
     const body = { pdgaNo: pdga, udisc };
     if (pendingPhoto) body.photo = pendingPhoto;
-    const button = byId("profileSaveBtn");
-    setBusy(button, true);
+    setAuthBusy("profile", "save", true);
     try {
       const response = await api("/profile", { method: "POST", token, body });
       if (response.status === 200) {
@@ -95,14 +97,14 @@ export function createProfileController({ api, showLogin, showMembersContent }) 
         showMembersContent(storageGet(NAME_KEY));
       } else if (response.status === 409) {
         const data = await response.json().catch(() => ({}));
-        showError(errorElement, `${data.field === "udisc" ? "That UDisc username" : "That PDGA #"} is already linked to another member.`);
+        showAuthError("profile", `${data.field === "udisc" ? "That UDisc username" : "That PDGA #"} is already linked to another member.`);
       } else {
-        showError(errorElement, "Could not save your profile. Please check the values and try again.");
+        showAuthError("profile", "Could not save your profile. Please check the values and try again.");
       }
     } catch {
-      showError(errorElement, "Network error. Please try again.");
+      showAuthError("profile", "Network error. Please try again.");
     } finally {
-      setBusy(button, false);
+      setAuthBusy("profile", "save", false);
     }
   }
 

@@ -1,24 +1,23 @@
-export function byId(id) {
-  return document.getElementById(id);
+export function setAuthFormState(form, detail) {
+  window.dispatchEvent(new CustomEvent("gvdg:member-auth-form-state", {
+    detail: { form, ...detail },
+  }));
 }
 
-export function showError(element, message) {
-  if (!element) return;
-  element.textContent = `Error: ${message}`;
-  element.classList.add("show");
+export function showAuthError(form, message) {
+  setAuthFormState(form, { error: `Error: ${message}` });
 }
 
-export function clearError(element) {
-  if (!element) return;
-  element.textContent = "";
-  element.classList.remove("show");
+export function clearAuthError(form) {
+  setAuthFormState(form, { error: "" });
 }
 
-export function setBusy(button, busy) {
-  if (!button) return;
-  if (!button.dataset.label) button.dataset.label = button.textContent || "";
-  button.disabled = busy;
-  button.textContent = busy ? "Please wait..." : button.dataset.label;
+export function setAuthBusy(form, action, busy) {
+  setAuthFormState(form, { busyAction: busy ? action : "" });
+}
+
+export function setAuthFormValues(form, values) {
+  setAuthFormState(form, { values });
 }
 
 export function setAuthMode(mode, passkeysSupported) {
@@ -32,15 +31,14 @@ export function setAuthMode(mode, passkeysSupported) {
 
 export function showLoginShell(passkeysSupported) {
   setAuthMode("login", passkeysSupported);
-  clearError(byId("loginError"));
-  clearError(byId("pinChangeError"));
-  clearError(byId("profileError"));
+  clearAuthError("login");
+  clearAuthError("pin");
+  clearAuthError("profile");
 }
 
 export function showPinChangeShell(passkeysSupported) {
   setAuthMode("pin", passkeysSupported);
-  clearError(byId("pinChangeError"));
-  requestAnimationFrame(() => byId("newPinInput")?.focus());
+  clearAuthError("pin");
 }
 
 export function showMembersShell(name) {
