@@ -179,7 +179,7 @@ Spacing follows a 4px base through rem values.
 - Structure: sticky topbar with fixed square logo, truncating title/subtitle, members shortcut, leaderboard control, and theme toggle.
 - Variants: home/setup state hides leaderboard; live card state shows leaderboard and replaces the subtitle with course/layout context. Live casual rounds also use a compact `Share / Add / Manage` tools row below the topbar.
 - Spacing: compact mobile-first controls at `38px-40px`, with gaps from the tight/compact spacing scale.
-- States: React owns title, subtitle, leaderboard visibility/click handling, and theme toggling; icon buttons use stable dimensions and active transform only; hidden controls must not reserve layout space.
+- States: React owns title, subtitle, leaderboard visibility/click handling, active body view rendering, and theme toggling; the legacy score controller only publishes body-view props through the shell body renderer and must not create separate roots or replace `#app` children. Icon buttons use stable dimensions and active transform only; hidden controls must not reserve layout space.
 - Accessibility: action controls expose text labels through `aria-label`, `title`, or visually hidden text; icons are decorative.
 - Motion: static except for the existing active press scale.
 

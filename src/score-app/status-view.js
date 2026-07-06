@@ -1,5 +1,4 @@
 import React from "react";
-import { createRoot } from "react-dom/client";
 import { RotateCw, Trophy } from "lucide-react";
 
 const h = React.createElement;
@@ -32,37 +31,7 @@ function MessageView(props) {
   ]);
 }
 
-function StatusView(props) {
+export function StatusView(props) {
   if (props.mode === "loading") return h(LoadingView);
   return h(MessageView, props);
-}
-
-export function createScoreStatusViewRenderer() {
-  let root = null;
-  let mountedOn = null;
-
-  function mount() {
-    const app = document.getElementById("app");
-    if (!app) throw new Error("Missing app mount element");
-    if (!root || mountedOn !== app) {
-      if (root) root.unmount();
-      app.replaceChildren();
-      root = createRoot(app);
-      mountedOn = app;
-    }
-    return root;
-  }
-
-  return {
-    render(props) {
-      mount().render(h(StatusView, props));
-    },
-    clear() {
-      if (root) {
-        root.unmount();
-        root = null;
-        mountedOn = null;
-      }
-    },
-  };
 }

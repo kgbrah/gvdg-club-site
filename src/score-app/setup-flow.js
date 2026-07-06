@@ -1,5 +1,4 @@
 import React from "react";
-import { createRoot } from "react-dom/client";
 import { ArrowLeft, ChevronRight, LogOut, PlayCircle } from "lucide-react";
 
 const h = React.createElement;
@@ -195,7 +194,7 @@ function SetupPickView({ layout, defaultConfig, onBack, onCreate }) {
   ]);
 }
 
-function ScoreSetupFlow(props) {
+export function ScoreSetupFlow(props) {
   switch (props.view) {
     case "home":
       return h(HomeView, props);
@@ -208,34 +207,4 @@ function ScoreSetupFlow(props) {
     default:
       return null;
   }
-}
-
-export function createScoreSetupFlowRenderer() {
-  let root = null;
-  let mountedOn = null;
-
-  function mount() {
-    const app = document.getElementById("app");
-    if (!app) throw new Error("Missing app mount element");
-    if (!root || mountedOn !== app) {
-      if (root) root.unmount();
-      app.replaceChildren();
-      root = createRoot(app);
-      mountedOn = app;
-    }
-    return root;
-  }
-
-  return {
-    render(props) {
-      mount().render(h(ScoreSetupFlow, props));
-    },
-    clear() {
-      if (root) {
-        root.unmount();
-        root = null;
-        mountedOn = null;
-      }
-    },
-  };
 }

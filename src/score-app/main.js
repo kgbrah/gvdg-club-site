@@ -3,7 +3,10 @@ import { createRoot } from "react-dom/client";
 import { Moon, Trophy, UsersRound } from "lucide-react";
 
 import { startScoreApp } from "./score-legacy.js";
-import { createScoreSetupFlowRenderer } from "./setup-flow.js";
+import { ScoreAuthFlow } from "./auth-flow.js";
+import { ScorecardView } from "./scorecard-view.js";
+import { ScoreSetupFlow } from "./setup-flow.js";
+import { StatusView } from "./status-view.js";
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
   void import("react-grab");
@@ -11,7 +14,7 @@ if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") 
 }
 
 const h = React.createElement;
-const setupFlow = createScoreSetupFlowRenderer();
+const INITIAL_SCORE_VIEW = { kind: "status", props: { mode: "loading" } };
 
 function icon(Icon, size = 18) {
   return h(Icon, {
@@ -23,18 +26,38 @@ function icon(Icon, size = 18) {
   });
 }
 
+function ScoreBody({ view }) {
+  switch (view.kind) {
+    case "auth":
+      return h(ScoreAuthFlow, view.props);
+    case "scorecard":
+      return h(ScorecardView, view.props);
+    case "setup":
+      return h(ScoreSetupFlow, view.props);
+    case "status":
+    default:
+      return h(StatusView, view.props);
+  }
+}
+
 function ScoreShell() {
   const [header, setHeader] = React.useState({
     showLeaderboard: false,
     subtitle: "Greenville Disc Golf Club",
     title: "Live Scoring",
   });
+  const [bodyView, setBodyView] = React.useState(INITIAL_SCORE_VIEW);
   const [darkTheme, setDarkTheme] = React.useState(() => localStorage.getItem("theme") === "dark");
   const leaderboardHandlerRef = React.useRef(null);
+  const bodyController = React.useMemo(() => ({
+    render(kind, props) {
+      setBodyView({ kind, props });
+    },
+  }), []);
 
   React.useEffect(() => {
     startScoreApp({
-      setupFlow,
+      body: bodyController,
       shell: {
         setHeader(nextHeader) {
           setHeader((current) => ({ ...current, ...nextHeader }));
@@ -46,9 +69,8 @@ function ScoreShell() {
     });
     return () => {
       leaderboardHandlerRef.current = null;
-      setupFlow.clear();
     };
-  }, []);
+  }, [bodyController]);
 
   React.useEffect(() => {
     if (darkTheme) {
@@ -103,7 +125,7 @@ function ScoreShell() {
         icon(Moon),
       ),
     ]),
-    h("main", { id: "app" }, h("div", { class: "spin" })),
+    h("main", { id: "app" }, h(ScoreBody, { view: bodyView })),
   ]);
 }
 

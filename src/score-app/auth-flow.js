@@ -1,5 +1,4 @@
 import React from "react";
-import { createRoot } from "react-dom/client";
 import { KeyRound } from "lucide-react";
 
 const h = React.createElement;
@@ -158,37 +157,7 @@ function SetPinView(props) {
   ]);
 }
 
-function ScoreAuthFlow(props) {
+export function ScoreAuthFlow(props) {
   if (props.mode === "setPin") return h(SetPinView, props);
   return h(LoginView, props);
-}
-
-export function createScoreAuthFlowRenderer() {
-  let root = null;
-  let mountedOn = null;
-
-  function mount() {
-    const app = document.getElementById("app");
-    if (!app) throw new Error("Missing app mount element");
-    if (!root || mountedOn !== app) {
-      if (root) root.unmount();
-      app.replaceChildren();
-      root = createRoot(app);
-      mountedOn = app;
-    }
-    return root;
-  }
-
-  return {
-    render(props) {
-      mount().render(h(ScoreAuthFlow, props));
-    },
-    clear() {
-      if (root) {
-        root.unmount();
-        root = null;
-        mountedOn = null;
-      }
-    },
-  };
 }

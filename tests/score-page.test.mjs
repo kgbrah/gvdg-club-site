@@ -140,43 +140,52 @@ test('createRound sends explicit live scoring config defaults and selections', (
 
 test('score setup screens are React-owned without legacy DOM fallbacks', () => {
   const legacy = scoreLegacySetupSource();
+  const setup = scoreSetupSource();
+  const main = scoreMainSource();
   const fullLegacy = readFileSync('src/score-app/score-legacy.js', 'utf8');
-  assert.match(fullLegacy, /if \(!setupFlow \|\| typeof setupFlow\.render !== 'function'\) throw new Error\('Missing score setup renderer'\)/);
+  assert.match(fullLegacy, /renderScoreBody\('setup', props\)/);
+  assert.match(main, /ScoreSetupFlow/);
+  assert.match(setup, /export function ScoreSetupFlow\(props\)/);
   assert.doesNotMatch(legacy, /const row = el\('button', 'tap-row'\)/);
   assert.doesNotMatch(legacy, /const btn = el\('button', 'setup-option'\)/);
   assert.doesNotMatch(legacy, /selected\[group\.key\] = opt\.value/);
+  assert.doesNotMatch(setup, /createRoot|getElementById\("app"\)|replaceChildren/);
 });
 
 test('score auth screens are React-owned without legacy DOM fallbacks', () => {
   const auth = scoreAuthSource();
+  const main = scoreMainSource();
   const legacy = scoreLegacyAuthSource();
   const fullLegacy = readFileSync('src/score-app/score-legacy.js', 'utf8');
-  assert.match(fullLegacy, /createScoreAuthFlowRenderer\(\)/);
-  assert.match(fullLegacy, /authFlow\.render\(props\)/);
+  assert.match(fullLegacy, /renderScoreBody\('auth', props\)/);
+  assert.match(main, /ScoreAuthFlow/);
   assert.match(auth, /function LoginView\(props\)/);
   assert.match(auth, /function SetPinView\(props\)/);
-  assert.match(auth, /createRoot\(app\)/);
+  assert.match(auth, /export function ScoreAuthFlow\(props\)/);
   assert.match(auth, /KeyRound/);
   assert.doesNotMatch(legacy, /const c = el\('div', 'card stack'\)/);
   assert.doesNotMatch(legacy, /const idL = el\('label', 'lbl', 'PDGA # or UDisc username'\)/);
   assert.doesNotMatch(legacy, /const pkb = el\('button', 'btn secondary'/);
   assert.doesNotMatch(legacy, /np\.placeholder = 'New 4-digit PIN'/);
+  assert.doesNotMatch(auth, /createRoot|getElementById\("app"\)|replaceChildren/);
 });
 
 test('score status screens are React-owned without legacy message DOM fallbacks', () => {
   const status = scoreStatusSource();
+  const main = scoreMainSource();
   const legacy = scoreLegacyStatusSource();
   const fullLegacy = readFileSync('src/score-app/score-legacy.js', 'utf8');
-  assert.match(fullLegacy, /createScoreStatusViewRenderer\(\)/);
-  assert.match(legacy, /statusView\.render\(props\)/);
+  assert.match(fullLegacy, /renderScoreBody\('status', props\)/);
+  assert.match(main, /StatusView/);
   assert.match(status, /function LoadingView\(\)/);
   assert.match(status, /function MessageView\(props\)/);
-  assert.match(status, /createRoot\(app\)/);
+  assert.match(status, /export function StatusView\(props\)/);
   assert.match(status, /View live leaderboard/);
   assert.doesNotMatch(legacy, /const c = el\('div', 'card center stack'\)/);
   assert.doesNotMatch(fullLegacy, /function spinner\(\)/);
   assert.doesNotMatch(fullLegacy, /shell\(spinner\(\)\)/);
   assert.doesNotMatch(fullLegacy, /🏆 View live leaderboard/);
+  assert.doesNotMatch(status, /createRoot|getElementById\("app"\)|replaceChildren/);
 });
 
 test('score notifications are React-owned without legacy body DOM fallbacks', () => {
@@ -215,15 +224,20 @@ test('score shell owns topbar state without legacy DOM mutations', () => {
   const main = scoreMainSource();
   const fullLegacy = readFileSync('src/score-app/score-legacy.js', 'utf8');
   assert.match(main, /const \[header, setHeader\] = React\.useState/);
+  assert.match(main, /const \[bodyView, setBodyView\] = React\.useState/);
+  assert.match(main, /function ScoreBody\(\{ view \}\)/);
+  assert.match(main, /body: bodyController/);
   assert.match(main, /setLeaderboardHandler\(handler\)/);
   assert.match(main, /hidden: !header\.showLeaderboard/);
   assert.match(main, /setDarkTheme\(\(current\) => !current\)/);
+  assert.match(fullLegacy, /renderScoreBody\(kind, props\)/);
   assert.match(fullLegacy, /scoreShell\.setHeader/);
   assert.match(fullLegacy, /scoreShell\.setLeaderboardHandler\(openLeaderboard\)/);
   assert.doesNotMatch(fullLegacy, /document\.getElementById\('lbBtn'\)/);
   assert.doesNotMatch(fullLegacy, /document\.getElementById\('barTitle'\)/);
   assert.doesNotMatch(fullLegacy, /document\.getElementById\('barSub'\)/);
   assert.doesNotMatch(fullLegacy, /document\.getElementById\('themeBtn'\)/);
+  assert.doesNotMatch(fullLegacy, /createScore(AuthFlow|SetupFlow|StatusView|cardView)Renderer/);
 });
 
 test('player score page supports pair target rows and target-id offline replay', () => {
@@ -288,19 +302,21 @@ test('manage players sheet is React-owned without legacy overlay DOM constructio
 test('scorecard view is React-owned without legacy hole DOM construction', () => {
   const legacy = scoreLegacyHoleSource();
   const scorecard = scorecardViewSource();
+  const main = scoreMainSource();
   const fullLegacy = readFileSync('src/score-app/score-legacy.js', 'utf8');
-  assert.match(fullLegacy, /createScorecardViewRenderer\(\)/);
-  assert.match(legacy, /scorecardView\.render\(\{/);
+  assert.match(fullLegacy, /renderScoreBody\('scorecard', \{/);
+  assert.match(main, /ScorecardView/);
   assert.match(scorecard, /function ScorecardView\(props\)/);
   assert.match(scorecard, /function ScoreRow\(props\)/);
   assert.match(scorecard, /function HoleGrid\(props\)/);
-  assert.match(scorecard, /createRoot\(app\)/);
+  assert.match(scorecard, /export function ScorecardView\(props\)/);
   assert.match(scorecard, /WeatherStrip/);
   assert.doesNotMatch(legacy, /const head = el\('div', 'hole-head'\)/);
   assert.doesNotMatch(legacy, /const box = el\('div', 'card'\)/);
   assert.doesNotMatch(legacy, /const row = el\('div', 'prow'/);
   assert.doesNotMatch(legacy, /const grid = el\('div', 'holegrid'\)/);
   assert.doesNotMatch(legacy, /document\.createElement\('select'\)/);
+  assert.doesNotMatch(scorecard, /createRoot|getElementById\("app"\)|replaceChildren/);
 });
 
 test('score weather strip is React-owned without legacy DOM replacement', () => {

@@ -1,10 +1,7 @@
-import { createScoreAuthFlowRenderer } from "./auth-flow.js";
 import { createLeaderboardSheetRenderer } from "./leaderboard-sheet.js";
 import { createManagePlayersSheetRenderer } from "./manage-players-sheet.js";
 import { createScoreDialogRenderer } from "./dialogs.js";
 import { createScoreNotificationsRenderer } from "./notifications.js";
-import { createScorecardViewRenderer } from "./scorecard-view.js";
-import { createScoreStatusViewRenderer } from "./status-view.js";
 
 export function startScoreApp(options) {
         "use strict";
@@ -26,12 +23,9 @@ export function startScoreApp(options) {
         function guestTokenStored() { try { const a = JSON.parse(localStorage.getItem(GUESTREG_KEY) || '{}'); return (a[EVENT_ID] && a[EVENT_ID].guestToken) || null; } catch (e) { return null; } }
         const GUEST_TOKEN = MODE === 'event' ? (params.get('gt') || guestTokenStored()) : null;
 
-        const authFlow = createScoreAuthFlowRenderer();
         const dialogs = createScoreDialogRenderer();
         const notifications = createScoreNotificationsRenderer();
-        const scorecardView = createScorecardViewRenderer();
-        const statusView = createScoreStatusViewRenderer();
-        const setupFlow = options && options.setupFlow;
+        const scoreBody = options && options.body;
         const scoreShell = options && options.shell;
         const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, roundConfig: null, scoreTargets: [], scoreTargetError: null, weather: null };
         const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
@@ -394,41 +388,23 @@ export function startScoreApp(options) {
         }
 
         // ---------- views ----------
-        function clearSetupFlow() {
-            if (setupFlow && typeof setupFlow.clear === 'function') setupFlow.clear();
-        }
-        function clearAuthFlow() {
-            if (authFlow && typeof authFlow.clear === 'function') authFlow.clear();
-        }
-        function clearScorecardView() {
-            if (scorecardView && typeof scorecardView.clear === 'function') scorecardView.clear();
-        }
-        function clearStatusView() {
-            if (statusView && typeof statusView.clear === 'function') statusView.clear();
+        function renderScoreBody(kind, props) {
+            if (!scoreBody || typeof scoreBody.render !== 'function') throw new Error('Missing score body renderer');
+            scoreBody.render(kind, props);
         }
         function renderAuthFlow(props) {
             resetShellHeader();
-            clearSetupFlow();
-            clearScorecardView();
-            clearStatusView();
-            authFlow.render(props);
+            renderScoreBody('auth', props);
             return true;
         }
         function renderSetupFlow(props) {
             resetShellHeader();
-            if (!setupFlow || typeof setupFlow.render !== 'function') throw new Error('Missing score setup renderer');
-            clearAuthFlow();
-            clearScorecardView();
-            clearStatusView();
-            setupFlow.render(props);
+            renderScoreBody('setup', props);
             return true;
         }
         function renderStatusView(props) {
             resetShellHeader();
-            clearSetupFlow();
-            clearAuthFlow();
-            clearScorecardView();
-            statusView.render(props);
+            renderScoreBody('status', props);
             return true;
         }
         function renderLoading() {
@@ -589,10 +565,7 @@ export function startScoreApp(options) {
                 hole: hh.hole,
                 index: i,
             }));
-            clearSetupFlow();
-            clearAuthFlow();
-            clearStatusView();
-            scorecardView.render({
+            renderScoreBody('scorecard', {
                 atEnd: S.holeIdx >= S.holes.length - 1,
                 atStart: S.holeIdx === 0,
                 choices: choices,

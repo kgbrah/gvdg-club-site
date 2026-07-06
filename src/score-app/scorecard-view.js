@@ -1,5 +1,4 @@
 import React from "react";
-import { createRoot } from "react-dom/client";
 import { ChevronLeft, ChevronRight, Settings2, Share2, UserPlus } from "lucide-react";
 import { WeatherStrip } from "./weather-strip.js";
 
@@ -203,7 +202,7 @@ function HoleGrid(props) {
   );
 }
 
-function ScorecardView(props) {
+export function ScorecardView(props) {
   return h(React.Fragment, null, [
     props.showWeather ? h(WeatherStrip, { key: "weather", title: "Round weather", weather: props.weather }) : null,
     h(RoundTools, props),
@@ -212,34 +211,4 @@ function ScorecardView(props) {
     h(ScorecardBox, props),
     h(HoleGrid, { holes: props.holeGrid, onJump: props.onJumpHole }),
   ]);
-}
-
-export function createScorecardViewRenderer() {
-  let root = null;
-  let mountedOn = null;
-
-  function mount() {
-    const app = document.getElementById("app");
-    if (!app) throw new Error("Missing app mount element");
-    if (!root || mountedOn !== app) {
-      if (root) root.unmount();
-      app.replaceChildren();
-      root = createRoot(app);
-      mountedOn = app;
-    }
-    return root;
-  }
-
-  return {
-    render(props) {
-      mount().render(h(ScorecardView, props));
-    },
-    clear() {
-      if (root) {
-        root.unmount();
-        root = null;
-        mountedOn = null;
-      }
-    },
-  };
 }
