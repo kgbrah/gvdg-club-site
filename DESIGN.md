@@ -185,11 +185,11 @@ Spacing follows a 4px base through rem values.
 
 ### Score Leaderboard Sheet
 
-- Structure: React-owned bottom sheet overlay with grab handle, leaderboard table, optional UDisc export mount, finalize status panel, and close action; the legacy score controller supplies standings, blockers, export data, and callbacks only.
+- Structure: React-owned bottom sheet overlay with grab handle, leaderboard table, optional UDisc export disclosure, finalize status panel, and close action; the legacy score controller supplies standings, blockers, export data, and callbacks only.
 - Variants: empty leaderboard, singles/player rows, doubles/pair rows, stroke to-par result, matchplay status result, final round, ready-to-finalize, blocked finalize, and casual round finish action.
 - Spacing: reuses `.overlay`, `.sheet`, `.lb`, `.btn`, and finalize sheet primitives from the score app; finalization details use compact rows and stay within the sheet scroll area.
 - States: overlay backdrop click and close button dismiss the sheet; live snapshots re-render the React sheet when open; finish button is disabled until the card has no conflicts or missing confirmations.
-- Accessibility: close and finish actions are real buttons; table headers label rank/player/thru/result columns; export UI remains mounted as live DOM inside an explicit React mount container.
+- Accessibility: close and finish actions are real buttons; table headers label rank/player/thru/result columns; the shared UDisc export disclosure is React-owned and uses a real outbound link.
 - Motion: bottom sheet remains static; only existing button active states apply.
 
 ### Score Manage Players Sheet
@@ -212,10 +212,10 @@ Spacing follows a 4px base through rem values.
 
 ### Scorecard View
 
-- Structure: React-owned live hole screen with weather mount, casual-round tools, hole navigation, optional tee-sign card, scorecard selector, player/pair steppers, totals bar, and hole jump grid; the legacy score controller supplies derived rows and callbacks only.
+- Structure: React-owned live hole screen with Round Weather, casual-round tools, hole navigation, optional tee-sign card, scorecard selector, player/pair steppers, totals bar, and hole jump grid; the legacy score controller supplies derived rows and callbacks only.
 - Variants: event card, casual round with share/add/manage tools, singles rows, doubles pair rows, matchplay status, dormie badge, tee-sign highlight, score conflicts, score-target warning, completed holes, and current-hole states.
 - Spacing: reuses `.weather-strip`, `.round-tools`, `.hole-head`, `.tee-sign-card`, `.scorecard-owner`, `.prow`, `.stepper`, `.totbar`, and `.holegrid` primitives so the migrated view keeps the existing mobile rhythm.
-- States: scorer changes, hole navigation, jump-grid taps, and plus/minus steppers rerender through React; weather remains a DOM mount for the shared weather renderer so compass updates and refresh replacement stay intact.
+- States: scorer changes, hole navigation, jump-grid taps, plus/minus steppers, and weather refreshes rerender through React; compass updates use the shared weather subscription helpers.
 - Accessibility: navigation and score steppers expose action labels, scorer selection has a label, tool buttons pair Lucide icons with text, and hole jump buttons expose hole labels.
 - Motion: static layout; only existing active press feedback and weather wind-arrow rotation apply.
 
@@ -242,7 +242,7 @@ Spacing follows a 4px base through rem values.
 - Structure: compact header, primary temperature/condition group, condition graphic, wind action, secondary meta pills, and course-location note.
 - Variants: pending/unavailable states use a single empty message; live weather promotes condition, feels-like temperature, a graphic condition cue, and wind while keeping humidity, precipitation, and changes secondary.
 - Spacing: condition and graphic share the first row on narrow phones with wind below; condition, graphic, and wind form a compact three-part row above `420px`.
-- States: wind starts `North-up`, moves through `Listening...`, and changes to `Phone-relative` when device orientation produces a heading.
+- States: the score app renders Round Weather through React using shared summary and compass helpers; the standalone DOM renderer remains available for non-score surfaces. Wind starts `North-up`, moves through `Listening...`, and changes to `Phone-relative` when device orientation produces a heading.
 - Accessibility: wind is a real button with an arrow title/label that explains whether the arrow is north-up or phone-relative; the condition graphic is a labeled image cue and does not replace the text condition.
 - Motion: only the wind arrow rotates, using a short transform transition.
 

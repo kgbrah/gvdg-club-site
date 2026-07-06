@@ -59,6 +59,7 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   const overview = readFileSync('src/members-app/overview-dashboard.js', 'utf8');
   const pdga = readFileSync('src/members-app/pdga-dashboard.js', 'utf8');
   const ratings = readFileSync('src/members-app/club-ratings.js', 'utf8');
+  const udiscExport = readFileSync('src/shared/udisc-export.js', 'utf8');
   const activity = readFileSync('src/members-app/activity-panels.js', 'utf8');
   const registration = readFileSync('src/members-app/registration-panel.js', 'utf8');
   const board = readFileSync('src/members-app/board-panel.js', 'utf8');
@@ -171,6 +172,15 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   assert.match(pdga, /\/pdga-stats\?pdga=/);
   assert.match(ratings, /\/my-ratings\?/);
   assert.match(ratings, /data-react-club-ratings/);
+  assert.match(ratings, /UDiscExportDetails/);
+  assert.match(udiscExport, /export function UDiscExportDetails\(props\)/);
+  assert.match(udiscExport, /export function udiscDeepLink\(courseId\)/);
+  assert.match(udiscExport, /export function parseUdiscScorecard\(scorecard\)/);
+  assert.match(udiscExport, /ExternalLink/);
+  assert.doesNotMatch(html, /udisc-export\.js/);
+  assert.doesNotMatch(ratings, /window\.UDiscExport/);
+  assert.doesNotMatch(ratings, /replaceChildren/);
+  assert.doesNotMatch(ratings, /appendChild\(node\)/);
   assert.match(activity, /\/my-live-rounds/);
   assert.match(activity, /\/shop\/wallet/);
   assert.match(activity, /\/leagues\/active/);

@@ -2,6 +2,7 @@ import React from "react";
 
 import { requestJson } from "./api.js";
 import { formatRatingDate, formatToPar, plural } from "./format.js";
+import { UDiscExportDetails } from "../shared/udisc-export.js";
 
 const h = React.createElement;
 const RATING_PAGE_SIZE = 250;
@@ -111,21 +112,6 @@ function useClubRatings(token) {
   return { state, loadMore: (kind) => load({ appendKind: kind }) };
 }
 
-function UDiscExportAction({ round }) {
-  const hostRef = React.useRef(null);
-  React.useEffect(() => {
-    const host = hostRef.current;
-    if (!host) return undefined;
-    host.replaceChildren();
-    if (round.scorecard && round.udisc_course_id && window.UDiscExport) {
-      const node = window.UDiscExport.build({ courseId: round.udisc_course_id, scorecard: round.scorecard });
-      if (node) host.appendChild(node);
-    }
-    return () => host.replaceChildren();
-  }, [round.scorecard, round.udisc_course_id]);
-  return h("div", { className: "club-rating-export", ref: hostRef });
-}
-
 function RatingRoundRow({ round, kind }) {
   const title = `${round.place != null ? `#${round.place} - ` : ""}${round.label || (kind === "competitive" ? "Competitive round" : "Casual round")}`;
   return h(React.Fragment, null, [
@@ -139,7 +125,9 @@ function RatingRoundRow({ round, kind }) {
         h("div", { className: "club-rating-score-sub", key: "source" }, round.rating == null ? "Unrated" : round.rating_source === "estimated" ? "Est." : "Rating"),
       ]),
     ]),
-    h(UDiscExportAction, { round, key: "export" }),
+    h("div", { className: "club-rating-export", key: "export" },
+      h(UDiscExportDetails, { courseId: round.udisc_course_id, scorecard: round.scorecard }),
+    ),
   ]);
 }
 

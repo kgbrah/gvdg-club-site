@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { ChevronLeft, ChevronRight, Settings2, Share2, UserPlus } from "lucide-react";
+import { WeatherStrip } from "./weather-strip.js";
 
 const h = React.createElement;
 
@@ -12,20 +13,6 @@ function icon(Icon) {
     "aria-hidden": "true",
     focusable: "false",
   });
-}
-
-function WeatherSlot(props) {
-  const ref = React.useRef(null);
-  React.useLayoutEffect(() => {
-    const host = ref.current;
-    if (!host) return undefined;
-    host.replaceChildren();
-    const node = props.buildWeatherNode ? props.buildWeatherNode() : null;
-    if (node) host.replaceChildren(node);
-    return () => host.replaceChildren();
-  }, [props.weatherVersion]);
-
-  return h("div", { key: "weather", ref });
 }
 
 function RoundTools(props) {
@@ -218,7 +205,7 @@ function HoleGrid(props) {
 
 function ScorecardView(props) {
   return h(React.Fragment, null, [
-    props.showWeather ? h(WeatherSlot, { buildWeatherNode: props.buildWeatherNode, weatherVersion: props.weatherVersion }) : null,
+    props.showWeather ? h(WeatherStrip, { key: "weather", title: "Round weather", weather: props.weather }) : null,
     h(RoundTools, props),
     h(HoleHeader, props),
     h(TeeSignCard, { teeSign: props.teeSign }),

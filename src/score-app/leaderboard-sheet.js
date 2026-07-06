@@ -1,5 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
+import { UDiscExportDetails } from "../shared/udisc-export.js";
 
 const h = React.createElement;
 
@@ -7,21 +8,6 @@ function standingName(standing) {
   return standing.name + (standing.members && standing.members.length
     ? " · " + standing.members.join(" / ")
     : (standing.division ? " · " + standing.division : ""));
-}
-
-function UDiscExportMount({ exportData }) {
-  const mountRef = React.useRef(null);
-
-  React.useEffect(() => {
-    const mount = mountRef.current;
-    if (!mount || !exportData || typeof exportData.build !== "function") return undefined;
-    mount.replaceChildren();
-    const node = exportData.build({ courseId: exportData.courseId, scorecard: exportData.scorecard });
-    if (node) mount.appendChild(node);
-    return () => mount.replaceChildren();
-  }, [exportData]);
-
-  return exportData ? h("div", { className: "udisc-export-mount", ref: mountRef }) : null;
 }
 
 function LeaderboardTable({ isDoubles, isMatchplay, relClass, relText, standings }) {
@@ -87,7 +73,9 @@ function LeaderboardSheet(props) {
         relText: props.relText,
         standings: props.standings,
       }),
-      h(UDiscExportMount, { exportData: props.exportData, key: "udisc" }),
+      props.exportData ? h("div", { className: "udisc-export-section", key: "udisc" },
+        h(UDiscExportDetails, { courseId: props.exportData.courseId, scorecard: props.exportData.scorecard }),
+      ) : null,
       h(FinalizePanel, {
         blockers: props.blockers,
         key: "finalize",

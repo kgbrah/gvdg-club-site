@@ -69,3 +69,91 @@
   --team-red: #e63950;
   --team-blue: #2f7fc4;
 }
+
+.udisc-export {
+  margin: 0.4rem 0;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--bg-tertiary);
+}
+
+.udisc-export > summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--primary);
+  list-style: none;
+}
+
+.udisc-export > summary::-webkit-details-marker {
+  display: none;
+}
+
+.udisc-export-note,
+.udisc-export-total {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.udisc-export-note {
+  margin: 0.5rem 0;
+}
+
+.udisc-export-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.4rem 0;
+}
+
+.udisc-hole {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 2.1rem;
+  padding: 0.2rem 0.25rem;
+  border-radius: 0.35rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.udisc-hole b {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.udisc-hole span {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.udisc-export-total {
+  margin: 0.3rem 0 0.5rem;
+}
+
+.udisc-export-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 38px;
+  padding: 0 0.9rem;
+  border-radius: 0.5rem;
+  background: var(--primary-strong);
+  color: white;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.udisc-export-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.udisc-export-section {
+  margin-top: 1rem;
+}

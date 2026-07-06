@@ -235,7 +235,7 @@
         .score-dialog-actions { display: flex; gap: 0.55rem; margin-top: 1rem; }
         .score-dialog-actions .btn { width: auto; flex: 1 1 0; }
         .auth-error { color: var(--over); min-height: 1rem; }
-        .sheet-close, .udisc-export-mount { margin-top: 1rem; }
+        .sheet-close { margin-top: 1rem; }
         .spin { width: 30px; height: 30px; border: 3px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; animation: sp 0.8s linear infinite; margin: 1.5rem auto; }
         @keyframes sp { to { transform: rotate(360deg); } }
         a.link { color: var(--primary); font-weight: 700; text-decoration: none; }
@@ -244,7 +244,6 @@
 </head>
 <body data-api-base="">
     <div id="scoreRoot"></div>
-    <script src="udisc-export.js"></script>
     <script src="weather-display.js"></script>
     <script type="module" src="matchplay-colors.js"></script>
     <script type="module" src="score-app/score-app.js"></script>

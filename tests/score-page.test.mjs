@@ -75,6 +75,14 @@ function scorecardViewSource() {
   return readFileSync('src/score-app/scorecard-view.js', 'utf8');
 }
 
+function scoreWeatherSource() {
+  return readFileSync('src/score-app/weather-strip.js', 'utf8');
+}
+
+function scoreUdiscExportSource() {
+  return readFileSync('src/shared/udisc-export.js', 'utf8');
+}
+
 function scoreLegacyLeaderboardSource() {
   const source = readFileSync('src/score-app/score-legacy.js', 'utf8');
   const start = source.indexOf('// ---------- leaderboard sheet ----------');
@@ -241,13 +249,26 @@ test('player leaderboard renders matchplay and pair labels without primary to-pa
 test('player leaderboard sheet is React-owned without legacy overlay DOM construction', () => {
   const legacy = scoreLegacyLeaderboardSource();
   const leaderboard = scoreLeaderboardSource();
+  const sharedUdisc = scoreUdiscExportSource();
+  const fullLegacy = readFileSync('src/score-app/score-legacy.js', 'utf8');
+  const html = readFileSync('score.html', 'utf8');
   assert.match(legacy, /createLeaderboardSheetRenderer\(\)/);
   assert.match(legacy, /leaderboardSheet\.render\(\{/);
   assert.match(leaderboard, /function LeaderboardSheet\(props\)/);
   assert.match(leaderboard, /createRoot\(host\)/);
+  assert.match(leaderboard, /UDiscExportDetails/);
+  assert.match(sharedUdisc, /export function UDiscExportDetails\(props\)/);
+  assert.match(sharedUdisc, /export function udiscDeepLink\(courseId\)/);
+  assert.match(sharedUdisc, /export function parseUdiscScorecard\(scorecard\)/);
+  assert.match(fullLegacy, /return \{ courseId: S\.udiscCourseId, scorecard: scorecard \};/);
   assert.doesNotMatch(legacy, /const overlay = el\('div', 'overlay'\)/);
   assert.doesNotMatch(legacy, /const table = el\('table', 'lb'\)/);
   assert.doesNotMatch(legacy, /sheet\.appendChild\(el\('h2', 'section', 'Live Leaderboard'\)\)/);
+  assert.doesNotMatch(leaderboard, /UDiscExportMount/);
+  assert.doesNotMatch(leaderboard, /replaceChildren/);
+  assert.doesNotMatch(leaderboard, /appendChild\(node\)/);
+  assert.doesNotMatch(fullLegacy, /window\.UDiscExport/);
+  assert.doesNotMatch(html, /udisc-export\.js/);
 });
 
 test('manage players sheet is React-owned without legacy overlay DOM construction', () => {
@@ -274,10 +295,34 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /function ScoreRow\(props\)/);
   assert.match(scorecard, /function HoleGrid\(props\)/);
   assert.match(scorecard, /createRoot\(app\)/);
-  assert.match(scorecard, /WeatherSlot/);
+  assert.match(scorecard, /WeatherStrip/);
   assert.doesNotMatch(legacy, /const head = el\('div', 'hole-head'\)/);
   assert.doesNotMatch(legacy, /const box = el\('div', 'card'\)/);
   assert.doesNotMatch(legacy, /const row = el\('div', 'prow'/);
   assert.doesNotMatch(legacy, /const grid = el\('div', 'holegrid'\)/);
   assert.doesNotMatch(legacy, /document\.createElement\('select'\)/);
+});
+
+test('score weather strip is React-owned without legacy DOM replacement', () => {
+  const fullLegacy = readFileSync('src/score-app/score-legacy.js', 'utf8');
+  const scorecard = scorecardViewSource();
+  const weather = scoreWeatherSource();
+  const sharedWeather = readFileSync('weather-display.js', 'utf8');
+  assert.match(scorecard, /import \{ WeatherStrip \} from "\.\/weather-strip\.js"/);
+  assert.match(scorecard, /h\(WeatherStrip, \{ key: "weather"/);
+  assert.match(fullLegacy, /weatherChanged\) renderHole\(\); return;/);
+  assert.match(fullLegacy, /weather: S\.weather/);
+  assert.match(weather, /export function WeatherStrip\(props\)/);
+  assert.match(weather, /currentWeatherSummary/);
+  assert.match(weather, /windArrowModel/);
+  assert.match(weather, /subscribeCompass/);
+  assert.match(sharedWeather, /currentWeatherSummary/);
+  assert.match(sharedWeather, /windArrowModel/);
+  assert.match(sharedWeather, /subscribeCompass/);
+  assert.doesNotMatch(scorecard, /WeatherSlot/);
+  assert.doesNotMatch(fullLegacy, /function roundWeatherNode\(\)/);
+  assert.doesNotMatch(fullLegacy, /function refreshWeatherStrip\(\)/);
+  assert.doesNotMatch(fullLegacy, /querySelector\('\.weather-strip'\)/);
+  assert.doesNotMatch(fullLegacy, /replaceWith\(fresh\)/);
+  assert.doesNotMatch(fullLegacy, /GVDGWeather\.buildWeatherStrip\(document/);
 });

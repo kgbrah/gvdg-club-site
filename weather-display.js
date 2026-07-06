@@ -64,31 +64,82 @@
     let compassEnabled = false;
     let compassStatus = "off"; // off | starting | active | denied | unavailable
     let compassFallbackTimer = null;
+    const compassListeners = new Set();
 
     function normalizeDeg(value) {
         const n = finite(value);
         return n == null ? null : ((n % 360) + 360) % 360;
     }
 
+    function compassModeText() {
+        if (compassHeading != null) return "Phone-relative";
+        if (compassStatus === "starting") return "Listening...";
+        if (compassStatus === "denied") return "Permission off";
+        return "North-up";
+    }
+
+    function compassState() {
+        return {
+            heading: compassHeading,
+            modeText: compassModeText(),
+            relative: compassHeading == null ? "north" : "facing",
+            status: compassStatus,
+        };
+    }
+
+    function notifyCompass() {
+        const state = compassState();
+        compassListeners.forEach(function (listener) {
+            try { listener(state); } catch (_err) {}
+        });
+    }
+
+    function subscribeCompass(listener) {
+        if (typeof listener !== "function") return function () {};
+        compassListeners.add(listener);
+        listener(compassState());
+        return function () {
+            compassListeners.delete(listener);
+        };
+    }
+
+    function windArrowState(blowToDeg) {
+        const blowTo = normalizeDeg(blowToDeg);
+        if (blowTo == null) return null;
+        const rotationDeg = normalizeDeg(blowTo - (compassHeading == null ? 0 : compassHeading));
+        const relative = compassHeading == null ? "north" : "facing";
+        return {
+            blowTo,
+            compassStatus,
+            label: relative === "north"
+                ? "Wind blowing this way. Tap to orient it to your phone heading."
+                : "Wind blowing this way, relative to the way you're facing",
+            modeText: compassModeText(),
+            relative,
+            rotationDeg,
+        };
+    }
+
+    function windArrowModel(windFromDeg) {
+        const windFrom = finite(windFromDeg);
+        return windArrowState(windFrom == null ? null : windFrom + 180);
+    }
+
     function applyArrowRotation(arrow) {
-        const blowTo = finite(Number(arrow.getAttribute("data-blowto")));
-        if (blowTo == null) return;
-        const rel = normalizeDeg(blowTo - (compassHeading == null ? 0 : compassHeading));
-        arrow.style.transform = "rotate(" + rel + "deg)";
-        arrow.setAttribute("data-relative", compassHeading == null ? "north" : "facing");
-        arrow.setAttribute("data-compass-status", compassStatus);
-        const label = compassHeading == null
-            ? "Wind blowing this way. Tap to orient it to your phone heading."
-            : "Wind blowing this way, relative to the way you're facing";
-        arrow.setAttribute("aria-label", label);
-        if (arrow.__titleEl) arrow.__titleEl.textContent = label;
+        const model = windArrowState(Number(arrow.getAttribute("data-blowto")));
+        if (!model) return;
+        arrow.style.transform = "rotate(" + model.rotationDeg + "deg)";
+        arrow.setAttribute("data-relative", model.relative);
+        arrow.setAttribute("data-compass-status", model.compassStatus);
+        arrow.setAttribute("aria-label", model.label);
+        if (arrow.__titleEl) arrow.__titleEl.textContent = model.label;
         const control = arrow.__windControl || arrow.closest && arrow.closest(".weather-wind");
         if (control) {
-            control.setAttribute("data-relative", compassHeading == null ? "north" : "facing");
-            control.setAttribute("data-compass-status", compassStatus);
-            control.setAttribute("aria-label", label);
+            control.setAttribute("data-relative", model.relative);
+            control.setAttribute("data-compass-status", model.compassStatus);
+            control.setAttribute("aria-label", model.label);
             const mode = control.querySelector && control.querySelector(".weather-wind-mode");
-            if (mode) mode.textContent = compassModeText();
+            if (mode) mode.textContent = model.modeText;
         }
     }
 
@@ -112,13 +163,14 @@
             compassFallbackTimer = null;
         }
         refreshWindArrows();
+        notifyCompass();
     }
 
     // Start (once) listening to the device compass so the arrow tracks the player's facing. iOS 13+ requires
     // this be triggered from a user gesture (we call it from the wind control click). Returns a Promise<boolean>.
-    function enableCompass() {
-        if (compassEnabled) return Promise.resolve(true);
-        if (typeof window === "undefined") return Promise.resolve(false);
+    async function enableCompass() {
+        if (compassEnabled) return true;
+        if (typeof window === "undefined") return false;
         const attach = function () {
             compassEnabled = true;
             compassStatus = "starting";
@@ -129,10 +181,12 @@
                     if (compassHeading == null) {
                         compassStatus = "unavailable";
                         refreshWindArrows();
+                        notifyCompass();
                     }
                 }, 3000);
             }
             refreshWindArrows();
+            notifyCompass();
             return true;
         };
         try {
@@ -141,41 +195,38 @@
                 let permission;
                 try { permission = DOE.requestPermission(true); } // request magnetometer-backed absolute orientation when supported
                 catch (_err) { permission = DOE.requestPermission(); }
-                return Promise.resolve(permission).then(function (res) {
+                try {
+                    const res = await Promise.resolve(permission);
                     if (res === "granted") return attach();
                     compassStatus = "denied";
                     refreshWindArrows();
+                    notifyCompass();
                     return false;
-                }).catch(function () {
+                } catch (_err) {
                     compassStatus = "denied";
                     refreshWindArrows();
+                    notifyCompass();
                     return false;
-                });
+                }
             }
-            return Promise.resolve(attach());
+            return attach();
         } catch (_e) {
             compassStatus = "unavailable";
             refreshWindArrows();
-            return Promise.resolve(false);
+            notifyCompass();
+            return false;
         }
     }
 
-    function compassModeText() {
-        if (compassHeading != null) return "Phone-relative";
-        if (compassStatus === "starting") return "Listening...";
-        if (compassStatus === "denied") return "Permission off";
-        return "North-up";
-    }
-
     function windArrow(doc, windFromDeg) {
-        const blowTo = normalizeDeg(finite(windFromDeg) == null ? null : finite(windFromDeg) + 180);
-        if (blowTo == null) return null;
+        const model = windArrowModel(windFromDeg);
+        if (!model) return null;
         const svg = doc.createElementNS(ARROW_NS, "svg");
         svg.setAttribute("class", "weather-wind-arrow");
         svg.setAttribute("viewBox", "0 0 24 24");
         svg.setAttribute("width", "15");
         svg.setAttribute("height", "15");
-        svg.setAttribute("data-blowto", String(blowTo));
+        svg.setAttribute("data-blowto", String(model.blowTo));
         svg.setAttribute("role", "img");
         svg.style.transformOrigin = "center";
         svg.style.transition = "transform 0.25s ease-out";
@@ -516,12 +567,16 @@
 
     root.GVDGWeather = {
         buildWeatherStrip,
+        compassState,
         conditionGraphic,
         conditionLabel,
+        currentWeatherSummary,
         enableCompass,
         formatLiveWeather,
         renderWeather,
+        subscribeCompass,
         weatherChanges,
         weatherChips,
+        windArrowModel,
     };
 })(typeof globalThis !== "undefined" ? globalThis : window);

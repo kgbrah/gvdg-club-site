@@ -326,12 +326,13 @@ export function startScoreApp(options) {
         }
         function mergeFromSnap() {
             const snap = S.snap; if (!snap || !Array.isArray(snap.players)) return;
-            // Apply weather FIRST, in place: the background weather refresh broadcasts a same-rev snapshot
-            // (weather isn't a scoring change), so the rev gate below would otherwise drop it and the strip
-            // would never update. Updating just the strip avoids a full renderHole that resets scroll/inputs.
-            if (Object.prototype.hasOwnProperty.call(snap, 'weather')) { S.weather = snap.weather || null; refreshWeatherStrip(); }
+            // Apply weather FIRST: the background weather refresh broadcasts a same-rev snapshot (weather
+            // isn't a scoring change), so the rev gate below would otherwise drop it and the strip would never
+            // update.
+            const weatherChanged = Object.prototype.hasOwnProperty.call(snap, 'weather');
+            if (weatherChanged) S.weather = snap.weather || null;
             // Drop a stale/out-of-order snapshot (a newer one from another device was already applied).
-            if (snap.rev != null) { if (snap.rev <= S.lastRev) return; S.lastRev = snap.rev; }
+            if (snap.rev != null) { if (snap.rev <= S.lastRev) { if (weatherChanged) renderHole(); return; } S.lastRev = snap.rev; }
             if (snap.status) S.status = snap.status; // reflect a finalize (or start) that happened on another device
             S.roundConfig = snap.roundConfig || S.roundConfig;
             S.scoreTargets = Array.isArray(snap.scoreTargets) ? snap.scoreTargets : S.scoreTargets;
@@ -543,21 +544,6 @@ export function startScoreApp(options) {
             };
         }
 
-        function roundWeatherNode() {
-            if (!window.GVDGWeather) return null;
-            // Best-effort: start the compass so the wind arrow tracks the player's facing. Android/desktop
-            // sensors begin now; iOS needs a user gesture, so there it stays north-up until the arrow is tapped.
-            if (S.weather && S.weather.current && window.GVDGWeather.enableCompass) window.GVDGWeather.enableCompass();
-            return window.GVDGWeather.buildWeatherStrip(document, S.weather, { title: 'Round weather' });
-        }
-        // Swap the weather strip in place (no full renderHole) when a background refresh arrives, so the
-        // scorecard's scroll position and any open scorer dropdown survive the 5-minute weather update.
-        function refreshWeatherStrip() {
-            const holder = document.querySelector('.weather-strip');
-            if (!holder) return; // no strip rendered yet — the next renderHole will place it
-            const fresh = roundWeatherNode();
-            if (fresh) holder.replaceWith(fresh); else holder.remove();
-        }
         function renderHole() {
             if (!S.holes.length) return;
             const h = holeMeta(S.holeIdx);
@@ -609,7 +595,6 @@ export function startScoreApp(options) {
             scorecardView.render({
                 atEnd: S.holeIdx >= S.holes.length - 1,
                 atStart: S.holeIdx === 0,
-                buildWeatherNode: roundWeatherNode,
                 choices: choices,
                 dormie: isMatchDormie(),
                 hole: h,
@@ -628,10 +613,11 @@ export function startScoreApp(options) {
                 rows: rowViews,
                 scorerIndex: scorerIndex,
                 show: MODE === 'round',
-                showWeather: !!(S.weather && window.GVDGWeather),
+                showWeather: !!S.weather,
                 teeSign: liveTeeSignView(h),
                 totals: totals,
                 warning: warnMsg,
+                weather: S.weather,
                 weatherVersion: S.weather && (S.weather.updatedAt || S.weather.nextRefreshAt || (S.weather.current && S.weather.current.fetchedAt) || ''),
             });
         }
@@ -658,13 +644,13 @@ export function startScoreApp(options) {
             });
         }
         function udiscExportData() {
-            if (!window.UDiscExport || !S.udiscCourseId) return null;
+            if (!S.udiscCourseId) return null;
             const me = (S.cardmates || []).find((c) => c.isMe);
             if (!me || !me.scores) return null;
             const scorecard = S.holes
                 .filter((h) => me.scores[h.hole] != null)
                 .map((h) => ({ hole: h.hole, par: h.par, strokes: me.scores[h.hole] }));
-            return { build: window.UDiscExport.build, courseId: S.udiscCourseId, scorecard: scorecard };
+            return { courseId: S.udiscCourseId, scorecard: scorecard };
         }
         // What (if anything) is stopping this card from finalizing: unresolved conflicts + unconfirmed
         // member scores. Recomputed each render so the sheet reflects live snapshots while it's open.

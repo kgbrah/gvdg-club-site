@@ -173,22 +173,55 @@ test('wind arrow rotates relative to device heading after compass permission', a
     clearTimeout() { clearedTimer = true; },
   };
   const weather = await loadWeatherDisplay({ window: fakeWindow });
+  const compassEvents = [];
+  const unsubscribe = weather.subscribeCompass((state) => compassEvents.push(state));
 
   assert.equal(await weather.enableCompass(), true);
   assert.equal(requestedAbsolute, true);
   assert.equal(typeof listeners.deviceorientationabsolute, 'function');
   assert.equal(typeof listeners.deviceorientation, 'function');
+  assert.equal(weather.windArrowModel(225).rotationDeg, 45);
+  assert.equal(compassEvents[compassEvents.length - 1].status, 'starting');
 
   listeners.deviceorientation({ absolute: true, alpha: 90 });
   const strip = weather.buildWeatherStrip(fakeDoc(), { current: { windSpeedMph: 8.4, windDirectionDeg: 225, windGustMph: 10 }, history: [] }, {});
   const arrow = findArrow(strip);
   const wind = findByClass(strip, 'weather-wind');
   assert.equal(clearedTimer, true);
+  assert.equal(weather.compassState().status, 'active');
+  assert.equal(weather.compassState().modeText, 'Phone-relative');
+  assert.equal(weather.windArrowModel(225).rotationDeg, 135);
+  assert.equal(compassEvents[compassEvents.length - 1].relative, 'facing');
   assert.equal(arrow.getAttribute('data-relative'), 'facing');
   assert.equal(arrow.getAttribute('data-compass-status'), 'active');
   assert.equal(arrow.style.transform, 'rotate(135deg)');
   assert.equal(wind.getAttribute('data-relative'), 'facing');
   assert.match(textOf(wind), /Phone-relative/);
+  unsubscribe();
+});
+
+test('current weather summary is exported for React weather surfaces', async () => {
+  const weather = await loadWeatherDisplay();
+  const summary = weather.currentWeatherSummary({
+    current: {
+      fetchedAt: '2026-07-01T16:20:10.000Z',
+      temperatureF: 74.2,
+      apparentTemperatureF: 80.2,
+      relativeHumidity: 68,
+      weatherCode: 0,
+      windSpeedMph: 6.8,
+      windDirectionDeg: 154,
+      windGustMph: 11.1,
+    },
+    history: [],
+  });
+
+  assert.equal(summary.condition, 'Clear');
+  assert.equal(summary.tempText, '74°');
+  assert.equal(summary.feelsText, 'Feels 80°');
+  assert.equal(summary.windText, 'SSE 7 mph');
+  assert.equal(summary.gustText, 'gust 11');
+  assert.equal(summary.humidityText, 'Humidity 68%');
 });
 
 test('no wind arrow when direction is unknown', async () => {
