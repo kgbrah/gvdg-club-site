@@ -1,6 +1,7 @@
 import { createScoreAuthFlowRenderer } from "./auth-flow.js";
 import { createLeaderboardSheetRenderer } from "./leaderboard-sheet.js";
 import { createManagePlayersSheetRenderer } from "./manage-players-sheet.js";
+import { createScoreDialogRenderer } from "./dialogs.js";
 import { createScoreNotificationsRenderer } from "./notifications.js";
 import { createScorecardViewRenderer } from "./scorecard-view.js";
 import { createScoreStatusViewRenderer } from "./status-view.js";
@@ -26,10 +27,12 @@ export function startScoreApp(options) {
         const GUEST_TOKEN = MODE === 'event' ? (params.get('gt') || guestTokenStored()) : null;
 
         const authFlow = createScoreAuthFlowRenderer();
+        const dialogs = createScoreDialogRenderer();
         const notifications = createScoreNotificationsRenderer();
         const scorecardView = createScorecardViewRenderer();
         const statusView = createScoreStatusViewRenderer();
         const setupFlow = options && options.setupFlow;
+        const scoreShell = options && options.shell;
         const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, roundConfig: null, scoreTargets: [], scoreTargetError: null, weather: null };
         const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
         const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
@@ -61,13 +64,12 @@ export function startScoreApp(options) {
             notifications.showConflict(text);
         }
 
-        // ---------- theme ----------
-        if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-        document.getElementById('themeBtn').addEventListener('click', function () {
-            const dark = document.documentElement.getAttribute('data-theme') === 'dark';
-            if (dark) { document.documentElement.removeAttribute('data-theme'); localStorage.setItem('theme', 'light'); }
-            else { document.documentElement.setAttribute('data-theme', 'dark'); localStorage.setItem('theme', 'dark'); }
-        });
+        function setShellHeader(nextHeader) {
+            if (scoreShell && typeof scoreShell.setHeader === 'function') scoreShell.setHeader(nextHeader);
+        }
+        function resetShellHeader() {
+            setShellHeader({ showLeaderboard: false, subtitle: 'Greenville Disc Golf Club', title: 'Live Scoring' });
+        }
 
         // ---------- API (member Bearer token OR guest ?gt=/guestToken) ----------
         async function api(path, opts) {
@@ -404,6 +406,7 @@ export function startScoreApp(options) {
             if (statusView && typeof statusView.clear === 'function') statusView.clear();
         }
         function renderAuthFlow(props) {
+            resetShellHeader();
             clearSetupFlow();
             clearScorecardView();
             clearStatusView();
@@ -411,6 +414,7 @@ export function startScoreApp(options) {
             return true;
         }
         function renderSetupFlow(props) {
+            resetShellHeader();
             if (!setupFlow || typeof setupFlow.render !== 'function') throw new Error('Missing score setup renderer');
             clearAuthFlow();
             clearScorecardView();
@@ -419,6 +423,7 @@ export function startScoreApp(options) {
             return true;
         }
         function renderStatusView(props) {
+            resetShellHeader();
             clearSetupFlow();
             clearAuthFlow();
             clearScorecardView();
@@ -556,7 +561,6 @@ export function startScoreApp(options) {
         function renderHole() {
             if (!S.holes.length) return;
             const h = holeMeta(S.holeIdx);
-            document.getElementById('lbBtn').hidden = false;
             const choices = scorecardChoices();
             const scorerIndex = currentScorerIndex();
             const rows = scoreRows();
@@ -635,8 +639,8 @@ export function startScoreApp(options) {
         // ---------- leaderboard sheet ----------
         let lbOpen = false;
         const leaderboardSheet = createLeaderboardSheetRenderer();
-        document.getElementById('lbBtn').addEventListener('click', openLeaderboard);
         function openLeaderboard() { lbOpen = true; renderLeaderboard(); }
+        if (scoreShell && typeof scoreShell.setLeaderboardHandler === 'function') scoreShell.setLeaderboardHandler(openLeaderboard);
         function closeLeaderboard() { lbOpen = false; leaderboardSheet.close(); }
         function renderLeaderboard() {
             leaderboardSheet.render({
@@ -675,7 +679,13 @@ export function startScoreApp(options) {
             return { conflicts: conflicts, missing: missing, ready: conflicts.length === 0 && missing.length === 0, lines: lines };
         }
         async function finalizeRound() {
-            if (!confirm('Finish this round? This locks the scorecard for everyone.')) return;
+            const confirmed = await dialogs.confirm({
+                cancelText: 'Keep scoring',
+                confirmText: 'Finish round',
+                message: 'This locks the scorecard for everyone.',
+                title: 'Finish round?'
+            });
+            if (!confirmed) return;
             // Casual finalize is /rounds/<code>/finalize (NOT under /live). The Finish button only shows
             // for casual rounds; competition rounds are finalized by an admin from the admin console.
             const r = await api('/rounds/' + ROUND_CODE + '/finalize', { method: 'POST', body: {} });
@@ -724,8 +734,11 @@ export function startScoreApp(options) {
             const sh = me && me.startingHole;
             const startIdx = sh ? S.holes.findIndex((h) => h.hole === sh) : 0;
             S.holeIdx = startIdx >= 0 ? startIdx : 0;
-            document.getElementById('barTitle').firstChild.textContent = MODE === 'round' ? ('Round ' + ROUND_CODE) : ('Card ' + (S.cardId || ''));
-            const subEl = document.getElementById('barSub'); if (subEl) subEl.textContent = [S.courseName, S.layoutName].filter(Boolean).join(' · ') || 'Greenville Disc Golf Club';
+            setShellHeader({
+                showLeaderboard: true,
+                subtitle: [S.courseName, S.layoutName].filter(Boolean).join(' · ') || 'Greenville Disc Golf Club',
+                title: MODE === 'round' ? ('Round ' + ROUND_CODE) : ('Card ' + (S.cardId || ''))
+            });
             renderHole();
             connectWs();
             flushQueue();
@@ -792,13 +805,29 @@ export function startScoreApp(options) {
             renderMessage('Could not start round', (r.data && r.data.error === 'no_layout_holes') ? 'That layout has no holes/pars yet.' : 'Please try again.', false);
         }
         async function addGuestPrompt() {
-            const name = (window.prompt('Add a player to your card (their name):') || '').trim();
+            const name = await dialogs.prompt({
+                confirmText: 'Add player',
+                errorText: 'Enter a player name.',
+                label: 'Player name',
+                message: 'Add a walk-on player to this card.',
+                placeholder: 'Player name',
+                required: true,
+                title: 'Add player'
+            });
             if (!name) return;
             // Doubles requires a pair label per player — collect it now so the walk-on is pairable, rather
             // than leaving the round unscorable until someone opens Manage players.
             let team = null;
             if (isDoublesScoring()) {
-                team = (window.prompt('Pair label for ' + name + ' (doubles — use the SAME label for their partner):') || '').trim();
+                team = await dialogs.prompt({
+                    confirmText: 'Add player',
+                    errorText: 'Enter a pair label.',
+                    label: 'Pair label for ' + name,
+                    message: 'Use the same pair label for exactly two active players before scoring starts.',
+                    placeholder: 'Pair label',
+                    required: true,
+                    title: 'Doubles pair label'
+                });
                 if (!team) { toast('Doubles needs a pair label for each player'); return; }
             }
             const r = await api('/rounds/' + ROUND_CODE + '/guest', { method: 'POST', body: team ? { name: name, team: team } : { name: name } });
@@ -840,8 +869,14 @@ export function startScoreApp(options) {
             toast('Pairs saved');
         }
         async function removeFromRound(p) {
-            const msg = p.isMe ? 'Leave this round? Your scores will be cleared.' : ('Remove ' + p.name + ' from this round? Their scores will be cleared.');
-            if (!window.confirm(msg)) return;
+            const confirmed = await dialogs.confirm({
+                cancelText: 'Cancel',
+                confirmText: p.isMe ? 'Leave round' : 'Remove player',
+                danger: true,
+                message: 'Scores for this player will be cleared.',
+                title: p.isMe ? 'Leave this round?' : ('Remove ' + p.name + '?')
+            });
+            if (!confirmed) return;
             const r = await api('/rounds/' + ROUND_CODE + '/remove', { method: 'POST', body: { index: p.index, name: p.name } });
             closeManagePlayers();
             if (r.status === 409 && r.data && r.data.error === 'player_moved') { await loadMine(); toast('Card changed — open Manage again'); return; }

@@ -24,17 +24,48 @@ function icon(Icon, size = 18) {
 }
 
 function ScoreShell() {
+  const [header, setHeader] = React.useState({
+    showLeaderboard: false,
+    subtitle: "Greenville Disc Golf Club",
+    title: "Live Scoring",
+  });
+  const [darkTheme, setDarkTheme] = React.useState(() => localStorage.getItem("theme") === "dark");
+  const leaderboardHandlerRef = React.useRef(null);
+
   React.useEffect(() => {
-    startScoreApp({ setupFlow });
-    return () => setupFlow.clear();
+    startScoreApp({
+      setupFlow,
+      shell: {
+        setHeader(nextHeader) {
+          setHeader((current) => ({ ...current, ...nextHeader }));
+        },
+        setLeaderboardHandler(handler) {
+          leaderboardHandlerRef.current = handler;
+        },
+      },
+    });
+    return () => {
+      leaderboardHandlerRef.current = null;
+      setupFlow.clear();
+    };
   }, []);
+
+  React.useEffect(() => {
+    if (darkTheme) {
+      document.documentElement.setAttribute("data-theme", "dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+      localStorage.setItem("theme", "light");
+    }
+  }, [darkTheme]);
 
   return h("div", { class: "wrap" }, [
     h("header", { class: "topbar" }, [
       h("img", { src: "img/logo.png", alt: "GVDG", class: "logo", width: 32, height: 32 }),
       h("h1", { id: "barTitle" }, [
-        "Live Scoring",
-        h("small", { id: "barSub", key: "subtitle" }, "Greenville Disc Golf Club"),
+        header.title,
+        h("small", { id: "barSub", key: "subtitle" }, header.subtitle),
       ]),
       h(
         "a",
@@ -46,8 +77,31 @@ function ScoreShell() {
         },
         [icon(UsersRound), h("span", { class: "top-link-label", key: "label" }, "Members")],
       ),
-      h("button", { class: "iconbtn", id: "lbBtn", title: "Leaderboard", "aria-label": "Leaderboard", hidden: true }, icon(Trophy)),
-      h("button", { class: "iconbtn", id: "themeBtn", title: "Toggle theme", "aria-label": "Toggle theme" }, icon(Moon)),
+      h(
+        "button",
+        {
+          "aria-label": "Leaderboard",
+          class: "iconbtn",
+          hidden: !header.showLeaderboard,
+          id: "lbBtn",
+          title: "Leaderboard",
+          type: "button",
+          onClick: () => leaderboardHandlerRef.current?.(),
+        },
+        icon(Trophy),
+      ),
+      h(
+        "button",
+        {
+          "aria-label": "Toggle theme",
+          class: "iconbtn",
+          id: "themeBtn",
+          title: "Toggle theme",
+          type: "button",
+          onClick: () => setDarkTheme((current) => !current),
+        },
+        icon(Moon),
+      ),
     ]),
     h("main", { id: "app" }, h("div", { class: "spin" })),
   ]);

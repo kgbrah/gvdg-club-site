@@ -161,7 +161,7 @@ Spacing follows a 4px base through rem values.
 - Structure: sticky topbar with fixed square logo, truncating title/subtitle, members shortcut, leaderboard control, and theme toggle.
 - Variants: home/setup state hides leaderboard; live card state shows leaderboard and replaces the subtitle with course/layout context. Live casual rounds also use a compact `Share / Add / Manage` tools row below the topbar.
 - Spacing: compact mobile-first controls at `38px-40px`, with gaps from the tight/compact spacing scale.
-- States: icon buttons use stable dimensions and active transform only; hidden controls must not reserve layout space.
+- States: React owns title, subtitle, leaderboard visibility/click handling, and theme toggling; icon buttons use stable dimensions and active transform only; hidden controls must not reserve layout space.
 - Accessibility: action controls expose text labels through `aria-label`, `title`, or visually hidden text; icons are decorative.
 - Motion: static except for the existing active press scale.
 
@@ -200,6 +200,15 @@ Spacing follows a 4px base through rem values.
 - States: overlay backdrop click and close button dismiss the sheet; saving pairs closes only after the server accepts; remove/leave prompts confirm before closing and posting.
 - Accessibility: pair fields use real labels, remove/leave/close/save are real buttons, and no icon-only actions appear in this management sheet.
 - Motion: static bottom sheet; button active states use the existing score app press feedback.
+
+### Score Dialogs
+
+- Structure: React-owned document-level modal renderer for score prompts and confirmations; the legacy score controller supplies dialog copy and awaits resolved values only.
+- Variants: add-player prompt, doubles pair-label prompt, finish-round confirmation, and remove/leave danger confirmation.
+- Spacing: reuses `.overlay`, `.sheet`, `.field`, `.lbl`, `.btn`, `.muted`, and compact modal actions; dialogs center in the viewport and stay within safe-area padding.
+- States: overlay click, Escape, and cancel resolve without side effects; required prompt fields show inline errors; danger confirmations use the score conflict token.
+- Accessibility: dialogs expose `role="dialog"`, `aria-modal`, labelled title/body, autofocus prompt inputs, and real submit/cancel buttons.
+- Motion: static modal; only existing button active states apply.
 
 ### Scorecard View
 

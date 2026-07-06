@@ -140,10 +140,7 @@ function makeLiveSnapshot({ eventId = null, roundCode = null, roundConfig, playe
     players,
     cardId: "card-a",
     playerIndex: 0,
-    cardmates: players.map((player) => ({
-      ...player,
-      isMe: player.index === 0,
-    })),
+    cardmates: activeCardmates(players),
     conflicts: [],
     missing: [],
     standings: standingsFor(players),
@@ -151,8 +148,15 @@ function makeLiveSnapshot({ eventId = null, roundCode = null, roundConfig, playe
   };
 }
 
+function activeCardmates(players) {
+  return players.filter((player) => !player.removed).map((player) => ({
+    ...player,
+    isMe: player.index === 0,
+  }));
+}
+
 function standingsFor(players) {
-  return players.map((player) => {
+  return players.filter((player) => !player.removed).map((player) => {
     const scoredHoles = holes.filter((hole) => Number.isInteger(player.scores[hole.hole]));
     const total = scoredHoles.reduce((sum, hole) => sum + player.scores[hole.hole], 0);
     const par = scoredHoles.reduce((sum, hole) => sum + hole.par, 0);
@@ -171,10 +175,31 @@ function scoreSnapshot(snapshot, body) {
   if (!player) return snapshot;
   player.scores[body.hole] = body.strokes;
   player.scorecards[body.hole] = { [`player:${body.scorerIndex ?? body.index}`]: body.strokes };
-  snapshot.cardmates = snapshot.players.map((row) => ({ ...row, isMe: row.index === snapshot.playerIndex }));
+  snapshot.cardmates = activeCardmates(snapshot.players);
   snapshot.standings = standingsFor(snapshot.players);
   snapshot.rev += 1;
   return snapshot;
+}
+
+function addGuest(snapshot, body) {
+  const index = snapshot.players.reduce((max, player) => Math.max(max, player.index), -1) + 1;
+  snapshot.players.push(makePlayer({ index, name: body.name || "Guest", cardId: "card-a", scores: {} }));
+  snapshot.cardmates = activeCardmates(snapshot.players);
+  snapshot.standings = standingsFor(snapshot.players);
+  snapshot.rev += 1;
+  return snapshot;
+}
+
+function removePlayer(snapshot, body) {
+  const player = snapshot.players.find((row) => row.index === body.index && row.name === body.name);
+  if (!player) return { ok: false, snapshot };
+  player.removed = true;
+  player.scores = {};
+  player.scorecards = {};
+  snapshot.cardmates = activeCardmates(snapshot.players);
+  snapshot.standings = standingsFor(snapshot.players);
+  snapshot.rev += 1;
+  return { ok: true, snapshot };
 }
 
 function json(body, status = 200) {
@@ -247,6 +272,15 @@ async function installApiRoutes(page) {
       return route.fulfill(json(roundLive));
     }
     if (pathName === "/rounds/QA1234/join" && method === "POST") return route.fulfill(json(roundLive));
+    if (pathName === "/rounds/QA1234/guest" && method === "POST") {
+      roundLive = addGuest(roundLive, parseBody(request));
+      return route.fulfill(json(roundLive));
+    }
+    if (pathName === "/rounds/QA1234/remove" && method === "POST") {
+      const result = removePlayer(roundLive, parseBody(request));
+      roundLive = result.snapshot;
+      return route.fulfill(json(result.ok ? roundLive : { error: "no_player" }, result.ok ? 200 : 404));
+    }
     if (pathName === "/shop/orders/new-count" && method === "GET") return route.fulfill(json({ count: 0 }));
     if (pathName === "/leagues" && method === "GET") return route.fulfill(json({ leagues: [] }));
     if (pathName === "/meetings" && method === "GET") return route.fulfill(json({ meetings: [] }));
@@ -273,6 +307,10 @@ async function runCasualRoundQa(browser, origin) {
   const page = await context.newPage();
   const errors = [];
   collectPageErrors(page, errors);
+  page.on("dialog", (dialog) => {
+    errors.push(`Unexpected native dialog: ${dialog.type()} ${dialog.message()}`);
+    return dialog.dismiss();
+  });
   await installApiRoutes(page);
   await page.addInitScript(() => {
     sessionStorage.setItem("gvdg_member_token", "qa-token");
@@ -319,6 +357,19 @@ async function runCasualRoundQa(browser, origin) {
   if (windArrow.relative !== "facing" || windArrow.status !== "active" || windArrow.transform !== "rotate(64deg)") {
     throw new Error(`Unexpected relative wind arrow state: ${JSON.stringify(windArrow)}`);
   }
+
+  await page.getByRole("button", { name: "Add player" }).click();
+  await page.getByRole("dialog", { name: "Add player" }).waitFor();
+  await page.getByLabel("Player name").fill("Nina Park");
+  await page.locator(".score-dialog").getByRole("button", { name: "Add player" }).click();
+  await waitForPageText(page, "body", "Nina Park", "added player score row");
+  await page.getByRole("button", { name: "Manage" }).click();
+  await page.waitForSelector(".sheet");
+  const ninaRow = page.locator(".manage-player-row").filter({ hasText: "Nina Park" });
+  await ninaRow.getByRole("button", { name: "Remove" }).click();
+  await page.getByRole("dialog", { name: "Remove Nina Park?" }).waitFor();
+  await page.locator(".score-dialog").getByRole("button", { name: "Remove player" }).click();
+  await page.waitForFunction(() => !document.body.textContent.includes("Nina Park"), null, { timeout: 5_000 });
 
   if (createdRoundBody?.liveScoringConfig?.groupFormat !== "singles") {
     throw new Error(`Expected singles config, got ${JSON.stringify(createdRoundBody)}`);

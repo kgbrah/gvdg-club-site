@@ -104,6 +104,7 @@
         .btn:active { transform: scale(0.98); }
         .btn.secondary { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); }
         .btn.ghost { background: transparent; color: var(--primary); border: 1.5px solid var(--primary); }
+        .btn.danger { background: var(--over); color: white; }
         .btn:disabled { opacity: 0.5; cursor: default; }
         .btn.small { min-height: 40px; width: auto; font-size: 0.85rem; padding: 0 0.85rem; border-radius: 10px; }
         input.field {
@@ -225,6 +226,14 @@
         .manage-pair-field { display: grid; gap: 0.35rem; }
         .manage-player-row { justify-content: space-between; }
         .manage-player-row .btn { width: auto; min-width: 96px; }
+        .score-dialog-overlay { z-index: 90; justify-content: center; padding: calc(1rem + var(--safe-top)) 1rem calc(1rem + var(--safe-bottom)); }
+        .score-dialog { width: min(100%, 430px); max-height: min(82vh, 560px); margin: auto; border-radius: 18px; padding: 1rem; box-shadow: 0 20px 60px var(--shadow); }
+        .score-dialog-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 14px; background: var(--bg-tertiary); color: var(--primary); margin-bottom: 0.7rem; }
+        .score-dialog-icon.danger { color: var(--over); }
+        .score-dialog-field { margin-top: 0.9rem; }
+        .score-dialog-field span { display: block; margin-bottom: 0.35rem; }
+        .score-dialog-actions { display: flex; gap: 0.55rem; margin-top: 1rem; }
+        .score-dialog-actions .btn { width: auto; flex: 1 1 0; }
         .auth-error { color: var(--over); min-height: 1rem; }
         .sheet-close, .udisc-export-mount { margin-top: 1rem; }
         .spin { width: 30px; height: 30px; border: 3px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; animation: sp 0.8s linear infinite; margin: 1.5rem auto; }

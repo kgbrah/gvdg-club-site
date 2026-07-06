@@ -19,6 +19,14 @@ function scoreNotificationsSource() {
   return readFileSync('src/score-app/notifications.js', 'utf8');
 }
 
+function scoreDialogsSource() {
+  return readFileSync('src/score-app/dialogs.js', 'utf8');
+}
+
+function scoreMainSource() {
+  return readFileSync('src/score-app/main.js', 'utf8');
+}
+
 function scoreLegacySetupSource() {
   const source = readFileSync('src/score-app/score-legacy.js', 'utf8');
   const start = source.indexOf('async function renderLayoutPick(course)');
@@ -49,9 +57,9 @@ function scoreLegacyStatusSource() {
 function scoreLegacyNotificationSource() {
   const source = readFileSync('src/score-app/score-legacy.js', 'utf8');
   const start = source.indexOf('function toast(msg)');
-  const end = source.indexOf('// ---------- theme ----------');
+  const end = source.indexOf('function setShellHeader(nextHeader)');
   assert.notEqual(start, -1, 'notification section should exist');
-  assert.notEqual(end, -1, 'theme section should follow notification section');
+  assert.notEqual(end, -1, 'shell header section should follow notification section');
   return source.slice(start, end);
 }
 
@@ -179,6 +187,35 @@ test('score notifications are React-owned without legacy body DOM fallbacks', ()
   assert.doesNotMatch(fullLegacy, /document\.body\.appendChild/);
   assert.doesNotMatch(fullLegacy, /offlineBar/);
   assert.doesNotMatch(fullLegacy, /toast conflict/);
+});
+
+test('score dialogs replace native score prompts and confirms', () => {
+  const dialogs = scoreDialogsSource();
+  const fullLegacy = readFileSync('src/score-app/score-legacy.js', 'utf8');
+  assert.match(fullLegacy, /createScoreDialogRenderer\(\)/);
+  assert.match(fullLegacy, /dialogs\.prompt\(\{/);
+  assert.match(fullLegacy, /dialogs\.confirm\(\{/);
+  assert.match(dialogs, /function ScoreDialog\(props\)/);
+  assert.match(dialogs, /role: "dialog"/);
+  assert.match(dialogs, /createRoot\(host\)/);
+  assert.doesNotMatch(fullLegacy, /window\.prompt/);
+  assert.doesNotMatch(fullLegacy, /window\.confirm/);
+  assert.doesNotMatch(fullLegacy, /if \(!confirm\(/);
+});
+
+test('score shell owns topbar state without legacy DOM mutations', () => {
+  const main = scoreMainSource();
+  const fullLegacy = readFileSync('src/score-app/score-legacy.js', 'utf8');
+  assert.match(main, /const \[header, setHeader\] = React\.useState/);
+  assert.match(main, /setLeaderboardHandler\(handler\)/);
+  assert.match(main, /hidden: !header\.showLeaderboard/);
+  assert.match(main, /setDarkTheme\(\(current\) => !current\)/);
+  assert.match(fullLegacy, /scoreShell\.setHeader/);
+  assert.match(fullLegacy, /scoreShell\.setLeaderboardHandler\(openLeaderboard\)/);
+  assert.doesNotMatch(fullLegacy, /document\.getElementById\('lbBtn'\)/);
+  assert.doesNotMatch(fullLegacy, /document\.getElementById\('barTitle'\)/);
+  assert.doesNotMatch(fullLegacy, /document\.getElementById\('barSub'\)/);
+  assert.doesNotMatch(fullLegacy, /document\.getElementById\('themeBtn'\)/);
 });
 
 test('player score page supports pair target rows and target-id offline replay', () => {
