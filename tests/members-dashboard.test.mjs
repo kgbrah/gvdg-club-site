@@ -12,9 +12,11 @@ test('member dashboard React registration panel includes casual round posts', ()
 
 test('member dashboard React board panel owns board loading and posting', () => {
   const html = readFileSync('gvdg-members.html', 'utf8');
+  const dashboardApp = readFileSync('src/members-app/dashboard-app.js', 'utf8');
   const panel = readFileSync('src/members-app/board-panel.js', 'utf8');
   const markdown = readFileSync('src/members-app/board-markdown.js', 'utf8');
-  assert.match(html, /id="membersReactBoardPanel"/);
+  assert.match(html, /id="membersReactDashboardApp"/);
+  assert.match(dashboardApp, /id: "membersReactBoardPanel"/);
   assert.match(html, /#membersReactBoardPanel:not\(:empty\)/);
   assert.doesNotMatch(html, /id="legacyBoardPanel"/);
   assert.doesNotMatch(html, /reactBoardReady/);
@@ -28,9 +30,11 @@ test('member dashboard React board panel owns board loading and posting', () => 
 
 test('member dashboard React tee signs panel owns upload and captured sign display', () => {
   const html = readFileSync('gvdg-members.html', 'utf8');
+  const dashboardApp = readFileSync('src/members-app/dashboard-app.js', 'utf8');
   const panel = readFileSync('src/members-app/tee-signs-panel.js', 'utf8');
   const utils = readFileSync('src/members-app/tee-signs-utils.js', 'utf8');
-  assert.match(html, /id="membersReactTeeSignsPanel"/);
+  assert.match(html, /id="membersReactDashboardApp"/);
+  assert.match(dashboardApp, /id: "membersReactTeeSignsPanel"/);
   assert.match(html, /#membersReactTeeSignsPanel:not\(:empty\)/);
   assert.doesNotMatch(html, /id="legacyTeeSignsPanel"/);
   assert.doesNotMatch(html, /reactTeeSignsReady/);
@@ -48,6 +52,7 @@ test('member dashboard React tee signs panel owns upload and captured sign displ
 test('member dashboard React club panel owns directory search, filters, load-more, and minutes', () => {
   const html = readFileSync('gvdg-members.html', 'utf8');
   const app = readFileSync('src/members-app/main.js', 'utf8');
+  const dashboardApp = readFileSync('src/members-app/dashboard-app.js', 'utf8');
   const router = readFileSync('src/members-app/dashboard-router.js', 'utf8');
   const clubPanel = readFileSync('src/members-app/club-panel.js', 'utf8');
   const data = readFileSync('src/members-app/club-directory-data.js', 'utf8');
@@ -56,7 +61,8 @@ test('member dashboard React club panel owns directory search, filters, load-mor
   const doubles = readFileSync('src/members-app/doubles-league-panel.js', 'utf8');
   const minuteData = readFileSync('src/members-app/meeting-minutes-data.js', 'utf8');
   const minutes = readFileSync('src/members-app/meeting-minutes-panel.js', 'utf8');
-  assert.match(html, /id="membersReactClubPanel"/);
+  assert.match(html, /id="membersReactDashboardApp"/);
+  assert.match(dashboardApp, /id: "membersReactClubPanel"/);
   assert.match(html, /body\[data-member-dashboard-tab="club"\] #membersReactClubPanel:not\(:empty\)/);
   assert.doesNotMatch(router, /querySelector|classList|dtab-off/);
   assert.doesNotMatch(html, /id="legacyClubDirectoryPanel"/);
@@ -69,7 +75,8 @@ test('member dashboard React club panel owns directory search, filters, load-mor
   assert.doesNotMatch(html, /DOUBLES_DATA_EMBEDDED/);
   assert.doesNotMatch(html, /id="doublesTable"/);
   assert.doesNotMatch(html, /id="seasonSelector"/);
-  assert.match(app, /createRoot\(clubMount\)\.render/);
+  assert.match(app, /createRoot\(dashboardMount\)\.render\(h\(MemberDashboardApp\)\)/);
+  assert.doesNotMatch(app, /createRoot\(clubMount\)\.render/);
   assert.doesNotMatch(app, /members-react-(shell|overview|ratings|registration|board|tee-signs|club)-ready|classList/);
   assert.match(data, /export const CLUB_MEMBERS/);
   assert.match(data, /export const CLUB_YEAR_DATA/);
@@ -102,9 +109,11 @@ test('member dashboard React club panel owns directory search, filters, load-mor
 
 test('member dashboard React registration section stays available for logged-in members', () => {
   const html = readFileSync('gvdg-members.html', 'utf8');
+  const dashboardApp = readFileSync('src/members-app/dashboard-app.js', 'utf8');
   const panel = readFileSync('src/members-app/registration-panel.js', 'utf8');
   const casual = readFileSync('src/members-app/registration-casual.js', 'utf8');
-  assert.match(html, /id="membersReactRegistrationPanel"/);
+  assert.match(html, /id="membersReactDashboardApp"/);
+  assert.match(dashboardApp, /id: "membersReactRegistrationPanel"/);
   assert.match(html, /#membersReactRegistrationPanel:not\(:empty\)/);
   assert.doesNotMatch(html, /id="legacyRegisterTitle"/);
   assert.doesNotMatch(html, /id="registerList"/);

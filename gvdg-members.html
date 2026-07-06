@@ -374,16 +374,18 @@
     <!-- Members Content (hidden until login) -->
     <div class="members-content" id="membersContent">
         <section id="members">
-            <div id="membersReactDashboardShell"></div>
+            <div id="membersReactDashboardApp"></div>
 
             <style>
+                #membersReactDashboardApp,
                 #membersReactDashboardShell,
                 #membersReactOverviewPanel,
                 #membersReactRegistrationPanel,
                 #membersReactBoardPanel,
                 #membersReactTeeSignsPanel,
                 #membersReactClubPanel { display: none; }
-                #membersReactDashboardShell { scroll-margin-top: 96px; }
+                #membersReactDashboardApp { scroll-margin-top: 96px; }
+                #membersReactDashboardApp:not(:empty),
                 #membersReactDashboardShell:not(:empty),
                 #membersReactOverviewPanel:not(:empty),
                 #membersReactRegistrationPanel:not(:empty),
@@ -655,24 +657,6 @@
                 .ts-guess-pending { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.4rem; }
             </style>
             <style>.admin-portal-link{display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin-bottom:1.5rem;background:var(--primary-strong);color:white;padding:0.6rem 1.25rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.9rem;}.admin-portal-link:hover{background:var(--primary);}</style>
-
-            <div id="myDashboard" class="my-dashboard">
-                <div id="membersReactOverviewPanel"></div>
-            </div>
-
-            <div id="clubRegister" class="club-register">
-                <div id="membersReactRegistrationPanel"></div>
-            </div>
-
-            <div id="clubBoard" class="club-board">
-                <div id="membersReactBoardPanel"></div>
-            </div>
-
-            <div id="teeCapture" class="tee-capture">
-                <div id="membersReactTeeSignsPanel"></div>
-            </div>
-
-            <div id="membersReactClubPanel"></div>
 
         </section>
 

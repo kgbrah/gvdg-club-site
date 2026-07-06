@@ -46,7 +46,7 @@ function assertNoLegacyMemberFallbacks(html) {
   removedMemberFallbacks.forEach((pattern) => assert.doesNotMatch(html, pattern));
 }
 
-test('member dashboard mounts React-owned dashboard islands without legacy fallbacks', () => {
+test('member dashboard mounts a React-owned dashboard app without legacy fallbacks', () => {
   const html = readFileSync('gvdg-members.html', 'utf8');
   const app = readFileSync('src/members-app/main.js', 'utf8');
   const authGate = readFileSync('src/members-app/auth-gate.js', 'utf8');
@@ -57,6 +57,7 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   const passkeys = readFileSync('src/members-app/member-passkeys.js', 'utf8');
   const profile = readFileSync('src/members-app/member-profile-controller.js', 'utf8');
   const pageChrome = readFileSync('src/members-app/page-chrome.js', 'utf8');
+  const dashboardApp = readFileSync('src/members-app/dashboard-app.js', 'utf8');
   const shell = readFileSync('src/members-app/dashboard-shell.js', 'utf8');
   const router = readFileSync('src/members-app/dashboard-router.js', 'utf8');
   const dialogs = readFileSync('src/members-app/member-dialogs.js', 'utf8');
@@ -74,12 +75,13 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   const club = readFileSync('src/members-app/club-panel.js', 'utf8');
   assert.match(html, /id="membersReactPageChrome"/);
   assert.match(html, /id="membersReactAuthGate"/);
-  assert.match(html, /id="membersReactDashboardShell"/);
-  assert.match(html, /id="membersReactOverviewPanel"/);
-  assert.match(html, /id="membersReactRegistrationPanel"/);
-  assert.match(html, /id="membersReactBoardPanel"/);
-  assert.match(html, /id="membersReactTeeSignsPanel"/);
-  assert.match(html, /id="membersReactClubPanel"/);
+  assert.match(html, /id="membersReactDashboardApp"/);
+  assert.doesNotMatch(html, /<div id="membersReactDashboardShell"/);
+  assert.doesNotMatch(html, /<div id="membersReactOverviewPanel"/);
+  assert.doesNotMatch(html, /<div id="membersReactRegistrationPanel"/);
+  assert.doesNotMatch(html, /<div id="membersReactBoardPanel"/);
+  assert.doesNotMatch(html, /<div id="membersReactTeeSignsPanel"/);
+  assert.doesNotMatch(html, /<div id="membersReactClubPanel"/);
   assert.doesNotMatch(html, /id="memberSectionTitle"/);
   assert.doesNotMatch(html, /id="myDashboard"[^>]*style="display:\s*none;?"/);
   assert.doesNotMatch(html, /id="clubRegister"[^>]*style="display:\s*none;?"/);
@@ -117,6 +119,7 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   assert.doesNotMatch(html, /☰|🌙|☀️/);
   assert.match(html, /body\[data-member-shell="members"\] \.members-content \{ display: block; \}/);
   assert.match(html, /body\[data-member-shell="members"\] \.login-gate \{ display: none; \}/);
+  assert.match(html, /#membersReactDashboardApp:not\(:empty\)/);
   assert.match(html, /#membersReactDashboardShell:not\(:empty\)/);
   assert.match(html, /#membersReactTeeSignsPanel:not\(:empty\)/);
   assert.match(html, /body\[data-member-dashboard-tab="events"\] #clubRegister/);
@@ -134,12 +137,22 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   assert.doesNotMatch(app, /members-react-auth-ready/);
   assert.match(app, /installMemberAuthController\(\)/);
   assert.match(app, /installDashboardRouter\(\)/);
-  assert.match(app, /createRoot\(shellMount\)\.render/);
-  assert.match(app, /createRoot\(overviewMount\)\.render/);
-  assert.match(app, /createRoot\(registrationMount\)\.render/);
-  assert.match(app, /createRoot\(boardMount\)\.render/);
-  assert.match(app, /createRoot\(teeSignsMount\)\.render/);
-  assert.match(app, /createRoot\(clubMount\)\.render/);
+  assert.match(app, /const dashboardMount = document\.getElementById\("membersReactDashboardApp"\)/);
+  assert.match(app, /createRoot\(dashboardMount\)\.render\(h\(MemberDashboardApp\)\)/);
+  assert.doesNotMatch(app, /const (shellMount|overviewMount|registrationMount|boardMount|teeSignsMount|clubMount) =/);
+  assert.match(dashboardApp, /export function MemberDashboardApp\(\)/);
+  assert.match(dashboardApp, /MemberDashboardShell/);
+  assert.match(dashboardApp, /MemberOverviewDashboard/);
+  assert.match(dashboardApp, /MemberRegistrationPanel/);
+  assert.match(dashboardApp, /MemberBoardPanel/);
+  assert.match(dashboardApp, /MemberTeeSignsPanel/);
+  assert.match(dashboardApp, /MemberClubPanel/);
+  assert.match(dashboardApp, /id: "membersReactDashboardShell"/);
+  assert.match(dashboardApp, /id: "membersReactOverviewPanel"/);
+  assert.match(dashboardApp, /id: "membersReactRegistrationPanel"/);
+  assert.match(dashboardApp, /id: "membersReactBoardPanel"/);
+  assert.match(dashboardApp, /id: "membersReactTeeSignsPanel"/);
+  assert.match(dashboardApp, /id: "membersReactClubPanel"/);
   assert.doesNotMatch(app, /members-react-(shell|overview|ratings|registration|board|tee-signs|club)-ready/);
   assert.doesNotMatch(app, /classList/);
   assert.match(authGate, /data-react-auth-gate/);
