@@ -111,12 +111,21 @@ Spacing follows a 4px base through rem values.
 - Spacing: `0.75rem 1.5rem`.
 - States: hover fills with `--primary`; expanded rotates icon.
 
+### Member Page Chrome
+
+- Structure: React-owned fixed header with logo link, shared public nav links, donate link, mobile menu control, and theme toggle mounted into `membersReactPageChrome`.
+- Variants: desktop inline nav, mobile collapsed nav, open mobile nav, light theme, and dark theme.
+- Spacing: preserves the existing member page `header`, `nav`, `nav-right`, `nav-links`, `theme-toggle`, and `menu-toggle` primitives so the chrome keeps the same fixed-header rhythm.
+- States: React owns menu expanded state, current-page nav state, external donate link, and `data-theme` persistence; the member page does not load `nav.js` or mutate header nodes with query selectors.
+- Accessibility: menu and theme controls are real buttons with labels, `aria-expanded`, and Lucide icons; current page uses `aria-current="page"`.
+- Motion: mobile menu reveal uses the existing transform/opacity transition; icon changes do not resize controls.
+
 ### Member Dashboard Shell
 
 - Structure: React-owned auth gate, bundled auth/session controller, title, tablist, welcome/logout banner, admin portal link, overview, account tools, event registration, board, tee-sign capture, and club panels mounted into stable HTML wrappers.
 - Variants: login, forced-PIN, profile setup, overview, events, board, tee signs, and club tabs; auth/account tools dispatch credential, passkey, profile, and logout events while bundled member auth modules perform the secure flows.
 - Spacing: dashboard wrappers keep the existing `my-dashboard`, `club-register`, `club-board`, and `tee-capture` surfaces so migrated panels retain the same mobile rhythm; the welcome banner uses the established green banner primitive and stays compact on phones.
-- States: migrated legacy fallback nodes must be absent, not hidden; auth mode is driven by `gvdg:member-auth-mode`; the bundled auth controller owns `gvdg:member-auth-ready`, `gvdg:member-profile-updated`, and login/session events; static panel wrappers stay visible by default under the auth-gated content, and the bundled dashboard router owns `gvdg:select-dashboard-tab`, `gvdg:member-dashboard-opened`, and wrapper `dtab-off` state; individual panels do not imperatively reveal their parent wrappers; the admin portal link renders only on the overview tab for admin members.
+- States: migrated legacy fallback nodes must be absent, not hidden; auth mode is driven by `gvdg:member-auth-mode`; the React auth gate owns page-level `data-member-shell` visibility through `gvdg:member-shell-view`; the bundled auth controller owns `gvdg:member-auth-ready`, `gvdg:member-profile-updated`, and login/session events; static panel wrappers stay visible by default under the auth-gated content, and the bundled dashboard router owns `gvdg:select-dashboard-tab`, `gvdg:member-dashboard-opened`, and wrapper `dtab-off` state; individual panels do not imperatively reveal their parent wrappers; the admin portal link renders only on the overview tab for admin members.
 - Accessibility: React tabs expose `role="tab"` and `aria-selected`; auth, profile, logout, and account actions are real buttons/forms with preserved labels.
 - Motion: tab changes are immediate and should not resize fixed controls or introduce horizontal overflow.
 

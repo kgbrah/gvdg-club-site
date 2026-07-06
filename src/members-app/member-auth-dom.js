@@ -22,16 +22,15 @@ export function setBusy(button, busy) {
 }
 
 export function setAuthMode(mode, passkeysSupported) {
+  window.dispatchEvent(new CustomEvent("gvdg:member-shell-view", {
+    detail: { view: "auth" },
+  }));
   window.dispatchEvent(new CustomEvent("gvdg:member-auth-mode", {
     detail: { mode, passkeysSupported },
   }));
 }
 
 export function showLoginShell(passkeysSupported) {
-  const gate = byId("loginGate");
-  const content = byId("membersContent");
-  if (gate) gate.style.display = "flex";
-  content?.classList.remove("active");
   setAuthMode("login", passkeysSupported);
   clearError(byId("loginError"));
   clearError(byId("pinChangeError"));
@@ -39,20 +38,15 @@ export function showLoginShell(passkeysSupported) {
 }
 
 export function showPinChangeShell(passkeysSupported) {
-  const gate = byId("loginGate");
-  const content = byId("membersContent");
-  if (gate) gate.style.display = "flex";
-  content?.classList.remove("active");
   setAuthMode("pin", passkeysSupported);
   clearError(byId("pinChangeError"));
   requestAnimationFrame(() => byId("newPinInput")?.focus());
 }
 
 export function showMembersShell(name) {
-  const gate = byId("loginGate");
-  const content = byId("membersContent");
-  if (gate) gate.style.display = "none";
-  content?.classList.add("active");
+  window.dispatchEvent(new CustomEvent("gvdg:member-shell-view", {
+    detail: { view: "members" },
+  }));
   const passkeyStatus = byId("passkeyStatus");
   if (passkeyStatus) passkeyStatus.textContent = "";
   window.dispatchEvent(new CustomEvent("gvdg:member-dashboard-opened", {

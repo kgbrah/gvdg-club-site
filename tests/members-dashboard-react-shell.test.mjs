@@ -38,6 +38,8 @@ const removedMemberFallbacks = [
   /function b64urlToBuf/,
   /window\.addEventListener\('gvdg:member-login-requested'/,
   /document\.querySelector\('\.menu-toggle'\)\.addEventListener/,
+  /<script src="nav\.js" defer><\/script>/,
+  /<span class="theme-icon">/,
 ];
 
 function assertNoLegacyMemberFallbacks(html) {
@@ -69,6 +71,7 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   const board = readFileSync('src/members-app/board-panel.js', 'utf8');
   const teeSigns = readFileSync('src/members-app/tee-signs-panel.js', 'utf8');
   const club = readFileSync('src/members-app/club-panel.js', 'utf8');
+  assert.match(html, /id="membersReactPageChrome"/);
   assert.match(html, /id="membersReactAuthGate"/);
   assert.match(html, /id="membersReactDashboardShell"/);
   assert.match(html, /id="membersReactOverviewPanel"/);
@@ -100,14 +103,22 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   assert.doesNotMatch(html, /gvdg:member-login-requested/);
   assert.doesNotMatch(html, /gvdg:member-profile-updated/);
   assert.doesNotMatch(html, /gvdg:member-dashboard-opened/);
+  assert.doesNotMatch(html, /<header>[\s\S]*class="menu-toggle"/);
+  assert.doesNotMatch(html, /<ul class="nav-links" id="navLinks"><\/ul>/);
+  assert.doesNotMatch(html, /☰|🌙|☀️/);
+  assert.match(html, /body\[data-member-shell="members"\] \.members-content \{ display: block; \}/);
+  assert.match(html, /body\[data-member-shell="members"\] \.login-gate \{ display: none; \}/);
+  assert.doesNotMatch(html, /\.members-content\.active/);
+  assert.doesNotMatch(html, /#membersContent\.active/);
   assertNoLegacyMemberFallbacks(html);
   assert.match(html, /<script type="module" src="members-app\/members-app\.js"><\/script>/);
+  assert.match(app, /createRoot\(pageChromeMount\)\.render\(h\(MemberPageChrome\)\)/);
   assert.match(app, /createRoot\(authMount\)\.render/);
   assert.match(app, /MemberDialogs/);
-  assert.match(app, /installMemberPageChrome\(\)/);
+  assert.doesNotMatch(app, /installMemberPageChrome/);
+  assert.doesNotMatch(app, /members-react-auth-ready/);
   assert.match(app, /installMemberAuthController\(\)/);
   assert.match(app, /installDashboardRouter\(\)/);
-  assert.match(app, /members-react-auth-ready/);
   assert.match(app, /createRoot\(shellMount\)\.render/);
   assert.match(app, /createRoot\(overviewMount\)\.render/);
   assert.match(app, /createRoot\(registrationMount\)\.render/);
@@ -132,6 +143,9 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   assert.match(authGate, /gvdg:member-profile-save-requested/);
   assert.match(authGate, /gvdg:member-profile-photo-chosen/);
   assert.match(authGate, /gvdg:member-passkey-login-requested/);
+  assert.match(authGate, /gvdg:member-shell-view/);
+  assert.match(authGate, /document\.body\.dataset\.memberShell/);
+  assert.match(authGate, /requestAnimationFrame\(\(\) => window\.scrollTo/);
   assert.match(authController, /data\.mustChangePin/);
   assert.match(authController, /request\(path, options\)/);
   assert.match(authController, /\/login/);
@@ -147,16 +161,27 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   assert.match(authController, /gvdg:member-logout-requested/);
   assert.match(authController, /gvdg:member-auth-ready/);
   assert.match(authDom, /gvdg:member-auth-mode/);
+  assert.match(authDom, /gvdg:member-shell-view/);
   assert.match(authDom, /gvdg:member-dashboard-opened/);
+  assert.doesNotMatch(authDom, /loginGate|membersContent|style\.display|classList\.(add|remove)\("active"\)/);
   assert.match(authState, /gvdg:member-profile-updated/);
   assert.match(authState, /GVDG_MEMBER_DASHBOARD_CONTEXT/);
   assert.match(passkeys, /\/webauthn\/register\/options/);
   assert.match(passkeys, /\/webauthn\/auth\/verify/);
   assert.match(passkeys, /navigator\.credentials\.get/);
+  assert.doesNotMatch(passkeys, /loginGate|style\.display/);
   assert.match(profile, /\/profile/);
   assert.match(profile, /profilePhotoPreview/);
-  assert.match(pageChrome, /querySelector\("\.menu-toggle"\)/);
+  assert.doesNotMatch(profile, /loginGate|membersContent|classList\.remove\("active"\)|gate\.style|content\?/);
+  assert.match(pageChrome, /export function MemberPageChrome\(\)/);
+  assert.match(pageChrome, /data-react-page-chrome/);
+  assert.match(pageChrome, /aria-current/);
+  assert.match(pageChrome, /aria-expanded/);
+  assert.match(pageChrome, /nav-donate/);
   assert.match(pageChrome, /localStorageGet\("theme"\)/);
+  assert.match(pageChrome, /Menu, Moon, Sun, X/);
+  assert.doesNotMatch(pageChrome, /querySelector|addEventListener|classList|textContent\s*=|installMemberPageChrome/);
+  assert.doesNotMatch(pageChrome, /☰|🌙|☀️/);
   assert.match(shell, /data-react-member-banner/);
   assert.match(shell, /data-react-admin-portal/);
   assert.match(shell, /id: "logoutBtn"/);

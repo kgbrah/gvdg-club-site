@@ -35,11 +35,7 @@ function resizeImageFile(file, maxPx) {
 
 export function createProfileController({ api, showLogin, showMembersContent }) {
   function showProfileSetup() {
-    const gate = byId("loginGate");
-    const content = byId("membersContent");
     const profile = memberAuthProfile();
-    if (gate) gate.style.display = "flex";
-    content?.classList.remove("active");
     setAuthMode("profile", passkeysSupported());
     clearError(byId("profileError"));
 

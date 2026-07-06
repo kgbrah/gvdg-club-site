@@ -90,7 +90,7 @@ export function createPasskeyController({ api, showMembersContent, showPinChange
     if (passkeyVisHooked) return;
     passkeyVisHooked = true;
     document.addEventListener("visibilitychange", () => {
-      if (!document.hidden && byId("loginGate")?.style.display !== "none") void prefetchPasskey();
+      if (!document.hidden && passkeyPrimeTimer) void prefetchPasskey();
     });
   }
 

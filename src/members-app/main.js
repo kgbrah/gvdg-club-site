@@ -9,7 +9,7 @@ import { installDashboardRouter } from "./dashboard-router.js";
 import { MemberDialogs } from "./member-dialogs.js";
 import { installMemberAuthController } from "./member-auth-controller.js";
 import { MemberOverviewDashboard } from "./overview-dashboard.js";
-import { installMemberPageChrome } from "./page-chrome.js";
+import { MemberPageChrome } from "./page-chrome.js";
 import { MemberRegistrationPanel } from "./registration-panel.js";
 import { MemberTeeSignsPanel } from "./tee-signs-panel.js";
 
@@ -24,14 +24,17 @@ const dialogMount = document.createElement("div");
 document.body.appendChild(dialogMount);
 createRoot(dialogMount).render(h(MemberDialogs));
 
-installMemberPageChrome();
 installMemberAuthController();
 installDashboardRouter();
+
+const pageChromeMount = document.getElementById("membersReactPageChrome");
+if (pageChromeMount) {
+  createRoot(pageChromeMount).render(h(MemberPageChrome));
+}
 
 const authMount = document.getElementById("membersReactAuthGate");
 if (authMount) {
   createRoot(authMount).render(h(MemberAuthGate));
-  document.getElementById("loginGate")?.classList.add("members-react-auth-ready");
 }
 
 const shellMount = document.getElementById("membersReactDashboardShell");

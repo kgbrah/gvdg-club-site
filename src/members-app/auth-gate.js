@@ -2,6 +2,7 @@ import React from "react";
 import { Camera, KeyRound, LockKeyhole } from "lucide-react";
 
 const h = React.createElement;
+const SHELL_EVENT = "gvdg:member-shell-view";
 
 function request(eventName, detail = {}) {
   window.dispatchEvent(new CustomEvent(eventName, { detail }));
@@ -168,7 +169,21 @@ function ProfileForm({ active }) {
 
 export function MemberAuthGate() {
   const [mode, setMode] = React.useState("login");
+  const [shellView, setShellView] = React.useState("auth");
   const [supportsPasskeys, setSupportsPasskeys] = React.useState(false);
+
+  React.useEffect(() => {
+    document.body.dataset.memberShell = shellView;
+    return () => {
+      if (document.body.dataset.memberShell === shellView) delete document.body.dataset.memberShell;
+    };
+  }, [shellView]);
+
+  React.useEffect(() => {
+    if (shellView !== "auth") return undefined;
+    const frame = window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [mode, shellView]);
 
   React.useEffect(() => {
     const supported = typeof window.PublicKeyCredential !== "undefined";
@@ -180,11 +195,21 @@ export function MemberAuthGate() {
     function update(event) {
       const nextMode = event.detail?.mode;
       setMode(nextMode === "pin" || nextMode === "profile" ? nextMode : "login");
+      setShellView("auth");
       if (typeof event.detail?.passkeysSupported === "boolean") setSupportsPasskeys(event.detail.passkeysSupported);
     }
 
     window.addEventListener("gvdg:member-auth-mode", update);
     return () => window.removeEventListener("gvdg:member-auth-mode", update);
+  }, []);
+
+  React.useEffect(() => {
+    function updateShell(event) {
+      setShellView(event.detail?.view === "members" ? "members" : "auth");
+    }
+
+    window.addEventListener(SHELL_EVENT, updateShell);
+    return () => window.removeEventListener(SHELL_EVENT, updateShell);
   }, []);
 
   return h("div", { className: "login-card", "data-react-auth-gate": mode }, [
