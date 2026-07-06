@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v44";
+const CACHE = "gvdg-club-v45";
 const OFFLINE_PAGE = "gvdg-members.html";
 const ASSETS = [
   "tokens.css",
@@ -6,6 +6,7 @@ const ASSETS = [
   "pwa.js",
   "nav.js",
   "crotts.js",
+  "home-app/home-app.js",
   "img/logo.png",
   "img/icons/app-icon-192.png",
   "img/icons/app-icon-512.png",

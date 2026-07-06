@@ -422,8 +422,17 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
 .back-to-top { display: none; position: fixed; bottom: 2rem; left: 1.5rem; z-index: 999; width: 48px; height: 48px; border-radius: 50%; border: none; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; font-size: 1.4rem; cursor: pointer; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3); opacity: 0; visibility: hidden; transform: translateY(20px); transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease, background 0.3s ease; -webkit-tap-highlight-color: transparent; align-items: center; justify-content: center; }
 .back-to-top.visible { opacity: 1; visibility: visible; transform: translateY(0); }
 .back-to-top:active { transform: translateY(0) scale(0.92); }
-@media (max-width: 768px) { .back-to-top { display: flex; } }
+@media (max-width: 768px) {
+    .back-to-top { display: flex; left: auto; right: 1.5rem; }
+    #crotts-fab { left: auto !important; right: 14px !important; }
+}
 @supports (padding: env(safe-area-inset-bottom)) { .back-to-top { bottom: calc(2rem + env(safe-area-inset-bottom)); left: calc(1.5rem + env(safe-area-inset-left)); } }
+@supports (padding: env(safe-area-inset-bottom)) {
+    @media (max-width: 768px) {
+        .back-to-top { left: auto; right: calc(1.5rem + env(safe-area-inset-right)); }
+        #crotts-fab { left: auto !important; right: calc(14px + env(safe-area-inset-right, 0px)) !important; }
+    }
+}
 
 .slide-header-nav { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-bottom: 1.5rem; }
 .slide-header-nav .slide-header { margin-bottom: 0; flex: 0 1 auto; text-align: center; min-width: 0; }
@@ -585,23 +594,15 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
 
     <section id="events">
         <h2 class="section-title fade-in">Upcoming Events</h2>
-        <div class="event-list" id="eventList"><div class="event-loading"><div class="spinner"></div><p>Loading events...</p></div></div>
-        <div id="event-toggle-container" class="event-toggle" style="display: none;">
-            <button id="event-toggle-btn" class="toggle-btn">
-                <span class="toggle-text">Show All Events</span>
-                <svg class="toggle-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-            </button>
-        </div>
+        <div id="homeReactEventsApp"><div class="event-list"><div class="event-loading"><div class="spinner"></div><p>Loading events...</p></div></div></div>
         <div class="events-footer" style="text-align: center; margin-top: 2rem;"><p style="color: var(--text-muted); font-size: 0.9rem;">Want to host an event? <a href="#contact" style="color: var(--primary);">Contact us!</a></p></div>
     </section>
 
 <section id="area-tournaments" class="section">
     <div class="container">
-        <h2 class="section-title">🏆 Area Tournaments</h2>
+        <h2 class="section-title">Area Tournaments</h2>
         <p class="section-subtitle">PDGA sanctioned events within 60 miles of Greenville, NC</p>
-        <div id="tournament-list" class="tournament-list"><div class="tournament-loading"><div class="loading-spinner"></div><p>Loading tournaments...</p></div></div>
-        <div id="tournament-toggle" class="tournament-toggle" style="display: none;"><button id="toggle-btn" class="toggle-btn"><span class="toggle-text">Show All Tournaments</span><svg class="toggle-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></button></div>
-        <div class="tournament-footer"><a href="https://www.discgolfscene.com/tournaments/search?filter%5Blocation%5D%5Bcountry%5D=USA&filter%5Blocation%5D%5Bname%5D=Greenville%2C+NC&filter%5Blocation%5D%5Blatitude%5D=35.589407&filter%5Blocation%5D%5Blongitude%5D=-77.351275&filter%5Blocation%5D%5Bdistance%5D=60&filter%5Blocation%5D%5Bunits%5D=mi&filter%5Bformat%5D%5B0%5D=s&filter%5Bformat%5D%5B1%5D=d&filter%5Bformat%5D%5B2%5D=t" target="_blank" rel="noopener" class="view-all-link">View on Disc Golf Scene →</a></div>
+        <div id="homeReactTournamentsApp"><div class="tournament-list"><div class="tournament-loading"><div class="loading-spinner"></div><p>Loading tournaments...</p></div></div></div>
     </div>
 </section>
 
@@ -632,6 +633,7 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
 .toggle-btn.expanded .toggle-icon { transform: rotate(180deg); }
 .tournament-footer { text-align: center; margin-top: 1.5rem; }
 .view-all-link { display: inline-block; color: var(--text-secondary, #666); font-size: 0.85rem; text-decoration: none; transition: color 0.2s ease; }
+.view-all-link svg { display: inline-block; vertical-align: -0.15em; margin-left: 0.2rem; }
 .view-all-link:hover { color: #FF6B35; }
 .tournament-loading { text-align: center; padding: 2rem; color: var(--text-secondary, #666); }
 .loading-spinner { width: 36px; height: 36px; border: 3px solid var(--border-color, #e0e0e0); border-top-color: #FF6B35; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 0.75rem; }
@@ -693,7 +695,7 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
         (function(){const mh=`<div class="course-modal-overlay" id="courseModal"><div class="course-modal"><div class="course-modal-header"><h3 class="course-modal-title" id="modalCourseName"></h3><p class="course-modal-location" id="modalCourseLocation"></p></div><div class="course-modal-options"><a href="#" class="course-modal-btn" id="modalUdisc" target="_blank" rel="noopener noreferrer"><div class="course-modal-btn-icon udisc"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" fill="white"/><circle cx="12" cy="12" r="7" fill="#FF6B00"/><circle cx="12" cy="12" r="3" fill="white"/><path d="M12 2C12 2 12 8 12 12" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg></div><div class="course-modal-btn-text"><div class="course-modal-btn-title">View on UDisc</div><div class="course-modal-btn-subtitle">Course info, layouts & reviews</div></div><span class="course-modal-btn-arrow">&rarr;</span></a><a href="#" class="course-modal-btn" id="modalDirections" target="_blank" rel="noopener noreferrer"><div class="course-modal-btn-icon directions">📍</div><div class="course-modal-btn-text"><div class="course-modal-btn-title">Get Directions</div><div class="course-modal-btn-subtitle">Open in Google Maps</div></div><span class="course-modal-btn-arrow">&rarr;</span></a><a href="#" class="course-modal-btn" id="modalYoutube" target="_blank" rel="noopener noreferrer"><div class="course-modal-btn-icon youtube">&#9654;</div><div class="course-modal-btn-text"><div class="course-modal-btn-title">Course Preview</div><div class="course-modal-btn-subtitle">Watch on YouTube</div></div><span class="course-modal-btn-arrow">&rarr;</span></a></div><button class="course-modal-close" id="modalClose">Close</button></div></div>`;document.body.insertAdjacentHTML('beforeend',mh);const modal=document.getElementById('courseModal'),mn=document.getElementById('modalCourseName'),ml=document.getElementById('modalCourseLocation'),mu=document.getElementById('modalUdisc'),md=document.getElementById('modalDirections'),my=document.getElementById('modalYoutube'),mc=document.getElementById('modalClose');function open(d){mn.textContent=d.course;ml.textContent='📍 '+d.location;if(d.udisc){mu.href=d.udisc;mu.classList.remove('disabled')}else{mu.href='#';mu.classList.add('disabled')}if(d.coords){const[lat,lng]=d.coords.split(',');md.href=`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;md.classList.remove('disabled')}else{md.href='#';md.classList.add('disabled')}if(d.youtube&&d.youtube.trim()!==''){my.href=d.youtube;my.classList.remove('disabled');my.querySelector('.course-modal-btn-subtitle').textContent='Watch on YouTube'}else{my.href='#';my.classList.add('disabled');my.querySelector('.course-modal-btn-subtitle').textContent='Coming soon'}modal.classList.add('active');document.body.style.overflow='hidden'}function close(){modal.classList.remove('active');document.body.style.overflow=''}document.querySelectorAll('.course-card[data-course]').forEach(c=>{c.style.cursor='pointer';c.addEventListener('click',function(e){e.preventDefault();open({course:this.dataset.course,location:this.dataset.location,udisc:this.dataset.udisc,coords:this.dataset.coords,youtube:this.dataset.youtube})})});mc.addEventListener('click',close);modal.addEventListener('click',function(e){if(e.target===modal)close()});document.addEventListener('keydown',function(e){if(e.key==='Escape'&&modal.classList.contains('active'))close()});document.querySelectorAll('.course-modal-btn.disabled').forEach(b=>b.addEventListener('click',function(e){e.preventDefault()}))})();
         (function(){const b=document.getElementById('backToTop');if(!b)return;let t=false;window.addEventListener('scroll',function(){if(!t){window.requestAnimationFrame(function(){window.scrollY>600?b.classList.add('visible'):b.classList.remove('visible');t=false});t=true}});b.addEventListener('click',function(){window.scrollTo({top:0,behavior:'smooth'})})})();
     </script>
-    <script type="module" src="home-feeds.js"></script>
+    <script type="module" src="home-app/home-app.js"></script>
     <script src="crotts.js" defer></script>
 </body>
 </html>

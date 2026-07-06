@@ -223,7 +223,7 @@ DEPLOYER="${GVDG_AGENT:-$(whoami)}"
 NOW="$(date -u +%FT%TZ)"
 DIST="$REPO_ROOT/.pages-dist"
 rm -rf "$DIST"; mkdir "$DIST"
-cp -R ./*.html ./*.js ./*.css members-app score-app img _headers CNAME site.webmanifest "$DIST/"
+cp -R ./*.html ./*.js ./*.css home-app members-app score-app img _headers CNAME site.webmanifest "$DIST/"
 printf '{"commit":"%s","branch":"%s","deployedAt":"%s","deployer":"%s"}\n' "$HEAD_SHA" "$BRANCH" "$NOW" "$DEPLOYER" > "$DIST/version.json"
 log "artifact built @ $HEAD_SHORT ($BRANCH) by $DEPLOYER; version.json stamped."
 

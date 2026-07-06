@@ -95,6 +95,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: linked events are real anchors with safe external URLs.
 - Motion: transform and opacity only.
 
+### Home Feed Panels
+
+- Structure: homepage events and Area Tournaments render from the `home-app` React bundle into `homeReactEventsApp` and `homeReactTournamentsApp`; `home-feeds.js` remains a parse-compatibility module only.
+- Variants: loading, ready, empty, error, collapsed mobile list, expanded mobile list, local Ryder Cup links, safe external links, and no-link rows.
+- Spacing: reuses `.event-list`, `.event-item`, `.tournament-list`, `.tournament-item`, `.event-toggle`, and `.tournament-toggle` primitives so the public homepage rhythm remains unchanged.
+- States: React owns fetch status, sorting/filtering display state, show-all toggles, hidden-mobile row classes, and footer link rendering; no DOM renderer may mutate `eventList`, `tournament-list`, or toggle button text.
+- Accessibility: loading states expose status text; linked rows are anchors, unlinked rows are non-interactive blocks, toggle controls are real buttons, and location/chevron iconography uses Lucide SVGs.
+- Motion: rows preserve the existing hover and fade-in classes; toggles rotate the existing chevron only.
+
 ### Tournament Item
 
 - Structure: date badge, event metadata, arrow icon.
