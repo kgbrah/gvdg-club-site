@@ -104,6 +104,24 @@ Spacing follows a 4px base through rem values.
 - Accessibility: loading states expose status text; linked rows are anchors, unlinked rows are non-interactive blocks, toggle controls are real buttons, and location/chevron iconography uses Lucide SVGs.
 - Motion: rows preserve the existing hover and fade-in classes; toggles rotate the existing chevron only.
 
+### Home Course Modal
+
+- Structure: course cards remain static card markup for this migration slice, while the UDisc/directions/preview overlay renders from the `home-app` React bundle into `homeReactCourseModalApp`.
+- Variants: closed, open, UDisc link enabled/disabled, directions enabled/disabled, preview enabled/disabled, backdrop dismissal, close button, and Escape dismissal.
+- Spacing: reuses `.course-modal-*` primitives so the modal keeps the established compact phone-first rhythm.
+- States: React owns selected course data, body scroll lock, active overlay class, disabled action classes, and action subtitles; inline scripts must not inject course modal HTML or mutate `modalCourse*` / `modalUdisc` / `modalDirections` / `modalYoutube` nodes.
+- Accessibility: the overlay exposes a labelled modal dialog, actions are real links when available, unavailable actions are removed from tab order with `aria-disabled`, and iconography uses Lucide SVGs.
+- Motion: overlay and modal retain the existing opacity/transform transitions only.
+
+### Home Page Controls
+
+- Structure: homepage theme toggle and back-to-top controls render from the `home-app` React bundle into `homeReactThemeToggleApp` and `homeReactBackToTopApp`; the head pre-paint theme script remains only to prevent dark-mode flash.
+- Variants: light theme, dark theme, hidden back-to-top, visible back-to-top, click-to-top, and storage-unavailable fallback.
+- Spacing: reuses `.theme-toggle` and `.back-to-top` primitives so header and floating-control dimensions remain stable.
+- States: React owns `data-theme` persistence, toggle pressed state, scroll threshold visibility, and smooth-scroll action; inline homepage scripts must not mutate `.theme-icon` or `#backToTop`.
+- Accessibility: controls are real buttons with explicit labels, pressed state for the theme toggle, and Lucide SVG iconography.
+- Motion: preserves existing transform/opacity button transitions only.
+
 ### Tournament Item
 
 - Structure: date badge, event metadata, arrow icon.
