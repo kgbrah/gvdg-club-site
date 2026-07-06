@@ -174,6 +174,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: course/layout rows and setup options are real buttons; join-code entry submits on Enter.
 - Motion: no decorative animation; navigation is immediate and preserves the existing active press feedback.
 
+### Score Auth Flow
+
+- Structure: React-owned login and forced-PIN cards mounted in the score app shell; the legacy score controller supplies auth, passkey, guest, and set-PIN callbacks only.
+- Variants: member login, passkey-supported login, guest-token continuation, forced PIN change, pending submit states, and inline errors.
+- Spacing: reuses `.card`, `.stack`, `.field`, `.lbl`, `.btn`, `.muted`, and `.return-members`; auth errors use the score conflict color token.
+- States: submit buttons disable while pending; validation errors render in a polite inline error row; successful auth leaves the auth renderer through the normal boot path.
+- Accessibility: login and PIN inputs are labelled, forms submit on Enter, errors use alert semantics, and passkey support uses a Lucide icon with text.
+- Motion: static card flow; only existing button active states apply.
+
 ### Score Leaderboard Sheet
 
 - Structure: React-owned bottom sheet overlay with grab handle, leaderboard table, optional UDisc export mount, finalize status panel, and close action; the legacy score controller supplies standings, blockers, export data, and callbacks only.

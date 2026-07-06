@@ -57,12 +57,12 @@ test('app entry pages link manifest, touch icon, theme color, and pwa registrar'
 test('live scoring links back to the members dashboard', () => {
   const html = readFileSync('score.html', 'utf8');
   const shellSource = readFileSync('src/score-app/main.js', 'utf8');
-  const scoringSource = readFileSync('src/score-app/score-legacy.js', 'utf8');
+  const authSource = readFileSync('src/score-app/auth-flow.js', 'utf8');
   assert.match(html, /<script type="module" src="score-app\/score-app\.js"><\/script>/);
   assert.match(shellSource, /href: "gvdg-members\.html"/);
   assert.match(shellSource, /"aria-label": "Return to members"/);
-  assert.match(scoringSource, /Return to members/);
-  assert.match(scoringSource, /membersLink\.href = 'gvdg-members\.html'/);
+  assert.match(authSource, /Return to members/);
+  assert.match(authSource, /href: props\.membersHref \|\| "gvdg-members\.html"/);
   assert.match(html, /\.iconbtn\[hidden\] \{ display: none; \}/);
 });
 
@@ -70,7 +70,7 @@ test('shared service worker caches app install assets and member fallback', () =
   const sw = readFileSync('sw.js', 'utf8');
   const cacheVersion = sw.match(/const CACHE = "gvdg-club-v(\d+)"/);
   assert.ok(cacheVersion, 'service worker cache version is present');
-  assert.ok(Number(cacheVersion[1]) >= 37, 'React-owned score manage players migration requires v37 or newer');
+  assert.ok(Number(cacheVersion[1]) >= 38, 'React-owned score auth migration requires v38 or newer');
   assert.match(sw, /const OFFLINE_PAGE = "gvdg-members\.html"/);
   assert.match(sw, /const STATIC_DESTINATIONS = new Set/);
   assert.match(sw, /if \(!staticAsset\(req, url\)\) return/);

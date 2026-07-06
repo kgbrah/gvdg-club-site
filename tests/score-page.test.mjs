@@ -7,12 +7,25 @@ function scoreSetupSource() {
   return source;
 }
 
+function scoreAuthSource() {
+  return readFileSync('src/score-app/auth-flow.js', 'utf8');
+}
+
 function scoreLegacySetupSource() {
   const source = readFileSync('src/score-app/score-legacy.js', 'utf8');
   const start = source.indexOf('async function renderLayoutPick(course)');
   const end = source.indexOf('async function addGuestPrompt()');
   assert.notEqual(start, -1, 'renderLayoutPick function should exist');
   assert.notEqual(end, -1, 'addGuestPrompt should follow createRound');
+  return source.slice(start, end);
+}
+
+function scoreLegacyAuthSource() {
+  const source = readFileSync('src/score-app/score-legacy.js', 'utf8');
+  const start = source.indexOf('// ---------- passkey login + forced PIN change');
+  const end = source.indexOf('function holeMeta(idx)');
+  assert.notEqual(start, -1, 'auth section should exist');
+  assert.notEqual(end, -1, 'hole meta should follow auth section');
   return source.slice(start, end);
 }
 
@@ -77,6 +90,22 @@ test('score setup screens are React-owned without legacy DOM fallbacks', () => {
   assert.doesNotMatch(legacy, /const row = el\('button', 'tap-row'\)/);
   assert.doesNotMatch(legacy, /const btn = el\('button', 'setup-option'\)/);
   assert.doesNotMatch(legacy, /selected\[group\.key\] = opt\.value/);
+});
+
+test('score auth screens are React-owned without legacy DOM fallbacks', () => {
+  const auth = scoreAuthSource();
+  const legacy = scoreLegacyAuthSource();
+  const fullLegacy = readFileSync('src/score-app/score-legacy.js', 'utf8');
+  assert.match(fullLegacy, /createScoreAuthFlowRenderer\(\)/);
+  assert.match(fullLegacy, /authFlow\.render\(props\)/);
+  assert.match(auth, /function LoginView\(props\)/);
+  assert.match(auth, /function SetPinView\(props\)/);
+  assert.match(auth, /createRoot\(app\)/);
+  assert.match(auth, /KeyRound/);
+  assert.doesNotMatch(legacy, /const c = el\('div', 'card stack'\)/);
+  assert.doesNotMatch(legacy, /const idL = el\('label', 'lbl', 'PDGA # or UDisc username'\)/);
+  assert.doesNotMatch(legacy, /const pkb = el\('button', 'btn secondary'/);
+  assert.doesNotMatch(legacy, /np\.placeholder = 'New 4-digit PIN'/);
 });
 
 test('player score page supports pair target rows and target-id offline replay', () => {

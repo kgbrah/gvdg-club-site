@@ -1,3 +1,4 @@
+import { createScoreAuthFlowRenderer } from "./auth-flow.js";
 import { createLeaderboardSheetRenderer } from "./leaderboard-sheet.js";
 import { createManagePlayersSheetRenderer } from "./manage-players-sheet.js";
 
@@ -22,6 +23,7 @@ export function startScoreApp(options) {
         const GUEST_TOKEN = MODE === 'event' ? (params.get('gt') || guestTokenStored()) : null;
 
         const app = document.getElementById('app');
+        const authFlow = createScoreAuthFlowRenderer();
         const setupFlow = options && options.setupFlow;
         const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, roundConfig: null, scoreTargets: [], scoreTargetError: null, weather: null };
         const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
@@ -398,12 +400,21 @@ export function startScoreApp(options) {
         function clearSetupFlow() {
             if (setupFlow && typeof setupFlow.clear === 'function') setupFlow.clear();
         }
+        function clearAuthFlow() {
+            if (authFlow && typeof authFlow.clear === 'function') authFlow.clear();
+        }
+        function renderAuthFlow(props) {
+            clearSetupFlow();
+            authFlow.render(props);
+            return true;
+        }
         function renderSetupFlow(props) {
             if (!setupFlow || typeof setupFlow.render !== 'function') throw new Error('Missing score setup renderer');
+            clearAuthFlow();
             setupFlow.render(props);
             return true;
         }
-        function shell(node) { clearSetupFlow(); app.replaceChildren(node); }
+        function shell(node) { clearSetupFlow(); clearAuthFlow(); app.replaceChildren(node); }
 
         function renderMessage(title, sub, withRetry) {
             const c = el('div', 'card center stack');
@@ -429,9 +440,8 @@ export function startScoreApp(options) {
             if (passkeyPrefetch && Date.now() - passkeyPrefetch.ts < PASSKEY_REFRESH_MS) return;
             try { const r = await api('/webauthn/auth/options', { method: 'POST', auth: false, guest: false }); if (r.ok && r.data) passkeyPrefetch = { options: r.data.options, flowId: r.data.flowId, ts: Date.now() }; } catch (e) {}
         }
-        async function loginWithPasskey(errEl, btn) {
-            if (!passkeysSupported()) { if (errEl) errEl.textContent = 'Passkeys aren’t supported on this device.'; return; }
-            if (btn) btn.disabled = true; if (errEl) errEl.textContent = '';
+        async function loginWithPasskey() {
+            if (!passkeysSupported()) return { ok: false, message: "Passkeys aren't supported on this device." };
             try {
                 let options, flowId; const pf = passkeyPrefetch; passkeyPrefetch = null; // single use, no await before get()
                 if (pf && Date.now() - pf.ts < 290000) { options = pf.options; flowId = pf.flowId; }
@@ -441,11 +451,11 @@ export function startScoreApp(options) {
                 const a = await navigator.credentials.get({ publicKey: options });
                 const body = { flowId, response: { id: a.id, rawId: bufToB64url(a.rawId), type: a.type, response: { clientDataJSON: bufToB64url(a.response.clientDataJSON), authenticatorData: bufToB64url(a.response.authenticatorData), signature: bufToB64url(a.response.signature), userHandle: a.response.userHandle ? bufToB64url(a.response.userHandle) : undefined }, clientExtensionResults: a.getClientExtensionResults ? a.getClientExtensionResults() : {} } };
                 const v = await api('/webauthn/auth/verify', { method: 'POST', auth: false, guest: false, body });
-                if (v.status === 200 && v.data && v.data.token) afterAuth(v.data);
-                else if (errEl) errEl.textContent = 'Passkey sign-in failed. Use your PIN instead.';
+                if (v.status === 200 && v.data && v.data.token) { afterAuth(v.data); return { ok: true }; }
+                return { ok: false, message: 'Passkey sign-in failed. Use your PIN instead.' };
             } catch (e) {
-                if (errEl) errEl.textContent = (e && e.name === 'NotAllowedError') ? 'Passkey sign-in cancelled.' : 'Passkey sign-in failed. Use your PIN instead.';
-            } finally { if (btn) btn.disabled = false; prefetchPasskey(); }
+                return { ok: false, message: (e && e.name === 'NotAllowedError') ? 'Passkey sign-in cancelled.' : 'Passkey sign-in failed. Use your PIN instead.' };
+            } finally { prefetchPasskey(); }
         }
         // After any successful auth (PIN or passkey): store the token, then force the PIN change if the
         // account still requires it — the must-change-PIN gate rejects EVERY protected route (incl. joining
@@ -455,61 +465,45 @@ export function startScoreApp(options) {
             if (data.mustChangePin) renderSetPin();
             else boot();
         }
+        async function saveNewPin(newPin) {
+            const r = await api('/set-pin', { method: 'POST', guest: false, body: { newPin: newPin } });
+            if (r.status === 200 && r.data && r.data.token) {
+                try { sessionStorage.setItem(TOKEN_KEY, r.data.token); } catch (e) {}
+                boot();
+                return { ok: true };
+            }
+            if (r.status === 401) { renderLogin('Please sign in again.'); return { ok: true }; }
+            return { ok: false, message: 'Could not update PIN - try again.' };
+        }
         function renderSetPin(message) {
-            const c = el('div', 'card stack');
-            c.appendChild(el('h2', 'section', 'Set your PIN'));
-            c.appendChild(el('p', 'muted', message || 'Choose a new 4-digit PIN to finish signing in.'));
-            const np = el('input', 'field'); np.type = 'password'; np.inputMode = 'numeric'; np.maxLength = 4; np.placeholder = 'New 4-digit PIN'; np.autocomplete = 'new-password';
-            const cp = el('input', 'field'); cp.type = 'password'; cp.inputMode = 'numeric'; cp.maxLength = 4; cp.placeholder = 'Confirm PIN'; cp.autocomplete = 'new-password';
-            const err = el('p', 'muted'); err.style.color = 'var(--over)'; err.style.minHeight = '1rem';
-            const btn = el('button', 'btn', 'Save PIN & continue');
-            btn.addEventListener('click', async function () {
-                const a = np.value.trim(), b = cp.value.trim();
-                if (!/^\d{4}$/.test(a)) { err.textContent = 'PIN must be exactly 4 digits.'; return; }
-                if (a !== b) { err.textContent = 'PINs don’t match.'; return; }
-                btn.disabled = true; err.textContent = '';
-                const r = await api('/set-pin', { method: 'POST', guest: false, body: { newPin: a } });
-                btn.disabled = false;
-                if (r.status === 200 && r.data && r.data.token) { try { sessionStorage.setItem(TOKEN_KEY, r.data.token); } catch (e) {} boot(); }
-                else if (r.status === 401) { renderLogin('Please sign in again.'); }
-                else { err.textContent = 'Could not update PIN — try again.'; }
+            renderAuthFlow({
+                mode: 'setPin',
+                message: message,
+                onSetPin: saveNewPin
             });
-            c.appendChild(np); c.appendChild(cp); c.appendChild(err); c.appendChild(btn);
-            shell(c);
         }
 
+        async function loginWithPin(payload) {
+            const r = await api('/login', { method: 'POST', auth: false, guest: false, body: { identifier: payload.identifier, pin: payload.pin } });
+            if (r.ok && r.data && r.data.token) { afterAuth(r.data); return { ok: true }; }
+            if (r.status === 423) return { ok: false, message: 'Too many attempts - try again in a few minutes.' };
+            return { ok: false, message: r.status === 401 ? "That ID/PIN didn't match." : 'Sign-in failed - try again.' };
+        }
         function renderLogin(message) {
-            const c = el('div', 'card stack');
-            c.appendChild(el('h2', 'section', 'Sign in to keep score'));
-            if (message) c.appendChild(el('p', 'muted', message));
-            const idL = el('label', 'lbl', 'PDGA # or UDisc username'); const id = el('input', 'field'); id.id = 'idIn'; id.autocapitalize = 'none';
-            const pinL = el('label', 'lbl', 'PIN'); const pin = el('input', 'field'); pin.id = 'pinIn'; pin.type = 'password'; pin.inputMode = 'numeric';
-            const err = el('p', 'muted'); err.style.color = 'var(--over)'; err.style.minHeight = '1rem';
-            const btn = el('button', 'btn', 'Sign in');
-            btn.addEventListener('click', async function () {
-                const identifier = id.value.trim(), p = pin.value.trim();
-                if (!identifier || !p) { err.textContent = 'Enter your ID and PIN.'; return; }
-                btn.disabled = true; err.textContent = '';
-                const r = await api('/login', { method: 'POST', auth: false, guest: false, body: { identifier: identifier, pin: p } });
-                btn.disabled = false;
-                if (r.ok && r.data && r.data.token) { afterAuth(r.data); }
-                else if (r.status === 423) { err.textContent = 'Too many attempts — try again in a few minutes.'; }
-                else { err.textContent = r.status === 401 ? 'That ID/PIN didn’t match.' : 'Sign-in failed — try again.'; }
+            const supported = passkeysSupported();
+            renderAuthFlow({
+                guestAvailable: !!GUEST_TOKEN,
+                membersHref: 'gvdg-members.html',
+                message: message,
+                mode: 'login',
+                onGuestContinue: function () { try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {} boot(); },
+                onLogin: loginWithPin,
+                onPasskeyLogin: supported ? loginWithPasskey : null,
+                passkeysSupported: supported
             });
-            c.appendChild(idL); c.appendChild(id); c.appendChild(pinL); c.appendChild(pin); c.appendChild(err); c.appendChild(btn);
-            if (passkeysSupported()) {
-                const pkb = el('button', 'btn secondary', '🔑 Log in with a passkey');
-                pkb.addEventListener('click', function () { loginWithPasskey(err, pkb); });
-                c.appendChild(pkb);
+            if (supported) {
                 prefetchPasskey(); // warm the Worker + hold a challenge so the tap has no network before get()
             }
-            if (GUEST_TOKEN) { const note = el('p', 'muted center', 'Registered as a guest? You can keep your card without signing in.'); const gb = el('button', 'btn ghost', 'Keep score as a guest'); gb.addEventListener('click', function () { try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {} boot(); }); c.appendChild(note); c.appendChild(gb); }
-            const members = el('p', 'muted center return-members');
-            const membersLink = el('a', 'link', 'Return to members');
-            membersLink.href = 'gvdg-members.html';
-            members.appendChild(membersLink);
-            c.appendChild(members);
-            shell(c);
         }
 
         function holeMeta(idx) { return S.holes[idx] || { hole: idx + 1, par: 3 }; }
