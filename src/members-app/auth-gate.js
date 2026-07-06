@@ -3,6 +3,7 @@ import { Camera, KeyRound, LockKeyhole } from "lucide-react";
 
 const h = React.createElement;
 const SHELL_EVENT = "gvdg:member-shell-view";
+const PROFILE_PREVIEW_EVENT = "gvdg:member-profile-preview";
 
 function request(eventName, detail = {}) {
   window.dispatchEvent(new CustomEvent(eventName, { detail }));
@@ -116,6 +117,17 @@ function PinChangeForm({ active }) {
 }
 
 function ProfileForm({ active }) {
+  const [previewSrc, setPreviewSrc] = React.useState("");
+
+  React.useEffect(() => {
+    function update(event) {
+      setPreviewSrc(typeof event.detail?.src === "string" ? event.detail.src : "");
+    }
+
+    window.addEventListener(PROFILE_PREVIEW_EVENT, update);
+    return () => window.removeEventListener(PROFILE_PREVIEW_EVENT, update);
+  }, []);
+
   return h("form", {
     className: "login-form",
     id: "profileForm",
@@ -128,7 +140,7 @@ function ProfileForm({ active }) {
   }, [
     h("p", { className: "login-subtitle", key: "copy" }, "Add your details so your ratings, stats and photo show up. All optional - you can do this later."),
     h("div", { className: "profile-photo-row", key: "photo" }, [
-      h("img", { id: "profilePhotoPreview", className: "profile-photo-preview", alt: "", key: "preview" }),
+      h("img", { className: "profile-photo-preview", "data-react-profile-preview": previewSrc ? "ready" : "empty", src: previewSrc || undefined, hidden: !previewSrc, alt: "Profile photo preview", key: "preview" }),
       h("label", { className: "passkey-btn", htmlFor: "photoInput", key: "label" }, h(IconLabel, {
         icon: h(Camera, { size: 17, strokeWidth: 2.2, key: "icon" }),
         text: "Add / change photo",

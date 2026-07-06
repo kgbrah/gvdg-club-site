@@ -47,8 +47,9 @@ export function showMembersShell(name) {
   window.dispatchEvent(new CustomEvent("gvdg:member-shell-view", {
     detail: { view: "members" },
   }));
-  const passkeyStatus = byId("passkeyStatus");
-  if (passkeyStatus) passkeyStatus.textContent = "";
+  window.dispatchEvent(new CustomEvent("gvdg:member-passkey-state", {
+    detail: { busy: false, message: "" },
+  }));
   window.dispatchEvent(new CustomEvent("gvdg:member-dashboard-opened", {
     detail: { name: name || null },
   }));

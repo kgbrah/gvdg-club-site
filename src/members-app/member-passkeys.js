@@ -3,6 +3,7 @@ import { byId, clearError, setBusy, showError } from "./member-auth-dom.js";
 import { applyProfile } from "./member-auth-state.js";
 
 const PASSKEY_REFRESH_MS = 170_000;
+const PASSKEY_STATE_EVENT = "gvdg:member-passkey-state";
 
 let passkeyPrefetch = null;
 let passkeyPrimeTimer = null;
@@ -10,6 +11,10 @@ let passkeyVisHooked = false;
 
 export function passkeysSupported() {
   return typeof window.PublicKeyCredential !== "undefined";
+}
+
+function setPasskeyState(detail) {
+  window.dispatchEvent(new CustomEvent(PASSKEY_STATE_EVENT, { detail }));
 }
 
 function b64urlToBuf(value) {
@@ -30,13 +35,10 @@ function bufToB64url(buffer) {
 
 export function createPasskeyController({ api, showMembersContent, showPinChange }) {
   async function enablePasskey() {
-    const status = byId("passkeyStatus");
-    const button = byId("enablePasskeyBtn");
     const token = storageGet(TOKEN_KEY);
-    if (!status || !button || !token || !passkeysSupported()) return;
+    if (!token || !passkeysSupported()) return;
 
-    status.textContent = "";
-    button.disabled = true;
+    setPasskeyState({ busy: true, message: "" });
     try {
       const optionsResponse = await api("/webauthn/register/options", { method: "POST", token });
       if (!optionsResponse.ok) throw new Error("options");
@@ -62,13 +64,15 @@ export function createPasskeyController({ api, showMembersContent, showPinChange
         clientExtensionResults: credential.getClientExtensionResults ? credential.getClientExtensionResults() : {},
       };
       const verifyResponse = await api("/webauthn/register/verify", { method: "POST", token, body });
-      status.textContent = verifyResponse.ok
-        ? "Passkey added - use it to log in next time."
-        : "Could not add passkey. Please try again.";
+      setPasskeyState({
+        message: verifyResponse.ok ? "Passkey added - use it to log in next time." : "Could not add passkey. Please try again.",
+      });
     } catch (error) {
-      status.textContent = error?.name === "NotAllowedError" ? "Passkey setup cancelled." : "Could not add passkey.";
+      setPasskeyState({
+        message: error?.name === "NotAllowedError" ? "Passkey setup cancelled." : "Could not add passkey.",
+      });
     } finally {
-      button.disabled = false;
+      setPasskeyState({ busy: false });
     }
   }
 

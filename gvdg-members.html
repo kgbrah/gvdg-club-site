@@ -377,30 +377,32 @@
             <div id="membersReactDashboardShell"></div>
 
             <style>
-                #membersReactDashboardShell { display: none; scroll-margin-top: 96px; }
-                #members.members-react-shell-ready #membersReactDashboardShell { display: block; }
-                #membersReactOverviewPanel { display: none; }
-                #members.members-react-overview-ready #membersReactOverviewPanel { display: block; }
-                #membersReactRegistrationPanel { display: none; }
-                #members.members-react-registration-ready #membersReactRegistrationPanel { display: block; }
-                #membersReactBoardPanel { display: none; }
-                #members.members-react-board-ready #membersReactBoardPanel { display: block; }
-                #membersReactTeeSignsPanel { display: none; }
-                #members.members-react-tee-signs-ready #membersReactTeeSignsPanel { display: block; }
+                #membersReactDashboardShell,
+                #membersReactOverviewPanel,
+                #membersReactRegistrationPanel,
+                #membersReactBoardPanel,
+                #membersReactTeeSignsPanel,
                 #membersReactClubPanel { display: none; }
-                #members.members-react-club-ready #membersReactClubPanel { display: block; }
+                #membersReactDashboardShell { scroll-margin-top: 96px; }
+                #membersReactDashboardShell:not(:empty),
+                #membersReactOverviewPanel:not(:empty),
+                #membersReactRegistrationPanel:not(:empty),
+                #membersReactBoardPanel:not(:empty),
+                #membersReactTeeSignsPanel:not(:empty) { display: block; }
+                #clubBoard,
+                #teeCapture,
+                #membersReactClubPanel { display: none; }
                 body[data-member-dashboard-tab] #myDashboard,
                 body[data-member-dashboard-tab] #clubRegister,
                 body[data-member-dashboard-tab] #clubBoard,
                 body[data-member-dashboard-tab] #teeCapture,
                 body[data-member-dashboard-tab] #membersReactClubPanel { display: none; }
-                body[data-member-dashboard-tab] #members.members-react-club-ready #membersReactClubPanel { display: none; }
                 body[data-member-dashboard-tab="overview"] #myDashboard,
                 body[data-member-dashboard-tab="overview"] #clubRegister,
                 body[data-member-dashboard-tab="events"] #clubRegister,
                 body[data-member-dashboard-tab="board"] #clubBoard,
                 body[data-member-dashboard-tab="tee"] #teeCapture,
-                body[data-member-dashboard-tab="club"] #members.members-react-club-ready #membersReactClubPanel { display: block; }
+                body[data-member-dashboard-tab="club"] #membersReactClubPanel:not(:empty) { display: block; }
                 .dash-tabs { display: flex; gap: 0.45rem; overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 0.3rem 0 0.85rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border-color); scrollbar-width: none; }
                 .dash-tabs::-webkit-scrollbar { display: none; }
                 .dash-tab { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.5rem 1.05rem; font-weight: 700; font-size: 0.88rem; cursor: pointer; white-space: nowrap; transition: background .15s ease, color .15s ease; }
@@ -625,7 +627,7 @@
                     .passkey-row .passkey-btn { width: 100%; }
                 }
                 .profile-photo-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
-                .profile-photo-preview { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border-color); display: none; }
+                .profile-photo-preview { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border-color); }
                 .tee-capture { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; }
                 .tee-capture-note { color: var(--text-muted); font-size: 0.9rem; line-height: 1.55; margin-bottom: 1rem; }
                 .ts-controls { display: flex; gap: 0.6rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 0.85rem; }

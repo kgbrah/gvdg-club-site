@@ -137,6 +137,13 @@ async function expectReactTab(page, name) {
   if (selected !== "true") throw new Error(`Expected React tab ${name} to be selected, got ${selected}`);
 }
 
+async function expectNoReadinessClasses(page) {
+  const className = await page.locator("#members").evaluate((node) => node.className || "");
+  if (/members-react-(shell|overview|ratings|registration|board|tee-signs|club)-ready/.test(className)) {
+    throw new Error(`Legacy member readiness class returned: ${className}`);
+  }
+}
+
 async function expectDashboardPanel(page, tab, selector, label) {
   try {
     await page.waitForFunction(
@@ -189,6 +196,12 @@ async function runAuthGateQa(browser, siteUrl) {
   });
   await page.locator("#profileForm").waitFor({ state: "visible", timeout: 15_000 });
   await waitForText(page, "[data-react-auth-gate]", "Add / change photo", "React auth profile form");
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("gvdg:member-profile-preview", {
+      detail: { src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p94AAAAASUVORK5CYII=" },
+    }));
+  });
+  await page.locator('[data-react-profile-preview="ready"]').waitFor({ state: "visible", timeout: 15_000 });
 
   const width = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth));
   const viewport = page.viewportSize()?.width || 390;
@@ -211,12 +224,13 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
     );
 
     await page.goto(`${siteUrl}/gvdg-members.html`, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector("#members.members-react-shell-ready", { timeout: 15_000 });
-    await page.waitForSelector("#members.members-react-overview-ready", { timeout: 15_000 });
-    await page.waitForSelector("#members.members-react-registration-ready", { timeout: 15_000 });
-    await page.waitForSelector("#members.members-react-board-ready", { timeout: 15_000 });
-    await page.waitForSelector("#members.members-react-tee-signs-ready", { timeout: 15_000 });
-    await page.waitForSelector("#members.members-react-club-ready", { timeout: 15_000 });
+    await page.waitForSelector("#membersReactDashboardShell:not(:empty)", { timeout: 15_000 });
+    await page.waitForSelector("#membersReactOverviewPanel:not(:empty)", { state: "attached", timeout: 15_000 });
+    await page.waitForSelector("#membersReactRegistrationPanel:not(:empty)", { state: "attached", timeout: 15_000 });
+    await page.waitForSelector("#membersReactBoardPanel:not(:empty)", { state: "attached", timeout: 15_000 });
+    await page.waitForSelector("#membersReactTeeSignsPanel:not(:empty)", { state: "attached", timeout: 15_000 });
+    await page.waitForSelector("#membersReactClubPanel:not(:empty)", { state: "attached", timeout: 15_000 });
+    await expectNoReadinessClasses(page);
     await waitForText(page, "#membersReactDashboardShell", "Player Dashboard", "React dashboard title");
     await expectReactTab(page, "Overview");
     await page.locator('[data-react-overview-dashboard="ready"]').waitFor({ state: "visible", timeout: 15_000 });
@@ -227,6 +241,17 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
     await page.locator('[data-react-pdga-dashboard="ready"]').waitFor({ state: "visible", timeout: 15_000 });
     await page.locator('[data-react-account-tools="ready"]').waitFor({ state: "visible", timeout: 15_000 });
     await waitForText(page, "[data-react-account-tools]", "Edit profile", "React account tools");
+    await page.evaluate(() => {
+      window.dispatchEvent(new CustomEvent("gvdg:member-passkey-state", {
+        detail: { busy: false, message: "Passkey setup cancelled." },
+      }));
+    });
+    await waitForText(page, "[data-react-passkey-status]", "Passkey setup cancelled.", "React passkey status");
+    await page.evaluate(() => {
+      window.dispatchEvent(new CustomEvent("gvdg:member-passkey-state", {
+        detail: { busy: false, message: "" },
+      }));
+    });
     await page.locator('[data-react-member-banner="ready"]').waitFor({ state: "visible", timeout: 15_000 });
     await waitForText(page, "[data-react-member-banner]", `Welcome back, ${memberName}!`, "React member banner");
     if (memberIsAdmin) {
@@ -245,6 +270,9 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
       "#clubWallet",
       "#legacyRegisterTitle",
       "#registerList",
+      "#profilePhotoPreview",
+      "#enablePasskeyBtn",
+      "#passkeyStatus",
       "#legacyBoardPanel",
       "#legacyTeeSignsPanel",
       "#clubMeetings",

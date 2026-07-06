@@ -8,6 +8,7 @@ import { useMemberContext } from "./member-context.js";
 import { PdgaDashboard, usePdgaStats } from "./pdga-dashboard.js";
 
 const h = React.createElement;
+const PASSKEY_STATE_EVENT = "gvdg:member-passkey-state";
 
 function ProfileHeader({ context, pdgaPhoto }) {
   const photo = context.photo || pdgaPhoto || null;
@@ -48,9 +49,22 @@ function DashboardActions() {
 
 function AccountTools() {
   const [supportsPasskeys, setSupportsPasskeys] = React.useState(false);
+  const [passkeyState, setPasskeyState] = React.useState({ busy: false, message: "" });
 
   React.useEffect(() => {
     setSupportsPasskeys(typeof window.PublicKeyCredential !== "undefined");
+  }, []);
+
+  React.useEffect(() => {
+    function update(event) {
+      setPasskeyState((previous) => ({
+        busy: typeof event.detail?.busy === "boolean" ? event.detail.busy : previous.busy,
+        message: typeof event.detail?.message === "string" ? event.detail.message : previous.message,
+      }));
+    }
+
+    window.addEventListener(PASSKEY_STATE_EVENT, update);
+    return () => window.removeEventListener(PASSKEY_STATE_EVENT, update);
   }, []);
 
   function request(eventName) {
@@ -63,10 +77,11 @@ function AccountTools() {
         ? h("button", {
           type: "button",
           className: "passkey-btn",
-          id: "enablePasskeyBtn",
+          "data-react-passkey-action": "add",
+          disabled: passkeyState.busy,
           onClick: () => request("gvdg:member-add-passkey-requested"),
           key: "passkey",
-        }, "Add a passkey")
+        }, passkeyState.busy ? "Adding passkey..." : "Add a passkey")
         : null,
       h("button", {
         type: "button",
@@ -75,7 +90,7 @@ function AccountTools() {
         onClick: () => request("gvdg:member-edit-profile-requested"),
         key: "profile",
       }, "Edit profile"),
-      h("span", { className: "passkey-status", id: "passkeyStatus", key: "status" }),
+      h("span", { className: "passkey-status", "data-react-passkey-status": passkeyState.message ? "message" : "empty", role: "status", "aria-live": "polite", key: "status" }, passkeyState.message),
     ].filter(Boolean)),
   ]);
 }

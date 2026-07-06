@@ -89,6 +89,13 @@ async function expectReactTab(page, name) {
   if (selected !== "true") throw new Error(`Expected React tab ${name} to be selected, got ${selected}`);
 }
 
+async function expectNoReadinessClasses(page) {
+  const className = await page.locator("#members").evaluate((node) => node.className || "");
+  if (/members-react-(shell|overview|ratings|registration|board|tee-signs|club)-ready/.test(className)) {
+    throw new Error(`Legacy member readiness class returned: ${className}`);
+  }
+}
+
 async function expectDashboardPanel(page, tab, selector, label) {
   const result = await page.evaluate(({ panels, tab: expectedTab, visiblePanels }) => {
     const displays = Object.fromEntries(panels.map((panelSelector) => {
@@ -161,6 +168,12 @@ async function captureAuthGate(browser, origin, viewport, slug) {
   });
   await page.locator("#profileForm").waitFor({ state: "visible", timeout: 10_000 });
   await waitForText(page, "[data-react-auth-gate]", "Add / change photo", "React auth profile form");
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("gvdg:member-profile-preview", {
+      detail: { src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p94AAAAASUVORK5CYII=" },
+    }));
+  });
+  await page.locator('[data-react-profile-preview="ready"]').waitFor({ state: "visible", timeout: 10_000 });
   await assertNoHorizontalOverflow(page, `${slug} auth profile`);
   await captureFullPage(page, path.join(evidenceDir, `${slug}-auth-profile.png`));
 
@@ -178,12 +191,13 @@ async function captureState(browser, origin, viewport, slug) {
   await page.addInitScript(() => sessionStorage.setItem("gvdg_member_token", "qa-token"));
 
   await page.goto(`${origin}/gvdg-members.html`, { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#members.members-react-shell-ready", { timeout: 10_000 });
-  await page.waitForSelector("#members.members-react-overview-ready", { timeout: 10_000 });
-  await page.waitForSelector("#members.members-react-registration-ready", { timeout: 10_000 });
-  await page.waitForSelector("#members.members-react-board-ready", { timeout: 10_000 });
-  await page.waitForSelector("#members.members-react-tee-signs-ready", { timeout: 10_000 });
-  await page.waitForSelector("#members.members-react-club-ready", { timeout: 10_000 });
+  await page.waitForSelector("#membersReactDashboardShell:not(:empty)", { timeout: 10_000 });
+  await page.waitForSelector("#membersReactOverviewPanel:not(:empty)", { state: "attached", timeout: 10_000 });
+  await page.waitForSelector("#membersReactRegistrationPanel:not(:empty)", { state: "attached", timeout: 10_000 });
+  await page.waitForSelector("#membersReactBoardPanel:not(:empty)", { state: "attached", timeout: 10_000 });
+  await page.waitForSelector("#membersReactTeeSignsPanel:not(:empty)", { state: "attached", timeout: 10_000 });
+  await page.waitForSelector("#membersReactClubPanel:not(:empty)", { state: "attached", timeout: 10_000 });
+  await expectNoReadinessClasses(page);
   await expectReactTab(page, "Overview");
   await page.waitForSelector('[data-react-overview-dashboard="ready"]', { timeout: 10_000 });
   await page.waitForSelector('[data-react-registration-panel="ready"]', { timeout: 10_000 });
@@ -201,6 +215,17 @@ async function captureState(browser, origin, viewport, slug) {
   await waitForText(page, "[data-react-club-ratings]", "906", "React club ratings");
   await waitForText(page, "[data-react-wallet]", "$12.50", "React wallet balance");
   await waitForText(page, "[data-react-account-tools]", "Edit profile", "React account tools");
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("gvdg:member-passkey-state", {
+      detail: { busy: false, message: "Passkey setup cancelled." },
+    }));
+  });
+  await waitForText(page, "[data-react-passkey-status]", "Passkey setup cancelled.", "React passkey status");
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("gvdg:member-passkey-state", {
+      detail: { busy: false, message: "" },
+    }));
+  });
   await page.waitForSelector('[data-react-member-banner="ready"]', { timeout: 10_000 });
   await waitForText(page, "[data-react-member-banner]", "Welcome back, QA Admin!", "React member banner");
   await waitForText(page, "[data-react-admin-portal]", "Admin Portal", "React admin portal");
@@ -216,6 +241,9 @@ async function captureState(browser, origin, viewport, slug) {
     "#clubWallet",
     "#legacyRegisterTitle",
     "#registerList",
+    "#profilePhotoPreview",
+    "#enablePasskeyBtn",
+    "#passkeyStatus",
     "#legacyBoardPanel",
     "#legacyTeeSignsPanel",
     "#clubMeetings",

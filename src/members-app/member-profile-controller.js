@@ -4,6 +4,13 @@ import { applyProfile, memberAuthProfile } from "./member-auth-state.js";
 import { passkeysSupported } from "./member-passkeys.js";
 
 let pendingPhoto = null;
+const PROFILE_PREVIEW_EVENT = "gvdg:member-profile-preview";
+
+function setProfilePreview(src) {
+  window.dispatchEvent(new CustomEvent(PROFILE_PREVIEW_EVENT, {
+    detail: { src: src || "" },
+  }));
+}
 
 function resizeImageFile(file, maxPx) {
   return new Promise((resolve) => {
@@ -44,16 +51,7 @@ export function createProfileController({ api, showLogin, showMembersContent }) 
     if (pdgaInput) pdgaInput.value = profile.pdgaNo || "";
     if (udiscInput) udiscInput.value = profile.udisc || "";
     pendingPhoto = null;
-
-    const preview = byId("profilePhotoPreview");
-    if (!preview) return;
-    if (profile.photo) {
-      preview.src = profile.photo;
-      preview.style.display = "block";
-    } else {
-      preview.removeAttribute("src");
-      preview.style.display = "none";
-    }
+    setProfilePreview(profile.photo || "");
   }
 
   async function onPhotoChosen(event) {
@@ -66,10 +64,7 @@ export function createProfileController({ api, showLogin, showMembersContent }) 
     }
     clearError(byId("profileError"));
     pendingPhoto = dataUrl;
-    const preview = byId("profilePhotoPreview");
-    if (!preview) return;
-    preview.src = dataUrl;
-    preview.style.display = "block";
+    setProfilePreview(dataUrl);
   }
 
   async function saveProfile() {

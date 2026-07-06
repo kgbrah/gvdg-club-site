@@ -15,7 +15,7 @@ test('member dashboard React board panel owns board loading and posting', () => 
   const panel = readFileSync('src/members-app/board-panel.js', 'utf8');
   const markdown = readFileSync('src/members-app/board-markdown.js', 'utf8');
   assert.match(html, /id="membersReactBoardPanel"/);
-  assert.match(html, /members-react-board-ready/);
+  assert.match(html, /#membersReactBoardPanel:not\(:empty\)/);
   assert.doesNotMatch(html, /id="legacyBoardPanel"/);
   assert.doesNotMatch(html, /reactBoardReady/);
   assert.doesNotMatch(html, /async function loadBoard\(/);
@@ -31,7 +31,7 @@ test('member dashboard React tee signs panel owns upload and captured sign displ
   const panel = readFileSync('src/members-app/tee-signs-panel.js', 'utf8');
   const utils = readFileSync('src/members-app/tee-signs-utils.js', 'utf8');
   assert.match(html, /id="membersReactTeeSignsPanel"/);
-  assert.match(html, /members-react-tee-signs-ready/);
+  assert.match(html, /#membersReactTeeSignsPanel:not\(:empty\)/);
   assert.doesNotMatch(html, /id="legacyTeeSignsPanel"/);
   assert.doesNotMatch(html, /reactTeeSignsReady/);
   assert.doesNotMatch(html, /async function loadTeeSigns\(/);
@@ -57,8 +57,7 @@ test('member dashboard React club panel owns directory search, filters, load-mor
   const minuteData = readFileSync('src/members-app/meeting-minutes-data.js', 'utf8');
   const minutes = readFileSync('src/members-app/meeting-minutes-panel.js', 'utf8');
   assert.match(html, /id="membersReactClubPanel"/);
-  assert.match(html, /members-react-club-ready/);
-  assert.match(html, /body\[data-member-dashboard-tab="club"\] #members\.members-react-club-ready #membersReactClubPanel/);
+  assert.match(html, /body\[data-member-dashboard-tab="club"\] #membersReactClubPanel:not\(:empty\)/);
   assert.doesNotMatch(router, /querySelector|classList|dtab-off/);
   assert.doesNotMatch(html, /id="legacyClubDirectoryPanel"/);
   assert.doesNotMatch(html, /id="legacyMeetingMinutesPanel"/);
@@ -71,7 +70,7 @@ test('member dashboard React club panel owns directory search, filters, load-mor
   assert.doesNotMatch(html, /id="doublesTable"/);
   assert.doesNotMatch(html, /id="seasonSelector"/);
   assert.match(app, /createRoot\(clubMount\)\.render/);
-  assert.match(app, /members-react-club-ready/);
+  assert.doesNotMatch(app, /members-react-(shell|overview|ratings|registration|board|tee-signs|club)-ready|classList/);
   assert.match(data, /export const CLUB_MEMBERS/);
   assert.match(data, /export const CLUB_YEAR_DATA/);
   assert.match(data, /export const CLUB_DIRECTORY_DATA/);
@@ -106,7 +105,7 @@ test('member dashboard React registration section stays available for logged-in 
   const panel = readFileSync('src/members-app/registration-panel.js', 'utf8');
   const casual = readFileSync('src/members-app/registration-casual.js', 'utf8');
   assert.match(html, /id="membersReactRegistrationPanel"/);
-  assert.match(html, /members-react-registration-ready/);
+  assert.match(html, /#membersReactRegistrationPanel:not\(:empty\)/);
   assert.doesNotMatch(html, /id="legacyRegisterTitle"/);
   assert.doesNotMatch(html, /id="registerList"/);
   assert.doesNotMatch(html, /async function loadRegister\(/);

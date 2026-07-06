@@ -40,35 +40,29 @@ if (authMount) {
 const shellMount = document.getElementById("membersReactDashboardShell");
 if (shellMount) {
   createRoot(shellMount).render(h(MemberDashboardShell));
-  document.getElementById("members")?.classList.add("members-react-shell-ready");
 }
 
 const overviewMount = document.getElementById("membersReactOverviewPanel");
 if (overviewMount) {
   createRoot(overviewMount).render(h(MemberOverviewDashboard));
-  document.getElementById("members")?.classList.add("members-react-overview-ready", "members-react-ratings-ready");
 }
 
 const registrationMount = document.getElementById("membersReactRegistrationPanel");
 if (registrationMount) {
   createRoot(registrationMount).render(h(MemberRegistrationPanel));
-  document.getElementById("members")?.classList.add("members-react-registration-ready");
 }
 
 const boardMount = document.getElementById("membersReactBoardPanel");
 if (boardMount) {
   createRoot(boardMount).render(h(MemberBoardPanel));
-  document.getElementById("members")?.classList.add("members-react-board-ready");
 }
 
 const teeSignsMount = document.getElementById("membersReactTeeSignsPanel");
 if (teeSignsMount) {
   createRoot(teeSignsMount).render(h(MemberTeeSignsPanel));
-  document.getElementById("members")?.classList.add("members-react-tee-signs-ready");
 }
 
 const clubMount = document.getElementById("membersReactClubPanel");
 if (clubMount) {
   createRoot(clubMount).render(h(MemberClubPanel));
-  document.getElementById("members")?.classList.add("members-react-club-ready");
 }
