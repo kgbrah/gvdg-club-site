@@ -10,6 +10,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
 const apiBase = "http://127.0.0.1:8788";
 const evidenceDir = path.join(repoRoot, ".omo/evidence/members-dashboard-react");
+const teeUploadPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p94AAAAASUVORK5CYII=", "base64");
 
 const mimeTypes = new Map([
   [".css", "text/css; charset=utf-8"],
@@ -93,9 +94,13 @@ async function captureState(browser, origin, viewport, slug) {
   await page.waitForSelector("#members.members-react-shell-ready", { timeout: 10_000 });
   await page.waitForSelector("#members.members-react-overview-ready", { timeout: 10_000 });
   await page.waitForSelector("#members.members-react-registration-ready", { timeout: 10_000 });
+  await page.waitForSelector("#members.members-react-board-ready", { timeout: 10_000 });
+  await page.waitForSelector("#members.members-react-tee-signs-ready", { timeout: 10_000 });
   await expectReactTab(page, "Overview");
   await page.waitForSelector('[data-react-overview-dashboard="ready"]', { timeout: 10_000 });
   await page.waitForSelector('[data-react-registration-panel="ready"]', { timeout: 10_000 });
+  await page.waitForSelector('[data-react-board-panel="ready"]', { state: "attached", timeout: 10_000 });
+  await page.waitForSelector('[data-react-tee-signs-panel="ready"]', { state: "attached", timeout: 10_000 });
   await page.waitForSelector('[data-react-pdga-dashboard="ready"]', { timeout: 10_000 });
   await waitForText(page, "#membersReactRatingPanel", "941", "React live rating");
   await page.waitForSelector('[data-react-club-ratings="ready"]', { timeout: 10_000 });
@@ -112,6 +117,10 @@ async function captureState(browser, origin, viewport, slug) {
   for (const selector of ["#legacyRegisterTitle", "#registerList"]) {
     const hidden = await page.locator(selector).evaluate((node) => getComputedStyle(node).display === "none");
     if (!hidden) throw new Error(`${selector} remained visible after React registration mounted.`);
+  }
+  for (const selector of ["#legacyBoardPanel", "#legacyTeeSignsPanel"]) {
+    const hidden = await page.locator(selector).evaluate((node) => getComputedStyle(node).display === "none");
+    if (!hidden) throw new Error(`${selector} remained visible after its React panel mounted.`);
   }
   await captureFullPage(page, path.join(evidenceDir, `${slug}-overview.png`));
 
@@ -132,6 +141,40 @@ async function captureState(browser, origin, viewport, slug) {
   }
   await page.waitForTimeout(250);
   await captureFullPage(page, path.join(evidenceDir, `${slug}-events.png`));
+
+  await page.getByRole("tab", { name: "Board" }).click();
+  await waitForText(page, "#membersReactDashboardShell", "Member Board", "board title");
+  await expectReactTab(page, "Board");
+  await page.locator('[data-react-board-panel="ready"]').waitFor({ state: "visible", timeout: 10_000 });
+  await waitForText(page, "[data-react-board-panel]", "League night", "React board fixture");
+  await page.locator("[data-react-board-panel] .board-compose textarea").fill(`QA board post ${slug}`);
+  await page.locator("[data-react-board-panel] .board-compose button").click();
+  await waitForText(page, "[data-react-board-panel]", `QA board post ${slug}`, "posted board message");
+  if (!apiState.boardPostBody || apiState.boardPostBody.body !== `QA board post ${slug}` || apiState.boardPostBody.parent_id !== null) {
+    throw new Error(`Board POST body was not captured correctly: ${JSON.stringify(apiState.boardPostBody)}`);
+  }
+  await page.waitForTimeout(250);
+  await captureFullPage(page, path.join(evidenceDir, `${slug}-board.png`));
+
+  await page.getByRole("tab", { name: "Tee Signs" }).click();
+  await waitForText(page, "#membersReactDashboardShell", "Tee Sign Capture", "tee signs title");
+  await expectReactTab(page, "Tee Signs");
+  await page.locator('[data-react-tee-signs-panel="ready"]').waitFor({ state: "visible", timeout: 10_000 });
+  await waitForText(page, "[data-react-tee-signs-panel]", "Blue - Par 3", "React tee sign fixture");
+  await page.setInputFiles('[data-react-tee-file]', {
+    name: "qa-tee-sign.png",
+    mimeType: "image/png",
+    buffer: teeUploadPng,
+  });
+  await page.locator("[data-react-tee-signs-panel] .ts-preview").waitFor({ state: "visible", timeout: 10_000 });
+  await page.locator("[data-react-tee-signs-panel] .passkey-btn").click();
+  await waitForText(page, "[data-react-tee-signs-panel]", "Uploaded. Crotts is reading the sign.", "tee upload status");
+  await waitForText(page, "[data-react-tee-signs-panel]", "Hole 1", "uploaded tee sign row");
+  if (!apiState.teeSignPostBody || apiState.teeSignPostBody.courseId !== 1 || apiState.teeSignPostBody.hole !== 1 || !String(apiState.teeSignPostBody.image || "").startsWith("data:image/jpeg;base64,")) {
+    throw new Error(`Tee sign POST body was not captured correctly: ${JSON.stringify(apiState.teeSignPostBody)}`);
+  }
+  await page.waitForTimeout(250);
+  await captureFullPage(page, path.join(evidenceDir, `${slug}-tee.png`));
 
   await page.getByRole("tab", { name: "Club" }).click();
   await waitForText(page, "#membersReactDashboardShell", "GVDG Member Directory", "club title");

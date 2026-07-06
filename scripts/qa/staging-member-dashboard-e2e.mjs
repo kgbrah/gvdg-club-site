@@ -144,10 +144,14 @@ async function runBrowserQa({ siteUrl, token }) {
     await page.waitForSelector("#members.members-react-shell-ready", { timeout: 15_000 });
     await page.waitForSelector("#members.members-react-overview-ready", { timeout: 15_000 });
     await page.waitForSelector("#members.members-react-registration-ready", { timeout: 15_000 });
+    await page.waitForSelector("#members.members-react-board-ready", { timeout: 15_000 });
+    await page.waitForSelector("#members.members-react-tee-signs-ready", { timeout: 15_000 });
     await waitForText(page, "#membersReactDashboardShell", "Player Dashboard", "React dashboard title");
     await expectReactTab(page, "Overview");
     await page.locator('[data-react-overview-dashboard="ready"]').waitFor({ state: "visible", timeout: 15_000 });
     await page.locator('[data-react-registration-panel="ready"]').waitFor({ state: "visible", timeout: 15_000 });
+    await page.locator('[data-react-board-panel="ready"]').waitFor({ state: "attached", timeout: 15_000 });
+    await page.locator('[data-react-tee-signs-panel="ready"]').waitFor({ state: "attached", timeout: 15_000 });
     await page.locator('[data-react-pdga-dashboard="ready"]').waitFor({ state: "visible", timeout: 15_000 });
 
     const legacyTabsHidden = await page.locator("#dashTabs").evaluate((node) => getComputedStyle(node).display === "none");
@@ -160,6 +164,10 @@ async function runBrowserQa({ siteUrl, token }) {
       const hidden = await page.locator(selector).evaluate((node) => getComputedStyle(node).display === "none");
       if (!hidden) throw new Error(`${selector} remained visible after React registration mounted.`);
     }
+    for (const selector of ["#legacyBoardPanel", "#legacyTeeSignsPanel"]) {
+      const hidden = await page.locator(selector).evaluate((node) => getComputedStyle(node).display === "none");
+      if (!hidden) throw new Error(`${selector} remained visible after its React panel mounted.`);
+    }
 
     await waitForLiveRating(page);
 
@@ -169,6 +177,20 @@ async function runBrowserQa({ siteUrl, token }) {
     const registerVisible = await page.locator("#clubRegister").evaluate((node) => !node.classList.contains("dtab-off"));
     if (!registerVisible) throw new Error("Events tab did not reveal the registration panel.");
     await page.locator('[data-react-casual-form="ready"]').waitFor({ state: "visible", timeout: 15_000 });
+
+    await page.getByRole("tab", { name: "Board" }).click();
+    await waitForText(page, "#membersReactDashboardShell", "Member Board", "board tab title");
+    await expectReactTab(page, "Board");
+    const boardVisible = await page.locator("#clubBoard").evaluate((node) => !node.classList.contains("dtab-off"));
+    if (!boardVisible) throw new Error("Board tab did not reveal the message board.");
+    await page.locator('[data-react-board-panel="ready"]').waitFor({ state: "visible", timeout: 15_000 });
+
+    await page.getByRole("tab", { name: "Tee Signs" }).click();
+    await waitForText(page, "#membersReactDashboardShell", "Tee Sign Capture", "tee signs tab title");
+    await expectReactTab(page, "Tee Signs");
+    const teeSignsVisible = await page.locator("#teeCapture").evaluate((node) => !node.classList.contains("dtab-off"));
+    if (!teeSignsVisible) throw new Error("Tee Signs tab did not reveal the capture panel.");
+    await page.locator('[data-react-tee-signs-panel="ready"]').waitFor({ state: "visible", timeout: 15_000 });
 
     await page.getByRole("tab", { name: "Club" }).click();
     await waitForText(page, "#membersReactDashboardShell", "GVDG Member Directory", "club tab title");

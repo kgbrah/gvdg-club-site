@@ -1,29 +1,12 @@
 import React from "react";
 
-import { TOKEN_KEY, requestJson, storageGet } from "./api.js";
+import { requestJson } from "./api.js";
 import { useMemberContext } from "./member-context.js";
 import { CasualRoundsSection } from "./registration-casual.js";
 import { EventRegistrationSections } from "./registration-events.js";
+import { useSessionToken } from "./session-token.js";
 
 const h = React.createElement;
-
-function useSessionToken() {
-  const [token, setToken] = React.useState(() => storageGet(TOKEN_KEY));
-
-  React.useEffect(() => {
-    function update() {
-      setToken(storageGet(TOKEN_KEY));
-    }
-    window.addEventListener("gvdg:member-dashboard-ready", update);
-    window.addEventListener("gvdg:member-profile-updated", update);
-    return () => {
-      window.removeEventListener("gvdg:member-dashboard-ready", update);
-      window.removeEventListener("gvdg:member-profile-updated", update);
-    };
-  }, []);
-
-  return token;
-}
 
 function visibleParent(token) {
   const parent = document.getElementById("clubRegister");

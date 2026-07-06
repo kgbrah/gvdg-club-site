@@ -127,7 +127,7 @@
             margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center;
             flex-wrap: wrap; gap: 1rem; border-left: 4px solid var(--primary);
         }
-        .welcome-text { font-size: 1.1rem; }
+        .welcome-text { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.45rem; font-size: 1.1rem; }
         .welcome-text strong { font-family: 'Bebas Neue', sans-serif; font-size: 1.3rem; letter-spacing: 0.02em; }
 
         .logout-btn { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.25); padding: 0.5rem 1.25rem; border-radius: 6px; font-weight: 600; font-size: 0.875rem; cursor: pointer; transition: background 0.15s ease; }
@@ -454,6 +454,12 @@
                 #members.members-react-registration-ready #membersReactRegistrationPanel { display: block; }
                 #members.members-react-registration-ready #legacyRegisterTitle,
                 #members.members-react-registration-ready #registerList { display: none !important; }
+                #membersReactBoardPanel { display: none; }
+                #members.members-react-board-ready #membersReactBoardPanel { display: block; }
+                #members.members-react-board-ready #legacyBoardPanel { display: none !important; }
+                #membersReactTeeSignsPanel { display: none; }
+                #members.members-react-tee-signs-ready #membersReactTeeSignsPanel { display: block; }
+                #members.members-react-tee-signs-ready #legacyTeeSignsPanel { display: none !important; }
                 #members.members-react-ratings-ready #legacyPdgaDashboard { display: none !important; }
                 #members.members-react-overview-ready #legacyDashboardHead,
                 #members.members-react-overview-ready #activeStandings,
@@ -809,43 +815,49 @@
             </div>
 
             <div id="clubBoard" class="club-board" style="display:none;">
-                <div class="board-title-row">
-                    <div>
-                        <h3 class="my-dashboard-title">Members Message Board</h3>
-                        <p class="board-note">Ask questions, coordinate rounds, share updates, and reply to other members.</p>
+                <div id="membersReactBoardPanel"></div>
+                <div id="legacyBoardPanel">
+                    <div class="board-title-row">
+                        <div>
+                            <h3 class="my-dashboard-title">Members Message Board</h3>
+                            <p class="board-note">Ask questions, coordinate rounds, share updates, and reply to other members.</p>
+                        </div>
+                        <span id="boardCount" class="board-count"></span>
                     </div>
-                    <span id="boardCount" class="board-count"></span>
+                    <div class="board-compose">
+                        <textarea id="boardInput" rows="3" maxlength="4000" placeholder="Share something with the club… (markdown: **bold**, - bullets, https links)"></textarea>
+                        <button type="button" class="passkey-btn" id="boardPostBtn">Post</button>
+                    </div>
+                    <div id="boardStatus" class="board-status" role="status" aria-live="polite"></div>
+                    <div id="boardFeed"></div>
                 </div>
-                <div class="board-compose">
-                    <textarea id="boardInput" rows="3" maxlength="4000" placeholder="Share something with the club… (markdown: **bold**, - bullets, https links)"></textarea>
-                    <button type="button" class="passkey-btn" id="boardPostBtn">Post</button>
-                </div>
-                <div id="boardStatus" class="board-status" role="status" aria-live="polite"></div>
-                <div id="boardFeed"></div>
             </div>
 
             <div id="teeCapture" class="tee-capture" style="display:none;">
-                <h3 class="my-dashboard-title">Capture a Tee Sign</h3>
-                <p class="tee-capture-note">Snap a photo of a tee sign while you play and Crotts will read the par &amp; distance for every layout on it. An admin reviews each photo before it counts — your shot helps document every course.</p>
-                <div class="ts-controls">
-                    <div class="ts-field">
-                        <label for="tsCourse">Course</label>
-                        <select id="tsCourse"></select>
+                <div id="membersReactTeeSignsPanel"></div>
+                <div id="legacyTeeSignsPanel">
+                    <h3 class="my-dashboard-title">Capture a Tee Sign</h3>
+                    <p class="tee-capture-note">Snap a photo of a tee sign while you play and Crotts will read the par &amp; distance for every layout on it. An admin reviews each photo before it counts — your shot helps document every course.</p>
+                    <div class="ts-controls">
+                        <div class="ts-field">
+                            <label for="tsCourse">Course</label>
+                            <select id="tsCourse"></select>
+                        </div>
+                        <div class="ts-field">
+                            <label for="tsHole">Hole</label>
+                            <select id="tsHole"></select>
+                        </div>
+                        <label class="ts-filelabel" for="tsPhotoInput">Take / choose photo</label>
+                        <input type="file" id="tsPhotoInput" accept="image/png,image/jpeg,image/webp" capture="environment" style="display:none;">
                     </div>
-                    <div class="ts-field">
-                        <label for="tsHole">Hole</label>
-                        <select id="tsHole"></select>
+                    <img id="tsPreview" class="ts-preview" alt="Tee-sign photo preview">
+                    <div>
+                        <button type="button" class="passkey-btn" id="tsUploadBtn" disabled>Upload tee sign</button>
                     </div>
-                    <label class="ts-filelabel" for="tsPhotoInput">Take / choose photo</label>
-                    <input type="file" id="tsPhotoInput" accept="image/png,image/jpeg,image/webp" capture="environment" style="display:none;">
+                    <div class="ts-status" id="tsStatus"></div>
+                    <div class="ts-mylist-title">My captured signs</div>
+                    <div id="tsMyList"></div>
                 </div>
-                <img id="tsPreview" class="ts-preview" alt="Tee-sign photo preview">
-                <div>
-                    <button type="button" class="passkey-btn" id="tsUploadBtn" disabled>Upload tee sign</button>
-                </div>
-                <div class="ts-status" id="tsStatus"></div>
-                <div class="ts-mylist-title">My captured signs</div>
-                <div id="tsMyList"></div>
             </div>
 
             <div class="members-stats-grid">
@@ -2461,8 +2473,20 @@
                 loadRegister();
             }
             loadMeetings();
-            loadBoard();
-            loadTeeSigns();
+            const reactBoardReady = $('members') && $('members').classList.contains('members-react-board-ready');
+            if (reactBoardReady) {
+                const boardWrap = $('clubBoard');
+                if (boardWrap) boardWrap.style.display = '';
+            } else {
+                loadBoard();
+            }
+            const reactTeeSignsReady = $('members') && $('members').classList.contains('members-react-tee-signs-ready');
+            if (reactTeeSignsReady) {
+                const teeSignsWrap = $('teeCapture');
+                if (teeSignsWrap) teeSignsWrap.style.display = '';
+            } else {
+                loadTeeSigns();
+            }
             const reactOverviewReady = $('members') && $('members').classList.contains('members-react-overview-ready');
             if (reactOverviewReady) return;
             loadClubRatings(); // GVDG results are keyed by memberId, so they show even without a PDGA#

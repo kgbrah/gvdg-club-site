@@ -19,6 +19,38 @@ test('member dashboard React registration panel includes casual round posts', ()
   assert.match(casual, /CasualRoundCard/);
 });
 
+test('member dashboard React board panel owns board loading and posting', () => {
+  const html = readFileSync('gvdg-members.html', 'utf8');
+  const panel = readFileSync('src/members-app/board-panel.js', 'utf8');
+  const markdown = readFileSync('src/members-app/board-markdown.js', 'utf8');
+  assert.match(html, /id="membersReactBoardPanel"/);
+  assert.match(html, /members-react-board-ready/);
+  assert.match(html, /id="legacyBoardPanel"/);
+  assert.match(html, /reactBoardReady/);
+  assert.match(panel, /requestJson\("\/board"/);
+  assert.match(panel, /request\("\/board", \{ method: "POST"/);
+  assert.match(panel, /data-react-board-panel/);
+  assert.match(panel, /MarkdownBlocks/);
+  assert.ok(markdown.includes('https?:\\/\\/'));
+});
+
+test('member dashboard React tee signs panel owns upload and captured sign display', () => {
+  const html = readFileSync('gvdg-members.html', 'utf8');
+  const panel = readFileSync('src/members-app/tee-signs-panel.js', 'utf8');
+  const utils = readFileSync('src/members-app/tee-signs-utils.js', 'utf8');
+  assert.match(html, /id="membersReactTeeSignsPanel"/);
+  assert.match(html, /members-react-tee-signs-ready/);
+  assert.match(html, /id="legacyTeeSignsPanel"/);
+  assert.match(html, /reactTeeSignsReady/);
+  assert.match(panel, /requestJson\("\/my-tee-signs"/);
+  assert.match(panel, /request\("\/tee-signs", \{ method: "POST"/);
+  assert.match(panel, /\/tee-signs\/\$\{encodeURIComponent\(id\)\}\/image/);
+  assert.match(panel, /data-react-tee-signs-panel/);
+  assert.match(panel, /data-react-tee-file/);
+  assert.match(utils, /resizeImageFile/);
+  assert.match(utils, /TS_MAX_DATA_URL/);
+});
+
 test('member dashboard React registration section stays available for logged-in members', () => {
   const html = readFileSync('gvdg-members.html', 'utf8');
   const panel = readFileSync('src/members-app/registration-panel.js', 'utf8');
@@ -72,9 +104,13 @@ test('member dashboard mounts the React shell as a fallback-safe island', () => 
   const ratings = readFileSync('src/members-app/club-ratings.js', 'utf8');
   const activity = readFileSync('src/members-app/activity-panels.js', 'utf8');
   const registration = readFileSync('src/members-app/registration-panel.js', 'utf8');
+  const board = readFileSync('src/members-app/board-panel.js', 'utf8');
+  const teeSigns = readFileSync('src/members-app/tee-signs-panel.js', 'utf8');
   assert.match(html, /id="membersReactDashboardShell"/);
   assert.match(html, /id="membersReactOverviewPanel"/);
   assert.match(html, /id="membersReactRegistrationPanel"/);
+  assert.match(html, /id="membersReactBoardPanel"/);
+  assert.match(html, /id="membersReactTeeSignsPanel"/);
   assert.match(html, /id="legacyPdgaDashboard"/);
   assert.match(html, /id="legacyDashboardHead"/);
   assert.match(html, /id="legacyDashboardActions"/);
@@ -85,8 +121,12 @@ test('member dashboard mounts the React shell as a fallback-safe island', () => 
   assert.match(app, /createRoot\(shellMount\)\.render/);
   assert.match(app, /createRoot\(overviewMount\)\.render/);
   assert.match(app, /createRoot\(registrationMount\)\.render/);
+  assert.match(app, /createRoot\(boardMount\)\.render/);
+  assert.match(app, /createRoot\(teeSignsMount\)\.render/);
   assert.match(app, /members-react-overview-ready/);
   assert.match(app, /members-react-registration-ready/);
+  assert.match(app, /members-react-board-ready/);
+  assert.match(app, /members-react-tee-signs-ready/);
   assert.match(overview, /data-react-overview-dashboard/);
   assert.match(overview, /data-react-dashboard-actions/);
   assert.match(pdga, /id: "membersReactRatingPanel"/);
@@ -103,4 +143,6 @@ test('member dashboard mounts the React shell as a fallback-safe island', () => 
   assert.match(registration, /data-react-registration-panel/);
   assert.match(registration, /EventRegistrationSections/);
   assert.match(registration, /CasualRoundsSection/);
+  assert.match(board, /data-react-board-panel/);
+  assert.match(teeSigns, /data-react-tee-signs-panel/);
 });

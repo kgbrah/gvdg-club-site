@@ -72,8 +72,34 @@ const openEvents = [
   },
 ];
 
+const tinyPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR42mP8z8BQDwAFgwJ/lwytjAAAAABJRU5ErkJggg==", "base64");
+
 function json(body, status = 200) {
   return { status, contentType: "application/json", body: JSON.stringify(body) };
+}
+
+function png(body, status = 200) {
+  return { status, contentType: "image/png", body };
+}
+
+function initialBoardPost() {
+  return {
+    id: 501,
+    member_id: "member-2",
+    author_name: "QA Cardmate",
+    created_at: "Jul 5, 2026",
+    body: "**League night** is set for Wednesday.\n\n- Check in by 5:30",
+    replies: [
+      {
+        id: 502,
+        parent_id: 501,
+        member_id: "member-1",
+        author_name: "QA Admin",
+        created_at: "Jul 5, 2026",
+        body: "I can help with cards.",
+      },
+    ],
+  };
 }
 
 function initialCasualRequest() {
@@ -120,10 +146,37 @@ function postedCasualRequest(body) {
   };
 }
 
+function initialTeeSign() {
+  return {
+    id: 701,
+    course_id: 1,
+    hole_number: 7,
+    r2_key: "qa/sign-701.png",
+    content_type: "image/png",
+    bytes: tinyPng.length,
+    uploaded_by: "member-1",
+    created_at: "2026-07-05T18:00:00Z",
+    status: "candidate",
+    extracted_json: JSON.stringify({
+      layouts: [
+        { label: "Blue", par: 3, distance_ft: 318, color: "blue" },
+        { label: "White", par: 3, distance_ft: 276, color: "white" },
+      ],
+    }),
+    extract_source: "qa",
+  };
+}
+
 export async function installMemberDashboardApiRoutes(page, apiBase) {
   const state = {
+    boardPostBody: null,
+    boardPosts: [initialBoardPost()],
     casualPostBody: null,
     casualRequests: [initialCasualRequest()],
+    nextBoardId: 503,
+    nextTeeSignId: 702,
+    teeSignPostBody: null,
+    teeSigns: [initialTeeSign()],
   };
 
   await page.route(`${apiBase}/**`, async (route) => {
@@ -152,9 +205,55 @@ export async function installMemberDashboardApiRoutes(page, apiBase) {
     if (pathName === "/courses") return route.fulfill(json({ courses: [{ id: 1, name: "ECU North Rec Complex" }] }));
     if (pathName === "/courses/1/layouts") return route.fulfill(json({ layouts: [{ id: 11, name: "Pee Dee's Treasure Map" }] }));
     if (pathName === "/meetings") return route.fulfill(json({ meetings: [] }));
-    if (pathName === "/board") return route.fulfill(json({ posts: [], authors: {} }));
+    if (pathName === "/board" && method === "GET") {
+      return route.fulfill(json({
+        posts: state.boardPosts,
+        authors: {},
+      }));
+    }
+    if (pathName === "/board" && method === "POST") {
+      state.boardPostBody = JSON.parse(request.postData() || "{}");
+      const post = {
+        id: state.nextBoardId++,
+        parent_id: state.boardPostBody.parent_id || null,
+        member_id: "member-1",
+        author_name: "QA Admin",
+        created_at: "Jul 6, 2026",
+        body: state.boardPostBody.body,
+        replies: [],
+      };
+      if (post.parent_id) {
+        const parent = state.boardPosts.find((row) => row.id === post.parent_id);
+        if (parent) parent.replies = [...(parent.replies || []), post];
+      } else {
+        state.boardPosts = [post, ...state.boardPosts];
+      }
+      return route.fulfill(json({ post }, 201));
+    }
+    if (pathName.startsWith("/board/") && method === "DELETE") {
+      return route.fulfill(json({ ok: true }));
+    }
     if (pathName === "/leagues/active") return route.fulfill(json({ leagues: [], events: [] }));
-    if (pathName === "/my-tee-signs") return route.fulfill(json({ teeSigns: [] }));
+    if (pathName === "/my-tee-signs") return route.fulfill(json({ teeSigns: state.teeSigns }));
+    if (pathName === "/tee-signs" && method === "POST") {
+      state.teeSignPostBody = JSON.parse(request.postData() || "{}");
+      const row = {
+        id: state.nextTeeSignId++,
+        course_id: state.teeSignPostBody.courseId,
+        hole_number: state.teeSignPostBody.hole,
+        r2_key: `qa/sign-${state.nextTeeSignId}.jpg`,
+        content_type: "image/jpeg",
+        bytes: 512,
+        uploaded_by: "member-1",
+        created_at: "2026-07-06T12:00:00Z",
+        status: "candidate",
+        extracted_json: null,
+        extract_source: null,
+      };
+      state.teeSigns = [row, ...state.teeSigns];
+      return route.fulfill(json({ teeSign: row }, 201));
+    }
+    if (/^\/tee-signs\/\d+\/image$/.test(pathName)) return route.fulfill(png(tinyPng));
     if (pathName.startsWith("/shop/")) return route.fulfill(json({ ok: true }));
     return route.fulfill(json({ ok: true }));
   });
