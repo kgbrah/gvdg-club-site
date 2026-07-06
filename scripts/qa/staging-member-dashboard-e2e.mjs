@@ -1,11 +1,31 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
 const DEFAULT_SITE_URL = "https://gvdgclub.com";
 const DEFAULT_API_URL = "https://auth.gvdgclub.com";
 const TOKEN_KEY = "gvdg_member_token";
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(scriptDir, "../..");
 
 function env(name) {
   return (process.env[name] || "").trim();
+}
+
+function loadDeployEnv() {
+  const file = path.join(repoRoot, ".gvdg-deploy.env");
+  let text = "";
+  try {
+    text = readFileSync(file, "utf8");
+  } catch {
+    return;
+  }
+  for (const line of text.split(/\r?\n/)) {
+    const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+    if (!match || process.env[match[1]]) continue;
+    process.env[match[1]] = match[2].replace(/^['"]|['"]$/g, "");
+  }
 }
 
 function cleanUrl(value, fallback) {
@@ -69,11 +89,9 @@ function collectPageErrors(page) {
 
 async function usefulStats(apiBase, pdgaNo) {
   const data = await requestJson(apiBase, `/pdga-stats?pdga=${encodeURIComponent(pdgaNo)}`);
-  const hasRatings = data && (data.live_rating != null || data.official_rating != null || data.peak_rating != null);
-  const hasEvents = Array.isArray(data?.events) && data.events.length > 0;
-  if (!hasRatings && !hasEvents) {
+  if (data?.live_rating == null) {
     throw new Error(
-      `QA member PDGA #${pdgaNo} has no dashboard stats. Run npm run qa:ensure-staging-dashboard-data.`,
+      `QA member PDGA #${pdgaNo} has no live dashboard rating. Run npm run qa:ensure-staging-dashboard-data.`,
     );
   }
 }
@@ -91,6 +109,20 @@ async function waitForText(page, selector, expected, label) {
   }
 }
 
+async function waitForLiveRating(page) {
+  try {
+    await page.waitForFunction(
+      () => /^\d{3,4}$/.test(document.querySelector("#dashLive")?.textContent?.trim() || ""),
+      null,
+      { timeout: 15_000 },
+    );
+  } catch {
+    const body = await page.locator("body").innerText().catch(() => "");
+    throw new Error(`Expected a numeric live rating, got ${(await page.locator("#dashLive").innerText()).trim()}. Page text:\n${body}`);
+  }
+  return (await page.locator("#dashLive").innerText()).trim();
+}
+
 async function runBrowserQa({ siteUrl, token, member }) {
   const browser = await chromium.launch({ headless: true });
   try {
@@ -105,13 +137,12 @@ async function runBrowserQa({ siteUrl, token, member }) {
     await page.goto(`${siteUrl}/gvdg-members.html`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector("#members.members-react-shell-ready", { timeout: 15_000 });
     await waitForText(page, "#membersReactDashboardShell", "Player Dashboard", "React dashboard title");
-    await waitForText(page, "#dashBody", "Live", "rating dashboard body");
+    await page.locator("#dashBody").waitFor({ state: "visible", timeout: 15_000 });
 
     const legacyTabsHidden = await page.locator("#dashTabs").evaluate((node) => getComputedStyle(node).display === "none");
     if (!legacyTabsHidden) throw new Error("Legacy dashboard tabs were visible after React shell mounted.");
 
-    const liveRating = (await page.locator("#dashLive").innerText()).trim();
-    if (!/^\d{3,4}$/.test(liveRating)) throw new Error(`Expected a numeric live rating, got ${liveRating}`);
+    await waitForLiveRating(page);
 
     await page.getByRole("tab", { name: "Events" }).click();
     await waitForText(page, "#membersReactDashboardShell", "Event Registration", "events tab title");
@@ -134,6 +165,7 @@ async function runBrowserQa({ siteUrl, token, member }) {
 }
 
 async function main() {
+  loadDeployEnv();
   const siteUrl = cleanUrl(env("GVDG_STAGING_SITE_URL"), DEFAULT_SITE_URL);
   const apiBase = cleanUrl(env("GVDG_STAGING_API_URL"), DEFAULT_API_URL);
   const token = await qaToken(apiBase);

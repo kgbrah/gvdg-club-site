@@ -141,10 +141,10 @@ async function setQaPdga(apiBase, token, preferred) {
   throw new Error("Every QA PDGA candidate is already linked to another member.");
 }
 
-async function hasUsefulStats(apiBase, pdga) {
+async function hasLiveRating(apiBase, pdga) {
   try {
     const stats = await requestJson(apiBase, `/pdga-stats?pdga=${encodeURIComponent(pdga)}`);
-    return stats?.live_rating != null || stats?.official_rating != null || (Array.isArray(stats?.events) && stats.events.length > 0);
+    return stats?.live_rating != null;
   } catch {
     return false;
   }
@@ -162,7 +162,7 @@ async function main() {
   } else if (member?.pdgaNo && QA_PDGA_CANDIDATES.includes(member.pdgaNo)) {
     pdga = member.pdgaNo;
     seedPdgaCache(pdga);
-  } else if (member?.pdgaNo && await hasUsefulStats(apiBase, member.pdgaNo)) {
+  } else if (member?.pdgaNo && await hasLiveRating(apiBase, member.pdgaNo)) {
     pdga = member.pdgaNo;
   } else {
     pdga = await setQaPdga(apiBase, token);
