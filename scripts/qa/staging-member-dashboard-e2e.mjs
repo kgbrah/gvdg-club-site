@@ -142,14 +142,18 @@ async function runBrowserQa({ siteUrl, token, member }) {
 
     await page.goto(`${siteUrl}/gvdg-members.html`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector("#members.members-react-shell-ready", { timeout: 15_000 });
+    await page.waitForSelector("#members.members-react-overview-ready", { timeout: 15_000 });
     await waitForText(page, "#membersReactDashboardShell", "Player Dashboard", "React dashboard title");
     await expectReactTab(page, "Overview");
+    await page.locator('[data-react-overview-dashboard="ready"]').waitFor({ state: "visible", timeout: 15_000 });
     await page.locator('[data-react-pdga-dashboard="ready"]').waitFor({ state: "visible", timeout: 15_000 });
 
     const legacyTabsHidden = await page.locator("#dashTabs").evaluate((node) => getComputedStyle(node).display === "none");
     if (!legacyTabsHidden) throw new Error("Legacy dashboard tabs were visible after React shell mounted.");
-    const legacyRatingsHidden = await page.locator("#legacyPdgaDashboard").evaluate((node) => getComputedStyle(node).display === "none");
-    if (!legacyRatingsHidden) throw new Error("Legacy PDGA dashboard remained visible after React rating panel mounted.");
+    for (const selector of ["#legacyDashboardHead", "#legacyPdgaDashboard", "#clubRatings", "#liveScoring", "#legacyDashboardActions", "#clubWallet"]) {
+      const hidden = await page.locator(selector).evaluate((node) => getComputedStyle(node).display === "none");
+      if (!hidden) throw new Error(`${selector} remained visible after React overview mounted.`);
+    }
 
     await waitForLiveRating(page);
 

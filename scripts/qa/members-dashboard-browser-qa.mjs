@@ -41,6 +41,42 @@ const stats = {
   ],
 };
 
+const myRatings = {
+  competitive: {
+    live_rating: 906,
+    rated_rounds: 1,
+    rounds_count: 1,
+    rounds: [
+      {
+        id: 101,
+        label: "GVDG QA Weekly",
+        date: "2026-07-04",
+        place: 2,
+        total: 56,
+        to_par: 2,
+        rating: 906,
+        rating_source: "stored",
+      },
+    ],
+  },
+  casual: {
+    live_rating: 890,
+    rated_rounds: 1,
+    rounds_count: 1,
+    rounds: [
+      {
+        id: 202,
+        label: "ECU North Rec Complex - Pee Dee's Treasure Map",
+        date: "2026-07-05T14:00:00Z",
+        total: 58,
+        to_par: 4,
+        rating: 890,
+        rating_source: "estimated",
+      },
+    ],
+  },
+};
+
 function json(body, status = 200) {
   return { status, contentType: "application/json", body: JSON.stringify(body) };
 }
@@ -83,9 +119,9 @@ async function installApiRoutes(page) {
     if (pathName === "/me") return route.fulfill(json({ sub: "member-1", isAdmin: true, name: "QA Admin", pdgaNo: "90000001" }));
     if (pathName === "/pdga-stats") return route.fulfill(json(stats));
     if (pathName.startsWith("/my-ratings")) {
-      return route.fulfill(json({ competitive: { rounds: [] }, casual: { rounds: [] } }));
+      return route.fulfill(json(myRatings));
     }
-    if (pathName === "/shop/wallet") return route.fulfill(json({ balance_cents: 0, transactions: [] }));
+    if (pathName === "/shop/wallet") return route.fulfill(json({ balance_cents: 1250, transactions: [{ id: "tx-1", source: "event_payout", amount_cents: 1250, note: "QA payout", created_at: "2026-07-05T12:00:00Z" }] }));
     if (pathName === "/my-live-rounds") return route.fulfill(json({ rounds: [] }));
     if (pathName === "/payments/config") return route.fulfill(json({ enabled: false }));
     if (pathName === "/registration/open") return route.fulfill(json({ events: [] }));
@@ -138,21 +174,32 @@ async function captureState(browser, origin, viewport, slug) {
 
   await page.goto(`${origin}/gvdg-members.html`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("#members.members-react-shell-ready", { timeout: 10_000 });
+  await page.waitForSelector("#members.members-react-overview-ready", { timeout: 10_000 });
   await expectReactTab(page, "Overview");
+  await page.waitForSelector('[data-react-overview-dashboard="ready"]', { timeout: 10_000 });
   await page.waitForSelector('[data-react-pdga-dashboard="ready"]', { timeout: 10_000 });
   await waitForText(page, "#membersReactRatingPanel", "941", "React live rating");
-  const legacyHidden = await page.locator("#legacyPdgaDashboard").evaluate((node) => getComputedStyle(node).display === "none");
-  if (!legacyHidden) throw new Error("Legacy PDGA dashboard remained visible after React rating panel mounted.");
+  await page.waitForSelector('[data-react-club-ratings="ready"]', { timeout: 10_000 });
+  await page.waitForSelector('[data-react-live-scoring="ready"]', { timeout: 10_000 });
+  await page.waitForSelector('[data-react-wallet="ready"]', { timeout: 10_000 });
+  await waitForText(page, "[data-react-club-ratings]", "906", "React club ratings");
+  await waitForText(page, "[data-react-wallet]", "$12.50", "React wallet balance");
+  for (const selector of ["#legacyDashboardHead", "#legacyPdgaDashboard", "#clubRatings", "#liveScoring", "#legacyDashboardActions", "#clubWallet"]) {
+    const hidden = await page.locator(selector).evaluate((node) => getComputedStyle(node).display === "none");
+    if (!hidden) throw new Error(`${selector} remained visible after React overview mounted.`);
+  }
   await page.screenshot({ path: path.join(evidenceDir, `${slug}-overview.png`), fullPage: true });
 
   await page.getByRole("tab", { name: "Events" }).click();
   await waitForText(page, "#membersReactDashboardShell", "Event Registration", "events title");
   await expectReactTab(page, "Events");
+  await page.waitForTimeout(250);
   await page.screenshot({ path: path.join(evidenceDir, `${slug}-events.png`), fullPage: true });
 
   await page.getByRole("tab", { name: "Club" }).click();
   await waitForText(page, "#membersReactDashboardShell", "GVDG Member Directory", "club title");
   await expectReactTab(page, "Club");
+  await page.waitForTimeout(250);
   await page.screenshot({ path: path.join(evidenceDir, `${slug}-club.png`), fullPage: true });
 
   const overflow = await page.evaluate(() => {

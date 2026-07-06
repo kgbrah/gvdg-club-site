@@ -444,18 +444,26 @@
             </div>
 
             <style>
-                #membersReactDashboardShell { display: none; }
+                #membersReactDashboardShell { display: none; scroll-margin-top: 96px; }
                 #members.members-react-shell-ready #membersReactDashboardShell { display: block; }
                 #members.members-react-shell-ready #memberSectionTitle,
                 #members.members-react-shell-ready #dashTabs { display: none !important; }
-                #membersReactRatingPanel { display: none; }
-                #members.members-react-ratings-ready #membersReactRatingPanel { display: block; }
+                #membersReactOverviewPanel { display: none; }
+                #members.members-react-overview-ready #membersReactOverviewPanel { display: block; }
                 #members.members-react-ratings-ready #legacyPdgaDashboard { display: none !important; }
+                #members.members-react-overview-ready #legacyDashboardHead,
+                #members.members-react-overview-ready #activeStandings,
+                #members.members-react-overview-ready #clubRatings,
+                #members.members-react-overview-ready #liveScoring,
+                #members.members-react-overview-ready #legacyDashboardActions,
+                #members.members-react-overview-ready #clubWallet { display: none !important; }
                 .dash-tabs { display: flex; gap: 0.45rem; overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 0.3rem 0 0.85rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border-color); scrollbar-width: none; }
                 .dash-tabs::-webkit-scrollbar { display: none; }
-                .dash-tab { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.5rem 1.05rem; font-weight: 700; font-size: 0.88rem; cursor: pointer; white-space: nowrap; transition: background .15s ease, color .15s ease; }
+                .dash-tab { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.5rem 1.05rem; font-weight: 700; font-size: 0.88rem; cursor: pointer; white-space: nowrap; transition: background .15s ease, color .15s ease; }
                 .dash-tab:hover { color: var(--text-primary); }
                 .dash-tab.active { background: var(--primary-strong); color: #fff; border-color: var(--primary); }
+                .members-react-tabs .dash-tab { background: none !important; background-color: var(--bg-secondary) !important; color: var(--text-secondary) !important; border-color: var(--border-color) !important; }
+                .members-react-tabs .dash-tab.active { background: none !important; background-color: var(--primary-strong) !important; color: white !important; border-color: var(--primary) !important; }
                 .dtab-off { display: none !important; }
             </style>
             <div class="dash-tabs" id="dashTabs" role="tablist" style="display:none;">
@@ -506,6 +514,12 @@
                 .react-pdga-status { color: var(--text-muted); font-size: 0.95rem; padding: 0.5rem 0 0.85rem; }
                 .react-pdga-status.error { color: var(--primary); font-weight: 700; }
                 .react-pdga-meta { color: var(--text-muted); font-size: 0.82rem; line-height: 1.45; margin: -0.25rem 0 0.85rem; }
+                .react-profile-meta { display: flex; gap: 0.55rem; flex-wrap: wrap; color: var(--text-muted); font-size: 0.86rem; line-height: 1.4; margin-top: 0.18rem; }
+                .react-dashboard-utility { margin-bottom: 1rem; }
+                .legacy-dashboard-utility { margin-top: 0.75rem; }
+                #members.members-react-overview-ready .legacy-dashboard-utility { padding-top: 0; border-top: 0; }
+                .standings-summary { cursor: pointer; font-weight: 700; margin: 0.5rem 0; color: var(--text-primary); }
+                .standings-link { float: right; font-size: 0.85rem; color: var(--secondary-text); text-decoration: none; }
                 .club-ratings { margin-top: 1.35rem; }
                 .club-rating-grid { display: grid; grid-template-columns: 1fr; gap: 0.85rem; }
                 @media (min-width: 780px) { .club-rating-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -637,7 +651,7 @@
                 .board-replybox { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
                 @media (max-width: 600px) { .board-compose, .board-replybox { flex-direction: column; } .board-compose textarea, .board-replybox textarea { width: 100%; } .board-compose .passkey-btn, .board-replybox .passkey-btn { width: 100%; } }
                 .passkey-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin: 0; }
-                .passkey-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; background: transparent; border: 1px solid var(--secondary-text); color: var(--secondary-text); padding: 0.55rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background 0.15s ease, color 0.15s ease; }
+                .passkey-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; background: transparent; border: 1px solid var(--secondary-text); color: var(--secondary-text); padding: 0.55rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; text-decoration: none; transition: background 0.15s ease, color 0.15s ease; }
                 .passkey-btn:hover { background: var(--secondary); color: #fff; }
                 .passkey-btn:disabled { opacity: 0.6; cursor: default; }
                 .passkey-status { font-size: 0.85rem; color: var(--text-muted); }
@@ -694,11 +708,11 @@
             <a id="adminPortalLink" href="admin.html" class="admin-portal-link" style="display:none;">🛠 Admin Portal — manage events &amp; courses →</a>
 
             <div id="myDashboard" class="my-dashboard" style="display:none;">
-                <div class="dash-head">
+                <div id="membersReactOverviewPanel"></div>
+                <div class="dash-head" id="legacyDashboardHead">
                     <img id="dashAvatar" class="dash-avatar" alt="" style="display:none;">
                     <h3 class="my-dashboard-title">My Player Dashboard</h3>
                 </div>
-                <div id="membersReactRatingPanel"></div>
                 <div id="legacyPdgaDashboard">
                     <div id="dashLoading" class="dash-note">Loading your stats…</div>
                     <div id="dashEmpty" class="dash-note" style="display:none;"></div>
@@ -753,13 +767,13 @@
                         </section>
                     </div>
                 </div>
-                <div class="dashboard-utility-panel" aria-label="Member tools">
+                <div class="dashboard-utility-panel legacy-dashboard-utility" aria-label="Member tools">
                     <div class="passkey-row" id="passkeyRow" style="display:none;">
                         <button type="button" class="passkey-btn" id="enablePasskeyBtn">Add a passkey</button>
                         <button type="button" class="passkey-btn" id="editProfileBtn">Edit profile</button>
                         <span class="passkey-status" id="passkeyStatus"></span>
                     </div>
-                    <div class="dashboard-actions">
+                    <div class="dashboard-actions" id="legacyDashboardActions">
                         <button type="button" class="dashboard-action primary" data-dtab="board">Message board</button>
                         <button type="button" class="dashboard-action" data-dtab="events">Register</button>
                         <a class="dashboard-action" href="score.html">Live scoring</a>
@@ -2433,13 +2447,15 @@
         async function loadDashboard() {
             const loading = $('dashLoading'), empty = $('dashEmpty'), body = $('dashBody');
             $('myDashboard').style.display = '';
-            loadClubRatings(); // GVDG results are keyed by memberId, so they show even without a PDGA#
-            loadWallet();
-            loadLiveScoring();
             loadRegister();
             loadMeetings();
             loadBoard();
             loadTeeSigns();
+            const reactOverviewReady = $('members') && $('members').classList.contains('members-react-overview-ready');
+            if (reactOverviewReady) return;
+            loadClubRatings(); // GVDG results are keyed by memberId, so they show even without a PDGA#
+            loadWallet();
+            loadLiveScoring();
             loadActiveStandings();
             loading.style.display = ''; empty.style.display = 'none'; body.style.display = 'none';
             const avatar = $('dashAvatar');

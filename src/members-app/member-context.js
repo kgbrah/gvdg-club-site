@@ -1,0 +1,56 @@
+import React from "react";
+
+import { NAME_KEY, PDGA_KEY, TOKEN_KEY, requestJson, storageGet } from "./api.js";
+
+export function readMemberContext(detail = null) {
+  const stored = window.GVDG_MEMBER_DASHBOARD_CONTEXT || {};
+  const source = detail || stored;
+  return {
+    name: source.name || stored.name || storageGet(NAME_KEY) || null,
+    pdgaNo: source.pdgaNo || stored.pdgaNo || storageGet(PDGA_KEY) || null,
+    photo: source.photo || stored.photo || null,
+    isAdmin: source.isAdmin === true || stored.isAdmin === true,
+  };
+}
+
+export function useMemberContext() {
+  const [context, setContext] = React.useState(() => readMemberContext());
+
+  React.useEffect(() => {
+    function update(event) {
+      setContext(readMemberContext(event.detail || null));
+    }
+
+    window.addEventListener("gvdg:member-profile-updated", update);
+    window.addEventListener("gvdg:member-dashboard-ready", update);
+    return () => {
+      window.removeEventListener("gvdg:member-profile-updated", update);
+      window.removeEventListener("gvdg:member-dashboard-ready", update);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const token = storageGet(TOKEN_KEY);
+    if (!token || context.pdgaNo) return undefined;
+
+    const controller = new AbortController();
+    requestJson("/me", { signal: controller.signal, token })
+      .then((profile) => {
+        if (!profile || typeof profile !== "object") return;
+        window.GVDG_MEMBER_DASHBOARD_CONTEXT = {
+          name: profile.name || storageGet(NAME_KEY) || null,
+          pdgaNo: profile.pdgaNo || storageGet(PDGA_KEY) || null,
+          photo: profile.photo || null,
+          isAdmin: profile.isAdmin === true,
+        };
+        setContext(readMemberContext(window.GVDG_MEMBER_DASHBOARD_CONTEXT));
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError") setContext(readMemberContext());
+      });
+
+    return () => controller.abort();
+  }, [context.pdgaNo]);
+
+  return context;
+}
