@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 
+import { MemberAuthGate } from "./auth-gate.js";
 import { MemberBoardPanel } from "./board-panel.js";
 import { MemberClubPanel } from "./club-panel.js";
 import { MemberDashboardShell } from "./dashboard-shell.js";
@@ -14,6 +15,12 @@ if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") 
 }
 
 const h = React.createElement;
+
+const authMount = document.getElementById("membersReactAuthGate");
+if (authMount) {
+  createRoot(authMount).render(h(MemberAuthGate));
+  document.getElementById("loginGate")?.classList.add("members-react-auth-ready");
+}
 
 const shellMount = document.getElementById("membersReactDashboardShell");
 if (shellMount) {

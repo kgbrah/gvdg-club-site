@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v30";
+const CACHE = "gvdg-club-v31";
 const OFFLINE_PAGE = "gvdg-members.html";
 const ASSETS = [
   "tokens.css",

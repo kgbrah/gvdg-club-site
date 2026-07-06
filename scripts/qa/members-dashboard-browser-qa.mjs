@@ -83,6 +83,64 @@ async function captureFullPage(page, filePath) {
   await page.screenshot({ path: filePath, fullPage: true });
 }
 
+async function assertNoHorizontalOverflow(page, label) {
+  const overflow = await page.evaluate(() =>
+    Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - window.innerWidth,
+  );
+  if (overflow <= 1) return;
+  const offenders = await page.evaluate(() => {
+    return [...document.querySelectorAll("body *")].map((node) => {
+      const rect = node.getBoundingClientRect();
+      return {
+        tag: node.tagName.toLowerCase(),
+        id: node.id || "",
+        className: String(node.className || ""),
+        left: Math.round(rect.left),
+        right: Math.round(rect.right),
+        width: Math.round(rect.width),
+      };
+    }).filter((row) => row.right > window.innerWidth + 1 || row.left < -1).slice(0, 8);
+  });
+  throw new Error(`${label} has horizontal overflow of ${overflow}px: ${JSON.stringify(offenders)}`);
+}
+
+async function captureAuthGate(browser, origin, viewport, slug) {
+  const context = await browser.newContext({ viewport });
+  const page = await context.newPage();
+  const errors = collectPageErrors(page);
+  await installMemberDashboardApiRoutes(page, apiBase);
+
+  await page.goto(`${origin}/gvdg-members.html`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector('[data-react-auth-gate="login"]', { timeout: 10_000 });
+  await waitForText(page, "[data-react-auth-gate]", "Members Only", "React auth gate");
+  await waitForText(page, "[data-react-auth-gate]", "PDGA # or UDisc Username", "React auth login form");
+  await page.getByRole("button", { name: "Log In", exact: true }).click();
+  await waitForText(page, "#loginError", "Enter your PDGA #/UDisc and PIN.", "empty login validation");
+  await assertNoHorizontalOverflow(page, `${slug} auth login`);
+  await captureFullPage(page, path.join(evidenceDir, `${slug}-auth-login.png`));
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("gvdg:member-auth-mode", { detail: { mode: "pin", passkeysSupported: false } }));
+  });
+  await page.locator("#pinChangeForm").waitFor({ state: "visible", timeout: 10_000 });
+  await waitForText(page, "[data-react-auth-gate]", "Choose your own to continue", "React auth PIN form");
+  await assertNoHorizontalOverflow(page, `${slug} auth PIN`);
+  await captureFullPage(page, path.join(evidenceDir, `${slug}-auth-pin.png`));
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("gvdg:member-auth-mode", { detail: { mode: "profile", passkeysSupported: false } }));
+  });
+  await page.locator("#profileForm").waitFor({ state: "visible", timeout: 10_000 });
+  await waitForText(page, "[data-react-auth-gate]", "Add / change photo", "React auth profile form");
+  await assertNoHorizontalOverflow(page, `${slug} auth profile`);
+  await captureFullPage(page, path.join(evidenceDir, `${slug}-auth-profile.png`));
+
+  const staticAuthFallbacks = await page.locator("#membersReactAuthGate + .login-card").count();
+  if (staticAuthFallbacks !== 0) throw new Error("Static auth card fallback is still present beside the React auth gate.");
+  if (errors.length) throw new Error(errors.join("\n"));
+  await context.close();
+}
+
 async function captureState(browser, origin, viewport, slug) {
   const context = await browser.newContext({ viewport });
   const page = await context.newPage();
@@ -230,25 +288,7 @@ async function captureState(browser, origin, viewport, slug) {
   await page.waitForTimeout(250);
   await captureFullPage(page, path.join(evidenceDir, `${slug}-club.png`));
 
-  const overflow = await page.evaluate(() =>
-    Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - window.innerWidth,
-  );
-  if (overflow > 1) {
-    const offenders = await page.evaluate(() => {
-      return [...document.querySelectorAll("body *")].map((node) => {
-        const rect = node.getBoundingClientRect();
-        return {
-          tag: node.tagName.toLowerCase(),
-          id: node.id || "",
-          className: String(node.className || ""),
-          left: Math.round(rect.left),
-          right: Math.round(rect.right),
-          width: Math.round(rect.width),
-        };
-      }).filter((row) => row.right > window.innerWidth + 1 || row.left < -1).slice(0, 8);
-    });
-    throw new Error(`${slug} has horizontal overflow of ${overflow}px: ${JSON.stringify(offenders)}`);
-  }
+  await assertNoHorizontalOverflow(page, slug);
   if (errors.length) throw new Error(errors.join("\n"));
   await context.close();
 }
@@ -258,6 +298,9 @@ const browser = await chromium.launch({ headless: true });
 
 try {
   await mkdir(evidenceDir, { recursive: true });
+  await captureAuthGate(browser, staticServer.origin, { width: 390, height: 844 }, "mobile");
+  await captureAuthGate(browser, staticServer.origin, { width: 768, height: 1024 }, "tablet");
+  await captureAuthGate(browser, staticServer.origin, { width: 1280, height: 900 }, "desktop");
   await captureState(browser, staticServer.origin, { width: 390, height: 844 }, "mobile");
   await captureState(browser, staticServer.origin, { width: 768, height: 1024 }, "tablet");
   await captureState(browser, staticServer.origin, { width: 1280, height: 900 }, "desktop");

@@ -129,9 +129,42 @@ async function expectReactTab(page, name) {
   if (selected !== "true") throw new Error(`Expected React tab ${name} to be selected, got ${selected}`);
 }
 
+async function runAuthGateQa(browser, siteUrl) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  const errors = collectPageErrors(page);
+
+  await page.goto(`${siteUrl}/gvdg-members.html`, { waitUntil: "domcontentloaded" });
+  await page.locator('[data-react-auth-gate="login"]').waitFor({ state: "visible", timeout: 15_000 });
+  await waitForText(page, "[data-react-auth-gate]", "Members Only", "React auth gate");
+  await waitForText(page, "[data-react-auth-gate]", "PDGA # or UDisc Username", "React auth login form");
+  await page.getByRole("button", { name: "Log In", exact: true }).click();
+  await waitForText(page, "#loginError", "Enter your PDGA #/UDisc and PIN.", "empty login validation");
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("gvdg:member-auth-mode", { detail: { mode: "pin", passkeysSupported: false } }));
+  });
+  await page.locator("#pinChangeForm").waitFor({ state: "visible", timeout: 15_000 });
+  await waitForText(page, "[data-react-auth-gate]", "Choose your own to continue", "React auth PIN form");
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("gvdg:member-auth-mode", { detail: { mode: "profile", passkeysSupported: false } }));
+  });
+  await page.locator("#profileForm").waitFor({ state: "visible", timeout: 15_000 });
+  await waitForText(page, "[data-react-auth-gate]", "Add / change photo", "React auth profile form");
+
+  const width = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth));
+  const viewport = page.viewportSize()?.width || 390;
+  if (width > viewport + 1) throw new Error(`React auth gate has horizontal overflow: ${width}px > ${viewport}px.`);
+  if (errors.length) throw new Error(errors.join("\n"));
+  await context.close();
+}
+
 async function runBrowserQa({ siteUrl, token }) {
   const browser = await chromium.launch({ headless: true });
   try {
+    await runAuthGateQa(browser, siteUrl);
+
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const page = await context.newPage();
     const errors = collectPageErrors(page);
