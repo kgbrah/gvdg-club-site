@@ -170,9 +170,9 @@ async function runBrowserQa({ siteUrl, token }) {
       const hidden = await page.locator(selector).evaluate((node) => getComputedStyle(node).display === "none");
       if (!hidden) throw new Error(`${selector} remained visible after its React panel mounted.`);
     }
-    const migratedClubLegacyNodes = await page.locator("#legacyClubDirectoryPanel, #legacyMeetingMinutesPanel, #membersGrid, #memberSearch").count();
+    const migratedClubLegacyNodes = await page.locator("#legacyClubDirectoryPanel, #legacyMeetingMinutesPanel, #membersGrid, #memberSearch, #doublesLeague, #doublesTable, #seasonSelector, #championsBanner").count();
     if (migratedClubLegacyNodes !== 0) {
-      throw new Error("Migrated Club directory/minutes legacy nodes are still present in the DOM.");
+      throw new Error("Migrated Club legacy nodes are still present in the DOM.");
     }
 
     await waitForLiveRating(page);
@@ -207,6 +207,9 @@ async function runBrowserQa({ siteUrl, token }) {
     await waitForText(page, "[data-react-club-panel]", "Membership Growth Since 2004", "React club growth chart");
     await waitForText(page, "[data-react-club-panel]", "Future Course Improvements - Ayden", "React meeting minutes");
     const clubPanel = page.locator('[data-react-club-panel]');
+    const doublesPanel = clubPanel.locator('[data-react-doubles-league="ready"]');
+    await doublesPanel.waitFor({ state: "visible", timeout: 15_000 });
+    await waitForText(page, "[data-react-doubles-league]", "Doubles League Records", "React doubles title");
     await clubPanel.locator(".members-search").fill("Martinez");
     await waitForText(page, "[data-react-club-panel] .members-grid", "Juan Martinez", "React directory search");
     await clubPanel.locator(".members-search").fill("");
@@ -215,8 +218,17 @@ async function runBrowserQa({ siteUrl, token }) {
     await clubPanel.getByRole("button", { name: "All Members" }).click();
     await clubPanel.getByRole("button", { name: /Show More/ }).click();
     await waitForText(page, "[data-react-club-panel] .members-count", "Showing 24 of", "React directory load more count");
+    await doublesPanel.getByRole("tab", { name: "All-Time Leaders" }).click();
+    await doublesPanel.locator(".doubles-search-bar").fill("Blake Poland");
+    await waitForText(page, "[data-react-doubles-league] .doubles-table-wrap", "Blake Poland", "React doubles all-time search");
+    await doublesPanel.locator("tbody tr.clickable-row").filter({ hasText: "Blake Poland" }).first().click();
+    await waitForText(page, ".player-modal", "Season History", "React doubles player modal");
+    await page.getByRole("button", { name: "Close player details" }).click();
+    await doublesPanel.getByRole("tab", { name: "Season Results" }).click();
+    await doublesPanel.getByRole("button", { name: "Spring 2025" }).click();
+    await waitForText(page, "[data-react-doubles-league] .doubles-table-wrap", "Blake Poland", "React doubles season results");
 
-    const width = await page.evaluate(() => document.documentElement.scrollWidth);
+    const width = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth));
     const viewport = page.viewportSize()?.width || 390;
     if (width > viewport + 1) throw new Error(`Members dashboard has horizontal overflow: ${width}px > ${viewport}px.`);
     if (errors.length) throw new Error(errors.join("\n"));

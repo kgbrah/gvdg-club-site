@@ -188,10 +188,12 @@ async function captureState(browser, origin, viewport, slug) {
   await waitForText(page, "#membersReactDashboardShell", "GVDG Member Directory", "club title");
   await expectReactTab(page, "Club");
   await page.locator('[data-react-club-panel="ready"]').waitFor({ state: "visible", timeout: 10_000 });
-  await page.locator("#doublesLeague").waitFor({ state: "visible", timeout: 10_000 });
   const clubPanel = page.locator('[data-react-club-panel]');
+  const doublesPanel = clubPanel.locator('[data-react-doubles-league="ready"]');
+  await doublesPanel.waitFor({ state: "visible", timeout: 10_000 });
   await waitForText(page, "[data-react-club-panel]", "Membership Growth Since 2004", "React club growth chart");
   await waitForText(page, "[data-react-club-panel]", "Future Course Improvements - Ayden", "React meeting minutes");
+  await waitForText(page, "[data-react-doubles-league]", "Doubles League Records", "React doubles title");
   await clubPanel.locator(".members-search").fill("Martinez");
   await waitForText(page, "[data-react-club-panel] .members-grid", "Juan Martinez", "React directory search");
   await waitForText(page, "[data-react-club-panel] .members-count", "Showing 1 of 1 members", "React directory search count");
@@ -208,16 +210,21 @@ async function captureState(browser, origin, viewport, slug) {
   if (await minutesToggle.getAttribute("aria-expanded") !== "false") throw new Error("React meeting minutes did not collapse.");
   await minutesToggle.click();
   if (await minutesToggle.getAttribute("aria-expanded") !== "true") throw new Error("React meeting minutes did not re-expand.");
+  await doublesPanel.getByRole("tab", { name: "All-Time Leaders" }).click();
+  await doublesPanel.locator(".doubles-search-bar").fill("Blake Poland");
+  await waitForText(page, "[data-react-doubles-league] .doubles-table-wrap", "Blake Poland", "React doubles all-time search");
+  await doublesPanel.locator("tbody tr.clickable-row").filter({ hasText: "Blake Poland" }).first().click();
+  await waitForText(page, ".player-modal", "Season History", "React doubles player modal");
+  await page.getByRole("button", { name: "Close player details" }).click();
+  await doublesPanel.getByRole("tab", { name: "Season Results" }).click();
+  await doublesPanel.getByRole("button", { name: "Spring 2025" }).click();
+  await waitForText(page, "[data-react-doubles-league] .doubles-table-wrap", "Blake Poland", "React doubles season results");
   await page.waitForTimeout(250);
   await captureFullPage(page, path.join(evidenceDir, `${slug}-club.png`));
 
-  const overflow = await page.evaluate(() => {
-    const y = window.scrollY;
-    window.scrollTo(9999, y);
-    const x = window.scrollX;
-    window.scrollTo(0, y);
-    return x;
-  });
+  const overflow = await page.evaluate(() =>
+    Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - window.innerWidth,
+  );
   if (overflow > 1) {
     const offenders = await page.evaluate(() => {
       return [...document.querySelectorAll("body *")].map((node) => {

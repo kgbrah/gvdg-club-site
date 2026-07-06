@@ -138,6 +138,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: section titles remain text, the download action is a real link, and iconography is decorative.
 - Motion: only the chevron rotation communicates expand/collapse state.
 
+### Doubles League Panel
+
+- Structure: quick stats, tabbed records views, champions grid, searchable/sortable all-time leaderboard, season-results table, and player-detail modal.
+- Variants: champions, all-time leaders, season results, filtered player search, paged leaderboard, and selected-player modal.
+- Spacing: reuses `doubles-*` dashboard primitives with dense tables, scroll-safe wrappers, and responsive champion cards.
+- States: tab buttons expose selected state, sortable headers use button controls, load-more updates the visible row count, and player rows open modal details.
+- Accessibility: tabs use tab roles, table sort state is exposed through `aria-sort`, modal close has an explicit label, and search has an accessible label.
+- Motion: static data display; the modal and existing hover treatments must not shift surrounding layout.
+
 ### Score App Shell
 
 - Structure: sticky topbar with fixed square logo, truncating title/subtitle, members shortcut, leaderboard control, and theme toggle.
