@@ -1,5 +1,6 @@
 import type { D1Like } from "./db-types.js";
-import { retryD1Read } from "./d1-retry.js";
+import { fallbackCourse, fallbackCourses, fallbackLayout, fallbackLayoutNames, fallbackLayouts } from "./course-catalog-fallback.js";
+import { readD1OrFallback } from "./d1-retry.js";
 
 export interface CourseInput {
   name: string;
@@ -12,11 +13,17 @@ export interface CourseInput {
 }
 
 export async function listCourses(db: D1Like) {
-  return (await retryD1Read(() => db.prepare("SELECT * FROM courses ORDER BY is_default DESC, name").all())).results;
+  return (await readD1OrFallback(
+    () => db.prepare("SELECT * FROM courses ORDER BY is_default DESC, name").all(),
+    () => ({ results: fallbackCourses(), success: true }),
+  )).results;
 }
 
 export async function getCourse(db: D1Like, id: number) {
-  return retryD1Read(() => db.prepare("SELECT * FROM courses WHERE id = ?").bind(id).first());
+  return readD1OrFallback(
+    () => db.prepare("SELECT * FROM courses WHERE id = ?").bind(id).first(),
+    () => fallbackCourse(id),
+  );
 }
 
 export async function createCourse(db: D1Like, c: CourseInput) {
@@ -44,7 +51,10 @@ export async function deleteCourse(db: D1Like, id: number) {
 }
 
 export async function listLayouts(db: D1Like, courseId: number) {
-  return (await retryD1Read(() => db.prepare("SELECT * FROM course_layouts WHERE course_id = ? ORDER BY id").bind(courseId).all())).results;
+  return (await readD1OrFallback(
+    () => db.prepare("SELECT * FROM course_layouts WHERE course_id = ? ORDER BY id").bind(courseId).all(),
+    () => ({ results: fallbackLayouts(courseId), success: true }),
+  )).results;
 }
 
 export async function createLayout(
@@ -59,7 +69,10 @@ export async function createLayout(
 }
 
 export async function getLayout(db: D1Like, id: number) {
-  return retryD1Read(() => db.prepare("SELECT * FROM course_layouts WHERE id = ?").bind(id).first());
+  return readD1OrFallback(
+    () => db.prepare("SELECT * FROM course_layouts WHERE id = ?").bind(id).first(),
+    () => fallbackLayout(id),
+  );
 }
 
 export interface ScorableHole {
@@ -119,7 +132,10 @@ export async function listPositions(db: D1Like, courseId: number, kind?: Positio
   const binds: unknown[] = [courseId];
   if (kind) { sql += " AND kind = ?"; binds.push(kind); }
   sql += " ORDER BY kind, id";
-  return (await retryD1Read(() => db.prepare(sql).bind(...binds).all())).results;
+  return (await readD1OrFallback(
+    () => db.prepare(sql).bind(...binds).all(),
+    () => ({ results: [], success: true }),
+  )).results;
 }
 
 export async function createPosition(db: D1Like, p: PositionInput) {
@@ -157,7 +173,10 @@ export function defaultLayoutName(label: unknown): string {
 }
 
 export async function listLayoutNames(db: D1Like, courseId: number): Promise<{ id: number; name: string }[]> {
-  return (await retryD1Read(() => db.prepare("SELECT id, name FROM course_layouts WHERE course_id = ?").bind(courseId).all<{ id: number; name: string }>())).results;
+  return (await readD1OrFallback(
+    () => db.prepare("SELECT id, name FROM course_layouts WHERE course_id = ?").bind(courseId).all<{ id: number; name: string }>(),
+    () => ({ results: fallbackLayoutNames(courseId), success: true }),
+  )).results;
 }
 
 export function matchLayoutIn(rows: { id: number; name: string }[], label: unknown): { id: number; name: string } | null {
