@@ -10,6 +10,7 @@ export function readMemberContext(detail = null) {
     pdgaNo: source.pdgaNo || stored.pdgaNo || storageGet(PDGA_KEY) || null,
     photo: source.photo || stored.photo || null,
     isAdmin: source.isAdmin === true || stored.isAdmin === true,
+    sub: source.sub || stored.sub || null,
   };
 }
 
@@ -42,6 +43,7 @@ export function useMemberContext() {
           pdgaNo: profile.pdgaNo || storageGet(PDGA_KEY) || null,
           photo: profile.photo || null,
           isAdmin: profile.isAdmin === true,
+          sub: profile.sub || null,
         };
         setContext(readMemberContext(window.GVDG_MEMBER_DASHBOARD_CONTEXT));
       })

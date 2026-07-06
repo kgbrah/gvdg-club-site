@@ -4,6 +4,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
+import { installMemberDashboardApiRoutes } from "./members-dashboard-api-routes.mjs";
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
 const apiBase = "http://127.0.0.1:8788";
@@ -18,68 +20,6 @@ const mimeTypes = new Map([
   [".png", "image/png"],
   [".webmanifest", "application/manifest+json; charset=utf-8"],
 ]);
-
-const stats = {
-  pdga: "90000001",
-  name: "GVDG QA Dashboard",
-  official_rating: 935,
-  rating_date: "2026-07-01",
-  live_rating: 941,
-  peak_rating: 958,
-  events_count: 2,
-  events: [
-    {
-      tournament: "GVDG QA Summer Check",
-      date: "Jul 4 2026",
-      epoch: 1783123200,
-      division: "MA2",
-      rounds: [
-        { rating: 943, score: 54, round: "1" },
-        { rating: 951, score: 52, round: "2" },
-      ],
-    },
-  ],
-};
-
-const myRatings = {
-  competitive: {
-    live_rating: 906,
-    rated_rounds: 1,
-    rounds_count: 1,
-    rounds: [
-      {
-        id: 101,
-        label: "GVDG QA Weekly",
-        date: "2026-07-04",
-        place: 2,
-        total: 56,
-        to_par: 2,
-        rating: 906,
-        rating_source: "stored",
-      },
-    ],
-  },
-  casual: {
-    live_rating: 890,
-    rated_rounds: 1,
-    rounds_count: 1,
-    rounds: [
-      {
-        id: 202,
-        label: "ECU North Rec Complex - Pee Dee's Treasure Map",
-        date: "2026-07-05T14:00:00Z",
-        total: 58,
-        to_par: 4,
-        rating: 890,
-        rating_source: "estimated",
-      },
-    ],
-  },
-};
-
-function json(body, status = 200) {
-  return { status, contentType: "application/json", body: JSON.stringify(body) };
-}
 
 async function startStaticServer() {
   const server = createServer(async (request, response) => {
@@ -109,35 +49,6 @@ async function startStaticServer() {
   };
 }
 
-async function installApiRoutes(page) {
-  await page.route(`${apiBase}/**`, async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    const pathName = url.pathname;
-    const method = request.method();
-
-    if (pathName === "/me") return route.fulfill(json({ sub: "member-1", isAdmin: true, name: "QA Admin", pdgaNo: "90000001" }));
-    if (pathName === "/pdga-stats") return route.fulfill(json(stats));
-    if (pathName.startsWith("/my-ratings")) {
-      return route.fulfill(json(myRatings));
-    }
-    if (pathName === "/shop/wallet") return route.fulfill(json({ balance_cents: 1250, transactions: [{ id: "tx-1", source: "event_payout", amount_cents: 1250, note: "QA payout", created_at: "2026-07-05T12:00:00Z" }] }));
-    if (pathName === "/my-live-rounds") return route.fulfill(json({ rounds: [] }));
-    if (pathName === "/payments/config") return route.fulfill(json({ enabled: false }));
-    if (pathName === "/registration/open") return route.fulfill(json({ events: [] }));
-    if (pathName === "/my-registrations") return route.fulfill(json({ registrations: [] }));
-    if (pathName === "/casual-rounds" && method === "GET") return route.fulfill(json({ requests: [] }));
-    if (pathName === "/courses") return route.fulfill(json({ courses: [{ id: 1, name: "ECU North Rec Complex" }] }));
-    if (pathName === "/courses/1/layouts") return route.fulfill(json({ layouts: [{ id: 11, name: "Pee Dee's Treasure Map" }] }));
-    if (pathName === "/meetings") return route.fulfill(json({ meetings: [] }));
-    if (pathName === "/board") return route.fulfill(json({ posts: [], authors: {} }));
-    if (pathName === "/leagues/active") return route.fulfill(json({ leagues: [], events: [] }));
-    if (pathName === "/my-tee-signs") return route.fulfill(json({ teeSigns: [] }));
-    if (pathName.startsWith("/shop/")) return route.fulfill(json({ ok: true }));
-    return route.fulfill(json({ ok: true }));
-  });
-}
-
 function collectPageErrors(page) {
   const errors = [];
   page.on("console", (message) => {
@@ -165,18 +76,26 @@ async function expectReactTab(page, name) {
   if (selected !== "true") throw new Error(`Expected React tab ${name} to be selected, got ${selected}`);
 }
 
+async function captureFullPage(page, filePath) {
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(100);
+  await page.screenshot({ path: filePath, fullPage: true });
+}
+
 async function captureState(browser, origin, viewport, slug) {
   const context = await browser.newContext({ viewport });
   const page = await context.newPage();
   const errors = collectPageErrors(page);
-  await installApiRoutes(page);
+  const apiState = await installMemberDashboardApiRoutes(page, apiBase);
   await page.addInitScript(() => sessionStorage.setItem("gvdg_member_token", "qa-token"));
 
   await page.goto(`${origin}/gvdg-members.html`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("#members.members-react-shell-ready", { timeout: 10_000 });
   await page.waitForSelector("#members.members-react-overview-ready", { timeout: 10_000 });
+  await page.waitForSelector("#members.members-react-registration-ready", { timeout: 10_000 });
   await expectReactTab(page, "Overview");
   await page.waitForSelector('[data-react-overview-dashboard="ready"]', { timeout: 10_000 });
+  await page.waitForSelector('[data-react-registration-panel="ready"]', { timeout: 10_000 });
   await page.waitForSelector('[data-react-pdga-dashboard="ready"]', { timeout: 10_000 });
   await waitForText(page, "#membersReactRatingPanel", "941", "React live rating");
   await page.waitForSelector('[data-react-club-ratings="ready"]', { timeout: 10_000 });
@@ -184,23 +103,41 @@ async function captureState(browser, origin, viewport, slug) {
   await page.waitForSelector('[data-react-wallet="ready"]', { timeout: 10_000 });
   await waitForText(page, "[data-react-club-ratings]", "906", "React club ratings");
   await waitForText(page, "[data-react-wallet]", "$12.50", "React wallet balance");
+  await waitForText(page, "[data-react-registration-panel]", "GVDG QA Doubles", "React registration event");
+  await waitForText(page, "[data-react-registration-panel]", "Warm-up round before league", "React casual round");
   for (const selector of ["#legacyDashboardHead", "#legacyPdgaDashboard", "#clubRatings", "#liveScoring", "#legacyDashboardActions", "#clubWallet"]) {
     const hidden = await page.locator(selector).evaluate((node) => getComputedStyle(node).display === "none");
     if (!hidden) throw new Error(`${selector} remained visible after React overview mounted.`);
   }
-  await page.screenshot({ path: path.join(evidenceDir, `${slug}-overview.png`), fullPage: true });
+  for (const selector of ["#legacyRegisterTitle", "#registerList"]) {
+    const hidden = await page.locator(selector).evaluate((node) => getComputedStyle(node).display === "none");
+    if (!hidden) throw new Error(`${selector} remained visible after React registration mounted.`);
+  }
+  await captureFullPage(page, path.join(evidenceDir, `${slug}-overview.png`));
 
   await page.getByRole("tab", { name: "Events" }).click();
   await waitForText(page, "#membersReactDashboardShell", "Event Registration", "events title");
   await expectReactTab(page, "Events");
+  await page.waitForSelector('[data-react-casual-form="ready"]', { timeout: 10_000 });
+  await page.locator('[data-react-registration-panel] input[data-register-pair="team"]').waitFor({ state: "visible", timeout: 10_000 });
+  await page.locator('[data-react-casual-form] textarea').fill(`QA browser casual ${slug}`);
+  await page.getByRole("button", { name: "Post casual round" }).click();
+  await page.waitForFunction(
+    ({ expected }) => document.querySelector("[data-react-registration-panel]")?.textContent?.includes(expected),
+    { expected: `QA browser casual ${slug}` },
+    { timeout: 10_000 },
+  );
+  if (!apiState.casualPostBody || apiState.casualPostBody.course_id !== 1 || apiState.casualPostBody.layout_id !== 11) {
+    throw new Error(`Casual round POST body was not captured correctly: ${JSON.stringify(apiState.casualPostBody)}`);
+  }
   await page.waitForTimeout(250);
-  await page.screenshot({ path: path.join(evidenceDir, `${slug}-events.png`), fullPage: true });
+  await captureFullPage(page, path.join(evidenceDir, `${slug}-events.png`));
 
   await page.getByRole("tab", { name: "Club" }).click();
   await waitForText(page, "#membersReactDashboardShell", "GVDG Member Directory", "club title");
   await expectReactTab(page, "Club");
   await page.waitForTimeout(250);
-  await page.screenshot({ path: path.join(evidenceDir, `${slug}-club.png`), fullPage: true });
+  await captureFullPage(page, path.join(evidenceDir, `${slug}-club.png`));
 
   const overflow = await page.evaluate(() => {
     const y = window.scrollY;

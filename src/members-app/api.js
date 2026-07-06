@@ -29,14 +29,21 @@ export function authBase() {
   return (localAuthBase || configured || fallback).replace(/\/+$/, "");
 }
 
-export async function requestJson(path, { signal, token = null } = {}) {
+export async function request(path, { signal, token = null, method = "GET", body = undefined } = {}) {
   const headers = { Accept: "application/json" };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
   if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(`${authBase()}${path}`, {
+  return fetch(`${authBase()}${path}`, {
     cache: "no-store",
     headers,
+    method,
     signal,
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
+}
+
+export async function requestJson(path, { signal, token = null, method = "GET", body = undefined } = {}) {
+  const response = await request(path, { signal, token, method, body });
   if (!response.ok) {
     const error = new Error(`request failed: ${response.status}`);
     error.status = response.status;

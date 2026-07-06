@@ -129,7 +129,7 @@ async function expectReactTab(page, name) {
   if (selected !== "true") throw new Error(`Expected React tab ${name} to be selected, got ${selected}`);
 }
 
-async function runBrowserQa({ siteUrl, token, member }) {
+async function runBrowserQa({ siteUrl, token }) {
   const browser = await chromium.launch({ headless: true });
   try {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -143,9 +143,11 @@ async function runBrowserQa({ siteUrl, token, member }) {
     await page.goto(`${siteUrl}/gvdg-members.html`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector("#members.members-react-shell-ready", { timeout: 15_000 });
     await page.waitForSelector("#members.members-react-overview-ready", { timeout: 15_000 });
+    await page.waitForSelector("#members.members-react-registration-ready", { timeout: 15_000 });
     await waitForText(page, "#membersReactDashboardShell", "Player Dashboard", "React dashboard title");
     await expectReactTab(page, "Overview");
     await page.locator('[data-react-overview-dashboard="ready"]').waitFor({ state: "visible", timeout: 15_000 });
+    await page.locator('[data-react-registration-panel="ready"]').waitFor({ state: "visible", timeout: 15_000 });
     await page.locator('[data-react-pdga-dashboard="ready"]').waitFor({ state: "visible", timeout: 15_000 });
 
     const legacyTabsHidden = await page.locator("#dashTabs").evaluate((node) => getComputedStyle(node).display === "none");
@@ -153,6 +155,10 @@ async function runBrowserQa({ siteUrl, token, member }) {
     for (const selector of ["#legacyDashboardHead", "#legacyPdgaDashboard", "#clubRatings", "#liveScoring", "#legacyDashboardActions", "#clubWallet"]) {
       const hidden = await page.locator(selector).evaluate((node) => getComputedStyle(node).display === "none");
       if (!hidden) throw new Error(`${selector} remained visible after React overview mounted.`);
+    }
+    for (const selector of ["#legacyRegisterTitle", "#registerList"]) {
+      const hidden = await page.locator(selector).evaluate((node) => getComputedStyle(node).display === "none");
+      if (!hidden) throw new Error(`${selector} remained visible after React registration mounted.`);
     }
 
     await waitForLiveRating(page);
@@ -162,6 +168,7 @@ async function runBrowserQa({ siteUrl, token, member }) {
     await expectReactTab(page, "Events");
     const registerVisible = await page.locator("#clubRegister").evaluate((node) => !node.classList.contains("dtab-off"));
     if (!registerVisible) throw new Error("Events tab did not reveal the registration panel.");
+    await page.locator('[data-react-casual-form="ready"]').waitFor({ state: "visible", timeout: 15_000 });
 
     await page.getByRole("tab", { name: "Club" }).click();
     await waitForText(page, "#membersReactDashboardShell", "GVDG Member Directory", "club tab title");
@@ -189,7 +196,7 @@ async function main() {
   if (!member.pdgaNo) throw new Error("QA member has no linked PDGA number. Run npm run qa:ensure-staging-dashboard-data.");
 
   await usefulStats(apiBase, member.pdgaNo);
-  await runBrowserQa({ siteUrl, token, member });
+  await runBrowserQa({ siteUrl, token });
   console.log("staging member dashboard E2E passed");
 }
 
