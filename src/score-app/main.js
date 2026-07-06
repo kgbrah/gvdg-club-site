@@ -1,8 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import Moon from "lucide-react/dist/esm/icons/moon.mjs";
-import Trophy from "lucide-react/dist/esm/icons/trophy.mjs";
-import UsersRound from "lucide-react/dist/esm/icons/users-round.mjs";
+import { Moon, Trophy, UsersRound } from "lucide-react";
 
 import { startScoreApp } from "./score-legacy.js";
 import { createScoreSetupFlowRenderer } from "./setup-flow.js";

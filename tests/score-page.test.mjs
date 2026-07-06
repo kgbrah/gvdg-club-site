@@ -3,6 +3,11 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 function scoreSetupSource() {
+  const source = readFileSync('src/score-app/setup-flow.js', 'utf8');
+  return source;
+}
+
+function scoreLegacySetupSource() {
   const source = readFileSync('src/score-app/score-legacy.js', 'utf8');
   const start = source.indexOf('async function renderLayoutPick(course)');
   const end = source.indexOf('async function addGuestPrompt()');
@@ -12,27 +17,40 @@ function scoreSetupSource() {
 }
 
 test('casual round flow shows setup after layout selection', () => {
-  const source = scoreSetupSource();
-  assert.match(source, /function renderSetupPick\(course, layout\)/);
-  assert.match(source, /renderSetupPick\(course, L\)/);
-  assert.match(source, /data-score-setup', 'casual-format'/);
-  assert.match(source, /data-group-format/);
-  assert.match(source, /data-scoring-style/);
-  assert.match(source, /Group format/);
-  assert.match(source, /Scoring style/);
-  assert.match(source, /Singles/);
-  assert.match(source, /Doubles/);
-  assert.match(source, /Stroke play/);
-  assert.match(source, /Match play/);
+  const setup = scoreSetupSource();
+  const legacy = scoreLegacySetupSource();
+  assert.match(legacy, /function renderSetupPick\(course, layout\)/);
+  assert.match(legacy, /onSelect: function \(layout\) \{ renderSetupPick\(course, layout\); \}/);
+  assert.match(legacy, /renderSetupFlow\(\{\s*view: 'setupPick'/);
+  assert.doesNotMatch(legacy, /data-score-setup', 'casual-format'/);
+  assert.match(setup, /"data-score-setup": "casual-format"/);
+  assert.match(setup, /data-group-format/);
+  assert.match(setup, /data-scoring-style/);
+  assert.match(setup, /Group format/);
+  assert.match(setup, /Scoring style/);
+  assert.match(setup, /Singles/);
+  assert.match(setup, /Doubles/);
+  assert.match(setup, /Stroke play/);
+  assert.match(setup, /Match play/);
 });
 
 test('createRound sends explicit live scoring config defaults and selections', () => {
-  const source = scoreSetupSource();
-  assert.match(source, /return \{ groupFormat: 'singles', scoringStyle: 'stroke' \};/);
-  assert.match(source, /selected\[group\.key\] = opt\.value; refresh\(\);/);
-  assert.match(source, /createRound\(course, layout, selected\)/);
-  assert.match(source, /const liveScoringConfig = config \|\| defaultLiveScoringConfig\(\);/);
-  assert.match(source, /body: \{ course_id: course\.id, layout_id: layout\.id, liveScoringConfig: \{ groupFormat: liveScoringConfig\.groupFormat, scoringStyle: liveScoringConfig\.scoringStyle \} \}/);
+  const setup = scoreSetupSource();
+  const legacy = scoreLegacySetupSource();
+  assert.match(legacy, /return \{ groupFormat: 'singles', scoringStyle: 'stroke' \};/);
+  assert.match(setup, /setSelected\(\(current\) => \(\{ \.\.\.current, \[group\.key\]: option\.value \}\)\)/);
+  assert.match(setup, /onCreate\(selected\)/);
+  assert.match(legacy, /const liveScoringConfig = config \|\| defaultLiveScoringConfig\(\);/);
+  assert.match(legacy, /body: \{ course_id: course\.id, layout_id: layout\.id, liveScoringConfig: \{ groupFormat: liveScoringConfig\.groupFormat, scoringStyle: liveScoringConfig\.scoringStyle \} \}/);
+});
+
+test('score setup screens are React-owned without legacy DOM fallbacks', () => {
+  const legacy = scoreLegacySetupSource();
+  const fullLegacy = readFileSync('src/score-app/score-legacy.js', 'utf8');
+  assert.match(fullLegacy, /if \(!setupFlow \|\| typeof setupFlow\.render !== 'function'\) throw new Error\('Missing score setup renderer'\)/);
+  assert.doesNotMatch(legacy, /const row = el\('button', 'tap-row'\)/);
+  assert.doesNotMatch(legacy, /const btn = el\('button', 'setup-option'\)/);
+  assert.doesNotMatch(legacy, /selected\[group\.key\] = opt\.value/);
 });
 
 test('player score page supports pair target rows and target-id offline replay', () => {

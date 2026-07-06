@@ -167,10 +167,10 @@ Spacing follows a 4px base through rem values.
 
 ### Score Setup Flow
 
-- Structure: stacked cards for home, course pick, layout pick, and casual round setup, rendered as React components inside the existing score app shell.
+- Structure: stacked cards for home, course pick, layout pick, and casual round setup, rendered as React components inside the existing score app shell; the legacy score controller only dispatches setup view state and callbacks.
 - Variants: empty course/layout states, selected setup options, and back navigation.
 - Spacing: reuses `.card`, `.stack`, `.tap-row`, `.setup-grid`, and `.setup-option` primitives from the score app.
-- States: setup options use `aria-pressed` and tokenized borders/backgrounds for selected state.
+- States: setup options use `aria-pressed` and tokenized borders/backgrounds for selected state; legacy setup fallback nodes must be absent, not hidden.
 - Accessibility: course/layout rows and setup options are real buttons; join-code entry submits on Enter.
 - Motion: no decorative animation; navigation is immediate and preserves the existing active press feedback.
 

@@ -1,9 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left.mjs";
-import ChevronRight from "lucide-react/dist/esm/icons/chevron-right.mjs";
-import LogOut from "lucide-react/dist/esm/icons/log-out.mjs";
-import PlayCircle from "lucide-react/dist/esm/icons/play-circle.mjs";
+import { ArrowLeft, ChevronRight, LogOut, PlayCircle } from "lucide-react";
 
 const h = React.createElement;
 

@@ -395,7 +395,7 @@ export function startScoreApp(options) {
             if (setupFlow && typeof setupFlow.clear === 'function') setupFlow.clear();
         }
         function renderSetupFlow(props) {
-            if (!setupFlow || typeof setupFlow.render !== 'function') return false;
+            if (!setupFlow || typeof setupFlow.render !== 'function') throw new Error('Missing score setup renderer');
             setupFlow.render(props);
             return true;
         }
@@ -815,149 +815,49 @@ export function startScoreApp(options) {
         }
         function signOut() { try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {} renderLogin(); }
         function renderHome() {
-            if (renderSetupFlow({
+            renderSetupFlow({
                 view: 'home',
                 onStart: renderCoursePick,
                 onJoin: joinRoundCode,
                 onInvalidCode: function () { toast('Enter a valid code'); },
                 onSignOut: signOut
-            })) return;
-            const c = el('div', 'stack');
-            const h = el('div', 'card stack');
-            h.appendChild(el('h2', 'section', 'Keep score'));
-            h.appendChild(el('p', 'muted', 'Start a casual round and share the code with your card, or join a round someone already started.'));
-            const start = el('button', 'btn', '⛳ Start a casual round'); start.addEventListener('click', renderCoursePick);
-            h.appendChild(start);
-            h.appendChild(el('label', 'lbl', 'Join with a code'));
-            const ji = el('input', 'field'); ji.placeholder = 'e.g. K7M2QX'; ji.autocapitalize = 'characters'; ji.maxLength = 8;
-            const jb = el('button', 'btn secondary', 'Join round');
-            jb.addEventListener('click', function () { const code = (ji.value || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); if (code.length >= 4) location.search = '?round=' + code; else toast('Enter a valid code'); });
-            h.appendChild(ji); h.appendChild(jb);
-            c.appendChild(h);
-            const out = el('button', 'btn ghost', 'Sign out'); out.addEventListener('click', signOut);
-            c.appendChild(out);
-            shell(c);
+            });
         }
         async function renderCoursePick() {
             shell(spinner());
             const r = await api('/courses', { auth: false });
             const courses = (r.ok && r.data && r.data.courses) || [];
-            if (renderSetupFlow({
+            renderSetupFlow({
                 view: 'coursePick',
                 courses: courses,
                 onBack: renderHome,
                 onSelect: renderLayoutPick
-            })) return;
-            const c = el('div', 'stack');
-            const back = el('button', 'btn ghost small', '‹ Back'); back.addEventListener('click', renderHome); c.appendChild(back);
-            c.appendChild(el('h2', 'section', 'Pick a course'));
-            if (!courses.length) c.appendChild(el('p', 'muted', 'No courses found.'));
-            courses.forEach(function (co) {
-                const row = el('button', 'tap-row'); const g = el('div', 'grow');
-                g.appendChild(el('div', 'title', co.name)); if (co.location) g.appendChild(el('div', 'sub', co.location));
-                row.appendChild(g); row.appendChild(el('div', 'chev', '›'));
-                row.addEventListener('click', function () { renderLayoutPick(co); });
-                c.appendChild(row);
             });
-            shell(c);
         }
         async function renderLayoutPick(course) {
             shell(spinner());
             const r = await api('/courses/' + encodeURIComponent(course.id) + '/layouts', { auth: false });
             const layouts = (r.ok && r.data && r.data.layouts) || [];
-            if (renderSetupFlow({
+            renderSetupFlow({
                 view: 'layoutPick',
                 course: course,
                 layouts: layouts,
                 onBack: renderCoursePick,
                 onSelect: function (layout) { renderSetupPick(course, layout); }
-            })) return;
-            const c = el('div', 'stack');
-            const back = el('button', 'btn ghost small', '‹ Back'); back.addEventListener('click', renderCoursePick); c.appendChild(back);
-            c.appendChild(el('h2', 'section', course.name));
-            if (!layouts.length) c.appendChild(el('p', 'muted', 'This course has no scorable layouts yet — an admin can add one (Admin → Layouts, or import from UDisc).'));
-            layouts.forEach(function (L) {
-                const row = el('button', 'tap-row'); const g = el('div', 'grow');
-                g.appendChild(el('div', 'title', L.name || 'Layout')); g.appendChild(el('div', 'sub', L.total_par != null ? ('Par ' + L.total_par) : ''));
-                row.appendChild(g); row.appendChild(el('div', 'chev', '›'));
-                row.addEventListener('click', function () { renderSetupPick(course, L); });
-                c.appendChild(row);
             });
-            shell(c);
         }
         function defaultLiveScoringConfig() {
             return { groupFormat: 'singles', scoringStyle: 'stroke' };
         }
         function renderSetupPick(course, layout) {
-            if (renderSetupFlow({
+            renderSetupFlow({
                 view: 'setupPick',
                 course: course,
                 layout: layout,
                 defaultConfig: defaultLiveScoringConfig(),
                 onBack: function () { renderLayoutPick(course); },
                 onCreate: function (selected) { createRound(course, layout, selected); }
-            })) return;
-            const selected = defaultLiveScoringConfig();
-            const c = el('div', 'stack');
-            const back = el('button', 'btn ghost small', '‹ Back'); back.addEventListener('click', function () { renderLayoutPick(course); }); c.appendChild(back);
-            const intro = el('div', 'card stack');
-            intro.setAttribute('data-score-setup', 'casual-format');
-            intro.appendChild(el('span', 'pill', layout && layout.name ? layout.name : 'Layout'));
-            intro.appendChild(el('h2', 'section', 'Round setup'));
-            intro.appendChild(el('p', 'muted', 'Choose how this casual card is scored. Defaults are ready for a standard singles stroke round.'));
-            c.appendChild(intro);
-
-            const optionGroups = [
-                {
-                    key: 'groupFormat',
-                    label: 'Group format',
-                    attr: 'data-group-format',
-                    options: [
-                        { value: 'singles', title: 'Singles', sub: 'One score per player' },
-                        { value: 'doubles', title: 'Doubles', sub: 'One score per pair' }
-                    ]
-                },
-                {
-                    key: 'scoringStyle',
-                    label: 'Scoring style',
-                    attr: 'data-scoring-style',
-                    options: [
-                        { value: 'stroke', title: 'Stroke play', sub: 'Lowest total wins' },
-                        { value: 'matchplay', title: 'Match play', sub: 'Win holes head to head' }
-                    ]
-                }
-            ];
-            const buttons = [];
-            function refresh() {
-                buttons.forEach(function (btn) {
-                    btn.setAttribute('aria-pressed', selected[btn.dataset.setupKey] === btn.dataset.setupValue ? 'true' : 'false');
-                });
-            }
-            optionGroups.forEach(function (group) {
-                const card = el('div', 'card stack');
-                card.appendChild(el('label', 'lbl', group.label));
-                const grid = el('div', 'setup-grid');
-                group.options.forEach(function (opt) {
-                    const btn = el('button', 'setup-option');
-                    btn.type = 'button';
-                    btn.dataset.setupKey = group.key;
-                    btn.dataset.setupValue = opt.value;
-                    btn.setAttribute(group.attr, opt.value);
-                    btn.appendChild(el('span', 'title', opt.title));
-                    btn.appendChild(el('span', 'sub', opt.sub));
-                    btn.addEventListener('click', function () { selected[group.key] = opt.value; refresh(); });
-                    buttons.push(btn);
-                    grid.appendChild(btn);
-                });
-                card.appendChild(grid);
-                c.appendChild(card);
             });
-            const start = el('button', 'btn', 'Start round');
-            start.setAttribute('data-create-round', 'casual');
-            start.addEventListener('click', function () { createRound(course, layout, selected); });
-            c.appendChild(start);
-            refresh();
-            shell(c);
         }
         async function createRound(course, layout, config) {
             shell(spinner());
