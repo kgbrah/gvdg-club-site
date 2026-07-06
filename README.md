@@ -128,7 +128,7 @@ All D1 access is **parameterized** (`.bind()` with `?`). Migrations in `auth-wor
 
 ## Tech stack
 
-- **Frontend:** hand-written HTML5 + vanilla ES modules, CSS custom-property design tokens (`tokens.css`), a Vite/React bundle for `score.html`, a service worker (`sw.js`, manually versioned) + PWA manifest.
+- **Frontend:** hand-written HTML5 + vanilla ES modules, CSS custom-property design tokens (`tokens.css`), Vite/React bundles for `score.html` and the member dashboard islands, a service worker (`sw.js`, manually versioned) + PWA manifest.
 - **Backend:** Cloudflare Workers (TypeScript), Workers KV, D1 (SQLite), Durable Objects, R2, Workers AI. Auth via PBKDF2-HMAC-SHA256 PIN hashing + HS256 JWT (`jose`) + passkeys (`@simplewebauthn/server`).
 - **Tooling:** `wrangler`, `vitest` (Worker tests), `node --test` (frontend helper tests), `playwright` (browser QA), `tsc` (typecheck).
 

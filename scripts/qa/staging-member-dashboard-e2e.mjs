@@ -156,23 +156,30 @@ async function runBrowserQa({ siteUrl, token }) {
     await page.locator('[data-react-club-panel="ready"]').waitFor({ state: "attached", timeout: 15_000 });
     await page.locator('[data-react-pdga-dashboard="ready"]').waitFor({ state: "visible", timeout: 15_000 });
 
-    const legacyTabsHidden = await page.locator("#dashTabs").evaluate((node) => getComputedStyle(node).display === "none");
-    if (!legacyTabsHidden) throw new Error("Legacy dashboard tabs were visible after React shell mounted.");
-    for (const selector of ["#legacyDashboardHead", "#legacyPdgaDashboard", "#clubRatings", "#liveScoring", "#legacyDashboardActions", "#clubWallet"]) {
-      const hidden = await page.locator(selector).evaluate((node) => getComputedStyle(node).display === "none");
-      if (!hidden) throw new Error(`${selector} remained visible after React overview mounted.`);
-    }
-    for (const selector of ["#legacyRegisterTitle", "#registerList"]) {
-      const hidden = await page.locator(selector).evaluate((node) => getComputedStyle(node).display === "none");
-      if (!hidden) throw new Error(`${selector} remained visible after React registration mounted.`);
-    }
-    for (const selector of ["#legacyBoardPanel", "#legacyTeeSignsPanel"]) {
-      const hidden = await page.locator(selector).evaluate((node) => getComputedStyle(node).display === "none");
-      if (!hidden) throw new Error(`${selector} remained visible after its React panel mounted.`);
-    }
-    const migratedClubLegacyNodes = await page.locator("#legacyClubDirectoryPanel, #legacyMeetingMinutesPanel, #membersGrid, #memberSearch, #doublesLeague, #doublesTable, #seasonSelector, #championsBanner").count();
-    if (migratedClubLegacyNodes !== 0) {
-      throw new Error("Migrated Club legacy nodes are still present in the DOM.");
+    const migratedLegacyNodes = await page.locator([
+      "#dashTabs",
+      "#legacyDashboardHead",
+      "#legacyPdgaDashboard",
+      "#clubRatings",
+      "#liveScoring",
+      "#legacyDashboardActions",
+      "#clubWallet",
+      "#legacyRegisterTitle",
+      "#registerList",
+      "#legacyBoardPanel",
+      "#legacyTeeSignsPanel",
+      "#clubMeetings",
+      "#legacyClubDirectoryPanel",
+      "#legacyMeetingMinutesPanel",
+      "#membersGrid",
+      "#memberSearch",
+      "#doublesLeague",
+      "#doublesTable",
+      "#seasonSelector",
+      "#championsBanner",
+    ].join(", ")).count();
+    if (migratedLegacyNodes !== 0) {
+      throw new Error("Migrated member dashboard legacy nodes are still present in the DOM.");
     }
 
     await waitForLiveRating(page);

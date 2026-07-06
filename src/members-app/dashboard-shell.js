@@ -21,13 +21,8 @@ function tabTitle(key) {
   return TABS.find((tab) => tab.key === key)?.title || DEFAULT_TAB.title;
 }
 
-function tabFromLegacyDom() {
-  const active = document.querySelector("#dashTabs .dash-tab.active");
-  return safeTab(active?.getAttribute("data-dtab") || DEFAULT_TAB.key);
-}
-
 function initialState() {
-  const tab = tabFromLegacyDom();
+  const tab = DEFAULT_TAB.key;
   const title = document.getElementById("memberSectionTitle")?.textContent?.trim() || tabTitle(tab);
   return { tab, title };
 }
@@ -41,7 +36,7 @@ export function MemberDashboardShell() {
 
   React.useEffect(() => {
     function update(event) {
-      const nextTab = safeTab(event.detail?.tab || tabFromLegacyDom());
+      const nextTab = safeTab(event.detail?.tab || DEFAULT_TAB.key);
       setState({
         tab: nextTab,
         title: event.detail?.title || tabTitle(nextTab),

@@ -111,6 +111,15 @@ Spacing follows a 4px base through rem values.
 - Spacing: `0.75rem 1.5rem`.
 - States: hover fills with `--primary`; expanded rotates icon.
 
+### Member Dashboard Shell
+
+- Structure: React-owned title, tablist, overview, event registration, board, tee-sign capture, and club panels mounted into stable HTML wrappers.
+- Variants: overview, events, board, tee signs, and club tabs; account tools remain a small non-React row for passkey setup and profile editing.
+- Spacing: dashboard wrappers keep the existing `my-dashboard`, `club-register`, `club-board`, and `tee-capture` surfaces so migrated panels retain the same mobile rhythm.
+- States: migrated legacy fallback nodes must be absent, not hidden; tab selection is driven by `gvdg:select-dashboard-tab` and wrapper `dtab-off` state.
+- Accessibility: React tabs expose `role="tab"` and `aria-selected`; account actions are real buttons.
+- Motion: tab changes are immediate and should not resize fixed controls or introduce horizontal overflow.
+
 ### Dashboard Rating Panel
 
 - Structure: panel header with category label/count and a prominent live rating, followed by compact per-round rows.

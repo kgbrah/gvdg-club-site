@@ -2,13 +2,33 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-function registerLoaderSource() {
-  const html = readFileSync('gvdg-members.html', 'utf8');
-  const start = html.indexOf('async function loadRegister()');
-  const end = html.indexOf('function dollars(c)');
-  assert.notEqual(start, -1, 'loadRegister function should exist');
-  assert.notEqual(end, -1, 'dollars helper should follow loadRegister');
-  return html.slice(start, end);
+const removedMemberFallbacks = [
+  /id="dashTabs"/,
+  /id="legacyDashboardHead"/,
+  /id="legacyPdgaDashboard"/,
+  /id="legacyDashboardActions"/,
+  /id="legacyRegisterTitle"/,
+  /id="registerList"/,
+  /id="legacyBoardPanel"/,
+  /id="legacyTeeSignsPanel"/,
+  /id="clubRatings"/,
+  /id="clubWallet"/,
+  /id="liveScoring"/,
+  /id="clubMeetings"/,
+  /async function loadDashboard\(/,
+  /async function loadRegister\(/,
+  /async function loadBoard\(/,
+  /async function loadTeeSigns\(/,
+  /async function loadMeetings\(/,
+  /async function uploadTeeSign\(/,
+  /function renderPayPal\(/,
+  /async function submitPost\(/,
+  /function renderEvents\(/,
+  /function mdRender\(/,
+];
+
+function assertNoLegacyMemberFallbacks(html) {
+  removedMemberFallbacks.forEach((pattern) => assert.doesNotMatch(html, pattern));
 }
 
 test('member dashboard React registration panel includes casual round posts', () => {
@@ -25,8 +45,9 @@ test('member dashboard React board panel owns board loading and posting', () => 
   const markdown = readFileSync('src/members-app/board-markdown.js', 'utf8');
   assert.match(html, /id="membersReactBoardPanel"/);
   assert.match(html, /members-react-board-ready/);
-  assert.match(html, /id="legacyBoardPanel"/);
-  assert.match(html, /reactBoardReady/);
+  assert.doesNotMatch(html, /id="legacyBoardPanel"/);
+  assert.doesNotMatch(html, /reactBoardReady/);
+  assert.doesNotMatch(html, /async function loadBoard\(/);
   assert.match(panel, /requestJson\("\/board"/);
   assert.match(panel, /request\("\/board", \{ method: "POST"/);
   assert.match(panel, /data-react-board-panel/);
@@ -40,8 +61,10 @@ test('member dashboard React tee signs panel owns upload and captured sign displ
   const utils = readFileSync('src/members-app/tee-signs-utils.js', 'utf8');
   assert.match(html, /id="membersReactTeeSignsPanel"/);
   assert.match(html, /members-react-tee-signs-ready/);
-  assert.match(html, /id="legacyTeeSignsPanel"/);
-  assert.match(html, /reactTeeSignsReady/);
+  assert.doesNotMatch(html, /id="legacyTeeSignsPanel"/);
+  assert.doesNotMatch(html, /reactTeeSignsReady/);
+  assert.doesNotMatch(html, /async function loadTeeSigns\(/);
+  assert.doesNotMatch(html, /async function uploadTeeSign\(/);
   assert.match(panel, /requestJson\("\/my-tee-signs"/);
   assert.match(panel, /request\("\/tee-signs", \{ method: "POST"/);
   assert.match(panel, /\/tee-signs\/\$\{encodeURIComponent\(id\)\}\/image/);
@@ -111,7 +134,9 @@ test('member dashboard React registration section stays available for logged-in 
   const casual = readFileSync('src/members-app/registration-casual.js', 'utf8');
   assert.match(html, /id="membersReactRegistrationPanel"/);
   assert.match(html, /members-react-registration-ready/);
-  assert.match(html, /id="legacyRegisterTitle"/);
+  assert.doesNotMatch(html, /id="legacyRegisterTitle"/);
+  assert.doesNotMatch(html, /id="registerList"/);
+  assert.doesNotMatch(html, /async function loadRegister\(/);
   assert.match(panel, /visibleParent\(token\)/);
   assert.match(casual, /data-react-casual-form/);
 });
@@ -133,13 +158,6 @@ test('member dashboard can post a casual round and jump to a live scorecard', ()
   assert.match(events, /score\.html\?event=/); // live registered events link to their scorecard
 });
 
-test('legacy registration loader remains as a fallback when React registration does not mount', () => {
-  const source = registerLoaderSource();
-  assert.match(source, /api\('\/casual-rounds'/);
-  assert.match(source, /casualRegisterCard/);
-  assert.match(readFileSync('gvdg-members.html', 'utf8'), /score\.html\?event=/); // live registered events link to their scorecard
-});
-
 test('member dashboard registration cards post pair label only for doubles events', () => {
   const events = readFileSync('src/members-app/registration-events.js', 'utf8');
   const utils = readFileSync('src/members-app/registration-utils.js', 'utf8');
@@ -150,7 +168,7 @@ test('member dashboard registration cards post pair label only for doubles event
   assert.match(events, /body\.team = team\.trim\(\)/);
 });
 
-test('member dashboard mounts the React shell as a fallback-safe island', () => {
+test('member dashboard mounts React-owned dashboard islands without legacy fallbacks', () => {
   const html = readFileSync('gvdg-members.html', 'utf8');
   const app = readFileSync('src/members-app/main.js', 'utf8');
   const overview = readFileSync('src/members-app/overview-dashboard.js', 'utf8');
@@ -167,9 +185,10 @@ test('member dashboard mounts the React shell as a fallback-safe island', () => 
   assert.match(html, /id="membersReactBoardPanel"/);
   assert.match(html, /id="membersReactTeeSignsPanel"/);
   assert.match(html, /id="membersReactClubPanel"/);
-  assert.match(html, /id="legacyPdgaDashboard"/);
-  assert.match(html, /id="legacyDashboardHead"/);
-  assert.match(html, /id="legacyDashboardActions"/);
+  assert.match(html, /id="passkeyRow"/);
+  assert.match(html, /id="enablePasskeyBtn"/);
+  assert.match(html, /id="editProfileBtn"/);
+  assertNoLegacyMemberFallbacks(html);
   assert.match(html, /<script type="module" src="members-app\/members-app\.js"><\/script>/);
   assert.match(html, /window\.addEventListener\('gvdg:select-dashboard-tab'/);
   assert.match(html, /window\.dispatchEvent\(new CustomEvent\('gvdg:member-profile-updated'/);
