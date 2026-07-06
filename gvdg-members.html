@@ -760,64 +760,15 @@
             requestAnimationFrame(() => $('newPinInput') && $('newPinInput').focus());
         }
 
-        // ---- Player dashboard tabs: one section group visible at a time; each section's own load-state
-        // (shown only when it has content) still governs WITHIN the active tab via the dtab-off override. ----
-        const DASH_TABS = {
-            overview: ['#myDashboard', '#clubRegister'],
-            events: ['#clubRegister'],
-            board: ['#clubBoard'],
-            tee: ['#teeCapture'],
-            club: ['#membersReactClubPanel'],
-        };
-        const DASH_TITLES = {
-            overview: 'Player Dashboard',
-            events: 'Event Registration',
-            board: 'Member Board',
-            tee: 'Tee Sign Capture',
-            club: 'GVDG Member Directory',
-        };
-        const DASH_ALL_SEL = [...new Set(Object.values(DASH_TABS).flat())];
-        let selectedDashTab = 'overview';
-        function emitDashboardState(eventName, extra) {
-            window.dispatchEvent(new CustomEvent(eventName, {
-                detail: {
-                    tab: selectedDashTab,
-                    title: DASH_TITLES[selectedDashTab] || DASH_TITLES.overview,
-                    isAdmin: memberProfile.isAdmin === true,
-                    name: memberProfile.name || sessionStorage.getItem(NAME_KEY) || null,
-                    pdgaNo: memberProfile.pdgaNo || sessionStorage.getItem(PDGA_KEY) || null,
-                    photo: memberProfile.photo || null,
-                    ...(extra || {}),
-                },
-            }));
-        }
-        function selectDashTab(tab) {
-            if (!DASH_TABS[tab]) tab = 'overview';
-            selectedDashTab = tab;
-            DASH_ALL_SEL.forEach((sel) => document.querySelectorAll(sel).forEach((el) => el.classList.add('dtab-off')));
-            DASH_TABS[tab].forEach((sel) => document.querySelectorAll(sel).forEach((el) => el.classList.remove('dtab-off')));
-            const title = $('memberSectionTitle');
-            if (title) title.textContent = DASH_TITLES[tab] || DASH_TITLES.overview;
-            emitDashboardState('gvdg:dashboard-tab-selected');
-            const t = $('membersReactDashboardShell'); if (t) t.scrollIntoView({ block: 'start', behavior: 'smooth' });
-        }
-        window.addEventListener('gvdg:select-dashboard-tab', (event) => selectDashTab(event.detail && event.detail.tab));
-        function revealDashboardSections() {
-            ['myDashboard', 'clubRegister', 'clubBoard', 'teeCapture'].forEach((id) => {
-                const el = $(id);
-                if (el) el.style.display = '';
-            });
-        }
-
         function showMembersContent(name) {
             stopPasskeyPriming(); // logged in — no need to keep priming a login challenge
             $('loginGate').style.display = 'none';
             $('membersContent').classList.add('active');
-            revealDashboardSections();
             const passkeyStatus = $('passkeyStatus');
             if (passkeyStatus) passkeyStatus.textContent = '';
-            selectDashTab('overview'); // land on Overview; tabs jump to each feature with no scrolling
-            emitDashboardState('gvdg:member-dashboard-ready', { name: name || memberProfile.name || sessionStorage.getItem(NAME_KEY) || null });
+            window.dispatchEvent(new CustomEvent('gvdg:member-dashboard-opened', {
+                detail: { name: name || memberProfile.name || sessionStorage.getItem(NAME_KEY) || null },
+            }));
         }
 
         function logout() {

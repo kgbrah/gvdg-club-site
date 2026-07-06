@@ -25,6 +25,9 @@ const removedMemberFallbacks = [
   /async function submitPost\(/,
   /function renderEvents\(/,
   /function mdRender\(/,
+  /const DASH_TABS/,
+  /function selectDashTab/,
+  /function revealDashboardSections/,
 ];
 
 function assertNoLegacyMemberFallbacks(html) {
@@ -77,6 +80,7 @@ test('member dashboard React tee signs panel owns upload and captured sign displ
 test('member dashboard React club panel owns directory search, filters, load-more, and minutes', () => {
   const html = readFileSync('gvdg-members.html', 'utf8');
   const app = readFileSync('src/members-app/main.js', 'utf8');
+  const router = readFileSync('src/members-app/dashboard-router.js', 'utf8');
   const clubPanel = readFileSync('src/members-app/club-panel.js', 'utf8');
   const data = readFileSync('src/members-app/club-directory-data.js', 'utf8');
   const directory = readFileSync('src/members-app/club-directory-panel.js', 'utf8');
@@ -86,7 +90,7 @@ test('member dashboard React club panel owns directory search, filters, load-mor
   const minutes = readFileSync('src/members-app/meeting-minutes-panel.js', 'utf8');
   assert.match(html, /id="membersReactClubPanel"/);
   assert.match(html, /members-react-club-ready/);
-  assert.match(html, /club: \['#membersReactClubPanel'\]/);
+  assert.match(router, /club: \["#membersReactClubPanel"\]/);
   assert.doesNotMatch(html, /id="legacyClubDirectoryPanel"/);
   assert.doesNotMatch(html, /id="legacyMeetingMinutesPanel"/);
   assert.doesNotMatch(html, /id="doublesLeague"/);
@@ -173,6 +177,7 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   const app = readFileSync('src/members-app/main.js', 'utf8');
   const authGate = readFileSync('src/members-app/auth-gate.js', 'utf8');
   const shell = readFileSync('src/members-app/dashboard-shell.js', 'utf8');
+  const router = readFileSync('src/members-app/dashboard-router.js', 'utf8');
   const overview = readFileSync('src/members-app/overview-dashboard.js', 'utf8');
   const pdga = readFileSync('src/members-app/pdga-dashboard.js', 'utf8');
   const ratings = readFileSync('src/members-app/club-ratings.js', 'utf8');
@@ -201,6 +206,9 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   assert.doesNotMatch(html, /id="logoutBtn"/);
   assert.doesNotMatch(html, /id="adminPortalLink"/);
   assert.doesNotMatch(html, /overview: \['#adminPortalLink'/);
+  assert.doesNotMatch(html, /const DASH_TABS/);
+  assert.doesNotMatch(html, /function selectDashTab/);
+  assert.doesNotMatch(html, /function revealDashboardSections/);
   assert.match(html, /gvdg:member-login-requested/);
   assert.match(html, /gvdg:member-pin-change-requested/);
   assert.match(html, /gvdg:member-profile-save-requested/);
@@ -210,12 +218,12 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   assert.match(html, /gvdg:member-add-passkey-requested/);
   assert.match(html, /gvdg:member-edit-profile-requested/);
   assert.match(html, /gvdg:member-logout-requested/);
+  assert.match(html, /gvdg:member-dashboard-opened/);
   assertNoLegacyMemberFallbacks(html);
   assert.match(html, /<script type="module" src="members-app\/members-app\.js"><\/script>/);
-  assert.match(html, /window\.addEventListener\('gvdg:select-dashboard-tab'/);
   assert.match(html, /window\.dispatchEvent\(new CustomEvent\('gvdg:member-profile-updated'/);
-  assert.match(html, /emitDashboardState\('gvdg:dashboard-tab-selected'\)/);
   assert.match(app, /createRoot\(authMount\)\.render/);
+  assert.match(app, /installDashboardRouter\(\)/);
   assert.match(app, /members-react-auth-ready/);
   assert.match(app, /createRoot\(shellMount\)\.render/);
   assert.match(app, /createRoot\(overviewMount\)\.render/);
@@ -248,6 +256,11 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   assert.match(shell, /readMemberContext/);
   assert.match(shell, /gvdg:member-profile-updated/);
   assert.match(shell, /gvdg:member-logout-requested/);
+  assert.match(router, /const DASH_TABS/);
+  assert.match(router, /gvdg:select-dashboard-tab/);
+  assert.match(router, /gvdg:dashboard-tab-selected/);
+  assert.match(router, /gvdg:member-dashboard-opened/);
+  assert.match(router, /gvdg:member-dashboard-ready/);
   assert.match(overview, /data-react-overview-dashboard/);
   assert.match(overview, /data-react-dashboard-actions/);
   assert.match(overview, /data-react-account-tools/);
