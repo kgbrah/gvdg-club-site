@@ -2,6 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 
 import { MemberBoardPanel } from "./board-panel.js";
+import { MemberClubPanel } from "./club-panel.js";
 import { MemberDashboardShell } from "./dashboard-shell.js";
 import { MemberOverviewDashboard } from "./overview-dashboard.js";
 import { MemberRegistrationPanel } from "./registration-panel.js";
@@ -42,4 +43,10 @@ const teeSignsMount = document.getElementById("membersReactTeeSignsPanel");
 if (teeSignsMount) {
   createRoot(teeSignsMount).render(h(MemberTeeSignsPanel));
   document.getElementById("members")?.classList.add("members-react-tee-signs-ready");
+}
+
+const clubMount = document.getElementById("membersReactClubPanel");
+if (clubMount) {
+  createRoot(clubMount).render(h(MemberClubPanel));
+  document.getElementById("members")?.classList.add("members-react-club-ready");
 }

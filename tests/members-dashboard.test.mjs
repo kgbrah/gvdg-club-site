@@ -51,6 +51,31 @@ test('member dashboard React tee signs panel owns upload and captured sign displ
   assert.match(utils, /TS_MAX_DATA_URL/);
 });
 
+test('member dashboard React club panel owns directory search, filters, load-more, and minutes', () => {
+  const html = readFileSync('gvdg-members.html', 'utf8');
+  const app = readFileSync('src/members-app/main.js', 'utf8');
+  const clubPanel = readFileSync('src/members-app/club-panel.js', 'utf8');
+  const directory = readFileSync('src/members-app/club-directory-panel.js', 'utf8');
+  const minutes = readFileSync('src/members-app/meeting-minutes-panel.js', 'utf8');
+  assert.match(html, /id="membersReactClubPanel"/);
+  assert.match(html, /id="legacyClubDirectoryPanel"/);
+  assert.match(html, /id="legacyMeetingMinutesPanel"/);
+  assert.match(html, /members-react-club-ready/);
+  assert.match(html, /GVDG_CLUB_DIRECTORY_DATA/);
+  assert.match(html, /gvdg:club-directory-data-ready/);
+  assert.match(html, /reactClubReady/);
+  assert.match(app, /createRoot\(clubMount\)\.render/);
+  assert.match(app, /members-react-club-ready/);
+  assert.match(clubPanel, /data-react-club-panel/);
+  assert.match(directory, /data-react-member-directory/);
+  assert.match(directory, /Search members by name or PDGA #/);
+  assert.match(directory, /PDGA Members/);
+  assert.match(directory, /Show More/);
+  assert.match(minutes, /data-react-meeting-minutes/);
+  assert.match(minutes, /readMinutesFromLegacyDom/);
+  assert.match(minutes, /Download full minutes/);
+});
+
 test('member dashboard React registration section stays available for logged-in members', () => {
   const html = readFileSync('gvdg-members.html', 'utf8');
   const panel = readFileSync('src/members-app/registration-panel.js', 'utf8');
@@ -106,11 +131,13 @@ test('member dashboard mounts the React shell as a fallback-safe island', () => 
   const registration = readFileSync('src/members-app/registration-panel.js', 'utf8');
   const board = readFileSync('src/members-app/board-panel.js', 'utf8');
   const teeSigns = readFileSync('src/members-app/tee-signs-panel.js', 'utf8');
+  const club = readFileSync('src/members-app/club-panel.js', 'utf8');
   assert.match(html, /id="membersReactDashboardShell"/);
   assert.match(html, /id="membersReactOverviewPanel"/);
   assert.match(html, /id="membersReactRegistrationPanel"/);
   assert.match(html, /id="membersReactBoardPanel"/);
   assert.match(html, /id="membersReactTeeSignsPanel"/);
+  assert.match(html, /id="membersReactClubPanel"/);
   assert.match(html, /id="legacyPdgaDashboard"/);
   assert.match(html, /id="legacyDashboardHead"/);
   assert.match(html, /id="legacyDashboardActions"/);
@@ -123,10 +150,12 @@ test('member dashboard mounts the React shell as a fallback-safe island', () => 
   assert.match(app, /createRoot\(registrationMount\)\.render/);
   assert.match(app, /createRoot\(boardMount\)\.render/);
   assert.match(app, /createRoot\(teeSignsMount\)\.render/);
+  assert.match(app, /createRoot\(clubMount\)\.render/);
   assert.match(app, /members-react-overview-ready/);
   assert.match(app, /members-react-registration-ready/);
   assert.match(app, /members-react-board-ready/);
   assert.match(app, /members-react-tee-signs-ready/);
+  assert.match(app, /members-react-club-ready/);
   assert.match(overview, /data-react-overview-dashboard/);
   assert.match(overview, /data-react-dashboard-actions/);
   assert.match(pdga, /id: "membersReactRatingPanel"/);
@@ -145,4 +174,5 @@ test('member dashboard mounts the React shell as a fallback-safe island', () => 
   assert.match(registration, /CasualRoundsSection/);
   assert.match(board, /data-react-board-panel/);
   assert.match(teeSigns, /data-react-tee-signs-panel/);
+  assert.match(club, /data-react-club-panel/);
 });

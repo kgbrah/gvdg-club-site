@@ -120,6 +120,24 @@ Spacing follows a 4px base through rem values.
 - Accessibility: each panel is labelled by its category heading.
 - Motion: static display; no layout-shifting animation.
 
+### Member Directory Panel
+
+- Structure: stat cards, membership growth chart, search/filter controls, paginated member card grid, and count status.
+- Variants: all members, founding members, PDGA members, empty search results, and load-more state.
+- Spacing: reuses dashboard card spacing with a single-column mobile grid and responsive multi-column desktop cards.
+- States: filter buttons expose pressed state; count text updates through a polite status region.
+- Accessibility: member search has an explicit label, external PDGA links use safe new-tab behavior, and chart bars expose per-year labels.
+- Motion: static except existing card hover transforms.
+
+### Meeting Minutes Accordion
+
+- Structure: dated minutes list with badge, expandable section groups, action-item callout, and download link.
+- Variants: expanded, collapsed, empty, and new-badge minutes.
+- Spacing: compact `meeting-minutes-*` primitives keep long minutes readable inside the dashboard surface.
+- States: accordion headers use real buttons with `aria-expanded`.
+- Accessibility: section titles remain text, the download action is a real link, and iconography is decorative.
+- Motion: only the chevron rotation communicates expand/collapse state.
+
 ### Score App Shell
 
 - Structure: sticky topbar with fixed square logo, truncating title/subtitle, members shortcut, leaderboard control, and theme toggle.

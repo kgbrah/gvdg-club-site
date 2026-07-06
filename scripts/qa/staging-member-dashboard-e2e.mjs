@@ -146,12 +146,14 @@ async function runBrowserQa({ siteUrl, token }) {
     await page.waitForSelector("#members.members-react-registration-ready", { timeout: 15_000 });
     await page.waitForSelector("#members.members-react-board-ready", { timeout: 15_000 });
     await page.waitForSelector("#members.members-react-tee-signs-ready", { timeout: 15_000 });
+    await page.waitForSelector("#members.members-react-club-ready", { timeout: 15_000 });
     await waitForText(page, "#membersReactDashboardShell", "Player Dashboard", "React dashboard title");
     await expectReactTab(page, "Overview");
     await page.locator('[data-react-overview-dashboard="ready"]').waitFor({ state: "visible", timeout: 15_000 });
     await page.locator('[data-react-registration-panel="ready"]').waitFor({ state: "visible", timeout: 15_000 });
     await page.locator('[data-react-board-panel="ready"]').waitFor({ state: "attached", timeout: 15_000 });
     await page.locator('[data-react-tee-signs-panel="ready"]').waitFor({ state: "attached", timeout: 15_000 });
+    await page.locator('[data-react-club-panel="ready"]').waitFor({ state: "attached", timeout: 15_000 });
     await page.locator('[data-react-pdga-dashboard="ready"]').waitFor({ state: "visible", timeout: 15_000 });
 
     const legacyTabsHidden = await page.locator("#dashTabs").evaluate((node) => getComputedStyle(node).display === "none");
@@ -167,6 +169,10 @@ async function runBrowserQa({ siteUrl, token }) {
     for (const selector of ["#legacyBoardPanel", "#legacyTeeSignsPanel"]) {
       const hidden = await page.locator(selector).evaluate((node) => getComputedStyle(node).display === "none");
       if (!hidden) throw new Error(`${selector} remained visible after its React panel mounted.`);
+    }
+    for (const selector of ["#legacyClubDirectoryPanel", "#legacyMeetingMinutesPanel"]) {
+      const hidden = await page.locator(selector).evaluate((node) => getComputedStyle(node).display === "none");
+      if (!hidden) throw new Error(`${selector} remained visible after React Club mounted.`);
     }
 
     await waitForLiveRating(page);
@@ -195,8 +201,20 @@ async function runBrowserQa({ siteUrl, token }) {
     await page.getByRole("tab", { name: "Club" }).click();
     await waitForText(page, "#membersReactDashboardShell", "GVDG Member Directory", "club tab title");
     await expectReactTab(page, "Club");
-    const clubVisible = await page.locator("#membersGrid").evaluate((node) => !node.classList.contains("dtab-off"));
-    if (!clubVisible) throw new Error("Club tab did not reveal the member directory.");
+    await page.locator('[data-react-club-panel="ready"]').waitFor({ state: "visible", timeout: 15_000 });
+    const clubVisible = await page.locator("#membersReactClubPanel").evaluate((node) => !node.classList.contains("dtab-off"));
+    if (!clubVisible) throw new Error("Club tab did not reveal the React member directory.");
+    await waitForText(page, "[data-react-club-panel]", "Membership Growth Since 2004", "React club growth chart");
+    await waitForText(page, "[data-react-club-panel]", "Future Course Improvements - Ayden", "React meeting minutes");
+    const clubPanel = page.locator('[data-react-club-panel]');
+    await clubPanel.locator(".members-search").fill("Martinez");
+    await waitForText(page, "[data-react-club-panel] .members-grid", "Juan Martinez", "React directory search");
+    await clubPanel.locator(".members-search").fill("");
+    await clubPanel.getByRole("button", { name: "PDGA Members" }).click();
+    await waitForText(page, "[data-react-club-panel] .members-count", "Showing 12 of", "React directory PDGA filter count");
+    await clubPanel.getByRole("button", { name: "All Members" }).click();
+    await clubPanel.getByRole("button", { name: /Show More/ }).click();
+    await waitForText(page, "[data-react-club-panel] .members-count", "Showing 24 of", "React directory load more count");
 
     const width = await page.evaluate(() => document.documentElement.scrollWidth);
     const viewport = page.viewportSize()?.width || 390;

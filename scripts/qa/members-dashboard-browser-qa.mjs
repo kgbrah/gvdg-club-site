@@ -96,11 +96,15 @@ async function captureState(browser, origin, viewport, slug) {
   await page.waitForSelector("#members.members-react-registration-ready", { timeout: 10_000 });
   await page.waitForSelector("#members.members-react-board-ready", { timeout: 10_000 });
   await page.waitForSelector("#members.members-react-tee-signs-ready", { timeout: 10_000 });
+  await page.waitForSelector("#members.members-react-club-ready", { timeout: 10_000 });
   await expectReactTab(page, "Overview");
   await page.waitForSelector('[data-react-overview-dashboard="ready"]', { timeout: 10_000 });
   await page.waitForSelector('[data-react-registration-panel="ready"]', { timeout: 10_000 });
   await page.waitForSelector('[data-react-board-panel="ready"]', { state: "attached", timeout: 10_000 });
   await page.waitForSelector('[data-react-tee-signs-panel="ready"]', { state: "attached", timeout: 10_000 });
+  await page.waitForSelector('[data-react-club-panel="ready"]', { state: "attached", timeout: 10_000 });
+  await page.waitForSelector('[data-react-member-directory="ready"]', { state: "attached", timeout: 10_000 });
+  await page.waitForSelector('[data-react-meeting-minutes="ready"]', { state: "attached", timeout: 10_000 });
   await page.waitForSelector('[data-react-pdga-dashboard="ready"]', { timeout: 10_000 });
   await waitForText(page, "#membersReactRatingPanel", "941", "React live rating");
   await page.waitForSelector('[data-react-club-ratings="ready"]', { timeout: 10_000 });
@@ -121,6 +125,10 @@ async function captureState(browser, origin, viewport, slug) {
   for (const selector of ["#legacyBoardPanel", "#legacyTeeSignsPanel"]) {
     const hidden = await page.locator(selector).evaluate((node) => getComputedStyle(node).display === "none");
     if (!hidden) throw new Error(`${selector} remained visible after its React panel mounted.`);
+  }
+  for (const selector of ["#legacyClubDirectoryPanel", "#legacyMeetingMinutesPanel"]) {
+    const hidden = await page.locator(selector).evaluate((node) => getComputedStyle(node).display === "none");
+    if (!hidden) throw new Error(`${selector} remained visible after React Club mounted.`);
   }
   await captureFullPage(page, path.join(evidenceDir, `${slug}-overview.png`));
 
@@ -179,6 +187,27 @@ async function captureState(browser, origin, viewport, slug) {
   await page.getByRole("tab", { name: "Club" }).click();
   await waitForText(page, "#membersReactDashboardShell", "GVDG Member Directory", "club title");
   await expectReactTab(page, "Club");
+  await page.locator('[data-react-club-panel="ready"]').waitFor({ state: "visible", timeout: 10_000 });
+  await page.locator("#doublesLeague").waitFor({ state: "visible", timeout: 10_000 });
+  const clubPanel = page.locator('[data-react-club-panel]');
+  await waitForText(page, "[data-react-club-panel]", "Membership Growth Since 2004", "React club growth chart");
+  await waitForText(page, "[data-react-club-panel]", "Future Course Improvements - Ayden", "React meeting minutes");
+  await clubPanel.locator(".members-search").fill("Martinez");
+  await waitForText(page, "[data-react-club-panel] .members-grid", "Juan Martinez", "React directory search");
+  await waitForText(page, "[data-react-club-panel] .members-count", "Showing 1 of 1 members", "React directory search count");
+  await clubPanel.locator(".members-search").fill("");
+  await clubPanel.getByRole("button", { name: "PDGA Members" }).click();
+  await waitForText(page, "[data-react-club-panel] .members-count", "Showing 12 of", "React directory PDGA filter count");
+  await clubPanel.getByRole("button", { name: "All Members" }).click();
+  await waitForText(page, "[data-react-club-panel] .members-count", "Showing 12 of", "React directory all count");
+  await clubPanel.getByRole("button", { name: /Show More/ }).click();
+  await waitForText(page, "[data-react-club-panel] .members-count", "Showing 24 of", "React directory load more count");
+  const minutesToggle = clubPanel.getByRole("button", { name: /January 12, 2026/ });
+  if (await minutesToggle.getAttribute("aria-expanded") !== "true") throw new Error("React meeting minutes did not start expanded.");
+  await minutesToggle.click();
+  if (await minutesToggle.getAttribute("aria-expanded") !== "false") throw new Error("React meeting minutes did not collapse.");
+  await minutesToggle.click();
+  if (await minutesToggle.getAttribute("aria-expanded") !== "true") throw new Error("React meeting minutes did not re-expand.");
   await page.waitForTimeout(250);
   await captureFullPage(page, path.join(evidenceDir, `${slug}-club.png`));
 
