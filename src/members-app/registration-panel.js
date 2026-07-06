@@ -8,11 +8,6 @@ import { useSessionToken } from "./session-token.js";
 
 const h = React.createElement;
 
-function visibleParent(token) {
-  const parent = document.getElementById("clubRegister");
-  if (parent && token) parent.style.display = "";
-}
-
 export function MemberRegistrationPanel() {
   const context = useMemberContext();
   const token = useSessionToken();
@@ -24,10 +19,6 @@ export function MemberRegistrationPanel() {
     casualRequests: [],
     paymentsConfig: { enabled: false },
   });
-
-  React.useEffect(() => {
-    visibleParent(token);
-  }, [token]);
 
   React.useEffect(() => {
     if (!token) {

@@ -43,13 +43,6 @@ function emitDashboardState(eventName, tab, extra = {}) {
   window.dispatchEvent(new CustomEvent(eventName, { detail: dashboardDetail(tab, extra) }));
 }
 
-export function revealDashboardSections() {
-  ["myDashboard", "clubRegister", "clubBoard", "teeCapture"].forEach((id) => {
-    const el = byId(id);
-    if (el) el.style.display = "";
-  });
-}
-
 export function selectDashboardTab(tabValue) {
   const tab = safeTab(tabValue);
   selectedDashTab = tab;
@@ -59,14 +52,11 @@ export function selectDashboardTab(tabValue) {
   DASH_TABS[tab].forEach((selector) => {
     document.querySelectorAll(selector).forEach((el) => el.classList.remove("dtab-off"));
   });
-  const title = byId("memberSectionTitle");
-  if (title) title.textContent = DASH_TITLES[tab] || DASH_TITLES.overview;
   emitDashboardState("gvdg:dashboard-tab-selected", tab);
   byId("membersReactDashboardShell")?.scrollIntoView({ block: "start", behavior: "smooth" });
 }
 
 export function openMemberDashboard(detail = {}) {
-  revealDashboardSections();
   selectDashboardTab("overview");
   emitDashboardState("gvdg:member-dashboard-ready", selectedDashTab, detail);
 }

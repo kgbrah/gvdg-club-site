@@ -14,11 +14,6 @@ import {
 
 const h = React.createElement;
 
-function visibleParent(token) {
-  const parent = document.getElementById("teeCapture");
-  if (parent && token) parent.style.display = "";
-}
-
 function courseName(courses, courseId) {
   const match = courses.find((course) => String(course.id) === String(courseId));
   return match?.name || `Course #${courseId}`;
@@ -87,10 +82,6 @@ export function MemberTeeSignsPanel() {
   const [pending, setPending] = React.useState(null);
   const [message, setMessage] = React.useState({ text: "", tone: "" });
   const [version, setVersion] = React.useState(0);
-
-  React.useEffect(() => {
-    visibleParent(token);
-  }, [token]);
 
   React.useEffect(() => {
     if (!token) {

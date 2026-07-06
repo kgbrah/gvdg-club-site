@@ -26,8 +26,7 @@ function tabTitle(key) {
 function initialState() {
   const tab = DEFAULT_TAB.key;
   const context = readMemberContext();
-  const title = document.getElementById("memberSectionTitle")?.textContent?.trim() || tabTitle(tab);
-  return { ...context, tab, title };
+  return { ...context, tab, title: tabTitle(tab) };
 }
 
 function nextState(previous, detail = null) {

@@ -109,7 +109,8 @@ test('member dashboard React registration section stays available for logged-in 
   assert.doesNotMatch(html, /id="legacyRegisterTitle"/);
   assert.doesNotMatch(html, /id="registerList"/);
   assert.doesNotMatch(html, /async function loadRegister\(/);
-  assert.match(panel, /visibleParent\(token\)/);
+  assert.doesNotMatch(html, /id="clubRegister"[^>]*style="display:\s*none;?"/);
+  assert.doesNotMatch(panel, /visibleParent|style\.display|getElementById\("clubRegister"\)/);
   assert.match(casual, /data-react-casual-form/);
 });
 

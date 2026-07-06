@@ -76,6 +76,11 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   assert.match(html, /id="membersReactBoardPanel"/);
   assert.match(html, /id="membersReactTeeSignsPanel"/);
   assert.match(html, /id="membersReactClubPanel"/);
+  assert.doesNotMatch(html, /id="memberSectionTitle"/);
+  assert.doesNotMatch(html, /id="myDashboard"[^>]*style="display:\s*none;?"/);
+  assert.doesNotMatch(html, /id="clubRegister"[^>]*style="display:\s*none;?"/);
+  assert.doesNotMatch(html, /id="clubBoard"[^>]*style="display:\s*none;?"/);
+  assert.doesNotMatch(html, /id="teeCapture"[^>]*style="display:\s*none;?"/);
   assert.doesNotMatch(html, /id="loginForm"/);
   assert.doesNotMatch(html, /id="pinChangeForm"/);
   assert.doesNotMatch(html, /id="profileForm"/);
@@ -159,11 +164,15 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   assert.match(shell, /readMemberContext/);
   assert.match(shell, /gvdg:member-profile-updated/);
   assert.match(shell, /gvdg:member-logout-requested/);
+  assert.doesNotMatch(shell, /memberSectionTitle|getElementById/);
   assert.match(router, /const DASH_TABS/);
   assert.match(router, /gvdg:select-dashboard-tab/);
   assert.match(router, /gvdg:dashboard-tab-selected/);
   assert.match(router, /gvdg:member-dashboard-opened/);
   assert.match(router, /gvdg:member-dashboard-ready/);
+  assert.doesNotMatch(router, /revealDashboardSections/);
+  assert.doesNotMatch(router, /style\.display/);
+  assert.doesNotMatch(router, /memberSectionTitle|textContent\s*=/);
   assert.match(dialogs, /export function MemberDialogs\(\)/);
   assert.match(dialogs, /export function memberAlert\(options\)/);
   assert.match(dialogs, /export function memberConfirm\(options\)/);
@@ -199,6 +208,7 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   assert.match(registration, /data-react-registration-panel/);
   assert.match(registration, /EventRegistrationSections/);
   assert.match(registration, /CasualRoundsSection/);
+  assert.doesNotMatch(registration, /visibleParent|style\.display|getElementById\("clubRegister"\)/);
   assert.doesNotMatch(registrationEvents, /window\.alert|window\.confirm/);
   assert.match(registrationEvents, /memberAlert/);
   assert.match(registrationEvents, /memberConfirm/);
@@ -208,8 +218,10 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   assert.doesNotMatch(registrationPayments, /window\.alert|window\.confirm/);
   assert.match(registrationPayments, /memberAlert/);
   assert.match(board, /data-react-board-panel/);
+  assert.doesNotMatch(board, /visibleParent|style\.display|getElementById\("clubBoard"\)/);
   assert.doesNotMatch(board, /window\.alert|window\.confirm/);
   assert.match(board, /memberConfirm/);
   assert.match(teeSigns, /data-react-tee-signs-panel/);
+  assert.doesNotMatch(teeSigns, /visibleParent|style\.display|getElementById\("teeCapture"\)/);
   assert.match(club, /data-react-club-panel/);
 });

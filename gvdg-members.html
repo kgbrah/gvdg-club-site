@@ -382,12 +382,10 @@
     <div class="members-content" id="membersContent">
         <section id="members">
             <div id="membersReactDashboardShell"></div>
-            <h2 class="section-title" id="memberSectionTitle">Player Dashboard</h2>
 
             <style>
                 #membersReactDashboardShell { display: none; scroll-margin-top: 96px; }
                 #members.members-react-shell-ready #membersReactDashboardShell { display: block; }
-                #members.members-react-shell-ready #memberSectionTitle { display: none !important; }
                 #membersReactOverviewPanel { display: none; }
                 #members.members-react-overview-ready #membersReactOverviewPanel { display: block; }
                 #membersReactRegistrationPanel { display: none; }
@@ -652,19 +650,19 @@
             </style>
             <style>.admin-portal-link{display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin-bottom:1.5rem;background:var(--primary-strong);color:white;padding:0.6rem 1.25rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.9rem;}.admin-portal-link:hover{background:var(--primary);}</style>
 
-            <div id="myDashboard" class="my-dashboard" style="display:none;">
+            <div id="myDashboard" class="my-dashboard">
                 <div id="membersReactOverviewPanel"></div>
             </div>
 
-            <div id="clubRegister" class="club-register" style="display:none;">
+            <div id="clubRegister" class="club-register">
                 <div id="membersReactRegistrationPanel"></div>
             </div>
 
-            <div id="clubBoard" class="club-board" style="display:none;">
+            <div id="clubBoard" class="club-board">
                 <div id="membersReactBoardPanel"></div>
             </div>
 
-            <div id="teeCapture" class="tee-capture" style="display:none;">
+            <div id="teeCapture" class="tee-capture">
                 <div id="membersReactTeeSignsPanel"></div>
             </div>
 

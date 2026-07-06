@@ -8,11 +8,6 @@ import { useSessionToken } from "./session-token.js";
 
 const h = React.createElement;
 
-function visibleParent(token) {
-  const parent = document.getElementById("clubBoard");
-  if (parent && token) parent.style.display = "";
-}
-
 function boardInitials(name) {
   const parts = String(name || "Member").trim().split(/\s+/).filter(Boolean);
   const first = parts[0]?.[0] || "M";
@@ -95,7 +90,6 @@ export function MemberBoardPanel() {
   }, [token]);
 
   React.useEffect(() => {
-    visibleParent(token);
     if (token) reload();
     else setState({ status: "idle", posts: [], authors: {} });
   }, [reload, token]);
