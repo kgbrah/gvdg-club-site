@@ -126,9 +126,9 @@ async function captureState(browser, origin, viewport, slug) {
     const hidden = await page.locator(selector).evaluate((node) => getComputedStyle(node).display === "none");
     if (!hidden) throw new Error(`${selector} remained visible after its React panel mounted.`);
   }
-  for (const selector of ["#legacyClubDirectoryPanel", "#legacyMeetingMinutesPanel"]) {
-    const hidden = await page.locator(selector).evaluate((node) => getComputedStyle(node).display === "none");
-    if (!hidden) throw new Error(`${selector} remained visible after React Club mounted.`);
+  const migratedClubLegacyNodes = await page.locator("#legacyClubDirectoryPanel, #legacyMeetingMinutesPanel, #membersGrid, #memberSearch").count();
+  if (migratedClubLegacyNodes !== 0) {
+    throw new Error("Migrated Club directory/minutes legacy nodes are still present in the DOM.");
   }
   await captureFullPage(page, path.join(evidenceDir, `${slug}-overview.png`));
 

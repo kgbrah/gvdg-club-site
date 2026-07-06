@@ -1,41 +1,9 @@
 import React from "react";
 import { ChevronDown, Download } from "lucide-react";
 
+import { MEETING_MINUTES } from "./meeting-minutes-data.js";
+
 const h = React.createElement;
-
-function text(node) {
-  return String(node?.textContent || "").replace(/\s+/g, " ").trim();
-}
-
-function cleanTitle(value) {
-  return String(value || "").replace(/^[^A-Za-z0-9]+/, "").trim();
-}
-
-function readItems(section) {
-  return [...section.querySelectorAll("li")].map(text).filter(Boolean);
-}
-
-function readMinutesFromLegacyDom() {
-  const root = document.getElementById("legacyMeetingMinutesPanel");
-  if (!root) return [];
-  return [...root.querySelectorAll(".meeting-minutes-item")].map((item, index) => {
-    const sections = [...item.querySelectorAll(".meeting-minutes-section, .meeting-minutes-action-items")]
-      .map((section) => ({
-        title: cleanTitle(text(section.querySelector(".meeting-minutes-section-title"))),
-        items: readItems(section),
-        action: section.classList.contains("meeting-minutes-action-items"),
-      }))
-      .filter((section) => section.title && section.items.length);
-    const download = item.querySelector(".meeting-minutes-download");
-    return {
-      id: `meeting-minutes-${index}`,
-      date: text(item.querySelector(".meeting-minutes-date")),
-      badge: text(item.querySelector(".meeting-minutes-badge")),
-      sections,
-      downloadHref: download?.getAttribute("href") || "",
-    };
-  }).filter((entry) => entry.date && entry.sections.length);
-}
 
 function MinutesSection({ section }) {
   return h("div", { className: section.action ? "meeting-minutes-action-items" : "meeting-minutes-section" }, [
@@ -70,14 +38,8 @@ function MinutesItem({ minutes, expanded, onToggle }) {
 }
 
 export function MeetingMinutesPanel() {
-  const [minutes, setMinutes] = React.useState(() => readMinutesFromLegacyDom());
+  const minutes = MEETING_MINUTES;
   const [expandedId, setExpandedId] = React.useState(() => minutes[0]?.id || "");
-
-  React.useEffect(() => {
-    const nextMinutes = readMinutesFromLegacyDom();
-    setMinutes(nextMinutes);
-    setExpandedId((current) => current || nextMinutes[0]?.id || "");
-  }, []);
 
   return h("section", { className: "meeting-minutes-container react-meeting-minutes", "data-react-meeting-minutes": minutes.length ? "ready" : "empty", "aria-labelledby": "reactMeetingMinutesTitle" }, [
     h("h3", { className: "meeting-minutes-title", id: "reactMeetingMinutesTitle", key: "title" }, "Meeting Minutes"),

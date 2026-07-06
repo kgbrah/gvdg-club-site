@@ -1,6 +1,4 @@
-import React from "react";
-
-export const CLUB_DIRECTORY_EVENT = "gvdg:club-directory-data-ready";
+import { CLUB_DIRECTORY_DATA } from "./club-directory-data.js";
 
 function normalizeYearData(value) {
   if (!value || typeof value !== "object") return {};
@@ -35,23 +33,9 @@ export function memberInitials(member) {
 }
 
 export function clubDirectoryData() {
-  const raw = window.GVDG_CLUB_DIRECTORY_DATA;
-  const members = Array.isArray(raw?.members) ? raw.members.map(normalizeMember).filter(Boolean) : [];
-  const yearData = normalizeYearData(raw?.yearData);
-  return members.length ? { members, yearData } : null;
-}
-
-export function useClubDirectoryData() {
-  const [data, setData] = React.useState(() => clubDirectoryData());
-
-  React.useEffect(() => {
-    function update() {
-      setData(clubDirectoryData());
-    }
-    update();
-    window.addEventListener(CLUB_DIRECTORY_EVENT, update);
-    return () => window.removeEventListener(CLUB_DIRECTORY_EVENT, update);
-  }, []);
-
-  return data;
+  const members = Array.isArray(CLUB_DIRECTORY_DATA.members)
+    ? CLUB_DIRECTORY_DATA.members.map(normalizeMember).filter(Boolean)
+    : [];
+  const yearData = normalizeYearData(CLUB_DIRECTORY_DATA.yearData);
+  return { members, yearData };
 }
