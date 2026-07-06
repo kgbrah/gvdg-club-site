@@ -16,6 +16,19 @@ function scoreLegacySetupSource() {
   return source.slice(start, end);
 }
 
+function scoreLeaderboardSource() {
+  return readFileSync('src/score-app/leaderboard-sheet.js', 'utf8');
+}
+
+function scoreLegacyLeaderboardSource() {
+  const source = readFileSync('src/score-app/score-legacy.js', 'utf8');
+  const start = source.indexOf('// ---------- leaderboard sheet ----------');
+  const end = source.indexOf('// What (if anything) is stopping this card from finalizing');
+  assert.notEqual(start, -1, 'leaderboard section should exist');
+  assert.notEqual(end, -1, 'finalize blockers should follow leaderboard section');
+  return source.slice(start, end);
+}
+
 test('casual round flow shows setup after layout selection', () => {
   const setup = scoreSetupSource();
   const legacy = scoreLegacySetupSource();
@@ -66,9 +79,21 @@ test('player score page supports pair target rows and target-id offline replay',
 });
 
 test('player leaderboard renders matchplay and pair labels without primary to-par ranking', () => {
-  const source = readFileSync('src/score-app/score-legacy.js', 'utf8');
-  assert.match(source, /const resultHead = isMatchplayScoring\(\) \? 'Match' : 'To par'/);
-  assert.ok(source.includes("s.members.join(' / ')"));
-  assert.match(source, /s\.match && s\.match\.status/);
-  assert.match(source, /Pair changes are blocked after scoring starts/);
+  const source = scoreLeaderboardSource();
+  assert.match(source, /const resultHead = isMatchplay \? "Match" : "To par"/);
+  assert.ok(source.includes('standing.members.join(" / ")'));
+  assert.match(source, /standing\.match && standing\.match\.status/);
+  assert.match(readFileSync('src/score-app/score-legacy.js', 'utf8'), /Pair changes are blocked after scoring starts/);
+});
+
+test('player leaderboard sheet is React-owned without legacy overlay DOM construction', () => {
+  const legacy = scoreLegacyLeaderboardSource();
+  const leaderboard = scoreLeaderboardSource();
+  assert.match(legacy, /createLeaderboardSheetRenderer\(\)/);
+  assert.match(legacy, /leaderboardSheet\.render\(\{/);
+  assert.match(leaderboard, /function LeaderboardSheet\(props\)/);
+  assert.match(leaderboard, /createRoot\(host\)/);
+  assert.doesNotMatch(legacy, /const overlay = el\('div', 'overlay'\)/);
+  assert.doesNotMatch(legacy, /const table = el\('table', 'lb'\)/);
+  assert.doesNotMatch(legacy, /sheet\.appendChild\(el\('h2', 'section', 'Live Leaderboard'\)\)/);
 });

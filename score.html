@@ -207,6 +207,14 @@
         table.lb td.pos { font-weight: 700; color: var(--text-muted); width: 1.6rem; }
         table.lb td.name { font-weight: 700; }
         table.lb td.tp.under { color: var(--under); } table.lb td.tp.over { color: var(--over); }
+        .finalize-card { margin-top: 1rem; padding: 0.8rem; border-radius: 12px; border: 1px solid var(--border-color); background: var(--bg-primary); }
+        .finalize-card.ready { border-color: var(--under); }
+        .finalize-head { font-weight: 700; margin-bottom: 0.2rem; color: var(--over); }
+        .finalize-card.ready .finalize-head { color: var(--under); }
+        .finalize-line { font-size: 0.82rem; }
+        .finish-round-btn { margin-top: 0.7rem; }
+        .finish-round-hint { font-size: 0.8rem; margin-top: 0.4rem; }
+        .sheet-close, .udisc-export-mount { margin-top: 1rem; }
         .spin { width: 30px; height: 30px; border: 3px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; animation: sp 0.8s linear infinite; margin: 1.5rem auto; }
         @keyframes sp { to { transform: rotate(360deg); } }
         a.link { color: var(--primary); font-weight: 700; text-decoration: none; }

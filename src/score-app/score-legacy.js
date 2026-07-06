@@ -1,3 +1,5 @@
+import { createLeaderboardSheetRenderer } from "./leaderboard-sheet.js";
+
 export function startScoreApp(options) {
         "use strict";
         options = options || {};
@@ -671,70 +673,34 @@ export function startScoreApp(options) {
         }
 
         // ---------- leaderboard sheet ----------
-        let lbOpen = false, lbSheet = null;
+        let lbOpen = false;
+        const leaderboardSheet = createLeaderboardSheetRenderer();
         document.getElementById('lbBtn').addEventListener('click', openLeaderboard);
         function openLeaderboard() { lbOpen = true; renderLeaderboard(); }
-        function closeLeaderboard() { lbOpen = false; if (lbSheet) { lbSheet.remove(); lbSheet = null; } }
+        function closeLeaderboard() { lbOpen = false; leaderboardSheet.close(); }
         function renderLeaderboard() {
-            if (lbSheet) lbSheet.remove();
-            const overlay = el('div', 'overlay'); overlay.addEventListener('click', function (e) { if (e.target === overlay) closeLeaderboard(); });
-            const sheet = el('div', 'sheet'); sheet.appendChild(el('div', 'grab'));
-            sheet.appendChild(el('h2', 'section', 'Live Leaderboard'));
-            const standings = (S.snap && S.snap.standings) || [];
-            if (!standings.length) { sheet.appendChild(el('p', 'muted', 'No scores in yet.')); }
-            else {
-                const table = el('table', 'lb');
-                const resultHead = isMatchplayScoring() ? 'Match' : 'To par';
-                const thead = el('tr'); ['', isDoublesScoring() ? 'Pair' : 'Player', 'Thru', resultHead].forEach((t) => thead.appendChild(el('th', null, t))); table.appendChild(thead);
-                standings.forEach((s, i) => {
-                    const tr = el('tr');
-                    tr.appendChild(el('td', 'pos', String(i + 1)));
-                    const name = s.name + (s.members && s.members.length ? ' · ' + s.members.join(' / ') : (s.division ? ' · ' + s.division : ''));
-                    tr.appendChild(el('td', 'name', name));
-                    tr.appendChild(el('td', null, (s.thru || 0) + ''));
-                    if (isMatchplayScoring()) tr.appendChild(el('td', null, s.match && s.match.status ? s.match.status : 'AS'));
-                    else tr.appendChild(el('td', 'tp ' + relClass(s.toPar || 0), s.thru ? relText(s.toPar || 0) : 'E'));
-                    table.appendChild(tr);
-                });
-                sheet.appendChild(table);
-            }
-            // "Add to UDisc": the caller's own hole-by-hole scores → open the right UDisc course to tap
-            // in (UDisc has no import API). Casual rounds aren't written to D1, so we source the scorecard
-            // live from this card. Shown only when the course's numeric UDisc id is known.
-            if (window.UDiscExport && S.udiscCourseId) {
-                const me = (S.cardmates || []).find((c) => c.isMe);
-                if (me && me.scores) {
-                    const card = S.holes.filter((h) => me.scores[h.hole] != null).map((h) => ({ hole: h.hole, par: h.par, strokes: me.scores[h.hole] }));
-                    const node = window.UDiscExport.build({ courseId: S.udiscCourseId, scorecard: card });
-                    if (node) { node.style.marginTop = '1rem'; sheet.appendChild(node); }
-                }
-            }
-            // ---- finalize status + action ----
-            if (S.status === 'final') {
-                const done = el('div'); done.style.cssText = 'margin-top:1rem;padding:0.8rem;border-radius:12px;border:1px solid var(--under);background:var(--bg-primary)';
-                done.appendChild(el('p', null, '🏁 Round finished — scores are locked.')).style.cssText = 'font-weight:700;color:var(--under)';
-                sheet.appendChild(done);
-            } else {
-                const bl = finalizeBlockers();
-                const box = el('div'); box.style.cssText = 'margin-top:1rem;padding:0.8rem;border-radius:12px;border:1px solid var(--border-color);background:var(--bg-primary)';
-                const head = el('p', null, bl.ready ? '✓ Your card agrees — ready to finalize' : '⚑ Your card isn’t ready yet');
-                head.style.cssText = 'font-weight:700;margin-bottom:0.2rem;color:' + (bl.ready ? 'var(--under)' : 'var(--over)');
-                box.appendChild(head);
-                bl.lines.forEach((line) => { const p = el('p', 'muted', line); p.style.fontSize = '0.82rem'; box.appendChild(p); });
-                sheet.appendChild(box);
-                // Casual rounds are finished from here by any member on the card. Competition rounds are
-                // finalized by an admin from the admin console, so players only see the status above.
-                if (MODE === 'round') {
-                    const fin = el('button', 'btn', '🏁 Finish round'); fin.style.marginTop = '0.7rem';
-                    fin.disabled = !bl.ready;
-                    fin.addEventListener('click', finalizeRound);
-                    sheet.appendChild(fin);
-                    if (!bl.ready) { const hint = el('p', 'muted', 'Every member on the card must enter matching scores for every hole before the round can be finished.'); hint.style.cssText = 'font-size:0.8rem;margin-top:0.4rem'; sheet.appendChild(hint); }
-                }
-            }
-            const close = el('button', 'btn secondary', 'Close'); close.style.marginTop = '1rem'; close.addEventListener('click', closeLeaderboard);
-            sheet.appendChild(close);
-            overlay.appendChild(sheet); document.body.appendChild(overlay); lbSheet = overlay;
+            leaderboardSheet.render({
+                blockers: finalizeBlockers(),
+                exportData: udiscExportData(),
+                isDoubles: isDoublesScoring(),
+                isMatchplay: isMatchplayScoring(),
+                mode: MODE,
+                onClose: closeLeaderboard,
+                onFinalize: finalizeRound,
+                relClass: relClass,
+                relText: relText,
+                standings: (S.snap && S.snap.standings) || [],
+                status: S.status,
+            });
+        }
+        function udiscExportData() {
+            if (!window.UDiscExport || !S.udiscCourseId) return null;
+            const me = (S.cardmates || []).find((c) => c.isMe);
+            if (!me || !me.scores) return null;
+            const scorecard = S.holes
+                .filter((h) => me.scores[h.hole] != null)
+                .map((h) => ({ hole: h.hole, par: h.par, strokes: me.scores[h.hole] }));
+            return { build: window.UDiscExport.build, courseId: S.udiscCourseId, scorecard: scorecard };
         }
         // What (if anything) is stopping this card from finalizing: unresolved conflicts + unconfirmed
         // member scores. Recomputed each render so the sheet reflects live snapshots while it's open.

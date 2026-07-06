@@ -174,6 +174,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: course/layout rows and setup options are real buttons; join-code entry submits on Enter.
 - Motion: no decorative animation; navigation is immediate and preserves the existing active press feedback.
 
+### Score Leaderboard Sheet
+
+- Structure: React-owned bottom sheet overlay with grab handle, leaderboard table, optional UDisc export mount, finalize status panel, and close action; the legacy score controller supplies standings, blockers, export data, and callbacks only.
+- Variants: empty leaderboard, singles/player rows, doubles/pair rows, stroke to-par result, matchplay status result, final round, ready-to-finalize, blocked finalize, and casual round finish action.
+- Spacing: reuses `.overlay`, `.sheet`, `.lb`, `.btn`, and finalize sheet primitives from the score app; finalization details use compact rows and stay within the sheet scroll area.
+- States: overlay backdrop click and close button dismiss the sheet; live snapshots re-render the React sheet when open; finish button is disabled until the card has no conflicts or missing confirmations.
+- Accessibility: close and finish actions are real buttons; table headers label rank/player/thru/result columns; export UI remains mounted as live DOM inside an explicit React mount container.
+- Motion: bottom sheet remains static; only existing button active states apply.
+
 ### Round Weather
 
 - Structure: compact header, primary temperature/condition group, condition graphic, wind action, secondary meta pills, and course-location note.
