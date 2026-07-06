@@ -2,6 +2,7 @@ import React from "react";
 
 import { request, requestJson } from "./api.js";
 import { shortDateTime } from "./format.js";
+import { memberAlert, memberConfirm } from "./member-dialogs.js";
 import { localDateTimeValue } from "./registration-utils.js";
 
 const h = React.createElement;
@@ -141,14 +142,27 @@ function CasualRoundCard({ request: round, token, viewerSub, onReload }) {
       body: round.committed ? undefined : {},
     });
     if (response.ok) onReload();
-    else window.alert("Casual round could not be updated.");
+    else await memberAlert({
+      message: "Casual round could not be updated.",
+      title: "Round update failed",
+    });
   }
 
   async function close() {
-    if (!window.confirm("Close this casual round post?")) return;
+    const confirmed = await memberConfirm({
+      cancelText: "Keep open",
+      confirmText: "Close post",
+      message: "This removes the casual round post from the dashboard.",
+      title: "Close this casual round post?",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     const response = await request(`/casual-rounds/${encodeURIComponent(round.id)}`, { method: "DELETE", token });
     if (response.ok) onReload();
-    else window.alert("Casual round could not be closed.");
+    else await memberAlert({
+      message: "Casual round could not be closed.",
+      title: "Close failed",
+    });
   }
 
   return h("div", { className: "register-card casual-register-card" }, [

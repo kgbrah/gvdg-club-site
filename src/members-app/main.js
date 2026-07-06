@@ -6,6 +6,7 @@ import { MemberBoardPanel } from "./board-panel.js";
 import { MemberClubPanel } from "./club-panel.js";
 import { MemberDashboardShell } from "./dashboard-shell.js";
 import { installDashboardRouter } from "./dashboard-router.js";
+import { MemberDialogs } from "./member-dialogs.js";
 import { installMemberAuthController } from "./member-auth-controller.js";
 import { MemberOverviewDashboard } from "./overview-dashboard.js";
 import { installMemberPageChrome } from "./page-chrome.js";
@@ -18,6 +19,10 @@ if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") 
 }
 
 const h = React.createElement;
+
+const dialogMount = document.createElement("div");
+document.body.appendChild(dialogMount);
+createRoot(dialogMount).render(h(MemberDialogs));
 
 installMemberPageChrome();
 installMemberAuthController();

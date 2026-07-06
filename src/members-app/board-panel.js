@@ -2,6 +2,7 @@ import React from "react";
 
 import { request, requestJson } from "./api.js";
 import { MarkdownBlocks } from "./board-markdown.js";
+import { memberConfirm } from "./member-dialogs.js";
 import { useMemberContext } from "./member-context.js";
 import { useSessionToken } from "./session-token.js";
 
@@ -116,7 +117,15 @@ export function MemberBoardPanel() {
   }
 
   async function deletePost(post) {
-    if (!token || !window.confirm("Delete this post?")) return;
+    if (!token) return;
+    const confirmed = await memberConfirm({
+      cancelText: "Keep post",
+      confirmText: "Delete post",
+      message: "This removes the post and any replies from the member board.",
+      title: "Delete this post?",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     const response = await request(`/board/${encodeURIComponent(post.id)}`, { method: "DELETE", token }).catch(() => null);
     if (response?.ok) reload();
     else setStatus({ message: "Could not delete that post. Please try again.", tone: "error" });

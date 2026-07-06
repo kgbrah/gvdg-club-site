@@ -1,6 +1,7 @@
 import React from "react";
 
 import { request } from "./api.js";
+import { memberAlert } from "./member-dialogs.js";
 
 const h = React.createElement;
 let paypalSdkPromise = null;
@@ -41,7 +42,7 @@ export function PayPalButtons({ eventId, token, paymentsConfig, onReload }) {
                 : data.error === "nothing_owed"
                   ? "There's nothing left to pay."
                   : "We couldn't start the payment. Please try again or pay at the event.";
-              window.alert(message);
+              await memberAlert({ message, title: "Payment could not start" });
               throw new Error(data.error || "create_order_failed");
             }
             return data.orderId;
@@ -52,9 +53,15 @@ export function PayPalButtons({ eventId, token, paymentsConfig, onReload }) {
             body: { orderId: data.orderID },
           }).then((response) => {
             if (response.ok) onReload();
-            else window.alert("We could not confirm your payment. Please contact the club.");
+            else void memberAlert({
+              message: "We could not confirm your payment. Please contact the club.",
+              title: "Payment confirmation failed",
+            });
           }),
-          onError: () => window.alert("Payment could not be completed. Please try again, or pay at the event."),
+          onError: () => void memberAlert({
+            message: "Payment could not be completed. Please try again, or pay at the event.",
+            title: "Payment failed",
+          }),
         }).render(host);
       })
       .catch(() => setFallback("Online payment is temporarily unavailable - pay at the event."));

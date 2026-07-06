@@ -2,6 +2,7 @@ import React from "react";
 
 import { request } from "./api.js";
 import { dollars, formatEventDay } from "./format.js";
+import { memberAlert, memberConfirm } from "./member-dialogs.js";
 import { PayPalButtons } from "./registration-payments.js";
 import { clientOwed, eventFromRegistration, eventMeta, isDoublesRegistration, parseArray, parseObject, sortRegistrations } from "./registration-utils.js";
 
@@ -29,7 +30,10 @@ function RegisteredEventActions({ event, registration, token, onReload }) {
       onClick: async () => {
         const response = await request(`/events/${encodeURIComponent(event.id)}/checkin`, { method: "POST", token });
         if (response.ok) onReload();
-        else window.alert("Check-in failed. Please try again or see an admin.");
+        else await memberAlert({
+          message: "Check-in failed. Please try again or see an admin.",
+          title: "Check-in failed",
+        });
       },
     }, "Check in"));
   }
@@ -39,18 +43,28 @@ function RegisteredEventActions({ event, registration, token, onReload }) {
       className: "board-link danger",
       key: "withdraw",
       onClick: async () => {
-        if (!window.confirm(`Withdraw from ${event.name}?`)) return;
+        const confirmed = await memberConfirm({
+          cancelText: "Stay registered",
+          confirmText: "Withdraw",
+          message: `Withdraw from ${event.name}?`,
+          title: "Withdraw from event?",
+          tone: "danger",
+        });
+        if (!confirmed) return;
         const response = await request(`/events/${encodeURIComponent(event.id)}/register`, { method: "DELETE", token });
         if (response.ok) {
           onReload();
           return;
         }
         const data = await response.json().catch(() => ({}));
-        window.alert(data.error === "paid_contact_admin"
-          ? "You've already paid. Please contact an admin to withdraw and arrange a refund."
-          : data.error === "event_started"
-            ? "This event has already started. Please see an admin to withdraw."
-            : "Withdraw failed. Please try again.");
+        await memberAlert({
+          message: data.error === "paid_contact_admin"
+            ? "You've already paid. Please contact an admin to withdraw and arrange a refund."
+            : data.error === "event_started"
+              ? "This event has already started. Please see an admin to withdraw."
+              : "Withdraw failed. Please try again.",
+          title: "Withdraw failed",
+        });
       },
     }, "Withdraw"));
   }
@@ -72,7 +86,10 @@ function OpenEventForm({ event, token, onReload }) {
     if (isDoublesRegistration(event)) body.team = team.trim();
     const response = await request(`/events/${encodeURIComponent(event.id)}/register`, { method: "POST", token, body });
     if (response.ok) onReload();
-    else window.alert("Registration could not be completed.");
+    else await memberAlert({
+      message: "Registration could not be completed.",
+      title: "Registration failed",
+    });
   }
 
   return h("form", { className: "register-form", onSubmit: submit }, [

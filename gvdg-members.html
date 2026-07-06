@@ -584,6 +584,18 @@
                 .board-reply { padding: 0.5rem 0; }
                 .board-replybox { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
                 @media (max-width: 600px) { .board-compose, .board-replybox { flex-direction: column; } .board-compose textarea, .board-replybox textarea { width: 100%; } .board-compose .passkey-btn, .board-replybox .passkey-btn { width: 100%; } }
+                .member-dialog-overlay { display: none; position: fixed; inset: 0; z-index: 2200; align-items: center; justify-content: center; padding: calc(1rem + var(--safe-top)) 1rem calc(1rem + var(--safe-bottom)); background: color-mix(in srgb, var(--dark) 68%, transparent); }
+                .member-dialog-overlay.active { display: flex; }
+                .member-dialog { width: min(100%, 430px); max-height: min(82vh, 560px); overflow-y: auto; border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; background: var(--bg-secondary); box-shadow: 0 20px 60px var(--shadow); }
+                .member-dialog.danger { border-color: var(--primary); }
+                .member-dialog-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem; line-height: 1.1; color: var(--text-primary); letter-spacing: 0.03em; }
+                .member-dialog-message { margin: 0.45rem 0 0; color: var(--text-secondary); line-height: 1.5; }
+                .member-dialog-actions { display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 1.1rem; }
+                .member-dialog-btn { min-height: 44px; border-radius: 8px; padding: 0 1rem; border: 1px solid var(--border-color); font: inherit; font-weight: 700; cursor: pointer; }
+                .member-dialog-btn.secondary { background: var(--bg-secondary); color: var(--text-primary); }
+                .member-dialog-btn.primary { background: var(--secondary); border-color: var(--secondary); color: white; }
+                .member-dialog-btn.primary.danger { background: var(--primary-strong); border-color: var(--primary-strong); }
+                @media (max-width: 420px) { .member-dialog-actions { flex-direction: column; } .member-dialog-btn { width: 100%; } }
                 .passkey-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin: 0; }
                 .passkey-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; background: transparent; border: 1px solid var(--secondary-text); color: var(--secondary-text); padding: 0.55rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; text-decoration: none; transition: background 0.15s ease, color 0.15s ease; }
                 .passkey-btn:hover { background: var(--secondary); color: #fff; }

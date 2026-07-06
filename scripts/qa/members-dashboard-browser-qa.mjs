@@ -56,6 +56,10 @@ function collectPageErrors(page) {
     if (message.type() === "error") errors.push(message.text());
   });
   page.on("pageerror", (error) => errors.push(error.message));
+  page.on("dialog", (dialog) => {
+    errors.push(`Unexpected native dialog: ${dialog.type()} ${dialog.message()}`);
+    return dialog.dismiss();
+  });
   return errors;
 }
 
@@ -219,6 +223,18 @@ async function captureState(browser, origin, viewport, slug) {
   if (!apiState.casualPostBody || apiState.casualPostBody.course_id !== 1 || apiState.casualPostBody.layout_id !== 11) {
     throw new Error(`Casual round POST body was not captured correctly: ${JSON.stringify(apiState.casualPostBody)}`);
   }
+  const postedCasual = page.locator(".casual-register-card").filter({ hasText: `QA browser casual ${slug}` });
+  await postedCasual.getByRole("button", { name: "Close" }).click();
+  await page.getByRole("dialog", { name: "Close this casual round post?" }).waitFor({ state: "visible", timeout: 10_000 });
+  await page.getByRole("button", { name: "Keep open" }).click();
+  await postedCasual.waitFor({ state: "visible", timeout: 10_000 });
+  await postedCasual.getByRole("button", { name: "Close" }).click();
+  await page.getByRole("button", { name: "Close post" }).click();
+  await page.waitForFunction(
+    ({ expected }) => !document.querySelector("[data-react-registration-panel]")?.textContent?.includes(expected),
+    { expected: `QA browser casual ${slug}` },
+    { timeout: 10_000 },
+  );
   await page.waitForTimeout(250);
   await captureFullPage(page, path.join(evidenceDir, `${slug}-events.png`));
 
@@ -233,6 +249,18 @@ async function captureState(browser, origin, viewport, slug) {
   if (!apiState.boardPostBody || apiState.boardPostBody.body !== `QA board post ${slug}` || apiState.boardPostBody.parent_id !== null) {
     throw new Error(`Board POST body was not captured correctly: ${JSON.stringify(apiState.boardPostBody)}`);
   }
+  const postedBoard = page.locator(".board-post").filter({ hasText: `QA board post ${slug}` }).first();
+  await postedBoard.getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("dialog", { name: "Delete this post?" }).waitFor({ state: "visible", timeout: 10_000 });
+  await page.getByRole("button", { name: "Keep post" }).click();
+  await postedBoard.waitFor({ state: "visible", timeout: 10_000 });
+  await postedBoard.getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("button", { name: "Delete post" }).click();
+  await page.waitForFunction(
+    ({ expected }) => !document.querySelector("[data-react-board-panel]")?.textContent?.includes(expected),
+    { expected: `QA board post ${slug}` },
+    { timeout: 10_000 },
+  );
   await page.waitForTimeout(250);
   await captureFullPage(page, path.join(evidenceDir, `${slug}-board.png`));
 

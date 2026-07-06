@@ -120,6 +120,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: React tabs expose `role="tab"` and `aria-selected`; auth, profile, logout, and account actions are real buttons/forms with preserved labels.
 - Motion: tab changes are immediate and should not resize fixed controls or introduce horizontal overflow.
 
+### Member Dashboard Dialogs
+
+- Structure: React-owned document-level modal renderer for member dashboard alerts and confirmations; separate dashboard roots call a shared dialog service instead of native browser dialogs.
+- Variants: neutral alerts, destructive confirmations, cancel action, confirm action, Escape dismissal, and backdrop dismissal.
+- Spacing: centered modal uses `--bg-secondary`, `--border-color`, `--shadow`, compact actions, and full-width stacked actions on narrow phones.
+- States: one dialog is shown at a time; queued requests resolve in order; destructive confirmations use the primary-strong CTA treatment.
+- Accessibility: dialogs expose `role="dialog"`, `aria-modal`, labelled title/body, and real action buttons.
+- Motion: static modal; no layout animation.
+
 ### Dashboard Rating Panel
 
 - Structure: panel header with category label/count and a prominent live rating, followed by compact per-round rows.

@@ -214,6 +214,11 @@ export async function installMemberDashboardApiRoutes(page, apiBase) {
       state.casualRequests = [postedCasualRequest(state.casualPostBody), ...state.casualRequests];
       return route.fulfill(json({ id: 77 }, 201));
     }
+    if (/^\/casual-rounds\/\d+$/.test(pathName) && method === "DELETE") {
+      const id = Number(pathName.split("/").pop());
+      state.casualRequests = state.casualRequests.filter((row) => Number(row.id) !== id);
+      return route.fulfill(json({ ok: true }));
+    }
     if (pathName === "/courses") return route.fulfill(json({ courses: [{ id: 1, name: "ECU North Rec Complex" }] }));
     if (pathName === "/courses/1/layouts") return route.fulfill(json({ layouts: [{ id: 11, name: "Pee Dee's Treasure Map" }] }));
     if (pathName === "/meetings") return route.fulfill(json({ meetings: [] }));
@@ -243,6 +248,9 @@ export async function installMemberDashboardApiRoutes(page, apiBase) {
       return route.fulfill(json({ post }, 201));
     }
     if (pathName.startsWith("/board/") && method === "DELETE") {
+      const id = Number(pathName.split("/").pop());
+      state.boardPosts = state.boardPosts.filter((post) => Number(post.id) !== id)
+        .map((post) => ({ ...post, replies: (post.replies || []).filter((reply) => Number(reply.id) !== id) }));
       return route.fulfill(json({ ok: true }));
     }
     if (pathName === "/leagues/active") return route.fulfill(json({ leagues: [], events: [] }));
