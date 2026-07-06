@@ -2,6 +2,9 @@ import { chromium } from "playwright";
 
 const DEFAULT_SITE_URL = "https://gvdgclub.com";
 const DEFAULT_API_URL = "https://auth.gvdgclub.com";
+const DEFAULT_GET_TIMEOUT_MS = 45_000;
+const DEFAULT_MUTATION_TIMEOUT_MS = 15_000;
+const SAFE_GET_RETRIES = 2;
 const TOKEN_KEY = "gvdg_member_token";
 
 function env(name) {
@@ -19,34 +22,64 @@ function jsonHeaders(token) {
   return headers;
 }
 
-async function requestJson(apiBase, path, options = {}) {
-  const headers = jsonHeaders(options.token);
-  const init = {
-    method: options.method || "GET",
-    headers,
-    signal: AbortSignal.timeout(options.timeoutMs || 15_000),
-  };
-  if (options.body !== undefined) {
-    headers["Content-Type"] = "application/json";
-    init.body = JSON.stringify(options.body);
-  }
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-  const response = await fetch(apiBase + path, init);
-  const text = await response.text();
-  let data = null;
-  if (text) {
+function isSafeGet(options) {
+  return (options.method || "GET").toUpperCase() === "GET" && options.body === undefined;
+}
+
+function isTransientApiError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes("TimeoutError") ||
+    message.includes("server_error") ||
+    message.includes("Network connection lost") ||
+    message.includes("fetch failed")
+  );
+}
+
+async function requestJson(apiBase, path, options = {}) {
+  const attempts = options.retries ?? (isSafeGet(options) ? SAFE_GET_RETRIES + 1 : 1);
+  let lastError = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const headers = jsonHeaders(options.token);
+    const method = options.method || "GET";
+    const init = {
+      method,
+      headers,
+      signal: AbortSignal.timeout(options.timeoutMs || (method.toUpperCase() === "GET" ? DEFAULT_GET_TIMEOUT_MS : DEFAULT_MUTATION_TIMEOUT_MS)),
+    };
+    if (options.body !== undefined) {
+      headers["Content-Type"] = "application/json";
+      init.body = JSON.stringify(options.body);
+    }
+
     try {
-      data = JSON.parse(text);
+      const response = await fetch(apiBase + path, init);
+      const text = await response.text();
+      let data = null;
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch (error) {
+          if (error instanceof SyntaxError) data = { raw: text };
+          else throw error;
+        }
+      }
+      if (!response.ok) {
+        const message = data && typeof data.error === "string" ? data.error : text.slice(0, 200);
+        throw new Error(`API ${init.method} ${path} failed with ${response.status}: ${message}`);
+      }
+      return data;
     } catch (error) {
-      if (error instanceof SyntaxError) data = { raw: text };
-      else throw error;
+      lastError = error instanceof Error ? error : new Error(String(error));
+      if (attempt >= attempts || !isTransientApiError(lastError)) throw lastError;
+      await sleep(500 * attempt);
     }
   }
-  if (!response.ok) {
-    const message = data && typeof data.error === "string" ? data.error : text.slice(0, 200);
-    throw new Error(`API ${init.method} ${path} failed with ${response.status}: ${message}`);
-  }
-  return data;
+  throw lastError ?? new Error(`API GET ${path} failed`);
 }
 
 async function qaToken(apiBase) {

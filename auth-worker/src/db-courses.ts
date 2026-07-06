@@ -1,4 +1,5 @@
 import type { D1Like } from "./db-types.js";
+import { retryD1Read } from "./d1-retry.js";
 
 export interface CourseInput {
   name: string;
@@ -11,11 +12,11 @@ export interface CourseInput {
 }
 
 export async function listCourses(db: D1Like) {
-  return (await db.prepare("SELECT * FROM courses ORDER BY is_default DESC, name").all()).results;
+  return (await retryD1Read(() => db.prepare("SELECT * FROM courses ORDER BY is_default DESC, name").all())).results;
 }
 
 export async function getCourse(db: D1Like, id: number) {
-  return db.prepare("SELECT * FROM courses WHERE id = ?").bind(id).first();
+  return retryD1Read(() => db.prepare("SELECT * FROM courses WHERE id = ?").bind(id).first());
 }
 
 export async function createCourse(db: D1Like, c: CourseInput) {
@@ -43,7 +44,7 @@ export async function deleteCourse(db: D1Like, id: number) {
 }
 
 export async function listLayouts(db: D1Like, courseId: number) {
-  return (await db.prepare("SELECT * FROM course_layouts WHERE course_id = ? ORDER BY id").bind(courseId).all()).results;
+  return (await retryD1Read(() => db.prepare("SELECT * FROM course_layouts WHERE course_id = ? ORDER BY id").bind(courseId).all())).results;
 }
 
 export async function createLayout(
@@ -58,7 +59,7 @@ export async function createLayout(
 }
 
 export async function getLayout(db: D1Like, id: number) {
-  return db.prepare("SELECT * FROM course_layouts WHERE id = ?").bind(id).first();
+  return retryD1Read(() => db.prepare("SELECT * FROM course_layouts WHERE id = ?").bind(id).first());
 }
 
 export interface ScorableHole {
@@ -118,7 +119,7 @@ export async function listPositions(db: D1Like, courseId: number, kind?: Positio
   const binds: unknown[] = [courseId];
   if (kind) { sql += " AND kind = ?"; binds.push(kind); }
   sql += " ORDER BY kind, id";
-  return (await db.prepare(sql).bind(...binds).all()).results;
+  return (await retryD1Read(() => db.prepare(sql).bind(...binds).all())).results;
 }
 
 export async function createPosition(db: D1Like, p: PositionInput) {
@@ -156,7 +157,7 @@ export function defaultLayoutName(label: unknown): string {
 }
 
 export async function listLayoutNames(db: D1Like, courseId: number): Promise<{ id: number; name: string }[]> {
-  return (await db.prepare("SELECT id, name FROM course_layouts WHERE course_id = ?").bind(courseId).all()).results as { id: number; name: string }[];
+  return (await retryD1Read(() => db.prepare("SELECT id, name FROM course_layouts WHERE course_id = ?").bind(courseId).all<{ id: number; name: string }>())).results;
 }
 
 export function matchLayoutIn(rows: { id: number; name: string }[], label: unknown): { id: number; name: string } | null {
