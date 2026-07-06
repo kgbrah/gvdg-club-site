@@ -5,6 +5,7 @@ import { verifySession } from "./jwt.js";
 import { bearer, json } from "./http.js";
 import { RECORD_PAGE_DEFAULTS, asInt, parseWindow } from "./input.js";
 import { handleTeeSignImage } from "./tee-sign-routes.js";
+import { readD1OrFallback } from "./d1-retry.js";
 
 const COURSE_CATALOG_CACHE_TTL_SEC = 900;
 const COURSE_CATALOG_CACHE_VERSION = "course-catalog-v1";
@@ -68,7 +69,10 @@ export async function handleClubPublic(
     const f = fid == null ? null : await db.getFundraiser(env.DB, fid);
     return f ? json({ fundraiser: f }, 200, origin) : json({ error: "not_found" }, 404, origin);
   }
-  if (method === "GET" && pathname === "/registration/open") return json({ events: await db.listOpenRegistrationEvents(env.DB) }, 200, origin);
+  if (method === "GET" && pathname === "/registration/open") {
+    const events = await readD1OrFallback(() => db.listOpenRegistrationEvents(env.DB), () => []);
+    return json({ events }, 200, origin);
+  }
   if (method === "GET" && pathname === "/payments/config") {
     return json({ enabled: !!(env.PAYPAL_CLIENT_ID && env.PAYPAL_SECRET), clientId: env.PAYPAL_CLIENT_ID ?? null, env: env.PAYPAL_ENV ?? "sandbox" }, 200, origin);
   }

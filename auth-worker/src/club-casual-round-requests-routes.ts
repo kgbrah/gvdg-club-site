@@ -6,6 +6,7 @@ import { getMember } from "./roster.js";
 import { json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { asInt, asStr } from "./input.js";
+import { readD1OrFallback } from "./d1-retry.js";
 
 const CREATE_LIMIT = 8;
 const JOIN_LIMIT = 60;
@@ -37,7 +38,11 @@ export async function handleCasualRoundRequests(
 
   if (method === "GET" && seg.length === 1) {
     const claims = await requireAuth(request, env);
-    return json({ requests: await casual.listCasualRoundRequests(env.DB, claims?.sub ?? null) }, 200, origin);
+    const requests = await readD1OrFallback(
+      () => casual.listCasualRoundRequests(env.DB, claims?.sub ?? null),
+      () => [],
+    );
+    return json({ requests }, 200, origin);
   }
 
   const claims = await requireAuth(request, env);

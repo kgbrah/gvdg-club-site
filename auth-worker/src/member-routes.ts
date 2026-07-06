@@ -9,6 +9,7 @@ import { requireAuth, ttl } from "./authz.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { RECORD_PAGE_DEFAULTS, asInt, parseWindow } from "./input.js";
 import { getMemberRatings } from "./ratings.js";
+import { readD1OrFallback } from "./d1-retry.js";
 
 // Iteration count must stay <=100000 to match crypto.ts / the workerd PBKDF2 cap, so the
 // no-such-member path computes a real PBKDF2 (constant-time-ish) instead of throwing immediately.
@@ -139,7 +140,8 @@ export async function handleMyRatings(request: Request, env: Env, origin: string
 export async function handleMyRegistrations(request: Request, env: Env, origin: string | null): Promise<Response> {
   const claims = await requireAuth(request, env);
   if (!claims) return json({ error: "unauthorized" }, 401, origin);
-  return json({ registrations: await db.listMyRegistrations(env.DB, claims.sub) }, 200, origin);
+  const registrations = await readD1OrFallback(() => db.listMyRegistrations(env.DB, claims.sub), () => []);
+  return json({ registrations }, 200, origin);
 }
 
 export async function handleMyLiveRounds(request: Request, env: Env, origin: string | null): Promise<Response> {

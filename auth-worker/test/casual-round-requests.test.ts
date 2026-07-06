@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import worker from "../src/index.js";
 import type { D1Like, D1ResultLike, D1StatementLike } from "../src/db.js";
 import { signSession } from "../src/jwt.js";
+import { retryableD1LossDb } from "./d1-test-utils.js";
 
 const SECRET = "x".repeat(40);
 const PLAYER_SEP = "\u001f";
@@ -156,11 +157,11 @@ function mockDb(state: State): D1Like {
   return { prepare: (sql: string) => new Statement(state, sql) };
 }
 
-function makeEnv(state = seedState()) {
+function makeEnv(state = seedState(), db: D1Like = mockDb(state)) {
   return {
     ROSTER: kv(members),
     RATELIMIT: kv(),
-    DB: mockDb(state),
+    DB: db,
     JWT_SECRET: SECRET,
     ALLOWED_ORIGINS: "http://localhost:8080",
     LIVE: undefined,
@@ -183,6 +184,12 @@ describe("casual round requests", () => {
     const body = (await res.json()) as { requests: { course_name: string; player_count: number }[] };
     expect(body.requests).toHaveLength(1);
     expect(body.requests[0]).toMatchObject({ course_name: "West Meadowbrook", player_count: 1 });
+  });
+
+  it("returns an empty request list when the public D1 read is transiently unavailable", async () => {
+    const res = await worker.fetch(new Request("https://w/casual-rounds", { headers: { Origin: "http://localhost:8080" } }), makeEnv(seedState(), retryableD1LossDb()));
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ requests: [] });
   });
 
   it("requires a member to post a request", async () => {

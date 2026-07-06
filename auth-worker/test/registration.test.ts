@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import worker from "../src/index.js";
 import { signSession } from "../src/jwt.js";
+import { retryableD1LossDb } from "./d1-test-utils.js";
 
 const SECRET = "x".repeat(40);
 const members = {
@@ -43,13 +44,13 @@ function mockDb(cfg: Record<string, unknown> | null, status = "scheduled") {
     run: async () => ({ results: [], success: true }),
   }); } };
 }
-const env = (cfg: Record<string, unknown> | null, status = "scheduled") => ({ ROSTER: kv(members), RATELIMIT: kv(), DB: mockDb(cfg, status), JWT_SECRET: SECRET, ALLOWED_ORIGINS: "http://localhost:8080", LIVE: undefined } as unknown as Parameters<typeof worker.fetch>[1]);
+const env = (cfg: Record<string, unknown> | null, status = "scheduled", db: unknown = mockDb(cfg, status)) => ({ ROSTER: kv(members), RATELIMIT: kv(), DB: db, JWT_SECRET: SECRET, ALLOWED_ORIGINS: "http://localhost:8080", LIVE: undefined } as unknown as Parameters<typeof worker.fetch>[1]);
 const tok = (sub: string) => signSession({ sub, mustChangePin: false }, SECRET, 900);
-async function call(path: string, method: string, token: string | undefined, body: unknown, cfg: Record<string, unknown> | null, status = "scheduled") {
+async function call(path: string, method: string, token: string | undefined, body: unknown, cfg: Record<string, unknown> | null, status = "scheduled", db?: unknown) {
   const h: Record<string, string> = { Origin: "http://localhost:8080" };
   if (token) h.authorization = "Bearer " + token;
   if (body) h["content-type"] = "application/json";
-  return worker.fetch(new Request("https://w" + path, { method, headers: h, body: body ? JSON.stringify(body) : undefined }), env(cfg, status));
+  return worker.fetch(new Request("https://w" + path, { method, headers: h, body: body ? JSON.stringify(body) : undefined }), env(cfg, status, db));
 }
 const OPEN = { registration_open: 1, divisions: '["MA1","MA40"]' };
 const CLOSED = { registration_open: 0, divisions: null };
@@ -105,6 +106,16 @@ describe("Track G — event registration", () => {
     const res = await call("/my-registrations", "GET", await tok("m_jane"), undefined, OPEN);
     const body = (await res.json()) as { registrations: Array<Record<string, unknown>> };
     expect(body.registrations[0]).toMatchObject({ event_id: 5, event_name: "Saturday Doubles", event_status: "scheduled", course_name: "River Park North" });
+  });
+  it("GET /my-registrations returns an empty list when the dashboard D1 read is transiently unavailable", async () => {
+    const res = await call("/my-registrations", "GET", await tok("m_jane"), undefined, OPEN, "scheduled", retryableD1LossDb());
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ registrations: [] });
+  });
+  it("GET /registration/open returns an empty list when the public D1 read is transiently unavailable", async () => {
+    const res = await call("/registration/open", "GET", undefined, undefined, OPEN, "scheduled", retryableD1LossDb());
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ events: [] });
   });
   it("admin can set event config + read the roster; non-admin cannot", async () => {
     expect((await call("/admin/events/5/config", "PUT", await tok("m_jane"), { registration_open: true }, OPEN)).status).toBe(403);
