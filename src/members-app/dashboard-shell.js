@@ -1,5 +1,7 @@
 import React from "react";
 
+import { readMemberContext } from "./member-context.js";
+
 const h = React.createElement;
 
 export const TABS = [
@@ -23,12 +25,27 @@ function tabTitle(key) {
 
 function initialState() {
   const tab = DEFAULT_TAB.key;
+  const context = readMemberContext();
   const title = document.getElementById("memberSectionTitle")?.textContent?.trim() || tabTitle(tab);
-  return { tab, title };
+  return { ...context, tab, title };
+}
+
+function nextState(previous, detail = null) {
+  const nextTab = safeTab(detail?.tab || previous.tab || DEFAULT_TAB.key);
+  const context = readMemberContext(detail);
+  return {
+    ...context,
+    tab: nextTab,
+    title: detail?.title || tabTitle(nextTab),
+  };
 }
 
 export function selectDashboardTab(tab) {
   window.dispatchEvent(new CustomEvent("gvdg:select-dashboard-tab", { detail: { tab } }));
+}
+
+export function requestLogout() {
+  window.dispatchEvent(new CustomEvent("gvdg:member-logout-requested"));
 }
 
 export function MemberDashboardShell() {
@@ -36,20 +53,33 @@ export function MemberDashboardShell() {
 
   React.useEffect(() => {
     function update(event) {
-      const nextTab = safeTab(event.detail?.tab || DEFAULT_TAB.key);
-      setState({
-        tab: nextTab,
-        title: event.detail?.title || tabTitle(nextTab),
-      });
+      setState((previous) => nextState(previous, event.detail || null));
     }
 
     window.addEventListener("gvdg:dashboard-tab-selected", update);
     window.addEventListener("gvdg:member-dashboard-ready", update);
+    window.addEventListener("gvdg:member-profile-updated", update);
     return () => {
       window.removeEventListener("gvdg:dashboard-tab-selected", update);
       window.removeEventListener("gvdg:member-dashboard-ready", update);
+      window.removeEventListener("gvdg:member-profile-updated", update);
     };
   }, []);
+
+  const welcome = state.name ? `Welcome back, ${state.name}!` : "Welcome back!";
+  const adminPortal = state.tab === "overview" && state.isAdmin
+    ? h(
+      "a",
+      {
+        className: "admin-portal-link react-admin-portal-link",
+        "data-react-admin-portal": "ready",
+        href: "admin.html",
+        id: "adminPortalLink",
+        key: "adminPortal",
+      },
+      "Admin Portal - manage events & courses",
+    )
+    : null;
 
   return h(React.Fragment, null, [
     h("h2", { className: "section-title", id: "membersReactDashboardTitle", key: "title" }, state.title),
@@ -78,5 +108,27 @@ export function MemberDashboardShell() {
         );
       }),
     ),
+    h(
+      "div",
+      { className: "welcome-banner react-member-banner", "data-react-member-banner": "ready", key: "welcome" },
+      [
+        h("div", { className: "welcome-text", key: "text" }, [
+          h("strong", { key: "name" }, welcome),
+          h("span", { className: "welcome-subtext", key: "subtext" }, "You're viewing the exclusive GVDG member directory."),
+        ]),
+        h(
+          "button",
+          {
+            className: "logout-btn",
+            id: "logoutBtn",
+            key: "logout",
+            onClick: requestLogout,
+            type: "button",
+          },
+          "Log Out",
+        ),
+      ],
+    ),
+    adminPortal,
   ]);
 }

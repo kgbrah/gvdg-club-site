@@ -172,6 +172,7 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   const html = readFileSync('gvdg-members.html', 'utf8');
   const app = readFileSync('src/members-app/main.js', 'utf8');
   const authGate = readFileSync('src/members-app/auth-gate.js', 'utf8');
+  const shell = readFileSync('src/members-app/dashboard-shell.js', 'utf8');
   const overview = readFileSync('src/members-app/overview-dashboard.js', 'utf8');
   const pdga = readFileSync('src/members-app/pdga-dashboard.js', 'utf8');
   const ratings = readFileSync('src/members-app/club-ratings.js', 'utf8');
@@ -196,6 +197,10 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   assert.doesNotMatch(html, /id="passkeyRow"/);
   assert.doesNotMatch(html, /id="enablePasskeyBtn"/);
   assert.doesNotMatch(html, /id="editProfileBtn"/);
+  assert.doesNotMatch(html, /<div class="welcome-banner"/);
+  assert.doesNotMatch(html, /id="logoutBtn"/);
+  assert.doesNotMatch(html, /id="adminPortalLink"/);
+  assert.doesNotMatch(html, /overview: \['#adminPortalLink'/);
   assert.match(html, /gvdg:member-login-requested/);
   assert.match(html, /gvdg:member-pin-change-requested/);
   assert.match(html, /gvdg:member-profile-save-requested/);
@@ -204,6 +209,7 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   assert.match(html, /gvdg:member-auth-ready/);
   assert.match(html, /gvdg:member-add-passkey-requested/);
   assert.match(html, /gvdg:member-edit-profile-requested/);
+  assert.match(html, /gvdg:member-logout-requested/);
   assertNoLegacyMemberFallbacks(html);
   assert.match(html, /<script type="module" src="members-app\/members-app\.js"><\/script>/);
   assert.match(html, /window\.addEventListener\('gvdg:select-dashboard-tab'/);
@@ -235,6 +241,13 @@ test('member dashboard mounts React-owned dashboard islands without legacy fallb
   assert.match(authGate, /gvdg:member-profile-save-requested/);
   assert.match(authGate, /gvdg:member-profile-photo-chosen/);
   assert.match(authGate, /gvdg:member-passkey-login-requested/);
+  assert.match(shell, /data-react-member-banner/);
+  assert.match(shell, /data-react-admin-portal/);
+  assert.match(shell, /id: "logoutBtn"/);
+  assert.match(shell, /id: "adminPortalLink"/);
+  assert.match(shell, /readMemberContext/);
+  assert.match(shell, /gvdg:member-profile-updated/);
+  assert.match(shell, /gvdg:member-logout-requested/);
   assert.match(overview, /data-react-overview-dashboard/);
   assert.match(overview, /data-react-dashboard-actions/);
   assert.match(overview, /data-react-account-tools/);

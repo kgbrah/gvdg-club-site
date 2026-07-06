@@ -172,6 +172,9 @@ async function captureState(browser, origin, viewport, slug) {
   await waitForText(page, "[data-react-club-ratings]", "906", "React club ratings");
   await waitForText(page, "[data-react-wallet]", "$12.50", "React wallet balance");
   await waitForText(page, "[data-react-account-tools]", "Edit profile", "React account tools");
+  await page.waitForSelector('[data-react-member-banner="ready"]', { timeout: 10_000 });
+  await waitForText(page, "[data-react-member-banner]", "Welcome back, QA Admin!", "React member banner");
+  await waitForText(page, "[data-react-admin-portal]", "Admin Portal", "React admin portal");
   await waitForText(page, "[data-react-registration-panel]", "GVDG QA Doubles", "React registration event");
   await waitForText(page, "[data-react-registration-panel]", "Warm-up round before league", "React casual round");
   const migratedLegacyNodes = await page.locator([
@@ -201,6 +204,9 @@ async function captureState(browser, origin, viewport, slug) {
   await page.getByRole("tab", { name: "Events" }).click();
   await waitForText(page, "#membersReactDashboardShell", "Event Registration", "events title");
   await expectReactTab(page, "Events");
+  if (await page.locator("[data-react-admin-portal]").count()) {
+    throw new Error("React admin portal link should only render on the overview tab.");
+  }
   await page.waitForSelector('[data-react-casual-form="ready"]', { timeout: 10_000 });
   await page.locator('[data-react-registration-panel] input[data-register-pair="team"]').waitFor({ state: "visible", timeout: 10_000 });
   await page.locator('[data-react-casual-form] textarea').fill(`QA browser casual ${slug}`);
@@ -289,6 +295,8 @@ async function captureState(browser, origin, viewport, slug) {
   await captureFullPage(page, path.join(evidenceDir, `${slug}-club.png`));
 
   await assertNoHorizontalOverflow(page, slug);
+  await page.getByRole("button", { name: "Log Out" }).click();
+  await page.locator('[data-react-auth-gate="login"]').waitFor({ state: "visible", timeout: 10_000 });
   if (errors.length) throw new Error(errors.join("\n"));
   await context.close();
 }

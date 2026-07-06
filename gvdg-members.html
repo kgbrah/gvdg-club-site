@@ -385,14 +385,6 @@
             <div id="membersReactDashboardShell"></div>
             <h2 class="section-title" id="memberSectionTitle">Player Dashboard</h2>
 
-            <div class="welcome-banner">
-                <div class="welcome-text">
-                    <strong>Welcome back!</strong>
-                    <span class="welcome-subtext">You're viewing the exclusive GVDG member directory.</span>
-                </div>
-                <button class="logout-btn" id="logoutBtn">Log Out</button>
-            </div>
-
             <style>
                 #membersReactDashboardShell { display: none; scroll-margin-top: 96px; }
                 #members.members-react-shell-ready #membersReactDashboardShell { display: block; }
@@ -647,8 +639,7 @@
                 .ts-chip { font-size: 0.78rem; color: var(--text-secondary); background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.2rem 0.5rem; }
                 .ts-guess-pending { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.4rem; }
             </style>
-            <style>.admin-portal-link{display:inline-block;margin-bottom:1.5rem;background: var(--primary-strong);color: #fff;padding:0.6rem 1.25rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.9rem;}.admin-portal-link:hover{background:#e55a2b;}</style>
-            <a id="adminPortalLink" href="admin.html" class="admin-portal-link" style="display:none;">🛠 Admin Portal — manage events &amp; courses →</a>
+            <style>.admin-portal-link{display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin-bottom:1.5rem;background:var(--primary-strong);color:white;padding:0.6rem 1.25rem;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.9rem;}.admin-portal-link:hover{background:var(--primary);}</style>
 
             <div id="myDashboard" class="my-dashboard" style="display:none;">
                 <div id="membersReactOverviewPanel"></div>
@@ -772,7 +763,7 @@
         // ---- Player dashboard tabs: one section group visible at a time; each section's own load-state
         // (shown only when it has content) still governs WITHIN the active tab via the dtab-off override. ----
         const DASH_TABS = {
-            overview: ['#adminPortalLink', '#myDashboard', '#clubRegister'],
+            overview: ['#myDashboard', '#clubRegister'],
             events: ['#clubRegister'],
             board: ['#clubBoard'],
             tee: ['#teeCapture'],
@@ -822,13 +813,9 @@
             stopPasskeyPriming(); // logged in — no need to keep priming a login challenge
             $('loginGate').style.display = 'none';
             $('membersContent').classList.add('active');
-            const banner = document.querySelector('.welcome-text strong');
-            if (banner && name) banner.textContent = 'Welcome back, ' + name + '!';
             revealDashboardSections();
             const passkeyStatus = $('passkeyStatus');
             if (passkeyStatus) passkeyStatus.textContent = '';
-            const adminLink = $('adminPortalLink');
-            if (adminLink) adminLink.style.display = memberProfile.isAdmin ? '' : 'none';
             selectDashTab('overview'); // land on Overview; tabs jump to each feature with no scrolling
             emitDashboardState('gvdg:member-dashboard-ready', { name: name || memberProfile.name || sessionStorage.getItem(NAME_KEY) || null });
         }
@@ -1142,7 +1129,7 @@
         window.addEventListener('gvdg:member-passkey-login-requested', loginWithPasskey);
         window.addEventListener('gvdg:member-add-passkey-requested', enablePasskey);
         window.addEventListener('gvdg:member-edit-profile-requested', showProfileSetup);
-        $('logoutBtn').addEventListener('click', logout);
+        window.addEventListener('gvdg:member-logout-requested', logout);
 
         document.querySelector('.menu-toggle').addEventListener('click', function() {
             document.querySelector('.nav-links').classList.toggle('active');

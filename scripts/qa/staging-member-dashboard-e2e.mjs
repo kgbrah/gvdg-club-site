@@ -160,7 +160,7 @@ async function runAuthGateQa(browser, siteUrl) {
   await context.close();
 }
 
-async function runBrowserQa({ siteUrl, token }) {
+async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
   const browser = await chromium.launch({ headless: true });
   try {
     await runAuthGateQa(browser, siteUrl);
@@ -190,6 +190,13 @@ async function runBrowserQa({ siteUrl, token }) {
     await page.locator('[data-react-pdga-dashboard="ready"]').waitFor({ state: "visible", timeout: 15_000 });
     await page.locator('[data-react-account-tools="ready"]').waitFor({ state: "visible", timeout: 15_000 });
     await waitForText(page, "[data-react-account-tools]", "Edit profile", "React account tools");
+    await page.locator('[data-react-member-banner="ready"]').waitFor({ state: "visible", timeout: 15_000 });
+    await waitForText(page, "[data-react-member-banner]", `Welcome back, ${memberName}!`, "React member banner");
+    if (memberIsAdmin) {
+      await waitForText(page, "[data-react-admin-portal]", "Admin Portal", "React admin portal");
+    } else if (await page.locator("[data-react-admin-portal]").count()) {
+      throw new Error("React admin portal link rendered for a non-admin member.");
+    }
 
     const migratedLegacyNodes = await page.locator([
       "#dashTabs",
@@ -223,6 +230,9 @@ async function runBrowserQa({ siteUrl, token }) {
     await page.getByRole("tab", { name: "Events" }).click();
     await waitForText(page, "#membersReactDashboardShell", "Event Registration", "events tab title");
     await expectReactTab(page, "Events");
+    if (await page.locator("[data-react-admin-portal]").count()) {
+      throw new Error("React admin portal link should only render on the overview tab.");
+    }
     const registerVisible = await page.locator("#clubRegister").evaluate((node) => !node.classList.contains("dtab-off"));
     if (!registerVisible) throw new Error("Events tab did not reveal the registration panel.");
     await page.locator('[data-react-casual-form="ready"]').waitFor({ state: "visible", timeout: 15_000 });
@@ -274,6 +284,8 @@ async function runBrowserQa({ siteUrl, token }) {
     const width = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth));
     const viewport = page.viewportSize()?.width || 390;
     if (width > viewport + 1) throw new Error(`Members dashboard has horizontal overflow: ${width}px > ${viewport}px.`);
+    await page.getByRole("button", { name: "Log Out" }).click();
+    await page.locator('[data-react-auth-gate="login"]').waitFor({ state: "visible", timeout: 15_000 });
     if (errors.length) throw new Error(errors.join("\n"));
     await context.close();
   } finally {
@@ -291,7 +303,7 @@ async function main() {
   if (!member.pdgaNo) throw new Error("QA member has no linked PDGA number. Run npm run qa:ensure-staging-dashboard-data.");
 
   await usefulStats(apiBase, member.pdgaNo);
-  await runBrowserQa({ siteUrl, token });
+  await runBrowserQa({ siteUrl, token, memberName: member.name, memberIsAdmin: member.isAdmin === true });
   console.log("staging member dashboard E2E passed");
 }
 
