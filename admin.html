@@ -274,6 +274,9 @@
         .admin-product-image-preview-note { max-width: 22rem; font-size: 0.78rem; line-height: 1.4; color: var(--text-muted); }
         .admin-member-form-admin-toggle { display: flex; align-items: flex-end; }
         .admin-member-form-admin-toggle label { display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; }
+        .admin-data-archive-destination-form { scroll-margin-top: 5.5rem; }
+        .admin-form .admin-data-archive-destination-toggle { display: flex; align-items: center; gap: 0.5rem; margin: 0; }
+        .admin-form .admin-data-archive-destination-toggle input[type="checkbox"] { width: auto; margin: 0; }
         .admin-wallet-form-wide { grid-column: 1 / -1; }
         .wallet-row { display: flex; justify-content: space-between; gap: 0.75rem; align-items: baseline; flex-wrap: wrap; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); padding: 0.65rem 0.75rem; }
         .wallet-row strong { color: var(--text-primary); }
@@ -638,20 +641,7 @@
                 <div class="al-section">
                     <h4 class="al-h">Archive destinations</h4>
                     <p class="al-note">Set one or more archive endpoints. The active destination is used by default.</p>
-                    <form class="admin-form" id="dxEndpointForm">
-                        <input id="dxEndpointId" type="hidden">
-                        <div><label for="dxEndpointLabel">Label</label><input id="dxEndpointLabel" maxlength="120" required></div>
-                        <div><label for="dxEndpointUrl">Endpoint URL (https)</label><input id="dxEndpointUrl" type="url" maxlength="1000" required></div>
-                        <div><label for="dxAuthHeader">Auth header (optional)</label><input id="dxAuthHeader" maxlength="80" placeholder="Authorization or X-Api-Key"></div>
-                        <div><label for="dxAuthPrefix">Auth prefix (optional)</label><input id="dxAuthPrefix" maxlength="40" placeholder="Bearer"></div>
-                        <div><label for="dxAuthToken">Auth token (optional)</label><input id="dxAuthToken" type="text" maxlength="4096" autocomplete="off" placeholder="Leave blank to keep existing"></div>
-                        <label class="register-addon"><input id="dxAuthTokenClear" type="checkbox"> Clear auth token</label>
-                        <label class="register-addon"><input id="dxEndpointActive" type="checkbox"> Use as active destination</label>
-                        <div class="admin-form-actions">
-                            <button type="submit" class="admin-btn" id="dxEndpointSave">Add destination</button>
-                            <button type="button" class="admin-btn secondary" id="dxEndpointCancel" style="display:none;">Cancel edit</button>
-                        </div>
-                    </form>
+                    <div id="adminDataArchiveDestinationFormReactApp"></div>
                     <div id="adminDataArchiveDestinationsReactApp" style="margin-top:1rem;"></div>
                 </div>
                 <div class="al-section">
@@ -797,19 +787,6 @@
             window.__gvdgAdminDataArchiveExportResultState = state;
             window.dispatchEvent(new CustomEvent('gvdg:admin-data-archive-export-result', { detail: state }));
         }
-        function resetDataArchiveEndpointForm() {
-            $('dxEndpointId').value = '';
-            $('dxEndpointLabel').value = '';
-            $('dxEndpointUrl').value = '';
-            $('dxAuthHeader').value = '';
-            $('dxAuthPrefix').value = '';
-            $('dxAuthToken').value = '';
-            $('dxAuthToken').placeholder = 'Leave blank to keep existing';
-            $('dxAuthTokenClear').checked = false;
-            $('dxEndpointActive').checked = false;
-            $('dxEndpointSave').textContent = 'Add destination';
-            $('dxEndpointCancel').style.display = 'none';
-        }
         async function adminLoadDataArchiveDestinations() {
             setAdminDataArchiveDestinationsState({ status: 'loading', destinations: [] });
             let destinations = [];
@@ -842,54 +819,49 @@
         function dataArchiveDestinationLabel(destination) {
             return destination && (destination.label || ('Endpoint ' + destination.id));
         }
+        function setDataArchiveEndpointForm(destination) {
+            window.dispatchEvent(new CustomEvent('gvdg:admin-data-archive-destination-form-edit', { detail: { destination } }));
+        }
         function editDataArchiveDestination(destination) {
-            const hasAuthToken = destination.hasAuthToken === true || destination.has_auth_token === true;
-            $('dxEndpointId').value = String(destination.id);
-            $('dxEndpointLabel').value = destination.label || '';
-            $('dxEndpointUrl').value = destination.endpoint_url || '';
-            $('dxAuthHeader').value = destination.auth_header || '';
-            $('dxAuthPrefix').value = destination.auth_prefix || '';
-            $('dxAuthToken').value = '';
-            $('dxAuthToken').placeholder = hasAuthToken ? 'Leave blank to keep existing token' : 'Add a token (optional)';
-            $('dxAuthTokenClear').checked = false;
-            $('dxEndpointActive').checked = Number(destination.is_active) === 1;
-            $('dxEndpointSave').textContent = 'Save destination';
-            $('dxEndpointCancel').style.display = '';
+            setDataArchiveEndpointForm(destination);
             adminMsg('Editing destination "' + dataArchiveDestinationLabel(destination) + '".');
         }
-        async function adminSaveDataArchiveEndpoint(e) {
-            e.preventDefault();
-            const label = $('dxEndpointLabel').value.trim();
-            const endpointUrl = $('dxEndpointUrl').value.trim();
-            if (!label || !/^https?:\/\//.test(endpointUrl)) {
-                adminMsg('Label and https endpoint URL are required.', false);
+        async function adminSaveDataArchiveEndpointFromReact(detail) {
+            const requestId = detail.requestId;
+            if (!requestId) return;
+            const body = detail.body || {};
+            const label = String(body.label || '').trim();
+            const endpointUrl = String(body.endpoint_url || '').trim();
+            if (detail.valid !== true || !label || !/^https?:\/\//.test(endpointUrl)) {
+                const message = 'Label and https endpoint URL are required.';
+                adminMsg(message, false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-data-archive-destination-save-result', { detail: { ok: false, requestId, message } }));
                 return;
             }
-            const editing = Boolean($('dxEndpointId').value);
-            const body = {
-                label,
-                endpoint_url: endpointUrl,
-                auth_header: $('dxAuthHeader').value.trim() || null,
-                auth_prefix: $('dxAuthPrefix').value.trim() || null,
-                is_active: $('dxEndpointActive').checked,
-            };
-            const token = $('dxAuthToken').value.trim();
-            if (token) body.auth_token = token;
-            else if (editing && $('dxAuthTokenClear').checked) body.auth_token = null;
-            if (!editing && body.auth_token == null && $('dxAuthTokenClear').checked) body.auth_token = null;
-            const id = editing ? Number($('dxEndpointId').value) : null;
+            const id = Number(detail.endpointId);
+            const editing = detail.editing === true && Number.isFinite(id);
             const path = editing ? '/admin/export/endpoints/' + id : '/admin/export/endpoints';
             const method = editing ? 'PATCH' : 'POST';
-            const r = await adminApi(path, { method, body });
+            let r;
+            try {
+                r = await adminApi(path, { method, body });
+            } catch (err) {
+                const message = 'Save failed';
+                adminMsg(message, false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-data-archive-destination-save-result', { detail: { ok: false, requestId, message } }));
+                return;
+            }
             if (r.ok) {
-                const labelText = $('dxEndpointLabel').value.trim() || ('Endpoint ' + (id || ''));
+                const labelText = detail.labelText || label || ('Endpoint ' + (id || ''));
                 adminMsg(editing ? 'Saved destination "' + labelText + '"' : 'Added destination "' + labelText + '"', true);
-                resetDataArchiveEndpointForm();
+                window.dispatchEvent(new CustomEvent('gvdg:admin-data-archive-destination-save-result', { detail: { ok: true, requestId } }));
                 await adminLoadDataArchiveDestinations();
             } else {
                 let payload = {};
                 try { payload = await r.json(); } catch (err) {}
-                adminMsg((payload.error || 'Save failed') + ' (' + r.status + ')', false);
+                const message = (payload.error || 'Save failed') + ' (' + r.status + ')';
+                adminMsg(message, false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-data-archive-destination-save-result', { detail: { ok: false, requestId, message } }));
             }
         }
         async function adminRunArchiveExport() {
@@ -2603,6 +2575,9 @@
                 if (!destination || destination.id == null) return;
                 editDataArchiveDestination(destination);
             });
+            window.addEventListener('gvdg:admin-data-archive-destination-save-request', async (event) => {
+                await adminSaveDataArchiveEndpointFromReact(event.detail || {});
+            });
             window.addEventListener('gvdg:admin-data-archive-destination-activate-request', async (event) => {
                 const destination = event.detail && event.detail.destination;
                 if (!destination || destination.id == null) return;
@@ -2695,8 +2670,6 @@
             $('rgAceSave').addEventListener('click', () => rgAcePut({ carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100), status: 'active' }));
             $('rgAcePayout').addEventListener('click', () => { if (!confirm('Mark ace pot paid out' + ($('rgAceWinner').value.trim() ? ' to ' + $('rgAceWinner').value.trim() : '') + '? This resolves the ace pot for this event.')) return; rgAcePut({ status: 'paid_out', winner_name: $('rgAceWinner').value.trim() || null, carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100) }); });
             $('rgAceCarryNext').addEventListener('click', () => { if (!confirm('Carry this ace pot to the next event? This resolves the ace pot for this event.')) return; rgAcePut({ status: 'carried', carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100) }); });
-            $('dxEndpointForm').addEventListener('submit', adminSaveDataArchiveEndpoint);
-            $('dxEndpointCancel').addEventListener('click', resetDataArchiveEndpointForm);
             $('dxRunExport').addEventListener('click', adminRunArchiveExport);
             adminLoadEvents();
             adminLoadCourses();

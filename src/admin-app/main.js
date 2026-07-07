@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { AdminAuthGate } from "./auth-gate.js";
 import { AdminFundraisersList, AdminLeaguesList, AdminMeetingsList } from "./club-content-lists.js";
 import { AdminCoursesList } from "./courses-list.js";
+import { AdminDataArchiveDestinationForm } from "./data-archive-destination-form.js";
 import { AdminDataArchiveDestinationsList, AdminDataArchiveExportResult } from "./data-archive-destinations-list.js";
 import { AdminEventsList } from "./events-list.js";
 import { AdminImportCandidatesList } from "./import-candidates-list.js";
@@ -116,6 +117,11 @@ if (walletRecentMount) {
 const walletFormMount = document.getElementById("adminWalletFormReactApp");
 if (walletFormMount) {
   createRoot(walletFormMount).render(h(AdminWalletAdjustmentForm));
+}
+
+const dataArchiveDestinationFormMount = document.getElementById("adminDataArchiveDestinationFormReactApp");
+if (dataArchiveDestinationFormMount) {
+  createRoot(dataArchiveDestinationFormMount).render(h(AdminDataArchiveDestinationForm));
 }
 
 const dataArchiveDestinationsMount = document.getElementById("adminDataArchiveDestinationsReactApp");

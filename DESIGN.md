@@ -320,9 +320,18 @@ Spacing follows a 4px base through rem values.
 - Accessibility: loading and empty states use status semantics, load failures use alert semantics, fulfillment fields have order-specific labels, and row actions are real buttons.
 - Motion: static order cards; only inherited control hover/focus states apply.
 
+### Admin Data Archive Destination Form
+
+- Structure: the Admin Data Archive destination add/edit form renders from `admin-app` into `adminDataArchiveDestinationFormReactApp`; legacy admin code only handles save-request events, the API POST/PATCH, destination reload, and global messages.
+- Variants: blank add form, edit form, required label/url validation, optional auth header/prefix/token fields, clear-token checkbox, active-destination checkbox, inline save error, busy submit, cancel edit, successful reset, and failed-save recovery.
+- Spacing: reuses `.admin-form`, `.admin-data-archive-destination-form`, `.register-addon`, `.admin-data-archive-destination-toggle`, `.admin-form-actions`, `.admin-btn`, and existing input/label primitives so archive endpoint setup keeps the same compact admin rhythm as the adjacent destination list.
+- States: React owns all field values, token placeholder, edit/cancel mode, edit scroll-into-view, checkbox state, busy button text, and reset after success; `admin.html` must not keep a static `dxEndpointForm`, read `dxEndpoint*` or `dxAuth*` fields, listen to the endpoint form submit/cancel events, or directly mutate destination form controls.
+- Accessibility: labels target stable form control ids, checkboxes are labelled, native URL validation remains available, and save/cancel actions are real buttons.
+- Motion: static form; inherited controls only.
+
 ### Admin Data Archive Destinations List
 
-- Structure: the Admin Data archive destination list renders from `admin-app` into `adminDataArchiveDestinationsReactApp`; legacy admin code fetches `/admin/export/endpoints`, keeps destination form save/reset, export destination select population, and publishes list state events only.
+- Structure: the Admin Data archive destination list renders from `admin-app` into `adminDataArchiveDestinationsReactApp`; legacy admin code fetches `/admin/export/endpoints`, keeps export destination select population, and publishes list state events only.
 - Variants: loading, error, empty destination list, active destination row, inactive destination row, token-set metadata, token-missing metadata, edit action, make-active action, and delete action.
 - Spacing: reuses `.admin-evrow`, `.ev-name`, `.al-note`, `.admin-msg.ok`, `.shop-admin-controls`, and `.admin-btn` so archive destinations match the compact admin list rhythm.
 - States: React owns destination row markup, loading/error/empty copy, active-default badge, delete confirm prompt, and edit/activate/delete request dispatch; `admin.html` must not mutate `dxDestinationsList`, construct destination `.admin-evrow` rows, or attach destination row listeners directly.
