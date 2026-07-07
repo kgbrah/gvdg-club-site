@@ -76,6 +76,7 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(html, /id="membersReactPageChrome"/);
   assert.match(html, /id="membersReactAuthGate"/);
   assert.match(html, /id="membersReactDashboardApp"/);
+  assert.match(html, /id="membersReactDialogsApp"/);
   assert.doesNotMatch(html, /<div id="membersReactDashboardShell"/);
   assert.doesNotMatch(html, /<div id="membersReactOverviewPanel"/);
   assert.doesNotMatch(html, /<div id="membersReactRegistrationPanel"/);
@@ -133,7 +134,10 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(app, /createRoot\(pageChromeMount\)\.render\(h\(MemberPageChrome\)\)/);
   assert.match(app, /createRoot\(authMount\)\.render/);
   assert.match(app, /MemberDialogs/);
+  assert.match(app, /const dialogMount = document\.getElementById\("membersReactDialogsApp"\)/);
+  assert.match(app, /createRoot\(dialogMount\)\.render\(h\(MemberDialogs\)\)/);
   assert.doesNotMatch(app, /installMemberPageChrome/);
+  assert.doesNotMatch(app, /document\.createElement|document\.body\.appendChild/);
   assert.doesNotMatch(app, /members-react-auth-ready/);
   assert.match(app, /installMemberAuthController\(\)/);
   assert.match(app, /installDashboardRouter\(\)/);

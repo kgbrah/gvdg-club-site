@@ -189,17 +189,21 @@ test('score status screens are React-owned without legacy message DOM fallbacks'
 });
 
 test('score notifications are React-owned without legacy body DOM fallbacks', () => {
+  const html = readFileSync('score.html', 'utf8');
   const notifications = scoreNotificationsSource();
   const legacy = scoreLegacyNotificationSource();
   const fullLegacy = readFileSync('src/score-app/score-legacy.js', 'utf8');
+  assert.match(html, /id="scoreReactNotificationsApp"/);
   assert.match(fullLegacy, /createScoreNotificationsRenderer\(\)/);
   assert.match(legacy, /notifications\.showToast\(msg\)/);
   assert.match(legacy, /notifications\.showConflict\(text\)/);
   assert.match(fullLegacy, /notifications\.setOnline\(on\)/);
   assert.match(notifications, /function ScoreNotifications\(props\)/);
   assert.match(notifications, /function ToastItem\(props\)/);
+  assert.match(notifications, /document\.getElementById\("scoreReactNotificationsApp"\)/);
   assert.match(notifications, /createRoot\(host\)/);
   assert.match(notifications, /Offline - scores sync when reconnected/);
+  assert.doesNotMatch(notifications, /document\.createElement|document\.body\.appendChild|host\.remove\(\)/);
   assert.doesNotMatch(fullLegacy, /function el\(/);
   assert.doesNotMatch(fullLegacy, /document\.body\.appendChild/);
   assert.doesNotMatch(fullLegacy, /offlineBar/);
@@ -207,14 +211,18 @@ test('score notifications are React-owned without legacy body DOM fallbacks', ()
 });
 
 test('score dialogs replace native score prompts and confirms', () => {
+  const html = readFileSync('score.html', 'utf8');
   const dialogs = scoreDialogsSource();
   const fullLegacy = readFileSync('src/score-app/score-legacy.js', 'utf8');
+  assert.match(html, /id="scoreReactDialogsApp"/);
   assert.match(fullLegacy, /createScoreDialogRenderer\(\)/);
   assert.match(fullLegacy, /dialogs\.prompt\(\{/);
   assert.match(fullLegacy, /dialogs\.confirm\(\{/);
   assert.match(dialogs, /function ScoreDialog\(props\)/);
   assert.match(dialogs, /role: "dialog"/);
+  assert.match(dialogs, /document\.getElementById\("scoreReactDialogsApp"\)/);
   assert.match(dialogs, /createRoot\(host\)/);
+  assert.doesNotMatch(dialogs, /document\.createElement|document\.body\.appendChild|host\.remove\(\)/);
   assert.doesNotMatch(fullLegacy, /window\.prompt/);
   assert.doesNotMatch(fullLegacy, /window\.confirm/);
   assert.doesNotMatch(fullLegacy, /if \(!confirm\(/);
@@ -266,10 +274,13 @@ test('player leaderboard sheet is React-owned without legacy overlay DOM constru
   const sharedUdisc = scoreUdiscExportSource();
   const fullLegacy = readFileSync('src/score-app/score-legacy.js', 'utf8');
   const html = readFileSync('score.html', 'utf8');
+  assert.match(html, /id="scoreReactLeaderboardSheetApp"/);
   assert.match(legacy, /createLeaderboardSheetRenderer\(\)/);
   assert.match(legacy, /leaderboardSheet\.render\(\{/);
   assert.match(leaderboard, /function LeaderboardSheet\(props\)/);
+  assert.match(leaderboard, /document\.getElementById\("scoreReactLeaderboardSheetApp"\)/);
   assert.match(leaderboard, /createRoot\(host\)/);
+  assert.match(leaderboard, /root\.render\(null\)/);
   assert.match(leaderboard, /UDiscExportDetails/);
   assert.match(sharedUdisc, /export function UDiscExportDetails\(props\)/);
   assert.match(sharedUdisc, /export function udiscDeepLink\(courseId\)/);
@@ -281,22 +292,28 @@ test('player leaderboard sheet is React-owned without legacy overlay DOM constru
   assert.doesNotMatch(leaderboard, /UDiscExportMount/);
   assert.doesNotMatch(leaderboard, /replaceChildren/);
   assert.doesNotMatch(leaderboard, /appendChild\(node\)/);
+  assert.doesNotMatch(leaderboard, /document\.createElement|document\.body\.appendChild|host\.remove\(\)/);
   assert.doesNotMatch(fullLegacy, /window\.UDiscExport/);
   assert.doesNotMatch(html, /udisc-export\.js/);
 });
 
 test('manage players sheet is React-owned without legacy overlay DOM construction', () => {
+  const html = readFileSync('score.html', 'utf8');
   const legacy = scoreLegacyManagePlayersSource();
   const manage = scoreManagePlayersSource();
+  assert.match(html, /id="scoreReactManagePlayersSheetApp"/);
   assert.match(legacy, /createManagePlayersSheetRenderer\(\)/);
   assert.match(legacy, /managePlayersSheet\.render\(\{/);
   assert.match(manage, /function ManagePlayersSheet\(props\)/);
   assert.match(manage, /function PairEditor\(\{ players, onSavePairs \}\)/);
+  assert.match(manage, /document\.getElementById\("scoreReactManagePlayersSheetApp"\)/);
   assert.match(manage, /createRoot\(host\)/);
+  assert.match(manage, /root\.render\(null\)/);
   assert.doesNotMatch(legacy, /const overlay = el\('div', 'overlay'\)/);
   assert.doesNotMatch(legacy, /const sheet = el\('div', 'sheet'\)/);
   assert.doesNotMatch(legacy, /pairInputs\.push/);
   assert.doesNotMatch(legacy, /overlay\.appendChild\(sheet\)/);
+  assert.doesNotMatch(manage, /document\.createElement|document\.body\.appendChild|host\.remove\(\)/);
 });
 
 test('scorecard view is React-owned without legacy hole DOM construction', () => {

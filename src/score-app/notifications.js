@@ -57,9 +57,8 @@ export function createScoreNotificationsRenderer() {
 
   function mount() {
     if (!host) {
-      host = document.createElement("div");
-      host.id = "scoreNotifications";
-      document.body.appendChild(host);
+      host = document.getElementById("scoreReactNotificationsApp");
+      if (!host) throw new Error("Missing scoreReactNotificationsApp mount element");
     }
     if (!root) root = createRoot(host);
     return root;

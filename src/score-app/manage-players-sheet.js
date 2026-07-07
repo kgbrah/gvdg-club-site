@@ -100,18 +100,15 @@ export function createManagePlayersSheetRenderer() {
   let root = null;
 
   function close() {
-    if (root) root.unmount();
-    if (host) host.remove();
-    host = null;
-    root = null;
+    if (root) root.render(null);
   }
 
   function render(props) {
     if (!host) {
-      host = document.createElement("div");
-      document.body.appendChild(host);
-      root = createRoot(host);
+      host = document.getElementById("scoreReactManagePlayersSheetApp");
+      if (!host) throw new Error("Missing scoreReactManagePlayersSheetApp mount element");
     }
+    if (!root) root = createRoot(host);
     root.render(h(ManagePlayersSheet, props));
   }
 

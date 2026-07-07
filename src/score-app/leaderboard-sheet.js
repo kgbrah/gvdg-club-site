@@ -93,18 +93,15 @@ export function createLeaderboardSheetRenderer() {
   let root = null;
 
   function close() {
-    if (root) root.unmount();
-    if (host) host.remove();
-    host = null;
-    root = null;
+    if (root) root.render(null);
   }
 
   function render(props) {
     if (!host) {
-      host = document.createElement("div");
-      document.body.appendChild(host);
-      root = createRoot(host);
+      host = document.getElementById("scoreReactLeaderboardSheetApp");
+      if (!host) throw new Error("Missing scoreReactLeaderboardSheetApp mount element");
     }
+    if (!root) root = createRoot(host);
     root.render(h(LeaderboardSheet, props));
   }
 

@@ -294,7 +294,7 @@ Spacing follows a 4px base through rem values.
 
 ### Member Dashboard Dialogs
 
-- Structure: React-owned document-level modal renderer for member dashboard alerts and confirmations; separate dashboard roots call a shared dialog service instead of native browser dialogs.
+- Structure: React-owned document-level modal renderer for member dashboard alerts and confirmations mounts into the static `membersReactDialogsApp` root; separate dashboard roots call a shared dialog service instead of native browser dialogs.
 - Variants: neutral alerts, destructive confirmations, cancel action, confirm action, Escape dismissal, and backdrop dismissal.
 - Spacing: centered modal uses `--bg-secondary`, `--border-color`, `--shadow`, compact actions, and full-width stacked actions on narrow phones.
 - States: one dialog is shown at a time; queued requests resolve in order; destructive confirmations use the primary-strong CTA treatment.
@@ -366,25 +366,25 @@ Spacing follows a 4px base through rem values.
 
 ### Score Leaderboard Sheet
 
-- Structure: React-owned bottom sheet overlay with grab handle, leaderboard table, optional UDisc export disclosure, finalize status panel, and close action; the legacy score controller supplies standings, blockers, export data, and callbacks only.
+- Structure: React-owned bottom sheet overlay with grab handle, leaderboard table, optional UDisc export disclosure, finalize status panel, and close action mounted into static `scoreReactLeaderboardSheetApp`; the legacy score controller supplies standings, blockers, export data, and callbacks only.
 - Variants: empty leaderboard, singles/player rows, doubles/pair rows, stroke to-par result, matchplay status result, final round, ready-to-finalize, blocked finalize, and casual round finish action.
 - Spacing: reuses `.overlay`, `.sheet`, `.lb`, `.btn`, and finalize sheet primitives from the score app; finalization details use compact rows and stay within the sheet scroll area.
-- States: overlay backdrop click and close button dismiss the sheet; live snapshots re-render the React sheet when open; finish button is disabled until the card has no conflicts or missing confirmations.
+- States: overlay backdrop click and close button dismiss the sheet by clearing the static React root; live snapshots re-render the React sheet when open; finish button is disabled until the card has no conflicts or missing confirmations.
 - Accessibility: close and finish actions are real buttons; table headers label rank/player/thru/result columns; the shared UDisc export disclosure is React-owned and uses a real outbound link.
 - Motion: bottom sheet remains static; only existing button active states apply.
 
 ### Score Manage Players Sheet
 
-- Structure: React-owned bottom sheet overlay with grab handle, player rows, optional doubles pair editor, and close action; the legacy score controller supplies players, scoring mode, and save/remove callbacks only.
+- Structure: React-owned bottom sheet overlay with grab handle, player rows, optional doubles pair editor, and close action mounted into static `scoreReactManagePlayersSheetApp`; the legacy score controller supplies players, scoring mode, and save/remove callbacks only.
 - Variants: singles remove list, doubles pair labels, current-player leave action, other-player remove action, and live re-render when cardmates change while the sheet is open.
 - Spacing: reuses `.overlay`, `.sheet`, `.card`, `.stack`, `.prow`, `.btn`, and `.field` primitives; pair inputs are compact grid labels inside an inset card.
-- States: overlay backdrop click and close button dismiss the sheet; saving pairs closes only after the server accepts; remove/leave prompts confirm before closing and posting.
+- States: overlay backdrop click and close button dismiss the sheet by clearing the static React root; saving pairs closes only after the server accepts; remove/leave prompts confirm before closing and posting.
 - Accessibility: pair fields use real labels, remove/leave/close/save are real buttons, and no icon-only actions appear in this management sheet.
 - Motion: static bottom sheet; button active states use the existing score app press feedback.
 
 ### Score Dialogs
 
-- Structure: React-owned document-level modal renderer for score prompts and confirmations; the legacy score controller supplies dialog copy and awaits resolved values only.
+- Structure: React-owned document-level modal renderer for score prompts and confirmations mounts into the static `scoreReactDialogsApp` root; the legacy score controller supplies dialog copy and awaits resolved values only.
 - Variants: add-player prompt, doubles pair-label prompt, finish-round confirmation, and remove/leave danger confirmation.
 - Spacing: reuses `.overlay`, `.sheet`, `.field`, `.lbl`, `.btn`, `.muted`, and compact modal actions; dialogs center in the viewport and stay within safe-area padding.
 - States: overlay click, Escape, and cancel resolve without side effects; required prompt fields show inline errors; danger confirmations use the score conflict token.
@@ -411,7 +411,7 @@ Spacing follows a 4px base through rem values.
 
 ### Score Notifications
 
-- Structure: React-owned document-level notification mount for transient toasts, scoring-conflict alerts, offline-sync rejection alerts, and the offline bar; the legacy score controller supplies notification messages and online state only.
+- Structure: React-owned document-level notification mount in static `scoreReactNotificationsApp` for transient toasts, scoring-conflict alerts, offline-sync rejection alerts, and the offline bar; the legacy score controller supplies notification messages and online state only.
 - Variants: default bottom toast, top conflict alert, rejected offline-score alert, and persistent offline bar.
 - Spacing: reuses `.toast`, `.toast.conflict`, and `.offline-bar`; icon-to-text gaps use the tight spacing scale.
 - States: toasts fade out on timers and dismiss on tap; conflict alerts stay longer, stack below the offline bar when needed, and use the score conflict token; offline state persists until connectivity returns.

@@ -110,9 +110,8 @@ export function createScoreDialogRenderer() {
 
   function mount() {
     if (!host) {
-      host = document.createElement("div");
-      host.id = "scoreDialogs";
-      document.body.appendChild(host);
+      host = document.getElementById("scoreReactDialogsApp");
+      if (!host) throw new Error("Missing scoreReactDialogsApp mount element");
     }
     if (!root) root = createRoot(host);
     return root;

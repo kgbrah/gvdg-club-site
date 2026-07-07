@@ -16,9 +16,10 @@ if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") 
 
 const h = React.createElement;
 
-const dialogMount = document.createElement("div");
-document.body.appendChild(dialogMount);
-createRoot(dialogMount).render(h(MemberDialogs));
+const dialogMount = document.getElementById("membersReactDialogsApp");
+if (dialogMount) {
+  createRoot(dialogMount).render(h(MemberDialogs));
+}
 
 installMemberAuthController();
 installDashboardRouter();
