@@ -2,6 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 
 import { AdminAuthGate } from "./auth-gate.js";
+import { AdminFundraiserForm, AdminLeagueForm, AdminMeetingForm } from "./club-content-forms.js";
 import { AdminFundraisersList, AdminLeaguesList, AdminMeetingsList } from "./club-content-lists.js";
 import { AdminCoursesList } from "./courses-list.js";
 import { AdminDataArchiveDestinationForm } from "./data-archive-destination-form.js";
@@ -64,14 +65,29 @@ if (coursesListMount) {
   createRoot(coursesListMount).render(h(AdminCoursesList));
 }
 
+const leagueFormMount = document.getElementById("adminLeagueFormReactApp");
+if (leagueFormMount) {
+  createRoot(leagueFormMount).render(h(AdminLeagueForm));
+}
+
 const leaguesListMount = document.getElementById("adminLeaguesListReactApp");
 if (leaguesListMount) {
   createRoot(leaguesListMount).render(h(AdminLeaguesList));
 }
 
+const fundraiserFormMount = document.getElementById("adminFundraiserFormReactApp");
+if (fundraiserFormMount) {
+  createRoot(fundraiserFormMount).render(h(AdminFundraiserForm));
+}
+
 const fundraisersListMount = document.getElementById("adminFundraisersListReactApp");
 if (fundraisersListMount) {
   createRoot(fundraisersListMount).render(h(AdminFundraisersList));
+}
+
+const meetingFormMount = document.getElementById("adminMeetingFormReactApp");
+if (meetingFormMount) {
+  createRoot(meetingFormMount).render(h(AdminMeetingForm));
 }
 
 const meetingsListMount = document.getElementById("adminMeetingsListReactApp");

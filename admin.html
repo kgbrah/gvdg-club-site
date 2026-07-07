@@ -277,6 +277,7 @@
         .admin-data-archive-destination-form { scroll-margin-top: 5.5rem; }
         .admin-form .admin-data-archive-destination-toggle { display: flex; align-items: center; gap: 0.5rem; margin: 0; }
         .admin-form .admin-data-archive-destination-toggle input[type="checkbox"] { width: auto; margin: 0; }
+        .admin-club-form-wide { grid-column: 1 / -1; }
         .admin-wallet-form-wide { grid-column: 1 / -1; }
         .wallet-row { display: flex; justify-content: space-between; gap: 0.75rem; align-items: baseline; flex-wrap: wrap; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); padding: 0.65rem 0.75rem; }
         .wallet-row strong { color: var(--text-primary); }
@@ -480,33 +481,16 @@
                 </div>
             </div>
             <div class="admin-pane" id="apane-leagues-mgmt">
-                <form class="admin-form" id="adminLeagueForm">
-                    <div><label for="lgName">League name</label><input id="lgName" maxlength="120" required></div>
-                    <div><label for="lgSeason">Season</label><input id="lgSeason" maxlength="40" placeholder="2026"></div>
-                    <div><label for="lgFormat">Format</label><select id="lgFormat"><option value="">—</option><option value="doubles">Doubles</option><option value="stroke">Singles/Stroke</option><option value="matchplay">Matchplay</option></select></div>
-                    <button type="submit" class="admin-btn">Add league</button>
-                </form>
+                <div id="adminLeagueFormReactApp"></div>
                 <p class="al-note" style="margin-top:0.5rem;">Assign <strong>league round</strong> events to a league on the New Event tab; finalized rounds roll up into the league standings automatically.</p>
                 <div id="adminLeaguesListReactApp" style="margin-top:1rem;"></div>
             </div>
             <div class="admin-pane" id="apane-fundraisers">
-                <form class="admin-form" id="adminFundraiserForm">
-                    <div><label for="frTitle">Title</label><input id="frTitle" maxlength="200" required></div>
-                    <div><label for="frGoal">Goal ($)</label><input id="frGoal" type="number" min="0" step="1"></div>
-                    <div><label for="frPaypal">PayPal URL (https)</label><input id="frPaypal" type="url" maxlength="1000" placeholder="https://paypal.me/greenvillediscgolf"></div>
-                    <div style="grid-column:1/-1;"><label for="frBody">Description (markdown: **bold**, - bullets, [link](https://…))</label><textarea id="frBody" rows="4"></textarea></div>
-                    <button type="submit" class="admin-btn">Add fundraiser</button>
-                </form>
+                <div id="adminFundraiserFormReactApp"></div>
                 <div id="adminFundraisersListReactApp" style="margin-top:1rem;"></div>
             </div>
             <div class="admin-pane" id="apane-meetings">
-                <form class="admin-form" id="adminMeetingForm">
-                    <div><label for="mtDate">Date</label><input id="mtDate" type="date" required></div>
-                    <div><label for="mtTitle">Title</label><input id="mtTitle" maxlength="200" required></div>
-                    <div style="grid-column:1/-1;"><label for="mtMinutes">Minutes (markdown)</label><textarea id="mtMinutes" rows="5"></textarea></div>
-                    <div style="grid-column:1/-1;"><label for="mtActions">Action items (one per line)</label><textarea id="mtActions" rows="3"></textarea></div>
-                    <button type="submit" class="admin-btn">Add meeting</button>
-                </form>
+                <div id="adminMeetingFormReactApp"></div>
                 <div id="adminMeetingsListReactApp" style="margin-top:1rem;"></div>
             </div>
             <div class="admin-pane" id="apane-registration">
@@ -1998,13 +1982,35 @@
             window.__gvdgAdminLeaguesListState = state;
             window.dispatchEvent(new CustomEvent('gvdg:admin-leagues-list', { detail: state }));
         }
-        async function adminAddLeague(e) {
-            e.preventDefault();
-            const body = { name: $('lgName').value.trim(), season: $('lgSeason').value.trim() || null, format: $('lgFormat').value || null };
-            if (!body.name) { adminMsg('League name required', false); return; }
-            const r = await adminApi('/admin/leagues', { method: 'POST', body });
-            if (r.ok) { adminMsg('Added league “' + body.name + '”', true); $('adminLeagueForm').reset(); adminLoadLeagues(); }
-            else adminMsg('Add league failed (' + r.status + ')', false);
+        async function adminAddLeagueFromReact(detail) {
+            const requestId = detail.requestId;
+            if (!requestId) return;
+            const body = detail.body || {};
+            const name = String(body.name || '').trim();
+            if (detail.valid !== true || !name) {
+                const message = 'League name required';
+                adminMsg(message, false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-league-create-result', { detail: { ok: false, requestId, message } }));
+                return;
+            }
+            let r;
+            try {
+                r = await adminApi('/admin/leagues', { method: 'POST', body });
+            } catch (err) {
+                const message = 'Add league failed';
+                adminMsg(message, false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-league-create-result', { detail: { ok: false, requestId, message } }));
+                return;
+            }
+            if (r.ok) {
+                adminMsg('Added league "' + (detail.labelText || name) + '"', true);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-league-create-result', { detail: { ok: true, requestId } }));
+                adminLoadLeagues();
+            } else {
+                const message = 'Add league failed (' + r.status + ')';
+                adminMsg(message, false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-league-create-result', { detail: { ok: false, requestId, message } }));
+            }
         }
 
         // ---- Fundraisers management (Phase 4) ----
@@ -2017,14 +2023,35 @@
             window.__gvdgAdminFundraisersListState = state;
             window.dispatchEvent(new CustomEvent('gvdg:admin-fundraisers-list', { detail: state }));
         }
-        async function adminAddFundraiser(e) {
-            e.preventDefault();
-            const goal = $('frGoal').value ? Math.round(Number($('frGoal').value) * 100) : null;
-            const body = { title: $('frTitle').value.trim(), body_md: $('frBody').value.trim() || null, goal_cents: goal, paypal_url: $('frPaypal').value.trim() || null, status: 'active' };
-            if (!body.title) { adminMsg('Title required', false); return; }
-            const r = await adminApi('/admin/fundraisers', { method: 'POST', body });
-            if (r.ok) { adminMsg('Added fundraiser', true); $('adminFundraiserForm').reset(); adminLoadFundraisers(); }
-            else adminMsg('Add failed (' + r.status + ')', false);
+        async function adminAddFundraiserFromReact(detail) {
+            const requestId = detail.requestId;
+            if (!requestId) return;
+            const body = detail.body || {};
+            const title = String(body.title || '').trim();
+            if (detail.valid !== true || !title) {
+                const message = 'Title required';
+                adminMsg(message, false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-fundraiser-create-result', { detail: { ok: false, requestId, message } }));
+                return;
+            }
+            let r;
+            try {
+                r = await adminApi('/admin/fundraisers', { method: 'POST', body });
+            } catch (err) {
+                const message = 'Add failed';
+                adminMsg(message, false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-fundraiser-create-result', { detail: { ok: false, requestId, message } }));
+                return;
+            }
+            if (r.ok) {
+                adminMsg('Added fundraiser', true);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-fundraiser-create-result', { detail: { ok: true, requestId } }));
+                adminLoadFundraisers();
+            } else {
+                const message = 'Add failed (' + r.status + ')';
+                adminMsg(message, false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-fundraiser-create-result', { detail: { ok: false, requestId, message } }));
+            }
         }
 
         // ---- Meetings management (Phase 4) ----
@@ -2037,14 +2064,35 @@
             window.__gvdgAdminMeetingsListState = state;
             window.dispatchEvent(new CustomEvent('gvdg:admin-meetings-list', { detail: state }));
         }
-        async function adminAddMeeting(e) {
-            e.preventDefault();
-            const actions = $('mtActions').value.split('\n').map((s) => s.trim()).filter(Boolean);
-            const body = { date: $('mtDate').value, title: $('mtTitle').value.trim(), minutes_md: $('mtMinutes').value.trim() || null, action_items: actions };
-            if (!body.date || !body.title) { adminMsg('Date and title required', false); return; }
-            const r = await adminApi('/admin/meetings', { method: 'POST', body });
-            if (r.ok) { adminMsg('Added meeting', true); $('adminMeetingForm').reset(); adminLoadMeetings(); }
-            else adminMsg('Add failed (' + r.status + ')', false);
+        async function adminAddMeetingFromReact(detail) {
+            const requestId = detail.requestId;
+            if (!requestId) return;
+            const body = detail.body || {};
+            const title = String(body.title || '').trim();
+            if (detail.valid !== true || !body.date || !title) {
+                const message = 'Date and title required';
+                adminMsg(message, false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-meeting-create-result', { detail: { ok: false, requestId, message } }));
+                return;
+            }
+            let r;
+            try {
+                r = await adminApi('/admin/meetings', { method: 'POST', body });
+            } catch (err) {
+                const message = 'Add failed';
+                adminMsg(message, false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-meeting-create-result', { detail: { ok: false, requestId, message } }));
+                return;
+            }
+            if (r.ok) {
+                adminMsg('Added meeting', true);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-meeting-create-result', { detail: { ok: true, requestId } }));
+                adminLoadMeetings();
+            } else {
+                const message = 'Add failed (' + r.status + ')';
+                adminMsg(message, false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-meeting-create-result', { detail: { ok: false, requestId, message } }));
+            }
         }
 
         // --- Members: onboard / issue temporary PINs ---
@@ -2458,6 +2506,15 @@
                 window.dispatchEvent(new CustomEvent('gvdg:admin-import-candidate-create-result', { detail: { ok: r.ok, requestId } }));
                 if (r.ok) adminLoadEvents();
             });
+            window.addEventListener('gvdg:admin-league-create-request', async (event) => {
+                await adminAddLeagueFromReact(event.detail || {});
+            });
+            window.addEventListener('gvdg:admin-fundraiser-create-request', async (event) => {
+                await adminAddFundraiserFromReact(event.detail || {});
+            });
+            window.addEventListener('gvdg:admin-meeting-create-request', async (event) => {
+                await adminAddMeetingFromReact(event.detail || {});
+            });
             window.addEventListener('gvdg:admin-league-delete-request', async (event) => {
                 const league = event.detail && event.detail.league;
                 if (!league || league.id == null) return;
@@ -2653,9 +2710,6 @@
             scWireFormatButtons();
             $('scOvApply').addEventListener('click', () => scApplyOverride(false));
             $('scOvClear').addEventListener('click', () => scApplyOverride(true));
-            $('adminLeagueForm').addEventListener('submit', adminAddLeague);
-            $('adminFundraiserForm').addEventListener('submit', adminAddFundraiser);
-            $('adminMeetingForm').addEventListener('submit', adminAddMeeting);
             $('psInvSort').addEventListener('change', adminLoadProducts);
             $('psInvStatus').addEventListener('change', adminLoadProducts);
             $('ordStatusFilter').addEventListener('change', adminLoadOrders);

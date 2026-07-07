@@ -221,13 +221,13 @@ Spacing follows a 4px base through rem values.
 - Accessibility: course rows are static text because no row action exists in the current admin workflow.
 - Motion: static list rows; no decorative motion.
 
-### Admin Club Content Lists
+### Admin Club Content Forms and Lists
 
-- Structure: the Admin Leagues, Fundraisers, and Meetings lists render from `admin-app` into `adminLeaguesListReactApp`, `adminFundraisersListReactApp`, and `adminMeetingsListReactApp`; legacy admin code fetches `/leagues`, `/fundraisers`, and `/meetings`, keeps form submission and select population, and publishes list state events only.
+- Structure: the Admin Leagues, Fundraisers, and Meetings add forms render from `admin-app` into `adminLeagueFormReactApp`, `adminFundraiserFormReactApp`, and `adminMeetingFormReactApp`; the matching lists render into `adminLeaguesListReactApp`, `adminFundraisersListReactApp`, and `adminMeetingsListReactApp`; legacy admin code fetches `/leagues`, `/fundraisers`, and `/meetings`, keeps New Event league select population, handles create-request events, and publishes list/result state events only.
 - Variants: league empty/row/delete, fundraiser empty/row/close/reopen/delete, and meeting empty/row/delete.
-- Spacing: reuses `.admin-evrow`, `.ev-name`, `.admin-btn`, and `.al-note` so the Club management panes preserve the same compact admin list rhythm as Events.
-- States: React owns row markup, empty copy, confirm prompts, and request dispatch; `admin.html` must not mutate `adminLeaguesList`, `adminFundraisersList`, or `adminMeetingsList`, construct `.admin-evrow` rows for those panes, or attach row button listeners directly.
-- Accessibility: empty states use status semantics, list actions are real buttons, and visible text preserves the existing row summaries.
+- Spacing: reuses `.admin-form`, `.admin-club-form-wide`, `.admin-evrow`, `.ev-name`, `.admin-btn`, and `.al-note` so the Club management panes preserve the same compact admin rhythm as Events.
+- States: React owns add-form field values, busy submit labels, successful resets, row markup, empty copy, confirm prompts, and request dispatch; `admin.html` must not keep static `adminLeagueForm`, `adminFundraiserForm`, or `adminMeetingForm` markup, read `lg*`/`fr*`/`mt*` fields, reset those forms, mutate `adminLeaguesList`, `adminFundraisersList`, or `adminMeetingsList`, construct `.admin-evrow` rows for those panes, or attach form/list listeners directly.
+- Accessibility: form labels target stable control ids, required fields remain native inputs, empty states use status semantics, list actions are real buttons, and visible text preserves the existing row summaries.
 - Motion: static list rows; only inherited control hover/focus states apply.
 
 ### Admin Member Creation Form
