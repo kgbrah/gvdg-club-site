@@ -7,6 +7,7 @@ import { AdminCoursesList } from "./courses-list.js";
 import { AdminDataArchiveDestinationsList, AdminDataArchiveExportResult } from "./data-archive-destinations-list.js";
 import { AdminEventsList } from "./events-list.js";
 import { AdminImportCandidatesList } from "./import-candidates-list.js";
+import { AdminMemberForm } from "./member-form.js";
 import { AdminMessage } from "./message.js";
 import { AdminMembersList, AdminMemberTempPin } from "./members-list.js";
 import { AdminNavigation } from "./navigation.js";
@@ -80,6 +81,11 @@ if (meetingsListMount) {
 const membersListMount = document.getElementById("adminMembersListReactApp");
 if (membersListMount) {
   createRoot(membersListMount).render(h(AdminMembersList));
+}
+
+const memberFormMount = document.getElementById("adminMemberFormReactApp");
+if (memberFormMount) {
+  createRoot(memberFormMount).render(h(AdminMemberForm));
 }
 
 const memberTempPinMount = document.getElementById("adminMemberTempPinReactApp");

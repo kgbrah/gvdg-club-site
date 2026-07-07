@@ -272,6 +272,8 @@
         .admin-product-image-preview { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin: 0.5rem 0 0; }
         .admin-product-image-preview-img { width: 7.5rem; }
         .admin-product-image-preview-note { max-width: 22rem; font-size: 0.78rem; line-height: 1.4; color: var(--text-muted); }
+        .admin-member-form-admin-toggle { display: flex; align-items: flex-end; }
+        .admin-member-form-admin-toggle label { display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; }
         .admin-wallet-form-wide { grid-column: 1 / -1; }
         .wallet-row { display: flex; justify-content: space-between; gap: 0.75rem; align-items: baseline; flex-wrap: wrap; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); padding: 0.65rem 0.75rem; }
         .wallet-row strong { color: var(--text-primary); }
@@ -625,13 +627,7 @@
                 <div id="adminOrdersListReactApp"></div>
             </div>
             <div class="admin-pane" id="apane-members">
-                <form class="admin-form" id="adminMemberForm">
-                    <div><label for="amName">Name</label><input id="amName" maxlength="80" required></div>
-                    <div><label for="amPdga">PDGA #</label><input id="amPdga" maxlength="12" inputmode="numeric" placeholder="optional if UDisc set"></div>
-                    <div><label for="amUdisc">UDisc username</label><input id="amUdisc" maxlength="50" placeholder="optional if PDGA# set"></div>
-                    <div style="display:flex;align-items:flex-end;"><label style="display:flex;align-items:center;gap:.5rem;"><input id="amAdmin" type="checkbox"> Make admin</label></div>
-                    <button type="submit" class="admin-btn">Create &amp; issue temp PIN</button>
-                </form>
+                <div id="adminMemberFormReactApp"></div>
                 <div id="adminMemberTempPinReactApp"></div>
                 <div class="al-section" style="margin-top:1rem;">
                     <h4 class="al-h">Members</h4>
@@ -2095,14 +2091,41 @@
             window.__gvdgAdminMembersListState = state;
             window.dispatchEvent(new CustomEvent('gvdg:admin-members-list', { detail: state }));
         }
-        async function adminAddMember(e) {
-            e.preventDefault();
-            const body = { name: $('amName').value.trim(), pdgaNo: $('amPdga').value.trim() || null, udisc: $('amUdisc').value.trim() || null, isAdmin: $('amAdmin').checked };
-            if (!body.name) { adminMsg('Name is required', false); return; }
-            if (!body.pdgaNo && !body.udisc) { adminMsg('PDGA# or UDisc is required', false); return; }
-            const r = await adminApi('/admin/members', { method: 'POST', body });
-            if (r.ok) { const j = await r.json(); showTempPin(j.member, j.tempPin); adminMsg('Member created', true); $('adminMemberForm').reset(); adminLoadMembers(); }
-            else { let err = {}; try { err = await r.json(); } catch (e) {} adminMsg('Create failed: ' + (err.error || r.status), false); }
+        async function adminCreateMemberFromReact(detail) {
+            const body = detail.body || {};
+            const requestId = detail.requestId;
+            if (!requestId) return;
+            if (!body.name) {
+                adminMsg('Name is required', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-member-create-result', { detail: { ok: false, requestId } }));
+                return;
+            }
+            if (detail.valid !== true || (!body.pdgaNo && !body.udisc)) {
+                adminMsg('PDGA# or UDisc is required', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-member-create-result', { detail: { ok: false, requestId } }));
+                return;
+            }
+            let r;
+            try {
+                r = await adminApi('/admin/members', { method: 'POST', body });
+            } catch (e) {
+                adminMsg('Create failed', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-member-create-result', { detail: { ok: false, requestId } }));
+                return;
+            }
+            if (r.ok) {
+                const j = await r.json().catch(() => ({}));
+                showTempPin(j.member, j.tempPin);
+                adminMsg('Member created', true);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-member-create-result', { detail: { ok: true, requestId } }));
+                adminLoadMembers();
+            }
+            else {
+                let err = {};
+                try { err = await r.json(); } catch (e) {}
+                adminMsg('Create failed: ' + (err.error || r.status), false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-member-create-result', { detail: { ok: false, requestId } }));
+            }
         }
 
         async function adminLoadProducts() {
@@ -2572,6 +2595,9 @@
             window.addEventListener('gvdg:admin-wallet-adjustment-request', async (event) => {
                 await adminPostWalletAdjustmentFromReact(event.detail || {});
             });
+            window.addEventListener('gvdg:admin-member-create-request', async (event) => {
+                await adminCreateMemberFromReact(event.detail || {});
+            });
             window.addEventListener('gvdg:admin-data-archive-destination-edit-request', (event) => {
                 const destination = event.detail && event.detail.destination;
                 if (!destination || destination.id == null) return;
@@ -2661,7 +2687,6 @@
             $('ordRefresh').addEventListener('click', adminLoadOrders);
             refreshOrdersBadge();                          // show the new-order count on load
             setInterval(refreshOrdersBadge, 60000);        // and keep it current while the page is open
-            $('adminMemberForm').addEventListener('submit', adminAddMember);
             $('rgEvent').addEventListener('change', rgOnSelect);
             $('rgSaveBtn').addEventListener('click', rgSaveConfig);
             $('rgPlayerAdd').addEventListener('click', rgAddManualPlayer);

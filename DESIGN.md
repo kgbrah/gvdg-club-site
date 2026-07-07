@@ -230,9 +230,18 @@ Spacing follows a 4px base through rem values.
 - Accessibility: empty states use status semantics, list actions are real buttons, and visible text preserves the existing row summaries.
 - Motion: static list rows; only inherited control hover/focus states apply.
 
+### Admin Member Creation Form
+
+- Structure: the Admin Members creation form renders from `admin-app` into `adminMemberFormReactApp`; legacy admin code only handles create-request events, the API POST, temp-PIN publication, members reload, and global messages.
+- Variants: blank form, name-required validation, PDGA-or-UDisc-required validation, optional admin checkbox, busy submit, successful reset, issued temporary PIN, and failed-create recovery.
+- Spacing: reuses `.admin-form`, `.admin-member-form-admin-toggle`, `.admin-btn`, and existing input/label primitives so the form keeps the compact Members pane rhythm.
+- States: React owns all field values, admin checkbox state, busy button text, and reset after success; `admin.html` must not keep a static `adminMemberForm`, read `am*` field values, listen to the member form submit event, or call `reset()` on the member form.
+- Accessibility: labels target stable form control ids, required fields remain native inputs, the admin checkbox is labelled, and the create action is a real submit button.
+- Motion: static form; inherited controls only.
+
 ### Admin Members List
 
-- Structure: the Admin Members list renders from `admin-app` into `adminMembersListReactApp`; legacy admin code fetches `/admin/members`, keeps member creation, and publishes list state events only.
+- Structure: the Admin Members list renders from `admin-app` into `adminMembersListReactApp`; legacy admin code fetches `/admin/members` and publishes list state events only.
 - Variants: loading, empty, member row, admin badge text, PIN-not-set badge text, reissue-PIN action, make-admin action, remove-admin action, and disabled last-admin removal.
 - Spacing: reuses `.admin-evrow`, `.ev-name`, `.admin-btn`, and `.al-note` so the Members pane keeps the same compact operational rhythm as the Events and Club lists.
 - States: React owns row markup, loading/empty copy, confirm prompts, last-admin disabled state, and request dispatch; `admin.html` must not mutate `adminMembersList`, construct member `.admin-evrow` rows, or attach member row button listeners directly.
