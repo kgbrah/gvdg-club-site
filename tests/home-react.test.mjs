@@ -8,7 +8,7 @@ test('homepage feeds are rendered by the home React bundle', () => {
   const legacyFeed = readFileSync('home-feeds.js', 'utf8');
 
   assert.match(packageJson, /"build:home": "vite build --config vite\.home\.config\.mjs"/);
-  assert.match(packageJson, /"build": "npm run build:home && npm run build:public && npm run build:tee-sign-preview && npm run build:score && npm run build:members"/);
+  assert.match(packageJson, /"build": "npm run build:home && npm run build:public && npm run build:admin && npm run build:tee-sign-preview && npm run build:score && npm run build:members"/);
   assert.ok(existsSync('vite.home.config.mjs'));
   assert.match(html, /id="homeReactEventsApp"/);
   assert.match(html, /id="homeReactTournamentsApp"/);

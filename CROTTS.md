@@ -14,7 +14,7 @@ brain (below) is what makes it actually answer.
 ## How it works (1-minute architecture)
 
 ```
-Browser widget (crotts.js, lower-left)
+Browser widget (shared React CrottsWidget, lower-left)
         │  POST /assistant  { message, history }
         ▼
 Club Worker (auth-worker/)  ── builds a Crotts prompt + injects live events/courses from D1
@@ -136,8 +136,8 @@ using real club data, in both light and dark themes.
 |---|---|
 | Personality / instructions / site facts | `auth-worker/src/assistant.ts` → `PERSONA` (and the club-context builder) |
 | Avatar image | `img/crotts.jpg` (replace the file; keep the name) |
-| Position / colors / sizing | `crotts.js` (`#crotts-fab` / `#crotts-panel`; currently `left:18px` lower-left) |
-| Which pages show it | the `<script src="crotts.js" defer></script>` tag (on all 6 pages) |
+| Position / colors / sizing | `src/shared/crotts-widget.js` (`#crotts-fab` / `#crotts-panel`; currently `left:18px` lower-left) |
+| Which pages show it | each page's `crottsReactApp` mount plus its route bundle (`home-app`, `public-app`, `admin-app`, or `members-app`) |
 | Rate limit | `auth-worker/src/index.ts` → `ASSISTANT_LIMIT` / `ASSISTANT_WINDOW` (default 20/min/IP) |
 | OpenRouter / Workers AI model | `OPENROUTER_MODEL` / `ASSISTANT_MODEL` vars in `wrangler.toml` |
 

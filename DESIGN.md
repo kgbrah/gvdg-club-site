@@ -142,10 +142,10 @@ Spacing follows a 4px base through rem values.
 
 ### Crotts Assistant Widget
 
-- Structure: the shared Crotts assistant widget renders from `home-app`, `public-app`, and `members-app` into `crottsReactApp`; `crotts.js` remains only for the legacy admin page until the admin surface is migrated.
+- Structure: the shared Crotts assistant widget renders from `home-app`, `public-app`, `admin-app`, and `members-app` into `crottsReactApp`; no page loads the root `crotts.js` helper.
 - Variants: closed floating avatar, open dialog, empty greeting, user message, assistant reply, typing state, API-rate-limit error, network/error response, and mobile safe-area placement.
 - Spacing: preserves the existing `#crotts-fab`, `#crotts-panel`, `#crotts-head`, `#crotts-msgs`, and `#crotts-form` hooks so page-specific placement overrides continue to work during migration; Events hides the launcher on mobile detail views so fixed assistant chrome cannot cover event facts or tee-sign cards.
-- States: React owns open/closed state, message history, busy/disabled send state, text input value, focus return to the composer, and assistant fetch lifecycle; public/member pages must not load `crotts.js` or append assistant DOM nodes.
+- States: React owns open/closed state, message history, busy/disabled send state, text input value, focus return to the composer, and assistant fetch lifecycle; HTML pages must not load `crotts.js` or append assistant DOM nodes.
 - Accessibility: the panel exposes dialog semantics, the avatar, close, and send controls are real buttons with labels, the composer is labelled, and iconography uses Lucide SVGs.
 - Motion: preserves the existing FAB scale and panel reveal only; no decorative motion is added.
 

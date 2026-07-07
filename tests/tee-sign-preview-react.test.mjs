@@ -16,7 +16,7 @@ test('tee-sign preview is rendered by a route-specific React bundle', () => {
 
   assert.ok(existsSync('vite.tee-sign-preview.config.mjs'));
   assert.match(packageJson, /"build:tee-sign-preview": "vite build --config vite\.tee-sign-preview\.config\.mjs"/);
-  assert.match(packageJson, /"build": "npm run build:home && npm run build:public && npm run build:tee-sign-preview && npm run build:score && npm run build:members"/);
+  assert.match(packageJson, /"build": "npm run build:home && npm run build:public && npm run build:admin && npm run build:tee-sign-preview && npm run build:score && npm run build:members"/);
   assert.match(html, /id="teeSignPreviewReactApp"/);
   assert.match(html, /<script type="module" src="tee-sign-preview-app\/tee-sign-preview-app\.js"><\/script>/);
   assert.match(html, /tokens\.css/);
@@ -36,13 +36,13 @@ test('tee-sign preview is rendered by a route-specific React bundle', () => {
   assert.doesNotMatch(sharedSvg, /teeSignNode|DOMParser|replaceChildren|appendChild|dangerouslySetInnerHTML/);
   assert.doesNotMatch(sharedModel, /teeSignNode|DOMParser|replaceChildren|appendChild|dangerouslySetInnerHTML/);
   assert.match(app, /MoonStar, Sun/);
-  assert.match(deploy, /home-app public-app tee-sign-preview-app members-app score-app/);
+  assert.match(deploy, /home-app public-app admin-app tee-sign-preview-app members-app score-app/);
   assert.match(deploy, /src\/shared\/tee-sign-model\.js/);
-  assert.match(watchdog, /home-app public-app tee-sign-preview-app members-app score-app/);
+  assert.match(watchdog, /home-app public-app admin-app tee-sign-preview-app members-app score-app/);
   assert.match(watchdog, /src\/shared\/tee-sign-model\.js/);
-  assert.match(workflow, /home-app public-app tee-sign-preview-app members-app score-app/);
+  assert.match(workflow, /home-app public-app admin-app tee-sign-preview-app members-app score-app/);
   assert.match(workflow, /src\/shared\/tee-sign-model\.js/);
-  assert.match(sw, /const CACHE = "gvdg-club-v65"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v66"/);
   assert.match(sw, /"tee-sign-preview-app\/tee-sign-preview-app\.js"/);
   assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
 });

@@ -1,10 +1,10 @@
-const CACHE = "gvdg-club-v65";
+const CACHE = "gvdg-club-v66";
 const OFFLINE_PAGE = "gvdg-members.html";
 const ASSETS = [
   "tokens.css",
   "site.webmanifest",
   "pwa.js",
-  "crotts.js",
+  "admin-app/admin-app.js",
   "home-app/home-app.js",
   "public-app/public-app.js",
   "tee-sign-preview-app/tee-sign-preview-app.js",

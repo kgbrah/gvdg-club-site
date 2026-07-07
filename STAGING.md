@@ -57,7 +57,7 @@ the deploy token only needs Worker permissions; the dashboard-owned custom domai
 
 ## 3. Frontend — already wired
 
-`crotts.js`, `gvdg-members.html`, `events.html`, `admin.html`, and `pro-shop.html` now **resolve the
+The page shells and React app bundles now **resolve the
 Worker base by hostname** (and the baked `data-*` attributes were blanked so they don't pin to prod).
 Rule everywhere: an explicit `data-*` attribute wins (manual override) → else `greenvillediscgolf.com`/`www`
 ⇒ prod, **everything else (gvdgclub.com, `*.pages.dev`, localhost) ⇒ staging**. No per-deploy edits needed.

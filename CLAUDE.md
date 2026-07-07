@@ -243,7 +243,7 @@ Matchplay league scoring is **team-based Ryder Cup style**, not stroke place-poi
 
 ### Frontend & PWA
 
-Pages find the API via the host-fallback logic above (duplicated in every page + `crotts.js`). Data
+Pages find the API via the host-fallback logic above (duplicated in page shells and React bundles). Data
 rendering is **XSS-safe by construction**: live/API data is built with `createElement`/`textContent`,
 **never `innerHTML`**; external hrefs pass `safe-url.js`; tee-sign SVG is parsed inert via `DOMParser`.
 (The one `innerHTML`-with-data is `gvdg-members.html`'s doubles league, whose source is build-time-trusted
@@ -251,8 +251,8 @@ rendering is **XSS-safe by construction**: live/API data is built with `createEl
 still power the homepage feeds and Ryder Cup (gviz has no CORS → the sheet must be publish-to-web;
 overridable via `data-grid-csv`/`data-scoreboard-csv`). `score.html` is a thin shell mounted by
 `src/score-app/main.js`; run `npm run build` before serving or deploying it. The **service worker**
-(`sw.js`) is **manually versioned** (`CACHE="gvdg-club-v20"`) — bump it on any precached-asset change or
-users get stale `crotts.js`/`score.html`/`score-app/score-app.js`; offline navigation falls back
+(`sw.js`) is **manually versioned** — bump it on any precached-asset change or
+users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
 to `gvdg-members.html`.
 
 ## Security & correctness invariants (uphold in any change)

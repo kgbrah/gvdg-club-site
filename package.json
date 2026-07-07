@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run build:home && npm run build:public && npm run build:tee-sign-preview && npm run build:score && npm run build:members",
+    "build": "npm run build:home && npm run build:public && npm run build:admin && npm run build:tee-sign-preview && npm run build:score && npm run build:members",
+    "build:admin": "vite build --config vite.admin.config.mjs",
     "build:home": "vite build --config vite.home.config.mjs",
     "build:members": "vite build --config vite.members.config.mjs",
     "build:public": "vite build --config vite.public.config.mjs",

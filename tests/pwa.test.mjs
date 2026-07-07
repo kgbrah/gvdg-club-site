@@ -77,6 +77,8 @@ test('shared service worker caches app install assets and member fallback', () =
   for (const asset of [
     'site.webmanifest',
     'pwa.js',
+    'home-app/home-app.js',
+    'admin-app/admin-app.js',
     'members-app/members-app.js',
     'public-app/public-app.js',
     'tee-sign-preview-app/tee-sign-preview-app.js',
@@ -89,6 +91,7 @@ test('shared service worker caches app install assets and member fallback', () =
     assert.ok(sw.includes(`"${asset}"`), asset);
   }
   assert.doesNotMatch(sw, /"nav\.js"/);
+  assert.doesNotMatch(sw, /"crotts\.js"/);
   assert.match(readFileSync('pwa.js', 'utf8'), /serviceWorker\.register\('sw\.js', \{ scope: '\.\/' \}\)/);
 });
 
