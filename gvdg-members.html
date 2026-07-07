@@ -503,7 +503,7 @@
                 }
                 .club-rating-load-btn:hover { border-color: var(--secondary); color: var(--secondary-text); }
                 .club-rating-load-btn:disabled { opacity: 0.6; cursor: default; }
-                @media (max-width: 768px) { body[data-member-shell="members"] #membersContent ~ #crotts-fab { display: none; } }
+                @media (max-width: 768px) { body[data-member-shell="members"] #membersContent ~ #crottsReactApp #crotts-fab { display: none; } }
                 .dashboard-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 0; }
                 .dashboard-action { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.55rem 0.85rem; background: var(--bg-secondary); color: var(--text-primary); text-decoration: none; font-size: 0.85rem; font-weight: 700; transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease; }
                 .dashboard-action:hover { border-color: var(--secondary); color: var(--secondary-text); transform: translateY(-1px); }
@@ -665,7 +665,7 @@
         </footer>
     </div>
 
+    <div id="crottsReactApp"></div>
     <script type="module" src="members-app/members-app.js"></script>
-    <script src="crotts.js" defer></script>
 </body>
 </html>

@@ -11,6 +11,7 @@ import { EventsClubFeedApp, EventsLiveNowApp, EventsScheduleFeedApp, EventsUpcom
 import { EventsLeagueDetailApp, EventsLeaguesApp } from "./events-leagues-app.js";
 import { EventsRegistrationApp } from "./events-registration-app.js";
 import { EventsStatusApp } from "./events-status-app.js";
+import { CrottsWidget } from "../shared/crotts-widget.js";
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
   import("react-scan").then(({ scan }) => scan({ enabled: true })).catch(() => {});
@@ -32,6 +33,7 @@ const eventsLeagueDetailMount = document.getElementById("leagueDetailSection");
 const eventsEventDetailMount = document.getElementById("detail");
 const eventsFundraisersMount = document.getElementById("fundraisersSection");
 const eventsMeetingsMount = document.getElementById("meetingsSection");
+const crottsMount = document.getElementById("crottsReactApp");
 
 if (pageChromeMount) {
   createRoot(pageChromeMount).render(h(PublicPageChrome));
@@ -91,4 +93,8 @@ if (eventsMeetingsMount) {
 
 if (proShopMount) {
   createRoot(proShopMount).render(h(ProShopApp));
+}
+
+if (crottsMount) {
+  createRoot(crottsMount).render(h(CrottsWidget));
 }

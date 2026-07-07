@@ -53,10 +53,47 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(chrome, /localStorage\.getItem\("theme"\)/);
   assert.match(chrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v58"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v59"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
+});
+
+test('Crotts assistant is rendered by React bundles outside admin', () => {
+  const homeHtml = readFileSync('index.html', 'utf8');
+  const membersHtml = readFileSync('gvdg-members.html', 'utf8');
+  const adminHtml = readFileSync('admin.html', 'utf8');
+  const publicMain = readFileSync('src/public-app/main.js', 'utf8');
+  const homeMain = readFileSync('src/home-app/main.js', 'utf8');
+  const membersMain = readFileSync('src/members-app/main.js', 'utf8');
+  const widget = readFileSync('src/shared/crotts-widget.js', 'utf8');
+
+  for (const page of publicPages) {
+    const html = readFileSync(page, 'utf8');
+    assert.match(html, /id="crottsReactApp"/, page);
+    assert.doesNotMatch(html, /<script src="crotts\.js" defer><\/script>/, page);
+  }
+  assert.match(homeHtml, /id="crottsReactApp"/);
+  assert.match(membersHtml, /id="crottsReactApp"/);
+  assert.doesNotMatch(homeHtml, /<script src="crotts\.js" defer><\/script>/);
+  assert.doesNotMatch(membersHtml, /<script src="crotts\.js" defer><\/script>/);
+  assert.match(adminHtml, /<script src="crotts\.js" defer><\/script>/);
+  assert.match(membersHtml, /#membersContent ~ #crottsReactApp #crotts-fab/);
+  assert.match(publicMain, /import \{ CrottsWidget \} from "\.\.\/shared\/crotts-widget\.js"/);
+  assert.match(homeMain, /import \{ CrottsWidget \} from "\.\.\/shared\/crotts-widget\.js"/);
+  assert.match(membersMain, /import \{ CrottsWidget \} from "\.\.\/shared\/crotts-widget\.js"/);
+  assert.match(publicMain, /const crottsMount = document\.getElementById\("crottsReactApp"\)/);
+  assert.match(homeMain, /const crottsMount = document\.getElementById\("crottsReactApp"\)/);
+  assert.match(membersMain, /const crottsMount = document\.getElementById\("crottsReactApp"\)/);
+  assert.match(publicMain, /createRoot\(crottsMount\)\.render\(h\(CrottsWidget\)\)/);
+  assert.match(homeMain, /createRoot\(crottsMount\)\.render\(h\(CrottsWidget\)\)/);
+  assert.match(membersMain, /createRoot\(crottsMount\)\.render\(h\(CrottsWidget\)\)/);
+  assert.match(widget, /export function CrottsWidget/);
+  assert.match(widget, /id: "crotts-fab"/);
+  assert.match(widget, /id: "crotts-panel"/);
+  assert.match(widget, /\/assistant/);
+  assert.match(widget, /MessageCircle, Send, X/);
+  assert.doesNotMatch(widget, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|dangerouslySetInnerHTML|☰|✕|🌙|☀️|🥏|…/);
 });
 
 test('Events previous results panel is rendered by the public React bundle', () => {

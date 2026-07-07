@@ -7,6 +7,7 @@ import { installDashboardRouter } from "./dashboard-router.js";
 import { MemberDialogs } from "./member-dialogs.js";
 import { installMemberAuthController } from "./member-auth-controller.js";
 import { MemberPageChrome } from "./page-chrome.js";
+import { CrottsWidget } from "../shared/crotts-widget.js";
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
   void import("react-grab");
@@ -35,4 +36,9 @@ if (authMount) {
 const dashboardMount = document.getElementById("membersReactDashboardApp");
 if (dashboardMount) {
   createRoot(dashboardMount).render(h(MemberDashboardApp));
+}
+
+const crottsMount = document.getElementById("crottsReactApp");
+if (crottsMount) {
+  createRoot(crottsMount).render(h(CrottsWidget));
 }

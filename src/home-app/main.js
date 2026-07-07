@@ -6,6 +6,7 @@ import { AreaTournamentsFeed, HomeEventsFeed } from "./feed-panels.js";
 import { HomePageChrome } from "./page-chrome.js";
 import { HomePageInteractions } from "./page-interactions.js";
 import { HomeBackToTop } from "./page-controls.js";
+import { CrottsWidget } from "../shared/crotts-widget.js";
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
   void import("react-grab");
@@ -42,4 +43,9 @@ if (backToTopMount) {
 const interactionsMount = document.getElementById("homeReactInteractionsApp");
 if (interactionsMount) {
   createRoot(interactionsMount).render(h(HomePageInteractions));
+}
+
+const crottsMount = document.getElementById("crottsReactApp");
+if (crottsMount) {
+  createRoot(crottsMount).render(h(CrottsWidget));
 }
