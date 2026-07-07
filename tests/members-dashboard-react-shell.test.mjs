@@ -319,6 +319,9 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(registrationCasual, /memberConfirm/);
   assert.doesNotMatch(registrationPayments, /window\.alert|window\.confirm/);
   assert.match(registrationPayments, /memberAlert/);
+  assert.match(registrationPayments, /data-paypal-button-host/);
+  assert.match(registrationPayments, /useLatest/);
+  assert.doesNotMatch(registrationPayments, /replaceChildren/);
   assert.match(board, /data-react-board-panel/);
   assert.doesNotMatch(board, /visibleParent|style\.display|getElementById\("clubBoard"\)/);
   assert.doesNotMatch(board, /window\.alert|window\.confirm/);

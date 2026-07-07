@@ -6,6 +6,14 @@ import { memberAlert } from "./member-dialogs.js";
 const h = React.createElement;
 let paypalSdkPromise = null;
 
+function useLatest(value) {
+  const ref = React.useRef(value);
+  React.useEffect(() => {
+    ref.current = value;
+  }, [value]);
+  return ref;
+}
+
 function loadPaypalSdk(config) {
   if (window.paypal) return Promise.resolve();
   if (paypalSdkPromise) return paypalSdkPromise;
@@ -21,20 +29,27 @@ function loadPaypalSdk(config) {
 
 export function PayPalButtons({ eventId, token, paymentsConfig, onReload }) {
   const hostRef = React.useRef(null);
+  const eventIdRef = useLatest(eventId);
+  const onReloadRef = useLatest(onReload);
+  const tokenRef = useLatest(token);
   const [fallback, setFallback] = React.useState("");
+  const hostKey = `${paymentsConfig?.clientId || "paypal-disabled"}:${eventId || "event"}`;
 
   React.useEffect(() => {
     const host = hostRef.current;
     if (!host || !paymentsConfig?.enabled) return undefined;
     let active = true;
-    host.replaceChildren();
+    setFallback("");
     loadPaypalSdk(paymentsConfig)
       .then(() => {
         if (!active || !window.paypal) return;
         window.paypal.Buttons({
           style: { layout: "horizontal", height: 36 },
           createOrder: async () => {
-            const response = await request(`/events/${encodeURIComponent(eventId)}/pay/create-order`, { method: "POST", token });
+            const response = await request(`/events/${encodeURIComponent(eventIdRef.current)}/pay/create-order`, {
+              method: "POST",
+              token: tokenRef.current,
+            });
             const data = await response.json().catch(() => ({}));
             if (!response.ok || !data.orderId) {
               const message = data.error === "already_paid"
@@ -47,12 +62,12 @@ export function PayPalButtons({ eventId, token, paymentsConfig, onReload }) {
             }
             return data.orderId;
           },
-          onApprove: (data) => request(`/events/${encodeURIComponent(eventId)}/pay/capture`, {
+          onApprove: (data) => request(`/events/${encodeURIComponent(eventIdRef.current)}/pay/capture`, {
             method: "POST",
-            token,
+            token: tokenRef.current,
             body: { orderId: data.orderID },
           }).then((response) => {
-            if (response.ok) onReload();
+            if (response.ok) onReloadRef.current();
             else void memberAlert({
               message: "We could not confirm your payment. Please contact the club.",
               title: "Payment confirmation failed",
@@ -67,9 +82,13 @@ export function PayPalButtons({ eventId, token, paymentsConfig, onReload }) {
       .catch(() => setFallback("Online payment is temporarily unavailable - pay at the event."));
     return () => {
       active = false;
-      host.replaceChildren();
     };
-  }, [eventId, onReload, paymentsConfig, token]);
+  }, [hostKey, paymentsConfig?.clientId, paymentsConfig?.enabled]);
 
-  return h("div", { className: "paypal-buttons", ref: hostRef }, fallback);
+  return h("div", { className: "paypal-buttons" }, [
+    fallback ? h("div", { className: "register-fee", key: "fallback", role: "status" }, fallback) : null,
+    paymentsConfig?.enabled
+      ? h("div", { "data-paypal-button-host": "true", key: hostKey, ref: hostRef })
+      : null,
+  ]);
 }

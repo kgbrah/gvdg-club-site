@@ -14,6 +14,14 @@ const ORDER_LABELS = {
 
 let paypalSdkPromise = null;
 
+function useLatest(value) {
+  const ref = React.useRef(value);
+  React.useEffect(() => {
+    ref.current = value;
+  }, [value]);
+  return ref;
+}
+
 function currentToken() {
   try {
     return sessionStorage.getItem(TOKEN_KEY) || "";
@@ -288,32 +296,37 @@ function CartRow({ onChange, product, quantity }) {
 
 function PayPalButtons({ config, createOrder, onApprove, onLoadError, onCancel, onError, signature }) {
   const hostRef = React.useRef(null);
+  const createOrderRef = useLatest(createOrder);
+  const onApproveRef = useLatest(onApprove);
+  const onCancelRef = useLatest(onCancel);
+  const onErrorRef = useLatest(onError);
+  const onLoadErrorRef = useLatest(onLoadError);
+  const hostKey = `${config?.clientId || "paypal-disabled"}:${signature || "empty-cart"}`;
 
   React.useEffect(() => {
     const host = hostRef.current;
     if (!host || !config?.enabled) return undefined;
     let active = true;
-    host.replaceChildren();
     loadPayPalSdk(config).then((ready) => {
       if (!active) return;
       if (!ready || !window.paypal) {
-        onLoadError();
+        onLoadErrorRef.current();
         return;
       }
       window.paypal.Buttons({
-        createOrder,
-        onApprove,
-        onCancel,
-        onError,
+        createOrder: (...args) => createOrderRef.current(...args),
+        onApprove: (...args) => onApproveRef.current(...args),
+        onCancel: (...args) => onCancelRef.current(...args),
+        onError: (...args) => onErrorRef.current(...args),
       }).render(host);
     });
     return () => {
       active = false;
-      host.replaceChildren();
     };
-  }, [config, createOrder, onApprove, onCancel, onError, onLoadError, signature]);
+  }, [config?.clientId, config?.enabled, hostKey]);
 
-  return h("div", { className: "paypal-wrap", ref: hostRef, style: { display: "block" } });
+  return h("div", { className: "paypal-wrap", style: { display: "block" } },
+    h("div", { "data-paypal-button-host": "true", key: hostKey, ref: hostRef }));
 }
 
 export function ProShopApp() {

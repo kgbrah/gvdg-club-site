@@ -30,7 +30,7 @@ test('tee-sign preview is rendered by a route-specific React bundle', () => {
   assert.match(deploy, /home-app public-app tee-sign-preview-app members-app score-app/);
   assert.match(watchdog, /home-app public-app tee-sign-preview-app members-app score-app/);
   assert.match(workflow, /home-app public-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v61"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v62"/);
   assert.match(sw, /"tee-sign-preview-app\/tee-sign-preview-app\.js"/);
   assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
 });
