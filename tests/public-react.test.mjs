@@ -53,7 +53,7 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(chrome, /localStorage\.getItem\("theme"\)/);
   assert.match(chrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v49"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v50"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
@@ -78,4 +78,26 @@ test('Ryder Cup body results are rendered by the public React bundle', () => {
   assert.match(app, /window\.setInterval\(\(\) => guardedLoad\(\{ quiet: true \}\), REFRESH_MS\)/);
   assert.match(app, /role: error \? "alert" : "status"/);
   assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|🏆|⚠/);
+});
+
+test('Pro Shop body storefront is rendered by the public React bundle', () => {
+  const html = readFileSync('pro-shop.html', 'utf8');
+  const main = readFileSync('src/public-app/main.js', 'utf8');
+  const app = readFileSync('src/public-app/pro-shop-app.js', 'utf8');
+
+  assert.match(html, /id="proShopReactApp"/);
+  assert.doesNotMatch(html, /id="productGrid"|id="cartList"|id="checkoutBtn"|id="paypalRedirectBtn"|function renderProducts|function renderCart|LOCAL_AUTH_BASE/);
+  assert.match(main, /createRoot\(proShopMount\)\.render\(h\(ProShopApp\)\)/);
+  assert.match(app, /export function ProShopApp/);
+  assert.match(app, /data-react-pro-shop/);
+  assert.match(app, /\/shop\/products\?sort=brand/);
+  assert.match(app, /\/shop\/wallet/);
+  assert.match(app, /\/shop\/orders/);
+  assert.match(app, /\/shop\/paypal-order/);
+  assert.match(app, /\/shop\/pay\/create-order/);
+  assert.match(app, /\/shop\/pay\/capture/);
+  assert.match(app, /\/payments\/config/);
+  assert.match(app, /window\.paypal\.Buttons/);
+  assert.match(app, /document\.createElement\("script"\)/);
+  assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|📦/);
 });

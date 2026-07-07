@@ -149,6 +149,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: loading uses status semantics, errors use alert semantics with a real retry button, the league and home actions are real links, and weekly results remain text content.
 - Motion: only the existing spinner animation and inherited hover/focus states apply; no new decorative motion.
 
+### Pro Shop App
+
+- Structure: the Pro Shop page body renders from the shared `public-app` React bundle into `proShopReactApp`, including title, wallet summary, member order history, filters, product grid, cart, PayPal guest fields, checkout actions, and status messaging.
+- Variants: signed-out wallet, loading wallet, ready wallet, wallet error, loading products, product-load error, empty filters, filtered product grid, empty cart, cart with quantity steppers, guest PayPal checkout, member store-credit checkout, SDK PayPal checkout, order history, and checkout success/error messages.
+- Spacing: reuses `.shop-head`, `.wallet-panel`, `.my-orders-panel`, `.shop-shell`, `.filters`, `.product-grid`, `.product-card`, `.cart`, `.cart-row`, `.paypal-fields`, `.payment-divider`, and `.shop-status` primitives so the page keeps its established compact storefront rhythm.
+- States: React owns API fetch status, filters, product sorting, cart quantities, stock pruning, wallet and order rendering, PayPal SDK mounting, store-credit checkout, PayPal redirect checkout, PayPal capture, and status tone; the page must not contain an inline Pro Shop DOM renderer.
+- Accessibility: filters use real form controls, product and cart actions are real buttons with quantity labels, status messages use polite status semantics, order tracking uses real links, and product fallbacks expose an image label without emoji.
+- Motion: only existing product hover and inherited button states apply; third-party PayPal rendering is isolated to its host.
+
 ### Home Page Interactions
 
 - Structure: homepage carousel controls, reveal observer, stat counters, smooth in-page anchors, and double-tap guard render as a React-owned null controller from the `home-app` bundle into `homeReactInteractionsApp`; the homepage keeps only the head pre-paint theme script inline.
