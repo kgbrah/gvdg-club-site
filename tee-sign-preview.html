@@ -5,11 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Tee-sign preview · GVDG</title>
 <link rel="icon" href="data:," /><!-- suppress the default /favicon.ico request (keeps console clean) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
 <style>
-  :root { --bg-primary:#f4f7fb; --text-primary:#0b2239; --tee-sign-bg:#fffdf5; --tee-sign-border:#0b2239; }
-  [data-theme="dark"] { --bg-primary:#0b1622; --text-primary:#e8eef6; --tee-sign-bg:#13202e; --tee-sign-border:#9fc1e0; }
-  body { background: var(--bg-primary); color: var(--text-primary); font-family: system-ui, sans-serif; margin: 0; padding: 2rem; }
-  .grid { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: flex-start; }
+  * { box-sizing: border-box; }
+  :root { --tee-sign-bg: var(--bg-secondary); --tee-sign-border: var(--text-primary); }
+  body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Archivo', system-ui, -apple-system, sans-serif; margin: 0; }
+  .tee-preview { min-height: 100vh; width: min(1100px, 100%); margin: 0 auto; padding: clamp(1rem, 4vw, 2rem); }
+  .tee-preview-head { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+  .tee-preview-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(2.2rem, 7vw, 4rem); line-height: 1; letter-spacing: 0.05em; color: var(--text-primary); }
+  .tee-preview-toggle { display: inline-flex; align-items: center; gap: 0.45rem; min-height: 40px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); font: inherit; font-weight: 700; padding: 0.55rem 0.8rem; cursor: pointer; box-shadow: 0 6px 20px var(--card-shadow); }
+  .tee-preview-toggle:hover { border-color: var(--primary); }
+  .tee-preview-grid { display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: flex-start; }
+  .tee-preview-sample { flex: 0 1 320px; }
   .tee-sign { color: var(--text-primary); }
   .tee-sign-bg { fill: var(--tee-sign-bg); stroke: var(--tee-sign-border); stroke-opacity: 0.5; }
   .tee-sign-hole { font: 700 44px 'Bebas Neue', system-ui, sans-serif; fill: currentColor; }
@@ -18,38 +28,11 @@
   .tee-sign-label { font: 600 14px system-ui, sans-serif; fill: currentColor; }
   .tee-sign-par { font: 600 14px system-ui, sans-serif; fill: currentColor; }
   .tee-sign-dist { font: 600 14px system-ui, sans-serif; fill: currentColor; opacity: 0.8; }
-  button { margin-bottom: 1.5rem; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; }
+  @media (max-width: 420px) { .tee-preview-sample, .tee-sign { width: 100%; height: auto; } }
 </style>
+<script type="module" src="tee-sign-preview-app/tee-sign-preview-app.js"></script>
 </head>
 <body>
-<button id="toggle">Toggle dark</button>
-<div class="grid" id="grid"></div>
-<script type="module">
-  import { teeSignNode } from './tee-sign.js';
-  const samples = [
-    { hole: 1, courseName: 'Battle Park', layouts: [
-      { label: 'Long', color: 'blue', par: 4, distance_ft: 420 },
-      { label: 'Short', color: 'white', par: 3, distance_ft: 285 },
-    ]},
-    { hole: 7, courseName: 'West Meadowbrook', layouts: [
-      { label: 'Gold', color: 'gold', par: 5, distance_ft: 615 },
-      { label: 'Blue', color: 'blue', par: 4, distance_ft: 480 },
-      { label: 'Red', color: 'red', par: 3, distance_ft: 300 },
-    ]},
-    { hole: 12, courseName: 'No data yet', layouts: [{ label: 'Main', par: null, distance_ft: null }] },
-  ];
-  const grid = document.getElementById('grid');
-  for (const s of samples) {
-    const wrap = document.createElement('div');
-    // teeSignNode parses via DOMParser (image/svg+xml is inert — no script execution), NOT innerHTML.
-    const node = teeSignNode(s);
-    if (node) wrap.appendChild(node);
-    grid.appendChild(wrap);
-  }
-  document.getElementById('toggle').addEventListener('click', () => {
-    const root = document.documentElement;
-    root.setAttribute('data-theme', root.getAttribute('data-theme') === 'dark' ? '' : 'dark');
-  });
-</script>
+<div id="teeSignPreviewReactApp"></div>
 </body>
 </html>

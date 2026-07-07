@@ -158,6 +158,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: filters use real form controls, product and cart actions are real buttons with quantity labels, status messages use polite status semantics, order tracking uses real links, and product fallbacks expose an image label without emoji.
 - Motion: only existing product hover and inherited button states apply; third-party PayPal rendering is isolated to its host.
 
+### Tee-Sign Preview App
+
+- Structure: the tee-sign preview page renders from the route-specific `tee-sign-preview-app` React bundle into `teeSignPreviewReactApp`, including title, theme toggle, and sample SVG preview grid.
+- Variants: light theme, dark theme, two-layout sample, three-layout sample, missing-distance sample, and narrow mobile scaling.
+- Spacing: uses the project page max width, `1rem-1.5rem` control/grid gaps, 8px control radius, and existing tee-sign SVG classes so the utility stays compact and scannable.
+- States: React owns the theme toggle, persisted theme value, sample list rendering, and mounting sanitized SVG nodes returned by `teeSignNode`; the HTML page must not contain an inline tee-sign DOM renderer.
+- Accessibility: the theme control is a real button with pressed state and Lucide iconography; generated SVGs retain their role and label from the shared tee-sign renderer.
+- Motion: no decorative motion; only inherited button hover/focus states apply.
+
 ### Home Page Interactions
 
 - Structure: homepage carousel controls, reveal observer, stat counters, smooth in-page anchors, and double-tap guard render as a React-owned null controller from the `home-app` bundle into `homeReactInteractionsApp`; the homepage keeps only the head pre-paint theme script inline.

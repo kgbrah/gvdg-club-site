@@ -79,6 +79,7 @@ test('shared service worker caches app install assets and member fallback', () =
     'pwa.js',
     'members-app/members-app.js',
     'public-app/public-app.js',
+    'tee-sign-preview-app/tee-sign-preview-app.js',
     'score-app/score-app.js',
     'img/icons/app-icon-192.png',
     'img/icons/app-icon-512.png',

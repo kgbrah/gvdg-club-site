@@ -82,7 +82,7 @@ reassert() { # $1 = full origin/main sha, $2 = reason, $3 = dryrun(0/1)
   trap "rm -rf '$build'" RETURN
   git -C "$REPO" archive origin/main | tar -x -C "$build"
   mkdir -p "$build/.pages-dist"
-  if ! ( cd "$build" && npm ci >>"$LOG" 2>&1 && npm run build >>"$LOG" 2>&1 && cp -R ./*.html ./*.js ./*.css home-app members-app score-app img _headers CNAME site.webmanifest .pages-dist/ >>"$LOG" 2>&1 ); then
+  if ! ( cd "$build" && npm ci >>"$LOG" 2>&1 && npm run build >>"$LOG" 2>&1 && cp -R ./*.html ./*.js ./*.css home-app public-app tee-sign-preview-app members-app score-app img _headers CNAME site.webmanifest .pages-dist/ >>"$LOG" 2>&1 ); then
     log "ERROR: static artifact build failed; cannot re-assert Pages."
     return
   fi

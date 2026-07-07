@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v50";
+const CACHE = "gvdg-club-v51";
 const OFFLINE_PAGE = "gvdg-members.html";
 const ASSETS = [
   "tokens.css",
@@ -7,6 +7,7 @@ const ASSETS = [
   "crotts.js",
   "home-app/home-app.js",
   "public-app/public-app.js",
+  "tee-sign-preview-app/tee-sign-preview-app.js",
   "img/logo.png",
   "img/icons/app-icon-192.png",
   "img/icons/app-icon-512.png",

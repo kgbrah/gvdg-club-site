@@ -39,7 +39,7 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   const sw = readFileSync('sw.js', 'utf8');
 
   assert.match(packageJson, /"build:public": "vite build --config vite\.public\.config\.mjs"/);
-  assert.match(packageJson, /"build": "npm run build:home && npm run build:public && npm run build:score && npm run build:members"/);
+  assert.match(packageJson, /"build": "npm run build:home && npm run build:public && npm run build:tee-sign-preview && npm run build:score && npm run build:members"/);
   assert.ok(existsSync('vite.public.config.mjs'));
   assert.match(main, /createRoot\(pageChromeMount\)\.render\(h\(PublicPageChrome\)\)/);
   assert.match(chrome, /export function PublicPageChrome/);
@@ -52,8 +52,8 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(chrome, /window\.requestAnimationFrame\(update\)/);
   assert.match(chrome, /localStorage\.getItem\("theme"\)/);
   assert.match(chrome, /localStorage\.setItem\("theme", theme\)/);
-  assert.match(deploy, /home-app public-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v50"/);
+  assert.match(deploy, /home-app public-app tee-sign-preview-app members-app score-app/);
+  assert.match(sw, /const CACHE = "gvdg-club-v51"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
