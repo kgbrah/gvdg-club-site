@@ -6,6 +6,7 @@ import { AdminFundraisersList, AdminLeaguesList, AdminMeetingsList } from "./clu
 import { AdminCoursesList } from "./courses-list.js";
 import { AdminEventsList } from "./events-list.js";
 import { AdminMessage } from "./message.js";
+import { AdminMembersList } from "./members-list.js";
 import { AdminNavigation } from "./navigation.js";
 import { AdminPageChrome } from "./page-chrome.js";
 import { CrottsWidget } from "../shared/crotts-widget.js";
@@ -60,6 +61,11 @@ if (fundraisersListMount) {
 const meetingsListMount = document.getElementById("adminMeetingsListReactApp");
 if (meetingsListMount) {
   createRoot(meetingsListMount).render(h(AdminMeetingsList));
+}
+
+const membersListMount = document.getElementById("adminMembersListReactApp");
+if (membersListMount) {
+  createRoot(membersListMount).render(h(AdminMembersList));
 }
 
 const crottsMount = document.getElementById("crottsReactApp");

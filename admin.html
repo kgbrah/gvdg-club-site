@@ -231,6 +231,7 @@
         .admin-btn { background: var(--primary-strong); color: #fff; border: none; padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
         .admin-btn.secondary { background: transparent; border: 1px solid var(--secondary-text); color: var(--secondary-text); }
         .admin-btn.danger { background: transparent; border: 1px solid #dc3545; color: #dc3545; padding: 0.35rem 0.7rem; font-size: 0.8rem; }
+        .admin-btn:disabled { opacity: 0.48; cursor: not-allowed; filter: grayscale(0.35); }
         .admin-form-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
         .admin-form-note { color: var(--text-muted); font-size: 0.9rem; margin: 0 0 0.75rem; }
         .admin-msg { font-size: 0.9rem; margin-bottom: 0.75rem; min-height: 1.2em; }
@@ -643,7 +644,7 @@
                 <div id="amTempPin" style="display:none;"></div>
                 <div class="al-section" style="margin-top:1rem;">
                     <h4 class="al-h">Members</h4>
-                    <div id="adminMembersList">Loading…</div>
+                    <div id="adminMembersListReactApp"></div>
                 </div>
             </div>
             <div class="admin-pane" id="apane-data-archive">
@@ -2151,46 +2152,14 @@
             box.appendChild(note);
         }
         async function adminLoadMembers() {
-            const list = $('adminMembersList'); list.textContent = 'Loading…';
+            setAdminMembersListState({ status: 'loading', members: [], currentMemberId: ME_ID });
             let members = [];
             try { const r = await adminApi('/admin/members'); if (r.ok) members = (await r.json()).members || []; } catch (e) {}
-            list.textContent = '';
-            if (!members.length) { list.appendChild(elx('p', 'al-note', 'No members yet.')); return; }
-            const adminCount = members.filter((x) => x.isAdmin).length;
-            members.forEach((m) => {
-                const id = m.pdgaNo || m.udisc || m.memberId;
-                const row = elx('div', 'admin-evrow');
-                row.appendChild(elx('span', 'ev-name', m.name + ' — ' + id + (m.isAdmin ? ' · admin' : '') + (m.mustChangePin ? ' · PIN not set' : '')));
-                const re = elx('button', 'admin-btn', 'Reissue PIN'); re.type = 'button';
-                re.addEventListener('click', async () => {
-                    if (!confirm('Issue a new temporary PIN for ' + m.name + '? Their current PIN stops working.')) return;
-                    const r = await adminApi('/admin/members/reset-pin', { method: 'POST', body: { identifier: id } });
-                    if (r.ok) { const j = await r.json(); showTempPin(j.member, j.tempPin); adminMsg('New temp PIN issued', true); adminLoadMembers(); }
-                    else adminMsg('Reissue failed (' + r.status + ')', false);
-                });
-                row.appendChild(re);
-                const roleBtn = elx('button', 'admin-btn', m.isAdmin ? 'Remove admin' : 'Make admin');
-                roleBtn.type = 'button';
-                if (m.isAdmin && adminCount <= 1) { roleBtn.disabled = true; roleBtn.title = "Can't remove the last admin"; }
-                roleBtn.addEventListener('click', async () => {
-                    const promoting = !m.isAdmin;
-                    const self = ME_ID && ME_ID === m.memberId;
-                    const ask = promoting
-                        ? 'Grant admin rights to ' + m.name + '?'
-                        : (self ? "Remove your OWN admin access? You'll lose this panel." : 'Remove admin rights from ' + m.name + '?');
-                    if (!confirm(ask)) return;
-                    roleBtn.disabled = true;
-                    const r = await adminApi('/admin/members/set-role', { method: 'POST', body: { memberId: m.memberId, isAdmin: promoting } });
-                    if (r.ok) { adminMsg((promoting ? 'Promoted ' : 'Demoted ') + m.name, true); adminLoadMembers(); }
-                    else {
-                        let err = {}; try { err = await r.json(); } catch (e) {}
-                        adminMsg(err.error === 'last_admin' ? "Can't remove the last admin" : ('Role change failed (' + r.status + ')'), false);
-                        roleBtn.disabled = false;
-                    }
-                });
-                row.appendChild(roleBtn);
-                list.appendChild(row);
-            });
+            setAdminMembersListState({ status: 'ready', members, currentMemberId: ME_ID });
+        }
+        function setAdminMembersListState(state) {
+            window.__gvdgAdminMembersListState = state;
+            window.dispatchEvent(new CustomEvent('gvdg:admin-members-list', { detail: state }));
         }
         async function adminAddMember(e) {
             e.preventDefault();
@@ -2696,6 +2665,34 @@
                 const r = await adminApi('/admin/meetings/' + meeting.id, { method: 'DELETE' });
                 adminMsg(r.ok ? 'Deleted' : 'Delete failed', r.ok);
                 if (r.ok) adminLoadMeetings();
+            });
+            window.addEventListener('gvdg:admin-member-reset-pin-request', async (event) => {
+                const detail = event.detail || {};
+                const identifier = detail.identifier;
+                if (!identifier) return;
+                const r = await adminApi('/admin/members/reset-pin', { method: 'POST', body: { identifier } });
+                if (r.ok) {
+                    const j = await r.json();
+                    showTempPin(j.member, j.tempPin);
+                    adminMsg('New temp PIN issued', true);
+                    adminLoadMembers();
+                } else {
+                    adminMsg('Reissue failed (' + r.status + ')', false);
+                }
+            });
+            window.addEventListener('gvdg:admin-member-role-request', async (event) => {
+                const detail = event.detail || {};
+                const member = detail.member;
+                const promoting = detail.isAdmin === true;
+                if (!member || !member.memberId) return;
+                const r = await adminApi('/admin/members/set-role', { method: 'POST', body: { memberId: member.memberId, isAdmin: promoting } });
+                if (r.ok) {
+                    adminMsg((promoting ? 'Promoted ' : 'Demoted ') + member.name, true);
+                    adminLoadMembers();
+                } else {
+                    let err = {}; try { err = await r.json(); } catch (e) {}
+                    adminMsg(err.error === 'last_admin' ? "Can't remove the last admin" : ('Role change failed (' + r.status + ')'), false);
+                }
             });
             $('adminCreateForm').addEventListener('submit', adminSaveEvent);
             $('aeCourse').addEventListener('change', aeLoadLayouts);

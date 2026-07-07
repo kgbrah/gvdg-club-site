@@ -275,3 +275,38 @@ test('admin club content lists are rendered by React from legacy loader state', 
   assert.match(lists, /role: "status"/);
   assert.doesNotMatch(lists, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️/);
 });
+
+test('admin members list is rendered by React from legacy loader state', () => {
+  const html = readFileSync('admin.html', 'utf8');
+  const main = readFileSync('src/admin-app/main.js', 'utf8');
+  const membersList = readFileSync('src/admin-app/members-list.js', 'utf8');
+  const adminLoadMembers = html.match(/async function adminLoadMembers\(\) \{[\s\S]*?\n        \}/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?\$\('adminCreateForm'\)\.addEventListener/)?.[0];
+
+  assert.match(html, /id="adminMembersListReactApp"/);
+  assert.doesNotMatch(html, /id="adminMembersList"/);
+  assert.match(html, /function setAdminMembersListState\(state\) \{[\s\S]*window\.__gvdgAdminMembersListState = state;[\s\S]*gvdg:admin-members-list/);
+  assert.ok(adminLoadMembers);
+  assert.match(adminLoadMembers, /setAdminMembersListState\(\{ status: 'loading', members: \[\], currentMemberId: ME_ID \}\)/);
+  assert.match(adminLoadMembers, /setAdminMembersListState\(\{ status: 'ready', members, currentMemberId: ME_ID \}\)/);
+  assert.doesNotMatch(adminLoadMembers, /adminMembersList|list\.textContent|list\.appendChild|elx\('div', 'admin-evrow'\)|addEventListener|document\.createElement/);
+  assert.ok(initAdmin);
+  assert.match(initAdmin, /gvdg:admin-member-reset-pin-request/);
+  assert.match(initAdmin, /adminApi\('\/admin\/members\/reset-pin', \{ method: 'POST', body: \{ identifier \} \}\)/);
+  assert.match(initAdmin, /showTempPin\(j\.member, j\.tempPin\)/);
+  assert.match(initAdmin, /gvdg:admin-member-role-request/);
+  assert.match(initAdmin, /adminApi\('\/admin\/members\/set-role', \{ method: 'POST', body: \{ memberId: member\.memberId, isAdmin: promoting \} \}\)/);
+  assert.match(main, /import \{ AdminMembersList \} from "\.\/members-list\.js"/);
+  assert.match(main, /const membersListMount = document\.getElementById\("adminMembersListReactApp"\)/);
+  assert.match(main, /createRoot\(membersListMount\)\.render\(h\(AdminMembersList\)\)/);
+  assert.match(membersList, /export function AdminMembersList/);
+  assert.match(membersList, /gvdg:admin-members-list/);
+  assert.match(membersList, /gvdg:admin-member-reset-pin-request/);
+  assert.match(membersList, /gvdg:admin-member-role-request/);
+  assert.match(membersList, /window\.__gvdgAdminMembersListState/);
+  assert.match(membersList, /data-react-admin-members-list/);
+  assert.match(membersList, /className: "admin-evrow"/);
+  assert.match(membersList, /className: "ev-name"/);
+  assert.match(membersList, /role: "status"/);
+  assert.doesNotMatch(membersList, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️|🏆|⚠|⏱/);
+});

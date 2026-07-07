@@ -221,6 +221,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: empty states use status semantics, list actions are real buttons, and visible text preserves the existing row summaries.
 - Motion: static list rows; only inherited control hover/focus states apply.
 
+### Admin Members List
+
+- Structure: the Admin Members list renders from `admin-app` into `adminMembersListReactApp`; legacy admin code fetches `/admin/members`, keeps member creation and temporary-PIN display, and publishes list state events only.
+- Variants: loading, empty, member row, admin badge text, PIN-not-set badge text, reissue-PIN action, make-admin action, remove-admin action, and disabled last-admin removal.
+- Spacing: reuses `.admin-evrow`, `.ev-name`, `.admin-btn`, and `.al-note` so the Members pane keeps the same compact operational rhythm as the Events and Club lists.
+- States: React owns row markup, loading/empty copy, confirm prompts, last-admin disabled state, and request dispatch; `admin.html` must not mutate `adminMembersList`, construct member `.admin-evrow` rows, or attach member row button listeners directly.
+- Accessibility: loading and empty states use status semantics, member actions are real buttons, and disabled role controls expose the existing last-admin title plus the shared disabled admin button treatment.
+- Motion: static list rows; only inherited control hover/focus states apply.
+
 ### Events Hub App
 
 - Structure: the Events page hub schedule renders from the shared `public-app` React bundle into `liveNowSection`, `calendarEvents`, `hub`, and `clubEventsSection`; the legacy Events script only fetches/splits feeds and publishes `gvdg:events-hub`.
