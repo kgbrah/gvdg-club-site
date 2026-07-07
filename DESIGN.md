@@ -158,6 +158,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: fundraisers and meetings render as articles, donation/share actions are real links/buttons, copied status is visible text, and external links keep safe new-tab attributes.
 - Motion: static content; only inherited hover/focus states apply.
 
+### Events Registration App
+
+- Structure: the Events page registration panel renders from the shared `public-app` React bundle into `registerSection`; the legacy Events script only requests refresh through `gvdg:events-registration-refresh` and keeps guest-token helpers for manage links and score links.
+- Variants: no-open-registration hidden state, guest registration form, member registration form, division select, doubles pair label input, CTP/ace add-ons, registered member state, registered guest state, amount-due note, inline submit errors, and two-step withdraw confirmation.
+- Spacing: reuses `.event-card`, `.register-card`, `.register-form`, `.reg-input`, `.register-addon`, `.reg-btn`, and `.events-grid` primitives so the panel keeps the existing compact Events rhythm.
+- States: React owns loading open registrations, member registration lookup, guest registration storage updates, form values, busy states, inline errors, registration POST, withdraw DELETE, and session-expired guest fallback; `events.html` must not contain a registration card/form DOM renderer.
+- Accessibility: registration cards render as articles, inputs are native form controls, status/error copy is visible, errors use alert semantics, and date/registered iconography uses Lucide SVGs.
+- Motion: no decorative motion; only inherited card/button hover and focus states apply.
+
 ### Ryder Cup Results App
 
 - Structure: the Ryder Cup page body renders from the shared `public-app` React bundle into `ryderCupReactApp`, including title, league link, loading/error state, scoreboard, scoring note, weekly match cards, last-updated text, and home link.

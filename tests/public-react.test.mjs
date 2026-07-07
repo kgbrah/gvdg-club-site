@@ -53,7 +53,7 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(chrome, /localStorage\.getItem\("theme"\)/);
   assert.match(chrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v53"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v54"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
@@ -98,6 +98,27 @@ test('Events fundraisers and meetings are rendered by the public React bundle', 
   assert.match(app, /navigator\.clipboard\.writeText\(url\)/);
   assert.match(app, /Heart, Mail/);
   assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|💚/);
+});
+
+test('Events registration is rendered by the public React bundle', () => {
+  const html = readFileSync('events.html', 'utf8');
+  const main = readFileSync('src/public-app/main.js', 'utf8');
+  const app = readFileSync('src/public-app/events-registration-app.js', 'utf8');
+
+  assert.match(html, /id="registerSection"/);
+  assert.match(html, /new CustomEvent\('gvdg:events-registration-refresh'/);
+  assert.doesNotMatch(html, /function regCard|function addonCheckbox|function registrationLiveConfig|registerEl\.appendChild|registerEl\.replaceChildren|alert\(|confirm\(/);
+  assert.match(main, /createRoot\(eventsRegistrationMount\)\.render\(h\(EventsRegistrationApp\)\)/);
+  assert.match(app, /export function EventsRegistrationApp/);
+  assert.match(app, /data-react-events-registration/);
+  assert.match(app, /data-react-events-registration-card/);
+  assert.match(app, /\/registration\/open/);
+  assert.match(app, /\/my-registrations/);
+  assert.match(app, /`\/events\/\$\{encodeURIComponent\(event\.id\)\}\/register/);
+  assert.match(app, /gvdg_guest_regs/);
+  assert.match(app, /Confirm withdraw/);
+  assert.match(app, /CalendarDays, CheckCircle2/);
+  assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|📅|📍|✅/);
 });
 
 test('Ryder Cup body results are rendered by the public React bundle', () => {

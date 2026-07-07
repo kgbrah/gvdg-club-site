@@ -89,14 +89,27 @@ test('public Events club content publishes fundraisers and meetings to React', (
 
 test('public registration cards post pair label only for doubles config', () => {
   const source = readFileSync('events.html', 'utf8');
-  assert.match(source, /function registrationLiveConfig\(ev\)/);
-  assert.match(source, /ev\.liveScoringConfig \|\| ev\.live_scoring_config/);
-  assert.match(source, /raw == null && ev\.play_format === 'doubles'/);
-  assert.match(source, /if \(isDoublesRegistration\(ev\)\)/);
-  assert.match(source, /pairInput\.setAttribute\('data-register-pair', 'team'\)/);
-  assert.match(source, /if \(pairInput\) body\.team = pairInput\.value\.trim\(\)/);
-  assert.match(source, /Currently Registering/);
-  assert.match(source, /registerEl\.hidden = true/);
+  const app = readFileSync('src/public-app/events-registration-app.js', 'utf8');
+  const utils = readFileSync('src/members-app/registration-utils.js', 'utf8');
+
+  assert.match(source, /function loadRegistration\(\)/);
+  assert.match(source, /new CustomEvent\('gvdg:events-registration-refresh'\)/);
+  assert.doesNotMatch(source, /function regCard|function addonCheckbox|function registrationLiveConfig|function clientOwed/);
+  assert.doesNotMatch(source, /registerEl\.replaceChildren|registerEl\.appendChild|document\.createElement\('input'\)|pairInput\.setAttribute|alert\(|confirm\(/);
+  assert.match(app, /export function EventsRegistrationApp/);
+  assert.match(app, /data-react-events-registration/);
+  assert.match(app, /data-react-events-registration-card/);
+  assert.match(app, /REGISTRATION_REFRESH_EVENT = "gvdg:events-registration-refresh"/);
+  assert.match(app, /isDoublesRegistration\(event\)/);
+  assert.match(app, /"data-register-pair": "team"/);
+  assert.match(app, /body\.team = team\.trim\(\)/);
+  assert.match(app, /addons: body\.addons/);
+  assert.match(app, /guestReg \? parseObject\(guestReg\.addons\) : \{\}/);
+  assert.match(app, /Currently Registering/);
+  assert.match(app, /Confirm withdraw/);
+  assert.match(utils, /function registrationLiveConfig\(event\)/);
+  assert.match(utils, /event\.liveScoringConfig \|\| event\.live_scoring_config/);
+  assert.match(utils, /raw == null && event\.play_format === "doubles"/);
 });
 
 test('Ryder Cup schedule cards link to the league route', () => {
