@@ -248,6 +248,24 @@ Spacing follows a 4px base through rem values.
 - Accessibility: loading and empty states use status semantics, thumbnails have text alternatives, editable controls have product-specific labels, and row actions are real buttons.
 - Motion: static inventory rows; only inherited control hover/focus states apply.
 
+### Admin Orders List
+
+- Structure: the Admin Pro Shop orders list renders from `admin-app` into `adminOrdersListReactApp`; legacy admin code fetches `/admin/orders`, keeps the status filter, refresh button, order badge update, and PATCH/DELETE API helpers, and publishes list state events only.
+- Variants: loading, error, empty all-orders list, empty filtered list, unfulfilled order card, cancelled order card, line items, editable fulfillment status, editable carrier, editable tracking number, save action, cancel action, delete action, and disabled cancelled cancel action.
+- Spacing: reuses `.orders-list`, `.order-card`, `.order-head`, `.order-items`, `.order-controls`, `.order-actions`, `.shop-admin-meta`, `.admin-btn`, and `.al-note` so fulfillment cards keep the existing compact shop-admin rhythm.
+- States: React owns order-card markup, row form values, loading/error/empty copy, cancel/delete confirm prompts, pending button disablement, and save/cancel/delete request dispatch; `admin.html` must not mutate `adminOrdersList`, construct `.order-card` rows, or attach order row button/input listeners directly.
+- Accessibility: loading and empty states use status semantics, load failures use alert semantics, fulfillment fields have order-specific labels, and row actions are real buttons.
+- Motion: static order cards; only inherited control hover/focus states apply.
+
+### Admin Data Archive Destinations List
+
+- Structure: the Admin Data archive destination list renders from `admin-app` into `adminDataArchiveDestinationsReactApp`; legacy admin code fetches `/admin/export/endpoints`, keeps destination form save/reset, export destination select population, and publishes list state events only.
+- Variants: loading, error, empty destination list, active destination row, inactive destination row, token-set metadata, token-missing metadata, edit action, make-active action, and delete action.
+- Spacing: reuses `.admin-evrow`, `.ev-name`, `.al-note`, `.admin-msg.ok`, `.shop-admin-controls`, and `.admin-btn` so archive destinations match the compact admin list rhythm.
+- States: React owns destination row markup, loading/error/empty copy, active-default badge, delete confirm prompt, and edit/activate/delete request dispatch; `admin.html` must not mutate `dxDestinationsList`, construct destination `.admin-evrow` rows, or attach destination row listeners directly.
+- Accessibility: loading and empty states use status semantics, load failures use alert semantics, and row actions are real buttons.
+- Motion: static destination rows; only inherited control hover/focus states apply.
+
 ### Events Hub App
 
 - Structure: the Events page hub schedule renders from the shared `public-app` React bundle into `liveNowSection`, `calendarEvents`, `hub`, and `clubEventsSection`; the legacy Events script only fetches/splits feeds and publishes `gvdg:events-hub`.

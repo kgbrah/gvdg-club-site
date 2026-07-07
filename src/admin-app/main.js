@@ -4,10 +4,12 @@ import { createRoot } from "react-dom/client";
 import { AdminAuthGate } from "./auth-gate.js";
 import { AdminFundraisersList, AdminLeaguesList, AdminMeetingsList } from "./club-content-lists.js";
 import { AdminCoursesList } from "./courses-list.js";
+import { AdminDataArchiveDestinationsList } from "./data-archive-destinations-list.js";
 import { AdminEventsList } from "./events-list.js";
 import { AdminMessage } from "./message.js";
 import { AdminMembersList } from "./members-list.js";
 import { AdminNavigation } from "./navigation.js";
+import { AdminOrdersList } from "./orders-list.js";
 import { AdminPageChrome } from "./page-chrome.js";
 import { AdminProductsList } from "./products-list.js";
 import { AdminWalletRecentList } from "./wallet-recent-list.js";
@@ -75,9 +77,19 @@ if (productsListMount) {
   createRoot(productsListMount).render(h(AdminProductsList));
 }
 
+const ordersListMount = document.getElementById("adminOrdersListReactApp");
+if (ordersListMount) {
+  createRoot(ordersListMount).render(h(AdminOrdersList));
+}
+
 const walletRecentMount = document.getElementById("adminWalletRecentReactApp");
 if (walletRecentMount) {
   createRoot(walletRecentMount).render(h(AdminWalletRecentList));
+}
+
+const dataArchiveDestinationsMount = document.getElementById("adminDataArchiveDestinationsReactApp");
+if (dataArchiveDestinationsMount) {
+  createRoot(dataArchiveDestinationsMount).render(h(AdminDataArchiveDestinationsList));
 }
 
 const crottsMount = document.getElementById("crottsReactApp");
