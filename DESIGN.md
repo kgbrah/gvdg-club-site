@@ -185,6 +185,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: the loading state uses status semantics, the gate uses visible text and a real Members link, and lock iconography uses Lucide SVGs.
 - Motion: loading keeps the existing spinner animation and gate links keep inherited hover transitions only.
 
+### Admin Message
+
+- Structure: the shared Admin success/error message renders from `admin-app` into `adminMessageReactApp`; legacy admin workflows keep calling `adminMsg(text, ok)` and publish `gvdg:admin-message` events only.
+- Variants: empty reserved row, success message, and error message.
+- Spacing: reuses `.admin-msg`, `.admin-msg.ok`, and `.admin-msg.err` so the message keeps its compact position above the pane content.
+- States: React owns message text, success/error classes, and status/alert semantics; `admin.html` must not keep `adminMsg` as a direct `textContent`/`className` DOM mutator or keep an `adminMsg` element id.
+- Accessibility: success messages use status semantics and error messages use alert semantics while preserving visible text.
+- Motion: static message text; no decorative motion.
+
 ### Events Hub App
 
 - Structure: the Events page hub schedule renders from the shared `public-app` React bundle into `liveNowSection`, `calendarEvents`, `hub`, and `clubEventsSection`; the legacy Events script only fetches/splits feeds and publishes `gvdg:events-hub`.

@@ -234,7 +234,7 @@
         .admin-form-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
         .admin-form-note { color: var(--text-muted); font-size: 0.9rem; margin: 0 0 0.75rem; }
         .admin-msg { font-size: 0.9rem; margin-bottom: 0.75rem; min-height: 1.2em; }
-        .admin-msg.ok { color: var(--green); } .admin-msg.err { color: #dc3545; }
+        .admin-msg.ok { color: var(--green); } .admin-msg.err { color: var(--over); }
         .admin-evrow { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); margin-bottom: 0.5rem; }
         .admin-evrow .ev-name { font-weight: 600; flex: 1; min-width: 140px; }
         .admin-evrow input, .admin-evrow select { padding: 0.35rem 0.45rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
@@ -299,7 +299,7 @@
             <div class="admin-main">
                 <div id="adminNavigationReactApp"></div>
                 <div class="admin-content">
-            <div class="admin-msg" id="adminMsg"></div>
+            <div id="adminMessageReactApp"></div>
             <div class="admin-pane active" id="apane-events"><div id="adminEventsList">Loading…</div></div>
             <div class="admin-pane" id="apane-create">
                 <p class="admin-form-note" id="aeModeNote">Create a scheduled event, fundraiser, meeting, or league round.</p>
@@ -792,7 +792,14 @@
         // ============================================================
         let adminInited = false;
         const elx = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
-        function adminMsg(text, ok) { const m = $('adminMsg'); m.textContent = text || ''; m.className = 'admin-msg' + (text ? (ok ? ' ok' : ' err') : ''); }
+        function setAdminMessageState(state) {
+            window.__gvdgAdminMessageState = state;
+            window.dispatchEvent(new CustomEvent('gvdg:admin-message', { detail: state }));
+        }
+        function adminMsg(text, ok) {
+            const message = text || '';
+            setAdminMessageState({ text: message, ok: message ? ok === true : null });
+        }
         function adminApi(path, opts) { return api(path, { ...(opts || {}), token: sessionStorage.getItem(TOKEN_KEY) }); }
         function dollarsFromCents(c) { const n = Number(c || 0); const abs = Math.abs(n); const out = '$' + (abs / 100).toLocaleString(undefined, { minimumFractionDigits: abs % 100 ? 2 : 0 }); return n < 0 ? '-' + out : out; }
         function dollarsToCents(v) { const n = parseFloat(v); return Number.isFinite(n) ? Math.round(n * 100) : null; }

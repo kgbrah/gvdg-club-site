@@ -117,3 +117,29 @@ test('admin navigation is rendered by React and drives legacy pane switching thr
   assert.match(nav, /value: selectValue\(group\)/);
   assert.doesNotMatch(nav, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️/);
 });
+
+test('admin message surface is rendered by React from adminMsg events', () => {
+  const html = readFileSync('admin.html', 'utf8');
+  const main = readFileSync('src/admin-app/main.js', 'utf8');
+  const message = readFileSync('src/admin-app/message.js', 'utf8');
+  const adminMsg = html.match(/function adminMsg\(text, ok\) \{[\s\S]*?\n        \}/)?.[0];
+
+  assert.match(html, /id="adminMessageReactApp"/);
+  assert.doesNotMatch(html, /id="adminMsg"/);
+  assert.match(html, /\.admin-msg\.err \{ color: var\(--over\); \}/);
+  assert.match(html, /function setAdminMessageState\(state\) \{[\s\S]*window\.__gvdgAdminMessageState = state;[\s\S]*gvdg:admin-message/);
+  assert.ok(adminMsg);
+  assert.match(adminMsg, /const message = text \|\| ''/);
+  assert.match(adminMsg, /setAdminMessageState\(\{ text: message, ok: message \? ok === true : null \}\)/);
+  assert.doesNotMatch(adminMsg, /textContent|className|getElementById|\$\('adminMsg'\)/);
+  assert.match(main, /import \{ AdminMessage \} from "\.\/message\.js"/);
+  assert.match(main, /const messageMount = document\.getElementById\("adminMessageReactApp"\)/);
+  assert.match(main, /createRoot\(messageMount\)\.render\(h\(AdminMessage\)\)/);
+  assert.match(message, /export function AdminMessage/);
+  assert.match(message, /data-react-admin-message/);
+  assert.match(message, /gvdg:admin-message/);
+  assert.match(message, /window\.__gvdgAdminMessageState/);
+  assert.match(message, /role = hasText \? \(message\.ok \? "status" : "alert"\) : undefined/);
+  assert.match(message, /className: `admin-msg\$\{statusClass\}`/);
+  assert.doesNotMatch(message, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️/);
+});
