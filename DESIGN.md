@@ -203,6 +203,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: loading and empty states use status semantics, status controls are labelled native selects, and row actions are real buttons.
 - Motion: static list rows; only inherited control hover/focus states apply.
 
+### Admin Import Candidates
+
+- Structure: the Admin Import candidate preview list renders from `admin-app` into `adminImportCandidatesReactApp`; legacy DiscGolfScene and CSV import handlers only publish candidate states and handle create-request events.
+- Variants: hidden idle state, loading candidates, no candidates found, candidate row, creating event, created event, and failed event.
+- Spacing: reuses `.admin-import-csv`, `.admin-cand`, `.dash-note`, and `.admin-btn.secondary` so the CSV controls and import previews keep the compact divider rhythm already used by Courses.
+- States: React owns candidate row markup, create button disabled state, and create/created/failed text; `admin.html` must not keep `importCandidates`, clear candidate `textContent`, construct `.admin-cand` rows, or attach create-row click listeners directly.
+- Accessibility: loading and empty states use status semantics, and row create actions are real buttons.
+- Motion: static candidate rows; only inherited control hover/focus states apply.
+
 ### Admin Courses List
 
 - Structure: the Admin courses summary list renders from `admin-app` into `adminCoursesListReactApp`; legacy admin code fetches `/courses`, continues populating the event/layout course selects, and publishes `gvdg:admin-courses-list` for the visual list only.
@@ -223,12 +232,21 @@ Spacing follows a 4px base through rem values.
 
 ### Admin Members List
 
-- Structure: the Admin Members list renders from `admin-app` into `adminMembersListReactApp`; legacy admin code fetches `/admin/members`, keeps member creation and temporary-PIN display, and publishes list state events only.
+- Structure: the Admin Members list renders from `admin-app` into `adminMembersListReactApp`; legacy admin code fetches `/admin/members`, keeps member creation, and publishes list state events only.
 - Variants: loading, empty, member row, admin badge text, PIN-not-set badge text, reissue-PIN action, make-admin action, remove-admin action, and disabled last-admin removal.
 - Spacing: reuses `.admin-evrow`, `.ev-name`, `.admin-btn`, and `.al-note` so the Members pane keeps the same compact operational rhythm as the Events and Club lists.
 - States: React owns row markup, loading/empty copy, confirm prompts, last-admin disabled state, and request dispatch; `admin.html` must not mutate `adminMembersList`, construct member `.admin-evrow` rows, or attach member row button listeners directly.
 - Accessibility: loading and empty states use status semantics, member actions are real buttons, and disabled role controls expose the existing last-admin title plus the shared disabled admin button treatment.
 - Motion: static list rows; only inherited control hover/focus states apply.
+
+### Admin Member Temporary PIN
+
+- Structure: the one-shot temporary PIN result renders from `admin-app` into `adminMemberTempPinReactApp`; legacy create/reset flows publish `gvdg:admin-member-temp-pin` events only.
+- Variants: hidden idle state, issued PIN card, copied button state, PDGA login label, UDisc login label, and member-id fallback label.
+- Spacing: reuses the admin form rhythm with `.admin-temp-pin`, `.admin-temp-pin-row`, `.admin-temp-pin-code`, `.admin-temp-pin-note`, and `.admin-btn`; border radius stays at 8px.
+- States: React owns PIN text, member label text, copy-button text, and clipboard timeout reset; `admin.html` must not keep `amTempPin`, construct PIN child nodes, mutate temp-PIN `textContent`, or apply inline temp-PIN styles.
+- Accessibility: the issued PIN card uses polite status semantics, visible copy text, and a real button; the PIN remains visible when clipboard access is unavailable.
+- Motion: static card; only inherited button hover/focus states apply.
 
 ### Admin Wallet Recent List
 

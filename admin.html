@@ -239,9 +239,18 @@
         .admin-evrow { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); margin-bottom: 0.5rem; }
         .admin-evrow .ev-name { font-weight: 600; flex: 1; min-width: 140px; }
         .admin-evrow input, .admin-evrow select { padding: 0.35rem 0.45rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
+        .admin-temp-pin { display: grid; gap: 0.6rem; margin-top: 1rem; padding: 1rem 1.25rem; border: 2px solid var(--primary); border-radius: 8px; background: var(--bg-tertiary); }
+        .admin-temp-pin-title { font-weight: 700; color: var(--text-primary); }
+        .admin-temp-pin-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+        .admin-temp-pin-code { font: 800 2rem/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: 0.3em; color: var(--text-primary); }
+        .admin-temp-pin-note { font-size: 0.85rem; color: var(--text-muted); }
         .admin-badge { font-size: 0.7rem; text-transform: uppercase; padding: 0.15rem 0.5rem; border-radius: 4px; background: var(--secondary); color: #fff; letter-spacing: 0.04em; }
         .admin-badge.live { background: #dc3545; } .admin-badge.final { background: var(--text-muted); } .admin-badge.scheduled { background: var(--green); }
         .admin-cand { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--border-color); }
+        .admin-import-csv { display: grid; gap: 0.5rem; margin-top: 1rem; max-width: 520px; }
+        .admin-import-csv label { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); }
+        .admin-import-csv textarea { width: 100%; min-height: 7rem; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font: 0.9rem/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+        .admin-import-csv .admin-btn { justify-self: start; }
         .admin-split { display: grid; grid-template-columns: minmax(260px, 420px) 1fr; gap: 1.25rem; align-items: start; }
         @media (max-width: 820px) { .admin-split { grid-template-columns: 1fr; } }
         .shop-admin-heading { display: flex; align-items: end; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.65rem; }
@@ -334,13 +343,13 @@
             </div>
             <div class="admin-pane" id="apane-import">
                 <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:0.5rem;">Import candidates appear below; click <em>Create</em> to add an event.</p>
-                <button type="button" class="admin-btn secondary" id="dgsImportBtn">⬇ Import from DiscGolfScene feed</button>
-                <div style="margin-top:1rem;">
-                    <label for="csvImportText" style="font-size:0.8rem;font-weight:600;">Paste CSV (header: name,date,type,format)</label>
+                <button type="button" class="admin-btn secondary" id="dgsImportBtn">Import from DiscGolfScene feed</button>
+                <div class="admin-import-csv">
+                    <label for="csvImportText">Paste CSV (header: name,date,type,format)</label>
                     <textarea id="csvImportText" rows="4" placeholder="name,date,type,format&#10;Fall Open,2026-09-12,tournament,stroke"></textarea>
-                    <button type="button" class="admin-btn secondary" id="csvImportBtn" style="margin-top:0.5rem;">Preview CSV</button>
+                    <button type="button" class="admin-btn secondary" id="csvImportBtn">Preview CSV</button>
                 </div>
-                <div id="importCandidates" style="margin-top:1rem;"></div>
+                <div id="adminImportCandidatesReactApp" style="margin-top:1rem;"></div>
             </div>
             <div class="admin-pane" id="apane-courses">
                 <form class="admin-form" id="adminCourseForm">
@@ -641,7 +650,7 @@
                     <div style="display:flex;align-items:flex-end;"><label style="display:flex;align-items:center;gap:.5rem;"><input id="amAdmin" type="checkbox"> Make admin</label></div>
                     <button type="submit" class="admin-btn">Create &amp; issue temp PIN</button>
                 </form>
-                <div id="amTempPin" style="display:none;"></div>
+                <div id="adminMemberTempPinReactApp"></div>
                 <div class="al-section" style="margin-top:1rem;">
                     <h4 class="al-h">Members</h4>
                     <div id="adminMembersListReactApp"></div>
@@ -1351,35 +1360,27 @@
             }
         }
 
-        function renderCandidates(cands) {
-            const wrap = $('importCandidates'); wrap.textContent = '';
-            if (!cands || !cands.length) { wrap.appendChild(elx('p', 'dash-note', 'No candidates found.')); return; }
-            cands.forEach((c) => {
-                const row = elx('div', 'admin-cand');
-                row.appendChild(elx('span', null, (c.name || '?') + (c.date ? ' (' + c.date + ')' : '') + ' [' + (c.type || 'event') + ']'));
-                const btn = elx('button', 'admin-btn secondary', 'Create');
-                btn.addEventListener('click', async () => {
-                    btn.disabled = true;
-                    const r = await adminApi('/admin/events', { method: 'POST', body: { type: c.type || 'tournament', name: c.name, date: c.date || null, format: c.format || null, source: c.source || 'manual', external_url: c.external_url || null } });
-                    btn.textContent = r.ok ? '✓ Created' : 'Failed';
-                    if (r.ok) adminLoadEvents();
-                });
-                row.appendChild(btn);
-                wrap.appendChild(row);
-            });
+        function setAdminImportCandidatesState(state) {
+            window.__gvdgAdminImportCandidatesState = state;
+            window.dispatchEvent(new CustomEvent('gvdg:admin-import-candidates', { detail: state }));
+        }
+        function showImportCandidates(candidates) {
+            setAdminImportCandidatesState({ status: 'ready', candidates: Array.isArray(candidates) ? candidates : [] });
         }
 
         async function adminDgsImport() {
             adminMsg('Importing from DiscGolfScene…', true);
+            setAdminImportCandidatesState({ status: 'loading', candidates: [] });
             const r = await adminApi('/admin/import/dgs', { method: 'POST', body: {} });
-            if (r.ok) { const d = await r.json(); renderCandidates(d.candidates); adminMsg((d.candidates || []).length + ' candidates loaded', true); }
+            if (r.ok) { const d = await r.json(); showImportCandidates(d.candidates); adminMsg((d.candidates || []).length + ' candidates loaded', true); }
             else { adminMsg('DGS import failed (' + r.status + ')', false); }
         }
         async function adminCsvImport() {
             const csv = $('csvImportText').value;
             if (!csv.trim()) { adminMsg('Paste CSV first', false); return; }
+            setAdminImportCandidatesState({ status: 'loading', candidates: [] });
             const r = await adminApi('/admin/import/csv', { method: 'POST', body: { csv } });
-            if (r.ok) { const d = await r.json(); renderCandidates(d.candidates); adminMsg((d.candidates || []).length + ' rows parsed', true); }
+            if (r.ok) { const d = await r.json(); showImportCandidates(d.candidates); adminMsg((d.candidates || []).length + ' rows parsed', true); }
             else { adminMsg('CSV import failed (' + r.status + ')', false); }
         }
 
@@ -2096,23 +2097,11 @@
             else adminMsg('Add failed (' + r.status + ')', false);
         }
 
-        // --- Members: onboard / issue temporary PINs (XSS-safe: textContent + createElement only) ---
+        // --- Members: onboard / issue temporary PINs ---
         function showTempPin(member, tempPin) {
-            const box = $('amTempPin');
-            box.textContent = '';
-            box.style.cssText = 'display:block;margin-top:1rem;padding:1rem 1.25rem;border:2px solid var(--primary,#FF6B35);border-radius:12px;background:rgba(255,107,53,0.08);';
-            const idLabel = member.pdgaNo ? ('PDGA# ' + member.pdgaNo) : (member.udisc || member.memberId);
-            box.appendChild(elx('div', null, 'Temporary PIN for ' + member.name + ' (' + idLabel + ')'));
-            const row = elx('div'); row.style.cssText = 'display:flex;align-items:center;gap:1rem;margin:.5rem 0;';
-            const pin = elx('span', null, tempPin); pin.style.cssText = 'font-size:2rem;font-weight:800;letter-spacing:.3em;font-family:ui-monospace,monospace;';
-            row.appendChild(pin);
-            const copy = elx('button', 'admin-btn', 'Copy'); copy.type = 'button';
-            copy.addEventListener('click', () => { try { navigator.clipboard.writeText(tempPin); } catch (e) {} copy.textContent = 'Copied'; setTimeout(() => { copy.textContent = 'Copy'; }, 1200); });
-            row.appendChild(copy);
-            box.appendChild(row);
-            const note = elx('div', null, 'Give this to ' + member.name + '. They log in with their ' + (member.pdgaNo ? 'PDGA#' : 'UDisc') + ' + this PIN, then set their own PIN. Shown once.');
-            note.style.cssText = 'font-size:.85rem;opacity:.8;';
-            box.appendChild(note);
+            const state = { member: member || null, tempPin: tempPin || '' };
+            window.__gvdgAdminMemberTempPinState = state;
+            window.dispatchEvent(new CustomEvent('gvdg:admin-member-temp-pin', { detail: state }));
         }
         async function adminLoadMembers() {
             setAdminMembersListState({ status: 'loading', members: [], currentMemberId: ME_ID });
@@ -2505,6 +2494,15 @@
                 if (!ev || ev.id == null) return;
                 const r = await adminApi('/admin/events/' + ev.id, { method: 'DELETE' });
                 adminMsg(r.ok ? 'Deleted “' + ev.name + '”' : 'Delete failed', r.ok);
+                if (r.ok) adminLoadEvents();
+            });
+            window.addEventListener('gvdg:admin-import-candidate-create-request', async (event) => {
+                const detail = event.detail || {};
+                const candidate = detail.candidate || {};
+                const requestId = detail.requestId;
+                if (!requestId || !candidate.name) return;
+                const r = await adminApi('/admin/events', { method: 'POST', body: { type: candidate.type || 'tournament', name: candidate.name, date: candidate.date || null, format: candidate.format || null, source: candidate.source || 'manual', external_url: candidate.external_url || null } });
+                window.dispatchEvent(new CustomEvent('gvdg:admin-import-candidate-create-result', { detail: { ok: r.ok, requestId } }));
                 if (r.ok) adminLoadEvents();
             });
             window.addEventListener('gvdg:admin-league-delete-request', async (event) => {

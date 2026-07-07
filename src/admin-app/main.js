@@ -6,8 +6,9 @@ import { AdminFundraisersList, AdminLeaguesList, AdminMeetingsList } from "./clu
 import { AdminCoursesList } from "./courses-list.js";
 import { AdminDataArchiveDestinationsList, AdminDataArchiveExportResult } from "./data-archive-destinations-list.js";
 import { AdminEventsList } from "./events-list.js";
+import { AdminImportCandidatesList } from "./import-candidates-list.js";
 import { AdminMessage } from "./message.js";
-import { AdminMembersList } from "./members-list.js";
+import { AdminMembersList, AdminMemberTempPin } from "./members-list.js";
 import { AdminNavigation } from "./navigation.js";
 import { AdminOrdersList } from "./orders-list.js";
 import { AdminPageChrome } from "./page-chrome.js";
@@ -49,6 +50,11 @@ if (eventsListMount) {
   createRoot(eventsListMount).render(h(AdminEventsList));
 }
 
+const importCandidatesMount = document.getElementById("adminImportCandidatesReactApp");
+if (importCandidatesMount) {
+  createRoot(importCandidatesMount).render(h(AdminImportCandidatesList));
+}
+
 const coursesListMount = document.getElementById("adminCoursesListReactApp");
 if (coursesListMount) {
   createRoot(coursesListMount).render(h(AdminCoursesList));
@@ -72,6 +78,11 @@ if (meetingsListMount) {
 const membersListMount = document.getElementById("adminMembersListReactApp");
 if (membersListMount) {
   createRoot(membersListMount).render(h(AdminMembersList));
+}
+
+const memberTempPinMount = document.getElementById("adminMemberTempPinReactApp");
+if (memberTempPinMount) {
+  createRoot(memberTempPinMount).render(h(AdminMemberTempPin));
 }
 
 const productsListMount = document.getElementById("adminProductsListReactApp");

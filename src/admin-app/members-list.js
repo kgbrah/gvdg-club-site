@@ -3,6 +3,7 @@ import React from "react";
 const h = React.createElement;
 
 const EMPTY_STATE = { status: "loading", members: [], currentMemberId: null };
+const EMPTY_TEMP_PIN_STATE = { member: null, tempPin: "" };
 
 function objectOrEmpty(value) {
   return value && typeof value === "object" ? value : {};
@@ -11,6 +12,11 @@ function objectOrEmpty(value) {
 function currentState() {
   const state = window.__gvdgAdminMembersListState;
   return state && typeof state === "object" ? state : EMPTY_STATE;
+}
+
+function currentTempPinState() {
+  const state = window.__gvdgAdminMemberTempPinState;
+  return state && typeof state === "object" ? state : EMPTY_TEMP_PIN_STATE;
 }
 
 function normalizeText(value, fallback = "") {
@@ -41,6 +47,13 @@ function normalizeState(state) {
   };
 }
 
+function normalizeTempPinState(state) {
+  return {
+    member: normalizeMember(state.member),
+    tempPin: normalizeText(state.tempPin),
+  };
+}
+
 function dispatchRequest(name, detail) {
   window.dispatchEvent(new CustomEvent(name, { detail }));
 }
@@ -52,6 +65,13 @@ function memberSummary(member) {
     member.mustChangePin ? "PIN not set" : "",
   ].filter(Boolean);
   return `${member.name} - ${badges.join(" - ")}`;
+}
+
+function memberPinLabel(member) {
+  if (member.source && typeof member.source.pdgaNo === "string" && member.source.pdgaNo) return `PDGA# ${member.source.pdgaNo}`;
+  return member.source && typeof member.source.udisc === "string" && member.source.udisc
+    ? member.source.udisc
+    : member.memberId || member.identifier || "member id unavailable";
 }
 
 function AdminMemberRow({ adminCount, currentMemberId, member }) {
@@ -93,6 +113,57 @@ function AdminMemberRow({ adminCount, currentMemberId, member }) {
       title: roleTitle,
       type: "button",
     }, roleLabel),
+  ]);
+}
+
+export function AdminMemberTempPin() {
+  const [state, setState] = React.useState(() => normalizeTempPinState(currentTempPinState()));
+  const [copied, setCopied] = React.useState(false);
+  const resetTimer = React.useRef(0);
+
+  React.useEffect(() => {
+    function update(event) {
+      setState(normalizeTempPinState(event.detail && typeof event.detail === "object" ? event.detail : currentTempPinState()));
+    }
+    window.addEventListener("gvdg:admin-member-temp-pin", update);
+    setState(normalizeTempPinState(currentTempPinState()));
+    return () => window.removeEventListener("gvdg:admin-member-temp-pin", update);
+  }, []);
+
+  React.useEffect(() => {
+    setCopied(false);
+    if (resetTimer.current) window.clearTimeout(resetTimer.current);
+    resetTimer.current = 0;
+  }, [state.tempPin]);
+
+  React.useEffect(() => () => {
+    if (resetTimer.current) window.clearTimeout(resetTimer.current);
+  }, []);
+
+  async function copyPin() {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(state.tempPin);
+    } catch {}
+    setCopied(true);
+    if (resetTimer.current) window.clearTimeout(resetTimer.current);
+    resetTimer.current = window.setTimeout(() => setCopied(false), 1200);
+  }
+
+  if (!state.tempPin) return null;
+
+  const loginMethod = state.member.source && state.member.source.pdgaNo ? "PDGA#" : "UDisc";
+  return h("section", {
+    "aria-live": "polite",
+    className: "admin-temp-pin",
+    "data-react-admin-member-temp-pin": "ready",
+    role: "status",
+  }, [
+    h("div", { className: "admin-temp-pin-title", key: "title" }, `Temporary PIN for ${state.member.name} (${memberPinLabel(state.member)})`),
+    h("div", { className: "admin-temp-pin-row", key: "pin-row" }, [
+      h("span", { className: "admin-temp-pin-code", key: "pin" }, state.tempPin),
+      h("button", { className: "admin-btn", key: "copy", onClick: copyPin, type: "button" }, copied ? "Copied" : "Copy"),
+    ]),
+    h("div", { className: "admin-temp-pin-note", key: "note" }, `Give this to ${state.member.name}. They log in with their ${loginMethod} and this PIN, then set their own PIN. Shown once.`),
   ]);
 }
 

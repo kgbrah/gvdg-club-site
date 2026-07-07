@@ -152,6 +152,7 @@ test('admin events list is rendered by React from adminLoadEvents state', () => 
   const html = readFileSync('admin.html', 'utf8');
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const eventsList = readFileSync('src/admin-app/events-list.js', 'utf8');
+  const importCandidates = readFileSync('src/admin-app/import-candidates-list.js', 'utf8');
   const adminLoadEvents = html.match(/async function adminLoadEvents\(\) \{[\s\S]*?\n        \}/)?.[0];
   const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?\$\('adminCreateForm'\)\.addEventListener/)?.[0];
 
@@ -171,8 +172,11 @@ test('admin events list is rendered by React from adminLoadEvents state', () => 
   assert.match(initAdmin, /adminApi\('\/admin\/events\/' \+ ev\.id, \{ method: 'DELETE' \}\)/);
   assert.match(initAdmin, /if \(r\.ok\) adminLoadEvents\(\)/);
   assert.match(main, /import \{ AdminEventsList \} from "\.\/events-list\.js"/);
+  assert.match(main, /import \{ AdminImportCandidatesList \} from "\.\/import-candidates-list\.js"/);
   assert.match(main, /const eventsListMount = document\.getElementById\("adminEventsListReactApp"\)/);
   assert.match(main, /createRoot\(eventsListMount\)\.render\(h\(AdminEventsList\)\)/);
+  assert.match(main, /const importCandidatesMount = document\.getElementById\("adminImportCandidatesReactApp"\)/);
+  assert.match(main, /createRoot\(importCandidatesMount\)\.render\(h\(AdminImportCandidatesList\)\)/);
   assert.match(eventsList, /export function AdminEventsList/);
   assert.match(eventsList, /data-react-admin-events-list/);
   assert.match(eventsList, /gvdg:admin-events-list/);
@@ -186,6 +190,9 @@ test('admin events list is rendered by React from adminLoadEvents state', () => 
   assert.match(eventsList, /className: `admin-badge \$\{event\.status\}`/);
   assert.match(eventsList, /role: "status"/);
   assert.doesNotMatch(eventsList, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️/);
+  assert.match(importCandidates, /export function AdminImportCandidatesList/);
+  assert.match(importCandidates, /gvdg:admin-import-candidates/);
+  assert.match(importCandidates, /data-react-admin-import-candidates/);
 });
 
 test('admin courses list is rendered by React while legacy code keeps course selects populated', () => {
@@ -296,9 +303,11 @@ test('admin members list is rendered by React from legacy loader state', () => {
   assert.match(initAdmin, /showTempPin\(j\.member, j\.tempPin\)/);
   assert.match(initAdmin, /gvdg:admin-member-role-request/);
   assert.match(initAdmin, /adminApi\('\/admin\/members\/set-role', \{ method: 'POST', body: \{ memberId: member\.memberId, isAdmin: promoting \} \}\)/);
-  assert.match(main, /import \{ AdminMembersList \} from "\.\/members-list\.js"/);
+  assert.match(main, /import \{ AdminMembersList, AdminMemberTempPin \} from "\.\/members-list\.js"/);
   assert.match(main, /const membersListMount = document\.getElementById\("adminMembersListReactApp"\)/);
   assert.match(main, /createRoot\(membersListMount\)\.render\(h\(AdminMembersList\)\)/);
+  assert.match(main, /const memberTempPinMount = document\.getElementById\("adminMemberTempPinReactApp"\)/);
+  assert.match(main, /createRoot\(memberTempPinMount\)\.render\(h\(AdminMemberTempPin\)\)/);
   assert.match(membersList, /export function AdminMembersList/);
   assert.match(membersList, /gvdg:admin-members-list/);
   assert.match(membersList, /gvdg:admin-member-reset-pin-request/);
