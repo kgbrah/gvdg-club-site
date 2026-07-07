@@ -140,6 +140,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: menu and theme controls are real buttons with labels, `aria-expanded`, `aria-controls`, `aria-pressed`, and Lucide icons; current page uses `aria-current="page"`.
 - Motion: mobile menu reveal and header scroll shadow preserve the existing transform/opacity/box-shadow transitions only.
 
+### Events Hub App
+
+- Structure: the Events page hub schedule renders from the shared `public-app` React bundle into `liveNowSection`, `calendarEvents`, `hub`, and `clubEventsSection`; the legacy Events script only fetches/splits feeds and publishes `gvdg:events-hub`.
+- Variants: no-current-events empty state, live-now section, external schedule feed card, internal league results card, upcoming club-scored card, status/type badges, and club feed card.
+- Spacing: reuses `.events-group-head`, `.events-section`, `.events-section-head`, `.events-grid`, `.event-card`, `.event-meta`, `.event-cta`, and badge primitives so the hub keeps the existing Events page rhythm.
+- States: React owns hub headings, live/upcoming/feed card markup, link attributes, empty-state rendering, Lucide date/location/external-link iconography, and event counts; `events.html` must not contain hub card/list/section DOM renderers.
+- Accessibility: schedule feed cards are real links when they navigate, upcoming/live event cards use hash links, external links keep safe new-tab attributes, and iconography uses Lucide SVGs.
+- Motion: preserves the inherited card hover/focus transforms only; no decorative motion is added.
+
 ### Events Previous Results App
 
 - Structure: the Events page previous-results panel renders from the shared `public-app` React bundle into `previousResultsSection`; the legacy Events script only publishes normalized result data through `gvdg:events-previous-results`.

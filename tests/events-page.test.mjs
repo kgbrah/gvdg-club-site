@@ -12,14 +12,17 @@ function renderPageSource() {
 }
 
 test('public Events page pins Live Now to the top section, above the schedule feed', () => {
+  const html = readFileSync('events.html', 'utf8');
   const source = renderPageSource();
-  const liveIndex = source.indexOf("liveNowEl.appendChild(section('Live Now', live, { live: true }))");
-  const feedIndex = source.indexOf('calendarEl.appendChild(feedList(feedEvents))');
-  assert.notEqual(liveIndex, -1, 'Live Now should render into the dedicated top liveNow section');
-  assert.notEqual(feedIndex, -1, 'schedule feed should still render inside the Events group');
-  assert.ok(liveIndex < feedIndex, 'Live Now should be rendered before the schedule feed');
-  assert.equal(source.includes("calendarEl.appendChild(section('Live Now'"), false, 'Live Now should no longer render inside the calendar group');
-  assert.equal(source.includes("hubEl.appendChild(section('Live Now'"), false, 'Live Now should not be rendered below the schedule feed');
+  const app = readFileSync('src/public-app/events-hub-app.js', 'utf8');
+  assert.ok(html.indexOf('id="liveNowSection"') < html.indexOf('id="calendarEvents"'), 'Live Now mount should remain above the schedule feed mount');
+  assert.match(source, /publishHub\(\{/);
+  assert.match(source, /live: live\.map\(eventHubItem\)/);
+  assert.match(source, /feedEvents: feedEvents\.map\(feedHubItem\)/);
+  assert.match(app, /export function EventsLiveNowApp/);
+  assert.match(app, /export function EventsScheduleFeedApp/);
+  assert.match(app, /Live Now/);
+  assert.doesNotMatch(source, /appendChild\(section\('Live Now'|appendChild\(feedList\(feedEvents\)|calendarEl\.appendChild|hubEl\.appendChild/);
 });
 
 test('public Events page hides past events behind previous results', () => {
@@ -85,6 +88,31 @@ test('public Events club content publishes fundraisers and meetings to React', (
   assert.match(app, /data-react-events-meetings/);
   assert.match(app, /MarkdownBody/);
   assert.match(app, /ShareRow/);
+});
+
+test('public Events hub schedule and club feed publish to React', () => {
+  const source = readFileSync('events.html', 'utf8');
+  const main = readFileSync('src/public-app/main.js', 'utf8');
+  const app = readFileSync('src/public-app/events-hub-app.js', 'utf8');
+
+  assert.match(source, /function publishHub\(hub\)/);
+  assert.match(source, /new CustomEvent\('gvdg:events-hub'/);
+  assert.match(source, /function eventHubItem\(raw\)/);
+  assert.match(source, /function feedHubItem\(item\)/);
+  assert.match(source, /hasMainContent/);
+  assert.doesNotMatch(source, /function groupHeading|function feedList|function eventCard|function section/);
+  assert.doesNotMatch(source, /liveNowEl\.replaceChildren|calendarEl\.replaceChildren|hubEl\.replaceChildren|clubEl\.replaceChildren|calendarEl\.appendChild|hubEl\.appendChild|clubEl\.appendChild/);
+  assert.match(main, /createRoot\(eventsLiveNowMount\)\.render\(h\(EventsLiveNowApp\)\)/);
+  assert.match(main, /createRoot\(eventsScheduleFeedMount\)\.render\(h\(EventsScheduleFeedApp\)\)/);
+  assert.match(main, /createRoot\(eventsUpcomingMount\)\.render\(h\(EventsUpcomingApp\)\)/);
+  assert.match(main, /createRoot\(eventsClubFeedMount\)\.render\(h\(EventsClubFeedApp\)\)/);
+  assert.match(app, /export function EventsLiveNowApp/);
+  assert.match(app, /export function EventsScheduleFeedApp/);
+  assert.match(app, /export function EventsUpcomingApp/);
+  assert.match(app, /export function EventsClubFeedApp/);
+  assert.match(app, /data-react-events-hub/);
+  assert.match(app, /CalendarDays, ExternalLink, MapPin/);
+  assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|📅|📍|🥏/);
 });
 
 test('public registration cards post pair label only for doubles config', () => {

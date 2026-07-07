@@ -116,7 +116,7 @@
         .events-grid { display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
         @media (max-width: 560px) { .events-grid { grid-template-columns: 1fr; } }
 
-        .event-card { background: var(--bg-secondary); border-radius: 15px; overflow: hidden; border: 2px solid var(--border-color); transition: all 0.3s ease; cursor: pointer; text-align: left; width: 100%; font: inherit; color: inherit; display: flex; flex-direction: column; padding: 1.4rem; gap: 0.7rem; box-shadow: 0 6px 24px var(--card-shadow); }
+        .event-card { background: var(--bg-secondary); border-radius: 15px; overflow: hidden; border: 2px solid var(--border-color); transition: all 0.3s ease; cursor: pointer; text-align: left; width: 100%; font: inherit; color: inherit; text-decoration: none; display: flex; flex-direction: column; padding: 1.4rem; gap: 0.7rem; box-shadow: 0 6px 24px var(--card-shadow); }
         .event-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px var(--card-shadow-hover); border-color: var(--primary); }
         .event-card:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
         .event-card.live { border-color: var(--primary); box-shadow: 0 8px 30px rgba(255, 107, 53, 0.25); }
@@ -468,51 +468,6 @@
             detailEl.hidden = which !== 'detail';
         }
 
-        // A group heading (e.g. "Events", "Club Events") with a one-line description.
-        function groupHeading(title, sub) {
-            const wrap = el('div', 'events-group-head');
-            wrap.appendChild(el('h2', 'events-section-title', title));
-            if (sub) wrap.appendChild(el('p', 'events-group-sub', sub));
-            return wrap;
-        }
-
-        // Render a schedule-feed list (Google Sheet items: {name, date, detail, url}) as linked cards.
-        function feedList(items) {
-            const grid = el('div', 'events-grid');
-            for (const it of items) {
-                const leagueTarget = ryderCupFeedHash(it);
-                const clean = leagueTarget || sanitizeUrl(it.url);
-                const card = el(clean ? 'a' : 'div', 'event-card');
-                if (leagueTarget) {
-                    card.href = leagueTarget;
-                } else if (clean) {
-                    card.href = clean;
-                    card.target = '_blank';
-                    card.rel = 'noopener noreferrer';
-                }
-                const top = el('div', 'event-card-top');
-                top.appendChild(el('h3', 'event-name', it.name));
-                card.appendChild(top);
-                const meta = el('div', 'event-meta');
-                const dateRow = el('div', 'meta-row');
-                dateRow.appendChild(el('span', 'meta-icon', '📅'));
-                dateRow.appendChild(el('span', null, it.date || 'TBD'));
-                meta.appendChild(dateRow);
-                if (it.detail) {
-                    const dRow = el('div', 'meta-row');
-                    dRow.appendChild(el('span', 'meta-icon', '📍'));
-                    dRow.appendChild(el('span', null, it.detail));
-                    meta.appendChild(dRow);
-                }
-                card.appendChild(meta);
-                // When the schedule row carries a link (Disc Golf Scene / PDGA), make registering explicit.
-                if (leagueTarget) card.appendChild(el('div', 'event-cta', 'League / Results'));
-                else if (clean) card.appendChild(el('div', 'event-cta', 'Register / Details ↗'));
-                grid.appendChild(card);
-            }
-            return grid;
-        }
-
         function startOfToday() {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
@@ -618,6 +573,42 @@
             return item && item.dateObj && !Number.isNaN(item.dateObj.getTime()) ? item.dateObj.getTime() : 0;
         }
 
+        function eventHubItem(raw) {
+            const ev = normalizeEvent(raw);
+            const leagueTarget = ryderCupEventHash(ev);
+            return {
+                id: ev.id,
+                name: ev.name,
+                typeClass: ev.type,
+                typeLabel: typeLabel(ev.type),
+                status: ev.status,
+                statusLabel: statusLabel(ev.status),
+                dateText: formatEventDate(ev.date),
+                courseName: courseNameFor(courseIndex, ev.course_id),
+                href: leagueTarget || `#event/${encodeURIComponent(ev.id)}`,
+            };
+        }
+
+        function feedHubItem(item) {
+            const leagueTarget = ryderCupFeedHash(item);
+            const externalHref = leagueTarget ? '' : sanitizeUrl(item && item.url);
+            return {
+                name: String((item && item.name) || 'Event'),
+                dateText: item && item.date ? String(item.date) : 'TBD',
+                detail: String((item && item.detail) || ''),
+                href: leagueTarget || externalHref,
+                external: !!externalHref,
+                cta: leagueTarget ? 'League / Results' : (externalHref ? 'Register / Details' : ''),
+            };
+        }
+
+        function publishHub(hub) {
+            window.__gvdgEventsHub = hub;
+            window.dispatchEvent(new CustomEvent('gvdg:events-hub', {
+                detail: { hub },
+            }));
+        }
+
         function publishPreviousResults(results) {
             const safeResults = Array.isArray(results) ? results : [];
             window.__gvdgEventsPreviousResults = safeResults;
@@ -679,57 +670,6 @@
             const b = el('span', 'badge ' + classes, text);
             return b;
         }
-
-        function eventCard(ev) {
-            // Use a <button> so the card is keyboard-focusable + screen-reader friendly.
-            const card = el('button', 'event-card' + (ev.status === 'live' ? ' live' : ''));
-            card.type = 'button';
-            const leagueTarget = ryderCupEventHash(ev);
-            card.addEventListener('click', () => {
-                window.location.hash = leagueTarget || `#event/${encodeURIComponent(ev.id)}`;
-            });
-
-            const top = el('div', 'event-card-top');
-            top.appendChild(el('h3', 'event-name', ev.name));
-            if (ev.type) top.appendChild(badge(typeLabel(ev.type), 'type-badge ' + ev.type));
-            card.appendChild(top);
-
-            const meta = el('div', 'event-meta');
-            const dateRow = el('div', 'meta-row');
-            dateRow.appendChild(el('span', 'meta-icon', '📅'));
-            dateRow.appendChild(el('span', null, formatEventDate(ev.date)));
-            meta.appendChild(dateRow);
-
-            const courseName = courseNameFor(courseIndex, ev.course_id);
-            if (courseName) {
-                const courseRow = el('div', 'meta-row');
-                courseRow.appendChild(el('span', 'meta-icon', '📍'));
-                courseRow.appendChild(el('span', null, courseName));
-                meta.appendChild(courseRow);
-            }
-            card.appendChild(meta);
-
-            if (ev.status) {
-                const statusRow = el('div', 'event-card-top');
-                statusRow.appendChild(badge(statusLabel(ev.status), 'status-badge ' + ev.status));
-                card.appendChild(statusRow);
-            }
-            return card;
-        }
-
-        function section(title, events, opts = {}) {
-            const wrap = el('section', 'events-section' + (opts.live ? ' live' : ''));
-            const head = el('div', 'events-section-head');
-            if (opts.live) head.appendChild(el('span', 'live-dot'));
-            head.appendChild(el('h2', 'events-section-title', title));
-            head.appendChild(el('span', 'events-section-count', `${events.length} event${events.length === 1 ? '' : 's'}`));
-            wrap.appendChild(head);
-
-            const grid = el('div', 'events-grid');
-            for (const ev of events) grid.appendChild(eventCard(ev));
-            wrap.appendChild(grid);
-            return wrap;
-        }
         // Render the two club categories: Events (schedule feed + any club-scored D1 events) and the
         // Club Events heading (fundraisers/meetings render into their own sections just below).
         function renderPage(feed, d1events) {
@@ -743,28 +683,16 @@
                 ...feedClubArchived.map((item) => previousResultFromFeed(item, 'Club Event')),
             ].sort((a, b) => previousResultTime(b) - previousResultTime(a));
 
-            // LIVE NOW — pinned to the very top so an in-progress event is impossible to miss.
-            liveNowEl.replaceChildren();
-            if (live.length) liveNowEl.appendChild(section('Live Now', live, { live: true }));
-
-            calendarEl.replaceChildren();
-            calendarEl.appendChild(groupHeading('Events', 'Disc golf tournaments & league rounds'));
-            if (feedEvents.length) calendarEl.appendChild(feedList(feedEvents));
-
-            hubEl.replaceChildren();
-            if (upcoming.length) hubEl.appendChild(section('Upcoming', upcoming));
-            // Empty-state reflects the MAIN flow only (live/upcoming/feed). Previous results live in a
-            // collapsed section below the current and upcoming events,
-            // so their presence must not suppress the "nothing scheduled" message.
-            if (!feedEvents.length && !live.length && !upcoming.length) {
-                calendarEl.appendChild(el('p', 'events-empty', 'No tournaments or league rounds are on the schedule right now.'));
-            }
+            const hasMainContent = !!(feedEvents.length || live.length || upcoming.length);
+            publishHub({
+                live: live.map(eventHubItem),
+                feedEvents: feedEvents.map(feedHubItem),
+                upcoming: upcoming.map(eventHubItem),
+                feedClub: feedClub.map(feedHubItem),
+                hasMainContent,
+            });
 
             publishPreviousResults(previousResults);
-
-            clubEl.replaceChildren();
-            clubEl.appendChild(groupHeading('Club Events', 'Fundraisers, meetings & minutes'));
-            if (feedClub.length) clubEl.appendChild(feedList(feedClub));
 
             setView('hub');
             lastUpdatedEl.hidden = false;

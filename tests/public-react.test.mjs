@@ -53,7 +53,7 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(chrome, /localStorage\.getItem\("theme"\)/);
   assert.match(chrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v54"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v55"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
@@ -76,6 +76,31 @@ test('Events previous results panel is rendered by the public React bundle', () 
   assert.match(app, /aria-expanded/);
   assert.match(app, /safeHref/);
   assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|📅|📍/);
+});
+
+test('Events hub schedule and club feed are rendered by the public React bundle', () => {
+  const html = readFileSync('events.html', 'utf8');
+  const main = readFileSync('src/public-app/main.js', 'utf8');
+  const app = readFileSync('src/public-app/events-hub-app.js', 'utf8');
+
+  assert.match(html, /id="liveNowSection"/);
+  assert.match(html, /id="calendarEvents"/);
+  assert.match(html, /id="hub"/);
+  assert.match(html, /id="clubEventsSection"/);
+  assert.match(html, /new CustomEvent\('gvdg:events-hub'/);
+  assert.doesNotMatch(html, /function groupHeading|function feedList|function eventCard|function section|liveNowEl\.replaceChildren|calendarEl\.appendChild|hubEl\.appendChild|clubEl\.appendChild/);
+  assert.match(main, /createRoot\(eventsLiveNowMount\)\.render\(h\(EventsLiveNowApp\)\)/);
+  assert.match(main, /createRoot\(eventsScheduleFeedMount\)\.render\(h\(EventsScheduleFeedApp\)\)/);
+  assert.match(main, /createRoot\(eventsUpcomingMount\)\.render\(h\(EventsUpcomingApp\)\)/);
+  assert.match(main, /createRoot\(eventsClubFeedMount\)\.render\(h\(EventsClubFeedApp\)\)/);
+  assert.match(app, /export function EventsLiveNowApp/);
+  assert.match(app, /export function EventsScheduleFeedApp/);
+  assert.match(app, /export function EventsUpcomingApp/);
+  assert.match(app, /export function EventsClubFeedApp/);
+  assert.match(app, /data-react-events-hub/);
+  assert.match(app, /CalendarDays, ExternalLink, MapPin/);
+  assert.match(app, /safeHref/);
+  assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|📅|📍|🥏/);
 });
 
 test('Events fundraisers and meetings are rendered by the public React bundle', () => {
