@@ -140,6 +140,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: menu and theme controls are real buttons with labels, `aria-expanded`, `aria-controls`, `aria-pressed`, and Lucide icons; current page uses `aria-current="page"`.
 - Motion: mobile menu reveal and header scroll shadow preserve the existing transform/opacity/box-shadow transitions only.
 
+### Ryder Cup Results App
+
+- Structure: the Ryder Cup page body renders from the shared `public-app` React bundle into `ryderCupReactApp`, including title, league link, loading/error state, scoreboard, scoring note, weekly match cards, last-updated text, and home link.
+- Variants: loading, retryable error, empty schedule, ready scoreboard, singles weeks, doubles weeks, unplayed matches, explicit winner, and tied matches.
+- Spacing: reuses `.scoreboard`, `.team-panel`, `.week-section`, `.match-grid`, `.match-card`, `.status-box`, `.retry-btn`, `.last-updated`, and `.back-link` primitives so the published page keeps its established rhythm.
+- States: React owns data fetch status, workbook-to-CSV fallback, quiet refresh, scoreboard visibility, week list rendering, retry behavior, and last-updated text; the page must not contain an inline Ryder Cup DOM renderer.
+- Accessibility: loading uses status semantics, errors use alert semantics with a real retry button, the league and home actions are real links, and weekly results remain text content.
+- Motion: only the existing spinner animation and inherited hover/focus states apply; no new decorative motion.
+
 ### Home Page Interactions
 
 - Structure: homepage carousel controls, reveal observer, stat counters, smooth in-page anchors, and double-tap guard render as a React-owned null controller from the `home-app` bundle into `homeReactInteractionsApp`; the homepage keeps only the head pre-paint theme script inline.

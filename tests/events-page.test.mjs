@@ -77,7 +77,7 @@ test('public registration cards post pair label only for doubles config', () => 
 test('Ryder Cup schedule cards link to the league route', () => {
   const eventsSource = readFileSync('events.html', 'utf8');
   const homeSource = readFileSync('home-feeds.js', 'utf8');
-  const ryderSource = readFileSync('ryder-cup.html', 'utf8');
+  const ryderSource = readFileSync('src/public-app/ryder-cup-app.js', 'utf8');
   assert.match(eventsSource, /const RYDER_CUP_LEAGUE_ID = '4'/);
   assert.match(eventsSource, /function ryderCupFeedHash\(item\)/);
   assert.match(eventsSource, /function ryderCupEventHash\(ev\)/);

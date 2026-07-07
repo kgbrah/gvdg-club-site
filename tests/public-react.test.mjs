@@ -58,3 +58,24 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
 });
+
+test('Ryder Cup body results are rendered by the public React bundle', () => {
+  const html = readFileSync('ryder-cup.html', 'utf8');
+  const main = readFileSync('src/public-app/main.js', 'utf8');
+  const app = readFileSync('src/public-app/ryder-cup-app.js', 'utf8');
+
+  assert.match(html, /id="ryderCupReactApp"/);
+  assert.doesNotMatch(html, /id="scoreboard"|id="weeks"|id="status"|id="lastUpdated"|parseMatchGrid|parseRyderWorkbook|parseScoreboard|seedPairNames/);
+  assert.match(main, /createRoot\(ryderCupMount\)\.render\(h\(RyderCupApp\)\)/);
+  assert.match(app, /export function RyderCupApp/);
+  assert.match(app, /data-react-ryder-cup/);
+  assert.match(app, /data-react-ryder-scoreboard/);
+  assert.match(app, /parseRyderWorkbook/);
+  assert.match(app, /parseMatchGrid/);
+  assert.match(app, /parseScoreboard/);
+  assert.match(app, /seedPairNames/);
+  assert.match(app, /events\.html#league\/4/);
+  assert.match(app, /window\.setInterval\(\(\) => guardedLoad\(\{ quiet: true \}\), REFRESH_MS\)/);
+  assert.match(app, /role: error \? "alert" : "status"/);
+  assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|🏆|⚠/);
+});
