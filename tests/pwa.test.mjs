@@ -97,6 +97,7 @@ test('shared service worker caches app install assets and member fallback', () =
 
 test('admin order badge clears stale counts when refresh fails closed', () => {
   const html = readFileSync('admin.html', 'utf8');
-  assert.match(html, /function setOrdersBadge\(n\) \{[\s\S]*b\.textContent = '';[\s\S]*b\.hidden = true;/);
+  assert.match(html, /function setOrdersBadge\(n\) \{[\s\S]*window\.__gvdgAdminOrdersBadgeCount = count;[\s\S]*gvdg:admin-orders-badge/);
   assert.match(html, /async function refreshOrdersBadge\(\) \{[\s\S]*setOrdersBadge\(0\);[\s\S]*catch \(e\) \{[\s\S]*setOrdersBadge\(0\);/);
+  assert.doesNotMatch(html, /id="ordersBadge" class="orders-badge" hidden/);
 });

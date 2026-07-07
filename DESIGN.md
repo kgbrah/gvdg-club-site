@@ -149,6 +149,24 @@ Spacing follows a 4px base through rem values.
 - Accessibility: the panel exposes dialog semantics, the avatar, close, and send controls are real buttons with labels, the composer is labelled, and iconography uses Lucide SVGs.
 - Motion: preserves the existing FAB scale and panel reveal only; no decorative motion is added.
 
+### Admin Page Chrome
+
+- Structure: the Admin page header, logo, public nav links, account links, theme toggle, and mobile menu render from the `admin-app` React bundle into `adminReactPageChromeApp`; the page keeps only the head pre-paint theme script inline.
+- Variants: desktop inline nav, mobile collapsed nav, mobile open nav, current Admin link, Back to Members account link, Log out account link, light theme, dark theme, and scrolled header.
+- Spacing: reuses the existing `header`, `nav`, `.nav-links`, `.nav-right`, `.nav-account`, `.nav-mobile-account`, `.theme-toggle`, `.menu-toggle`, and `.logo-image` primitives so the admin surface keeps its established rhythm during migration.
+- States: React owns menu expanded state, current-page nav state, `data-theme` persistence, logout session-key clearing, and the `header.scrolled` class; `admin.html` must not mutate `.menu-toggle`, `.nav-links`, `.theme-icon`, `.logout-link`, or `header`.
+- Accessibility: menu and theme controls are real buttons with labels, `aria-expanded`, `aria-controls`, `aria-pressed`, and Lucide icons; current page uses `aria-current="page"` plus the existing active-link class.
+- Motion: mobile menu reveal and header scroll shadow preserve the existing transform/opacity/box-shadow transitions only.
+
+### Admin Orders Badge
+
+- Structure: the new-order count in the Admin Orders tab renders from `admin-app` into `ordersBadgeReactApp`; legacy order loaders publish `gvdg:admin-orders-badge` events only.
+- Variants: hidden zero-count state and visible unfulfilled-order count.
+- Spacing: reuses `.orders-badge` so the tab label keeps the existing compact badge dimensions.
+- States: React owns count visibility and text rendering; `admin.html` must not write badge `textContent` or toggle a badge `hidden` attribute.
+- Accessibility: the badge remains inline text inside the Orders tab button.
+- Motion: static count; no decorative motion.
+
 ### Events Hub App
 
 - Structure: the Events page hub schedule renders from the shared `public-app` React bundle into `liveNowSection`, `calendarEvents`, `hub`, and `clubEventsSection`; the legacy Events script only fetches/splits feeds and publishes `gvdg:events-hub`.
