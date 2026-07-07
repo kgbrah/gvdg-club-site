@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { AdminAuthGate } from "./auth-gate.js";
 import { AdminFundraiserForm, AdminLeagueForm, AdminMeetingForm } from "./club-content-forms.js";
 import { AdminFundraisersList, AdminLeaguesList, AdminMeetingsList } from "./club-content-lists.js";
+import { AdminCourseForm } from "./course-form.js";
 import { AdminCoursesList } from "./courses-list.js";
 import { AdminDataArchiveDestinationForm } from "./data-archive-destination-form.js";
 import { AdminDataArchiveDestinationsList, AdminDataArchiveExportResult } from "./data-archive-destinations-list.js";
@@ -63,6 +64,11 @@ if (importCandidatesMount) {
 const coursesListMount = document.getElementById("adminCoursesListReactApp");
 if (coursesListMount) {
   createRoot(coursesListMount).render(h(AdminCoursesList));
+}
+
+const courseFormMount = document.getElementById("adminCourseFormReactApp");
+if (courseFormMount) {
+  createRoot(courseFormMount).render(h(AdminCourseForm));
 }
 
 const leagueFormMount = document.getElementById("adminLeagueFormReactApp");

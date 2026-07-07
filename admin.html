@@ -365,13 +365,7 @@
                 <div id="adminImportCandidatesReactApp" style="margin-top:1rem;"></div>
             </div>
             <div class="admin-pane" id="apane-courses">
-                <form class="admin-form" id="adminCourseForm">
-                    <div><label for="acName">Course name</label><input id="acName" maxlength="200" required></div>
-                    <div><label for="acLoc">Location</label><input id="acLoc" maxlength="200"></div>
-                    <div><label for="acUdisc">UDisc URL (https)</label><input id="acUdisc" type="url" maxlength="1000"></div>
-                    <div><label for="acUdiscCourseId">UDisc course id <span class="al-note">(numeric — auto-saved by UDisc import; enables “Add to UDisc”)</span></label><input id="acUdiscCourseId" inputmode="numeric" pattern="\d*" maxlength="20"></div>
-                    <button type="submit" class="admin-btn">Add course</button>
-                </form>
+                <div id="adminCourseFormReactApp"></div>
                 <div id="adminCoursesListReactApp" style="margin-top:1rem;"></div>
             </div>
             <div class="admin-pane" id="apane-layouts">
@@ -1071,13 +1065,35 @@
             }
         }
 
-        async function adminAddCourse(e) {
-            e.preventDefault();
-            const body = { name: $('acName').value.trim(), location: $('acLoc').value.trim() || null, udisc_url: $('acUdisc').value.trim() || null, udisc_course_id: $('acUdiscCourseId').value.trim() || null };
-            if (!body.name) { adminMsg('Course name required', false); return; }
-            const r = await adminApi('/admin/courses', { method: 'POST', body });
-            if (r.ok) { adminMsg('Added course “' + body.name + '”', true); $('adminCourseForm').reset(); adminLoadCourses(); }
-            else { adminMsg('Add course failed (' + r.status + ')', false); }
+        async function adminAddCourseFromReact(detail) {
+            const requestId = detail.requestId;
+            if (!requestId) return;
+            const body = detail.body || {};
+            const name = String(body.name || '').trim();
+            if (detail.valid !== true || !name) {
+                const message = 'Course name required';
+                adminMsg(message, false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-course-create-result', { detail: { ok: false, requestId, message } }));
+                return;
+            }
+            let r;
+            try {
+                r = await adminApi('/admin/courses', { method: 'POST', body });
+            } catch (err) {
+                const message = 'Add course failed';
+                adminMsg(message, false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-course-create-result', { detail: { ok: false, requestId, message } }));
+                return;
+            }
+            if (r.ok) {
+                adminMsg('Added course "' + (detail.labelText || name) + '"', true);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-course-create-result', { detail: { ok: true, requestId } }));
+                adminLoadCourses();
+            } else {
+                const message = 'Add course failed (' + r.status + ')';
+                adminMsg(message, false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-course-create-result', { detail: { ok: false, requestId, message } }));
+            }
         }
 
         function tsCourseName(courseId) {
@@ -2688,11 +2704,13 @@
                 adminMsg(r.ok ? 'CTP deleted' : 'Delete failed (' + r.status + ')', r.ok);
                 if (r.ok) rgLoadCtps();
             });
+            window.addEventListener('gvdg:admin-course-create-request', async (event) => {
+                await adminAddCourseFromReact(event.detail || {});
+            });
             $('adminCreateForm').addEventListener('submit', adminSaveEvent);
             $('aeCourse').addEventListener('change', aeLoadLayouts);
             $('aeLayout').addEventListener('change', aeToggleQuickLayout);
             $('aeCancelEdit').addEventListener('click', () => { aeResetForm(); adminSwitch('events'); });
-            $('adminCourseForm').addEventListener('submit', adminAddCourse);
             $('dgsImportBtn').addEventListener('click', adminDgsImport);
             $('csvImportBtn').addEventListener('click', adminCsvImport);
             $('alCourse').addEventListener('change', alOnCourseChange);

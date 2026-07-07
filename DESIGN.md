@@ -212,13 +212,13 @@ Spacing follows a 4px base through rem values.
 - Accessibility: loading and empty states use status semantics, and row create actions are real buttons.
 - Motion: static candidate rows; only inherited control hover/focus states apply.
 
-### Admin Courses List
+### Admin Courses Form and List
 
-- Structure: the Admin courses summary list renders from `admin-app` into `adminCoursesListReactApp`; legacy admin code fetches `/courses`, continues populating the event/layout course selects, and publishes `gvdg:admin-courses-list` for the visual list only.
+- Structure: the Admin courses add form renders from `admin-app` into `adminCourseFormReactApp`, and the courses summary list renders into `adminCoursesListReactApp`; legacy admin code fetches `/courses`, continues populating the event/layout course selects, handles create-request events, and publishes list/result state events only.
 - Variants: empty list and course row with optional location.
-- Spacing: reuses `.admin-cand` and the existing courses-pane top margin so course rows keep the same compact divider rhythm.
-- States: React owns course-row markup and empty rendering; `admin.html` must not mutate `adminCoursesList`, clear its text, or append `.admin-cand` rows directly.
-- Accessibility: course rows are static text because no row action exists in the current admin workflow.
+- Spacing: reuses `.admin-form`, `.admin-btn`, `.admin-cand`, and the existing courses-pane top margin so the form and course rows keep the same compact divider rhythm.
+- States: React owns add-form field values, busy submit labels, successful resets, course-row markup, and empty rendering; `admin.html` must not keep static `adminCourseForm` markup, read `ac*` fields, reset that form, mutate `adminCoursesList`, clear its text, or append `.admin-cand` rows directly.
+- Accessibility: form labels target stable control ids, required fields remain native inputs, and course rows are static text because no row action exists in the current admin workflow.
 - Motion: static list rows; no decorative motion.
 
 ### Admin Club Content Forms and Lists
