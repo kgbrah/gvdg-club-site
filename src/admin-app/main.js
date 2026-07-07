@@ -20,8 +20,10 @@ import { AdminOrdersList } from "./orders-list.js";
 import { AdminPageChrome } from "./page-chrome.js";
 import { AdminProductForm } from "./product-form.js";
 import { AdminProductsList } from "./products-list.js";
+import { AdminRegistrationManualPlayerForm } from "./registration-manual-player-form.js";
 import { AdminRegistrationRoster } from "./registration-roster.js";
 import { AdminRegistrationAcePot, AdminRegistrationCreditsList, AdminRegistrationCtpsList } from "./registration-widgets.js";
+import { AdminOrderControls, AdminProductInventoryControls } from "./shop-controls.js";
 import { AdminWalletAdjustmentForm } from "./wallet-form.js";
 import { AdminWalletRecentList } from "./wallet-recent-list.js";
 import { CrottsWidget } from "../shared/crotts-widget.js";
@@ -133,6 +135,16 @@ if (productFormMount) {
   createRoot(productFormMount).render(h(AdminProductForm));
 }
 
+const productInventoryControlsMount = document.getElementById("adminProductInventoryControlsReactApp");
+if (productInventoryControlsMount) {
+  createRoot(productInventoryControlsMount).render(h(AdminProductInventoryControls));
+}
+
+const orderControlsMount = document.getElementById("adminOrderControlsReactApp");
+if (orderControlsMount) {
+  createRoot(orderControlsMount).render(h(AdminOrderControls));
+}
+
 const ordersListMount = document.getElementById("adminOrdersListReactApp");
 if (ordersListMount) {
   createRoot(ordersListMount).render(h(AdminOrdersList));
@@ -171,6 +183,11 @@ if (dataArchiveExportResultMount) {
 const registrationRosterMount = document.getElementById("adminRegistrationRosterReactApp");
 if (registrationRosterMount) {
   createRoot(registrationRosterMount).render(h(AdminRegistrationRoster));
+}
+
+const registrationManualPlayerFormMount = document.getElementById("adminRegistrationManualPlayerFormReactApp");
+if (registrationManualPlayerFormMount) {
+  createRoot(registrationManualPlayerFormMount).render(h(AdminRegistrationManualPlayerForm));
 }
 
 const registrationCtpsMount = document.getElementById("adminRegistrationCtpsReactApp");

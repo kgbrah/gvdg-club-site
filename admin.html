@@ -286,6 +286,7 @@
         .credit-award { display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
         .credit-award input { width: 5rem; padding: 0.3rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
         .orders-badge { display: inline-flex; min-width: 1.2rem; height: 1.2rem; padding: 0 0.35rem; border-radius: 999px; background: var(--primary-strong); color: #fff; font-size: 0.7rem; font-weight: 700; align-items: center; justify-content: center; }
+        .admin-order-controls { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.75rem; }
         .orders-list { display: grid; gap: 0.75rem; }
         .order-card { border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-secondary); padding: 0.75rem 0.9rem; }
         .order-card.unfulfilled { border-left: 3px solid var(--primary); }
@@ -502,18 +503,7 @@
                         <button type="button" class="admin-btn secondary" id="rgAssignCards">Assign Cards</button>
                         <span class="al-note">Players/Card <input id="rgCardSize" type="number" min="1" value="4" style="width:3rem"></span>
                     </div>
-                    <div class="al-section" style="margin-top:1rem;">
-                        <h4 class="al-h">Add a walk-on / non-member</h4>
-                        <div class="al-row">
-                            <input id="rgPlayerName" maxlength="100" placeholder="Player name">
-                            <input id="rgPlayerMember" maxlength="64" placeholder="member id (optional)">
-                            <input id="rgPlayerPdga" maxlength="20" placeholder="PDGA #">
-                            <input id="rgPlayerDivision" maxlength="40" placeholder="division">
-                            <input id="rgPlayerTeam" maxlength="40" placeholder="team">
-                            <button type="button" class="admin-btn secondary" id="rgPlayerAdd">Add player</button>
-                        </div>
-                        <p class="al-note" style="margin-top:0.4rem;">Added players appear under Registered players above and play alongside registrants.</p>
-                    </div>
+                    <div id="adminRegistrationManualPlayerFormReactApp"></div>
                     <div class="al-section" style="margin-top:1rem;">
                         <h4 class="al-h">CTPs (closest to pin)</h4>
                         <datalist id="rgMemberOptions"></datalist>
@@ -549,30 +539,7 @@
                     <div>
                         <div class="shop-admin-heading">
                             <h4 class="al-h">Inventory</h4>
-                            <div class="shop-admin-toolbar" aria-label="Inventory controls">
-                                <label for="psInvSort">Sort
-                                    <select id="psInvSort">
-                                        <option value="newest">Newest first</option>
-                                        <option value="name">Name A-Z</option>
-                                        <option value="brand">Brand A-Z</option>
-                                        <option value="type">Type</option>
-                                        <option value="color">Color</option>
-                                        <option value="weight">Weight</option>
-                                        <option value="price_asc">Price low-high</option>
-                                        <option value="price_desc">Price high-low</option>
-                                        <option value="stock_asc">Stock low-high</option>
-                                        <option value="stock_desc">Stock high-low</option>
-                                        <option value="status">Status</option>
-                                    </select>
-                                </label>
-                                <label for="psInvStatus">Show
-                                    <select id="psInvStatus">
-                                        <option value="active">Active</option>
-                                        <option value="inactive">Archived</option>
-                                        <option value="all">All items</option>
-                                    </select>
-                                </label>
-                            </div>
+                            <div id="adminProductInventoryControlsReactApp"></div>
                         </div>
                         <div id="adminProductsListReactApp"></div>
                     </div>
@@ -586,19 +553,7 @@
                 </div>
             </div>
             <div class="admin-pane" id="apane-orders">
-                <div class="al-section" style="margin-bottom:0.75rem; display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-                    <label for="ordStatusFilter">Show</label>
-                    <select id="ordStatusFilter">
-                        <option value="">All orders</option>
-                        <option value="submitted">Submitted</option>
-                        <option value="processing">Processing</option>
-                        <option value="ready">Ready for pickup</option>
-                        <option value="shipped">Shipped</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                    </select>
-                    <button type="button" class="admin-btn" id="ordRefresh">Refresh</button>
-                </div>
+                <div id="adminOrderControlsReactApp"></div>
                 <div id="adminOrdersListReactApp"></div>
             </div>
             <div class="admin-pane" id="apane-members">
@@ -2158,12 +2113,17 @@
             }
         }
 
-        async function adminLoadProducts() {
-            setAdminProductsListState({ status: 'loading', products: [], inventoryStatus: $('psInvStatus') ? $('psInvStatus').value : 'active' });
+        function adminProductInventoryControlsState(detail) {
+            const source = detail && typeof detail === 'object' ? detail : (window.__gvdgAdminProductInventoryControlsState || {});
+            const sort = typeof source.sort === 'string' && source.sort ? source.sort : 'newest';
+            const status = typeof source.status === 'string' && source.status ? source.status : 'active';
+            return { sort, status };
+        }
+        async function adminLoadProducts(detail) {
+            const { sort, status } = adminProductInventoryControlsState(detail);
+            setAdminProductsListState({ status: 'loading', products: [], inventoryStatus: status });
             let products = [];
             const params = new URLSearchParams();
-            const sort = $('psInvSort') ? $('psInvSort').value : 'newest';
-            const status = $('psInvStatus') ? $('psInvStatus').value : 'active';
             if (sort) params.set('sort', sort);
             if (status) params.set('status', status);
             try { const r = await adminApi('/admin/shop/products?' + params.toString()); if (r.ok) products = (await r.json()).products || []; } catch (e) {}
@@ -2211,8 +2171,13 @@
             window.__gvdgAdminOrdersBadgeCount = count;
             window.dispatchEvent(new CustomEvent('gvdg:admin-orders-badge', { detail: { count } }));
         }
-        async function adminLoadOrders() {
-            const status = ($('ordStatusFilter') && $('ordStatusFilter').value) || '';
+        function adminOrderControlsState(detail) {
+            const source = detail && typeof detail === 'object' ? detail : (window.__gvdgAdminOrderControlsState || {});
+            const status = typeof source.status === 'string' ? source.status : '';
+            return { status };
+        }
+        async function adminLoadOrders(detail) {
+            const { status } = adminOrderControlsState(detail);
             setAdminOrdersListState({ status: 'loading', orders: [], filterStatus: status });
             let orders = [], unfulfilled = 0;
             try {
@@ -2350,22 +2315,35 @@
             window.__gvdgAdminRegistrationRosterState = state;
             window.dispatchEvent(new CustomEvent('gvdg:admin-registration-roster', { detail: state }));
         }
-        async function rgAddManualPlayer() {
-            const body = {
-                name: $('rgPlayerName').value.trim(),
-                member_id: $('rgPlayerMember').value.trim() || null,
-                pdga_no: $('rgPlayerPdga').value.trim() || null,
-                division: $('rgPlayerDivision').value.trim() || null,
-                team: $('rgPlayerTeam').value.trim() || null,
-            };
-            if (!body.name) { adminMsg('Player name required', false); return; }
-            const r = await adminApi('/admin/events/' + rgEventId + '/players', { method: 'POST', body });
+        async function rgAddManualPlayerFromReact(detail) {
+            const requestId = detail.requestId;
+            if (!requestId) return;
+            if (!rgEventId) {
+                adminMsg('Select an event first', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-registration-manual-player-add-result', { detail: { ok: false, requestId } }));
+                return;
+            }
+            const body = detail.body || {};
+            if (detail.valid !== true || !String(body.name || '').trim()) {
+                adminMsg('Player name required', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-registration-manual-player-add-result', { detail: { ok: false, requestId } }));
+                return;
+            }
+            let r;
+            try {
+                r = await adminApi('/admin/events/' + rgEventId + '/players', { method: 'POST', body });
+            } catch (e) {
+                adminMsg('Add player failed', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-registration-manual-player-add-result', { detail: { ok: false, requestId } }));
+                return;
+            }
             if (r.ok) {
                 adminMsg('Player added', true);
-                ['rgPlayerName', 'rgPlayerMember', 'rgPlayerPdga', 'rgPlayerDivision', 'rgPlayerTeam'].forEach((id) => { $(id).value = ''; });
+                window.dispatchEvent(new CustomEvent('gvdg:admin-registration-manual-player-add-result', { detail: { ok: true, requestId } }));
                 rgLoadRoster();
             } else {
                 adminMsg('Add player failed (' + r.status + ')', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-registration-manual-player-add-result', { detail: { ok: false, requestId } }));
             }
         }
         async function rgRemoveManualPlayer(player) {
@@ -2678,6 +2656,9 @@
                 if (!player || player.id == null || !rgEventId) return;
                 await rgRemoveManualPlayer(player);
             });
+            window.addEventListener('gvdg:admin-registration-manual-player-add-request', async (event) => {
+                await rgAddManualPlayerFromReact(event.detail || {});
+            });
             window.addEventListener('gvdg:admin-registration-ctp-winner-request', async (event) => {
                 const detail = event.detail || {};
                 const ctp = detail.ctp;
@@ -2710,6 +2691,12 @@
             window.addEventListener('gvdg:admin-csv-import-request', async (event) => {
                 await adminCsvImportFromReact(event.detail || {});
             });
+            window.addEventListener('gvdg:admin-product-inventory-controls-request', async (event) => {
+                await adminLoadProducts(event.detail || {});
+            });
+            window.addEventListener('gvdg:admin-order-controls-request', async (event) => {
+                await adminLoadOrders(event.detail || {});
+            });
             $('adminCreateForm').addEventListener('submit', adminSaveEvent);
             $('aeCourse').addEventListener('change', aeLoadLayouts);
             $('aeLayout').addEventListener('change', aeToggleQuickLayout);
@@ -2729,15 +2716,10 @@
             scWireFormatButtons();
             $('scOvApply').addEventListener('click', () => scApplyOverride(false));
             $('scOvClear').addEventListener('click', () => scApplyOverride(true));
-            $('psInvSort').addEventListener('change', adminLoadProducts);
-            $('psInvStatus').addEventListener('change', adminLoadProducts);
-            $('ordStatusFilter').addEventListener('change', adminLoadOrders);
-            $('ordRefresh').addEventListener('click', adminLoadOrders);
             refreshOrdersBadge();                          // show the new-order count on load
             setInterval(refreshOrdersBadge, 60000);        // and keep it current while the page is open
             $('rgEvent').addEventListener('change', rgOnSelect);
             $('rgSaveBtn').addEventListener('click', rgSaveConfig);
-            $('rgPlayerAdd').addEventListener('click', rgAddManualPlayer);
             $('rgAssignCards').addEventListener('click', () => rgAssign('assign-starting-holes', { shuffle: true, groupSize: parseInt($('rgCardSize').value, 10) || 4 }));
             $('rgCtpAdd').addEventListener('click', rgAddCtp);
             $('rgAceSave').addEventListener('click', () => rgAcePut({ carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100), status: 'active' }));

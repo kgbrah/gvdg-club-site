@@ -275,13 +275,13 @@ Spacing follows a 4px base through rem values.
 - Accessibility: labels target stable form control ids, required fields remain native inputs, and the adjustment action is a real submit button.
 - Motion: static form; inherited controls only.
 
-### Admin Registration Roster
+### Admin Registration Manual Player Form and Roster
 
-- Structure: the Admin Registration registered-player roster renders from `admin-app` into `adminRegistrationRosterReactApp`; legacy registration code fetches registrations and event walk-ons, keeps member-option datalist population for CTP winner fields, and publishes roster state events only.
+- Structure: the Admin Registration walk-on/non-member add form renders from `admin-app` into `adminRegistrationManualPlayerFormReactApp`, and the registered-player roster renders into `adminRegistrationRosterReactApp`; legacy registration code fetches registrations and event walk-ons, keeps member-option datalist population for CTP winner fields, handles add-request events, and publishes roster/result state events only.
 - Variants: loading, error, empty roster table, registered-player row, manually-added walk-on row, editable division/team/start-hole controls, check-in and paid-entry toggles, member store-credit action, and manual remove action.
 - Spacing: reuses `.al-h`, `.al-note`, `.al-holes`, `.lb-name`, `.credit-award`, and `.admin-btn` so roster management keeps the dense operational table rhythm already used by live scoring and admin registration.
-- States: React owns roster count text, table markup, editable row control values, checkbox state, manual-player remove confirmation, and request dispatch; `admin.html` must not mutate `rgCount` or `rgRoster`, construct roster table rows, call `rgCreditCell` / `rgToggleCell`, or attach roster-row listeners directly.
-- Accessibility: loading states use status semantics, load failures use alert semantics, row inputs and toggles have player-specific labels, and row actions are real buttons.
+- States: React owns walk-on form field values, busy submit label, successful reset, roster count text, table markup, editable row control values, checkbox state, manual-player remove confirmation, and request dispatch; `admin.html` must not keep static `rgPlayerName`/`rgPlayerMember`/`rgPlayerPdga`/`rgPlayerDivision`/`rgPlayerTeam`/`rgPlayerAdd` markup, read those DOM fields, reset those fields, mutate `rgCount` or `rgRoster`, construct roster table rows, call `rgCreditCell` / `rgToggleCell`, or attach roster-row/manual-add listeners directly.
+- Accessibility: walk-on controls keep stable labels through placeholders matching the existing compact form, loading states use status semantics, load failures use alert semantics, row inputs and toggles have player-specific labels, and row actions are real buttons.
 - Motion: static roster table; only inherited control hover/focus states apply.
 
 ### Admin Registration CTP, Credit, and Ace Pot Widgets
@@ -293,12 +293,12 @@ Spacing follows a 4px base through rem values.
 - Accessibility: loading and empty states use status semantics, load failures use alert semantics, CTP controls have row-specific labels, and row actions are real buttons.
 - Motion: static widgets; only inherited control hover/focus states apply.
 
-### Admin Product Inventory List
+### Admin Product Inventory Controls and List
 
-- Structure: the Admin Pro Shop inventory list renders from `admin-app` into `adminProductsListReactApp`; legacy admin code fetches `/admin/shop/products`, keeps sort/status filters, and publishes list state events only.
+- Structure: the Admin Pro Shop inventory sort/status controls render from `admin-app` into `adminProductInventoryControlsReactApp`, and the inventory list renders into `adminProductsListReactApp`; legacy admin code fetches `/admin/shop/products`, handles controls-request events, and publishes list state events only.
 - Variants: loading, empty active list, empty archived list, active product row, archived product row, image thumbnail, text thumbnail fallback, editable price, editable stock, active/archive toggle, save action, and delete action.
 - Spacing: reuses `.shop-admin-list`, `.shop-admin-row`, `.shop-admin-thumb`, `.shop-admin-controls`, `.register-addon`, `.admin-btn`, and `.al-note` so inventory keeps the existing dense admin shop rhythm.
-- States: React owns product row markup, thumbnail fallback, editable row control values, empty/loading copy, delete confirm prompt, and save/delete request dispatch; `admin.html` must not mutate `adminProductsList`, construct `.shop-admin-row` rows, or attach product row button/input listeners directly.
+- States: React owns sort/status select values, product row markup, thumbnail fallback, editable row control values, empty/loading copy, delete confirm prompt, and save/delete request dispatch; `admin.html` must not keep static `psInvSort`/`psInvStatus` markup, read those DOM fields, mutate `adminProductsList`, construct `.shop-admin-row` rows, or attach product row/filter button/input listeners directly.
 - Accessibility: loading and empty states use status semantics, thumbnails have text alternatives, editable controls have product-specific labels, and row actions are real buttons.
 - Motion: static inventory rows; only inherited control hover/focus states apply.
 
@@ -311,12 +311,12 @@ Spacing follows a 4px base through rem values.
 - Accessibility: labels target stable form control ids, upload preview has alt text, and create action is a real submit button.
 - Motion: static form; inherited controls only.
 
-### Admin Orders List
+### Admin Orders Controls and List
 
-- Structure: the Admin Pro Shop orders list renders from `admin-app` into `adminOrdersListReactApp`; legacy admin code fetches `/admin/orders`, keeps the status filter, refresh button, order badge update, and PATCH/DELETE API helpers, and publishes list state events only.
+- Structure: the Admin Pro Shop order status filter and refresh button render from `admin-app` into `adminOrderControlsReactApp`, and the orders list renders into `adminOrdersListReactApp`; legacy admin code fetches `/admin/orders`, handles controls-request events, keeps order badge update plus PATCH/DELETE API helpers, and publishes list state events only.
 - Variants: loading, error, empty all-orders list, empty filtered list, unfulfilled order card, cancelled order card, line items, editable fulfillment status, editable carrier, editable tracking number, save action, cancel action, delete action, and disabled cancelled cancel action.
 - Spacing: reuses `.orders-list`, `.order-card`, `.order-head`, `.order-items`, `.order-controls`, `.order-actions`, `.shop-admin-meta`, `.admin-btn`, and `.al-note` so fulfillment cards keep the existing compact shop-admin rhythm.
-- States: React owns order-card markup, row form values, loading/error/empty copy, cancel/delete confirm prompts, pending button disablement, and save/cancel/delete request dispatch; `admin.html` must not mutate `adminOrdersList`, construct `.order-card` rows, or attach order row button/input listeners directly.
+- States: React owns filter select value, refresh action, order-card markup, row form values, loading/error/empty copy, cancel/delete confirm prompts, pending button disablement, and save/cancel/delete request dispatch; `admin.html` must not keep static `ordStatusFilter`/`ordRefresh` markup, read those DOM fields, mutate `adminOrdersList`, construct `.order-card` rows, or attach order row/filter button/input listeners directly.
 - Accessibility: loading and empty states use status semantics, load failures use alert semantics, fulfillment fields have order-specific labels, and row actions are real buttons.
 - Motion: static order cards; only inherited control hover/focus states apply.
 

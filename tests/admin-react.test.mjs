@@ -482,22 +482,25 @@ test('admin product inventory list is rendered by React from legacy loader state
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const productForm = readFileSync('src/admin-app/product-form.js', 'utf8');
   const productsList = readFileSync('src/admin-app/products-list.js', 'utf8');
-  const adminLoadProducts = html.match(/async function adminLoadProducts\(\) \{[\s\S]*?\n        \}/)?.[0];
+  const shopControls = readFileSync('src/admin-app/shop-controls.js', 'utf8');
+  const adminLoadProducts = html.match(/async function adminLoadProducts\(detail\) \{[\s\S]*?\n        \}/)?.[0];
   const adminCreateProduct = html.match(/async function adminCreateProductFromReact\(detail\) \{[\s\S]*?\n        \}/)?.[0];
   const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?\$\('adminCreateForm'\)\.addEventListener/)?.[0];
 
   assert.match(html, /id="adminProductFormReactApp"/);
+  assert.match(html, /id="adminProductInventoryControlsReactApp"/);
   assert.match(html, /id="adminProductsListReactApp"/);
   assert.doesNotMatch(html, /id="adminProductForm"/);
   assert.doesNotMatch(html, /id="adminProductsList"/);
-  assert.doesNotMatch(html, /id="psImagePreview"|function adminAddProduct|function onProductImageFile|function resizeImageToDataUrl|productImageDataUrl|adminProductImagePreviewReactApp|gvdg:admin-product-image-preview/);
+  assert.doesNotMatch(html, /id="psImagePreview"|id="psInvSort"|id="psInvStatus"|function adminAddProduct|function onProductImageFile|function resizeImageToDataUrl|productImageDataUrl|adminProductImagePreviewReactApp|gvdg:admin-product-image-preview/);
   assert.match(html, /\.shop-admin-thumb\.fallback/);
   assert.match(html, /function setAdminProductsListState\(state\) \{[\s\S]*window\.__gvdgAdminProductsListState = state;[\s\S]*gvdg:admin-products-list/);
   assert.ok(adminLoadProducts);
+  assert.match(adminLoadProducts, /adminProductInventoryControlsState\(detail\)/);
   assert.match(adminLoadProducts, /setAdminProductsListState\(\{ status: 'loading', products: \[\], inventoryStatus:/);
   assert.match(adminLoadProducts, /setAdminProductsListState\(\{ status: 'ready', products, inventoryStatus: status \}\)/);
   assert.match(adminLoadProducts, /adminApi\('\/admin\/shop\/products\?' \+ params\.toString\(\)\)/);
-  assert.doesNotMatch(adminLoadProducts, /adminProductsList|replaceChildren|appendChild|productThumb|shop-admin-row|document\.createElement|querySelector|classList|textContent\s*=/);
+  assert.doesNotMatch(adminLoadProducts, /\$\('psInvSort'\)|\$\('psInvStatus'\)|adminProductsList|replaceChildren|appendChild|productThumb|shop-admin-row|document\.createElement|querySelector|classList|textContent\s*=/);
   assert.doesNotMatch(html, /function productThumb|function productIsActive/);
   assert.ok(adminCreateProduct);
   assert.match(adminCreateProduct, /adminApi\('\/admin\/shop\/products', \{ method: 'POST', body \}\)/);
@@ -507,17 +510,22 @@ test('admin product inventory list is rendered by React from legacy loader state
   assert.match(initAdmin, /gvdg:admin-product-create-request/);
   assert.match(initAdmin, /gvdg:admin-product-photo-ready/);
   assert.match(initAdmin, /gvdg:admin-product-photo-error/);
-  assert.doesNotMatch(initAdmin, /\$\('adminProductForm'\)\.addEventListener|\$\('psImageFile'\)\.addEventListener|\$\('psImage'\)\.addEventListener/);
+  assert.match(initAdmin, /gvdg:admin-product-inventory-controls-request/);
+  assert.match(initAdmin, /adminLoadProducts\(event\.detail \|\| \{\}\)/);
+  assert.doesNotMatch(initAdmin, /\$\('adminProductForm'\)\.addEventListener|\$\('psImageFile'\)\.addEventListener|\$\('psImage'\)\.addEventListener|\$\('psInvSort'\)\.addEventListener|\$\('psInvStatus'\)\.addEventListener/);
   assert.match(initAdmin, /gvdg:admin-product-save-request/);
   assert.match(initAdmin, /adminApi\('\/admin\/shop\/products\/' \+ product\.id, \{ method: 'PATCH', body: \{ price_cents: dollarsToCents\(detail\.priceValue\), stock_qty: parseInt\(detail\.stockValue, 10\) \|\| 0, active: detail\.active === true \} \}\)/);
   assert.match(initAdmin, /gvdg:admin-product-delete-request/);
   assert.match(initAdmin, /adminApi\('\/admin\/shop\/products\/' \+ product\.id, \{ method: 'DELETE' \}\)/);
   assert.match(main, /import \{ AdminProductForm \} from "\.\/product-form\.js"/);
   assert.match(main, /import \{ AdminProductsList \} from "\.\/products-list\.js"/);
+  assert.match(main, /import \{ AdminOrderControls, AdminProductInventoryControls \} from "\.\/shop-controls\.js"/);
   assert.match(main, /const productsListMount = document\.getElementById\("adminProductsListReactApp"\)/);
   assert.match(main, /createRoot\(productsListMount\)\.render\(h\(AdminProductsList\)\)/);
   assert.match(main, /const productFormMount = document\.getElementById\("adminProductFormReactApp"\)/);
   assert.match(main, /createRoot\(productFormMount\)\.render\(h\(AdminProductForm\)\)/);
+  assert.match(main, /const productInventoryControlsMount = document\.getElementById\("adminProductInventoryControlsReactApp"\)/);
+  assert.match(main, /createRoot\(productInventoryControlsMount\)\.render\(h\(AdminProductInventoryControls\)\)/);
   assert.match(productForm, /export function AdminProductForm/);
   assert.match(productForm, /data-react-admin-product-form/);
   assert.match(productForm, /gvdg:admin-product-create-request/);
@@ -545,29 +553,37 @@ test('admin product inventory list is rendered by React from legacy loader state
   assert.match(productsList, /className: "shop-admin-controls"/);
   assert.match(productsList, /role: "status"/);
   assert.doesNotMatch(productsList, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️|🏆|⚠|⏱/);
+  assert.match(shopControls, /export function AdminProductInventoryControls/);
+  assert.match(shopControls, /gvdg:admin-product-inventory-controls-request/);
+  assert.match(shopControls, /window\.__gvdgAdminProductInventoryControlsState/);
+  assert.match(shopControls, /data-react-admin-product-inventory-controls/);
 });
 
 test('admin orders list is rendered by React from legacy loader state', () => {
   const html = readFileSync('admin.html', 'utf8');
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const ordersList = readFileSync('src/admin-app/orders-list.js', 'utf8');
-  const adminLoadOrders = html.match(/async function adminLoadOrders\(\) \{[\s\S]*?\n        \}/)?.[0];
+  const shopControls = readFileSync('src/admin-app/shop-controls.js', 'utf8');
+  const adminLoadOrders = html.match(/async function adminLoadOrders\(detail\) \{[\s\S]*?\n        \}/)?.[0];
   const saveOrder = html.match(/async function saveOrder\(id, body\) \{[\s\S]*?\n        \}/)?.[0];
   const cancelOrder = html.match(/async function cancelOrder\(id, status\) \{[\s\S]*?\n        \}/)?.[0];
   const deleteOrder = html.match(/async function deleteOrder\(id\) \{[\s\S]*?\n        \}/)?.[0];
   const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?\$\('adminCreateForm'\)\.addEventListener/)?.[0];
 
+  assert.match(html, /id="adminOrderControlsReactApp"/);
   assert.match(html, /id="adminOrdersListReactApp"/);
   assert.doesNotMatch(html, /id="adminOrdersList"/);
+  assert.doesNotMatch(html, /id="ordStatusFilter"|id="ordRefresh"/);
   assert.doesNotMatch(html, /function orderCard|const ORDER_STATUS_LABELS|const ORDER_UNFULFILLED/);
   assert.match(html, /function setAdminOrdersListState\(state\) \{[\s\S]*window\.__gvdgAdminOrdersListState = state;[\s\S]*gvdg:admin-orders-list/);
   assert.ok(adminLoadOrders);
+  assert.match(adminLoadOrders, /adminOrderControlsState\(detail\)/);
   assert.match(adminLoadOrders, /setAdminOrdersListState\(\{ status: 'loading', orders: \[\], filterStatus: status \}\)/);
   assert.match(adminLoadOrders, /setAdminOrdersListState\(\{ status: 'error', orders: \[\], filterStatus: status \}\)/);
   assert.match(adminLoadOrders, /setAdminOrdersListState\(\{ status: 'ready', orders, filterStatus: status \}\)/);
   assert.match(adminLoadOrders, /adminApi\('\/admin\/orders' \+ \(status \? '\?status=' \+ encodeURIComponent\(status\) : ''\)\)/);
   assert.match(adminLoadOrders, /setOrdersBadge\(unfulfilled\)/);
-  assert.doesNotMatch(adminLoadOrders, /\$\('adminOrdersList'\)|replaceChildren|appendChild|orderCard|document\.createElement|querySelector|classList|textContent\s*=|addEventListener/);
+  assert.doesNotMatch(adminLoadOrders, /\$\('ordStatusFilter'\)|\$\('ordRefresh'\)|\$\('adminOrdersList'\)|replaceChildren|appendChild|orderCard|document\.createElement|querySelector|classList|textContent\s*=|addEventListener/);
   assert.ok(saveOrder);
   assert.match(saveOrder, /adminApi\('\/admin\/orders\/' \+ id, \{ method: 'PATCH', body \}\)/);
   assert.match(saveOrder, /adminLoadOrders\(\); return true/);
@@ -582,6 +598,8 @@ test('admin orders list is rendered by React from legacy loader state', () => {
   assert.match(deleteOrder, /return false/);
   assert.doesNotMatch(deleteOrder, /confirm/);
   assert.ok(initAdmin);
+  assert.match(initAdmin, /gvdg:admin-order-controls-request/);
+  assert.match(initAdmin, /adminLoadOrders\(event\.detail \|\| \{\}\)/);
   assert.match(initAdmin, /gvdg:admin-order-save-request/);
   assert.match(initAdmin, /const trackingCarrier = String\(detail\.trackingCarrier \|\| ''\)\.trim\(\)/);
   assert.match(initAdmin, /const trackingNumber = String\(detail\.trackingNumber \|\| ''\)\.trim\(\)/);
@@ -592,7 +610,11 @@ test('admin orders list is rendered by React from legacy loader state', () => {
   assert.match(initAdmin, /gvdg:admin-order-delete-request/);
   assert.match(initAdmin, /deleteOrder\(order\.id\)/);
   assert.match(initAdmin, /gvdg:admin-order-action-result/);
+  assert.doesNotMatch(initAdmin, /\$\('ordStatusFilter'\)\.addEventListener|\$\('ordRefresh'\)\.addEventListener/);
   assert.match(main, /import \{ AdminOrdersList \} from "\.\/orders-list\.js"/);
+  assert.match(main, /import \{ AdminOrderControls, AdminProductInventoryControls \} from "\.\/shop-controls\.js"/);
+  assert.match(main, /const orderControlsMount = document\.getElementById\("adminOrderControlsReactApp"\)/);
+  assert.match(main, /createRoot\(orderControlsMount\)\.render\(h\(AdminOrderControls\)\)/);
   assert.match(main, /const ordersListMount = document\.getElementById\("adminOrdersListReactApp"\)/);
   assert.match(main, /createRoot\(ordersListMount\)\.render\(h\(AdminOrdersList\)\)/);
   assert.match(ordersList, /export function AdminOrdersList/);
@@ -611,6 +633,10 @@ test('admin orders list is rendered by React from legacy loader state', () => {
   assert.match(ordersList, /role: "status"/);
   assert.match(ordersList, /role: "alert"/);
   assert.doesNotMatch(ordersList, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️|🏆|⚠|⏱/);
+  assert.match(shopControls, /export function AdminOrderControls/);
+  assert.match(shopControls, /gvdg:admin-order-controls-request/);
+  assert.match(shopControls, /window\.__gvdgAdminOrderControlsState/);
+  assert.match(shopControls, /data-react-admin-order-controls/);
 });
 
 test('admin data archive destination list is rendered by React from legacy loader state', () => {
