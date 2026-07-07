@@ -53,10 +53,51 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(chrome, /localStorage\.getItem\("theme"\)/);
   assert.match(chrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v51"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v53"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
+});
+
+test('Events previous results panel is rendered by the public React bundle', () => {
+  const html = readFileSync('events.html', 'utf8');
+  const main = readFileSync('src/public-app/main.js', 'utf8');
+  const app = readFileSync('src/public-app/events-previous-results-app.js', 'utf8');
+
+  assert.match(html, /id="previousResultsSection"/);
+  assert.match(html, /window\.dispatchEvent\(new CustomEvent\('gvdg:events-previous-results'/);
+  assert.doesNotMatch(html, /function renderPreviousResults|function previousResultCard|previousResultsExpanded|previousResultsVisible/);
+  assert.match(main, /createRoot\(eventsPreviousResultsMount\)\.render\(h\(EventsPreviousResultsApp\)\)/);
+  assert.match(app, /export function EventsPreviousResultsApp/);
+  assert.match(app, /data-react-events-previous-results/);
+  assert.match(app, /PREVIOUS_RESULTS_INITIAL = 3/);
+  assert.match(app, /PREVIOUS_RESULTS_PAGE_SIZE = 12/);
+  assert.match(app, /CalendarDays, ChevronDown, ChevronUp, ExternalLink, Info/);
+  assert.match(app, /aria-expanded/);
+  assert.match(app, /safeHref/);
+  assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|📅|📍/);
+});
+
+test('Events fundraisers and meetings are rendered by the public React bundle', () => {
+  const html = readFileSync('events.html', 'utf8');
+  const main = readFileSync('src/public-app/main.js', 'utf8');
+  const app = readFileSync('src/public-app/events-club-content-app.js', 'utf8');
+
+  assert.match(html, /id="fundraisersSection"/);
+  assert.match(html, /id="meetingsSection"/);
+  assert.match(html, /new CustomEvent\('gvdg:events-fundraisers'/);
+  assert.match(html, /new CustomEvent\('gvdg:events-meetings'/);
+  assert.doesNotMatch(html, /function safeMd|function appendInline|function shareRow|fundraisersEl\.appendChild|meetingsEl\.appendChild|💚 Donate/);
+  assert.match(main, /createRoot\(eventsFundraisersMount\)\.render\(h\(EventsFundraisersApp\)\)/);
+  assert.match(main, /createRoot\(eventsMeetingsMount\)\.render\(h\(EventsMeetingsApp\)\)/);
+  assert.match(app, /export function EventsFundraisersApp/);
+  assert.match(app, /export function EventsMeetingsApp/);
+  assert.match(app, /data-react-events-fundraisers/);
+  assert.match(app, /data-react-events-meetings/);
+  assert.match(app, /safeExternalUrl/);
+  assert.match(app, /navigator\.clipboard\.writeText\(url\)/);
+  assert.match(app, /Heart, Mail/);
+  assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|💚/);
 });
 
 test('Ryder Cup body results are rendered by the public React bundle', () => {

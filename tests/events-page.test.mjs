@@ -24,13 +24,17 @@ test('public Events page pins Live Now to the top section, above the schedule fe
 
 test('public Events page hides past events behind previous results', () => {
   const source = readFileSync('events.html', 'utf8');
+  const app = readFileSync('src/public-app/events-previous-results-app.js', 'utf8');
   // Only current/upcoming render in the main flow; previous results stay collapsed on the same page.
   assert.match(source, /function splitFeedByDate\(items\)/);
   assert.match(source, /function isArchivedClubEvent\(raw\)/);
-  assert.match(source, /function renderPreviousResults\(results\)/);
-  assert.match(source, /See previous results/);
-  assert.match(source, /Hide previous results/);
-  assert.match(source, /previous-results-toggle/);
+  assert.match(source, /function publishPreviousResults\(results\)/);
+  assert.match(source, /window\.dispatchEvent\(new CustomEvent\('gvdg:events-previous-results'/);
+  assert.doesNotMatch(source, /function renderPreviousResults\(results\)/);
+  assert.doesNotMatch(source, /function previousResultCard\(item\)/);
+  assert.match(app, /See previous results/);
+  assert.match(app, /Hide previous results/);
+  assert.match(app, /previous-results-toggle/);
   assert.doesNotMatch(source, /function renderPastSection\(past\)/);
   assert.doesNotMatch(source, /past-toggle/);
   assert.doesNotMatch(source, /function renderArchiveCta\(archivedCount\)/);
@@ -54,12 +58,33 @@ test('public Events page parses feed dates before archiving rows', () => {
 
 test('public Events previous results include load more and show less controls', () => {
   const source = readFileSync('events.html', 'utf8');
-  assert.match(source, /const PREVIOUS_RESULTS_INITIAL = 3/);
-  assert.match(source, /const PREVIOUS_RESULTS_PAGE_SIZE = 12/);
-  assert.match(source, /Load more/);
-  assert.match(source, /Show less/);
-  assert.match(source, /previousResultsVisible = PREVIOUS_RESULTS_INITIAL/);
+  const app = readFileSync('src/public-app/events-previous-results-app.js', 'utf8');
+  assert.match(app, /const PREVIOUS_RESULTS_INITIAL = 3/);
+  assert.match(app, /const PREVIOUS_RESULTS_PAGE_SIZE = 12/);
+  assert.match(app, /Load more/);
+  assert.match(app, /Show less/);
+  assert.match(app, /setVisible\(PREVIOUS_RESULTS_INITIAL\)/);
   assert.match(source, /previousResultTime\(b\) - previousResultTime\(a\)/);
+});
+
+test('public Events club content publishes fundraisers and meetings to React', () => {
+  const source = readFileSync('events.html', 'utf8');
+  const app = readFileSync('src/public-app/events-club-content-app.js', 'utf8');
+
+  assert.match(source, /async function loadFundraisers\(\)/);
+  assert.match(source, /window\.__gvdgEventsFundraisers = active/);
+  assert.match(source, /new CustomEvent\('gvdg:events-fundraisers'/);
+  assert.match(source, /async function loadMeetings\(\)/);
+  assert.match(source, /window\.__gvdgEventsMeetings = Array\.isArray\(items\) \? items : \[\]/);
+  assert.match(source, /new CustomEvent\('gvdg:events-meetings'/);
+  assert.doesNotMatch(source, /function safeMd|function appendInline|function shareRow/);
+  assert.doesNotMatch(source, /fundraisersEl\.appendChild|meetingsEl\.appendChild|💚 Donate/);
+  assert.match(app, /export function EventsFundraisersApp/);
+  assert.match(app, /export function EventsMeetingsApp/);
+  assert.match(app, /data-react-events-fundraisers/);
+  assert.match(app, /data-react-events-meetings/);
+  assert.match(app, /MarkdownBody/);
+  assert.match(app, /ShareRow/);
 });
 
 test('public registration cards post pair label only for doubles config', () => {

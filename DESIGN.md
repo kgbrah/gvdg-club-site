@@ -140,6 +140,24 @@ Spacing follows a 4px base through rem values.
 - Accessibility: menu and theme controls are real buttons with labels, `aria-expanded`, `aria-controls`, `aria-pressed`, and Lucide icons; current page uses `aria-current="page"`.
 - Motion: mobile menu reveal and header scroll shadow preserve the existing transform/opacity/box-shadow transitions only.
 
+### Events Previous Results App
+
+- Structure: the Events page previous-results panel renders from the shared `public-app` React bundle into `previousResultsSection`; the legacy Events script only publishes normalized result data through `gvdg:events-previous-results`.
+- Variants: empty state, collapsed summary, expanded grid, linked internal event result, linked external schedule result, status badge, load more, and show less.
+- Spacing: reuses `.previous-results-*`, `.events-grid`, `.event-card`, `.event-meta`, and badge primitives so the panel keeps the existing compact Events rhythm.
+- States: React owns expanded/collapsed state, visible result count, load-more/show-less controls, link attributes, and Lucide date/info/expand iconography; `events.html` must not contain a previous-results DOM renderer.
+- Accessibility: the summary control is a real button with `aria-expanded` and `aria-controls`; result cards remain anchors only when they navigate, and external links keep safe `rel` attributes.
+- Motion: preserves the existing hover/focus transforms and no decorative animation.
+
+### Events Club Content App
+
+- Structure: the Events page fundraisers and meetings/minutes sections render from the shared `public-app` React bundle into `fundraisersSection` and `meetingsSection`; the legacy Events script only publishes fetched arrays through `gvdg:events-fundraisers` and `gvdg:events-meetings`.
+- Variants: no-content hidden state, active fundraiser cards, goal progress, safe markdown paragraphs/headings/lists/links, donation CTA, share actions, copy-link status, and meeting minutes cards.
+- Spacing: reuses `.fundraiser-card`, `.fundraiser-title`, `.fundraiser-body`, `.fr-*`, `.donate-btn`, and `.events-section-title` primitives so club content keeps the same Events-page rhythm.
+- States: React owns markdown rendering, progress bar width, donation/share links, copy-link status, and Lucide donation/share iconography; `events.html` must not contain fundraiser/meeting DOM renderers or markdown DOM helpers.
+- Accessibility: fundraisers and meetings render as articles, donation/share actions are real links/buttons, copied status is visible text, and external links keep safe new-tab attributes.
+- Motion: static content; only inherited hover/focus states apply.
+
 ### Ryder Cup Results App
 
 - Structure: the Ryder Cup page body renders from the shared `public-app` React bundle into `ryderCupReactApp`, including title, league link, loading/error state, scoreboard, scoring note, weekly match cards, last-updated text, and home link.
