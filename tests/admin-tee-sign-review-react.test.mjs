@@ -1,0 +1,60 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import test from 'node:test';
+
+test('admin tee-sign review queue is rendered by React from legacy loader state', () => {
+  const html = readFileSync('admin.html', 'utf8');
+  const main = readFileSync('src/admin-app/main.js', 'utf8');
+  const review = readFileSync('src/admin-app/tee-sign-review.js', 'utf8');
+  const tsLoadReview = html.match(/async function tsLoadReview\(detail\) \{[\s\S]*?\n        \}/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?\$\('adminCreateForm'\)\.addEventListener/)?.[0];
+
+  assert.match(html, /id="adminTeeSignReviewControlsReactApp"/);
+  assert.match(html, /id="adminTeeSignReviewReactApp"/);
+  assert.doesNotMatch(html, /id="tsStatusFilter"|id="tsRefresh"|id="tsReviewList"/);
+  assert.match(html, /function setAdminTeeSignReviewState\(state\) \{[\s\S]*window\.__gvdgAdminTeeSignReviewState = state;[\s\S]*gvdg:admin-tee-sign-review/);
+  assert.ok(tsLoadReview);
+  assert.match(tsLoadReview, /adminTeeSignReviewControlsState\(detail\)/);
+  assert.match(tsLoadReview, /setAdminTeeSignReviewState\(\{ status: 'loading'/);
+  assert.match(tsLoadReview, /adminApi\('\/admin\/tee-signs\?status=' \+ encodeURIComponent\(queueStatus\)\)/);
+  assert.match(tsLoadReview, /setAdminTeeSignReviewState\(\{ status: 'ready'/);
+  assert.doesNotMatch(tsLoadReview, /tsReviewList|replaceChildren|appendChild|document\.createElement|tsCard|tsRowsFrom|tsAddReviewRow|\$\('tsStatusFilter'\)/);
+  assert.match(html, /async function tsApproveFromReact\(detail\)/);
+  assert.match(html, /async function tsExtractFromReact\(detail\)/);
+  assert.match(html, /async function tsRejectFromReact\(detail\)/);
+  assert.match(html, /async function tsDeleteFromReact\(detail\)/);
+  assert.match(html, /gvdg:admin-tee-sign-review-action-result/);
+  assert.ok(initAdmin);
+  assert.match(initAdmin, /gvdg:admin-tee-sign-review-controls-request/);
+  assert.match(initAdmin, /tsLoadReview\(event\.detail \|\| \{\}\)/);
+  assert.match(initAdmin, /gvdg:admin-tee-sign-review-approve-request/);
+  assert.match(initAdmin, /gvdg:admin-tee-sign-review-extract-request/);
+  assert.match(initAdmin, /gvdg:admin-tee-sign-review-reject-request/);
+  assert.match(initAdmin, /gvdg:admin-tee-sign-review-delete-request/);
+  assert.doesNotMatch(initAdmin, /\$\('tsStatusFilter'\)\.addEventListener|\$\('tsRefresh'\)\.addEventListener/);
+
+  assert.match(main, /import \{ AdminTeeSignReviewControls, AdminTeeSignReviewList \} from "\.\/tee-sign-review\.js"/);
+  assert.match(main, /const teeSignReviewControlsMount = document\.getElementById\("adminTeeSignReviewControlsReactApp"\)/);
+  assert.match(main, /createRoot\(teeSignReviewControlsMount\)\.render\(h\(AdminTeeSignReviewControls\)\)/);
+  assert.match(main, /const teeSignReviewMount = document\.getElementById\("adminTeeSignReviewReactApp"\)/);
+  assert.match(main, /createRoot\(teeSignReviewMount\)\.render\(h\(AdminTeeSignReviewList\)\)/);
+
+  assert.match(review, /export function AdminTeeSignReviewControls/);
+  assert.match(review, /export function AdminTeeSignReviewList/);
+  assert.match(review, /data-react-admin-tee-sign-review-controls/);
+  assert.match(review, /data-react-admin-tee-sign-review/);
+  assert.match(review, /gvdg:admin-tee-sign-review-controls-request/);
+  assert.match(review, /gvdg:admin-tee-sign-review/);
+  assert.match(review, /gvdg:admin-tee-sign-review-approve-request/);
+  assert.match(review, /gvdg:admin-tee-sign-review-extract-request/);
+  assert.match(review, /gvdg:admin-tee-sign-review-reject-request/);
+  assert.match(review, /gvdg:admin-tee-sign-review-delete-request/);
+  assert.match(review, /gvdg:admin-tee-sign-review-action-result/);
+  assert.match(review, /id: "tsStatusFilter"/);
+  assert.match(review, /id: "tsRefresh"/);
+  assert.match(review, /className: "ts-review-card"/);
+  assert.match(review, /className: "ts-review-row"/);
+  assert.match(review, /URL\.createObjectURL/);
+  assert.match(review, /URL\.revokeObjectURL/);
+  assert.doesNotMatch(review, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️|🏆|⚠|⏱|—/);
+});

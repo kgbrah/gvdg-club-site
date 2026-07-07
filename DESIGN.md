@@ -221,6 +221,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: form labels target stable control ids, required fields remain native inputs, and course rows are static text because no row action exists in the current admin workflow.
 - Motion: static list rows; no decorative motion.
 
+### Admin Tee Signs Review Queue
+
+- Structure: the Admin Tee Signs status toolbar renders from `admin-app` into `adminTeeSignReviewControlsReactApp`, and the review queue renders into `adminTeeSignReviewReactApp`; legacy admin code fetches `/admin/tee-signs`, layout options, and handles approve/extract/reject/delete request events while publishing queue/action state only.
+- Variants: awaiting-review, official, and rejected filters; loading queue, error queue, empty queue, candidate card, official card with apply-rows action, rejected card with delete-only action, authorized candidate image preview, official public image preview, editable layout rows, new-layout row, remove-row action, add-row action, pending action state, and failed validation state.
+- Spacing: reuses `.ts-review-toolbar`, `.ts-review-list`, `.ts-review-card`, `.ts-review-media`, `.ts-review-body`, `.ts-review-row`, `.ts-review-actions`, `.admin-btn`, and `.admin-badge` so tee-sign review keeps the existing dense proofing workflow.
+- States: React owns filter select value, refresh action, review-card markup, preview image object URL lifecycle, editable row values, add/remove row behavior, reject/delete confirmations, pending action labels, and request dispatch; `admin.html` must not keep static `tsStatusFilter`/`tsRefresh`/`tsReviewList` markup, read those DOM fields, mutate `tsReviewList`, construct tee-sign cards or `.ts-review-row` rows, load thumbnail images into DOM nodes, query card rows, or attach toolbar/card listeners directly.
+- Accessibility: loading and empty states use status semantics, load failures use alert semantics, preview images have hole-specific alt text, row labels target stable inputs, and every queue action is a real button.
+- Motion: static review cards; only inherited control hover/focus states apply.
+
 ### Admin Club Content Forms and Lists
 
 - Structure: the Admin Leagues, Fundraisers, and Meetings add forms render from `admin-app` into `adminLeagueFormReactApp`, `adminFundraiserFormReactApp`, and `adminMeetingFormReactApp`; the matching lists render into `adminLeaguesListReactApp`, `adminFundraisersListReactApp`, and `adminMeetingsListReactApp`; legacy admin code fetches `/leagues`, `/fundraisers`, and `/meetings`, keeps New Event league select population, handles create-request events, and publishes list/result state events only.

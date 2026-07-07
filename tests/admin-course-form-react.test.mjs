@@ -6,7 +6,7 @@ test('admin course add form is rendered by React from request events', () => {
   const html = readFileSync('admin.html', 'utf8');
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const form = readFileSync('src/admin-app/course-form.js', 'utf8');
-  const adminAddCourse = html.match(/async function adminAddCourseFromReact\(detail\) \{[\s\S]*?function tsCourseName/)?.[0];
+  const adminAddCourse = html.match(/async function adminAddCourseFromReact\(detail\) \{[\s\S]*?async function tsLayoutsForCourse/)?.[0];
 
   assert.match(html, /id="adminCourseFormReactApp"/);
   assert.doesNotMatch(html, /id="adminCourseForm"|id="acName"|id="acLoc"|id="acUdisc"|id="acUdiscCourseId"/);

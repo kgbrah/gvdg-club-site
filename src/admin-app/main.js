@@ -24,6 +24,7 @@ import { AdminRegistrationManualPlayerForm } from "./registration-manual-player-
 import { AdminRegistrationRoster } from "./registration-roster.js";
 import { AdminRegistrationAcePot, AdminRegistrationCreditsList, AdminRegistrationCtpsList } from "./registration-widgets.js";
 import { AdminOrderControls, AdminProductInventoryControls } from "./shop-controls.js";
+import { AdminTeeSignReviewControls, AdminTeeSignReviewList } from "./tee-sign-review.js";
 import { AdminWalletAdjustmentForm } from "./wallet-form.js";
 import { AdminWalletRecentList } from "./wallet-recent-list.js";
 import { CrottsWidget } from "../shared/crotts-widget.js";
@@ -78,6 +79,16 @@ if (coursesListMount) {
 const courseFormMount = document.getElementById("adminCourseFormReactApp");
 if (courseFormMount) {
   createRoot(courseFormMount).render(h(AdminCourseForm));
+}
+
+const teeSignReviewControlsMount = document.getElementById("adminTeeSignReviewControlsReactApp");
+if (teeSignReviewControlsMount) {
+  createRoot(teeSignReviewControlsMount).render(h(AdminTeeSignReviewControls));
+}
+
+const teeSignReviewMount = document.getElementById("adminTeeSignReviewReactApp");
+if (teeSignReviewMount) {
+  createRoot(teeSignReviewMount).render(h(AdminTeeSignReviewList));
 }
 
 const leagueFormMount = document.getElementById("adminLeagueFormReactApp");

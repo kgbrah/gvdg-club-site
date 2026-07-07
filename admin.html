@@ -409,16 +409,8 @@
                 </div>
             </div>
             <div class="admin-pane" id="apane-tee-signs">
-                <div class="al-section ts-review-toolbar">
-                    <label for="tsStatusFilter">Show</label>
-                    <select id="tsStatusFilter">
-                        <option value="candidate">Awaiting review</option>
-                        <option value="official">Official</option>
-                        <option value="rejected">Rejected</option>
-                    </select>
-                    <button type="button" class="admin-btn" id="tsRefresh">Refresh</button>
-                </div>
-                <div id="tsReviewList" class="ts-review-list">Loading…</div>
+                <div id="adminTeeSignReviewControlsReactApp"></div>
+                <div id="adminTeeSignReviewReactApp"></div>
             </div>
             <div class="admin-pane" id="apane-scoring">
                 <div><label for="scEvent">Event</label>
@@ -811,7 +803,7 @@
             }
         }
         let aeEditingEvent = null;
-        let adminCoursesCache = [], tsReviewThumbUrls = [];
+        let adminCoursesCache = [];
         function adminSwitch(tab) {
             window.__gvdgAdminActiveTab = tab;
             window.dispatchEvent(new CustomEvent('gvdg:admin-active-tab', { detail: { tab } }));
@@ -1009,30 +1001,6 @@
             }
         }
 
-        function tsCourseName(courseId) {
-            const c = adminCoursesCache.find((row) => String(row.id) === String(courseId));
-            return c ? c.name : 'Course #' + courseId;
-        }
-        function tsReleaseThumbs() {
-            tsReviewThumbUrls.forEach((url) => URL.revokeObjectURL(url));
-            tsReviewThumbUrls = [];
-        }
-        async function tsLoadReviewImage(sign, img) {
-            const id = Number(sign.id);
-            if (!id) return;
-            if (sign.status === 'official') {
-                img.src = AUTH_BASE + '/tee-signs/' + id + '/image';
-                return;
-            }
-            if (sign.status !== 'candidate') return;
-            try {
-                const r = await fetch(AUTH_BASE + '/tee-signs/' + id + '/image', { headers: { Authorization: 'Bearer ' + sessionStorage.getItem(TOKEN_KEY) } });
-                if (!r.ok) return;
-                const url = URL.createObjectURL(await r.blob());
-                if (img.isConnected) { tsReviewThumbUrls.push(url); img.src = url; }
-                else URL.revokeObjectURL(url);
-            } catch (e) {}
-        }
         async function tsLayoutsForCourse(courseId) {
             try {
                 const r = await api('/courses/' + encodeURIComponent(courseId) + '/layouts');
@@ -1040,187 +1008,71 @@
             } catch (e) {}
             return [];
         }
-        function tsField(label, node) {
-            const wrap = document.createElement('div');
-            wrap.appendChild(elx('label', null, label));
-            wrap.appendChild(node);
-            return wrap;
+        function setAdminTeeSignReviewState(state) {
+            window.__gvdgAdminTeeSignReviewState = state;
+            window.dispatchEvent(new CustomEvent('gvdg:admin-tee-sign-review', { detail: state }));
         }
-        function tsAddReviewRow(wrap, layouts, seed) {
-            const row = elx('div', 'ts-review-row');
-            const layout = document.createElement('select');
-            layout.className = 'ts-layout';
-            layouts.forEach((l) => {
-                const opt = document.createElement('option');
-                opt.value = String(l.id);
-                opt.textContent = l.name || ('Layout #' + l.id);
-                layout.appendChild(opt);
-            });
-            const fresh = document.createElement('option');
-            fresh.value = '__new__';
-            fresh.textContent = '+ New layout';
-            layout.appendChild(fresh);
-            const hasLayout = seed && seed.layoutId != null;
-            layout.value = hasLayout ? String(seed.layoutId) : '__new__';
-            const newLayout = document.createElement('input');
-            newLayout.className = 'ts-new-layout';
-            newLayout.maxLength = 80;
-            newLayout.placeholder = 'Layout name';
-            newLayout.value = !hasLayout ? (seed && (seed.suggestedLayoutName || seed.label) || 'Main') : '';
-            const syncNewLayout = () => { newLayout.disabled = layout.value !== '__new__'; };
-            layout.addEventListener('change', syncNewLayout);
-            syncNewLayout();
-            const par = document.createElement('input');
-            par.className = 'ts-par';
-            par.type = 'number';
-            par.min = '1';
-            par.max = '15';
-            par.value = seed && seed.par != null ? String(seed.par) : '3';
-            const dist = document.createElement('input');
-            dist.className = 'ts-distance';
-            dist.type = 'number';
-            dist.min = '0';
-            dist.placeholder = 'ft';
-            if (seed && seed.distance_ft != null) dist.value = String(seed.distance_ft);
-            const tee = document.createElement('input');
-            tee.className = 'ts-tee';
-            tee.maxLength = 80;
-            tee.placeholder = 'Tee';
-            tee.value = seed && seed.tee != null ? String(seed.tee) : '';
-            const target = document.createElement('input');
-            target.className = 'ts-target';
-            target.maxLength = 80;
-            target.placeholder = 'Target';
-            target.value = seed && seed.target != null ? String(seed.target) : '';
-            const color = document.createElement('input');
-            color.className = 'ts-color';
-            color.maxLength = 24;
-            color.placeholder = 'Color';
-            color.value = seed && seed.color != null ? String(seed.color) : '';
-            const remove = elx('button', 'admin-btn danger', 'Remove');
-            remove.type = 'button';
-            remove.addEventListener('click', () => row.remove());
-            row.appendChild(tsField('Layout', layout));
-            row.appendChild(tsField('New name', newLayout));
-            row.appendChild(tsField('Par', par));
-            row.appendChild(tsField('Feet', dist));
-            row.appendChild(tsField('Tee', tee));
-            row.appendChild(tsField('Target', target));
-            row.appendChild(tsField('Color', color));
-            row.appendChild(remove);
-            wrap.appendChild(row);
+        function adminTeeSignReviewControlsState(detail) {
+            const source = detail && typeof detail === 'object' ? detail : (window.__gvdgAdminTeeSignReviewControlsState || {});
+            const status = ['candidate', 'official', 'rejected'].includes(source.status) ? source.status : 'candidate';
+            return { status };
         }
-        function tsRowsFrom(card) {
-            return Array.from(card.querySelectorAll('.ts-review-row')).map((row) => {
-                const layout = row.querySelector('.ts-layout');
-                const par = parseInt(row.querySelector('.ts-par').value, 10);
-                const dist = parseInt(row.querySelector('.ts-distance').value, 10);
-                if (!(par >= 1 && par <= 15)) return null;
-                const body = {
-                    par,
-                    distance_ft: Number.isFinite(dist) && dist > 0 ? dist : null,
-                    tee: row.querySelector('.ts-tee').value.trim() || null,
-                    target: row.querySelector('.ts-target').value.trim() || null,
-                    color: row.querySelector('.ts-color').value.trim() || null,
-                };
-                if (layout.value && layout.value !== '__new__') body.layoutId = Number(layout.value);
-                else body.newLayoutName = row.querySelector('.ts-new-layout').value.trim() || 'Main';
-                return body;
-            }).filter(Boolean);
+        async function tsLoadReview(detail) {
+            const { status: queueStatus } = adminTeeSignReviewControlsState(detail);
+            setAdminTeeSignReviewState({ status: 'loading', queueStatus, signs: [], courses: adminCoursesCache, layoutsByCourse: {}, authBase: AUTH_BASE });
+            if (!adminCoursesCache.length) await adminLoadCourses();
+            let r;
+            try {
+                r = await adminApi('/admin/tee-signs?status=' + encodeURIComponent(queueStatus));
+            } catch (e) {
+                setAdminTeeSignReviewState({ status: 'error', queueStatus, signs: [], courses: adminCoursesCache, layoutsByCourse: {}, authBase: AUTH_BASE });
+                return;
+            }
+            if (!r.ok) {
+                setAdminTeeSignReviewState({ status: 'error', queueStatus, signs: [], courses: adminCoursesCache, layoutsByCourse: {}, authBase: AUTH_BASE });
+                return;
+            }
+            const signs = (await r.json()).teeSigns || [];
+            const layoutsByCourse = {};
+            for (const sign of signs) {
+                const cid = Number(sign.course_id);
+                if (!layoutsByCourse[String(cid)]) layoutsByCourse[String(cid)] = await tsLayoutsForCourse(cid);
+            }
+            setAdminTeeSignReviewState({ status: 'ready', queueStatus, signs, courses: adminCoursesCache, layoutsByCourse, authBase: AUTH_BASE });
         }
-        async function tsApprove(sign, card) {
-            const rows = tsRowsFrom(card);
-            if (!rows.length) { adminMsg('Add at least one valid row before approving', false); return; }
+        function finishTeeSignReviewAction(requestId, ok) {
+            if (requestId) window.dispatchEvent(new CustomEvent('gvdg:admin-tee-sign-review-action-result', { detail: { requestId, ok } }));
+        }
+        async function tsApproveFromReact(detail) {
+            const sign = detail.sign || {};
+            const rows = Array.isArray(detail.rows) ? detail.rows : [];
+            if (!rows.length) { adminMsg('Add at least one valid row before approving', false); finishTeeSignReviewAction(detail.requestId, false); return; }
             const r = await adminApi('/admin/tee-signs/' + sign.id + '/approve', { method: 'POST', body: { rows } });
             adminMsg(r.ok ? 'Tee sign approved and layout holes updated' : 'Approve failed (' + r.status + ')', r.ok);
+            finishTeeSignReviewAction(detail.requestId, r.ok);
             if (r.ok) tsLoadReview();
         }
-        async function tsExtract(sign) {
+        async function tsExtractFromReact(detail) {
+            const sign = detail.sign || {};
             adminMsg('Re-running tee-sign vision...', true);
             const r = await adminApi('/admin/tee-signs/' + sign.id + '/extract', { method: 'POST', body: {} });
             adminMsg(r.ok ? 'Vision extraction refreshed' : 'Vision refresh failed (' + r.status + ')', r.ok);
+            finishTeeSignReviewAction(detail.requestId, r.ok);
             if (r.ok) tsLoadReview();
         }
-        async function tsReject(sign) {
-            if (!confirm('Reject tee sign for hole ' + sign.hole_number + '? The stored image will be removed.')) return;
+        async function tsRejectFromReact(detail) {
+            const sign = detail.sign || {};
             const r = await adminApi('/admin/tee-signs/' + sign.id + '/reject', { method: 'POST', body: {} });
             adminMsg(r.ok ? 'Tee sign rejected' : 'Reject failed (' + r.status + ')', r.ok);
+            finishTeeSignReviewAction(detail.requestId, r.ok);
             if (r.ok) tsLoadReview();
         }
-        async function tsDelete(sign) {
-            if (!confirm('Delete tee sign #' + sign.id + '?')) return;
+        async function tsDeleteFromReact(detail) {
+            const sign = detail.sign || {};
             const r = await adminApi('/admin/tee-signs/' + sign.id, { method: 'DELETE' });
             adminMsg(r.ok ? 'Tee sign deleted' : 'Delete failed (' + r.status + ')', r.ok);
+            finishTeeSignReviewAction(detail.requestId, r.ok);
             if (r.ok) tsLoadReview();
-        }
-        function tsCard(sign, layouts) {
-            const card = elx('div', 'ts-review-card');
-            const media = elx('div', 'ts-review-media');
-            const img = elx('img', 'ts-review-photo');
-            img.alt = 'Tee sign for hole ' + sign.hole_number;
-            img.loading = 'lazy';
-            media.appendChild(img);
-            tsLoadReviewImage(sign, img);
-            card.appendChild(media);
-            const body = elx('div', 'ts-review-body');
-            const head = elx('div', 'ts-review-head');
-            head.appendChild(elx('div', 'ts-review-title', tsCourseName(sign.course_id) + ' · Hole ' + sign.hole_number));
-            head.appendChild(elx('span', 'admin-badge ' + (sign.status || ''), sign.status || 'candidate'));
-            body.appendChild(head);
-            const metaBits = [];
-            if (sign.uploaded_by) metaBits.push('Uploaded by ' + sign.uploaded_by);
-            if (sign.created_at) metaBits.push(sign.created_at);
-            if (sign.extract_source) metaBits.push('Vision: ' + sign.extract_source);
-            body.appendChild(elx('div', 'ts-review-meta', metaBits.join(' · ') || 'No metadata'));
-            const rows = elx('div', 'ts-review-rows');
-            const seeds = Array.isArray(sign.suggestedRows) && sign.suggestedRows.length ? sign.suggestedRows : [{ suggestedLayoutName: 'Main', par: 3 }];
-            seeds.forEach((seed) => tsAddReviewRow(rows, layouts, seed));
-            body.appendChild(rows);
-            const actions = elx('div', 'ts-review-actions');
-            const add = elx('button', 'admin-btn secondary', '+ Row');
-            add.type = 'button';
-            add.addEventListener('click', () => tsAddReviewRow(rows, layouts, { suggestedLayoutName: 'Main', par: 3 }));
-            actions.appendChild(add);
-            if (sign.status !== 'rejected') {
-                const approve = elx('button', 'admin-btn', sign.status === 'official' ? 'Apply rows' : 'Approve');
-                approve.type = 'button';
-                approve.addEventListener('click', () => tsApprove(sign, card));
-                actions.appendChild(approve);
-                const extract = elx('button', 'admin-btn secondary', 'Re-run vision');
-                extract.type = 'button';
-                extract.addEventListener('click', () => tsExtract(sign));
-                actions.appendChild(extract);
-                const reject = elx('button', 'admin-btn danger', 'Reject');
-                reject.type = 'button';
-                reject.addEventListener('click', () => tsReject(sign));
-                actions.appendChild(reject);
-            }
-            const del = elx('button', 'admin-btn danger', 'Delete');
-            del.type = 'button';
-            del.addEventListener('click', () => tsDelete(sign));
-            actions.appendChild(del);
-            body.appendChild(actions);
-            card.appendChild(body);
-            return card;
-        }
-        async function tsLoadReview() {
-            const wrap = $('tsReviewList');
-            if (!wrap) return;
-            wrap.textContent = 'Loading...';
-            tsReleaseThumbs();
-            if (!adminCoursesCache.length) await adminLoadCourses();
-            const status = $('tsStatusFilter').value || 'candidate';
-            const r = await adminApi('/admin/tee-signs?status=' + encodeURIComponent(status));
-            wrap.replaceChildren();
-            if (!r.ok) { wrap.appendChild(elx('div', 'ts-review-empty', 'Could not load tee signs (' + r.status + ').')); return; }
-            const signs = (await r.json()).teeSigns || [];
-            if (!signs.length) { wrap.appendChild(elx('div', 'ts-review-empty', 'No tee signs in this queue.')); return; }
-            const layoutCache = new Map();
-            for (const sign of signs) {
-                const cid = Number(sign.course_id);
-                if (!layoutCache.has(cid)) layoutCache.set(cid, await tsLayoutsForCourse(cid));
-                wrap.appendChild(tsCard(sign, layoutCache.get(cid) || []));
-            }
         }
 
         function setAdminImportCandidatesState(state) {
@@ -2697,6 +2549,21 @@
             window.addEventListener('gvdg:admin-order-controls-request', async (event) => {
                 await adminLoadOrders(event.detail || {});
             });
+            window.addEventListener('gvdg:admin-tee-sign-review-controls-request', async (event) => {
+                await tsLoadReview(event.detail || {});
+            });
+            window.addEventListener('gvdg:admin-tee-sign-review-approve-request', async (event) => {
+                await tsApproveFromReact(event.detail || {});
+            });
+            window.addEventListener('gvdg:admin-tee-sign-review-extract-request', async (event) => {
+                await tsExtractFromReact(event.detail || {});
+            });
+            window.addEventListener('gvdg:admin-tee-sign-review-reject-request', async (event) => {
+                await tsRejectFromReact(event.detail || {});
+            });
+            window.addEventListener('gvdg:admin-tee-sign-review-delete-request', async (event) => {
+                await tsDeleteFromReact(event.detail || {});
+            });
             $('adminCreateForm').addEventListener('submit', adminSaveEvent);
             $('aeCourse').addEventListener('change', aeLoadLayouts);
             $('aeLayout').addEventListener('change', aeToggleQuickLayout);
@@ -2707,8 +2574,6 @@
             $('alAddHole').addEventListener('click', () => addHoleRow());
             $('alSaveLayout').addEventListener('click', alSaveLayout);
             $('alResetLayout').addEventListener('click', alResetLayout);
-            $('tsStatusFilter').addEventListener('change', tsLoadReview);
-            $('tsRefresh').addEventListener('click', tsLoadReview);
             $('scEvent').addEventListener('change', scOnEventChange);
             $('scStartBtn').addEventListener('click', scStart);
             $('scFinalizeBtn').addEventListener('click', scFinalize);
