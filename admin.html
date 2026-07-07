@@ -355,13 +355,7 @@
                 </form>
             </div>
             <div class="admin-pane" id="apane-import">
-                <p style="font-size:0.9rem;color:var(--text-muted);margin-bottom:0.5rem;">Import candidates appear below; click <em>Create</em> to add an event.</p>
-                <button type="button" class="admin-btn secondary" id="dgsImportBtn">Import from DiscGolfScene feed</button>
-                <div class="admin-import-csv">
-                    <label for="csvImportText">Paste CSV (header: name,date,type,format)</label>
-                    <textarea id="csvImportText" rows="4" placeholder="name,date,type,format&#10;Fall Open,2026-09-12,tournament,stroke"></textarea>
-                    <button type="button" class="admin-btn secondary" id="csvImportBtn">Preview CSV</button>
-                </div>
+                <div id="adminImportControlsReactApp"></div>
                 <div id="adminImportCandidatesReactApp" style="margin-top:1rem;"></div>
             </div>
             <div class="admin-pane" id="apane-courses">
@@ -625,24 +619,7 @@
                 <div class="al-section">
                     <h4 class="al-h">Run export</h4>
                     <p class="al-note">Choose the date window and optional destination. Download mode is always available.</p>
-                    <div class="admin-form">
-                        <div><label for="dxExportFrom">From date</label><input id="dxExportFrom" type="date"></div>
-                        <div><label for="dxExportTo">To date</label><input id="dxExportTo" type="date"></div>
-                        <div><label for="dxExportDestination">Destination</label><select id="dxExportDestination"><option value="">Download only (no endpoint)</option></select></div>
-                        <div class="al-row" style="margin-top:0.6rem;">
-                            <label class="register-addon"><input id="dxIncludeEventPlayers" type="checkbox" checked> Include event players</label>
-                            <label class="register-addon"><input id="dxIncludeResults" type="checkbox" checked> Include results</label>
-                            <label class="register-addon"><input id="dxIncludeCasualRounds" type="checkbox" checked> Include casual rounds</label>
-                            <label class="register-addon"><input id="dxIncludeEventConfig" type="checkbox" checked> Include event config</label>
-                        </div>
-                        <div class="al-row" style="margin-top:0.4rem;">
-                            <label class="register-addon"><input id="dxDryRun" type="checkbox"> Dry run (download JSON)</label>
-                            <label class="register-addon"><input id="dxTest" type="checkbox"> Test destination ping</label>
-                        </div>
-                        <div class="admin-form-actions" style="margin-top:0.6rem;">
-                            <button type="button" class="admin-btn" id="dxRunExport">Run export</button>
-                        </div>
-                    </div>
+                    <div id="adminDataArchiveExportControlsReactApp"></div>
                     <div id="adminDataArchiveExportResultReactApp" style="margin-top:0.75rem;"></div>
                 </div>
             </div>
@@ -777,17 +754,6 @@
                 return;
             }
             dataArchiveDestinations = destinations;
-            const select = $('dxExportDestination');
-            const current = select.value;
-            select.replaceChildren();
-            select.appendChild(Object.assign(document.createElement('option'), { value: '', textContent: 'Download only (no endpoint)' }));
-            destinations.forEach((dest) => {
-                const option = document.createElement('option');
-                option.value = String(dest.id);
-                option.textContent = `${dest.label} (${dest.endpoint_url})` + (dest.is_active ? ' (active)' : '');
-                option.selected = current ? String(dest.id) === current : Number(dest.is_active) === 1;
-                select.appendChild(option);
-            });
             setAdminDataArchiveDestinationsState({ status: 'ready', destinations });
         }
         function setAdminDataArchiveDestinationsState(state) {
@@ -842,23 +808,11 @@
                 window.dispatchEvent(new CustomEvent('gvdg:admin-data-archive-destination-save-result', { detail: { ok: false, requestId, message } }));
             }
         }
-        async function adminRunArchiveExport() {
-            const btn = $('dxRunExport');
-            btn.disabled = true;
-            const from = $('dxExportFrom').value.trim();
-            const to = $('dxExportTo').value.trim();
-            const body = {
-                from: from || null,
-                to: to || null,
-                includeEventPlayers: $('dxIncludeEventPlayers').checked,
-                includeResults: $('dxIncludeResults').checked,
-                includeCasualRounds: $('dxIncludeCasualRounds').checked,
-                includeEventConfig: $('dxIncludeEventConfig').checked,
-                dry_run: $('dxDryRun').checked,
-                test: $('dxTest').checked,
-            };
-            const endpointId = $('dxExportDestination').value;
-            if (endpointId) body.endpoint_id = Number(endpointId);
+        async function adminRunArchiveExportFromReact(detail) {
+            const requestId = detail.requestId;
+            if (!requestId) return;
+            const body = detail.body || {};
+            let ok = false;
             try {
                 const r = await adminApi('/admin/export', { method: 'POST', body });
                 const payload = await r.json().catch(() => ({}));
@@ -879,22 +833,26 @@
                     document.body.removeChild(link);
                     URL.revokeObjectURL(link.href);
                     setDataArchiveExportResult('Download ready: ' + (payload.exportData.exportedAt || 'snapshot') + ' (events: ' + (payload.exportData.counts?.events || 0) + ')', true);
+                    ok = true;
                     return;
                 }
                 if (payload.mode === 'test') {
                     setDataArchiveExportResult('Test passed for "' + (payload.destination && payload.destination.label ? payload.destination.label : payload.destination) + '" (HTTP ' + payload.status + ')', true);
+                    ok = true;
                     return;
                 }
                 if (payload.mode === 'sent') {
                     setDataArchiveExportResult('Export sent to "' + (payload.destination && payload.destination.label ? payload.destination.label : payload.destination) + '" (HTTP ' + payload.status + ', events: ' + (payload.counts?.events || 0) + ')', true);
+                    ok = true;
                     return;
                 }
                 setDataArchiveExportResult('Export completed.', true);
+                ok = true;
             } catch (error) {
                 setDataArchiveExportResult('Export failed unexpectedly.', false);
                 adminMsg('Export failed unexpectedly', false);
             } finally {
-                btn.disabled = false;
+                window.dispatchEvent(new CustomEvent('gvdg:admin-data-archive-export-run-result', { detail: { ok, requestId } }));
             }
         }
         let aeEditingEvent = null;
@@ -1318,20 +1276,56 @@
             setAdminImportCandidatesState({ status: 'ready', candidates: Array.isArray(candidates) ? candidates : [] });
         }
 
-        async function adminDgsImport() {
-            adminMsg('Importing from DiscGolfScene…', true);
+        async function adminDgsImportFromReact(detail) {
+            const requestId = detail.requestId;
+            if (!requestId) return;
+            adminMsg('Importing from DiscGolfScene...', true);
             setAdminImportCandidatesState({ status: 'loading', candidates: [] });
-            const r = await adminApi('/admin/import/dgs', { method: 'POST', body: {} });
-            if (r.ok) { const d = await r.json(); showImportCandidates(d.candidates); adminMsg((d.candidates || []).length + ' candidates loaded', true); }
-            else { adminMsg('DGS import failed (' + r.status + ')', false); }
+            let r;
+            try {
+                r = await adminApi('/admin/import/dgs', { method: 'POST', body: {} });
+            } catch (err) {
+                adminMsg('DGS import failed', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-dgs-import-result', { detail: { ok: false, requestId } }));
+                return;
+            }
+            if (r.ok) {
+                const d = await r.json();
+                showImportCandidates(d.candidates);
+                adminMsg((d.candidates || []).length + ' candidates loaded', true);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-dgs-import-result', { detail: { ok: true, requestId } }));
+            } else {
+                adminMsg('DGS import failed (' + r.status + ')', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-dgs-import-result', { detail: { ok: false, requestId } }));
+            }
         }
-        async function adminCsvImport() {
-            const csv = $('csvImportText').value;
-            if (!csv.trim()) { adminMsg('Paste CSV first', false); return; }
+        async function adminCsvImportFromReact(detail) {
+            const requestId = detail.requestId;
+            if (!requestId) return;
+            const csv = typeof detail.csv === 'string' ? detail.csv : '';
+            if (detail.valid !== true || !csv.trim()) {
+                adminMsg('Paste CSV first', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-csv-import-result', { detail: { ok: false, requestId } }));
+                return;
+            }
             setAdminImportCandidatesState({ status: 'loading', candidates: [] });
-            const r = await adminApi('/admin/import/csv', { method: 'POST', body: { csv } });
-            if (r.ok) { const d = await r.json(); showImportCandidates(d.candidates); adminMsg((d.candidates || []).length + ' rows parsed', true); }
-            else { adminMsg('CSV import failed (' + r.status + ')', false); }
+            let r;
+            try {
+                r = await adminApi('/admin/import/csv', { method: 'POST', body: { csv } });
+            } catch (err) {
+                adminMsg('CSV import failed', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-csv-import-result', { detail: { ok: false, requestId } }));
+                return;
+            }
+            if (r.ok) {
+                const d = await r.json();
+                showImportCandidates(d.candidates);
+                adminMsg((d.candidates || []).length + ' rows parsed', true);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-csv-import-result', { detail: { ok: true, requestId } }));
+            } else {
+                adminMsg('CSV import failed (' + r.status + ')', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-csv-import-result', { detail: { ok: false, requestId } }));
+            }
         }
 
         // ============================================================
@@ -2665,6 +2659,9 @@
                 if (r.ok) { adminMsg('Deleted "' + dataArchiveDestinationLabel(destination) + '"', true); await adminLoadDataArchiveDestinations(); }
                 else adminMsg('Delete failed (' + r.status + ')', false);
             });
+            window.addEventListener('gvdg:admin-data-archive-export-run-request', async (event) => {
+                await adminRunArchiveExportFromReact(event.detail || {});
+            });
             window.addEventListener('gvdg:admin-registration-roster-patch-request', async (event) => {
                 const detail = event.detail || {};
                 const registration = detail.registration;
@@ -2707,12 +2704,16 @@
             window.addEventListener('gvdg:admin-course-create-request', async (event) => {
                 await adminAddCourseFromReact(event.detail || {});
             });
+            window.addEventListener('gvdg:admin-dgs-import-request', async (event) => {
+                await adminDgsImportFromReact(event.detail || {});
+            });
+            window.addEventListener('gvdg:admin-csv-import-request', async (event) => {
+                await adminCsvImportFromReact(event.detail || {});
+            });
             $('adminCreateForm').addEventListener('submit', adminSaveEvent);
             $('aeCourse').addEventListener('change', aeLoadLayouts);
             $('aeLayout').addEventListener('change', aeToggleQuickLayout);
             $('aeCancelEdit').addEventListener('click', () => { aeResetForm(); adminSwitch('events'); });
-            $('dgsImportBtn').addEventListener('click', adminDgsImport);
-            $('csvImportBtn').addEventListener('click', adminCsvImport);
             $('alCourse').addEventListener('change', alOnCourseChange);
             $('alPosAddBtn').addEventListener('click', alAddPosition);
             $('alUdiscBtn').addEventListener('click', alUdiscFetch);
@@ -2742,7 +2743,6 @@
             $('rgAceSave').addEventListener('click', () => rgAcePut({ carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100), status: 'active' }));
             $('rgAcePayout').addEventListener('click', () => { if (!confirm('Mark ace pot paid out' + ($('rgAceWinner').value.trim() ? ' to ' + $('rgAceWinner').value.trim() : '') + '? This resolves the ace pot for this event.')) return; rgAcePut({ status: 'paid_out', winner_name: $('rgAceWinner').value.trim() || null, carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100) }); });
             $('rgAceCarryNext').addEventListener('click', () => { if (!confirm('Carry this ace pot to the next event? This resolves the ace pot for this event.')) return; rgAcePut({ status: 'carried', carryover_in_cents: Math.round((parseFloat($('rgAceCarry').value) || 0) * 100) }); });
-            $('dxRunExport').addEventListener('click', adminRunArchiveExport);
             adminLoadEvents();
             adminLoadCourses();
             adminLoadLeagues();

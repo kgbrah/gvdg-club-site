@@ -7,9 +7,11 @@ import { AdminFundraisersList, AdminLeaguesList, AdminMeetingsList } from "./clu
 import { AdminCourseForm } from "./course-form.js";
 import { AdminCoursesList } from "./courses-list.js";
 import { AdminDataArchiveDestinationForm } from "./data-archive-destination-form.js";
+import { AdminDataArchiveExportControls } from "./data-archive-export-controls.js";
 import { AdminDataArchiveDestinationsList, AdminDataArchiveExportResult } from "./data-archive-destinations-list.js";
 import { AdminEventsList } from "./events-list.js";
 import { AdminImportCandidatesList } from "./import-candidates-list.js";
+import { AdminImportControls } from "./import-controls.js";
 import { AdminMemberForm } from "./member-form.js";
 import { AdminMessage } from "./message.js";
 import { AdminMembersList, AdminMemberTempPin } from "./members-list.js";
@@ -54,6 +56,11 @@ if (messageMount) {
 const eventsListMount = document.getElementById("adminEventsListReactApp");
 if (eventsListMount) {
   createRoot(eventsListMount).render(h(AdminEventsList));
+}
+
+const importControlsMount = document.getElementById("adminImportControlsReactApp");
+if (importControlsMount) {
+  createRoot(importControlsMount).render(h(AdminImportControls));
 }
 
 const importCandidatesMount = document.getElementById("adminImportCandidatesReactApp");
@@ -149,6 +156,11 @@ if (dataArchiveDestinationFormMount) {
 const dataArchiveDestinationsMount = document.getElementById("adminDataArchiveDestinationsReactApp");
 if (dataArchiveDestinationsMount) {
   createRoot(dataArchiveDestinationsMount).render(h(AdminDataArchiveDestinationsList));
+}
+
+const dataArchiveExportControlsMount = document.getElementById("adminDataArchiveExportControlsReactApp");
+if (dataArchiveExportControlsMount) {
+  createRoot(dataArchiveExportControlsMount).render(h(AdminDataArchiveExportControls));
 }
 
 const dataArchiveExportResultMount = document.getElementById("adminDataArchiveExportResultReactApp");

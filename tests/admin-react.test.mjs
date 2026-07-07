@@ -633,8 +633,7 @@ test('admin data archive destination list is rendered by React from legacy loade
   assert.match(adminLoadDataArchiveDestinations, /setAdminDataArchiveDestinationsState\(\{ status: 'loading', destinations: \[\] \}\)/);
   assert.match(adminLoadDataArchiveDestinations, /setAdminDataArchiveDestinationsState\(\{ status: 'error', destinations: \[\] \}\)/);
   assert.match(adminLoadDataArchiveDestinations, /setAdminDataArchiveDestinationsState\(\{ status: 'ready', destinations \}\)/);
-  assert.match(adminLoadDataArchiveDestinations, /select\.replaceChildren\(\)/);
-  assert.doesNotMatch(adminLoadDataArchiveDestinations, /dxDestinationsList|list\.|elx\('p', 'al-note'|elx\('div', 'admin-evrow'\)|left\.appendChild|controls\.appendChild|addEventListener/);
+  assert.doesNotMatch(adminLoadDataArchiveDestinations, /dxExportDestination|select\.replaceChildren|document\.createElement|appendChild|selected|dxDestinationsList|list\.|elx\('p', 'al-note'|elx\('div', 'admin-evrow'\)|left\.appendChild|controls\.appendChild|addEventListener/);
   assert.ok(editDataArchiveDestination);
   assert.match(editDataArchiveDestination, /setDataArchiveEndpointForm\(destination\)/);
   assert.match(html, /function setDataArchiveEndpointForm\(destination\) \{[\s\S]*gvdg:admin-data-archive-destination-form-edit/);

@@ -11,8 +11,8 @@ test('admin import candidates are rendered by React from legacy import state', (
 
   assert.match(html, /id="adminImportCandidatesReactApp"/);
   assert.doesNotMatch(html, /id="importCandidates"/);
-  assert.match(html, /class="admin-import-csv"/);
-  assert.match(html, />Import from DiscGolfScene feed<\/button>/);
+  assert.match(html, /id="adminImportControlsReactApp"/);
+  assert.doesNotMatch(html, /id="dgsImportBtn"|id="csvImportBtn"|id="csvImportText"/);
   assert.doesNotMatch(html, /⬇ Import from DiscGolfScene feed/);
   assert.match(html, /function setAdminImportCandidatesState\(state\) \{[\s\S]*window\.__gvdgAdminImportCandidatesState = state;[\s\S]*gvdg:admin-import-candidates/);
   assert.ok(showImportCandidates);

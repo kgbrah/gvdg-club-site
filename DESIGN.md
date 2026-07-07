@@ -203,13 +203,13 @@ Spacing follows a 4px base through rem values.
 - Accessibility: loading and empty states use status semantics, status controls are labelled native selects, and row actions are real buttons.
 - Motion: static list rows; only inherited control hover/focus states apply.
 
-### Admin Import Candidates
+### Admin Import Controls and Candidates
 
-- Structure: the Admin Import candidate preview list renders from `admin-app` into `adminImportCandidatesReactApp`; legacy DiscGolfScene and CSV import handlers only publish candidate states and handle create-request events.
+- Structure: the Admin Import DiscGolfScene and CSV controls render from `admin-app` into `adminImportControlsReactApp`, and the candidate preview list renders into `adminImportCandidatesReactApp`; legacy DiscGolfScene and CSV import handlers only handle request events, call admin APIs, publish control-result events, publish candidate states, and handle create-request events.
 - Variants: hidden idle state, loading candidates, no candidates found, candidate row, creating event, created event, and failed event.
 - Spacing: reuses `.admin-import-csv`, `.admin-cand`, `.dash-note`, and `.admin-btn.secondary` so the CSV controls and import previews keep the compact divider rhythm already used by Courses.
-- States: React owns candidate row markup, create button disabled state, and create/created/failed text; `admin.html` must not keep `importCandidates`, clear candidate `textContent`, construct `.admin-cand` rows, or attach create-row click listeners directly.
-- Accessibility: loading and empty states use status semantics, and row create actions are real buttons.
+- States: React owns import button busy labels, CSV textarea value, candidate row markup, create button disabled state, and create/created/failed text; `admin.html` must not keep static `dgsImportBtn`/`csvImportBtn`/`csvImportText` markup, read `csvImportText`, keep `importCandidates`, clear candidate `textContent`, construct `.admin-cand` rows, or attach import-control/create-row click listeners directly.
+- Accessibility: CSV labels target stable control ids, loading and empty states use status semantics, and row create actions are real buttons.
 - Motion: static candidate rows; only inherited control hover/focus states apply.
 
 ### Admin Courses Form and List
@@ -331,12 +331,21 @@ Spacing follows a 4px base through rem values.
 
 ### Admin Data Archive Destinations List
 
-- Structure: the Admin Data archive destination list renders from `admin-app` into `adminDataArchiveDestinationsReactApp`; legacy admin code fetches `/admin/export/endpoints`, keeps export destination select population, and publishes list state events only.
+- Structure: the Admin Data archive destination list renders from `admin-app` into `adminDataArchiveDestinationsReactApp`; legacy admin code fetches `/admin/export/endpoints` and publishes list state events only.
 - Variants: loading, error, empty destination list, active destination row, inactive destination row, token-set metadata, token-missing metadata, edit action, make-active action, and delete action.
 - Spacing: reuses `.admin-evrow`, `.ev-name`, `.al-note`, `.admin-msg.ok`, `.shop-admin-controls`, and `.admin-btn` so archive destinations match the compact admin list rhythm.
 - States: React owns destination row markup, loading/error/empty copy, active-default badge, delete confirm prompt, and edit/activate/delete request dispatch; `admin.html` must not mutate `dxDestinationsList`, construct destination `.admin-evrow` rows, or attach destination row listeners directly.
 - Accessibility: loading and empty states use status semantics, load failures use alert semantics, and row actions are real buttons.
 - Motion: static destination rows; only inherited control hover/focus states apply.
+
+### Admin Data Archive Export Controls
+
+- Structure: the Admin Data archive export controls render from `admin-app` into `adminDataArchiveExportControlsReactApp`; legacy export code only handles run-request events, the API POST, download creation, result publication, and run-result events.
+- Variants: blank date range, active default destination, download-only destination, include-data checkboxes, dry-run checkbox, test-destination checkbox, idle run button, and busy run button.
+- Spacing: reuses `.admin-form`, `.al-row`, `.register-addon`, `.admin-form-actions`, and `.admin-btn` so the export runner keeps the same compact control rhythm as destination setup.
+- States: React owns date fields, destination select options/value, include/test checkbox state, and busy button text; `admin.html` must not keep static `dxExport*`/`dxInclude*`/`dxDryRun`/`dxTest`/`dxRunExport` markup, populate `dxExportDestination`, read export control fields, or attach the run button listener directly.
+- Accessibility: labels target stable form control ids, checkboxes are labelled, and the run action is a real button.
+- Motion: static controls; inherited hover/focus states only.
 
 ### Admin Data Archive Export Result
 
