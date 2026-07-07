@@ -144,7 +144,7 @@ Spacing follows a 4px base through rem values.
 
 - Structure: the shared Crotts assistant widget renders from `home-app`, `public-app`, and `members-app` into `crottsReactApp`; `crotts.js` remains only for the legacy admin page until the admin surface is migrated.
 - Variants: closed floating avatar, open dialog, empty greeting, user message, assistant reply, typing state, API-rate-limit error, network/error response, and mobile safe-area placement.
-- Spacing: preserves the existing `#crotts-fab`, `#crotts-panel`, `#crotts-head`, `#crotts-msgs`, and `#crotts-form` hooks so page-specific placement overrides continue to work during migration.
+- Spacing: preserves the existing `#crotts-fab`, `#crotts-panel`, `#crotts-head`, `#crotts-msgs`, and `#crotts-form` hooks so page-specific placement overrides continue to work during migration; Events hides the launcher on mobile detail views so fixed assistant chrome cannot cover event facts or tee-sign cards.
 - States: React owns open/closed state, message history, busy/disabled send state, text input value, focus return to the composer, and assistant fetch lifecycle; public/member pages must not load `crotts.js` or append assistant DOM nodes.
 - Accessibility: the panel exposes dialog semantics, the avatar, close, and send controls are real buttons with labels, the composer is labelled, and iconography uses Lucide SVGs.
 - Motion: preserves the existing FAB scale and panel reveal only; no decorative motion is added.
@@ -245,8 +245,8 @@ Spacing follows a 4px base through rem values.
 - Structure: the tee-sign preview page renders from the route-specific `tee-sign-preview-app` React bundle into `teeSignPreviewReactApp`, including title, theme toggle, and sample SVG preview grid.
 - Variants: light theme, dark theme, two-layout sample, three-layout sample, missing-distance sample, and narrow mobile scaling.
 - Spacing: uses the project page max width, `1rem-1.5rem` control/grid gaps, 8px control radius, and existing tee-sign SVG classes so the utility stays compact and scannable.
-- States: React owns the theme toggle, persisted theme value, sample list rendering, and mounting sanitized SVG nodes returned by `teeSignNode`; the HTML page must not contain an inline tee-sign DOM renderer.
-- Accessibility: the theme control is a real button with pressed state and Lucide iconography; generated SVGs retain their role and label from the shared tee-sign renderer.
+- States: React owns the theme toggle, persisted theme value, sample list rendering, and SVG element rendering through the shared `TeeSignSvg` component; the HTML page must not contain an inline tee-sign DOM renderer or browser DOMParser mount path.
+- Accessibility: the theme control is a real button with pressed state and Lucide iconography; React-rendered SVGs retain their role and label from the shared tee-sign renderer.
 - Motion: no decorative motion; only inherited button hover/focus states apply.
 
 ### Home Page Interactions

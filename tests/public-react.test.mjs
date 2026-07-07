@@ -53,7 +53,7 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(chrome, /localStorage\.getItem\("theme"\)/);
   assert.match(chrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v59"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v60"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
@@ -78,6 +78,7 @@ test('Crotts assistant is rendered by React bundles outside admin', () => {
   assert.doesNotMatch(homeHtml, /<script src="crotts\.js" defer><\/script>/);
   assert.doesNotMatch(membersHtml, /<script src="crotts\.js" defer><\/script>/);
   assert.match(adminHtml, /<script src="crotts\.js" defer><\/script>/);
+  assert.match(readFileSync('events.html', 'utf8'), /:has\(#detail:not\(\[hidden\]\)\) #crottsReactApp #crotts-fab/);
   assert.match(membersHtml, /#membersContent ~ #crottsReactApp #crotts-fab/);
   assert.match(publicMain, /import \{ CrottsWidget \} from "\.\.\/shared\/crotts-widget\.js"/);
   assert.match(homeMain, /import \{ CrottsWidget \} from "\.\.\/shared\/crotts-widget\.js"/);
@@ -205,6 +206,7 @@ test('Events event detail is rendered by the public React bundle', () => {
   const html = readFileSync('events.html', 'utf8');
   const main = readFileSync('src/public-app/main.js', 'utf8');
   const app = readFileSync('src/public-app/events-detail-app.js', 'utf8');
+  const sharedSvg = readFileSync('src/shared/tee-sign-svg.js', 'utf8');
 
   assert.match(html, /id="detail"/);
   assert.match(html, /new CustomEvent\('gvdg:events-event-detail'/);
@@ -227,7 +229,10 @@ test('Events event detail is rendered by the public React bundle', () => {
   assert.match(app, /function TeeSigns/);
   assert.match(app, /function PlayerRoster/);
   assert.match(app, /WeatherStrip/);
-  assert.match(app, /teeSignModel/);
+  assert.match(app, /import \{ TeeSignSvg \} from "\.\.\/shared\/tee-sign-svg\.js"/);
+  assert.match(sharedSvg, /teeSignModel/);
+  assert.doesNotMatch(app, /teeSignNode|DOMParser|replaceChildren|appendChild|dangerouslySetInnerHTML/);
+  assert.doesNotMatch(sharedSvg, /teeSignNode|DOMParser|replaceChildren|appendChild|dangerouslySetInnerHTML/);
   assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|document\.createElement|querySelector|classList|textContent\s*=|dangerouslySetInnerHTML|☰|✕|🌙|☀️|📅|📍|🥏|🏆|🪧|✏️|⚑/);
 });
 

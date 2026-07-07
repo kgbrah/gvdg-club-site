@@ -2,7 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { MoonStar, Sun } from "lucide-react";
 
-import { teeSignNode } from "../../tee-sign.js";
+import { TeeSignSvg } from "../shared/tee-sign-svg.js";
 
 const h = React.createElement;
 const THEME_KEY = "theme";
@@ -56,22 +56,14 @@ function Icon({ dark }) {
 }
 
 function TeeSignGraphic({ sample }) {
-  const hostRef = React.useRef(null);
-
-  React.useEffect(() => {
-    const host = hostRef.current;
-    if (!host) return undefined;
-    const node = teeSignNode(sample);
-    host.replaceChildren();
-    if (node) host.appendChild(node);
-    return () => host.replaceChildren();
-  }, [sample]);
-
   return h("div", {
     "aria-label": `Preview for hole ${sample.hole}`,
     className: "tee-preview-sample",
-    ref: hostRef,
-  });
+  }, h(TeeSignSvg, {
+    courseName: sample.courseName,
+    hole: sample.hole,
+    layouts: sample.layouts,
+  }));
 }
 
 export function TeeSignPreviewApp() {

@@ -196,6 +196,7 @@ test('public Events event detail publishes to React', () => {
   const source = readFileSync('events.html', 'utf8');
   const main = readFileSync('src/public-app/main.js', 'utf8');
   const app = readFileSync('src/public-app/events-detail-app.js', 'utf8');
+  const sharedSvg = readFileSync('src/shared/tee-sign-svg.js', 'utf8');
   const start = source.indexOf('async function loadDetail(id)');
   const end = source.indexOf('// ---------- ROUTING ----------');
   assert.notEqual(start, -1, 'loadDetail should exist');
@@ -229,7 +230,10 @@ test('public Events event detail publishes to React', () => {
   assert.match(app, /function TeeSigns/);
   assert.match(app, /function PlayerRoster/);
   assert.match(app, /WeatherStrip/);
-  assert.match(app, /teeSignModel/);
+  assert.match(app, /import \{ TeeSignSvg \} from "\.\.\/shared\/tee-sign-svg\.js"/);
+  assert.match(sharedSvg, /teeSignModel/);
+  assert.doesNotMatch(app, /teeSignNode|DOMParser|replaceChildren|appendChild|dangerouslySetInnerHTML/);
+  assert.doesNotMatch(sharedSvg, /teeSignNode|DOMParser|replaceChildren|appendChild|dangerouslySetInnerHTML/);
   assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|document\.createElement|querySelector|classList|textContent\s*=|dangerouslySetInnerHTML|☰|✕|🌙|☀️|📅|📍|🥏|🏆|🪧|✏️|⚑/);
 });
 

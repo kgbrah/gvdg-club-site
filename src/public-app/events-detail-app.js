@@ -7,8 +7,8 @@ import {
   statusLabel,
   typeLabel,
 } from "../../events.js";
-import { teeSignModel } from "../../tee-sign.js";
 import { WeatherStrip } from "../score-app/weather-strip.js";
+import { TeeSignSvg } from "../shared/tee-sign-svg.js";
 
 const h = React.createElement;
 const EVENT_DETAIL_EVENT = "gvdg:events-event-detail";
@@ -368,60 +368,6 @@ function EventExtras({ extras }) {
   return blocks.length ? h(React.Fragment, null, blocks) : null;
 }
 
-function TeeSignSvg({ hole, layout, courseName }) {
-  const model = teeSignModel({
-    courseName,
-    hole: hole && hole.hole,
-    layouts: [{
-      color: (hole && (hole.color || (hole.tee && hole.tee.color))) || null,
-      distance_ft: hole && hole.distance_ft != null ? hole.distance_ft : null,
-      label: layout && layout.name ? layout.name : "Layout",
-      par: hole && hole.par != null ? hole.par : null,
-    }],
-  });
-  const width = 320;
-  const rowHeight = 30;
-  const headHeight = 96;
-  const height = headHeight + Math.max(1, model.layouts.length) * rowHeight + 16;
-  const holeText = model.hole == null ? "-" : String(model.hole);
-
-  return h("svg", {
-    "aria-label": `Tee sign for hole ${holeText}`,
-    className: "tee-sign",
-    height,
-    role: "img",
-    viewBox: `0 0 ${width} ${height}`,
-    width,
-  }, [
-    h("rect", { className: "tee-sign-bg", height: height - 2, key: "bg", rx: 16, width: width - 2, x: 1, y: 1 }),
-    h("text", { className: "tee-sign-hole", key: "hole", x: 16, y: 58 }, holeText),
-    h("text", { className: "tee-sign-course", key: "course", textAnchor: "end", x: width - 16, y: 40 }, model.courseName),
-    h("line", { className: "tee-sign-rule", key: "rule", x1: 16, x2: width - 16, y1: headHeight - 14, y2: headHeight - 14 }),
-    ...model.layouts.map((row, index) => {
-      const y = headHeight + index * rowHeight;
-      const labelX = row.color ? 40 : 16;
-      return h("g", { className: "tee-sign-row", key: `${row.label}|${index}` }, [
-        row.color
-          ? h("rect", {
-            fill: row.color,
-            height: 16,
-            key: "swatch",
-            rx: 3,
-            stroke: "currentColor",
-            strokeOpacity: 0.3,
-            width: 16,
-            x: 16,
-            y: y + 6,
-          })
-          : null,
-        h("text", { className: "tee-sign-label", key: "label", x: labelX, y: y + 19 }, row.label),
-        h("text", { className: "tee-sign-par", key: "par", textAnchor: "end", x: width - 96, y: y + 19 }, `Par ${row.par == null ? "-" : row.par}`),
-        h("text", { className: "tee-sign-dist", key: "dist", textAnchor: "end", x: width - 16, y: y + 19 }, row.distance_ft == null ? "" : `${row.distance_ft} ft`),
-      ]);
-    }),
-  ]);
-}
-
 function safeWinnerClass(value) {
   const key = String(value || "").toLowerCase();
   return key === "red" || key === "blue" || key === "tie" ? key : "";
@@ -450,7 +396,16 @@ function TeeSigns({ apiBase, teeSigns }) {
             loading: "lazy",
             src: `${apiBase}/tee-signs/${encodeURIComponent(hole.signId)}/image`,
           })
-          : h("div", { className: "ts-hole-svg", key: "svg" }, h(TeeSignSvg, { courseName, hole, layout })),
+          : h("div", { className: "ts-hole-svg", key: "svg" }, h(TeeSignSvg, {
+            courseName,
+            hole: hole && hole.hole,
+            layouts: [{
+              color: (hole && (hole.color || (hole.tee && hole.tee.color))) || null,
+              distance_ft: hole && hole.distance_ft != null ? hole.distance_ft : null,
+              label: layout && layout.name ? layout.name : "Layout",
+              par: hole && hole.par != null ? hole.par : null,
+            }],
+          })),
         h("div", { className: "ts-hole-meta", key: "meta" }, [
           h("span", { className: "ts-hole-num", key: "hole" }, `Hole ${hole.hole}`),
           bits.length ? ` · ${bits.join(" · ")}` : "",

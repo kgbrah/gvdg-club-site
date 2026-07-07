@@ -73,6 +73,8 @@
             .nav-right { gap: 1rem; }
             body[data-page="events"] #crotts-fab { left: auto !important; right: calc(14px + env(safe-area-inset-right, 0px)) !important; }
             body[data-page="events"] #crotts-panel { left: auto !important; right: 12px !important; }
+            body[data-page="events"]:has(#detail:not([hidden])) #crottsReactApp #crotts-fab,
+            body[data-page="events"]:has(#detail:not([hidden])) #crottsReactApp #crotts-panel { display: none !important; }
             .nav-links { position: fixed; top: 70px; left: 0; right: 0; background: rgba(26, 26, 46, 0.98); flex-direction: column; gap: 0; padding: 2rem; transform: translateY(-100%); opacity: 0; transition: all 0.3s ease; pointer-events: none; max-height: calc(100vh - 70px); overflow-y: auto; }
             [data-theme="dark"] .nav-links { background: rgba(15, 15, 30, 0.98); }
             .nav-links.active { transform: translateY(0); opacity: 1; pointer-events: all; }
