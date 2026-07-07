@@ -239,6 +239,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: loading and empty states use status semantics, and ledger rows remain static text because recent transactions have no row action in the current admin workflow.
 - Motion: static ledger rows; no decorative motion.
 
+### Admin Registration CTP, Credit, and Ace Pot Widgets
+
+- Structure: the Admin Registration CTP list, store-credit payout ledger, and ace-pot summary render from `admin-app` into `adminRegistrationCtpsReactApp`, `adminRegistrationCreditsReactApp`, and `adminRegistrationAcePotReactApp`; legacy registration code keeps API fetching, roster/member-option population, and ace-pot form submissions while publishing widget state events only.
+- Variants: loading, error, empty CTP list, CTP row with winner/member/credit controls, empty payout ledger, credit/debit payout rows, empty ace-pot summary, and ready ace-pot summary with carryover, contributors, status, and winner text.
+- Spacing: reuses `.admin-evrow`, `.ev-name`, `.admin-btn`, `.wallet-ledger`, `.wallet-row`, `.shop-admin-meta`, `.credit`, `.debit`, and `.al-note` so registration management keeps the same compact operational rhythm as Events, Wallets, and Orders.
+- States: React owns CTP row markup, CTP row input values, CTP delete confirmation, payout ledger rows, and ace-pot summary text; `admin.html` must not mutate `rgCtpList`, `rgCreditList`, or `rgAceInfo`, construct CTP `.admin-evrow` rows, append payout `walletRow` nodes, or write ace-pot `textContent`.
+- Accessibility: loading and empty states use status semantics, load failures use alert semantics, CTP controls have row-specific labels, and row actions are real buttons.
+- Motion: static widgets; only inherited control hover/focus states apply.
+
 ### Admin Product Inventory List
 
 - Structure: the Admin Pro Shop inventory list renders from `admin-app` into `adminProductsListReactApp`; legacy admin code fetches `/admin/shop/products`, keeps product creation, image upload, sort/status filters, and publishes list state events only.

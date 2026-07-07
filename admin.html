@@ -531,16 +531,16 @@
                             <input id="rgCtpPrize" placeholder="prize" maxlength="200" size="16">
                             <button type="button" class="admin-btn secondary" id="rgCtpAdd">Add CTP</button>
                         </div>
-                        <div id="rgCtpList" style="margin-top:0.5rem;"></div>
+                        <div id="adminRegistrationCtpsReactApp" style="margin-top:0.5rem;"></div>
                     </div>
                     <div class="al-section">
                         <h4 class="al-h">Store credit payouts</h4>
                         <p class="al-note">Award credit from registered-player rows or CTP rows, then review the payout ledger here.</p>
-                        <div id="rgCreditList" style="margin-top:0.5rem;"></div>
+                        <div id="adminRegistrationCreditsReactApp" style="margin-top:0.5rem;"></div>
                     </div>
                     <div class="al-section">
                         <h4 class="al-h">Ace pot</h4>
-                        <div id="rgAceInfo" class="al-note"></div>
+                        <div id="adminRegistrationAcePotReactApp"></div>
                         <div class="al-row" style="margin-top:0.5rem;">
                             <span>Carryover in $<input id="rgAceCarry" type="number" min="0" style="width:5rem"></span>
                             <button type="button" class="admin-btn secondary" id="rgAceSave">Save carryover</button>
@@ -2449,36 +2449,32 @@
         }
         // CTPs
         async function rgLoadCtps() {
+            setAdminRegistrationCtpsState({ status: 'loading', ctps: [] });
             let ctps = [];
-            try { const r = await api('/events/' + rgEventId + '/ctps'); if (r.ok) ctps = (await r.json()).ctps || []; } catch (e) {}
-            const list = $('rgCtpList'); list.replaceChildren();
-            if (!ctps.length) { list.appendChild(elx('p', 'al-note', 'No CTPs yet.')); }
-            ctps.forEach((c) => {
-                const row = elx('div', 'admin-evrow');
-                row.appendChild(elx('span', 'ev-name', 'Hole ' + c.hole + (c.division ? ' · ' + c.division : '') + (c.prize ? ' · ' + c.prize : '') + (c.winner_name ? ' · 🏆 ' + c.winner_name : '')));
-                const win = document.createElement('input'); win.placeholder = 'winner'; win.style.width = '8rem'; if (c.winner_name) win.value = c.winner_name;
-                const member = document.createElement('input'); member.placeholder = 'member id'; member.style.width = '7rem'; member.setAttribute('list', 'rgMemberOptions'); if (c.winner_member_id) member.value = c.winner_member_id;
-                const setW = elx('button', 'admin-btn secondary', 'Set winner');
-                setW.addEventListener('click', async () => { const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + c.id, { method: 'PATCH', body: { winner_name: win.value.trim() || null, winner_member_id: member.value.trim() || null } }); if (r.ok) { adminMsg('CTP winner set', true); rgLoadCtps(); } });
-                const credit = document.createElement('input'); credit.type = 'number'; credit.min = '0'; credit.step = '0.01'; credit.placeholder = '$'; credit.style.width = '5rem';
-                const award = elx('button', 'admin-btn secondary', 'Award credit'); award.type = 'button';
-                award.addEventListener('click', () => rgAwardCtpCredit(c, member, win, credit));
-                const del = elx('button', 'admin-btn danger', 'Delete');
-                del.addEventListener('click', async () => { if (!confirm('Delete this CTP for hole ' + (c.hole ?? '?') + '?')) return; const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + c.id, { method: 'DELETE' }); if (r.ok) rgLoadCtps(); });
-                row.appendChild(win); row.appendChild(member); row.appendChild(setW); row.appendChild(credit); row.appendChild(award); row.appendChild(del);
-                list.appendChild(row);
-            });
+            try {
+                const r = await api('/events/' + rgEventId + '/ctps');
+                if (!r.ok) throw new Error('ctps_failed');
+                ctps = (await r.json()).ctps || [];
+            } catch (e) {
+                setAdminRegistrationCtpsState({ status: 'error', ctps: [] });
+                return;
+            }
+            setAdminRegistrationCtpsState({ status: 'ready', ctps });
         }
-        async function rgAwardCtpCredit(ctp, memberInput, nameInput, amountInput) {
-            const memberId = memberInput.value.trim();
-            const amount = dollarsToCents(amountInput.value);
+        function setAdminRegistrationCtpsState(state) {
+            window.__gvdgAdminRegistrationCtpsState = state;
+            window.dispatchEvent(new CustomEvent('gvdg:admin-registration-ctps-list', { detail: state }));
+        }
+        async function rgAwardCtpCredit(ctp, memberIdValue, winnerNameValue, amountValue) {
+            const memberId = String(memberIdValue || '').trim();
+            const winnerName = String(winnerNameValue || '').trim();
+            const amount = dollarsToCents(amountValue);
             if (!memberId) { adminMsg('CTP store credit needs a member id', false); return; }
             if (amount == null || amount <= 0) { adminMsg('Enter a CTP store credit amount', false); return; }
-            const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + ctp.id + '/store-credit', { method: 'POST', body: { member_id: memberId, winner_name: nameInput.value.trim() || null, amount_cents: amount } });
+            const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + ctp.id + '/store-credit', { method: 'POST', body: { member_id: memberId, winner_name: winnerName || null, amount_cents: amount } });
             if (r.ok) {
                 const d = await r.json();
                 adminMsg('Awarded CTP credit ' + dollarsFromCents(amount) + '. Balance: ' + dollarsFromCents(d.balance_cents || 0), true);
-                amountInput.value = '';
                 rgLoadCtps();
                 rgLoadCredits();
             } else {
@@ -2493,19 +2489,40 @@
             else adminMsg('Add CTP failed', false);
         }
         async function rgLoadCredits() {
+            setAdminRegistrationCreditsState({ status: 'loading', payouts: [] });
             let payouts = [];
-            try { const r = await adminApi('/admin/events/' + rgEventId + '/store-credit'); if (r.ok) payouts = (await r.json()).payouts || []; } catch (e) {}
-            const list = $('rgCreditList'); list.replaceChildren();
-            if (!payouts.length) { list.appendChild(elx('p', 'al-note', 'No store credit payouts yet.')); return; }
-            payouts.forEach((tx) => list.appendChild(walletRow(tx)));
+            try {
+                const r = await adminApi('/admin/events/' + rgEventId + '/store-credit');
+                if (!r.ok) throw new Error('credits_failed');
+                payouts = (await r.json()).payouts || [];
+            } catch (e) {
+                setAdminRegistrationCreditsState({ status: 'error', payouts: [] });
+                return;
+            }
+            setAdminRegistrationCreditsState({ status: 'ready', payouts });
+        }
+        function setAdminRegistrationCreditsState(state) {
+            window.__gvdgAdminRegistrationCreditsState = state;
+            window.dispatchEvent(new CustomEvent('gvdg:admin-registration-credits-list', { detail: state }));
         }
         // Ace pot
         async function rgLoadAcePot() {
+            setAdminRegistrationAcePotState({ status: 'loading', acePot: null });
             let pot = null;
-            try { const r = await api('/events/' + rgEventId + '/ace-pot'); if (r.ok) pot = (await r.json()).ace_pot; } catch (e) {}
-            const d = (c) => '$' + ((c || 0) / 100).toLocaleString();
-            $('rgAceInfo').textContent = pot ? ('Total pot ' + d(pot.total_cents) + ' = carryover ' + d(pot.carryover_in_cents) + ' + ' + (pot.contributors || 0) + ' paid × ' + d(pot.ace_fee_cents) + ' · status: ' + (pot.status || 'active') + (pot.winner_name ? ' · 🏆 ' + pot.winner_name : '')) : 'No ace pot data.';
+            try {
+                const r = await api('/events/' + rgEventId + '/ace-pot');
+                if (!r.ok) throw new Error('ace_pot_failed');
+                pot = (await r.json()).ace_pot;
+            } catch (e) {
+                setAdminRegistrationAcePotState({ status: 'error', acePot: null });
+                return;
+            }
+            setAdminRegistrationAcePotState({ status: 'ready', acePot: pot });
             if (pot && pot.carryover_in_cents != null) $('rgAceCarry').value = pot.carryover_in_cents / 100;
+        }
+        function setAdminRegistrationAcePotState(state) {
+            window.__gvdgAdminRegistrationAcePotState = state;
+            window.dispatchEvent(new CustomEvent('gvdg:admin-registration-ace-pot', { detail: state }));
         }
         async function rgAcePut(body) {
             const r = await adminApi('/admin/events/' + rgEventId + '/ace-pot', { method: 'PUT', body });
@@ -2654,6 +2671,29 @@
                 const r = await adminApi('/admin/export/endpoints/' + destination.id, { method: 'DELETE' });
                 if (r.ok) { adminMsg('Deleted "' + dataArchiveDestinationLabel(destination) + '"', true); await adminLoadDataArchiveDestinations(); }
                 else adminMsg('Delete failed (' + r.status + ')', false);
+            });
+            window.addEventListener('gvdg:admin-registration-ctp-winner-request', async (event) => {
+                const detail = event.detail || {};
+                const ctp = detail.ctp;
+                if (!ctp || ctp.id == null || !rgEventId) return;
+                const winnerName = String(detail.winnerName || '').trim();
+                const winnerMemberId = String(detail.winnerMemberId || '').trim();
+                const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + ctp.id, { method: 'PATCH', body: { winner_name: winnerName || null, winner_member_id: winnerMemberId || null } });
+                adminMsg(r.ok ? 'CTP winner set' : 'CTP winner update failed (' + r.status + ')', r.ok);
+                if (r.ok) rgLoadCtps();
+            });
+            window.addEventListener('gvdg:admin-registration-ctp-credit-request', async (event) => {
+                const detail = event.detail || {};
+                const ctp = detail.ctp;
+                if (!ctp || ctp.id == null || !rgEventId) return;
+                await rgAwardCtpCredit(ctp, detail.winnerMemberId, detail.winnerName, detail.amountValue);
+            });
+            window.addEventListener('gvdg:admin-registration-ctp-delete-request', async (event) => {
+                const ctp = event.detail && event.detail.ctp;
+                if (!ctp || ctp.id == null || !rgEventId) return;
+                const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + ctp.id, { method: 'DELETE' });
+                adminMsg(r.ok ? 'CTP deleted' : 'Delete failed (' + r.status + ')', r.ok);
+                if (r.ok) rgLoadCtps();
             });
             $('adminCreateForm').addEventListener('submit', adminSaveEvent);
             $('aeCourse').addEventListener('change', aeLoadLayouts);

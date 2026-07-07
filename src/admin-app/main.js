@@ -12,6 +12,7 @@ import { AdminNavigation } from "./navigation.js";
 import { AdminOrdersList } from "./orders-list.js";
 import { AdminPageChrome } from "./page-chrome.js";
 import { AdminProductsList } from "./products-list.js";
+import { AdminRegistrationAcePot, AdminRegistrationCreditsList, AdminRegistrationCtpsList } from "./registration-widgets.js";
 import { AdminWalletRecentList } from "./wallet-recent-list.js";
 import { CrottsWidget } from "../shared/crotts-widget.js";
 
@@ -90,6 +91,21 @@ if (walletRecentMount) {
 const dataArchiveDestinationsMount = document.getElementById("adminDataArchiveDestinationsReactApp");
 if (dataArchiveDestinationsMount) {
   createRoot(dataArchiveDestinationsMount).render(h(AdminDataArchiveDestinationsList));
+}
+
+const registrationCtpsMount = document.getElementById("adminRegistrationCtpsReactApp");
+if (registrationCtpsMount) {
+  createRoot(registrationCtpsMount).render(h(AdminRegistrationCtpsList));
+}
+
+const registrationCreditsMount = document.getElementById("adminRegistrationCreditsReactApp");
+if (registrationCreditsMount) {
+  createRoot(registrationCreditsMount).render(h(AdminRegistrationCreditsList));
+}
+
+const registrationAcePotMount = document.getElementById("adminRegistrationAcePotReactApp");
+if (registrationAcePotMount) {
+  createRoot(registrationAcePotMount).render(h(AdminRegistrationAcePot));
 }
 
 const crottsMount = document.getElementById("crottsReactApp");
