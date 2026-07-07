@@ -300,7 +300,7 @@
                 <div id="adminNavigationReactApp"></div>
                 <div class="admin-content">
             <div id="adminMessageReactApp"></div>
-            <div class="admin-pane active" id="apane-events"><div id="adminEventsList">Loading…</div></div>
+            <div class="admin-pane active" id="apane-events"><div id="adminEventsListReactApp"></div></div>
             <div class="admin-pane" id="apane-create">
                 <p class="admin-form-note" id="aeModeNote">Create a scheduled event, fundraiser, meeting, or league round.</p>
                 <form class="admin-form" id="adminCreateForm">
@@ -348,7 +348,7 @@
                     <div><label for="acUdiscCourseId">UDisc course id <span class="al-note">(numeric — auto-saved by UDisc import; enables “Add to UDisc”)</span></label><input id="acUdiscCourseId" inputmode="numeric" pattern="\d*" maxlength="20"></div>
                     <button type="submit" class="admin-btn">Add course</button>
                 </form>
-                <div id="adminCoursesList" style="margin-top:1rem;"></div>
+                <div id="adminCoursesListReactApp" style="margin-top:1rem;"></div>
             </div>
             <div class="admin-pane" id="apane-layouts">
                 <div><label for="alCourse">Course</label>
@@ -1053,49 +1053,28 @@
             adminCoursesCache = courses;
             const sel = $('aeCourse'); sel.length = 1;
             const lsel = $('alCourse'); lsel.length = 1;
-            const list = $('adminCoursesList'); list.textContent = '';
             courses.forEach((c) => {
                 const label = c.name + (c.location ? ' — ' + c.location : '');
                 const o = document.createElement('option'); o.value = c.id; o.textContent = label; sel.appendChild(o);
                 const o2 = document.createElement('option'); o2.value = c.id; o2.textContent = label; lsel.appendChild(o2);
-                list.appendChild(elx('div', 'admin-cand', label));
             });
+            setAdminCoursesListState({ courses });
             aeResetLayoutSelect();
+        }
+        function setAdminCoursesListState(state) {
+            window.__gvdgAdminCoursesListState = state;
+            window.dispatchEvent(new CustomEvent('gvdg:admin-courses-list', { detail: state }));
         }
 
         async function adminLoadEvents() {
-            const wrap = $('adminEventsList'); wrap.textContent = 'Loading…';
+            setAdminEventsListState({ status: 'loading', events: [] });
             let events = [];
             try { const r = await api('/events'); if (r.ok) events = (await r.json()).events || []; } catch (e) {}
-            wrap.textContent = '';
-            if (!events.length) { wrap.appendChild(elx('p', 'dash-note', 'No events yet — create or import one.')); return; }
-            events.forEach((ev) => {
-                const row = elx('div', 'admin-evrow');
-                row.appendChild(elx('span', 'ev-name', ev.name));
-                row.appendChild(elx('span', 'admin-badge ' + (ev.status || ''), ev.status || ''));
-                if (ev.date) row.appendChild(elx('span', 'dash-event-date', ev.date));
-                const sel = document.createElement('select');
-                ['scheduled', 'live', 'final', 'cancelled'].forEach((s) => { const o = document.createElement('option'); o.value = s; o.textContent = s; if (s === ev.status) o.selected = true; sel.appendChild(o); });
-                sel.addEventListener('change', async () => {
-                    if (!confirm('Change “' + ev.name + '” status to ' + sel.value + '?')) { sel.value = ev.status || 'scheduled'; return; }
-                    const r = await adminApi('/admin/events/' + ev.id, { method: 'PATCH', body: { status: sel.value } });
-                    adminMsg(r.ok ? 'Updated “' + ev.name + '” → ' + sel.value : 'Update failed', r.ok);
-                    if (r.ok) adminLoadEvents();
-                });
-                row.appendChild(sel);
-                const edit = elx('button', 'admin-btn secondary', 'Edit');
-                edit.addEventListener('click', () => aeEditEvent(ev));
-                row.appendChild(edit);
-                const del = elx('button', 'admin-btn danger', 'Delete');
-                del.addEventListener('click', async () => {
-                    if (!confirm('Delete event “' + ev.name + '”?')) return;
-                    const r = await adminApi('/admin/events/' + ev.id, { method: 'DELETE' });
-                    adminMsg(r.ok ? 'Deleted “' + ev.name + '”' : 'Delete failed', r.ok);
-                    if (r.ok) adminLoadEvents();
-                });
-                row.appendChild(del);
-                wrap.appendChild(row);
-            });
+            setAdminEventsListState({ status: 'ready', events });
+        }
+        function setAdminEventsListState(state) {
+            window.__gvdgAdminEventsListState = state;
+            window.dispatchEvent(new CustomEvent('gvdg:admin-events-list', { detail: state }));
         }
 
         // datetime-local <-> ISO helpers: the input is in the admin's local zone; the API stores/reads ISO (UTC).
@@ -2683,6 +2662,26 @@
             window.addEventListener('gvdg:admin-tab-request', (event) => {
                 const tab = event.detail && event.detail.tab;
                 if (tab) adminSwitch(tab);
+            });
+            window.addEventListener('gvdg:admin-event-edit-request', (event) => {
+                const ev = event.detail && event.detail.event;
+                if (ev) aeEditEvent(ev);
+            });
+            window.addEventListener('gvdg:admin-event-status-request', async (event) => {
+                const detail = event.detail || {};
+                const ev = detail.event;
+                const status = detail.status;
+                if (!ev || ev.id == null || !status) return;
+                const r = await adminApi('/admin/events/' + ev.id, { method: 'PATCH', body: { status } });
+                adminMsg(r.ok ? 'Updated “' + ev.name + '” → ' + status : 'Update failed', r.ok);
+                if (r.ok) adminLoadEvents();
+            });
+            window.addEventListener('gvdg:admin-event-delete-request', async (event) => {
+                const ev = event.detail && event.detail.event;
+                if (!ev || ev.id == null) return;
+                const r = await adminApi('/admin/events/' + ev.id, { method: 'DELETE' });
+                adminMsg(r.ok ? 'Deleted “' + ev.name + '”' : 'Delete failed', r.ok);
+                if (r.ok) adminLoadEvents();
             });
             $('adminCreateForm').addEventListener('submit', adminSaveEvent);
             $('aeCourse').addEventListener('change', aeLoadLayouts);

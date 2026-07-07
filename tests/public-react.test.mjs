@@ -53,7 +53,7 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(chrome, /localStorage\.getItem\("theme"\)/);
   assert.match(chrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app admin-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v70"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v72"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
@@ -99,6 +99,7 @@ test('Crotts assistant is rendered by React bundles on app pages', () => {
   assert.match(widget, /export function CrottsWidget/);
   assert.match(widget, /id: "crotts-fab"/);
   assert.match(widget, /id: "crotts-panel"/);
+  assert.match(widget, /body\.admin-page #crotts-fab,body\.admin-page #crotts-panel\{display:none\}/);
   assert.match(widget, /\/assistant/);
   assert.match(widget, /MessageCircle, Send, X/);
   assert.doesNotMatch(widget, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|dangerouslySetInnerHTML|☰|✕|🌙|☀️|🥏|…/);

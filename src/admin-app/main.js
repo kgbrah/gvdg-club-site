@@ -2,6 +2,8 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 
 import { AdminAuthGate } from "./auth-gate.js";
+import { AdminCoursesList } from "./courses-list.js";
+import { AdminEventsList } from "./events-list.js";
 import { AdminMessage } from "./message.js";
 import { AdminNavigation } from "./navigation.js";
 import { AdminPageChrome } from "./page-chrome.js";
@@ -32,6 +34,16 @@ if (navigationMount) {
 const messageMount = document.getElementById("adminMessageReactApp");
 if (messageMount) {
   createRoot(messageMount).render(h(AdminMessage));
+}
+
+const eventsListMount = document.getElementById("adminEventsListReactApp");
+if (eventsListMount) {
+  createRoot(eventsListMount).render(h(AdminEventsList));
+}
+
+const coursesListMount = document.getElementById("adminCoursesListReactApp");
+if (coursesListMount) {
+  createRoot(coursesListMount).render(h(AdminCoursesList));
 }
 
 const crottsMount = document.getElementById("crottsReactApp");

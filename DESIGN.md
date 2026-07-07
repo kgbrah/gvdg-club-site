@@ -144,7 +144,7 @@ Spacing follows a 4px base through rem values.
 
 - Structure: the shared Crotts assistant widget renders from `home-app`, `public-app`, `admin-app`, and `members-app` into `crottsReactApp`; no page loads the root `crotts.js` helper.
 - Variants: closed floating avatar, open dialog, empty greeting, user message, assistant reply, typing state, API-rate-limit error, network/error response, and mobile safe-area placement.
-- Spacing: preserves the existing `#crotts-fab`, `#crotts-panel`, `#crotts-head`, `#crotts-msgs`, and `#crotts-form` hooks so page-specific placement overrides continue to work during migration; Events hides the launcher on mobile detail views so fixed assistant chrome cannot cover event facts or tee-sign cards.
+- Spacing: preserves the existing `#crotts-fab`, `#crotts-panel`, `#crotts-head`, `#crotts-msgs`, and `#crotts-form` hooks so page-specific placement overrides continue to work during migration; Events hides the launcher on mobile detail views and Admin hides it on mobile forms so fixed assistant chrome cannot cover event facts, tee-sign cards, or input labels.
 - States: React owns open/closed state, message history, busy/disabled send state, text input value, focus return to the composer, and assistant fetch lifecycle; HTML pages must not load `crotts.js` or append assistant DOM nodes.
 - Accessibility: the panel exposes dialog semantics, the avatar, close, and send controls are real buttons with labels, the composer is labelled, and iconography uses Lucide SVGs.
 - Motion: preserves the existing FAB scale and panel reveal only; no decorative motion is added.
@@ -193,6 +193,24 @@ Spacing follows a 4px base through rem values.
 - States: React owns message text, success/error classes, and status/alert semantics; `admin.html` must not keep `adminMsg` as a direct `textContent`/`className` DOM mutator or keep an `adminMsg` element id.
 - Accessibility: success messages use status semantics and error messages use alert semantics while preserving visible text.
 - Motion: static message text; no decorative motion.
+
+### Admin Events List
+
+- Structure: the Admin events table/list renders from `admin-app` into `adminEventsListReactApp`; legacy admin code only fetches `/events`, publishes `gvdg:admin-events-list`, and handles edit/status/delete request events.
+- Variants: loading row, empty row, event row, scheduled/live/final/cancelled status badges, status select, edit action, and delete action.
+- Spacing: reuses `.admin-evrow`, `.ev-name`, `.admin-badge`, `.dash-event-date`, `.admin-btn`, and `.dash-note` so the existing compact admin rhythm does not shift.
+- States: React owns row markup, status select value, empty/loading copy, and request dispatch; `admin.html` must not mutate `adminEventsList`, construct `.admin-evrow` rows, or attach row button/select listeners directly.
+- Accessibility: loading and empty states use status semantics, status controls are labelled native selects, and row actions are real buttons.
+- Motion: static list rows; only inherited control hover/focus states apply.
+
+### Admin Courses List
+
+- Structure: the Admin courses summary list renders from `admin-app` into `adminCoursesListReactApp`; legacy admin code fetches `/courses`, continues populating the event/layout course selects, and publishes `gvdg:admin-courses-list` for the visual list only.
+- Variants: empty list and course row with optional location.
+- Spacing: reuses `.admin-cand` and the existing courses-pane top margin so course rows keep the same compact divider rhythm.
+- States: React owns course-row markup and empty rendering; `admin.html` must not mutate `adminCoursesList`, clear its text, or append `.admin-cand` rows directly.
+- Accessibility: course rows are static text because no row action exists in the current admin workflow.
+- Motion: static list rows; no decorative motion.
 
 ### Events Hub App
 

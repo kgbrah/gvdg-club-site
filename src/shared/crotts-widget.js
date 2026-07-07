@@ -28,6 +28,7 @@ const CROTTS_CSS = `
 #crotts-send:disabled{opacity:.5;cursor:default}
 .crotts-typing{font-size:12px;color:var(--text-muted);align-self:flex-start;padding:2px 4px}
 @media (max-width:768px){#crotts-fab{width:54px;height:54px;left:14px;bottom:calc(82px + env(safe-area-inset-bottom,0px))}#crotts-panel{left:12px;bottom:calc(148px + env(safe-area-inset-bottom,0px));max-width:calc(100vw - 24px);max-height:calc(100vh - 172px)}}
+@media (max-width:768px){body.admin-page #crotts-fab,body.admin-page #crotts-panel{display:none}}
 `;
 
 function apiBase() {

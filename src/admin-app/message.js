@@ -25,6 +25,7 @@ export function AdminMessage() {
       setMessage(normalizeMessage(event.detail && typeof event.detail === "object" ? event.detail : currentMessage()));
     }
     window.addEventListener("gvdg:admin-message", update);
+    setMessage(normalizeMessage(currentMessage()));
     return () => window.removeEventListener("gvdg:admin-message", update);
   }, []);
 

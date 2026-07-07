@@ -78,6 +78,7 @@ export function AdminNavigation() {
       if (typeof tab === "string" && tab) setActiveTab(tab);
     }
     window.addEventListener("gvdg:admin-active-tab", update);
+    setActiveTab(initialTab());
     return () => window.removeEventListener("gvdg:admin-active-tab", update);
   }, []);
 

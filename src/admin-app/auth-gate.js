@@ -47,6 +47,7 @@ export function AdminAuthGate() {
       setState(event.detail && typeof event.detail === "object" ? event.detail : currentState());
     }
     window.addEventListener("gvdg:admin-auth-gate", update);
+    setState(currentState());
     return () => window.removeEventListener("gvdg:admin-auth-gate", update);
   }, []);
 

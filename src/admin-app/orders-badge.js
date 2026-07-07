@@ -10,6 +10,7 @@ export function AdminOrdersBadge() {
       setCount(Number(event.detail?.count || 0));
     }
     window.addEventListener("gvdg:admin-orders-badge", update);
+    setCount(Number(window.__gvdgAdminOrdersBadgeCount || 0));
     return () => window.removeEventListener("gvdg:admin-orders-badge", update);
   }, []);
 
