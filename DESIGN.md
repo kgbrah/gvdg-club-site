@@ -423,7 +423,7 @@ Spacing follows a 4px base through rem values.
 - Structure: compact header, primary temperature/condition group, condition graphic, wind action, secondary meta pills, and course-location note.
 - Variants: pending/unavailable states use a single empty message; live weather promotes condition, feels-like temperature, a graphic condition cue, and wind while keeping humidity, precipitation, and changes secondary.
 - Spacing: condition and graphic share the first row on narrow phones with wind below; condition, graphic, and wind form a compact three-part row above `420px`.
-- States: the score app renders Round Weather through React using shared summary and compass helpers; the standalone DOM renderer remains available for non-score surfaces. Wind starts `North-up`, moves through `Listening...`, and changes to `Phone-relative` when device orientation produces a heading.
+- States: the score app and Events live detail render Round Weather through React using shared summary and compass helpers; `weather-display.js` exposes model helpers only and must not contain a standalone DOM renderer. Wind starts `North-up`, moves through `Listening...`, and changes to `Phone-relative` when device orientation produces a heading.
 - Accessibility: wind is a real button with an arrow title/label that explains whether the arrow is north-up or phone-relative; the condition graphic is a labeled image cue and does not replace the text condition.
 - Motion: only the wind arrow rotates, using a short transform transition.
 

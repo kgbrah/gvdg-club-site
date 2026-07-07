@@ -62,52 +62,7 @@ test('maps open-meteo weather codes to accessible condition graphics', async () 
   }
 });
 
-function fakeDoc() {
-  function el() {
-    return {
-      children: [], attrs: {}, style: {}, className: '', textContent: '',
-      setAttribute(k, v) { this.attrs[k] = String(v); },
-      getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; },
-      appendChild(c) { this.children.push(c); return c; },
-      addEventListener() {},
-      querySelector(selector) { return selector.startsWith('.') ? findByClass(this, selector.slice(1)) : null; },
-      querySelectorAll() { return []; },
-    };
-  }
-  return { createElement: () => el(), createElementNS: () => el(), createTextNode: (t) => ({ text: t }) };
-}
-
-function nodeClass(node) {
-  return (node && node.className) || (node && node.attrs && node.attrs.class) || '';
-}
-
-function findByClass(node, className) {
-  if (!node || typeof node !== 'object') return null;
-  if (nodeClass(node).split(/\s+/).includes(className)) return node;
-  for (const child of node.children || []) {
-    const found = findByClass(child, className);
-    if (found) return found;
-  }
-  return null;
-}
-
-function findArrow(node) {
-  return findByClass(node, 'weather-wind-arrow');
-}
-
-function textOf(node) {
-  if (!node || typeof node !== 'object') return '';
-  const parts = [];
-  if (node.textContent) parts.push(node.textContent);
-  if (node.text) parts.push(node.text);
-  for (const child of node.children || []) {
-    const childText = textOf(child);
-    if (childText) parts.push(childText);
-  }
-  return parts.join(' ');
-}
-
-test('compact weather strip promotes condition, wind, and secondary meta without chip clutter', async () => {
+test('current weather summary promotes condition, wind, and secondary meta without chip clutter', async () => {
   const weather = await loadWeatherDisplay();
   const state = {
     location: { label: 'Course - Greenville, NC' },
@@ -128,31 +83,28 @@ test('compact weather strip promotes condition, wind, and secondary meta without
     updatedAt: '2026-07-01T16:20:10.000Z',
   };
 
-  const strip = weather.buildWeatherStrip(fakeDoc(), state, {});
-  assert.equal(findByClass(strip, 'weather-temp').textContent, '82°');
-  assert.match(textOf(findByClass(strip, 'weather-copy')), /Rain/);
-  assert.match(textOf(findByClass(strip, 'weather-copy')), /Feels 88°/);
-  const graphic = findByClass(strip, 'weather-graphic');
-  assert.equal(graphic.getAttribute('role'), 'img');
-  assert.equal(graphic.getAttribute('aria-label'), 'Light rain');
-  assert.match(textOf(graphic), /🌧️/);
-  assert.match(textOf(findByClass(strip, 'weather-wind')), /SW 8 mph/);
-  assert.match(textOf(findByClass(strip, 'weather-wind')), /gust 18/);
-  assert.match(textOf(findByClass(strip, 'weather-wind')), /North-up/);
-  assert.match(textOf(findByClass(strip, 'weather-meta')), /Humidity 72%/);
-  assert.match(textOf(findByClass(strip, 'weather-meta')), /Rain 0\.03 in/);
-  assert.match(textOf(strip), /Course - Greenville, NC/);
+  const summary = weather.currentWeatherSummary(state);
+  assert.equal(summary.tempText, '82°');
+  assert.equal(summary.condition, 'Rain');
+  assert.equal(summary.feelsText, 'Feels 88°');
+  assert.equal(summary.graphic.icon, '🌧️');
+  assert.equal(summary.graphic.label, 'Light rain');
+  assert.equal(summary.windText, 'SW 8 mph');
+  assert.equal(summary.gustText, 'gust 18');
+  assert.equal(summary.humidityText, 'Humidity 72%');
+  assert.equal(summary.precipText, 'Rain 0.03 in');
+  assert.match(summary.updatedText, /^Updated /);
 });
 
 test('wind control includes a direction arrow pointing where the wind blows north-up until compass enabled', async () => {
   const weather = await loadWeatherDisplay();
-  const state = { current: { windSpeedMph: 8.4, windDirectionDeg: 225, windGustMph: 10 }, history: [] };
-  const strip = weather.buildWeatherStrip(fakeDoc(), state, {});
-  const arrow = findArrow(strip);
-  assert.ok(arrow, 'wind arrow present');
-  assert.equal(arrow.getAttribute('data-blowto'), '45'); // wind FROM 225 (SW) blows TO 45 (NE)
-  assert.equal(arrow.getAttribute('data-relative'), 'north'); // compass off -> north-up
-  assert.equal(arrow.style.transform, 'rotate(45deg)');
+  const model = weather.windArrowModel(225);
+  assert.equal(model.blowTo, 45);
+  assert.equal(model.compassStatus, 'off');
+  assert.equal(model.label, 'Wind blowing this way. Tap to orient it to your phone heading.');
+  assert.equal(model.modeText, 'North-up');
+  assert.equal(model.relative, 'north');
+  assert.equal(model.rotationDeg, 45);
 });
 
 test('wind arrow rotates relative to device heading after compass permission', async () => {
@@ -184,19 +136,17 @@ test('wind arrow rotates relative to device heading after compass permission', a
   assert.equal(compassEvents[compassEvents.length - 1].status, 'starting');
 
   listeners.deviceorientation({ absolute: true, alpha: 90 });
-  const strip = weather.buildWeatherStrip(fakeDoc(), { current: { windSpeedMph: 8.4, windDirectionDeg: 225, windGustMph: 10 }, history: [] }, {});
-  const arrow = findArrow(strip);
-  const wind = findByClass(strip, 'weather-wind');
   assert.equal(clearedTimer, true);
   assert.equal(weather.compassState().status, 'active');
   assert.equal(weather.compassState().modeText, 'Phone-relative');
-  assert.equal(weather.windArrowModel(225).rotationDeg, 135);
+  const model = weather.windArrowModel(225);
+  assert.equal(model.blowTo, 45);
+  assert.equal(model.compassStatus, 'active');
+  assert.equal(model.label, "Wind blowing this way, relative to the way you're facing");
+  assert.equal(model.modeText, 'Phone-relative');
+  assert.equal(model.relative, 'facing');
+  assert.equal(model.rotationDeg, 135);
   assert.equal(compassEvents[compassEvents.length - 1].relative, 'facing');
-  assert.equal(arrow.getAttribute('data-relative'), 'facing');
-  assert.equal(arrow.getAttribute('data-compass-status'), 'active');
-  assert.equal(arrow.style.transform, 'rotate(135deg)');
-  assert.equal(wind.getAttribute('data-relative'), 'facing');
-  assert.match(textOf(wind), /Phone-relative/);
   unsubscribe();
 });
 
@@ -226,8 +176,7 @@ test('current weather summary is exported for React weather surfaces', async () 
 
 test('no wind arrow when direction is unknown', async () => {
   const weather = await loadWeatherDisplay();
-  const state = { current: { windSpeedMph: 5, windDirectionDeg: null }, history: [] };
-  assert.equal(findArrow(weather.buildWeatherStrip(fakeDoc(), state, {})), null);
+  assert.equal(weather.windArrowModel(null), null);
 });
 
 test('surfaces material weather changes during a round', async () => {
@@ -255,4 +204,12 @@ test('surfaces material weather changes during a round', async () => {
     Array.from(weather.weatherChanges({ current, history: [previous, current] })),
     ['Wind +5 mph', 'Gust +9 mph', 'Rain started'],
   );
+});
+
+test('shared weather helper exports no standalone DOM renderer', async () => {
+  const weather = await loadWeatherDisplay();
+  const source = await readFile(new URL('../weather-display.js', import.meta.url), 'utf8');
+  assert.equal(weather.buildWeatherStrip, undefined);
+  assert.equal(weather.renderWeather, undefined);
+  assert.doesNotMatch(source, /createElement|createElementNS|appendChild|replaceChildren|querySelectorAll/);
 });

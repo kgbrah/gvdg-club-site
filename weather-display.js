@@ -59,7 +59,6 @@
     // disc golfer pointing where the wind PUSHES the disc (blow-to = from + 180). When the compass is
     // enabled we rotate that relative to the phone's heading, so screen-up = the way the player is facing:
     // arrow up = tailwind, down = headwind, sideways = crosswind. Without the compass the arrow is north-up.
-    const ARROW_NS = "http://www.w3.org/2000/svg";
     let compassHeading = null; // player facing, degrees (0 = N, clockwise); null = unknown -> arrow is north-up
     let compassEnabled = false;
     let compassStatus = "off"; // off | starting | active | denied | unavailable
@@ -125,29 +124,6 @@
         return windArrowState(windFrom == null ? null : windFrom + 180);
     }
 
-    function applyArrowRotation(arrow) {
-        const model = windArrowState(Number(arrow.getAttribute("data-blowto")));
-        if (!model) return;
-        arrow.style.transform = "rotate(" + model.rotationDeg + "deg)";
-        arrow.setAttribute("data-relative", model.relative);
-        arrow.setAttribute("data-compass-status", model.compassStatus);
-        arrow.setAttribute("aria-label", model.label);
-        if (arrow.__titleEl) arrow.__titleEl.textContent = model.label;
-        const control = arrow.__windControl || arrow.closest && arrow.closest(".weather-wind");
-        if (control) {
-            control.setAttribute("data-relative", model.relative);
-            control.setAttribute("data-compass-status", model.compassStatus);
-            control.setAttribute("aria-label", model.label);
-            const mode = control.querySelector && control.querySelector(".weather-wind-mode");
-            if (mode) mode.textContent = model.modeText;
-        }
-    }
-
-    function refreshWindArrows(doc) {
-        (doc || (typeof document !== "undefined" ? document : null) || { querySelectorAll: function () { return []; } })
-            .querySelectorAll("svg.weather-wind-arrow[data-blowto]").forEach(applyArrowRotation);
-    }
-
     function onOrientation(event) {
         let heading = null;
         if (typeof event.webkitCompassHeading === "number" && Number.isFinite(event.webkitCompassHeading) && event.webkitCompassHeading >= 0) {
@@ -162,7 +138,6 @@
             window.clearTimeout(compassFallbackTimer);
             compassFallbackTimer = null;
         }
-        refreshWindArrows();
         notifyCompass();
     }
 
@@ -180,12 +155,10 @@
                 compassFallbackTimer = window.setTimeout(function () {
                     if (compassHeading == null) {
                         compassStatus = "unavailable";
-                        refreshWindArrows();
                         notifyCompass();
                     }
                 }, 3000);
             }
-            refreshWindArrows();
             notifyCompass();
             return true;
         };
@@ -199,12 +172,10 @@
                     const res = await Promise.resolve(permission);
                     if (res === "granted") return attach();
                     compassStatus = "denied";
-                    refreshWindArrows();
                     notifyCompass();
                     return false;
                 } catch (_err) {
                     compassStatus = "denied";
-                    refreshWindArrows();
                     notifyCompass();
                     return false;
                 }
@@ -212,33 +183,9 @@
             return attach();
         } catch (_e) {
             compassStatus = "unavailable";
-            refreshWindArrows();
             notifyCompass();
             return false;
         }
-    }
-
-    function windArrow(doc, windFromDeg) {
-        const model = windArrowModel(windFromDeg);
-        if (!model) return null;
-        const svg = doc.createElementNS(ARROW_NS, "svg");
-        svg.setAttribute("class", "weather-wind-arrow");
-        svg.setAttribute("viewBox", "0 0 24 24");
-        svg.setAttribute("width", "15");
-        svg.setAttribute("height", "15");
-        svg.setAttribute("data-blowto", String(model.blowTo));
-        svg.setAttribute("role", "img");
-        svg.style.transformOrigin = "center";
-        svg.style.transition = "transform 0.25s ease-out";
-        const title = doc.createElementNS(ARROW_NS, "title");
-        svg.appendChild(title);
-        svg.__titleEl = title;
-        const path = doc.createElementNS(ARROW_NS, "path");
-        path.setAttribute("d", "M12 2 L19 21 L12 16 L5 21 Z"); // an arrowhead-with-notch pointing up (blow-to)
-        path.setAttribute("fill", "currentColor");
-        svg.appendChild(path);
-        applyArrowRotation(svg);
-        return svg;
     }
 
     function inch(value) {
@@ -438,142 +385,13 @@
         return weatherChips(weather).map((chip) => chip.label + ": " + chip.value).join(" - ");
     }
 
-    function buildWeatherStrip(doc, weather, options) {
-        const chips = weatherChips(weather);
-        if (!chips.length) return null;
-        const opts = options || {};
-        const wrap = doc.createElement("div");
-        wrap.className = "weather-strip";
-
-        const head = doc.createElement("div");
-        head.className = "weather-head";
-        const title = doc.createElement("div");
-        title.className = "weather-title";
-        title.textContent = opts.title || "Round weather";
-        head.appendChild(title);
-
-        const current = weather && weather.current;
-        const summary = currentWeatherSummary(weather);
-        if (summary && summary.updatedText) {
-            const updated = doc.createElement("div");
-            updated.className = "weather-updated";
-            updated.textContent = summary.updatedText;
-            head.appendChild(updated);
-        }
-        wrap.appendChild(head);
-
-        if (!summary) {
-            const empty = doc.createElement("div");
-            empty.className = "weather-empty";
-            empty.textContent = chips.map((chip) => chip.value).join(" ");
-            wrap.appendChild(empty);
-        } else {
-            const main = doc.createElement("div");
-            main.className = "weather-main";
-
-            const condition = doc.createElement("div");
-            condition.className = "weather-condition";
-            const temp = doc.createElement("div");
-            temp.className = "weather-temp";
-            temp.textContent = summary.tempText;
-            const copy = doc.createElement("div");
-            copy.className = "weather-copy";
-            const name = doc.createElement("strong");
-            name.textContent = summary.condition;
-            copy.appendChild(name);
-            if (summary.feelsText) {
-                const feels = doc.createElement("span");
-                feels.textContent = summary.feelsText;
-                copy.appendChild(feels);
-            }
-            condition.appendChild(temp);
-            condition.appendChild(copy);
-            main.appendChild(condition);
-
-            if (summary.graphic) {
-                const graphic = doc.createElement("div");
-                graphic.className = "weather-graphic";
-                graphic.setAttribute("role", "img");
-                graphic.setAttribute("aria-label", summary.graphic.label);
-                const icon = doc.createElement("span");
-                icon.className = "weather-graphic-icon";
-                icon.setAttribute("aria-hidden", "true");
-                icon.textContent = summary.graphic.icon;
-                graphic.appendChild(icon);
-                main.appendChild(graphic);
-            }
-
-            if (summary.windText) {
-                const wind = doc.createElement("button");
-                wind.className = "weather-wind";
-                wind.type = "button";
-                wind.title = "Tap to orient wind to your phone heading";
-                wind.addEventListener("click", function () { enableCompass(); });
-                const arrow = windArrow(doc, current.windDirectionDeg);
-                if (arrow) {
-                    arrow.__windControl = wind;
-                    wind.appendChild(arrow);
-                }
-                const windCopy = doc.createElement("span");
-                windCopy.className = "weather-wind-copy";
-                const speed = doc.createElement("strong");
-                speed.textContent = summary.windText;
-                windCopy.appendChild(speed);
-                if (summary.gustText) {
-                    const gust = doc.createElement("span");
-                    gust.textContent = summary.gustText;
-                    windCopy.appendChild(gust);
-                }
-                const mode = doc.createElement("span");
-                mode.className = "weather-wind-mode";
-                mode.textContent = compassModeText();
-                windCopy.appendChild(mode);
-                wind.appendChild(windCopy);
-                if (arrow) applyArrowRotation(arrow);
-                main.appendChild(wind);
-            }
-            wrap.appendChild(main);
-
-            const meta = [summary.humidityText, summary.precipText].filter(Boolean).concat(summary.changes);
-            if (meta.length) {
-                const metaRow = doc.createElement("div");
-                metaRow.className = "weather-meta";
-                meta.forEach(function (text) {
-                    const item = doc.createElement("span");
-                    item.textContent = text;
-                    metaRow.appendChild(item);
-                });
-                wrap.appendChild(metaRow);
-            }
-        }
-
-        if (weather && weather.location && weather.location.label) {
-            const note = doc.createElement("div");
-            note.className = "weather-note";
-            note.textContent = weather.location.label;
-            wrap.appendChild(note);
-        }
-
-        return wrap;
-    }
-
-    function renderWeather(container, weather, options) {
-        if (!container) return;
-        container.replaceChildren();
-        const node = buildWeatherStrip(container.ownerDocument || document, weather, options);
-        container.hidden = !node;
-        if (node) container.appendChild(node);
-    }
-
     root.GVDGWeather = {
-        buildWeatherStrip,
         compassState,
         conditionGraphic,
         conditionLabel,
         currentWeatherSummary,
         enableCompass,
         formatLiveWeather,
-        renderWeather,
         subscribeCompass,
         weatherChanges,
         weatherChips,
