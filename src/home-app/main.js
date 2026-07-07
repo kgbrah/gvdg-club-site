@@ -3,7 +3,8 @@ import { createRoot } from "react-dom/client";
 
 import { CourseModal } from "./course-modal.js";
 import { AreaTournamentsFeed, HomeEventsFeed } from "./feed-panels.js";
-import { HomeBackToTop, HomeThemeToggle } from "./page-controls.js";
+import { HomePageChrome } from "./page-chrome.js";
+import { HomeBackToTop } from "./page-controls.js";
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
   void import("react-grab");
@@ -11,6 +12,11 @@ if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") 
 }
 
 const h = React.createElement;
+
+const pageChromeMount = document.getElementById("homeReactPageChromeApp");
+if (pageChromeMount) {
+  createRoot(pageChromeMount).render(h(HomePageChrome));
+}
 
 const eventsMount = document.getElementById("homeReactEventsApp");
 if (eventsMount) {
@@ -25,11 +31,6 @@ if (tournamentsMount) {
 const courseModalMount = document.getElementById("homeReactCourseModalApp");
 if (courseModalMount) {
   createRoot(courseModalMount).render(h(CourseModal));
-}
-
-const themeToggleMount = document.getElementById("homeReactThemeToggleApp");
-if (themeToggleMount) {
-  createRoot(themeToggleMount).render(h(HomeThemeToggle));
 }
 
 const backToTopMount = document.getElementById("homeReactBackToTopApp");

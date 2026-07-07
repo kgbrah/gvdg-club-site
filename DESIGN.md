@@ -115,12 +115,21 @@ Spacing follows a 4px base through rem values.
 
 ### Home Page Controls
 
-- Structure: homepage theme toggle and back-to-top controls render from the `home-app` React bundle into `homeReactThemeToggleApp` and `homeReactBackToTopApp`; the head pre-paint theme script remains only to prevent dark-mode flash.
+- Structure: homepage theme toggle renders inside the React-owned homepage chrome, and the back-to-top control renders from the `home-app` React bundle into `homeReactBackToTopApp`; the head pre-paint theme script remains only to prevent dark-mode flash.
 - Variants: light theme, dark theme, hidden back-to-top, visible back-to-top, click-to-top, and storage-unavailable fallback.
 - Spacing: reuses `.theme-toggle` and `.back-to-top` primitives so header and floating-control dimensions remain stable.
 - States: React owns `data-theme` persistence, toggle pressed state, scroll threshold visibility, and smooth-scroll action; inline homepage scripts must not mutate `.theme-icon` or `#backToTop`.
 - Accessibility: controls are real buttons with explicit labels, pressed state for the theme toggle, and Lucide SVG iconography.
 - Motion: preserves existing transform/opacity button transitions only.
+
+### Home Page Chrome
+
+- Structure: homepage header, logo, public nav links, donate link, theme toggle, and mobile menu control render from the `home-app` React bundle into `homeReactPageChromeApp`; `nav.js` does not run on the homepage.
+- Variants: desktop inline nav, mobile collapsed nav, mobile open nav, current-page link, donate link, light theme, dark theme, and scrolled header.
+- Spacing: reuses `header`, `nav`, `.nav-links`, `.nav-right`, `.theme-toggle`, `.menu-toggle`, and `.logo-image` primitives so the public homepage rhythm remains unchanged.
+- States: React owns menu expanded state, current-page nav state, donate link rendering, theme toggle placement, and the `header.scrolled` class; inline homepage scripts must not mutate `.menu-toggle`, `.nav-links`, or `header`.
+- Accessibility: menu and theme controls are real buttons with labels, `aria-expanded`, `aria-controls`, and Lucide icons; current page uses `aria-current="page"`.
+- Motion: mobile menu reveal and header scroll shadow preserve the existing transform/opacity/box-shadow transitions only.
 
 ### Tournament Item
 

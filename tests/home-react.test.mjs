@@ -58,10 +58,11 @@ test('home React bundle owns theme and back-to-top controls', () => {
   const main = readFileSync('src/home-app/main.js', 'utf8');
   const controls = readFileSync('src/home-app/page-controls.js', 'utf8');
 
-  assert.match(html, /id="homeReactThemeToggleApp"/);
   assert.match(html, /id="homeReactBackToTopApp"/);
-  assert.doesNotMatch(html, /class="theme-icon"|id="backToTop"|themeIcon\.textContent|getElementById\('backToTop'\)/);
-  assert.match(main, /createRoot\(themeToggleMount\)\.render\(h\(HomeThemeToggle\)\)/);
+  assert.match(html, /\.back-to-top\s*\{[^}]*display:\s*flex/);
+  assert.doesNotMatch(html, /\.back-to-top\s*\{[^}]*display:\s*none/);
+  assert.doesNotMatch(html, /homeReactThemeToggleApp|class="theme-icon"|id="backToTop"|themeIcon\.textContent|getElementById\('backToTop'\)/);
+  assert.doesNotMatch(main, /themeToggleMount/);
   assert.match(main, /createRoot\(backToTopMount\)\.render\(h\(HomeBackToTop\)\)/);
   assert.match(controls, /export function HomeThemeToggle/);
   assert.match(controls, /export function HomeBackToTop/);
@@ -72,4 +73,23 @@ test('home React bundle owns theme and back-to-top controls', () => {
   assert.match(controls, /Sun/);
   assert.match(controls, /ArrowUp/);
   assert.doesNotMatch(controls, /innerHTML|insertAdjacentHTML|document\.createElement|replaceChildren|themeIcon|backToTop|☀️|🌙|↑/);
+});
+
+test('home React bundle owns page chrome menu and header scroll state', () => {
+  const html = readFileSync('index.html', 'utf8');
+  const main = readFileSync('src/home-app/main.js', 'utf8');
+  const chrome = readFileSync('src/home-app/page-chrome.js', 'utf8');
+
+  assert.match(html, /id="homeReactPageChromeApp"/);
+  assert.doesNotMatch(html, /<script src="nav\.js"|class="menu-toggle" aria-label="Toggle menu"|const menuToggle=|const header=document\.querySelector\('header'\)/);
+  assert.match(main, /createRoot\(pageChromeMount\)\.render\(h\(HomePageChrome\)\)/);
+  assert.match(chrome, /export function HomePageChrome/);
+  assert.match(chrome, /data-react-home-chrome/);
+  assert.match(chrome, /aria-expanded/);
+  assert.match(chrome, /aria-current/);
+  assert.match(chrome, /nav-donate/);
+  assert.match(chrome, /HomeThemeToggle/);
+  assert.match(chrome, /Menu, X/);
+  assert.match(chrome, /window\.requestAnimationFrame\(update\)/);
+  assert.doesNotMatch(chrome, /querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
 });
