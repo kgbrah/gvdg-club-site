@@ -94,5 +94,6 @@ test('archive subdomain redirect is not part of the Events page flow', () => {
   assert.doesNotMatch(eventsSource, /archive\.html/);
   assert.doesNotMatch(indexSource, /archive\.gvdgclub\.com/);
   assert.match(archiveSource, /events\.html#previousResultsSection/);
+  assert.doesNotMatch(archiveSource, /<script|location\.replace|document\./);
   assert.doesNotMatch(archiveSource, /const INITIAL_VISIBLE = 3/);
 });
