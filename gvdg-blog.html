@@ -145,6 +145,12 @@
             backdrop-filter: blur(5px);
             -webkit-tap-highlight-color: transparent;
         }
+
+        .theme-toggle svg,
+        .menu-toggle svg {
+            display: block;
+            pointer-events: none;
+        }
         
         .theme-toggle:hover {
             background: rgba(255, 255, 255, 0.2);
@@ -193,6 +199,25 @@
         .nav-links a:hover,
         .nav-links a.active {
             color: var(--primary);
+        }
+
+        .nav-links a[aria-current="page"] {
+            text-decoration: underline;
+            text-underline-offset: 5px;
+            font-weight: 800;
+        }
+
+        .nav-links a.nav-donate {
+            background: var(--accent);
+            color: var(--secondary) !important;
+            padding: 0.35rem 0.95rem;
+            border-radius: 999px;
+            font-weight: 800;
+        }
+
+        .nav-links a.nav-donate:hover {
+            color: var(--secondary);
+            filter: brightness(1.08);
         }
         
         .menu-toggle {
@@ -521,25 +546,11 @@
             background: linear-gradient(135deg, var(--bg-secondary) 0%, #0a0a14 100%);
         }
     </style>
-  <script src="nav.js" defer></script>
+  <script type="module" src="public-app/public-app.js"></script>
   <script src="pwa.js" defer></script>
 </head>
 <body>
-    <!-- Header Navigation -->
-    <header>
-        <nav>
-            <a href="index.html" class="logo">
-                <img src="img/logo.png" alt="Greenville DGC Logo" class="logo-image">
-            </a>
-            <div class="nav-right">
-                <button class="menu-toggle" aria-label="Toggle menu">☰</button>
-                <ul class="nav-links" id="navLinks"></ul>
-                <button class="theme-toggle" aria-label="Toggle dark mode">
-                    <span class="theme-icon">🌙</span>
-                </button>
-            </div>
-        </nav>
-    </header>
+    <div id="publicReactPageChrome"></div>
 
     <!-- Page Hero -->
     <section class="page-hero">
@@ -580,52 +591,6 @@
         <p>&copy; 2025 Greenville Disc Golf Club. All rights reserved.</p>
     </footer>
 
-    <script>
-        // Dark mode toggle
-        const themeToggle = document.querySelector('.theme-toggle');
-        const themeIcon = document.querySelector('.theme-icon');
-        const html = document.documentElement;
-
-        const savedTheme = localStorage.getItem('theme');
-        if (savedTheme) {
-            html.setAttribute('data-theme', savedTheme);
-            if (themeIcon) themeIcon.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
-        }
-
-        themeToggle.addEventListener('click', () => {
-            const currentTheme = html.getAttribute('data-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            html.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
-            if (themeIcon) themeIcon.textContent = newTheme === 'dark' ? '☀️' : '🌙';
-        });
-
-        // Mobile menu toggle
-        const menuToggle = document.querySelector('.menu-toggle');
-        const navLinks = document.querySelector('.nav-links');
-
-        menuToggle.addEventListener('click', () => {
-            navLinks.classList.toggle('active');
-            menuToggle.textContent = navLinks.classList.contains('active') ? '✕' : '☰';
-        });
-
-        document.querySelectorAll('.nav-links a').forEach(link => {
-            link.addEventListener('click', () => {
-                navLinks.classList.remove('active');
-                menuToggle.textContent = '☰';
-            });
-        });
-
-        // Header scroll effect
-        const header = document.querySelector('header');
-        window.addEventListener('scroll', () => {
-            if (window.scrollY > 100) {
-                header.classList.add('scrolled');
-            } else {
-                header.classList.remove('scrolled');
-            }
-        });
-    </script>
     <script src="crotts.js" defer></script>
 </body>
 </html>

@@ -35,7 +35,11 @@
         .nav-links a::after { content: ""; position: absolute; left: 0; bottom: -5px; width: 0; height: 2px; background: var(--primary); transition: width 0.2s ease; }
         .nav-links a:hover, .nav-links a.active { color: var(--primary); }
         .nav-links a:hover::after, .nav-links a.active::after { width: 100%; }
-        .theme-toggle, .menu-toggle { min-width: 44px; min-height: 44px; border: 2px solid rgba(255,255,255,0.3); color: #fff; background: rgba(255,255,255,0.1); border-radius: 50%; cursor: pointer; }
+        .nav-links a[aria-current="page"] { text-decoration: underline; text-underline-offset: 5px; font-weight: 800; }
+        .nav-links a.nav-donate { background: var(--accent); color: var(--secondary) !important; padding: 0.35rem 0.95rem; border-radius: 999px; font-weight: 800; }
+        .nav-links a.nav-donate:hover { color: var(--secondary); filter: brightness(1.08); }
+        .theme-toggle, .menu-toggle { min-width: 44px; min-height: 44px; border: 2px solid rgba(255,255,255,0.3); color: #fff; background: rgba(255,255,255,0.1); border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .theme-toggle svg, .menu-toggle svg { display: block; pointer-events: none; }
         .menu-toggle { display: none; border: none; background: transparent; font-size: 1.5rem; }
         main { width: min(1200px, 100%); margin: 0 auto; padding: 118px 1.5rem 4rem; flex: 1; }
         .shop-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 1.25rem; align-items: end; margin: 1rem 0 1.25rem; }
@@ -97,7 +101,7 @@
         @media (max-width: 900px) { .shop-head, .shop-shell { grid-template-columns: 1fr; } .cart { position: static; } .filters { grid-template-columns: 1fr 1fr; } }
         @media (max-width: 768px) {
             header { padding: 1rem; } .logo-image { height: 40px; } header.scrolled .logo-image { height: 35px; }
-            .menu-toggle { display: block; } .nav-right { gap: 0.75rem; }
+            .menu-toggle { display: flex; } .nav-right { gap: 0.75rem; }
             .nav-links { position: fixed; top: 70px; left: 0; right: 0; background: rgba(26,26,46,0.995); flex-direction: column; gap: 0; padding: 2rem; transform: translateY(-100%); opacity: 0; pointer-events: none; transition: all 0.3s ease; }
             [data-theme="dark"] .nav-links { background: rgba(15,15,30,0.995); }
             .nav-links.active { transform: translateY(0); opacity: 1; pointer-events: all; }
@@ -105,20 +109,11 @@
             .filters { grid-template-columns: 1fr; }
         }
     </style>
-  <script src="nav.js" defer></script>
+  <script type="module" src="public-app/public-app.js"></script>
   <script src="pwa.js" defer></script>
 </head>
 <body data-auth-base="">
-    <header>
-        <nav>
-            <a href="index.html" class="logo"><img src="img/logo.png" alt="Greenville DGC Logo" class="logo-image"></a>
-            <ul class="nav-links" id="navLinks"></ul>
-            <div class="nav-right">
-                <button class="menu-toggle" aria-label="Toggle menu">☰</button>
-                <button class="theme-toggle" aria-label="Toggle dark mode"><span class="theme-icon">🌙</span></button>
-            </div>
-        </nav>
-    </header>
+    <div id="publicReactPageChrome"></div>
     <main>
         <div class="shop-head">
             <div>
@@ -601,28 +596,6 @@
                 renderCart();
             }
         }
-        document.querySelector('.menu-toggle').addEventListener('click', () => {
-            const links = document.querySelector('.nav-links');
-            links.classList.toggle('active');
-            document.querySelector('.menu-toggle').textContent = links.classList.contains('active') ? '✕' : '☰';
-        });
-        document.querySelectorAll('.nav-links a').forEach((link) => link.addEventListener('click', () => {
-            document.querySelector('.nav-links').classList.remove('active');
-            document.querySelector('.menu-toggle').textContent = '☰';
-        }));
-        const themeToggle = document.querySelector('.theme-toggle');
-        const themeIcon = document.querySelector('.theme-icon');
-        const currentTheme = localStorage.getItem('theme') || 'light';
-        document.documentElement.setAttribute('data-theme', currentTheme);
-        themeIcon.textContent = currentTheme === 'dark' ? '☀️' : '🌙';
-        themeToggle.addEventListener('click', () => {
-            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-            const next = isDark ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', next);
-            localStorage.setItem('theme', next);
-            themeIcon.textContent = next === 'dark' ? '☀️' : '🌙';
-        });
-        window.addEventListener('scroll', () => document.querySelector('header').classList.toggle('scrolled', window.scrollY > 100));
         ['shopSearch', 'brandFilter', 'colorFilter', 'weightFilter', 'typeFilter', 'sortSelect'].forEach((id) => $(id).addEventListener('input', renderProducts));
         $('checkoutBtn').addEventListener('click', checkout);
         $('paypalRedirectBtn').addEventListener('click', payWithPaypal);

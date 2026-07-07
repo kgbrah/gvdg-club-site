@@ -150,7 +150,7 @@ All D1 access is **parameterized** (`.bind()` with `?`). Migrations in `auth-wor
   ryder-cup.html          Ryder Cup standings
   gvdg-blog.html          blog
   archive.html            results archive
-  *.js                    page logic (crotts.js, events.js, nav.js, pwa.js, matchplay-colors.js, …)
+  *.js                    page logic (crotts.js, events.js, pwa.js, matchplay-colors.js, ...)
   tokens.css              design tokens (single source of colour truth)
   sw.js                   service worker (manually versioned cache)
   site.webmanifest        PWA manifest

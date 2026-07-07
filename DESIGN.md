@@ -131,6 +131,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: menu and theme controls are real buttons with labels, `aria-expanded`, `aria-controls`, and Lucide icons; current page uses `aria-current="page"`.
 - Motion: mobile menu reveal and header scroll shadow preserve the existing transform/opacity/box-shadow transitions only.
 
+### Public Page Chrome
+
+- Structure: Events, Ryder Cup, Pro Shop, and Blog mount a shared React-owned header, logo, public nav links, donate link, theme toggle, and mobile menu into `publicReactPageChrome`; `nav.js` does not run on these public content pages.
+- Variants: desktop inline nav, mobile collapsed nav, mobile open nav, current-page link, donate link, light theme, dark theme, and scrolled header.
+- Spacing: reuses each page's existing `header`, `nav`, `.nav-links`, `.nav-right`, `.theme-toggle`, `.menu-toggle`, and `.logo-image` primitives so the surrounding page layout stays unchanged during migration.
+- States: React owns menu expanded state, current-page nav state, donate link rendering, `data-theme` persistence, and the `header.scrolled` class; page scripts must not mutate `.menu-toggle`, `.nav-links`, `.theme-icon`, or `header`.
+- Accessibility: menu and theme controls are real buttons with labels, `aria-expanded`, `aria-controls`, `aria-pressed`, and Lucide icons; current page uses `aria-current="page"`.
+- Motion: mobile menu reveal and header scroll shadow preserve the existing transform/opacity/box-shadow transitions only.
+
 ### Home Page Interactions
 
 - Structure: homepage carousel controls, reveal observer, stat counters, smooth in-page anchors, and double-tap guard render as a React-owned null controller from the `home-app` bundle into `homeReactInteractionsApp`; the homepage keeps only the head pre-paint theme script inline.

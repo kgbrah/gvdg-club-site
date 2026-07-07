@@ -3,9 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run build:home && npm run build:score && npm run build:members",
+    "build": "npm run build:home && npm run build:public && npm run build:score && npm run build:members",
     "build:home": "vite build --config vite.home.config.mjs",
     "build:members": "vite build --config vite.members.config.mjs",
+    "build:public": "vite build --config vite.public.config.mjs",
     "build:score": "vite build --config vite.score.config.mjs",
     "doctor": "react-doctor --no-dead-code --no-score --blocking none",
     "qa:ensure-staging-dashboard-data": "node scripts/qa/ensure-staging-dashboard-data.mjs",
