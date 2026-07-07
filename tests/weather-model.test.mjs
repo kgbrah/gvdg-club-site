@@ -1,14 +1,11 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import vm from 'node:vm';
+import { access, readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-async function loadWeatherDisplay(globals = {}) {
-  const source = await readFile(new URL('../weather-display.js', import.meta.url), 'utf8');
-  const context = { ...globals };
-  vm.createContext(context);
-  vm.runInContext(source, context);
-  return context.GVDGWeather;
+let importCounter = 0;
+
+async function loadWeatherDisplay() {
+  return import(new URL(`../src/shared/weather-model.js?test=${importCounter++}`, import.meta.url));
 }
 
 test('formats current round weather with wind, precipitation, humidity, and update time', async () => {
@@ -124,30 +121,37 @@ test('wind arrow rotates relative to device heading after compass permission', a
     setTimeout() { return 1; },
     clearTimeout() { clearedTimer = true; },
   };
-  const weather = await loadWeatherDisplay({ window: fakeWindow });
-  const compassEvents = [];
-  const unsubscribe = weather.subscribeCompass((state) => compassEvents.push(state));
+  const previousWindow = globalThis.window;
+  globalThis.window = fakeWindow;
+  try {
+    const weather = await loadWeatherDisplay();
+    const compassEvents = [];
+    const unsubscribe = weather.subscribeCompass((state) => compassEvents.push(state));
 
-  assert.equal(await weather.enableCompass(), true);
-  assert.equal(requestedAbsolute, true);
-  assert.equal(typeof listeners.deviceorientationabsolute, 'function');
-  assert.equal(typeof listeners.deviceorientation, 'function');
-  assert.equal(weather.windArrowModel(225).rotationDeg, 45);
-  assert.equal(compassEvents[compassEvents.length - 1].status, 'starting');
+    assert.equal(await weather.enableCompass(), true);
+    assert.equal(requestedAbsolute, true);
+    assert.equal(typeof listeners.deviceorientationabsolute, 'function');
+    assert.equal(typeof listeners.deviceorientation, 'function');
+    assert.equal(weather.windArrowModel(225).rotationDeg, 45);
+    assert.equal(compassEvents[compassEvents.length - 1].status, 'starting');
 
-  listeners.deviceorientation({ absolute: true, alpha: 90 });
-  assert.equal(clearedTimer, true);
-  assert.equal(weather.compassState().status, 'active');
-  assert.equal(weather.compassState().modeText, 'Phone-relative');
-  const model = weather.windArrowModel(225);
-  assert.equal(model.blowTo, 45);
-  assert.equal(model.compassStatus, 'active');
-  assert.equal(model.label, "Wind blowing this way, relative to the way you're facing");
-  assert.equal(model.modeText, 'Phone-relative');
-  assert.equal(model.relative, 'facing');
-  assert.equal(model.rotationDeg, 135);
-  assert.equal(compassEvents[compassEvents.length - 1].relative, 'facing');
-  unsubscribe();
+    listeners.deviceorientation({ absolute: true, alpha: 90 });
+    assert.equal(clearedTimer, true);
+    assert.equal(weather.compassState().status, 'active');
+    assert.equal(weather.compassState().modeText, 'Phone-relative');
+    const model = weather.windArrowModel(225);
+    assert.equal(model.blowTo, 45);
+    assert.equal(model.compassStatus, 'active');
+    assert.equal(model.label, "Wind blowing this way, relative to the way you're facing");
+    assert.equal(model.modeText, 'Phone-relative');
+    assert.equal(model.relative, 'facing');
+    assert.equal(model.rotationDeg, 135);
+    assert.equal(compassEvents[compassEvents.length - 1].relative, 'facing');
+    unsubscribe();
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  }
 });
 
 test('current weather summary is exported for React weather surfaces', async () => {
@@ -208,8 +212,20 @@ test('surfaces material weather changes during a round', async () => {
 
 test('shared weather helper exports no standalone DOM renderer', async () => {
   const weather = await loadWeatherDisplay();
-  const source = await readFile(new URL('../weather-display.js', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../src/shared/weather-model.js', import.meta.url), 'utf8');
   assert.equal(weather.buildWeatherStrip, undefined);
   assert.equal(weather.renderWeather, undefined);
+  assert.doesNotMatch(source, /GVDGWeather|window\.GVDGWeather|root\.GVDGWeather/);
   assert.doesNotMatch(source, /createElement|createElementNS|appendChild|replaceChildren|querySelectorAll/);
+});
+
+test('React weather surfaces import the module instead of loading a global script', async () => {
+  const scoreHtml = await readFile(new URL('../score.html', import.meta.url), 'utf8');
+  const eventsHtml = await readFile(new URL('../events.html', import.meta.url), 'utf8');
+  const strip = await readFile(new URL('../src/score-app/weather-strip.js', import.meta.url), 'utf8');
+  await assert.rejects(access(new URL('../weather-display.js', import.meta.url)));
+  assert.doesNotMatch(scoreHtml, /<script src="weather-display\.js"/);
+  assert.doesNotMatch(eventsHtml, /<script src="weather-display\.js"/);
+  assert.match(strip, /from "\.\.\/shared\/weather-model\.js"/);
+  assert.doesNotMatch(strip, /weatherApi|GVDGWeather/);
 });

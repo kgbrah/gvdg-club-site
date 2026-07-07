@@ -1,30 +1,24 @@
 import React from "react";
+import {
+  compassState as currentCompassState,
+  currentWeatherSummary,
+  enableCompass,
+  subscribeCompass,
+  weatherChips,
+  windArrowModel,
+} from "../shared/weather-model.js";
 
 const h = React.createElement;
 
-function weatherApi() {
-  return typeof window === "undefined" ? null : window.GVDGWeather || null;
-}
-
-function fallbackCompassState() {
-  return { heading: null, modeText: "North-up", relative: "north", status: "off" };
-}
-
 function useCompassState(weather) {
-  const [state, setState] = React.useState(() => {
-    const api = weatherApi();
-    return api && typeof api.compassState === "function" ? api.compassState() : fallbackCompassState();
-  });
+  const [state, setState] = React.useState(() => currentCompassState());
 
   React.useEffect(() => {
-    const api = weatherApi();
-    if (!api || typeof api.subscribeCompass !== "function") return undefined;
-    return api.subscribeCompass(setState);
+    return subscribeCompass(setState);
   }, []);
 
   React.useEffect(() => {
-    const api = weatherApi();
-    if (weather && weather.current && api && typeof api.enableCompass === "function") api.enableCompass();
+    if (weather && weather.current) void enableCompass();
   }, [weather]);
 
   return state;
@@ -68,8 +62,7 @@ function WeatherGraphic(props) {
 function WeatherWind(props) {
   const summary = props.summary;
   if (!summary.windText) return null;
-  const api = weatherApi();
-  const model = api && typeof api.windArrowModel === "function" ? api.windArrowModel(props.windDirectionDeg) : null;
+  const model = windArrowModel(props.windDirectionDeg);
   const modeText = model ? model.modeText : props.compassState.modeText;
   const windLabel = model ? model.label : "Tap to orient wind to your phone heading";
 
@@ -83,8 +76,7 @@ function WeatherWind(props) {
       title: "Tap to orient wind to your phone heading",
       type: "button",
       onClick: () => {
-        const nextApi = weatherApi();
-        if (nextApi && typeof nextApi.enableCompass === "function") nextApi.enableCompass();
+        void enableCompass();
       },
     },
     [
@@ -99,14 +91,12 @@ function WeatherWind(props) {
 }
 
 export function WeatherStrip(props) {
-  const api = weatherApi();
   const compassState = useCompassState(props.weather);
-  if (!api || typeof api.weatherChips !== "function") return null;
 
-  const chips = api.weatherChips(props.weather);
+  const chips = weatherChips(props.weather);
   if (!chips.length) return null;
 
-  const summary = typeof api.currentWeatherSummary === "function" ? api.currentWeatherSummary(props.weather) : null;
+  const summary = currentWeatherSummary(props.weather);
   const current = props.weather && props.weather.current;
   const meta = summary ? [summary.humidityText, summary.precipText].filter(Boolean).concat(summary.changes) : [];
 
