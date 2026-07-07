@@ -115,6 +115,57 @@ test('public Events hub schedule and club feed publish to React', () => {
   assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|📅|📍|🥏/);
 });
 
+test('public Events leagues list publishes to React', () => {
+  const source = readFileSync('events.html', 'utf8');
+  const main = readFileSync('src/public-app/main.js', 'utf8');
+  const app = readFileSync('src/public-app/events-leagues-app.js', 'utf8');
+  const start = source.indexOf('async function loadLeaguesList()');
+  const end = source.indexOf('async function loadLeague(id)');
+  assert.notEqual(start, -1, 'loadLeaguesList should exist');
+  assert.notEqual(end, -1, 'loadLeague should follow loadLeaguesList');
+  const loader = source.slice(start, end);
+
+  assert.match(source, /function publishLeagues\(leagues\)/);
+  assert.match(source, /new CustomEvent\('gvdg:events-leagues'/);
+  assert.match(loader, /publishLeagues\(leagues\)/);
+  assert.doesNotMatch(loader, /replaceChildren|appendChild|document\.createElement|addEventListener|league-card|league-name|league-meta/);
+  assert.match(main, /createRoot\(eventsLeaguesMount\)\.render\(h\(EventsLeaguesApp\)\)/);
+  assert.match(app, /export function EventsLeaguesApp/);
+  assert.match(app, /data-react-events-leagues/);
+  assert.match(app, /Leagues & Standings/);
+  assert.match(app, /window\.location\.hash = `#league\/\$\{encodeURIComponent\(league\.id\)\}`/);
+  assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|📅|📍|🥏/);
+});
+
+test('public Events league detail keeps standings tables scroll-contained', () => {
+  const source = readFileSync('events.html', 'utf8');
+  const main = readFileSync('src/public-app/main.js', 'utf8');
+  const app = readFileSync('src/public-app/events-leagues-app.js', 'utf8');
+  const start = source.indexOf('async function loadLeague(id)');
+  const end = source.indexOf('// ---------- DETAIL ----------');
+  assert.notEqual(start, -1, 'loadLeague should exist');
+  assert.notEqual(end, -1, 'detail section should follow loadLeague');
+  const loader = source.slice(start, end);
+
+  assert.match(source, /id="leagueDetailSection"/);
+  assert.match(source, /function publishLeagueDetail\(data\)/);
+  assert.match(source, /new CustomEvent\('gvdg:events-league-detail'/);
+  assert.match(source, /leagueDetailEl\.hidden = which !== 'league-detail'/);
+  assert.match(loader, /publishLeagueDetail\(data\)/);
+  assert.match(loader, /setView\('league-detail'\)/);
+  assert.doesNotMatch(source, /function renderLeague\(data\)|function scrollTable\(table\)/);
+  assert.doesNotMatch(loader, /replaceChildren|appendChild|document\.createElement|addEventListener|lb-table|player-row/);
+  assert.match(main, /createRoot\(eventsLeagueDetailMount\)\.render\(h\(EventsLeagueDetailApp\)\)/);
+  assert.match(app, /export function EventsLeagueDetailApp/);
+  assert.match(app, /data-react-events-league-detail/);
+  assert.match(app, /function TeamStandingsTable/);
+  assert.match(app, /function PlayerStandingsTable/);
+  assert.match(app, /function LeagueRounds/);
+  assert.match(app, /className: "lb-wrap"/);
+  assert.match(app, /window\.location\.hash = `#event\/\$\{encodeURIComponent\(id\)\}`/);
+  assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|📅|📍|🥏|●/);
+});
+
 test('public registration cards post pair label only for doubles config', () => {
   const source = readFileSync('events.html', 'utf8');
   const app = readFileSync('src/public-app/events-registration-app.js', 'utf8');

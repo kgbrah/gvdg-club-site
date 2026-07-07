@@ -149,6 +149,24 @@ Spacing follows a 4px base through rem values.
 - Accessibility: schedule feed cards are real links when they navigate, upcoming/live event cards use hash links, external links keep safe new-tab attributes, and iconography uses Lucide SVGs.
 - Motion: preserves the inherited card hover/focus transforms only; no decorative motion is added.
 
+### Events Leagues App
+
+- Structure: the Events page leagues list renders from the shared `public-app` React bundle into `leaguesSection`; the legacy Events script only fetches `/leagues` and publishes `gvdg:events-leagues`.
+- Variants: hidden empty state, league card with name, league card with season/format metadata, and hash navigation into the existing league detail route.
+- Spacing: reuses `.events-section-title`, `.leagues-grid`, `.league-card`, `.league-name`, and `.league-meta` so league standings keep the current compact Events rhythm.
+- States: React owns the leagues heading, card list, metadata text, disabled no-id guard, and hash navigation; `events.html` must not contain a leagues-list DOM renderer.
+- Accessibility: each league card is a real button with visible text and native disabled behavior when a league id is missing.
+- Motion: preserves the existing league-card hover transform only.
+
+### Events League Detail App
+
+- Structure: the Events page league detail view renders from the shared `public-app` React bundle into `leagueDetailSection`; the legacy Events script only fetches `/leagues/:id` and publishes `gvdg:events-league-detail`.
+- Variants: matchplay team standings, standard player standings, empty standings, round list, red winner, blue winner, tie winner, and round hash navigation into event detail.
+- Spacing: reuses `.detail-card`, `.detail-head`, `.detail-title`, `.detail-notes`, `.roster-title`, `.lb-wrap`, `.lb-table`, `.player-list`, and `.player-row` so league detail keeps the current detail-page rhythm and scroll-contained standings tables on mobile.
+- States: React owns the back action, league metadata, table markup, team dots, round winner stripe classes, disabled missing-id guards, and event hash navigation; `events.html` must not contain a league-detail DOM renderer.
+- Accessibility: table headers remain semantic, the back and round actions are real buttons, team dots are hidden from assistive tech, and winner color is reinforced by row placement and text context rather than color alone.
+- Motion: preserves inherited card/button hover states only; the winner stripe is static and token-driven.
+
 ### Events Previous Results App
 
 - Structure: the Events page previous-results panel renders from the shared `public-app` React bundle into `previousResultsSection`; the legacy Events script only publishes normalized result data through `gvdg:events-previous-results`.

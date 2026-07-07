@@ -53,7 +53,7 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(chrome, /localStorage\.getItem\("theme"\)/);
   assert.match(chrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v55"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v57"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
@@ -101,6 +101,48 @@ test('Events hub schedule and club feed are rendered by the public React bundle'
   assert.match(app, /CalendarDays, ExternalLink, MapPin/);
   assert.match(app, /safeHref/);
   assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|📅|📍|🥏/);
+});
+
+test('Events leagues list is rendered by the public React bundle', () => {
+  const html = readFileSync('events.html', 'utf8');
+  const main = readFileSync('src/public-app/main.js', 'utf8');
+  const app = readFileSync('src/public-app/events-leagues-app.js', 'utf8');
+
+  assert.match(html, /id="leaguesSection"/);
+  assert.match(html, /new CustomEvent\('gvdg:events-leagues'/);
+  assert.match(html, /publishLeagues\(leagues\)/);
+  assert.doesNotMatch(html, /leaguesEl\.replaceChildren|leaguesEl\.appendChild/);
+  assert.match(main, /import \{ EventsLeagueDetailApp, EventsLeaguesApp \} from "\.\/events-leagues-app\.js"/);
+  assert.match(main, /const eventsLeaguesMount = document\.getElementById\("leaguesSection"\)/);
+  assert.match(main, /createRoot\(eventsLeaguesMount\)\.render\(h\(EventsLeaguesApp\)\)/);
+  assert.match(app, /export function EventsLeaguesApp/);
+  assert.match(app, /data-react-events-leagues/);
+  assert.match(app, /className: "league-card"/);
+  assert.match(app, /disabled/);
+  assert.match(app, /window\.location\.hash = `#league\/\$\{encodeURIComponent\(league\.id\)\}`/);
+  assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|📅|📍|🥏/);
+});
+
+test('Events league detail is rendered by the public React bundle', () => {
+  const html = readFileSync('events.html', 'utf8');
+  const main = readFileSync('src/public-app/main.js', 'utf8');
+  const app = readFileSync('src/public-app/events-leagues-app.js', 'utf8');
+
+  assert.match(html, /id="leagueDetailSection"/);
+  assert.match(html, /new CustomEvent\('gvdg:events-league-detail'/);
+  assert.match(html, /publishLeagueDetail\(data\)/);
+  assert.match(html, /setView\('league-detail'\)/);
+  assert.doesNotMatch(html, /function renderLeague\(data\)|function scrollTable\(table\)/);
+  assert.match(main, /const eventsLeagueDetailMount = document\.getElementById\("leagueDetailSection"\)/);
+  assert.match(main, /createRoot\(eventsLeagueDetailMount\)\.render\(h\(EventsLeagueDetailApp\)\)/);
+  assert.match(app, /export function EventsLeagueDetailApp/);
+  assert.match(app, /data-react-events-league-detail/);
+  assert.match(app, /function TeamStandingsTable/);
+  assert.match(app, /function PlayerStandingsTable/);
+  assert.match(app, /function LeagueRounds/);
+  assert.match(app, /className: "lb-wrap"/);
+  assert.match(app, /window\.location\.hash = `#event\/\$\{encodeURIComponent\(id\)\}`/);
+  assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|📅|📍|🥏|●/);
 });
 
 test('Events fundraisers and meetings are rendered by the public React bundle', () => {

@@ -7,6 +7,7 @@ import { RyderCupApp } from "./ryder-cup-app.js";
 import { EventsPreviousResultsApp } from "./events-previous-results-app.js";
 import { EventsFundraisersApp, EventsMeetingsApp } from "./events-club-content-app.js";
 import { EventsClubFeedApp, EventsLiveNowApp, EventsScheduleFeedApp, EventsUpcomingApp } from "./events-hub-app.js";
+import { EventsLeagueDetailApp, EventsLeaguesApp } from "./events-leagues-app.js";
 import { EventsRegistrationApp } from "./events-registration-app.js";
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
@@ -23,6 +24,8 @@ const eventsUpcomingMount = document.getElementById("hub");
 const eventsClubFeedMount = document.getElementById("clubEventsSection");
 const eventsRegistrationMount = document.getElementById("registerSection");
 const eventsPreviousResultsMount = document.getElementById("previousResultsSection");
+const eventsLeaguesMount = document.getElementById("leaguesSection");
+const eventsLeagueDetailMount = document.getElementById("leagueDetailSection");
 const eventsFundraisersMount = document.getElementById("fundraisersSection");
 const eventsMeetingsMount = document.getElementById("meetingsSection");
 
@@ -56,6 +59,14 @@ if (eventsRegistrationMount) {
 
 if (eventsPreviousResultsMount) {
   createRoot(eventsPreviousResultsMount).render(h(EventsPreviousResultsApp));
+}
+
+if (eventsLeaguesMount) {
+  createRoot(eventsLeaguesMount).render(h(EventsLeaguesApp));
+}
+
+if (eventsLeagueDetailMount) {
+  createRoot(eventsLeagueDetailMount).render(h(EventsLeagueDetailApp));
 }
 
 if (eventsFundraisersMount) {
