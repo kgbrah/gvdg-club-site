@@ -12,6 +12,7 @@ import { AdminMembersList, AdminMemberTempPin } from "./members-list.js";
 import { AdminNavigation } from "./navigation.js";
 import { AdminOrdersList } from "./orders-list.js";
 import { AdminPageChrome } from "./page-chrome.js";
+import { AdminProductForm } from "./product-form.js";
 import { AdminProductsList } from "./products-list.js";
 import { AdminRegistrationRoster } from "./registration-roster.js";
 import { AdminRegistrationAcePot, AdminRegistrationCreditsList, AdminRegistrationCtpsList } from "./registration-widgets.js";
@@ -88,6 +89,11 @@ if (memberTempPinMount) {
 const productsListMount = document.getElementById("adminProductsListReactApp");
 if (productsListMount) {
   createRoot(productsListMount).render(h(AdminProductsList));
+}
+
+const productFormMount = document.getElementById("adminProductFormReactApp");
+if (productFormMount) {
+  createRoot(productFormMount).render(h(AdminProductForm));
 }
 
 const ordersListMount = document.getElementById("adminOrdersListReactApp");

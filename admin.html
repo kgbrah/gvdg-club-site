@@ -266,6 +266,12 @@
         .shop-admin-meta { font-size: 0.8rem; color: var(--text-muted); }
         .shop-admin-controls { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; }
         .shop-admin-controls input { width: 5rem; padding: 0.35rem 0.45rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
+        .admin-product-form-wide { grid-column: 1 / -1; }
+        .admin-product-image-input { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.4rem; flex-wrap: wrap; }
+        .admin-product-image-input .al-note { font-size: 0.78rem; }
+        .admin-product-image-preview { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin: 0.5rem 0 0; }
+        .admin-product-image-preview-img { width: 7.5rem; }
+        .admin-product-image-preview-note { max-width: 22rem; font-size: 0.78rem; line-height: 1.4; color: var(--text-muted); }
         .wallet-row { display: flex; justify-content: space-between; gap: 0.75rem; align-items: baseline; flex-wrap: wrap; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); padding: 0.65rem 0.75rem; }
         .wallet-row strong { color: var(--text-primary); }
         .wallet-row .credit { color: var(--green); font-weight: 700; }
@@ -561,27 +567,7 @@
             </div>
             <div class="admin-pane" id="apane-shop">
                 <div class="admin-split">
-                    <form class="admin-form" id="adminProductForm">
-                        <div><label for="psCategory">Category</label><select id="psCategory"><option value="disc">Disc</option><option value="accessory">Accessory</option></select></div>
-                        <div><label for="psName">Product name</label><input id="psName" maxlength="160" required></div>
-                        <div><label for="psBrand">Brand</label><input id="psBrand" maxlength="80" placeholder="Innova, Discraft, MVP"></div>
-                        <div><label for="psType">Type</label><select id="psType"><option value="distance_driver">Distance driver</option><option value="fairway_driver">Fairway driver</option><option value="midrange">Midrange</option><option value="putter">Putter</option><option value="approach">Approach</option><option value="bag">Bag</option><option value="apparel">Apparel</option><option value="accessory">Accessory</option></select></div>
-                        <div><label for="psColor">Color</label><input id="psColor" maxlength="60"></div>
-                        <div><label for="psWeight">Weight (g)</label><input id="psWeight" type="number" min="0" step="1"></div>
-                        <div><label for="psPrice">Price ($)</label><input id="psPrice" type="number" min="0" step="0.01" required></div>
-                        <div><label for="psStock">Stock</label><input id="psStock" type="number" min="0" step="1" value="1"></div>
-                        <div style="grid-column:1/-1;">
-                            <label for="psImage">Image</label>
-                            <input id="psImage" type="url" maxlength="2000" placeholder="https://… paste an image URL">
-                            <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.4rem; flex-wrap:wrap;">
-                                <input id="psImageFile" type="file" accept="image/*">
-                                <span class="al-note" style="font-size:0.78rem;">…or take a photo / upload from your device</span>
-                            </div>
-                            <img id="psImagePreview" alt="" style="display:none; margin-top:0.5rem; max-height:120px; border-radius:8px; border:1px solid var(--border-color);">
-                        </div>
-                        <div style="grid-column:1/-1;"><label for="psDescription">Description</label><textarea id="psDescription" rows="3" maxlength="1000"></textarea></div>
-                        <button type="submit" class="admin-btn">Add product</button>
-                    </form>
+                    <div id="adminProductFormReactApp"></div>
                     <div>
                         <div class="shop-admin-heading">
                             <h4 class="al-h">Inventory</h4>
@@ -2138,57 +2124,26 @@
             window.__gvdgAdminProductsListState = state;
             window.dispatchEvent(new CustomEvent('gvdg:admin-products-list', { detail: state }));
         }
-        // Product image: take a photo / upload (resized to a data URL) OR paste a URL.
-        let productImageDataUrl = '';
-        function resizeImageToDataUrl(file, maxDim, quality) {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                const url = URL.createObjectURL(file);
-                img.onload = () => {
-                    URL.revokeObjectURL(url);
-                    let w = img.width, h = img.height;
-                    if (w > maxDim || h > maxDim) {
-                        if (w >= h) { h = Math.round(h * maxDim / w); w = maxDim; } else { w = Math.round(w * maxDim / h); h = maxDim; }
-                    }
-                    const c = document.createElement('canvas'); c.width = w; c.height = h;
-                    c.getContext('2d').drawImage(img, 0, 0, w, h);
-                    resolve(c.toDataURL('image/jpeg', quality));
-                };
-                img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image_load_failed')); };
-                img.src = url;
-            });
-        }
-        async function onProductImageFile(e) {
-            const file = e.target.files && e.target.files[0];
-            if (!file) return;
+        async function adminCreateProductFromReact(detail) {
+            const body = detail.body || {};
+            const requestId = detail.requestId;
+            if (!requestId) return;
+            if (detail.valid !== true || !body.name || body.price_cents == null) {
+                adminMsg('Product name and price are required', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-product-create-result', { detail: { ok: false, requestId } }));
+                return;
+            }
+            let r;
             try {
-                productImageDataUrl = await resizeImageToDataUrl(file, 700, 0.78);
-                const pv = $('psImagePreview'); pv.src = productImageDataUrl; pv.style.display = '';
-                $('psImage').value = ''; // a captured/uploaded photo overrides a pasted URL
-                adminMsg('Photo ready (~' + Math.round(productImageDataUrl.length / 1024) + ' KB). Add the product to save it.', true);
-            } catch (_e) { adminMsg('Could not read that image — try another.', false); }
-        }
-        function clearProductImage() { productImageDataUrl = ''; const pv = $('psImagePreview'); if (pv) { pv.style.display = 'none'; pv.removeAttribute('src'); } const f = $('psImageFile'); if (f) f.value = ''; }
-        async function adminAddProduct(e) {
-            e.preventDefault();
-            const price = dollarsToCents($('psPrice').value);
-            const stock = parseInt($('psStock').value, 10);
-            const body = {
-                category: $('psCategory').value,
-                name: $('psName').value.trim(),
-                brand: $('psBrand').value.trim() || null,
-                product_type: $('psType').value || null,
-                color: $('psColor').value.trim() || null,
-                weight_g: parseInt($('psWeight').value, 10) || null,
-                price_cents: price,
-                stock_qty: Number.isFinite(stock) ? stock : 0,
-                image_url: productImageDataUrl || $('psImage').value.trim() || null,
-                description: $('psDescription').value.trim() || null,
-            };
-            if (!body.name || price == null) { adminMsg('Product name and price are required', false); return; }
-            const r = await adminApi('/admin/shop/products', { method: 'POST', body });
-            if (r.ok) { adminMsg('Product added', true); $('adminProductForm').reset(); $('psStock').value = '1'; clearProductImage(); adminLoadProducts(); }
-            else adminMsg('Add product failed (' + r.status + ')', false);
+                r = await adminApi('/admin/shop/products', { method: 'POST', body });
+            } catch (e) {
+                adminMsg('Add product failed', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-product-create-result', { detail: { ok: false, requestId } }));
+                return;
+            }
+            adminMsg(r.ok ? 'Product added' : 'Add product failed (' + r.status + ')', r.ok);
+            window.dispatchEvent(new CustomEvent('gvdg:admin-product-create-result', { detail: { ok: r.ok, requestId } }));
+            if (r.ok) adminLoadProducts();
         }
         function walletRow(tx) {
             const row = elx('div', 'wallet-row');
@@ -2578,6 +2533,16 @@
                 adminMsg(r.ok ? 'Product permanently deleted' : 'Delete failed', r.ok);
                 if (r.ok) adminLoadProducts();
             });
+            window.addEventListener('gvdg:admin-product-photo-ready', (event) => {
+                const sizeKb = event.detail && Number(event.detail.sizeKb);
+                adminMsg('Photo ready (~' + (Number.isFinite(sizeKb) ? sizeKb : '?') + ' KB). Add the product to save it.', true);
+            });
+            window.addEventListener('gvdg:admin-product-photo-error', () => {
+                adminMsg('Could not read that image - try another.', false);
+            });
+            window.addEventListener('gvdg:admin-product-create-request', async (event) => {
+                await adminCreateProductFromReact(event.detail || {});
+            });
             window.addEventListener('gvdg:admin-order-save-request', async (event) => {
                 const detail = event.detail || {};
                 const order = detail.order;
@@ -2684,11 +2649,8 @@
             $('adminLeagueForm').addEventListener('submit', adminAddLeague);
             $('adminFundraiserForm').addEventListener('submit', adminAddFundraiser);
             $('adminMeetingForm').addEventListener('submit', adminAddMeeting);
-            $('adminProductForm').addEventListener('submit', adminAddProduct);
             $('psInvSort').addEventListener('change', adminLoadProducts);
             $('psInvStatus').addEventListener('change', adminLoadProducts);
-            $('psImageFile').addEventListener('change', onProductImageFile);
-            $('psImage').addEventListener('input', () => { if ($('psImage').value) clearProductImage(); });
             $('adminWalletForm').addEventListener('submit', adminPostWalletAdjustment);
             $('ordStatusFilter').addEventListener('change', adminLoadOrders);
             $('ordRefresh').addEventListener('click', adminLoadOrders);

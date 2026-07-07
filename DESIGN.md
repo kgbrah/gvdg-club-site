@@ -277,12 +277,21 @@ Spacing follows a 4px base through rem values.
 
 ### Admin Product Inventory List
 
-- Structure: the Admin Pro Shop inventory list renders from `admin-app` into `adminProductsListReactApp`; legacy admin code fetches `/admin/shop/products`, keeps product creation, image upload, sort/status filters, and publishes list state events only.
+- Structure: the Admin Pro Shop inventory list renders from `admin-app` into `adminProductsListReactApp`; legacy admin code fetches `/admin/shop/products`, keeps sort/status filters, and publishes list state events only.
 - Variants: loading, empty active list, empty archived list, active product row, archived product row, image thumbnail, text thumbnail fallback, editable price, editable stock, active/archive toggle, save action, and delete action.
 - Spacing: reuses `.shop-admin-list`, `.shop-admin-row`, `.shop-admin-thumb`, `.shop-admin-controls`, `.register-addon`, `.admin-btn`, and `.al-note` so inventory keeps the existing dense admin shop rhythm.
 - States: React owns product row markup, thumbnail fallback, editable row control values, empty/loading copy, delete confirm prompt, and save/delete request dispatch; `admin.html` must not mutate `adminProductsList`, construct `.shop-admin-row` rows, or attach product row button/input listeners directly.
 - Accessibility: loading and empty states use status semantics, thumbnails have text alternatives, editable controls have product-specific labels, and row actions are real buttons.
 - Motion: static inventory rows; only inherited control hover/focus states apply.
+
+### Admin Product Creation Form
+
+- Structure: the Admin Pro Shop product creation form renders from `admin-app` into `adminProductFormReactApp`; legacy admin code only handles create-request events, the API POST, inventory reload, and global messages.
+- Variants: blank form, required name/price validation, pasted image URL, selected upload preview, busy submit, successful reset, and failed create.
+- Spacing: reuses `.admin-form`, `.admin-product-form-wide`, `.admin-product-image-input`, `.admin-product-image-preview`, `.shop-admin-thumb`, `.admin-btn`, and `.al-note`.
+- States: React owns all field values, upload resize handoff, preview image, busy button text, and reset after success; `admin.html` must not keep `adminProductForm`, read `ps*` field values, listen to `psImageFile`/`psImage`, mutate `psImagePreview`, or call `reset()` on the product form.
+- Accessibility: labels target stable form control ids, upload preview has alt text, and create action is a real submit button.
+- Motion: static form; inherited controls only.
 
 ### Admin Orders List
 
