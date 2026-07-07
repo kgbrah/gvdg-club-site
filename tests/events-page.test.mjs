@@ -230,7 +230,10 @@ test('public Events event detail publishes to React', () => {
   assert.match(app, /function TeeSigns/);
   assert.match(app, /function PlayerRoster/);
   assert.match(app, /WeatherStrip/);
+  assert.match(app, /import \{ UDiscExportDetails \} from "\.\.\/shared\/udisc-export\.js"/);
+  assert.doesNotMatch(app, /function UDiscExportCard|function udiscDeepLink|function scorecardRows/);
   assert.match(app, /import \{ TeeSignSvg \} from "\.\.\/shared\/tee-sign-svg\.js"/);
+  assert.match(sharedSvg, /from "\.\/tee-sign-model\.js"/);
   assert.match(sharedSvg, /teeSignModel/);
   assert.doesNotMatch(app, /teeSignNode|DOMParser|replaceChildren|appendChild|dangerouslySetInnerHTML/);
   assert.doesNotMatch(sharedSvg, /teeSignNode|DOMParser|replaceChildren|appendChild|dangerouslySetInnerHTML/);

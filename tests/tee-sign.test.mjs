@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { escapeXml, sanitizeColor, teeSignModel, teeSignSvg } from '../tee-sign.js';
+import { escapeXml, sanitizeColor, teeSignModel, teeSignSvg } from '../src/shared/tee-sign-model.js';
 
 test('escapeXml escapes the five XML metacharacters', () => {
   assert.equal(escapeXml(`<a href="x">&'`), '&lt;a href=&quot;x&quot;&gt;&amp;&#39;');

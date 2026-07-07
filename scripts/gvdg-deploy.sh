@@ -224,6 +224,8 @@ NOW="$(date -u +%FT%TZ)"
 DIST="$REPO_ROOT/.pages-dist"
 rm -rf "$DIST"; mkdir "$DIST"
 cp -R ./*.html ./*.js ./*.css home-app public-app tee-sign-preview-app members-app score-app img _headers CNAME site.webmanifest "$DIST/"
+mkdir -p "$DIST/src/shared"
+cp src/shared/tee-sign-model.js "$DIST/src/shared/"
 printf '{"commit":"%s","branch":"%s","deployedAt":"%s","deployer":"%s"}\n' "$HEAD_SHA" "$BRANCH" "$NOW" "$DEPLOYER" > "$DIST/version.json"
 log "artifact built @ $HEAD_SHORT ($BRANCH) by $DEPLOYER; version.json stamped."
 

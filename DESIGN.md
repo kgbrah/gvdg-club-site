@@ -191,7 +191,7 @@ Spacing follows a 4px base through rem values.
 - Variants: scheduled event facts, final results, matchplay final results, live leaderboard, live weather, UDisc assisted-entry cards, CTP list, ace-pot summary, player roster, official tee-sign photos, SVG tee-sign fallback, and red/blue/tie tee-sign winner states.
 - Mobile tables: live matchplay standings use the `live-matchplay` compact table variant so team/member names wrap inside the detail card instead of depending on first-view horizontal scroll.
 - Spacing: reuses `.detail-card`, `.detail-head`, `.detail-facts`, `.live-banner`, `.btn-keep-score`, `.lb-wrap`, `.lb-table`, `.player-list`, `.extras-list`, `.tee-signs-grid`, and `.ts-hole-card` so event detail keeps the established Events rhythm.
-- States: React owns the detail card, back action, badges, facts, live/final tables, extras, roster, UDisc disclosures, tee-sign grid, weather strip placement, and score link text; `events.html` must not append detail DOM nodes.
+- States: React owns the detail card, back action, badges, facts, live/final tables, extras, roster, UDisc disclosures through `src/shared/udisc-export.js`, tee-sign grid, weather strip placement, and score link text; `events.html` must not append detail DOM nodes or load a root UDisc global helper.
 - Accessibility: live and final standings remain semantic tables, links retain safe external attributes, player score links are anchors, weather wind controls come from the shared React strip, tee-sign photos have alt text, and SVG fallbacks expose image labels.
 - Motion: preserves existing live-dot pulse, inherited button/card states, and compass arrow rotation only; no decorative motion is added.
 
@@ -245,7 +245,7 @@ Spacing follows a 4px base through rem values.
 - Structure: the tee-sign preview page renders from the route-specific `tee-sign-preview-app` React bundle into `teeSignPreviewReactApp`, including title, theme toggle, and sample SVG preview grid.
 - Variants: light theme, dark theme, two-layout sample, three-layout sample, missing-distance sample, and narrow mobile scaling.
 - Spacing: uses the project page max width, `1rem-1.5rem` control/grid gaps, 8px control radius, and existing tee-sign SVG classes so the utility stays compact and scannable.
-- States: React owns the theme toggle, persisted theme value, sample list rendering, and SVG element rendering through the shared `TeeSignSvg` component; the HTML page must not contain an inline tee-sign DOM renderer or browser DOMParser mount path.
+- States: React owns the theme toggle, persisted theme value, sample list rendering, and SVG element rendering through the shared `TeeSignSvg` component; the pure tee-sign model lives in `src/shared/tee-sign-model.js`, and the legacy admin page imports that shared model directly for its tee-sign strip. There is no root `tee-sign.js`; the HTML preview page must not contain an inline tee-sign DOM renderer or browser DOMParser mount path.
 - Accessibility: the theme control is a real button with pressed state and Lucide iconography; React-rendered SVGs retain their role and label from the shared tee-sign renderer.
 - Motion: no decorative motion; only inherited button hover/focus states apply.
 

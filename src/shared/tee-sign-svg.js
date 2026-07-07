@@ -1,6 +1,6 @@
 import React from "react";
 
-import { teeSignModel } from "../../tee-sign.js";
+import { teeSignModel } from "./tee-sign-model.js";
 
 const h = React.createElement;
 const SVG_WIDTH = 320;

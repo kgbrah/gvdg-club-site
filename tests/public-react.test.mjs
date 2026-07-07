@@ -53,7 +53,7 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(chrome, /localStorage\.getItem\("theme"\)/);
   assert.match(chrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v64"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v65"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
@@ -213,6 +213,7 @@ test('Events event detail is rendered by the public React bundle', () => {
   assert.match(html, /publishEventDetail\(activeEventDetail\)/);
   assert.match(html, /setView\('detail'\)/);
   assert.match(html, /mountLiveLeaderboard\(seq, ev\.id\)/);
+  assert.equal(existsSync('udisc-export.js'), false);
   assert.doesNotMatch(html, /udisc-export\.js|window\.UDiscExport/);
   assert.doesNotMatch(html, /function renderDetail|function renderFinalResults|function renderEventExtras|function renderTeeSigns|function renderStandings|detailEl\.appendChild|detailEl\.replaceChildren/);
   assert.match(main, /import \{ EventsEventDetailApp \} from "\.\/events-detail-app\.js"/);
@@ -229,6 +230,8 @@ test('Events event detail is rendered by the public React bundle', () => {
   assert.match(app, /function TeeSigns/);
   assert.match(app, /function PlayerRoster/);
   assert.match(app, /WeatherStrip/);
+  assert.match(app, /import \{ UDiscExportDetails \} from "\.\.\/shared\/udisc-export\.js"/);
+  assert.doesNotMatch(app, /function UDiscExportCard|function udiscDeepLink|function scorecardRows/);
   assert.match(app, /import \{ TeeSignSvg \} from "\.\.\/shared\/tee-sign-svg\.js"/);
   assert.match(sharedSvg, /teeSignModel/);
   assert.doesNotMatch(app, /teeSignNode|DOMParser|replaceChildren|appendChild|dangerouslySetInnerHTML/);

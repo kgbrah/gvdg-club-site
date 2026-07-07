@@ -49,6 +49,8 @@ jobs:
           rm -rf .pages-dist
           mkdir .pages-dist
           cp -R *.html *.js *.css home-app public-app tee-sign-preview-app members-app score-app img _headers CNAME site.webmanifest .pages-dist/
+          mkdir -p .pages-dist/src/shared
+          cp src/shared/tee-sign-model.js .pages-dist/src/shared/
           printf '{"commit":"%s","branch":"%s","deployedAt":"%s","deployer":"github-actions"}\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" "$(date -u +%FT%TZ)" > .pages-dist/version.json
       - name: Deploy static site to Cloudflare Pages
         if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_CF_ACCOUNT == 'true' }}

@@ -9,6 +9,7 @@ import {
 } from "../../events.js";
 import { WeatherStrip } from "../score-app/weather-strip.js";
 import { TeeSignSvg } from "../shared/tee-sign-svg.js";
+import { UDiscExportDetails } from "../shared/udisc-export.js";
 
 const h = React.createElement;
 const EVENT_DETAIL_EVENT = "gvdg:events-event-detail";
@@ -248,47 +249,6 @@ function fmtBreakdown(raw) {
   return parts.join(" · ");
 }
 
-function scorecardRows(scorecard) {
-  const rows = parseJson(scorecard, []);
-  return Array.isArray(rows)
-    ? rows.filter((row) => row && typeof row.strokes === "number" && typeof row.hole === "number")
-    : [];
-}
-
-function udiscDeepLink(courseId) {
-  const id = courseId == null ? "" : String(courseId).trim();
-  return /^\d{1,20}$/.test(id) ? `https://app.udisc.com/applink/create-scorecard/${id}` : "";
-}
-
-function UDiscExportCard({ courseId, result }) {
-  const rows = scorecardRows(result && result.scorecard);
-  const href = udiscDeepLink(courseId);
-  if (!href || !rows.length) return null;
-
-  let total = 0;
-  let toPar = 0;
-  rows.forEach((row) => {
-    total += row.strokes;
-    toPar += row.strokes - (typeof row.par === "number" ? row.par : 0);
-  });
-
-  return h("details", { className: "udisc-export" }, [
-    h("summary", { key: "summary" }, result && result.name ? `Add ${result.name} to UDisc` : "Add to UDisc"),
-    h("p", { className: "udisc-export-note", key: "note" }, "UDisc has no round import. Open a scorecard on this course, then enter these scores:"),
-    h("div", { className: "udisc-export-strip", key: "strip" }, rows.map((row) =>
-      h("span", {
-        className: "udisc-hole",
-        key: `${row.hole}|${row.strokes}`,
-        title: `Hole ${row.hole}${typeof row.par === "number" ? ` · par ${row.par}` : ""}`,
-      }, [
-        h("b", { key: "hole" }, `H${row.hole}`),
-        h("span", { key: "strokes" }, String(row.strokes)),
-      ]))),
-    h("p", { className: "udisc-export-total", key: "total" }, `Total ${total} (${fmtToPar(toPar)}) · ${rows.length} holes`),
-    h("a", { className: "udisc-export-btn", href, key: "link", rel: "noopener noreferrer", target: "_blank" }, "Open in UDisc"),
-  ]);
-}
-
 function FinalResults({ course, data }) {
   const results = Array.isArray(data.finalResults) ? data.finalResults : [];
   const loaded = data.finalResultsLoaded === true;
@@ -331,7 +291,12 @@ function FinalResults({ course, data }) {
     udiscCourseId && addable.length
       ? h("div", { className: "udisc-export-section", key: "udisc" }, [
         h("h4", { className: "roster-title", key: "title" }, "Add your round to UDisc"),
-        addable.map((result, index) => h(UDiscExportCard, { courseId: udiscCourseId, key: `${result.name}|${index}`, result })),
+        addable.map((result, index) => h(UDiscExportDetails, {
+          courseId: udiscCourseId,
+          key: `${result.name}|${index}`,
+          label: result && result.name ? `Add ${result.name} to UDisc` : "Add to UDisc",
+          scorecard: result && result.scorecard,
+        })),
       ])
       : null,
   ]);

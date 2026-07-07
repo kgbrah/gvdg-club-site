@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 
 function scoreSetupSource() {
@@ -286,6 +286,7 @@ test('player leaderboard sheet is React-owned without legacy overlay DOM constru
   assert.match(sharedUdisc, /export function udiscDeepLink\(courseId\)/);
   assert.match(sharedUdisc, /export function parseUdiscScorecard\(scorecard\)/);
   assert.match(fullLegacy, /return \{ courseId: S\.udiscCourseId, scorecard: scorecard \};/);
+  assert.equal(existsSync('udisc-export.js'), false);
   assert.doesNotMatch(legacy, /const overlay = el\('div', 'overlay'\)/);
   assert.doesNotMatch(legacy, /const table = el\('table', 'lb'\)/);
   assert.doesNotMatch(legacy, /sheet\.appendChild\(el\('h2', 'section', 'Live Leaderboard'\)\)/);

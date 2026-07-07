@@ -793,10 +793,12 @@
 
     <footer><p>&copy; 2026 Greenville Disc Golf Club. All rights reserved. | Greenville, NC</p></footer>
 
-    <!-- T4: expose the shared (pure, XSS-safe) tee-sign SVG renderer to the classic script below. -->
     <script type="module">
-        import { teeSignNode } from './tee-sign.js';
-        window.teeSignNode = teeSignNode;
+        import { teeSignSvg } from './src/shared/tee-sign-model.js';
+        window.teeSignNode = function (input) {
+            const root = new DOMParser().parseFromString(teeSignSvg(input), 'image/svg+xml').documentElement;
+            return root && root.nodeName.toLowerCase() === 'svg' ? root : null;
+        };
     </script>
     <script>
         // --- Theme toggle (mirrors index.html / events.html) ---

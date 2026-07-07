@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const removedMemberFallbacks = [
@@ -298,6 +298,7 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(udiscExport, /export function udiscDeepLink\(courseId\)/);
   assert.match(udiscExport, /export function parseUdiscScorecard\(scorecard\)/);
   assert.match(udiscExport, /ExternalLink/);
+  assert.equal(existsSync('udisc-export.js'), false);
   assert.doesNotMatch(html, /udisc-export\.js/);
   assert.doesNotMatch(ratings, /window\.UDiscExport/);
   assert.doesNotMatch(ratings, /replaceChildren/);
