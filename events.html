@@ -222,6 +222,16 @@
         .lb-table tbody tr:first-child td { font-weight: 700; color: var(--text-primary); }
         .lb-pos { width: 2.5rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
         .lb-name { font-weight: 600; color: var(--text-primary); }
+        .lb-table.live-matchplay { min-width: 0; table-layout: fixed; }
+        .lb-table.live-matchplay th:nth-child(1),
+        .lb-table.live-matchplay td:nth-child(1) { width: 2.4rem; }
+        .lb-table.live-matchplay th:nth-child(3),
+        .lb-table.live-matchplay td:nth-child(3) { width: 3rem; }
+        .lb-table.live-matchplay th:nth-child(4),
+        .lb-table.live-matchplay td:nth-child(4) { width: 4.9rem; }
+        .lb-table.live-matchplay .lb-name { white-space: normal; line-height: 1.25; overflow-wrap: anywhere; }
+        .lb-table.live-matchplay .lb-members { display: block; margin-top: 0.12rem; color: var(--text-muted); font-size: 0.78rem; font-weight: 600; }
+        .lb-table.live-matchplay .lb-match { line-height: 1.2; }
         .lb-topar { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
         .lb-topar.under { color: #2e9e44; }
         .lb-topar.over { color: var(--primary); }
@@ -272,12 +282,13 @@
         .player-team { margin-left: auto; font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 
         /* ---- States ---- */
-        .status-box { text-align: center; padding: 3rem 1.5rem; color: var(--text-muted); }
+        .status-box { text-align: center; padding: 3rem 1.5rem; color: var(--text-primary); }
         .status-box .spinner { width: 42px; height: 42px; border: 4px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; margin: 0 auto 1rem; animation: spin 0.9s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .status-box.error { color: #c8102e; }
-        [data-theme="dark"] .status-box.error { color: #e63950; }
-        .status-box .empty-icon { font-size: 2.5rem; opacity: 0.6; margin-bottom: 0.5rem; }
+        .status-box.error { color: var(--primary); }
+        .status-box .empty-icon { display: inline-flex; align-items: center; justify-content: center; opacity: 0.65; margin-bottom: 0.5rem; color: var(--primary); }
+        .status-message { margin-bottom: 0.75rem; font-weight: 700; }
+        .retry-btn svg { margin-right: 0.35rem; vertical-align: -0.15em; }
         .retry-btn { margin-top: 1rem; background: var(--primary-strong); color: white; border: none; padding: 0.75rem 1.75rem; min-height: 44px; border-radius: 50px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer; transition: all 0.3s ease; }
         .retry-btn:hover { background: #ff7f4d; transform: translateY(-2px); }
         .last-updated { text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-top: 1.5rem; }
@@ -292,6 +303,9 @@
         /* ---- Tee signs (T4): per-hole official photo or SVG fallback ---- */
         .tee-signs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.75rem; margin-top: 0.5rem; }
         .ts-hole-card { border: 1px solid var(--border-color); border-radius: 12px; padding: 0.6rem; background: var(--bg-primary); display: flex; flex-direction: column; gap: 0.4rem; }
+        .ts-hole-card.winner-red { box-shadow: 0 0 0 3px var(--primary); }
+        .ts-hole-card.winner-blue { box-shadow: 0 0 0 3px var(--secondary); }
+        .ts-hole-card.winner-tie { box-shadow: 0 0 0 3px var(--accent); }
         .ts-hole-photo { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; background: var(--bg-tertiary); }
         .ts-hole-svg { display: flex; justify-content: center; }
         .ts-hole-svg svg { width: 100%; height: auto; max-width: 100%; }
@@ -308,7 +322,6 @@
     </style>
   <script type="module" src="public-app/public-app.js"></script>
   <script src="pwa.js" defer></script>
-  <script src="udisc-export.js" defer></script>
   <script src="weather-display.js" defer></script>
 </head>
 <body data-api-base="" data-page="events">
@@ -319,10 +332,7 @@
         <p class="page-subtitle">Disc golf tournaments &amp; league rounds, plus club fundraisers, meetings &amp; minutes</p>
 
         <!-- Loading / error -->
-        <div id="status" class="status-box">
-            <div class="spinner"></div>
-            <div>Loading&hellip;</div>
-        </div>
+        <div id="status"></div>
 
         <!-- LIVE NOW: any club-scored event currently being scored — always surfaced at the very top -->
         <div id="liveNowSection" hidden></div>
@@ -359,16 +369,13 @@
             bucketEvents,
             normalizeEvent,
             parseEventDate,
-            groupPlayersByDivision,
             buildCourseIndex,
             courseNameFor,
             formatEventDate,
-            formatClubDateTime,
             typeLabel,
             statusLabel,
         } from './events.js';
-        import { teeSignNode } from './tee-sign.js';
-        import { holeWinners, playersFromResults, winnerColor } from './matchplay-colors.js';
+        import { holeWinners, playersFromResults } from './matchplay-colors.js';
         import { parseHomepageEventDate } from './home-feed-parse.js';
 
         // --- API wiring ---
@@ -416,28 +423,6 @@
         let coursesLoaded = false;
         let refreshTimer = null;
 
-        // --- XSS-safe DOM helper (mirrors ryder-cup.html) ---
-        // Every piece of API data lands here as a text node; we NEVER assign
-        // innerHTML with API data anywhere in this file.
-        function el(tag, className, text) {
-            const node = document.createElement(tag);
-            if (className) node.className = className;
-            if (text != null) node.textContent = text;
-            return node;
-        }
-
-        // Build a safe external anchor. href is sanitized to http(s) only so a
-        // hostile external_url/udisc_url can't inject a javascript: URL.
-        function safeLink(href, text) {
-            const a = el('a', null, text);
-            const clean = sanitizeUrl(href);
-            if (clean) {
-                a.href = clean;
-                a.target = '_blank';
-                a.rel = 'noopener noreferrer';
-            }
-            return a;
-        }
         function sanitizeUrl(raw) {
             if (!raw) return '';
             try {
@@ -630,28 +615,26 @@
             }));
         }
 
+        function publishStatus(status) {
+            const safeStatus = status && typeof status === 'object' ? status : { tone: 'loading', message: 'Loading...' };
+            window.__gvdgEventsStatus = safeStatus;
+            window.dispatchEvent(new CustomEvent('gvdg:events-status', {
+                detail: { status: safeStatus },
+            }));
+        }
+
         function showStatus(message, isError, onRetry) {
             setView('status');
-            statusEl.className = 'status-box' + (isError ? ' error' : '');
-            statusEl.replaceChildren();
-            if (isError) {
-                statusEl.appendChild(el('div', null, message));
-                const btn = el('button', 'retry-btn', 'Retry');
-                btn.type = 'button';
-                btn.addEventListener('click', onRetry || route);
-                statusEl.appendChild(btn);
-            } else {
-                statusEl.appendChild(el('div', 'spinner'));
-                statusEl.appendChild(el('div', null, message));
-            }
+            publishStatus({
+                message,
+                retry: isError ? (onRetry || route) : null,
+                tone: isError ? 'error' : 'loading',
+            });
         }
 
         function showEmpty(message) {
             setView('status');
-            statusEl.className = 'status-box';
-            statusEl.replaceChildren();
-            statusEl.appendChild(el('div', 'empty-icon', '🥏'));
-            statusEl.appendChild(el('div', null, message));
+            publishStatus({ message, retry: null, tone: 'empty' });
         }
 
         async function fetchJson(path) {
@@ -679,10 +662,6 @@
         }
 
         // ---------- HUB ----------
-        function badge(text, classes) {
-            const b = el('span', 'badge ' + classes, text);
-            return b;
-        }
         // Render the two club categories: Events (schedule feed + any club-scored D1 events) and the
         // Club Events heading (fundraisers/meetings render into their own sections just below).
         function renderPage(feed, d1events) {
@@ -824,371 +803,175 @@
         }
 
         // ---------- DETAIL ----------
-        function fact(label, valueNode) {
-            const f = el('div', 'detail-fact');
-            f.appendChild(el('div', 'label', label));
-            const v = el('div', 'value');
-            if (typeof valueNode === 'string') v.textContent = valueNode;
-            else v.appendChild(valueNode);
-            f.appendChild(v);
-            return f;
+        let activeEventDetail = null;
+        let activeEventDetailSeq = 0;
+        let activeLive = null;
+
+        function eventCourse(ev) {
+            return ev && ev.course_id ? (courseIndex.get(String(ev.course_id)) || null) : null;
         }
 
-        // ---- Live leaderboard (S3): WebSocket viewer with polling fallback ----
-        let activeLive = null;
+        function publishEventDetail(data) {
+            window.__gvdgEventsEventDetail = data || null;
+            window.dispatchEvent(new CustomEvent('gvdg:events-event-detail', {
+                detail: { data: window.__gvdgEventsEventDetail },
+            }));
+        }
+
+        function updateEventDetail(seq, patch) {
+            if (!activeEventDetail || activeEventDetail.seq !== seq) return;
+            activeEventDetail = { ...activeEventDetail, ...patch };
+            publishEventDetail(activeEventDetail);
+        }
+
         function teardownLive() {
             if (!activeLive) return;
             try { if (activeLive.ws) activeLive.ws.close(); } catch (_e) {}
             if (activeLive.poll) clearInterval(activeLive.poll);
             activeLive = null;
         }
-        function fmtToPar(n) { n = n || 0; return n === 0 ? 'E' : (n > 0 ? '+' + n : String(n)); }
-        // Matchplay display helpers — a matchplay round reports its result as a match status ("won 3&2",
-        // "2 up", "AS"), never a stroke score. matchText reads a live standing's .match; parseMatchResult
-        // reads a finalized result row's match_result JSON (null → the row is stroke play).
-        // The match status ("won 3&2") is match-level and shared by both sides; label the losing side "lost 3&2".
-        function matchLabel(m) { if (!m || !m.status) return 'AS'; return (m.outcome === 'lost' || m.outcome === 'trailing') ? m.status.replace(/^won /, 'lost ') : m.status; }
-        function matchText(m) { if (!m || !m.status) return 'AS'; return (m.dormie ? '⚑ ' : '') + matchLabel(m); }
-        function parseMatchResult(raw) { if (!raw) return null; try { const m = JSON.parse(raw); return m && m.status ? m : null; } catch (_e) { return null; } }
-        function standingNameCell(s, dbl) {
-            const td = el('td', 'lb-name', s && s.name != null ? String(s.name) : 'Player');
-            if (dbl && s && Array.isArray(s.members) && s.members.length) td.appendChild(el('span', 'lb-members', ' (' + s.members.join(' & ') + ')'));
-            return td;
-        }
-        function renderStandings(container, snap) {
-            const standings = (snap && snap.standings) || [];
-            container.replaceChildren();
-            if (!standings.length) { container.appendChild(el('p', 'lb-empty', 'Waiting for the first scores…')); return; }
-            const cfg = (snap && snap.roundConfig) || {};
-            const mp = cfg.scoringStyle === 'matchplay';
-            const dbl = cfg.groupFormat === 'doubles';
-            const hasDiv = !mp && standings.some((s) => s && s.division);
-            const table = el('table', 'lb-table');
-            const thead = el('thead'); const htr = el('tr');
-            const cols = mp
-                ? ['Pos', dbl ? 'Team' : 'Player', 'Thru', 'Match']
-                : (hasDiv ? ['Pos', 'Player', 'Div', 'Thru', 'Total', 'To Par'] : ['Pos', 'Player', 'Thru', 'Total', 'To Par']);
-            cols.forEach((h) => htr.appendChild(el('th', null, h)));
-            thead.appendChild(htr); table.appendChild(thead);
-            const tbody = el('tbody');
-            standings.forEach((s, i) => {
-                const tr = el('tr');
-                tr.appendChild(el('td', 'lb-pos', String(i + 1)));
-                tr.appendChild(standingNameCell(s, dbl));
-                if (mp) {
-                    tr.appendChild(el('td', null, s && s.thru ? String(s.thru) : '—'));
-                    tr.appendChild(el('td', 'lb-match', matchText(s && s.match)));
-                } else {
-                    if (hasDiv) tr.appendChild(el('td', null, (s && s.division) || '—'));
-                    tr.appendChild(el('td', null, s && s.thru ? String(s.thru) : '—'));
-                    tr.appendChild(el('td', null, s && s.total != null && s.thru ? String(s.total) : '—'));
-                    const tp = el('td', 'lb-topar', s && s.thru ? fmtToPar(s.toPar) : '—');
-                    if (s && s.thru) { if ((s.toPar || 0) < 0) tp.classList.add('under'); else if ((s.toPar || 0) > 0) tp.classList.add('over'); }
-                    tr.appendChild(tp);
-                }
-                tbody.appendChild(tr);
-            });
-            table.appendChild(tbody);
-            container.appendChild(table);
-        }
-        function renderLiveSnapshot(container, weatherEl, snap) {
-            if (window.GVDGWeather && weatherEl) window.GVDGWeather.renderWeather(weatherEl, snap && snap.weather, { title: 'Round weather' });
-            renderStandings(container, snap);
-        }
-        function mountLiveLeaderboard(eventId, container, statusEl, weatherEl) {
+
+        function mountLiveLeaderboard(seq, eventId) {
             teardownLive();
             const ctx = { ws: null, poll: null, gotWs: false, done: false };
             activeLive = ctx;
-            const setConn = (t) => { if (statusEl) statusEl.textContent = t; };
+            const setConn = (text) => updateEventDetail(seq, { liveConnection: text });
             const render = (snap) => {
                 if (activeLive !== ctx) return;
-                renderLiveSnapshot(container, weatherEl, snap);
-                // Round finalized/cancelled → stop polling; the detail view swaps to final results on next load.
-                if (snap && snap.status && snap.status !== 'live') { ctx.done = true; if (ctx.poll) { clearInterval(ctx.poll); ctx.poll = null; } setConn('final'); }
+                updateEventDetail(seq, { liveSnapshot: snap });
+                if (snap && snap.status && snap.status !== 'live') {
+                    ctx.done = true;
+                    if (ctx.poll) { clearInterval(ctx.poll); ctx.poll = null; }
+                    setConn('Final');
+                }
             };
             const pollOnce = async () => { try { const d = await fetchJson(`/events/${encodeURIComponent(eventId)}/live`); render(d); } catch (_e) {} };
-            const startPolling = () => { if (ctx.poll || ctx.done || activeLive !== ctx) return; setConn('live (auto-refresh)'); pollOnce(); ctx.poll = setInterval(pollOnce, 5000); };
+            const startPolling = () => { if (ctx.poll || ctx.done || activeLive !== ctx) return; setConn('Live (auto-refresh)'); pollOnce(); ctx.poll = setInterval(pollOnce, 5000); };
             try {
                 const wsUrl = API_BASE.replace(/^http/, 'ws') + `/events/${encodeURIComponent(eventId)}/live/ws`;
                 const ws = new WebSocket(wsUrl);
                 ctx.ws = ws;
-                ws.onopen = () => { ctx.gotWs = true; setConn('● live'); };
+                ws.onopen = () => { ctx.gotWs = true; setConn('Live'); };
                 ws.onmessage = (e) => { try { render(JSON.parse(e.data)); } catch (_e) {} };
-                // A dropped socket (common on a phone over a full round, or a CF edge recycle) must NOT freeze
-                // the board. Fall back to polling on ANY close/error — previously this was gated on !gotWs, so
-                // a mid-round drop left the leaderboard stuck on its last frame with no updates.
                 ws.onerror = () => { startPolling(); };
                 ws.onclose = () => { startPolling(); };
-                setTimeout(() => { if (!ctx.gotWs) startPolling(); }, 4000); // fallback if the upgrade stalls
+                setTimeout(() => { if (!ctx.gotWs) startPolling(); }, 4000);
             } catch (_e) { startPolling(); }
         }
 
-        // ---- Final results (R2 / club archive): rendered for finalized events ----
-        function fmtBreakdown(raw) {
-            let b = {}; try { b = JSON.parse(raw || '{}') || {}; } catch (_e) {}
-            const parts = [];
-            const add = (n, label) => { if (b[n]) parts.push(b[n] + ' ' + label + (b[n] > 1 ? 's' : '')); };
-            add('aces', 'ace'); add('eagles', 'eagle'); add('birdies', 'birdie'); add('pars', 'par'); add('bogeys', 'bogey'); add('doubles_plus', 'dbl+');
-            return parts.join(' · ');
-        }
-        async function renderFinalResults(eventId, container, courseId) {
+        async function fetchFinalResults(eventId) {
             let results = [];
             try { const d = await fetchJson(`/events/${encodeURIComponent(eventId)}/results`); results = (d && d.results) || []; } catch (_e) {}
-            container.replaceChildren();
-            container.appendChild(el('h3', 'roster-title', 'Final results'));
-            if (!results.length) { container.appendChild(el('p', 'lb-empty', 'Results not posted yet.')); return; }
-            // A finalized matchplay round records its result in match_result (e.g. "won 3&2"); its stroke
-            // to_par is a meaningless artifact, so show the Match column instead of Total/To Par.
-            const mp = results.some((r) => parseMatchResult(r.match_result));
-            const table = el('table', 'lb-table');
-            const thead = el('thead'); const htr = el('tr');
-            (mp ? ['Pos', 'Player', 'Match', 'Scoring'] : ['Pos', 'Player', 'Total', 'To Par', 'Scoring']).forEach((h) => htr.appendChild(el('th', null, h)));
-            thead.appendChild(htr); table.appendChild(thead);
-            const tbody = el('tbody');
-            results.forEach((r) => {
-                const tr = el('tr');
-                tr.appendChild(el('td', 'lb-pos', r.place != null ? String(r.place) : '—'));
-                const nameTd = el('td', 'lb-name', r.name != null ? String(r.name) : 'Player');
-                let sgLabel = null; try { const sg = JSON.parse(r.scoring_group || 'null'); if (sg && sg.label) sgLabel = String(sg.label); } catch (_e) {}
-                if (sgLabel) nameTd.appendChild(el('span', 'lb-members', ' · ' + sgLabel));
-                tr.appendChild(nameTd);
-                if (mp) {
-                    const m = parseMatchResult(r.match_result);
-                    tr.appendChild(el('td', 'lb-match', m ? matchLabel(m) : '—'));
-                } else {
-                    tr.appendChild(el('td', null, r.total != null ? String(r.total) : '—'));
-                    const tp = el('td', 'lb-topar', r.to_par != null ? fmtToPar(r.to_par) : '—');
-                    if (r.to_par < 0) tp.classList.add('under'); else if (r.to_par > 0) tp.classList.add('over');
-                    tr.appendChild(tp);
-                }
-                tr.appendChild(el('td', 'res-chips', fmtBreakdown(r.breakdown)));
-                tbody.appendChild(tr);
-            });
-            table.appendChild(tbody); container.appendChild(table);
-
-            // "Add to UDisc": one tap per player to open the right UDisc course + their hole-by-hole
-            // scores to enter (UDisc has no import API). Needs the course's numeric UDisc id and a
-            // stored scorecard; otherwise this section is simply omitted.
-            const course = courseIndex.get(String(courseId));
-            const udiscCourseId = course && course.udisc_course_id;
-            const addable = results.filter((r) => r && r.scorecard);
-            if (udiscCourseId && addable.length && window.UDiscExport) {
-                const sec = el('div', 'udisc-export-section');
-                sec.appendChild(el('h4', 'roster-title', 'Add your round to UDisc'));
-                addable.forEach((r) => {
-                    const node = window.UDiscExport.build({ courseId: udiscCourseId, scorecard: r.scorecard, label: r.name || 'Player' });
-                    if (node) sec.appendChild(node);
-                });
-                container.appendChild(sec);
-            }
+            return Array.isArray(results) ? results : [];
         }
 
-        // ---- CTPs + ace pot (Track G G3, public on the event detail) ----
-        async function renderEventExtras(eventId, card) {
-            let ctps = [], pot = null;
+        async function fetchEventExtrasData(eventId) {
             const [cd, pd] = await Promise.all([
                 fetchJson(`/events/${encodeURIComponent(eventId)}/ctps`).catch(() => null),
                 fetchJson(`/events/${encodeURIComponent(eventId)}/ace-pot`).catch(() => null),
             ]);
-            ctps = (cd && cd.ctps) || [];
-            pot = pd && pd.ace_pot;
-            if (ctps.length) {
-                card.appendChild(el('h3', 'roster-title', 'CTPs (closest to pin)'));
-                const ul = el('ul', 'extras-list');
-                ctps.forEach((c) => ul.appendChild(el('li', null, 'Hole ' + c.hole + (c.division ? ' (' + c.division + ')' : '') + (c.prize ? ' — ' + c.prize : '') + (c.winner_name ? ' · 🏆 ' + c.winner_name : ''))));
-                card.appendChild(ul);
-            }
-            if (pot && (pot.total_cents > 0 || (pot.status && pot.status !== 'active'))) {
-                card.appendChild(el('h3', 'roster-title', 'Ace pot'));
-                const money = (c) => '$' + ((c || 0) / 100).toLocaleString();
-                let txt;
-                if (pot.status === 'paid_out') txt = 'Paid out' + (pot.winner_name ? ' to ' + pot.winner_name + ' 🏆' : '');
-                else if (pot.status === 'carried') txt = money(pot.total_cents) + ' carried to the next event';
-                else txt = money(pot.total_cents) + ' in the pot' + (pot.contributors ? ' (' + pot.contributors + ' in)' : '');
-                card.appendChild(el('p', 'detail-notes', txt));
-            }
+            return {
+                acePot: pd && pd.ace_pot ? pd.ace_pot : null,
+                ctps: (cd && Array.isArray(cd.ctps)) ? cd.ctps : [],
+                loaded: true,
+            };
         }
 
-        // T4: per-hole tee signs for the event's selected layout. Viewer is public → official photos only;
-        // holes without a photo fall back to the SVG tee sign rendered from the confirmed layout data.
-        async function renderTeeSigns(ev, card) {
-            if (!ev.course_id) return;
+        function parseLayoutHoles(layout) {
+            if (!layout) return [];
+            if (Array.isArray(layout.holes)) return layout.holes;
+            try { const holes = JSON.parse(layout.holes || '[]'); return Array.isArray(holes) ? holes : []; } catch (_e) { return []; }
+        }
+
+        async function fetchTeeSignsData(ev, finalResults) {
+            if (!ev.course_id) return null;
             const [ld, td] = await Promise.all([
                 fetchJson(`/courses/${encodeURIComponent(ev.course_id)}/layouts`).catch(() => null),
                 fetchJson(`/courses/${encodeURIComponent(ev.course_id)}/tee-signs`).catch(() => null),
             ]);
             const layouts = (ld && ld.layouts) || [];
             const signs = (td && td.teeSigns) || [];
-            const layout = layouts.find((l) => String(l.id) === ev.layout_id) || layouts[0] || null;
-            let holes = [];
-            if (layout) { try { holes = JSON.parse(layout.holes || '[]'); } catch (_e) { holes = []; } }
+            const layout = layouts.find((l) => String(l.id ?? l.layout_id) === ev.layout_id) || layouts[0] || null;
+            const holes = parseLayoutHoles(layout);
             const officialByHole = new Map();
             signs.forEach((s) => { if (s.status === 'official') officialByHole.set(Number(s.hole_number), s.id); });
             const holeData = new Map(holes.map((h) => [Number(h.hole), h]));
             const holeNums = new Set([...holeData.keys(), ...officialByHole.keys()]);
-            if (!holeNums.size) return; // nothing confirmed yet → no section (capture CTA lives on the members page)
-            // Matchplay: tint each hole by the team that won it (yellow = halved). Final rounds read the
-            // finalized results; a live round reads the snapshot. Non-matchplay / no-scorecard → uncolored.
-            const holeList = [...holeNums].map((n) => ({ hole: n })); // color the holes actually shown (photos or SVG), not just layout holes
+            if (!holeNums.size) return null;
+            const holeList = [...holeNums].map((n) => ({ hole: n }));
             let holeWins = {};
             try {
                 if (ev.status === 'final') {
-                    const rd = await fetchJson(`/events/${encodeURIComponent(ev.id)}/results`).catch(() => null);
-                    holeWins = holeWinners(holeList, playersFromResults((rd && rd.results) || []));
+                    holeWins = holeWinners(holeList, playersFromResults(finalResults || []));
                 } else {
                     const sd = await fetchJson(`/events/${encodeURIComponent(ev.id)}/live`).catch(() => null);
                     if (sd && sd.roundConfig && sd.roundConfig.scoringStyle === 'matchplay') holeWins = holeWinners((sd.holes && sd.holes.length) ? sd.holes : holeList, sd.players || []);
                 }
             } catch (_e) {}
-            card.appendChild(el('h3', 'roster-title', '🪧 Tee Signs' + (layout ? ' — ' + layout.name : '')));
-            const grid = el('div', 'tee-signs-grid');
-            const courseName = courseNameFor(courseIndex, ev.course_id) || '';
-            for (const hn of [...holeNums].sort((a, b) => a - b)) {
-                const h = holeData.get(hn) || { hole: hn };
-                const holeCard = el('div', 'ts-hole-card');
-                const wc = winnerColor(holeWins[hn]); // team color for a won hole; yellow for a halve
-                if (wc) { holeCard.style.boxShadow = '0 0 0 3px ' + wc; holeCard.style.borderRadius = '10px'; }
-                const signId = officialByHole.get(hn);
-                if (signId != null) {
-                    const img = el('img', 'ts-hole-photo');
-                    img.loading = 'lazy';
-                    img.alt = `Tee sign, hole ${hn}`;
-                    img.src = `${API_BASE}/tee-signs/${encodeURIComponent(signId)}/image`;
-                    holeCard.appendChild(img);
-                } else {
-                    const wrap = el('div', 'ts-hole-svg');
-                    const node = teeSignNode({ hole: hn, courseName, layouts: [{ label: layout ? layout.name : 'Layout', color: h.color || (h.tee && h.tee.color) || null, par: h.par != null ? h.par : null, distance_ft: h.distance_ft != null ? h.distance_ft : null }] });
-                    if (node) wrap.appendChild(node);
-                    holeCard.appendChild(wrap);
-                }
-                const meta = el('div', 'ts-hole-meta');
-                meta.appendChild(el('span', 'ts-hole-num', 'Hole ' + hn));
-                const bits = [];
-                if (h.par != null) bits.push('Par ' + h.par);
-                if (h.distance_ft != null) bits.push(h.distance_ft + ' ft');
-                if (bits.length) meta.appendChild(document.createTextNode(' · ' + bits.join(' · ')));
-                holeCard.appendChild(meta);
-                grid.appendChild(holeCard);
-            }
-            card.appendChild(grid);
-        }
-
-        function renderDetail(rawEvent) {
-            const ev = normalizeEvent(rawEvent);
-            detailEl.replaceChildren();
-
-            const backBtn = el('button', 'back-link', '← All events');
-            backBtn.type = 'button';
-            backBtn.addEventListener('click', () => { window.location.hash = ''; });
-            detailEl.appendChild(backBtn);
-
-            const card = el('div', 'detail-card');
-
-            const head = el('div', 'detail-head');
-            head.appendChild(el('h2', 'detail-title', ev.name));
-            if (ev.type) head.appendChild(badge(typeLabel(ev.type), 'type-badge ' + ev.type));
-            if (ev.status) head.appendChild(badge(statusLabel(ev.status), 'status-badge ' + ev.status));
-            card.appendChild(head);
-
-            // Live scoring: real-time leaderboard over WebSocket (polling fallback).
-            if (ev.status === 'live') {
-                const banner = el('div', 'live-banner');
-                banner.appendChild(el('span', 'live-dot'));
-                banner.appendChild(el('span', null, 'Live scoring in progress'));
-                const conn = el('span', 'lb-conn', 'connecting…');
-                banner.appendChild(conn);
-                card.appendChild(banner);
-                // Players keep their own card's scores in the mobile scorecard app (score.html). Members use
-                // their saved login; a guest registrant passes their registration token so they can score too.
-                const ks = el('a', 'btn-keep-score', '✏️ Keep score for my card');
-                let href = 'score.html?event=' + encodeURIComponent(ev.id);
-                const gr = (typeof guestRegs === 'function' ? guestRegs()[ev.id] : null);
-                if (!memberToken() && gr && gr.guestToken) href += '&gt=' + encodeURIComponent(gr.guestToken);
-                ks.href = href;
-                card.appendChild(ks);
-                const weather = el('div', 'live-weather'); weather.hidden = true;
-                card.appendChild(weather);
-                const lb = el('div', 'lb-wrap');
-                card.appendChild(lb);
-                mountLiveLeaderboard(ev.id, lb, conn, weather);
-            } else if (ev.status === 'final') {
-                const rwrap = el('div', 'lb-wrap');
-                card.appendChild(rwrap);
-                renderFinalResults(ev.id, rwrap, ev.course_id);
-            }
-
-            const facts = el('div', 'detail-facts');
-            facts.appendChild(fact('Date', formatEventDate(ev.date)));
-            // Scheduled start + sign-up/check-in cutoffs, shown in club (Eastern) time when set.
-            if (ev.starts_at) facts.appendChild(fact('Starts', formatClubDateTime(ev.starts_at)));
-            if (ev.registration_deadline) facts.appendChild(fact('Registration closes', formatClubDateTime(ev.registration_deadline)));
-            if (ev.checkin_deadline) facts.appendChild(fact('Check-in closes', formatClubDateTime(ev.checkin_deadline)));
-            if (ev.format) facts.appendChild(fact('Format', ev.format));
-
-            const courseName = courseNameFor(courseIndex, ev.course_id);
-            const course = courseIndex.get(String(ev.course_id));
-            if (courseName) {
-                const udiscLink = course && sanitizeUrl(course.udisc_url);
-                if (udiscLink) {
-                    const wrap = el('span');
-                    wrap.appendChild(el('span', null, courseName + ' '));
-                    wrap.appendChild(safeLink(course.udisc_url, '(UDisc ↗)'));
-                    facts.appendChild(fact('Course', wrap));
-                } else {
-                    facts.appendChild(fact('Course', courseName));
-                }
-            }
-            if (ev.external_url && sanitizeUrl(ev.external_url)) {
-                facts.appendChild(fact('More info', safeLink(ev.external_url, 'External link ↗')));
-            }
-            card.appendChild(facts);
-
-            if (ev.notes) {
-                card.appendChild(el('div', 'detail-notes', ev.notes));
-            }
-
-            // Roster, grouped by division when present.
-            const grouped = groupPlayersByDivision(ev.players);
-            if (grouped.length) {
-                card.appendChild(el('h3', 'roster-title', `Players (${ev.players.length})`));
-                // If everyone is in the single synthetic 'Open' group, skip the heading.
-                const showDivisionHeads = !(grouped.length === 1 && grouped[0].division === 'Open');
-                for (const group of grouped) {
-                    const groupWrap = el('div', 'division-group');
-                    if (showDivisionHeads) groupWrap.appendChild(el('div', 'division-name', group.division));
-                    const listEl = el('div', 'player-list');
-                    for (const p of group.players) {
-                        const row = el('div', 'player-row');
-                        row.appendChild(el('span', 'player-name', p && p.name != null ? String(p.name) : 'Unnamed'));
-                        if (p && p.pdga_no) row.appendChild(el('span', 'player-pdga', '#' + p.pdga_no));
-                        if (p && p.team) row.appendChild(el('span', 'player-team', String(p.team)));
-                        listEl.appendChild(row);
-                    }
-                    groupWrap.appendChild(listEl);
-                    card.appendChild(groupWrap);
-                }
-            }
-
-            renderEventExtras(ev.id, card); // CTPs + ace pot (Track G G3), filled in async
-            renderTeeSigns(ev, card);       // T4: per-hole tee signs (official photo / SVG fallback), filled in async
-
-            detailEl.appendChild(card);
-            setView('detail');
-            lastUpdatedEl.hidden = true;
-            window.scrollTo(0, 0);
+            return {
+                courseName: courseNameFor(courseIndex, ev.course_id) || '',
+                layout: layout ? { id: layout.id ?? layout.layout_id ?? '', name: layout.name || '' } : null,
+                holes: [...holeNums].sort((a, b) => a - b).map((hn) => {
+                    const h = holeData.get(hn) || { hole: hn };
+                    return {
+                        ...h,
+                        hole: hn,
+                        signId: officialByHole.get(hn) ?? null,
+                        winner: holeWins[hn] || null,
+                    };
+                }),
+            };
         }
 
         async function loadDetail(id) {
-            teardownLive(); // close any prior live socket before re-rendering
-            showStatus('Loading event…', false);
+            teardownLive();
+            showStatus('Loading event...', false);
             try {
-                await ensureCourses(); // for course name + UDisc link
+                await ensureCourses();
                 const data = await fetchJson(`/events/${encodeURIComponent(id)}`);
                 if (!data || !data.event) {
                     showStatus('That event could not be found.', true, () => { window.location.hash = ''; });
                     return;
                 }
-                renderDetail(data.event);
+                const seq = ++activeEventDetailSeq;
+                const ev = normalizeEvent(data.event);
+                const guestReg = typeof guestRegs === 'function' ? guestRegs()[ev.id] : null;
+                activeEventDetail = {
+                    apiBase: API_BASE,
+                    course: eventCourse(ev),
+                    event: ev,
+                    extras: { acePot: null, ctps: [], loaded: false },
+                    finalResults: [],
+                    finalResultsLoaded: ev.status !== 'final',
+                    guestReg,
+                    liveConnection: ev.status === 'live' ? 'Connecting' : '',
+                    liveSnapshot: null,
+                    memberToken: memberToken(),
+                    seq,
+                    teeSigns: null,
+                };
+                publishEventDetail(activeEventDetail);
+                setView('detail');
+                lastUpdatedEl.hidden = true;
+                window.scrollTo(0, 0);
+
+                if (ev.status === 'live') mountLiveLeaderboard(seq, ev.id);
+
+                const finalResultsPromise = ev.status === 'final'
+                    ? fetchFinalResults(ev.id).then((results) => {
+                        updateEventDetail(seq, { finalResults: results, finalResultsLoaded: true });
+                        return results;
+                    })
+                    : Promise.resolve(null);
+
+                finalResultsPromise
+                    .then((results) => fetchTeeSignsData(ev, results))
+                    .then((teeSigns) => { if (teeSigns) updateEventDetail(seq, { teeSigns }); })
+                    .catch(() => {});
+
+                fetchEventExtrasData(ev.id)
+                    .then((extras) => updateEventDetail(seq, { extras }))
+                    .catch(() => updateEventDetail(seq, { extras: { acePot: null, ctps: [], loaded: true } }));
             } catch (_err) {
                 showStatus('We couldn’t load that event right now. Please try again.', true, () => loadDetail(id));
             }

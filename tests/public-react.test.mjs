@@ -53,7 +53,7 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(chrome, /localStorage\.getItem\("theme"\)/);
   assert.match(chrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v57"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v58"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
@@ -103,6 +103,25 @@ test('Events hub schedule and club feed are rendered by the public React bundle'
   assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|📅|📍|🥏/);
 });
 
+test('Events status messages are rendered by the public React bundle', () => {
+  const html = readFileSync('events.html', 'utf8');
+  const main = readFileSync('src/public-app/main.js', 'utf8');
+  const app = readFileSync('src/public-app/events-status-app.js', 'utf8');
+
+  assert.match(html, /id="status"/);
+  assert.match(html, /new CustomEvent\('gvdg:events-status'/);
+  assert.match(html, /function publishStatus\(status\)/);
+  assert.match(html, /showStatus\(message, isError, onRetry\)/);
+  assert.doesNotMatch(html, /statusEl\.className|statusEl\.replaceChildren|statusEl\.appendChild|document\.createElement|empty-icon', '🥏'/);
+  assert.match(main, /const eventsStatusMount = document\.getElementById\("status"\)/);
+  assert.match(main, /createRoot\(eventsStatusMount\)\.render\(h\(EventsStatusApp\)\)/);
+  assert.match(app, /export function EventsStatusApp/);
+  assert.match(app, /data-react-events-status/);
+  assert.match(app, /CircleAlert, Disc3, RefreshCcw/);
+  assert.match(app, /role = isError \? "alert" : "status"/);
+  assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|dangerouslySetInnerHTML|☰|✕|🌙|☀️|📅|📍|🥏/);
+});
+
 test('Events leagues list is rendered by the public React bundle', () => {
   const html = readFileSync('events.html', 'utf8');
   const main = readFileSync('src/public-app/main.js', 'utf8');
@@ -143,6 +162,36 @@ test('Events league detail is rendered by the public React bundle', () => {
   assert.match(app, /className: "lb-wrap"/);
   assert.match(app, /window\.location\.hash = `#event\/\$\{encodeURIComponent\(id\)\}`/);
   assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|📅|📍|🥏|●/);
+});
+
+test('Events event detail is rendered by the public React bundle', () => {
+  const html = readFileSync('events.html', 'utf8');
+  const main = readFileSync('src/public-app/main.js', 'utf8');
+  const app = readFileSync('src/public-app/events-detail-app.js', 'utf8');
+
+  assert.match(html, /id="detail"/);
+  assert.match(html, /new CustomEvent\('gvdg:events-event-detail'/);
+  assert.match(html, /publishEventDetail\(activeEventDetail\)/);
+  assert.match(html, /setView\('detail'\)/);
+  assert.match(html, /mountLiveLeaderboard\(seq, ev\.id\)/);
+  assert.doesNotMatch(html, /udisc-export\.js|window\.UDiscExport/);
+  assert.doesNotMatch(html, /function renderDetail|function renderFinalResults|function renderEventExtras|function renderTeeSigns|function renderStandings|detailEl\.appendChild|detailEl\.replaceChildren/);
+  assert.match(main, /import \{ EventsEventDetailApp \} from "\.\/events-detail-app\.js"/);
+  assert.match(main, /const eventsEventDetailMount = document\.getElementById\("detail"\)/);
+  assert.match(main, /createRoot\(eventsEventDetailMount\)\.render\(h\(EventsEventDetailApp\)\)/);
+  assert.match(app, /export function EventsEventDetailApp/);
+  assert.match(app, /data-react-events-event-detail/);
+  assert.match(app, /data-react-events-final-results/);
+  assert.match(app, /function LivePanel/);
+  assert.match(app, /function LiveStandings/);
+  assert.match(app, /live-matchplay/);
+  assert.match(app, /function FinalResults/);
+  assert.match(app, /function EventExtras/);
+  assert.match(app, /function TeeSigns/);
+  assert.match(app, /function PlayerRoster/);
+  assert.match(app, /WeatherStrip/);
+  assert.match(app, /teeSignModel/);
+  assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|document\.createElement|querySelector|classList|textContent\s*=|dangerouslySetInnerHTML|☰|✕|🌙|☀️|📅|📍|🥏|🏆|🪧|✏️|⚑/);
 });
 
 test('Events fundraisers and meetings are rendered by the public React bundle', () => {

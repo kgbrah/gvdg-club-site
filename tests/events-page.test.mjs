@@ -115,6 +115,32 @@ test('public Events hub schedule and club feed publish to React', () => {
   assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|📅|📍|🥏/);
 });
 
+test('public Events status messages publish to React', () => {
+  const source = readFileSync('events.html', 'utf8');
+  const main = readFileSync('src/public-app/main.js', 'utf8');
+  const app = readFileSync('src/public-app/events-status-app.js', 'utf8');
+  const start = source.indexOf('function publishStatus(status)');
+  const end = source.indexOf('async function fetchJson(path)');
+  assert.notEqual(start, -1, 'publishStatus should exist');
+  assert.notEqual(end, -1, 'fetchJson should follow status helpers');
+  const statusHelpers = source.slice(start, end);
+
+  assert.match(source, /id="status"/);
+  assert.match(source, /function publishStatus\(status\)/);
+  assert.match(source, /new CustomEvent\('gvdg:events-status'/);
+  assert.match(statusHelpers, /tone: isError \? 'error' : 'loading'/);
+  assert.match(statusHelpers, /publishStatus\(\{ message, retry: null, tone: 'empty' \}\)/);
+  assert.doesNotMatch(statusHelpers, /statusEl\.className|statusEl\.replaceChildren|statusEl\.appendChild|document\.createElement|addEventListener|empty-icon', '🥏'/);
+  assert.match(main, /import \{ EventsStatusApp \} from "\.\/events-status-app\.js"/);
+  assert.match(main, /const eventsStatusMount = document\.getElementById\("status"\)/);
+  assert.match(main, /createRoot\(eventsStatusMount\)\.render\(h\(EventsStatusApp\)\)/);
+  assert.match(app, /export function EventsStatusApp/);
+  assert.match(app, /data-react-events-status/);
+  assert.match(app, /Disc3/);
+  assert.match(app, /RefreshCcw/);
+  assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|dangerouslySetInnerHTML|☰|✕|🌙|☀️|📅|📍|🥏/);
+});
+
 test('public Events leagues list publishes to React', () => {
   const source = readFileSync('events.html', 'utf8');
   const main = readFileSync('src/public-app/main.js', 'utf8');
@@ -164,6 +190,47 @@ test('public Events league detail keeps standings tables scroll-contained', () =
   assert.match(app, /className: "lb-wrap"/);
   assert.match(app, /window\.location\.hash = `#event\/\$\{encodeURIComponent\(id\)\}`/);
   assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|📅|📍|🥏|●/);
+});
+
+test('public Events event detail publishes to React', () => {
+  const source = readFileSync('events.html', 'utf8');
+  const main = readFileSync('src/public-app/main.js', 'utf8');
+  const app = readFileSync('src/public-app/events-detail-app.js', 'utf8');
+  const start = source.indexOf('async function loadDetail(id)');
+  const end = source.indexOf('// ---------- ROUTING ----------');
+  assert.notEqual(start, -1, 'loadDetail should exist');
+  assert.notEqual(end, -1, 'routing should follow loadDetail');
+  const loader = source.slice(start, end);
+
+  assert.match(source, /function publishEventDetail\(data\)/);
+  assert.match(source, /new CustomEvent\('gvdg:events-event-detail'/);
+  assert.match(source, /function updateEventDetail\(seq, patch\)/);
+  assert.match(source, /function mountLiveLeaderboard\(seq, eventId\)/);
+  assert.match(source, /function fetchFinalResults\(eventId\)/);
+  assert.match(source, /function fetchEventExtrasData\(eventId\)/);
+  assert.match(source, /function fetchTeeSignsData\(ev, finalResults\)/);
+  assert.match(loader, /activeEventDetail = \{/);
+  assert.match(loader, /publishEventDetail\(activeEventDetail\)/);
+  assert.match(loader, /setView\('detail'\)/);
+  assert.match(loader, /mountLiveLeaderboard\(seq, ev\.id\)/);
+  assert.match(loader, /fetchFinalResults\(ev\.id\)/);
+  assert.match(loader, /fetchTeeSignsData\(ev, results\)/);
+  assert.match(loader, /fetchEventExtrasData\(ev\.id\)/);
+  assert.doesNotMatch(source, /udisc-export\.js|window\.UDiscExport/);
+  assert.doesNotMatch(source, /function renderDetail|function renderFinalResults|function renderEventExtras|function renderTeeSigns|function renderStandings|function renderLiveSnapshot/);
+  assert.doesNotMatch(loader, /detailEl\.replaceChildren|detailEl\.appendChild|document\.createElement|addEventListener|player-row|lb-table|tee-signs-grid/);
+  assert.match(main, /createRoot\(eventsEventDetailMount\)\.render\(h\(EventsEventDetailApp\)\)/);
+  assert.match(app, /export function EventsEventDetailApp/);
+  assert.match(app, /data-react-events-event-detail/);
+  assert.match(app, /function LiveStandings/);
+  assert.match(app, /live-matchplay/);
+  assert.match(app, /function FinalResults/);
+  assert.match(app, /function EventExtras/);
+  assert.match(app, /function TeeSigns/);
+  assert.match(app, /function PlayerRoster/);
+  assert.match(app, /WeatherStrip/);
+  assert.match(app, /teeSignModel/);
+  assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|document\.createElement|querySelector|classList|textContent\s*=|dangerouslySetInnerHTML|☰|✕|🌙|☀️|📅|📍|🥏|🏆|🪧|✏️|⚑/);
 });
 
 test('public registration cards post pair label only for doubles config', () => {

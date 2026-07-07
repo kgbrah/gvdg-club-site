@@ -149,6 +149,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: schedule feed cards are real links when they navigate, upcoming/live event cards use hash links, external links keep safe new-tab attributes, and iconography uses Lucide SVGs.
 - Motion: preserves the inherited card hover/focus transforms only; no decorative motion is added.
 
+### Events Status App
+
+- Structure: the Events page status surface renders from the shared `public-app` React bundle into `status`; the legacy Events script only publishes `gvdg:events-status` for loading, empty, and retryable error states.
+- Variants: loading spinner, empty state, retryable error, and retry callback handoff.
+- Spacing: reuses `.status-box`, `.spinner`, `.empty-icon`, `.status-message`, and `.retry-btn` so status states preserve the current Events page rhythm.
+- States: React owns status markup, role, retry button, and Lucide status iconography; `events.html` must not append status DOM nodes or use emoji icons for empty/error states.
+- Accessibility: loading/empty use status semantics, errors use alert semantics, and retry remains a real button.
+- Motion: preserves only the existing spinner animation.
+
 ### Events Leagues App
 
 - Structure: the Events page leagues list renders from the shared `public-app` React bundle into `leaguesSection`; the legacy Events script only fetches `/leagues` and publishes `gvdg:events-leagues`.
@@ -166,6 +175,16 @@ Spacing follows a 4px base through rem values.
 - States: React owns the back action, league metadata, table markup, team dots, round winner stripe classes, disabled missing-id guards, and event hash navigation; `events.html` must not contain a league-detail DOM renderer.
 - Accessibility: table headers remain semantic, the back and round actions are real buttons, team dots are hidden from assistive tech, and winner color is reinforced by row placement and text context rather than color alone.
 - Motion: preserves inherited card/button hover states only; the winner stripe is static and token-driven.
+
+### Events Event Detail App
+
+- Structure: the Events page event detail view renders from the shared `public-app` React bundle into `detail`; the legacy Events script fetches `/events/:id`, final results, event extras, tee-sign data, and live snapshots, then publishes `gvdg:events-event-detail`.
+- Variants: scheduled event facts, final results, matchplay final results, live leaderboard, live weather, UDisc assisted-entry cards, CTP list, ace-pot summary, player roster, official tee-sign photos, SVG tee-sign fallback, and red/blue/tie tee-sign winner states.
+- Mobile tables: live matchplay standings use the `live-matchplay` compact table variant so team/member names wrap inside the detail card instead of depending on first-view horizontal scroll.
+- Spacing: reuses `.detail-card`, `.detail-head`, `.detail-facts`, `.live-banner`, `.btn-keep-score`, `.lb-wrap`, `.lb-table`, `.player-list`, `.extras-list`, `.tee-signs-grid`, and `.ts-hole-card` so event detail keeps the established Events rhythm.
+- States: React owns the detail card, back action, badges, facts, live/final tables, extras, roster, UDisc disclosures, tee-sign grid, weather strip placement, and score link text; `events.html` must not append detail DOM nodes.
+- Accessibility: live and final standings remain semantic tables, links retain safe external attributes, player score links are anchors, weather wind controls come from the shared React strip, tee-sign photos have alt text, and SVG fallbacks expose image labels.
+- Motion: preserves existing live-dot pulse, inherited button/card states, and compass arrow rotation only; no decorative motion is added.
 
 ### Events Previous Results App
 

@@ -5,10 +5,12 @@ import { ProShopApp } from "./pro-shop-app.js";
 import { PublicPageChrome } from "./page-chrome.js";
 import { RyderCupApp } from "./ryder-cup-app.js";
 import { EventsPreviousResultsApp } from "./events-previous-results-app.js";
+import { EventsEventDetailApp } from "./events-detail-app.js";
 import { EventsFundraisersApp, EventsMeetingsApp } from "./events-club-content-app.js";
 import { EventsClubFeedApp, EventsLiveNowApp, EventsScheduleFeedApp, EventsUpcomingApp } from "./events-hub-app.js";
 import { EventsLeagueDetailApp, EventsLeaguesApp } from "./events-leagues-app.js";
 import { EventsRegistrationApp } from "./events-registration-app.js";
+import { EventsStatusApp } from "./events-status-app.js";
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
   import("react-scan").then(({ scan }) => scan({ enabled: true })).catch(() => {});
@@ -18,6 +20,7 @@ const h = React.createElement;
 const pageChromeMount = document.getElementById("publicReactPageChrome");
 const proShopMount = document.getElementById("proShopReactApp");
 const ryderCupMount = document.getElementById("ryderCupReactApp");
+const eventsStatusMount = document.getElementById("status");
 const eventsLiveNowMount = document.getElementById("liveNowSection");
 const eventsScheduleFeedMount = document.getElementById("calendarEvents");
 const eventsUpcomingMount = document.getElementById("hub");
@@ -26,6 +29,7 @@ const eventsRegistrationMount = document.getElementById("registerSection");
 const eventsPreviousResultsMount = document.getElementById("previousResultsSection");
 const eventsLeaguesMount = document.getElementById("leaguesSection");
 const eventsLeagueDetailMount = document.getElementById("leagueDetailSection");
+const eventsEventDetailMount = document.getElementById("detail");
 const eventsFundraisersMount = document.getElementById("fundraisersSection");
 const eventsMeetingsMount = document.getElementById("meetingsSection");
 
@@ -35,6 +39,10 @@ if (pageChromeMount) {
 
 if (ryderCupMount) {
   createRoot(ryderCupMount).render(h(RyderCupApp));
+}
+
+if (eventsStatusMount) {
+  createRoot(eventsStatusMount).render(h(EventsStatusApp));
 }
 
 if (eventsLiveNowMount) {
@@ -67,6 +75,10 @@ if (eventsLeaguesMount) {
 
 if (eventsLeagueDetailMount) {
   createRoot(eventsLeagueDetailMount).render(h(EventsLeagueDetailApp));
+}
+
+if (eventsEventDetailMount) {
+  createRoot(eventsEventDetailMount).render(h(EventsEventDetailApp));
 }
 
 if (eventsFundraisersMount) {
