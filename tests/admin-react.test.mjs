@@ -310,3 +310,74 @@ test('admin members list is rendered by React from legacy loader state', () => {
   assert.match(membersList, /role: "status"/);
   assert.doesNotMatch(membersList, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️|🏆|⚠|⏱/);
 });
+
+test('admin wallet recent list is rendered by React from legacy loader state', () => {
+  const html = readFileSync('admin.html', 'utf8');
+  const main = readFileSync('src/admin-app/main.js', 'utf8');
+  const walletRecent = readFileSync('src/admin-app/wallet-recent-list.js', 'utf8');
+  const adminLoadWalletRecent = html.match(/async function adminLoadWalletRecent\(\) \{[\s\S]*?\n        \}/)?.[0];
+
+  assert.match(html, /id="adminWalletRecentReactApp"/);
+  assert.doesNotMatch(html, /id="adminWalletRecent"/);
+  assert.match(html, /function setAdminWalletRecentState\(state\) \{[\s\S]*window\.__gvdgAdminWalletRecentState = state;[\s\S]*gvdg:admin-wallet-recent/);
+  assert.ok(adminLoadWalletRecent);
+  assert.match(adminLoadWalletRecent, /setAdminWalletRecentState\(\{ status: 'loading', transactions: \[\] \}\)/);
+  assert.match(adminLoadWalletRecent, /setAdminWalletRecentState\(\{ status: 'ready', transactions \}\)/);
+  assert.doesNotMatch(adminLoadWalletRecent, /adminWalletRecent|replaceChildren|appendChild|walletRow|elx\('p', 'al-note'|document\.createElement|querySelector|classList|textContent\s*=/);
+  assert.match(html, /function walletRow\(tx\) \{/);
+  assert.match(html, /payouts\.forEach\(\(tx\) => list\.appendChild\(walletRow\(tx\)\)\)/);
+  assert.match(main, /import \{ AdminWalletRecentList \} from "\.\/wallet-recent-list\.js"/);
+  assert.match(main, /const walletRecentMount = document\.getElementById\("adminWalletRecentReactApp"\)/);
+  assert.match(main, /createRoot\(walletRecentMount\)\.render\(h\(AdminWalletRecentList\)\)/);
+  assert.match(walletRecent, /export function AdminWalletRecentList/);
+  assert.match(walletRecent, /gvdg:admin-wallet-recent/);
+  assert.match(walletRecent, /window\.__gvdgAdminWalletRecentState/);
+  assert.match(walletRecent, /data-react-admin-wallet-recent/);
+  assert.match(walletRecent, /className: "wallet-ledger"/);
+  assert.match(walletRecent, /className: "wallet-row"/);
+  assert.match(walletRecent, /className: "shop-admin-meta"/);
+  assert.match(walletRecent, /"credit"/);
+  assert.match(walletRecent, /"debit"/);
+  assert.match(walletRecent, /role: "status"/);
+  assert.doesNotMatch(walletRecent, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️|🏆|⚠|⏱/);
+});
+
+test('admin product inventory list is rendered by React from legacy loader state', () => {
+  const html = readFileSync('admin.html', 'utf8');
+  const main = readFileSync('src/admin-app/main.js', 'utf8');
+  const productsList = readFileSync('src/admin-app/products-list.js', 'utf8');
+  const adminLoadProducts = html.match(/async function adminLoadProducts\(\) \{[\s\S]*?\n        \}/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?\$\('adminCreateForm'\)\.addEventListener/)?.[0];
+
+  assert.match(html, /id="adminProductsListReactApp"/);
+  assert.doesNotMatch(html, /id="adminProductsList"/);
+  assert.match(html, /\.shop-admin-thumb\.fallback/);
+  assert.match(html, /function setAdminProductsListState\(state\) \{[\s\S]*window\.__gvdgAdminProductsListState = state;[\s\S]*gvdg:admin-products-list/);
+  assert.ok(adminLoadProducts);
+  assert.match(adminLoadProducts, /setAdminProductsListState\(\{ status: 'loading', products: \[\], inventoryStatus:/);
+  assert.match(adminLoadProducts, /setAdminProductsListState\(\{ status: 'ready', products, inventoryStatus: status \}\)/);
+  assert.match(adminLoadProducts, /adminApi\('\/admin\/shop\/products\?' \+ params\.toString\(\)\)/);
+  assert.doesNotMatch(adminLoadProducts, /adminProductsList|replaceChildren|appendChild|productThumb|shop-admin-row|document\.createElement|querySelector|classList|textContent\s*=/);
+  assert.doesNotMatch(html, /function productThumb|function productIsActive/);
+  assert.ok(initAdmin);
+  assert.match(initAdmin, /gvdg:admin-product-save-request/);
+  assert.match(initAdmin, /adminApi\('\/admin\/shop\/products\/' \+ product\.id, \{ method: 'PATCH', body: \{ price_cents: dollarsToCents\(detail\.priceValue\), stock_qty: parseInt\(detail\.stockValue, 10\) \|\| 0, active: detail\.active === true \} \}\)/);
+  assert.match(initAdmin, /gvdg:admin-product-delete-request/);
+  assert.match(initAdmin, /adminApi\('\/admin\/shop\/products\/' \+ product\.id, \{ method: 'DELETE' \}\)/);
+  assert.match(main, /import \{ AdminProductsList \} from "\.\/products-list\.js"/);
+  assert.match(main, /const productsListMount = document\.getElementById\("adminProductsListReactApp"\)/);
+  assert.match(main, /createRoot\(productsListMount\)\.render\(h\(AdminProductsList\)\)/);
+  assert.match(productsList, /export function AdminProductsList/);
+  assert.match(productsList, /gvdg:admin-products-list/);
+  assert.match(productsList, /gvdg:admin-product-save-request/);
+  assert.match(productsList, /gvdg:admin-product-delete-request/);
+  assert.match(productsList, /window\.__gvdgAdminProductsListState/);
+  assert.match(productsList, /data-react-admin-products-list/);
+  assert.match(productsList, /className: "shop-admin-list"/);
+  assert.match(productsList, /className: `shop-admin-row/);
+  assert.match(productsList, /className: "shop-admin-thumb"/);
+  assert.match(productsList, /className: "shop-admin-thumb fallback"/);
+  assert.match(productsList, /className: "shop-admin-controls"/);
+  assert.match(productsList, /role: "status"/);
+  assert.doesNotMatch(productsList, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️|🏆|⚠|⏱/);
+});

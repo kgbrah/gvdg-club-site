@@ -230,6 +230,24 @@ Spacing follows a 4px base through rem values.
 - Accessibility: loading and empty states use status semantics, member actions are real buttons, and disabled role controls expose the existing last-admin title plus the shared disabled admin button treatment.
 - Motion: static list rows; only inherited control hover/focus states apply.
 
+### Admin Wallet Recent List
+
+- Structure: the Admin Wallets recent ledger renders from `admin-app` into `adminWalletRecentReactApp`; legacy admin code fetches `/admin/wallets/recent`, keeps the adjustment form submission, and publishes recent-ledger state events only.
+- Variants: loading, empty, credit transaction, debit transaction, member fallback text, source fallback text, note metadata, and created-at metadata.
+- Spacing: reuses `.wallet-ledger`, `.wallet-row`, `.shop-admin-meta`, `.credit`, `.debit`, and `.al-note` so the Wallets pane keeps the same compact ledger rhythm as the Pro Shop admin surfaces.
+- States: React owns recent-ledger row markup and loading/empty copy; `admin.html` must not mutate `adminWalletRecent`, clear recent ledger children, or append recent ledger `walletRow` nodes directly.
+- Accessibility: loading and empty states use status semantics, and ledger rows remain static text because recent transactions have no row action in the current admin workflow.
+- Motion: static ledger rows; no decorative motion.
+
+### Admin Product Inventory List
+
+- Structure: the Admin Pro Shop inventory list renders from `admin-app` into `adminProductsListReactApp`; legacy admin code fetches `/admin/shop/products`, keeps product creation, image upload, sort/status filters, and publishes list state events only.
+- Variants: loading, empty active list, empty archived list, active product row, archived product row, image thumbnail, text thumbnail fallback, editable price, editable stock, active/archive toggle, save action, and delete action.
+- Spacing: reuses `.shop-admin-list`, `.shop-admin-row`, `.shop-admin-thumb`, `.shop-admin-controls`, `.register-addon`, `.admin-btn`, and `.al-note` so inventory keeps the existing dense admin shop rhythm.
+- States: React owns product row markup, thumbnail fallback, editable row control values, empty/loading copy, delete confirm prompt, and save/delete request dispatch; `admin.html` must not mutate `adminProductsList`, construct `.shop-admin-row` rows, or attach product row button/input listeners directly.
+- Accessibility: loading and empty states use status semantics, thumbnails have text alternatives, editable controls have product-specific labels, and row actions are real buttons.
+- Motion: static inventory rows; only inherited control hover/focus states apply.
+
 ### Events Hub App
 
 - Structure: the Events page hub schedule renders from the shared `public-app` React bundle into `liveNowSection`, `calendarEvents`, `hub`, and `clubEventsSection`; the legacy Events script only fetches/splits feeds and publishes `gvdg:events-hub`.

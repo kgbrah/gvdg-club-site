@@ -253,6 +253,7 @@
         .shop-admin-row { display: grid; grid-template-columns: 56px minmax(160px, 1fr) auto; gap: 0.75rem; align-items: center; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); padding: 0.65rem; }
         .shop-admin-row.inactive { opacity: 0.72; }
         .shop-admin-thumb { width: 56px; aspect-ratio: 1; border-radius: 8px; object-fit: cover; background: var(--bg-tertiary); border: 1px solid var(--border-color); }
+        .shop-admin-thumb.fallback { display: flex; align-items: center; justify-content: center; font-weight: 700; }
         .shop-admin-meta { font-size: 0.8rem; color: var(--text-muted); }
         .shop-admin-controls { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; }
         .shop-admin-controls input { width: 5rem; padding: 0.35rem 0.45rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
@@ -601,7 +602,7 @@
                                 </label>
                             </div>
                         </div>
-                        <div id="adminProductsList" class="shop-admin-list">Loading…</div>
+                        <div id="adminProductsListReactApp"></div>
                     </div>
                 </div>
             </div>
@@ -614,7 +615,7 @@
                 </form>
                 <div class="al-section" style="margin-top:1rem;">
                     <h4 class="al-h">Recent wallet ledger</h4>
-                    <div id="adminWalletRecent" class="wallet-ledger">Loading…</div>
+                    <div id="adminWalletRecentReactApp"></div>
                 </div>
             </div>
             <div class="admin-pane" id="apane-orders">
@@ -2171,25 +2172,8 @@
             else { let err = {}; try { err = await r.json(); } catch (e) {} adminMsg('Create failed: ' + (err.error || r.status), false); }
         }
 
-        function productThumb(product) {
-            if (product.image_url) {
-                const img = elx('img', 'shop-admin-thumb');
-                img.src = product.image_url;
-                img.alt = product.name || 'Product image';
-                img.loading = 'lazy';
-                return img;
-            }
-            const fallback = elx('div', 'shop-admin-thumb', (product.brand || product.name || '?').slice(0, 1).toUpperCase());
-            fallback.style.display = 'flex';
-            fallback.style.alignItems = 'center';
-            fallback.style.justifyContent = 'center';
-            fallback.style.fontWeight = '700';
-            return fallback;
-        }
-        function productIsActive(product) {
-            return Number(product && product.active) === 1;
-        }
         async function adminLoadProducts() {
+            setAdminProductsListState({ status: 'loading', products: [], inventoryStatus: $('psInvStatus') ? $('psInvStatus').value : 'active' });
             let products = [];
             const params = new URLSearchParams();
             const sort = $('psInvSort') ? $('psInvSort').value : 'newest';
@@ -2197,38 +2181,11 @@
             if (sort) params.set('sort', sort);
             if (status) params.set('status', status);
             try { const r = await adminApi('/admin/shop/products?' + params.toString()); if (r.ok) products = (await r.json()).products || []; } catch (e) {}
-            const list = $('adminProductsList'); list.replaceChildren();
-            if (!products.length) { list.appendChild(elx('p', 'al-note', status === 'inactive' ? 'No archived products.' : 'No products yet.')); return; }
-            products.forEach((p) => {
-                const isActive = productIsActive(p);
-                const row = elx('div', 'shop-admin-row' + (isActive ? '' : ' inactive'));
-                row.appendChild(productThumb(p));
-                const info = elx('div');
-                info.appendChild(elx('div', 'ev-name', p.name || 'Product'));
-                const meta = [p.brand, p.product_type, p.color, p.weight_g != null ? p.weight_g + 'g' : '', dollarsFromCents(p.price_cents), (p.stock_qty || 0) + ' in stock', isActive ? 'active' : 'archived'].filter(Boolean).join(' · ');
-                info.appendChild(elx('div', 'shop-admin-meta', meta || 'No metadata'));
-                row.appendChild(info);
-                const controls = elx('div', 'shop-admin-controls');
-                const price = document.createElement('input'); price.type = 'number'; price.min = '0'; price.step = '0.01'; price.value = p.price_cents != null ? String(p.price_cents / 100) : '';
-                const stock = document.createElement('input'); stock.type = 'number'; stock.min = '0'; stock.step = '1'; stock.value = p.stock_qty != null ? String(p.stock_qty) : '0';
-                const activeLabel = elx('label', 'register-addon'); const active = document.createElement('input'); active.type = 'checkbox'; active.checked = isActive; const activeText = document.createTextNode(active.checked ? ' active' : ' archived'); active.addEventListener('change', () => { activeText.textContent = active.checked ? ' active' : ' archived'; }); activeLabel.appendChild(active); activeLabel.appendChild(activeText);
-                const save = elx('button', 'admin-btn secondary', 'Save');
-                save.addEventListener('click', async () => {
-                    const r = await adminApi('/admin/shop/products/' + p.id, { method: 'PATCH', body: { price_cents: dollarsToCents(price.value), stock_qty: parseInt(stock.value, 10) || 0, active: active.checked } });
-                    adminMsg(r.ok ? 'Product updated' : 'Product update failed', r.ok);
-                    if (r.ok) adminLoadProducts();
-                });
-                const del = elx('button', 'admin-btn danger', 'Delete');
-                del.addEventListener('click', async () => {
-                    if (!confirm('Permanently delete "' + (p.name || 'this product') + '"? Past orders keep the item name, price, and quantity, but this product will be removed from inventory.')) return;
-                    const r = await adminApi('/admin/shop/products/' + p.id, { method: 'DELETE' });
-                    adminMsg(r.ok ? 'Product permanently deleted' : 'Delete failed', r.ok);
-                    if (r.ok) adminLoadProducts();
-                });
-                controls.appendChild(price); controls.appendChild(stock); controls.appendChild(activeLabel); controls.appendChild(save); controls.appendChild(del);
-                row.appendChild(controls);
-                list.appendChild(row);
-            });
+            setAdminProductsListState({ status: 'ready', products, inventoryStatus: status });
+        }
+        function setAdminProductsListState(state) {
+            window.__gvdgAdminProductsListState = state;
+            window.dispatchEvent(new CustomEvent('gvdg:admin-products-list', { detail: state }));
         }
         // Product image: take a photo / upload (resized to a data URL) OR paste a URL.
         let productImageDataUrl = '';
@@ -2293,11 +2250,14 @@
             return row;
         }
         async function adminLoadWalletRecent() {
+            setAdminWalletRecentState({ status: 'loading', transactions: [] });
             let transactions = [];
             try { const r = await adminApi('/admin/wallets/recent'); if (r.ok) transactions = (await r.json()).transactions || []; } catch (e) {}
-            const list = $('adminWalletRecent'); list.replaceChildren();
-            if (!transactions.length) { list.appendChild(elx('p', 'al-note', 'No wallet activity yet.')); return; }
-            transactions.forEach((tx) => list.appendChild(walletRow(tx)));
+            setAdminWalletRecentState({ status: 'ready', transactions });
+        }
+        function setAdminWalletRecentState(state) {
+            window.__gvdgAdminWalletRecentState = state;
+            window.dispatchEvent(new CustomEvent('gvdg:admin-wallet-recent', { detail: state }));
         }
 
         // ---- Pro shop orders: status, tracking, and the new-order badge ----
@@ -2693,6 +2653,21 @@
                     let err = {}; try { err = await r.json(); } catch (e) {}
                     adminMsg(err.error === 'last_admin' ? "Can't remove the last admin" : ('Role change failed (' + r.status + ')'), false);
                 }
+            });
+            window.addEventListener('gvdg:admin-product-save-request', async (event) => {
+                const detail = event.detail || {};
+                const product = detail.product;
+                if (!product || product.id == null) return;
+                const r = await adminApi('/admin/shop/products/' + product.id, { method: 'PATCH', body: { price_cents: dollarsToCents(detail.priceValue), stock_qty: parseInt(detail.stockValue, 10) || 0, active: detail.active === true } });
+                adminMsg(r.ok ? 'Product updated' : 'Product update failed', r.ok);
+                if (r.ok) adminLoadProducts();
+            });
+            window.addEventListener('gvdg:admin-product-delete-request', async (event) => {
+                const product = event.detail && event.detail.product;
+                if (!product || product.id == null) return;
+                const r = await adminApi('/admin/shop/products/' + product.id, { method: 'DELETE' });
+                adminMsg(r.ok ? 'Product permanently deleted' : 'Delete failed', r.ok);
+                if (r.ok) adminLoadProducts();
             });
             $('adminCreateForm').addEventListener('submit', adminSaveEvent);
             $('aeCourse').addEventListener('change', aeLoadLayouts);

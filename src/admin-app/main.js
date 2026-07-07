@@ -9,6 +9,8 @@ import { AdminMessage } from "./message.js";
 import { AdminMembersList } from "./members-list.js";
 import { AdminNavigation } from "./navigation.js";
 import { AdminPageChrome } from "./page-chrome.js";
+import { AdminProductsList } from "./products-list.js";
+import { AdminWalletRecentList } from "./wallet-recent-list.js";
 import { CrottsWidget } from "../shared/crotts-widget.js";
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
@@ -66,6 +68,16 @@ if (meetingsListMount) {
 const membersListMount = document.getElementById("adminMembersListReactApp");
 if (membersListMount) {
   createRoot(membersListMount).render(h(AdminMembersList));
+}
+
+const productsListMount = document.getElementById("adminProductsListReactApp");
+if (productsListMount) {
+  createRoot(productsListMount).render(h(AdminProductsList));
+}
+
+const walletRecentMount = document.getElementById("adminWalletRecentReactApp");
+if (walletRecentMount) {
+  createRoot(walletRecentMount).render(h(AdminWalletRecentList));
 }
 
 const crottsMount = document.getElementById("crottsReactApp");
