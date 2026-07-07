@@ -131,6 +131,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: menu and theme controls are real buttons with labels, `aria-expanded`, `aria-controls`, and Lucide icons; current page uses `aria-current="page"`.
 - Motion: mobile menu reveal and header scroll shadow preserve the existing transform/opacity/box-shadow transitions only.
 
+### Home Page Interactions
+
+- Structure: homepage carousel controls, reveal observer, stat counters, smooth in-page anchors, and double-tap guard render as a React-owned null controller from the `home-app` bundle into `homeReactInteractionsApp`; the homepage keeps only the head pre-paint theme script inline.
+- Variants: hero previous/next/dot controls, hero swipe, hero auto-advance/pause, about carousel, courses carousel/header arrows, reveal-on-scroll, stat counter animation, smooth anchor scroll, and double-tap prevention.
+- Spacing: reuses the existing `.carousel-*`, `.about-carousel-*`, `.courses-carousel-*`, `.fade-in`, `.visible`, and `.stat-*` primitives so the public homepage layout is unchanged during the behavior migration.
+- States: React lifecycle owns event listener setup/cleanup, active slide classes, active dot state, courses carousel height sync, reveal visibility, animated stat flags, and global anchor/touch handlers; inline homepage scripts must not mutate carousel, reveal, counter, anchor, or touch state.
+- Accessibility: carousel state keeps active indicators marked with `aria-current`; controls remain real buttons and links.
+- Motion: preserves existing opacity, transform, and smooth-scroll behavior only.
+
 ### Tournament Item
 
 - Structure: date badge, event metadata, arrow icon.

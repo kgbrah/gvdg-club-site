@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { CourseModal } from "./course-modal.js";
 import { AreaTournamentsFeed, HomeEventsFeed } from "./feed-panels.js";
 import { HomePageChrome } from "./page-chrome.js";
+import { HomePageInteractions } from "./page-interactions.js";
 import { HomeBackToTop } from "./page-controls.js";
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
@@ -36,4 +37,9 @@ if (courseModalMount) {
 const backToTopMount = document.getElementById("homeReactBackToTopApp");
 if (backToTopMount) {
   createRoot(backToTopMount).render(h(HomeBackToTop));
+}
+
+const interactionsMount = document.getElementById("homeReactInteractionsApp");
+if (interactionsMount) {
+  createRoot(interactionsMount).render(h(HomePageInteractions));
 }

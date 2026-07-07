@@ -93,3 +93,24 @@ test('home React bundle owns page chrome menu and header scroll state', () => {
   assert.match(chrome, /window\.requestAnimationFrame\(update\)/);
   assert.doesNotMatch(chrome, /querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
 });
+
+test('home React bundle owns remaining homepage interactions without inline controllers', () => {
+  const html = readFileSync('index.html', 'utf8');
+  const main = readFileSync('src/home-app/main.js', 'utf8');
+  const interactions = readFileSync('src/home-app/page-interactions.js', 'utf8');
+
+  assert.match(html, /id="homeReactInteractionsApp"/);
+  assert.doesNotMatch(html, /let currentSlide=|new IntersectionObserver|document\.querySelectorAll\('a\[href\^="#"]/);
+  assert.match(main, /createRoot\(interactionsMount\)\.render\(h\(HomePageInteractions\)\)/);
+  assert.match(interactions, /export function HomePageInteractions/);
+  assert.match(interactions, /setupHeroCarousel/);
+  assert.match(interactions, /setupSlidingCarousel/);
+  assert.match(interactions, /setupRevealObserver/);
+  assert.match(interactions, /setupStatCounters/);
+  assert.match(interactions, /setupSmoothAnchors/);
+  assert.match(interactions, /setupDoubleTapGuard/);
+  assert.match(interactions, /aria-current/);
+  assert.match(interactions, /window\.setInterval\(goNext, 5000\)/);
+  assert.match(interactions, /window\.requestAnimationFrame/);
+  assert.doesNotMatch(interactions, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|☰|✕|🌙|☀️|↑/);
+});
