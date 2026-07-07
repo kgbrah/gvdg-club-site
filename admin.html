@@ -272,6 +272,7 @@
         .admin-product-image-preview { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin: 0.5rem 0 0; }
         .admin-product-image-preview-img { width: 7.5rem; }
         .admin-product-image-preview-note { max-width: 22rem; font-size: 0.78rem; line-height: 1.4; color: var(--text-muted); }
+        .admin-wallet-form-wide { grid-column: 1 / -1; }
         .wallet-row { display: flex; justify-content: space-between; gap: 0.75rem; align-items: baseline; flex-wrap: wrap; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); padding: 0.65rem 0.75rem; }
         .wallet-row strong { color: var(--text-primary); }
         .wallet-row .credit { color: var(--green); font-weight: 700; }
@@ -601,12 +602,7 @@
                 </div>
             </div>
             <div class="admin-pane" id="apane-wallets">
-                <form class="admin-form" id="adminWalletForm">
-                    <div><label for="waMemberId">Member</label><input id="waMemberId" maxlength="80" placeholder="Name, PDGA#, or UDisc" required></div>
-                    <div><label for="waAmount">Adjustment ($)</label><input id="waAmount" type="number" step="0.01" required></div>
-                    <div style="grid-column:1/-1;"><label for="waNote">Note</label><input id="waNote" maxlength="300" placeholder="League payout, correction, volunteer credit"></div>
-                    <button type="submit" class="admin-btn">Post wallet adjustment</button>
-                </form>
+                <div id="adminWalletFormReactApp"></div>
                 <div class="al-section" style="margin-top:1rem;">
                     <h4 class="al-h">Recent wallet ledger</h4>
                     <div id="adminWalletRecentReactApp"></div>
@@ -2145,16 +2141,6 @@
             window.dispatchEvent(new CustomEvent('gvdg:admin-product-create-result', { detail: { ok: r.ok, requestId } }));
             if (r.ok) adminLoadProducts();
         }
-        function walletRow(tx) {
-            const row = elx('div', 'wallet-row');
-            const left = elx('div');
-            left.appendChild(elx('strong', null, (tx.member_name || tx.member_id || 'Member') + ' · ' + (tx.source || 'wallet')));
-            left.appendChild(elx('div', 'shop-admin-meta', (tx.note || '') + (tx.created_at ? ' · ' + tx.created_at : '')));
-            row.appendChild(left);
-            const amt = elx('span', tx.amount_cents >= 0 ? 'credit' : 'debit', (tx.amount_cents >= 0 ? '+' : '') + dollarsFromCents(tx.amount_cents || 0));
-            row.appendChild(amt);
-            return row;
-        }
         async function adminLoadWalletRecent() {
             setAdminWalletRecentState({ status: 'loading', transactions: [] });
             let transactions = [];
@@ -2221,19 +2207,36 @@
             } catch (e) { setOrdersBadge(0); }
         }
 
-        async function adminPostWalletAdjustment(e) {
-            e.preventDefault();
-            const amount = dollarsToCents($('waAmount').value);
-            const body = { member_id: $('waMemberId').value.trim(), amount_cents: amount, note: $('waNote').value.trim() || null };
-            if (!body.member_id || amount == null || amount === 0) { adminMsg('Member and non-zero amount are required', false); return; }
-            const r = await adminApi('/admin/wallets/credit', { method: 'POST', body });
-            if (r.ok) { const d = await r.json(); adminMsg('Wallet updated. Balance: ' + dollarsFromCents(d.balance_cents || 0), true); $('adminWalletForm').reset(); adminLoadWalletRecent(); }
+        async function adminPostWalletAdjustmentFromReact(detail) {
+            const body = detail.body || {};
+            const requestId = detail.requestId;
+            if (!requestId) return;
+            if (detail.valid !== true || !body.member_id || body.amount_cents == null || body.amount_cents === 0) {
+                adminMsg('Member and non-zero amount are required', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-wallet-adjustment-result', { detail: { ok: false, requestId } }));
+                return;
+            }
+            let r;
+            try {
+                r = await adminApi('/admin/wallets/credit', { method: 'POST', body });
+            } catch (e) {
+                adminMsg('Wallet update failed', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-wallet-adjustment-result', { detail: { ok: false, requestId } }));
+                return;
+            }
+            if (r.ok) {
+                const d = await r.json().catch(() => ({}));
+                adminMsg('Wallet updated. Balance: ' + dollarsFromCents(d.balance_cents || 0), true);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-wallet-adjustment-result', { detail: { ok: true, requestId } }));
+                adminLoadWalletRecent();
+            }
             else {
                 const d = await r.json().catch(() => ({}));
                 const msg = d.error === 'member_not_found' ? 'No member matches that — try their PDGA#, UDisc, or exact name'
                     : d.error === 'member_ambiguous' ? 'More than one member has that name — use their PDGA# or UDisc instead'
                     : 'Wallet update failed (' + r.status + ')';
                 adminMsg(msg, false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-wallet-adjustment-result', { detail: { ok: false, requestId } }));
             }
         }
 
@@ -2566,6 +2569,9 @@
                 const ok = await deleteOrder(order.id);
                 window.dispatchEvent(new CustomEvent('gvdg:admin-order-action-result', { detail: { requestId: detail.requestId, ok } }));
             });
+            window.addEventListener('gvdg:admin-wallet-adjustment-request', async (event) => {
+                await adminPostWalletAdjustmentFromReact(event.detail || {});
+            });
             window.addEventListener('gvdg:admin-data-archive-destination-edit-request', (event) => {
                 const destination = event.detail && event.detail.destination;
                 if (!destination || destination.id == null) return;
@@ -2651,7 +2657,6 @@
             $('adminMeetingForm').addEventListener('submit', adminAddMeeting);
             $('psInvSort').addEventListener('change', adminLoadProducts);
             $('psInvStatus').addEventListener('change', adminLoadProducts);
-            $('adminWalletForm').addEventListener('submit', adminPostWalletAdjustment);
             $('ordStatusFilter').addEventListener('change', adminLoadOrders);
             $('ordRefresh').addEventListener('click', adminLoadOrders);
             refreshOrdersBadge();                          // show the new-order count on load

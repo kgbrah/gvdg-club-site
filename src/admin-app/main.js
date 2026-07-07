@@ -16,6 +16,7 @@ import { AdminProductForm } from "./product-form.js";
 import { AdminProductsList } from "./products-list.js";
 import { AdminRegistrationRoster } from "./registration-roster.js";
 import { AdminRegistrationAcePot, AdminRegistrationCreditsList, AdminRegistrationCtpsList } from "./registration-widgets.js";
+import { AdminWalletAdjustmentForm } from "./wallet-form.js";
 import { AdminWalletRecentList } from "./wallet-recent-list.js";
 import { CrottsWidget } from "../shared/crotts-widget.js";
 
@@ -104,6 +105,11 @@ if (ordersListMount) {
 const walletRecentMount = document.getElementById("adminWalletRecentReactApp");
 if (walletRecentMount) {
   createRoot(walletRecentMount).render(h(AdminWalletRecentList));
+}
+
+const walletFormMount = document.getElementById("adminWalletFormReactApp");
+if (walletFormMount) {
+  createRoot(walletFormMount).render(h(AdminWalletAdjustmentForm));
 }
 
 const dataArchiveDestinationsMount = document.getElementById("adminDataArchiveDestinationsReactApp");

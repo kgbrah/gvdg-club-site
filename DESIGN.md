@@ -250,12 +250,21 @@ Spacing follows a 4px base through rem values.
 
 ### Admin Wallet Recent List
 
-- Structure: the Admin Wallets recent ledger renders from `admin-app` into `adminWalletRecentReactApp`; legacy admin code fetches `/admin/wallets/recent`, keeps the adjustment form submission, and publishes recent-ledger state events only.
+- Structure: the Admin Wallets recent ledger renders from `admin-app` into `adminWalletRecentReactApp`; legacy admin code fetches `/admin/wallets/recent` and publishes recent-ledger state events only.
 - Variants: loading, empty, credit transaction, debit transaction, member fallback text, source fallback text, note metadata, and created-at metadata.
 - Spacing: reuses `.wallet-ledger`, `.wallet-row`, `.shop-admin-meta`, `.credit`, `.debit`, and `.al-note` so the Wallets pane keeps the same compact ledger rhythm as the Pro Shop admin surfaces.
 - States: React owns recent-ledger row markup and loading/empty copy; `admin.html` must not mutate `adminWalletRecent`, clear recent ledger children, or append recent ledger `walletRow` nodes directly.
 - Accessibility: loading and empty states use status semantics, and ledger rows remain static text because recent transactions have no row action in the current admin workflow.
 - Motion: static ledger rows; no decorative motion.
+
+### Admin Wallet Adjustment Form
+
+- Structure: the Admin Wallets adjustment form renders from `admin-app` into `adminWalletFormReactApp`; legacy admin code only handles adjustment-request events, the API POST, recent-ledger reload, and global messages.
+- Variants: blank form, required member/amount validation, positive credit, negative debit, busy submit, successful reset, member-not-found error, ambiguous-member error, and failed-request recovery.
+- Spacing: reuses `.admin-form`, `.admin-wallet-form-wide`, `.admin-btn`, and existing input/label primitives so the form keeps the compact wallet pane rhythm.
+- States: React owns all field values, busy button text, and reset after success; `admin.html` must not keep a static `adminWalletForm`, read `wa*` field values, listen to the wallet form submit event, call `reset()` on the wallet form, or keep the old `walletRow` helper.
+- Accessibility: labels target stable form control ids, required fields remain native inputs, and the adjustment action is a real submit button.
+- Motion: static form; inherited controls only.
 
 ### Admin Registration Roster
 
