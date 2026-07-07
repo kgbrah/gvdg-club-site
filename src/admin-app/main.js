@@ -1,7 +1,8 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 
-import { AdminOrdersBadge } from "./orders-badge.js";
+import { AdminAuthGate } from "./auth-gate.js";
+import { AdminNavigation } from "./navigation.js";
 import { AdminPageChrome } from "./page-chrome.js";
 import { CrottsWidget } from "../shared/crotts-widget.js";
 
@@ -17,9 +18,14 @@ if (pageChromeMount) {
   createRoot(pageChromeMount).render(h(AdminPageChrome));
 }
 
-const ordersBadgeMount = document.getElementById("ordersBadgeReactApp");
-if (ordersBadgeMount) {
-  createRoot(ordersBadgeMount).render(h(AdminOrdersBadge));
+const authGateMount = document.getElementById("adminAuthGateReactApp");
+if (authGateMount) {
+  createRoot(authGateMount).render(h(AdminAuthGate));
+}
+
+const navigationMount = document.getElementById("adminNavigationReactApp");
+if (navigationMount) {
+  createRoot(navigationMount).render(h(AdminNavigation));
 }
 
 const crottsMount = document.getElementById("crottsReactApp");

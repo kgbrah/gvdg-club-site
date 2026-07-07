@@ -291,79 +291,13 @@
         <h1 class="page-title">Admin</h1>
         <p class="page-subtitle">Event management for club admins</p>
 
-        <!-- Loading / auth-check state -->
-        <div id="adminStatus" class="status-box">
-            <div class="spinner"></div>
-            <div>Checking your session&hellip;</div>
-        </div>
-
-        <!-- Auth gate: shown when not signed in / not admin / session expired -->
-        <div id="adminGate" class="admin-gate" hidden></div>
+        <div id="adminAuthGateReactApp"></div>
 
         <!-- Admin panel (copied verbatim from gvdg-members.html) -->
         <div id="adminPanel" class="admin-panel" style="display:none;">
             <h3 class="admin-title">🛠 Admin — Event Management</h3>
-            <div class="admin-mobile-nav" role="group" aria-label="Admin sections">
-                <select class="admin-mnav" aria-label="Events section">
-                    <option value="" disabled selected hidden>Events</option>
-                    <option value="events">Events</option>
-                    <option value="create">New Event</option>
-                    <option value="import">Import</option>
-                    <option value="registration">Registration</option>
-                    <option value="scoring">Live Scoring</option>
-                </select>
-                <select class="admin-mnav" aria-label="Courses section">
-                    <option value="" disabled selected hidden>Courses</option>
-                    <option value="courses">Courses</option>
-                    <option value="layouts">Layouts</option>
-                    <option value="tee-signs">Tee Signs</option>
-                </select>
-                <select class="admin-mnav" aria-label="Club section">
-                    <option value="" disabled selected hidden>Club</option>
-                    <option value="leagues-mgmt">Leagues</option>
-                    <option value="fundraisers">Fundraisers</option>
-                    <option value="meetings">Meetings</option>
-                </select>
-                <select class="admin-mnav" aria-label="Shop section">
-                    <option value="" disabled selected hidden>Shop</option>
-                    <option value="shop">Pro Shop</option>
-                    <option value="orders">Orders</option>
-                    <option value="wallets">Wallets</option>
-                </select>
-                <select class="admin-mnav" aria-label="Members section">
-                    <option value="" disabled selected hidden>Members</option>
-                    <option value="members">Members</option>
-                </select>
-                <select class="admin-mnav" aria-label="Data section">
-                    <option value="" disabled selected hidden>Data</option>
-                    <option value="data-archive">Data archive</option>
-                </select>
-            </div>
             <div class="admin-main">
-                <nav class="admin-sidebar" aria-label="Admin sections">
-                    <div class="admin-navgroup">Events</div>
-                    <button type="button" class="admin-tab active" data-atab="events">Events</button>
-                    <button type="button" class="admin-tab" data-atab="create">New Event</button>
-                    <button type="button" class="admin-tab" data-atab="import">Import</button>
-                    <button type="button" class="admin-tab" data-atab="registration">Registration</button>
-                    <button type="button" class="admin-tab" data-atab="scoring">Live Scoring</button>
-                    <div class="admin-navgroup">Courses</div>
-                    <button type="button" class="admin-tab" data-atab="courses">Courses</button>
-                    <button type="button" class="admin-tab" data-atab="layouts">Layouts</button>
-                    <button type="button" class="admin-tab" data-atab="tee-signs">Tee Signs</button>
-                    <div class="admin-navgroup">Club</div>
-                    <button type="button" class="admin-tab" data-atab="leagues-mgmt">Leagues</button>
-                    <button type="button" class="admin-tab" data-atab="fundraisers">Fundraisers</button>
-                    <button type="button" class="admin-tab" data-atab="meetings">Meetings</button>
-                    <div class="admin-navgroup">Shop</div>
-                    <button type="button" class="admin-tab" data-atab="shop">Pro Shop</button>
-                    <button type="button" class="admin-tab" data-atab="orders">Orders <span id="ordersBadgeReactApp"></span></button>
-                    <button type="button" class="admin-tab" data-atab="wallets">Wallets</button>
-                    <div class="admin-navgroup">Members</div>
-                    <button type="button" class="admin-tab" data-atab="members">Members</button>
-                    <div class="admin-navgroup">Data</div>
-                    <button type="button" class="admin-tab" data-atab="data-archive">Data archive</button>
-                </nav>
+                <div id="adminNavigationReactApp"></div>
                 <div class="admin-content">
             <div class="admin-msg" id="adminMsg"></div>
             <div class="admin-pane active" id="apane-events"><div id="adminEventsList">Loading…</div></div>
@@ -761,7 +695,7 @@
         </div>
 
         <div style="text-align:center;">
-            <a href="index.html" class="back-link">&larr; Back to home</a>
+            <a href="index.html" class="back-link">&larr; Back&nbsp;to home</a>
         </div>
     </main>
 
@@ -808,10 +742,13 @@
             return fetch(AUTH_BASE + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
         }
 
-        // --- Gate rendering (XSS-safe: textContent + createElement only) ---
+        function setAdminAuthGateState(state) {
+            window.__gvdgAdminAuthGateState = state;
+            window.dispatchEvent(new CustomEvent('gvdg:admin-auth-gate', { detail: state }));
+        }
+
         function showAdminPanel() {
-            $('adminStatus').hidden = true;
-            $('adminGate').hidden = true;
+            setAdminAuthGateState({ status: 'panel' });
             $('adminPanel').style.display = '';
             initAdmin();
         }
@@ -819,19 +756,8 @@
         // Render the gate with a message and (optionally) a link back to the
         // Members page so the user can sign in. Never injects API data.
         function showGate(message, withMembersLink) {
-            $('adminStatus').hidden = true;
             $('adminPanel').style.display = 'none';
-            const gate = $('adminGate');
-            gate.replaceChildren();
-            gate.appendChild(elx('div', 'gate-icon', '🔒'));
-            gate.appendChild(elx('div', 'gate-title', 'Admin'));
-            gate.appendChild(elx('p', 'gate-msg', message));
-            if (withMembersLink) {
-                const a = elx('a', 'gate-btn', 'Go to Members page');
-                a.href = 'gvdg-members.html';
-                gate.appendChild(a);
-            }
-            gate.hidden = false;
+            setAdminAuthGateState({ status: 'gate', message, withMembersLink: Boolean(withMembersLink) });
         }
 
         // On load: verify the session token grants admin, then show the panel.
@@ -1066,11 +992,9 @@
         let aeEditingEvent = null;
         let adminCoursesCache = [], tsReviewThumbUrls = [];
         function adminSwitch(tab) {
-            document.querySelectorAll('.admin-tab').forEach((t) => t.classList.toggle('active', t.dataset.atab === tab));
+            window.__gvdgAdminActiveTab = tab;
+            window.dispatchEvent(new CustomEvent('gvdg:admin-active-tab', { detail: { tab } }));
             document.querySelectorAll('.admin-pane').forEach((p) => p.classList.toggle('active', p.id === 'apane-' + tab));
-            document.querySelectorAll('.admin-mnav').forEach((sel) => { // sync the per-section dropdowns: the active group shows the tab, the rest reset to their section label
-                if (Array.prototype.some.call(sel.options, (o) => o.value === tab)) sel.value = tab; else sel.selectedIndex = 0;
-            });
             if (tab === 'scoring') scLoadEvents();
             if (tab === 'leagues-mgmt') adminLoadLeagues();
             if (tab === 'fundraisers') adminLoadFundraisers();
@@ -2749,8 +2673,10 @@
         function initAdmin() {
             if (adminInited) { adminLoadEvents(); adminLoadCourses(); return; }
             adminInited = true;
-            document.querySelectorAll('.admin-tab').forEach((t) => t.addEventListener('click', () => adminSwitch(t.dataset.atab)));
-            document.querySelectorAll('.admin-mnav').forEach((sel) => sel.addEventListener('change', () => { if (sel.value) adminSwitch(sel.value); }));
+            window.addEventListener('gvdg:admin-tab-request', (event) => {
+                const tab = event.detail && event.detail.tab;
+                if (tab) adminSwitch(tab);
+            });
             $('adminCreateForm').addEventListener('submit', adminSaveEvent);
             $('aeCourse').addEventListener('change', aeLoadLayouts);
             $('aeLayout').addEventListener('change', aeToggleQuickLayout);

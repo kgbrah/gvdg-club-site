@@ -160,12 +160,30 @@ Spacing follows a 4px base through rem values.
 
 ### Admin Orders Badge
 
-- Structure: the new-order count in the Admin Orders tab renders from `admin-app` into `ordersBadgeReactApp`; legacy order loaders publish `gvdg:admin-orders-badge` events only.
+- Structure: the new-order count in the React-owned Admin Orders tab renders inside `AdminNavigation`; legacy order loaders publish `gvdg:admin-orders-badge` events only.
 - Variants: hidden zero-count state and visible unfulfilled-order count.
 - Spacing: reuses `.orders-badge` so the tab label keeps the existing compact badge dimensions.
 - States: React owns count visibility and text rendering; `admin.html` must not write badge `textContent` or toggle a badge `hidden` attribute.
 - Accessibility: the badge remains inline text inside the Orders tab button.
 - Motion: static count; no decorative motion.
+
+### Admin Navigation
+
+- Structure: the Admin desktop sidebar groups and mobile grouped selects render from `admin-app` into `adminNavigationReactApp`; legacy pane code keeps the `adminSwitch(tab)` loader and pane activation contract.
+- Variants: desktop sidebar, mobile grouped select grid, active tab, Events/Courses/Club/Shop/Members/Data groups, Orders badge count, and programmatic tab switches from edit/save/cancel flows.
+- Spacing: reuses `.admin-main`, `.admin-sidebar`, `.admin-mobile-nav`, `.admin-mnav`, `.admin-tab`, `.admin-navgroup`, and `.orders-badge` primitives so the existing admin panel layout does not shift during migration.
+- States: React owns active tab button/select rendering and mobile select synchronization; `admin.html` must not attach click/change handlers to `.admin-tab` or `.admin-mnav`, or mutate their active classes/values. Legacy code requests tab switches through `gvdg:admin-tab-request` and publishes the canonical active tab through `gvdg:admin-active-tab`.
+- Accessibility: sidebar actions are real buttons with `aria-current`, mobile groups are labelled native selects, and group headings remain visible text.
+- Motion: no decorative motion; only inherited button hover/focus states apply.
+
+### Admin Auth Gate
+
+- Structure: the Admin loading state and signed-out/not-admin/session-expired gate render from `admin-app` into `adminAuthGateReactApp`; the legacy auth checker publishes `gvdg:admin-auth-gate` state events only.
+- Variants: loading session check, signed-out with Members link, expired session with Members link, not-admin message without link, and authenticated panel-hidden state.
+- Spacing: reuses `.status-box`, `.spinner`, `.admin-gate`, `.gate-icon`, `.gate-title`, `.gate-msg`, and `.gate-btn` so the auth gate keeps the same centered compact admin layout.
+- States: React owns loading/gate/panel visibility and gate card content; `admin.html` must not keep `adminStatus`/`adminGate` nodes, build gate children, or mutate gate text/hidden state.
+- Accessibility: the loading state uses status semantics, the gate uses visible text and a real Members link, and lock iconography uses Lucide SVGs.
+- Motion: loading keeps the existing spinner animation and gate links keep inherited hover transitions only.
 
 ### Events Hub App
 
