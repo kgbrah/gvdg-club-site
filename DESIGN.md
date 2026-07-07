@@ -212,6 +212,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: course rows are static text because no row action exists in the current admin workflow.
 - Motion: static list rows; no decorative motion.
 
+### Admin Club Content Lists
+
+- Structure: the Admin Leagues, Fundraisers, and Meetings lists render from `admin-app` into `adminLeaguesListReactApp`, `adminFundraisersListReactApp`, and `adminMeetingsListReactApp`; legacy admin code fetches `/leagues`, `/fundraisers`, and `/meetings`, keeps form submission and select population, and publishes list state events only.
+- Variants: league empty/row/delete, fundraiser empty/row/close/reopen/delete, and meeting empty/row/delete.
+- Spacing: reuses `.admin-evrow`, `.ev-name`, `.admin-btn`, and `.al-note` so the Club management panes preserve the same compact admin list rhythm as Events.
+- States: React owns row markup, empty copy, confirm prompts, and request dispatch; `admin.html` must not mutate `adminLeaguesList`, `adminFundraisersList`, or `adminMeetingsList`, construct `.admin-evrow` rows for those panes, or attach row button listeners directly.
+- Accessibility: empty states use status semantics, list actions are real buttons, and visible text preserves the existing row summaries.
+- Motion: static list rows; only inherited control hover/focus states apply.
+
 ### Events Hub App
 
 - Structure: the Events page hub schedule renders from the shared `public-app` React bundle into `liveNowSection`, `calendarEvents`, `hub`, and `clubEventsSection`; the legacy Events script only fetches/splits feeds and publishes `gvdg:events-hub`.

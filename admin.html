@@ -464,7 +464,7 @@
                     <button type="submit" class="admin-btn">Add league</button>
                 </form>
                 <p class="al-note" style="margin-top:0.5rem;">Assign <strong>league round</strong> events to a league on the New Event tab; finalized rounds roll up into the league standings automatically.</p>
-                <div id="adminLeaguesList" style="margin-top:1rem;"></div>
+                <div id="adminLeaguesListReactApp" style="margin-top:1rem;"></div>
             </div>
             <div class="admin-pane" id="apane-fundraisers">
                 <form class="admin-form" id="adminFundraiserForm">
@@ -474,7 +474,7 @@
                     <div style="grid-column:1/-1;"><label for="frBody">Description (markdown: **bold**, - bullets, [link](https://…))</label><textarea id="frBody" rows="4"></textarea></div>
                     <button type="submit" class="admin-btn">Add fundraiser</button>
                 </form>
-                <div id="adminFundraisersList" style="margin-top:1rem;"></div>
+                <div id="adminFundraisersListReactApp" style="margin-top:1rem;"></div>
             </div>
             <div class="admin-pane" id="apane-meetings">
                 <form class="admin-form" id="adminMeetingForm">
@@ -484,7 +484,7 @@
                     <div style="grid-column:1/-1;"><label for="mtActions">Action items (one per line)</label><textarea id="mtActions" rows="3"></textarea></div>
                     <button type="submit" class="admin-btn">Add meeting</button>
                 </form>
-                <div id="adminMeetingsList" style="margin-top:1rem;"></div>
+                <div id="adminMeetingsListReactApp" style="margin-top:1rem;"></div>
             </div>
             <div class="admin-pane" id="apane-registration">
                 <div><label for="rgEvent">Event</label>
@@ -2074,17 +2074,14 @@
             let leagues = [];
             try { const r = await api('/leagues'); if (r.ok) leagues = (await r.json()).leagues || []; } catch (e) {}
             const sel = $('aeLeague'); sel.length = 1;
-            const list = $('adminLeaguesList'); list.textContent = '';
-            if (!leagues.length) { list.appendChild(elx('p', 'al-note', 'No leagues yet.')); }
             leagues.forEach((l) => {
                 const o = document.createElement('option'); o.value = l.id; o.textContent = l.name + (l.season ? ' (' + l.season + ')' : ''); sel.appendChild(o);
-                const row = elx('div', 'admin-evrow');
-                row.appendChild(elx('span', 'ev-name', l.name + (l.season ? ' · ' + l.season : '') + (l.format ? ' · ' + l.format : '')));
-                const del = elx('button', 'admin-btn danger', 'Delete');
-                del.addEventListener('click', async () => { if (!confirm('Delete league “' + l.name + '”?')) return; const r = await adminApi('/admin/leagues/' + l.id, { method: 'DELETE' }); if (r.ok) { adminMsg('Deleted league', true); adminLoadLeagues(); } });
-                row.appendChild(del);
-                list.appendChild(row);
             });
+            setAdminLeaguesListState({ leagues });
+        }
+        function setAdminLeaguesListState(state) {
+            window.__gvdgAdminLeaguesListState = state;
+            window.dispatchEvent(new CustomEvent('gvdg:admin-leagues-list', { detail: state }));
         }
         async function adminAddLeague(e) {
             e.preventDefault();
@@ -2099,19 +2096,11 @@
         async function adminLoadFundraisers() {
             let items = [];
             try { const r = await api('/fundraisers'); if (r.ok) items = (await r.json()).fundraisers || []; } catch (e) {}
-            const list = $('adminFundraisersList'); list.textContent = '';
-            if (!items.length) { list.appendChild(elx('p', 'al-note', 'No fundraisers yet.')); }
-            items.forEach((f) => {
-                const row = elx('div', 'admin-evrow');
-                const goal = f.goal_cents != null ? ' · goal $' + (f.goal_cents / 100) : '';
-                row.appendChild(elx('span', 'ev-name', f.title + ' [' + f.status + ']' + goal));
-                const close = elx('button', 'admin-btn secondary', f.status === 'active' ? 'Close' : 'Reopen');
-                close.addEventListener('click', async () => { if (!confirm((f.status === 'active' ? 'Close' : 'Reopen') + ' fundraiser “' + f.title + '”?')) return; const r = await adminApi('/admin/fundraisers/' + f.id, { method: 'PATCH', body: { status: f.status === 'active' ? 'closed' : 'active' } }); if (r.ok) { adminMsg('Updated', true); adminLoadFundraisers(); } });
-                const del = elx('button', 'admin-btn danger', 'Delete');
-                del.addEventListener('click', async () => { if (!confirm('Delete fundraiser “' + f.title + '”?')) return; const r = await adminApi('/admin/fundraisers/' + f.id, { method: 'DELETE' }); if (r.ok) { adminMsg('Deleted', true); adminLoadFundraisers(); } });
-                row.appendChild(close); row.appendChild(del);
-                list.appendChild(row);
-            });
+            setAdminFundraisersListState({ fundraisers: items });
+        }
+        function setAdminFundraisersListState(state) {
+            window.__gvdgAdminFundraisersListState = state;
+            window.dispatchEvent(new CustomEvent('gvdg:admin-fundraisers-list', { detail: state }));
         }
         async function adminAddFundraiser(e) {
             e.preventDefault();
@@ -2127,16 +2116,11 @@
         async function adminLoadMeetings() {
             let items = [];
             try { const r = await api('/meetings'); if (r.ok) items = (await r.json()).meetings || []; } catch (e) {}
-            const list = $('adminMeetingsList'); list.textContent = '';
-            if (!items.length) { list.appendChild(elx('p', 'al-note', 'No meetings yet.')); }
-            items.forEach((m) => {
-                const row = elx('div', 'admin-evrow');
-                row.appendChild(elx('span', 'ev-name', (m.date || '') + ' · ' + m.title));
-                const del = elx('button', 'admin-btn danger', 'Delete');
-                del.addEventListener('click', async () => { if (!confirm('Delete meeting “' + m.title + '”?')) return; const r = await adminApi('/admin/meetings/' + m.id, { method: 'DELETE' }); if (r.ok) { adminMsg('Deleted', true); adminLoadMeetings(); } });
-                row.appendChild(del);
-                list.appendChild(row);
-            });
+            setAdminMeetingsListState({ meetings: items });
+        }
+        function setAdminMeetingsListState(state) {
+            window.__gvdgAdminMeetingsListState = state;
+            window.dispatchEvent(new CustomEvent('gvdg:admin-meetings-list', { detail: state }));
         }
         async function adminAddMeeting(e) {
             e.preventDefault();
@@ -2682,6 +2666,36 @@
                 const r = await adminApi('/admin/events/' + ev.id, { method: 'DELETE' });
                 adminMsg(r.ok ? 'Deleted “' + ev.name + '”' : 'Delete failed', r.ok);
                 if (r.ok) adminLoadEvents();
+            });
+            window.addEventListener('gvdg:admin-league-delete-request', async (event) => {
+                const league = event.detail && event.detail.league;
+                if (!league || league.id == null) return;
+                const r = await adminApi('/admin/leagues/' + league.id, { method: 'DELETE' });
+                adminMsg(r.ok ? 'Deleted league' : 'Delete failed', r.ok);
+                if (r.ok) adminLoadLeagues();
+            });
+            window.addEventListener('gvdg:admin-fundraiser-status-request', async (event) => {
+                const detail = event.detail || {};
+                const fundraiser = detail.fundraiser;
+                const status = detail.status;
+                if (!fundraiser || fundraiser.id == null || !status) return;
+                const r = await adminApi('/admin/fundraisers/' + fundraiser.id, { method: 'PATCH', body: { status } });
+                adminMsg(r.ok ? 'Updated' : 'Update failed', r.ok);
+                if (r.ok) adminLoadFundraisers();
+            });
+            window.addEventListener('gvdg:admin-fundraiser-delete-request', async (event) => {
+                const fundraiser = event.detail && event.detail.fundraiser;
+                if (!fundraiser || fundraiser.id == null) return;
+                const r = await adminApi('/admin/fundraisers/' + fundraiser.id, { method: 'DELETE' });
+                adminMsg(r.ok ? 'Deleted' : 'Delete failed', r.ok);
+                if (r.ok) adminLoadFundraisers();
+            });
+            window.addEventListener('gvdg:admin-meeting-delete-request', async (event) => {
+                const meeting = event.detail && event.detail.meeting;
+                if (!meeting || meeting.id == null) return;
+                const r = await adminApi('/admin/meetings/' + meeting.id, { method: 'DELETE' });
+                adminMsg(r.ok ? 'Deleted' : 'Delete failed', r.ok);
+                if (r.ok) adminLoadMeetings();
             });
             $('adminCreateForm').addEventListener('submit', adminSaveEvent);
             $('aeCourse').addEventListener('change', aeLoadLayouts);

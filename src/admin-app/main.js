@@ -2,6 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 
 import { AdminAuthGate } from "./auth-gate.js";
+import { AdminFundraisersList, AdminLeaguesList, AdminMeetingsList } from "./club-content-lists.js";
 import { AdminCoursesList } from "./courses-list.js";
 import { AdminEventsList } from "./events-list.js";
 import { AdminMessage } from "./message.js";
@@ -44,6 +45,21 @@ if (eventsListMount) {
 const coursesListMount = document.getElementById("adminCoursesListReactApp");
 if (coursesListMount) {
   createRoot(coursesListMount).render(h(AdminCoursesList));
+}
+
+const leaguesListMount = document.getElementById("adminLeaguesListReactApp");
+if (leaguesListMount) {
+  createRoot(leaguesListMount).render(h(AdminLeaguesList));
+}
+
+const fundraisersListMount = document.getElementById("adminFundraisersListReactApp");
+if (fundraisersListMount) {
+  createRoot(fundraisersListMount).render(h(AdminFundraisersList));
+}
+
+const meetingsListMount = document.getElementById("adminMeetingsListReactApp");
+if (meetingsListMount) {
+  createRoot(meetingsListMount).render(h(AdminMeetingsList));
 }
 
 const crottsMount = document.getElementById("crottsReactApp");
