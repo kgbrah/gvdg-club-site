@@ -3,6 +3,7 @@ import React from "react";
 const h = React.createElement;
 
 const EMPTY_STATE = { status: "loading", destinations: [] };
+const EMPTY_EXPORT_RESULT_STATE = { message: "No export run yet.", ok: null };
 
 function objectOrEmpty(value) {
   return value && typeof value === "object" ? value : {};
@@ -11,6 +12,11 @@ function objectOrEmpty(value) {
 function currentState() {
   const state = window.__gvdgAdminDataArchiveDestinationsState;
   return state && typeof state === "object" ? state : EMPTY_STATE;
+}
+
+function currentExportResultState() {
+  const state = window.__gvdgAdminDataArchiveExportResultState;
+  return state && typeof state === "object" ? state : EMPTY_EXPORT_RESULT_STATE;
 }
 
 function normalizeText(value, fallback = "") {
@@ -37,6 +43,13 @@ function normalizeState(state) {
   return {
     destinations: Array.isArray(state.destinations) ? state.destinations.map(normalizeDestination) : [],
     status: state.status === "loading" || state.status === "error" ? state.status : "ready",
+  };
+}
+
+function normalizeExportResultState(state) {
+  return {
+    message: normalizeText(state.message, EMPTY_EXPORT_RESULT_STATE.message) || EMPTY_EXPORT_RESULT_STATE.message,
+    ok: state.ok === true ? true : state.ok === false ? false : null,
   };
 }
 
@@ -116,4 +129,24 @@ export function AdminDataArchiveDestinationsList() {
       key: destination.id || `${destination.label}-${index}`,
     })
   )));
+}
+
+export function AdminDataArchiveExportResult() {
+  const [state, setState] = React.useState(() => normalizeExportResultState(currentExportResultState()));
+
+  React.useEffect(() => {
+    function update(event) {
+      setState(normalizeExportResultState(event.detail && typeof event.detail === "object" ? event.detail : currentExportResultState()));
+    }
+    window.addEventListener("gvdg:admin-data-archive-export-result", update);
+    setState(normalizeExportResultState(currentExportResultState()));
+    return () => window.removeEventListener("gvdg:admin-data-archive-export-result", update);
+  }, []);
+
+  const tone = state.ok === false ? "error" : state.ok === true ? "success" : "idle";
+  return h("p", {
+    className: state.ok === false ? "al-note err" : "al-note",
+    "data-react-admin-data-archive-export-result": tone,
+    role: state.ok === false ? "alert" : "status",
+  }, state.message);
 }

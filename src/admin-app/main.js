@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { AdminAuthGate } from "./auth-gate.js";
 import { AdminFundraisersList, AdminLeaguesList, AdminMeetingsList } from "./club-content-lists.js";
 import { AdminCoursesList } from "./courses-list.js";
-import { AdminDataArchiveDestinationsList } from "./data-archive-destinations-list.js";
+import { AdminDataArchiveDestinationsList, AdminDataArchiveExportResult } from "./data-archive-destinations-list.js";
 import { AdminEventsList } from "./events-list.js";
 import { AdminMessage } from "./message.js";
 import { AdminMembersList } from "./members-list.js";
@@ -92,6 +92,11 @@ if (walletRecentMount) {
 const dataArchiveDestinationsMount = document.getElementById("adminDataArchiveDestinationsReactApp");
 if (dataArchiveDestinationsMount) {
   createRoot(dataArchiveDestinationsMount).render(h(AdminDataArchiveDestinationsList));
+}
+
+const dataArchiveExportResultMount = document.getElementById("adminDataArchiveExportResultReactApp");
+if (dataArchiveExportResultMount) {
+  createRoot(dataArchiveExportResultMount).render(h(AdminDataArchiveExportResult));
 }
 
 const registrationRosterMount = document.getElementById("adminRegistrationRosterReactApp");

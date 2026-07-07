@@ -688,7 +688,7 @@
                             <button type="button" class="admin-btn" id="dxRunExport">Run export</button>
                         </div>
                     </div>
-                    <div id="dxExportResult" style="margin-top:0.75rem;" class="al-note">No export run yet.</div>
+                    <div id="adminDataArchiveExportResultReactApp" style="margin-top:0.75rem;"></div>
                 </div>
             </div>
                 </div><!-- /.admin-content -->
@@ -806,10 +806,9 @@
         function dollarsToCents(v) { const n = parseFloat(v); return Number.isFinite(n) ? Math.round(n * 100) : null; }
         let dataArchiveDestinations = [];
         function setDataArchiveExportResult(message, ok) {
-            const r = $('dxExportResult');
-            if (!r) return;
-            r.textContent = message || 'No export run yet.';
-            r.className = 'al-note' + (ok ? '' : ' err');
+            const state = { message: message || 'No export run yet.', ok: ok === true ? true : ok === false ? false : null };
+            window.__gvdgAdminDataArchiveExportResultState = state;
+            window.dispatchEvent(new CustomEvent('gvdg:admin-data-archive-export-result', { detail: state }));
         }
         function resetDataArchiveEndpointForm() {
             $('dxEndpointId').value = '';

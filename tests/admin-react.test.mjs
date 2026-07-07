@@ -545,7 +545,7 @@ test('admin data archive destination list is rendered by React from legacy loade
   assert.match(initAdmin, /adminApi\('\/admin\/export\/endpoints\/' \+ destination\.id \+ '\/activate', \{ method: 'POST' \}\)/);
   assert.match(initAdmin, /gvdg:admin-data-archive-destination-delete-request/);
   assert.match(initAdmin, /adminApi\('\/admin\/export\/endpoints\/' \+ destination\.id, \{ method: 'DELETE' \}\)/);
-  assert.match(main, /import \{ AdminDataArchiveDestinationsList \} from "\.\/data-archive-destinations-list\.js"/);
+  assert.match(main, /import \{ AdminDataArchiveDestinationsList, AdminDataArchiveExportResult \} from "\.\/data-archive-destinations-list\.js"/);
   assert.match(main, /const dataArchiveDestinationsMount = document\.getElementById\("adminDataArchiveDestinationsReactApp"\)/);
   assert.match(main, /createRoot\(dataArchiveDestinationsMount\)\.render\(h\(AdminDataArchiveDestinationsList\)\)/);
   assert.match(destinationsList, /export function AdminDataArchiveDestinationsList/);

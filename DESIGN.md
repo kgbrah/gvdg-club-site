@@ -284,6 +284,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: loading and empty states use status semantics, load failures use alert semantics, and row actions are real buttons.
 - Motion: static destination rows; only inherited control hover/focus states apply.
 
+### Admin Data Archive Export Result
+
+- Structure: the Admin Data archive export result renders from `admin-app` into `adminDataArchiveExportResultReactApp`; legacy export code keeps request/download handling and publishes result state events only.
+- Variants: idle copy, successful download/test/sent result, completed fallback result, and failed result.
+- Spacing: reuses `.al-note` and `.al-note.err` so the result sits in the same compact note position below the Run export button.
+- States: React owns message text, success/idle/error tone, and status/alert role; `admin.html` must not keep `dxExportResult`, mutate export result `textContent`, or toggle result classes directly.
+- Accessibility: idle and success messages use status semantics; failures use alert semantics.
+- Motion: static result text; no decorative motion.
+
 ### Events Hub App
 
 - Structure: the Events page hub schedule renders from the shared `public-app` React bundle into `liveNowSection`, `calendarEvents`, `hub`, and `clubEventsSection`; the legacy Events script only fetches/splits feeds and publishes `gvdg:events-hub`.
