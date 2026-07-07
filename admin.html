@@ -504,8 +504,7 @@
                         <div class="al-row" style="margin-top:0.5rem;"><span>Divisions (comma-separated)<input id="rgDivisions" maxlength="400" size="40" placeholder="MA1, MA40, FA1, Rec"></span></div>
                         <button type="button" class="admin-btn" id="rgSaveBtn" style="margin-top:0.5rem;">Save settings</button>
                     </div>
-                    <h4 class="al-h">Registered players (<span id="rgCount">0</span>) <span class="al-note">— includes manually-added walk-ons; check in, assign division/team/start hole</span></h4>
-                    <div style="overflow-x:auto;"><table class="al-holes" id="rgRoster"></table></div>
+                    <div id="adminRegistrationRosterReactApp"></div>
                     <div class="al-row" style="margin-top:0.6rem;">
                         <button type="button" class="admin-btn secondary" id="rgAssignCards">Assign Cards</button>
                         <span class="al-note">Players/Card <input id="rgCardSize" type="number" min="1" value="4" style="width:3rem"></span>
@@ -2330,11 +2329,12 @@
             adminMsg(r.ok ? 'Registration settings saved' : 'Save failed (' + r.status + ')', r.ok);
         }
         async function rgLoadRoster() {
+            setAdminRegistrationRosterState({ status: 'loading', registrations: [], manualPlayers: [] });
             let regs = [];
-            try { const r = await adminApi('/admin/events/' + rgEventId + '/registrations'); if (r.ok) regs = (await r.json()).registrations || []; } catch (e) {}
+            let ok = true;
+            try { const r = await adminApi('/admin/events/' + rgEventId + '/registrations'); if (!r.ok) throw new Error('registrations_failed'); regs = (await r.json()).registrations || []; } catch (e) { ok = false; }
             let manual = [];
-            try { const r = await api('/events/' + rgEventId); if (r.ok) manual = ((await r.json()).event || {}).players || []; } catch (e) {}
-            $('rgCount').textContent = String(regs.length + manual.length);
+            try { const r = await api('/events/' + rgEventId); if (!r.ok) throw new Error('event_failed'); manual = ((await r.json()).event || {}).players || []; } catch (e) { ok = false; }
             const memberOptions = $('rgMemberOptions');
             if (memberOptions) {
                 memberOptions.replaceChildren();
@@ -2345,45 +2345,11 @@
                     memberOptions.appendChild(opt);
                 });
             }
-            const grid = $('rgRoster'); grid.replaceChildren();
-            const thead = document.createElement('thead'); const htr = document.createElement('tr');
-            ['Player', 'Division', 'Team', 'Start hole', 'In?', 'Paid?', 'Credit'].forEach((h) => htr.appendChild(elx('th', null, h)));
-            thead.appendChild(htr); grid.appendChild(thead);
-            const tbody = document.createElement('tbody');
-            if (!regs.length && !manual.length) { const tr = document.createElement('tr'); const td = elx('td', null, 'No players yet.'); td.colSpan = 7; tr.appendChild(td); tbody.appendChild(tr); }
-            regs.forEach((rg) => {
-                const tr = document.createElement('tr');
-                tr.appendChild(elx('td', 'lb-name', rg.name));
-                // Division + team are admin-editable (blur to save). Team matters for doubles — each player
-                // needs a pair label, and matchplay/doubles targets are built from these labels.
-                const divTd = document.createElement('td'); const divIn = document.createElement('input'); divIn.type = 'text'; divIn.maxLength = 40; divIn.style.width = '5rem'; divIn.value = rg.division || ''; divIn.placeholder = 'division'; divIn.addEventListener('change', () => rgPatch(rg.id, { division: divIn.value.trim() || null })); divTd.appendChild(divIn); tr.appendChild(divTd);
-                const teamTd = document.createElement('td'); const teamIn = document.createElement('input'); teamIn.type = 'text'; teamIn.maxLength = 40; teamIn.style.width = '5rem'; teamIn.value = rg.team || ''; teamIn.placeholder = 'pair/team'; teamIn.addEventListener('change', () => rgPatch(rg.id, { team: teamIn.value.trim() || null })); teamTd.appendChild(teamIn); tr.appendChild(teamTd);
-                const shTd = document.createElement('td'); const sh = document.createElement('input'); sh.type = 'number'; sh.min = '1'; sh.style.width = '3.5rem'; if (rg.starting_hole != null) sh.value = rg.starting_hole; sh.addEventListener('change', () => rgPatch(rg.id, { starting_hole: parseInt(sh.value, 10) || null })); shTd.appendChild(sh); tr.appendChild(shTd);
-                tr.appendChild(rgToggleCell(rg.checked_in, (v) => rgPatch(rg.id, { checked_in: v })));
-                tr.appendChild(rgToggleCell(rg.paid_entry, (v) => rgPatch(rg.id, { paid_entry: v })));
-                tr.appendChild(rgCreditCell(rg));
-                tbody.appendChild(tr);
-            });
-            // Manually-added walk-ons appear in the SAME roster (read-only, tagged, with a Remove) so admins
-            // manage one unified "Registered players" list — and both sources seed the live round.
-            manual.forEach((p) => {
-                const tr = document.createElement('tr');
-                const nameTd = elx('td', 'lb-name', p.name || 'Player');
-                const tag = document.createElement('span'); tag.className = 'al-note'; tag.textContent = ' · manual'; nameTd.appendChild(tag);
-                tr.appendChild(nameTd);
-                tr.appendChild(elx('td', null, p.division || '—'));
-                tr.appendChild(elx('td', null, p.team || '—'));
-                tr.appendChild(elx('td', null, '—')); // start hole — assigned at scoring time
-                tr.appendChild(elx('td', null, '—')); // check-in n/a for a walk-on
-                tr.appendChild(elx('td', null, '—')); // paid n/a
-                const act = document.createElement('td');
-                const del = elx('button', 'admin-btn danger', 'Remove'); del.type = 'button';
-                del.addEventListener('click', () => rgRemoveManualPlayer(p));
-                act.appendChild(del);
-                tr.appendChild(act);
-                tbody.appendChild(tr);
-            });
-            grid.appendChild(tbody);
+            setAdminRegistrationRosterState({ status: ok ? 'ready' : 'error', registrations: regs, manualPlayers: manual });
+        }
+        function setAdminRegistrationRosterState(state) {
+            window.__gvdgAdminRegistrationRosterState = state;
+            window.dispatchEvent(new CustomEvent('gvdg:admin-registration-roster', { detail: state }));
         }
         async function rgAddManualPlayer() {
             const body = {
@@ -2404,26 +2370,15 @@
             }
         }
         async function rgRemoveManualPlayer(player) {
-            if (!confirm('Remove ' + (player.name || 'this player') + '?')) return;
             const r = await adminApi('/admin/events/' + rgEventId + '/players/' + player.id, { method: 'DELETE' });
             adminMsg(r.ok ? 'Player removed' : 'Remove failed (' + r.status + ')', r.ok);
             if (r.ok) rgLoadRoster();
         }
-        function rgCreditCell(rg) {
-            const td = document.createElement('td');
-            if (!rg.member_id) { td.textContent = '—'; return td; }
-            const wrap = elx('span', 'credit-award');
-            const amount = document.createElement('input'); amount.type = 'number'; amount.min = '0'; amount.step = '0.01'; amount.placeholder = '$';
-            const btn = elx('button', 'admin-btn secondary', 'Award'); btn.type = 'button';
-            btn.addEventListener('click', () => rgAwardCredit(rg.member_id, rg.name, amount));
-            wrap.appendChild(amount); wrap.appendChild(btn); td.appendChild(wrap);
-            return td;
-        }
-        async function rgAwardCredit(memberId, name, input) {
-            const amount = dollarsToCents(input.value);
+        async function rgAwardCredit(memberId, name, amountValue) {
+            const amount = dollarsToCents(amountValue);
             if (amount == null || amount <= 0) { adminMsg('Enter a store credit amount', false); return; }
             const r = await adminApi('/admin/events/' + rgEventId + '/store-credit', { method: 'POST', body: { member_id: memberId, member_name: name || null, amount_cents: amount, note: 'Event payout: ' + ($('rgEvent').selectedOptions[0]?.textContent || 'event') } });
-            if (r.ok) { const d = await r.json(); adminMsg('Awarded ' + dollarsFromCents(amount) + ' to ' + (name || memberId) + '. Balance: ' + dollarsFromCents(d.balance_cents || 0), true); input.value = ''; rgLoadCredits(); }
+            if (r.ok) { const d = await r.json(); adminMsg('Awarded ' + dollarsFromCents(amount) + ' to ' + (name || memberId) + '. Balance: ' + dollarsFromCents(d.balance_cents || 0), true); rgLoadRoster(); rgLoadCredits(); }
             else adminMsg(await rgStoreCreditError(r, 'Store credit award failed'), false);
         }
         async function rgStoreCreditError(r, fallback) {
@@ -2431,10 +2386,6 @@
             if (d.error === 'member_not_found') return fallback + ': member id not found';
             if (d.error === 'invalid_store_credit') return fallback + ': enter a valid member and amount';
             return fallback + ' (' + r.status + ')';
-        }
-        function rgToggleCell(on, onChange) {
-            const td = document.createElement('td'); const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!on;
-            cb.addEventListener('change', () => onChange(cb.checked)); td.appendChild(cb); return td;
         }
         async function rgPatch(rid, patch) {
             const r = await adminApi('/admin/events/' + rgEventId + '/registrations/' + rid, { method: 'PATCH', body: patch });
@@ -2671,6 +2622,22 @@
                 const r = await adminApi('/admin/export/endpoints/' + destination.id, { method: 'DELETE' });
                 if (r.ok) { adminMsg('Deleted "' + dataArchiveDestinationLabel(destination) + '"', true); await adminLoadDataArchiveDestinations(); }
                 else adminMsg('Delete failed (' + r.status + ')', false);
+            });
+            window.addEventListener('gvdg:admin-registration-roster-patch-request', async (event) => {
+                const detail = event.detail || {};
+                const registration = detail.registration;
+                if (!registration || registration.id == null || !rgEventId) return;
+                await rgPatch(registration.id, detail.patch || {});
+            });
+            window.addEventListener('gvdg:admin-registration-roster-credit-request', async (event) => {
+                const detail = event.detail || {};
+                if (!detail.memberId || !rgEventId) return;
+                await rgAwardCredit(detail.memberId, detail.memberName, detail.amountValue);
+            });
+            window.addEventListener('gvdg:admin-registration-manual-remove-request', async (event) => {
+                const player = event.detail && event.detail.player;
+                if (!player || player.id == null || !rgEventId) return;
+                await rgRemoveManualPlayer(player);
             });
             window.addEventListener('gvdg:admin-registration-ctp-winner-request', async (event) => {
                 const detail = event.detail || {};

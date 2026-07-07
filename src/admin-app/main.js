@@ -12,6 +12,7 @@ import { AdminNavigation } from "./navigation.js";
 import { AdminOrdersList } from "./orders-list.js";
 import { AdminPageChrome } from "./page-chrome.js";
 import { AdminProductsList } from "./products-list.js";
+import { AdminRegistrationRoster } from "./registration-roster.js";
 import { AdminRegistrationAcePot, AdminRegistrationCreditsList, AdminRegistrationCtpsList } from "./registration-widgets.js";
 import { AdminWalletRecentList } from "./wallet-recent-list.js";
 import { CrottsWidget } from "../shared/crotts-widget.js";
@@ -91,6 +92,11 @@ if (walletRecentMount) {
 const dataArchiveDestinationsMount = document.getElementById("adminDataArchiveDestinationsReactApp");
 if (dataArchiveDestinationsMount) {
   createRoot(dataArchiveDestinationsMount).render(h(AdminDataArchiveDestinationsList));
+}
+
+const registrationRosterMount = document.getElementById("adminRegistrationRosterReactApp");
+if (registrationRosterMount) {
+  createRoot(registrationRosterMount).render(h(AdminRegistrationRoster));
 }
 
 const registrationCtpsMount = document.getElementById("adminRegistrationCtpsReactApp");
