@@ -1,13 +1,12 @@
 import React from "react";
 import { LockKeyhole } from "lucide-react";
 
+import { currentAdminAuthGateState } from "./admin-shell-state.js";
+
 const h = React.createElement;
 
-const DEFAULT_STATE = { status: "loading" };
-
 function currentState() {
-  const state = window.__gvdgAdminAuthGateState;
-  return state && typeof state === "object" ? state : DEFAULT_STATE;
+  return currentAdminAuthGateState();
 }
 
 function gateIcon() {

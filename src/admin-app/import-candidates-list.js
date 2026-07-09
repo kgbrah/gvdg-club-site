@@ -8,11 +8,6 @@ function objectOrEmpty(value) {
   return value && typeof value === "object" ? value : {};
 }
 
-function currentState() {
-  const state = window.__gvdgAdminImportCandidatesState;
-  return state && typeof state === "object" ? state : EMPTY_STATE;
-}
-
 function normalizeText(value, fallback = "") {
   return typeof value === "string" ? value : fallback;
 }
@@ -47,17 +42,16 @@ function dispatchRequest(name, detail) {
 }
 
 export function AdminImportCandidatesList() {
-  const [state, setState] = React.useState(() => normalizeState(currentState()));
+  const [state, setState] = React.useState(() => normalizeState(EMPTY_STATE));
   const [actions, setActions] = React.useState({});
   const requestCounter = React.useRef(0);
 
   React.useEffect(() => {
     function update(event) {
-      setState(normalizeState(event.detail && typeof event.detail === "object" ? event.detail : currentState()));
+      setState(normalizeState(event.detail && typeof event.detail === "object" ? event.detail : EMPTY_STATE));
       setActions({});
     }
     window.addEventListener("gvdg:admin-import-candidates", update);
-    setState(normalizeState(currentState()));
     return () => window.removeEventListener("gvdg:admin-import-candidates", update);
   }, []);
 

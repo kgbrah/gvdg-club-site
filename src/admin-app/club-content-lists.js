@@ -1,5 +1,7 @@
 import React from "react";
 
+import { adminConfirm } from "./admin-dialogs.js";
+
 const h = React.createElement;
 
 const EMPTY_LEAGUES_STATE = { leagues: [] };
@@ -8,11 +10,6 @@ const EMPTY_MEETINGS_STATE = { meetings: [] };
 
 function objectOrEmpty(value) {
   return value && typeof value === "object" ? value : {};
-}
-
-function stateFrom(name, fallback) {
-  const state = window[name];
-  return state && typeof state === "object" ? state : fallback;
 }
 
 function dispatchRequest(name, detail) {
@@ -91,14 +88,13 @@ function EmptyNote({ children, marker }) {
 }
 
 export function AdminLeaguesList() {
-  const [state, setState] = React.useState(() => normalizeLeaguesState(stateFrom("__gvdgAdminLeaguesListState", EMPTY_LEAGUES_STATE)));
+  const [state, setState] = React.useState(() => normalizeLeaguesState(EMPTY_LEAGUES_STATE));
 
   React.useEffect(() => {
     function update(event) {
-      setState(normalizeLeaguesState(event.detail && typeof event.detail === "object" ? event.detail : stateFrom("__gvdgAdminLeaguesListState", EMPTY_LEAGUES_STATE)));
+      setState(normalizeLeaguesState(event.detail && typeof event.detail === "object" ? event.detail : EMPTY_LEAGUES_STATE));
     }
     window.addEventListener("gvdg:admin-leagues-list", update);
-    setState(normalizeLeaguesState(stateFrom("__gvdgAdminLeaguesListState", EMPTY_LEAGUES_STATE)));
     return () => window.removeEventListener("gvdg:admin-leagues-list", update);
   }, []);
 
@@ -110,8 +106,14 @@ export function AdminLeaguesList() {
       h("button", {
         className: "admin-btn danger",
         key: "delete",
-        onClick: () => {
-          if (!window.confirm(`Delete league "${league.name}"?`)) return;
+        onClick: async () => {
+          const confirmed = await adminConfirm({
+            title: "Delete league",
+            message: `Delete league "${league.name}"?`,
+            confirmText: "Delete",
+            danger: true,
+          });
+          if (!confirmed) return;
           dispatchRequest("gvdg:admin-league-delete-request", { league: league.source });
         },
         type: "button",
@@ -121,14 +123,13 @@ export function AdminLeaguesList() {
 }
 
 export function AdminFundraisersList() {
-  const [state, setState] = React.useState(() => normalizeFundraisersState(stateFrom("__gvdgAdminFundraisersListState", EMPTY_FUNDRAISERS_STATE)));
+  const [state, setState] = React.useState(() => normalizeFundraisersState(EMPTY_FUNDRAISERS_STATE));
 
   React.useEffect(() => {
     function update(event) {
-      setState(normalizeFundraisersState(event.detail && typeof event.detail === "object" ? event.detail : stateFrom("__gvdgAdminFundraisersListState", EMPTY_FUNDRAISERS_STATE)));
+      setState(normalizeFundraisersState(event.detail && typeof event.detail === "object" ? event.detail : EMPTY_FUNDRAISERS_STATE));
     }
     window.addEventListener("gvdg:admin-fundraisers-list", update);
-    setState(normalizeFundraisersState(stateFrom("__gvdgAdminFundraisersListState", EMPTY_FUNDRAISERS_STATE)));
     return () => window.removeEventListener("gvdg:admin-fundraisers-list", update);
   }, []);
 
@@ -142,8 +143,13 @@ export function AdminFundraisersList() {
       h("button", {
         className: "admin-btn secondary",
         key: "status",
-        onClick: () => {
-          if (!window.confirm(`${actionLabel} fundraiser "${fundraiser.title}"?`)) return;
+        onClick: async () => {
+          const confirmed = await adminConfirm({
+            title: `${actionLabel} fundraiser`,
+            message: `${actionLabel} fundraiser "${fundraiser.title}"?`,
+            confirmText: actionLabel,
+          });
+          if (!confirmed) return;
           dispatchRequest("gvdg:admin-fundraiser-status-request", { fundraiser: fundraiser.source, status: nextStatus });
         },
         type: "button",
@@ -151,8 +157,14 @@ export function AdminFundraisersList() {
       h("button", {
         className: "admin-btn danger",
         key: "delete",
-        onClick: () => {
-          if (!window.confirm(`Delete fundraiser "${fundraiser.title}"?`)) return;
+        onClick: async () => {
+          const confirmed = await adminConfirm({
+            title: "Delete fundraiser",
+            message: `Delete fundraiser "${fundraiser.title}"?`,
+            confirmText: "Delete",
+            danger: true,
+          });
+          if (!confirmed) return;
           dispatchRequest("gvdg:admin-fundraiser-delete-request", { fundraiser: fundraiser.source });
         },
         type: "button",
@@ -162,14 +174,13 @@ export function AdminFundraisersList() {
 }
 
 export function AdminMeetingsList() {
-  const [state, setState] = React.useState(() => normalizeMeetingsState(stateFrom("__gvdgAdminMeetingsListState", EMPTY_MEETINGS_STATE)));
+  const [state, setState] = React.useState(() => normalizeMeetingsState(EMPTY_MEETINGS_STATE));
 
   React.useEffect(() => {
     function update(event) {
-      setState(normalizeMeetingsState(event.detail && typeof event.detail === "object" ? event.detail : stateFrom("__gvdgAdminMeetingsListState", EMPTY_MEETINGS_STATE)));
+      setState(normalizeMeetingsState(event.detail && typeof event.detail === "object" ? event.detail : EMPTY_MEETINGS_STATE));
     }
     window.addEventListener("gvdg:admin-meetings-list", update);
-    setState(normalizeMeetingsState(stateFrom("__gvdgAdminMeetingsListState", EMPTY_MEETINGS_STATE)));
     return () => window.removeEventListener("gvdg:admin-meetings-list", update);
   }, []);
 
@@ -181,8 +192,14 @@ export function AdminMeetingsList() {
       h("button", {
         className: "admin-btn danger",
         key: "delete",
-        onClick: () => {
-          if (!window.confirm(`Delete meeting "${meeting.title}"?`)) return;
+        onClick: async () => {
+          const confirmed = await adminConfirm({
+            title: "Delete meeting",
+            message: `Delete meeting "${meeting.title}"?`,
+            confirmText: "Delete",
+            danger: true,
+          });
+          if (!confirmed) return;
           dispatchRequest("gvdg:admin-meeting-delete-request", { meeting: meeting.source });
         },
         type: "button",

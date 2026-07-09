@@ -1,9 +1,10 @@
 import React from "react";
 import { Check, Copy, ExternalLink, Heart, Mail } from "lucide-react";
 
+import { fetchPublicJson, publicApiBase } from "./public-api.js";
+import { safeExternalUrl } from "../shared/safe-url.js";
+
 const h = React.createElement;
-const FUNDRAISERS_EVENT = "gvdg:events-fundraisers";
-const MEETINGS_EVENT = "gvdg:events-meetings";
 const DONATION_FALLBACK = "https://paypal.me/greenvillediscgolf";
 
 function icon(Icon, size = 15) {
@@ -13,21 +14,6 @@ function icon(Icon, size = 15) {
     size,
     strokeWidth: 2.4,
   });
-}
-
-function publishedArray(name) {
-  const value = window[name];
-  return Array.isArray(value) ? value : [];
-}
-
-function safeExternalUrl(raw) {
-  if (!raw) return "";
-  try {
-    const url = new URL(String(raw), window.location.href);
-    return url.protocol === "http:" || url.protocol === "https:" ? url.href : "";
-  } catch {
-    return "";
-  }
 }
 
 function currency(cents) {
@@ -194,19 +180,36 @@ function MeetingCard({ meeting }) {
   ]);
 }
 
+function activeFundraisers(data) {
+  const items = Array.isArray(data && data.fundraisers) ? data.fundraisers : [];
+  return items.filter((fundraiser) => fundraiser && fundraiser.status === "active");
+}
+
+function meetingItems(data) {
+  return Array.isArray(data && data.meetings) ? data.meetings : [];
+}
+
 export function EventsFundraisersApp() {
-  const [fundraisers, setFundraisers] = React.useState(() => publishedArray("__gvdgEventsFundraisers"));
+  const api = React.useMemo(publicApiBase, []);
+  const [fundraisers, setFundraisers] = React.useState([]);
 
   React.useEffect(() => {
-    function update(event) {
-      setFundraisers(Array.isArray(event.detail && event.detail.fundraisers)
-        ? event.detail.fundraisers
-        : publishedArray("__gvdgEventsFundraisers"));
+    let active = true;
+
+    async function loadFundraisers() {
+      try {
+        const data = await fetchPublicJson(api, "/fundraisers");
+        if (active) setFundraisers(activeFundraisers(data));
+      } catch {
+        if (active) setFundraisers([]);
+      }
     }
-    window.addEventListener(FUNDRAISERS_EVENT, update);
-    update({ detail: { fundraisers: publishedArray("__gvdgEventsFundraisers") } });
-    return () => window.removeEventListener(FUNDRAISERS_EVENT, update);
-  }, []);
+
+    loadFundraisers();
+    return () => {
+      active = false;
+    };
+  }, [api]);
 
   if (!fundraisers.length) return null;
   return h("section", { "data-react-events-fundraisers": "true" }, [
@@ -217,18 +220,26 @@ export function EventsFundraisersApp() {
 }
 
 export function EventsMeetingsApp() {
-  const [meetings, setMeetings] = React.useState(() => publishedArray("__gvdgEventsMeetings"));
+  const api = React.useMemo(publicApiBase, []);
+  const [meetings, setMeetings] = React.useState([]);
 
   React.useEffect(() => {
-    function update(event) {
-      setMeetings(Array.isArray(event.detail && event.detail.meetings)
-        ? event.detail.meetings
-        : publishedArray("__gvdgEventsMeetings"));
+    let active = true;
+
+    async function loadMeetings() {
+      try {
+        const data = await fetchPublicJson(api, "/meetings");
+        if (active) setMeetings(meetingItems(data));
+      } catch {
+        if (active) setMeetings([]);
+      }
     }
-    window.addEventListener(MEETINGS_EVENT, update);
-    update({ detail: { meetings: publishedArray("__gvdgEventsMeetings") } });
-    return () => window.removeEventListener(MEETINGS_EVENT, update);
-  }, []);
+
+    loadMeetings();
+    return () => {
+      active = false;
+    };
+  }, [api]);
 
   if (!meetings.length) return null;
   return h("section", { "data-react-events-meetings": "true" }, [

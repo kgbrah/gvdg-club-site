@@ -4,7 +4,7 @@ The official website and member platform for the **Greenville Disc Golf Club** (
 
 It is two things in one repository, deployed together:
 
-1. **A static frontend** — hand-written HTML + vanilla JavaScript at the repo root (`index.html`, `gvdg-members.html`, `admin.html`, `events.html`, …), with `score.html` now loading a small Vite/React bundle generated into `score-app/`.
+1. **A static frontend** — hand-written HTML shells and page-owned helpers at the repo root, with Vite/React bundles for the home, public/events, admin, members, live-scoring, and tee-sign preview surfaces.
 2. **A Cloudflare Worker** (`auth-worker/`, TypeScript) — the only server-side code. It handles member authentication, the club-operations API, live scoring, the pro shop, ratings, and the "Crotts" AI assistant. Every dynamic thing the pages show comes from this Worker over HTTPS.
 
 There is **no traditional backend or database server to boot** for the site itself — the pages are static files, and all data flows through the Worker.
@@ -41,7 +41,7 @@ There are **two separate environments**, and it is important not to confuse them
 
 The Cloudflare Worker for the dev environment is named `gvdg-member-auth-staging` — despite the "staging" name, **it is the live dev Worker** attached to `auth.gvdgclub.com`. The `staging` and `gvdgclub` config environments are aliases to the same Worker and share one D1 database, KV, and R2 bucket.
 
-The frontend picks its API base automatically: an explicit `data-api-base` / `data-auth-base` attribute wins; otherwise it resolves by host (`greenvillediscgolf.com → auth.greenvillediscgolf.com`, everything else → `auth.gvdgclub.com`, `localhost → :8788`).
+The frontend picks its API base automatically through `src/shared/api-base.js`: an explicit `data-api-base` / `data-auth-base` attribute wins; otherwise it resolves by host (`greenvillediscgolf.com → auth.greenvillediscgolf.com`, everything else → `auth.gvdgclub.com`, `localhost → :8788`).
 
 ---
 
@@ -92,7 +92,8 @@ The frontend picks its API base automatically: an explicit `data-api-base` / `da
 
 ```
 Browser (static page)
-  │  resolves the API base (data-*-base attribute, else by host)
+  │  resolves the API base through src/shared/api-base.js
+  │  (data-*-base attribute, else by host)
   ▼
 Cloudflare Worker  auth-worker/src/index.ts   (default export { fetch, scheduled })
   ├─ KV  ROSTER      members (source of truth incl. PIN hashes) + login indexes + passkey creds
@@ -128,7 +129,7 @@ All D1 access is **parameterized** (`.bind()` with `?`). Migrations in `auth-wor
 
 ## Tech stack
 
-- **Frontend:** hand-written HTML5 + vanilla ES modules, CSS custom-property design tokens (`tokens.css`), Vite/React bundles for `score.html` and the member dashboard islands, a service worker (`sw.js`, manually versioned) + PWA manifest.
+- **Frontend:** hand-written HTML5 shells + CSS custom-property design tokens (`tokens.css`), Vite/React bundles for the public, admin, members, live-scoring, tee-sign preview, and home app surfaces, a service worker (`sw.js`, manually versioned) + PWA manifest.
 - **Backend:** Cloudflare Workers (TypeScript), Workers KV, D1 (SQLite), Durable Objects, R2, Workers AI. Auth via PBKDF2-HMAC-SHA256 PIN hashing + HS256 JWT (`jose`) + passkeys (`@simplewebauthn/server`).
 - **Tooling:** `wrangler`, `vitest` (Worker tests), `node --test` (frontend helper tests), `playwright` (browser QA), `tsc` (typecheck).
 
@@ -152,7 +153,7 @@ All D1 access is **parameterized** (`.bind()` with `?`). Migrations in `auth-wor
   archive.html            results archive
   src/*-app/              React app entries for migrated page regions
   *-app/                  generated route bundles (created by npm run build)
-  *.js                    small static helpers (pwa.js, matchplay-colors.js, ...)
+  *.js                    small static helpers that remain page-owned (pwa.js, ryder-cup.js, ...)
   tokens.css              design tokens (single source of colour truth)
   sw.js                   service worker (manually versioned cache)
   site.webmanifest        PWA manifest
@@ -175,7 +176,7 @@ Key docs: **[CLAUDE.md](CLAUDE.md)** (architecture map), **[AGENTS.md](AGENTS.md
 
 ## Local development
 
-**Prerequisites:** Node.js, and `wrangler` (`npm i -g wrangler`). Run the root build before serving `score.html`.
+**Prerequisites:** Node.js, and `wrangler` (`npm i -g wrangler`). Run the root build before serving the local frontend.
 
 ### 1. Install root frontend/tooling dependencies
 ```bash
@@ -237,9 +238,10 @@ npm run typecheck             # tsc --noEmit
 npm run audit                 # npm audit --audit-level=moderate
 
 # Frontend helpers (from repo root)
-npm run build                 # builds score-app/ for score.html
+npm run build                 # builds all generated Vite route bundles
 npm test                      # node --test tests/*.test.mjs
-npm run qa:react              # react-doctor static scan for the score app island
+npm run qa:react              # react-doctor project scan; generated app bundles are ignored
+npm run qa:site-smoke         # Playwright browser smoke for migrated route bundles
 npm run qa:live-scoring       # Playwright live-scoring browser QA
 npm run qa:staging-live-scoring  # live gvdgclub.com scoring E2E; requires QA credentials
 ```

@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v78";
+const CACHE = "gvdg-club-v85";
 const OFFLINE_PAGE = "gvdg-members.html";
 const ASSETS = [
   "tokens.css",
@@ -16,8 +16,7 @@ const ASSETS = [
   OFFLINE_PAGE,
   "members-app/members-app.js",
   "score.html",
-  "score-app/score-app.js",
-  "matchplay-colors.js"
+  "score-app/score-app.js"
 ];
 const STATIC_DESTINATIONS = new Set(["script", "style", "image", "font", "manifest"]);
 

@@ -17,11 +17,6 @@ function normalizeStatus(value) {
   return value === "loading" || value === "error" ? value : "ready";
 }
 
-function currentRosterState() {
-  const state = window.__gvdgAdminRegistrationRosterState;
-  return state && typeof state === "object" ? state : EMPTY_ROSTER_STATE;
-}
-
 function normalizeRegistration(registration) {
   const source = objectOrEmpty(registration);
   const id = source.id == null ? "" : String(source.id);
@@ -82,14 +77,13 @@ function RosterTable({ state }) {
 }
 
 export function AdminRegistrationRoster() {
-  const [state, setState] = React.useState(() => normalizeRosterState(currentRosterState()));
+  const [state, setState] = React.useState(() => normalizeRosterState(EMPTY_ROSTER_STATE));
 
   React.useEffect(() => {
     function update(event) {
-      setState(normalizeRosterState(event.detail && typeof event.detail === "object" ? event.detail : currentRosterState()));
+      setState(normalizeRosterState(event.detail && typeof event.detail === "object" ? event.detail : EMPTY_ROSTER_STATE));
     }
     window.addEventListener("gvdg:admin-registration-roster", update);
-    setState(normalizeRosterState(currentRosterState()));
     return () => window.removeEventListener("gvdg:admin-registration-roster", update);
   }, []);
 

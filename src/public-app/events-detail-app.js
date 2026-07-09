@@ -6,34 +6,13 @@ import {
   groupPlayersByDivision,
   statusLabel,
   typeLabel,
-} from "../../events.js";
+} from "../shared/events-model.js";
 import { WeatherStrip } from "../score-app/weather-strip.js";
 import { TeeSignSvg } from "../shared/tee-sign-svg.js";
-import { UDiscExportDetails } from "../shared/udisc-export.js";
+import { UDiscExportDetails, udiscDeepLink } from "../shared/udisc-export.js";
+import { useEventsEventDetail } from "./events-detail-data.js";
 
 const h = React.createElement;
-const EVENT_DETAIL_EVENT = "gvdg:events-event-detail";
-
-function publishedEventDetail() {
-  const data = window.__gvdgEventsEventDetail;
-  return data && typeof data === "object" && data.event ? data : null;
-}
-
-function useEventsEventDetail() {
-  const [data, setData] = React.useState(publishedEventDetail);
-
-  React.useEffect(() => {
-    function update(event) {
-      const next = event.detail && event.detail.data ? event.detail.data : publishedEventDetail();
-      setData(next && typeof next === "object" && next.event ? next : null);
-    }
-    window.addEventListener(EVENT_DETAIL_EVENT, update);
-    update({ detail: { data: publishedEventDetail() } });
-    return () => window.removeEventListener(EVENT_DETAIL_EVENT, update);
-  }, []);
-
-  return data;
-}
 
 function cleanClassName(value) {
   return String(value || "").replace(/[^a-z0-9_-]/gi, "");
@@ -256,6 +235,7 @@ function FinalResults({ course, data }) {
   const columns = matchplay ? ["Pos", "Player", "Match", "Scoring"] : ["Pos", "Player", "Total", "To Par", "Scoring"];
   const udiscCourseId = course && course.udisc_course_id;
   const addable = results.filter((result) => result && result.scorecard);
+  const canExportToUdisc = Boolean(udiscDeepLink(udiscCourseId) && addable.length);
 
   return h("section", { "data-react-events-final-results": "true" }, [
     h("h3", { className: "roster-title", key: "title" }, "Final results"),
@@ -288,7 +268,7 @@ function FinalResults({ course, data }) {
             ]);
           })),
         ])),
-    udiscCourseId && addable.length
+    canExportToUdisc
       ? h("div", { className: "udisc-export-section", key: "udisc" }, [
         h("h4", { className: "roster-title", key: "title" }, "Add your round to UDisc"),
         addable.map((result, index) => h(UDiscExportDetails, {

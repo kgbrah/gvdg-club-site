@@ -1,5 +1,7 @@
 import React from "react";
 
+import { adminConfirm } from "./admin-dialogs.js";
+
 const h = React.createElement;
 
 const EMPTY_CTPS_STATE = { status: "loading", ctps: [] };
@@ -32,21 +34,6 @@ function dollarsFromCents(cents) {
 
 function dispatchRequest(name, detail) {
   window.dispatchEvent(new CustomEvent(name, { detail }));
-}
-
-function currentCtpsState() {
-  const state = window.__gvdgAdminRegistrationCtpsState;
-  return state && typeof state === "object" ? state : EMPTY_CTPS_STATE;
-}
-
-function currentCreditsState() {
-  const state = window.__gvdgAdminRegistrationCreditsState;
-  return state && typeof state === "object" ? state : EMPTY_CREDITS_STATE;
-}
-
-function currentAcePotState() {
-  const state = window.__gvdgAdminRegistrationAcePotState;
-  return state && typeof state === "object" ? state : EMPTY_ACE_POT_STATE;
 }
 
 function normalizeCtp(ctp) {
@@ -128,8 +115,14 @@ function CtpRow({ ctp }) {
     setAmountValue("");
   }, [ctp.id, ctp.winnerName, ctp.winnerMemberId]);
 
-  function requestDelete() {
-    if (!window.confirm(`Delete this CTP for hole ${ctp.hole || "?"}?`)) return;
+  async function requestDelete() {
+    const confirmed = await adminConfirm({
+      title: "Delete CTP",
+      message: `Delete this CTP for hole ${ctp.hole || "?"}?`,
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!confirmed) return;
     dispatchRequest("gvdg:admin-registration-ctp-delete-request", { ctp: ctp.source });
   }
 
@@ -206,14 +199,13 @@ function WalletTransactionRow({ transaction, index }) {
 }
 
 export function AdminRegistrationCtpsList() {
-  const [state, setState] = React.useState(() => normalizeCtpsState(currentCtpsState()));
+  const [state, setState] = React.useState(() => normalizeCtpsState(EMPTY_CTPS_STATE));
 
   React.useEffect(() => {
     function update(event) {
-      setState(normalizeCtpsState(event.detail && typeof event.detail === "object" ? event.detail : currentCtpsState()));
+      setState(normalizeCtpsState(event.detail && typeof event.detail === "object" ? event.detail : EMPTY_CTPS_STATE));
     }
     window.addEventListener("gvdg:admin-registration-ctps-list", update);
-    setState(normalizeCtpsState(currentCtpsState()));
     return () => window.removeEventListener("gvdg:admin-registration-ctps-list", update);
   }, []);
 
@@ -235,14 +227,13 @@ export function AdminRegistrationCtpsList() {
 }
 
 export function AdminRegistrationCreditsList() {
-  const [state, setState] = React.useState(() => normalizeCreditsState(currentCreditsState()));
+  const [state, setState] = React.useState(() => normalizeCreditsState(EMPTY_CREDITS_STATE));
 
   React.useEffect(() => {
     function update(event) {
-      setState(normalizeCreditsState(event.detail && typeof event.detail === "object" ? event.detail : currentCreditsState()));
+      setState(normalizeCreditsState(event.detail && typeof event.detail === "object" ? event.detail : EMPTY_CREDITS_STATE));
     }
     window.addEventListener("gvdg:admin-registration-credits-list", update);
-    setState(normalizeCreditsState(currentCreditsState()));
     return () => window.removeEventListener("gvdg:admin-registration-credits-list", update);
   }, []);
 
@@ -268,14 +259,13 @@ export function AdminRegistrationCreditsList() {
 }
 
 export function AdminRegistrationAcePot() {
-  const [state, setState] = React.useState(() => normalizeAcePotState(currentAcePotState()));
+  const [state, setState] = React.useState(() => normalizeAcePotState(EMPTY_ACE_POT_STATE));
 
   React.useEffect(() => {
     function update(event) {
-      setState(normalizeAcePotState(event.detail && typeof event.detail === "object" ? event.detail : currentAcePotState()));
+      setState(normalizeAcePotState(event.detail && typeof event.detail === "object" ? event.detail : EMPTY_ACE_POT_STATE));
     }
     window.addEventListener("gvdg:admin-registration-ace-pot", update);
-    setState(normalizeAcePotState(currentAcePotState()));
     return () => window.removeEventListener("gvdg:admin-registration-ace-pot", update);
   }, []);
 

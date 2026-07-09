@@ -4,6 +4,26 @@ import { requestJson } from "./api.js";
 
 const h = React.createElement;
 
+const HTML_ENTITY_MAP = {
+  amp: "&",
+  apos: "'",
+  quot: '"',
+  "#039": "'",
+};
+
+export function pdgaEventTitle(value) {
+  return String(value || "").replace(/&(#\d+|#x[\da-fA-F]+|amp|apos|quot|#039);/g, (match, entity) => {
+    if (HTML_ENTITY_MAP[entity]) return HTML_ENTITY_MAP[entity];
+    if (entity[0] === "#") {
+      const code = entity[1].toLowerCase() === "x"
+        ? Number.parseInt(entity.slice(2), 16)
+        : Number.parseInt(entity.slice(1), 10);
+      return Number.isInteger(code) && code >= 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
+    }
+    return match;
+  }).trim();
+}
+
 function ratingValue(value) {
   return value == null ? "-" : String(value);
 }
@@ -15,6 +35,18 @@ function eventMeta(event) {
 function eventRatings(event) {
   const ratings = (event.rounds || []).map((round) => round.rating).filter((value) => value != null);
   return ratings.length ? ratings.join(" - ") : "-";
+}
+
+function EventRatingRow({ ratings }) {
+  const label = ratings === "-" ? "Rating" : "Round ratings";
+  return h("div", { className: "dash-event-rating-row", key: "rating-row" }, [
+    h("span", { className: "dash-event-rating-label", key: "label" }, label),
+    h("span", {
+      "aria-label": ratings === "-" ? "Round ratings unavailable" : `Round ratings: ${ratings}`,
+      className: "dash-event-ratings",
+      key: "ratings",
+    }, ratings),
+  ]);
 }
 
 export function usePdgaStats(pdgaNo) {
@@ -61,12 +93,16 @@ function RatingTile({ label, value, delta, live = false }) {
 }
 
 function RecentEvent({ event }) {
-  return h("div", { className: "dash-event" }, [
-    h("div", { key: "main" }, [
-      h("div", { className: "dash-event-name", key: "name" }, event.tournament || "Event"),
-      h("div", { className: "dash-event-date", key: "date" }, eventMeta(event)),
+  const ratings = eventRatings(event);
+  const title = pdgaEventTitle(event.tournament) || "Event";
+  return h("article", { className: "dash-event" }, [
+    h("div", { className: "dash-event-main", key: "main" }, [
+      h("div", { className: "dash-event-copy", key: "copy" }, [
+        h("div", { className: "dash-event-name", key: "name" }, title),
+        h("div", { className: "dash-event-date", key: "date" }, eventMeta(event)),
+      ]),
+      h(EventRatingRow, { ratings, key: "rating-row" }),
     ]),
-    h("div", { className: "dash-event-ratings", key: "ratings" }, eventRatings(event)),
   ]);
 }
 

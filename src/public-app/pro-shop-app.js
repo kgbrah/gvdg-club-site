@@ -1,5 +1,7 @@
 import React from "react";
 
+import { resolveApiBase } from "../shared/api-base.js";
+
 const h = React.createElement;
 
 const TOKEN_KEY = "gvdg_member_token";
@@ -31,15 +33,7 @@ function currentToken() {
 }
 
 function authBase() {
-  const local = ["127.0.0.1", "localhost"].includes(location.hostname) ? "http://127.0.0.1:8788" : "";
-  const host = location.hostname;
-  return (
-    local ||
-    (document.body.dataset.authBase || "").trim() ||
-    (host === "greenvillediscgolf.com" || host === "www.greenvillediscgolf.com"
-      ? "https://auth.greenvillediscgolf.com"
-      : "https://auth.gvdgclub.com")
-  ).trim().replace(/\/+$/, "");
+  return resolveApiBase({ datasetKeys: ["authBase"] });
 }
 
 function money(cents) {

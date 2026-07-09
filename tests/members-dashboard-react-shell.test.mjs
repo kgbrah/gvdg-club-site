@@ -49,11 +49,13 @@ function assertNoLegacyMemberFallbacks(html) {
 test('member dashboard mounts a React-owned dashboard app without legacy fallbacks', () => {
   const html = readFileSync('gvdg-members.html', 'utf8');
   const app = readFileSync('src/members-app/main.js', 'utf8');
+  const api = readFileSync('src/members-app/api.js', 'utf8');
   const authGate = readFileSync('src/members-app/auth-gate.js', 'utf8');
   const authForms = readFileSync('src/members-app/auth-forms.js', 'utf8');
   const authController = readFileSync('src/members-app/member-auth-controller.js', 'utf8');
   const authDom = readFileSync('src/members-app/member-auth-dom.js', 'utf8');
   const authState = readFileSync('src/members-app/member-auth-state.js', 'utf8');
+  const memberContext = readFileSync('src/members-app/member-context.js', 'utf8');
   const passkeys = readFileSync('src/members-app/member-passkeys.js', 'utf8');
   const profile = readFileSync('src/members-app/member-profile-controller.js', 'utf8');
   const pageChrome = readFileSync('src/members-app/page-chrome.js', 'utf8');
@@ -77,6 +79,11 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(html, /id="membersReactAuthGate"/);
   assert.match(html, /id="membersReactDashboardApp"/);
   assert.match(html, /id="membersReactDialogsApp"/);
+  assert.match(html, /<body data-auth-base="">/);
+  assert.match(html, /<div class="login-gate" id="membersReactAuthGate"><\/div>/);
+  assert.match(html, /<div class="members-content">/);
+  assert.doesNotMatch(html, /id="loginGate"/);
+  assert.doesNotMatch(html, /id="membersContent"/);
   assert.doesNotMatch(html, /<div id="membersReactDashboardShell"/);
   assert.doesNotMatch(html, /<div id="membersReactOverviewPanel"/);
   assert.doesNotMatch(html, /<div id="membersReactRegistrationPanel"/);
@@ -126,11 +133,12 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(html, /body\[data-member-dashboard-tab="events"\] #clubRegister/);
   assert.match(html, /body\[data-member-dashboard-tab="club"\] #membersReactClubPanel:not\(:empty\)/);
   assert.doesNotMatch(html, /\.members-content\.active/);
-  assert.doesNotMatch(html, /#membersContent\.active/);
+  assert.doesNotMatch(html, /#membersContent/);
   assert.doesNotMatch(html, /\.dtab-off/);
   assert.doesNotMatch(html, /members-react-(shell|overview|ratings|registration|board|tee-signs|club)-ready/);
   assertNoLegacyMemberFallbacks(html);
   assert.match(html, /<script type="module" src="members-app\/members-app\.js"><\/script>/);
+  assert.doesNotMatch(html, /matchplay-colors\.js/);
   assert.match(app, /createRoot\(pageChromeMount\)\.render\(h\(MemberPageChrome\)\)/);
   assert.match(app, /createRoot\(authMount\)\.render/);
   assert.match(app, /MemberDialogs/);
@@ -144,6 +152,9 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(app, /const dashboardMount = document\.getElementById\("membersReactDashboardApp"\)/);
   assert.match(app, /createRoot\(dashboardMount\)\.render\(h\(MemberDashboardApp\)\)/);
   assert.doesNotMatch(app, /const (shellMount|overviewMount|registrationMount|boardMount|teeSignsMount|clubMount) =/);
+  assert.match(api, /import \{ resolveApiBase \} from "\.\.\/shared\/api-base\.js"/);
+  assert.match(api, /resolveApiBase\(\{ datasetKeys: \["authBase"\] \}\)/);
+  assert.doesNotMatch(api, /getElementById\("loginGate"\)|loginGate/);
   assert.match(dashboardApp, /export function MemberDashboardApp\(\)/);
   assert.match(dashboardApp, /MemberDashboardShell/);
   assert.match(dashboardApp, /MemberOverviewDashboard/);
@@ -234,7 +245,10 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(authDom, /setAuthFormValues/);
   assert.doesNotMatch(authDom, /byId|getElementById|requestAnimationFrame|loginGate|membersContent|style\.display|classList|textContent\s*=|showError|clearError|setBusy/);
   assert.match(authState, /gvdg:member-profile-updated/);
-  assert.match(authState, /GVDG_MEMBER_DASHBOARD_CONTEXT/);
+  assert.match(authState, /setMemberContext/);
+  assert.match(memberContext, /let memberContext = \{\}/);
+  assert.match(memberContext, /export function setMemberContext/);
+  assert.doesNotMatch(`${authState}\n${memberContext}\n${router}`, /GVDG_MEMBER_DASHBOARD_CONTEXT|GVDG_MEMBER_DASHBOARD_ROUTER_READY/);
   assert.match(passkeys, /\/webauthn\/register\/options/);
   assert.match(passkeys, /\/webauthn\/auth\/verify/);
   assert.match(passkeys, /navigator\.credentials\.get/);
@@ -291,6 +305,26 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(pdga, /data-react-pdga-dashboard/);
   assert.match(pdga, /data-react-live-rating/);
   assert.match(pdga, /\/pdga-stats\?pdga=/);
+  assert.match(pdga, /className: "dash-event-main"/);
+  assert.match(pdga, /export function pdgaEventTitle\(value\)/);
+  assert.match(pdga, /pdgaEventTitle\(event\.tournament\) \|\| "Event"/);
+  assert.doesNotMatch(pdga, /dangerouslySetInnerHTML|innerHTML/);
+  assert.match(pdga, /className: "dash-event-main"[\s\S]*className: "dash-event-copy"[\s\S]*h\(EventRatingRow, \{ ratings/);
+  assert.match(pdga, /function EventRatingRow\(\{ ratings \}\)[\s\S]*className: "dash-event-rating-row"[\s\S]*className: "dash-event-rating-label"[\s\S]*className: "dash-event-ratings"/);
+  assert.match(html, /\.dash-event \{ display: grid; grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(html, /\.dash-event \{[^}]*grid-auto-flow: row/);
+  assert.doesNotMatch(html, /\.dash-event \{[^}]*justify-content: space-between/);
+  assert.match(html, /\.dash-event-main \{[^}]*display: grid; grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(html, /\.dash-event-copy \{[^}]*display: grid; grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(html, /\.dash-event-rating-row \{[^}]*grid-column: 1 \/ -1/);
+  assert.match(html, /\.dash-event-rating-row \{[^}]*display: grid; grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(html, /\.dash-event-rating-row \{[^}]*width: 100%/);
+  assert.match(html, /\.dash-event-rating-row \{[^}]*border-top: 1px solid var\(--border-color\)/);
+  assert.match(html, /\.dash-event-rating-label \{[^}]*text-transform: uppercase/);
+  assert.match(html, /\.dash-event-ratings \{[^}]*display: inline-flex/);
+  assert.match(html, /\.dash-event-ratings \{[^}]*justify-self: start/);
+  assert.match(html, /\.dash-event-ratings \{[^}]*background: var\(--bg-tertiary\)/);
+  assert.match(pdga, /Round ratings:/);
   assert.match(ratings, /\/my-ratings\?/);
   assert.match(ratings, /data-react-club-ratings/);
   assert.match(ratings, /UDiscExportDetails/);
@@ -330,4 +364,12 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(teeSigns, /data-react-tee-signs-panel/);
   assert.doesNotMatch(teeSigns, /visibleParent|style\.display|getElementById\("teeCapture"\)/);
   assert.match(club, /data-react-club-panel/);
+});
+
+test('PDGA event titles decode common HTML entities without innerHTML', async () => {
+  const { pdgaEventTitle } = await import(new URL('../src/members-app/pdga-dashboard.js', import.meta.url));
+
+  assert.equal(pdgaEventTitle('2026 Ayden Founders&#039; Day Classic'), "2026 Ayden Founders' Day Classic");
+  assert.equal(pdgaEventTitle('CEP Charity &amp; Rated'), 'CEP Charity & Rated');
+  assert.equal(pdgaEventTitle('Hex &#x26; Flex'), 'Hex & Flex');
 });

@@ -1,14 +1,14 @@
 import React from "react";
 import { ChevronDown, ChevronRight, MapPin } from "lucide-react";
 
-import { safeExternalUrl } from "../../safe-url.js";
+import { safeExternalUrl } from "../shared/safe-url.js";
 import {
   isClubEvent,
   parseHomepageEventCsv,
   parseHomepageEventDate,
   parseTournamentCsv,
   parseTournamentDate,
-} from "../../home-feed-parse.js";
+} from "../shared/home-feed-parse.js";
 
 const h = React.createElement;
 const VISIBLE_LIMIT = 5;

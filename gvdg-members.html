@@ -93,7 +93,6 @@
 
         /* Login Gate */
         .login-gate { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 6rem 2rem 2rem; }
-        #membersReactAuthGate { width: min(100%, 400px); }
         .login-card { background: var(--bg-secondary); border-radius: 12px; padding: 2.5rem; max-width: 400px; width: 100%; box-shadow: 0 4px 24px var(--card-shadow); text-align: center; border: 1px solid var(--border-color); }
         .login-icon { font-size: 4rem; margin-bottom: 1.5rem; color: var(--primary); display: flex; justify-content: center; }
         .auth-icon-label { display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; }
@@ -359,20 +358,14 @@
 
         .doubles-table tbody tr.clickable-row { cursor: pointer; }
     </style>
-  <script type="module" src="matchplay-colors.js"></script>
   <script src="pwa.js" defer></script>
 </head>
-<body>
+<body data-auth-base="">
     <div id="membersReactPageChrome"></div>
 
-    <!-- Login Gate -->
-    <div class="login-gate" id="loginGate"
-         data-auth-base="">
-        <div id="membersReactAuthGate"></div>
-    </div>
+    <div class="login-gate" id="membersReactAuthGate"></div>
 
-    <!-- Members Content (hidden until login) -->
-    <div class="members-content" id="membersContent">
+    <div class="members-content">
         <section id="members">
             <div id="membersReactDashboardApp"></div>
 
@@ -455,10 +448,14 @@
                 .dash-standings-card .lb-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
                 .dash-standings-card .lb-table th { text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.4px; color: var(--secondary-text); padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--border-color, rgba(127,127,127,0.25)); }
                 .dash-standings-card .lb-table td { padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--border-color, rgba(127,127,127,0.12)); }
-                .dash-event { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); margin-bottom: 0.5rem; flex-wrap: wrap; }
-                .dash-event-name { font-weight: 600; color: var(--text-primary); }
-                .dash-event-date { font-size: 0.8rem; color: var(--text-muted); }
-                .dash-event-ratings { font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; color: var(--secondary-text); }
+                .dash-event { display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-flow: row; min-width: 0; padding: 0.7rem 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); margin-bottom: 0.5rem; }
+                .dash-event-main { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; min-width: 0; width: 100%; row-gap: 0.55rem; }
+                .dash-event-copy { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; row-gap: 0.12rem; }
+                .dash-event-name { font-weight: 600; color: var(--text-primary); line-height: 1.25; overflow-wrap: anywhere; text-wrap: pretty; }
+                .dash-event-date { font-size: 0.8rem; color: var(--text-muted); line-height: 1.35; margin-top: 0.15rem; }
+                .dash-event-rating-row { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 0.24rem; width: 100%; min-width: 0; padding-top: 0.5rem; border-top: 1px solid var(--border-color); }
+                .dash-event-rating-label { color: var(--text-muted); font-size: 0.68rem; font-weight: 700; line-height: 1; text-transform: uppercase; letter-spacing: 0.05em; }
+                .dash-event-ratings { display: inline-flex; align-items: center; justify-self: start; max-width: 100%; min-height: 1.65rem; padding: 0.16rem 0.48rem 0.1rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-tertiary); font-family: 'Bebas Neue', sans-serif; font-size: 1.32rem; line-height: 1; letter-spacing: 0.03em; font-variant-numeric: tabular-nums; color: var(--secondary-text); overflow-wrap: anywhere; white-space: normal; }
                 .react-pdga-dashboard { margin-bottom: 1rem; }
                 .react-pdga-dashboard .dash-rating-row { margin-bottom: 1rem; }
                 .react-pdga-status { color: var(--text-muted); font-size: 0.95rem; padding: 0.5rem 0 0.85rem; }
@@ -503,7 +500,7 @@
                 }
                 .club-rating-load-btn:hover { border-color: var(--secondary); color: var(--secondary-text); }
                 .club-rating-load-btn:disabled { opacity: 0.6; cursor: default; }
-                @media (max-width: 768px) { body[data-member-shell="members"] #membersContent ~ #crottsReactApp #crotts-fab { display: none; } }
+                @media (max-width: 768px) { body[data-member-shell="members"] .members-content ~ #crottsReactApp #crotts-fab { display: none; } }
                 .dashboard-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 0; }
                 .dashboard-action { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.55rem 0.85rem; background: var(--bg-secondary); color: var(--text-primary); text-decoration: none; font-size: 0.85rem; font-weight: 700; transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease; }
                 .dashboard-action:hover { border-color: var(--secondary); color: var(--secondary-text); transform: translateY(-1px); }

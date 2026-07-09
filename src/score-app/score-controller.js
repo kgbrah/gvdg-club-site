@@ -2,15 +2,25 @@ import { createLeaderboardSheetRenderer } from "./leaderboard-sheet.js";
 import { createManagePlayersSheetRenderer } from "./manage-players-sheet.js";
 import { createScoreDialogRenderer } from "./dialogs.js";
 import { createScoreNotificationsRenderer } from "./notifications.js";
+import {
+    buildScorecardViewState,
+    finalizeBlockers,
+    isDoublesScoring,
+    isMatchplayScoring,
+    relClass,
+    relText,
+    scorePendingKey as pendingKey,
+    scoreTargetForPlayer,
+    scorecardChoices,
+    udiscExportData,
+} from "./score-view-model.js";
+import { resolveApiBase } from "../shared/api-base.js";
+import { holeWinners, winnerColor } from "../shared/matchplay-colors.js";
 
 export function startScoreApp(options) {
         "use strict";
         options = options || {};
-        // --- API base: explicit data-api-base wins; else resolve by host (prod vs gvdgclub.com dev/previews). ---
-        const _h = location.hostname;
-        const LOCAL = ['127.0.0.1', 'localhost'].includes(_h) ? 'http://127.0.0.1:8788' : '';
-        const API_BASE = (LOCAL || (document.body.dataset.apiBase || '').trim() ||
-            ((_h === 'greenvillediscgolf.com' || _h === 'www.greenvillediscgolf.com') ? 'https://auth.greenvillediscgolf.com' : 'https://auth.gvdgclub.com')).replace(/\/+$/, '');
+        const API_BASE = resolveApiBase({ datasetKeys: ['apiBase'] });
 
         const TOKEN_KEY = 'gvdg_member_token', NAME_KEY = 'gvdg_member_name', GUESTREG_KEY = 'gvdg_guest_regs', RECENT_ROUNDS_KEY = 'gvdg_recent_rounds';
         const params = new URLSearchParams(location.search);
@@ -45,8 +55,6 @@ export function startScoreApp(options) {
                 localStorage.setItem(RECENT_ROUNDS_KEY, JSON.stringify(next));
             } catch (e) {}
         }
-        function relClass(d) { return d < 0 ? 'under' : d > 0 ? 'over' : 'even'; }
-        function relText(d) { return d === 0 ? 'E' : d > 0 ? '+' + d : String(d); }
         function toast(msg) {
             notifications.showToast(msg);
         }
@@ -138,71 +146,22 @@ export function startScoreApp(options) {
         window.addEventListener('offline', function () { setOnline(false); });
 
         // ---------- score state access ----------
-        function scorecardChoices() {
-            return S.cardmates.filter((p) => p && p.canEnterScorecard !== false);
-        }
         function currentScorerIndex() {
-            const choices = scorecardChoices();
+            const choices = scorecardChoices(S);
             if (!choices.length) return null;
             if (choices.some((p) => p.index === S.scorerIndex)) return S.scorerIndex;
             const mine = choices.find((p) => p.index === S.myIndex);
             S.scorerIndex = (mine || choices[0]).index;
             return S.scorerIndex;
         }
-        function pendingKey(scorerIndex, index, hole, targetId) {
-            return scorerIndex + ':' + (targetId ? ('target:' + targetId) : ('index:' + index)) + ':' + hole;
-        }
         function hasPendingScore(index, hole) {
             const legacySuffix = ':index:' + index + ':' + hole;
             for (const key of pending.keys()) {
                 if (key.endsWith(legacySuffix)) return true;
-                const target = targetForPlayer(index);
+                const target = scoreTargetForPlayer(S, index);
                 if (target && key.endsWith(':target:' + target.id + ':' + hole)) return true;
             }
             return false;
-        }
-        function isDoublesScoring() {
-            return S.roundConfig && S.roundConfig.groupFormat === 'doubles';
-        }
-        function isMatchplayScoring() {
-            return S.roundConfig && S.roundConfig.scoringStyle === 'matchplay';
-        }
-        function targetForPlayer(index) {
-            return (S.scoreTargets || []).find(function (target) { return target && Array.isArray(target.playerIndexes) && target.playerIndexes.indexOf(index) >= 0; }) || null;
-        }
-        function scoreRows() {
-            if (!isDoublesScoring()) {
-                return S.cardmates.map(function (p) { return { type: 'player', index: p.index, label: p.name + (p.isMe ? ' (you)' : ''), meta: p.division || '', playerIndexes: [p.index] }; });
-            }
-            const cardIndexes = new Set(S.cardmates.map(function (p) { return p.index; }));
-            return (S.scoreTargets || []).reduce(function (rows, target) {
-                if (target && target.type === 'pair' && target.playerIndexes.some(function (index) { return cardIndexes.has(index); })) {
-                    rows.push({
-                        type: 'pair',
-                        targetId: target.id,
-                        label: target.label,
-                        meta: (target.members || []).join(' / '),
-                        playerIndexes: target.playerIndexes || []
-                    });
-                }
-                return rows;
-            }, []);
-        }
-        function strokesFor(index, hole) {
-            const cm = S.cardmates.find((p) => p.index === index);
-            if (!cm) return null;
-            // Show the SELECTED scorecard's OWN vote for this player, so you can see and dial your own number
-            // even during a conflict (when the consensus score is intentionally blank). Fall back to the
-            // agreed/consensus value when this scorecard hasn't voted on the hole yet.
-            const sIdx = currentScorerIndex();
-            const votes = cm.scorecards && cm.scorecards[hole];
-            if (sIdx != null && votes && typeof votes['player:' + sIdx] === 'number') return votes['player:' + sIdx];
-            const v = cm.scores ? cm.scores[hole] : undefined;
-            return (typeof v === 'number') ? v : null;
-        }
-        function strokesForRow(row, hole) {
-            const index = row.playerIndexes && row.playerIndexes[0];
-            return Number.isInteger(index) ? strokesFor(index, hole) : null;
         }
         function setLocal(index, hole, strokes) {
             const cm = S.cardmates.find((p) => p.index === index);
@@ -234,32 +193,6 @@ export function startScoreApp(options) {
             if (!msg || msg.cardId !== S.cardId) return;
             S.conflicts = S.conflicts.filter((c) => !((msg.targetId && c.targetId === msg.targetId || !msg.targetId && c.playerIndex === msg.playerIndex) && c.hole === msg.hole));
             if (Array.isArray(msg.values) && msg.values.length > 1) S.conflicts.push({ cardId: msg.cardId, playerIndex: msg.playerIndex, playerName: msg.playerName, targetId: msg.targetId, label: msg.label, hole: msg.hole, values: msg.values });
-        }
-        function conflictFor(index, hole) {
-            return S.conflicts.find((c) => c && c.playerIndex === index && c.hole === hole) || null;
-        }
-        function conflictForRow(row, hole) {
-            if (row.targetId) return S.conflicts.find((c) => c && c.targetId === row.targetId && c.hole === hole) || null;
-            return conflictFor(row.index, hole);
-        }
-        function holeHasConflict(hole) {
-            return S.conflicts.some((c) => c && c.hole === hole);
-        }
-        // Dormie: the leader is up by exactly the holes remaining, so a win OR a halve of THIS hole ends the
-        // match. Flagged prominently on the hole so the card knows it's match point.
-        function isMatchDormie() {
-            if (!isMatchplayScoring() || !S.snap || !Array.isArray(S.snap.standings)) return false;
-            return S.snap.standings.some(function (s) { return s.match && s.match.dormie; });
-        }
-        function matchStatusText() {
-            if (!isMatchplayScoring() || !S.snap || !Array.isArray(S.snap.standings)) return '';
-            const cardTargets = scoreRows().map(function (row) { return row.targetId || ('player:' + row.index); });
-            const rows = S.snap.standings.filter(function (standing) { return cardTargets.indexOf(standing.targetId) >= 0; });
-            const withMatch = rows.find(function (standing) { return standing.match && standing.match.status; });
-            return withMatch && withMatch.match ? ('Match: ' + withMatch.match.status) : '';
-        }
-        function myScoreRow() {
-            return scoreRows().find(function (row) { return row.playerIndexes.indexOf(S.myIndex) >= 0; }) || null;
         }
 
         async function postScore(row, hole, strokes) {
@@ -358,7 +291,7 @@ export function startScoreApp(options) {
                     const local = cm.scorecards[hh.hole] || {};
                     Object.keys(local).forEach((sid) => {
                         const sidx = sid.indexOf('player:') === 0 ? Number(sid.slice(7)) : NaN;
-                        const target = targetForPlayer(cm.index);
+                        const target = scoreTargetForPlayer(S, cm.index);
                         if (Number.isInteger(sidx) && (pending.has(pendingKey(sidx, cm.index, hh.hole, null)) || (target && pending.has(pendingKey(sidx, null, hh.hole, target.id))))) votes[sid] = local[sid];
                     });
                     if (Object.keys(votes).length) cm.scorecards[hh.hole] = votes; else delete cm.scorecards[hh.hole];
@@ -507,9 +440,9 @@ export function startScoreApp(options) {
             // Matchplay: tint this hole's tee sign in the winning team's color. Halved holes stay as-is
             // (no color) in the scoring app, per spec.
             let highlightColor = null;
-            if (isMatchplayScoring() && window.GVDGMatchplay) {
-                const w = window.GVDGMatchplay.holeWinners([{ hole: h.hole }], S.cardmates)[h.hole];
-                const c = window.GVDGMatchplay.winnerColor(w, { tie: false });
+            if (isMatchplayScoring(S)) {
+                const w = holeWinners([{ hole: h.hole }], S.cardmates)[h.hole];
+                const c = winnerColor(w, { tie: false });
                 if (c) highlightColor = c;
             }
             return {
@@ -523,57 +456,16 @@ export function startScoreApp(options) {
         function renderHole() {
             if (!S.holes.length) return;
             const h = holeMeta(S.holeIdx);
-            const choices = scorecardChoices();
             const scorerIndex = currentScorerIndex();
-            const rows = scoreRows();
-            // My pair/card is broken (e.g. a partner left): show its exact message even if I still have rows
-            // (the intact side of a broken matchplay match). Otherwise, if doubles has no rows yet, prompt to
-            // set pairs. A healthy pair sharing a card with a broken one has scoreTargetError null → no banner.
-            const warnMsg = (S.scoreTargetError && S.scoreTargetError.message) ? S.scoreTargetError.message
-                : (isDoublesScoring() && !rows.length) ? 'Set pairs in Manage before scoring doubles.' : null;
-            const rowViews = rows.map((rowData) => {
-                const conflict = conflictForRow(rowData, h.hole);
-                const cur = strokesForRow(rowData, h.hole);
-                const d = cur == null ? null : cur - h.par;
-                return {
-                    conflictText: conflict ? 'Conflict: ' + (conflict.values || []).join(' vs ') + ' - set yours to match' : '',
-                    currentScore: cur,
-                    key: rowData.targetId || rowData.index,
-                    label: rowData.label,
-                    meta: rowData.meta,
-                    relative: d == null ? null : { className: relClass(d), text: relText(d) },
-                    source: rowData,
-                };
+            const scorecardState = buildScorecardViewState({
+                state: S,
+                mode: MODE,
+                roundCode: ROUND_CODE,
+                scorerIndex: scorerIndex,
+                teeSign: liveTeeSignView(h),
             });
-
-            // my totals
-            const meRow = myScoreRow();
-            let totals = [];
-            if (meRow) {
-                let thru = 0, total = 0, toPar = 0;
-                S.holes.forEach((hh) => { const s = strokesForRow(meRow, hh.hole); if (typeof s === 'number') { thru++; total += s; toPar += s - hh.par; } });
-                const resultLabel = isMatchplayScoring() ? 'Match' : 'To par';
-                const resultValue = isMatchplayScoring() ? (matchStatusText().replace(/^Match: /, '') || 'AS') : (thru ? relText(toPar) : 'E');
-                totals = [{ label: 'Thru', value: String(thru) + '/' + S.holes.length }, { label: 'Total', value: total ? String(total) : '-' }, { label: resultLabel, value: resultValue }];
-            }
-
-            // hole jump grid
-            const holeGrid = S.holes.map((hh, i) => ({
-                conflict: holeHasConflict(hh.hole),
-                current: i === S.holeIdx,
-                done: !!(meRow && strokesForRow(meRow, hh.hole) != null),
-                hole: hh.hole,
-                index: i,
-            }));
             renderScoreBody('scorecard', {
-                atEnd: S.holeIdx >= S.holes.length - 1,
-                atStart: S.holeIdx === 0,
-                choices: choices,
-                dormie: isMatchDormie(),
-                hole: h,
-                holeGrid: holeGrid,
-                holeMeta: 'Par ' + h.par + (h.distance_ft ? ' · ' + h.distance_ft + ' ft' : '') + (h.overridden ? ' (today)' : ''),
-                matchStatus: isMatchplayScoring() ? matchStatusText() : '',
+                ...scorecardState,
                 onAddPlayer: addGuestPrompt,
                 onJumpHole: function (index) { S.holeIdx = index; renderHole(); },
                 onManagePlayers: openManagePlayers,
@@ -582,16 +474,6 @@ export function startScoreApp(options) {
                 onScore: postScore,
                 onScorerChange: function (index) { S.scorerIndex = index; renderHole(); },
                 onShare: shareRound,
-                roundCode: ROUND_CODE,
-                rows: rowViews,
-                scorerIndex: scorerIndex,
-                show: MODE === 'round',
-                showWeather: !!S.weather,
-                teeSign: liveTeeSignView(h),
-                totals: totals,
-                warning: warnMsg,
-                weather: S.weather,
-                weatherVersion: S.weather && (S.weather.updatedAt || S.weather.nextRefreshAt || (S.weather.current && S.weather.current.fetchedAt) || ''),
             });
         }
 
@@ -603,10 +485,10 @@ export function startScoreApp(options) {
         function closeLeaderboard() { lbOpen = false; leaderboardSheet.close(); }
         function renderLeaderboard() {
             leaderboardSheet.render({
-                blockers: finalizeBlockers(),
-                exportData: udiscExportData(),
-                isDoubles: isDoublesScoring(),
-                isMatchplay: isMatchplayScoring(),
+                blockers: finalizeBlockers(S),
+                exportData: udiscExportData(S),
+                isDoubles: isDoublesScoring(S),
+                isMatchplay: isMatchplayScoring(S),
                 mode: MODE,
                 onClose: closeLeaderboard,
                 onFinalize: finalizeRound,
@@ -615,27 +497,6 @@ export function startScoreApp(options) {
                 standings: (S.snap && S.snap.standings) || [],
                 status: S.status,
             });
-        }
-        function udiscExportData() {
-            if (!S.udiscCourseId) return null;
-            const me = (S.cardmates || []).find((c) => c.isMe);
-            if (!me || !me.scores) return null;
-            const scorecard = S.holes
-                .filter((h) => me.scores[h.hole] != null)
-                .map((h) => ({ hole: h.hole, par: h.par, strokes: me.scores[h.hole] }));
-            return { courseId: S.udiscCourseId, scorecard: scorecard };
-        }
-        // What (if anything) is stopping this card from finalizing: unresolved conflicts + unconfirmed
-        // member scores. Recomputed each render so the sheet reflects live snapshots while it's open.
-        function finalizeBlockers() {
-            const conflicts = S.conflicts || [];
-            const missing = S.missing || [];
-            const lines = [];
-            conflicts.forEach((c) => lines.push('Hole ' + c.hole + ' — ' + (c.playerName || c.label || 'a target') + ': scores disagree (' + (Array.isArray(c.values) ? c.values.join(' vs ') : '?') + ')'));
-            const shown = missing.slice(0, 4);
-            shown.forEach((m) => lines.push('Hole ' + m.hole + ' — ' + (m.playerName || m.label || 'a target') + ': not confirmed by all members'));
-            if (missing.length > shown.length) lines.push('…and ' + (missing.length - shown.length) + ' more unconfirmed');
-            return { conflicts: conflicts, missing: missing, ready: conflicts.length === 0 && missing.length === 0, lines: lines };
         }
         async function finalizeRound() {
             const confirmed = await dialogs.confirm({
@@ -777,7 +638,7 @@ export function startScoreApp(options) {
             // Doubles requires a pair label per player — collect it now so the walk-on is pairable, rather
             // than leaving the round unscorable until someone opens Manage players.
             let team = null;
-            if (isDoublesScoring()) {
+            if (isDoublesScoring(S)) {
                 team = await dialogs.prompt({
                     confirmText: 'Add player',
                     errorText: 'Enter a pair label.',
@@ -800,7 +661,7 @@ export function startScoreApp(options) {
         function closeManagePlayers() { managePlayersOpen = false; managePlayersSheet.close(); }
         function renderManagePlayers() {
             managePlayersSheet.render({
-                isDoubles: isDoublesScoring(),
+                isDoubles: isDoublesScoring(S),
                 onClose: closeManagePlayers,
                 onRemove: removeFromRound,
                 onSavePairs: savePairLabels,

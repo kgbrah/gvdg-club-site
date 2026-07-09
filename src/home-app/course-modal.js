@@ -1,7 +1,7 @@
 import React from "react";
 import { ChevronRight, MapPin, Navigation, Play, Target } from "lucide-react";
 
-import { safeExternalUrl } from "../../safe-url.js";
+import { safeExternalUrl } from "../shared/safe-url.js";
 
 const h = React.createElement;
 

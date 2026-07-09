@@ -4,11 +4,6 @@ const h = React.createElement;
 
 const EMPTY_STATE = { courses: [] };
 
-function currentState() {
-  const state = window.__gvdgAdminCoursesListState;
-  return state && typeof state === "object" ? state : EMPTY_STATE;
-}
-
 function courseLabel(course) {
   const name = typeof course.name === "string" && course.name ? course.name : "Untitled course";
   return course.location ? `${name} — ${course.location}` : name;
@@ -29,14 +24,13 @@ function normalizeState(state) {
 }
 
 export function AdminCoursesList() {
-  const [state, setState] = React.useState(() => normalizeState(currentState()));
+  const [state, setState] = React.useState(() => normalizeState(EMPTY_STATE));
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     function update(event) {
-      setState(normalizeState(event.detail && typeof event.detail === "object" ? event.detail : currentState()));
+      setState(normalizeState(event.detail && typeof event.detail === "object" ? event.detail : EMPTY_STATE));
     }
     window.addEventListener("gvdg:admin-courses-list", update);
-    setState(normalizeState(currentState()));
     return () => window.removeEventListener("gvdg:admin-courses-list", update);
   }, []);
 

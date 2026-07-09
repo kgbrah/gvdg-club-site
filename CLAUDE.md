@@ -28,9 +28,8 @@ Production `www.greenvillediscgolf.com` (GitHub Pages, pinned by the `CNAME` fil
 
 The website for the **Greenville Disc Golf Club**. Two halves in one repo, deployed together:
 
-1. **A static frontend** — the root `*.html` / `*.js` files. Most pages are plain hand-written HTML +
-   vanilla JS served as-is; `score.html` loads a small Vite/React bundle generated into `score-app/`.
-   Some pages are large single-file monoliths (`gvdg-members.html` ~334 KB, `admin.html` ~206 KB).
+1. **A static frontend** — root HTML shells plus page-owned helper files, with generated Vite/React route
+   bundles for the home, public/events, admin, members, live-scoring, and tee-sign preview surfaces.
 2. **A Cloudflare Worker** in `auth-worker/` (TypeScript, ~82 modules). The **only** server-side code:
    member auth, the club-operations API, live scoring, pro-shop, ratings, and the "Crotts" AI assistant.
    The static pages reach all dynamic data through it over HTTPS.
@@ -74,8 +73,10 @@ node scripts/provision.mjs --roster roster.json --out-dir ./out   # seed members
 ### Static frontend tests (repo root — pure-helper tests, no DOM)
 
 ```bash
-npm run build            # builds score-app/ for score.html
-npm test                 # node --test tests/*.test.mjs (events/ryder-cup/home-feeds/safe-url/pwa/… parsers)
+npm run build            # builds all generated Vite route bundles
+npm test                 # node --test tests/*.test.mjs (events/ryder-cup/feed/safe-url/pwa/… parsers)
+npm run qa:react         # react-doctor project scan; generated app bundles are ignored
+npm run qa:site-smoke    # Playwright browser smoke for migrated route bundles
 npm run qa:live-scoring  # Playwright live-scoring browser QA
 npm run qa:staging-live-scoring  # live gvdgclub.com scoring E2E; needs private QA credentials
 ```
@@ -104,7 +105,8 @@ auto-deploy.**
 
 ```
 Browser (static page)
-  │  resolves the API base: explicit data-api-base/data-auth-base attr wins; else by host —
+  │  resolves the API base through src/shared/api-base.js:
+  │  explicit data-api-base/data-auth-base attr wins; else by host —
   │  localhost→:8788,  greenvillediscgolf.com→auth.greenvillediscgolf.com,  ELSE→auth.gvdgclub.com
   │  (deployed HTML ships data-*-base="" so the host fallback is what actually selects the Worker)
   ▼
@@ -228,12 +230,12 @@ Matchplay league scoring is **team-based Ryder Cup style**, not stroke place-poi
   result rows don't double-count; `computeRoundWinners` gives each round's winning side. `GET /leagues/:id`
   returns `standings` + `teamStandings` + `roundWinners`; `GET /leagues/active` (member dashboards) returns
   active leagues (a live or last-60-day round) + live events.
-- **Winner coloring (`matchplay-colors.js` — pure, node-tested `tests/matchplay-colors.test.mjs`):**
+- **Winner coloring (`src/shared/matchplay-colors.js` — pure, node-tested `tests/matchplay-colors.test.mjs`):**
   `holeWinners()` decides each hole by comparing the two teams' scores (doubles alt-shot = the pair's shared
   score; equal = tie; unscored = `null` → uncolored). Colors: Red `#dc3545`, Blue `#2f6fd0`, tie `#e6b400`.
   Applied to the scoring app (current hole's tee sign; halves left **as-is**), the event scoreboard + round-
-  results tee signs (halves = **yellow**), and the league rounds list (round winner). It's an ES module in
-  `events.html` and `window.GVDGMatchplay` (dual global) for classic pages (`score.html`, `gvdg-members.html`).
+  results tee signs (halves = **yellow**), and the league rounds list (round winner). App bundles import the
+  shared module directly; there is no root `matchplay-colors.js` compatibility shim.
 - **Ryder Cup data (league_id 4):** Red = *Juan Team*, Blue = *Jesus Team*. The season was **backfilled from
   the `ryder-cup.html` Google Sheet** — winners are read from the **rendered green-highlighted page** (the CSV
   drops the highlight), imported as one event per match with `source='ryder-import'` (idempotent: re-import
@@ -243,9 +245,9 @@ Matchplay league scoring is **team-based Ryder Cup style**, not stroke place-poi
 
 ### Frontend & PWA
 
-Pages find the API via the host-fallback logic above (duplicated in page shells and React bundles). Data
+Pages find the API via the shared `src/shared/api-base.js` host-fallback helper. Data
 rendering is **XSS-safe by construction**: live/API data is built with `createElement`/`textContent`,
-**never `innerHTML`**; external hrefs pass `safe-url.js`; tee-sign SVG is parsed inert via `DOMParser`.
+**never `innerHTML`**; external hrefs pass the pure `src/shared/safe-url.js` helper; tee-sign SVG is parsed inert via `DOMParser`.
 (The one `innerHTML`-with-data is `gvdg-members.html`'s doubles league, whose source is build-time-trusted
 `DOUBLES_DATA_EMBEDDED` JSON, still run through `escHtml()`.) **Legacy Google-Sheet published-CSV rails**
 still power the homepage feeds and Ryder Cup (gviz has no CORS → the sheet must be publish-to-web;

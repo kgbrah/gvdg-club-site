@@ -1,6 +1,8 @@
 import React from "react";
 import { CircleAlert, Disc3, RefreshCcw } from "lucide-react";
 
+import { currentEventsStatus } from "./events-state.js";
+
 const h = React.createElement;
 const STATUS_EVENT = "gvdg:events-status";
 
@@ -18,7 +20,7 @@ function defaultStatus() {
 }
 
 function publishedStatus() {
-  const status = window.__gvdgEventsStatus;
+  const status = currentEventsStatus();
   return status && typeof status === "object" ? status : defaultStatus();
 }
 

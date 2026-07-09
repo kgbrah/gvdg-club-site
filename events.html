@@ -73,8 +73,8 @@
             .nav-right { gap: 1rem; }
             body[data-page="events"] #crotts-fab { left: auto !important; right: calc(14px + env(safe-area-inset-right, 0px)) !important; }
             body[data-page="events"] #crotts-panel { left: auto !important; right: 12px !important; }
-            body[data-page="events"]:has(#detail:not([hidden])) #crottsReactApp #crotts-fab,
-            body[data-page="events"]:has(#detail:not([hidden])) #crottsReactApp #crotts-panel { display: none !important; }
+            body[data-page="events"][data-events-view="detail"] #crottsReactApp #crotts-fab,
+            body[data-page="events"][data-events-view="detail"] #crottsReactApp #crotts-panel { display: none !important; }
             .nav-links { position: fixed; top: 70px; left: 0; right: 0; background: rgba(26, 26, 46, 0.98); flex-direction: column; gap: 0; padding: 2rem; transform: translateY(-100%); opacity: 0; transition: all 0.3s ease; pointer-events: none; max-height: calc(100vh - 70px); overflow-y: auto; }
             [data-theme="dark"] .nav-links { background: rgba(15, 15, 30, 0.98); }
             .nav-links.active { transform: translateY(0); opacity: 1; pointer-events: all; }
@@ -89,6 +89,19 @@
         .page-subtitle { text-align: center; color: rgba(255, 255, 255, 0.94); font-size: 1rem; margin-bottom: 2rem; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45); }
 
         /* ---- Event sections ---- */
+        .events-route { display: none; }
+        body[data-events-view="status"] #status,
+        body[data-events-view="hub"] #liveNowSection,
+        body[data-events-view="hub"] #registerSection,
+        body[data-events-view="hub"] #calendarEvents,
+        body[data-events-view="hub"] #hub,
+        body[data-events-view="hub"] #previousResultsSection,
+        body[data-events-view="hub"] #leaguesSection,
+        body[data-events-view="hub"] #clubEventsSection,
+        body[data-events-view="hub"] #fundraisersSection,
+        body[data-events-view="hub"] #meetingsSection,
+        body[data-events-view="league-detail"] #leagueDetailSection,
+        body[data-events-view="detail"] #detail { display: block; }
         .events-section { margin-bottom: 2.75rem; }
         .events-section-head { display: flex; align-items: baseline; gap: 0.75rem; margin-bottom: 1.25rem; padding-bottom: 0.6rem; border-bottom: 2px solid var(--border-color); }
         .events-section-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(1.6rem, 4vw, 2.2rem); letter-spacing: 0.04em; color: var(--text-primary); }
@@ -144,9 +157,9 @@
         .reg-btn:disabled { opacity: 0.6; cursor: default; }
         .reg-btn.secondary { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
         .reg-btn.tertiary { background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border-color); }
-        #registerSection { background: rgba(244, 244, 249, 0.94); margin: 0 -1.5rem 2rem; padding: 1.25rem 1.5rem 1.5rem; border-radius: 16px; }
-        #registerSection:empty { display: none; }
-        [data-theme="dark"] #registerSection { background: rgba(15, 15, 30, 0.86); }
+        #registerSection { margin: 0; padding: 0; background: transparent; border-radius: 0; }
+        #registerSection [data-react-events-registration="true"] { background: rgba(244, 244, 249, 0.94); margin: 0 -1.5rem 2rem; padding: 1.25rem 1.5rem 1.5rem; border-radius: 16px; }
+        [data-theme="dark"] #registerSection [data-react-events-registration="true"] { background: rgba(15, 15, 30, 0.86); }
         #registerSection .events-group-head { margin-top: 0; }
         /* Keep-score CTA on a live event */
         .btn-keep-score { display: inline-block; margin: 0.25rem 0 0.75rem; background: var(--primary-strong); color: #fff; text-decoration: none; font-weight: 800; padding: 0.7rem 1.3rem; border-radius: 50px; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.9rem; }
@@ -324,39 +337,40 @@
   <script type="module" src="public-app/public-app.js"></script>
   <script src="pwa.js" defer></script>
 </head>
-<body data-api-base="" data-page="events">
+<body data-api-base="" data-page="events" data-events-view="status">
     <div id="publicReactPageChrome"></div>
+    <div id="eventsViewControllerReactApp"></div>
 
     <main>
         <h1 class="page-title">Events &amp; Club Events</h1>
         <p class="page-subtitle">Disc golf tournaments &amp; league rounds, plus club fundraisers, meetings &amp; minutes</p>
 
         <!-- Loading / error -->
-        <div id="status"></div>
+        <div id="status" class="events-route"></div>
 
         <!-- LIVE NOW: any club-scored event currently being scored — always surfaced at the very top -->
-        <div id="liveNowSection" hidden></div>
+        <div id="liveNowSection" class="events-route"></div>
 
         <!-- REGISTER: club events open for sign-up (members or guests) -->
-        <div id="registerSection" hidden></div>
+        <div id="registerSection" class="events-route"></div>
 
         <!-- EVENTS: disc golf tournaments & league rounds (schedule feed + any club-scored upcoming events) -->
-        <div id="calendarEvents" hidden></div>
-        <div id="hub" hidden></div>
-        <div id="previousResultsSection" hidden></div>
-        <div id="leaguesSection" hidden></div>
+        <div id="calendarEvents" class="events-route"></div>
+        <div id="hub" class="events-route"></div>
+        <div id="previousResultsSection" class="events-route"></div>
+        <div id="leaguesSection" class="events-route"></div>
 
         <!-- CLUB EVENTS: fundraisers, meetings & minutes -->
-        <div id="clubEventsSection" hidden></div>
-        <div id="fundraisersSection" hidden></div>
-        <div id="meetingsSection" hidden></div>
+        <div id="clubEventsSection" class="events-route"></div>
+        <div id="fundraisersSection" class="events-route"></div>
+        <div id="meetingsSection" class="events-route"></div>
 
-        <div id="leagueDetailSection" hidden></div>
+        <div id="leagueDetailSection" class="events-route"></div>
 
         <!-- Detail view (single event) -->
-        <div id="detail" hidden></div>
+        <div id="detail" class="events-route"></div>
 
-        <p id="lastUpdated" class="last-updated" hidden></p>
+        <div id="eventsLastUpdatedReactApp"></div>
         <div style="text-align:center;">
             <a href="index.html" class="back-link">&larr; Back to home</a>
         </div>
@@ -364,667 +378,6 @@
 
     <footer><p>&copy; 2026 Greenville Disc Golf Club. All rights reserved. | Greenville, NC</p></footer>
 
-    <script type="module">
-        import {
-            bucketEvents,
-            normalizeEvent,
-            parseEventDate,
-            buildCourseIndex,
-            courseNameFor,
-            formatEventDate,
-            typeLabel,
-            statusLabel,
-        } from './events.js';
-        import { holeWinners, playersFromResults } from './matchplay-colors.js';
-        import { parseHomepageEventDate } from './home-feed-parse.js';
-
-        // --- API wiring ---
-        // Public read endpoints on the club Worker. Base is configurable on <body>
-        // so the senior engineer can repoint it at a local Worker for testing.
-        const LOCAL_API_BASE = ['127.0.0.1', 'localhost'].includes(location.hostname)
-            ? 'http://127.0.0.1:8788'
-            : '';
-        // Explicit data-api-base wins; else resolve by host (prod vs the gvdgclub.com dev site / previews).
-        const _h = location.hostname;
-        const API_BASE = (
-            LOCAL_API_BASE ||
-            (document.body.dataset.apiBase || '').trim() ||
-            ((_h === 'greenvillediscgolf.com' || _h === 'www.greenvillediscgolf.com')
-                ? 'https://auth.greenvillediscgolf.com' : 'https://auth.gvdgclub.com')
-        )
-            .trim()
-            .replace(/\/+$/, ''); // strip trailing slashes
-        const REFRESH_MS = 60 * 1000; // ~60s background refresh on the hub
-        const EVENTS_PAGE_SIZE = 2000;
-        const EVENTS_PAGE_MAX_LIMIT = 2000;
-        const RYDER_CUP_LEAGUE_ID = '4';
-        const eventsLoadState = {
-            events: [],
-            loading: false,
-        };
-
-        const statusEl = document.getElementById('status');
-        const liveNowEl = document.getElementById('liveNowSection');
-        const registerEl = document.getElementById('registerSection');
-        const calendarEl = document.getElementById('calendarEvents');
-        const hubEl = document.getElementById('hub');
-        const previousResultsEl = document.getElementById('previousResultsSection');
-        const leaguesEl = document.getElementById('leaguesSection');
-        const clubEl = document.getElementById('clubEventsSection');
-        const fundraisersEl = document.getElementById('fundraisersSection');
-        const meetingsEl = document.getElementById('meetingsSection');
-        const leagueDetailEl = document.getElementById('leagueDetailSection');
-        const detailEl = document.getElementById('detail');
-        const lastUpdatedEl = document.getElementById('lastUpdated');
-
-        // In-memory caches so navigating hub <-> detail doesn't refetch needlessly.
-        let courseIndex = new Map();
-        let coursesCache = [];
-        let coursesLoaded = false;
-        let refreshTimer = null;
-
-        function sanitizeUrl(raw) {
-            if (!raw) return '';
-            try {
-                const u = new URL(String(raw), window.location.href);
-                return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : '';
-            } catch (_e) {
-                return '';
-            }
-        }
-        function isRyderCupName(value) {
-            return /\bryder\s*cup\b/i.test(String(value || ''));
-        }
-        function leagueHash(id) {
-            return `#league/${encodeURIComponent(String(id))}`;
-        }
-        function ryderCupLeagueHash() {
-            return leagueHash(RYDER_CUP_LEAGUE_ID);
-        }
-        function ryderCupFeedHash(item) {
-            return isRyderCupName(item && item.name) ? ryderCupLeagueHash() : '';
-        }
-        function ryderCupEventHash(ev) {
-            if (!ev) return '';
-            const leagueId = ev.league_id != null ? String(ev.league_id) : '';
-            if (leagueId && leagueId === RYDER_CUP_LEAGUE_ID) return leagueHash(leagueId);
-            return isRyderCupName(ev.name) ? ryderCupLeagueHash() : '';
-        }
-
-        function setView(which) {
-            statusEl.hidden = which !== 'status';
-            liveNowEl.hidden = which !== 'hub';
-            registerEl.hidden = which !== 'hub';
-            calendarEl.hidden = which !== 'hub';
-            hubEl.hidden = which !== 'hub';
-            previousResultsEl.hidden = which !== 'hub';
-            leaguesEl.hidden = which !== 'hub';
-            clubEl.hidden = which !== 'hub';
-            fundraisersEl.hidden = which !== 'hub';
-            meetingsEl.hidden = which !== 'hub';
-            leagueDetailEl.hidden = which !== 'league-detail';
-            detailEl.hidden = which !== 'detail';
-        }
-
-        function startOfToday() {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            return today;
-        }
-
-        function feedDateInfo(item) {
-            const epoch = Number(item && item.epoch);
-            if (Number.isFinite(epoch) && epoch > 0) {
-                const ms = epoch < 100000000000 ? epoch * 1000 : epoch;
-                const fromEpoch = new Date(ms);
-                if (!Number.isNaN(fromEpoch.getTime())) {
-                    return { dateObj: fromEpoch, isPast: fromEpoch < startOfToday(), isTBD: false };
-                }
-            }
-            return parseHomepageEventDate(String((item && item.date) || ''));
-        }
-
-        function isPastFeedItem(item) {
-            const info = feedDateInfo(item);
-            return !info.isTBD && info.isPast;
-        }
-
-        function eventDateForSort(ev) {
-            return parseEventDate((ev && (ev.date || ev.starts_at)) || null);
-        }
-
-        function isArchivedClubEvent(raw) {
-            const ev = normalizeEvent(raw);
-            if (ev.status === 'live') return false;
-            if (ev.status === 'final' || ev.status === 'cancelled') return true;
-            const d = eventDateForSort(ev);
-            return d ? d < startOfToday() : false;
-        }
-
-        function splitFeedByDate(items) {
-            const active = [];
-            const archived = [];
-            for (const item of items || []) {
-                (isPastFeedItem(item) ? archived : active).push(item);
-            }
-            const byDate = (a, b) => feedDateInfo(a).dateObj - feedDateInfo(b).dateObj;
-            active.sort(byDate);
-            archived.sort((a, b) => feedDateInfo(b).dateObj - feedDateInfo(a).dateObj);
-            return { active, archived };
-        }
-
-        function splitClubEventsByDate(items) {
-            const active = [];
-            const archived = [];
-            for (const raw of items || []) {
-                const ev = normalizeEvent(raw);
-                (isArchivedClubEvent(ev) ? archived : active).push(ev);
-            }
-            return { active, archived };
-        }
-
-        function feedResultDateText(item) {
-            if (item && item.date) return String(item.date);
-            const info = feedDateInfo(item);
-            if (!info.isTBD && info.dateObj && !Number.isNaN(info.dateObj.getTime())) {
-                return info.dateObj.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-            }
-            return 'Date TBD';
-        }
-
-        function previousResultFromFeed(item, category) {
-            const info = feedDateInfo(item);
-            const leagueTarget = ryderCupFeedHash(item);
-            const externalHref = leagueTarget ? '' : sanitizeUrl(item && item.url);
-            return {
-                name: String((item && item.name) || 'Previous result'),
-                dateObj: info.dateObj,
-                dateText: feedResultDateText(item),
-                detail: String((item && item.detail) || ''),
-                label: category,
-                href: leagueTarget || externalHref,
-                external: !!externalHref,
-                cta: leagueTarget ? 'League / Results' : (externalHref ? 'Results / Details' : ''),
-            };
-        }
-
-        function previousResultFromEvent(raw) {
-            const ev = normalizeEvent(raw);
-            const leagueTarget = ryderCupEventHash(ev);
-            const courseName = courseNameFor(courseIndex, ev.course_id);
-            return {
-                name: ev.name,
-                dateObj: eventDateForSort(ev),
-                dateText: formatEventDate(ev.date || ev.starts_at),
-                detail: [courseName, statusLabel(ev.status)].filter(Boolean).join(' · '),
-                label: typeLabel(ev.type),
-                typeClass: ev.type,
-                status: ev.status,
-                statusLabel: statusLabel(ev.status),
-                href: leagueTarget || `#event/${encodeURIComponent(ev.id)}`,
-                external: false,
-                cta: leagueTarget ? 'League / Results' : 'View results',
-            };
-        }
-
-        function previousResultTime(item) {
-            return item && item.dateObj && !Number.isNaN(item.dateObj.getTime()) ? item.dateObj.getTime() : 0;
-        }
-
-        function eventHubItem(raw) {
-            const ev = normalizeEvent(raw);
-            const leagueTarget = ryderCupEventHash(ev);
-            return {
-                id: ev.id,
-                name: ev.name,
-                typeClass: ev.type,
-                typeLabel: typeLabel(ev.type),
-                status: ev.status,
-                statusLabel: statusLabel(ev.status),
-                dateText: formatEventDate(ev.date),
-                courseName: courseNameFor(courseIndex, ev.course_id),
-                href: leagueTarget || `#event/${encodeURIComponent(ev.id)}`,
-            };
-        }
-
-        function feedHubItem(item) {
-            const leagueTarget = ryderCupFeedHash(item);
-            const externalHref = leagueTarget ? '' : sanitizeUrl(item && item.url);
-            return {
-                name: String((item && item.name) || 'Event'),
-                dateText: item && item.date ? String(item.date) : 'TBD',
-                detail: String((item && item.detail) || ''),
-                href: leagueTarget || externalHref,
-                external: !!externalHref,
-                cta: leagueTarget ? 'League / Results' : (externalHref ? 'Register / Details' : ''),
-            };
-        }
-
-        function publishHub(hub) {
-            window.__gvdgEventsHub = hub;
-            window.dispatchEvent(new CustomEvent('gvdg:events-hub', {
-                detail: { hub },
-            }));
-        }
-
-        function publishPreviousResults(results) {
-            const safeResults = Array.isArray(results) ? results : [];
-            window.__gvdgEventsPreviousResults = safeResults;
-            window.dispatchEvent(new CustomEvent('gvdg:events-previous-results', {
-                detail: { results: safeResults },
-            }));
-        }
-
-        function publishStatus(status) {
-            const safeStatus = status && typeof status === 'object' ? status : { tone: 'loading', message: 'Loading...' };
-            window.__gvdgEventsStatus = safeStatus;
-            window.dispatchEvent(new CustomEvent('gvdg:events-status', {
-                detail: { status: safeStatus },
-            }));
-        }
-
-        function showStatus(message, isError, onRetry) {
-            setView('status');
-            publishStatus({
-                message,
-                retry: isError ? (onRetry || route) : null,
-                tone: isError ? 'error' : 'loading',
-            });
-        }
-
-        function showEmpty(message) {
-            setView('status');
-            publishStatus({ message, retry: null, tone: 'empty' });
-        }
-
-        async function fetchJson(path) {
-            const res = await fetch(`${API_BASE}${path}`, {
-                cache: 'no-store',
-                headers: { Accept: 'application/json' },
-            });
-            if (!res.ok) throw new Error(`Request failed (${res.status})`);
-            return res.json();
-        }
-
-        // Lazily load /courses once so cards/detail can show a course name.
-        async function ensureCourses() {
-            if (coursesLoaded) return;
-            try {
-                const data = await fetchJson('/courses');
-                coursesCache = Array.isArray(data && data.courses) ? data.courses : [];
-                courseIndex = buildCourseIndex(coursesCache);
-            } catch (_e) {
-                // Course names are a nicety — never block events on this.
-                coursesCache = [];
-                courseIndex = new Map();
-            }
-            coursesLoaded = true;
-        }
-
-        // ---------- HUB ----------
-        // Render the two club categories: Events (schedule feed + any club-scored D1 events) and the
-        // Club Events heading (fundraisers/meetings render into their own sections just below).
-        function renderPage(feed, d1events) {
-            const { active: feedEvents, archived: feedArchived } = splitFeedByDate((feed && feed.events) || []);
-            const { active: feedClub, archived: feedClubArchived } = splitFeedByDate((feed && feed.clubEvents) || []);
-            const { active: activeD1, archived: d1Archived } = splitClubEventsByDate(d1events || []);
-            const { live, upcoming } = bucketEvents(activeD1);
-            const previousResults = [
-                ...d1Archived.map(previousResultFromEvent),
-                ...feedArchived.map((item) => previousResultFromFeed(item, 'Event')),
-                ...feedClubArchived.map((item) => previousResultFromFeed(item, 'Club Event')),
-            ].sort((a, b) => previousResultTime(b) - previousResultTime(a));
-
-            const hasMainContent = !!(feedEvents.length || live.length || upcoming.length);
-            publishHub({
-                live: live.map(eventHubItem),
-                feedEvents: feedEvents.map(feedHubItem),
-                upcoming: upcoming.map(eventHubItem),
-                feedClub: feedClub.map(feedHubItem),
-                hasMainContent,
-            });
-
-            publishPreviousResults(previousResults);
-
-            setView('hub');
-            lastUpdatedEl.hidden = false;
-            lastUpdatedEl.textContent =
-                'Last updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        }
-
-        async function loadHub({ quiet = false } = {}) {
-            teardownLive(); // close any live socket from a detail view
-            if (eventsLoadState.loading) return;
-            const limit = Math.min(EVENTS_PAGE_SIZE, EVENTS_PAGE_MAX_LIMIT);
-            const state = eventsLoadState;
-            if (!quiet) showStatus('Loading…', false);
-            state.loading = true;
-            try {
-                // Courses first (best-effort) so cards can show names on first paint.
-                await ensureCourses();
-                const [feed, d1] = await Promise.all([
-                    fetchJson('/club-feed').catch(() => ({ events: [], clubEvents: [] })),
-                    fetchJson('/events?limit=' + encodeURIComponent(String(limit)) + '&offset=0').catch(() => ({ events: [] })),
-                ]);
-                const next = (d1 && d1.events) || [];
-                state.events = next;
-                renderPage(feed, state.events);
-                loadRegistration(); // best-effort; club events open for sign-up
-                loadLeaguesList(); // best-effort; standings live behind each league
-                loadFundraisers();
-                loadMeetings();
-            } catch (_err) {
-                if (!quiet) {
-                    lastUpdatedEl.hidden = true;
-                    showStatus('We couldn’t load the calendar right now. Please try again.', true, loadHub);
-                }
-            } finally {
-                state.loading = false;
-            }
-        }
-
-        // ---------- REGISTER (club events open for sign-up; members or guests) ----------
-        function memberToken() { try { return sessionStorage.getItem('gvdg_member_token') || null; } catch (_e) { return null; } }
-        const GUEST_REG_KEY = 'gvdg_guest_regs'; // { [eventId]: { guestToken, name, division, team, addons } } - lets a guest manage their sign-up
-        function guestRegs() { try { return JSON.parse(localStorage.getItem(GUEST_REG_KEY) || '{}'); } catch (_e) { return {}; } }
-        function setGuestReg(eventId, val) {
-            const all = guestRegs();
-            if (val) all[eventId] = val; else delete all[eventId];
-            try { localStorage.setItem(GUEST_REG_KEY, JSON.stringify(all)); } catch (_e) {}
-        }
-        async function regApi(path, opts) {
-            const o = opts || {};
-            const headers = { Accept: 'application/json' };
-            if (o.body) headers['Content-Type'] = 'application/json';
-            if (o.token) headers.Authorization = 'Bearer ' + o.token;
-            return fetch(API_BASE + path, { method: o.method || 'GET', cache: 'no-store', headers, body: o.body ? JSON.stringify(o.body) : undefined });
-        }
-        function loadRegistration() {
-            window.dispatchEvent(new CustomEvent('gvdg:events-registration-refresh'));
-        }
-
-        // ---------- FUNDRAISERS (Phase 4, public) ----------
-        async function loadFundraisers() {
-            let items = [];
-            try { const d = await fetchJson('/fundraisers'); items = (d && d.fundraisers) || []; } catch (_e) {}
-            const active = items.filter((f) => f.status === 'active');
-            window.__gvdgEventsFundraisers = active;
-            window.dispatchEvent(new CustomEvent('gvdg:events-fundraisers', {
-                detail: { fundraisers: active },
-            }));
-        }
-
-        // ---------- MEETINGS & MINUTES (club events) ----------
-        async function loadMeetings() {
-            let items = [];
-            try { const d = await fetchJson('/meetings'); items = (d && d.meetings) || []; } catch (_e) {}
-            window.__gvdgEventsMeetings = Array.isArray(items) ? items : [];
-            window.dispatchEvent(new CustomEvent('gvdg:events-meetings', {
-                detail: { meetings: window.__gvdgEventsMeetings },
-            }));
-        }
-
-        // ---------- LEAGUES & STANDINGS (Phase 4) ----------
-        function publishLeagues(leagues) {
-            const safeLeagues = Array.isArray(leagues) ? leagues : [];
-            window.__gvdgEventsLeagues = safeLeagues;
-            window.dispatchEvent(new CustomEvent('gvdg:events-leagues', {
-                detail: { leagues: safeLeagues },
-            }));
-        }
-
-        function publishLeagueDetail(data) {
-            window.__gvdgEventsLeagueDetail = data || null;
-            window.dispatchEvent(new CustomEvent('gvdg:events-league-detail', {
-                detail: { data: window.__gvdgEventsLeagueDetail },
-            }));
-        }
-
-        async function loadLeaguesList() {
-            let leagues = [];
-            try { const d = await fetchJson('/leagues'); leagues = (d && d.leagues) || []; } catch (_e) {}
-            publishLeagues(leagues);
-        }
-
-        async function loadLeague(id) {
-            teardownLive();
-            showStatus('Loading league…', false);
-            try {
-                await ensureCourses();
-                const data = await fetchJson(`/leagues/${encodeURIComponent(id)}`);
-                if (!data || !data.league) { showStatus('That league could not be found.', true, () => { window.location.hash = ''; }); return; }
-                publishLeagueDetail(data);
-                setView('league-detail');
-                lastUpdatedEl.hidden = true;
-                window.scrollTo(0, 0);
-            } catch (_e) {
-                showStatus('We couldn’t load that league right now.', true, () => loadLeague(id));
-            }
-        }
-
-        // ---------- DETAIL ----------
-        let activeEventDetail = null;
-        let activeEventDetailSeq = 0;
-        let activeLive = null;
-
-        function eventCourse(ev) {
-            return ev && ev.course_id ? (courseIndex.get(String(ev.course_id)) || null) : null;
-        }
-
-        function publishEventDetail(data) {
-            window.__gvdgEventsEventDetail = data || null;
-            window.dispatchEvent(new CustomEvent('gvdg:events-event-detail', {
-                detail: { data: window.__gvdgEventsEventDetail },
-            }));
-        }
-
-        function updateEventDetail(seq, patch) {
-            if (!activeEventDetail || activeEventDetail.seq !== seq) return;
-            activeEventDetail = { ...activeEventDetail, ...patch };
-            publishEventDetail(activeEventDetail);
-        }
-
-        function teardownLive() {
-            if (!activeLive) return;
-            try { if (activeLive.ws) activeLive.ws.close(); } catch (_e) {}
-            if (activeLive.poll) clearInterval(activeLive.poll);
-            activeLive = null;
-        }
-
-        function mountLiveLeaderboard(seq, eventId) {
-            teardownLive();
-            const ctx = { ws: null, poll: null, gotWs: false, done: false };
-            activeLive = ctx;
-            const setConn = (text) => updateEventDetail(seq, { liveConnection: text });
-            const render = (snap) => {
-                if (activeLive !== ctx) return;
-                updateEventDetail(seq, { liveSnapshot: snap });
-                if (snap && snap.status && snap.status !== 'live') {
-                    ctx.done = true;
-                    if (ctx.poll) { clearInterval(ctx.poll); ctx.poll = null; }
-                    setConn('Final');
-                }
-            };
-            const pollOnce = async () => { try { const d = await fetchJson(`/events/${encodeURIComponent(eventId)}/live`); render(d); } catch (_e) {} };
-            const startPolling = () => { if (ctx.poll || ctx.done || activeLive !== ctx) return; setConn('Live (auto-refresh)'); pollOnce(); ctx.poll = setInterval(pollOnce, 5000); };
-            try {
-                const wsUrl = API_BASE.replace(/^http/, 'ws') + `/events/${encodeURIComponent(eventId)}/live/ws`;
-                const ws = new WebSocket(wsUrl);
-                ctx.ws = ws;
-                ws.onopen = () => { ctx.gotWs = true; setConn('Live'); };
-                ws.onmessage = (e) => { try { render(JSON.parse(e.data)); } catch (_e) {} };
-                ws.onerror = () => { startPolling(); };
-                ws.onclose = () => { startPolling(); };
-                setTimeout(() => { if (!ctx.gotWs) startPolling(); }, 4000);
-            } catch (_e) { startPolling(); }
-        }
-
-        async function fetchFinalResults(eventId) {
-            let results = [];
-            try { const d = await fetchJson(`/events/${encodeURIComponent(eventId)}/results`); results = (d && d.results) || []; } catch (_e) {}
-            return Array.isArray(results) ? results : [];
-        }
-
-        async function fetchEventExtrasData(eventId) {
-            const [cd, pd] = await Promise.all([
-                fetchJson(`/events/${encodeURIComponent(eventId)}/ctps`).catch(() => null),
-                fetchJson(`/events/${encodeURIComponent(eventId)}/ace-pot`).catch(() => null),
-            ]);
-            return {
-                acePot: pd && pd.ace_pot ? pd.ace_pot : null,
-                ctps: (cd && Array.isArray(cd.ctps)) ? cd.ctps : [],
-                loaded: true,
-            };
-        }
-
-        function parseLayoutHoles(layout) {
-            if (!layout) return [];
-            if (Array.isArray(layout.holes)) return layout.holes;
-            try { const holes = JSON.parse(layout.holes || '[]'); return Array.isArray(holes) ? holes : []; } catch (_e) { return []; }
-        }
-
-        async function fetchTeeSignsData(ev, finalResults) {
-            if (!ev.course_id) return null;
-            const [ld, td] = await Promise.all([
-                fetchJson(`/courses/${encodeURIComponent(ev.course_id)}/layouts`).catch(() => null),
-                fetchJson(`/courses/${encodeURIComponent(ev.course_id)}/tee-signs`).catch(() => null),
-            ]);
-            const layouts = (ld && ld.layouts) || [];
-            const signs = (td && td.teeSigns) || [];
-            const layout = layouts.find((l) => String(l.id ?? l.layout_id) === ev.layout_id) || layouts[0] || null;
-            const holes = parseLayoutHoles(layout);
-            const officialByHole = new Map();
-            signs.forEach((s) => { if (s.status === 'official') officialByHole.set(Number(s.hole_number), s.id); });
-            const holeData = new Map(holes.map((h) => [Number(h.hole), h]));
-            const holeNums = new Set([...holeData.keys(), ...officialByHole.keys()]);
-            if (!holeNums.size) return null;
-            const holeList = [...holeNums].map((n) => ({ hole: n }));
-            let holeWins = {};
-            try {
-                if (ev.status === 'final') {
-                    holeWins = holeWinners(holeList, playersFromResults(finalResults || []));
-                } else {
-                    const sd = await fetchJson(`/events/${encodeURIComponent(ev.id)}/live`).catch(() => null);
-                    if (sd && sd.roundConfig && sd.roundConfig.scoringStyle === 'matchplay') holeWins = holeWinners((sd.holes && sd.holes.length) ? sd.holes : holeList, sd.players || []);
-                }
-            } catch (_e) {}
-            return {
-                courseName: courseNameFor(courseIndex, ev.course_id) || '',
-                layout: layout ? { id: layout.id ?? layout.layout_id ?? '', name: layout.name || '' } : null,
-                holes: [...holeNums].sort((a, b) => a - b).map((hn) => {
-                    const h = holeData.get(hn) || { hole: hn };
-                    return {
-                        ...h,
-                        hole: hn,
-                        signId: officialByHole.get(hn) ?? null,
-                        winner: holeWins[hn] || null,
-                    };
-                }),
-            };
-        }
-
-        async function loadDetail(id) {
-            teardownLive();
-            showStatus('Loading event...', false);
-            try {
-                await ensureCourses();
-                const data = await fetchJson(`/events/${encodeURIComponent(id)}`);
-                if (!data || !data.event) {
-                    showStatus('That event could not be found.', true, () => { window.location.hash = ''; });
-                    return;
-                }
-                const seq = ++activeEventDetailSeq;
-                const ev = normalizeEvent(data.event);
-                const guestReg = typeof guestRegs === 'function' ? guestRegs()[ev.id] : null;
-                activeEventDetail = {
-                    apiBase: API_BASE,
-                    course: eventCourse(ev),
-                    event: ev,
-                    extras: { acePot: null, ctps: [], loaded: false },
-                    finalResults: [],
-                    finalResultsLoaded: ev.status !== 'final',
-                    guestReg,
-                    liveConnection: ev.status === 'live' ? 'Connecting' : '',
-                    liveSnapshot: null,
-                    memberToken: memberToken(),
-                    seq,
-                    teeSigns: null,
-                };
-                publishEventDetail(activeEventDetail);
-                setView('detail');
-                lastUpdatedEl.hidden = true;
-                window.scrollTo(0, 0);
-
-                if (ev.status === 'live') mountLiveLeaderboard(seq, ev.id);
-
-                const finalResultsPromise = ev.status === 'final'
-                    ? fetchFinalResults(ev.id).then((results) => {
-                        updateEventDetail(seq, { finalResults: results, finalResultsLoaded: true });
-                        return results;
-                    })
-                    : Promise.resolve(null);
-
-                finalResultsPromise
-                    .then((results) => fetchTeeSignsData(ev, results))
-                    .then((teeSigns) => { if (teeSigns) updateEventDetail(seq, { teeSigns }); })
-                    .catch(() => {});
-
-                fetchEventExtrasData(ev.id)
-                    .then((extras) => updateEventDetail(seq, { extras }))
-                    .catch(() => updateEventDetail(seq, { extras: { acePot: null, ctps: [], loaded: true } }));
-            } catch (_err) {
-                showStatus('We couldn’t load that event right now. Please try again.', true, () => loadDetail(id));
-            }
-        }
-
-        // ---------- ROUTING ----------
-        // Hash route: "#event/:id" -> event detail; "#league/:id" -> league standings; else hub.
-        function parseHash() {
-            const h = window.location.hash || '';
-            let m = h.match(/^#event\/(.+)$/); if (m) return { view: 'event', id: decodeURIComponent(m[1]) };
-            m = h.match(/^#league\/(.+)$/); if (m) return { view: 'league', id: decodeURIComponent(m[1]) };
-            m = h.match(/^#manage=(\d+)-([a-f0-9]+)$/i); if (m) return { view: 'manage', id: m[1], token: m[2] };
-            return null;
-        }
-
-        // A guest's emailed manage link (#manage=<eventId>-<token>): re-seed this browser from the token so
-        // the Register section shows their sign-up here (with Withdraw), then drop the token from the URL.
-        async function applyManage(eid, token) {
-            try {
-                const r = await regApi('/events/' + eid + '/registration?gt=' + encodeURIComponent(token));
-                if (r.ok) { const d = await r.json(); if (d && d.registration) setGuestReg(eid, { guestToken: token, name: d.registration.name }); }
-            } catch (_e) {}
-            history.replaceState(null, '', location.pathname + location.search);
-            loadHub(); startRefresh();
-        }
-
-        function route() {
-            stopRefresh();
-            const r = parseHash();
-            if (r && r.view === 'event') loadDetail(r.id);
-            else if (r && r.view === 'league') loadLeague(r.id);
-            else if (r && r.view === 'manage') applyManage(r.id, r.token);
-            else { loadHub(); startRefresh(); }
-        }
-
-        // Quiet ~60s background refresh while on the hub. Keeps current content
-        // on screen and only swaps it in once the new payload parses cleanly.
-        function startRefresh() {
-            stopRefresh();
-            refreshTimer = setInterval(() => {
-                if (!hubEl.hidden) {
-                    loadHub({ reset: true, preserveCount: true, quiet: true });
-                }
-            }, REFRESH_MS);
-        }
-
-        function stopRefresh() {
-            if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
-        }
-
-        window.addEventListener('hashchange', route);
-        route();
-    </script>
     <div id="crottsReactApp"></div>
 </body>
 </html>

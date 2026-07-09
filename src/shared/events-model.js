@@ -1,8 +1,7 @@
-// events.js — pure, DOM-free helpers for the GVDG public events hub.
+// Pure, DOM-free helpers for the GVDG public events hub.
 //
 // No DOM, no network access here so it can run headless under `node --test`.
-// All rendering + fetching lives in events.html. These functions normalize the
-// club Worker's REST payloads, bucket events into Live / Upcoming / Past, sort
+// These functions normalize the club Worker's REST payloads, bucket events into Live / Upcoming / Past, sort
 // each bucket, group a roster by division, and format ISO dates defensively.
 //
 // Public API: VALID_STATUSES, VALID_TYPES, normalizeEvent, bucketEvents,

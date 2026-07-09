@@ -22,6 +22,7 @@
     <style>
         /* Design tokens (color / surfaces / text) live in tokens.css, linked above — one source of truth. */
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
 body{ position: relative; }
 body::before{
   content: ""; position: fixed; inset: 0; z-index: -1;
@@ -97,7 +98,7 @@ body::before{
         .carousel-arrow:active { transform: translateY(-50%) scale(0.95); }
         .carousel-prev { left: 20px; }
         .carousel-next { right: 20px; }
-        @media (max-width: 768px) { .carousel-arrow { width: 44px; height: 44px; min-width: 44px; min-height: 44px; font-size: 1.2rem; } .carousel-prev { left: 10px; } .carousel-next { right: 10px; } .carousel-controls { bottom: 20px; } }
+        @media (max-width: 768px) { .carousel-arrow { top: 68%; width: 44px; height: 44px; min-width: 44px; min-height: 44px; font-size: 1.2rem; } .carousel-prev { left: 10px; } .carousel-next { right: 10px; } .carousel-controls { bottom: 20px; } }
         .hero-content { position: relative; z-index: 5; text-align: center; color: white; max-width: 900px; padding: 0 2rem; animation: fadeInUp 1s ease-out; }
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
         .hero-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(2.5rem, 8vw, 5rem); letter-spacing: 0.05em; margin-bottom: 1rem; text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.7), 0 0 30px rgba(0, 0, 0, 0.5); line-height: 1.1; }
@@ -135,6 +136,7 @@ body::before{
         .board-member-card { background: linear-gradient(135deg, var(--green), var(--secondary)); padding: 1.5rem; border-radius: 15px; text-align: center; color: white; transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; gap: 0.75rem; }
         .board-member-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(45, 80, 22, 0.4); }
         .board-member-icon { width: 70px; height: 70px; background: rgba(255, 255, 255, 0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem; }
+        .board-member-icon svg { width: 1em; height: 1em; }
         .board-member-name { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; letter-spacing: 0.02em; }
         .board-member-role { font-size: 0.85rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 0.05em; background: rgba(255, 255, 255, 0.15); padding: 0.4rem 0.8rem; border-radius: 20px; }
         .board-member-card.founder .board-member-icon { background: linear-gradient(135deg, var(--primary), var(--accent)); }
@@ -165,13 +167,15 @@ body::before{
         .slide-subtitle { font-size: 1rem; color: var(--text-tertiary); font-weight: 600; }
         .courses-grid { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
         @media (max-width: 640px) { .courses-grid { grid-template-columns: 1fr; } }
-        .course-card { background: var(--bg-primary); border-radius: 15px; overflow: hidden; border: 2px solid var(--border-color); transition: all 0.3s ease; }
+        .course-card { background: var(--bg-primary); border-radius: 15px; overflow: hidden; border: 2px solid var(--border-color); transition: all 0.3s ease; display: block; outline: none; }
         .course-card[data-course] { cursor: pointer; }
         .course-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px var(--card-shadow-hover); border-color: var(--primary); }
+        .course-card:focus-visible { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.22), 0 10px 30px var(--card-shadow-hover); }
         .course-image { width: 100%; height: 180px; background: linear-gradient(135deg, var(--secondary), var(--green)); position: relative; overflow: hidden; }
         .course-image img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s ease; }
         .course-card:hover .course-image img { transform: scale(1.05); }
-        .course-image.no-image::before { content: '🥏'; position: absolute; font-size: 4rem; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0.3; }
+        .course-image.no-image::before { content: none; }
+        .course-placeholder-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: rgba(255, 255, 255, 0.45); }
         .course-content { padding: 1.5rem; }
         .course-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; }
         .course-name { font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; color: var(--text-primary); flex: 1; }
@@ -179,7 +183,8 @@ body::before{
         .difficulty-beginner { background: linear-gradient(135deg, var(--green), #4a7c23); color: white; }
         .difficulty-intermediate { background: linear-gradient(135deg, var(--accent), #e5a600); color: var(--dark); }
         .difficulty-advanced { background: linear-gradient(135deg, var(--primary), #cc4a1a); color: white; }
-        .course-location { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem; }
+        .course-location { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem; display: inline-flex; align-items: center; gap: 0.35rem; }
+        .course-location svg { flex: 0 0 auto; }
         .course-info { display: flex; gap: 1.5rem; margin: 1.5rem 0; padding: 1rem; background: var(--bg-tertiary); border-radius: 10px; }
         .info-item { flex: 1; text-align: center; }
         .info-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.3rem; }
@@ -192,7 +197,7 @@ body::before{
             gap: 2rem;
             margin-top: 1.25rem;
         }
-        .carousel-btn { background: var(--primary-strong); color: white; border: none; width: 50px; height: 50px; border-radius: 50%; cursor: pointer; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; }
+        .carousel-btn { background: var(--primary-strong); color: white; border: none; width: 50px; height: 50px; border-radius: 50%; cursor: pointer; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; padding: 0 !important; }
         .carousel-btn:hover { background: var(--secondary); transform: scale(1.1); }
         .carousel-btn:disabled { opacity: 0.3; cursor: not-allowed; }
         .carousel-indicators { display: flex; gap: 0.8rem; align-items: center; }
@@ -294,6 +299,7 @@ body::before{
         #membership { background: linear-gradient(135deg, var(--secondary) 0%, var(--green) 100%); color: white; text-align: center; position: relative; overflow: hidden; }
         #membership::before { content: ''; position: absolute; inset: 0; background-image: repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(255,255,255,.03) 35px, rgba(255,255,255,.03) 70px); }
         .membership-content { position: relative; z-index: 1; }
+        .membership-subtitle { font-size: 1.2rem; margin: 1.5rem 0; opacity: 0.95; }
         .membership-perks { display: grid; grid-template-columns: 1fr; gap: 1.5rem; margin: 3rem 0; max-width: 900px; margin-left: auto; margin-right: auto; }
         @media (min-width: 640px) { .membership-perks { grid-template-columns: repeat(2, 1fr); } }
         @media (min-width: 1024px) { .membership-perks { grid-template-columns: repeat(4, 1fr); } }
@@ -302,6 +308,7 @@ body::before{
         .perk:hover { background: rgba(255, 255, 255, 0.2); transform: translateY(-10px) scale(1.05); border-color: var(--accent); }
         .perk:active { transform: translateY(-5px) scale(1.02); }
         .perk-icon { font-size: 3rem; margin-bottom: 1rem; transition: transform 0.3s ease; }
+        .perk-icon svg, .contact-icon svg { display: block; width: 1em; height: 1em; margin: 0 auto; }
         .perk:hover .perk-icon { transform: scale(1.2) rotate(10deg); }
         .perk-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.3rem; margin-bottom: 0.5rem; letter-spacing: 0.03em; }
         .perk p { font-size: 0.95rem; opacity: 0.9; }
@@ -321,6 +328,7 @@ body::before{
         .contact-detail a { color: var(--primary); text-decoration: none; transition: color 0.3s ease; }
         .contact-detail a:hover { color: var(--secondary-text); text-decoration: underline; }
         footer { background: linear-gradient(135deg, var(--dark) 0%, #0d1a0d 100%); color: white; text-align: center; padding: 2.5rem 2rem; font-size: 0.95rem; border-top: 3px solid var(--accent); }
+        footer p { max-width: 34rem; margin: 0 auto; }
         [data-theme="dark"] footer { background: linear-gradient(135deg, var(--bg-secondary) 0%, #0a0a14 100%); }
         .fade-in { opacity: 0; transform: translateY(20px); transition: all 0.6s ease; }
         .fade-in.visible { opacity: 1; transform: translateY(0); }
@@ -328,7 +336,7 @@ body::before{
         @media print { header, .carousel-arrow, .carousel-controls, .scroll-indicator, footer { display: none; } section { page-break-inside: avoid; } }
 
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
-a, button, input, select, textarea, .nav-toggle, .theme-toggle, .carousel-btn { min-height: 44px; min-width: 44px; }
+a, button, input, select, textarea, .nav-toggle, .theme-toggle, .carousel-btn { min-height: 44px; min-width: 44px; touch-action: manipulation; }
 body { overflow-x: hidden; width: 100%; font-size: 16px; line-height: 1.6; }
 img { max-width: 100%; height: auto; display: block; }
 img[loading="lazy"] { background: var(--bg-secondary, #f0f0f0); }
@@ -339,7 +347,7 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
 @media (max-width: 768px) {
   .hide-mobile { display: none !important; } .show-mobile { display: block !important; } .text-center-mobile { text-align: center !important; } .stack-mobile { flex-direction: column !important; }
   section { padding: 3rem 1rem; } section h2 { margin-bottom: 1.5rem; text-align: center; } .container { width: 100%; max-width: 100%; padding-left: 1rem; padding-right: 1rem; }
-  footer { padding: 2rem 1rem; text-align: center; } footer .links, footer nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem; margin-bottom: 1rem; } footer a { padding: 0.5rem; min-height: 44px; display: inline-flex; align-items: center; }
+  footer { padding: 2rem 4.75rem 5rem; text-align: center; } footer p { max-width: 18rem; } footer .links, footer nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem; margin-bottom: 1rem; } footer a { padding: 0.5rem; min-height: 44px; display: inline-flex; align-items: center; }
   .btn, button, input[type="submit"] { min-height: 48px; padding: 0.875rem 1.5rem; font-size: 1rem; border-radius: 8px; -webkit-tap-highlight-color: transparent; }
   .membership-perks { gap: 1rem; margin: 2rem 0; }
   .perk { min-height: 128px; padding: 1.5rem 1rem; }
@@ -348,7 +356,11 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
 }
 @media (max-width: 480px) { .btn-primary, .btn-cta { width: 100%; text-align: center; } }
 @media (min-width: 769px) { .hide-desktop { display: none !important; } }
-@supports (padding: env(safe-area-inset-bottom)) { header { padding-top: env(safe-area-inset-top); } footer { padding-bottom: env(safe-area-inset-bottom); } }
+@supports (padding: env(safe-area-inset-bottom)) {
+  header { padding-top: env(safe-area-inset-top); }
+  footer { padding-bottom: calc(2.5rem + env(safe-area-inset-bottom)); }
+  @media (max-width: 768px) { footer { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); } }
+}
 .carousel, .carousel-item, nav ul, .nav-menu { will-change: transform; transform: translateZ(0); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } }
 
@@ -442,7 +454,7 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
 
 .slide-header-nav { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-bottom: 1.5rem; }
 .slide-header-nav .slide-header { margin-bottom: 0; flex: 0 1 auto; text-align: center; min-width: 0; }
-.slide-nav-arrow { flex-shrink: 0; width: 44px; height: 44px; min-width: 44px; min-height: 44px; border-radius: 50%; border: 2px solid var(--primary); background: transparent; color: var(--primary); font-size: 1.4rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; -webkit-tap-highlight-color: transparent; line-height: 1; }
+.slide-nav-arrow { flex-shrink: 0; width: 44px; height: 44px; min-width: 44px; min-height: 44px; border-radius: 50%; border: 2px solid var(--primary); background: transparent; color: var(--primary); font-size: 1.4rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; -webkit-tap-highlight-color: transparent; line-height: 1; padding: 0 !important; }
 .slide-nav-arrow:hover:not(:disabled) { background: var(--primary-strong); color: white; transform: scale(1.1); }
 .slide-nav-arrow:active:not(:disabled) { transform: scale(0.95); }
 .slide-nav-arrow:disabled { opacity: 0.2; cursor: not-allowed; transform: none !important; background: transparent !important; color: var(--primary) !important; }
@@ -455,146 +467,25 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
 <body>
     <div id="homeReactPageChromeApp"></div>
 
-    <section class="hero">
-        <div class="hero-bg-pattern"></div>
-        <div class="carousel">
-            <div class="carousel-slide active"></div>
-            <div class="carousel-slide"></div>
-            <div class="carousel-slide"></div>
-            <div class="carousel-slide"></div>
-            <div class="carousel-slide"></div>
-        </div>
-        <button class="carousel-arrow carousel-prev" aria-label="Previous slide">‹</button>
-        <button class="carousel-arrow carousel-next" aria-label="Next slide">›</button>
-        <div class="carousel-controls">
-            <button class="carousel-dot active" aria-label="Slide 1"></button>
-            <button class="carousel-dot" aria-label="Slide 2"></button>
-            <button class="carousel-dot" aria-label="Slide 3"></button>
-            <button class="carousel-dot" aria-label="Slide 4"></button>
-            <button class="carousel-dot" aria-label="Slide 5"></button>
-        </div>
-        <div class="hero-content">
-            <h1 class="hero-title">Greenville Disc Golf Club</h1>
-            <p class="hero-subtitle">Eastern North Carolina's Premier Disc Golf Community</p>
-            <a href="#membership" class="cta-button">Join the Club</a>
-        </div>
-        <div class="scroll-indicator"></div>
-    </section>
+    <div id="homeReactHeroApp"></div>
 
-    <section id="about">
-        <h2 class="section-title fade-in">About Our Club</h2>
-        <div class="about-carousel-container">
-            <div class="about-carousel">
-                <div class="carousel-slide-about">
-                    <div class="about-content">
-                        <div class="about-text">
-                            <p>Greenville Disc Golf (GVDG) was founded in 2004 when local disc golf enthusiasts came together to prove there was a community passionate about bringing the sport to Eastern North Carolina. What started as a grassroots effort to build a single course has grown into one of the region's most active disc golf organizations.</p>
-                            <p>For over two decades, we've been hosting weekly doubles, monthly tournaments, and our signature annual event—the Down East Players Cup, a PDGA A-tier tournament that draws players from across the region. We're proud to have helped establish Greenville as the 12th best disc golf destination in North Carolina.</p>
-                            <p>Beyond the course, GVDG is committed to giving back. Our scholarship program supports graduating seniors in Pitt County, funded through events like our annual Scholarship Shootout. Whether you're throwing your first disc or competing at the pro level, you'll find your place in our community.</p>
-                        </div>
-                        <div class="stats-grid">
-                            <div class="stat-card"><div class="stat-number" data-count="21">0</div><div class="stat-label">Years Strong</div></div>
-                            <div class="stat-card"><div class="stat-number" data-count="5">0</div><div class="stat-label">Local Courses</div></div>
-                            <div class="stat-card"><div class="stat-number" data-count="12">0</div><div class="stat-label">NC Ranking</div></div>
-                            <div class="stat-card"><div class="stat-number" data-count="7">0</div><div class="stat-label">Active Leagues</div></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="carousel-slide-about">
-                    <div class="board-slide-header">
-                        <h3 class="board-slide-title">Meet Our Board</h3>
-                        <p class="board-slide-subtitle">The people who keep GVDG running</p>
-                    </div>
-                    <div class="board-members-grid">
-                        <div class="board-member-card founder"><div class="board-member-icon">🥏</div><div class="board-member-name">Max Crotts</div><div class="board-member-role">Club Officer</div></div>
-                        <div class="board-member-card"><div class="board-member-icon">💰</div><div class="board-member-name">Adam Walter</div><div class="board-member-role">Treasurer</div></div>
-                        <div class="board-member-card"><div class="board-member-icon">🥏</div><div class="board-member-name">Jarrett Wallace</div><div class="board-member-role">Club Officer</div></div>
-                        <div class="board-member-card"><div class="board-member-icon">🥏</div><div class="board-member-name">Jeff Stelly</div><div class="board-member-role">Club Officer</div></div>
-                        <div class="board-member-card"><div class="board-member-icon">🥏</div><div class="board-member-name">TJ Braley</div><div class="board-member-role">Club Officer</div></div>
-                        <div class="board-member-card"><div class="board-member-icon">🥏</div><div class="board-member-name">Alex Schwarga</div><div class="board-member-role">Club Officer</div></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="about-carousel-nav">
-            <button class="carousel-btn" id="aboutPrevBtn">‹</button>
-            <div class="carousel-indicators"><button class="carousel-indicator active" data-slide="0"></button><button class="carousel-indicator" data-slide="1"></button></div>
-            <button class="carousel-btn" id="aboutNextBtn">›</button>
-        </div>
-    </section>
+    <section id="about"><div id="homeReactAboutApp"></div></section>
 
 <section id="courses">
-    <div class="courses-carousel-container">
-        <div class="courses-carousel">
-            <div class="carousel-slide-courses">
-                <div class="slide-header-nav">
-                <button class="slide-nav-arrow slide-nav-prev" aria-label="Previous courses slide">&#8249;</button>
-                <div class="slide-header"><h3 class="slide-title">Our Courses</h3><p class="slide-subtitle">5 Courses in Greenville, NC</p></div>
-                <button class="slide-nav-arrow slide-nav-next" aria-label="Next courses slide">&#8250;</button>
-            </div>
-                <div class="courses-grid">
-                    <div class="course-card" data-course="ECU North Rec Complex" data-location="Greenville, NC" data-udisc="https://udisc.com/courses/ecu-north-recreational-complex-HbME" data-coords="35.631092,-77.319923" data-youtube=""><div class="course-image"><img src="https://d22ksth68ujgu2.cloudfront.net/b7fd828f4c6bf4fe89cd95a2d07e4cfc_m_IMG_6470.jpg" alt="ECU North Recreational Complex" loading="lazy"></div><div class="course-content"><div class="course-header"><h3 class="course-name">ECU North Rec Complex</h3><span class="difficulty-badge difficulty-intermediate">Moderate - Hard</span></div><div class="course-location">📍 Greenville, NC</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">23</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">4.4★</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~2 hrs</div></div></div><p class="course-description">Well-maintained course with manicured fairways and great signage.</p></div></div>
-                    <div class="course-card" data-course="West Meadowbrook Park" data-location="Greenville, NC" data-udisc="https://udisc.com/courses/west-meadowbrook-park-40Aw" data-coords="35.6264,-77.375" data-youtube=""><div class="course-image"><img src="https://d22ksth68ujgu2.cloudfront.net/a280319675d856e30869b9bca4eaee00_m_40698704_Unknown.jpg" alt="West Meadowbrook Park" loading="lazy"></div><div class="course-content"><div class="course-header"><h3 class="course-name">West Meadowbrook Park</h3><span class="difficulty-badge difficulty-beginner">Easy - Hard</span></div><div class="course-location">📍 Greenville, NC</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">18</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">4.3★</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~1 hr</div></div></div><p class="course-description">Five layouts available! Great mix of open and wooded shots.</p></div></div>
-                    <div class="course-card" data-course="Covenant Church" data-location="Winterville, NC" data-udisc="https://udisc.com/courses/covenant-church-Kbtz" data-coords="35.55785,-77.360886" data-youtube=""><div class="course-image"><img src="https://d22ksth68ujgu2.cloudfront.net/8342d5e6d680264501f3f46c96b61755_m_IMG_1449.jpg" alt="Covenant Church" loading="lazy"></div><div class="course-content"><div class="course-header"><h3 class="course-name">Covenant Church</h3><span class="difficulty-badge difficulty-intermediate">Moderate</span></div><div class="course-location">📍 Winterville, NC</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">18</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">4.3★</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~1 hr</div></div></div><p class="course-description">Challenging wooded course with water holes and tight lines.</p></div></div>
-                    <div class="course-card" data-course="The Oakwood Eagles' Nest" data-location="Greenville, NC" data-udisc="https://udisc.com/courses/the-oakwood-eagles-nest-TGSv" data-coords="35.621615,-77.448291" data-youtube=""><div class="course-image no-image"></div><div class="course-content"><div class="course-header"><h3 class="course-name">The Oakwood Eagles' Nest</h3><span class="difficulty-badge difficulty-intermediate">Moderate</span></div><div class="course-location">📍 Greenville, NC</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">18</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">4.0★</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~1.5 hrs</div></div></div><p class="course-description">School campus course with cart-friendly paths.</p></div></div>
-                    <div class="course-card" data-course="Third Street Disc Golf" data-location="Greenville, NC" data-udisc="https://udisc.com/courses/third-street-disc-golf-EC96" data-coords="35.5931,-77.3847" data-youtube=""><div class="course-image"><img src="https://d22ksth68ujgu2.cloudfront.net/658645982c2779bbc89dbe41fa1de4c7_m_IMG_6254.jpg" alt="Third Street Disc Golf" loading="lazy"></div><div class="course-content"><div class="course-header"><h3 class="course-name">Third Street Disc Golf</h3><span class="difficulty-badge difficulty-intermediate">Moderate</span></div><div class="course-location">📍 Greenville, NC</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">9</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">3.7★</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~30 min</div></div></div><p class="course-description">Quick 9-hole course perfect for a fast round.</p></div></div>
-                </div>
-            </div>
-            <div class="carousel-slide-courses">
-                <div class="slide-header-nav">
-                <button class="slide-nav-arrow slide-nav-prev" aria-label="Previous courses slide">&#8249;</button>
-                <div class="slide-header"><h3 class="slide-title">Nearby Courses</h3><p class="slide-subtitle">7 Courses Within 30 Minutes of Greenville</p></div>
-                <button class="slide-nav-arrow slide-nav-next" aria-label="Next courses slide">&#8250;</button>
-            </div>
-                <div class="courses-grid">
-                    <div class="course-card" data-course="Farmville DiscGolfPark" data-location="Farmville, NC" data-udisc="https://udisc.com/courses/farmville-disc-golf-park-YCBv" data-coords="35.604686,-77.576533" data-youtube=""><div class="course-image"><img src="https://d22ksth68ujgu2.cloudfront.net/decd19215d15e33dad293d8b394eaca8_m_IMG_5046.jpg" alt="Farmville DiscGolfPark" loading="lazy"></div><div class="course-content"><div class="course-header"><h3 class="course-name">Farmville DiscGolfPark</h3><span class="difficulty-badge difficulty-intermediate">Moderate</span></div><div class="course-location">📍 Farmville, NC • 15 min</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">18</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">4.3★</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~1.5 hrs</div></div></div><p class="course-description">Former farmland with woods, Blue and Red tee pads available.</p></div></div>
-                    <div class="course-card" data-course="Ayden Park" data-location="Ayden, NC" data-udisc="https://udisc.com/courses/ayden-park-HoPq" data-coords="35.489203,-77.426836" data-youtube=""><div class="course-image"><img src="https://d22ksth68ujgu2.cloudfront.net/6e443673f3aae14b699bfbef1c94b75a_m_IMG_2887.jpg" alt="Ayden Park" loading="lazy"></div><div class="course-content"><div class="course-header"><h3 class="course-name">Ayden Park</h3><span class="difficulty-badge difficulty-intermediate">Moderate</span></div><div class="course-location">📍 Ayden, NC • 20 min</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">18</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">3.5★</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~2 hrs</div></div></div><p class="course-description">Fun beginner-friendly open course in a public park.</p></div></div>
-                    <div class="course-card" data-course="Barnet Park" data-location="Kinston, NC" data-udisc="https://udisc.com/courses/barnet-park-kDCh" data-coords="35.278801,-77.640503" data-youtube=""><div class="course-image"><img src="https://d22ksth68ujgu2.cloudfront.net/ce27baa0cd58600da35e54beb76128c1_m_IMG_2170.jpg" alt="Barnet Park" loading="lazy"></div><div class="course-content"><div class="course-header"><h3 class="course-name">Barnet Park</h3><span class="difficulty-badge difficulty-advanced">Moderate - Very Hard</span></div><div class="course-location">📍 Kinston, NC • 30 min</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">18</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">4.1★</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~1.5 hrs</div></div></div><p class="course-description">Classic eastern NC wooded course with technical shots.</p></div></div>
-                    <div class="course-card" data-course="Beaufort County CC" data-location="Washington, NC" data-udisc="https://udisc.com/courses/beaufort-county-community-college-ijIj" data-coords="35.5549,-77.0152" data-youtube=""><div class="course-image"><img src="https://d22ksth68ujgu2.cloudfront.net/024cd11e84bcdf7863ec22e4876a4e4f_m_IMG_0395.jpg" alt="Beaufort County Community College" loading="lazy"></div><div class="course-content"><div class="course-header"><h3 class="course-name">Beaufort County CC</h3><span class="difficulty-badge difficulty-intermediate">Moderate</span></div><div class="course-location">📍 Washington, NC • 25 min</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">18</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">3.8★</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~2 hrs</div></div></div><p class="course-description">College campus course with elevation and water hazards.</p></div></div>
-                    <div class="course-card" data-course="Farm Life Disc Golf" data-location="Williamston, NC" data-udisc="https://udisc.com/courses/farm-life-disc-golf-3IvE" data-coords="35.7416,-76.985603" data-youtube=""><div class="course-image"><img src="https://d22ksth68ujgu2.cloudfront.net/dc17882950ff11c0a7a2ee7a14438cf5_m_IMG_7564.jpg" alt="Farm Life Disc Golf" loading="lazy"></div><div class="course-content"><div class="course-header"><h3 class="course-name">Farm Life Disc Golf</h3><span class="difficulty-badge difficulty-intermediate">Moderate</span></div><div class="course-location">📍 Williamston, NC • 30 min</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">18</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">4.5★</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~2 hrs</div></div></div><p class="course-description">Highly-rated scenic private course worth the drive.</p></div></div>
-                    <div class="course-card" data-course="Snipers Landing at Robersonville CC" data-location="Robersonville, NC" data-udisc="https://udisc.com/courses/snipers-landing-at-robersonville-cc-0WKq" data-coords="35.861996,-77.244241" data-youtube=""><div class="course-image"><img src="https://imagedelivery.net/gSwsyfyonEyXxR24Q80qjQ/c5986195-9aae-45d0-3a31-8f4a5a889900/public" alt="Snipers Landing at Robersonville CC" loading="lazy"></div><div class="course-content"><div class="course-header"><h3 class="course-name">Snipers Landing</h3><span class="difficulty-badge difficulty-advanced">Hard</span></div><div class="course-location">📍 Robersonville, NC • 25 min</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">18</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">4.3★</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~2.5 hrs</div></div></div><p class="course-description">$10 greens fee. 3 tee sets on a ball golf course. Check in at pro shop.</p></div></div>
-                    <div class="course-card" data-course="Ayden-Grifton HS Disc Golf Course" data-location="Ayden, NC" data-udisc="https://udisc.com/courses/ayden-grifton-hs-disc-golf-course-sLFk" data-coords="35.429322,-77.431738" data-youtube=""><div class="course-image no-image"></div><div class="course-content"><div class="course-header"><h3 class="course-name">Ayden-Grifton HS DGC</h3><span class="difficulty-badge difficulty-beginner">Easy</span></div><div class="course-location">📍 Ayden, NC • 20 min</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">9</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">New</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~30 min</div></div></div><p class="course-description">Beginner-friendly school course. Weekdays after 5pm, weekends sunrise–sunset.</p></div></div>
-                </div>
-            </div>
-            <div class="carousel-slide-courses">
-                <div class="slide-header-nav">
-                <button class="slide-nav-arrow slide-nav-prev" aria-label="Previous courses slide">&#8249;</button>
-                <div class="slide-header"><h3 class="slide-title">Worth The Drive</h3><p class="slide-subtitle">10 Top-Rated Courses Within 60 Miles</p></div>
-                <button class="slide-nav-arrow slide-nav-next" aria-label="Next courses slide">&#8250;</button>
-            </div>
-                <div class="courses-grid">
-                    <div class="course-card" data-course="Glenburnie Park" data-location="New Bern, NC" data-udisc="https://udisc.com/courses/glenburnie-park-Rsnq" data-coords="35.138901,-77.061699" data-youtube=""><div class="course-image"><img src="https://d22ksth68ujgu2.cloudfront.net/20348b2697a1d34ef46a457ea19fb677_m_IMG_2080.jpg" alt="Glenburnie Park" loading="lazy"></div><div class="course-content"><div class="course-header"><h3 class="course-name">Glenburnie Park</h3><span class="difficulty-badge difficulty-advanced">Moderate - Hard</span></div><div class="course-location">📍 New Bern, NC • 45 min</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">18</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">4.6★</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~2 hrs</div></div></div><p class="course-description">One of the best in Eastern NC with river views and elevation.</p></div></div>
-                    <div class="course-card" data-course="Creekside Park" data-location="New Bern, NC" data-udisc="https://udisc.com/courses/creekside-park-GaFZ" data-coords="35.061508,-77.044464" data-youtube=""><div class="course-image"><img src="https://d22ksth68ujgu2.cloudfront.net/1d99b20a6b23ab7bd5fc96edb0272862_m_IMG_0370.jpg" alt="Creekside Park" loading="lazy"></div><div class="course-content"><div class="course-header"><h3 class="course-name">Creekside Park</h3><span class="difficulty-badge difficulty-advanced">Moderate - Hard</span></div><div class="course-location">📍 New Bern, NC • 50 min</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">18</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">4.3★</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~2 hrs</div></div></div><p class="course-description">Technical wooded course with excellent amenities.</p></div></div>
-                    <div class="course-card" data-course="Sunset Park DGC" data-location="Rocky Mount, NC" data-udisc="https://udisc.com/courses/sunset-park-dgc-Z1wS" data-coords="35.953166,-77.813380" data-youtube=""><div class="course-image"><img src="https://d22ksth68ujgu2.cloudfront.net/e3547497c0aae8f215a1680d4080f1f0_m_IMG_5628.jpg" alt="Sunset Park DGC" loading="lazy"></div><div class="course-content"><div class="course-header"><h3 class="course-name">Sunset Park DGC</h3><span class="difficulty-badge difficulty-advanced">Moderate - Hard</span></div><div class="course-location">📍 Rocky Mount, NC • 50 min</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">18</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">4.1★</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~2 hrs</div></div></div><p class="course-description">Well-established course in a beautiful park setting.</p></div></div>
-                    <div class="course-card" data-course="Battle Park DGC" data-location="Rocky Mount, NC" data-udisc="https://udisc.com/courses/battle-park-dgc-XD3h" data-coords="35.961804,-77.804932" data-youtube=""><div class="course-image"><img src="https://d22ksth68ujgu2.cloudfront.net/afbccd3914ebea747a7f303b5770ca05_m_IMG_5571.jpg" alt="Battle Park DGC" loading="lazy"></div><div class="course-content"><div class="course-header"><h3 class="course-name">Battle Park DGC</h3><span class="difficulty-badge difficulty-advanced">Hard</span></div><div class="course-location">📍 Rocky Mount, NC • 50 min</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">18</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">4.0★</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~2 hrs</div></div></div><p class="course-description">Newest Rocky Mount course with woods and river in play.</p></div></div>
-                    <div class="course-card" data-course="Richlands-Steed Park" data-location="Richlands, NC" data-udisc="https://udisc.com/courses/richlands-steed-park-MaGt" data-coords="34.897999,-77.522202" data-youtube=""><div class="course-image"><img src="https://d22ksth68ujgu2.cloudfront.net/c8d3da5095beedd83e85fbdb67c4bce6_m_IMG_9398.jpg" alt="Richlands-Steed Park" loading="lazy"></div><div class="course-content"><div class="course-header"><h3 class="course-name">Richlands-Steed Park</h3><span class="difficulty-badge difficulty-beginner">Beginner Friendly</span></div><div class="course-location">📍 Richlands, NC • 55 min</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">21</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">4.3★</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~1.5 hrs</div></div></div><p class="course-description">Great beginner course, well-maintained with open fairways.</p></div></div>
-                    <div class="course-card" data-course="Eagles Apex at West Craven Park" data-location="New Bern, NC" data-udisc="https://udisc.com/courses/eagles-apex-at-west-craven-park-9saH" data-coords="35.232019,-77.132066" data-youtube=""><div class="course-image no-image"></div><div class="course-content"><div class="course-header"><h3 class="course-name">Eagles Apex at West Craven</h3><span class="difficulty-badge difficulty-advanced">Moderate - Very Hard</span></div><div class="course-location">📍 New Bern, NC • 50 min</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">18</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">4.0★</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~2 hrs</div></div></div><p class="course-description">Newer course with short and long layouts. Free to play.</p></div></div>
-                    <div class="course-card" data-course="NC Wesleyan University" data-location="Rocky Mount, NC" data-udisc="https://udisc.com/courses/north-carolina-wesleyan-university-Xw47" data-coords="35.936,-77.833" data-youtube=""><div class="course-image no-image"></div><div class="course-content"><div class="course-header"><h3 class="course-name">NC Wesleyan University</h3><span class="difficulty-badge difficulty-intermediate">Moderate</span></div><div class="course-location">📍 Rocky Mount, NC • 55 min</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">20</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">4.3★</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~1.5 hrs</div></div></div><p class="course-description">Redesigned 2023. Campus course with disc store and PDGA events.</p></div></div>
-                    <div class="course-card" data-course="Nash Community College DGC" data-location="Rocky Mount, NC" data-udisc="https://udisc.com/courses/nash-community-college-dgc-fGpR" data-coords="35.977,-77.863" data-youtube=""><div class="course-image no-image"></div><div class="course-content"><div class="course-header"><h3 class="course-name">Nash Community College DGC</h3><span class="difficulty-badge difficulty-advanced">Hard</span></div><div class="course-location">📍 Rocky Mount, NC • 55 min</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">18</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">4.2★</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~2 hrs</div></div></div><p class="course-description">Open and wooded mix with water carries. Best played off-peak hours.</p></div></div>
-                    <div class="course-card" data-course="Farmington Park DGC" data-location="Rocky Mount, NC" data-udisc="https://udisc.com/courses/farmington-park-dgc-xQw3" data-coords="35.946,-77.838" data-youtube=""><div class="course-image no-image"></div><div class="course-content"><div class="course-header"><h3 class="course-name">Farmington Park DGC</h3><span class="difficulty-badge difficulty-intermediate">Moderate</span></div><div class="course-location">📍 Rocky Mount, NC • 50 min</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">18</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">3.9★</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~1.5 hrs</div></div></div><p class="course-description">Active league play with Flexing on Farm Fridays.</p></div></div>
-                    <div class="course-card" data-course="Northeast Creek Park" data-location="Jacksonville, NC" data-udisc="https://udisc.com/courses/northeast-creek-park-UIAe" data-coords="34.747051,-77.358165" data-youtube=""><div class="course-image no-image"></div><div class="course-content"><div class="course-header"><h3 class="course-name">Northeast Creek Park</h3><span class="difficulty-badge difficulty-advanced">Moderate - Hard</span></div><div class="course-location">📍 Jacksonville, NC • 60 min</div><div class="course-info"><div class="info-item"><div class="info-label">Holes</div><div class="info-value">18</div></div><div class="info-item"><div class="info-label">Rating</div><div class="info-value">4.4★</div></div><div class="info-item"><div class="info-label">Time</div><div class="info-value">~2 hrs</div></div></div><p class="course-description">Jacksonville's top course. Well-groomed with coastal winds adding challenge.</p></div></div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="courses-carousel-nav">
-        <button class="carousel-btn" id="coursesPrevBtn">‹</button>
-        <div class="carousel-indicators"><button class="carousel-indicator active" data-slide="0"></button><button class="carousel-indicator" data-slide="1"></button><button class="carousel-indicator" data-slide="2"></button></div>
-        <button class="carousel-btn" id="coursesNextBtn">›</button>
-    </div>
+    <div id="homeReactCoursesApp"></div>
 </section>
 
     <section id="events">
-        <h2 class="section-title fade-in">Upcoming Events</h2>
-        <div id="homeReactEventsApp"><div class="event-list"><div class="event-loading"><div class="spinner"></div><p>Loading events...</p></div></div></div>
+        <h2 class="section-title fade-in visible">Upcoming Events</h2>
+        <div id="homeReactEventsApp"></div>
         <div class="events-footer" style="text-align: center; margin-top: 2rem;"><p style="color: var(--text-muted); font-size: 0.9rem;">Want to host an event? <a href="#contact" style="color: var(--primary);">Contact us!</a></p></div>
     </section>
 
 <section id="area-tournaments" class="section">
     <div class="container">
-        <h2 class="section-title">Area Tournaments</h2>
+        <h2 class="section-title visible">Area Tournaments</h2>
         <p class="section-subtitle">PDGA sanctioned events within 60 miles of Greenville, NC</p>
-        <div id="homeReactTournamentsApp"><div class="tournament-list"><div class="tournament-loading"><div class="loading-spinner"></div><p>Loading tournaments...</p></div></div></div>
+        <div id="homeReactTournamentsApp"></div>
     </div>
 </section>
 
@@ -646,35 +537,14 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
 [data-theme="dark"] .loading-spinner { border-color: rgba(255, 255, 255, 0.1); border-top-color: #FF6B35; }
 </style>
 
-    <section id="membership">
-        <div class="membership-content">
-            <h2 class="section-title">Become a Member</h2>
-            <p style="font-size: 1.2rem; margin: 1.5rem 0; opacity: 0.95;">Join our growing community and enjoy exclusive benefits</p>
-            <div class="membership-perks">
-                <div class="perk fade-in"><div class="perk-icon">🏆</div><div class="perk-title">Tournament Access</div><p>Member-only events and discounts</p></div>
-                <div class="perk fade-in"><div class="perk-icon">💬</div><div class="perk-title">Community</div><p>Private Discord and social events</p></div>
-                <div class="perk fade-in"><div class="perk-icon">🎯</div><div class="perk-title">Course Maintenance</div><p>Help improve our local courses</p></div>
-                <div class="perk fade-in"><div class="perk-icon">📊</div><div class="perk-title">Skill Development</div><p>Clinics and coaching sessions</p></div>
-            </div>
-            <div class="price">$15 / Year</div>
-          <a href="https://paypal.me/greenvillediscgolf/15" class="cta-button" target="_blank" rel="noopener noreferrer">Get Started Today</a>
-        </div>
-    </section>
+    <section id="membership"><div id="homeReactMembershipApp"></div></section>
 
-    <section id="contact">
-        <h2 class="section-title fade-in">Get in Touch</h2>
-        <div class="contact-info">
-            <div class="contact-box fade-in"><div class="contact-icon">📧</div><div class="contact-label">Email Us</div><div class="contact-detail"><a href="mailto:greenvillediscgolf@gmail.com">greenvillediscgolf@gmail.com</a></div></div>
-            <div class="contact-box fade-in"><div class="contact-icon">📱</div><div class="contact-label">Follow Us</div><div class="contact-detail"><a href="https://www.facebook.com/groups/243452675724939" target="_blank" rel="noopener noreferrer">@GreenvilleDGC on Facebook</a> & Instagram</div></div>
-            <div class="contact-box fade-in"><div class="contact-icon">📍</div><div class="contact-label">Location</div><div class="contact-detail">Greenville, North Carolina</div></div>
-        </div>
-    </section>
+    <section id="contact"><div id="homeReactContactApp"></div></section>
 
     <div id="homeReactBackToTopApp"></div>
     <div id="homeReactCourseModalApp"></div>
-    <div id="homeReactInteractionsApp"></div>
     <div id="crottsReactApp"></div>
-    <footer><p>&copy; 2026 Greenville Disc Golf Club. All rights reserved. | Greenville, NC</p></footer>
+    <div id="homeReactFooterApp"></div>
 
     <script type="module" src="home-app/home-app.js"></script>
 </body>

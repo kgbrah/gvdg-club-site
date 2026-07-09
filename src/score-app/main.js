@@ -2,7 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { Moon, Trophy, UsersRound } from "lucide-react";
 
-import { startScoreApp } from "./score-legacy.js";
+import { startScoreApp } from "./score-controller.js";
 import { ScoreAuthFlow } from "./auth-flow.js";
 import { ScorecardView } from "./scorecard-view.js";
 import { ScoreSetupFlow } from "./setup-flow.js";

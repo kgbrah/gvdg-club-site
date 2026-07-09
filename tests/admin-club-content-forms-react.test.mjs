@@ -3,13 +3,13 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 test('admin club content add forms are rendered by React from request events', () => {
-  const html = readFileSync('admin.html', 'utf8');
+  const html = `${readFileSync('admin.html', 'utf8')}\n${readFileSync('src/admin-app/admin-controller.js', 'utf8')}`;
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const forms = readFileSync('src/admin-app/club-content-forms.js', 'utf8');
   const adminAddLeague = html.match(/async function adminAddLeagueFromReact\(detail\) \{[\s\S]*?\/\/ ---- Fundraisers management/)?.[0];
   const adminAddFundraiser = html.match(/async function adminAddFundraiserFromReact\(detail\) \{[\s\S]*?\/\/ ---- Meetings management/)?.[0];
   const adminAddMeeting = html.match(/async function adminAddMeetingFromReact\(detail\) \{[\s\S]*?\/\/ --- Members/)?.[0];
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?\$\('adminCreateForm'\)\.addEventListener/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminLeagueFormReactApp"/);
   assert.match(html, /id="adminFundraiserFormReactApp"/);

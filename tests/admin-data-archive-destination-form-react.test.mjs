@@ -3,26 +3,27 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 test('admin data archive destination form is rendered by React from request events', () => {
-  const html = readFileSync('admin.html', 'utf8');
+  const html = `${readFileSync('admin.html', 'utf8')}\n${readFileSync('src/admin-app/admin-controller.js', 'utf8')}`;
+  const dataArchiveController = readFileSync('src/admin-app/data-archive-controller.js', 'utf8');
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const destinationForm = readFileSync('src/admin-app/data-archive-destination-form.js', 'utf8');
-  const saveEndpoint = html.match(/async function adminSaveDataArchiveEndpointFromReact\(detail\) \{[\s\S]*?async function adminRunArchiveExport/)?.[0];
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?\$\('adminCreateForm'\)\.addEventListener/)?.[0];
+  const saveEndpoint = dataArchiveController.match(/export async function adminSaveDataArchiveEndpointFromReact\(detail, \{ adminApi, adminMsg \}\) \{[\s\S]*?export async function adminRunArchiveExport/)?.[0];
 
   assert.match(html, /id="adminDataArchiveDestinationFormReactApp"/);
   assert.doesNotMatch(html, /id="dxEndpointForm"|id="dxEndpointId"|id="dxEndpointLabel"|id="dxEndpointUrl"|id="dxAuthHeader"|id="dxAuthPrefix"|id="dxAuthToken"|id="dxAuthTokenClear"|id="dxEndpointActive"|id="dxEndpointSave"|id="dxEndpointCancel"/);
   assert.doesNotMatch(html, /function resetDataArchiveEndpointForm|async function adminSaveDataArchiveEndpoint\(e\)/);
-  assert.match(html, /function setDataArchiveEndpointForm\(destination\) \{[\s\S]*gvdg:admin-data-archive-destination-form-edit/);
+  assert.match(dataArchiveController, /function setDataArchiveEndpointForm\(destination\) \{[\s\S]*gvdg:admin-data-archive-destination-form-edit/);
   assert.ok(saveEndpoint);
   assert.match(saveEndpoint, /adminApi\(path, \{ method, body \}\)/);
   assert.match(saveEndpoint, /gvdg:admin-data-archive-destination-save-result/);
-  assert.match(saveEndpoint, /detail: \{ ok: false, requestId, message \}/);
-  assert.match(saveEndpoint, /adminLoadDataArchiveDestinations\(\)/);
+  assert.match(saveEndpoint, /dispatchAdminEvent\('gvdg:admin-data-archive-destination-save-result', \{ ok: false, requestId, message \}\)/);
+  assert.doesNotMatch(saveEndpoint, /adminLoadDataArchiveDestinations\(\)/);
   assert.doesNotMatch(saveEndpoint, /dxEndpointLabel|dxEndpointUrl|dxAuthHeader|dxAuthPrefix|dxAuthToken|dxAuthTokenClear|dxEndpointActive|\$\('dxEndpoint/);
-  assert.ok(initAdmin);
-  assert.match(initAdmin, /gvdg:admin-data-archive-destination-save-request/);
-  assert.match(initAdmin, /adminSaveDataArchiveEndpointFromReact\(event\.detail \|\| \{\}\)/);
-  assert.doesNotMatch(initAdmin, /\$\('dxEndpointForm'\)\.addEventListener|\$\('dxEndpointCancel'\)\.addEventListener/);
+  assert.match(html, /import \{ installDataArchiveController \} from "\.\/data-archive-controller\.js"/);
+  assert.match(html, /installDataArchiveController\(adminControllerDeps\)/);
+  assert.match(dataArchiveController, /gvdg:admin-data-archive-destination-save-request/);
+  assert.match(dataArchiveController, /adminSaveDataArchiveEndpointFromReact\(event\.detail \|\| \{\}, deps\)/);
+  assert.doesNotMatch(html, /\$\('dxEndpointForm'\)\.addEventListener|\$\('dxEndpointCancel'\)\.addEventListener/);
   assert.match(main, /import \{ AdminDataArchiveDestinationForm \} from "\.\/data-archive-destination-form\.js"/);
   assert.match(main, /const dataArchiveDestinationFormMount = document\.getElementById\("adminDataArchiveDestinationFormReactApp"\)/);
   assert.match(main, /createRoot\(dataArchiveDestinationFormMount\)\.render\(h\(AdminDataArchiveDestinationForm\)\)/);

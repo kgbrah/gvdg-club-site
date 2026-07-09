@@ -1,12 +1,11 @@
 import React from "react";
 
+import { currentAdminMessageState } from "./admin-shell-state.js";
+
 const h = React.createElement;
 
-const EMPTY_MESSAGE = { text: "", ok: null };
-
 function currentMessage() {
-  const state = window.__gvdgAdminMessageState;
-  return state && typeof state === "object" ? state : EMPTY_MESSAGE;
+  return currentAdminMessageState();
 }
 
 function normalizeMessage(state) {

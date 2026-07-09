@@ -1,8 +1,9 @@
 import React from "react";
 import { CalendarDays, CheckCircle2 } from "lucide-react";
 
-import { normalizeEvent, parseEventDate } from "../../events.js";
+import { normalizeEvent, parseEventDate } from "../shared/events-model.js";
 import { clientOwed, isDoublesRegistration, parseArray, parseObject } from "../members-app/registration-utils.js";
+import { publicApiBase } from "./public-api.js";
 
 const h = React.createElement;
 const REGISTRATION_REFRESH_EVENT = "gvdg:events-registration-refresh";
@@ -18,16 +19,7 @@ function icon(Icon, size = 16) {
 }
 
 function apiBase() {
-  const localBase = ["127.0.0.1", "localhost"].includes(window.location.hostname)
-    ? "http://127.0.0.1:8788"
-    : "";
-  if (localBase) return localBase;
-  const configured = (document.body?.dataset.apiBase || "").trim();
-  if (configured) return configured.replace(/\/+$/, "");
-  const host = window.location.hostname;
-  return host === "greenvillediscgolf.com" || host === "www.greenvillediscgolf.com"
-    ? "https://auth.greenvillediscgolf.com"
-    : "https://auth.gvdgclub.com";
+  return publicApiBase();
 }
 
 function memberToken() {

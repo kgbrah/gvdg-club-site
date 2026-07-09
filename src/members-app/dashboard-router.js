@@ -11,6 +11,7 @@ const DASH_TITLES = {
 
 const DASH_TABS = new Set(Object.keys(DASH_TITLES));
 let selectedDashTab = "overview";
+let routerInstalled = false;
 
 function safeTab(tab) {
   return DASH_TABS.has(tab) ? tab : "overview";
@@ -44,8 +45,8 @@ export function openMemberDashboard(detail = {}) {
 }
 
 export function installDashboardRouter() {
-  if (window.GVDG_MEMBER_DASHBOARD_ROUTER_READY) return;
-  window.GVDG_MEMBER_DASHBOARD_ROUTER_READY = true;
+  if (routerInstalled) return;
+  routerInstalled = true;
   window.addEventListener("gvdg:select-dashboard-tab", (event) => selectDashboardTab(event.detail?.tab));
   window.addEventListener("gvdg:member-dashboard-opened", (event) => openMemberDashboard(event.detail || {}));
 }

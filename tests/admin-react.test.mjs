@@ -2,8 +2,40 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
+function adminHtmlSource() {
+  return readFileSync('admin.html', 'utf8');
+}
+
+function adminControllerSource() {
+  return readFileSync('src/admin-app/admin-controller.js', 'utf8');
+}
+
+function adminPageAndControllerSource() {
+  return `${adminHtmlSource()}\n${adminControllerSource()}`;
+}
+
+test('admin controller bridge is bundled instead of inline in admin.html', () => {
+  const html = adminHtmlSource();
+  const controller = adminControllerSource();
+  const main = readFileSync('src/admin-app/main.js', 'utf8');
+
+  assert.match(html, /id="crottsReactApp"/);
+  assert.match(html, /<script type="module" src="admin-app\/admin-app\.js"><\/script>/);
+  assert.doesNotMatch(html, /function api\(|function initAdmin\(|checkAdminSession\(\)/);
+  assert.doesNotMatch(html, /<script>\s*\/\/ ============================================================/);
+  assert.match(controller, /export function startAdminController\(\)/);
+  assert.match(controller, /function api\(/);
+  assert.match(controller, /function initAdmin\(\)/);
+  assert.match(controller, /checkAdminSession\(\)/);
+  assert.doesNotMatch(`${main}\n${controller}`, /admin-state-store/);
+  assert.match(main, /import \{ flushSync \} from "react-dom"/);
+  assert.match(main, /import \{ startAdminController \} from "\.\/admin-controller\.js"/);
+  assert.match(main, /flushSync\(\(\) => createRoot\(pageChromeMount\)\.render\(h\(AdminPageChrome\)\)\)/);
+  assert.match(main, /startAdminController\(\)/);
+});
+
 test('admin page chrome is rendered by the admin React bundle', () => {
-  const html = readFileSync('admin.html', 'utf8');
+  const html = adminPageAndControllerSource();
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const chrome = readFileSync('src/admin-app/page-chrome.js', 'utf8');
 
@@ -29,18 +61,21 @@ test('admin page chrome is rendered by the admin React bundle', () => {
 });
 
 test('admin order badge updates through React instead of DOM text mutation', () => {
-  const html = readFileSync('admin.html', 'utf8');
+  const html = adminPageAndControllerSource();
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const nav = readFileSync('src/admin-app/navigation.js', 'utf8');
   const badge = readFileSync('src/admin-app/orders-badge.js', 'utf8');
+  const shellState = readFileSync('src/admin-app/admin-shell-state.js', 'utf8');
   const setBadge = html.match(/function setOrdersBadge\(n\) \{[\s\S]*?\n        \}/)?.[0];
 
   assert.match(html, /id="adminNavigationReactApp"/);
   assert.doesNotMatch(html, /id="ordersBadgeReactApp"/);
   assert.doesNotMatch(html, /id="ordersBadge" class="orders-badge" hidden/);
   assert.ok(setBadge);
-  assert.match(setBadge, /window\.__gvdgAdminOrdersBadgeCount = count/);
-  assert.match(setBadge, /new CustomEvent\('gvdg:admin-orders-badge', \{ detail: \{ count \} \}\)/);
+  assert.match(setBadge, /publishAdminOrdersBadgeCount\(n\)/);
+  assert.match(shellState, /export function publishAdminOrdersBadgeCount\(count\)/);
+  assert.match(shellState, /gvdg:admin-orders-badge/);
+  assert.doesNotMatch(`${html}\n${badge}`, /__gvdgAdminOrdersBadgeCount/);
   assert.doesNotMatch(setBadge, /textContent|hidden|getElementById/);
   assert.match(html, /async function refreshOrdersBadge\(\) \{[\s\S]*setOrdersBadge\(0\);[\s\S]*catch \(e\) \{ setOrdersBadge\(0\); \}/);
   assert.doesNotMatch(main, /ordersBadgeMount|ordersBadgeReactApp/);
@@ -49,36 +84,50 @@ test('admin order badge updates through React instead of DOM text mutation', () 
   assert.match(nav, /h\(AdminOrdersBadge, \{ key: "badge" \}\)/);
   assert.match(badge, /export function AdminOrdersBadge/);
   assert.match(badge, /gvdg:admin-orders-badge/);
-  assert.match(badge, /window\.__gvdgAdminOrdersBadgeCount/);
-  assert.match(badge, /setCount\(Number\(window\.__gvdgAdminOrdersBadgeCount \|\| 0\)\)/);
+  assert.match(badge, /currentAdminOrdersBadgeCount/);
+  assert.match(badge, /setCount\(currentAdminOrdersBadgeCount\(\)\)/);
   assert.match(badge, /className: "orders-badge"/);
   assert.match(badge, /if \(count <= 0\) return null/);
   assert.doesNotMatch(badge, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
 });
 
+test('admin controller does not keep a legacy DOM element factory', () => {
+  const html = adminPageAndControllerSource();
+
+  assert.doesNotMatch(html, /const elx =|function elx|createElement\/textContent|copied verbatim/);
+  assert.doesNotMatch(html, /teeSignNode|DOMParser|import \{ teeSignSvg \} from '\.\/src\/shared\/tee-sign-model\.js'/);
+  assert.doesNotMatch(html, /document\.createElement|appendChild|replaceChildren|textContent\s*=|classList|querySelector/);
+});
+
 test('admin auth gate is rendered by React from auth state events', () => {
-  const html = readFileSync('admin.html', 'utf8');
+  const html = adminPageAndControllerSource();
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const gate = readFileSync('src/admin-app/auth-gate.js', 'utf8');
+  const shellState = readFileSync('src/admin-app/admin-shell-state.js', 'utf8');
   const showPanel = html.match(/function showAdminPanel\(\) \{[\s\S]*?\n        \}/)?.[0];
   const showGate = html.match(/function showGate\(message, withMembersLink\) \{[\s\S]*?\n        \}/)?.[0];
 
   assert.match(html, /id="adminAuthGateReactApp"/);
   assert.doesNotMatch(html, /id="adminStatus"|id="adminGate"/);
-  assert.match(html, /function setAdminAuthGateState\(state\) \{[\s\S]*window\.__gvdgAdminAuthGateState = state;[\s\S]*gvdg:admin-auth-gate/);
+  assert.match(html, /import \{ publishAdminActiveTab, publishAdminAuthGateState, publishAdminMessageState, publishAdminOrdersBadgeCount \} from "\.\/admin-shell-state\.js"/);
+  assert.match(html, /function setAdminAuthGateState\(state\) \{[\s\S]*publishAdminAuthGateState\(state\)/);
+  assert.doesNotMatch(`${html}\n${gate}`, /__gvdgAdminAuthGateState/);
   assert.ok(showPanel);
   assert.match(showPanel, /setAdminAuthGateState\(\{ status: 'panel' \}\)/);
-  assert.doesNotMatch(showPanel, /adminStatus|adminGate|hidden/);
+  assert.doesNotMatch(showPanel, /adminPanel|style\.display|adminStatus|adminGate|hidden/);
   assert.ok(showGate);
   assert.match(showGate, /setAdminAuthGateState\(\{ status: 'gate', message, withMembersLink: Boolean\(withMembersLink\) \}\)/);
-  assert.doesNotMatch(showGate, /replaceChildren|appendChild|textContent|hidden|adminStatus|adminGate/);
+  assert.doesNotMatch(showGate, /adminPanel|style\.display|replaceChildren|appendChild|textContent|hidden|adminStatus|adminGate/);
   assert.match(main, /import \{ AdminAuthGate \} from "\.\/auth-gate\.js"/);
   assert.match(main, /const authGateMount = document\.getElementById\("adminAuthGateReactApp"\)/);
   assert.match(main, /createRoot\(authGateMount\)\.render\(h\(AdminAuthGate\)\)/);
   assert.match(gate, /export function AdminAuthGate/);
   assert.match(gate, /data-react-admin-auth-gate/);
   assert.match(gate, /gvdg:admin-auth-gate/);
-  assert.match(gate, /window\.__gvdgAdminAuthGateState/);
+  assert.match(gate, /currentAdminAuthGateState/);
+  assert.match(shellState, /let adminAuthGateState = DEFAULT_AUTH_GATE_STATE/);
+  assert.match(shellState, /export function publishAdminAuthGateState\(state\)/);
+  assert.match(shellState, /gvdg:admin-auth-gate/);
   assert.match(gate, /setState\(currentState\(\)\)/);
   assert.match(gate, /LockKeyhole/);
   assert.match(gate, /role: "status"/);
@@ -87,21 +136,64 @@ test('admin auth gate is rendered by React from auth state events', () => {
   assert.doesNotMatch(gate, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️/);
 });
 
-test('admin navigation is rendered by React and drives legacy pane switching through events', () => {
-  const html = readFileSync('admin.html', 'utf8');
+test('admin pane visibility is controlled by React state and body attributes', () => {
+  const html = adminPageAndControllerSource();
+  const main = readFileSync('src/admin-app/main.js', 'utf8');
+  const controller = readFileSync('src/admin-app/pane-visibility.js', 'utf8');
+  const shellState = readFileSync('src/admin-app/admin-shell-state.js', 'utf8');
+  const showPanel = html.match(/function showAdminPanel\(\) \{[\s\S]*?\n        \}/)?.[0];
+  const showGate = html.match(/function showGate\(message, withMembersLink\) \{[\s\S]*?\n        \}/)?.[0];
+  const adminSwitch = html.match(/function adminSwitch\(tab\) \{[\s\S]*?\n        \}/)?.[0];
+
+  assert.match(html, /data-admin-panel="hidden"/);
+  assert.match(html, /data-admin-tab="events"/);
+  assert.match(html, /id="adminPaneVisibilityReactApp"/);
+  assert.match(html, /\.admin-panel \{ display: none;/);
+  assert.match(html, /body\[data-admin-panel="visible"\] #adminPanel \{ display: block; \}/);
+  assert.match(html, /body\[data-admin-tab="events"\] #apane-events/);
+  assert.match(html, /body\[data-admin-tab="data-archive"\] #apane-data-archive \{ display: block; \}/);
+  assert.doesNotMatch(html, /id="adminPanel" class="admin-panel" style=/);
+  assert.doesNotMatch(html, /class="admin-pane active"/);
+  assert.doesNotMatch(html, /\.admin-pane\.active/);
+  assert.ok(showPanel);
+  assert.doesNotMatch(showPanel, /adminPanel|style\.display|\$\('adminPanel'\)/);
+  assert.ok(showGate);
+  assert.doesNotMatch(showGate, /adminPanel|style\.display|\$\('adminPanel'\)/);
+  assert.ok(adminSwitch);
+  assert.match(adminSwitch, /publishAdminActiveTab\(tab\)/);
+  assert.match(shellState, /export function publishAdminActiveTab\(tab\)/);
+  assert.match(shellState, /gvdg:admin-active-tab/);
+  assert.doesNotMatch(`${html}\n${controller}`, /__gvdgAdmin(AuthGateState|ActiveTab)/);
+  assert.doesNotMatch(adminSwitch, /querySelectorAll|classList|admin-pane/);
+  assert.match(main, /import \{ AdminPaneVisibility \} from "\.\/pane-visibility\.js"/);
+  assert.match(main, /const paneVisibilityMount = document\.getElementById\("adminPaneVisibilityReactApp"\)/);
+  assert.match(main, /createRoot\(paneVisibilityMount\)\.render\(h\(AdminPaneVisibility\)\)/);
+  assert.match(controller, /export function AdminPaneVisibility/);
+  assert.match(controller, /ADMIN_NAV_GROUPS/);
+  assert.match(controller, /currentAdminAuthGateState/);
+  assert.match(controller, /currentAdminActiveTab/);
+  assert.match(controller, /gvdg:admin-auth-gate/);
+  assert.match(controller, /gvdg:admin-active-tab/);
+  assert.match(controller, /document\.body\.dataset\.adminPanel = panel/);
+  assert.match(controller, /document\.body\.dataset\.adminTab = tab/);
+  assert.doesNotMatch(controller, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|style\.display|☰|✕|🔒|🌙|☀️/);
+});
+
+test('admin navigation is rendered by React and drives pane switching through events', () => {
+  const html = adminPageAndControllerSource();
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const nav = readFileSync('src/admin-app/navigation.js', 'utf8');
-  const adminSwitch = html.match(/function adminSwitch\(tab\) \{[\s\S]*?if \(tab === 'data-archive'\) adminLoadDataArchiveDestinations\(\);\n        \}/)?.[0];
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?\$\('adminCreateForm'\)\.addEventListener/)?.[0];
+  const shellState = readFileSync('src/admin-app/admin-shell-state.js', 'utf8');
+  const adminSwitch = html.match(/function adminSwitch\(tab\) \{[\s\S]*?\n        \}/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminNavigationReactApp"/);
   assert.doesNotMatch(html, /<nav class="admin-sidebar"|<div class="admin-mobile-nav" role="group"/);
   assert.doesNotMatch(html, /document\.querySelectorAll\('\.admin-tab'\)|document\.querySelectorAll\('\.admin-mnav'\)/);
   assert.ok(adminSwitch);
-  assert.match(adminSwitch, /window\.__gvdgAdminActiveTab = tab/);
-  assert.match(adminSwitch, /gvdg:admin-active-tab/);
-  assert.match(adminSwitch, /document\.querySelectorAll\('\.admin-pane'\)/);
-  assert.doesNotMatch(adminSwitch, /\.admin-tab|\.admin-mnav/);
+  assert.match(adminSwitch, /publishAdminActiveTab\(tab\)/);
+  assert.match(shellState, /gvdg:admin-active-tab/);
+  assert.doesNotMatch(adminSwitch, /querySelectorAll|classList|\.admin-pane|\.admin-tab|\.admin-mnav/);
   assert.ok(initAdmin);
   assert.match(initAdmin, /window\.addEventListener\('gvdg:admin-tab-request'/);
   assert.match(initAdmin, /adminSwitch\(tab\)/);
@@ -115,22 +207,27 @@ test('admin navigation is rendered by React and drives legacy pane switching thr
   assert.match(nav, /aria-current/);
   assert.match(nav, /gvdg:admin-tab-request/);
   assert.match(nav, /gvdg:admin-active-tab/);
-  assert.match(nav, /window\.__gvdgAdminActiveTab/);
+  assert.match(nav, /currentAdminActiveTab/);
+  assert.doesNotMatch(nav, /__gvdgAdminActiveTab/);
   assert.match(nav, /setActiveTab\(initialTab\(\)\)/);
   assert.match(nav, /value: selectValue\(group\)/);
   assert.doesNotMatch(nav, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️/);
 });
 
 test('admin message surface is rendered by React from adminMsg events', () => {
-  const html = readFileSync('admin.html', 'utf8');
+  const html = adminPageAndControllerSource();
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const message = readFileSync('src/admin-app/message.js', 'utf8');
+  const shellState = readFileSync('src/admin-app/admin-shell-state.js', 'utf8');
   const adminMsg = html.match(/function adminMsg\(text, ok\) \{[\s\S]*?\n        \}/)?.[0];
 
   assert.match(html, /id="adminMessageReactApp"/);
   assert.doesNotMatch(html, /id="adminMsg"/);
   assert.match(html, /\.admin-msg\.err \{ color: var\(--over\); \}/);
-  assert.match(html, /function setAdminMessageState\(state\) \{[\s\S]*window\.__gvdgAdminMessageState = state;[\s\S]*gvdg:admin-message/);
+  assert.match(html, /function setAdminMessageState\(state\) \{[\s\S]*publishAdminMessageState\(state\)/);
+  assert.match(shellState, /export function publishAdminMessageState\(state\)/);
+  assert.match(shellState, /gvdg:admin-message/);
+  assert.doesNotMatch(`${html}\n${message}`, /__gvdgAdminMessageState/);
   assert.ok(adminMsg);
   assert.match(adminMsg, /const message = text \|\| ''/);
   assert.match(adminMsg, /setAdminMessageState\(\{ text: message, ok: message \? ok === true : null \}\)/);
@@ -141,27 +238,63 @@ test('admin message surface is rendered by React from adminMsg events', () => {
   assert.match(message, /export function AdminMessage/);
   assert.match(message, /data-react-admin-message/);
   assert.match(message, /gvdg:admin-message/);
-  assert.match(message, /window\.__gvdgAdminMessageState/);
+  assert.match(message, /currentAdminMessageState/);
   assert.match(message, /setMessage\(normalizeMessage\(currentMessage\(\)\)\)/);
   assert.match(message, /role = hasText \? \(message\.ok \? "status" : "alert"\) : undefined/);
   assert.match(message, /className: `admin-msg\$\{statusClass\}`/);
   assert.doesNotMatch(message, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️/);
 });
 
-test('admin events list is rendered by React from adminLoadEvents state', () => {
-  const html = readFileSync('admin.html', 'utf8');
+test('admin confirmations render through a shared React dialog service', () => {
+  const html = adminHtmlSource();
+  const main = readFileSync('src/admin-app/main.js', 'utf8');
+  const dialogs = readFileSync('src/admin-app/admin-dialogs.js', 'utf8');
+  const sources = [
+    'src/admin-app/admin-controller.js',
+    'src/admin-app/club-content-lists.js',
+    'src/admin-app/data-archive-destinations-list.js',
+    'src/admin-app/events-list.js',
+    'src/admin-app/layouts-sections.js',
+    'src/admin-app/members-list.js',
+    'src/admin-app/orders-list.js',
+    'src/admin-app/products-list.js',
+    'src/admin-app/registration-actions.js',
+    'src/admin-app/registration-roster-rows.js',
+    'src/admin-app/registration-widgets.js',
+    'src/admin-app/tee-sign-review.js',
+  ].map((path) => readFileSync(path, 'utf8')).join('\n');
+
+  assert.match(html, /id="adminDialogsReactApp"/);
+  assert.match(html, /\.admin-dialog-overlay/);
+  assert.match(main, /import \{ AdminDialogs \} from "\.\/admin-dialogs\.js"/);
+  assert.match(main, /const dialogsMount = document\.getElementById\("adminDialogsReactApp"\)/);
+  assert.match(main, /createRoot\(dialogsMount\)\.render\(h\(AdminDialogs\)\)/);
+  assert.match(dialogs, /export function adminConfirm\(options\)/);
+  assert.match(dialogs, /export function AdminDialogs\(\)/);
+  assert.match(dialogs, /role: "dialog"/);
+  assert.match(dialogs, /aria-modal/);
+  assert.match(dialogs, /subscribers/);
+  assert.match(dialogs, /queue/);
+  assert.match(dialogs, /Escape/);
+  assert.match(sources, /adminConfirm\(\{/);
+  assert.doesNotMatch(sources, /\b(?:window\.)?confirm\(/);
+  assert.doesNotMatch(dialogs, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️/);
+});
+
+test('admin events list is rendered by React from direct loader events', () => {
+  const html = adminPageAndControllerSource();
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const eventsList = readFileSync('src/admin-app/events-list.js', 'utf8');
   const importCandidates = readFileSync('src/admin-app/import-candidates-list.js', 'utf8');
   const adminLoadEvents = html.match(/async function adminLoadEvents\(\) \{[\s\S]*?\n        \}/)?.[0];
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?\$\('adminCreateForm'\)\.addEventListener/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminEventsListReactApp"/);
   assert.doesNotMatch(html, /id="adminEventsList"/);
-  assert.match(html, /function setAdminEventsListState\(state\) \{[\s\S]*window\.__gvdgAdminEventsListState = state;[\s\S]*gvdg:admin-events-list/);
+  assert.doesNotMatch(html, /function setAdminEventsListState|publishAdminState\('eventsList'/);
   assert.ok(adminLoadEvents);
-  assert.match(adminLoadEvents, /setAdminEventsListState\(\{ status: 'loading', events: \[\] \}\)/);
-  assert.match(adminLoadEvents, /setAdminEventsListState\(\{ status: 'ready', events \}\)/);
+  assert.match(adminLoadEvents, /gvdg:admin-events-list', \{ detail: \{ status: 'loading', events: \[\] \} \}/);
+  assert.match(adminLoadEvents, /gvdg:admin-events-list', \{ detail: \{ status: 'ready', events \} \}/);
   assert.doesNotMatch(adminLoadEvents, /adminEventsList|textContent|appendChild|document\.createElement|elx\('div', 'admin-evrow'\)|addEventListener/);
   assert.ok(initAdmin);
   assert.match(initAdmin, /gvdg:admin-event-edit-request/);
@@ -183,8 +316,7 @@ test('admin events list is rendered by React from adminLoadEvents state', () => 
   assert.match(eventsList, /gvdg:admin-event-edit-request/);
   assert.match(eventsList, /gvdg:admin-event-status-request/);
   assert.match(eventsList, /gvdg:admin-event-delete-request/);
-  assert.match(eventsList, /window\.__gvdgAdminEventsListState/);
-  assert.match(eventsList, /setState\(normalizeState\(currentState\(\)\)\)/);
+  assert.doesNotMatch(eventsList, /currentAdminState\("eventsList"|admin-state-store|currentState\(\)/);
   assert.match(eventsList, /EVENT_STATUSES = \["scheduled", "live", "final", "cancelled"\]/);
   assert.match(eventsList, /className: "admin-evrow"/);
   assert.match(eventsList, /className: `admin-badge \$\{event\.status\}`/);
@@ -195,60 +327,54 @@ test('admin events list is rendered by React from adminLoadEvents state', () => 
   assert.match(importCandidates, /data-react-admin-import-candidates/);
 });
 
-test('admin courses list is rendered by React while legacy code keeps course selects populated', () => {
-  const html = readFileSync('admin.html', 'utf8');
+test('admin courses list and event form course options share React state', () => {
+  const html = adminPageAndControllerSource();
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const coursesList = readFileSync('src/admin-app/courses-list.js', 'utf8');
   const adminLoadCourses = html.match(/async function adminLoadCourses\(\) \{[\s\S]*?\n        \}/)?.[0];
 
   assert.match(html, /id="adminCoursesListReactApp"/);
   assert.doesNotMatch(html, /id="adminCoursesList"/);
-  assert.match(html, /function setAdminCoursesListState\(state\) \{[\s\S]*window\.__gvdgAdminCoursesListState = state;[\s\S]*gvdg:admin-courses-list/);
+  assert.match(html, /function setAdminCoursesListState\(state\) \{[\s\S]*new CustomEvent\('gvdg:admin-courses-list', \{ detail: state \}\)/);
+  assert.doesNotMatch(html, /publishAdminState\('coursesList'/);
   assert.ok(adminLoadCourses);
   assert.match(adminLoadCourses, /adminCoursesCache = courses/);
-  assert.match(adminLoadCourses, /const sel = \$\('aeCourse'\); sel\.length = 1/);
-  assert.match(adminLoadCourses, /const lsel = \$\('alCourse'\); lsel\.length = 1/);
-  assert.match(adminLoadCourses, /document\.createElement\('option'\)/);
   assert.match(adminLoadCourses, /setAdminCoursesListState\(\{ courses \}\)/);
-  assert.doesNotMatch(adminLoadCourses, /adminCoursesList|list\.textContent|list\.appendChild|elx\('div', 'admin-cand'/);
+  assert.doesNotMatch(adminLoadCourses, /aeCourse|alCourse|lsel|document\.createElement|appendChild|textContent|adminCoursesList|list\.textContent|list\.appendChild|elx\('div', 'admin-cand'/);
   assert.match(main, /import \{ AdminCoursesList \} from "\.\/courses-list\.js"/);
   assert.match(main, /const coursesListMount = document\.getElementById\("adminCoursesListReactApp"\)/);
   assert.match(main, /createRoot\(coursesListMount\)\.render\(h\(AdminCoursesList\)\)/);
   assert.match(coursesList, /export function AdminCoursesList/);
   assert.match(coursesList, /data-react-admin-courses-list/);
+  assert.match(coursesList, /React\.useLayoutEffect/);
   assert.match(coursesList, /gvdg:admin-courses-list/);
-  assert.match(coursesList, /window\.__gvdgAdminCoursesListState/);
-  assert.match(coursesList, /setState\(normalizeState\(currentState\(\)\)\)/);
+  assert.doesNotMatch(coursesList, /currentAdminState\("coursesList"|admin-state-store|function currentState|setState\(normalizeState\(currentState\(\)\)\)/);
   assert.match(coursesList, /className: "admin-cand"/);
   assert.doesNotMatch(coursesList, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️/);
 });
 
-test('admin club content lists are rendered by React from legacy loader state', () => {
-  const html = readFileSync('admin.html', 'utf8');
+test('admin club content lists are rendered by React from direct loader events', () => {
+  const html = adminPageAndControllerSource();
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const lists = readFileSync('src/admin-app/club-content-lists.js', 'utf8');
   const adminLoadLeagues = html.match(/async function adminLoadLeagues\(\) \{[\s\S]*?\n        \}/)?.[0];
   const adminLoadFundraisers = html.match(/async function adminLoadFundraisers\(\) \{[\s\S]*?\n        \}/)?.[0];
   const adminLoadMeetings = html.match(/async function adminLoadMeetings\(\) \{[\s\S]*?\n        \}/)?.[0];
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?\$\('adminCreateForm'\)\.addEventListener/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminLeaguesListReactApp"/);
   assert.match(html, /id="adminFundraisersListReactApp"/);
   assert.match(html, /id="adminMeetingsListReactApp"/);
   assert.doesNotMatch(html, /id="adminLeaguesList"|id="adminFundraisersList"|id="adminMeetingsList"/);
-  assert.match(html, /function setAdminLeaguesListState\(state\) \{[\s\S]*window\.__gvdgAdminLeaguesListState = state;[\s\S]*gvdg:admin-leagues-list/);
-  assert.match(html, /function setAdminFundraisersListState\(state\) \{[\s\S]*window\.__gvdgAdminFundraisersListState = state;[\s\S]*gvdg:admin-fundraisers-list/);
-  assert.match(html, /function setAdminMeetingsListState\(state\) \{[\s\S]*window\.__gvdgAdminMeetingsListState = state;[\s\S]*gvdg:admin-meetings-list/);
+  assert.doesNotMatch(html, /function setAdmin(?:Leagues|Fundraisers|Meetings)ListState|publishAdminState\('(?:leaguesList|fundraisersList|meetingsList)'/);
   assert.ok(adminLoadLeagues);
-  assert.match(adminLoadLeagues, /const sel = \$\('aeLeague'\); sel\.length = 1/);
-  assert.match(adminLoadLeagues, /document\.createElement\('option'\)/);
-  assert.match(adminLoadLeagues, /setAdminLeaguesListState\(\{ leagues \}\)/);
-  assert.doesNotMatch(adminLoadLeagues, /adminLeaguesList|list\.textContent|list\.appendChild|elx\('div', 'admin-evrow'\)|addEventListener/);
+  assert.match(adminLoadLeagues, /gvdg:admin-leagues-list', \{ detail: \{ leagues \} \}/);
+  assert.doesNotMatch(adminLoadLeagues, /aeLeague|document\.createElement|appendChild|textContent|adminLeaguesList|list\.textContent|list\.appendChild|elx\('div', 'admin-evrow'\)|addEventListener/);
   assert.ok(adminLoadFundraisers);
-  assert.match(adminLoadFundraisers, /setAdminFundraisersListState\(\{ fundraisers: items \}\)/);
+  assert.match(adminLoadFundraisers, /gvdg:admin-fundraisers-list', \{ detail: \{ fundraisers: items \} \}/);
   assert.doesNotMatch(adminLoadFundraisers, /adminFundraisersList|textContent|appendChild|document\.createElement|elx\('div', 'admin-evrow'\)|addEventListener/);
   assert.ok(adminLoadMeetings);
-  assert.match(adminLoadMeetings, /setAdminMeetingsListState\(\{ meetings: items \}\)/);
+  assert.match(adminLoadMeetings, /gvdg:admin-meetings-list', \{ detail: \{ meetings: items \} \}/);
   assert.doesNotMatch(adminLoadMeetings, /adminMeetingsList|textContent|appendChild|document\.createElement|elx\('div', 'admin-evrow'\)|addEventListener/);
   assert.ok(initAdmin);
   assert.match(initAdmin, /gvdg:admin-league-delete-request/);
@@ -276,6 +402,7 @@ test('admin club content lists are rendered by React from legacy loader state', 
   assert.match(lists, /gvdg:admin-fundraiser-status-request/);
   assert.match(lists, /gvdg:admin-fundraiser-delete-request/);
   assert.match(lists, /gvdg:admin-meeting-delete-request/);
+  assert.doesNotMatch(lists, /currentAdminState|admin-state-store|stateFrom\(/);
   assert.match(lists, /data-react-admin-club-list/);
   assert.match(lists, /className: "admin-evrow"/);
   assert.match(lists, /className: "ev-name"/);
@@ -283,14 +410,14 @@ test('admin club content lists are rendered by React from legacy loader state', 
   assert.doesNotMatch(lists, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️/);
 });
 
-test('admin members list is rendered by React from legacy loader state', () => {
-  const html = readFileSync('admin.html', 'utf8');
+test('admin members list is rendered by React from direct loader events', () => {
+  const html = adminPageAndControllerSource();
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const memberForm = readFileSync('src/admin-app/member-form.js', 'utf8');
   const membersList = readFileSync('src/admin-app/members-list.js', 'utf8');
   const adminLoadMembers = html.match(/async function adminLoadMembers\(\) \{[\s\S]*?\n        \}/)?.[0];
   const adminCreateMember = html.match(/async function adminCreateMemberFromReact\(detail\) \{[\s\S]*?\n        \}/)?.[0];
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?\$\('adminCreateForm'\)\.addEventListener/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminMemberFormReactApp"/);
   assert.match(html, /id="adminMembersListReactApp"/);
@@ -298,10 +425,10 @@ test('admin members list is rendered by React from legacy loader state', () => {
   assert.doesNotMatch(html, /id="adminMembersList"/);
   assert.doesNotMatch(html, /async function adminAddMember\(e\)/);
   assert.match(html, /\.admin-member-form-admin-toggle \{/);
-  assert.match(html, /function setAdminMembersListState\(state\) \{[\s\S]*window\.__gvdgAdminMembersListState = state;[\s\S]*gvdg:admin-members-list/);
+  assert.doesNotMatch(html, /function setAdminMembersListState|publishAdminState\('membersList'/);
   assert.ok(adminLoadMembers);
-  assert.match(adminLoadMembers, /setAdminMembersListState\(\{ status: 'loading', members: \[\], currentMemberId: ME_ID \}\)/);
-  assert.match(adminLoadMembers, /setAdminMembersListState\(\{ status: 'ready', members, currentMemberId: ME_ID \}\)/);
+  assert.match(adminLoadMembers, /gvdg:admin-members-list', \{ detail: \{ status: 'loading', members: \[\], currentMemberId: ME_ID \} \}/);
+  assert.match(adminLoadMembers, /gvdg:admin-members-list', \{ detail: \{ status: 'ready', members, currentMemberId: ME_ID \} \}/);
   assert.doesNotMatch(adminLoadMembers, /adminMembersList|list\.textContent|list\.appendChild|elx\('div', 'admin-evrow'\)|addEventListener|document\.createElement/);
   assert.ok(adminCreateMember);
   assert.match(adminCreateMember, /adminApi\('\/admin\/members', \{ method: 'POST', body \}\)/);
@@ -340,7 +467,7 @@ test('admin members list is rendered by React from legacy loader state', () => {
   assert.match(membersList, /gvdg:admin-members-list/);
   assert.match(membersList, /gvdg:admin-member-reset-pin-request/);
   assert.match(membersList, /gvdg:admin-member-role-request/);
-  assert.match(membersList, /window\.__gvdgAdminMembersListState/);
+  assert.doesNotMatch(membersList, /currentAdminState\("membersList"|function currentState\(\)/);
   assert.match(membersList, /data-react-admin-members-list/);
   assert.match(membersList, /className: "admin-evrow"/);
   assert.match(membersList, /className: "ev-name"/);
@@ -348,14 +475,14 @@ test('admin members list is rendered by React from legacy loader state', () => {
   assert.doesNotMatch(membersList, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️|🏆|⚠|⏱/);
 });
 
-test('admin wallet recent list is rendered by React from legacy loader state', () => {
-  const html = readFileSync('admin.html', 'utf8');
+test('admin wallet recent list is fetched by React after admin auth and wallet tab activation', () => {
+  const html = adminPageAndControllerSource();
   const main = readFileSync('src/admin-app/main.js', 'utf8');
+  const adminApi = readFileSync('src/admin-app/admin-api.js', 'utf8');
   const walletForm = readFileSync('src/admin-app/wallet-form.js', 'utf8');
   const walletRecent = readFileSync('src/admin-app/wallet-recent-list.js', 'utf8');
-  const adminLoadWalletRecent = html.match(/async function adminLoadWalletRecent\(\) \{[\s\S]*?\n        \}/)?.[0];
   const adminPostWalletAdjustment = html.match(/async function adminPostWalletAdjustmentFromReact\(detail\) \{[\s\S]*?\n        \}/)?.[0];
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?\$\('adminCreateForm'\)\.addEventListener/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminWalletFormReactApp"/);
   assert.match(html, /id="adminWalletRecentReactApp"/);
@@ -363,18 +490,18 @@ test('admin wallet recent list is rendered by React from legacy loader state', (
   assert.doesNotMatch(html, /id="adminWalletRecent"/);
   assert.doesNotMatch(html, /function walletRow\(tx\)|async function adminPostWalletAdjustment\(e\)/);
   assert.match(html, /\.admin-wallet-form-wide \{/);
-  assert.match(html, /function setAdminWalletRecentState\(state\) \{[\s\S]*window\.__gvdgAdminWalletRecentState = state;[\s\S]*gvdg:admin-wallet-recent/);
-  assert.ok(adminLoadWalletRecent);
-  assert.match(adminLoadWalletRecent, /setAdminWalletRecentState\(\{ status: 'loading', transactions: \[\] \}\)/);
-  assert.match(adminLoadWalletRecent, /setAdminWalletRecentState\(\{ status: 'ready', transactions \}\)/);
-  assert.doesNotMatch(adminLoadWalletRecent, /adminWalletRecent|replaceChildren|appendChild|walletRow|elx\('p', 'al-note'|document\.createElement|querySelector|classList|textContent\s*=/);
+  assert.doesNotMatch(html, /function setAdminWalletRecentState|async function adminLoadWalletRecent|gvdg:admin-wallet-recent/);
   assert.ok(adminPostWalletAdjustment);
   assert.match(adminPostWalletAdjustment, /adminApi\('\/admin\/wallets\/credit', \{ method: 'POST', body \}\)/);
   assert.match(adminPostWalletAdjustment, /gvdg:admin-wallet-adjustment-result/);
-  assert.match(adminPostWalletAdjustment, /adminLoadWalletRecent\(\)/);
+  assert.doesNotMatch(adminPostWalletAdjustment, /adminLoadWalletRecent\(\)/);
   assert.ok(initAdmin);
   assert.match(initAdmin, /gvdg:admin-wallet-adjustment-request/);
+  assert.doesNotMatch(initAdmin, /if \(tab === 'wallets'\) adminLoadWalletRecent\(\)/);
   assert.doesNotMatch(initAdmin, /\$\('adminWalletForm'\)\.addEventListener/);
+  assert.match(adminApi, /export async function adminJson\(path, options\)/);
+  assert.match(adminApi, /resolveApiBase\(\{ datasetKeys: \["authBase"\] \}\)/);
+  assert.match(adminApi, /headers\.Authorization = `Bearer \$\{token\}`/);
   assert.match(main, /import \{ AdminWalletAdjustmentForm \} from "\.\/wallet-form\.js"/);
   assert.match(main, /import \{ AdminWalletRecentList \} from "\.\/wallet-recent-list\.js"/);
   assert.match(main, /const walletFormMount = document\.getElementById\("adminWalletFormReactApp"\)/);
@@ -392,8 +519,13 @@ test('admin wallet recent list is rendered by React from legacy loader state', (
   assert.match(walletForm, /busy \? "Posting\.\.\." : "Post wallet adjustment"/);
   assert.doesNotMatch(walletForm, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️|🏆|⚠|⏱|—/);
   assert.match(walletRecent, /export function AdminWalletRecentList/);
-  assert.match(walletRecent, /gvdg:admin-wallet-recent/);
-  assert.match(walletRecent, /window\.__gvdgAdminWalletRecentState/);
+  assert.match(walletRecent, /import \{ adminJson \} from "\.\/admin-api\.js"/);
+  assert.match(walletRecent, /currentAdminAuthGateState\(\)\.status === "panel"/);
+  assert.match(walletRecent, /activeTab === "wallets"/);
+  assert.match(walletRecent, /adminJson\("\/admin\/wallets\/recent"/);
+  assert.match(walletRecent, /gvdg:admin-wallet-adjustment-result/);
+  assert.match(walletRecent, /state\.status === "idle" \|\| state\.status === "loading"/);
+  assert.doesNotMatch(walletRecent, /currentAdminState\("walletRecent"|gvdg:admin-wallet-recent/);
   assert.match(walletRecent, /data-react-admin-wallet-recent/);
   assert.match(walletRecent, /className: "wallet-ledger"/);
   assert.match(walletRecent, /className: "wallet-row"/);
@@ -401,26 +533,30 @@ test('admin wallet recent list is rendered by React from legacy loader state', (
   assert.match(walletRecent, /"credit"/);
   assert.match(walletRecent, /"debit"/);
   assert.match(walletRecent, /role: "status"/);
+  assert.match(walletRecent, /role: "alert"/);
   assert.doesNotMatch(walletRecent, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️|🏆|⚠|⏱/);
 });
 
-test('admin registration CTP, credit, and ace pot widgets are rendered by React from legacy loader state', () => {
-  const html = readFileSync('admin.html', 'utf8');
+test('admin registration CTP, credit, and ace pot widgets are rendered by React from direct loader events', () => {
+  const html = adminPageAndControllerSource();
   const main = readFileSync('src/admin-app/main.js', 'utf8');
+  const panel = readFileSync('src/admin-app/registration-panel.js', 'utf8');
   const widgets = readFileSync('src/admin-app/registration-widgets.js', 'utf8');
   const rgLoadCtps = html.match(/async function rgLoadCtps\(\) \{[\s\S]*?\n        \}/)?.[0];
   const rgLoadCredits = html.match(/async function rgLoadCredits\(\) \{[\s\S]*?\n        \}/)?.[0];
   const rgLoadAcePot = html.match(/async function rgLoadAcePot\(\) \{[\s\S]*?\n        \}/)?.[0];
   const rgAwardCtpCredit = html.match(/async function rgAwardCtpCredit\(ctp, memberIdValue, winnerNameValue, amountValue\) \{[\s\S]*?\n        \}/)?.[0];
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?\$\('adminCreateForm'\)\.addEventListener/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
-  assert.match(html, /id="adminRegistrationCtpsReactApp"/);
-  assert.match(html, /id="adminRegistrationCreditsReactApp"/);
-  assert.match(html, /id="adminRegistrationAcePotReactApp"/);
+  assert.match(html, /id="adminRegistrationReactApp"/);
+  assert.doesNotMatch(html, /id="adminRegistrationCtpsReactApp"/);
+  assert.doesNotMatch(html, /id="adminRegistrationCreditsReactApp"/);
+  assert.doesNotMatch(html, /id="adminRegistrationAcePotReactApp"/);
   assert.doesNotMatch(html, /id="rgCtpList"|id="rgCreditList"|id="rgAceInfo"/);
-  assert.match(html, /function setAdminRegistrationCtpsState\(state\) \{[\s\S]*window\.__gvdgAdminRegistrationCtpsState = state;[\s\S]*gvdg:admin-registration-ctps-list/);
-  assert.match(html, /function setAdminRegistrationCreditsState\(state\) \{[\s\S]*window\.__gvdgAdminRegistrationCreditsState = state;[\s\S]*gvdg:admin-registration-credits-list/);
-  assert.match(html, /function setAdminRegistrationAcePotState\(state\) \{[\s\S]*window\.__gvdgAdminRegistrationAcePotState = state;[\s\S]*gvdg:admin-registration-ace-pot/);
+  assert.match(html, /function setAdminRegistrationCtpsState\(state\) \{[\s\S]*new CustomEvent\('gvdg:admin-registration-ctps-list', \{ detail: state \}\)/);
+  assert.match(html, /function setAdminRegistrationCreditsState\(state\) \{[\s\S]*new CustomEvent\('gvdg:admin-registration-credits-list', \{ detail: state \}\)/);
+  assert.match(html, /function setAdminRegistrationAcePotState\(state\) \{[\s\S]*new CustomEvent\('gvdg:admin-registration-ace-pot', \{ detail: state \}\)/);
+  assert.doesNotMatch(html, /publishAdminState\('registrationCtps'|publishAdminState\('registrationCredits'|publishAdminState\('registrationAcePot'/);
   assert.ok(rgLoadCtps);
   assert.match(rgLoadCtps, /setAdminRegistrationCtpsState\(\{ status: 'loading', ctps: \[\] \}\)/);
   assert.match(rgLoadCtps, /setAdminRegistrationCtpsState\(\{ status: 'error', ctps: \[\] \}\)/);
@@ -448,13 +584,13 @@ test('admin registration CTP, credit, and ace pot widgets are rendered by React 
   assert.match(initAdmin, /rgAwardCtpCredit\(ctp, detail\.winnerMemberId, detail\.winnerName, detail\.amountValue\)/);
   assert.match(initAdmin, /gvdg:admin-registration-ctp-delete-request/);
   assert.match(initAdmin, /adminApi\('\/admin\/events\/' \+ rgEventId \+ '\/ctps\/' \+ ctp\.id, \{ method: 'DELETE' \}\)/);
-  assert.match(main, /import \{ AdminRegistrationAcePot, AdminRegistrationCreditsList, AdminRegistrationCtpsList \} from "\.\/registration-widgets\.js"/);
-  assert.match(main, /const registrationCtpsMount = document\.getElementById\("adminRegistrationCtpsReactApp"\)/);
-  assert.match(main, /createRoot\(registrationCtpsMount\)\.render\(h\(AdminRegistrationCtpsList\)\)/);
-  assert.match(main, /const registrationCreditsMount = document\.getElementById\("adminRegistrationCreditsReactApp"\)/);
-  assert.match(main, /createRoot\(registrationCreditsMount\)\.render\(h\(AdminRegistrationCreditsList\)\)/);
-  assert.match(main, /const registrationAcePotMount = document\.getElementById\("adminRegistrationAcePotReactApp"\)/);
-  assert.match(main, /createRoot\(registrationAcePotMount\)\.render\(h\(AdminRegistrationAcePot\)\)/);
+  assert.match(main, /import \{ AdminRegistrationPanel \} from "\.\/registration-panel\.js"/);
+  assert.match(main, /const registrationMount = document\.getElementById\("adminRegistrationReactApp"\)/);
+  assert.match(main, /createRoot\(registrationMount\)\.render\(h\(AdminRegistrationPanel\)\)/);
+  assert.match(panel, /import \{ AdminRegistrationAcePot, AdminRegistrationCreditsList, AdminRegistrationCtpsList \} from "\.\/registration-widgets\.js"/);
+  assert.match(panel, /h\(AdminRegistrationCtpsList/);
+  assert.match(panel, /h\(AdminRegistrationCreditsList/);
+  assert.match(panel, /h\(AdminRegistrationAcePot/);
   assert.match(widgets, /export function AdminRegistrationCtpsList/);
   assert.match(widgets, /export function AdminRegistrationCreditsList/);
   assert.match(widgets, /export function AdminRegistrationAcePot/);
@@ -464,9 +600,7 @@ test('admin registration CTP, credit, and ace pot widgets are rendered by React 
   assert.match(widgets, /gvdg:admin-registration-ctp-winner-request/);
   assert.match(widgets, /gvdg:admin-registration-ctp-credit-request/);
   assert.match(widgets, /gvdg:admin-registration-ctp-delete-request/);
-  assert.match(widgets, /window\.__gvdgAdminRegistrationCtpsState/);
-  assert.match(widgets, /window\.__gvdgAdminRegistrationCreditsState/);
-  assert.match(widgets, /window\.__gvdgAdminRegistrationAcePotState/);
+  assert.doesNotMatch(widgets, /currentAdminState\("registrationCtps"|currentAdminState\("registrationCredits"|currentAdminState\("registrationAcePot"|admin-state-store|function current(?:Ctps|Credits|AcePot)State/);
   assert.match(widgets, /data-react-admin-registration-ctps/);
   assert.match(widgets, /data-react-admin-registration-credits/);
   assert.match(widgets, /data-react-admin-registration-ace-pot/);
@@ -477,15 +611,15 @@ test('admin registration CTP, credit, and ace pot widgets are rendered by React 
   assert.doesNotMatch(widgets, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|🏆|⚠|⏱/);
 });
 
-test('admin product inventory list is rendered by React from legacy loader state', () => {
-  const html = readFileSync('admin.html', 'utf8');
+test('admin product inventory list is rendered by React from direct loader events', () => {
+  const html = adminPageAndControllerSource();
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const productForm = readFileSync('src/admin-app/product-form.js', 'utf8');
   const productsList = readFileSync('src/admin-app/products-list.js', 'utf8');
   const shopControls = readFileSync('src/admin-app/shop-controls.js', 'utf8');
   const adminLoadProducts = html.match(/async function adminLoadProducts\(detail\) \{[\s\S]*?\n        \}/)?.[0];
   const adminCreateProduct = html.match(/async function adminCreateProductFromReact\(detail\) \{[\s\S]*?\n        \}/)?.[0];
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?\$\('adminCreateForm'\)\.addEventListener/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminProductFormReactApp"/);
   assert.match(html, /id="adminProductInventoryControlsReactApp"/);
@@ -494,7 +628,8 @@ test('admin product inventory list is rendered by React from legacy loader state
   assert.doesNotMatch(html, /id="adminProductsList"/);
   assert.doesNotMatch(html, /id="psImagePreview"|id="psInvSort"|id="psInvStatus"|function adminAddProduct|function onProductImageFile|function resizeImageToDataUrl|productImageDataUrl|adminProductImagePreviewReactApp|gvdg:admin-product-image-preview/);
   assert.match(html, /\.shop-admin-thumb\.fallback/);
-  assert.match(html, /function setAdminProductsListState\(state\) \{[\s\S]*window\.__gvdgAdminProductsListState = state;[\s\S]*gvdg:admin-products-list/);
+  assert.match(html, /function setAdminProductsListState\(state\) \{[\s\S]*new CustomEvent\('gvdg:admin-products-list', \{ detail: state \}\)/);
+  assert.doesNotMatch(html, /publishAdminState\('productsList'/);
   assert.ok(adminLoadProducts);
   assert.match(adminLoadProducts, /adminProductInventoryControlsState\(detail\)/);
   assert.match(adminLoadProducts, /setAdminProductsListState\(\{ status: 'loading', products: \[\], inventoryStatus:/);
@@ -544,7 +679,7 @@ test('admin product inventory list is rendered by React from legacy loader state
   assert.match(productsList, /gvdg:admin-products-list/);
   assert.match(productsList, /gvdg:admin-product-save-request/);
   assert.match(productsList, /gvdg:admin-product-delete-request/);
-  assert.match(productsList, /window\.__gvdgAdminProductsListState/);
+  assert.doesNotMatch(productsList, /currentAdminState\("productsList"|admin-state-store|function currentState/);
   assert.match(productsList, /data-react-admin-products-list/);
   assert.match(productsList, /className: "shop-admin-list"/);
   assert.match(productsList, /className: `shop-admin-row/);
@@ -555,12 +690,15 @@ test('admin product inventory list is rendered by React from legacy loader state
   assert.doesNotMatch(productsList, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️|🏆|⚠|⏱/);
   assert.match(shopControls, /export function AdminProductInventoryControls/);
   assert.match(shopControls, /gvdg:admin-product-inventory-controls-request/);
-  assert.match(shopControls, /window\.__gvdgAdminProductInventoryControlsState/);
+  assert.match(shopControls, /let productControlsStateSnapshot = \{\}/);
+  assert.doesNotMatch(shopControls, /window\.__gvdgAdminProductInventoryControlsState/);
+  assert.match(html, /let adminProductInventoryControlsSnapshot = \{\}/);
+  assert.doesNotMatch(html, /window\.__gvdgAdminProductInventoryControlsState/);
   assert.match(shopControls, /data-react-admin-product-inventory-controls/);
 });
 
-test('admin orders list is rendered by React from legacy loader state', () => {
-  const html = readFileSync('admin.html', 'utf8');
+test('admin orders list is rendered by React from direct loader events', () => {
+  const html = adminPageAndControllerSource();
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const ordersList = readFileSync('src/admin-app/orders-list.js', 'utf8');
   const shopControls = readFileSync('src/admin-app/shop-controls.js', 'utf8');
@@ -568,14 +706,15 @@ test('admin orders list is rendered by React from legacy loader state', () => {
   const saveOrder = html.match(/async function saveOrder\(id, body\) \{[\s\S]*?\n        \}/)?.[0];
   const cancelOrder = html.match(/async function cancelOrder\(id, status\) \{[\s\S]*?\n        \}/)?.[0];
   const deleteOrder = html.match(/async function deleteOrder\(id\) \{[\s\S]*?\n        \}/)?.[0];
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?\$\('adminCreateForm'\)\.addEventListener/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminOrderControlsReactApp"/);
   assert.match(html, /id="adminOrdersListReactApp"/);
   assert.doesNotMatch(html, /id="adminOrdersList"/);
   assert.doesNotMatch(html, /id="ordStatusFilter"|id="ordRefresh"/);
   assert.doesNotMatch(html, /function orderCard|const ORDER_STATUS_LABELS|const ORDER_UNFULFILLED/);
-  assert.match(html, /function setAdminOrdersListState\(state\) \{[\s\S]*window\.__gvdgAdminOrdersListState = state;[\s\S]*gvdg:admin-orders-list/);
+  assert.match(html, /function setAdminOrdersListState\(state\) \{[\s\S]*new CustomEvent\('gvdg:admin-orders-list', \{ detail: state \}\)/);
+  assert.doesNotMatch(html, /publishAdminState\('ordersList'/);
   assert.ok(adminLoadOrders);
   assert.match(adminLoadOrders, /adminOrderControlsState\(detail\)/);
   assert.match(adminLoadOrders, /setAdminOrdersListState\(\{ status: 'loading', orders: \[\], filterStatus: status \}\)/);
@@ -623,7 +762,7 @@ test('admin orders list is rendered by React from legacy loader state', () => {
   assert.match(ordersList, /gvdg:admin-order-cancel-request/);
   assert.match(ordersList, /gvdg:admin-order-delete-request/);
   assert.match(ordersList, /gvdg:admin-order-action-result/);
-  assert.match(ordersList, /window\.__gvdgAdminOrdersListState/);
+  assert.doesNotMatch(ordersList, /currentAdminState\("ordersList"|admin-state-store|function currentState/);
   assert.match(ordersList, /data-react-admin-orders-list/);
   assert.match(ordersList, /className: "orders-list"/);
   assert.match(ordersList, /className: "order-head"/);
@@ -635,50 +774,51 @@ test('admin orders list is rendered by React from legacy loader state', () => {
   assert.doesNotMatch(ordersList, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️|🏆|⚠|⏱/);
   assert.match(shopControls, /export function AdminOrderControls/);
   assert.match(shopControls, /gvdg:admin-order-controls-request/);
-  assert.match(shopControls, /window\.__gvdgAdminOrderControlsState/);
+  assert.match(shopControls, /let orderControlsStateSnapshot = \{\}/);
+  assert.doesNotMatch(shopControls, /window\.__gvdgAdminOrderControlsState/);
+  assert.match(html, /let adminOrderControlsSnapshot = \{\}/);
+  assert.doesNotMatch(html, /window\.__gvdgAdminOrderControlsState/);
   assert.match(shopControls, /data-react-admin-order-controls/);
 });
 
-test('admin data archive destination list is rendered by React from legacy loader state', () => {
-  const html = readFileSync('admin.html', 'utf8');
+test('admin data archive destination list is fetched by React after admin auth and data archive tab activation', () => {
+  const html = adminPageAndControllerSource();
   const main = readFileSync('src/admin-app/main.js', 'utf8');
+  const dataArchiveController = readFileSync('src/admin-app/data-archive-controller.js', 'utf8');
   const destinationForm = readFileSync('src/admin-app/data-archive-destination-form.js', 'utf8');
   const destinationsList = readFileSync('src/admin-app/data-archive-destinations-list.js', 'utf8');
-  const adminLoadDataArchiveDestinations = html.match(/async function adminLoadDataArchiveDestinations\(\) \{[\s\S]*?\n        \}/)?.[0];
-  const adminSaveDataArchiveEndpoint = html.match(/async function adminSaveDataArchiveEndpointFromReact\(detail\) \{[\s\S]*?async function adminRunArchiveExport/)?.[0];
-  const editDataArchiveDestination = html.match(/function editDataArchiveDestination\(destination\) \{[\s\S]*?\n        \}/)?.[0];
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?\$\('adminCreateForm'\)\.addEventListener/)?.[0];
+  const destinationsStore = readFileSync('src/admin-app/data-archive-destinations-store.js', 'utf8');
+  const adminSaveDataArchiveEndpoint = dataArchiveController.match(/export async function adminSaveDataArchiveEndpointFromReact\(detail, \{ adminApi, adminMsg \}\) \{[\s\S]*?export async function adminRunArchiveExport/)?.[0];
+  const editDataArchiveDestination = dataArchiveController.match(/export function editDataArchiveDestination\(destination, \{ adminMsg \}\) \{[\s\S]*?\n\}/)?.[0];
 
   assert.match(html, /id="adminDataArchiveDestinationFormReactApp"/);
   assert.match(html, /id="adminDataArchiveDestinationsReactApp"/);
   assert.doesNotMatch(html, /id="dxEndpointForm"|id="dxEndpointId"|id="dxEndpointLabel"|id="dxEndpointUrl"|id="dxAuthHeader"|id="dxAuthPrefix"|id="dxAuthToken"|id="dxAuthTokenClear"|id="dxEndpointActive"|id="dxEndpointSave"|id="dxEndpointCancel"/);
   assert.doesNotMatch(html, /id="dxDestinationsList"/);
   assert.doesNotMatch(html, /function resetDataArchiveEndpointForm|async function adminSaveDataArchiveEndpoint\(e\)/);
-  assert.match(html, /function setAdminDataArchiveDestinationsState\(state\) \{[\s\S]*window\.__gvdgAdminDataArchiveDestinationsState = state;[\s\S]*gvdg:admin-data-archive-destinations-list/);
-  assert.ok(adminLoadDataArchiveDestinations);
-  assert.match(adminLoadDataArchiveDestinations, /setAdminDataArchiveDestinationsState\(\{ status: 'loading', destinations: \[\] \}\)/);
-  assert.match(adminLoadDataArchiveDestinations, /setAdminDataArchiveDestinationsState\(\{ status: 'error', destinations: \[\] \}\)/);
-  assert.match(adminLoadDataArchiveDestinations, /setAdminDataArchiveDestinationsState\(\{ status: 'ready', destinations \}\)/);
-  assert.doesNotMatch(adminLoadDataArchiveDestinations, /dxExportDestination|select\.replaceChildren|document\.createElement|appendChild|selected|dxDestinationsList|list\.|elx\('p', 'al-note'|elx\('div', 'admin-evrow'\)|left\.appendChild|controls\.appendChild|addEventListener/);
+  assert.doesNotMatch(html, /adminLoadDataArchiveDestinations|setAdminDataArchiveDestinationsState|gvdg:admin-data-archive-destinations-list|publishAdminState\('dataArchiveDestinations'/);
   assert.ok(editDataArchiveDestination);
   assert.match(editDataArchiveDestination, /setDataArchiveEndpointForm\(destination\)/);
-  assert.match(html, /function setDataArchiveEndpointForm\(destination\) \{[\s\S]*gvdg:admin-data-archive-destination-form-edit/);
+  assert.match(dataArchiveController, /function setDataArchiveEndpointForm\(destination\) \{[\s\S]*gvdg:admin-data-archive-destination-form-edit/);
   assert.ok(adminSaveDataArchiveEndpoint);
   assert.match(adminSaveDataArchiveEndpoint, /adminApi\(path, \{ method, body \}\)/);
   assert.match(adminSaveDataArchiveEndpoint, /gvdg:admin-data-archive-destination-save-result/);
-  assert.match(adminSaveDataArchiveEndpoint, /detail: \{ ok: false, requestId, message \}/);
-  assert.match(adminSaveDataArchiveEndpoint, /adminLoadDataArchiveDestinations\(\)/);
+  assert.match(adminSaveDataArchiveEndpoint, /dispatchAdminEvent\('gvdg:admin-data-archive-destination-save-result', \{ ok: false, requestId, message \}\)/);
+  assert.doesNotMatch(adminSaveDataArchiveEndpoint, /adminLoadDataArchiveDestinations\(\)/);
   assert.doesNotMatch(adminSaveDataArchiveEndpoint, /dxEndpointLabel|dxEndpointUrl|dxAuthHeader|dxAuthPrefix|dxAuthToken|dxAuthTokenClear|dxEndpointActive|\$\('dxEndpoint/);
-  assert.ok(initAdmin);
-  assert.doesNotMatch(initAdmin, /\$\('dxEndpointForm'\)\.addEventListener|\$\('dxEndpointCancel'\)\.addEventListener/);
-  assert.match(initAdmin, /gvdg:admin-data-archive-destination-edit-request/);
-  assert.match(initAdmin, /editDataArchiveDestination\(destination\)/);
-  assert.match(initAdmin, /gvdg:admin-data-archive-destination-save-request/);
-  assert.match(initAdmin, /adminSaveDataArchiveEndpointFromReact\(event\.detail \|\| \{\}\)/);
-  assert.match(initAdmin, /gvdg:admin-data-archive-destination-activate-request/);
-  assert.match(initAdmin, /adminApi\('\/admin\/export\/endpoints\/' \+ destination\.id \+ '\/activate', \{ method: 'POST' \}\)/);
-  assert.match(initAdmin, /gvdg:admin-data-archive-destination-delete-request/);
-  assert.match(initAdmin, /adminApi\('\/admin\/export\/endpoints\/' \+ destination\.id, \{ method: 'DELETE' \}\)/);
+  assert.doesNotMatch(html, /\$\('dxEndpointForm'\)\.addEventListener|\$\('dxEndpointCancel'\)\.addEventListener/);
+  assert.match(html, /import \{ installDataArchiveController \} from "\.\/data-archive-controller\.js"/);
+  assert.match(html, /installDataArchiveController\(adminControllerDeps\)/);
+  assert.match(dataArchiveController, /gvdg:admin-data-archive-destination-edit-request/);
+  assert.match(dataArchiveController, /editDataArchiveDestination\(destination, deps\)/);
+  assert.match(dataArchiveController, /gvdg:admin-data-archive-destination-save-request/);
+  assert.match(dataArchiveController, /adminSaveDataArchiveEndpointFromReact\(event\.detail \|\| \{\}, deps\)/);
+  assert.match(dataArchiveController, /gvdg:admin-data-archive-destination-activate-request/);
+  assert.match(dataArchiveController, /adminApi\('\/admin\/export\/endpoints\/' \+ destination\.id \+ '\/activate', \{ method: 'POST' \}\)/);
+  assert.match(dataArchiveController, /gvdg:admin-data-archive-destination-activate-result/);
+  assert.match(dataArchiveController, /gvdg:admin-data-archive-destination-delete-request/);
+  assert.match(dataArchiveController, /adminApi\('\/admin\/export\/endpoints\/' \+ destination\.id, \{ method: 'DELETE' \}\)/);
+  assert.match(dataArchiveController, /gvdg:admin-data-archive-destination-delete-result/);
   assert.match(main, /import \{ AdminDataArchiveDestinationForm \} from "\.\/data-archive-destination-form\.js"/);
   assert.match(main, /import \{ AdminDataArchiveDestinationsList, AdminDataArchiveExportResult \} from "\.\/data-archive-destinations-list\.js"/);
   assert.match(main, /const dataArchiveDestinationFormMount = document\.getElementById\("adminDataArchiveDestinationFormReactApp"\)/);
@@ -712,11 +852,11 @@ test('admin data archive destination list is rendered by React from legacy loade
   assert.match(html, /\.admin-form \.admin-data-archive-destination-toggle \{/);
   assert.doesNotMatch(destinationForm, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️|🏆|⚠|⏱|—/);
   assert.match(destinationsList, /export function AdminDataArchiveDestinationsList/);
-  assert.match(destinationsList, /gvdg:admin-data-archive-destinations-list/);
+  assert.match(destinationsList, /useDataArchiveDestinationsState/);
   assert.match(destinationsList, /gvdg:admin-data-archive-destination-edit-request/);
   assert.match(destinationsList, /gvdg:admin-data-archive-destination-activate-request/);
   assert.match(destinationsList, /gvdg:admin-data-archive-destination-delete-request/);
-  assert.match(destinationsList, /window\.__gvdgAdminDataArchiveDestinationsState/);
+  assert.doesNotMatch(destinationsList, /currentAdminState\("dataArchiveDestinations"|gvdg:admin-data-archive-destinations-list/);
   assert.match(destinationsList, /data-react-admin-data-archive-destinations/);
   assert.match(destinationsList, /className: "admin-evrow"/);
   assert.match(destinationsList, /className: "ev-name"/);
@@ -725,4 +865,11 @@ test('admin data archive destination list is rendered by React from legacy loade
   assert.match(destinationsList, /role: "status"/);
   assert.match(destinationsList, /role: "alert"/);
   assert.doesNotMatch(destinationsList, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️|🏆|⚠|⏱/);
+  assert.match(destinationsStore, /export function useDataArchiveDestinationsState/);
+  assert.match(destinationsStore, /adminJson\("\/admin\/export\/endpoints"/);
+  assert.match(destinationsStore, /gvdg:admin-auth-gate/);
+  assert.match(destinationsStore, /gvdg:admin-active-tab/);
+  assert.match(destinationsStore, /gvdg:admin-data-archive-destination-save-result/);
+  assert.match(destinationsStore, /gvdg:admin-data-archive-destination-activate-result/);
+  assert.match(destinationsStore, /gvdg:admin-data-archive-destination-delete-result/);
 });

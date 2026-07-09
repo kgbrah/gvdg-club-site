@@ -1,8 +1,9 @@
 import React from "react";
 import { CalendarDays, ExternalLink, MapPin } from "lucide-react";
 
+import { useEventsHub } from "./events-hub-data.js";
+
 const h = React.createElement;
-const HUB_EVENT = "gvdg:events-hub";
 
 function icon(Icon, size = 16) {
   return h(Icon, {
@@ -11,41 +12,6 @@ function icon(Icon, size = 16) {
     size,
     strokeWidth: 2.4,
   });
-}
-
-function publishedHub() {
-  const hub = window.__gvdgEventsHub;
-  return hub && typeof hub === "object"
-    ? {
-      feedClub: Array.isArray(hub.feedClub) ? hub.feedClub : [],
-      feedEvents: Array.isArray(hub.feedEvents) ? hub.feedEvents : [],
-      hasMainContent: Boolean(hub.hasMainContent),
-      live: Array.isArray(hub.live) ? hub.live : [],
-      upcoming: Array.isArray(hub.upcoming) ? hub.upcoming : [],
-    }
-    : { feedClub: [], feedEvents: [], hasMainContent: false, live: [], upcoming: [] };
-}
-
-function useEventsHub() {
-  const [hub, setHub] = React.useState(publishedHub);
-
-  React.useEffect(() => {
-    function update(event) {
-      const next = event.detail && event.detail.hub ? event.detail.hub : publishedHub();
-      setHub({
-        feedClub: Array.isArray(next.feedClub) ? next.feedClub : [],
-        feedEvents: Array.isArray(next.feedEvents) ? next.feedEvents : [],
-        hasMainContent: Boolean(next.hasMainContent),
-        live: Array.isArray(next.live) ? next.live : [],
-        upcoming: Array.isArray(next.upcoming) ? next.upcoming : [],
-      });
-    }
-    window.addEventListener(HUB_EVENT, update);
-    update({ detail: { hub: publishedHub() } });
-    return () => window.removeEventListener(HUB_EVENT, update);
-  }, []);
-
-  return hub;
 }
 
 function cleanClassName(value) {

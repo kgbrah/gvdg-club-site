@@ -1,5 +1,7 @@
 import React from "react";
 
+import { useDataArchiveDestinationsState } from "./data-archive-destinations-store.js";
+
 const h = React.createElement;
 
 const DEFAULT_FORM = {
@@ -13,34 +15,6 @@ const DEFAULT_FORM = {
   test: false,
   to: "",
 };
-
-function objectOrEmpty(value) {
-  return value && typeof value === "object" ? value : {};
-}
-
-function normalizeText(value, fallback = "") {
-  return typeof value === "string" ? value : fallback;
-}
-
-function normalizeDestination(destination) {
-  const source = objectOrEmpty(destination);
-  const id = source.id == null ? "" : String(source.id);
-  const label = normalizeText(source.label, id ? `Endpoint ${id}` : "Endpoint");
-  const endpointUrl = normalizeText(source.endpoint_url);
-  return {
-    endpointUrl,
-    id,
-    isActive: Number(source.is_active) === 1 || source.is_active === true,
-    label,
-  };
-}
-
-function currentDestinations() {
-  const state = window.__gvdgAdminDataArchiveDestinationsState;
-  return state && typeof state === "object" && Array.isArray(state.destinations)
-    ? state.destinations.map(normalizeDestination)
-    : [];
-}
 
 function dispatchRequest(name, detail) {
   window.dispatchEvent(new CustomEvent(name, { detail }));
@@ -69,26 +43,25 @@ function checkboxField({ checked, id, label, onChange }) {
 }
 
 export function AdminDataArchiveExportControls() {
-  const [destinations, setDestinations] = React.useState(currentDestinations);
+  const destinationsState = useDataArchiveDestinationsState();
   const [form, setForm] = React.useState(DEFAULT_FORM);
   const [busy, setBusy] = React.useState(false);
   const requestCounter = React.useRef(0);
   const currentRequest = React.useRef("");
+  const userSelectedDestination = React.useRef(false);
+  const destinations = destinationsState.destinations;
 
   React.useEffect(() => {
-    function updateDestinations(event) {
-      const detail = event.detail && typeof event.detail === "object" ? event.detail : {};
-      const next = Array.isArray(detail.destinations) ? detail.destinations.map(normalizeDestination) : currentDestinations();
-      setDestinations(next);
-      setForm((current) => {
-        if (current.destinationId && next.some((destination) => destination.id === current.destinationId)) return current;
-        const active = next.find((destination) => destination.isActive);
-        return { ...current, destinationId: active ? active.id : "" };
-      });
-    }
-    window.addEventListener("gvdg:admin-data-archive-destinations-list", updateDestinations);
-    return () => window.removeEventListener("gvdg:admin-data-archive-destinations-list", updateDestinations);
-  }, []);
+    setForm((current) => {
+      if (userSelectedDestination.current && current.destinationId && destinations.some((destination) => destination.id === current.destinationId)) {
+        return current;
+      }
+      userSelectedDestination.current = false;
+      const active = destinations.find((destination) => destination.isActive);
+      const destinationId = active ? active.id : "";
+      return current.destinationId === destinationId ? current : { ...current, destinationId };
+    });
+  }, [destinations]);
 
   React.useEffect(() => {
     function updateRun(event) {
@@ -103,6 +76,11 @@ export function AdminDataArchiveExportControls() {
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateDestination(value) {
+    userSelectedDestination.current = true;
+    updateField("destinationId", value);
   }
 
   function submit() {
@@ -141,7 +119,7 @@ export function AdminDataArchiveExportControls() {
       h("select", {
         id: "dxExportDestination",
         key: "select",
-        onChange: (event) => updateField("destinationId", event.target.value),
+        onChange: (event) => updateDestination(event.target.value),
         value: form.destinationId,
       }, [
         h("option", { key: "download", value: "" }, "Download only (no endpoint)"),

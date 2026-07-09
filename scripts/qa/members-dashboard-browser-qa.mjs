@@ -176,6 +176,38 @@ async function assertNoHorizontalOverflow(page, label) {
   throw new Error(`${label} has horizontal overflow of ${overflow}px: ${JSON.stringify(offenders)}`);
 }
 
+async function assertPdgaRatingsStacked(page, label) {
+  const rows = await page.locator("#membersReactRatingPanel .dash-event").evaluateAll((events) =>
+    events.map((event, index) => {
+      const main = event.querySelector(".dash-event-main");
+      const copy = event.querySelector(".dash-event-copy");
+      const title = event.querySelector(".dash-event-name");
+      const date = event.querySelector(".dash-event-date");
+      const ratingRow = event.querySelector(".dash-event-rating-row");
+      const ratings = event.querySelector(".dash-event-ratings");
+      const eventRect = event.getBoundingClientRect();
+      const mainRect = main?.getBoundingClientRect();
+      const copyRect = copy?.getBoundingClientRect();
+      const titleRect = title?.getBoundingClientRect();
+      const dateRect = date?.getBoundingClientRect();
+      const ratingRowRect = ratingRow?.getBoundingClientRect();
+      const ratingsRect = ratings?.getBoundingClientRect();
+      return {
+        index,
+        title: main?.textContent?.trim() || "",
+        missing: !main || !copy || !title || !date || !ratingRow || !ratings,
+        ratingRowBelowCopy: Boolean(copyRect && ratingRowRect && ratingRowRect.top >= copyRect.bottom - 1),
+        ratingsBelowText: Boolean(titleRect && dateRect && ratingsRect && ratingsRect.top >= dateRect.bottom - 1 && ratingsRect.top > titleRect.top),
+        ratingRowFullWidth: Boolean(mainRect && ratingRowRect && ratingRowRect.left >= mainRect.left - 1 && ratingRowRect.right <= mainRect.right + 1 && ratingRowRect.width >= mainRect.width - 2),
+        ratingsInsideMain: Boolean(mainRect && ratingsRect && ratingsRect.left >= mainRect.left - 1 && ratingsRect.right <= mainRect.right + 1),
+        ratingsInsideCard: Boolean(ratingsRect && ratingsRect.left >= eventRect.left - 1 && ratingsRect.right <= eventRect.right + 1),
+      };
+    })
+  );
+  const badRows = rows.filter((row) => row.missing || !row.ratingRowBelowCopy || !row.ratingsBelowText || !row.ratingRowFullWidth || !row.ratingsInsideMain || !row.ratingsInsideCard);
+  if (badRows.length) throw new Error(`${label} PDGA ratings are not stacked below event text: ${JSON.stringify(badRows)}`);
+}
+
 async function captureAuthGate(browser, origin, viewport, slug) {
   const context = await browser.newContext({ viewport });
   const page = await context.newPage();
@@ -296,6 +328,8 @@ async function captureState(browser, origin, viewport, slug) {
   await page.waitForSelector('[data-react-meeting-minutes="ready"]', { state: "attached", timeout: 10_000 });
   await page.waitForSelector('[data-react-pdga-dashboard="ready"]', { timeout: 10_000 });
   await waitForText(page, "#membersReactRatingPanel", "941", "React live rating");
+  await waitForText(page, "#membersReactRatingPanel", "Memorial Day Showdown 2026", "React long PDGA event title");
+  await assertPdgaRatingsStacked(page, slug);
   await page.waitForSelector('[data-react-club-ratings="ready"]', { timeout: 10_000 });
   await page.waitForSelector('[data-react-live-scoring="ready"]', { timeout: 10_000 });
   await page.waitForSelector('[data-react-wallet="ready"]', { timeout: 10_000 });

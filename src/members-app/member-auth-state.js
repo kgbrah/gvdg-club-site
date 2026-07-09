@@ -1,4 +1,5 @@
 import { NAME_KEY, PDGA_KEY, storageGet } from "./api.js";
+import { setMemberContext } from "./member-context.js";
 
 let memberProfile = {
   isAdmin: false,
@@ -38,8 +39,8 @@ export function memberAuthProfile() {
 }
 
 export function publishMemberProfile(detail = memberDashboardContext()) {
-  window.GVDG_MEMBER_DASHBOARD_CONTEXT = detail;
-  window.dispatchEvent(new CustomEvent("gvdg:member-profile-updated", { detail }));
+  const context = setMemberContext(detail);
+  window.dispatchEvent(new CustomEvent("gvdg:member-profile-updated", { detail: context }));
 }
 
 export function applyProfile(data = {}) {

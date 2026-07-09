@@ -1,5 +1,7 @@
 import React from "react";
 
+import { adminConfirm } from "./admin-dialogs.js";
+
 const h = React.createElement;
 
 function dispatchRequest(name, detail) {
@@ -131,8 +133,14 @@ export function RegistrationRow({ registration }) {
 }
 
 export function ManualPlayerRow({ player }) {
-  function requestRemove() {
-    if (!window.confirm(`Remove ${player.name || "this player"}?`)) return;
+  async function requestRemove() {
+    const confirmed = await adminConfirm({
+      title: "Remove manual player",
+      message: `Remove ${player.name || "this player"}?`,
+      confirmText: "Remove",
+      danger: true,
+    });
+    if (!confirmed) return;
     dispatchRequest("gvdg:admin-registration-manual-remove-request", { player: player.source });
   }
 

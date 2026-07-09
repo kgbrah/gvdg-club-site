@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { holeWinner, holeWinners, teamSide, winnerColor, playersFromResults, TEAM_COLORS } from '../matchplay-colors.js';
+import { existsSync, readFileSync } from 'node:fs';
+import { holeWinner, holeWinners, teamSide, winnerColor, playersFromResults, TEAM_COLORS } from '../src/shared/matchplay-colors.js';
 
 test('holeWinner: lower score wins, equal is a tie, missing is null', () => {
   assert.equal(holeWinner(3, 4), 'red');
@@ -49,4 +50,11 @@ test('playersFromResults parses team + scorecard into the holeWinners shape', ()
   assert.equal(players[0].team, 'Blue');
   assert.equal(players[0].scores[1], 2);
   assert.deepEqual(players[1].scores, {}); // no per-hole data → no coloring
+});
+
+test('matchplay helpers stay module-only without browser globals or a root shim', () => {
+  const shared = readFileSync('src/shared/matchplay-colors.js', 'utf8');
+
+  assert.equal(existsSync('matchplay-colors.js'), false);
+  assert.doesNotMatch(shared, /GVDGMatchplay|installMatchplayGlobal|window\./);
 });

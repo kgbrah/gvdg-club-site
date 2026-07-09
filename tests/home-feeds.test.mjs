@@ -7,7 +7,7 @@ import {
   parseHomepageEventDate,
   parseTournamentCsv,
   parseTournamentDate,
-} from '../home-feeds.js';
+} from '../src/shared/home-feed-parse.js';
 
 test('isClubEvent flags club business but keeps tournaments/league rounds', () => {
   assert.equal(isClubEvent({ title: 'Club Meeting', description: 'At Local Oak Brewing' }), true);

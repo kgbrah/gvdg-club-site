@@ -3,12 +3,12 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 test('admin member creation form is rendered by React from request events', () => {
-  const html = readFileSync('admin.html', 'utf8');
+  const html = `${readFileSync('admin.html', 'utf8')}\n${readFileSync('src/admin-app/admin-controller.js', 'utf8')}`;
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const memberForm = readFileSync('src/admin-app/member-form.js', 'utf8');
   const membersList = readFileSync('src/admin-app/members-list.js', 'utf8');
   const adminCreateMember = html.match(/async function adminCreateMemberFromReact\(detail\) \{[\s\S]*?\n        \}/)?.[0];
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?\$\('adminCreateForm'\)\.addEventListener/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminMemberFormReactApp"/);
   assert.doesNotMatch(html, /id="adminMemberForm"|id="amName"|id="amPdga"|id="amUdisc"|id="amAdmin"/);

@@ -1,14 +1,11 @@
 import React from "react";
 
+import { adminConfirm } from "./admin-dialogs.js";
+
 const h = React.createElement;
 
 const EVENT_STATUSES = ["scheduled", "live", "final", "cancelled"];
 const EMPTY_STATE = { status: "loading", events: [] };
-
-function currentState() {
-  const state = window.__gvdgAdminEventsListState;
-  return state && typeof state === "object" ? state : EMPTY_STATE;
-}
 
 function normalizeEvent(event) {
   const source = event && typeof event === "object" ? event : {};
@@ -42,9 +39,14 @@ function AdminEventRow({ event }) {
     setSelectValue(safeStatus);
   }, [safeStatus]);
 
-  function requestStatusChange(changeEvent) {
+  async function requestStatusChange(changeEvent) {
     const status = changeEvent.target.value;
-    if (!window.confirm(`Change "${event.name}" status to ${status}?`)) {
+    const confirmed = await adminConfirm({
+      title: "Change event status",
+      message: `Change "${event.name}" status to ${status}?`,
+      confirmText: "Change status",
+    });
+    if (!confirmed) {
       setSelectValue(safeStatus);
       return;
     }
@@ -52,8 +54,14 @@ function AdminEventRow({ event }) {
     dispatchRequest("gvdg:admin-event-status-request", { event: event.source, status });
   }
 
-  function requestDelete() {
-    if (!window.confirm(`Delete event "${event.name}"?`)) return;
+  async function requestDelete() {
+    const confirmed = await adminConfirm({
+      title: "Delete event",
+      message: `Delete event "${event.name}"?`,
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!confirmed) return;
     dispatchRequest("gvdg:admin-event-delete-request", { event: event.source });
   }
 
@@ -83,14 +91,13 @@ function AdminEventRow({ event }) {
 }
 
 export function AdminEventsList() {
-  const [state, setState] = React.useState(() => normalizeState(currentState()));
+  const [state, setState] = React.useState(() => normalizeState(EMPTY_STATE));
 
   React.useEffect(() => {
     function update(event) {
-      setState(normalizeState(event.detail && typeof event.detail === "object" ? event.detail : currentState()));
+      setState(normalizeState(event.detail && typeof event.detail === "object" ? event.detail : EMPTY_STATE));
     }
     window.addEventListener("gvdg:admin-events-list", update);
-    setState(normalizeState(currentState()));
     return () => window.removeEventListener("gvdg:admin-events-list", update);
   }, []);
 

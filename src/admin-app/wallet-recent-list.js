@@ -1,16 +1,15 @@
 import React from "react";
 
+import { adminJson } from "./admin-api.js";
+import { currentAdminActiveTab, currentAdminAuthGateState } from "./admin-shell-state.js";
+
 const h = React.createElement;
 
-const EMPTY_STATE = { status: "loading", transactions: [] };
+const EMPTY_STATE = { status: "idle", transactions: [] };
+const LOADING_STATE = { status: "loading", transactions: [] };
 
 function objectOrEmpty(value) {
   return value && typeof value === "object" ? value : {};
-}
-
-function currentState() {
-  const state = window.__gvdgAdminWalletRecentState;
-  return state && typeof state === "object" ? state : EMPTY_STATE;
 }
 
 function normalizeText(value, fallback = "") {
@@ -35,8 +34,9 @@ function normalizeTransaction(transaction) {
 }
 
 function normalizeState(state) {
+  const status = state.status === "idle" || state.status === "loading" || state.status === "error" ? state.status : "ready";
   return {
-    status: state.status === "loading" ? "loading" : "ready",
+    status,
     transactions: Array.isArray(state.transactions) ? state.transactions.map(normalizeTransaction) : [],
   };
 }
@@ -70,19 +70,57 @@ function WalletTransactionRow({ transaction, index }) {
 }
 
 export function AdminWalletRecentList() {
-  const [state, setState] = React.useState(() => normalizeState(currentState()));
+  const [state, setState] = React.useState(() => normalizeState(EMPTY_STATE));
+  const [adminReady, setAdminReady] = React.useState(() => currentAdminAuthGateState().status === "panel");
+  const [activeTab, setActiveTab] = React.useState(() => currentAdminActiveTab());
+  const [refreshCount, setRefreshCount] = React.useState(0);
+  const shouldLoad = adminReady && activeTab === "wallets";
 
   React.useEffect(() => {
-    function update(event) {
-      setState(normalizeState(event.detail && typeof event.detail === "object" ? event.detail : currentState()));
+    function updateAuth(event) {
+      const detail = event.detail && typeof event.detail === "object" ? event.detail : currentAdminAuthGateState();
+      setAdminReady(detail.status === "panel");
     }
-    window.addEventListener("gvdg:admin-wallet-recent", update);
-    setState(normalizeState(currentState()));
-    return () => window.removeEventListener("gvdg:admin-wallet-recent", update);
+    function updateTab(event) {
+      const tab = event.detail && typeof event.detail.tab === "string" ? event.detail.tab : currentAdminActiveTab();
+      setActiveTab(tab);
+    }
+    function refreshAfterAdjustment(event) {
+      if (event.detail?.ok === true) setRefreshCount((count) => count + 1);
+    }
+
+    window.addEventListener("gvdg:admin-auth-gate", updateAuth);
+    window.addEventListener("gvdg:admin-active-tab", updateTab);
+    window.addEventListener("gvdg:admin-wallet-adjustment-result", refreshAfterAdjustment);
+    setAdminReady(currentAdminAuthGateState().status === "panel");
+    setActiveTab(currentAdminActiveTab());
+    return () => {
+      window.removeEventListener("gvdg:admin-auth-gate", updateAuth);
+      window.removeEventListener("gvdg:admin-active-tab", updateTab);
+      window.removeEventListener("gvdg:admin-wallet-adjustment-result", refreshAfterAdjustment);
+    };
   }, []);
 
-  if (state.status === "loading") {
+  React.useEffect(() => {
+    if (!shouldLoad) return undefined;
+    const controller = new AbortController();
+    setState(normalizeState(LOADING_STATE));
+    adminJson("/admin/wallets/recent", { signal: controller.signal })
+      .then((data) => {
+        setState(normalizeState({ status: "ready", transactions: data?.transactions }));
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setState(normalizeState({ status: "error", transactions: [] }));
+      });
+    return () => controller.abort();
+  }, [shouldLoad, refreshCount]);
+
+  if (state.status === "idle" || state.status === "loading") {
     return h("p", { className: "al-note", "data-react-admin-wallet-recent": "loading", role: "status" }, "Loading...");
+  }
+
+  if (state.status === "error") {
+    return h("p", { className: "al-note", "data-react-admin-wallet-recent": "error", role: "alert" }, "Wallet activity could not load.");
   }
 
   if (!state.transactions.length) {

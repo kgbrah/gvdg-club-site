@@ -1,8 +1,9 @@
 import React from "react";
 import { CalendarDays, ChevronDown, ChevronUp, ExternalLink, Info } from "lucide-react";
 
+import { useEventsPreviousResults } from "./events-hub-data.js";
+
 const h = React.createElement;
-const PREVIOUS_RESULTS_EVENT = "gvdg:events-previous-results";
 const PREVIOUS_RESULTS_INITIAL = 3;
 const PREVIOUS_RESULTS_PAGE_SIZE = 12;
 
@@ -13,11 +14,6 @@ function icon(Icon, size = 16) {
     size,
     strokeWidth: 2.4,
   });
-}
-
-function publishedResults() {
-  const results = window.__gvdgEventsPreviousResults;
-  return Array.isArray(results) ? results : [];
 }
 
 function cleanClassName(value) {
@@ -105,21 +101,9 @@ function PreviousResultCard({ item }) {
 }
 
 export function EventsPreviousResultsApp() {
-  const [results, setResults] = React.useState(publishedResults);
+  const results = useEventsPreviousResults();
   const [expanded, setExpanded] = React.useState(false);
   const [visible, setVisible] = React.useState(PREVIOUS_RESULTS_INITIAL);
-
-  React.useEffect(() => {
-    function update(event) {
-      const next = Array.isArray(event.detail && event.detail.results) ? event.detail.results : publishedResults();
-      setResults(next);
-      setVisible((current) => Math.min(Math.max(current, PREVIOUS_RESULTS_INITIAL), Math.max(next.length, PREVIOUS_RESULTS_INITIAL)));
-      if (!next.length) setExpanded(false);
-    }
-    window.addEventListener(PREVIOUS_RESULTS_EVENT, update);
-    update({ detail: { results: publishedResults() } });
-    return () => window.removeEventListener(PREVIOUS_RESULTS_EVENT, update);
-  }, []);
 
   React.useEffect(() => {
     setVisible((current) => Math.min(Math.max(current, PREVIOUS_RESULTS_INITIAL), Math.max(results.length, PREVIOUS_RESULTS_INITIAL)));

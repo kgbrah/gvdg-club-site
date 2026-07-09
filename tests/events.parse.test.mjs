@@ -5,6 +5,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
 
 import {
   VALID_STATUSES,
@@ -19,7 +20,7 @@ import {
   statusLabel,
   buildCourseIndex,
   courseNameFor,
-} from '../events.js';
+} from '../src/shared/events-model.js';
 
 // --- normalizeEvent -----------------------------------------------------------
 test('normalizeEvent fills safe defaults for a sparse object', () => {
@@ -149,4 +150,20 @@ test('courseNameFor resolves ids and falls back gracefully', () => {
   assert.equal(courseNameFor(index, '2'), 'Bradford Creek');
   assert.equal(courseNameFor(index, 99), ''); // unknown id -> blank
   assert.equal(courseNameFor(index, null), ''); // no course on event
+});
+
+test('public React modules import the shared events model without a root compatibility shim', () => {
+  const publicSources = [
+    'src/public-app/events-detail-data.js',
+    'src/public-app/events-registration-app.js',
+    'src/public-app/events-league-detail-app.js',
+    'src/public-app/events-detail-app.js',
+    'src/public-app/events-hub-data.js',
+  ].map((file) => readFileSync(file, 'utf8'));
+
+  assert.equal(existsSync('events.js'), false);
+  for (const source of publicSources) {
+    assert.match(source, /from "\.\.\/shared\/events-model\.js"/);
+    assert.doesNotMatch(source, /from "\.\.\/\.\.\/events\.js"/);
+  }
 });

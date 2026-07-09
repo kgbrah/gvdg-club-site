@@ -70,7 +70,7 @@ test('shared service worker caches app install assets and member fallback', () =
   const sw = readFileSync('sw.js', 'utf8');
   const cacheVersion = sw.match(/const CACHE = "gvdg-club-v(\d+)"/);
   assert.ok(cacheVersion, 'service worker cache version is present');
-  assert.ok(Number(cacheVersion[1]) >= 44, 'React-owned weather and UDisc export migration requires v44 or newer');
+  assert.ok(Number(cacheVersion[1]) >= 79, 'Bundled matchplay helper migration requires v79 or newer');
   assert.match(sw, /const OFFLINE_PAGE = "gvdg-members\.html"/);
   assert.match(sw, /const STATIC_DESTINATIONS = new Set/);
   assert.match(sw, /if \(!staticAsset\(req, url\)\) return/);
@@ -92,12 +92,17 @@ test('shared service worker caches app install assets and member fallback', () =
   }
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(sw, /"crotts\.js"/);
+  assert.doesNotMatch(sw, /"matchplay-colors\.js"/);
   assert.match(readFileSync('pwa.js', 'utf8'), /serviceWorker\.register\('sw\.js', \{ scope: '\.\/' \}\)/);
 });
 
 test('admin order badge clears stale counts when refresh fails closed', () => {
   const html = readFileSync('admin.html', 'utf8');
-  assert.match(html, /function setOrdersBadge\(n\) \{[\s\S]*window\.__gvdgAdminOrdersBadgeCount = count;[\s\S]*gvdg:admin-orders-badge/);
-  assert.match(html, /async function refreshOrdersBadge\(\) \{[\s\S]*setOrdersBadge\(0\);[\s\S]*catch \(e\) \{[\s\S]*setOrdersBadge\(0\);/);
+  const controller = readFileSync('src/admin-app/admin-controller.js', 'utf8');
+  const shellState = readFileSync('src/admin-app/admin-shell-state.js', 'utf8');
+  assert.match(controller, /function setOrdersBadge\(n\) \{[\s\S]*publishAdminOrdersBadgeCount\(n\)/);
+  assert.match(shellState, /export function publishAdminOrdersBadgeCount\(count\)[\s\S]*gvdg:admin-orders-badge/);
+  assert.doesNotMatch(controller, /__gvdgAdminOrdersBadgeCount/);
+  assert.match(controller, /async function refreshOrdersBadge\(\) \{[\s\S]*setOrdersBadge\(0\);[\s\S]*catch \(e\) \{[\s\S]*setOrdersBadge\(0\);/);
   assert.doesNotMatch(html, /id="ordersBadge" class="orders-badge" hidden/);
 });

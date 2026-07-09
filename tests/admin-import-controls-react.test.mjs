@@ -3,11 +3,12 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 test('admin import controls are rendered by React from request events', () => {
-  const html = readFileSync('admin.html', 'utf8');
+  const html = `${readFileSync('admin.html', 'utf8')}\n${readFileSync('src/admin-app/admin-controller.js', 'utf8')}`;
+  const importController = readFileSync('src/admin-app/import-controller.js', 'utf8');
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const controls = readFileSync('src/admin-app/import-controls.js', 'utf8');
-  const adminDgsImport = html.match(/async function adminDgsImportFromReact\(detail\) \{[\s\S]*?async function adminCsvImportFromReact/)?.[0];
-  const adminCsvImport = html.match(/async function adminCsvImportFromReact\(detail\) \{[\s\S]*?\/\/ ============================================================/)?.[0];
+  const adminDgsImport = importController.match(/export async function adminDgsImportFromReact\(detail, \{ adminApi, adminMsg \}\) \{[\s\S]*?export async function adminCsvImportFromReact/)?.[0];
+  const adminCsvImport = importController.match(/export async function adminCsvImportFromReact\(detail, \{ adminApi, adminMsg \}\) \{[\s\S]*?export function installImportController/)?.[0];
 
   assert.match(html, /id="adminImportControlsReactApp"/);
   assert.doesNotMatch(html, /id="dgsImportBtn"|id="csvImportBtn"|id="csvImportText"/);
@@ -20,8 +21,10 @@ test('admin import controls are rendered by React from request events', () => {
   assert.match(adminCsvImport, /Paste CSV first/);
   assert.doesNotMatch(adminCsvImport, /csvImportText|\$\('csvImportText'\)/);
   assert.doesNotMatch(html, /\$\('dgsImportBtn'\)\.addEventListener|\$\('csvImportBtn'\)\.addEventListener/);
-  assert.match(html, /gvdg:admin-dgs-import-request/);
-  assert.match(html, /gvdg:admin-csv-import-request/);
+  assert.match(html, /import \{ installImportController \} from "\.\/import-controller\.js"/);
+  assert.match(html, /installImportController\(adminControllerDeps\)/);
+  assert.match(importController, /gvdg:admin-dgs-import-request/);
+  assert.match(importController, /gvdg:admin-csv-import-request/);
   assert.match(main, /import \{ AdminImportControls \} from "\.\/import-controls\.js"/);
   assert.match(main, /const importControlsMount = document\.getElementById\("adminImportControlsReactApp"\)/);
   assert.match(main, /createRoot\(importControlsMount\)\.render\(h\(AdminImportControls\)\)/);

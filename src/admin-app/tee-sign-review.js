@@ -1,5 +1,7 @@
 import React from "react";
 
+import { adminConfirm } from "./admin-dialogs.js";
+
 const h = React.createElement;
 
 const REVIEW_STATUSES = [
@@ -17,6 +19,8 @@ const EMPTY_STATE = {
   status: "loading",
 };
 
+let teeSignReviewControlsStateSnapshot = {};
+
 function objectOrEmpty(value) {
   return value && typeof value === "object" ? value : {};
 }
@@ -30,13 +34,12 @@ function normalizeStatus(value) {
 }
 
 function currentControlsState() {
-  const state = window.__gvdgAdminTeeSignReviewControlsState;
+  const state = teeSignReviewControlsStateSnapshot;
   return state && typeof state === "object" ? state : {};
 }
 
-function currentState() {
-  const state = window.__gvdgAdminTeeSignReviewState;
-  return state && typeof state === "object" ? state : EMPTY_STATE;
+function setCurrentControlsState(state) {
+  teeSignReviewControlsStateSnapshot = state;
 }
 
 function dispatchRequest(name, detail) {
@@ -214,6 +217,26 @@ function TeeSignReviewCard({ state, sign }) {
     setRows((current) => current.map((candidate, i) => i === index ? row : candidate));
   }
 
+  async function rejectSign() {
+    const confirmed = await adminConfirm({
+      title: "Reject tee sign",
+      message: `Reject tee sign for hole ${sign.holeNumber}? The stored image will be removed.`,
+      confirmText: "Reject",
+      danger: true,
+    });
+    if (confirmed) request("gvdg:admin-tee-sign-review-reject-request");
+  }
+
+  async function deleteSign() {
+    const confirmed = await adminConfirm({
+      title: "Delete tee sign",
+      message: `Delete tee sign #${sign.id}?`,
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (confirmed) request("gvdg:admin-tee-sign-review-delete-request");
+  }
+
   const meta = [
     sign.uploadedBy ? `Uploaded by ${sign.uploadedBy}` : "",
     sign.createdAt,
@@ -240,8 +263,8 @@ function TeeSignReviewCard({ state, sign }) {
         h("button", { className: "admin-btn secondary", disabled: busy, key: "add", onClick: () => setRows((current) => [...current, rowFromSeed({ suggestedLayoutName: "Main", par: 3 }, current.length)]), type: "button" }, "+ Row"),
         sign.status === "rejected" ? null : h("button", { className: "admin-btn", disabled: busy, key: "approve", onClick: () => request("gvdg:admin-tee-sign-review-approve-request", { rows: rowsPayload(rows) }), type: "button" }, pending ? "Working..." : sign.status === "official" ? "Apply rows" : "Approve"),
         sign.status === "rejected" ? null : h("button", { className: "admin-btn secondary", disabled: busy, key: "extract", onClick: () => request("gvdg:admin-tee-sign-review-extract-request"), type: "button" }, "Re-run vision"),
-        sign.status === "rejected" ? null : h("button", { className: "admin-btn danger", disabled: busy, key: "reject", onClick: () => { if (window.confirm(`Reject tee sign for hole ${sign.holeNumber}? The stored image will be removed.`)) request("gvdg:admin-tee-sign-review-reject-request"); }, type: "button" }, "Reject"),
-        h("button", { className: "admin-btn danger", disabled: busy, key: "delete", onClick: () => { if (window.confirm(`Delete tee sign #${sign.id}?`)) request("gvdg:admin-tee-sign-review-delete-request"); }, type: "button" }, "Delete"),
+        sign.status === "rejected" ? null : h("button", { className: "admin-btn danger", disabled: busy, key: "reject", onClick: rejectSign, type: "button" }, "Reject"),
+        h("button", { className: "admin-btn danger", disabled: busy, key: "delete", onClick: deleteSign, type: "button" }, "Delete"),
       ]),
     ]),
   ]);
@@ -250,11 +273,11 @@ function TeeSignReviewCard({ state, sign }) {
 export function AdminTeeSignReviewControls() {
   const initial = currentControlsState();
   const [status, setStatus] = React.useState(() => normalizeStatus(initial.status));
-  React.useEffect(() => { window.__gvdgAdminTeeSignReviewControlsState = { status }; }, [status]);
+  React.useEffect(() => { setCurrentControlsState({ status }); }, [status]);
 
   function requestLoad(nextStatus) {
     const next = { status: normalizeStatus(nextStatus) };
-    window.__gvdgAdminTeeSignReviewControlsState = next;
+    setCurrentControlsState(next);
     dispatchRequest("gvdg:admin-tee-sign-review-controls-request", next);
   }
 
@@ -266,13 +289,12 @@ export function AdminTeeSignReviewControls() {
 }
 
 export function AdminTeeSignReviewList() {
-  const [state, setState] = React.useState(() => normalizeState(currentState()));
+  const [state, setState] = React.useState(() => normalizeState(EMPTY_STATE));
   React.useEffect(() => {
     function update(event) {
-      setState(normalizeState(event.detail && typeof event.detail === "object" ? event.detail : currentState()));
+      setState(normalizeState(event.detail && typeof event.detail === "object" ? event.detail : EMPTY_STATE));
     }
     window.addEventListener("gvdg:admin-tee-sign-review", update);
-    setState(normalizeState(currentState()));
     return () => window.removeEventListener("gvdg:admin-tee-sign-review", update);
   }, []);
 

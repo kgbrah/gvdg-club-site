@@ -5,16 +5,35 @@ const stats = {
   rating_date: "2026-07-01",
   live_rating: 941,
   peak_rating: 958,
-  events_count: 2,
+  events_count: 3,
   events: [
     {
-      tournament: "GVDG QA Summer Check",
+      tournament: "Memorial Day Showdown 2026 (CEP Charity - Rated)",
       date: "Jul 4 2026",
       epoch: 1783123200,
       division: "MA2",
       rounds: [
         { rating: 943, score: 54, round: "1" },
         { rating: 951, score: 52, round: "2" },
+      ],
+    },
+    {
+      tournament: "Irate Armada Challenge IV (CEP Charity - Rated)",
+      date: "Jun 14 2026",
+      epoch: 1781481600,
+      division: "MA40",
+      rounds: [
+        { rating: 906, score: 56, round: "1" },
+      ],
+    },
+    {
+      tournament: "GVDG Monthly",
+      date: "May 31 2026",
+      epoch: 1780185600,
+      division: "MA2",
+      rounds: [
+        { rating: 888, score: 59, round: "1" },
+        { rating: 836, score: 64, round: "2" },
       ],
     },
   ],

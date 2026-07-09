@@ -3,13 +3,15 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 test('admin registration manual player form is rendered by React from request events', () => {
-  const html = readFileSync('admin.html', 'utf8');
+  const html = `${readFileSync('admin.html', 'utf8')}\n${readFileSync('src/admin-app/admin-controller.js', 'utf8')}`;
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const form = readFileSync('src/admin-app/registration-manual-player-form.js', 'utf8');
+  const panel = readFileSync('src/admin-app/registration-panel.js', 'utf8');
   const rgAddManualPlayer = html.match(/async function rgAddManualPlayerFromReact\(detail\) \{[\s\S]*?\n        \}/)?.[0];
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?\$\('adminCreateForm'\)\.addEventListener/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
-  assert.match(html, /id="adminRegistrationManualPlayerFormReactApp"/);
+  assert.match(html, /id="adminRegistrationReactApp"/);
+  assert.doesNotMatch(html, /id="adminRegistrationManualPlayerFormReactApp"/);
   assert.doesNotMatch(html, /id="rgPlayerName"|id="rgPlayerMember"|id="rgPlayerPdga"|id="rgPlayerDivision"|id="rgPlayerTeam"|id="rgPlayerAdd"/);
   assert.ok(rgAddManualPlayer);
   assert.match(rgAddManualPlayer, /if \(!rgEventId\) \{[\s\S]*?Select an event first[\s\S]*?gvdg:admin-registration-manual-player-add-result[\s\S]*?ok: false, requestId[\s\S]*?return;/);
@@ -23,9 +25,11 @@ test('admin registration manual player form is rendered by React from request ev
   assert.match(initAdmin, /rgAddManualPlayerFromReact\(event\.detail \|\| \{\}\)/);
   assert.doesNotMatch(initAdmin, /\$\('rgPlayerAdd'\)\.addEventListener/);
 
-  assert.match(main, /import \{ AdminRegistrationManualPlayerForm \} from "\.\/registration-manual-player-form\.js"/);
-  assert.match(main, /const registrationManualPlayerFormMount = document\.getElementById\("adminRegistrationManualPlayerFormReactApp"\)/);
-  assert.match(main, /createRoot\(registrationManualPlayerFormMount\)\.render\(h\(AdminRegistrationManualPlayerForm\)\)/);
+  assert.match(main, /import \{ AdminRegistrationPanel \} from "\.\/registration-panel\.js"/);
+  assert.match(main, /const registrationMount = document\.getElementById\("adminRegistrationReactApp"\)/);
+  assert.match(main, /createRoot\(registrationMount\)\.render\(h\(AdminRegistrationPanel\)\)/);
+  assert.match(panel, /import \{ AdminRegistrationManualPlayerForm \} from "\.\/registration-manual-player-form\.js"/);
+  assert.match(panel, /h\(AdminRegistrationManualPlayerForm/);
 
   assert.match(form, /export function AdminRegistrationManualPlayerForm/);
   assert.match(form, /data-react-admin-registration-manual-player-form/);

@@ -32,13 +32,16 @@ const ORDER_STATUS_OPTIONS = [
   ["cancelled", "Cancelled"],
 ];
 
+let productControlsStateSnapshot = {};
+let orderControlsStateSnapshot = {};
+
 function productControlsState() {
-  const state = window.__gvdgAdminProductInventoryControlsState;
+  const state = productControlsStateSnapshot;
   return state && typeof state === "object" ? state : {};
 }
 
 function orderControlsState() {
-  const state = window.__gvdgAdminOrderControlsState;
+  const state = orderControlsStateSnapshot;
   return state && typeof state === "object" ? state : {};
 }
 
@@ -51,11 +54,11 @@ function dispatchRequest(name, detail) {
 }
 
 function setProductControlsState(state) {
-  window.__gvdgAdminProductInventoryControlsState = state;
+  productControlsStateSnapshot = state;
 }
 
 function setOrderControlsState(state) {
-  window.__gvdgAdminOrderControlsState = state;
+  orderControlsStateSnapshot = state;
 }
 
 export function AdminProductInventoryControls() {

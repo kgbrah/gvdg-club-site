@@ -1,5 +1,6 @@
 import React from "react";
 
+import { currentAdminActiveTab } from "./admin-shell-state.js";
 import { AdminOrdersBadge } from "./orders-badge.js";
 
 const h = React.createElement;
@@ -54,8 +55,7 @@ export const ADMIN_NAV_GROUPS = [
 ];
 
 function initialTab() {
-  const tab = window.__gvdgAdminActiveTab;
-  return typeof tab === "string" && tab ? tab : "events";
+  return currentAdminActiveTab();
 }
 
 function tabLabel(item) {

@@ -3,11 +3,11 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 test('admin product creation form and upload preview are rendered by React from request events', () => {
-  const html = readFileSync('admin.html', 'utf8');
+  const html = `${readFileSync('admin.html', 'utf8')}\n${readFileSync('src/admin-app/admin-controller.js', 'utf8')}`;
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const productForm = readFileSync('src/admin-app/product-form.js', 'utf8');
   const productsList = readFileSync('src/admin-app/products-list.js', 'utf8');
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?\$\('adminCreateForm'\)\.addEventListener/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminProductFormReactApp"/);
   assert.doesNotMatch(html, /id="adminProductForm"/);

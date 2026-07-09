@@ -1,6 +1,8 @@
 import React from "react";
 import { MessageCircle, Send, X } from "lucide-react";
 
+import { resolveApiBase } from "./api-base.js";
+
 const h = React.createElement;
 const AVATAR = "img/crotts.jpg";
 
@@ -32,16 +34,7 @@ const CROTTS_CSS = `
 `;
 
 function apiBase() {
-  const bodyBase = globalThis.document?.body?.dataset?.apiBase || globalThis.document?.body?.dataset?.authBase || "";
-  const explicit = String(bodyBase || "").trim();
-  if (explicit) return explicit.replace(/\/+$/, "");
-
-  const host = globalThis.location?.hostname || "";
-  if (host === "127.0.0.1" || host === "localhost") return "http://127.0.0.1:8788";
-  if (host === "greenvillediscgolf.com" || host === "www.greenvillediscgolf.com") {
-    return "https://auth.greenvillediscgolf.com";
-  }
-  return "https://auth.gvdgclub.com";
+  return resolveApiBase({ datasetKeys: ["apiBase", "authBase"] });
 }
 
 function icon(Icon, size = 18) {

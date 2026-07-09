@@ -1,16 +1,13 @@
 import React from "react";
 
+import { adminConfirm } from "./admin-dialogs.js";
+
 const h = React.createElement;
 
 const EMPTY_STATE = { status: "loading", products: [], inventoryStatus: "active" };
 
 function objectOrEmpty(value) {
   return value && typeof value === "object" ? value : {};
-}
-
-function currentState() {
-  const state = window.__gvdgAdminProductsListState;
-  return state && typeof state === "object" ? state : EMPTY_STATE;
 }
 
 function normalizeText(value, fallback = "") {
@@ -110,8 +107,14 @@ function ProductRow({ product }) {
     });
   }
 
-  function requestDelete() {
-    if (!window.confirm(`Permanently delete "${product.name || "this product"}"? Past orders keep the item name, price, and quantity, but this product will be removed from inventory.`)) return;
+  async function requestDelete() {
+    const confirmed = await adminConfirm({
+      title: "Delete product",
+      message: `Permanently delete "${product.name || "this product"}"? Past orders keep the item name, price, and quantity, but this product will be removed from inventory.`,
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!confirmed) return;
     dispatchRequest("gvdg:admin-product-delete-request", { product: product.source });
   }
 
@@ -156,14 +159,13 @@ function ProductRow({ product }) {
 }
 
 export function AdminProductsList() {
-  const [state, setState] = React.useState(() => normalizeState(currentState()));
+  const [state, setState] = React.useState(() => normalizeState(EMPTY_STATE));
 
   React.useEffect(() => {
     function update(event) {
-      setState(normalizeState(event.detail && typeof event.detail === "object" ? event.detail : currentState()));
+      setState(normalizeState(event.detail && typeof event.detail === "object" ? event.detail : EMPTY_STATE));
     }
     window.addEventListener("gvdg:admin-products-list", update);
-    setState(normalizeState(currentState()));
     return () => window.removeEventListener("gvdg:admin-products-list", update);
   }, []);
 

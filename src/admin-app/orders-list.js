@@ -1,5 +1,7 @@
 import React from "react";
 
+import { adminConfirm } from "./admin-dialogs.js";
+
 const h = React.createElement;
 
 const ORDER_STATUS_LABELS = {
@@ -16,11 +18,6 @@ const EMPTY_STATE = { status: "loading", orders: [], filterStatus: "" };
 
 function objectOrEmpty(value) {
   return value && typeof value === "object" ? value : {};
-}
-
-function currentState() {
-  const state = window.__gvdgAdminOrdersListState;
-  return state && typeof state === "object" ? state : EMPTY_STATE;
 }
 
 function normalizeText(value, fallback = "") {
@@ -135,16 +132,28 @@ function OrderCard({ order }) {
     });
   }
 
-  function requestCancel() {
+  async function requestCancel() {
     if (order.status === "cancelled") return;
-    if (!window.confirm(`Cancel order #${order.id || "?"}?`)) return;
+    const confirmed = await adminConfirm({
+      title: "Cancel order",
+      message: `Cancel order #${order.id || "?"}?`,
+      confirmText: "Cancel order",
+      danger: true,
+    });
+    if (!confirmed) return;
     const id = requestId(order.id, "cancel");
     setPendingRequest(id);
     dispatchRequest("gvdg:admin-order-cancel-request", { order: order.source, requestId: id });
   }
 
-  function requestDelete() {
-    if (!window.confirm(`Delete order #${order.id || "?"}? Order items will be removed from the admin list. Wallet ledger entries remain for accounting.`)) return;
+  async function requestDelete() {
+    const confirmed = await adminConfirm({
+      title: "Delete order",
+      message: `Delete order #${order.id || "?"}? Order items will be removed from the admin list. Wallet ledger entries remain for accounting.`,
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!confirmed) return;
     const id = requestId(order.id, "delete");
     setPendingRequest(id);
     dispatchRequest("gvdg:admin-order-delete-request", { order: order.source, requestId: id });
@@ -209,14 +218,13 @@ function OrderCard({ order }) {
 }
 
 export function AdminOrdersList() {
-  const [state, setState] = React.useState(() => normalizeState(currentState()));
+  const [state, setState] = React.useState(() => normalizeState(EMPTY_STATE));
 
   React.useEffect(() => {
     function update(event) {
-      setState(normalizeState(event.detail && typeof event.detail === "object" ? event.detail : currentState()));
+      setState(normalizeState(event.detail && typeof event.detail === "object" ? event.detail : EMPTY_STATE));
     }
     window.addEventListener("gvdg:admin-orders-list", update);
-    setState(normalizeState(currentState()));
     return () => window.removeEventListener("gvdg:admin-orders-list", update);
   }, []);
 

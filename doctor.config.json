@@ -3,21 +3,20 @@
     "files": [
       ".pages-dist/**",
       ".github/**",
+      "admin-app/**",
       "auth-worker/**",
       "docs/**",
+      "home-app/**",
       "members-app/**",
+      "public-app/**",
       "score-app/**",
       "scripts/**",
+      "tee-sign-preview-app/**",
       "tests/**",
       "*.html",
       "*.js",
       "*.mjs"
     ],
-    "overrides": [
-      {
-        "files": ["src/score-app/score-legacy.js"],
-        "rules": ["react-doctor/async-await-in-loop"]
-      }
-    ]
+    "overrides": []
   }
 }

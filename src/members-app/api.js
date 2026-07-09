@@ -1,3 +1,5 @@
+import { resolveApiBase } from "../shared/api-base.js";
+
 export const TOKEN_KEY = "gvdg_member_token";
 export const NAME_KEY = "gvdg_member_name";
 export const PDGA_KEY = "gvdg_member_pdga";
@@ -20,13 +22,7 @@ export function localStorageGet(key) {
 }
 
 export function authBase() {
-  const host = window.location.hostname;
-  const localAuthBase = ["127.0.0.1", "localhost"].includes(host) ? "http://127.0.0.1:8788" : "";
-  const configured = document.getElementById("loginGate")?.dataset.authBase?.trim() || "";
-  const fallback = host === "greenvillediscgolf.com" || host === "www.greenvillediscgolf.com"
-    ? "https://auth.greenvillediscgolf.com"
-    : "https://auth.gvdgclub.com";
-  return (localAuthBase || configured || fallback).replace(/\/+$/, "");
+  return resolveApiBase({ datasetKeys: ["authBase"] });
 }
 
 export async function request(path, { signal, token = null, method = "GET", body = undefined } = {}) {

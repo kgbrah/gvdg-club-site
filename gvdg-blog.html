@@ -377,11 +377,17 @@
 
         /* Animated disc icon */
         .disc-icon {
-            font-size: 4.5rem;
+            color: var(--primary);
             display: inline-block;
             animation: discSpin 4s ease-in-out infinite;
             margin-bottom: 1.5rem;
             line-height: 1;
+        }
+
+        .disc-icon svg {
+            display: block;
+            width: 4.5rem;
+            height: 4.5rem;
         }
 
         @keyframes discSpin {
@@ -503,29 +509,6 @@
             transform: translateX(-3px);
         }
 
-        /* Decorative corner chain links (subtle) */
-        .construction-card::before,
-        .construction-card::after {
-            position: absolute;
-            font-size: 6rem;
-            opacity: 0.04;
-            pointer-events: none;
-        }
-
-        .construction-card::before {
-            content: '🥏';
-            top: -10px;
-            right: -10px;
-            transform: rotate(15deg);
-        }
-
-        .construction-card::after {
-            content: '🥏';
-            bottom: -10px;
-            left: -10px;
-            transform: rotate(-25deg);
-        }
-
         @media (max-width: 520px) {
             .construction-card {
                 padding: 2.5rem 1.5rem;
@@ -545,46 +528,21 @@
         [data-theme="dark"] footer {
             background: linear-gradient(135deg, var(--bg-secondary) 0%, #0a0a14 100%);
         }
+
+        @media (max-width: 768px) {
+            body[data-page="gvdg-blog"] #crottsReactApp #crotts-fab,
+            body[data-page="gvdg-blog"] #crottsReactApp #crotts-panel {
+                display: none !important;
+            }
+        }
     </style>
   <script type="module" src="public-app/public-app.js"></script>
   <script src="pwa.js" defer></script>
 </head>
-<body>
+<body data-page="gvdg-blog">
     <div id="publicReactPageChrome"></div>
 
-    <!-- Page Hero -->
-    <section class="page-hero">
-        <div class="page-hero-content">
-            <h1 class="page-title">Club Blog</h1>
-            <p class="page-subtitle">News, tips, tournament recaps, and stories from the Greenville disc golf community</p>
-        </div>
-    </section>
-
-    <!-- Under Construction Content -->
-    <section class="construction-section">
-        <div class="construction-card">
-            <div class="disc-icon">🥏</div>
-            <h2 class="construction-heading">Blog <span>Coming Soon</span></h2>
-            <p class="construction-text">
-                We're working on something great! The GVDG blog will feature tournament recaps, course tips, member spotlights, and everything disc golf in Greenville. Stay tuned.
-            </p>
-
-            <div class="progress-wrap">
-                <div class="progress-label">
-                    <span>Progress</span>
-                    <span>30%</span>
-                </div>
-                <div class="progress-track">
-                    <div class="progress-fill"></div>
-                </div>
-            </div>
-
-            <a href="index.html" class="back-btn">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
-                Back to Home
-            </a>
-        </div>
-    </section>
+    <div id="blogReactApp"></div>
 
     <!-- Footer -->
     <footer>

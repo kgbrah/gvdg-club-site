@@ -1,16 +1,18 @@
 import React from "react";
 
+import { currentAdminOrdersBadgeCount } from "./admin-shell-state.js";
+
 const h = React.createElement;
 
 export function AdminOrdersBadge() {
-  const [count, setCount] = React.useState(() => Number(window.__gvdgAdminOrdersBadgeCount || 0));
+  const [count, setCount] = React.useState(currentAdminOrdersBadgeCount);
 
   React.useEffect(() => {
     function update(event) {
       setCount(Number(event.detail?.count || 0));
     }
     window.addEventListener("gvdg:admin-orders-badge", update);
-    setCount(Number(window.__gvdgAdminOrdersBadgeCount || 0));
+    setCount(currentAdminOrdersBadgeCount());
     return () => window.removeEventListener("gvdg:admin-orders-badge", update);
   }, []);
 

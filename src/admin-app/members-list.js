@@ -1,5 +1,7 @@
 import React from "react";
 
+import { adminConfirm } from "./admin-dialogs.js";
+
 const h = React.createElement;
 
 const EMPTY_STATE = { status: "loading", members: [], currentMemberId: null };
@@ -7,16 +9,6 @@ const EMPTY_TEMP_PIN_STATE = { member: null, tempPin: "" };
 
 function objectOrEmpty(value) {
   return value && typeof value === "object" ? value : {};
-}
-
-function currentState() {
-  const state = window.__gvdgAdminMembersListState;
-  return state && typeof state === "object" ? state : EMPTY_STATE;
-}
-
-function currentTempPinState() {
-  const state = window.__gvdgAdminMemberTempPinState;
-  return state && typeof state === "object" ? state : EMPTY_TEMP_PIN_STATE;
 }
 
 function normalizeText(value, fallback = "") {
@@ -80,19 +72,31 @@ function AdminMemberRow({ adminCount, currentMemberId, member }) {
   const roleLabel = member.isAdmin ? "Remove admin" : "Make admin";
   const roleTitle = isLastAdmin ? "Can't remove the last admin" : undefined;
 
-  function requestPinReset() {
-    if (!window.confirm(`Issue a new temporary PIN for ${member.name}? Their current PIN stops working.`)) return;
+  async function requestPinReset() {
+    const confirmed = await adminConfirm({
+      title: "Reissue temporary PIN",
+      message: `Issue a new temporary PIN for ${member.name}? Their current PIN stops working.`,
+      confirmText: "Reissue PIN",
+      danger: true,
+    });
+    if (!confirmed) return;
     dispatchRequest("gvdg:admin-member-reset-pin-request", { identifier: member.identifier, member: member.source });
   }
 
-  function requestRoleChange() {
+  async function requestRoleChange() {
     const promoting = !member.isAdmin;
     const message = promoting
       ? `Grant admin rights to ${member.name}?`
       : isSelf
         ? "Remove your OWN admin access? You'll lose this panel."
         : `Remove admin rights from ${member.name}?`;
-    if (!window.confirm(message)) return;
+    const confirmed = await adminConfirm({
+      title: promoting ? "Grant admin rights" : "Remove admin rights",
+      message,
+      confirmText: promoting ? "Grant admin" : "Remove admin",
+      danger: !promoting,
+    });
+    if (!confirmed) return;
     dispatchRequest("gvdg:admin-member-role-request", { isAdmin: promoting, member: member.source });
   }
 
@@ -117,16 +121,15 @@ function AdminMemberRow({ adminCount, currentMemberId, member }) {
 }
 
 export function AdminMemberTempPin() {
-  const [state, setState] = React.useState(() => normalizeTempPinState(currentTempPinState()));
+  const [state, setState] = React.useState(() => normalizeTempPinState(EMPTY_TEMP_PIN_STATE));
   const [copied, setCopied] = React.useState(false);
   const resetTimer = React.useRef(0);
 
   React.useEffect(() => {
     function update(event) {
-      setState(normalizeTempPinState(event.detail && typeof event.detail === "object" ? event.detail : currentTempPinState()));
+      setState(normalizeTempPinState(event.detail && typeof event.detail === "object" ? event.detail : EMPTY_TEMP_PIN_STATE));
     }
     window.addEventListener("gvdg:admin-member-temp-pin", update);
-    setState(normalizeTempPinState(currentTempPinState()));
     return () => window.removeEventListener("gvdg:admin-member-temp-pin", update);
   }, []);
 
@@ -168,14 +171,13 @@ export function AdminMemberTempPin() {
 }
 
 export function AdminMembersList() {
-  const [state, setState] = React.useState(() => normalizeState(currentState()));
+  const [state, setState] = React.useState(() => normalizeState(EMPTY_STATE));
 
   React.useEffect(() => {
     function update(event) {
-      setState(normalizeState(event.detail && typeof event.detail === "object" ? event.detail : currentState()));
+      setState(normalizeState(event.detail && typeof event.detail === "object" ? event.detail : EMPTY_STATE));
     }
     window.addEventListener("gvdg:admin-members-list", update);
-    setState(normalizeState(currentState()));
     return () => window.removeEventListener("gvdg:admin-members-list", update);
   }, []);
 

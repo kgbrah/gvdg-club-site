@@ -1,56 +1,49 @@
 import React from "react";
 
+import { adminConfirm } from "./admin-dialogs.js";
+import { useDataArchiveDestinationsState } from "./data-archive-destinations-store.js";
+
 const h = React.createElement;
 
-const EMPTY_STATE = { status: "loading", destinations: [] };
 const EMPTY_EXPORT_RESULT_STATE = { message: "No export run yet.", ok: null };
 
 function objectOrEmpty(value) {
   return value && typeof value === "object" ? value : {};
 }
 
-function currentState() {
-  const state = window.__gvdgAdminDataArchiveDestinationsState;
-  return state && typeof state === "object" ? state : EMPTY_STATE;
-}
-
-function currentExportResultState() {
-  const state = window.__gvdgAdminDataArchiveExportResultState;
-  return state && typeof state === "object" ? state : EMPTY_EXPORT_RESULT_STATE;
-}
-
 function normalizeText(value, fallback = "") {
   return typeof value === "string" ? value : fallback;
 }
 
-function normalizeDestination(destination) {
-  const source = objectOrEmpty(destination);
-  const id = source.id == null ? "" : String(source.id);
-  const label = normalizeText(source.label, id ? `Endpoint ${id}` : "Endpoint");
-  return {
-    source,
-    authHeader: normalizeText(source.auth_header, "(no auth header)") || "(no auth header)",
-    authPrefix: normalizeText(source.auth_prefix, "(no auth prefix)") || "(no auth prefix)",
-    endpointUrl: normalizeText(source.endpoint_url),
-    hasAuthToken: source.hasAuthToken === true || source.has_auth_token === true,
-    id,
-    isActive: Number(source.is_active) === 1 || source.is_active === true,
-    label,
-  };
-}
-
-function normalizeState(state) {
-  return {
-    destinations: Array.isArray(state.destinations) ? state.destinations.map(normalizeDestination) : [],
-    status: state.status === "loading" || state.status === "error" ? state.status : "ready",
-  };
-}
-
 function normalizeExportResultState(state) {
   return {
+    download: normalizeDownload(state.download),
     message: normalizeText(state.message, EMPTY_EXPORT_RESULT_STATE.message) || EMPTY_EXPORT_RESULT_STATE.message,
     ok: state.ok === true ? true : state.ok === false ? false : null,
   };
+}
+
+function normalizeDownload(download) {
+  const source = objectOrEmpty(download);
+  const hasContent = typeof source.content === "string";
+  const hasData = Object.prototype.hasOwnProperty.call(source, "data");
+  if (!hasContent && !hasData) return null;
+  return {
+    content: hasContent ? source.content : "",
+    data: hasData ? source.data : null,
+    filename: normalizeText(source.filename, "gvdg-archive.json") || "gvdg-archive.json",
+    mimeType: normalizeText(source.mimeType, "application/json;charset=utf-8") || "application/json;charset=utf-8",
+  };
+}
+
+function serializeDownload(download) {
+  if (!download) return "";
+  if (download.content) return download.content;
+  try {
+    return JSON.stringify(download.data, null, 2) || "";
+  } catch (error) {
+    return String(download.data || "");
+  }
 }
 
 function dispatchRequest(name, detail) {
@@ -58,8 +51,14 @@ function dispatchRequest(name, detail) {
 }
 
 function DestinationRow({ destination }) {
-  function requestDelete() {
-    if (!window.confirm(`Delete destination "${destination.label}"?`)) return;
+  async function requestDelete() {
+    const confirmed = await adminConfirm({
+      title: "Delete archive destination",
+      message: `Delete destination "${destination.label}"?`,
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!confirmed) return;
     dispatchRequest("gvdg:admin-data-archive-destination-delete-request", { destination: destination.source });
   }
 
@@ -100,18 +99,9 @@ function DestinationRow({ destination }) {
 }
 
 export function AdminDataArchiveDestinationsList() {
-  const [state, setState] = React.useState(() => normalizeState(currentState()));
+  const state = useDataArchiveDestinationsState();
 
-  React.useEffect(() => {
-    function update(event) {
-      setState(normalizeState(event.detail && typeof event.detail === "object" ? event.detail : currentState()));
-    }
-    window.addEventListener("gvdg:admin-data-archive-destinations-list", update);
-    setState(normalizeState(currentState()));
-    return () => window.removeEventListener("gvdg:admin-data-archive-destinations-list", update);
-  }, []);
-
-  if (state.status === "loading") {
+  if (state.status === "idle" || state.status === "loading") {
     return h("p", { className: "al-note", "data-react-admin-data-archive-destinations": "loading", role: "status" }, "Loading...");
   }
 
@@ -132,21 +122,49 @@ export function AdminDataArchiveDestinationsList() {
 }
 
 export function AdminDataArchiveExportResult() {
-  const [state, setState] = React.useState(() => normalizeExportResultState(currentExportResultState()));
+  const [state, setState] = React.useState(() => normalizeExportResultState(EMPTY_EXPORT_RESULT_STATE));
+  const [downloadLink, setDownloadLink] = React.useState({ filename: "", href: "" });
+  const autoDownloadedHref = React.useRef("");
+  const downloadLinkRef = React.useRef(null);
 
   React.useEffect(() => {
     function update(event) {
-      setState(normalizeExportResultState(event.detail && typeof event.detail === "object" ? event.detail : currentExportResultState()));
+      setState(normalizeExportResultState(event.detail && typeof event.detail === "object" ? event.detail : EMPTY_EXPORT_RESULT_STATE));
     }
     window.addEventListener("gvdg:admin-data-archive-export-result", update);
-    setState(normalizeExportResultState(currentExportResultState()));
     return () => window.removeEventListener("gvdg:admin-data-archive-export-result", update);
   }, []);
+
+  React.useEffect(() => {
+    if (!state.download) {
+      setDownloadLink({ filename: "", href: "" });
+      return undefined;
+    }
+    const blob = new Blob([serializeDownload(state.download)], { type: state.download.mimeType });
+    const href = URL.createObjectURL(blob);
+    setDownloadLink({ filename: state.download.filename, href });
+    return () => URL.revokeObjectURL(href);
+  }, [state.download]);
+
+  React.useEffect(() => {
+    if (!downloadLink.href || autoDownloadedHref.current === downloadLink.href) return;
+    autoDownloadedHref.current = downloadLink.href;
+    if (downloadLinkRef.current) downloadLinkRef.current.click();
+  }, [downloadLink.href]);
 
   const tone = state.ok === false ? "error" : state.ok === true ? "success" : "idle";
   return h("p", {
     className: state.ok === false ? "al-note err" : "al-note",
     "data-react-admin-data-archive-export-result": tone,
     role: state.ok === false ? "alert" : "status",
-  }, state.message);
+  }, [
+    h("span", { key: "message" }, state.message),
+    downloadLink.href ? " " : null,
+    downloadLink.href ? h("a", {
+      download: downloadLink.filename,
+      href: downloadLink.href,
+      key: "download",
+      ref: downloadLinkRef,
+    }, "Download JSON") : null,
+  ]);
 }

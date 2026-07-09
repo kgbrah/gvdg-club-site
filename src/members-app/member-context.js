@@ -2,8 +2,21 @@ import React from "react";
 
 import { NAME_KEY, PDGA_KEY, TOKEN_KEY, requestJson, storageGet } from "./api.js";
 
+let memberContext = {};
+
+export function setMemberContext(detail = {}) {
+  memberContext = {
+    isAdmin: detail.isAdmin === true,
+    name: detail.name || null,
+    pdgaNo: detail.pdgaNo || null,
+    photo: detail.photo || null,
+    sub: detail.sub || null,
+  };
+  return readMemberContext(memberContext);
+}
+
 export function readMemberContext(detail = null) {
-  const stored = window.GVDG_MEMBER_DASHBOARD_CONTEXT || {};
+  const stored = memberContext;
   const source = detail || stored;
   return {
     name: source.name || stored.name || storageGet(NAME_KEY) || null,
@@ -38,14 +51,14 @@ export function useMemberContext() {
     requestJson("/me", { signal: controller.signal, token })
       .then((profile) => {
         if (!profile || typeof profile !== "object") return;
-        window.GVDG_MEMBER_DASHBOARD_CONTEXT = {
+        const next = setMemberContext({
           name: profile.name || storageGet(NAME_KEY) || null,
           pdgaNo: profile.pdgaNo || storageGet(PDGA_KEY) || null,
           photo: profile.photo || null,
           isAdmin: profile.isAdmin === true,
           sub: profile.sub || null,
-        };
-        setContext(readMemberContext(window.GVDG_MEMBER_DASHBOARD_CONTEXT));
+        });
+        setContext(next);
       })
       .catch((error) => {
         if (error.name !== "AbortError") setContext(readMemberContext());

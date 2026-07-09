@@ -25,8 +25,7 @@ test('tee-sign preview is rendered by a route-specific React bundle', () => {
   assert.match(app, /data-react-tee-sign-preview/);
   assert.match(app, /TeeSignSvg/);
   assert.equal(existsSync('tee-sign.js'), false);
-  assert.match(adminHtml, /import \{ teeSignSvg \} from '\.\/src\/shared\/tee-sign-model\.js'/);
-  assert.match(adminHtml, /window\.teeSignNode = function/);
+  assert.doesNotMatch(adminHtml, /teeSignNode|DOMParser|import \{ teeSignSvg \} from '\.\/src\/shared\/tee-sign-model\.js'/);
   assert.match(sharedSvg, /export function TeeSignSvg/);
   assert.match(sharedSvg, /from "\.\/tee-sign-model\.js"/);
   assert.match(sharedSvg, /teeSignModel/);
@@ -42,7 +41,7 @@ test('tee-sign preview is rendered by a route-specific React bundle', () => {
   assert.match(watchdog, /src\/shared\/tee-sign-model\.js/);
   assert.match(workflow, /home-app public-app admin-app tee-sign-preview-app members-app score-app/);
   assert.match(workflow, /src\/shared\/tee-sign-model\.js/);
-  assert.match(sw, /const CACHE = "gvdg-club-v78"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v85"/);
   assert.match(sw, /"tee-sign-preview-app\/tee-sign-preview-app\.js"/);
   assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
 });
