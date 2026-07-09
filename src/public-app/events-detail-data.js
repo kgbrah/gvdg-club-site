@@ -1,6 +1,6 @@
 import React from "react";
 
-import { buildCourseIndex, courseNameFor, normalizeEvent } from "../shared/events-model.js";
+import { buildCourseIndex, courseNameFor, eventCourseSummary, normalizeEvent } from "../shared/events-model.js";
 import { holeWinners, playersFromResults } from "../shared/matchplay-colors.js";
 import {
   currentEventsRoute,
@@ -256,6 +256,7 @@ export function useEventsEventDetail() {
         const baseDetail = {
           apiBase: api,
           course: eventCourse(courseData.index, event),
+          courseSummary: eventCourseSummary(courseData.index, event, true),
           event,
           extras: EMPTY_EXTRAS,
           finalResults: [],

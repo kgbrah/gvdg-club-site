@@ -102,10 +102,29 @@ export function normalizeEvent(raw) {
     source: ev.source != null ? String(ev.source) : '',
     external_url: ev.external_url != null ? String(ev.external_url) : '',
     notes: ev.notes != null ? String(ev.notes) : '',
+    event_courses: normalizeEventCourses(ev.event_courses),
     // Detail payloads carry a players array; hub payloads don't.
     players: Array.isArray(ev.players) ? ev.players : [],
     _date: parseEventDate(ev.date),
   };
+}
+
+export function normalizeEventCourses(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item) => {
+    const row = item && typeof item === 'object' ? item : {};
+    return {
+      course_id: row.course_id != null ? String(row.course_id) : '',
+      layout_id: row.layout_id != null ? String(row.layout_id) : '',
+      course_name: row.course_name != null ? String(row.course_name) : '',
+      course_location: row.course_location != null ? String(row.course_location) : '',
+      course_udisc_url: row.course_udisc_url != null ? String(row.course_udisc_url) : '',
+      course_udisc_course_id: row.course_udisc_course_id != null ? String(row.course_udisc_course_id) : '',
+      layout_name: row.layout_name != null ? String(row.layout_name) : '',
+      sort_order: Number.isFinite(Number(row.sort_order)) ? Number(row.sort_order) : 0,
+      total_par: Number.isFinite(Number(row.total_par)) ? Number(row.total_par) : null,
+    };
+  }).filter((row) => row.course_id || row.course_name);
 }
 
 // Bucket a list of raw events into { live, upcoming, past, cancelled }.
@@ -184,4 +203,17 @@ export function courseNameFor(courseIndex, courseId) {
   if (!courseId) return '';
   const course = courseIndex instanceof Map ? courseIndex.get(String(courseId)) : null;
   return course && course.name ? String(course.name) : '';
+}
+
+export function eventCourseSummary(courseIndex, event, includeLayouts = false) {
+  const rows = Array.isArray(event?.event_courses) ? event.event_courses : [];
+  const labels = rows.map((row) => {
+    const courseName = row.course_name || courseNameFor(courseIndex, row.course_id);
+    if (!courseName) return '';
+    const layoutName = includeLayouts && row.layout_name ? ` (${row.layout_name})` : '';
+    return `${courseName}${layoutName}`;
+  }).filter(Boolean);
+  if (!labels.length) return courseNameFor(courseIndex, event?.course_id);
+  if (labels.length <= 2) return labels.join(' · ');
+  return `${labels.slice(0, 2).join(' · ')} + ${labels.length - 2} more`;
 }

@@ -255,6 +255,16 @@
         .admin-btn:disabled { opacity: 0.48; cursor: not-allowed; filter: grayscale(0.35); }
         .admin-form-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
         .admin-form-note { color: var(--text-muted); font-size: 0.9rem; margin: 0 0 0.75rem; }
+        .admin-event-courses { display: grid; gap: 0.55rem; }
+        .admin-event-course-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 0.55rem; align-items: end; }
+        .admin-event-course-row.primary { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+        .admin-event-course-row .admin-btn { min-height: 2.45rem; padding: 0.55rem 0.8rem; }
+        .admin-event-course-add { justify-self: start; }
+        @media (max-width: 760px) {
+            .admin-event-course-row,
+            .admin-event-course-row.primary { grid-template-columns: 1fr; }
+            .admin-event-course-row .admin-btn { justify-self: start; }
+        }
         .admin-msg { font-size: 0.9rem; margin-bottom: 0.75rem; min-height: 1.2em; }
         .admin-msg.ok { color: var(--green); } .admin-msg.err { color: var(--over); }
         .admin-dialog-overlay { position: fixed; inset: 0; z-index: 1500; display: grid; place-items: center; padding: 1rem; background: rgba(15, 15, 30, 0.68); }

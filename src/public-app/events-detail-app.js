@@ -92,9 +92,11 @@ function ExternalLink({ href, text }) {
   return h("a", { href: clean, rel: "noopener noreferrer", target: "_blank" }, text);
 }
 
-function DetailFacts({ course, event }) {
+function DetailFacts({ course, courseSummary, event }) {
   const udiscHref = course && safeHref(course.udisc_url);
   const courseName = course && course.name ? String(course.name) : "";
+  const venueText = courseSummary || courseName;
+  const hasMultipleVenues = Array.isArray(event.event_courses) && event.event_courses.length > 1;
   const externalHref = safeHref(event.external_url);
 
   return h("div", { className: "detail-facts" }, [
@@ -115,16 +117,16 @@ function DetailFacts({ course, event }) {
       })
       : null,
     event.format ? h(DetailFact, { key: "format", label: "Format", value: String(event.format) }) : null,
-    courseName
+    venueText
       ? h(DetailFact, {
         key: "course",
-        label: "Course",
-        value: udiscHref
+        label: hasMultipleVenues ? "Courses / layouts" : "Course",
+        value: udiscHref && !hasMultipleVenues
           ? h(React.Fragment, null, [
-            `${courseName} `,
+            `${venueText} `,
             h(ExternalLink, { href: udiscHref, key: "link", text: "(UDisc)" }),
           ])
-          : courseName,
+          : venueText,
       })
       : null,
     externalHref
@@ -400,7 +402,7 @@ export function EventsEventDetailApp() {
       ]),
       event.status === "live" ? h(LivePanel, { data, key: "live" }) : null,
       event.status === "final" ? h(FinalResults, { course, data, key: "final" }) : null,
-      h(DetailFacts, { course, event, key: "facts" }),
+      h(DetailFacts, { course, courseSummary: data.courseSummary, event, key: "facts" }),
       event.notes ? h("div", { className: "detail-notes", key: "notes" }, String(event.notes)) : null,
       h(PlayerRoster, { event, key: "players" }),
       h(EventExtras, { extras: data.extras, key: "extras" }),

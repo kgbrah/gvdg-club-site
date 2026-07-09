@@ -34,6 +34,8 @@ function db(
   state: {
     layoutBinds?: unknown[];
     eventBinds?: unknown[];
+    eventCourseBinds?: unknown[][];
+    eventCourseDeletes?: unknown[][];
     playerBinds?: unknown[];
     eventConfigBinds?: unknown[];
     removedPlayer?: number;
@@ -52,6 +54,9 @@ function db(
         },
         all: async () => {
           if (/FROM event_players/i.test(sql)) {
+            return { results: [], success: true };
+          }
+          if (/FROM event_courses ec/i.test(sql)) {
             return { results: [], success: true };
           }
           if (/FROM events e JOIN event_config c/i.test(sql)) {
@@ -107,6 +112,12 @@ function db(
         },
         run: async () => {
           if (/DELETE FROM event_players/i.test(sql)) state.removedPlayer = Number(binds[0]);
+          if (/DELETE FROM event_courses/i.test(sql)) {
+            state.eventCourseDeletes = [...(state.eventCourseDeletes ?? []), binds];
+          }
+          if (/INSERT INTO event_courses/i.test(sql)) {
+            state.eventCourseBinds = [...(state.eventCourseBinds ?? []), binds];
+          }
           return { results: [], success: true };
         },
       };
@@ -241,9 +252,33 @@ describe("admin event management", () => {
     expect(state.layoutBinds?.[0]).toBe(7);
     expect(state.layoutBinds?.[1]).toBe("Gold");
     expect(state.layoutBinds?.[3]).toBe(54);
+    expect(state.eventCourseBinds).toEqual([[12, 7, 44, null, 0]]);
     const holes = JSON.parse(String(state.layoutBinds?.[2])) as { hole: number; par: number }[];
     expect(holes).toHaveLength(18);
     expect(holes.every((h) => h.par === 3)).toBe(true);
+  });
+
+  it("creates an event with multiple ordered course and layout assignments", async () => {
+    const state: Parameters<typeof db>[0] = {};
+    const res = await call("/admin/events", "POST", {
+      type: "tournament",
+      name: "Cross County Open",
+      course_id: 7,
+      layout_id: 44,
+      event_courses: [
+        { course_id: 7, layout_id: 44 },
+        { course_id: 8, layout_id: 45 },
+      ],
+    }, await token("m_admin"), state);
+
+    expect(res.status).toBe(201);
+    expect(state.eventBinds?.[5]).toBe(7);
+    expect(state.eventBinds?.[6]).toBe(44);
+    expect(state.eventCourseDeletes).toEqual([[12]]);
+    expect(state.eventCourseBinds).toEqual([
+      [12, 7, 44, null, 0],
+      [12, 8, 45, null, 1],
+    ]);
   });
 
   it("lets admins add and remove manual event players", async () => {
@@ -337,6 +372,7 @@ describe("live scoring metadata DB helpers", () => {
         date: "2026-08-01",
         play_format: "doubles",
         live_scoring_config: JSON.stringify({ groupFormat: "doubles", scoringStyle: "matchplay" }),
+        event_courses: [],
       },
     ]);
     expect(state.listEventsSql).toMatch(/LEFT JOIN event_config/i);

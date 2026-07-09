@@ -1,9 +1,28 @@
 import type { D1Like } from "./db-types.js";
 
+export interface EventCourseInput {
+  course_id: number;
+  layout_id?: number | null;
+  label?: string | null;
+  sort_order?: number | null;
+}
+
+export interface EventCourseRow extends EventCourseInput {
+  id?: number;
+  event_id?: number;
+  course_name?: string | null;
+  course_location?: string | null;
+  course_udisc_url?: string | null;
+  course_udisc_course_id?: string | null;
+  layout_name?: string | null;
+  total_par?: number | null;
+}
+
 export type EventPatch = {
   type?: string | null; name?: string | null; status?: string | null; format?: string | null; date?: string | null;
   course_id?: number | null; layout_id?: number | null; league_id?: number | null; notes?: string | null;
   starts_at?: string | null; registration_deadline?: string | null; checkin_deadline?: string | null;
+  event_courses?: EventCourseInput[];
 };
 
 export interface EventInput {
@@ -22,6 +41,130 @@ export interface EventInput {
   starts_at?: string | null;
   registration_deadline?: string | null;
   checkin_deadline?: string | null;
+  event_courses?: EventCourseInput[];
+}
+
+type EventRow = Record<string, unknown>;
+
+function missingEventCoursesTable(error: unknown): boolean {
+  return /no such table: event_courses/i.test(String(error));
+}
+
+function primaryCourse(rows: EventCourseInput[] | undefined): EventCourseInput | null {
+  return rows && rows.length ? rows[0]! : null;
+}
+
+function primaryCourseId(input: EventInput | EventPatch): number | null | undefined {
+  if (input.event_courses !== undefined) return primaryCourse(input.event_courses)?.course_id ?? null;
+  return input.course_id;
+}
+
+function primaryLayoutId(input: EventInput | EventPatch): number | null | undefined {
+  if (input.event_courses !== undefined) return primaryCourse(input.event_courses)?.layout_id ?? null;
+  return input.layout_id;
+}
+
+function fallbackEventCourses(row: EventRow): EventCourseRow[] {
+  const courseId = row.course_id == null ? null : Number(row.course_id);
+  if (courseId == null || !Number.isSafeInteger(courseId)) return [];
+  const layoutId = row.layout_id == null ? null : Number(row.layout_id);
+  return [{
+    course_id: courseId,
+    layout_id: Number.isSafeInteger(layoutId) ? layoutId : null,
+    sort_order: 0,
+  }];
+}
+
+function eventIdFromRow(row: EventRow): number | null {
+  const id = row.id == null ? null : Number(row.id);
+  return id != null && Number.isSafeInteger(id) ? id : null;
+}
+
+async function eventCoursesByEventId(db: D1Like, eventIds: number[]): Promise<Map<number, EventCourseRow[]>> {
+  const uniqueIds = [...new Set(eventIds.filter(Number.isSafeInteger))];
+  const out = new Map<number, EventCourseRow[]>();
+  if (!uniqueIds.length) return out;
+  const placeholders = uniqueIds.map(() => "?").join(",");
+  try {
+    const rows = (await db
+      .prepare(
+        `SELECT ec.id, ec.event_id, ec.course_id, ec.layout_id, ec.label, ec.sort_order,
+                c.name AS course_name, c.location AS course_location, c.udisc_url AS course_udisc_url,
+                c.udisc_course_id AS course_udisc_course_id, l.name AS layout_name, l.total_par
+           FROM event_courses ec
+           LEFT JOIN courses c ON c.id = ec.course_id
+           LEFT JOIN course_layouts l ON l.id = ec.layout_id
+          WHERE ec.event_id IN (${placeholders})
+          ORDER BY ec.event_id, ec.sort_order, ec.id`,
+      )
+      .bind(...uniqueIds)
+      .all<EventCourseRow>()).results;
+    for (const row of rows) {
+      const eventId = row.event_id == null ? null : Number(row.event_id);
+      if (eventId == null || !Number.isSafeInteger(eventId)) continue;
+      const list = out.get(eventId) ?? [];
+      list.push(row);
+      out.set(eventId, list);
+    }
+  } catch (error) {
+    if (!missingEventCoursesTable(error)) throw error;
+  }
+  return out;
+}
+
+async function attachEventCourses(db: D1Like, rows: EventRow[]): Promise<EventRow[]> {
+  const byEvent = await eventCoursesByEventId(db, rows.map(eventIdFromRow).filter((id): id is number => id != null));
+  return rows.map((row) => {
+    const id = eventIdFromRow(row);
+    return { ...row, event_courses: id == null ? fallbackEventCourses(row) : (byEvent.get(id) ?? fallbackEventCourses(row)) };
+  });
+}
+
+async function attachEventCoursesToRow<T extends EventRow>(db: D1Like, row: T | null): Promise<(T & { event_courses: EventCourseRow[] }) | null> {
+  if (!row) return null;
+  return (await attachEventCourses(db, [row]))[0] as T & { event_courses: EventCourseRow[] };
+}
+
+async function replaceEventCourses(db: D1Like, eventId: number, courses: EventCourseInput[]): Promise<void> {
+  try {
+    await db.prepare("DELETE FROM event_courses WHERE event_id = ?").bind(eventId).run();
+    for (const [index, course] of courses.entries()) {
+      await db
+        .prepare("INSERT INTO event_courses (event_id, course_id, layout_id, label, sort_order) VALUES (?, ?, ?, ?, ?)")
+        .bind(eventId, course.course_id, course.layout_id ?? null, course.label ?? null, course.sort_order ?? index)
+        .run();
+    }
+  } catch (error) {
+    if (!missingEventCoursesTable(error)) throw error;
+  }
+}
+
+async function syncPrimaryEventCourse(db: D1Like, eventId: number, event: EventRow): Promise<void> {
+  const courseId = event.course_id == null ? null : Number(event.course_id);
+  try {
+    if (!Number.isSafeInteger(courseId)) {
+      await db.prepare("DELETE FROM event_courses WHERE event_id = ?").bind(eventId).run();
+      return;
+    }
+    const layoutId = event.layout_id == null ? null : Number(event.layout_id);
+    const primary = await db
+      .prepare("SELECT id FROM event_courses WHERE event_id = ? ORDER BY sort_order, id LIMIT 1")
+      .bind(eventId)
+      .first<{ id: number }>();
+    if (primary?.id != null) {
+      await db
+        .prepare("UPDATE event_courses SET course_id = ?, layout_id = ?, label = NULL, sort_order = 0 WHERE id = ?")
+        .bind(courseId, Number.isSafeInteger(layoutId) ? layoutId : null, primary.id)
+        .run();
+      return;
+    }
+    await db
+      .prepare("INSERT INTO event_courses (event_id, course_id, layout_id, label, sort_order) VALUES (?, ?, ?, NULL, 0)")
+      .bind(eventId, courseId, Number.isSafeInteger(layoutId) ? layoutId : null)
+      .run();
+  } catch (error) {
+    if (!missingEventCoursesTable(error)) throw error;
+  }
 }
 
 export async function listEvents(
@@ -41,33 +184,44 @@ export async function listEvents(
     const offset = Number.isInteger(opts.offset) && (opts.offset ?? 0) > 0 ? opts.offset : 0;
     if (offset != null && offset > 0) { sql += " OFFSET ?"; binds.push(offset); }
   }
-  return (await db.prepare(sql).bind(...binds).all()).results;
+  const rows = (await db.prepare(sql).bind(...binds).all()).results;
+  return attachEventCourses(db, rows);
 }
 
 export async function getEvent(db: D1Like, id: number) {
   const event = await db.prepare("SELECT * FROM events WHERE id = ?").bind(id).first();
   if (!event) return null;
   const players = (await db.prepare("SELECT * FROM event_players WHERE event_id = ? ORDER BY name").bind(id).all()).results;
-  return { ...event, players };
+  return attachEventCoursesToRow(db, { ...event, players });
 }
 
 export async function createEvent(db: D1Like, e: EventInput) {
-  return db
+  const courseId = primaryCourseId(e);
+  const layoutId = primaryLayoutId(e);
+  const event = await db
     .prepare(
       `INSERT INTO events (type, name, status, format, date, course_id, layout_id, league_id, source, external_url, notes, created_by, starts_at, registration_deadline, checkin_deadline)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
     )
     .bind(
       e.type, e.name, e.status ?? "scheduled", e.format ?? null, e.date ?? null,
-      e.course_id ?? null, e.layout_id ?? null, e.league_id ?? null,
+      courseId ?? null, layoutId ?? null, e.league_id ?? null,
       e.source ?? "manual", e.external_url ?? null, e.notes ?? null, e.created_by ?? null,
       e.starts_at ?? null, e.registration_deadline ?? null, e.checkin_deadline ?? null,
     )
     .first();
+  const eventId = event ? eventIdFromRow(event) : null;
+  if (event && eventId != null) {
+    const courses = e.event_courses !== undefined ? e.event_courses : fallbackEventCourses(event);
+    await replaceEventCourses(db, eventId, courses);
+  }
+  return attachEventCoursesToRow(db, event);
 }
 
 export async function updateEvent(db: D1Like, id: number, e: EventPatch) {
-  return db
+  const courseId = primaryCourseId(e);
+  const layoutId = primaryLayoutId(e);
+  const event = await db
     .prepare(
       `UPDATE events SET type=CASE WHEN ? THEN ? ELSE type END,
         name=CASE WHEN ? THEN ? ELSE name END,
@@ -89,8 +243,8 @@ export async function updateEvent(db: D1Like, id: number, e: EventPatch) {
       e.status !== undefined ? 1 : 0, e.status ?? null,
       e.format !== undefined ? 1 : 0, e.format ?? null,
       e.date !== undefined ? 1 : 0, e.date ?? null,
-      e.course_id !== undefined ? 1 : 0, e.course_id ?? null,
-      e.layout_id !== undefined ? 1 : 0, e.layout_id ?? null,
+      courseId !== undefined ? 1 : 0, courseId ?? null,
+      layoutId !== undefined ? 1 : 0, layoutId ?? null,
       e.league_id !== undefined ? 1 : 0, e.league_id ?? null,
       e.notes !== undefined ? 1 : 0, e.notes ?? null,
       e.starts_at !== undefined ? 1 : 0, e.starts_at ?? null,
@@ -99,6 +253,11 @@ export async function updateEvent(db: D1Like, id: number, e: EventPatch) {
       id,
     )
     .first();
+  if (event) {
+    if (e.event_courses !== undefined) await replaceEventCourses(db, id, e.event_courses);
+    else if (e.course_id !== undefined || e.layout_id !== undefined) await syncPrimaryEventCourse(db, id, event);
+  }
+  return attachEventCoursesToRow(db, event);
 }
 
 export async function deleteEvent(db: D1Like, id: number) {

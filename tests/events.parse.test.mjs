@@ -20,6 +20,7 @@ import {
   statusLabel,
   buildCourseIndex,
   courseNameFor,
+  eventCourseSummary,
 } from '../src/shared/events-model.js';
 
 // --- normalizeEvent -----------------------------------------------------------
@@ -43,6 +44,21 @@ test('normalizeEvent is null-safe', () => {
 test('normalizeEvent passes through the selected layout_id as a string (T4 tee-sign render)', () => {
   assert.equal(normalizeEvent({ id: 1, layout_id: 99 }).layout_id, '99');
   assert.equal(normalizeEvent({ id: 1 }).layout_id, '');
+});
+
+test('normalizeEvent preserves ordered event course/layout assignments', () => {
+  const ev = normalizeEvent({
+    id: 1,
+    course_id: 7,
+    event_courses: [
+      { course_id: 7, layout_id: 44, course_name: 'West Meadowbrook', layout_name: 'Gold', sort_order: 0 },
+      { course_id: 8, layout_id: 45, course_name: 'ECU', layout_name: 'Short', sort_order: 1 },
+    ],
+  });
+  assert.deepEqual(ev.event_courses.map((row) => [row.course_id, row.layout_id, row.course_name, row.layout_name]), [
+    ['7', '44', 'West Meadowbrook', 'Gold'],
+    ['8', '45', 'ECU', 'Short'],
+  ]);
 });
 
 test('normalizeEvent preserves an unknown status verbatim', () => {
@@ -150,6 +166,20 @@ test('courseNameFor resolves ids and falls back gracefully', () => {
   assert.equal(courseNameFor(index, '2'), 'Bradford Creek');
   assert.equal(courseNameFor(index, 99), ''); // unknown id -> blank
   assert.equal(courseNameFor(index, null), ''); // no course on event
+});
+
+test('eventCourseSummary summarizes multiple courses and layouts', () => {
+  const index = buildCourseIndex([{ id: 1, name: 'River Park North' }]);
+  const event = normalizeEvent({
+    course_id: 1,
+    event_courses: [
+      { course_id: 1, layout_name: 'Gold' },
+      { course_id: 2, course_name: 'Bradford Creek', layout_name: 'Short' },
+      { course_id: 3, course_name: 'ECU', layout_name: 'Long' },
+    ],
+  });
+  assert.equal(eventCourseSummary(index, event, true), 'River Park North (Gold) · Bradford Creek (Short) + 1 more');
+  assert.equal(eventCourseSummary(index, normalizeEvent({ course_id: 1 }), false), 'River Park North');
 });
 
 test('public React modules import the shared events model without a root compatibility shim', () => {

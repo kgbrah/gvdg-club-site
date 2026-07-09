@@ -5,7 +5,7 @@ import { EVENT_FORMATS, EVENT_STATUSES, EVENT_TYPES } from "./db.js";
 import { assignShotgun, assignTeams } from "./assign.js";
 import { getMember } from "./roster.js";
 import { json, readJson } from "./http.js";
-import { asInt, asIsoTimestamp, asStr, inSet, jsonStringArray, validEventInput } from "./input.js";
+import { asInt, asIsoTimestamp, asStr, inSet, jsonStringArray, validEventCoursesInput, validEventInput } from "./input.js";
 import { AdminLiveConfigError, adminLiveScoringConfigJson } from "./admin-live-config.js";
 import { inlineLayout } from "./admin-event-layout.js";
 import { defaultCtpPayoutNote } from "./admin-payout-notes.js";
@@ -20,6 +20,15 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 const hasField = (body: Record<string, unknown>, field: string): boolean => Object.prototype.hasOwnProperty.call(body, field);
+
+function withPrimaryLayout(input: db.EventInput, layoutId: number): db.EventInput {
+  if (!input.event_courses?.length) return { ...input, layout_id: layoutId };
+  return {
+    ...input,
+    layout_id: layoutId,
+    event_courses: input.event_courses.map((course, index) => (index === 0 ? { ...course, layout_id: layoutId } : course)),
+  };
+}
 
 export async function handleAdminEvents(
   request: Request,
@@ -185,7 +194,7 @@ export async function handleAdminEvents(
       layout = await db.createLayout(env.DB, { course_id: v.course_id, ...cleanLayout });
       const layoutId = asInt((layout as { id?: unknown } | null)?.id);
       if (layoutId == null) return json({ error: "invalid_layout" }, 500, origin);
-      eventInput = { ...v, layout_id: layoutId };
+      eventInput = withPrimaryLayout(v, layoutId);
     }
     const row = await db.createEvent(env.DB, { ...eventInput, created_by: adminId });
     return json(layout ? { event: row, layout } : { event: row }, 201, origin);
@@ -225,6 +234,11 @@ export async function handleAdminEvents(
       const layoutId = b.layout_id == null || b.layout_id === "" ? null : asInt(b.layout_id);
       if (layoutId == null && b.layout_id != null && b.layout_id !== "") return json({ error: "invalid_event" }, 400, origin);
       patch.layout_id = layoutId;
+    }
+    if (hasField(b, "event_courses")) {
+      const eventCourses = validEventCoursesInput(b.event_courses);
+      if (!eventCourses) return json({ error: "invalid_event" }, 400, origin);
+      patch.event_courses = eventCourses;
     }
     if (hasField(b, "league_id")) {
       const leagueId = b.league_id == null || b.league_id === "" ? null : asInt(b.league_id);

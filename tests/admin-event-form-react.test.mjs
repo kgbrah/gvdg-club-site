@@ -45,8 +45,11 @@ test('admin new event form is rendered by React and saved through bridge events'
   assert.match(eventForm, /React\.useLayoutEffect/);
   assert.match(eventForm, /id: "adminCreateForm"/);
   assert.match(eventForm, /id: "aeName"/);
-  assert.match(eventForm, /id: "aeCourse"/);
-  assert.match(eventForm, /id: "aeLayout"/);
+  assert.match(eventForm, /const courseId = primary \? "aeCourse" : `aeCourse-\$\{row\.key\}`/);
+  assert.match(eventForm, /const layoutId = primary \? "aeLayout" : `aeLayout-\$\{row\.key\}`/);
+  assert.match(eventForm, /body\.event_courses = eventCourses/);
+  assert.match(eventForm, /courseRowsFromEvent/);
+  assert.match(eventForm, /Add course\/layout/);
   assert.match(eventForm, /id: "aeLeague"/);
   assert.match(eventForm, /gvdg:admin-courses-list/);
   assert.match(eventForm, /gvdg:admin-leagues-list/);

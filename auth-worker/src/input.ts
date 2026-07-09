@@ -94,6 +94,7 @@ export const jsonStringArray = (v: unknown, max: number): string | null =>
 
 const validLat = (n: number | null): number | null => (n != null && n >= -90 && n <= 90 ? n : null);
 const validLng = (n: number | null): number | null => (n != null && n >= -180 && n <= 180 ? n : null);
+const hasField = (body: Record<string, unknown>, field: string): boolean => Object.prototype.hasOwnProperty.call(body, field);
 
 export function cleanPosition(raw: unknown): { label: string; lat: number | null; lng: number | null } | null {
   if (!raw || typeof raw !== "object") return null;
@@ -123,6 +124,29 @@ export function sanitizeHoles(raw: unknown[]): LayoutHole[] | null {
   return out;
 }
 
+export function validEventCoursesInput(raw: unknown): db.EventCourseInput[] | null {
+  if (raw == null) return [];
+  if (!Array.isArray(raw) || raw.length > 20) return null;
+  const out: db.EventCourseInput[] = [];
+  for (const [index, item] of raw.entries()) {
+    if (!item || typeof item !== "object") return null;
+    const source = item as Record<string, unknown>;
+    const courseId = source.course_id == null || source.course_id === "" ? null : asInt(source.course_id);
+    if (courseId == null) return null;
+    const rawLayoutId = source.layout_id;
+    const layoutId = rawLayoutId == null || rawLayoutId === "" ? null : asInt(rawLayoutId);
+    if (layoutId == null && rawLayoutId != null && rawLayoutId !== "") return null;
+    const rawLabel = source.label;
+    const label = rawLabel == null || rawLabel === "" ? null : asStr(rawLabel, 120);
+    if (label == null && rawLabel != null && rawLabel !== "") return null;
+    const rawSort = source.sort_order;
+    const sortOrder = rawSort == null || rawSort === "" ? index : asInt(rawSort);
+    if (sortOrder == null) return null;
+    out.push({ course_id: courseId, layout_id: layoutId, label, sort_order: sortOrder });
+  }
+  return out;
+}
+
 export function validEventInput(b: Record<string, unknown>): db.EventInput | null {
   const name = asStr(b.name, 200);
   if (!inSet(EVENT_TYPES, b.type) || !name) return null;
@@ -141,7 +165,7 @@ export function validEventInput(b: Record<string, unknown>): db.EventInput | nul
   const registrationDeadline = asIsoTimestamp(b.registration_deadline);
   const checkinDeadline = asIsoTimestamp(b.checkin_deadline);
   if (startsAt === undefined || registrationDeadline === undefined || checkinDeadline === undefined) return null;
-  return {
+  const input: db.EventInput = {
     type: b.type as string,
     name,
     status,
@@ -157,4 +181,12 @@ export function validEventInput(b: Record<string, unknown>): db.EventInput | nul
     registration_deadline: registrationDeadline,
     checkin_deadline: checkinDeadline,
   };
+  if (hasField(b, "event_courses")) {
+    const eventCourses = validEventCoursesInput(b.event_courses);
+    if (!eventCourses) return null;
+    input.event_courses = eventCourses;
+    input.course_id = eventCourses[0]?.course_id ?? null;
+    input.layout_id = eventCourses[0]?.layout_id ?? null;
+  }
+  return input;
 }

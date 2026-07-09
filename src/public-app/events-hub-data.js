@@ -3,7 +3,7 @@ import React from "react";
 import {
   bucketEvents,
   buildCourseIndex,
-  courseNameFor,
+  eventCourseSummary,
   formatEventDate,
   normalizeEvent,
   parseEventDate,
@@ -177,7 +177,7 @@ function previousResultFromFeed(item, category) {
 function previousResultFromEvent(raw, courseIndex) {
   const event = normalizeEvent(raw);
   const leagueTarget = ryderCupEventHash(event);
-  const courseName = courseNameFor(courseIndex, event.course_id);
+  const courseName = eventCourseSummary(courseIndex, event);
   return {
     cta: leagueTarget ? "League / Results" : "View results",
     dateObj: eventDateForSort(event),
@@ -201,7 +201,7 @@ function eventHubItem(raw, courseIndex) {
   const event = normalizeEvent(raw);
   const leagueTarget = ryderCupEventHash(event);
   return {
-    courseName: courseNameFor(courseIndex, event.course_id),
+    courseName: eventCourseSummary(courseIndex, event),
     dateText: formatEventDate(event.date),
     href: leagueTarget || `#event/${encodeURIComponent(event.id)}`,
     id: event.id,
