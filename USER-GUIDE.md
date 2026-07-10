@@ -23,7 +23,7 @@ There are four parts:
 ### 📅 See upcoming tournaments and events
 1. On the home page, scroll down to the tournaments part, **or** tap **Club Events** in the menu.
 2. You'll see a list of games coming up. Newest and soonest are near the top.
-3. Tap any event to see more about it: where it is, who signed up, and the scores if it already happened.
+3. Tap any event to see more about it: where it is, which course or courses and layouts it uses, who signed up, and the scores if it already happened.
 
 ### ⛳ Look at the disc golf courses
 1. On the home page, scroll to the **courses** part.
@@ -180,6 +180,11 @@ The **score app** (tap **Live Scoring**, or open a round link someone shares) le
 3. Tap the arrow **›** to go to the next hole, or **‹** to go back.
 - **Important:** everyone on the card keeps their **own** score. If two people scoring the same card don't agree on a number, the app leaves that hole blank until they match. This keeps scores honest. 🤝
 
+### 🌦️ Check round weather
+- During a live round, the scorecard can show the current course weather.
+- Wind starts as north-up. On phones that support device orientation, the wind arrow can switch to phone-relative so it points correctly compared with the direction your phone is facing.
+- If the phone or browser does not allow that sensor, the weather still works with the normal wind direction.
+
 ### 👯 Doubles, teams, and match-play
 - **Doubles:** two players share one score. Set up the pairs in **Manage** before you start.
 - **Match-play (Red vs Blue):** the app colors each hole by which team won that hole — **red**, **blue**, or **yellow** for a tie. It's like coloring in who won each little battle.
@@ -214,7 +219,7 @@ Admins are club helpers with extra powers. The **Admin** page (`admin.html`) is 
 ### 📋 The tabs, explained simply
 
 - **Events** — the list of all games. Tap one to edit its name, date, place, and settings.
-- **New Event** — make a brand-new game. Fill in the name, date, and course, then save.
+- **New Event** — make a brand-new game. Fill in the name, date, and the course/layout rows, then save. Some tournaments use one course; others use several courses or several layouts.
 - **Import** — instead of typing a game by hand, **grab** games from other websites (Disc Golf Scene), a spreadsheet (CSV), or UDisc. Paste the link and import.
 - **Registration** — set up sign-ups for a game: turn sign-ups **on/off**, set the **entry fee**, make **divisions** (skill groups), add **CTP** contests and **ace pots**, **assign** players to starting holes or teams (random or by hand), see who's signed up, **check people in**, and mark them **paid**.
 - **Live Scoring** — as an admin you can **start** a game's scoring, **watch** the live scorecard and leaderboard, and **finish** the round. Admins can fix scores when players can't agree.

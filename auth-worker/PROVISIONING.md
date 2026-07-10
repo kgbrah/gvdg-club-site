@@ -9,7 +9,7 @@ onboard GVDG members into the auth Worker's KV store:
    distribute. **This file is SENSITIVE** (see the security note below).
 
 The script uses WebCrypto + Node stdlib only (no dependencies) and reproduces
-`src/crypto.ts` `hashPin()` exactly (PBKDF2-HMAC-SHA256, 120,000 iterations, 16-byte random
+`src/crypto.ts` legacy hash format exactly (PBKDF2-HMAC-SHA256, 100,000 iterations, 16-byte random
 salt, `pbkdf2$sha256$<iters>$<saltB64url>$<hashB64url>`), so a provisioned member's default PIN
 verifies against the live Worker's `verifyPin()`.
 
@@ -113,8 +113,8 @@ The repo `.gitignore` already ignores `seed.local.json`. The provisioning output
 PIN hashes are additionally protected by an HMAC **pepper** (a server-held secret, `PIN_PEPPER`), layered
 under PBKDF2, so a leaked KV roster alone can't brute-force the 4-digit PINs offline (`src/crypto.ts`).
 
-- **Activated on gvdgclub** (2026-07): a strong random value is set via `wrangler secret put PIN_PEPPER
-  --env gvdgclub`. New/changed PINs are hashed as `pbkdf2h$…`; pre-pepper members' legacy `pbkdf2$…`
+- **Shared dev:** a strong random value is set via `wrangler secret put PIN_PEPPER --env gvdgclub`.
+  New/changed PINs are hashed as `pbkdf2h$…`; pre-pepper members' legacy `pbkdf2$…`
   hashes still verify (the pepper is ignored for them) and are transparently upgraded on their next login.
 - **⚠️ Once set, `PIN_PEPPER` must never be lost or changed** — exactly like `JWT_SECRET`. Losing it locks
   out every member whose hash has been upgraded to `pbkdf2h`. Cloudflare stores it, but back the value up

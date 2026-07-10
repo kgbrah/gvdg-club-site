@@ -18,8 +18,8 @@ This work happens in the isolated worktree `/home/kg/gvdg-wt-teesign` (branch `f
 
 ```bash
 cd /home/kg/gvdg-wt-teesign
-git config user.name "kgbrah"
-git config user.email "kg3333333@gmail.com"
+git config user.name "Your Name"
+git config user.email "you@example.com"
 ```
 
 ## File Structure
