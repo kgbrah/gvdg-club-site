@@ -190,13 +190,19 @@ lists and SET/table fragments built from **hardcoded** column literals — never
 `.prepare()` also lives outside `db*.ts` (e.g. `shop-db.ts`, `ratings*.ts`, `wallet-idempotency.ts`) —
 keep any new one parameterized.
 
-`auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered**. Highest is **`0024`; next is
-`0025`**. The **`0007` gap is intentional** — never back-fill it. Two branches must not claim the same
+`auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered**. Highest is **`0025`; next is
+`0026`**. The **`0007` gap is intentional** — never back-fill it. Two branches must not claim the same
 number. Domains: core courses/events/results (`0001-0003`), board (`0004`), registration/ctps/ace-pots
 (`0005-0006`), tee-signs (`0008`), pro-shop + wallet (`0009`, `0012`, `0017`, `0023`), KV fallback
 (`0010`), PDGA cache (`0011`), guest reg (`0013`), casual-round requests/rounds (`0014`, `0016`), UDisc
 export (`0015`), live-scoring metadata (`0018`), scale indexes (`0019-0020`), export endpoints (`0021`),
-ratings (`0022`), event schedule/deadlines (`0024`).
+ratings (`0022`), event schedule/deadlines (`0024`), event course/layout assignments (`0025`).
+
+`events.course_id` / `events.layout_id` remain the primary legacy/scoring fields, but multi-course events
+must also be represented in `event_courses` (migration `0025`). Admin create/edit payloads may include
+`event_courses: [{ course_id, layout_id?, label?, sort_order? }]`; public event models attach those rows
+and summarize each course/layout from the structured table. Do not encode multi-course tournaments only in
+freeform notes.
 
 ### Feature domains
 
@@ -279,10 +285,9 @@ to `gvdg-members.html`.
 
 Per the parent `CLAUDE.md`, **nothing is "done" until it runs in the real app.** These bite at runtime only:
 
-- **PBKDF2 is capped at 100k by workerd — it *throws* above it.** `crypto.ts` uses `ITERATIONS=100_000`.
-  🐛 **`scripts/provision.mjs` still uses 120_000**, so bulk-seeded members' PINs fail `verifyPin` (workerd
-  rejects the 120k re-hash) and **they cannot log in on the deployed Worker**. Admin-UI-created members
-  (100k) are fine. Fix provision to 100k before relying on a seed.
+- **PBKDF2 is capped at 100k by workerd — it *throws* above it.** `crypto.ts` and
+  `scripts/provision.mjs` both use `ITERATIONS=100_000`. Do not raise this in either place; bulk-seeded
+  members would fail `verifyPin` on the deployed Worker.
 - **Session TTL is 12h, not 900s** — `SESSION_TTL_SEC=43200` in `wrangler.toml`; the 900 in `authz.ts` is
   only the unset fallback.
 - **`-staging` is production:** deploy the Worker with `--env gvdgclub`; a bare `wrangler deploy` ships to
@@ -303,5 +308,6 @@ Object `LiveEventDO`), `ASSISTANT_RL` (unsafe ratelimit, 20/60s), `[triggers] cr
 `[vars]` per env: `ALLOWED_ORIGINS`, `SESSION_TTL_SEC`, model ids, `PAYPAL_ENV`, WebAuthn `RP_ID`/
 `EXPECTED_ORIGIN` (dev `gvdgclub.com` vs prod `greenvillediscgolf.com`), Resend senders. **Secrets** (never
 committed, set via `wrangler secret put` / synced by CI): `JWT_SECRET`, `OPENROUTER_API_KEY`,
-`GEMINI_API_KEY`, `PAYPAL_CLIENT_ID`/`PAYPAL_SECRET`, `RESEND_API_KEY`. `validate-wrangler-config.mjs`
+`GEMINI_API_KEY`, `PAYPAL_CLIENT_ID`/`PAYPAL_SECRET`, `RESEND_API_KEY`, `PIN_PEPPER`.
+`validate-wrangler-config.mjs`
 gates every deploy, aborting on any `REPLACE_WITH_*` in the targeted env.

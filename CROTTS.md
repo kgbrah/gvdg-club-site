@@ -1,7 +1,7 @@
 # Crotts — the GVDG AI assistant: setup & operations
 
 **Crotts** is the club's persistent AI assistant: a floating avatar button (named after club officer
-**Max Crotts**, using his photo) in the **lower-left** of every page. Click it to chat. Crotts answers
+**Max Crotts**, using his photo) on the main public, member, and admin surfaces. Click it to chat. Crotts answers
 questions about the club's **events and courses** (pulled live from the club API), general disc-golf
 questions, and how to use the site (sign-in, ratings, donating).
 
@@ -39,7 +39,7 @@ Club Worker (auth-worker/)  ── builds a Crotts prompt + injects live events/
        is already declared in `auth-worker/wrangler.toml`).
 2. [ ] (Recommended) Get a **free OpenRouter API key** → set it as the Worker secret `OPENROUTER_API_KEY`.
 3. [ ] Confirm/optionally change `OPENROUTER_MODEL` in `wrangler.toml` (default: `openai/gpt-oss-120b:free`).
-4. [ ] Deploy the Worker (manually, or via the included GitHub Actions workflow).
+4. [ ] Deploy the Worker through the correct path for your environment.
 5. [ ] Verify (curl + click the avatar on the live site).
 
 That's it. Steps in detail below.
@@ -84,24 +84,36 @@ You need the other Worker secret/bindings that the whole portal already requires
   `wrangler kv namespace create ROSTER` / `... RATELIMIT`, `wrangler d1 create gvdg`, then
   `wrangler d1 migrations apply DB`).
 
-Then deploy:
+Then deploy through the matching path:
 
-### Option A — Manual
+### Shared dev — `gvdgclub.com`
+From the repo root:
 ```bash
-cd auth-worker
-npx wrangler deploy
+GVDG_AGENT=<your-name> ./scripts/gvdg-deploy.sh
 ```
 
-### Option B — Automated (GitHub Actions) — included
-`.github/workflows/deploy-worker.yml` deploys on push to `main` (paths `auth-worker/**`) or manual dispatch.
-It runs `tsc` + tests, then `cloudflare/wrangler-action` deploys and **injects the secrets from GitHub
-Secrets into Cloudflare**. Add these **repo secrets** (Settings → Secrets and variables → Actions):
+This is the only sanctioned deploy path for the shared dev slot. It runs the repo gates and deploys Pages
+plus the Worker together.
+
+### Maintainer-owned production Worker
+From `auth-worker/`, after filling the top-level placeholders and setting secrets:
+```bash
+npm run deploy
+```
+
+### Automated (GitHub Actions) — included
+`.github/workflows/deploy-worker.yml` runs on push to `main` (paths `auth-worker/**`) or manual dispatch.
+It runs typegen, audit, typecheck, tests, and config validation. If the production config is filled in and
+`CLOUDFLARE_API_TOKEN` exists, `cloudflare/wrangler-action` deploys and syncs the secrets listed in the
+workflow into Cloudflare. Add these **repo secrets** (Settings → Secrets and variables → Actions):
 
 | GitHub Secret | What it is | How to get it |
 |---|---|---|
 | `CLOUDFLARE_API_TOKEN` | Token CI uses to deploy | Cloudflare dash → My Profile → API Tokens → Create → **Edit Cloudflare Workers** template |
 | `JWT_SECRET` | Member-auth signing key (≥32 chars) | Generate any high-entropy string |
 | `OPENROUTER_API_KEY` | Crotts' OpenRouter key | openrouter.ai → Keys (optional; omit to use Workers AI only) |
+| `GEMINI_API_KEY` | Preferred tee-sign OCR provider | Google AI Studio / Gemini API key |
+| `PAYPAL_CLIENT_ID` / `PAYPAL_SECRET` | Optional PayPal Checkout | PayPal developer app credentials |
 
 **Why GitHub Secrets are safe here:** they're readable only inside a CI run. The workflow uses them at
 **deploy time** to run `wrangler secret put`, which stores them in **Cloudflare's** encrypted secret store.
@@ -136,7 +148,7 @@ using real club data, in both light and dark themes.
 |---|---|
 | Personality / instructions / site facts | `auth-worker/src/assistant.ts` → `PERSONA` (and the club-context builder) |
 | Avatar image | `img/crotts.jpg` (replace the file; keep the name) |
-| Position / colors / sizing | `src/shared/crotts-widget.js` (`#crotts-fab` / `#crotts-panel`; currently `left:18px` lower-left) |
+| Position / colors / sizing | `src/shared/crotts-widget.js` (`#crotts-fab` / `#crotts-panel`; pages may override placement for mobile/detail views) |
 | Which pages show it | each page's `crottsReactApp` mount plus its route bundle (`home-app`, `public-app`, `admin-app`, or `members-app`) |
 | Rate limit | `auth-worker/src/index.ts` → `ASSISTANT_LIMIT` / `ASSISTANT_WINDOW` (default 20/min/IP) |
 | OpenRouter / Workers AI model | `OPENROUTER_MODEL` / `ASSISTANT_MODEL` vars in `wrangler.toml` |

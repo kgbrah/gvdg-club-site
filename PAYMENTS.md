@@ -20,10 +20,14 @@ Payments activate the moment the Worker has **both** PayPal credentials. Nothing
    npx wrangler secret put PAYPAL_CLIENT_ID
    npx wrangler secret put PAYPAL_SECRET
    ```
-   (Or add `PAYPAL_CLIENT_ID` / `PAYPAL_SECRET` as GitHub Actions secrets — the deploy workflow injects them.)
+   For the shared `gvdgclub.com` dev Worker, include `--env gvdgclub` and keep the values private. For a
+   maintainer-owned production Worker, set them on that production environment. You can also add
+   `PAYPAL_CLIENT_ID` / `PAYPAL_SECRET` as GitHub Actions secrets; the production Worker workflow syncs
+   those two names when it deploys.
 3. In `auth-worker/wrangler.toml` set `PAYPAL_ENV = "sandbox"` to test, then `"live"` for production. Deploy.
 
-That's it. The members' register cards now show **PayPal buttons** for events with a fee; on payment the
+Deploy shared dev through `./scripts/gvdg-deploy.sh`; deploy maintainer-owned production through the
+owner's Worker deploy path. That's it. The members' register cards now show **PayPal buttons** for events with a fee; on payment the
 Worker captures the order, **verifies the amount**, and marks the registration paid. Remove the secrets to
 fall back to manual mode.
 
