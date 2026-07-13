@@ -78,10 +78,11 @@ export async function adminRunArchiveExportFromReact(detail, { adminApi, adminMs
       return;
     }
     if (payload.mode === 'download' && payload.exportData) {
+      const exportedDate = String(payload.exportData.exportedAt || new Date().toISOString()).slice(0, 10);
       setDataArchiveExportResult('Download ready: ' + (payload.exportData.exportedAt || 'snapshot') + ' (events: ' + (payload.exportData.counts?.events || 0) + ')', true, {
         download: {
           data: payload.exportData,
-          filename: 'gvdg-archive-' + new Date().toISOString().slice(0, 10) + '.json',
+          filename: 'gvdg-archive-' + exportedDate + '.json',
           mimeType: 'application/json;charset=utf-8',
         },
       });
