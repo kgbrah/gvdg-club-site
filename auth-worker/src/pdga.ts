@@ -1,9 +1,10 @@
 // Best-effort scraper for pdga.com player ratings (read-only, public data) — the live source behind
-// the member dashboard's rating/stats panel. Two pages are parsed:
+// the member dashboard's rating/stats panel. Player pages provide identity and event discovery:
 //   /player/<n>          -> name + current OFFICIAL rating
 //   /player/<n>/details  -> per-round ratings (grouped into events; used for live/peak/recent form)
+//   /tour/event/<id>     -> newly reported rounds that have not reached rating details yet
 // HTML parsing is regex-based and defensive: any field that doesn't match becomes null/empty rather
-// than throwing. Results are cached in D1 (handlePdgaStats) so pdga.com is hit at most ~once/day/player.
+// than throwing. Results are cached in D1 (handlePdgaStats) to bound requests to pdga.com.
 
 import type { Env } from "./env.js";
 import { clientIp, json } from "./http.js";
@@ -24,7 +25,7 @@ export interface PdgaStats {
 }
 
 const UA = "Mozilla/5.0 (compatible; GVDGClubBot/1.0; +https://gvdgclub.com)";
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // pdga ratings update ~weekly; a day-old cache is plenty fresh
+const CACHE_TTL_MS = 15 * 60 * 1000;
 const RECENT_ROUNDS = 8; // "live" rating = mean of the most recent N round ratings (recent-form estimate)
 const STAGING_QA_PDGA = "90000001";
 const STAGING_QA_STATS: PdgaStats = {
@@ -71,10 +72,47 @@ export function parseDetailRounds(html: string): PdgaEvent[] {
     const round = (cap(/<td class="round[^"]*"[^>]*>\s*([^<]+?)\s*</i, row) ?? "").trim();
     const scoreStr = cap(/<td class="score">\s*(-?\d+)/i, row);
     const key = `${tournament}|${date}|${division}`;
-    if (!events.has(key)) events.set(key, { tournament, date, epoch, division, rounds: [] });
-    events.get(key)!.rounds.push({ rating: parseInt(ratingStr, 10), score: scoreStr ? parseInt(scoreStr, 10) : null, round });
+    const existing = events.get(key);
+    const parsedRound = { rating: parseInt(ratingStr, 10), score: scoreStr ? parseInt(scoreStr, 10) : null, round };
+    if (existing) existing.rounds.push(parsedRound);
+    else events.set(key, { tournament, date, epoch, division, rounds: [parsedRound] });
   }
   return [...events.values()].sort((a, b) => b.epoch - a.epoch);
+}
+
+type PendingEventRef = {
+  readonly id: string;
+  readonly tournament: string;
+  readonly date: string;
+  readonly epoch: number;
+  readonly division: string;
+};
+
+function pendingEventRefs(playerHtml: string, detailHtml: string): PendingEventRef[] {
+  const known = new Set([...detailHtml.matchAll(/href="\/tour\/event\/(\d+)"/gi)].flatMap((match) => match[1] ? [match[1]] : []));
+  const pending: PendingEventRef[] = [];
+  for (const row of playerHtml.split(/<tr[ >]/).slice(1)) {
+    const event = /<td class="tournament"><a href="\/tour\/event\/(\d+)#([^"]+)">([^<]+)/i.exec(row);
+    const date = /<td class="dates"[^>]*data-text="(\d+)"[^>]*>\s*([^<]+?)\s*</i.exec(row);
+    const id = event?.[1];
+    const tournament = event?.[3]?.trim();
+    const epoch = Number(date?.[1]);
+    const dateText = date?.[2]?.trim();
+    const division = event?.[2];
+    if (id && tournament && dateText && division && Number.isFinite(epoch) && !known.has(id)) pending.push({ id, tournament, date: dateText, epoch, division });
+  }
+  return pending.sort((a, b) => b.epoch - a.epoch).slice(0, RECENT_ROUNDS);
+}
+
+function parsePendingEvent(html: string, pdga: string, event: PendingEventRef): PdgaEvent | null {
+  const row = html.split(/<tr[ >]/).slice(1).find((candidate) => new RegExp(`href="/player/${pdga}"`, "i").test(candidate));
+  if (!row) return null;
+  const rounds: PdgaRound[] = [];
+  for (const match of row.matchAll(/<td class="round"[^>]*>\s*<a[^>]*href="\/live\/event\/\d+\/[^/"]+\/scores\?round=(\d+)"[^>]*>\s*(-?\d+)\s*<\/a>\s*<\/td>\s*<td class="round-rating"[^>]*>\s*(\d+)\s*<\/td>/gi)) {
+    if (match[1] && match[2] && match[3]) rounds.push({ round: match[1], score: Number(match[2]), rating: Number(match[3]) });
+  }
+  rounds.sort((a, b) => Number(b.round) - Number(a.round));
+  return rounds.length ? { tournament: event.tournament, date: event.date, epoch: event.epoch, division: event.division, rounds } : null;
 }
 
 function emptyPdgaStats(pdga: string): PdgaStats {
@@ -85,13 +123,20 @@ function fallbackPdgaStats(pdga: string): PdgaStats | null {
   return pdga === STAGING_QA_PDGA ? STAGING_QA_STATS : null;
 }
 
-/** Build the full stats object for a (digits-only) PDGA number by fetching + parsing both pages. */
+/** Build the full stats object for a digits-only PDGA number from its player, detail, and pending-event pages. */
 export async function fetchPdgaStats(pdga: string, doFetch: typeof fetch = fetch): Promise<PdgaStats> {
   const headers = { "user-agent": UA, accept: "text/html" };
   const base = `https://www.pdga.com/player/${pdga}`;
   const [pRes, dRes] = await Promise.all([doFetch(base, { headers }), doFetch(`${base}/details`, { headers })]);
-  const player = pRes.ok ? parsePlayerPage(await pRes.text()) : { name: null, official_rating: null, rating_date: null };
-  const events = dRes.ok ? parseDetailRounds(await dRes.text()) : [];
+  const [playerHtml, detailHtml] = await Promise.all([pRes.ok ? pRes.text() : Promise.resolve(""), dRes.ok ? dRes.text() : Promise.resolve("")]);
+  const player = parsePlayerPage(playerHtml);
+  const detailEvents = parseDetailRounds(detailHtml);
+  const pendingResults = await Promise.allSettled(pendingEventRefs(playerHtml, detailHtml).map(async (event) => {
+    const response = await doFetch(`https://www.pdga.com/tour/event/${event.id}`, { headers });
+    return response.ok ? parsePendingEvent(await response.text(), pdga, event) : null;
+  }));
+  const pending = pendingResults.flatMap((result) => result.status === "fulfilled" && result.value ? [result.value] : []);
+  const events = [...pending.filter((event): event is PdgaEvent => event != null), ...detailEvents].sort((a, b) => b.epoch - a.epoch);
 
   const ratings = events.flatMap((e) => e.rounds.map((r) => r.rating));
   const recent = ratings.slice(0, RECENT_ROUNDS);
@@ -110,7 +155,7 @@ export async function fetchPdgaStats(pdga: string, doFetch: typeof fetch = fetch
   };
 }
 
-/** GET /pdga-stats?pdga=<digits> — D1-cached (24h), IP-rate-limited, public read of pdga.com ratings. */
+/** GET /pdga-stats?pdga=<digits> — D1-cached (15m), IP-rate-limited, public read of pdga.com ratings. */
 export async function handlePdgaStats(request: Request, env: Env, origin: string | null): Promise<Response> {
   const pdga = (new URL(request.url).searchParams.get("pdga") ?? "").replace(/\D/g, "");
   if (!pdga || pdga.length > 8) return json({ error: "invalid_pdga" }, 400, origin);
@@ -119,15 +164,15 @@ export async function handlePdgaStats(request: Request, env: Env, origin: string
   if (await kvRateLimited(env, "pdga:" + clientIp(request), 30, 60)) return json({ error: "rate_limited" }, 429, origin);
 
   const now = Date.now();
-  const headers = { "Cache-Control": "public, max-age=3600" };
+  const headers = { "Cache-Control": "public, max-age=300" };
   try {
     const row = await readD1OrFallback(
       () => env.DB.prepare("SELECT data, fetched_at FROM pdga_cache WHERE pdga = ?1").bind(pdga).first<{ data: string; fetched_at: number }>(),
       () => null,
     );
     if (row && now - Number(row.fetched_at) < CACHE_TTL_MS) return json(JSON.parse(row.data), 200, origin, headers);
-  } catch {
-    /* cache miss / parse error -> fall through to a fresh fetch */
+  } catch (error) {
+    console.warn(JSON.stringify({ message: "pdga_cache_read_failed", error: error instanceof Error ? error.message : String(error) }));
   }
 
   let stats: PdgaStats;
@@ -136,15 +181,15 @@ export async function handlePdgaStats(request: Request, env: Env, origin: string
   } catch {
     stats = fallbackPdgaStats(pdga) ?? emptyPdgaStats(pdga);
   }
-  // Only cache a useful result, so a transient pdga.com outage isn't pinned in the cache for a day.
+  // Only cache a useful result, so a transient pdga.com outage isn't pinned for the full TTL.
   if (stats.official_rating != null || stats.events.length) {
     try {
       await env.DB.prepare(
         "INSERT INTO pdga_cache (pdga, data, fetched_at) VALUES (?1, ?2, ?3) " +
           "ON CONFLICT(pdga) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at",
       ).bind(pdga, JSON.stringify(stats), now).run();
-    } catch {
-      /* cache write is best-effort */
+    } catch (error) {
+      console.warn(JSON.stringify({ message: "pdga_cache_write_failed", error: error instanceof Error ? error.message : String(error) }));
     }
   }
   return json(stats, 200, origin, headers);
