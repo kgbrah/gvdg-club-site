@@ -77,10 +77,12 @@ export function parseDetailRounds(html: string): PdgaEvent[] {
     if (existing) existing.rounds.push(parsedRound);
     else events.set(key, { tournament, date, epoch, division, rounds: [parsedRound] });
   }
-  return [...events.values()].sort((a, b) => b.epoch - a.epoch);
+  return [...events.values()]
+    .map((event) => ({ ...event, rounds: newestRoundsFirst(event.rounds) }))
+    .sort((a, b) => b.epoch - a.epoch);
 }
 
-type PendingEventRef = {
+type PlayerEventRef = {
   readonly id: string;
   readonly tournament: string;
   readonly date: string;
@@ -88,9 +90,9 @@ type PendingEventRef = {
   readonly division: string;
 };
 
-function pendingEventRefs(playerHtml: string, detailHtml: string): PendingEventRef[] {
+function recentEventRefs(playerHtml: string, detailHtml: string): PlayerEventRef[] {
   const known = new Set([...detailHtml.matchAll(/href="\/tour\/event\/(\d+)"/gi)].flatMap((match) => match[1] ? [match[1]] : []));
-  const pending: PendingEventRef[] = [];
+  const events: PlayerEventRef[] = [];
   for (const row of playerHtml.split(/<tr[ >]/).slice(1)) {
     const event = /<td class="tournament"><a href="\/tour\/event\/(\d+)#([^"]+)">([^<]+)/i.exec(row);
     const date = /<td class="dates"[^>]*data-text="(\d+)"[^>]*>\s*([^<]+?)\s*</i.exec(row);
@@ -99,20 +101,55 @@ function pendingEventRefs(playerHtml: string, detailHtml: string): PendingEventR
     const epoch = Number(date?.[1]);
     const dateText = date?.[2]?.trim();
     const division = event?.[2];
-    if (id && tournament && dateText && division && Number.isFinite(epoch) && !known.has(id)) pending.push({ id, tournament, date: dateText, epoch, division });
+    if (id && tournament && dateText && division && Number.isFinite(epoch)) events.push({ id, tournament, date: dateText, epoch, division });
   }
-  return pending.sort((a, b) => b.epoch - a.epoch).slice(0, RECENT_ROUNDS);
+  return events
+    .sort((a, b) => b.epoch - a.epoch)
+    .filter((event, index) => index === 0 || !known.has(event.id))
+    .slice(0, RECENT_ROUNDS);
 }
 
-function parsePendingEvent(html: string, pdga: string, event: PendingEventRef): PdgaEvent | null {
+function parseRecentEvent(html: string, pdga: string, event: PlayerEventRef): PdgaEvent | null {
   const row = html.split(/<tr[ >]/).slice(1).find((candidate) => new RegExp(`href="/player/${pdga}"`, "i").test(candidate));
   if (!row) return null;
   const rounds: PdgaRound[] = [];
   for (const match of row.matchAll(/<td class="round"[^>]*>\s*<a[^>]*href="\/live\/event\/\d+\/[^/"]+\/scores\?round=(\d+)"[^>]*>\s*(-?\d+)\s*<\/a>\s*<\/td>\s*<td class="round-rating"[^>]*>\s*(\d+)\s*<\/td>/gi)) {
     if (match[1] && match[2] && match[3]) rounds.push({ round: match[1], score: Number(match[2]), rating: Number(match[3]) });
   }
-  rounds.sort((a, b) => Number(b.round) - Number(a.round));
-  return rounds.length ? { tournament: event.tournament, date: event.date, epoch: event.epoch, division: event.division, rounds } : null;
+  return rounds.length
+    ? { tournament: event.tournament, date: event.date, epoch: event.epoch, division: event.division, rounds: newestRoundsFirst(rounds) }
+    : null;
+}
+
+function newestRoundsFirst(rounds: readonly PdgaRound[]): PdgaRound[] {
+  return [...rounds].sort((a, b) => {
+    const difference = Number(b.round) - Number(a.round);
+    return Number.isFinite(difference) ? difference : 0;
+  });
+}
+
+function mergeEvents(refreshed: readonly PdgaEvent[], detailed: readonly PdgaEvent[]): PdgaEvent[] {
+  const events = new Map(detailed.map((event) => [eventKey(event), event]));
+  for (const event of refreshed) {
+    const key = eventKey(event);
+    const existing = events.get(key);
+    if (!existing) {
+      events.set(key, event);
+      continue;
+    }
+    const rounds = new Map(existing.rounds.map((round) => [roundKey(round), round]));
+    for (const round of event.rounds) rounds.set(roundKey(round), round);
+    events.set(key, { ...existing, ...event, rounds: newestRoundsFirst([...rounds.values()]) });
+  }
+  return [...events.values()].sort((a, b) => b.epoch - a.epoch);
+}
+
+function eventKey(event: PdgaEvent): string {
+  return `${event.epoch}|${event.division}`;
+}
+
+function roundKey(round: PdgaRound): string {
+  return round.round || `${round.score ?? ""}|${round.rating}`;
 }
 
 function emptyPdgaStats(pdga: string): PdgaStats {
@@ -131,12 +168,12 @@ export async function fetchPdgaStats(pdga: string, doFetch: typeof fetch = fetch
   const [playerHtml, detailHtml] = await Promise.all([pRes.ok ? pRes.text() : Promise.resolve(""), dRes.ok ? dRes.text() : Promise.resolve("")]);
   const player = parsePlayerPage(playerHtml);
   const detailEvents = parseDetailRounds(detailHtml);
-  const pendingResults = await Promise.allSettled(pendingEventRefs(playerHtml, detailHtml).map(async (event) => {
+  const recentResults = await Promise.allSettled(recentEventRefs(playerHtml, detailHtml).map(async (event) => {
     const response = await doFetch(`https://www.pdga.com/tour/event/${event.id}`, { headers });
-    return response.ok ? parsePendingEvent(await response.text(), pdga, event) : null;
+    return response.ok ? parseRecentEvent(await response.text(), pdga, event) : null;
   }));
-  const pending = pendingResults.flatMap((result) => result.status === "fulfilled" && result.value ? [result.value] : []);
-  const events = [...pending.filter((event): event is PdgaEvent => event != null), ...detailEvents].sort((a, b) => b.epoch - a.epoch);
+  const refreshed = recentResults.flatMap((result) => result.status === "fulfilled" && result.value ? [result.value] : []);
+  const events = mergeEvents(refreshed, detailEvents);
 
   const ratings = events.flatMap((e) => e.rounds.map((r) => r.rating));
   const recent = ratings.slice(0, RECENT_ROUNDS);

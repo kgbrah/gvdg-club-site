@@ -305,6 +305,10 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(pdga, /data-react-pdga-dashboard/);
   assert.match(pdga, /data-react-live-rating/);
   assert.match(pdga, /\/pdga-stats\?pdga=/);
+  assert.match(pdga, /PDGA_REFRESH_MS = 15 \* 60 \* 1000/);
+  assert.match(pdga, /setInterval\(refreshIfStale, PDGA_REFRESH_MS\)/);
+  assert.match(pdga, /addEventListener\("focus", refreshIfStale\)/);
+  assert.match(pdga, /addEventListener\("visibilitychange", refreshWhenVisible\)/);
   assert.match(pdga, /className: "dash-event-main"/);
   assert.match(pdga, /export function pdgaEventTitle\(value\)/);
   assert.match(pdga, /pdgaEventTitle\(event\.tournament\) \|\| "Event"/);

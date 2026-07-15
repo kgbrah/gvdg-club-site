@@ -23,6 +23,16 @@ const PENDING_EVENT_HTML = `
 <h2>Unofficial Results</h2>
 <table class="results"><tr class="even"><td class="place">8</td><td class="player"><a href="/player/273070">Kevin Gray</a></td><td class="pdga-number">273070</td><td class="player-rating">891</td><td class="par">+10</td><td class="round"><a href="/live/event/104547/MA2/scores?round=1" class="score">67</a></td><td class="round-rating">818</td><td class="round"><a href="/live/event/104547/MA2/scores?round=2" class="score">66</a></td><td class="round-rating">909</td><td class="total">133</td></tr></table>`;
 
+const DETAILS_WITH_PARTIAL_EVENT_HTML = DETAILS_HTML.replace("</table>", `
+<tr class="evaluated included odd"><td class="tournament"><a href="/tour/event/104547">Yard Gnomes Open presented by Play it Again Sports</a></td><td class="tier">B</td><td class="date" data-text="1783742400">11-Jul-2026</td><td class="division">MA2</td><td class="round tooltip" data-tooltip-content="#c">1</td><td class="score">67</td><td class="round-rating">818</td><td class="evaluated">Yes</td></tr>
+</table>`);
+
+const DETAILS_WITH_ASCENDING_ROUNDS_HTML = `
+<table>
+<tr><td class="tournament"><a href="/tour/event/98457">Lancer Chain Chaser 9</a></td><td class="date" data-text="1775966400">12-Apr-2026</td><td class="division">MA2</td><td class="round">1</td><td class="score">68</td><td class="round-rating">852</td></tr>
+<tr><td class="tournament"><a href="/tour/event/98457">Lancer Chain Chaser 9</a></td><td class="date" data-text="1775966400">12-Apr-2026</td><td class="division">MA2</td><td class="round">2</td><td class="score">56</td><td class="round-rating">968</td></tr>
+</table>`;
+
 describe("pdga.com parsers", () => {
   it("parses name + official rating + date from the player page", () => {
     const p = parsePlayerPage(PLAYER_HTML);
@@ -41,6 +51,10 @@ describe("pdga.com parsers", () => {
     expect(events[0]?.rounds.map((r) => r.rating)).toEqual([888, 836]);
     expect(events[1]).toMatchObject({ tournament: "Spring Open", division: "MA1" });
     expect(events[1]?.rounds[0]?.rating).toBe(925);
+  });
+
+  it("orders each event's rounds newest first before applying the recent-round cutoff", () => {
+    expect(parseDetailRounds(DETAILS_WITH_ASCENDING_ROUNDS_HTML)[0]?.rounds.map((round) => round.rating)).toEqual([968, 852]);
   });
 
   it("computes live (recent-form mean) + peak from a stubbed fetch", async () => {
@@ -76,6 +90,31 @@ describe("pdga.com parsers", () => {
         { rating: 818, score: 67, round: "1" },
       ],
     });
+    expect(stats.live_rating).toBe(875);
+  });
+
+  it("merges a newly reported round into an event already present in ratings detail", async () => {
+    // Given PDGA ratings detail has round one, while the event page already has round two.
+    let eventFetches = 0;
+    const stub: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/details")) return new Response(DETAILS_WITH_PARTIAL_EVENT_HTML, { status: 200 });
+      if (url.endsWith("/tour/event/104547")) {
+        eventFetches += 1;
+        return new Response(PENDING_EVENT_HTML, { status: 200 });
+      }
+      return new Response(PLAYER_WITH_PENDING_EVENT_HTML, { status: 200 });
+    };
+
+    // When live PDGA stats are built during that partially published event.
+    const stats = await fetchPdgaStats("273070", stub);
+
+    // Then the latest event is refreshed and its existing round is not duplicated.
+    expect(eventFetches).toBe(1);
+    expect(stats.events[0]?.rounds).toEqual([
+      { rating: 909, score: 66, round: "2" },
+      { rating: 818, score: 67, round: "1" },
+    ]);
     expect(stats.live_rating).toBe(875);
   });
 
