@@ -98,9 +98,6 @@ function matchplayRequiredHoles(players: PlayerState[], holes: ScoreHole[], card
   return holes;
 }
 
-// Casual: whoever is keeping the card can finalize. Every MEMBER on the card must have voted on each hole,
-// which — when only one member is logged in and scoring (guests are optional, see requiredScorerIds) —
-// collapses to that single scorekeeper. So a solo casual round finalizes once every hole is scored.
 function casualTargetMissing(players: PlayerState[], holes: ScoreHole[], targets: readonly ScoreTarget[], requiredHoles: Map<string, ScoreHole[]>): MissingScoreConsensus[] {
   const missing: MissingScoreConsensus[] = [];
   for (const target of targets) {
@@ -302,15 +299,37 @@ function cardScorerIds(players: PlayerState[], target: PlayerState): string[] {
 }
 
 function requiredScorerIds(players: PlayerState[], target: PlayerState): string[] {
+  const voted = cardVotedScorerIds(players, target);
+  const activeMembers = cardScorerIds(players, target).filter((scorerId) => isRequiredMemberScorer(players, scorerId));
+  const participating = activeMembers.filter((scorerId) => voted.has(scorerId));
+  return participating.length ? participating : activeMembers;
+}
+
+function cardVotedScorerIds(players: PlayerState[], target: PlayerState): Set<string> {
   const cardId = target.cardId ?? null;
-  const ids: string[] = [];
-  for (let index = 0; index < players.length; index++) {
-    const player = players[index];
+  const active = new Set(cardScorerIds(players, target));
+  const ids = new Set<string>();
+  for (const player of players) {
     if (!player || player.removed || (player.cardId ?? null) !== cardId) continue;
-    if (!player.memberId || player.memberId.startsWith("g_")) continue;
-    ids.push(playerScorerId(index));
+    for (const votes of Object.values(player.scorecards ?? {})) {
+      for (const scorerId of Object.keys(votes ?? {})) {
+        if (active.has(scorerId)) ids.add(scorerId);
+      }
+    }
   }
   return ids;
+}
+
+function isRequiredMemberScorer(players: PlayerState[], scorerId: string): boolean {
+  const index = scorerIndexFromId(scorerId);
+  const player = index == null ? undefined : players[index];
+  return Boolean(player && !player.removed && player.memberId && !player.memberId.startsWith("g_"));
+}
+
+function scorerIndexFromId(scorerId: string): number | null {
+  if (!scorerId.startsWith("player:")) return null;
+  const index = Number(scorerId.slice("player:".length));
+  return Number.isInteger(index) && index >= 0 ? index : null;
 }
 
 // Scorer ids of the registered (non-guest) members ON a specific team/target — used by the competition

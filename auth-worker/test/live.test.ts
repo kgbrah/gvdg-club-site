@@ -678,6 +678,46 @@ describe("live consensus score targets", () => {
     expect(scoreTargetConsensusIssues(card, holes, [pairTarget], { casual: true }).missing).toEqual([]);
   });
 
+  it("casual: does not require untouched member cardmates after one scorekeeper records a pair target", () => {
+    const card = players();
+
+    recordScoreTargetVote({ players: card, target: pairTarget, scorerId: "player:0", hole: 1, strokes: 3 });
+
+    expect(scoreTargetConsensusIssues(card, holes, [pairTarget], { casual: true })).toEqual({ conflicts: [], missing: [] });
+  });
+
+  it("casual: reports an unscored pair target once for the scorekeeper who started the card", () => {
+    const card: PlayerState[] = [
+      { memberId: "m0", name: "A", cardId: "c0", scores: {} },
+      { memberId: "m1", name: "B", cardId: "c0", scores: {} },
+      { memberId: "m2", name: "C", cardId: "c0", scores: {} },
+      { memberId: "m3", name: "D", cardId: "c0", scores: {} },
+    ];
+    const redTarget = {
+      type: "pair",
+      id: "pair:red",
+      label: "Red Pair",
+      playerIndexes: [2, 3],
+      memberIds: ["m2", "m3"],
+    } satisfies ScoreTarget;
+
+    recordScoreTargetVote({ players: card, target: pairTarget, scorerId: "player:0", hole: 1, strokes: 3 });
+
+    expect(scoreTargetConsensusIssues(card, holes, [pairTarget, redTarget], { casual: true }).missing).toEqual([
+      {
+        cardId: "c0",
+        playerIndex: 2,
+        playerName: "Red Pair",
+        hole: 1,
+        missing: 1,
+        required: 1,
+        targetId: "pair:red",
+        targetType: "pair",
+        playerIndexes: [2, 3],
+      },
+    ]);
+  });
+
   it("purges a removed scorer's stale pair-target vote and restores the agreed pair score", () => {
     const card: PlayerState[] = [
       { memberId: "m0", name: "A", cardId: "c0", scores: {} },
@@ -705,7 +745,7 @@ describe("live consensus score targets", () => {
     recordScoreTargetVote({ players: card, target: playerTarget, scorerId: "player:0", hole: 1, strokes: 2 });
 
     expect(card[0]?.scores).toMatchObject({ 1: 2 });
-    expect(scoreTargetConsensusIssues(card, holes, [playerTarget])).toEqual({ conflicts: [], missing: [{ cardId: "c0", playerIndex: 0, playerName: "A", hole: 1, missing: 1, required: 2 }] });
+    expect(scoreTargetConsensusIssues(card, holes, [playerTarget])).toEqual({ conflicts: [], missing: [] });
   });
 });
 
@@ -1363,31 +1403,24 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     expect(touchedDb).toBe(false); // casual → nothing written to D1
   });
 
-  it("blocks finalize while a MEMBER cardmate hasn't confirmed (no conflict, purely unconfirmed), then finalizes once they match", async () => {
+  it("finalizes when one member scorekeeper records the full card and another member never keeps score", async () => {
     const live = new LiveEventDO(new FakeState({}), { DB: db });
     await startCasual(live, "m_a");
     await act(live, "join", "m_b", { name: "Bee" });
-    // m_a keeps the whole card; m_b (a member) hasn't entered anything.
+    // m_a keeps the whole card; m_b is a member on the card but has not kept a scorecard.
     for (const hole of [1, 2]) { await act(live, "score", "m_a", { index: 0, hole, strokes: 3 }); await act(live, "score", "m_a", { index: 1, hole, strokes: 3 }); }
-    const blocked = await act(live, "finalize", "m_a", {});
-    expect(blocked.status).toBe(409);
-    const b1 = (await blocked.json()) as { error: string; conflicts: unknown[]; missing: unknown[] };
-    expect(b1.error).toBe("scorecard_incomplete");
-    expect(b1.conflicts).toEqual([]); // nothing disagrees — it's purely unconfirmed
-    expect(b1.missing.length).toBeGreaterThan(0);
-    // m_b confirms matching scores on every hole for both players → complete.
-    for (const hole of [1, 2]) { await act(live, "score", "m_b", { index: 0, hole, strokes: 3 }); await act(live, "score", "m_b", { index: 1, hole, strokes: 3 }); }
-    const done = await act(live, "finalize", "m_a", {});
-    expect(done.status).toBe(200);
-    expect(((await done.json()) as { forced: boolean }).forced).toBe(false);
+
+    const finalized = await act(live, "finalize", "m_a", {});
+    expect(finalized.status).toBe(200);
+    expect(((await finalized.json()) as { forced: boolean }).forced).toBe(false);
   });
 
   it("a non-admin cannot force past an incomplete board; only an admin can", async () => {
     const live = new LiveEventDO(new FakeState({}), { DB: db });
     await startCasual(live, "m_a");
     await act(live, "join", "m_b", { name: "Bee" });
-    // Only m_a scores; member m_b never confirms → incomplete.
-    for (const hole of [1, 2]) { await act(live, "score", "m_a", { index: 0, hole, strokes: 3 }); await act(live, "score", "m_a", { index: 1, hole, strokes: 3 }); }
+    // m_a starts a scorecard but leaves the card incomplete.
+    await act(live, "score", "m_a", { index: 0, hole: 1, strokes: 3 });
     const nope = await act(live, "finalize", "m_a", { force: true }); // non-admin force is ignored
     expect(nope.status).toBe(409);
     expect(((await nope.json()) as { error: string }).error).toBe("scorecard_incomplete");
@@ -1396,11 +1429,11 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     expect(((await forced.json()) as { forced: boolean }).forced).toBe(true);
   });
 
-  it("exposes `missing` (unconfirmed member scores) in the snapshot and /mine", async () => {
+  it("exposes missing unfinished participating-scorer scores in the snapshot and /mine", async () => {
     const live = new LiveEventDO(new FakeState({}), { DB: db });
     await startCasual(live, "m_a");
     await act(live, "join", "m_b", { name: "Bee" });
-    await act(live, "score", "m_a", { index: 0, hole: 1, strokes: 3 }); // barely started → lots unconfirmed
+    await act(live, "score", "m_a", { index: 0, hole: 1, strokes: 3 }); // barely started -> lots unfinished
     const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { missing: { hole: number; playerName: string }[] };
     expect(Array.isArray(snap.missing)).toBe(true);
     expect(snap.missing.length).toBeGreaterThan(0);

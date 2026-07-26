@@ -126,8 +126,8 @@ export function scorecardConsensusIssues(players: PlayerState[], holes: ScoreHol
   return { conflicts: scoreConflicts(players, holes), missing };
 }
 
-/** A round is ready to finalize when the whole card agrees: NO active-scorer conflicts AND every required
- *  (member) scorer has voted on every hole. Guests are optional (see requiredScorerIds). */
+/** A round is ready to finalize when the whole card agrees: NO active-scorer conflicts AND every participating
+ *  member scorekeeper has voted on every hole. Guests are optional unless their score conflicts. */
 export function isScoreboardComplete(players: PlayerState[], holes: ScoreHole[], targets?: readonly ScoreTarget[]): boolean {
   const issues = scorecardConsensusIssues(players, holes, targets);
   return issues.conflicts.length === 0 && issues.missing.length === 0;
@@ -198,18 +198,38 @@ function cardScorerIds(players: PlayerState[], target: PlayerState): string[] {
   return ids;
 }
 
-/** Scorers REQUIRED to have voted before a scorecard counts as complete: the MEMBER players on the card
- *  (a real member id — not null and not a "g_" guest capability token). Walk-on guests aren't required to
- *  keep a card (they may have no phone), so their absence never blocks finalize — but any vote a guest DOES
- *  cast still counts toward consensus via activeVoteValues, so a disagreeing guest blocks it as a conflict. */
+/** Scorers required before a scorecard counts as complete: member players on the card who have kept any score.
+ *  Before anyone starts scoring, fall back to all member cardmates so an empty card cannot be finalized. */
 export function requiredScorerIds(players: PlayerState[], target: PlayerState): string[] {
+  const voted = cardVotedScorerIds(players, target);
+  const activeMembers = cardScorerIds(players, target).filter((scorerId) => isRequiredMemberScorer(players, scorerId));
+  const participating = activeMembers.filter((scorerId) => voted.has(scorerId));
+  return participating.length ? participating : activeMembers;
+}
+
+function cardVotedScorerIds(players: PlayerState[], target: PlayerState): Set<string> {
   const cardId = target.cardId ?? null;
-  const ids: string[] = [];
-  for (let index = 0; index < players.length; index++) {
-    const player = players[index];
+  const active = new Set(cardScorerIds(players, target));
+  const ids = new Set<string>();
+  for (const player of players) {
     if (!player || player.removed || (player.cardId ?? null) !== cardId) continue;
-    if (!player.memberId || player.memberId.startsWith("g_")) continue; // guests optional
-    ids.push(playerScorerId(index));
+    for (const votes of Object.values(player.scorecards ?? {})) {
+      for (const scorerId of Object.keys(votes ?? {})) {
+        if (active.has(scorerId)) ids.add(scorerId);
+      }
+    }
   }
   return ids;
+}
+
+function isRequiredMemberScorer(players: PlayerState[], scorerId: string): boolean {
+  const index = scorerIndexFromId(scorerId);
+  const player = index == null ? undefined : players[index];
+  return Boolean(player && !player.removed && player.memberId && !player.memberId.startsWith("g_"));
+}
+
+function scorerIndexFromId(scorerId: string): number | null {
+  if (!scorerId.startsWith("player:")) return null;
+  const index = Number(scorerId.slice("player:".length));
+  return Number.isInteger(index) && index >= 0 ? index : null;
 }
