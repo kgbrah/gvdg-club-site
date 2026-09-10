@@ -107,27 +107,27 @@ export function scorecardConsensusIssues(players: PlayerState[], holes: ScoreHol
   for (let index = 0; index < players.length; index++) {
     const player = players[index];
     if (!player || player.removed) continue;
-    const requiredScorers = requiredScorerIds(players, player);
-    if (requiredScorers.length === 0) continue;
     for (const hole of holes) {
-      const votes = player.scorecards?.[hole.hole] ?? {};
-      const missingCount = requiredScorers.filter((scorerId) => votes[scorerId] == null).length;
-      if (missingCount === 0) continue;
+      // Integrity is disagreement (conflicts) plus "no living score". A hole that already has exactly
+      // one active-scorer value is complete even if other cardmates never kept a second scorecard.
+      const values = activeVoteValues(players, player, hole.hole);
+      if (values.length !== 0) continue;
       missing.push({
         cardId: player.cardId ?? null,
         playerIndex: index,
         playerName: player.name,
         hole: hole.hole,
-        missing: missingCount,
-        required: requiredScorers.length,
+        missing: 1,
+        required: 1,
       });
     }
   }
   return { conflicts: scoreConflicts(players, holes), missing };
 }
 
-/** A round is ready to finalize when the whole card agrees: NO active-scorer conflicts AND every participating
- *  member scorekeeper has voted on every hole. Guests are optional unless their score conflicts. */
+/** A round is ready to finalize when every required hole has a living consensus score and no active-scorer
+ *  disagreement. Extra cardmates do not have to keep a second scorecard. Guests are optional unless they
+ *  actually enter a conflicting score. */
 export function isScoreboardComplete(players: PlayerState[], holes: ScoreHole[], targets?: readonly ScoreTarget[]): boolean {
   const issues = scorecardConsensusIssues(players, holes, targets);
   return issues.conflicts.length === 0 && issues.missing.length === 0;

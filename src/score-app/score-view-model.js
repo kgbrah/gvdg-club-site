@@ -204,8 +204,8 @@ export function finalizeBlockers(state) {
   });
   const shown = missing.slice(0, 4);
   shown.forEach((row) => {
-    lines.push("Hole " + row.hole + " — " + (row.playerName || row.label || "a target") + ": not confirmed by all members");
+    lines.push("Hole " + row.hole + " — " + (row.playerName || row.label || "a target") + ": no confirmed score yet");
   });
-  if (missing.length > shown.length) lines.push("…and " + (missing.length - shown.length) + " more unconfirmed");
+  if (missing.length > shown.length) lines.push("…and " + (missing.length - shown.length) + " more holes without a score");
   return { conflicts, missing, ready: conflicts.length === 0 && missing.length === 0, lines };
 }
