@@ -21,8 +21,8 @@ export function uiMatch(match, extras = {}) {
   const bluePlayers = namesFrom(match, "blue");
   return {
     num: match.num,
-    winner: match.winner || null,
-    score: match.score || "",
+    winner: match.winner || extras.winner || null,
+    score: match.score || extras.score || "",
     official: extras.official ?? !!match.official,
     livePath: match.livePath || extras.livePath || "",
     eventId: match.eventId || extras.eventId || null,
@@ -42,6 +42,88 @@ function emptyBoard() {
   };
 }
 
+function nameTokens(name) {
+  return String(name || "").toLowerCase().split(/[^a-z]+/).filter((part) => part.length > 2);
+}
+
+function namesOverlap(left, right) {
+  const a = new Set(nameTokens(left));
+  const b = new Set(nameTokens(right));
+  if (!a.size || !b.size) return false;
+  for (const token of a) if (b.has(token)) return true;
+  return false;
+}
+
+export function sidesOverlap(left, right) {
+  const unused = [...right];
+  let hits = 0;
+  for (const name of left) {
+    const index = unused.findIndex((other) => namesOverlap(name, other));
+    if (index < 0) continue;
+    unused.splice(index, 1);
+    hits += 1;
+  }
+  const need = Math.min(left.length, right.length);
+  return need > 0 && hits === need;
+}
+
+function scoreKey(value) {
+  const text = String(value || "").toLowerCase().replace(/\s+/g, "");
+  if (!text) return "";
+  if (text.startsWith("tie") || text === "as") return "tie";
+  const margin = text.match(/(\d+&\d+)/);
+  return margin ? margin[1] : text;
+}
+
+function scoresCompatible(sheetMatch, liveMatch) {
+  const sheet = scoreKey(sheetMatch.score);
+  const live = scoreKey(liveMatch.score);
+  if (!sheet) return !live;
+  if (!live) return true;
+  return sheet === live;
+}
+
+function liveMatchFitsSheet(live, sheetMatch) {
+  const liveRed = namesFrom(live, "red");
+  const liveBlue = namesFrom(live, "blue");
+  const sheetRed = namesFrom(sheetMatch, "red");
+  const sheetBlue = namesFrom(sheetMatch, "blue");
+  if (liveRed.length !== sheetRed.length || liveBlue.length !== sheetBlue.length) return false;
+  return sidesOverlap(liveRed, sheetRed)
+    && sidesOverlap(liveBlue, sheetBlue)
+    && scoresCompatible(sheetMatch, live);
+}
+
+function liveIndexKey(weekLabel, num) {
+  return weekKey(weekLabel) + "#" + String(num);
+}
+
+function flattenLiveMatches(liveWeeks) {
+  const byWeekNum = new Map();
+  const unlabeled = [];
+  for (const week of liveWeeks) {
+    for (const match of week.matches || []) {
+      const labeled = weekKey(week.label).startsWith("week") || weekKey(week.label) === "finale";
+      if (labeled && match.num) {
+        byWeekNum.set(liveIndexKey(week.label, match.num), { week, match });
+      } else {
+        unlabeled.push({ week, match });
+      }
+    }
+  }
+  return { byWeekNum, unlabeled };
+}
+
+function attachLive(sheetMatch, live) {
+  if (!live) return uiMatch(sheetMatch, { official: true });
+  return uiMatch(sheetMatch, {
+    official: true,
+    livePath: live.livePath || live.match?.livePath,
+    eventId: live.eventId || live.match?.eventId,
+    status: live.status || live.match?.status,
+  });
+}
+
 export function mergeRyderCupData(livePayload, sheetData) {
   const liveBoard = livePayload && livePayload.board ? livePayload.board : emptyBoard();
   const sheet = sheetData && typeof sheetData === "object"
@@ -49,76 +131,75 @@ export function mergeRyderCupData(livePayload, sheetData) {
     : { weeks: [], teamPoints: { red: 0, blue: 0 }, scoreboard: { red: { ...EMPTY_TEAM }, blue: { ...EMPTY_BLUE } } };
   const liveWeeks = Array.isArray(liveBoard.weeks) ? liveBoard.weeks : [];
   const sheetWeeks = Array.isArray(sheet.weeks) ? sheet.weeks : [];
-  const liveByKey = new Map(liveWeeks.map((week) => [weekKey(week.label), week]));
-  const order = [];
-  const seen = new Set();
-  function addLabel(label) {
-    const key = weekKey(label);
-    if (!key || seen.has(key)) return;
-    seen.add(key);
-    order.push(label);
-  }
-  for (const week of sheetWeeks) addLabel(week.label);
-  for (const week of liveWeeks) addLabel(week.label);
+  const { byWeekNum, unlabeled } = flattenLiveMatches(liveWeeks);
+  const usedLive = new Set();
 
-  const weeks = order.map((label) => {
-    const live = liveByKey.get(weekKey(label));
-    const sheetWeek = sheetWeeks.find((week) => weekKey(week.label) === weekKey(label));
-    if (live && Array.isArray(live.matches) && live.matches.length) {
-      const liveNums = new Set(live.matches.map((match) => match.num));
-      const fillIns = sheetWeek && Array.isArray(sheetWeek.matches)
-        ? sheetWeek.matches.filter((match) => !liveNums.has(match.num)).map((match) => uiMatch(match, { official: false }))
-        : [];
-      return {
-        label: live.label || label,
-        dates: live.dates || (sheetWeek && sheetWeek.dates) || "",
-        format: live.format || (sheetWeek && sheetWeek.format) || "singles",
-        official: live.matches.some((match) => match.official),
-        source: "live",
-        matches: [...live.matches.map((match) => uiMatch(match, { official: !!match.official })), ...fillIns],
-      };
+  function takeLiveFor(week, match) {
+    const keyed = byWeekNum.get(liveIndexKey(week.label, match.num));
+    if (keyed && !usedLive.has(keyed.match)) {
+      usedLive.add(keyed.match);
+      return keyed.match;
     }
-    if (sheetWeek) {
-      return {
-        label: sheetWeek.label || label,
-        dates: sheetWeek.dates || "",
-        format: sheetWeek.format || "singles",
-        official: false,
-        source: "sheet",
-        matches: (sheetWeek.matches || []).map((match) => uiMatch(match, { official: false })),
-      };
+    const found = unlabeled.find((row) => !usedLive.has(row.match) && liveMatchFitsSheet(row.match, match));
+    if (found) {
+      usedLive.add(found.match);
+      return found.match;
     }
+    return null;
+  }
+
+  const weeks = sheetWeeks.map((sheetWeek) => {
+    const matches = (sheetWeek.matches || []).map((match) => attachLive(match, takeLiveFor(sheetWeek, match)));
+    const played = matches.filter((match) => (match.score || "").length > 0 || !!match.winner).length;
     return {
-      label,
-      dates: "",
-      format: "singles",
-      official: false,
-      source: "live",
-      matches: [],
+      label: sheetWeek.label,
+      dates: sheetWeek.dates || "",
+      format: sheetWeek.format || "singles",
+      official: true,
+      source: "sheet",
+      matches,
+      played,
     };
   });
 
-  const liveRed = liveBoard.scoreboard && liveBoard.scoreboard.red ? liveBoard.scoreboard.red : EMPTY_TEAM;
-  const liveBlue = liveBoard.scoreboard && liveBoard.scoreboard.blue ? liveBoard.scoreboard.blue : EMPTY_BLUE;
+  for (const liveWeek of liveWeeks) {
+    const leftover = (liveWeek.matches || []).filter((match) => !usedLive.has(match));
+    if (!leftover.length) continue;
+    const labeled = weekKey(liveWeek.label).startsWith("week") || weekKey(liveWeek.label) === "finale";
+    if (labeled && weeks.some((week) => weekKey(week.label) === weekKey(liveWeek.label))) continue;
+    weeks.push({
+      label: liveWeek.label || "App-scored",
+      dates: liveWeek.dates || "",
+      format: liveWeek.format || "singles",
+      official: false,
+      source: "live",
+      matches: leftover.map((match) => uiMatch(match, { official: false })),
+    });
+  }
+
   const sheetRed = sheet.scoreboard && sheet.scoreboard.red ? sheet.scoreboard.red : EMPTY_TEAM;
   const sheetBlue = sheet.scoreboard && sheet.scoreboard.blue ? sheet.scoreboard.blue : EMPTY_BLUE;
-  const hasLivePoints = liveWeeks.some((week) => (week.matches || []).some((match) => match.official));
+  const liveRed = liveBoard.scoreboard && liveBoard.scoreboard.red ? liveBoard.scoreboard.red : EMPTY_TEAM;
+  const liveBlue = liveBoard.scoreboard && liveBoard.scoreboard.blue ? liveBoard.scoreboard.blue : EMPTY_BLUE;
+  const sheetPoints = sheet.teamPoints && (sheet.teamPoints.red || sheet.teamPoints.blue || sheetWeeks.length)
+    ? sheet.teamPoints
+    : null;
 
   return {
     scoreboard: {
       red: {
-        name: liveRed.name || sheetRed.name || "Red Team",
-        players: (liveRed.players && liveRed.players.length ? liveRed.players : sheetRed.players) || [],
+        name: sheetRed.name || liveRed.name || "Red Team",
+        players: (sheetRed.players && sheetRed.players.length ? sheetRed.players : liveRed.players) || [],
       },
       blue: {
-        name: liveBlue.name || sheetBlue.name || "Blue Team",
-        players: (liveBlue.players && liveBlue.players.length ? liveBlue.players : sheetBlue.players) || [],
+        name: sheetBlue.name || liveBlue.name || "Blue Team",
+        players: (sheetBlue.players && sheetBlue.players.length ? sheetBlue.players : liveBlue.players) || [],
       },
     },
-    teamPoints: liveBoard.teamPoints || { red: 0, blue: 0 },
+    teamPoints: sheetPoints || liveBoard.teamPoints || { red: 0, blue: 0 },
     weeks,
-    officialPoints: hasLivePoints,
+    officialPoints: !!(sheetPoints && sheetWeeks.length),
     liveAvailable: !!(livePayload && livePayload.board),
-    sheetAvailable: Array.isArray(sheet.weeks) && sheet.weeks.length > 0,
+    sheetAvailable: sheetWeeks.length > 0,
   };
 }

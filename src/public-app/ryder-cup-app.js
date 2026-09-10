@@ -175,7 +175,7 @@ function WeekSection({ scoreboard, week }) {
         h("span", {
           className: "week-source " + (week.official ? "official" : "unofficial"),
           key: "source",
-        }, week.official ? "Official live cards" : "Sheet schedule"),
+        }, week.official ? "Official sheet" : "App-scored"),
         h("span", { className: "week-tally", key: "tally" }, played ? `${played} of ${week.matches.length} played` : "Upcoming"),
       ]),
     ]),
@@ -187,9 +187,9 @@ function WeekSection({ scoreboard, week }) {
 function ScoringNote({ officialPoints }) {
   return h("p", { className: "scoring-note" }, [
     officialPoints
-      ? "Header points count finished live cards only. "
-      : "No finished live cards yet, so official points are 0-0. ",
-    "Sheet weeks without a live card are schedule, not official. ",
+      ? "Official points come from the club scoreboard sheet. This league was kept there, not in the app. "
+      : "The official sheet has not posted points yet. ",
+    "App cards are linked on a match when one exists. ",
     h("span", { key: "scores" }, ["A win is worth 2 points and a tie awards 1 point each. Scores shown as ", h("strong", { key: "strong" }, "A&B"), "."]),
   ]);
 }

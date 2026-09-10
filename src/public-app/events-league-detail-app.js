@@ -242,7 +242,7 @@ export function EventsLeagueDetailApp() {
         : null,
       data.board
         ? h("p", { key: "scoreboard-link" },
-            h("a", { className: "back-link", href: "ryder-cup.html" }, "Open official Ryder Cup scoreboard"))
+            h("a", { className: "back-link", href: "ryder-cup.html" }, "Official Ryder Cup scoreboard (sheet tally)"))
         : null,
       h(TeamStandingsTable, { key: "teams", teams: teamStandings }),
       h(PlayerStandingsTable, { isMatch, key: "players", standings }),
