@@ -203,3 +203,94 @@ export function mergeRyderCupData(livePayload, sheetData) {
     sheetAvailable: sheetWeeks.length > 0,
   };
 }
+
+function officialMatchResult(match) {
+  const score = String(match && match.score || "").toLowerCase();
+  const isTie = match && match.winner === "tie" || /^tie\b/.test(score) || score === "as";
+  if (!score && !isTie) return null;
+  if (isTie) return "tie";
+  if (match.winner === "red" || match.winner === "blue") return match.winner;
+  return null;
+}
+
+export function officialRyderTeamStandings(tally) {
+  const record = { red: { wins: 0, ties: 0, losses: 0 }, blue: { wins: 0, ties: 0, losses: 0 } };
+  for (const week of (tally && tally.weeks) || []) {
+    if (week.source === "live") continue;
+    for (const match of week.matches || []) {
+      const result = officialMatchResult(match);
+      if (result === "tie") {
+        record.red.ties += 1;
+        record.blue.ties += 1;
+      } else if (result === "red") {
+        record.red.wins += 1;
+        record.blue.losses += 1;
+      } else if (result === "blue") {
+        record.blue.wins += 1;
+        record.red.losses += 1;
+      }
+    }
+  }
+  const redName = tally && tally.scoreboard && tally.scoreboard.red ? tally.scoreboard.red.name : "Red Team";
+  const blueName = tally && tally.scoreboard && tally.scoreboard.blue ? tally.scoreboard.blue.name : "Blue Team";
+  const redPoints = tally && tally.teamPoints ? tally.teamPoints.red : 0;
+  const bluePoints = tally && tally.teamPoints ? tally.teamPoints.blue : 0;
+  return [
+    { team: "Red", teamName: redName || "Red Team", points: redPoints ?? 0, ...record.red },
+    { team: "Blue", teamName: blueName || "Blue Team", points: bluePoints ?? 0, ...record.blue },
+  ].sort((a, b) => b.points - a.points || b.wins - a.wins || a.team.localeCompare(b.team));
+}
+
+export function officialRyderPlayerStandings(weeks) {
+  const map = new Map();
+  function add(name, points, won) {
+    const label = String(name || "").trim();
+    if (!label) return;
+    const key = label.toLowerCase();
+    let row = map.get(key);
+    if (!row) {
+      row = { name: label, events: 0, wins: 0, points: 0 };
+      map.set(key, row);
+    }
+    row.events += 1;
+    row.points += points;
+    if (won) row.wins += 1;
+  }
+  for (const week of weeks || []) {
+    if (week.source === "live") continue;
+    for (const match of week.matches || []) {
+      const result = officialMatchResult(match);
+      if (!result) continue;
+      const redPoints = result === "red" ? 2 : result === "tie" ? 1 : 0;
+      const bluePoints = result === "blue" ? 2 : result === "tie" ? 1 : 0;
+      for (const name of namesFrom(match, "red")) add(name, redPoints, redPoints === 2);
+      for (const name of namesFrom(match, "blue")) add(name, bluePoints, bluePoints === 2);
+    }
+  }
+  return [...map.values()].sort((a, b) => b.points - a.points || b.wins - a.wins || a.name.localeCompare(b.name));
+}
+
+export function applyOfficialRyderTally(leagues, tally, leagueId = 4) {
+  return (Array.isArray(leagues) ? leagues : []).map((item) => {
+    const id = item && item.league ? item.league.id : null;
+    if (Number(id) !== Number(leagueId)) return item;
+    if (tally && typeof tally === "object") {
+      return {
+        ...item,
+        officialSheet: true,
+        officialPending: false,
+        officialError: false,
+        teamStandings: officialRyderTeamStandings(tally),
+        standings: officialRyderPlayerStandings(tally.weeks),
+      };
+    }
+    return {
+      ...item,
+      officialSheet: true,
+      officialPending: tally === undefined,
+      officialError: tally === null,
+      teamStandings: [],
+      standings: [],
+    };
+  });
+}

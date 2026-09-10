@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { mergeRyderCupData, sidesOverlap, uiMatch } from "../src/public-app/ryder-board-merge.js";
+import { applyOfficialRyderTally, mergeRyderCupData, officialRyderPlayerStandings, officialRyderTeamStandings, sidesOverlap, uiMatch } from "../src/public-app/ryder-board-merge.js";
 
 test("uiMatch flattens live name arrays onto the sheet card shape", () => {
   const match = uiMatch({
@@ -158,6 +158,69 @@ test("mergeRyderCupData does not attach a live card onto a different pairing or 
   assert.equal(merged.weeks[0].matches[0].livePath, "");
   assert.equal(merged.weeks[1].label, "2026-07-26");
   assert.equal(merged.weeks[1].matches[0].livePath, "score.html?event=1020");
+});
+
+test("official Ryder standings use sheet points and skip leftover fill-only winners", () => {
+  const tally = {
+    scoreboard: { red: { name: "Juan Team" }, blue: { name: "Jesus Team" } },
+    teamPoints: { red: 80, blue: 76 },
+    weeks: [
+      {
+        source: "sheet",
+        matches: [
+          { num: 1, red: "Juan", blue: "Jesus", score: "1&0", winner: "blue", redPlayers: ["Juan"], bluePlayers: ["Jesus"] },
+          { num: 2, red: "Trap", blue: "PJ", score: "", winner: "red", redPlayers: ["Trap"], bluePlayers: ["PJ"] },
+        ],
+      },
+    ],
+  };
+  const teams = officialRyderTeamStandings(tally);
+  assert.equal(teams[0].teamName, "Juan Team");
+  assert.deepEqual(teams.map((team) => [team.team, team.points, team.wins, team.losses]), [
+    ["Red", 80, 0, 1],
+    ["Blue", 76, 1, 0],
+  ]);
+  const players = officialRyderPlayerStandings(tally.weeks);
+  assert.deepEqual(players.map((player) => [player.name, player.points, player.wins, player.events]), [
+    ["Jesus", 2, 1, 1],
+    ["Juan", 0, 0, 1],
+  ]);
+});
+
+test("applyOfficialRyderTally overlays sheet points and hides D1 numbers until the sheet loads", () => {
+  const leagues = [{
+    league: { id: 4, name: "Ryder Cup", season: "2026" },
+    teamStandings: [{ team: "Blue", teamName: "Jesus Team", points: 21, wins: 10, ties: 1, losses: 9 }],
+    standings: [{ name: "Caleb Leggett", points: 5, events: 3, wins: 2 }],
+  }, {
+    league: { id: 9, name: "Other League" },
+    teamStandings: [{ team: "A", points: 12 }],
+    standings: [],
+  }];
+
+  const pending = applyOfficialRyderTally(leagues, undefined);
+  assert.equal(pending[0].officialSheet, true);
+  assert.equal(pending[0].officialPending, true);
+  assert.deepEqual(pending[0].teamStandings, []);
+  assert.deepEqual(pending[0].standings, []);
+  assert.deepEqual(pending[1].teamStandings, [{ team: "A", points: 12 }]);
+
+  const failed = applyOfficialRyderTally(leagues, null);
+  assert.equal(failed[0].officialError, true);
+  assert.deepEqual(failed[0].teamStandings, []);
+
+  const ready = applyOfficialRyderTally(leagues, {
+    scoreboard: { red: { name: "Juan Team" }, blue: { name: "Jesus Team" } },
+    teamPoints: { red: 80, blue: 76 },
+    weeks: [],
+  });
+  assert.equal(ready[0].officialPending, false);
+  assert.equal(ready[0].officialError, false);
+  assert.deepEqual(ready[0].teamStandings.map((team) => [team.team, team.points]), [
+    ["Red", 80],
+    ["Blue", 76],
+  ]);
+  assert.deepEqual(ready[0].standings, []);
 });
 
 test("mergeRyderCupData keeps leftover live weeks that do not match the sheet", () => {

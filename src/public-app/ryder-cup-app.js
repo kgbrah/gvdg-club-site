@@ -1,71 +1,15 @@
 import React from "react";
 
-import { parseMatchGrid, parseRyderWorkbook, parseScoreboard, seedPairNames } from "../../ryder-cup.js";
-import { fetchPublicJson, publicApiBase } from "./public-api.js";
-import { mergeRyderCupData } from "./ryder-board-merge.js";
+import { seedPairNames } from "../../ryder-cup.js";
+import { fetchMergedRyderData } from "../shared/ryder-cup-data.js";
 
 const h = React.createElement;
 
-const SHEET_ID = "1PSP5bZaG-db04YeREGjQHzlQlLT6QT97np7WBbEGq5I";
-const RYDER_CUP_LEAGUE_ID = 4;
+export { fetchMergedRyderData };
+
 const REFRESH_MS = 3 * 60 * 1000;
 const ROSTER_SEPARATOR = " \u00b7 ";
 const UNPLAYED_MARK = "\u2014";
-
-function gvizUrl(gid) {
-  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${gid}`;
-}
-
-function config() {
-  const data = document.body.dataset;
-  return {
-    gridCsvUrl: (data.gridCsv || "").trim() || gvizUrl("2109671762"),
-    scoreboardCsvUrl: (data.scoreboardCsv || "").trim() || gvizUrl("932426467"),
-    workbookUrl: (data.workbookUrl || "").trim() ||
-      `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=xlsx&id=${SHEET_ID}`,
-  };
-}
-
-async function fetchCsv(url) {
-  const response = await fetch(url, { cache: "no-store" });
-  if (!response.ok) throw new Error(`Sheet request failed (${response.status})`);
-  return response.text();
-}
-
-async function fetchWorkbook(url) {
-  const response = await fetch(url, { cache: "no-store" });
-  if (!response.ok) throw new Error(`Workbook request failed (${response.status})`);
-  return response.arrayBuffer();
-}
-
-async function fetchRyderData() {
-  const urls = config();
-  try {
-    const workbook = await fetchWorkbook(urls.workbookUrl);
-    return await parseRyderWorkbook(workbook);
-  } catch {
-    const [gridCsv, scoreboardCsv] = await Promise.all([
-      fetchCsv(urls.gridCsvUrl),
-      fetchCsv(urls.scoreboardCsvUrl),
-    ]);
-    const { weeks, teamPoints } = parseMatchGrid(gridCsv);
-    const scoreboard = parseScoreboard(scoreboardCsv);
-    return { weeks, teamPoints, scoreboard };
-  }
-}
-
-export async function fetchMergedRyderData() {
-  const sheetPromise = fetchRyderData().catch(() => null);
-  let live = null;
-  try {
-    live = await fetchPublicJson(publicApiBase(), "/leagues/" + RYDER_CUP_LEAGUE_ID);
-  } catch {
-    live = null;
-  }
-  const sheet = await sheetPromise;
-  if (!live && !sheet) throw new Error("ryder_unavailable");
-  return mergeRyderCupData(live, sheet);
-}
 
 function StatusBox({ onRetry, status }) {
   const error = status === "error";

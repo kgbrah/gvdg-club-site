@@ -2,6 +2,8 @@ import React from "react";
 
 import { RECENT_ROUNDS_KEY, localStorageGet, requestJson } from "./api.js";
 import { dollars, formatEventDay, formatToPar } from "./format.js";
+import { applyOfficialRyderTally } from "../public-app/ryder-board-merge.js";
+import { fetchMergedRyderData } from "../shared/ryder-cup-data.js";
 
 const h = React.createElement;
 
@@ -157,10 +159,24 @@ export function WalletPanel({ token }) {
 
 function LeagueCard({ item }) {
   const league = item.league || {};
+  const official = item.officialSheet === true;
+  const pending = item.officialPending === true;
+  const failed = item.officialError === true;
   const teams = Array.isArray(item.teamStandings) ? item.teamStandings : [];
   const players = Array.isArray(item.standings) ? item.standings : [];
+  const note = !official ? null
+    : pending ? "Loading official tally..."
+    : failed ? [
+      "Couldn't load the official sheet tally. ",
+      h("a", { className: "standings-link", href: "ryder-cup.html", key: "link" }, "Open scoreboard"),
+    ]
+    : [
+      "Official points come from the club scoreboard sheet. ",
+      h("a", { className: "standings-link", href: "ryder-cup.html", key: "link" }, "Open scoreboard"),
+    ];
   return h("div", { className: "dash-standings-card" }, [
-    h("h4", { className: "dash-subtitle", key: "title" }, `${league.name || "League"}${league.season ? ` - ${league.season}` : ""} - Standings`),
+    h("h4", { className: "dash-subtitle", key: "title" }, `${league.name || "League"}${league.season ? ` - ${league.season}` : ""} - ${official ? "Official tally" : "Standings"}`),
+    note ? h("p", { className: "dash-note", key: "note" }, note) : null,
     teams.length ? h("table", { className: "lb-table", key: "teams" }, [
       h("thead", { key: "head" }, h("tr", null, ["Team", "Pts", "W", "T", "L"].map((label) => h("th", { key: label }, label)))),
       h("tbody", { key: "body" }, teams.map((team) => h("tr", { key: team.teamName || team.team }, [
@@ -234,25 +250,30 @@ function LiveEventStandings({ event }) {
 }
 
 export function ActiveStandingsPanel() {
-  const [state, setState] = React.useState({ status: "idle", leagues: [], liveEvents: [] });
+  const [state, setState] = React.useState({ status: "idle", leagues: [], liveEvents: [], ryderTally: undefined });
 
   React.useEffect(() => {
     const controller = new AbortController();
     requestJson("/leagues/active", { signal: controller.signal })
-      .then((data) => setState({
+      .then((data) => setState((current) => ({
+        ...current,
         status: "ready",
         leagues: Array.isArray(data.leagues) ? data.leagues : [],
         liveEvents: Array.isArray(data.liveEvents) ? data.liveEvents : Array.isArray(data.events) ? data.events : [],
-      }))
+      })))
       .catch((error) => {
-        if (error.name !== "AbortError") setState({ status: "error", leagues: [], liveEvents: [] });
+        if (error.name !== "AbortError") setState({ status: "error", leagues: [], liveEvents: [], ryderTally: null });
       });
+    fetchMergedRyderData()
+      .then((tally) => setState((current) => ({ ...current, ryderTally: tally })))
+      .catch(() => setState((current) => ({ ...current, ryderTally: null })));
     return () => controller.abort();
   }, []);
 
   if (state.status !== "ready" || (!state.leagues.length && !state.liveEvents.length)) return null;
+  const leagues = applyOfficialRyderTally(state.leagues, state.ryderTally);
   return h("div", { className: "active-standings react-active-standings", "data-react-active-standings": "ready" }, [
     ...state.liveEvents.map((event) => h(LiveEventStandings, { event, key: `event-${event.id}` })),
-    ...state.leagues.map((league, index) => h(LeagueCard, { item: league, key: `league-${league.league?.id || index}` })),
+    ...leagues.map((league, index) => h(LeagueCard, { item: league, key: `league-${league.league?.id || index}` })),
   ]);
 }

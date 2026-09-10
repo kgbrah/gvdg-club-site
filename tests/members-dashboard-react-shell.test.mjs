@@ -344,6 +344,13 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(activity, /\/my-live-rounds/);
   assert.match(activity, /\/shop\/wallet/);
   assert.match(activity, /\/leagues\/active/);
+  assert.match(activity, /fetchMergedRyderData/);
+  assert.match(activity, /applyOfficialRyderTally/);
+  assert.match(activity, /Official tally/);
+  assert.match(activity, /Loading official tally/);
+  assert.match(activity, /Official points come from the club scoreboard sheet/);
+  assert.match(activity, /href: "ryder-cup.html"/);
+  assert.doesNotMatch(activity, /from "\.\.\/public-app\/ryder-cup-app\.js"/);
   assert.match(activity, /data-react-live-scoring/);
   assert.match(activity, /data-react-wallet/);
   assert.match(registration, /data-react-registration-panel/);

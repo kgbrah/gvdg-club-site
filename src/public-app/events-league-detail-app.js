@@ -9,7 +9,7 @@ import {
   publishEventsView,
 } from "./events-state.js";
 import { fetchPublicJson, publicApiBase } from "./public-api.js";
-import { fetchMergedRyderData } from "./ryder-cup-app.js";
+import { fetchMergedRyderData } from "../shared/ryder-cup-data.js";
 
 const h = React.createElement;
 
