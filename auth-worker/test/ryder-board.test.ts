@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import worker from "../src/index.js";
 import { buildRyderCupBoard } from "../src/ryder-board.js";
 
 const sg = (label: string, teamName: string, members: string[]) =>
@@ -61,6 +62,7 @@ describe("buildRyderCupBoard from live league results", () => {
     expect(july.format).toBe("doubles");
     expect(july.matches[0]).toMatchObject({
       eventId: 1020,
+      num: 1,
       red: ["Jason Shirley", "Kevin Gray"],
       blue: ["Alex Donadio", "Eder Hernandez"],
       winner: "red",
@@ -77,6 +79,7 @@ describe("buildRyderCupBoard from live league results", () => {
     expect(board.weeks[0]).toMatchObject({ label: "Week 7", official: false });
     expect(board.weeks[0]!.matches[0]).toMatchObject({
       eventId: 88,
+      num: 1,
       red: ["Jackie"],
       blue: ["Jesus"],
       score: "",
@@ -84,5 +87,66 @@ describe("buildRyderCupBoard from live league results", () => {
       official: false,
       livePath: "score.html?event=88",
     });
+  });
+});
+
+function kv() {
+  const rows = new Map<string, string>();
+  return {
+    get: async (key: string) => rows.get(key) ?? null,
+    put: async (key: string, value: string) => void rows.set(key, value),
+    delete: async (key: string) => void rows.delete(key),
+  };
+}
+
+function leagueDb(state: { league: Record<string, unknown> | null; events: Record<string, unknown>[]; rows: Record<string, unknown>[] }) {
+  return {
+    prepare: (sql: string) => {
+      let binds: unknown[] = [];
+      return {
+        bind(...values: unknown[]) {
+          binds = values;
+          return this;
+        },
+        first: async () => {
+          if (/FROM leagues WHERE id = \?/i.test(sql)) {
+            return binds[0] === 4 ? state.league : null;
+          }
+          return null;
+        },
+        all: async () => {
+          if (/FROM results r JOIN events e/i.test(sql)) return { results: state.rows, success: true };
+          if (/FROM events WHERE league_id = \?/i.test(sql)) return { results: state.events, success: true };
+          return { results: [], success: true };
+        },
+        run: async () => ({ results: [], success: true }),
+      };
+    },
+  };
+}
+
+describe("GET /leagues/4 includes the official board", () => {
+  it("attaches board for Ryder Cup", async () => {
+    const events = [
+      { id: 1001, name: "Ryder Cup Week 1 #1 — Juan Martinez vs Jesus", date: "2026-06-17", status: "final", format: "matchplay" },
+    ];
+    const rows = [
+      { event_id: 1001, member_id: null, name: "Jesus", place: 1, to_par: null, match_result: mr("won"), scoring_group: sg("Blue", "Jesus Team", ["Jesus"]) },
+      { event_id: 1001, member_id: null, name: "Juan Martinez", place: 2, to_par: null, match_result: mr("lost"), scoring_group: sg("Red", "Juan Team", ["Juan Martinez"]) },
+    ];
+    const env = {
+      ROSTER: kv(),
+      RATELIMIT: kv(),
+      DB: leagueDb({ league: { id: 4, name: "Ryder Cup", format: "matchplay" }, events, rows }),
+      JWT_SECRET: "x".repeat(40),
+      ALLOWED_ORIGINS: "http://localhost:8080",
+      LIVE: undefined,
+    } as unknown as Parameters<typeof worker.fetch>[1];
+
+    const res = await worker.fetch(new Request("https://w/leagues/4", { headers: { Origin: "http://localhost:8080" } }), env);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { board?: { teamPoints?: { red: number; blue: number }; weeks?: { label: string }[] } };
+    expect(body.board?.teamPoints).toEqual({ red: 0, blue: 2 });
+    expect(body.board?.weeks?.map((week) => week.label)).toEqual(["Week 1"]);
   });
 });

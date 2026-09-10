@@ -69,7 +69,7 @@ export function buildRyderCupBoard(events: readonly RyderLeagueEvent[], rows: re
   const matches = [...events]
     .slice()
     .sort(compareEvents)
-    .map((event, index) => matchFromEvent(event, rows, winners, index + 1));
+    .map((event) => matchFromEvent(event, rows, winners));
 
   const weeks = groupMatches(matches);
   return {
@@ -86,7 +86,6 @@ function matchFromEvent(
   event: RyderLeagueEvent,
   rows: readonly RyderResultRow[],
   winners: Record<number, "red" | "blue" | "tie">,
-  fallbackNum: number,
 ): RyderMatch {
   const eventRows = rows.filter((row) => row.event_id === event.id);
   const red = uniqueNames(eventRows, "red");
@@ -100,7 +99,7 @@ function matchFromEvent(
     status,
     date: String(event.date || ""),
     weekLabel: parsed.weekLabel,
-    num: parsed.num ?? fallbackNum,
+    num: parsed.num ?? 0,
     format: red.length > 1 || blue.length > 1 || isDoublesName(event.name) ? "doubles" : "singles",
     red: red.length ? red : parsed.red,
     blue: blue.length ? blue : parsed.blue,
@@ -123,7 +122,7 @@ function groupMatches(matches: readonly RyderMatch[]): RyderWeek[] {
     buckets.get(label)!.push(match);
   }
   return order.map((label) => {
-    const weekMatches = (buckets.get(label) || []).slice().sort((a, b) => a.num - b.num || a.eventId - b.eventId);
+    const weekMatches = numberWeekMatches((buckets.get(label) || []).slice().sort((a, b) => a.num - b.num || a.eventId - b.eventId));
     const dates = unique(weekMatches.map((match) => match.date).filter(Boolean)).join(" · ");
     const doubles = weekMatches.filter((match) => match.format === "doubles").length;
     return {
@@ -138,6 +137,19 @@ function groupMatches(matches: readonly RyderMatch[]): RyderWeek[] {
 
 function weekLabelFor(match: RyderMatch): string {
   return match.weekLabel || match.date || "Live matches";
+}
+
+function numberWeekMatches(matches: readonly RyderMatch[]): RyderMatch[] {
+  const used = new Set(matches.map((match) => match.num).filter((num) => num > 0));
+  let next = 1;
+  return matches.map((match) => {
+    if (match.num > 0) return match;
+    while (used.has(next)) next += 1;
+    const num = next;
+    used.add(num);
+    next += 1;
+    return { ...match, num };
+  });
 }
 
 function parseEventTitle(name: string): { weekLabel: string; num: number | null; red: string[]; blue: string[] } {
