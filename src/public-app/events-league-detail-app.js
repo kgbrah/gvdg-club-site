@@ -240,6 +240,10 @@ export function EventsLeagueDetailApp() {
       data.league && data.league.description
         ? h("div", { className: "detail-notes", key: "description" }, String(data.league.description))
         : null,
+      data.board
+        ? h("p", { key: "scoreboard-link" },
+            h("a", { className: "back-link", href: "ryder-cup.html" }, "Open official Ryder Cup scoreboard"))
+        : null,
       h(TeamStandingsTable, { key: "teams", teams: teamStandings }),
       h(PlayerStandingsTable, { isMatch, key: "players", standings }),
       h(LeagueRounds, { key: "rounds", roundWinners, rounds }),

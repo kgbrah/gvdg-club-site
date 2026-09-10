@@ -41,14 +41,15 @@ function FinalizePanel({ blockers, mode, onFinalize, status }) {
   }
 
   const ready = blockers.ready;
+  const hint = blockers.hint || "";
   return h("div", { className: "finalize-card " + (ready ? "ready" : "blocked") }, [
-    h("p", { className: "finalize-head", key: "head" }, ready ? "Your card agrees - ready to finalize" : "Your card is not ready yet"),
+    h("p", { className: "finalize-head", key: "head" }, ready ? "Your card agrees - ready to finish" : "Your card is not ready yet"),
     ...blockers.lines.map((line, index) => h("p", { className: "muted finalize-line", key: "line-" + index }, line)),
     mode === "round"
       ? h("button", { className: "btn finish-round-btn", disabled: !ready, key: "finish", type: "button", onClick: onFinalize }, "Finish round")
       : null,
-    mode === "round" && !ready
-      ? h("p", { className: "muted finish-round-hint", key: "hint" }, "Every member on the card must enter matching scores for every hole before the round can be finished.")
+    mode === "round" && hint
+      ? h("p", { className: "muted finish-round-hint", key: "hint" }, hint)
       : null,
   ]);
 }

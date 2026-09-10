@@ -279,6 +279,21 @@ describe("config-aware live standings", () => {
     ]);
   });
 
+  it("stores Red/Blue scoring groups on singles matchplay so league team points count", () => {
+    const players: PlayerState[] = [
+      { memberId: "a", name: "Ann", team: "Red", scores: { 1: 3, 2: 3 } },
+      { memberId: "b", name: "Bo", team: "Blue", scores: { 1: 4, 2: 4 } },
+    ];
+    const holes = [...twoHoleLayout, { hole: 3, par: 3 }];
+    const config = { groupFormat: "singles", scoringStyle: "matchplay" } as const;
+    const targets = scoreTargetsForPlayers(players, config);
+    const finalized = finalizeLiveStandings({ holes, players, config, targets });
+    expect(finalized.map(({ name, scoringGroup }) => ({ name, label: scoringGroup?.label, members: scoringGroup?.members }))).toEqual([
+      { name: "Ann", label: "Red", members: ["Ann"] },
+      { name: "Bo", label: "Blue", members: ["Bo"] },
+    ]);
+  });
+
   it("computes doubles matchplay from pair side scores and expands final metadata to both members", () => {
     // Given two pair targets in matchplay and Alpha closes the match.
     const players: PlayerState[] = [

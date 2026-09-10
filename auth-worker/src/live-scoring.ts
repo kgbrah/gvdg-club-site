@@ -1,5 +1,5 @@
 import { countScores, type Breakdown } from "./score-breakdown.js";
-import { validateCardTargetsForScoring, type LiveScoringConfig, type ScoreTarget } from "./live-format.js";
+import { normalizePairLabel, validateCardTargetsForScoring, type LiveScoringConfig, type LiveScoringStyle, type ScoreTarget } from "./live-format.js";
 import { finalMatchResult, matchOutcomeOrder, matchPlace, summarizeMatchplay, type MatchStatus } from "./matchplay-scoring.js";
 import type { FinalStanding, PlayerState, Standing } from "./scoring.js";
 
@@ -76,7 +76,7 @@ export function finalizeLiveStandings(input: LiveScoringInput): FinalLiveStandin
 }
 
 function strokeTargetRows(input: LiveScoringInput): TargetStrokeRow[] {
-  const rows = input.targets.map((target) => targetStrokeRow(input.holes, input.players, target));
+  const rows = input.targets.map((target) => targetStrokeRow(input.holes, input.players, target, input.config.scoringStyle));
   rows.sort((a, b) => a.toPar - b.toPar || a.total - b.total || a.name.localeCompare(b.name));
   return rows;
 }
@@ -115,15 +115,15 @@ function matchplaySummary(input: LiveScoringInput): { readonly rows: readonly [T
     holes: input.holes,
     players: input.players,
     targets: [leftTarget, rightTarget],
-    targetName: (target) => targetStrokeRow(input.holes, input.players, target).name,
+    targetName: (target) => targetStrokeRow(input.holes, input.players, target, input.config.scoringStyle).name,
     scoreForTarget,
   });
   const [leftSide, rightSide] = summary.sides;
   return {
     isFinal: summary.isFinal,
     rows: [
-      withMatch(targetStrokeRow(input.holes, input.players, leftSide.target), leftSide.match),
-      withMatch(targetStrokeRow(input.holes, input.players, rightSide.target), rightSide.match),
+      withMatch(targetStrokeRow(input.holes, input.players, leftSide.target, input.config.scoringStyle), leftSide.match),
+      withMatch(targetStrokeRow(input.holes, input.players, rightSide.target, input.config.scoringStyle), rightSide.match),
     ],
   };
 }
@@ -132,6 +132,7 @@ function targetStrokeRow(
   holes: readonly { readonly hole: number; readonly par: number }[],
   players: readonly PlayerState[],
   target: ScoreTarget,
+  scoringStyle?: LiveScoringStyle,
 ): TargetStrokeRow {
   const pars: number[] = [];
   const strokes: number[] = [];
@@ -151,7 +152,7 @@ function targetStrokeRow(
     toPar += score - hole.par;
   }
 
-  const group = scoringGroup(players, target);
+  const group = scoringGroupForTarget(players, target, scoringStyle);
   return {
     memberId: target.memberIds[0] ?? null,
     name: target.label,
@@ -163,8 +164,8 @@ function targetStrokeRow(
     targetType: target.type,
     playerIndexes: target.playerIndexes,
     memberIds: target.memberIds,
-    members: group.members,
-    scoringGroup: target.type === "pair" ? group : undefined,
+    members: group?.members ?? target.playerIndexes.map((index) => playerAt(players, index).name),
+    scoringGroup: group,
     breakdown: countScores(pars, strokes),
     holes: played,
   };
@@ -183,6 +184,25 @@ function scoringGroup(players: readonly PlayerState[], target: ScoreTarget): Sco
     targetId: target.id,
     targetType: target.type,
     label: target.label,
+    members: target.playerIndexes.map((index) => playerAt(players, index).name),
+  };
+}
+
+/** Pair targets always carry a scoring group. Singles matchplay only does when the player has a Red/Blue
+ *  team label — otherwise team standings would treat each player name as a side. */
+function scoringGroupForTarget(
+  players: readonly PlayerState[],
+  target: ScoreTarget,
+  scoringStyle?: LiveScoringStyle,
+): ScoringGroup | undefined {
+  if (target.type === "pair") return scoringGroup(players, target);
+  if (scoringStyle !== "matchplay") return undefined;
+  const team = normalizePairLabel(playerAt(players, target.playerIndexes[0])?.team);
+  if (!team) return undefined;
+  return {
+    targetId: target.id,
+    targetType: target.type,
+    label: team,
     members: target.playerIndexes.map((index) => playerAt(players, index).name),
   };
 }

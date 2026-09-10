@@ -496,6 +496,39 @@ export function startAdminController() {
                 window.dispatchEvent(new CustomEvent('gvdg:admin-league-create-result', { detail: { ok: false, requestId, message } }));
             }
         }
+        async function adminStartLeagueNightFromReact(detail) {
+            const requestId = detail.requestId;
+            if (!requestId) return;
+            const leagueId = detail.leagueId;
+            const body = detail.body || {};
+            if (detail.valid !== true || !leagueId) {
+                const message = !leagueId ? 'Select a league' : (body.start && !body.layout_id ? 'Pick a layout before starting live cards' : 'Week label and matches are required');
+                adminMsg(message, false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-league-night-result', { detail: { ok: false, requestId, message } }));
+                return;
+            }
+            let r;
+            try {
+                r = await adminApi('/admin/leagues/' + leagueId + '/nights', { method: 'POST', body });
+            } catch (err) {
+                const message = 'League night failed';
+                adminMsg(message, false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-league-night-result', { detail: { ok: false, requestId, message } }));
+                return;
+            }
+            const data = await r.json().catch(() => ({}));
+            if (r.ok) {
+                const count = data && data.night && Array.isArray(data.night.events) ? data.night.events.length : 0;
+                adminMsg('Built ' + count + ' league match' + (count === 1 ? '' : 'es'), true);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-league-night-result', { detail: { ok: true, requestId, night: data.night } }));
+                adminLoadEvents();
+                scLoadEvents();
+            } else {
+                const message = data.message || data.error || ('League night failed (' + r.status + ')');
+                adminMsg(message, false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-league-night-result', { detail: { ok: false, requestId, message } }));
+            }
+        }
 
         // ---- Fundraisers management (Phase 4) ----
         async function adminLoadFundraisers() {
@@ -1083,6 +1116,9 @@ export function startAdminController() {
             });
             window.addEventListener('gvdg:admin-league-create-request', async (event) => {
                 await adminAddLeagueFromReact(event.detail || {});
+            });
+            window.addEventListener('gvdg:admin-league-night-request', async (event) => {
+                await adminStartLeagueNightFromReact(event.detail || {});
             });
             window.addEventListener('gvdg:admin-fundraiser-create-request', async (event) => {
                 await adminAddFundraiserFromReact(event.detail || {});

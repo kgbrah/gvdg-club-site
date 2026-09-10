@@ -209,3 +209,17 @@ export function finalizeBlockers(state) {
   if (missing.length > shown.length) lines.push("…and " + (missing.length - shown.length) + " more holes without a score");
   return { conflicts, missing, ready: conflicts.length === 0 && missing.length === 0, lines };
 }
+
+export function finishRoundHint(blockers, mode) {
+  if (mode !== "round") return "";
+  if (blockers.ready) {
+    return "Anyone on this card can finish. Matching scores on each hole are enough; extra cardmates do not need a second scorecard. Conflicts still block.";
+  }
+  if ((blockers.conflicts || []).length) {
+    return "Fix the disagreeing scores first. Extra scorecards are not required unless someone entered a different number.";
+  }
+  if ((blockers.missing || []).length) {
+    return "Each hole needs one confirmed score. You can keep your own card; the round is not waiting for every member to type the same numbers.";
+  }
+  return "";
+}
