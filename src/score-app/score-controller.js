@@ -185,7 +185,7 @@ export function startScoreApp(options) {
             S.conflicts = (Array.isArray(rows) ? rows : []).filter((c) => c && c.cardId === S.cardId);
         }
         function setMissing(rows) {
-            // Holes where a member cardmate hasn't confirmed a score yet (guests are optional). Drives the
+            // Holes with no living consensus score yet (guests are optional). Drives the
             // "what's blocking finalize" panel; scoped to our own card.
             S.missing = (Array.isArray(rows) ? rows : []).filter((m) => m && m.cardId === S.cardId);
         }

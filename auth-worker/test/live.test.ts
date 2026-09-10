@@ -3,6 +3,7 @@ import {
   purgeScoreTargetScorerVotes,
   recordScoreTargetVote,
   recordScoreVote,
+  scorecardConsensusIssues,
   scoreConflicts,
   scoreTargetConsensusIssues,
 } from "../src/live-consensus.js";
@@ -605,6 +606,21 @@ describe("live consensus score targets", () => {
     { memberId: "m0", name: "A", cardId: "c0", scores: {} },
     { memberId: "m1", name: "B", cardId: "c0", scores: {} },
   ];
+
+  it("treats self-kept scorecards as complete when they do not disagree", () => {
+    const card = players();
+    const playerTargets = [
+      playerTarget,
+      { type: "player", id: "player:1", label: "B", playerIndexes: [1], memberIds: ["m1"] },
+    ] satisfies ScoreTarget[];
+
+    recordScoreVote({ players: card, targetIndex: 0, scorerId: "player:0", hole: 1, strokes: 3 });
+    recordScoreVote({ players: card, targetIndex: 1, scorerId: "player:1", hole: 1, strokes: 4 });
+
+    expect(scoreConflicts(card, holes)).toEqual([]);
+    expect(scorecardConsensusIssues(card, holes)).toEqual({ conflicts: [], missing: [] });
+    expect(scoreTargetConsensusIssues(card, holes, playerTargets)).toEqual({ conflicts: [], missing: [] });
+  });
 
   it("keeps legacy player conflict behavior unchanged when no score targets are supplied", () => {
     const card = players();
@@ -1401,6 +1417,23 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     expect(finalized.status).toBe(200);
     expect(((await finalized.json()) as { status: string }).status).toBe("final");
     expect(touchedDb).toBe(false); // casual → nothing written to D1
+  });
+
+  it("finalizes when each member kept only their own scorecard and those scores do not conflict", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await startCasual(live, "m_a");
+    await act(live, "join", "m_b", { name: "Bee" });
+    for (const hole of [1, 2]) {
+      await act(live, "score", "m_a", { index: 0, hole, strokes: 3 });
+      await act(live, "score", "m_b", { index: 1, hole, strokes: 4 });
+    }
+
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { conflicts: unknown[]; missing: unknown[] };
+    expect(snap.conflicts).toEqual([]);
+    expect(snap.missing).toEqual([]);
+    const finalized = await act(live, "finalize", "m_a", {});
+    expect(finalized.status).toBe(200);
+    expect(((await finalized.json()) as { status: string; forced: boolean }).forced).toBe(false);
   });
 
   it("finalizes when one member scorekeeper records the full card and another member never keeps score", async () => {

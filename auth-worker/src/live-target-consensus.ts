@@ -103,46 +103,32 @@ function casualTargetMissing(players: PlayerState[], holes: ScoreHole[], targets
   for (const target of targets) {
     const anchor = activeTargetPlayers(players, target)[0];
     if (!anchor) continue;
-    const requiredScorers = requiredScorerIds(players, anchor.player);
-    if (requiredScorers.length === 0) continue;
     for (const hole of requiredHoles.get(target.id) ?? holes) {
-      const voted = targetVotedScorerIds(players, target, hole.hole);
-      const missingCount = requiredScorers.filter((scorerId) => !voted.has(scorerId)).length;
-      if (missingCount === 0) continue;
-      missing.push(targetMissing({ target, anchor, hole: hole.hole, missing: missingCount, required: requiredScorers.length }));
+      if (targetActiveVoteValues(players, target, hole.hole).length !== 0) continue;
+      missing.push(targetMissing({ target, anchor, hole: hole.hole, missing: 1, required: 1 }));
     }
   }
   return missing;
 }
 
-// Competition: each competing SIDE must confirm the card itself.
-//  • Singles (player targets): unchanged — every member on the card attests each score (for a head-to-head
-//    card that already means both sides confirm), preserving cross-attestation.
-//  • Teams (doubles/matchplay pairs): >=1 of the TEAM's OWN registered (non-guest) members must confirm
-//    each hole — "at least one registered player from each team submits a matching scorecard". A team with
-//    no registered member can never confirm, so its holes stay "missing" (finalize needs an admin override).
-// Matching across sides is enforced separately by the conflict check.
+// Competition: a required hole is complete once it has a living consensus score (exactly one distinct
+// active-scorer value). Disagreement is a conflict, not "missing". A team with no registered member can
+// never confirm, so its holes stay missing (finalize needs an admin override).
 function competitionTargetMissing(players: PlayerState[], holes: ScoreHole[], targets: readonly ScoreTarget[], requiredHoles: Map<string, ScoreHole[]>): MissingScoreConsensus[] {
   const missing: MissingScoreConsensus[] = [];
   for (const target of targets) {
     const anchor = activeTargetPlayers(players, target)[0];
     if (!anchor) continue;
     const targetHoles = requiredHoles.get(target.id) ?? holes;
-    if (target.type === "player") {
-      const requiredScorers = requiredScorerIds(players, anchor.player);
-      if (requiredScorers.length === 0) continue;
-      for (const hole of targetHoles) {
-        const voted = targetVotedScorerIds(players, target, hole.hole);
-        const missingCount = requiredScorers.filter((scorerId) => !voted.has(scorerId)).length;
-        if (missingCount > 0) missing.push(targetMissing({ target, anchor, hole: hole.hole, missing: missingCount, required: requiredScorers.length }));
-      }
-      continue;
-    }
-    const teamScorers = registeredTargetScorerIds(players, target);
+    const teamScorers = target.type === "pair" ? registeredTargetScorerIds(players, target) : null;
     for (const hole of targetHoles) {
-      const voted = targetVotedScorerIds(players, target, hole.hole);
-      if (teamScorers.some((id) => voted.has(id))) continue; // this team confirmed the hole
-      missing.push(targetMissing({ target, anchor, hole: hole.hole, missing: 1, required: Math.max(1, teamScorers.length) }));
+      // A guest-only team can never confirm a competition card.
+      if (teamScorers && teamScorers.length === 0) {
+        missing.push(targetMissing({ target, anchor, hole: hole.hole, missing: 1, required: 1 }));
+        continue;
+      }
+      if (targetActiveVoteValues(players, target, hole.hole).length !== 0) continue;
+      missing.push(targetMissing({ target, anchor, hole: hole.hole, missing: 1, required: 1 }));
     }
   }
   return missing;
@@ -246,18 +232,6 @@ function targetActiveVoteValues(players: PlayerState[], target: ScoreTarget, hol
   return uniqueSorted([...valuesByScorer.values()].flatMap((values) => [...values]));
 }
 
-function targetVotedScorerIds(players: PlayerState[], target: ScoreTarget, hole: number): Set<string> {
-  if (target.type === "player") {
-    const player = players[target.playerIndexes[0]];
-    return new Set(player && !player.removed ? Object.keys(player.scorecards?.[hole] ?? {}) : []);
-  }
-  const voted = new Set<string>();
-  for (const member of activeTargetPlayers(players, target)) {
-    for (const scorerId of Object.keys(member.player.scorecards?.[hole] ?? {})) voted.add(scorerId);
-  }
-  return voted;
-}
-
 function uniqueSorted(values: number[]): number[] {
   return [...new Set(values)].sort((a, b) => a - b);
 }
@@ -294,28 +268,6 @@ function cardScorerIds(players: PlayerState[], target: PlayerState): string[] {
     const player = players[index];
     if (!player || player.removed || (player.cardId ?? null) !== cardId) continue;
     ids.push(playerScorerId(index));
-  }
-  return ids;
-}
-
-function requiredScorerIds(players: PlayerState[], target: PlayerState): string[] {
-  const voted = cardVotedScorerIds(players, target);
-  const activeMembers = cardScorerIds(players, target).filter((scorerId) => isRequiredMemberScorer(players, scorerId));
-  const participating = activeMembers.filter((scorerId) => voted.has(scorerId));
-  return participating.length ? participating : activeMembers;
-}
-
-function cardVotedScorerIds(players: PlayerState[], target: PlayerState): Set<string> {
-  const cardId = target.cardId ?? null;
-  const active = new Set(cardScorerIds(players, target));
-  const ids = new Set<string>();
-  for (const player of players) {
-    if (!player || player.removed || (player.cardId ?? null) !== cardId) continue;
-    for (const votes of Object.values(player.scorecards ?? {})) {
-      for (const scorerId of Object.keys(votes ?? {})) {
-        if (active.has(scorerId)) ids.add(scorerId);
-      }
-    }
   }
   return ids;
 }
