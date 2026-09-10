@@ -53,7 +53,7 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(chrome, /localStorage\.getItem\("theme"\)/);
   assert.match(chrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app admin-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v87"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v88"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
@@ -382,6 +382,7 @@ test('Ryder Cup body results are rendered by the public React bundle', () => {
   assert.match(app, /parseMatchGrid/);
   assert.match(app, /parseScoreboard/);
   assert.match(app, /seedPairNames/);
+  assert.match(app, /export async function fetchMergedRyderData/);
   assert.match(app, /fetchPublicJson\(publicApiBase\(\), "\/leagues\/" \+ RYDER_CUP_LEAGUE_ID\)/);
   assert.match(app, /mergeRyderCupData/);
   assert.match(app, /events\.html#league\/4/);

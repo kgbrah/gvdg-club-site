@@ -263,6 +263,8 @@ test('public Events league detail keeps standings tables scroll-contained', () =
   assert.match(app, /publishEventsView\("league-detail"\)/);
   assert.match(app, /data-react-events-league-detail/);
   assert.match(app, /function TeamStandingsTable/);
+  assert.match(app, /function OfficialRyderTally/);
+  assert.match(app, /fetchMergedRyderData/);
   assert.match(app, /function PlayerStandingsTable/);
   assert.match(app, /function LeagueRounds/);
   assert.match(app, /className: "lb-wrap"/);

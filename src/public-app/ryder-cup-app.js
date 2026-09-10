@@ -54,7 +54,7 @@ async function fetchRyderData() {
   }
 }
 
-async function fetchMergedRyderData() {
+export async function fetchMergedRyderData() {
   const sheetPromise = fetchRyderData().catch(() => null);
   let live = null;
   try {

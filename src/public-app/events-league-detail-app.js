@@ -9,6 +9,7 @@ import {
   publishEventsView,
 } from "./events-state.js";
 import { fetchPublicJson, publicApiBase } from "./public-api.js";
+import { fetchMergedRyderData } from "./ryder-cup-app.js";
 
 const h = React.createElement;
 
@@ -100,7 +101,29 @@ function useEventsLeagueDetail() {
     };
   }, [api, reloadKey, routeId]);
 
-  return data;
+  return { data, routeId };
+}
+
+function useOfficialRyderTally(routeId) {
+  const [tally, setTally] = React.useState(null);
+  React.useEffect(() => {
+    if (routeId !== "4") {
+      setTally(null);
+      return undefined;
+    }
+    let active = true;
+    fetchMergedRyderData()
+      .then((next) => {
+        if (active) setTally(next);
+      })
+      .catch(() => {
+        if (active) setTally(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [routeId]);
+  return tally;
 }
 
 function leagueMeta(league) {
@@ -130,6 +153,30 @@ function TeamDot({ team }) {
 
 function ScrollTable({ children }) {
   return h("div", { className: "lb-wrap" }, children);
+}
+
+function OfficialRyderTally({ tally }) {
+  if (!tally || !tally.teamPoints) return null;
+  const teams = [
+    { team: "Red", teamName: tally.scoreboard && tally.scoreboard.red ? tally.scoreboard.red.name : "Red Team", points: tally.teamPoints.red },
+    { team: "Blue", teamName: tally.scoreboard && tally.scoreboard.blue ? tally.scoreboard.blue.name : "Blue Team", points: tally.teamPoints.blue },
+  ];
+  return h(React.Fragment, null, [
+    h("h3", { className: "roster-title", key: "title" }, "Official tally"),
+    h("p", { className: "detail-notes", key: "note" }, "Official points come from the club scoreboard sheet. This Ryder Cup was kept there, not in the app."),
+    h(ScrollTable, { key: "table" }, h("table", { className: "lb-table" }, [
+      h("thead", { key: "head" }, h("tr", null, ["Team", "Pts"].map((label) => h("th", { key: label }, label)))),
+      h("tbody", { key: "body" }, teams.map((team) => h("tr", { key: team.team }, [
+        h("td", { className: "lb-name", key: "team" }, [
+          h(TeamDot, { key: "dot", team: team.team }),
+          team.teamName,
+        ]),
+        h("td", { key: "points" }, cellText(team.points)),
+      ]))),
+    ])),
+    h("p", { key: "scoreboard-link" },
+      h("a", { className: "back-link", href: "ryder-cup.html" }, "Full Ryder Cup scoreboard")),
+  ]);
 }
 
 function TeamStandingsTable({ teams }) {
@@ -215,7 +262,8 @@ function LeagueRounds({ roundWinners, rounds }) {
 }
 
 export function EventsLeagueDetailApp() {
-  const data = useEventsLeagueDetail();
+  const { data, routeId } = useEventsLeagueDetail();
+  const ryderTally = useOfficialRyderTally(routeId);
   if (!data) return null;
 
   const league = normalizeLeague(data.league);
@@ -225,6 +273,7 @@ export function EventsLeagueDetailApp() {
   const roundWinners = data.roundWinners && typeof data.roundWinners === "object" ? data.roundWinners : {};
   const meta = leagueMeta(league);
   const isMatch = teamStandings.length > 0;
+  const isRyder = routeId === "4";
 
   function backToHub() {
     window.location.hash = "";
@@ -240,11 +289,7 @@ export function EventsLeagueDetailApp() {
       data.league && data.league.description
         ? h("div", { className: "detail-notes", key: "description" }, String(data.league.description))
         : null,
-      data.board
-        ? h("p", { key: "scoreboard-link" },
-            h("a", { className: "back-link", href: "ryder-cup.html" }, "Official Ryder Cup scoreboard (sheet tally)"))
-        : null,
-      h(TeamStandingsTable, { key: "teams", teams: teamStandings }),
+      isRyder ? h(OfficialRyderTally, { key: "official", tally: ryderTally }) : h(TeamStandingsTable, { key: "teams", teams: teamStandings }),
       h(PlayerStandingsTable, { isMatch, key: "players", standings }),
       h(LeagueRounds, { key: "rounds", roundWinners, rounds }),
     ]),
