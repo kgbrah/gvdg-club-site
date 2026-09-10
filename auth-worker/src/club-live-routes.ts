@@ -44,6 +44,53 @@ export function unionRosterPlayers(
 
 const LIVE_SCORE_IP_LIMIT = 180; // score writes per identity per minute (a card rarely exceeds a few)
 
+export async function startLiveEvent(
+  env: Env,
+  origin: string | null,
+  eid: number,
+  startBody: Record<string, unknown> = {},
+): Promise<Response> {
+  const stub = env.LIVE.get(env.LIVE.idFromName("event:" + eid));
+  const ev = (await db.getEvent(env.DB, eid)) as (Record<string, unknown> & { layout_id?: number | null; players?: Record<string, unknown>[] }) | null;
+  if (!ev) return json({ error: "not_found" }, 404, origin);
+  const holes = await db.getLayoutHoles(env.DB, ev.layout_id);
+  if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin);
+  const evLayout = ev.layout_id != null ? ((await db.getLayout(env.DB, ev.layout_id)) as { name?: string | null; course_id?: number | null } | null) : null;
+  const evCourse = evLayout?.course_id != null ? ((await db.getCourse(env.DB, evLayout.course_id)) as { name?: string | null; lat?: number | null; lng?: number | null } | null) : null;
+  const weatherLocation = weatherLocationForCourse(evCourse, evLayout); // null unless the course has coords
+  const eventConfig = (await db.getEventConfig(env.DB, eid)) as { live_scoring_config?: unknown; play_format?: unknown } | null;
+  let liveScoringConfig: LiveScoringConfig;
+  try {
+    liveScoringConfig = normalizeLiveScoringConfigFromLegacy({
+      liveScoringConfig: startBody.liveScoringConfig,
+      live_scoring_config: eventConfig?.live_scoring_config,
+      play_format: eventConfig?.play_format,
+      format: ev.format,
+    });
+  } catch (error) {
+    if (isLiveFormatError(error)) return json({ error: "invalid_live_scoring_config" }, 400, origin);
+    throw error;
+  }
+  const regs = (await db.listRegistrations(env.DB, eid)) as { member_id?: string; name?: string; division?: string | null; starting_hole?: number | null; team?: string | null }[];
+  // Seed the round with BOTH registered players AND manually-added (event_players) walk-ons — nobody is
+  // dropped regardless of how they were entered. (A registered player who was also manually added shows
+  // once; the registration wins since it carries division / starting hole / check-in.)
+  const players = unionRosterPlayers(regs, Array.isArray(ev.players) ? ev.players : []);
+  const validationPlayers: PlayerState[] = players.map((player) => ({ ...player, scores: {}, scorecards: {} }));
+  assignCards(validationPlayers);
+  const targetValidation = scoringState({ eventId: eid, holes, status: "live", startedAt: "", roundConfig: liveScoringConfig }, validationPlayers);
+  // Refuse a malformed prospective roster at start (odd/mis-paired card). Read globalError/cardErrors
+  // explicitly rather than the `error` summary so this guard can't silently regress if the summary changes.
+  const startError = targetValidation.globalError ?? targetValidation.cardErrors[0] ?? null;
+  if (startError) {
+    return json({ error: "invalid_score_targets", code: startError.code, message: startError.message }, 400, origin);
+  }
+  const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, courseName: evCourse?.name ?? null, layoutName: evLayout?.name ?? null, holes, players, liveScoringConfig, startedAt: new Date().toISOString(), weatherLocation }) });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 200) await db.updateEvent(env.DB, eid, { status: "live" });
+  return json(data, r.status, origin);
+}
+
 async function liveProxy(stub: DurableObjectStub, path: string, init: RequestInit | undefined, origin: string | null): Promise<Response> {
   const r = await stub.fetch("https://do" + path, init);
   const data = await r.json().catch(() => ({}));
@@ -121,44 +168,7 @@ export async function handleClubLive(
 
     if (sub === "start") {
       const startBody = (await readJson(request)) ?? {};
-      const ev = (await db.getEvent(env.DB, eid)) as (Record<string, unknown> & { layout_id?: number | null; players?: Record<string, unknown>[] }) | null;
-      if (!ev) return json({ error: "not_found" }, 404, origin);
-      const holes = await db.getLayoutHoles(env.DB, ev.layout_id);
-      if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin);
-      const evLayout = ev.layout_id != null ? ((await db.getLayout(env.DB, ev.layout_id)) as { name?: string | null; course_id?: number | null } | null) : null;
-      const evCourse = evLayout?.course_id != null ? ((await db.getCourse(env.DB, evLayout.course_id)) as { name?: string | null; lat?: number | null; lng?: number | null } | null) : null;
-      const weatherLocation = weatherLocationForCourse(evCourse, evLayout); // null unless the course has coords
-      const eventConfig = (await db.getEventConfig(env.DB, eid)) as { live_scoring_config?: unknown; play_format?: unknown } | null;
-      let liveScoringConfig: LiveScoringConfig;
-      try {
-        liveScoringConfig = normalizeLiveScoringConfigFromLegacy({
-          liveScoringConfig: startBody.liveScoringConfig,
-          live_scoring_config: eventConfig?.live_scoring_config,
-          play_format: eventConfig?.play_format,
-          format: ev.format,
-        });
-      } catch (error) {
-        if (isLiveFormatError(error)) return json({ error: "invalid_live_scoring_config" }, 400, origin);
-        throw error;
-      }
-      const regs = (await db.listRegistrations(env.DB, eid)) as { member_id?: string; name?: string; division?: string | null; starting_hole?: number | null; team?: string | null }[];
-      // Seed the round with BOTH registered players AND manually-added (event_players) walk-ons — nobody is
-      // dropped regardless of how they were entered. (A registered player who was also manually added shows
-      // once; the registration wins since it carries division / starting hole / check-in.)
-      const players = unionRosterPlayers(regs, Array.isArray(ev.players) ? ev.players : []);
-      const validationPlayers: PlayerState[] = players.map((player) => ({ ...player, scores: {}, scorecards: {} }));
-      assignCards(validationPlayers);
-      const targetValidation = scoringState({ eventId: eid, holes, status: "live", startedAt: "", roundConfig: liveScoringConfig }, validationPlayers);
-      // Refuse a malformed prospective roster at start (odd/mis-paired card). Read globalError/cardErrors
-      // explicitly rather than the `error` summary so this guard can't silently regress if the summary changes.
-      const startError = targetValidation.globalError ?? targetValidation.cardErrors[0] ?? null;
-      if (startError) {
-        return json({ error: "invalid_score_targets", code: startError.code, message: startError.message }, 400, origin);
-      }
-      const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, courseName: evCourse?.name ?? null, layoutName: evLayout?.name ?? null, holes, players, liveScoringConfig, startedAt: new Date().toISOString(), weatherLocation }) });
-      const data = await r.json().catch(() => ({}));
-      if (r.status === 200) await db.updateEvent(env.DB, eid, { status: "live" });
-      return json(data, r.status, origin);
+      return startLiveEvent(env, origin, eid, startBody);
     }
     const body = (await readJson(request)) ?? {};
     if (sub === "finalize") {

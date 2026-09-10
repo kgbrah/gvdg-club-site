@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 import { AdminDialogs } from "./admin-dialogs.js";
 import { AdminAuthGate } from "./auth-gate.js";
 import { AdminFundraiserForm, AdminLeagueForm, AdminMeetingForm } from "./club-content-forms.js";
+import { AdminLeagueNightForm } from "./league-night-form.js";
 import { AdminFundraisersList, AdminLeaguesList, AdminMeetingsList } from "./club-content-lists.js";
 import { AdminCourseForm } from "./course-form.js";
 import { AdminCoursesList } from "./courses-list.js";
@@ -124,6 +125,11 @@ if (teeSignReviewMount) {
 const leagueFormMount = document.getElementById("adminLeagueFormReactApp");
 if (leagueFormMount) {
   flushSync(() => createRoot(leagueFormMount).render(h(AdminLeagueForm)));
+}
+
+const leagueNightFormMount = document.getElementById("adminLeagueNightFormReactApp");
+if (leagueNightFormMount) {
+  flushSync(() => createRoot(leagueNightFormMount).render(h(AdminLeagueNightForm)));
 }
 
 const leaguesListMount = document.getElementById("adminLeaguesListReactApp");

@@ -294,6 +294,9 @@ test('score controller delegates scorecard derivation to a pure view model', () 
   assert.match(viewModel, /export function scoreRows\(state\)/);
   assert.match(viewModel, /export function strokesForRow/);
   assert.match(viewModel, /export function finalizeBlockers\(state\)/);
+  assert.match(viewModel, /export function finishRoundHint\(blockers, mode\)/);
+  assert.match(controller, /finishRoundHint\(blockers, MODE\)/);
+  assert.doesNotMatch(scoreLeaderboardSource(), /Every member on the card must enter matching scores/);
   assert.doesNotMatch(controller, /function scoreRows\(\)|function strokesFor\(|function strokesForRow\(|function conflictForRow\(|function holeHasConflict\(|function isMatchDormie\(|function matchStatusText\(|function myScoreRow\(|function udiscExportData\(\)|function finalizeBlockers\(\)/);
 });
 
@@ -301,6 +304,7 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
   const {
     buildScorecardViewState,
     finalizeBlockers,
+    finishRoundHint,
     scoreRows,
     udiscExportData,
   } = await import(new URL('../src/score-app/score-view-model.js', import.meta.url));
@@ -336,6 +340,9 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
   assert.equal(view.show, true);
   assert.deepEqual(udiscExportData(state), { courseId: '123', scorecard: [{ hole: 1, par: 3, strokes: 2 }] });
   assert.equal(finalizeBlockers(state).ready, false);
+  assert.match(finishRoundHint(finalizeBlockers(state), 'round'), /disagreeing scores/);
+  assert.match(finishRoundHint({ ready: true, conflicts: [], missing: [], lines: [] }, 'round'), /Anyone on this card can finish/);
+  assert.equal(finishRoundHint({ ready: true, conflicts: [], missing: [], lines: [] }, 'event'), '');
 });
 
 test('player leaderboard renders matchplay and pair labels without primary to-par ranking', () => {

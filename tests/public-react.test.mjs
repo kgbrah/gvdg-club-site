@@ -382,6 +382,8 @@ test('Ryder Cup body results are rendered by the public React bundle', () => {
   assert.match(app, /parseMatchGrid/);
   assert.match(app, /parseScoreboard/);
   assert.match(app, /seedPairNames/);
+  assert.match(app, /fetchPublicJson\(publicApiBase\(\), "\/leagues\/" \+ RYDER_CUP_LEAGUE_ID\)/);
+  assert.match(app, /mergeRyderCupData/);
   assert.match(app, /events\.html#league\/4/);
   assert.match(app, /window\.setInterval\(\(\) => guardedLoad\(\{ quiet: true \}\), REFRESH_MS\)/);
   assert.match(app, /role: error \? "alert" : "status"/);

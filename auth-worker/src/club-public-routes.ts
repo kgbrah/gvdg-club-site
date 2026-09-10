@@ -1,6 +1,7 @@
 import type { Env } from "./env.js";
 import * as db from "./db.js";
 import { computeLeagueStandings, computeRoundWinners, computeTeamStandings } from "./scoring.js";
+import { RYDER_CUP_LEAGUE_ID, buildRyderCupBoard, type RyderLeagueEvent } from "./ryder-board.js";
 import { verifySession } from "./jwt.js";
 import { bearer, json } from "./http.js";
 import { RECORD_PAGE_DEFAULTS, asInt, parseWindow } from "./input.js";
@@ -67,7 +68,12 @@ export async function handleClubPublic(
     const standings = computeLeagueStandings(rows);
     const teamStandings = computeTeamStandings(rows);
     const roundWinners = computeRoundWinners(rows);
-    return json({ league, standings, teamStandings, roundWinners, events: await db.listLeagueEvents(env.DB, lid!) }, 200, origin);
+    const events = await db.listLeagueEvents(env.DB, lid!);
+    const payload: Record<string, unknown> = { league, standings, teamStandings, roundWinners, events };
+    if (lid === RYDER_CUP_LEAGUE_ID) {
+      payload.board = buildRyderCupBoard(events as RyderLeagueEvent[], rows);
+    }
+    return json(payload, 200, origin);
   }
   if (method === "GET" && pathname === "/fundraisers") return json({ fundraisers: await db.listFundraisers(env.DB) }, 200, origin);
   if (method === "GET" && seg[0] === "fundraisers" && seg.length === 2) {

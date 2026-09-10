@@ -5,6 +5,7 @@ import { createScoreNotificationsRenderer } from "./notifications.js";
 import {
     buildScorecardViewState,
     finalizeBlockers,
+    finishRoundHint,
     isDoublesScoring,
     isMatchplayScoring,
     relClass,
@@ -484,8 +485,10 @@ export function startScoreApp(options) {
         if (scoreShell && typeof scoreShell.setLeaderboardHandler === 'function') scoreShell.setLeaderboardHandler(openLeaderboard);
         function closeLeaderboard() { lbOpen = false; leaderboardSheet.close(); }
         function renderLeaderboard() {
+            const blockers = finalizeBlockers(S);
+            blockers.hint = finishRoundHint(blockers, MODE);
             leaderboardSheet.render({
-                blockers: finalizeBlockers(S),
+                blockers: blockers,
                 exportData: udiscExportData(S),
                 isDoubles: isDoublesScoring(S),
                 isMatchplay: isMatchplayScoring(S),
