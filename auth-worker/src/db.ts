@@ -1,5 +1,6 @@
 export * from "./db-types.js";
 export * from "./db-courses.js";
+export * from "./db-course-conditions.js";
 export * from "./db-leagues.js";
 export * from "./db-events.js";
 export * from "./db-registration.js";

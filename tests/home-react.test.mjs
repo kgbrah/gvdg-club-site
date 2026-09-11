@@ -79,6 +79,11 @@ test('home React bundle owns the course carousel cards', () => {
   assert.match(courses, /tabIndex: 0/);
   assert.match(courses, /MapPin/);
   assert.match(courses, /Disc3/);
+  assert.match(courses, /course-conditions-model/);
+  assert.match(courses, /\/course-conditions/);
+  assert.match(courses, /matchCourseCondition/);
+  assert.match(courses, /course-condition-badge/);
+  assert.match(html, /\.course-condition-badge/);
   assert.match(courseModal, /closest\("\.course-card\[data-course\]"\)/);
   assert.doesNotMatch(courses, /document\.|innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=/);
   assert.doesNotMatch(courses, /📍|🥏|‹|›/);

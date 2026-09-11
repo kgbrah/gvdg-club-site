@@ -1,6 +1,12 @@
 import React from "react";
 import { ChevronLeft, ChevronRight, Disc3, MapPin } from "lucide-react";
 
+import { resolveApiBase } from "../shared/api-base.js";
+import {
+  isStaleCondition,
+  matchCourseCondition,
+  normalizeCondition,
+} from "../shared/course-conditions-model.js";
 import { safeExternalUrl } from "../shared/safe-url.js";
 import { clampedIndex, useSwipe } from "./interaction-hooks.js";
 
@@ -391,14 +397,32 @@ function SlideArrow({ direction, disabled, onClick }) {
   );
 }
 
-function CourseImage({ course }) {
+function ConditionBadge({ condition }) {
+  const stale = isStaleCondition(condition.createdAt);
+  return h(
+    "div",
+    {
+      className: "course-condition-badge " + condition.status + (stale ? " stale" : ""),
+      "data-course-condition": condition.status,
+    },
+    [
+      condition.label,
+      condition.when ? h("span", { className: "course-condition-when", key: "when" }, condition.when) : null,
+    ],
+  );
+}
+
+function CourseImage({ course, condition }) {
   const image = safeExternalUrl(course.image || "");
   return h(
     "div",
     { className: "course-image" + (image ? "" : " no-image") },
-    image
-      ? h("img", { src: image, alt: course.imageAlt || course.name, loading: "lazy" })
-      : icon(Disc3, { className: "course-placeholder-icon", size: 64, strokeWidth: 1.8 }),
+    [
+      image
+        ? h("img", { src: image, alt: course.imageAlt || course.name, loading: "lazy", key: "img" })
+        : icon(Disc3, { className: "course-placeholder-icon", size: 64, strokeWidth: 1.8, key: "placeholder" }),
+      condition ? h(ConditionBadge, { condition, key: "condition" }) : null,
+    ],
   );
 }
 
@@ -409,15 +433,16 @@ function InfoItem({ label, value }) {
   ]);
 }
 
-function CourseCard({ course }) {
+function CourseCard({ course, condition }) {
   const visibleLocation = course.distance ? `${course.location} - ${course.distance}` : course.location;
+  const conditionLabel = condition ? `, ${condition.label}${condition.when ? " " + condition.when : ""}` : "";
   return h(
     "div",
     {
       className: "course-card",
       role: "button",
       tabIndex: 0,
-      "aria-label": `${course.name}, ${visibleLocation}. Open course options.`,
+      "aria-label": `${course.name}, ${visibleLocation}${conditionLabel}. Open course options.`,
       "data-course": course.course,
       "data-location": course.location,
       "data-udisc": safeExternalUrl(course.udisc || ""),
@@ -426,7 +451,7 @@ function CourseCard({ course }) {
       onKeyDown: handleCardKeyDown,
     },
     [
-      h(CourseImage, { course, key: "image" }),
+      h(CourseImage, { course, condition, key: "image" }),
       h("div", { className: "course-content", key: "content" }, [
         h("div", { className: "course-header", key: "header" }, [
           h("h3", { className: "course-name", key: "name" }, course.name),
@@ -447,7 +472,7 @@ function CourseCard({ course }) {
   );
 }
 
-function CourseSlide({ active, onNext, onPrevious, onSizeChange, slide, slideRef }) {
+function CourseSlide({ active, onNext, onPrevious, onSizeChange, reports, slide, slideRef }) {
   return h("div", { className: "carousel-slide-courses", onLoadCapture: onSizeChange, ref: slideRef }, [
     h("div", { className: "slide-header-nav", key: "header-nav" }, [
       h(SlideArrow, { direction: "previous", disabled: !active || onPrevious == null, key: "previous", onClick: onPrevious }),
@@ -457,7 +482,11 @@ function CourseSlide({ active, onNext, onPrevious, onSizeChange, slide, slideRef
       ]),
       h(SlideArrow, { direction: "next", disabled: !active || onNext == null, key: "next", onClick: onNext }),
     ]),
-    h("div", { className: "courses-grid", key: "grid" }, slide.courses.map((course) => h(CourseCard, { course, key: course.course }))),
+    h("div", { className: "courses-grid", key: "grid" }, slide.courses.map((course) => h(CourseCard, {
+      condition: matchCourseCondition(course, reports),
+      course,
+      key: course.course,
+    }))),
   ]);
 }
 
@@ -501,6 +530,7 @@ function CarouselNav({ current, onNext, onPrevious, onSelect }) {
 export function HomeCoursesApp() {
   const [current, setCurrent] = React.useState(0);
   const [height, setHeight] = React.useState("");
+  const [reports, setReports] = React.useState([]);
   const slideRefs = React.useRef([]);
   const swipeHandlers = useSwipe((step) => setCurrent((slide) => clampedIndex(slide + step, COURSE_SLIDES.length)));
 
@@ -509,9 +539,27 @@ export function HomeCoursesApp() {
     if (active) setHeight(`${active.scrollHeight}px`);
   }, [current]);
 
+  React.useEffect(() => {
+    const ac = new AbortController();
+    fetch(`${resolveApiBase()}/course-conditions`, {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+      signal: ac.signal,
+    })
+      .then((response) => (response.ok ? response.json() : { reports: [] }))
+      .then((data) => {
+        setReports((Array.isArray(data?.reports) ? data.reports : []).map(normalizeCondition).filter(Boolean));
+      })
+      .catch((error) => {
+        if (error?.name === "AbortError") return;
+        setReports([]);
+      });
+    return () => ac.abort();
+  }, []);
+
   React.useLayoutEffect(() => {
     measureHeight();
-  }, [measureHeight]);
+  }, [measureHeight, reports]);
 
   React.useEffect(() => {
     window.addEventListener("resize", measureHeight);
@@ -540,6 +588,7 @@ export function HomeCoursesApp() {
           onNext: index < COURSE_SLIDES.length - 1 ? () => go(index + 1) : null,
           onPrevious: index > 0 ? () => go(index - 1) : null,
           onSizeChange: measureHeight,
+          reports,
           slide,
           slideRef: (node) => { slideRefs.current[index] = node; },
         })))),

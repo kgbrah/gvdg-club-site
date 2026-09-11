@@ -195,6 +195,20 @@
         .meeting-minutes-download { display: inline-flex; align-items: center; gap: 0.5rem; margin-top: 1rem; padding: 0.5rem 1rem; background: var(--secondary); color: white; text-decoration: none; border-radius: 6px; font-size: 0.85rem; font-weight: 600; transition: background 0.15s ease; }
         .meeting-minutes-download:hover { background: #003d6b; }
 
+        .course-conditions-panel { background: var(--bg-primary); border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem; border: 1px solid var(--border-color); }
+        .course-conditions-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; color: var(--primary); margin-bottom: 0.35rem; text-align: center; }
+        .course-conditions-note { color: var(--text-muted); font-size: 0.9rem; line-height: 1.5; text-align: center; margin: 0 0 1rem; }
+        .course-conditions-list { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 1rem; }
+        .course-conditions-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; flex-wrap: wrap; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem 1rem; }
+        .course-conditions-course { font-weight: 700; color: var(--text-primary); }
+        .course-conditions-meta { color: var(--text-muted); font-size: 0.85rem; line-height: 1.45; margin-top: 0.2rem; }
+        .course-conditions-panel .course-condition-badge { position: static; display: inline-flex; align-items: center; padding: 0.3rem 0.65rem; border-radius: 999px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #fff; box-shadow: none; }
+        .course-conditions-panel .course-condition-badge.dry { background: #2f6f2f; }
+        .course-conditions-panel .course-condition-badge.playable { background: #4a7c23; }
+        .course-conditions-panel .course-condition-badge.wet { background: #1d4e89; }
+        .course-conditions-panel .course-condition-badge.flooded { background: #0b3a6a; }
+        .course-conditions-panel .course-condition-badge.closed { background: #9b1c1c; }
+
         /* Members Controls & Grid */
         .members-controls { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
         .members-search { flex: 1; min-width: 200px; padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); font-size: 1rem; color: var(--text-primary); outline: none; transition: border-color 0.15s ease; }

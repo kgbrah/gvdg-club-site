@@ -84,7 +84,13 @@ test('member dashboard React club panel owns directory search, filters, load-mor
   assert.match(data, /"lastName": "Faison"/);
   assert.match(clubPanel, /data-react-club-panel/);
   assert.match(clubPanel, /clubDirectoryData/);
+  assert.match(clubPanel, /CourseConditionsPanel/);
   assert.match(clubPanel, /DoublesLeaguePanel/);
+  const conditions = readFileSync('src/members-app/course-conditions-panel.js', 'utf8');
+  assert.match(conditions, /data-react-course-conditions/);
+  assert.match(conditions, /\/courses\/\$\{id\}\/conditions/);
+  assert.match(conditions, /COURSE_CONDITION_STATUSES/);
+  assert.doesNotMatch(conditions, /innerHTML|insertAdjacentHTML/);
   assert.match(directory, /data-react-member-directory/);
   assert.match(directory, /Search members by name or PDGA #/);
   assert.match(directory, /PDGA Members/);
