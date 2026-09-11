@@ -35,9 +35,10 @@ function matchSummary(round) {
   if (!match) return null;
   const scoringGroup = parseObject(round.scoring_group);
   const team = scoringGroup?.label ? `${scoringGroup.label} - ` : "";
+  const raw = String(match.status || "");
   const status = match.outcome === "lost" || match.outcome === "trailing"
-    ? String(match.status || "").replace(/^won /, "lost ")
-    : String(match.status || "");
+    ? raw.replace(/^won /, "lost ").replace(/^(\d+) up\b/, "$1 down")
+    : raw;
   return `${team}${status}`;
 }
 

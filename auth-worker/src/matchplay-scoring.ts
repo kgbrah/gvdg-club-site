@@ -56,7 +56,6 @@ export function summarizeMatchplay(input: {
   // Dormie: the leader's margin equals the holes left AND the match isn't already decided/over — a win or a
   // halve on the current hole ends it. A match-level property, so it's the same for both sides.
   const dormie = Math.abs(lead) > 0 && Math.abs(lead) === holesRemaining && holesRemaining > 0;
-  const status = matchStatusLabel(lead, holesRemaining, dormie);
   const isFinal = holesRemaining === 0 || Math.abs(lead) > holesRemaining;
   const rightLead = lead === 0 ? 0 : -lead;
   return {
@@ -66,7 +65,7 @@ export function summarizeMatchplay(input: {
         target: leftTarget,
         name: leftName,
         match: {
-          status,
+          status: matchStatusLabel(lead, holesRemaining, dormie),
           outcome: liveOutcome(lead),
           holesWon: leftWins,
           holesLost: rightWins,
@@ -81,7 +80,7 @@ export function summarizeMatchplay(input: {
         target: rightTarget,
         name: rightName,
         match: {
-          status,
+          status: matchStatusLabel(rightLead, holesRemaining, dormie),
           outcome: liveOutcome(-lead),
           holesWon: rightWins,
           holesLost: leftWins,
@@ -151,9 +150,11 @@ function liveOutcome(lead: number): MatchStatus["outcome"] {
 function matchStatusLabel(lead: number, holesRemaining: number, dormie: boolean): string {
   const margin = Math.abs(lead);
   if (margin === 0) return "AS";
+  // Closed-match result stays "won N&M" on both sides; UI remaps the trailer to "lost".
   if (margin > holesRemaining) return `won ${margin}&${holesRemaining}`;
-  if (dormie) return `${margin} up (dormie)`;
-  return `${margin} up`;
+  const dir = lead > 0 ? "up" : "down";
+  if (dormie) return `${margin} ${dir} (dormie)`;
+  return `${margin} ${dir}`;
 }
 
 function assertNever(value: never): never {

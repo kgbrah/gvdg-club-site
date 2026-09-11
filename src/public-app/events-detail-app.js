@@ -53,9 +53,9 @@ function parseJson(raw, fallback = null) {
 
 function matchLabel(match) {
   if (!match || !match.status) return "AS";
-  return match.outcome === "lost" || match.outcome === "trailing"
-    ? String(match.status).replace(/^won /, "lost ")
-    : String(match.status);
+  const status = String(match.status);
+  if (match.outcome !== "lost" && match.outcome !== "trailing") return status;
+  return status.replace(/^won /, "lost ").replace(/^(\d+) up\b/, "$1 down");
 }
 
 function matchText(match) {

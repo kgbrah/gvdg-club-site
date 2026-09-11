@@ -255,7 +255,25 @@ describe("config-aware live standings", () => {
     // Then the leading side is 1 up with 1 to play = DORMIE (a win or a halve on the last hole clinches it).
     expect(live.map(({ name, match }) => ({ name, match }))).toEqual([
       { name: "Ann", match: { status: "1 up (dormie)", outcome: "leading", holesWon: 1, holesLost: 0, holesTied: 0, lead: 1, holesRemaining: 1, opponent: "Bo", dormie: true } },
-      { name: "Bo", match: { status: "1 up (dormie)", outcome: "trailing", holesWon: 0, holesLost: 1, holesTied: 0, lead: -1, holesRemaining: 1, opponent: "Ann", dormie: true } },
+      { name: "Bo", match: { status: "1 down (dormie)", outcome: "trailing", holesWon: 0, holesLost: 1, holesTied: 0, lead: -1, holesRemaining: 1, opponent: "Ann", dormie: true } },
+    ]);
+  });
+
+  it("labels the trailer N down while the leader is N up", () => {
+    // Given Ann wins hole 1 on an 18-hole card (not dormie: 1 up, 17 to play).
+    const holes = Array.from({ length: 18 }, (_, i) => ({ hole: i + 1, par: 3 }));
+    const players: PlayerState[] = [
+      { memberId: "a", name: "Ann", scores: { 1: 3 } },
+      { memberId: "b", name: "Bo", scores: { 1: 4 } },
+    ];
+    const config = { groupFormat: "singles", scoringStyle: "matchplay" } as const;
+    const targets = scoreTargetsForPlayers(players, config);
+
+    const live = computeLiveStandings({ holes, players, config, targets });
+
+    expect(live.map(({ name, match }) => ({ name, status: match?.status, outcome: match?.outcome, lead: match?.lead }))).toEqual([
+      { name: "Ann", status: "1 up", outcome: "leading", lead: 1 },
+      { name: "Bo", status: "1 down", outcome: "trailing", lead: -1 },
     ]);
   });
 
