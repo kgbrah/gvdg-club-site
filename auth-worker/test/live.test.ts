@@ -1734,8 +1734,8 @@ describe("LiveEventDO config-aware score targets and final results", () => {
     expect(snap.standings?.map((standing) => [standing.name, standing.match?.outcome])).toEqual([
       ["A", "leading"],
       ["B", "trailing"],
-      ["C", "trailing"],
       ["D", "leading"],
+      ["C", "trailing"],
     ]);
 
     const finalized = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" } }));
