@@ -3,6 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index.js";
 
 const SECRET = "x".repeat(40);
+const FULL_CATALOG = [
+  { id: 1, name: "ECU North Rec Complex", is_default: 1 },
+  { id: 2, name: "West Meadowbrook Park", is_default: 1 },
+];
 
 function kv() {
   return { get: async () => null, put: async () => undefined, delete: async () => undefined };
@@ -19,7 +23,7 @@ function installCache() {
   vi.stubGlobal("caches", { open: async () => defaultCache });
 }
 
-function courseDb() {
+function courseDb(mode: "full-then-loss" | "always-loss") {
   let calls = 0;
   const statement = {
     bind() {
@@ -27,8 +31,8 @@ function courseDb() {
     },
     all: async () => {
       calls += 1;
-      if (calls > 1) throw new Error("D1_ERROR: Network connection lost.");
-      return { results: [{ id: 1, name: "ECU North Rec Complex", is_default: 1 }], success: true };
+      if (mode === "always-loss" || calls > 1) throw new Error("D1_ERROR: Network connection lost.");
+      return { results: FULL_CATALOG, success: true };
     },
     first: async () => null,
     run: async () => ({ results: [], success: true }),
@@ -59,9 +63,9 @@ describe("public course catalog cache", () => {
     vi.unstubAllGlobals();
   });
 
-  it("serves repeated course-list requests from Worker cache", async () => {
+  it("keeps a real catalog when D1 later fails instead of caching the one-course fallback", async () => {
     installCache();
-    const courses = courseDb();
+    const courses = courseDb("full-then-loss");
 
     const first = await worker.fetch(request(), env(courses.db));
     const second = await worker.fetch(request(), env(courses.db));
@@ -69,7 +73,22 @@ describe("public course catalog cache", () => {
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
     expect(second.headers.get("Access-Control-Allow-Origin")).toBe("*");
-    expect(courses.calls()).toBe(1);
-    expect(await second.json()).toMatchObject({ courses: [{ id: 1, name: "ECU North Rec Complex" }] });
+    expect((await first.json() as { courses: unknown[] }).courses).toHaveLength(2);
+    expect((await second.json() as { courses: unknown[] }).courses).toHaveLength(2);
+    expect(courses.calls()).toBeGreaterThan(1);
+  });
+
+  it("does not pin the ECU-only fallback in cache", async () => {
+    installCache();
+    const courses = courseDb("always-loss");
+
+    const first = await worker.fetch(request(), env(courses.db));
+    const afterFirst = courses.calls();
+    const second = await worker.fetch(request(), env(courses.db));
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect((await first.json() as { courses: unknown[] }).courses).toHaveLength(1);
+    expect(courses.calls()).toBeGreaterThan(afterFirst);
   });
 });

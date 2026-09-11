@@ -8,8 +8,7 @@ import { RECORD_PAGE_DEFAULTS, asInt, parseWindow } from "./input.js";
 import { handleTeeSignImage } from "./tee-sign-routes.js";
 import { readD1OrFallback } from "./d1-retry.js";
 
-const COURSE_CATALOG_CACHE_TTL_SEC = 900;
-const COURSE_CATALOG_CACHE_VERSION = "course-catalog-v1";
+const COURSE_CATALOG_CACHE_VERSION = "course-catalog-v2";
 const COURSE_CATALOG_CACHE_NAME = "gvdg-course-catalog";
 
 function courseCatalogCacheKey(request: Request): Request {
@@ -18,19 +17,32 @@ function courseCatalogCacheKey(request: Request): Request {
   return new Request(url.toString(), { method: "GET" });
 }
 
-async function cachedCourseCatalogJson(request: Request, origin: string | null, load: () => Promise<unknown>): Promise<Response> {
-  if (typeof caches === "undefined") return json(await load(), 200, origin);
-  const cache = await caches.open(COURSE_CATALOG_CACHE_NAME);
-  const cacheKey = courseCatalogCacheKey(request);
-  const cached = await cache.match(cacheKey);
-  if (cached) return cached;
-  const response = json(await load(), 200, origin, {
-    "Access-Control-Allow-Origin": "*",
-    "Cache-Control": `public, max-age=${COURSE_CATALOG_CACHE_TTL_SEC}`,
-    Vary: "Accept-Encoding",
-  });
-  await cache.put(cacheKey, response.clone());
-  return response;
+const CATALOG_CORS = {
+  "Access-Control-Allow-Origin": "*",
+  Vary: "Accept-Encoding",
+} as const;
+
+async function cachedCourseCatalogJson(
+  request: Request,
+  origin: string | null,
+  load: () => Promise<{ payload: unknown; cacheable: boolean }>,
+): Promise<Response> {
+  const loaded = await load();
+  const cache = typeof caches === "undefined" ? null : await caches.open(COURSE_CATALOG_CACHE_NAME);
+  const cacheKey = cache ? courseCatalogCacheKey(request) : null;
+  if (loaded.cacheable) {
+    const response = json(loaded.payload, 200, origin, {
+      ...CATALOG_CORS,
+      "Cache-Control": "private, no-store",
+    });
+    if (cache && cacheKey) await cache.put(cacheKey, response.clone());
+    return response;
+  }
+  if (cache && cacheKey) {
+    const cached = await cache.match(cacheKey);
+    if (cached) return cached;
+  }
+  return json(loaded.payload, 200, origin, { ...CATALOG_CORS, "Cache-Control": "no-store" });
 }
 
 export async function handleClubPublic(
@@ -41,7 +53,12 @@ export async function handleClubPublic(
   method: string,
   seg: string[],
 ): Promise<Response | null> {
-  if (method === "GET" && pathname === "/courses") return cachedCourseCatalogJson(request, origin, async () => ({ courses: await db.listCourses(env.DB) }));
+  if (method === "GET" && pathname === "/courses") {
+    return cachedCourseCatalogJson(request, origin, async () => {
+      const listed = await db.listCoursesCatalog(env.DB);
+      return { payload: { courses: listed.results }, cacheable: listed.cacheable };
+    });
+  }
   if (method === "GET" && pathname === "/leagues") return json({ leagues: await db.listLeagues(env.DB) }, 200, origin);
   // Club standings for member dashboards: active leagues (with team + player standings) + any live events.
   if (method === "GET" && pathname === "/leagues/active") {
@@ -133,9 +150,16 @@ export async function handleClubPublic(
   if (method === "GET" && seg[0] === "courses" && seg.length === 3 && (seg[2] === "layouts" || seg[2] === "positions")) {
     const cid = asInt(seg[1]);
     if (cid == null) return json({ error: "not_found" }, 404, origin);
-    return seg[2] === "layouts"
-      ? cachedCourseCatalogJson(request, origin, async () => ({ layouts: await db.listLayouts(env.DB, cid) }))
-      : cachedCourseCatalogJson(request, origin, async () => ({ positions: await db.listPositions(env.DB, cid) }));
+    if (seg[2] === "layouts") {
+      return cachedCourseCatalogJson(request, origin, async () => {
+        const listed = await db.listLayoutsCatalog(env.DB, cid);
+        return { payload: { layouts: listed.results }, cacheable: listed.cacheable };
+      });
+    }
+    return cachedCourseCatalogJson(request, origin, async () => {
+      const listed = await db.listPositionsCatalog(env.DB, cid);
+      return { payload: { positions: listed.results }, cacheable: listed.cacheable };
+    });
   }
   if (method === "GET" && seg[0] === "courses" && seg.length === 3 && seg[2] === "tee-signs") {
     const cid = asInt(seg[1]);

@@ -12,11 +12,27 @@ export interface CourseInput {
   created_by?: string | null;
 }
 
-export async function listCourses(db: D1Like) {
-  return (await readD1OrFallback(
+async function listed<T>(
+  operation: () => Promise<{ results: T[] }>,
+  fallback: () => T[],
+): Promise<{ results: T[]; cacheable: boolean }> {
+  let cacheable = true;
+  const results = (await readD1OrFallback(operation, () => {
+    cacheable = false;
+    return { results: fallback(), success: true };
+  })).results;
+  return { results, cacheable };
+}
+
+export async function listCoursesCatalog(db: D1Like) {
+  return listed(
     () => db.prepare("SELECT * FROM courses ORDER BY is_default DESC, name").all(),
-    () => ({ results: fallbackCourses(), success: true }),
-  )).results;
+    fallbackCourses,
+  );
+}
+
+export async function listCourses(db: D1Like) {
+  return (await listCoursesCatalog(db)).results;
 }
 
 export async function getCourse(db: D1Like, id: number) {
@@ -50,11 +66,15 @@ export async function deleteCourse(db: D1Like, id: number) {
   await db.prepare("DELETE FROM courses WHERE id = ?").bind(id).run();
 }
 
-export async function listLayouts(db: D1Like, courseId: number) {
-  return (await readD1OrFallback(
+export async function listLayoutsCatalog(db: D1Like, courseId: number) {
+  return listed(
     () => db.prepare("SELECT * FROM course_layouts WHERE course_id = ? ORDER BY id").bind(courseId).all(),
-    () => ({ results: fallbackLayouts(courseId), success: true }),
-  )).results;
+    () => fallbackLayouts(courseId),
+  );
+}
+
+export async function listLayouts(db: D1Like, courseId: number) {
+  return (await listLayoutsCatalog(db, courseId)).results;
 }
 
 export async function createLayout(
@@ -176,15 +196,19 @@ export interface PositionInput {
   color?: string | null;
 }
 
-export async function listPositions(db: D1Like, courseId: number, kind?: PositionKind) {
+export async function listPositionsCatalog(db: D1Like, courseId: number, kind?: PositionKind) {
   let sql = "SELECT * FROM course_positions WHERE course_id = ?";
   const binds: unknown[] = [courseId];
   if (kind) { sql += " AND kind = ?"; binds.push(kind); }
   sql += " ORDER BY kind, id";
-  return (await readD1OrFallback(
+  return listed(
     () => db.prepare(sql).bind(...binds).all(),
-    () => ({ results: [], success: true }),
-  )).results;
+    () => [],
+  );
+}
+
+export async function listPositions(db: D1Like, courseId: number, kind?: PositionKind) {
+  return (await listPositionsCatalog(db, courseId, kind)).results;
 }
 
 export async function createPosition(db: D1Like, p: PositionInput) {
