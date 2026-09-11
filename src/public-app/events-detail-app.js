@@ -8,6 +8,7 @@ import {
   typeLabel,
 } from "../shared/events-model.js";
 import { WeatherStrip } from "../score-app/weather-strip.js";
+import { liveWatchHref } from "../shared/live-watch.js";
 import { TeeSignSvg } from "../shared/tee-sign-svg.js";
 import { UDiscExportDetails, udiscDeepLink } from "../shared/udisc-export.js";
 import { useEventsEventDetail } from "./events-detail-data.js";
@@ -206,6 +207,7 @@ function LivePanel({ data }) {
       h("span", { key: "label" }, "Live scoring in progress"),
       h("span", { className: "lb-conn", key: "connection" }, data.liveConnection || "Connecting"),
     ]),
+    h("a", { className: "btn-watch-live", href: liveWatchHref({ eventId: data.event && data.event.id }), key: "watch" }, "Watch live"),
     h("a", { className: "btn-keep-score", href: keepScoreHref(data), key: "score" }, "Keep score for my card"),
     snapshot && snapshot.weather
       ? h("div", { className: "live-weather", key: "weather" }, h(WeatherStrip, { title: "Round weather", weather: snapshot.weather }))

@@ -167,6 +167,8 @@ test('score setup screens are React-owned without legacy DOM fallbacks', () => {
   const controller = readFileSync('src/score-app/score-controller.js', 'utf8');
   assert.match(controller, /renderScoreBody\('setup', props\)/);
   assert.match(main, /ScoreSetupFlow/);
+  assert.match(setup, /Watch this round/);
+  assert.match(controller, /onWatch: watchRoundCode/);
   assert.match(setup, /export function ScoreSetupFlow\(props\)/);
   assert.doesNotMatch(legacy, /const row = el\('button', 'tap-row'\)/);
   assert.doesNotMatch(legacy, /const btn = el\('button', 'setup-option'\)/);
@@ -436,6 +438,24 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.doesNotMatch(legacy, /const grid = el\('div', 'holegrid'\)/);
   assert.doesNotMatch(legacy, /document\.createElement\('select'\)/);
   assert.doesNotMatch(scorecard, /createRoot|getElementById\("app"\)|replaceChildren/);
+});
+
+test('spectator watch mode loads the public snapshot and never joins the card', () => {
+  const controller = readFileSync('src/score-app/score-controller.js', 'utf8');
+  const main = scoreMainSource();
+  const watch = readFileSync('src/score-app/watch-view.js', 'utf8');
+  const shared = readFileSync('src/shared/live-watch.js', 'utf8');
+  assert.match(shared, /export function liveWatchHref/);
+  assert.match(controller, /const WATCH = isLiveWatchRequest\(params\)/);
+  assert.match(controller, /async function loadWatch\(\)/);
+  assert.match(controller, /api\(LIVE, \{ auth: false, guest: false \}\)/);
+  assert.match(controller, /if \(WATCH && \(EVENT_ID \|\| ROUND_CODE\)\)/);
+  assert.match(controller, /if \(WATCH\) return;/);
+  assert.match(main, /WatchView/);
+  assert.match(watch, /data-react-live-watch/);
+  assert.match(watch, /Copy watch link/);
+  const watchBoot = controller.slice(controller.indexOf('async function loadWatch'), controller.indexOf('function watchRoundCode'));
+  assert.doesNotMatch(watchBoot, /\/join/);
 });
 
 test('score weather strip is React-owned without legacy DOM replacement', () => {

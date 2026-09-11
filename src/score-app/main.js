@@ -7,6 +7,7 @@ import { ScoreAuthFlow } from "./auth-flow.js";
 import { ScorecardView } from "./scorecard-view.js";
 import { ScoreSetupFlow } from "./setup-flow.js";
 import { StatusView } from "./status-view.js";
+import { WatchView } from "./watch-view.js";
 import { InstallCoachBanner } from "../shared/install-coach-ui.js";
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
@@ -35,6 +36,8 @@ function ScoreBody({ view }) {
       return h(ScorecardView, view.props);
     case "setup":
       return h(ScoreSetupFlow, view.props);
+    case "watch":
+      return h(WatchView, view.props);
     case "status":
     default:
       return h(StatusView, view.props);

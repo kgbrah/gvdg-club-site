@@ -10,7 +10,7 @@ function standingName(standing) {
     : (standing.division ? " · " + standing.division : ""));
 }
 
-function LeaderboardTable({ isDoubles, isMatchplay, relClass, relText, standings }) {
+export function LeaderboardTable({ isDoubles, isMatchplay, relClass, relText, standings }) {
   if (!standings.length) return h("p", { className: "muted" }, "No scores in yet.");
   const resultHead = isMatchplay ? "Match" : "To par";
   return h("table", { className: "lb" }, [

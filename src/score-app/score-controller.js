@@ -16,6 +16,7 @@ import {
     udiscExportData,
 } from "./score-view-model.js";
 import { resolveApiBase } from "../shared/api-base.js";
+import { isLiveWatchRequest, liveScoreHref, liveWatchHref } from "../shared/live-watch.js";
 import { holeWinners, winnerColor } from "../shared/matchplay-colors.js";
 
 export function startScoreApp(options) {
@@ -28,6 +29,7 @@ export function startScoreApp(options) {
         const EVENT_ID = (params.get('event') || '').replace(/[^0-9]/g, '');
         const ROUND_CODE = (params.get('round') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
         const MODE = ROUND_CODE ? 'round' : (EVENT_ID ? 'event' : 'home'); // event scoring · casual round · home
+        const WATCH = isLiveWatchRequest(params);
         const LIVE = ROUND_CODE ? ('/rounds/' + ROUND_CODE + '/live') : ('/events/' + EVENT_ID + '/live');
         // A guest scores an EVENT via their registration token (URL ?gt= or saved at registration); casual
         // rounds are members-only, so there is no guest token there.
@@ -254,6 +256,15 @@ export function startScoreApp(options) {
         }
         function mergeFromSnap() {
             const snap = S.snap; if (!snap || !Array.isArray(snap.players)) return;
+            if (WATCH) {
+                const weatherChanged = Object.prototype.hasOwnProperty.call(snap, 'weather');
+                if (weatherChanged) S.weather = snap.weather || null;
+                if (snap.rev != null) { if (snap.rev <= S.lastRev) { if (weatherChanged) renderWatch(); return; } S.lastRev = snap.rev; }
+                if (snap.status) S.status = snap.status;
+                S.roundConfig = snap.roundConfig || S.roundConfig;
+                renderWatch();
+                return;
+            }
             // Apply weather FIRST: the background weather refresh broadcasts a same-rev snapshot (weather
             // isn't a scoring change), so the rev gate below would otherwise drop it and the strip would never
             // update.
@@ -314,7 +325,7 @@ export function startScoreApp(options) {
             ws.addEventListener('message', function (ev) {
                 let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
                 // Two scorers on the same card disagreed on a hole — alert this card immediately to reconcile.
-                if (msg && msg.type === 'conflict') { if (msg.cardId === S.cardId) { upsertConflict(msg); conflictAlert(msg); renderHole(); } return; }
+                if (msg && msg.type === 'conflict') { if (WATCH) return; if (msg.cardId === S.cardId) { upsertConflict(msg); conflictAlert(msg); renderHole(); } return; }
                 if (msg && msg.type === 'snapshot') { S.snap = msg; mergeFromSnap(); }
             });
             ws.addEventListener('close', function () { if (S.wsTimer) return; S.wsTimer = setTimeout(function () { S.wsTimer = null; connectWs(); }, 4000); });
@@ -475,6 +486,7 @@ export function startScoreApp(options) {
                 onScore: postScore,
                 onScorerChange: function (index) { S.scorerIndex = index; renderHole(); },
                 onShare: shareRound,
+                onWatchShare: ROUND_CODE || EVENT_ID ? shareWatchLink : null,
             });
         }
 
@@ -580,6 +592,7 @@ export function startScoreApp(options) {
                 view: 'home',
                 onStart: renderCoursePick,
                 onJoin: joinRoundCode,
+                onWatch: watchRoundCode,
                 onInvalidCode: function () { toast('Enter a valid code'); },
                 onSignOut: signOut
             });
@@ -715,9 +728,72 @@ export function startScoreApp(options) {
             else if (navigator.clipboard) { navigator.clipboard.writeText(url).then(function () { toast('Link copied'); }).catch(function () { toast('Code: ' + ROUND_CODE); }); }
             else toast('Code: ' + ROUND_CODE);
         }
+        function watchHref() {
+            return liveWatchHref({ eventId: EVENT_ID, roundCode: ROUND_CODE });
+        }
+        function shareWatchLink() {
+            const path = watchHref();
+            if (!path) { toast('Nothing to watch yet'); return; }
+            const url = location.origin + location.pathname.replace(/[^/]+$/, '') + path;
+            if (navigator.clipboard) { navigator.clipboard.writeText(url).then(function () { toast('Watch link copied'); }).catch(function () { toast(url); }); }
+            else toast(url);
+        }
+        function renderWatch() {
+            const snap = S.snap || {};
+            setShellHeader({
+                showLeaderboard: false,
+                subtitle: [S.courseName, S.layoutName].filter(Boolean).join(' · ') || 'Live scoring',
+                title: S.status === 'final' ? 'Final' : 'Watch live',
+            });
+            renderScoreBody('watch', {
+                connection: S.status === 'final' ? 'Final' : 'Live',
+                courseName: S.courseName,
+                isDoubles: isDoublesScoring(S),
+                isMatchplay: isMatchplayScoring(S),
+                keepScoreHref: liveScoreHref({ eventId: EVENT_ID, roundCode: ROUND_CODE, guestToken: GUEST_TOKEN }),
+                layoutName: S.layoutName,
+                onCopyLink: shareWatchLink,
+                relClass: relClass,
+                relText: relText,
+                showWeather: Boolean(S.weather),
+                standings: Array.isArray(snap.standings) ? snap.standings : [],
+                status: S.status,
+                weather: S.weather,
+            });
+        }
+        async function loadWatch() {
+            const r = await api(LIVE, { auth: false, guest: false });
+            if (!r.ok || !r.data) { renderMessage('Couldn’t load live scores', 'Check the link and try again.', true); return; }
+            const d = r.data;
+            if (d.status !== 'live' && d.status !== 'final') {
+                renderMessage('This round is not live', 'Ask for a live watch link, or open the event page.', true);
+                return;
+            }
+            S.snap = d;
+            S.status = d.status || null;
+            S.holes = Array.isArray(d.holes) ? d.holes : [];
+            S.roundConfig = d.roundConfig || null;
+            S.courseName = d.courseName || null;
+            S.layoutName = d.layoutName || null;
+            S.udiscCourseId = d.udiscCourseId || null;
+            S.weather = d.weather || null;
+            S.lastRev = d.rev == null ? -1 : d.rev;
+            renderWatch();
+            if (d.status === 'live') connectWs();
+        }
+        function watchRoundCode(value) {
+            const code = cleanRoundCode(value);
+            if (code.length >= 4) location.search = '?round=' + code + '&watch=1';
+            else toast('Enter a valid code');
+        }
 
         async function boot() {
             setOnline(navigator.onLine);
+            if (WATCH && (EVENT_ID || ROUND_CODE)) {
+                renderLoading();
+                await loadWatch();
+                return;
+            }
             if (MODE === 'home') { if (!memberToken()) { renderLogin(); return; } renderHome(); return; }
             if (!memberToken() && !GUEST_TOKEN) { renderLogin(); return; }
             renderLoading();

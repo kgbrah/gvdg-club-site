@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronLeft, ChevronRight, Settings2, Share2, UserPlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, Settings2, Share2, UserPlus } from "lucide-react";
 import { HoleMap } from "./hole-map.js";
 import { WeatherStrip } from "./weather-strip.js";
 
@@ -27,6 +27,12 @@ function RoundTools(props) {
         icon(Share2),
         "Share",
       ]),
+      props.onWatchShare
+        ? h("button", { className: "btn small secondary", key: "watch", type: "button", onClick: props.onWatchShare }, [
+          icon(Eye),
+          "Watch",
+        ])
+        : null,
       h(
         "button",
         {

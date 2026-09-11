@@ -305,6 +305,8 @@ test('public Events event detail fetches in React', () => {
   assert.match(app, /data-react-events-event-detail/);
   assert.match(app, /function LiveStandings/);
   assert.match(app, /live-matchplay/);
+  assert.match(app, /Watch live/);
+  assert.match(app, /liveWatchHref/);
   assert.match(app, /function FinalResults/);
   assert.match(app, /function EventExtras/);
   assert.match(app, /function TeeSigns/);

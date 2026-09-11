@@ -61,6 +61,11 @@ function HomeView({ onStart, onJoin, onInvalidCode, onSignOut }) {
         { className: "btn secondary", type: "button", onClick: submitJoin, key: "joinButton" },
         "Join round",
       ),
+      h(
+        "button",
+        { className: "btn ghost", type: "button", onClick: () => (joinCode.trim() ? props.onWatch(joinCode) : props.onInvalidCode()), key: "watchButton" },
+        "Watch this round",
+      ),
     ]),
     h(
       "button",

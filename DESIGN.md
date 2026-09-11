@@ -706,6 +706,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: dialogs expose `role="dialog"`, `aria-modal`, labelled title/body, autofocus prompt inputs, and real submit/cancel buttons.
 - Motion: static modal; only existing button active states apply.
 
+### Score Watch View
+
+- Structure: React-owned spectator screen with a live banner, optional weather, leaderboard table, copy-watch-link, and keep-score action mounted in the score app shell; the score controller fetches the public live snapshot and never joins the card.
+- Variants: live event watch, casual-round watch by code, finished round, empty standings, and connection/final status.
+- Spacing: reuses `.card`, `.section`, `.btn`, `.weather-strip`, and `.lb` primitives with a compact `.watch-banner` and `.watch-actions` row.
+- States: `?watch=1` skips member login and `/join`; WebSocket snapshots rerender the table; conflict alerts stay off for spectators.
+- Accessibility: copy and keep-score are real controls; the live banner exposes connection text; the leaderboard table keeps rank/player/thru/result headers.
+- Motion: static layout; only existing button press feedback applies.
+
 ### Scorecard View
 
 - Structure: React-owned live hole screen with Round Weather, casual-round tools, hole navigation, optional GPS hole map, optional tee-sign card, scorecard selector, player/pair steppers, totals bar, and hole jump grid; the score controller supplies derived rows and callbacks only.
