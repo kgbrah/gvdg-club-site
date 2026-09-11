@@ -150,6 +150,13 @@ function keepScoreHref(data) {
   return href;
 }
 
+function standingTeamLabel(standing) {
+  const label = standing && standing.scoringGroup && standing.scoringGroup.label
+    ? String(standing.scoringGroup.label)
+    : "";
+  return label && label !== cellText(standing && standing.name, "") ? label : "";
+}
+
 function LiveStandings({ snapshot }) {
   const standings = snapshot && Array.isArray(snapshot.standings) ? snapshot.standings : [];
   if (!standings.length) {
@@ -171,13 +178,17 @@ function LiveStandings({ snapshot }) {
     h("tbody", { key: "body" }, standings.map((standing, index) => {
       const toPar = Number(standing && standing.toPar) || 0;
       const name = cellText(standing && standing.name, "Player");
+      const teamLabel = standingTeamLabel(standing);
+      const team = safeWinnerClass(teamLabel || (standing && standing.scoringGroup && standing.scoringGroup.label));
       const members = doubles && standing && Array.isArray(standing.members) && standing.members.length
         ? ` (${standing.members.join(" & ")})`
         : "";
       const base = [
         h("td", { className: "lb-pos", key: "pos" }, String(index + 1)),
         h("td", { className: "lb-name", key: "name" }, [
+          team ? h("span", { "aria-hidden": "true", className: `team-dot ${team}`, key: "dot" }) : null,
           name,
+          teamLabel ? h("span", { className: "lb-members", key: "team" }, teamLabel) : null,
           members ? h("span", { className: "lb-members", key: "members" }, members) : null,
         ]),
       ];

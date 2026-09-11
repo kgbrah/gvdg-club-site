@@ -277,6 +277,24 @@ describe("config-aware live standings", () => {
     ]);
   });
 
+  it("lists the leading Red/Blue side first on live matchplay standings", () => {
+    // Given Blue is player 0 and Red wins hole 6 (same shape as Schwarga vs TJ).
+    const holes = Array.from({ length: 18 }, (_, i) => ({ hole: i + 1, par: 3 }));
+    const players: PlayerState[] = [
+      { memberId: "a", name: "Alex", team: "Blue", scores: { 1: 2, 2: 3, 3: 3, 4: 2, 5: 3, 6: 3, 7: 2 } },
+      { memberId: "b", name: "TJ", team: "Red", scores: { 1: 2, 2: 3, 3: 3, 4: 2, 5: 3, 6: 2, 7: 2 } },
+    ];
+    const config = { groupFormat: "singles", scoringStyle: "matchplay" } as const;
+    const targets = scoreTargetsForPlayers(players, config);
+
+    const live = computeLiveStandings({ holes, players, config, targets });
+
+    expect(live.map((row) => ({ name: row.name, team: row.scoringGroup?.label, status: row.match?.status, outcome: row.match?.outcome }))).toEqual([
+      { name: "TJ", team: "Red", status: "1 up", outcome: "leading" },
+      { name: "Alex", team: "Blue", status: "1 down", outcome: "trailing" },
+    ]);
+  });
+
   it("reports singles matchplay as won N&M once the lead exceeds holes remaining", () => {
     // Given Ann wins two holes with one hole remaining.
     const players: PlayerState[] = [

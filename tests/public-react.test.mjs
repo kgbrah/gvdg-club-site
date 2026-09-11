@@ -281,6 +281,7 @@ test('Events event detail is rendered by the public React bundle', () => {
   assert.match(app, /function LivePanel/);
   assert.match(app, /EventLiveChat/);
   assert.match(app, /function LiveStandings/);
+  assert.match(app, /team-dot/);
   const chat = readFileSync('src/public-app/events-live-chat.js', 'utf8');
   assert.match(chat, /data-react-live-chat/);
   assert.match(chat, /\/events\/\$\{encodeURIComponent\(eventId\)\}\/chat/);

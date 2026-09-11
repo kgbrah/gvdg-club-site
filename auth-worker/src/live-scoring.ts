@@ -92,7 +92,7 @@ function rankedStrokeTargets(input: LiveScoringInput): RankedTargetRow[] {
 
 function matchplayTargetRows(input: LiveScoringInput): TargetStrokeRow[] {
   const match = matchplaySummary(input);
-  return [...match.rows];
+  return [...match.rows].sort((a, b) => matchOutcomeOrder(a.match) - matchOutcomeOrder(b.match));
 }
 
 function rankedMatchplayTargets(input: LiveScoringInput): RankedTargetRow[] {

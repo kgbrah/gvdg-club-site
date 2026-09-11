@@ -96,8 +96,14 @@ export function matchStatusText(state) {
   if (!isMatchplayScoring(state) || !state.snap || !Array.isArray(state.snap.standings)) return "";
   const cardTargets = scoreRows(state).map((row) => row.targetId || ("player:" + row.index));
   const rows = state.snap.standings.filter((standing) => cardTargets.indexOf(standing.targetId) >= 0);
-  const withMatch = rows.find((standing) => standing.match && standing.match.status);
-  return withMatch && withMatch.match ? ("Match: " + withMatch.match.status) : "";
+  const leader = rows.find((standing) => standing.match && (standing.match.outcome === "leading" || standing.match.outcome === "won"));
+  const draw = rows.find((standing) => standing.match && standing.match.outcome === "draw");
+  const withMatch = leader || draw || rows.find((standing) => standing.match && standing.match.status);
+  if (!withMatch || !withMatch.match) return "";
+  if (withMatch.match.outcome === "draw") return "Match: AS";
+  const team = withMatch.scoringGroup && withMatch.scoringGroup.label;
+  const status = withMatch.match.status;
+  return "Match: " + (team && String(team) !== String(withMatch.name) ? team + " " + status : status);
 }
 
 export function myScoreRow(state) {

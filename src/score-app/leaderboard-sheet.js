@@ -5,9 +5,13 @@ import { UDiscExportDetails } from "../shared/udisc-export.js";
 const h = React.createElement;
 
 function standingName(standing) {
-  return standing.name + (standing.members && standing.members.length
-    ? " · " + standing.members.join(" / ")
-    : (standing.division ? " · " + standing.division : ""));
+  const team = standing.scoringGroup && standing.scoringGroup.label && standing.scoringGroup.label !== standing.name
+    ? String(standing.scoringGroup.label)
+    : "";
+  const extra = standing.members && standing.members.length && standing.targetType === "pair"
+    ? standing.members.join(" / ")
+    : (team || standing.division || "");
+  return standing.name + (extra ? " · " + extra : "");
 }
 
 export function LeaderboardTable({ isDoubles, isMatchplay, relClass, relText, standings }) {

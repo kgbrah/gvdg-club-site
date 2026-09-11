@@ -203,6 +203,14 @@ function LeagueCard({ item }) {
   ]);
 }
 
+function standingNameWithTeam(standing) {
+  const name = standing && standing.name != null ? String(standing.name) : "Player";
+  const team = standing && standing.scoringGroup && standing.scoringGroup.label
+    ? String(standing.scoringGroup.label)
+    : "";
+  return team && team !== name ? `${name} · ${team}` : name;
+}
+
 function LiveEventStandings({ event }) {
   const [snapshot, setSnapshot] = React.useState(null);
   React.useEffect(() => {
@@ -238,7 +246,7 @@ function LiveEventStandings({ event }) {
       h("thead", { key: "head" }, h("tr", null, headings.map((label) => h("th", { key: label }, label)))),
       h("tbody", { key: "body" }, standings.map((standing, index) => h("tr", { key: `${standing.name || "player"}-${index}` }, [
         h("td", { key: "pos" }, String(index + 1)),
-        h("td", { key: "name" }, standing.name != null ? String(standing.name) : "Player"),
+        h("td", { key: "name" }, standingNameWithTeam(standing)),
         h("td", { key: "thru" }, standing.thru ? String(standing.thru) : "-"),
         matchplay
           ? h("td", { key: "match" }, standing.match?.status || "AS")

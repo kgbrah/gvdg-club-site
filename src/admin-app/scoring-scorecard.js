@@ -97,7 +97,7 @@ export function AdminScoringLeaderboard({ snapshot }) {
       h("thead", { key: "head" }, h("tr", null, ["Pos", isDoubles(snap) ? "Pair" : "Player", "Thru", "Total", finalHead].map((label) => h("th", { key: label }, label)))),
       h("tbody", { key: "body" }, standings.map((standing, index) => h("tr", { key: standing.name || index }, [
         h("td", { key: "pos" }, String(index + 1)),
-        h("td", { className: "lb-name", key: "name" }, `${standing.name || "Player"}${Array.isArray(standing.members) && standing.members.length ? ` - ${standing.members.join(" / ")}` : ""}`),
+        h("td", { className: "lb-name", key: "name" }, `${standing.name || "Player"}${standing.scoringGroup && standing.scoringGroup.label && standing.scoringGroup.label !== standing.name ? ` · ${standing.scoringGroup.label}` : ""}${Array.isArray(standing.members) && standing.members.length && standing.targetType === "pair" ? ` - ${standing.members.join(" / ")}` : ""}`),
         h("td", { key: "thru" }, standing.thru ? String(standing.thru) : "N/A"),
         h("td", { key: "total" }, standing.thru ? String(standing.total) : "N/A"),
         h("td", { key: "final" }, isMatchplay(snap) ? standing.match?.status || "AS" : standing.thru ? toPar(standing.toPar) : "N/A"),

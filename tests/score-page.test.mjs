@@ -309,6 +309,7 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
     buildScorecardViewState,
     finalizeBlockers,
     finishRoundHint,
+    matchStatusText,
     scoreRows,
     udiscExportData,
     yourTurnHint,
@@ -365,6 +366,16 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
   assert.match(finishRoundHint(finalizeBlockers(state), 'round'), /disagreeing scores/);
   assert.match(finishRoundHint({ ready: true, conflicts: [], missing: [], lines: [] }, 'round'), /Anyone on this card can finish/);
   assert.equal(finishRoundHint({ ready: true, conflicts: [], missing: [], lines: [] }, 'event'), '');
+  assert.equal(matchStatusText({
+    ...state,
+    roundConfig: { groupFormat: 'singles', scoringStyle: 'matchplay' },
+    snap: {
+      standings: [
+        { targetId: 'player:0', name: 'Alex Schwarga', scoringGroup: { label: 'Blue' }, match: { status: '1 down', outcome: 'trailing' } },
+        { targetId: 'player:1', name: 'TJ Braley', scoringGroup: { label: 'Red' }, match: { status: '1 up', outcome: 'leading' } },
+      ],
+    },
+  }), 'Match: Red 1 up');
 });
 
 test('player leaderboard renders matchplay and pair labels without primary to-par ranking', () => {
