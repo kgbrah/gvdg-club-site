@@ -5,6 +5,7 @@ export * from "./db-leagues.js";
 export * from "./db-events.js";
 export * from "./db-registration.js";
 export * from "./db-event-awards.js";
+export * from "./db-event-chat.js";
 export * from "./db-content.js";
 export * from "./db-results.js";
 export * from "./db-export.js";

@@ -12,6 +12,7 @@ import { liveWatchHref } from "../shared/live-watch.js";
 import { TeeSignSvg } from "../shared/tee-sign-svg.js";
 import { UDiscExportDetails, udiscDeepLink } from "../shared/udisc-export.js";
 import { useEventsEventDetail } from "./events-detail-data.js";
+import { EventLiveChat } from "./events-live-chat.js";
 
 const h = React.createElement;
 
@@ -213,6 +214,13 @@ function LivePanel({ data }) {
       ? h("div", { className: "live-weather", key: "weather" }, h(WeatherStrip, { title: "Round weather", weather: snapshot.weather }))
       : null,
     h(LiveStandings, { key: "standings", snapshot }),
+    h(EventLiveChat, {
+      apiBase: data.apiBase || "",
+      eventId: data.event && data.event.id,
+      key: "chat",
+      memberName: data.memberName || "",
+      memberToken: data.memberToken || "",
+    }),
   ]);
 }
 

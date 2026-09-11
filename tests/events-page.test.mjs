@@ -286,6 +286,7 @@ test('public Events event detail fetches in React', () => {
   assert.match(eventsHubDataSource(), /route\?\.view === "event" \|\| route\?\.view === "league"/);
   assert.match(main, /createRoot\(eventsEventDetailMount\)\.render\(h\(EventsEventDetailApp\)\)/);
   assert.match(app, /export function EventsEventDetailApp/);
+  assert.match(app, /EventLiveChat/);
   assert.match(app, /import \{ useEventsEventDetail \} from "\.\/events-detail-data\.js"/);
   assert.match(dataApp, /export function useEventsEventDetail/);
   assert.match(dataApp, /EVENTS_ROUTE_REQUEST_EVENT/);

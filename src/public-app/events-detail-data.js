@@ -31,6 +31,14 @@ function memberToken() {
   }
 }
 
+function memberName() {
+  try {
+    return sessionStorage.getItem("gvdg_member_name") || "";
+  } catch {
+    return "";
+  }
+}
+
 function guestRegs() {
   try {
     const parsed = JSON.parse(localStorage.getItem(GUEST_REG_KEY) || "{}");
@@ -264,6 +272,7 @@ export function useEventsEventDetail() {
           guestReg: guestRegs()[event.id] || null,
           liveConnection: event.status === "live" ? "Connecting" : "",
           liveSnapshot: null,
+          memberName: memberName(),
           memberToken: memberToken(),
           teeSigns: null,
         };

@@ -4,6 +4,7 @@ import { handleCasualRoundRequests } from "./club-casual-round-requests-routes.j
 import { handleClubLive } from "./club-live-routes.js";
 import { handleCasualRounds } from "./club-rounds-routes.js";
 import { handleCourseConditions } from "./course-conditions-routes.js";
+import { handleEventChat } from "./event-chat-routes.js";
 import { handleClubPublic } from "./club-public-routes.js";
 import { handleClubRegistration } from "./club-registration-routes.js";
 import { handleClubShop } from "./club-shop-routes.js";
@@ -13,6 +14,9 @@ export async function clubApi(request: Request, env: Env, origin: string | null,
 
   const conditionsRoute = await handleCourseConditions(request, env, origin, pathname, method, seg);
   if (conditionsRoute) return conditionsRoute;
+
+  const chatRoute = await handleEventChat(request, env, origin, method, seg);
+  if (chatRoute) return chatRoute;
 
   const publicRoute = await handleClubPublic(request, env, origin, pathname, method, seg);
   if (publicRoute) return publicRoute;
