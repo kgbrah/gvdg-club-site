@@ -1,3 +1,4 @@
+import { holeMarker } from "./db-courses.js";
 import { scorecardConsensusIssues } from "./live-consensus.js";
 import { isLiveFormatError, normalizeLiveScoringConfig, scoreTargetsForPlayersSafe, validateCardTargetsForScoring, type LiveScoringConfig, type ScoreTarget } from "./live-format.js";
 import { computeLiveStandings, finalizeLiveStandings, type FinalLiveStanding, type LiveStanding, type PlayerState } from "./scoring.js";
@@ -16,6 +17,8 @@ export function resolvedHoles(meta: LiveMeta | null): ResolvedHole[] {
       par: override?.par ?? hole.par,
       distance_ft: override?.distance_ft ?? hole.distance_ft ?? null,
       tee_sign_id: hole.tee_sign_id ?? null,
+      tee: holeMarker(hole.tee),
+      target: holeMarker(hole.target),
       overridden: override != null,
     };
   });

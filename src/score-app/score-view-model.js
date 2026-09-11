@@ -102,6 +102,19 @@ export function myScoreRow(state) {
   return scoreRows(state).find((row) => row.playerIndexes.indexOf(state.myIndex) >= 0) || null;
 }
 
+export function yourTurnHint(state) {
+  const hole = holeMeta(state, state.holeIdx);
+  const mine = myScoreRow(state);
+  if (!mine) return "";
+  const myScore = strokesForRow(state, mine, hole.hole, state.scorerIndex ?? state.myIndex);
+  if (myScore != null) return "";
+  const others = scoreRows(state).some((row) => {
+    if (row === mine) return false;
+    return strokesForRow(state, row, hole.hole, state.scorerIndex ?? state.myIndex) != null;
+  });
+  return others ? "Your card is waiting on this hole." : "";
+}
+
 function holeMeta(state, index) {
   return state.holes[index] || { hole: index + 1, par: 3 };
 }
@@ -179,9 +192,12 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
     showWeather: Boolean(state.weather),
     teeSign,
     totals,
+    udiscCourseId: state.udiscCourseId || "",
     warning,
     weather: state.weather,
     weatherVersion: state.weather && (state.weather.updatedAt || state.weather.nextRefreshAt || (state.weather.current && state.weather.current.fetchedAt) || ""),
+    windFromDeg: state.weather && state.weather.current ? state.weather.current.windDirectionDeg : null,
+    yourTurn: yourTurnHint({ ...state, scorerIndex }),
   };
 }
 

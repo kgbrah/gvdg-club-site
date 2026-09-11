@@ -10,6 +10,7 @@ import { isLiveFormatError, normalizeLiveScoringConfig, normalizePairLabel, type
 import { finalizeLiveEvent } from "./live-finalize.js";
 import { updateLivePairs } from "./live-pairs.js";
 import { canEnterScorecard, findPlayer, invalidScoreTargetsResponse, scoreTargetForBody, scoringState, targetAnchor } from "./live-state.js";
+import { holeMarker } from "./db-courses.js";
 import { mineData, publicSnapshot } from "./live-snapshot.js";
 import { j, type LiveEnv, type LiveMeta, type LiveState, type OverrideBody, type PairAssignmentBody, type RemoveBody, type ScoreBody, type StartBody, type WeatherBody } from "./live-types.js";
 import { assignCards, type PlayerState } from "./scoring.js";
@@ -125,7 +126,7 @@ export class LiveEventDO {
   private async start(b: StartBody): Promise<Response> {
     const holes = (Array.isArray(b.holes) ? b.holes : [])
       .filter((h) => h && typeof h.hole === "number" && typeof h.par === "number")
-      .map((h) => ({ hole: h.hole, par: h.par, distance_ft: h.distance_ft ?? null, tee_sign_id: h.tee_sign_id ?? null }));
+      .map((h) => ({ hole: h.hole, par: h.par, distance_ft: h.distance_ft ?? null, tee_sign_id: h.tee_sign_id ?? null, tee: holeMarker(h.tee), target: holeMarker(h.target) }));
     if (holes.length === 0 || (!b.eventId && !b.casual)) return j({ error: "invalid_start" }, 400);
     let roundConfig: LiveScoringConfig;
     try {

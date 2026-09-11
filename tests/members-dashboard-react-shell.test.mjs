@@ -265,6 +265,8 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.doesNotMatch(profile, /loginGate|membersContent|classList\.remove\("active"\)|gate\.style|content\?|profilePhotoPreview|profileError|profileSaveBtn|style\.display|textContent\s*=|setBusy|showError|clearError/);
   assert.match(pageChrome, /export function MemberPageChrome\(\)/);
   assert.match(pageChrome, /data-react-page-chrome/);
+  assert.match(pageChrome, /InstallCoachBanner/);
+  assert.match(readFileSync('src/shared/install-coach.js', 'utf8'), /export function installCoachMode/);
   assert.match(pageChrome, /aria-current/);
   assert.match(pageChrome, /aria-expanded/);
   assert.match(pageChrome, /nav-donate/);

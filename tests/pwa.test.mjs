@@ -93,7 +93,11 @@ test('shared service worker caches app install assets and member fallback', () =
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(sw, /"crotts\.js"/);
   assert.doesNotMatch(sw, /"matchplay-colors\.js"/);
-  assert.match(readFileSync('pwa.js', 'utf8'), /serviceWorker\.register\('sw\.js', \{ scope: '\.\/' \}\)/);
+  const pwa = readFileSync('pwa.js', 'utf8');
+  assert.match(pwa, /serviceWorker\.register\('sw\.js', \{ scope: '\.\/' \}\)/);
+  assert.match(pwa, /beforeinstallprompt/);
+  assert.match(pwa, /gvdg:pwa-install-available/);
+  assert.match(pwa, /gvdg:pwa-install-prompt/);
 });
 
 test('admin order badge clears stale counts when refresh fails closed', () => {

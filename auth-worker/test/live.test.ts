@@ -1318,14 +1318,15 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     const live = new LiveEventDO(new FakeState({}), { DB: db });
     await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
       casual: true, courseName: "North Rec", layoutName: "Blue",
-      holes: [{ hole: 1, par: 3, distance_ft: 250, tee_sign_id: 77 }, { hole: 2, par: 4, distance_ft: 410 }],
+      holes: [{ hole: 1, par: 3, distance_ft: 250, tee_sign_id: 77, tee: { label: "Gold", lat: 35.6, lng: -77.37 }, target: { label: "A", lat: 35.601, lng: -77.37 } }, { hole: 2, par: 4, distance_ft: 410 }],
       players: [{ memberId: "m_a", name: "A" }],
     }) }));
-    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { courseName: string; layoutName: string; holes: { hole: number; distance_ft: number | null; tee_sign_id: number | null }[] };
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { courseName: string; layoutName: string; holes: { hole: number; distance_ft: number | null; tee_sign_id: number | null; tee: { label: string | null } | null }[] };
     expect(snap.courseName).toBe("North Rec");
     expect(snap.layoutName).toBe("Blue");
     expect(snap.holes.find((h) => h.hole === 1)?.distance_ft).toBe(250);
     expect(snap.holes.find((h) => h.hole === 1)?.tee_sign_id).toBe(77);
+    expect(snap.holes.find((h) => h.hole === 1)?.tee?.label).toBe("Gold");
     const mine = (await (await live.fetch(new Request("https://do/mine", { headers: { "X-Auth-Member": "m_a" } }))).json()) as { courseName: string; layoutName: string; holes: { hole: number; distance_ft: number | null; tee_sign_id: number | null }[] };
     expect(mine.courseName).toBe("North Rec");
     expect(mine.layoutName).toBe("Blue");

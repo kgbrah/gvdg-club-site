@@ -2,6 +2,7 @@ import React from "react";
 import { Menu, Moon, Sun, X } from "lucide-react";
 
 import { localStorageGet } from "./api.js";
+import { InstallCoachBanner } from "../shared/install-coach-ui.js";
 
 const h = React.createElement;
 
@@ -67,7 +68,8 @@ export function MemberPageChrome() {
     }, item.label));
   }
 
-  return h("header", { "data-react-page-chrome": "true" }, h("nav", null, [
+  return h(React.Fragment, null, [
+    h("header", { "data-react-page-chrome": "true", key: "header" }, h("nav", null, [
     h("a", { className: "logo", href: "index.html", key: "logo", onClick: () => setMenuOpen(false) },
       h("img", {
         alt: "Greenville DGC Logo",
@@ -110,5 +112,7 @@ export function MemberPageChrome() {
         type: "button",
       }, icon(darkTheme ? Sun : Moon, 20)),
     ]),
-  ]));
+  ])),
+    h(InstallCoachBanner, { key: "install" }),
+  ]);
 }

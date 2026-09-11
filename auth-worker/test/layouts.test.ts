@@ -1,5 +1,26 @@
 import { describe, it, expect } from "vitest";
+import { parseScorableHoles } from "../src/db-courses.js";
 import { enrichHoles } from "../src/layouts.js";
+
+describe("parseScorableHoles", () => {
+  it("keeps tee and target coordinates for the live hole map", () => {
+    const holes = parseScorableHoles(JSON.stringify([
+      { hole: 1, par: 3, distance_ft: 250, tee: { label: "Gold", lat: 35.6, lng: -77.37 }, target: { label: "A", lat: 35.601, lng: -77.37 }, verified: { tee_sign_id: 9 } },
+    ]));
+    expect(holes[0]).toMatchObject({
+      hole: 1,
+      par: 3,
+      distance_ft: 250,
+      tee_sign_id: 9,
+      tee: { label: "Gold", lat: 35.6, lng: -77.37 },
+      target: { label: "A", lat: 35.601, lng: -77.37 },
+    });
+  });
+
+  it("returns an empty list for invalid JSON", () => {
+    expect(parseScorableHoles("{nope")).toEqual([]);
+  });
+});
 
 describe("enrichHoles (compute per-hole distance + total par)", () => {
   it("uses geo distance when a hole has tee+target coords", () => {

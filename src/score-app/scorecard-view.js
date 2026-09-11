@@ -1,5 +1,6 @@
 import React from "react";
 import { ChevronLeft, ChevronRight, Settings2, Share2, UserPlus } from "lucide-react";
+import { HoleMap } from "./hole-map.js";
 import { WeatherStrip } from "./weather-strip.js";
 
 const h = React.createElement;
@@ -207,6 +208,8 @@ export function ScorecardView(props) {
     props.showWeather ? h(WeatherStrip, { key: "weather", title: "Round weather", weather: props.weather }) : null,
     h(RoundTools, props),
     h(HoleHeader, props),
+    props.yourTurn ? h("p", { className: "your-turn-hint", key: "turn" }, props.yourTurn) : null,
+    h(HoleMap, { hole: props.hole, udiscCourseId: props.udiscCourseId, windFromDeg: props.windFromDeg }),
     h(TeeSignCard, { teeSign: props.teeSign }),
     h(ScorecardBox, props),
     h(HoleGrid, { holes: props.holeGrid, onJump: props.onJumpHole }),

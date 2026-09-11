@@ -259,6 +259,7 @@ test('score shell owns topbar state without legacy DOM mutations', () => {
   assert.match(main, /body: bodyController/);
   assert.match(main, /setLeaderboardHandler\(handler\)/);
   assert.match(main, /hidden: !header\.showLeaderboard/);
+  assert.match(main, /InstallCoachBanner/);
   assert.match(main, /setDarkTheme\(\(current\) => !current\)/);
   assert.match(controller, /renderScoreBody\(kind, props\)/);
   assert.match(controller, /scoreShell\.setHeader/);
@@ -291,6 +292,7 @@ test('score controller delegates scorecard derivation to a pure view model', () 
   assert.match(controller, /udiscExportData\(S\)/);
   assert.match(controller, /scoreTargetForPlayer\(S, index\)/);
   assert.match(viewModel, /export function buildScorecardViewState/);
+  assert.match(viewModel, /export function yourTurnHint\(state\)/);
   assert.match(viewModel, /export function scoreRows\(state\)/);
   assert.match(viewModel, /export function strokesForRow/);
   assert.match(viewModel, /export function finalizeBlockers\(state\)/);
@@ -307,6 +309,7 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
     finishRoundHint,
     scoreRows,
     udiscExportData,
+    yourTurnHint,
   } = await import(new URL('../src/score-app/score-view-model.js', import.meta.url));
   const state = {
     holes: [{ hole: 1, par: 3, distance_ft: 250 }, { hole: 2, par: 4 }],
@@ -338,6 +341,15 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
   ]);
   assert.equal(view.holeGrid[0].done, true);
   assert.equal(view.show, true);
+  assert.equal(view.yourTurn, '');
+  assert.equal(yourTurnHint({
+    ...state,
+    holeIdx: 0,
+    cardmates: [
+      { index: 0, name: 'Ava King', division: 'MA1', isMe: true, scores: {}, scorecards: {} },
+      { index: 1, name: 'Milo Chen', division: 'MA1', scores: { 1: 5 }, scorecards: { 1: { 'player:1': 5 } } },
+    ],
+  }), 'Your card is waiting on this hole.');
   assert.deepEqual(udiscExportData(state), { courseId: '123', scorecard: [{ hole: 1, par: 3, strokes: 2 }] });
   assert.equal(finalizeBlockers(state).ready, false);
   assert.match(finishRoundHint(finalizeBlockers(state), 'round'), /disagreeing scores/);
@@ -416,6 +428,8 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /function HoleGrid\(props\)/);
   assert.match(scorecard, /export function ScorecardView\(props\)/);
   assert.match(scorecard, /WeatherStrip/);
+  assert.match(scorecard, /HoleMap/);
+  assert.match(scorecard, /your-turn-hint/);
   assert.doesNotMatch(legacy, /const head = el\('div', 'hole-head'\)/);
   assert.doesNotMatch(legacy, /const box = el\('div', 'card'\)/);
   assert.doesNotMatch(legacy, /const row = el\('div', 'prow'/);

@@ -7,6 +7,7 @@ import { ScoreAuthFlow } from "./auth-flow.js";
 import { ScorecardView } from "./scorecard-view.js";
 import { ScoreSetupFlow } from "./setup-flow.js";
 import { StatusView } from "./status-view.js";
+import { InstallCoachBanner } from "../shared/install-coach-ui.js";
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
   void import("react-grab");
@@ -125,6 +126,7 @@ function ScoreShell() {
         icon(Moon),
       ),
     ]),
+    h(InstallCoachBanner, { key: "install" }),
     h("main", { id: "app" }, h(ScoreBody, { view: bodyView })),
   ]);
 }

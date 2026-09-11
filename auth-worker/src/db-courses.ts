@@ -75,26 +75,75 @@ export async function getLayout(db: D1Like, id: number) {
   );
 }
 
+export interface HoleMarker {
+  label: string | null;
+  lat: number | null;
+  lng: number | null;
+}
+
 export interface ScorableHole {
   hole: number;
   par: number;
   distance_ft: number | null;
   tee_sign_id: number | null;
+  tee: HoleMarker | null;
+  target: HoleMarker | null;
+}
+
+function finiteCoord(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+export function holeMarker(value: unknown): HoleMarker | null {
+  if (!value || typeof value !== "object") return null;
+  const source = value as { label?: unknown; lat?: unknown; lng?: unknown };
+  const label = typeof source.label === "string" && source.label.trim() ? source.label.trim() : null;
+  const lat = finiteCoord(source.lat);
+  const lng = finiteCoord(source.lng);
+  if (!label && lat == null && lng == null) return null;
+  return { label, lat, lng };
+}
+
+export function parseScorableHoles(holesJson: string | unknown): ScorableHole[] {
+  let rows: unknown = holesJson;
+  if (typeof holesJson === "string") {
+    try {
+      rows = JSON.parse(holesJson || "[]");
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .filter((row) => row && typeof row === "object")
+    .map((row) => {
+      const hole = row as {
+        hole?: unknown;
+        par?: unknown;
+        distance_ft?: unknown;
+        verified?: { tee_sign_id?: number | null } | null;
+        tee_sign_id?: number | null;
+        tee?: unknown;
+        target?: unknown;
+      };
+      return {
+        hole: Number(hole.hole),
+        par: Number(hole.par),
+        distance_ft: hole.distance_ft == null ? null : Number(hole.distance_ft),
+        tee_sign_id: hole.verified?.tee_sign_id ?? hole.tee_sign_id ?? null,
+        tee: holeMarker(hole.tee),
+        target: holeMarker(hole.target),
+      };
+    })
+    .filter((hole) => Number.isFinite(hole.hole) && Number.isFinite(hole.par));
 }
 
 export async function getLayoutHoles(db: D1Like, layoutId: number | null | undefined): Promise<ScorableHole[]> {
   if (!layoutId) return [];
   const layout = (await getLayout(db, Number(layoutId))) as { holes?: string } | null;
-  try {
-    return JSON.parse(layout?.holes ?? "[]").map((h: { hole: number; par: number; distance_ft?: number | null; verified?: { tee_sign_id?: number | null } | null; tee_sign_id?: number | null }) => ({
-      hole: Number(h.hole),
-      par: Number(h.par),
-      distance_ft: h.distance_ft == null ? null : Number(h.distance_ft),
-      tee_sign_id: h.verified?.tee_sign_id ?? h.tee_sign_id ?? null,
-    }));
-  } catch {
-    return [];
-  }
+  return parseScorableHoles(layout?.holes ?? "[]");
 }
 
 export async function updateLayout(
