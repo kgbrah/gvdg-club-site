@@ -41,6 +41,13 @@
   --team-blue: #004E89;
   --team-blue-dark: #003a66;
 
+  /* Member-reported course conditions */
+  --condition-dry: #2f6f2f;
+  --condition-playable: #4a7c23;
+  --condition-wet: #1d4e89;
+  --condition-flooded: #0b3a6a;
+  --condition-closed: #9b1c1c;
+
   /* Mobile safe areas */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);

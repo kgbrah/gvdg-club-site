@@ -177,12 +177,12 @@ body::before{
         .course-card:hover .course-image img { transform: scale(1.05); }
         .course-image.no-image::before { content: none; }
         .course-placeholder-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: rgba(255, 255, 255, 0.45); }
-        .course-condition-badge { position: absolute; top: 0.75rem; right: 0.75rem; z-index: 1; display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.65rem; border-radius: 999px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #fff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28); }
-        .course-condition-badge.dry { background: #2f6f2f; }
-        .course-condition-badge.playable { background: #4a7c23; }
-        .course-condition-badge.wet { background: #1d4e89; }
-        .course-condition-badge.flooded { background: #0b3a6a; }
-        .course-condition-badge.closed { background: #9b1c1c; }
+        .course-condition-badge { position: absolute; top: 0.75rem; right: 0.75rem; z-index: 1; display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.65rem; border-radius: 999px; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: white; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28); }
+        .course-condition-badge.dry { background: var(--condition-dry); }
+        .course-condition-badge.playable { background: var(--condition-playable); }
+        .course-condition-badge.wet { background: var(--condition-wet); }
+        .course-condition-badge.flooded { background: var(--condition-flooded); }
+        .course-condition-badge.closed { background: var(--condition-closed); }
         .course-condition-badge.stale { opacity: 0.78; }
         .course-condition-when { font-weight: 600; text-transform: none; letter-spacing: 0; opacity: 0.92; }
         .course-content { padding: 1.5rem; }
