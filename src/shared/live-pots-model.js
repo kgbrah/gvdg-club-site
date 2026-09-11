@@ -13,6 +13,7 @@ export function normalizeCtp(raw) {
     hole: Number.isInteger(hole) ? hole : null,
     id: source.id == null ? "" : String(source.id),
     prize: typeof source.prize === "string" ? source.prize : "",
+    live: source.live_leader === true,
     winnerName: typeof source.winner_name === "string" ? source.winner_name : "",
   };
 }
@@ -42,8 +43,21 @@ export function ctpLine(ctp) {
   const parts = ["Hole " + (ctp.hole ?? "?")];
   if (ctp.division) parts.push(ctp.division);
   if (ctp.prize) parts.push(ctp.prize);
-  if (ctp.winnerName) parts.push("Winner: " + ctp.winnerName);
+  if (ctp.winnerName) parts.push((ctp.live ? "Leader: " : "Winner: ") + ctp.winnerName);
   return parts.join(" · ");
+}
+
+export function withLiveCtpLeaders(ctps, liveCtps) {
+  const byId = new Map();
+  for (const row of Array.isArray(liveCtps) ? liveCtps : []) {
+    if (row && row.id != null) byId.set(String(row.id), row);
+  }
+  return (Array.isArray(ctps) ? ctps : []).map((ctp) => {
+    if (!ctp || ctp.winner_name) return ctp;
+    const live = byId.get(String(ctp.id));
+    if (!live || !live.leaderName) return ctp;
+    return { ...ctp, winner_name: live.leaderName, live_leader: true };
+  });
 }
 
 export function buildLivePots({ acePot = null, ctps = [], currentHole = null } = {}) {

@@ -153,6 +153,31 @@ export async function handleClubLive(
     return json(await r.json().catch(() => ({})), r.status, origin);
   }
 
+  // Card-unanimous CTP claim: same identity as scoring. Worker checks the CTP exists on this event;
+  // the DO records votes and only promotes a leader when every player on that card agrees.
+  if (method === "POST" && sub === "ctp") {
+    const body = (await readJson(request)) ?? {};
+    const id = await scoreIdentity(request, env, body);
+    if (!id.authMember) return json({ error: "unauthorized" }, 401, origin);
+    if (await kvRateLimited(env, "live:" + id.authMember, LIVE_SCORE_IP_LIMIT, 60)) return json({ error: "rate_limited" }, 429, origin);
+    const ctpId = asInt(body.ctpId);
+    if (ctpId == null) return json({ error: "invalid_ctp" }, 400, origin);
+    const ctps = (await db.listCtps(env.DB, eid)) as { id?: number; hole?: number; division?: string | null }[];
+    const ctp = ctps.find((row) => Number(row.id) === ctpId);
+    if (!ctp) return json({ error: "not_found" }, 404, origin);
+    const r = await stub.fetch("https://do/ctp", {
+      method: "POST",
+      body: JSON.stringify({
+        ...body,
+        ctpId,
+        hole: asInt(ctp.hole) ?? body.hole,
+        division: ctp.division ?? null,
+      }),
+      headers: { "X-Auth-Member": id.authMember, "X-Auth-Admin": String(id.authAdmin) },
+    });
+    return json(await r.json().catch(() => ({})), r.status, origin);
+  }
+
   // Round control stays admin-only: start, finalize, cancel, and the round-scoped hole override.
   if (method === "POST" && (sub === "start" || sub === "finalize" || sub === "cancel" || sub === "override")) {
     const gate = await adminGate(request, env, origin);

@@ -18,6 +18,15 @@ export async function setCtpWinner(db: D1Like, id: number, eventId: number, winn
     .first();
 }
 
+/** Only fills an empty winner — live finalize must not overwrite an admin-set CTP. */
+export function setCtpWinnerIfEmptyStmt(db: D1Like, id: number, eventId: number, winnerMemberId: string | null, winnerName: string | null) {
+  return db
+    .prepare(
+      "UPDATE ctps SET winner_member_id = ?, winner_name = ? WHERE id = ? AND event_id = ? AND winner_member_id IS NULL AND (winner_name IS NULL OR winner_name = '')",
+    )
+    .bind(winnerMemberId, winnerName, id, eventId);
+}
+
 export async function deleteCtp(db: D1Like, eventId: number, id: number) {
   await db.prepare("DELETE FROM ctps WHERE id = ? AND event_id = ?").bind(id, eventId).run();
 }

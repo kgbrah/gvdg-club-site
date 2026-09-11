@@ -498,11 +498,13 @@ test('live CTP and ace pot strip uses public event reads without scoring writes'
   const html = readFileSync('score.html', 'utf8');
   assert.match(controller, /\/events\/' \+ EVENT_ID \+ '\/ctps'/);
   assert.match(controller, /\/events\/' \+ EVENT_ID \+ '\/ace-pot'/);
+  assert.match(controller, /LIVE \+ '\/ctp'/);
   assert.match(controller, /auth: false, guest: false/);
   assert.match(controller, /startPotsPolling\(\)/);
   assert.doesNotMatch(controller, /\/admin\/events\/.*\/ctps/);
   assert.doesNotMatch(controller, /store-credit/);
   assert.match(scorecard, /PotsStrip/);
+  assert.match(scorecard, /function CtpClaim/);
   assert.match(scorecard, /ctp-badge/);
   assert.match(watch, /PotsStrip/);
   assert.match(pots, /data-react-live-pots/);

@@ -69,6 +69,14 @@ export interface ScoreBody {
   strokes: number;
 }
 
+export interface CtpVoteBody {
+  ctpId?: number;
+  hole?: number;
+  division?: string | null;
+  nomineeIndex?: number;
+  scorerIndex?: number | null;
+}
+
 export interface OverrideBody {
   hole: number;
   par?: number | null;

@@ -213,6 +213,11 @@ function LivePanel({ data }) {
     snapshot && snapshot.weather
       ? h("div", { className: "live-weather", key: "weather" }, h(WeatherStrip, { title: "Round weather", weather: snapshot.weather }))
       : null,
+    snapshot && Array.isArray(snapshot.liveCtps) && snapshot.liveCtps.some((ctp) => ctp && ctp.leaderName)
+      ? h("ul", { className: "extras-list", key: "live-ctps" }, snapshot.liveCtps.filter((ctp) => ctp && ctp.leaderName).map((ctp) =>
+        h("li", { key: ctp.id || ctp.hole }, `CTP hole ${ctp.hole}${ctp.division ? ` (${ctp.division})` : ""} · Leader: ${ctp.leaderName}`),
+      ))
+      : null,
     h(LiveStandings, { key: "standings", snapshot }),
     h(EventLiveChat, {
       apiBase: data.apiBase || "",

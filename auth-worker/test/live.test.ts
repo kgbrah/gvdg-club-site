@@ -796,6 +796,84 @@ describe("LiveEventDO WebSocket handling", () => {
   });
 });
 
+describe("LiveEventDO live CTP claims", () => {
+  const start = (live: LiveEventDO) =>
+    live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({
+        eventId: 22,
+        holes: [{ hole: 1, par: 3 }, { hole: 7, par: 3 }],
+        players: [
+          { memberId: "m0", name: "Ann" },
+          { memberId: "m1", name: "Bo" },
+        ],
+      }),
+    }));
+  const vote = (live: LiveEventDO, member: string, nomineeIndex: number, scorerIndex: number) =>
+    live.fetch(new Request("https://do/ctp", {
+      method: "POST",
+      headers: { "X-Auth-Member": member },
+      body: JSON.stringify({ ctpId: 9, hole: 7, nomineeIndex, scorerIndex }),
+    }));
+
+  it("promotes a CTP leader only after the whole card agrees", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await start(live);
+    const first = await vote(live, "m0", 0, 0);
+    expect(first.status).toBe(200);
+    const firstSnap = await first.json() as { liveCtps?: { leaderName?: string | null }[] };
+    expect(firstSnap.liveCtps?.[0]?.leaderName ?? null).toBeNull();
+
+    const second = await vote(live, "m1", 0, 1);
+    expect(second.status).toBe(200);
+    const snap = await second.json() as { liveCtps?: { leaderName?: string | null; cards?: { agreed?: boolean }[] }[] };
+    expect(snap.liveCtps?.[0]?.leaderName).toBe("Ann");
+    expect(snap.liveCtps?.[0]?.cards?.some((card) => card.agreed)).toBe(true);
+  });
+
+  it("rejects a CTP vote from someone not on the card", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await start(live);
+    expect((await vote(live, "ghost", 0, 0)).status).toBe(403);
+  });
+
+  it("awards the live CTP leader when the event is finalized", async () => {
+    const updates: unknown[][] = [];
+    const recDb = {
+      prepare(sql: string) {
+        return {
+          bind(...args: unknown[]) {
+            if (/UPDATE ctps SET winner/i.test(sql)) updates.push(args);
+            return this;
+          },
+          run: async () => ({ results: [], success: true }),
+          first: async () => null,
+          all: async () => ({ results: [], success: true }),
+        };
+      },
+    };
+    const live = new LiveEventDO(new FakeState({}), { DB: recDb });
+    await start(live);
+    await vote(live, "m0", 0, 0);
+    await vote(live, "m1", 0, 1);
+    for (const hole of [1, 7]) {
+      await live.fetch(new Request("https://do/score", {
+        method: "POST",
+        headers: { "X-Auth-Admin": "true" },
+        body: JSON.stringify({ index: 0, scorerIndex: 0, hole, strokes: 3 }),
+      }));
+      await live.fetch(new Request("https://do/score", {
+        method: "POST",
+        headers: { "X-Auth-Admin": "true" },
+        body: JSON.stringify({ index: 1, scorerIndex: 1, hole, strokes: 3 }),
+      }));
+    }
+    const fin = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" } }));
+    expect(fin.status).toBe(200);
+    expect(updates).toContainEqual(["m0", "Ann", 9, 22]);
+  });
+});
+
 describe("LiveEventDO card-scoped scoring", () => {
   const liveDO = () => new LiveEventDO(new FakeState({}), { DB: db });
   const start = (live: LiveEventDO, players: unknown[]) =>

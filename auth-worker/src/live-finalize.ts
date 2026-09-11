@@ -1,5 +1,6 @@
 import * as db from "./db.js";
 import { scorecardConsensusIssues } from "./live-consensus.js";
+import { ctpAwardWinners, type LiveCtpStore } from "./live-ctp.js";
 import type { LiveScoringConfig } from "./live-format.js";
 import { finalizeStandings, type FinalLiveStanding, type PlayerState } from "./scoring.js";
 import { finalizeRoundStandings, healthyTargets, invalidScoreTargetsResponse, resolvedHoles, roundConfig, scoringState } from "./live-state.js";
@@ -11,6 +12,7 @@ import { ratingWeatherFromJson } from "./weather.js";
 export type FinalizeLiveEventInput = {
   readonly meta: LiveMeta | null;
   readonly players: PlayerState[];
+  readonly liveCtps?: LiveCtpStore;
   readonly env: LiveEnv;
   readonly authMember: string | null;
   readonly authAdmin: boolean;
@@ -92,6 +94,9 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
           scoring_group: metadataJson(standing.scoringGroup),
           match_result: metadataJson(standing.matchResult),
         }),
+      ),
+      ...ctpAwardWinners(input.liveCtps ?? {}, input.players).map((winner) =>
+        db.setCtpWinnerIfEmptyStmt(input.env.DB, winner.ctpId, meta.eventId, winner.memberId, winner.name),
       ),
     ]);
     await db.updateEvent(input.env.DB, meta.eventId, { status: "final" });
