@@ -47,7 +47,8 @@ export function sanitizeCrottsHref(value: unknown): string {
   if (path === "score.html") {
     if (!query) return "score.html";
     const params = new URLSearchParams(query);
-    const keys = [...params.keys()];
+    const keys: string[] = [];
+    params.forEach((_value, key) => keys.push(key));
     if (keys.some((key) => key !== "event" && key !== "watch")) return "";
     const event = eventId(params.get("event"));
     const watch = String(params.get("watch") || "");
