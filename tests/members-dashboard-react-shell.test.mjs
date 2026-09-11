@@ -184,6 +184,15 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.doesNotMatch(authGate, /id: "loginBtn"|id: "passkeyBtn"|id: "setPinBtn"|id: "profileSaveBtn"/);
   assert.doesNotMatch(authGate, /profilePhotoPreview/);
   assert.match(authGate, /gvdg:member-auth-ready/);
+  assert.match(authGate, /function initialAuthMode/);
+  assert.match(authGate, /location\.hash/);
+  assert.match(authGate, /#apply/);
+  assert.match(authGate, /useState\(initialAuthMode\)/);
+  assert.ok(
+    authGate.indexOf('addEventListener("gvdg:member-auth-mode"')
+      < authGate.indexOf('dispatchEvent(new CustomEvent("gvdg:member-auth-ready"'),
+    "auth-mode listener must be registered before auth-ready so #apply is not dropped",
+  );
   assert.match(authGate, /gvdg:member-shell-view/);
   assert.match(authGate, /document\.body\.dataset\.memberShell/);
   assert.match(authGate, /requestAnimationFrame\(\(\) => window\.scrollTo/);

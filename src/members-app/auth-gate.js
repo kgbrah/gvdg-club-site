@@ -5,6 +5,11 @@ const h = React.createElement;
 const SHELL_EVENT = "gvdg:member-shell-view";
 const AUTH_FORM_STATE_EVENT = "gvdg:member-auth-form-state";
 const AUTH_FORMS = new Set(["login", "pin", "profile", "apply"]);
+
+function initialAuthMode() {
+  return String(window.location.hash || "").toLowerCase() === "#apply" ? "apply" : "login";
+}
+
 const FORM_VALUES = {
   login: { identifier: "", pin: "" },
   pin: { newPin: "", confirmPin: "" },
@@ -29,7 +34,7 @@ function mergeFormState(previous, form, changes) {
 }
 
 export function MemberAuthGate() {
-  const [mode, setMode] = React.useState("login");
+  const [mode, setMode] = React.useState(initialAuthMode);
   const [shellView, setShellView] = React.useState("auth");
   const [supportsPasskeys, setSupportsPasskeys] = React.useState(false);
   const [formStates, setFormStates] = React.useState({
@@ -59,10 +64,7 @@ export function MemberAuthGate() {
   React.useEffect(() => {
     const supported = typeof window.PublicKeyCredential !== "undefined";
     setSupportsPasskeys(supported);
-    window.dispatchEvent(new CustomEvent("gvdg:member-auth-ready", { detail: { mode: "login", passkeysSupported: supported } }));
-  }, []);
 
-  React.useEffect(() => {
     function update(event) {
       const nextMode = event.detail?.mode;
       setMode(nextMode === "pin" || nextMode === "profile" || nextMode === "apply" ? nextMode : "login");
@@ -70,7 +72,9 @@ export function MemberAuthGate() {
       if (typeof event.detail?.passkeysSupported === "boolean") setSupportsPasskeys(event.detail.passkeysSupported);
     }
 
+    // Listen before ready: checkSession may dispatch apply mode on the same tick as #apply.
     window.addEventListener("gvdg:member-auth-mode", update);
+    window.dispatchEvent(new CustomEvent("gvdg:member-auth-ready", { detail: { mode: initialAuthMode(), passkeysSupported: supported } }));
     return () => window.removeEventListener("gvdg:member-auth-mode", update);
   }, []);
 
