@@ -440,6 +440,16 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /WeatherStrip/);
   assert.match(scorecard, /HoleMap/);
   assert.match(scorecard, /your-turn-hint/);
+  const holeMap = readFileSync('src/score-app/hole-map.js', 'utf8');
+  const html = readFileSync('score.html', 'utf8');
+  assert.match(holeMap, /hole-map-satellite/);
+  assert.match(holeMap, /SATELLITE_CREDIT/);
+  assert.match(holeMap, /safeExternalUrl/);
+  assert.match(html, /\.round-tools \{ display: flex; flex-wrap: wrap;/);
+  assert.match(html, /\.round-code \{ flex: 1 1 7\.5rem;/);
+  assert.match(html, /\.round-actions \{ display: flex; flex: 1 1 auto; flex-wrap: wrap;/);
+  assert.match(html, /\.hole-map-satellite/);
+  assert.match(html, /\.hole-map-frame/);
   assert.doesNotMatch(legacy, /const head = el\('div', 'hole-head'\)/);
   assert.doesNotMatch(legacy, /const box = el\('div', 'card'\)/);
   assert.doesNotMatch(legacy, /const row = el\('div', 'prow'/);

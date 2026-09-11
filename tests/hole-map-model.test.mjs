@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { headingDeg, holeMapLabel, holePoint, projectHoleMap, windBlowToDeg } from "../src/shared/hole-map-model.js";
+import { headingDeg, holeMapLabel, holePoint, projectHoleMap, satelliteImageUrl, windBlowToDeg } from "../src/shared/hole-map-model.js";
 
 test("holePoint requires numeric lat/lng", () => {
   assert.equal(holePoint(null), null);
@@ -27,6 +27,21 @@ test("projectHoleMap returns a north-up tee-to-basket layout", () => {
   assert.equal(map.basket.label, "A");
   assert.equal(map.windBlowToDeg, 180);
   assert.match(holeMapLabel(map, 3), /Hole 3 map, 250 ft/);
+});
+
+test("projectHoleMap overlays a satellite image on the GPS bounds", () => {
+  const map = projectHoleMap({
+    hole: 1,
+    distance_ft: 297,
+    tee: { lat: 35.62635943646063, lng: -77.37487380252036, label: "Hole 1 tee" },
+    target: { lat: 35.626574, lng: -77.3758408, label: "Hole 1 basket" },
+  });
+  assert.ok(map.satelliteUrl.startsWith("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?"));
+  assert.match(map.satelliteUrl, /bboxSR=4326/);
+  assert.match(map.satelliteUrl, /format=jpg/);
+  assert.ok(map.bounds.minLng < map.bounds.maxLng);
+  assert.ok(map.bounds.minLat < map.bounds.maxLat);
+  assert.equal(satelliteImageUrl(null), "");
 });
 
 test("projectHoleMap hides identical tee and basket points", () => {

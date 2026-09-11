@@ -36,47 +36,69 @@ export function windBlowToDeg(windFromDeg) {
   return from == null ? null : (from + 180) % 360;
 }
 
+const SATELLITE_EXPORT = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export";
+export const SATELLITE_CREDIT = "Imagery: Esri, Maxar, Earthstar Geographics";
+
+function paddedBounds(tee, basket) {
+  const minLat = Math.min(tee.lat, basket.lat);
+  const maxLat = Math.max(tee.lat, basket.lat);
+  const minLng = Math.min(tee.lng, basket.lng);
+  const maxLng = Math.max(tee.lng, basket.lng);
+  const midLat = (minLat + maxLat) / 2;
+  const latPad = Math.max((maxLat - minLat) * 0.75, 0.00045);
+  const lngPad = Math.max((maxLng - minLng) * 0.75, 0.00045 / Math.max(Math.cos(midLat * Math.PI / 180), 0.2));
+  return {
+    minLat: minLat - latPad,
+    maxLat: maxLat + latPad,
+    minLng: minLng - lngPad,
+    maxLng: maxLng + lngPad,
+  };
+}
+
+export function satelliteImageUrl(bounds, width, height) {
+  if (!bounds) return "";
+  const spanLng = bounds.maxLng - bounds.minLng;
+  const spanLat = bounds.maxLat - bounds.minLat;
+  if (!(spanLng > 0) || !(spanLat > 0)) return "";
+  const params = new URLSearchParams({
+    bbox: [bounds.minLng, bounds.minLat, bounds.maxLng, bounds.maxLat].map((value) => value.toFixed(7)).join(","),
+    bboxSR: "4326",
+    imageSR: "4326",
+    size: Math.round(width) + "," + Math.round(height),
+    format: "jpg",
+    f: "image",
+  });
+  return SATELLITE_EXPORT + "?" + params.toString();
+}
+
 export function projectHoleMap(hole, options = {}) {
   const tee = holePoint(hole && hole.tee);
   const basket = holePoint(hole && hole.target);
   if (!tee || !basket) return null;
   if (Math.abs(tee.lat - basket.lat) < 1e-8 && Math.abs(tee.lng - basket.lng) < 1e-8) return null;
 
-  const width = finite(options.width) || 320;
-  const height = finite(options.height) || 168;
-  const pad = finite(options.pad) || 28;
-  const midLat = (tee.lat + basket.lat) / 2;
-  const lngScale = Math.cos(midLat * Math.PI / 180) || 1;
-  const points = [
-    { key: "tee", x: tee.lng * lngScale, y: tee.lat, source: tee },
-    { key: "basket", x: basket.lng * lngScale, y: basket.lat, source: basket },
-  ];
-  const xs = points.map((point) => point.x);
-  const ys = points.map((point) => point.y);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  const spanX = Math.max(maxX - minX, 1e-7);
-  const spanY = Math.max(maxY - minY, 1e-7);
-  const innerW = width - pad * 2;
-  const innerH = height - pad * 2;
-  const scale = Math.min(innerW / spanX, innerH / spanY);
+  const width = finite(options.width) || 640;
+  const height = finite(options.height) || 360;
+  const bounds = paddedBounds(tee, basket);
+  const spanLng = Math.max(bounds.maxLng - bounds.minLng, 1e-7);
+  const spanLat = Math.max(bounds.maxLat - bounds.minLat, 1e-7);
 
-  function xy(x, y) {
+  function xy(lng, lat) {
     return {
-      x: Number((pad + (x - minX) * scale + (innerW - spanX * scale) / 2).toFixed(2)),
-      y: Number((height - (pad + (y - minY) * scale + (innerH - spanY * scale) / 2)).toFixed(2)),
+      x: Number((((lng - bounds.minLng) / spanLng) * width).toFixed(2)),
+      y: Number((((bounds.maxLat - lat) / spanLat) * height).toFixed(2)),
     };
   }
 
-  const teePt = { ...xy(points[0].x, points[0].y), label: tee.label || "Tee" };
-  const basketPt = { ...xy(points[1].x, points[1].y), label: basket.label || "Basket" };
+  const teePt = { ...xy(tee.lng, tee.lat), label: tee.label || "Tee" };
+  const basketPt = { ...xy(basket.lng, basket.lat), label: basket.label || "Basket" };
   const distanceFt = finite(hole && hole.distance_ft) || haversineFt(tee, basket);
   const windFrom = finite(options.windFromDeg);
   return {
     width,
     height,
+    bounds,
+    satelliteUrl: satelliteImageUrl(bounds, width, height),
     tee: teePt,
     basket: basketPt,
     headingDeg: headingDeg(tee, basket),
