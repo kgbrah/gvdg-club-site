@@ -1,6 +1,7 @@
 import React from "react";
 import { ChevronLeft, ChevronRight, Eye, Settings2, Share2, UserPlus } from "lucide-react";
 import { HoleMap } from "./hole-map.js";
+import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
 
 const h = React.createElement;
@@ -70,6 +71,7 @@ function HoleHeader(props) {
     h("div", { key: "mid", style: { flex: "1", textAlign: "center" } }, [
       h("div", { className: "hnum", key: "number" }, `Hole ${props.hole.hole}`),
       h("div", { className: "hpar", key: "par" }, props.holeMeta),
+      props.ctpBadge ? h("div", { className: "ctp-badge", key: "ctp" }, props.ctpBadge) : null,
       props.matchStatus ? h("div", { className: "pmeta", key: "match" }, props.matchStatus) : null,
       props.dormie ? h("div", { className: "dormie-badge", key: "dormie" }, "DORMIE - win or halve this hole to close it") : null,
     ]),
@@ -198,7 +200,7 @@ function HoleGrid(props) {
         "button",
         {
           "aria-label": `Hole ${hole.hole}`,
-          className: [hole.current ? "cur" : "", hole.done ? "done" : "", hole.conflict ? "conflict" : ""].filter(Boolean).join(" "),
+          className: [hole.current ? "cur" : "", hole.done ? "done" : "", hole.conflict ? "conflict" : "", hole.ctp ? "ctp" : ""].filter(Boolean).join(" "),
           key: hole.hole,
           type: "button",
           onClick: () => props.onJump(hole.index),
@@ -212,6 +214,8 @@ function HoleGrid(props) {
 export function ScorecardView(props) {
   return h(React.Fragment, null, [
     props.showWeather ? h(WeatherStrip, { key: "weather", title: "Round weather", weather: props.weather }) : null,
+    props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,
+    props.potsAceHint ? h("p", { className: "pots-ace-hint", key: "ace-hint" }, props.potsAceHint) : null,
     h(RoundTools, props),
     h(HoleHeader, props),
     props.yourTurn ? h("p", { className: "your-turn-hint", key: "turn" }, props.yourTurn) : null,

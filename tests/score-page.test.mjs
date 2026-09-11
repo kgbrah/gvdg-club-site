@@ -329,6 +329,10 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
     snap: { standings: [] },
     udiscCourseId: '123',
     weather: null,
+    pots: {
+      acePot: { total_cents: 2500, contributors: 5, status: "active" },
+      ctps: [{ id: 1, hole: 1, prize: "Disc" }],
+    },
   };
 
   const view = buildScorecardViewState({ state, mode: 'round', roundCode: 'QA1234', scorerIndex: 0, teeSign: null });
@@ -342,6 +346,10 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
     { label: 'To par', value: '-1' },
   ]);
   assert.equal(view.holeGrid[0].done, true);
+  assert.equal(view.holeGrid[0].ctp, true);
+  assert.equal(view.showPots, true);
+  assert.equal(view.ctpBadge, "Disc");
+  assert.match(view.pots.aceLine, /\$25 in the pot/);
   assert.equal(view.show, true);
   assert.equal(view.yourTurn, '');
   assert.equal(yourTurnHint({
@@ -438,6 +446,28 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.doesNotMatch(legacy, /const grid = el\('div', 'holegrid'\)/);
   assert.doesNotMatch(legacy, /document\.createElement\('select'\)/);
   assert.doesNotMatch(scorecard, /createRoot|getElementById\("app"\)|replaceChildren/);
+});
+
+test('live CTP and ace pot strip uses public event reads without scoring writes', () => {
+  const controller = readFileSync('src/score-app/score-controller.js', 'utf8');
+  const scorecard = scorecardViewSource();
+  const watch = readFileSync('src/score-app/watch-view.js', 'utf8');
+  const pots = readFileSync('src/score-app/pots-strip.js', 'utf8');
+  const model = readFileSync('src/shared/live-pots-model.js', 'utf8');
+  const html = readFileSync('score.html', 'utf8');
+  assert.match(controller, /\/events\/' \+ EVENT_ID \+ '\/ctps'/);
+  assert.match(controller, /\/events\/' \+ EVENT_ID \+ '\/ace-pot'/);
+  assert.match(controller, /auth: false, guest: false/);
+  assert.match(controller, /startPotsPolling\(\)/);
+  assert.doesNotMatch(controller, /\/admin\/events\/.*\/ctps/);
+  assert.doesNotMatch(controller, /store-credit/);
+  assert.match(scorecard, /PotsStrip/);
+  assert.match(scorecard, /ctp-badge/);
+  assert.match(watch, /PotsStrip/);
+  assert.match(pots, /data-react-live-pots/);
+  assert.match(model, /export function buildLivePots/);
+  assert.match(html, /\.pots-strip/);
+  assert.match(html, /\.holegrid button\.ctp/);
 });
 
 test('spectator watch mode loads the public snapshot and never joins the card', () => {

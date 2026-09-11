@@ -16,6 +16,7 @@ import {
     udiscExportData,
 } from "./score-view-model.js";
 import { resolveApiBase } from "../shared/api-base.js";
+import { buildLivePots } from "../shared/live-pots-model.js";
 import { isLiveWatchRequest, liveScoreHref, liveWatchHref } from "../shared/live-watch.js";
 import { holeWinners, winnerColor } from "../shared/matchplay-colors.js";
 
@@ -40,7 +41,9 @@ export function startScoreApp(options) {
         const notifications = createScoreNotificationsRenderer();
         const scoreBody = options && options.body;
         const scoreShell = options && options.shell;
-        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, roundConfig: null, scoreTargets: [], scoreTargetError: null, weather: null };
+        const POTS_REFRESH_MS = 30 * 1000;
+        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, roundConfig: null, scoreTargets: [], scoreTargetError: null, weather: null, pots: null };
+        let potsTimer = null;
         const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
         const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
 
@@ -95,6 +98,31 @@ export function startScoreApp(options) {
             catch (e) { return { ok: false, status: 0, data: null, neterr: true }; }
             let data = null; try { data = await r.json(); } catch (e) {}
             return { ok: r.ok, status: r.status, data };
+        }
+
+        async function loadPots() {
+            if (!EVENT_ID) {
+                S.pots = null;
+                return;
+            }
+            const [ctpsRes, aceRes] = await Promise.all([
+                api('/events/' + EVENT_ID + '/ctps', { auth: false, guest: false }),
+                api('/events/' + EVENT_ID + '/ace-pot', { auth: false, guest: false }),
+            ]);
+            S.pots = {
+                acePot: aceRes.ok && aceRes.data ? aceRes.data.ace_pot : null,
+                ctps: ctpsRes.ok && Array.isArray(ctpsRes.data && ctpsRes.data.ctps) ? ctpsRes.data.ctps : [],
+            };
+        }
+        function startPotsPolling() {
+            if (!EVENT_ID || potsTimer != null) return;
+            void refreshPots();
+            potsTimer = setInterval(function () { void refreshPots(); }, POTS_REFRESH_MS);
+        }
+        async function refreshPots() {
+            await loadPots();
+            if (WATCH) renderWatch();
+            else if (S.holes.length) renderHole();
         }
 
         // ---------- offline score queue ----------
@@ -576,6 +604,7 @@ export function startScoreApp(options) {
             });
             renderHole();
             connectWs();
+            startPotsPolling();
             flushQueue();
         }
 
@@ -740,6 +769,7 @@ export function startScoreApp(options) {
         }
         function renderWatch() {
             const snap = S.snap || {};
+            const pots = buildLivePots({ acePot: S.pots && S.pots.acePot, ctps: S.pots && S.pots.ctps });
             setShellHeader({
                 showLeaderboard: false,
                 subtitle: [S.courseName, S.layoutName].filter(Boolean).join(' · ') || 'Live scoring',
@@ -753,8 +783,10 @@ export function startScoreApp(options) {
                 keepScoreHref: liveScoreHref({ eventId: EVENT_ID, roundCode: ROUND_CODE, guestToken: GUEST_TOKEN }),
                 layoutName: S.layoutName,
                 onCopyLink: shareWatchLink,
+                pots,
                 relClass: relClass,
                 relText: relText,
+                showPots: pots.visible,
                 showWeather: Boolean(S.weather),
                 standings: Array.isArray(snap.standings) ? snap.standings : [],
                 status: S.status,
@@ -779,6 +811,7 @@ export function startScoreApp(options) {
             S.weather = d.weather || null;
             S.lastRev = d.rev == null ? -1 : d.rev;
             renderWatch();
+            startPotsPolling();
             if (d.status === 'live') connectWs();
         }
         function watchRoundCode(value) {

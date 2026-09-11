@@ -1,6 +1,7 @@
 import React from "react";
 import { Copy, Trophy } from "lucide-react";
 
+import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
 import { LeaderboardTable } from "./leaderboard-sheet.js";
 
@@ -28,6 +29,7 @@ export function WatchView(props) {
       ? h("p", { className: "muted watch-meta", key: "meta" }, [props.courseName, props.layoutName].filter(Boolean).join(" · "))
       : null,
     props.showWeather ? h(WeatherStrip, { key: "weather", title: "Round weather", weather: props.weather }) : null,
+    props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,
     h("div", { className: "card", key: "board" }, [
       h("h2", { className: "section", key: "title" }, [icon(Trophy), " Live leaderboard"]),
       h(LeaderboardTable, {

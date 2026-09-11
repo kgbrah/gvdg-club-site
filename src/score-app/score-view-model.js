@@ -1,3 +1,5 @@
+import { aceHint, buildLivePots } from "../shared/live-pots-model.js";
+
 export function relClass(delta) {
   return delta < 0 ? "under" : delta > 0 ? "over" : "even";
 }
@@ -168,27 +170,39 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
     ];
   }
 
+  const pots = buildLivePots({
+    acePot: state.pots && state.pots.acePot,
+    ctps: state.pots && state.pots.ctps,
+    currentHole: hole && hole.hole,
+  });
+  const holeScores = (state.cardmates || []).map((player) => player && player.scores ? player.scores[hole.hole] : null);
   const holeGrid = (state.holes || []).map((currentHole, index) => ({
     conflict: holeHasConflict(state, currentHole.hole),
+    ctp: pots.holeNumbers.indexOf(currentHole.hole) >= 0,
     current: index === state.holeIdx,
     done: Boolean(mine && strokesForRow(state, mine, currentHole.hole, scorerIndex) != null),
     hole: currentHole.hole,
     index,
   }));
+  const ctpMeta = pots.currentHoleCtps.length ? " · CTP" : "";
 
   return {
     atEnd: state.holeIdx >= state.holes.length - 1,
     atStart: state.holeIdx === 0,
     choices: scorecardChoices(state),
+    ctpBadge: pots.currentHoleCtps.length ? pots.currentHoleCtps.map((ctp) => ctp.prize || ctp.division || "CTP").join(" · ") : "",
     dormie: isMatchDormie(state),
     hole,
     holeGrid,
-    holeMeta: "Par " + hole.par + (hole.distance_ft ? " · " + hole.distance_ft + " ft" : "") + (hole.overridden ? " (today)" : ""),
+    holeMeta: "Par " + hole.par + (hole.distance_ft ? " · " + hole.distance_ft + " ft" : "") + (hole.overridden ? " (today)" : "") + ctpMeta,
     matchStatus: isMatchplayScoring(state) ? matchStatusText(state) : "",
+    pots,
+    potsAceHint: aceHint({ hole: hole && hole.hole, pots, scores: holeScores }),
     roundCode,
     rows: rowViews,
     scorerIndex,
     show: mode === "round",
+    showPots: pots.visible,
     showWeather: Boolean(state.weather),
     teeSign,
     totals,
