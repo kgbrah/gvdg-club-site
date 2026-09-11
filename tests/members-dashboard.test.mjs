@@ -107,6 +107,20 @@ test('member dashboard React club panel owns directory search, filters, load-mor
   assert.match(minutes, /Download full minutes/);
 });
 
+test('member dashboard mounts a personal season page from existing member APIs', () => {
+  const html = readFileSync('gvdg-members.html', 'utf8');
+  const dashboardApp = readFileSync('src/members-app/dashboard-app.js', 'utf8');
+  const page = readFileSync('src/members-app/season-page.js', 'utf8');
+  const model = readFileSync('src/members-app/season-page-model.js', 'utf8');
+  assert.match(dashboardApp, /id: "membersReactSeasonPanel"/);
+  assert.match(html, /body\[data-member-dashboard-tab="season"\] #mySeason/);
+  assert.match(page, /data-react-season-page/);
+  assert.match(page, /\/my-results\?all=1/);
+  assert.match(model, /export function buildSeasonPage/);
+  assert.doesNotMatch(page, /\/admin\//);
+  assert.doesNotMatch(page, /createMember|isAdmin/);
+});
+
 test('member dashboard React registration section stays available for logged-in members', () => {
   const html = readFileSync('gvdg-members.html', 'utf8');
   const dashboardApp = readFileSync('src/members-app/dashboard-app.js', 'utf8');

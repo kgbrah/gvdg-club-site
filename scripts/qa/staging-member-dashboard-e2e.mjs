@@ -8,9 +8,10 @@ const DEFAULT_API_URL = "https://auth.gvdgclub.com";
 const TOKEN_KEY = "gvdg_member_token";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
-const dashboardPanels = ["#myDashboard", "#clubRegister", "#clubBoard", "#teeCapture", "#membersReactClubPanel"];
+const dashboardPanels = ["#myDashboard", "#mySeason", "#clubRegister", "#clubBoard", "#teeCapture", "#membersReactClubPanel"];
 const visibleDashboardPanels = {
   overview: ["#myDashboard", "#clubRegister"],
+  season: ["#mySeason"],
   events: ["#clubRegister"],
   board: ["#clubBoard"],
   tee: ["#teeCapture"],
@@ -386,6 +387,12 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
     }
 
     await waitForLiveRating(page);
+
+    await page.getByRole("tab", { name: "Season" }).click();
+    await waitForText(page, "#membersReactDashboardShell", "Your Season", "season tab title");
+    await expectReactTab(page, "Season");
+    await expectDashboardPanel(page, "season", "#mySeason", "Season tab");
+    await page.locator("[data-react-season-page]").waitFor({ state: "visible", timeout: 15_000 });
 
     await page.getByRole("tab", { name: "Events" }).click();
     await waitForText(page, "#membersReactDashboardShell", "Event Registration", "events tab title");

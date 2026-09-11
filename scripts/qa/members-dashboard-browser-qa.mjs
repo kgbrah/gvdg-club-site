@@ -11,9 +11,10 @@ const repoRoot = path.resolve(scriptDir, "../..");
 const apiBase = "http://127.0.0.1:8788";
 const evidenceDir = path.join(repoRoot, ".omo/evidence/members-dashboard-react");
 const teeUploadPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p94AAAAASUVORK5CYII=", "base64");
-const dashboardPanels = ["#myDashboard", "#clubRegister", "#clubBoard", "#teeCapture", "#membersReactClubPanel"];
+const dashboardPanels = ["#myDashboard", "#mySeason", "#clubRegister", "#clubBoard", "#teeCapture", "#membersReactClubPanel"];
 const visibleDashboardPanels = {
   overview: ["#myDashboard", "#clubRegister"],
+  season: ["#mySeason"],
   events: ["#clubRegister"],
   board: ["#clubBoard"],
   tee: ["#teeCapture"],
@@ -313,6 +314,7 @@ async function captureState(browser, origin, viewport, slug) {
   await page.goto(`${origin}/gvdg-members.html`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("#membersReactDashboardShell:not(:empty)", { timeout: 10_000 });
   await page.waitForSelector("#membersReactOverviewPanel:not(:empty)", { state: "attached", timeout: 10_000 });
+  await page.waitForSelector("#membersReactSeasonPanel:not(:empty)", { state: "attached", timeout: 10_000 });
   await page.waitForSelector("#membersReactRegistrationPanel:not(:empty)", { state: "attached", timeout: 10_000 });
   await page.waitForSelector("#membersReactBoardPanel:not(:empty)", { state: "attached", timeout: 10_000 });
   await page.waitForSelector("#membersReactTeeSignsPanel:not(:empty)", { state: "attached", timeout: 10_000 });
@@ -386,6 +388,16 @@ async function captureState(browser, origin, viewport, slug) {
     throw new Error("Migrated member dashboard legacy nodes are still present in the DOM.");
   }
   await captureFullPage(page, path.join(evidenceDir, `${slug}-overview.png`));
+
+  await page.getByRole("tab", { name: "Season" }).click();
+  await waitForText(page, "#membersReactDashboardShell", "Your Season", "season title");
+  await expectReactTab(page, "Season");
+  await expectDashboardPanel(page, "season", "#mySeason", "Season tab");
+  await page.locator('[data-react-season-page="ready"]').waitFor({ state: "visible", timeout: 10_000 });
+  await waitForText(page, "[data-react-season-page]", "2026 Season", "season year heading");
+  await waitForText(page, "[data-react-season-page]", "GVDG QA Weekly", "season result row");
+  await waitForText(page, "[data-react-season-page]", "GVDG QA League", "season league standing");
+  await captureFullPage(page, path.join(evidenceDir, `${slug}-season.png`));
 
   await page.getByRole("tab", { name: "Events" }).click();
   await waitForText(page, "#membersReactDashboardShell", "Event Registration", "events title");

@@ -219,6 +219,11 @@ export async function installMemberDashboardApiRoutes(page, apiBase) {
     if (pathName === "/me") return route.fulfill(json({ sub: "member-1", isAdmin: true, name: "QA Admin", pdgaNo: "90000001" }));
     if (pathName === "/pdga-stats") return route.fulfill(json(stats));
     if (pathName.startsWith("/my-ratings")) return route.fulfill(json(myRatings));
+    if (pathName === "/my-results") return route.fulfill(json({
+      results: [
+        { id: 1, event_id: 10, event_name: "GVDG QA Weekly", event_date: "2026-07-04", place: 2, total: 56, to_par: 2 },
+      ],
+    }));
     if (pathName === "/shop/wallet") return route.fulfill(json({
       balance_cents: 1250,
       transactions: [{ id: "tx-1", source: "event_payout", amount_cents: 1250, note: "QA payout", created_at: "2026-07-05T12:00:00Z" }],
@@ -272,7 +277,16 @@ export async function installMemberDashboardApiRoutes(page, apiBase) {
         .map((post) => ({ ...post, replies: (post.replies || []).filter((reply) => Number(reply.id) !== id) }));
       return route.fulfill(json({ ok: true }));
     }
-    if (pathName === "/leagues/active") return route.fulfill(json({ leagues: [], events: [] }));
+    if (pathName === "/leagues/active") return route.fulfill(json({
+      leagues: [{
+        league: { id: 2, name: "GVDG QA League", season: "2026" },
+        standings: [
+          { name: "QA Admin", points: 8, events: 3, wins: 1 },
+          { name: "Other Player", points: 6, events: 3, wins: 0 },
+        ],
+      }],
+      events: [],
+    }));
     if (pathName === "/my-tee-signs") return route.fulfill(json({ teeSigns: state.teeSigns }));
     if (pathName === "/tee-signs" && method === "POST") {
       state.teeSignPostBody = JSON.parse(request.postData() || "{}");

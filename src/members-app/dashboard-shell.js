@@ -6,6 +6,7 @@ const h = React.createElement;
 
 export const TABS = [
   { key: "overview", label: "Overview", title: "Player Dashboard" },
+  { key: "season", label: "Season", title: "Your Season" },
   { key: "events", label: "Events", title: "Event Registration" },
   { key: "board", label: "Board", title: "Member Board" },
   { key: "tee", label: "Tee Signs", title: "Tee Sign Capture" },

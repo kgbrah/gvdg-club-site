@@ -3,6 +3,7 @@ import { readMemberContext } from "./member-context.js";
 
 const DASH_TITLES = {
   overview: "Player Dashboard",
+  season: "Your Season",
   events: "Event Registration",
   board: "Member Board",
   tee: "Tee Sign Capture",

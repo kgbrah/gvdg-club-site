@@ -39,6 +39,7 @@ function DashboardActions() {
   return h("div", { className: "dashboard-utility-panel react-dashboard-utility", "data-react-dashboard-actions": "ready" }, [
     h("div", { className: "dashboard-actions", key: "actions" }, [
       tabButton("board", "Message board", true),
+      tabButton("season", "My season"),
       tabButton("events", "Register"),
       h("a", { className: "dashboard-action", href: "score.html", key: "score" }, "Live scoring"),
       tabButton("tee", "Tee signs"),

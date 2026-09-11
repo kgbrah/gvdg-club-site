@@ -373,6 +373,7 @@
                 #membersReactDashboardApp,
                 #membersReactDashboardShell,
                 #membersReactOverviewPanel,
+                #membersReactSeasonPanel,
                 #membersReactRegistrationPanel,
                 #membersReactBoardPanel,
                 #membersReactTeeSignsPanel,
@@ -381,6 +382,7 @@
                 #membersReactDashboardApp:not(:empty),
                 #membersReactDashboardShell:not(:empty),
                 #membersReactOverviewPanel:not(:empty),
+                #membersReactSeasonPanel:not(:empty),
                 #membersReactRegistrationPanel:not(:empty),
                 #membersReactBoardPanel:not(:empty),
                 #membersReactTeeSignsPanel:not(:empty) { display: block; }
@@ -388,12 +390,14 @@
                 #teeCapture,
                 #membersReactClubPanel { display: none; }
                 body[data-member-dashboard-tab] #myDashboard,
+                body[data-member-dashboard-tab] #mySeason,
                 body[data-member-dashboard-tab] #clubRegister,
                 body[data-member-dashboard-tab] #clubBoard,
                 body[data-member-dashboard-tab] #teeCapture,
                 body[data-member-dashboard-tab] #membersReactClubPanel { display: none; }
                 body[data-member-dashboard-tab="overview"] #myDashboard,
                 body[data-member-dashboard-tab="overview"] #clubRegister,
+                body[data-member-dashboard-tab="season"] #mySeason,
                 body[data-member-dashboard-tab="events"] #clubRegister,
                 body[data-member-dashboard-tab="board"] #clubBoard,
                 body[data-member-dashboard-tab="tee"] #teeCapture,
@@ -456,6 +460,11 @@
                 .dash-event-rating-row { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 0.24rem; width: 100%; min-width: 0; padding-top: 0.5rem; border-top: 1px solid var(--border-color); }
                 .dash-event-rating-label { color: var(--text-muted); font-size: 0.68rem; font-weight: 700; line-height: 1; text-transform: uppercase; letter-spacing: 0.05em; }
                 .dash-event-ratings { display: inline-flex; align-items: center; justify-self: start; max-width: 100%; min-height: 1.65rem; padding: 0.16rem 0.48rem 0.1rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-tertiary); font-family: 'Bebas Neue', sans-serif; font-size: 1.32rem; line-height: 1; letter-spacing: 0.03em; font-variant-numeric: tabular-nums; color: var(--secondary-text); overflow-wrap: anywhere; white-space: normal; }
+                .season-result { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; text-decoration: none; color: inherit; }
+                .season-result-score { text-align: right; }
+                .season-result-place { font-weight: 800; color: var(--text-primary); }
+                .season-result-par { font-family: 'Bebas Neue', sans-serif; font-size: 1.45rem; color: var(--secondary-text); line-height: 1; }
+                .season-standing-place { margin: 0; color: var(--text-primary); font-size: 1.05rem; }
                 .react-pdga-dashboard { margin-bottom: 1rem; }
                 .react-pdga-dashboard .dash-rating-row { margin-bottom: 1rem; }
                 .react-pdga-status { color: var(--text-muted); font-size: 0.95rem; padding: 0.5rem 0 0.85rem; }

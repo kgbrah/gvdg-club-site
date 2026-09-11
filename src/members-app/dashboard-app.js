@@ -5,6 +5,7 @@ import { MemberClubPanel } from "./club-panel.js";
 import { MemberDashboardShell } from "./dashboard-shell.js";
 import { MemberOverviewDashboard } from "./overview-dashboard.js";
 import { MemberRegistrationPanel } from "./registration-panel.js";
+import { MemberSeasonPage } from "./season-page.js";
 import { MemberTeeSignsPanel } from "./tee-signs-panel.js";
 
 const h = React.createElement;
@@ -14,6 +15,9 @@ export function MemberDashboardApp() {
     h("div", { id: "membersReactDashboardShell", key: "shell" }, h(MemberDashboardShell)),
     h("div", { className: "my-dashboard", id: "myDashboard", key: "overview" }, [
       h("div", { id: "membersReactOverviewPanel", key: "mount" }, h(MemberOverviewDashboard)),
+    ]),
+    h("div", { className: "my-dashboard", id: "mySeason", key: "season" }, [
+      h("div", { id: "membersReactSeasonPanel", key: "mount" }, h(MemberSeasonPage)),
     ]),
     h("div", { className: "club-register", id: "clubRegister", key: "registration" }, [
       h("div", { id: "membersReactRegistrationPanel", key: "mount" }, h(MemberRegistrationPanel)),
