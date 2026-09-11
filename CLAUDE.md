@@ -271,8 +271,9 @@ to `gvdg-members.html`.
 - **`adminGate` is the only admin authority** (server-side `isAdmin` from ROSTER, not the JWT).
 - **Anti-enumeration:** unknown login identifiers still run a real PBKDF2 against `DUMMY_HASH`; lockout is
   keyed by `canonicalLoginKey()` (normalizes PDGA/UDisc) so mutating the raw identifier can't reset it.
-- **Closed enrollment:** no self-signup route. Members come only from `provision.mjs` bulk-seed or
-  admin-gated `POST /admin/members`; both set `mustChangePin:true`.
+- **Closed roster writes:** public `POST /membership/apply` only stores a pending application (rate-limited,
+  never `isAdmin`). Roster records still come from `provision.mjs`, admin-gated `POST /admin/members`,
+  or admin approve of an application; all set `mustChangePin:true`.
 - **WebAuthn challenges are single-use** (read-and-delete); advance the stored credential counter each auth.
 - **Imports go through `safeFetch`** with a per-kind host allowlist (https-only, reject userinfo /
   IP-literal / IPv6, `redirect:manual` re-validating every hop, byte/time caps). ⚠️ There is **no

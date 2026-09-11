@@ -420,6 +420,7 @@ test('admin members list is rendered by React from direct loader events', () => 
   const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminMemberFormReactApp"/);
+  assert.match(html, /id="adminMemberApplicationsReactApp"/);
   assert.match(html, /id="adminMembersListReactApp"/);
   assert.doesNotMatch(html, /id="adminMemberForm"|id="amName"|id="amPdga"|id="amUdisc"|id="amAdmin"/);
   assert.doesNotMatch(html, /id="adminMembersList"/);
@@ -445,13 +446,18 @@ test('admin members list is rendered by React from direct loader events', () => 
   assert.match(initAdmin, /gvdg:admin-member-role-request/);
   assert.match(initAdmin, /adminApi\('\/admin\/members\/set-role', \{ method: 'POST', body: \{ memberId: member\.memberId, isAdmin: promoting \} \}\)/);
   assert.match(main, /import \{ AdminMemberForm \} from "\.\/member-form\.js"/);
-  assert.match(main, /import \{ AdminMembersList, AdminMemberTempPin \} from "\.\/members-list\.js"/);
+  assert.match(main, /import \{ AdminMembersList, AdminMemberTempPin, AdminMembershipApplications \} from "\.\/members-list\.js"/);
   assert.match(main, /const memberFormMount = document\.getElementById\("adminMemberFormReactApp"\)/);
   assert.match(main, /createRoot\(memberFormMount\)\.render\(h\(AdminMemberForm\)\)/);
   assert.match(main, /const membersListMount = document\.getElementById\("adminMembersListReactApp"\)/);
   assert.match(main, /createRoot\(membersListMount\)\.render\(h\(AdminMembersList\)\)/);
   assert.match(main, /const memberTempPinMount = document\.getElementById\("adminMemberTempPinReactApp"\)/);
   assert.match(main, /createRoot\(memberTempPinMount\)\.render\(h\(AdminMemberTempPin\)\)/);
+  assert.match(main, /createRoot\(membershipApplicationsMount\)\.render\(h\(AdminMembershipApplications\)\)/);
+  assert.match(membersList, /export function AdminMembershipApplications/);
+  assert.match(membersList, /gvdg:admin-membership-applications/);
+  assert.match(html, /gvdg:admin-membership-approve-request/);
+  assert.match(html, /adminApi\('\/admin\/members\/applications\/' \+ encodeURIComponent\(id\) \+ '\/approve'/);
   assert.match(memberForm, /export function AdminMemberForm/);
   assert.match(memberForm, /data-react-admin-member-form/);
   assert.match(memberForm, /gvdg:admin-member-create-request/);

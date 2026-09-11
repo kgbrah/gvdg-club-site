@@ -95,7 +95,92 @@ export function LoginForm({ active, supportsPasskeys, state, onValuesChange }) {
         key: "passkey",
       }, passkeyBusy ? "Please wait..." : h(IconLabel, { icon: h(KeyRound, { size: 17, strokeWidth: 2.2, key: "icon" }), text: "Log in with a passkey" }))
       : null,
+    h("button", {
+      type: "button",
+      className: "login-btn login-btn-secondary",
+      disabled: busy,
+      "data-react-auth-action": "apply-open",
+      onClick: () => request("gvdg:member-apply-open"),
+      key: "apply",
+    }, "Apply for a club login"),
   ].filter(Boolean));
+}
+
+export function ApplyForm({ active, state, onValuesChange }) {
+  const name = state.values.name || "";
+  const pdgaNo = state.values.pdgaNo || "";
+  const udisc = state.values.udisc || "";
+  const pin = state.values.pin || "";
+  const confirmPin = state.values.confirmPin || "";
+  const busy = state.busyAction === "apply";
+
+  return h("form", {
+    className: "login-form",
+    id: "applyForm",
+    autoComplete: "on",
+    hidden: !active,
+    onSubmit: (event) => {
+      event.preventDefault();
+      request("gvdg:member-apply-requested", { name, pdgaNo, udisc, pin, confirmPin });
+    },
+  }, [
+    h("p", { className: "login-subtitle", key: "copy" }, "Pick a PDGA # or UDisc name and a PIN. An admin approves you, then you can log in."),
+    h(FormGroup, { label: "Name", htmlFor: "applyNameInput", key: "name" }, h("input", {
+      type: "text",
+      className: "form-input",
+      id: "applyNameInput",
+      name: "name",
+      autoComplete: "name",
+      maxLength: 80,
+      value: name,
+      onChange: (event) => onValuesChange("apply", { name: event.target.value }),
+    })),
+    h(FormGroup, { label: "PDGA #", htmlFor: "applyPdgaInput", hint: "Need PDGA # or UDisc", key: "pdga" }, h("input", {
+      type: "text",
+      className: "form-input",
+      id: "applyPdgaInput",
+      inputMode: "numeric",
+      maxLength: 12,
+      value: pdgaNo,
+      onChange: (event) => onValuesChange("apply", { pdgaNo: event.target.value }),
+    })),
+    h(FormGroup, { label: "UDisc username", htmlFor: "applyUdiscInput", key: "udisc" }, h("input", {
+      type: "text",
+      className: "form-input",
+      id: "applyUdiscInput",
+      maxLength: 50,
+      value: udisc,
+      onChange: (event) => onValuesChange("apply", { udisc: event.target.value }),
+    })),
+    h(FormGroup, { label: "Choose a PIN", htmlFor: "applyPinInput", key: "pin" }, h("input", {
+      type: "password",
+      className: "form-input",
+      id: "applyPinInput",
+      inputMode: "numeric",
+      autoComplete: "new-password",
+      maxLength: 4,
+      value: pin,
+      onChange: (event) => onValuesChange("apply", { pin: event.target.value }),
+    })),
+    h(FormGroup, { label: "Confirm PIN", htmlFor: "applyConfirmPinInput", key: "confirm" }, h("input", {
+      type: "password",
+      className: "form-input",
+      id: "applyConfirmPinInput",
+      inputMode: "numeric",
+      autoComplete: "new-password",
+      maxLength: 4,
+      value: confirmPin,
+      onChange: (event) => onValuesChange("apply", { confirmPin: event.target.value }),
+    })),
+    h("button", { type: "submit", className: "login-btn", disabled: busy, "data-react-auth-action": "apply", key: "submit" }, busy ? "Sending..." : "Submit application"),
+    h(ErrorMessage, { form: "apply", state, key: "error" }),
+    h("button", {
+      type: "button",
+      className: "back-link",
+      onClick: () => request("gvdg:member-apply-cancel"),
+      key: "back",
+    }, "Back to log in"),
+  ]);
 }
 
 export function PinChangeForm({ active, state, onValuesChange }) {

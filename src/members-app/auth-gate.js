@@ -1,14 +1,15 @@
 import React from "react";
-import { AuthIcon, LoginForm, PinChangeForm, ProfileForm } from "./auth-forms.js";
+import { ApplyForm, AuthIcon, LoginForm, PinChangeForm, ProfileForm } from "./auth-forms.js";
 
 const h = React.createElement;
 const SHELL_EVENT = "gvdg:member-shell-view";
 const AUTH_FORM_STATE_EVENT = "gvdg:member-auth-form-state";
-const AUTH_FORMS = new Set(["login", "pin", "profile"]);
+const AUTH_FORMS = new Set(["login", "pin", "profile", "apply"]);
 const FORM_VALUES = {
   login: { identifier: "", pin: "" },
   pin: { newPin: "", confirmPin: "" },
   profile: { pdga: "", udisc: "" },
+  apply: { name: "", pdgaNo: "", udisc: "", pin: "", confirmPin: "" },
 };
 
 function createFormState(form) {
@@ -35,6 +36,7 @@ export function MemberAuthGate() {
     login: createFormState("login"),
     pin: createFormState("pin"),
     profile: createFormState("profile"),
+    apply: createFormState("apply"),
   });
 
   function setFormValues(form, values) {
@@ -63,7 +65,7 @@ export function MemberAuthGate() {
   React.useEffect(() => {
     function update(event) {
       const nextMode = event.detail?.mode;
-      setMode(nextMode === "pin" || nextMode === "profile" ? nextMode : "login");
+      setMode(nextMode === "pin" || nextMode === "profile" || nextMode === "apply" ? nextMode : "login");
       setShellView("auth");
       if (typeof event.detail?.passkeysSupported === "boolean") setSupportsPasskeys(event.detail.passkeysSupported);
     }
@@ -94,9 +96,10 @@ export function MemberAuthGate() {
 
   return h("div", { className: "login-card", "data-react-auth-gate": mode }, [
     h(AuthIcon, { key: "icon" }),
-    h("h1", { className: "login-title", key: "title" }, "Members Only"),
-    h("p", { className: "login-subtitle", key: "subtitle" }, "Log in with your PDGA # or UDisc username and your PIN."),
+    h("h1", { className: "login-title", key: "title" }, mode === "apply" ? "Join the Club" : "Members Only"),
+    mode === "apply" ? null : h("p", { className: "login-subtitle", key: "subtitle" }, "Log in with your PDGA # or UDisc username and your PIN."),
     h(LoginForm, { active: mode === "login", supportsPasskeys, state: formStates.login, onValuesChange: setFormValues, key: "login" }),
+    h(ApplyForm, { active: mode === "apply", state: formStates.apply, onValuesChange: setFormValues, key: "apply" }),
     h(PinChangeForm, { active: mode === "pin", state: formStates.pin, onValuesChange: setFormValues, key: "pin" }),
     h(ProfileForm, { active: mode === "profile", state: formStates.profile, onValuesChange: setFormValues, key: "profile" }),
     h("a", { href: "index.html", className: "back-link", key: "back" }, "Back to main site"),

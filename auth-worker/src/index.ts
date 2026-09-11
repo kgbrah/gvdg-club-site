@@ -17,6 +17,7 @@ import { handleWebAuthnRoute } from "./webauthn-routes.js";
 import { handleMyTeeSigns, handleTeeSignUpload } from "./tee-sign-routes.js";
 import { handlePdgaStats } from "./pdga.js";
 import { handleClubFeed } from "./feeds.js";
+import { handleMembershipApply } from "./membership-apply.js";
 import { clubApi } from "./club-api.js";
 import { D1KV } from "./d1kv.js";
 
@@ -69,6 +70,7 @@ export default {
       if (pathname === "/my-tee-signs" && method === "GET") return await handleMyTeeSigns(request, env, origin);
       if (pathname === "/pdga-stats" && method === "GET") return await handlePdgaStats(request, env, origin);
       if (pathname === "/club-feed" && method === "GET") return await handleClubFeed(env, origin);
+      if (pathname === "/membership/apply" && method === "POST") return await handleMembershipApply(request, env, origin);
 
       const club = await clubApi(request, env, origin, pathname, method, ctx);
       if (club) return club;

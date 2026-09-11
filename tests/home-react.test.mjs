@@ -99,6 +99,8 @@ test('home React bundle owns membership contact and footer sections', () => {
   assert.match(main, /createRoot\(contactMount\)\.render\(h\(HomeContactSection\)\)/);
   assert.match(main, /createRoot\(footerMount\)\.render\(h\(HomeFooter\)\)/);
   assert.match(community, /export function HomeMembershipSection/);
+  assert.match(community, /gvdg-members\.html#apply/);
+  assert.match(community, /Create your app login/);
   assert.match(community, /export function HomeContactSection/);
   assert.match(community, /export function HomeFooter/);
   assert.match(community, /data-react-home-membership/);

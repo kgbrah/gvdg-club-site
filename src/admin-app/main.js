@@ -19,7 +19,7 @@ import { AdminImportControls } from "./import-controls.js";
 import { AdminLayoutsManager } from "./layouts-manager.js";
 import { AdminMemberForm } from "./member-form.js";
 import { AdminMessage } from "./message.js";
-import { AdminMembersList, AdminMemberTempPin } from "./members-list.js";
+import { AdminMembersList, AdminMemberTempPin, AdminMembershipApplications } from "./members-list.js";
 import { AdminNavigation } from "./navigation.js";
 import { AdminOrdersList } from "./orders-list.js";
 import { AdminPageChrome } from "./page-chrome.js";
@@ -155,6 +155,11 @@ if (meetingFormMount) {
 const meetingsListMount = document.getElementById("adminMeetingsListReactApp");
 if (meetingsListMount) {
   flushSync(() => createRoot(meetingsListMount).render(h(AdminMeetingsList)));
+}
+
+const membershipApplicationsMount = document.getElementById("adminMemberApplicationsReactApp");
+if (membershipApplicationsMount) {
+  flushSync(() => createRoot(membershipApplicationsMount).render(h(AdminMembershipApplications)));
 }
 
 const membersListMount = document.getElementById("adminMembersListReactApp");

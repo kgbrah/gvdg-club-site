@@ -3,6 +3,7 @@ import { json, readJson } from "./http.js";
 import { asStr } from "./input.js";
 import { generatePin, hashPin } from "./crypto.js";
 import { createMember, listMembers, resetMemberPin, getMember, setMemberAdmin, countAdmins, type AdminMember, type KVListLike, type Member } from "./roster.js";
+import { handleAdminMembershipApplications } from "./membership-apply.js";
 
 // Admin member onboarding: create a member (or reissue) and return a one-time TEMPORARY PIN for the
 // admin to hand off. The member logs in with PDGA#/UDisc + temp PIN, then is forced to set their own
@@ -24,6 +25,9 @@ export async function handleAdminMembers(
   seg: string[],
   adminId: string,
 ): Promise<Response | null> {
+  const applications = await handleAdminMembershipApplications(env, origin, method, seg);
+  if (applications) return applications;
+
   // GET /admin/members — list members (public-safe fields, never the PIN hash)
   if (method === "GET" && seg.length === 2) {
     return json({ members: await listMembers(env.ROSTER as unknown as KVListLike) }, 200, origin);

@@ -34,6 +34,12 @@ export function showLoginShell(passkeysSupported) {
   clearAuthError("login");
   clearAuthError("pin");
   clearAuthError("profile");
+  clearAuthError("apply");
+}
+
+export function showApplyShell(passkeysSupported) {
+  setAuthMode("apply", passkeysSupported);
+  clearAuthError("apply");
 }
 
 export function showPinChangeShell(passkeysSupported) {

@@ -188,8 +188,12 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(authGate, /document\.body\.dataset\.memberShell/);
   assert.match(authGate, /requestAnimationFrame\(\(\) => window\.scrollTo/);
   assert.match(authForms, /id: "loginForm"/);
+  assert.match(authForms, /id: "applyForm"/);
   assert.match(authForms, /id: "pinChangeForm"/);
   assert.match(authForms, /id: "profileForm"/);
+  assert.match(authForms, /gvdg:member-apply-requested/);
+  assert.match(authController, /\/membership\/apply/);
+  assert.match(authGate, /ApplyForm/);
   assert.match(authForms, /data-react-auth-error/);
   assert.match(authForms, /data-react-auth-action/);
   assert.match(authForms, /busyAction/);

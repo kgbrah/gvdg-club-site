@@ -73,13 +73,20 @@ export function HomeMembershipSection() {
     h("p", { className: "membership-subtitle", key: "subtitle" }, "Join our growing community and enjoy exclusive benefits"),
     h("div", { className: "membership-perks", key: "perks" }, MEMBERSHIP_PERKS.map((perk, index) => h(PerkCard, { index, perk, key: perk.title }))),
     h("div", { className: "price", key: "price" }, "$15 / Year"),
-    h("a", {
-      className: "cta-button",
-      href: membershipUrl,
-      key: "cta",
-      rel: "noopener noreferrer",
-      target: "_blank",
-    }, "Get Started Today"),
+    h("div", { className: "membership-actions", key: "actions" }, [
+      h("a", {
+        className: "cta-button",
+        href: membershipUrl,
+        key: "cta",
+        rel: "noopener noreferrer",
+        target: "_blank",
+      }, "Pay $15 dues"),
+      h("a", {
+        className: "cta-button",
+        href: "gvdg-members.html#apply",
+        key: "apply",
+      }, "Create your app login"),
+    ]),
   ]);
 }
 

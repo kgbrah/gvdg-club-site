@@ -15,7 +15,7 @@ test('admin member temporary PIN display is rendered by React from direct create
   assert.match(showTempPin, /new CustomEvent\('gvdg:admin-member-temp-pin', \{ detail: state \}\)/);
   assert.doesNotMatch(showTempPin, /publishAdminState\('memberTempPin'/);
   assert.doesNotMatch(showTempPin, /amTempPin|textContent|appendChild|style\.cssText|createElement|elx\(|addEventListener|classList/);
-  assert.match(main, /import \{ AdminMembersList, AdminMemberTempPin \} from "\.\/members-list\.js"/);
+  assert.match(main, /import \{ AdminMembersList, AdminMemberTempPin, AdminMembershipApplications \} from "\.\/members-list\.js"/);
   assert.match(main, /const memberTempPinMount = document\.getElementById\("adminMemberTempPinReactApp"\)/);
   assert.match(main, /createRoot\(memberTempPinMount\)\.render\(h\(AdminMemberTempPin\)\)/);
   assert.match(membersList, /export function AdminMemberTempPin/);

@@ -1,5 +1,5 @@
 import { NAME_KEY, PDGA_KEY, TOKEN_KEY, authBase, request, storageGet } from "./api.js";
-import { clearAuthError, setAuthBusy, setAuthFormValues, showAuthError, showLoginShell, showMembersShell, showPinChangeShell } from "./member-auth-dom.js";
+import { clearAuthError, setAuthBusy, setAuthFormState, setAuthFormValues, showApplyShell, showAuthError, showLoginShell, showMembersShell, showPinChangeShell } from "./member-auth-dom.js";
 import { applyProfile, memberDashboardContext, resetMemberProfile } from "./member-auth-state.js";
 import { createPasskeyController, passkeysSupported } from "./member-passkeys.js";
 import { createProfileController } from "./member-profile-controller.js";
@@ -152,10 +152,68 @@ export function installMemberAuthController() {
     }
   }
 
+  function openApply() {
+    showApplyShell(passkeysSupported());
+  }
+
+  async function handleApply(event) {
+    const name = detailString(event, "name");
+    const pdgaNo = detailString(event, "pdgaNo");
+    const udisc = detailString(event, "udisc");
+    const pin = detailString(event, "pin");
+    const confirmPin = detailString(event, "confirmPin");
+    clearAuthError("apply");
+    if (!authBase()) {
+      showAuthError("apply", "Membership apply is not configured yet - contact an admin.");
+      return;
+    }
+    if (!name) {
+      showAuthError("apply", "Enter your name.");
+      return;
+    }
+    if (!pdgaNo && !udisc) {
+      showAuthError("apply", "Enter a PDGA # or UDisc username.");
+      return;
+    }
+    if (!/^\d{4}$/.test(pin)) {
+      showAuthError("apply", "PIN must be exactly 4 digits.");
+      return;
+    }
+    if (pin !== confirmPin) {
+      showAuthError("apply", "PINs do not match.");
+      return;
+    }
+
+    setAuthBusy("apply", "apply", true);
+    try {
+      const response = await api("/membership/apply", { method: "POST", body: { name, pdgaNo, udisc, pin } });
+      if (response.status === 201) {
+        setAuthFormValues("apply", { pin: "", confirmPin: "" });
+        setAuthFormValues("login", { identifier: pdgaNo || udisc, pin: "" });
+        showLoginShell(passkeysSupported());
+        setAuthFormState("login", { error: "Application sent. After an admin approves you, log in with this PIN." });
+      } else if (response.status === 409) {
+        const data = await response.json().catch(() => ({}));
+        if (data.error === "member_exists") showAuthError("apply", "That PDGA # or UDisc is already on the roster. Log in instead.");
+        else if (data.error === "already_pending") showAuthError("apply", "We already have an application for that PDGA # or UDisc.");
+        else showAuthError("apply", "Could not submit that application.");
+      } else if (response.status === 429) {
+        showAuthError("apply", "Too many tries. Wait a bit and try again.");
+      } else {
+        showAuthError("apply", "Could not submit that application. Check the details and try again.");
+      }
+    } catch {
+      showAuthError("apply", "Network error. Please check your connection.");
+    } finally {
+      setAuthBusy("apply", "apply", false);
+    }
+  }
+
   async function checkSession() {
     const token = storageGet(TOKEN_KEY);
     if (!token || !authBase()) {
-      showLogin();
+      if (String(window.location.hash || "").toLowerCase() === "#apply") openApply();
+      else showLogin();
       return;
     }
     try {
@@ -177,6 +235,9 @@ export function installMemberAuthController() {
   profile = createProfileController({ api, showLogin, showMembersContent });
 
   window.addEventListener("gvdg:member-login-requested", handleLogin);
+  window.addEventListener("gvdg:member-apply-open", openApply);
+  window.addEventListener("gvdg:member-apply-cancel", showLogin);
+  window.addEventListener("gvdg:member-apply-requested", handleApply);
   window.addEventListener("gvdg:member-pin-change-requested", handleSetPin);
   window.addEventListener("gvdg:member-profile-save-requested", profile.saveProfile);
   window.addEventListener("gvdg:member-profile-skip-requested", () => showMembersContent(storageGet(NAME_KEY)));

@@ -614,6 +614,13 @@ export function startAdminController() {
             let members = [];
             try { const r = await adminApi('/admin/members'); if (r.ok) members = (await r.json()).members || []; } catch (e) {}
             window.dispatchEvent(new CustomEvent('gvdg:admin-members-list', { detail: { status: 'ready', members, currentMemberId: ME_ID } }));
+            await adminLoadMembershipApplications();
+        }
+        async function adminLoadMembershipApplications() {
+            window.dispatchEvent(new CustomEvent('gvdg:admin-membership-applications', { detail: { status: 'loading', applications: [] } }));
+            let applications = [];
+            try { const r = await adminApi('/admin/members/applications'); if (r.ok) applications = (await r.json()).applications || []; } catch (e) {}
+            window.dispatchEvent(new CustomEvent('gvdg:admin-membership-applications', { detail: { status: 'ready', applications } }));
         }
         async function adminCreateMemberFromReact(detail) {
             const body = detail.body || {};
@@ -1237,6 +1244,20 @@ export function startAdminController() {
             });
             window.addEventListener('gvdg:admin-member-create-request', async (event) => {
                 await adminCreateMemberFromReact(event.detail || {});
+            });
+            window.addEventListener('gvdg:admin-membership-approve-request', async (event) => {
+                const id = event.detail && event.detail.id;
+                if (!id) return;
+                const r = await adminApi('/admin/members/applications/' + encodeURIComponent(id) + '/approve', { method: 'POST' });
+                adminMsg(r.ok ? ('Approved ' + (event.detail.name || 'applicant')) : 'Approve failed', r.ok);
+                if (r.ok) adminLoadMembers();
+            });
+            window.addEventListener('gvdg:admin-membership-reject-request', async (event) => {
+                const id = event.detail && event.detail.id;
+                if (!id) return;
+                const r = await adminApi('/admin/members/applications/' + encodeURIComponent(id) + '/reject', { method: 'POST' });
+                adminMsg(r.ok ? ('Rejected ' + (event.detail.name || 'applicant')) : 'Reject failed', r.ok);
+                if (r.ok) adminLoadMembershipApplications();
             });
             window.addEventListener('gvdg:admin-registration-event-select-request', async (event) => {
                 await rgSelectEventFromReact(event.detail || {});

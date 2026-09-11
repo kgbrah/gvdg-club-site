@@ -170,6 +170,60 @@ export function AdminMemberTempPin() {
   ]);
 }
 
+const EMPTY_APPLICATIONS = { status: "loading", applications: [] };
+
+function normalizeApplication(row) {
+  const source = objectOrEmpty(row);
+  return {
+    source,
+    createdAt: normalizeText(source.createdAt),
+    id: normalizeText(source.id),
+    name: normalizeText(source.name, "Unnamed applicant"),
+    pdgaNo: normalizeText(source.pdgaNo),
+    udisc: normalizeText(source.udisc),
+  };
+}
+
+export function AdminMembershipApplications() {
+  const [state, setState] = React.useState(EMPTY_APPLICATIONS);
+
+  React.useEffect(() => {
+    function update(event) {
+      const detail = event.detail && typeof event.detail === "object" ? event.detail : EMPTY_APPLICATIONS;
+      setState({
+        applications: Array.isArray(detail.applications) ? detail.applications.map(normalizeApplication) : [],
+        status: detail.status === "ready" ? "ready" : "loading",
+      });
+    }
+    window.addEventListener("gvdg:admin-membership-applications", update);
+    return () => window.removeEventListener("gvdg:admin-membership-applications", update);
+  }, []);
+
+  if (state.status === "loading") {
+    return h("p", { className: "al-note", "data-react-admin-membership-applications": "loading", role: "status" }, "Loading...");
+  }
+  if (!state.applications.length) {
+    return h("p", { className: "al-note", "data-react-admin-membership-applications": "empty", role: "status" }, "No pending applications.");
+  }
+  return h("div", { "data-react-admin-membership-applications": "ready" }, state.applications.map((row) =>
+    h("div", { className: "admin-evrow", "data-admin-application-id": row.id, key: row.id }, [
+      h("span", { className: "ev-name", key: "name" }, `${row.name} - ${[row.pdgaNo && `PDGA# ${row.pdgaNo}`, row.udisc].filter(Boolean).join(" - ") || row.id}`),
+      h("button", {
+        className: "admin-btn",
+        key: "approve",
+        type: "button",
+        onClick: () => dispatchRequest("gvdg:admin-membership-approve-request", { id: row.id, name: row.name }),
+      }, "Approve"),
+      h("button", {
+        className: "admin-btn",
+        key: "reject",
+        type: "button",
+        onClick: () => dispatchRequest("gvdg:admin-membership-reject-request", { id: row.id, name: row.name }),
+      }, "Reject"),
+    ]),
+  ));
+}
+
 export function AdminMembersList() {
   const [state, setState] = React.useState(() => normalizeState(EMPTY_STATE));
 
