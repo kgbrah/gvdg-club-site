@@ -2,6 +2,7 @@ import React from "react";
 import { MessageCircle, Send, X } from "lucide-react";
 
 import { resolveApiBase } from "./api-base.js";
+import { sanitizeCrottsActions } from "./crotts-actions.js";
 
 const h = React.createElement;
 const AVATAR = "img/crotts.jpg";
@@ -29,6 +30,9 @@ const CROTTS_CSS = `
 #crotts-send{display:inline-flex;align-items:center;gap:0.35rem;background:var(--secondary);color:white;border:0;border-radius:8px;padding:0 13px;font-weight:700;cursor:pointer}
 #crotts-send:disabled{opacity:.5;cursor:default}
 .crotts-typing{font-size:12px;color:var(--text-muted);align-self:flex-start;padding:2px 4px}
+.crotts-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.crotts-action{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:6px 10px;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font:inherit;font-size:12px;font-weight:700;text-decoration:none;cursor:pointer}
+.crotts-action:hover{border-color:var(--secondary);color:var(--secondary)}
 @media (max-width:768px){#crotts-fab{width:54px;height:54px;left:14px;bottom:calc(82px + env(safe-area-inset-bottom,0px))}#crotts-panel{left:12px;bottom:calc(148px + env(safe-area-inset-bottom,0px));max-width:calc(100vw - 24px);max-height:calc(100vh - 172px)}}
 @media (max-width:768px){body.admin-page #crotts-fab,body.admin-page #crotts-panel{display:none}}
 `;
@@ -52,7 +56,17 @@ function messageId(counter) {
 }
 
 function AssistantBubble({ message }) {
-  return h("div", { className: `crotts-b ${message.kind}` }, message.content);
+  const actions = sanitizeCrottsActions(message.actions);
+  return h("div", { className: `crotts-b ${message.kind}` }, [
+    message.content,
+    actions.length
+      ? h("div", { className: "crotts-actions", key: "actions" }, actions.map((action) => h("a", {
+        className: "crotts-action",
+        href: action.href,
+        key: action.id,
+      }, action.label)))
+      : null,
+  ]);
 }
 
 export function CrottsWidget() {
@@ -71,7 +85,7 @@ export function CrottsWidget() {
     setMessages((current) => {
       if (current.length) return current;
       return [{
-        content: "Hey, I'm Crotts. Ask me about GVDG events, courses, or how to use the site.",
+        content: "Hey, I'm Crotts. Ask me about GVDG events, courses, or how to use the site. I can also open the page you need.",
         id: messageId(idCounter),
         kind: "them",
       }];
@@ -118,7 +132,8 @@ export function CrottsWidget() {
 
       const data = await response.json();
       const reply = data && data.reply ? String(data.reply) : "Hmm, I didn't catch that.";
-      setMessages((current) => current.concat({ content: reply, id: messageId(idCounter), kind: "them" }));
+      const actions = sanitizeCrottsActions(data && data.actions);
+      setMessages((current) => current.concat({ actions, content: reply, id: messageId(idCounter), kind: "them" }));
       historyRef.current = historyRef.current.concat(
         { role: "user", content: text },
         { role: "assistant", content: reply },

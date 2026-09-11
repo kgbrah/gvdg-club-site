@@ -1,5 +1,6 @@
 import type { Env } from "./env.js";
 import * as db from "./db.js";
+import { suggestCrottsActions } from "./assistant-actions.js";
 import { buildMessages, generateReply, MAX_HISTORY, type ChatMessage, type ChatTurn, type ReplyProvider } from "./assistant.js";
 import { getClubCalendar, upcoming, type ClubFeeds, type FeedItem } from "./feeds.js";
 import { clientIp, json, readJson } from "./http.js";
@@ -99,8 +100,12 @@ export async function handleAssistant(request: Request, env: Env, origin: string
   const now = Date.now();
   let cal: ClubFeeds = { events: [], clubEvents: [] };
   let courses: Record<string, unknown>[] = [];
+  let liveEvents: { id?: number | string | null; name?: string | null }[] = [];
+  let openEvents: { id?: number | string | null; name?: string | null }[] = [];
   try { cal = await getClubCalendar(env, now); } catch { /* calendar unavailable */ }
   try { courses = (await db.listCourses(env.DB)) as Record<string, unknown>[]; } catch { /* empty */ }
+  try { liveEvents = (await db.listLiveEvents(env.DB)) as { id?: number | string | null; name?: string | null }[]; } catch { /* empty */ }
+  try { openEvents = (await db.listOpenRegistrationEvents(env.DB)) as { id?: number | string | null; name?: string | null }[]; } catch { /* empty */ }
 
   const toCtx = (f: FeedItem) => ({ name: f.name, date: f.date, status: null as string | null });
   const messages = buildMessages({
@@ -109,15 +114,23 @@ export async function handleAssistant(request: Request, env: Env, origin: string
     events: upcoming(cal.events, now, 8).map(toCtx),
     clubEvents: upcoming(cal.clubEvents, now, 8).map(toCtx),
     courses: courses.map((c) => ({ name: String(c.name ?? ""), location: (c.location as string) ?? null })),
+    liveEvents: liveEvents.map((event) => ({ name: String(event.name ?? "Live round"), status: "live" })),
   });
+  const actions = suggestCrottsActions({ message, liveEvents, openEvents });
 
   const providers: ReplyProvider[] = [];
   if (env.OPENROUTER_API_KEY) providers.push(openRouterProvider(env));
   if (env.AI) providers.push(workersAiProvider(env));
 
   if (!providers.length) {
-    return json({ reply: "🥏 (dev stub) Hi, I'm Crotts! No AI provider is configured in this environment, so I can't think for real yet — but your message reached the worker and the club context loaded fine.", stub: true }, 200, origin);
+    return json({
+      actions,
+      reply: "🥏 (dev stub) Hi, I'm Crotts! No AI provider is configured in this environment, so I can't think for real yet — but your message reached the worker and the club context loaded fine.",
+      stub: true,
+    }, 200, origin);
   }
   const out = await generateReply(providers, messages);
-  return out ? json({ reply: out.reply, provider: out.provider }, 200, origin) : json({ error: "assistant_unavailable" }, 502, origin);
+  return out
+    ? json({ actions, reply: out.reply, provider: out.provider }, 200, origin)
+    : json({ error: "assistant_unavailable" }, 502, origin);
 }

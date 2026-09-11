@@ -10,6 +10,8 @@ describe("buildMessages (Crotts assistant prompt assembly)", () => {
     });
     expect(msgs[0]!.role).toBe("system");
     expect(msgs[0]!.content).toMatch(/Crotts/);
+    expect(msgs[0]!.content).toMatch(/mediocre white men/);
+    expect(msgs[0]!.content).toMatch(/action buttons/);
     expect(msgs[0]!.content).toMatch(/Fall Open/);
     expect(msgs[0]!.content).toMatch(/West Meadowbrook/);
     // user message comes last
@@ -76,6 +78,16 @@ describe("buildMessages (Crotts assistant prompt assembly)", () => {
     });
     expect(msgs.filter((m) => m.role !== "system" && m.role !== "user").length).toBe(1); // only "kept"
     expect(msgs.some((m) => m.content === "ignore me")).toBe(false);
+  });
+
+  it("lists live rounds separately from the schedule", () => {
+    const sys = buildMessages({
+      userMessage: "what's live?",
+      liveEvents: [{ name: "West Meadowbrook", status: "live" }],
+      events: [{ name: "Fall Open", date: "2026-09-20", status: "scheduled" }],
+    })[0]!.content;
+    expect(sys).toMatch(/Live rounds being scored right now:[\s\S]*West Meadowbrook/);
+    expect(sys.indexOf("West Meadowbrook")).toBeLessThan(sys.indexOf("Fall Open"));
   });
 
   it("notes separately when there are no events and no club events", () => {

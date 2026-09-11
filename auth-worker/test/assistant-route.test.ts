@@ -28,6 +28,14 @@ describe("POST /assistant", () => {
     const j = await jsonObject(res);
     expect(j.stub).toBe(true);
     expect(j.reply).toMatch(/Crotts/);
+    expect(Array.isArray(j.actions)).toBe(true);
+  });
+
+  it("returns allowlisted action buttons for a watch request", async () => {
+    const res = await worker.fetch(req({ message: "can I watch the live round?" }), makeEnv());
+    expect(res.status).toBe(200);
+    const j = await jsonObject(res);
+    expect(Array.isArray(j.actions)).toBe(true);
   });
 
   it("passes the model reply through when AI is bound", async () => {
