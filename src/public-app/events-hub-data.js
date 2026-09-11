@@ -5,6 +5,7 @@ import {
   buildCourseIndex,
   eventCourseSummary,
   formatEventDate,
+  isPastClubCalendarEvent,
   normalizeEvent,
   parseEventDate,
   statusLabel,
@@ -120,11 +121,7 @@ function eventDateForSort(event) {
 }
 
 function isArchivedClubEvent(raw) {
-  const event = normalizeEvent(raw);
-  if (event.status === "live") return false;
-  if (event.status === "final" || event.status === "cancelled") return true;
-  const date = eventDateForSort(event);
-  return date ? date < startOfToday() : false;
+  return isPastClubCalendarEvent(normalizeEvent(raw));
 }
 
 function splitFeedByDate(items) {

@@ -50,6 +50,45 @@ export function parseEventDate(raw) {
 // (America/New_York tracks EST/EDT automatically.)
 export const CLUB_TIME_ZONE = 'America/New_York';
 
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+export function clubCalendarDay(raw) {
+  if (raw == null || raw === '') return '';
+  if (raw instanceof Date) {
+    return Number.isNaN(raw.getTime()) ? '' : raw.toLocaleDateString('en-CA', { timeZone: CLUB_TIME_ZONE });
+  }
+  const text = String(raw).trim();
+  if (DATE_ONLY.test(text)) return text;
+  const parsed = parseEventDate(text);
+  if (!parsed) return '';
+  return parsed.toLocaleDateString('en-CA', { timeZone: CLUB_TIME_ZONE });
+}
+
+export function clubToday(now = new Date()) {
+  return now.toLocaleDateString('en-CA', { timeZone: CLUB_TIME_ZONE });
+}
+
+export function eventClubCalendarDay(event) {
+  const source = event && typeof event === 'object' ? event : {};
+  if (source.starts_at) {
+    const fromStart = clubCalendarDay(source.starts_at);
+    if (fromStart) return fromStart;
+  }
+  return clubCalendarDay(source.date);
+}
+
+/** True when a scheduled club event is before today in America/New_York.
+ *  Date-only `YYYY-MM-DD` values are calendar days, not UTC midnights — comparing those
+ *  Date objects to local midnight archived every Eastern "today" event. */
+export function isPastClubCalendarEvent(event, now = new Date()) {
+  const status = event && event.status;
+  if (status === 'live') return false;
+  if (status === 'final' || status === 'cancelled') return true;
+  const day = eventClubCalendarDay(event);
+  if (!day) return false;
+  return day < clubToday(now);
+}
+
 // Format a date for display. Tolerates ISO strings, Date objects and nulls.
 // A bare YYYY-MM-DD is a calendar date: render it in UTC (parseEventDate made it UTC-midnight) so it never
 // shifts a day backward in a behind-UTC zone — the old local render turned a July 4 event into "July 3" in

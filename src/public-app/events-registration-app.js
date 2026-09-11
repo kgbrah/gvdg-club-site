@@ -1,7 +1,7 @@
 import React from "react";
 import { CalendarDays, CheckCircle2 } from "lucide-react";
 
-import { normalizeEvent, parseEventDate } from "../shared/events-model.js";
+import { isPastClubCalendarEvent, normalizeEvent } from "../shared/events-model.js";
 import { clientOwed, isDoublesRegistration, parseArray, parseObject } from "../members-app/registration-utils.js";
 import { publicApiBase } from "./public-api.js";
 
@@ -49,22 +49,8 @@ function setGuestReg(eventId, value) {
   }
 }
 
-function startOfToday() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return today;
-}
-
-function eventDateForSort(event) {
-  return parseEventDate((event && (event.date || event.starts_at)) || null);
-}
-
 function isArchivedClubEvent(raw) {
-  const event = normalizeEvent(raw);
-  if (event.status === "live") return false;
-  if (event.status === "final" || event.status === "cancelled") return true;
-  const date = eventDateForSort(event);
-  return date ? date < startOfToday() : false;
+  return isPastClubCalendarEvent(normalizeEvent(raw));
 }
 
 function dollars(cents) {

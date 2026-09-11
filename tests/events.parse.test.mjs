@@ -16,6 +16,7 @@ import {
   parseEventDate,
   formatEventDate,
   formatClubDateTime,
+  isPastClubCalendarEvent,
   typeLabel,
   statusLabel,
   buildCourseIndex,
@@ -81,6 +82,19 @@ test('typeLabel / statusLabel map known enums and pass unknowns through', () => 
 });
 
 // --- date handling ------------------------------------------------------------
+test('today date-only club events stay upcoming in Eastern time', () => {
+  const now = new Date('2026-09-11T21:13:00.000Z'); // 5:13 PM EDT
+  assert.equal(isPastClubCalendarEvent({ status: 'scheduled', date: '2026-09-11' }, now), false);
+  assert.equal(isPastClubCalendarEvent({ status: 'scheduled', date: '2026-09-10' }, now), true);
+  assert.equal(isPastClubCalendarEvent({
+    status: 'scheduled',
+    date: '2026-09-11',
+    starts_at: '2026-09-11T22:00:00.000Z',
+  }, now), false);
+  assert.equal(isPastClubCalendarEvent({ status: 'final', date: '2026-09-11' }, now), true);
+  assert.equal(isPastClubCalendarEvent({ status: 'live', date: '2026-09-10' }, now), false);
+});
+
 test('parseEventDate tolerates ISO, date-only, null and junk', () => {
   assert.ok(parseEventDate('2026-07-04') instanceof Date);
   assert.ok(parseEventDate('2026-07-04T17:30:00Z') instanceof Date);
