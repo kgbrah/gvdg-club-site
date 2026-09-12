@@ -38,7 +38,7 @@ export const EXTRACT_MODE_META = {
 export const THEME_MODES = ["dark", "light"];
 export const ANSI_SLOT_ROLES = ["BG", "RD", "GR", "YL", "BL", "MG", "CY", "FG", "DIM", "RD+", "GR+", "YL+", "BL+", "MG+", "CY+", "FG+"];
 export const ANSI_HUES = [0, 120, 60, 240, 300, 180];
-export const FILL_TOKEN_KEYS = ["primary", "primary-strong", "secondary", "accent", "green"];
+export const FILL_TOKEN_KEYS = ["primary-strong", "secondary", "accent", "green"];
 export const TOKEN_KEYS = [
   "primary",
   "primary-strong",
@@ -337,16 +337,139 @@ export function samplePixels(data, width, height, target = 3600) {
 }
 
 function ensureContrast(foreground, background, minimum = 4.5) {
+  if (contrastRatio(foreground, background) >= minimum) return foreground;
+  const hue = rgbToOklch(foreground);
+  const darken = relativeLuminance(background) >= 0.45;
+  const tryDirection = (delta) => {
+    let l = hue.l;
+    for (let guard = 0; guard < 24; guard += 1) {
+      l = clamp(l + delta, 0, 1);
+      const candidate = oklchToRgb({ ...hue, l });
+      if (contrastRatio(candidate, background) >= minimum) return candidate;
+    }
+    return null;
+  };
+  return tryDirection(darken ? -0.05 : 0.05)
+    || tryDirection(darken ? 0.05 : -0.05)
+    || (darken ? rgb(18, 18, 28) : rgb(246, 246, 250));
+}
+
+function surfacesOf(tokens) {
+  return ["bg-primary", "bg-secondary", "bg-tertiary"]
+    .map((key) => hexToRgb(tokens[key]))
+    .filter(Boolean);
+}
+
+function ensureContrastOnSurfaces(foreground, backgrounds, minimum = 4.5) {
   let color = foreground;
+  for (let pass = 0; pass < 4; pass += 1) {
+    let ok = true;
+    for (const background of backgrounds) {
+      if (contrastRatio(color, background) < minimum) {
+        color = ensureContrast(color, background, minimum);
+        ok = false;
+      }
+    }
+    if (ok) return color;
+  }
+  const paper = backgrounds[0];
+  if (!paper) return foreground;
+  if (backgrounds.every((background) => contrastRatio(color, background) >= minimum)) return color;
+  if (contrastRatio(color, paper) >= minimum) return color;
+  if (contrastRatio(foreground, paper) >= minimum) return foreground;
+  return ensureContrast(foreground, paper, minimum);
+}
+
+function surfacesCompatible(tokens, minimum = 4.5) {
+  const backgrounds = surfacesOf(tokens);
+  if (!backgrounds.length) return true;
+  const white = rgb(246, 246, 250);
+  const black = rgb(18, 18, 28);
+  return backgrounds.every((background) => contrastRatio(white, background) >= minimum)
+    || backgrounds.every((background) => contrastRatio(black, background) >= minimum);
+}
+
+function migrateSurfaces(tokens, mode) {
+  const paper = paperFrom(
+    hexToRgb(tokens["bg-primary"]) || (mode === "light" ? rgb(248, 248, 252) : rgb(8, 10, 18)),
+    mode,
+  );
+  const ink = inkFrom(
+    hexToRgb(tokens["text-primary"])
+      || hexToRgb(tokens["text-secondary"])
+      || (mode === "light" ? rgb(18, 18, 28) : rgb(246, 246, 250)),
+    paper,
+    mode,
+  );
+  const card = mix(paper, ink, mode === "light" ? 0.06 : 0.1);
+  const raised = mix(paper, ink, mode === "light" ? 0.11 : 0.16);
+  return {
+    ...tokens,
+    "bg-primary": rgbToHex(paper),
+    "bg-secondary": rgbToHex(card),
+    "bg-tertiary": rgbToHex(raised),
+    "border-color": rgbToHex(mix(paper, ink, 0.22)),
+    "text-primary": rgbToHex(ink),
+    "text-secondary": rgbToHex(mix(ink, paper, 0.22)),
+    "text-tertiary": rgbToHex(mix(ink, paper, 0.45)),
+    "text-muted": rgbToHex(mix(ink, paper, 0.32)),
+  };
+}
+
+function inkReadableOnPaper(tokens) {
+  const foreground = hexToRgb(tokens?.["text-primary"]);
+  const paper = hexToRgb(tokens?.["bg-primary"]);
+  return Boolean(foreground && paper && contrastRatio(foreground, paper) >= 4.5);
+}
+
+function paperFrom(background, mode) {
+  let color = background;
+  if (mode === "light") {
+    let guard = 0;
+    while (relativeLuminance(color) < 0.85 && guard < 16) {
+      color = mix(color, rgb(255, 255, 255), 0.22);
+      guard += 1;
+    }
+    return color;
+  }
   let guard = 0;
-  while (contrastRatio(color, background) < minimum && guard < 24) {
-    color = shiftLightness(color, relativeLuminance(background) > 0.45 ? -0.06 : 0.06);
+  while (relativeLuminance(color) > 0.08 && guard < 16) {
+    color = mix(color, rgb(10, 10, 16), 0.22);
     guard += 1;
   }
-  if (contrastRatio(color, background) < minimum) {
-    return relativeLuminance(background) > 0.45 ? rgb(18, 18, 28) : rgb(246, 246, 250);
-  }
   return color;
+}
+
+function pickBestForeground(candidates, background) {
+  let best = candidates.find(Boolean) || rgb(246, 246, 250);
+  let bestRatio = 0;
+  for (const color of candidates) {
+    if (!color) continue;
+    const ratio = contrastRatio(color, background);
+    if (ratio > bestRatio) {
+      bestRatio = ratio;
+      best = color;
+    }
+  }
+  return best;
+}
+
+function inkFrom(foreground, background, mode) {
+  let color = foreground;
+  if (mode === "light") {
+    let guard = 0;
+    while (relativeLuminance(color) > 0.28 && contrastRatio(color, background) < 7 && guard < 16) {
+      color = mix(color, rgb(16, 16, 24), 0.18);
+      guard += 1;
+    }
+  } else {
+    let guard = 0;
+    while (relativeLuminance(color) < 0.72 && contrastRatio(color, background) < 7 && guard < 16) {
+      color = mix(color, rgb(250, 250, 252), 0.18);
+      guard += 1;
+    }
+  }
+  return ensureContrast(color, background, 4.5);
 }
 
 function dominantHue(colors) {
@@ -681,8 +804,8 @@ function sanitizeHexList(values, max = 16) {
 
 function applyTextContrast(tokens) {
   if (!tokens) return tokens;
-  const bg = hexToRgb(tokens["bg-primary"]);
-  if (!bg) return tokens;
+  const backgrounds = surfacesOf(tokens);
+  if (!backgrounds.length) return tokens;
   const next = { ...tokens };
   const pairs = [
     ["text-primary", 4.5],
@@ -693,8 +816,18 @@ function applyTextContrast(tokens) {
   ];
   for (const [key, minimum] of pairs) {
     const color = hexToRgb(next[key]);
-    if (color) next[key] = rgbToHex(ensureContrast(color, bg, minimum));
+    if (color) next[key] = rgbToHex(ensureContrastOnSurfaces(color, backgrounds, minimum));
   }
+  return next;
+}
+
+function applyAccentContrast(tokens) {
+  if (!tokens) return tokens;
+  const backgrounds = surfacesOf(tokens);
+  if (!backgrounds.length) return tokens;
+  const next = { ...tokens };
+  const color = hexToRgb(next.primary);
+  if (color) next.primary = rgbToHex(ensureContrastOnSurfaces(color, backgrounds, 4.5));
   return next;
 }
 
@@ -717,28 +850,31 @@ export function tokensFromPalette(palette, mode = "dark") {
   if (colors.length >= 8) {
     const bg = colors[0];
     const fg = colors[7] || colors[colors.length - 1];
-    const dim = colors[8] || mix(bg, fg, 0.35);
     const red = colors[1] || fg;
     const green = colors[2] || red;
     const yellow = colors[3] || red;
     const blue = colors[4] || red;
     const cyan = colors[6] || blue;
-    return applyTextContrast(applyFillContrast({
-      primary: rgbToHex(ensureContrast(red, bg, 3)),
-      "primary-strong": rgbToHex(shiftLightness(red, mode === "light" ? -0.1 : -0.06)),
+    const paper = paperFrom(bg, mode);
+    const ink = inkFrom(pickBestForeground([fg, colors[15], colors[colors.length - 1]], paper), paper, mode);
+    const card = mix(paper, ink, mode === "light" ? 0.06 : 0.1);
+    const raised = mix(paper, ink, mode === "light" ? 0.11 : 0.16);
+    return applyAccentContrast(applyTextContrast(applyFillContrast({
+      primary: rgbToHex(red),
+      "primary-strong": rgbToHex(shiftLightness(red, mode === "light" ? -0.12 : -0.08)),
       secondary: rgbToHex(blue),
       accent: rgbToHex(yellow),
       green: rgbToHex(green),
-      "bg-primary": rgbToHex(bg),
-      "bg-secondary": rgbToHex(mix(bg, fg, mode === "light" ? 0.06 : 0.1)),
-      "bg-tertiary": rgbToHex(dim),
-      "border-color": rgbToHex(mix(dim, fg, 0.22)),
-      "text-primary": rgbToHex(ensureContrast(fg, bg)),
-      "text-secondary": rgbToHex(mix(fg, dim, 0.25)),
-      "text-tertiary": rgbToHex(mix(fg, dim, 0.45)),
-      "text-muted": rgbToHex(ensureContrast(dim, bg, 3.2)),
-      "secondary-text": rgbToHex(ensureContrast(cyan, bg, 3.5)),
-    }));
+      "bg-primary": rgbToHex(paper),
+      "bg-secondary": rgbToHex(card),
+      "bg-tertiary": rgbToHex(raised),
+      "border-color": rgbToHex(mix(paper, ink, 0.22)),
+      "text-primary": rgbToHex(ink),
+      "text-secondary": rgbToHex(mix(ink, paper, 0.22)),
+      "text-tertiary": rgbToHex(mix(ink, paper, 0.45)),
+      "text-muted": rgbToHex(mix(ink, paper, 0.32)),
+      "secondary-text": rgbToHex(cyan),
+    })));
   }
   const ordered = colors.slice().sort((left, right) => relativeLuminance(left) - relativeLuminance(right));
   const dark = ordered[0];
@@ -838,21 +974,33 @@ export function sanitizeTheme(raw) {
   const adjustments = sanitizeAdjustments(raw.adjustments);
   const palette = sanitizeHexList(raw.palette);
   const sourcePalette = sanitizeHexList(raw.sourcePalette);
-  const tokens = {};
+  let tokens = {};
   if (raw.tokens && typeof raw.tokens === "object") {
     for (const key of TOKEN_KEYS) {
       const value = String(raw.tokens[key] || "").toLowerCase();
       if (HEX.test(value)) tokens[key] = value;
     }
   }
-  if (TOKEN_KEYS.some((key) => !tokens[key])) {
-    const rebuilt = tokensFromPalette(palette.length ? palette : Object.values(tokens), mode);
+  if (palette.length >= 8) {
+    const rebuilt = tokensFromPalette(palette, mode);
     if (!rebuilt) return null;
-    for (const key of TOKEN_KEYS) {
-      if (!tokens[key]) tokens[key] = rebuilt[key];
+    tokens = rebuilt;
+  } else {
+    if (TOKEN_KEYS.some((key) => !tokens[key])) {
+      const rebuilt = tokensFromPalette(palette.length ? palette : Object.values(tokens), mode);
+      if (!rebuilt) return null;
+      for (const key of TOKEN_KEYS) {
+        if (!tokens[key]) tokens[key] = rebuilt[key];
+      }
+    }
+    if (!surfacesCompatible(tokens)) tokens = migrateSurfaces(tokens, mode);
+    Object.assign(tokens, applyAccentContrast(applyTextContrast(applyFillContrast(tokens))));
+    if (!inkReadableOnPaper(tokens)) {
+      tokens = migrateSurfaces(tokens, mode);
+      Object.assign(tokens, applyAccentContrast(applyTextContrast(applyFillContrast(tokens))));
     }
   }
-  Object.assign(tokens, applyTextContrast(applyFillContrast(tokens)));
+  if (!TOKEN_KEYS.every((key) => HEX.test(tokens[key] || ""))) return null;
   const wallpaper = typeof raw.wallpaper === "string" && WALLPAPER_RE.test(raw.wallpaper) && raw.wallpaper.length <= MAX_WALLPAPER_CHARS
     ? raw.wallpaper
     : null;
@@ -905,25 +1053,70 @@ export function clearStoredTheme(storage, memberId) {
   }
 }
 
+function wallpaperImage(theme) {
+  if (!theme?.wallpaper) return "";
+  const bg = hexToRgb(theme.tokens["bg-primary"]) || (theme.mode === "dark" ? rgb(8, 10, 18) : rgb(248, 248, 252));
+  const start = theme.mode === "dark" ? 0.78 : 0.86;
+  const end = theme.mode === "dark" ? 0.9 : 0.93;
+  const scrim = `linear-gradient(rgba(${bg.r}, ${bg.g}, ${bg.b}, ${start}), rgba(${bg.r}, ${bg.g}, ${bg.b}, ${end}))`;
+  return `${scrim}, url("${theme.wallpaper}")`;
+}
+
+function themePage(root) {
+  const body = root?.ownerDocument?.body;
+  return body && body !== root ? body : null;
+}
+
+function clearThemeOn(el) {
+  if (!el?.style) return;
+  for (const key of TOKEN_KEYS) el.style.removeProperty(`--${key}`);
+  el.style.removeProperty("--player-theme-image");
+  el.style.removeProperty("--player-theme-footer");
+  el.style.removeProperty("--player-theme-link");
+  el.classList?.remove?.("player-theme-active", "player-theme-page");
+}
+
+function paintThemeOn(el, theme) {
+  if (!el?.style) return;
+  for (const key of TOKEN_KEYS) el.style.setProperty(`--${key}`, theme.tokens[key]);
+  const image = wallpaperImage(theme);
+  if (image) {
+    el.style.setProperty("--player-theme-image", image);
+    el.classList?.add?.("player-theme-active");
+  } else {
+    el.style.removeProperty("--player-theme-image");
+    el.classList?.remove?.("player-theme-active");
+  }
+}
+
+function paintPageOn(el, theme) {
+  if (!el?.style) return;
+  el.style.setProperty("--bg-primary", theme.tokens["bg-primary"]);
+  el.style.setProperty("--text-primary", theme.tokens["text-primary"]);
+  el.style.setProperty("--player-theme-footer", theme.tokens["text-muted"]);
+  el.style.setProperty("--player-theme-link", theme.tokens.primary);
+  const image = wallpaperImage(theme);
+  if (image) {
+    el.style.setProperty("--player-theme-image", image);
+    el.classList?.add?.("player-theme-active");
+  } else {
+    el.style.removeProperty("--player-theme-image");
+    el.classList?.remove?.("player-theme-active");
+  }
+  el.classList?.add?.("player-theme-page");
+}
+
 export function applyDashboardTheme(theme, root) {
   if (!root || !root.style) return;
+  const page = themePage(root);
   if (!theme) {
-    for (const key of TOKEN_KEYS) root.style.removeProperty(`--${key}`);
-    root.style.removeProperty("--player-theme-image");
-    root.classList.remove("player-theme-active");
+    clearThemeOn(root);
+    clearThemeOn(page);
     return;
   }
   const safe = sanitizeTheme(theme);
   if (!safe) return;
-  for (const key of TOKEN_KEYS) root.style.setProperty(`--${key}`, safe.tokens[key]);
-  if (safe.wallpaper) {
-    const scrim = safe.mode === "dark"
-      ? "linear-gradient(rgba(8, 10, 18, 0.62), rgba(8, 10, 18, 0.8))"
-      : "linear-gradient(rgba(255, 255, 255, 0.58), rgba(248, 248, 252, 0.78))";
-    root.style.setProperty("--player-theme-image", `${scrim}, url("${safe.wallpaper}")`);
-    root.classList.add("player-theme-active");
-  } else {
-    root.style.removeProperty("--player-theme-image");
-    root.classList.remove("player-theme-active");
-  }
+  paintThemeOn(root, safe);
+  if (page) paintPageOn(page, safe);
 }
+

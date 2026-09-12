@@ -99,7 +99,7 @@ test("Nord preset maps ANSI slot 0 onto the dashboard background", () => {
 test("fill tokens stay readable on white tile text", () => {
   const theme = buildTheme({ preset: "Dracula", mode: "dark" });
   const white = rgb(255, 255, 255);
-  for (const key of ["primary", "secondary", "accent", "green"]) {
+  for (const key of ["primary-strong", "secondary", "accent", "green"]) {
     assert.ok(contrastRatio(hexToRgb(theme.tokens[key]), white) >= 4.5, key);
   }
 });
@@ -108,11 +108,42 @@ test("secondary text tokens meet AA contrast on the theme background", () => {
   for (const name of Object.keys(PRESET_THEMES)) {
     for (const mode of ["dark", "light"]) {
       const theme = buildTheme({ preset: name, mode });
-      const bg = hexToRgb(theme.tokens["bg-primary"]);
-      assert.ok(contrastRatio(hexToRgb(theme.tokens["text-secondary"]), bg) >= 4.5, `${name} ${mode} text-secondary`);
-      assert.ok(contrastRatio(hexToRgb(theme.tokens["text-muted"]), bg) >= 4.5, `${name} ${mode} text-muted`);
+      const surfaces = ["bg-primary", "bg-secondary", "bg-tertiary"].map((key) => hexToRgb(theme.tokens[key]));
+      for (const bg of surfaces) {
+        assert.ok(contrastRatio(hexToRgb(theme.tokens["text-primary"]), bg) >= 4.5, `${name} ${mode} text-primary`);
+        assert.ok(contrastRatio(hexToRgb(theme.tokens["text-secondary"]), bg) >= 4.5, `${name} ${mode} text-secondary`);
+        assert.ok(contrastRatio(hexToRgb(theme.tokens["text-muted"]), bg) >= 4.5, `${name} ${mode} text-muted`);
+        assert.ok(contrastRatio(hexToRgb(theme.tokens.primary), bg) >= 4.5, `${name} ${mode} primary`);
+      }
     }
   }
+});
+
+test("light paper stays light and dark paper stays dark", () => {
+  for (const name of Object.keys(PRESET_THEMES)) {
+    const dark = buildTheme({ preset: name, mode: "dark" });
+    const light = buildTheme({ preset: name, mode: "light" });
+    assert.ok(relativeLuminance(hexToRgb(light.tokens["bg-primary"])) >= 0.85, `${name} light paper`);
+    assert.ok(relativeLuminance(hexToRgb(dark.tokens["bg-primary"])) <= 0.08, `${name} dark paper`);
+    assert.ok(relativeLuminance(hexToRgb(light.tokens["text-primary"])) < 0.32, `${name} light ink`);
+    assert.ok(relativeLuminance(hexToRgb(dark.tokens["text-primary"])) > 0.6, `${name} dark ink`);
+  }
+});
+
+test("wallpaper scrim uses the theme paper so body text is not bleached", () => {
+  const wallpaper = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p94AAAAASUVORK5CYII=";
+  const props = new Map();
+  const root = {
+    style: {
+      setProperty(name, value) { props.set(name, value); },
+      removeProperty(name) { props.delete(name); },
+    },
+    classList: { add() {}, remove() {} },
+  };
+  const theme = buildTheme({ preset: "Nord", mode: "light", wallpaper });
+  applyDashboardTheme(theme, root);
+  const bg = hexToRgb(theme.tokens["bg-primary"]);
+  assert.match(props.get("--player-theme-image"), new RegExp(`rgba\\(${bg.r}, ${bg.g}, ${bg.b}, 0\\.86\\)`));
 });
 
 test("recolored palettes swap anchors when switching to light", () => {
@@ -186,6 +217,53 @@ test("buildTheme wires wallpaper, mode, and tokens together", () => {
   assert.equal(theme.palette.length, 16);
 });
 
+test("applyDashboardTheme paints the page body so the public forest footer is covered", () => {
+  function fakeEl() {
+    const props = new Map();
+    const classes = new Set();
+    return {
+      props,
+      classes,
+      style: {
+        setProperty(name, value) { props.set(name, value); },
+        removeProperty(name) { props.delete(name); },
+      },
+      classList: {
+        add(...names) { names.forEach((name) => classes.add(name)); },
+        remove(...names) { names.forEach((name) => classes.delete(name)); },
+      },
+    };
+  }
+  const wallpaper = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p94AAAAASUVORK5CYII=";
+  const body = fakeEl();
+  const root = fakeEl();
+  root.ownerDocument = { body };
+  const themed = buildTheme({ preset: "Nord", mode: "light", wallpaper });
+  applyDashboardTheme(themed, root);
+  assert.equal(root.props.get("--primary"), themed.tokens.primary);
+  assert.equal(body.props.get("--bg-primary"), themed.tokens["bg-primary"]);
+  assert.equal(body.props.get("--text-primary"), themed.tokens["text-primary"]);
+  assert.equal(body.props.get("--player-theme-footer"), themed.tokens["text-muted"]);
+  assert.equal(body.props.get("--player-theme-link"), themed.tokens.primary);
+  assert.equal(body.props.has("--primary"), false);
+  assert.equal(body.props.has("--accent"), false);
+  assert.equal(body.props.has("--secondary"), false);
+  assert.match(body.props.get("--player-theme-image"), /url\("data:image\/png/);
+  assert.deepEqual([...root.classes], ["player-theme-active"]);
+  assert.ok(body.classes.has("player-theme-page"));
+  assert.ok(body.classes.has("player-theme-active"));
+  const paperOnly = buildTheme({ preset: "Nord", mode: "light" });
+  applyDashboardTheme(paperOnly, root);
+  assert.equal(body.props.has("--player-theme-image"), false);
+  assert.ok(body.classes.has("player-theme-page"));
+  assert.equal(body.classes.has("player-theme-active"), false);
+  applyDashboardTheme(null, root);
+  assert.equal(root.props.size, 0);
+  assert.equal(body.props.size, 0);
+  assert.equal(root.classes.size, 0);
+  assert.equal(body.classes.size, 0);
+});
+
 test("applyDashboardTheme sets and clears CSS variables on the dashboard root", () => {
   const props = new Map();
   const root = {
@@ -208,4 +286,63 @@ test("applyDashboardTheme sets and clears CSS variables on the dashboard root", 
   assert.equal(props.size, 0);
   assert.equal(root.className, "");
   assert.equal(rgbToHex(rgb(255, 0, 8)), "#ff0008");
+});
+
+test("sanitizeTheme rebuilds incompatible stored surfaces so ink stays readable", () => {
+  const palette = PRESET_THEMES["Gruvbox Dark"].map((hex) => hex.toLowerCase());
+  const stored = {
+    mode: "dark",
+    preset: "Gruvbox Dark",
+    palette,
+    tokens: {
+      primary: "#cc241d",
+      "primary-strong": "#9a1b16",
+      secondary: "#458588",
+      accent: "#d79921",
+      green: "#98971a",
+      "bg-primary": "#282828",
+      "bg-secondary": "#3c3836",
+      "bg-tertiary": "#928374",
+      "border-color": "#504945",
+      "text-primary": "#ebdbb2",
+      "text-secondary": "#d5c4a1",
+      "text-tertiary": "#bdae93",
+      "text-muted": "#a89984",
+      "secondary-text": "#689d6a",
+    },
+  };
+  const safe = sanitizeTheme(stored);
+  const surfaces = ["bg-primary", "bg-secondary", "bg-tertiary"].map((key) => hexToRgb(safe.tokens[key]));
+  for (const bg of surfaces) {
+    assert.ok(contrastRatio(hexToRgb(safe.tokens["text-primary"]), bg) >= 4.5, `text-primary on ${rgbToHex(bg)}`);
+    assert.ok(contrastRatio(hexToRgb(safe.tokens["text-muted"]), bg) >= 4.5, `text-muted on ${rgbToHex(bg)}`);
+  }
+  assert.notEqual(safe.tokens["bg-tertiary"], "#928374");
+  assert.ok(relativeLuminance(hexToRgb(safe.tokens["bg-primary"])) <= 0.08);
+});
+
+test("sanitizeTheme migrates tokens-only themes whose surfaces cannot share ink", () => {
+  const safe = sanitizeTheme({
+    mode: "dark",
+    tokens: {
+      primary: "#cc241d",
+      "primary-strong": "#9a1b16",
+      secondary: "#458588",
+      accent: "#d79921",
+      green: "#98971a",
+      "bg-primary": "#282828",
+      "bg-secondary": "#3c3836",
+      "bg-tertiary": "#928374",
+      "border-color": "#504945",
+      "text-primary": "#ebdbb2",
+      "text-secondary": "#d5c4a1",
+      "text-tertiary": "#bdae93",
+      "text-muted": "#a89984",
+      "secondary-text": "#689d6a",
+    },
+  });
+  assert.ok(safe);
+  assert.ok(contrastRatio(hexToRgb(safe.tokens["text-primary"]), hexToRgb(safe.tokens["bg-primary"])) >= 4.5);
+  assert.ok(contrastRatio(hexToRgb(safe.tokens["text-primary"]), hexToRgb(safe.tokens["bg-tertiary"])) >= 4.5);
+  assert.notEqual(safe.tokens["bg-tertiary"], "#928374");
 });
