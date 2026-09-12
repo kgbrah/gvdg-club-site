@@ -1,3 +1,5 @@
+import { playersMatch } from "../shared/player-identity.js";
+
 const EASTERN = "America/New_York";
 
 export function easternYear(now = new Date()) {
@@ -18,9 +20,7 @@ export function dateYear(value) {
 }
 
 export function namesMatch(left, right) {
-  const a = String(left || "").trim().toLowerCase();
-  const b = String(right || "").trim().toLowerCase();
-  return Boolean(a && b && a === b);
+  return playersMatch(left, right);
 }
 
 function numberOrNull(value) {

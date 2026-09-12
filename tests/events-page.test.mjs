@@ -265,6 +265,7 @@ test('public Events league detail keeps standings tables scroll-contained', () =
   assert.match(app, /function TeamStandingsTable/);
   assert.match(app, /function OfficialRyderTally/);
   assert.match(app, /fetchMergedRyderData/);
+  assert.match(app, /officialRyderPlayerStandings/);
   assert.match(app, /function PlayerStandingsTable/);
   assert.match(app, /function LeagueRounds/);
   assert.match(app, /className: "lb-wrap"/);

@@ -10,6 +10,7 @@ import {
 } from "./events-state.js";
 import { fetchPublicJson, publicApiBase } from "./public-api.js";
 import { fetchMergedRyderData } from "../shared/ryder-cup-data.js";
+import { officialRyderPlayerStandings } from "./ryder-board-merge.js";
 
 const h = React.createElement;
 
@@ -267,13 +268,18 @@ export function EventsLeagueDetailApp() {
   if (!data) return null;
 
   const league = normalizeLeague(data.league);
-  const standings = Array.isArray(data.standings) ? data.standings : [];
   const rounds = Array.isArray(data.events) ? data.events : [];
   const teamStandings = Array.isArray(data.teamStandings) ? data.teamStandings : [];
   const roundWinners = data.roundWinners && typeof data.roundWinners === "object" ? data.roundWinners : {};
   const meta = leagueMeta(league);
   const isMatch = teamStandings.length > 0;
   const isRyder = routeId === "4";
+  const standings = isRyder && ryderTally
+    ? officialRyderPlayerStandings(ryderTally.weeks, [
+      ...((ryderTally.scoreboard && ryderTally.scoreboard.red && ryderTally.scoreboard.red.players) || []),
+      ...((ryderTally.scoreboard && ryderTally.scoreboard.blue && ryderTally.scoreboard.blue.players) || []),
+    ])
+    : (Array.isArray(data.standings) ? data.standings : []);
 
   function backToHub() {
     window.location.hash = "";

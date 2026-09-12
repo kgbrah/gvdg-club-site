@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { parseScoreboard } from "../ryder-cup.js";
 import { applyOfficialRyderTally, mergeRyderCupData, officialRyderPlayerStandings, officialRyderTeamStandings, sidesOverlap, uiMatch } from "../src/public-app/ryder-board-merge.js";
 
 test("uiMatch flattens live name arrays onto the sheet card shape", () => {
@@ -23,6 +25,7 @@ test("uiMatch flattens live name arrays onto the sheet card shape", () => {
 test("sidesOverlap matches shortened sheet names to live card names", () => {
   assert.equal(sidesOverlap(["Kevin Gray", "David D"], ["David Doughtie", "Kevin Gray"]), true);
   assert.equal(sidesOverlap(["Mike Ellis", "Caleb Leggett"], ["Caleb Leggett", "Michael Ellis"]), true);
+  assert.equal(sidesOverlap(["Jackie"], ["Jarrett Wallace"]), true);
   assert.equal(sidesOverlap(["Jackie"], ["Jesus"]), false);
   assert.equal(sidesOverlap(["Jason Shirley", "Kevin Gray"], ["Jason Shirley", "Benitez"]), false);
 });
@@ -185,6 +188,64 @@ test("official Ryder standings use sheet points and skip leftover fill-only winn
     ["Jesus", 2, 1, 1],
     ["Juan", 0, 0, 1],
   ]);
+});
+
+test("official Ryder player standings fold sheet nicknames onto the scoreboard roster", () => {
+  const roster = [
+    "Tj Braley",
+    "Alex Schwarga",
+    "Eder Hernandez",
+    "Joshua Willoughby",
+    'Travis "Trap" Sherrod',
+    "Blake Sargent",
+    "David Doughtie",
+    "Leo Hernandez",
+  ];
+  const players = officialRyderPlayerStandings([
+    {
+      source: "sheet",
+      matches: [
+        { num: 4, red: "Tj Braley", blue: "Blake S", score: "5&4", winner: "red", redPlayers: ["Tj Braley"], bluePlayers: ["Blake S"] },
+        { num: 5, red: "Willoughby", blue: "Schwarga", score: "2&1", winner: "red", redPlayers: ["Willoughby"], bluePlayers: ["Schwarga"] },
+        { num: 6, red: "Trap", blue: "Alex Schwarga", score: "6&5", winner: "red", redPlayers: ["Trap"], bluePlayers: ["Alex Schwarga"] },
+        { num: 8, red: "TJ Braley", blue: "Eder H", score: "2&1", winner: "red", redPlayers: ["TJ Braley"], bluePlayers: ["Eder H"] },
+        { num: 11, red: "David D.", blue: "Leo H.", score: "1&0", winner: "red", redPlayers: ["David D."], bluePlayers: ["Leo H."] },
+      ],
+    },
+  ], roster);
+  assert.deepEqual(players.map((player) => [player.name, player.points, player.events]), [
+    ["Tj Braley", 4, 2],
+    ["David Doughtie", 2, 1],
+    ["Joshua Willoughby", 2, 1],
+    ['Travis "Trap" Sherrod', 2, 1],
+    ["Alex Schwarga", 0, 2],
+    ["Blake Sargent", 0, 1],
+    ["Eder Hernandez", 0, 1],
+    ["Leo Hernandez", 0, 1],
+  ]);
+});
+
+test("official Ryder player records keep the 24-person roster and fold Jackie into Jarrett Wallace", () => {
+  const scoreboard = parseScoreboard(readFileSync("tests/fixtures/ryder-scoreboard.csv", "utf8"));
+  const roster = [...scoreboard.red.players, ...scoreboard.blue.players];
+  assert.equal(roster.length, 24);
+  const players = officialRyderPlayerStandings([
+    {
+      source: "sheet",
+      matches: [
+        { num: 1, red: "Jackie", blue: "Jesus", score: "5&4", winner: "red", redPlayers: ["Jackie"], bluePlayers: ["Jesus"] },
+        { num: 2, red: "Jarrett Wallace", blue: "Vee", score: "1&0", winner: "blue", redPlayers: ["Jarrett Wallace"], bluePlayers: ["Vee"] },
+        { num: 3, red: "Juan", blue: "Castro", score: "tie 1", winner: "tie", redPlayers: ["Juan"], bluePlayers: ["Castro"] },
+      ],
+    },
+  ], roster);
+  assert.equal(players.length, 24);
+  const jackie = players.find((player) => /jackie/i.test(player.name));
+  const jarrett = players.find((player) => player.name === "Jarrett Wallace");
+  const juan = players.find((player) => player.name === 'Juan "Him" Martinez');
+  assert.equal(jackie, undefined);
+  assert.deepEqual([jarrett.points, jarrett.events, jarrett.wins], [2, 2, 1]);
+  assert.deepEqual([juan.points, juan.events, juan.wins], [1, 1, 0]);
 });
 
 test("applyOfficialRyderTally overlays sheet points and hides D1 numbers until the sheet loads", () => {
