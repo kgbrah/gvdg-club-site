@@ -263,6 +263,7 @@ test('score shell owns topbar state without legacy DOM mutations', () => {
   assert.match(main, /setLeaderboardHandler\(handler\)/);
   assert.match(main, /hidden: !header\.showLeaderboard/);
   assert.match(main, /InstallCoachBanner/);
+  assert.match(main, /bodyView\.kind === "watch" \? null : h\(InstallCoachBanner/);
   assert.match(main, /setDarkTheme\(\(current\) => !current\)/);
   assert.match(controller, /renderScoreBody\(kind, props\)/);
   assert.match(controller, /scoreShell\.setHeader/);

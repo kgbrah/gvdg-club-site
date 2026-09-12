@@ -5,7 +5,8 @@
 // each bucket, group a roster by division, and format ISO dates defensively.
 //
 // Public API: VALID_STATUSES, VALID_TYPES, normalizeEvent, bucketEvents,
-// groupPlayersByDivision, formatEventDate, typeLabel, statusLabel, courseNameFor.
+// groupPlayersByDivision, formatEventDate, formatClubDateTime, formatClubClock,
+// eventScheduleFacts, typeLabel, statusLabel, courseNameFor.
 
 export const VALID_STATUSES = ['scheduled', 'live', 'final', 'cancelled'];
 export const VALID_TYPES = ['tournament', 'league_round', 'fundraiser', 'meeting'];
@@ -131,6 +132,43 @@ export function formatClubDateTime(raw) {
   } catch (_e) {
     return d.toISOString();
   }
+}
+
+export function formatClubClock(raw) {
+  if (raw == null || raw === '') return '';
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return '';
+  try {
+    return d.toLocaleString([], { hour: 'numeric', minute: '2-digit', timeZone: CLUB_TIME_ZONE, timeZoneName: 'short' });
+  } catch (_e) {
+    return '';
+  }
+}
+
+function firstTimestamp(event, keys) {
+  if (!event || typeof event !== 'object') return null;
+  for (const key of keys) {
+    const value = event[key];
+    if (value != null && String(value).trim()) return value;
+  }
+  return null;
+}
+
+export function eventScheduleFacts(event) {
+  const day = firstTimestamp(event, ['date', 'event_date', 'starts_at', 'event_starts_at']);
+  const rows = [
+    { key: 'starts', label: 'Starts', raw: firstTimestamp(event, ['starts_at', 'event_starts_at']) },
+    { key: 'register', label: 'Register by', raw: firstTimestamp(event, ['registration_deadline', 'event_registration_deadline']) },
+    { key: 'checkin', label: 'Check-in by', raw: firstTimestamp(event, ['checkin_deadline', 'event_checkin_deadline']) },
+  ];
+  return rows.flatMap((row) => {
+    const clock = formatClubClock(row.raw);
+    if (!clock) return [];
+    const instantDay = clubCalendarDay(row.raw);
+    const eventDay = clubCalendarDay(day);
+    const value = instantDay && eventDay && instantDay === eventDay ? clock : formatClubDateTime(row.raw);
+    return value ? [{ key: row.key, label: row.label, value }] : [];
+  });
 }
 
 // Normalize one raw API event into a predictable shape with safe defaults.

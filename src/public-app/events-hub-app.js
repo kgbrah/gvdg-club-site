@@ -2,6 +2,7 @@ import React from "react";
 import { CalendarDays, ExternalLink, MapPin } from "lucide-react";
 
 import { useEventsHub } from "./events-hub-data.js";
+import { EventScheduleFacts } from "../shared/event-schedule.js";
 
 const h = React.createElement;
 
@@ -89,6 +90,7 @@ function EventCard({ event }) {
         ? h(MetaRow, { iconNode: icon(MapPin), key: "course" }, String(event.courseName))
         : null,
     ]),
+    h(EventScheduleFacts, { event, key: "schedule" }),
     event && event.statusLabel ? h("div", { className: "event-card-top", key: "status" }, h(Badge, {
       className: `status-badge ${statusClass}`,
       text: String(event.statusLabel),

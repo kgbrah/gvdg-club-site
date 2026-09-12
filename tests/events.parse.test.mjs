@@ -16,6 +16,8 @@ import {
   parseEventDate,
   formatEventDate,
   formatClubDateTime,
+  formatClubClock,
+  eventScheduleFacts,
   isPastClubCalendarEvent,
   typeLabel,
   statusLabel,
@@ -123,6 +125,41 @@ test('formatClubDateTime renders a timestamp in Eastern time', () => {
   const out = formatClubDateTime('2026-07-04T12:00:00.000Z');
   assert.ok(/Jul 4/.test(out), `expected Jul 4 in "${out}"`);
   assert.ok(/8:00/.test(out) && /EDT/.test(out), `expected 8:00 AM EDT in "${out}"`);
+});
+
+test('eventScheduleFacts shows clock-only times on the event day and full datetimes otherwise', () => {
+  assert.deepEqual(eventScheduleFacts(null), []);
+  assert.deepEqual(eventScheduleFacts({}), []);
+  const sameDay = eventScheduleFacts({
+    date: '2026-09-13',
+    starts_at: '2026-09-13T17:30:00.000Z',
+    registration_deadline: '2026-09-13T16:00:00.000Z',
+    checkin_deadline: '2026-09-13T17:00:00.000Z',
+  });
+  assert.deepEqual(sameDay.map((row) => row.key), ['starts', 'register', 'checkin']);
+  assert.equal(sameDay[0].label, 'Starts');
+  assert.match(sameDay[0].value, /1:30/);
+  assert.match(sameDay[0].value, /EDT/);
+  assert.doesNotMatch(sameDay[0].value, /Sep/);
+  assert.match(sameDay[1].value, /12:00/);
+  assert.match(sameDay[2].value, /1:00/);
+
+  const priorDay = eventScheduleFacts({
+    date: '2026-09-13',
+    registration_deadline: '2026-09-12T22:00:00.000Z',
+  });
+  assert.equal(priorDay.length, 1);
+  assert.equal(priorDay[0].label, 'Register by');
+  assert.match(priorDay[0].value, /Sep 12/);
+  assert.match(priorDay[0].value, /6:00/);
+});
+
+test('formatClubClock never throws and labels missing timestamps', () => {
+  assert.equal(formatClubClock(''), '');
+  assert.equal(formatClubClock(null), '');
+  const out = formatClubClock('2026-07-04T12:00:00.000Z');
+  assert.match(out, /8:00/);
+  assert.match(out, /EDT/);
 });
 
 // --- bucketEvents -------------------------------------------------------------

@@ -2,6 +2,7 @@ import React from "react";
 import { CalendarDays, CheckCircle2 } from "lucide-react";
 
 import { formatLabel, isPastClubCalendarEvent, normalizeEvent } from "../shared/events-model.js";
+import { EventScheduleFacts } from "../shared/event-schedule.js";
 import { clientOwed, isDoublesRegistration, parseArray, parseObject } from "../members-app/registration-utils.js";
 import { publicApiBase } from "./public-api.js";
 
@@ -98,11 +99,15 @@ function registrationError(response, error) {
 }
 
 function EventMeta({ event }) {
-  if (!event.date) return null;
-  return h("div", { className: "event-meta" }, h("div", { className: "meta-row" }, [
-    h("span", { className: "meta-icon", key: "icon" }, icon(CalendarDays)),
-    h("span", { key: "date" }, String(event.date)),
-  ]));
+  return h(React.Fragment, null, [
+    event.date
+      ? h("div", { className: "event-meta", key: "date" }, h("div", { className: "meta-row" }, [
+        h("span", { className: "meta-icon", key: "icon" }, icon(CalendarDays)),
+        h("span", { key: "date" }, String(event.date)),
+      ]))
+      : null,
+    h(EventScheduleFacts, { event, key: "schedule" }),
+  ]);
 }
 
 function RegisteredCardActions({ api, event, guestReg, myReg, onRefresh, token }) {

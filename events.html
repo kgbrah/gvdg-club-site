@@ -134,6 +134,13 @@
         .event-meta { font-size: 0.9rem; color: var(--text-tertiary); display: flex; flex-direction: column; gap: 0.3rem; }
         .event-meta .meta-row { display: flex; align-items: center; gap: 0.4rem; }
         .event-meta .meta-icon { display: inline-flex; align-items: center; justify-content: center; width: 1rem; min-width: 1rem; opacity: 0.8; }
+        .event-schedule { display: grid; gap: 0.2rem; margin-top: 0.45rem; }
+        .event-schedule-row {
+            display: grid; grid-template-columns: 6.6rem minmax(0, 1fr);
+            gap: 0.45rem; align-items: baseline; font-size: 0.82rem; line-height: 1.3;
+        }
+        .event-schedule-row dt { color: var(--text-muted); font-weight: 700; }
+        .event-schedule-row dd { margin: 0; color: var(--text-secondary); font-weight: 600; }
         /* External "register" CTA on schedule-feed (linked) cards */
         .event-cta { margin-top: auto; font-weight: 800; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--primary); }
         .event-cta-icon { display: inline-flex; margin-left: 0.35rem; vertical-align: -0.125em; }

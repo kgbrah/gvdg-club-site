@@ -157,6 +157,8 @@ test('overview dashboard is a compact home and keeps registration on Events', ()
   assert.match(overview, /LiveScoringPanel, \{ token, compact: true/);
   assert.match(overview, /WalletPanel, \{ token, compact: true/);
   assert.match(overview, /selectDashboardTab\("events"\)/);
+  assert.match(overview, /EventScheduleFacts/);
+  assert.match(overview, /data-react-home-next/);
   assert.match(more, /Club directory/);
   assert.match(more, /Message board/);
   assert.match(more, /Tee signs/);
@@ -196,6 +198,7 @@ test('member dashboard React registration panel surfaces live events and lists e
   assert.match(events, /"Live now"/);
   assert.match(events, /"My events"/); // ALL registrations render, not just the open ones
   assert.match(events, /eventFromRegistration/); // registrations no longer in the open list still render
+  assert.match(events, /EventScheduleFacts/);
   assert.match(readFileSync('src/members-app/registration-panel.js', 'utf8'), /requestJson\("\/my-registrations"/);
 });
 
