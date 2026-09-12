@@ -1,6 +1,8 @@
 import React from "react";
 import { Menu, MoonStar, Sun, X } from "lucide-react";
 
+import { CrottsHelpLink } from "../shared/crotts-widget.js";
+
 const h = React.createElement;
 
 const NAV_ITEMS = [
@@ -109,6 +111,7 @@ export function PublicPageChrome() {
       })),
     h("ul", { className: menuOpen ? "nav-links active" : "nav-links", id: "navLinks", key: "links" }, [
       ...NAV_ITEMS.map(navLink),
+      h("li", { key: "help" }, h(CrottsHelpLink, { onClick: closeMenu })),
       h("li", { key: "donate" }, h("a", {
         className: "nav-donate",
         href: DONATE_URL,

@@ -154,7 +154,6 @@ test('public Events route visibility is controlled by React state and body attri
   assert.match(source, /body\[data-events-view="hub"\] #liveNowSection/);
   assert.match(source, /body\[data-events-view="league-detail"\] #leagueDetailSection/);
   assert.match(source, /body\[data-events-view="detail"\] #detail \{ display: block; \}/);
-  assert.match(source, /body\[data-page="events"\]\[data-events-view="detail"\] #crottsReactApp #crotts-fab/);
   assert.doesNotMatch(source, /id="(?:liveNowSection|registerSection|calendarEvents|hub|previousResultsSection|leaguesSection|clubEventsSection|fundraisersSection|meetingsSection|leagueDetailSection|detail)" hidden/);
   assert.doesNotMatch(source, /function setView\(which\)|function startRefresh\(\)|function stopRefresh\(\)|window\.addEventListener\('gvdg:events-route-request'/);
   assert.match(hubData, /function startRefresh\(\)/);

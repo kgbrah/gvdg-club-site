@@ -1,7 +1,8 @@
 # Crotts — the GVDG AI assistant: setup & operations
 
-**Crotts** is the club's persistent AI assistant: a floating avatar button (named after club officer
-**Max Crotts**, using his photo) on the main public, member, and admin surfaces. Click it to chat. Crotts answers
+**Crotts** is the club's AI assistant (named after club officer
+**Max Crotts**, using his photo). He stays hidden until someone asks for Help in the site nav.
+Click **Help** to chat. Crotts answers
 questions about the club's **events and courses** (pulled live from the club API), general disc-golf
 questions, and how to use the site (sign-in, ratings, donating).
 
@@ -14,7 +15,7 @@ brain (below) is what makes it actually answer.
 ## How it works (1-minute architecture)
 
 ```
-Browser widget (shared React CrottsWidget, lower-left)
+Browser widget (shared React CrottsWidget, hidden until Help)
         │  POST /assistant  { message, history }
         ▼
 Club Worker (auth-worker/)  ── builds a Crotts prompt + injects live events/courses from D1
@@ -40,7 +41,7 @@ Club Worker (auth-worker/)  ── builds a Crotts prompt + injects live events/
 2. [ ] (Recommended) Get a **free OpenRouter API key** → set it as the Worker secret `OPENROUTER_API_KEY`.
 3. [ ] Confirm/optionally change `OPENROUTER_MODEL` in `wrangler.toml` (default: `openai/gpt-oss-120b:free`).
 4. [ ] Deploy the Worker through the correct path for your environment.
-5. [ ] Verify (curl + click the avatar on the live site).
+5. [ ] Verify (curl + open Help on the live site).
 
 That's it. Steps in detail below.
 
@@ -137,8 +138,8 @@ curl -s -X POST https://<your-worker-host>/assistant \
   and that Workers AI is enabled.
 - `{"stub":true}` = no provider configured → set `OPENROUTER_API_KEY` or confirm the `[ai]` binding deployed.
 
-**UI:** open the live site → click the **Crotts avatar in the lower-left** → ask a question. It should answer
-using real club data, in both light and dark themes.
+**UI:** open the live site → click **Help** in the nav → ask a question. It should answer
+using real club data, in both light and dark themes. Crotts does not appear until Help is requested.
 
 ---
 
@@ -148,8 +149,8 @@ using real club data, in both light and dark themes.
 |---|---|
 | Personality / instructions / site facts | `auth-worker/src/assistant.ts` → `PERSONA` (and the club-context builder) |
 | Avatar image | `img/crotts.jpg` (replace the file; keep the name) |
-| Position / colors / sizing | `src/shared/crotts-widget.js` (`#crotts-fab` / `#crotts-panel`; pages may override placement for mobile/detail views) |
-| Which pages show it | each page's `crottsReactApp` mount plus its route bundle (`home-app`, `public-app`, `admin-app`, or `members-app`) |
+| Position / colors / sizing | `src/shared/crotts-widget.js` (`#crotts-panel`; Help link lives in page chrome) |
+| Which pages show it | each page's `crottsReactApp` mount plus its route bundle (`home-app`, `public-app`, `admin-app`, or `members-app`); panel mounts only after Help |
 | Rate limit | `auth-worker/src/index.ts` → `ASSISTANT_LIMIT` / `ASSISTANT_WINDOW` (default 20/min/IP) |
 | OpenRouter / Workers AI model | `OPENROUTER_MODEL` / `ASSISTANT_MODEL` vars in `wrangler.toml` |
 

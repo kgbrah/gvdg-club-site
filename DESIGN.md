@@ -169,12 +169,12 @@ Spacing follows a 4px base through rem values.
 
 ### Crotts Assistant Widget
 
-- Structure: the shared Crotts assistant widget renders from `home-app`, `public-app`, `admin-app`, and `members-app` into `crottsReactApp`; no page loads the root `crotts.js` helper.
-- Variants: closed floating avatar, open dialog, empty greeting, user message, assistant reply, typing state, API-rate-limit error, network/error response, and mobile safe-area placement.
-- Spacing: preserves the existing `#crotts-fab`, `#crotts-panel`, `#crotts-head`, `#crotts-msgs`, and `#crotts-form` hooks so page-specific placement overrides continue to work during migration; Events hides the launcher on mobile detail views, Blog hides it on mobile coming-soon cards, and Admin hides it on mobile forms so fixed assistant chrome cannot cover event facts, tee-sign cards, or input labels.
-- States: React owns open/closed state, message history, busy/disabled send state, text input value, focus return to the composer, and assistant fetch lifecycle; HTML pages must not load `crotts.js` or append assistant DOM nodes.
-- Accessibility: the panel exposes dialog semantics, the avatar, close, and send controls are real buttons with labels, the composer is labelled, and iconography uses Lucide SVGs.
-- Motion: preserves the existing FAB scale and panel reveal only; no decorative motion is added.
+- Structure: the shared Crotts assistant widget renders from `home-app`, `public-app`, `admin-app`, and `members-app` into `crottsReactApp`; no page loads the root `crotts.js` helper. The floating avatar launcher is gone. Help nav links in page chrome dispatch `gvdg:help-request` and the panel mounts only after that (or a `#help` hash).
+- Variants: hidden by default, open help dialog, empty greeting, user message, assistant reply, typing state, API-rate-limit error, network/error response, and mobile safe-area placement.
+- Spacing: the panel uses `#crotts-panel`, `#crotts-head`, `#crotts-msgs`, and `#crotts-form`; there is no `#crotts-fab`.
+- States: React owns open/closed state from the help event, message history, busy/disabled send state, text input value, focus return to the composer, and assistant fetch lifecycle; HTML pages must not load `crotts.js` or append assistant DOM nodes.
+- Accessibility: the panel exposes dialog semantics, Help is a real nav link, close and send controls are real buttons with labels, the composer is labelled, and iconography uses Lucide SVGs.
+- Motion: preserves the existing panel reveal only; no decorative motion is added.
 
 ### Admin Page Chrome
 

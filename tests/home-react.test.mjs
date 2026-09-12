@@ -190,6 +190,7 @@ test('home React bundle owns page chrome menu and header scroll state', () => {
   assert.match(chrome, /aria-expanded/);
   assert.match(chrome, /aria-current/);
   assert.match(chrome, /nav-donate/);
+  assert.match(chrome, /CrottsHelpLink/);
   assert.match(chrome, /HomeThemeToggle/);
   assert.match(chrome, /Menu, X/);
   assert.match(chrome, /window\.requestAnimationFrame\(update\)/);

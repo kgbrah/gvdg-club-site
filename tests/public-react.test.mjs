@@ -53,13 +53,13 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(chrome, /localStorage\.getItem\("theme"\)/);
   assert.match(chrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app admin-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v122"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v123"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
 });
 
-test('Crotts assistant is rendered by React bundles on app pages', () => {
+test('Crotts assistant stays hidden until Help is requested', () => {
   const homeHtml = readFileSync('index.html', 'utf8');
   const membersHtml = readFileSync('gvdg-members.html', 'utf8');
   const adminHtml = readFileSync('admin.html', 'utf8');
@@ -67,12 +67,17 @@ test('Crotts assistant is rendered by React bundles on app pages', () => {
   const homeMain = readFileSync('src/home-app/main.js', 'utf8');
   const membersMain = readFileSync('src/members-app/main.js', 'utf8');
   const adminMain = readFileSync('src/admin-app/main.js', 'utf8');
+  const homeChrome = readFileSync('src/home-app/page-chrome.js', 'utf8');
+  const publicChrome = readFileSync('src/public-app/page-chrome.js', 'utf8');
+  const membersChrome = readFileSync('src/members-app/page-chrome.js', 'utf8');
+  const adminChrome = readFileSync('src/admin-app/page-chrome.js', 'utf8');
   const widget = readFileSync('src/shared/crotts-widget.js', 'utf8');
 
   for (const page of publicPages) {
     const html = readFileSync(page, 'utf8');
     assert.match(html, /id="crottsReactApp"/, page);
     assert.doesNotMatch(html, /<script src="crotts\.js" defer><\/script>/, page);
+    assert.doesNotMatch(html, /#crotts-fab/, page);
   }
   assert.match(homeHtml, /id="crottsReactApp"/);
   assert.match(membersHtml, /id="crottsReactApp"/);
@@ -81,9 +86,9 @@ test('Crotts assistant is rendered by React bundles on app pages', () => {
   assert.doesNotMatch(homeHtml, /<script src="crotts\.js" defer><\/script>/);
   assert.doesNotMatch(membersHtml, /<script src="crotts\.js" defer><\/script>/);
   assert.doesNotMatch(adminHtml, /<script src="crotts\.js" defer><\/script>/);
+  assert.doesNotMatch(homeHtml, /#crotts-fab/);
+  assert.doesNotMatch(membersHtml, /#crotts-fab/);
   assert.equal(existsSync('crotts.js'), false);
-  assert.match(readFileSync('events.html', 'utf8'), /body\[data-page="events"\]\[data-events-view="detail"\] #crottsReactApp #crotts-fab/);
-  assert.match(membersHtml, /\.members-content ~ #crottsReactApp #crotts-fab/);
   assert.match(publicMain, /import \{ CrottsWidget \} from "\.\.\/shared\/crotts-widget\.js"/);
   assert.match(homeMain, /import \{ CrottsWidget \} from "\.\.\/shared\/crotts-widget\.js"/);
   assert.match(membersMain, /import \{ CrottsWidget \} from "\.\.\/shared\/crotts-widget\.js"/);
@@ -96,12 +101,19 @@ test('Crotts assistant is rendered by React bundles on app pages', () => {
   assert.match(homeMain, /createRoot\(crottsMount\)\.render\(h\(CrottsWidget\)\)/);
   assert.match(membersMain, /createRoot\(crottsMount\)\.render\(h\(CrottsWidget\)\)/);
   assert.match(adminMain, /createRoot\(crottsMount\)\.render\(h\(CrottsWidget\)\)/);
+  assert.match(homeChrome, /CrottsHelpLink/);
+  assert.match(publicChrome, /CrottsHelpLink/);
+  assert.match(membersChrome, /CrottsHelpLink/);
+  assert.match(adminChrome, /CrottsHelpLink/);
   assert.match(widget, /export function CrottsWidget/);
-  assert.match(widget, /id: "crotts-fab"/);
+  assert.match(widget, /export function CrottsHelpLink/);
+  assert.match(widget, /export function requestCrottsHelp/);
+  assert.match(widget, /CROTTS_HELP_EVENT = "gvdg:help-request"/);
   assert.match(widget, /id: "crotts-panel"/);
-  assert.match(widget, /body\.admin-page #crotts-fab,body\.admin-page #crotts-panel\{display:none\}/);
+  assert.match(widget, /if \(!open\) return null/);
+  assert.doesNotMatch(widget, /id: "crotts-fab"/);
   assert.match(widget, /\/assistant/);
-  assert.match(widget, /MessageCircle, Send, X/);
+  assert.match(widget, /Send, X/);
   assert.match(widget, /sanitizeCrottsActions/);
   assert.match(widget, /crotts-action/);
   assert.match(widget, /I can also open the page you need/);
@@ -368,7 +380,6 @@ test('Blog body coming-soon page is rendered by the public React bundle', () => 
 
   assert.match(html, /id="blogReactApp"/);
   assert.match(html, /<body data-page="gvdg-blog">/);
-  assert.match(html, /body\[data-page="gvdg-blog"\] #crottsReactApp #crotts-fab/);
   assert.doesNotMatch(body, /<section class="page-hero"|<section class="construction-section"|class="disc-icon"|class="progress-fill"|class="back-btn"/);
   assert.doesNotMatch(html, /🥏/);
   assert.match(main, /import \{ BlogApp \} from "\.\/blog-app\.js"/);

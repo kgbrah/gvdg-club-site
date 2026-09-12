@@ -451,13 +451,11 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
 .back-to-top:active { transform: translateY(0) scale(0.92); }
 @media (max-width: 768px) {
     .back-to-top { left: 1.5rem; right: auto; }
-    #crotts-fab { left: auto !important; right: 14px !important; }
 }
 @supports (padding: env(safe-area-inset-bottom)) { .back-to-top { bottom: calc(2rem + env(safe-area-inset-bottom)); right: calc(1.5rem + env(safe-area-inset-right)); } }
 @supports (padding: env(safe-area-inset-bottom)) {
     @media (max-width: 768px) {
         .back-to-top { left: calc(1.5rem + env(safe-area-inset-left)); right: auto; }
-        #crotts-fab { left: auto !important; right: calc(14px + env(safe-area-inset-right, 0px)) !important; }
     }
 }
 

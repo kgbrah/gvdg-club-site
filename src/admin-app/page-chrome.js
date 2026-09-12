@@ -1,6 +1,8 @@
 import React from "react";
 import { Menu, MoonStar, Sun, X } from "lucide-react";
 
+import { CrottsHelpLink } from "../shared/crotts-widget.js";
+
 const h = React.createElement;
 
 const NAV_ITEMS = [
@@ -119,6 +121,7 @@ export function AdminPageChrome() {
       })),
     h("ul", { className: menuOpen ? "nav-links active" : "nav-links", id: "adminNavLinks", key: "links" }, [
       ...NAV_ITEMS.map(navLink),
+      h("li", { key: "help" }, h(CrottsHelpLink, { onClick: closeMenu })),
       h("li", { className: "nav-mobile-account", key: "mobile-members" }, backToMembers("mobile-members-link")),
       h("li", { className: "nav-mobile-account", key: "mobile-logout" }, logout("mobile-logout-link")),
     ]),
