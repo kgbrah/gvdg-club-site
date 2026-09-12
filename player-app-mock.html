@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="robots" content="noindex,nofollow" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>GVDG player app mock</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="tokens.css" />
+  <style>
+    :root {
+      --app-max: 430px;
+      --nav-h: 4.35rem;
+      --top-h: 3.35rem;
+      --radius: 16px;
+      --font: Inter, system-ui, sans-serif;
+      --display: "Bebas Neue", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: var(--font);
+      background: var(--dark);
+      color: var(--text-primary);
+    }
+    .studio {
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: 1.25rem;
+      gap: 1rem;
+    }
+    .studio-note {
+      max-width: 42rem;
+      color: var(--text-muted);
+      font-size: 0.92rem;
+      line-height: 1.5;
+      text-align: center;
+    }
+    .studio-note strong { color: white; }
+    .phone {
+      width: min(100%, var(--app-max));
+      height: min(860px, calc(100dvh - 2.5rem));
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: 0 24px 80px rgba(0,0,0,.45);
+      display: grid;
+      grid-template-rows: var(--top-h) 1fr var(--nav-h);
+      position: relative;
+    }
+    @media (max-width: 520px) {
+      body { background: var(--bg-primary); }
+      .studio { padding: 0; }
+      .studio-note { display: none; }
+      .phone { width: 100%; height: 100dvh; border-radius: 0; box-shadow: none; }
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 .9rem 0 1rem;
+      background: var(--dark);
+      color: white;
+    }
+    .brand { display: flex; align-items: center; gap: .55rem; font-weight: 800; letter-spacing: .04em; font-size: .78rem; }
+    .mark {
+      width: 1.7rem; height: 1.7rem; border-radius: 8px;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      display: grid; place-items: center; font-family: var(--display); font-size: 1rem;
+    }
+    .top-actions { display: flex; gap: .35rem; }
+    .icon-btn {
+      width: 40px; height: 40px; border: 0; border-radius: 999px;
+      background: rgba(255,255,255,.1); color: white; cursor: pointer;
+    }
+
+    .screen { display: none; overflow: auto; padding: .9rem .9rem calc(.5rem + env(safe-area-inset-bottom, 0px)); }
+    .screen.on { display: block; }
+
+    .hero {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: .75rem;
+      align-items: center;
+      padding: .15rem 0 .85rem;
+    }
+    .avatar {
+      width: 52px; height: 52px; border-radius: 50%;
+      border: 2px solid var(--primary);
+      background: var(--secondary); color: white;
+      display: grid; place-items: center;
+      font-family: var(--display); font-size: 1.4rem;
+    }
+    .who { min-width: 0; }
+    .who h1 { margin: 0; font-size: 1.05rem; line-height: 1.2; }
+    .who p { margin: .15rem 0 0; color: var(--text-muted); font-size: .78rem; }
+    .rating-pill {
+      text-align: right;
+    }
+    .rating-pill b { display: block; font-family: var(--display); font-size: 1.8rem; line-height: .9; color: var(--primary); }
+    .rating-pill span { color: var(--text-muted); font-size: .68rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+
+    .cta {
+      display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+      background: linear-gradient(135deg, var(--green), var(--secondary));
+      color: white; border-radius: var(--radius); padding: 1rem 1.05rem;
+      text-decoration: none; margin-bottom: .75rem;
+    }
+    .cta h2 { margin: 0; font-family: var(--display); font-size: 1.55rem; letter-spacing: .03em; }
+    .cta p { margin: .15rem 0 0; font-size: .82rem; opacity: .92; }
+    .cta-go {
+      flex: 0 0 auto; background: white; color: var(--green); font-weight: 800;
+      border-radius: 999px; padding: .55rem .8rem; font-size: .78rem;
+    }
+
+    .row-cards { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; margin-bottom: .75rem; }
+    .stat {
+      background: var(--bg-secondary); border: 1px solid var(--border-color);
+      border-radius: 14px; padding: .8rem .85rem;
+    }
+    .stat .k { color: var(--text-muted); font-size: .68rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+    .stat .v { font-family: var(--display); font-size: 1.7rem; line-height: 1; margin-top: .2rem; color: var(--text-primary); }
+    .stat .s { color: var(--text-muted); font-size: .75rem; margin-top: .2rem; }
+
+    .card {
+      background: var(--bg-secondary); border: 1px solid var(--border-color);
+      border-radius: var(--radius); padding: .9rem 1rem; margin-bottom: .7rem;
+    }
+    .card h3 {
+      margin: 0 0 .65rem; font-size: .72rem; letter-spacing: .06em;
+      text-transform: uppercase; color: var(--text-muted);
+    }
+    .event-name { font-weight: 800; }
+    .event-meta { color: var(--text-muted); font-size: .8rem; margin-top: .15rem; line-height: 1.4; }
+    .chip-row { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .55rem; }
+    .chip {
+      font-size: .7rem; font-weight: 800; letter-spacing: .03em; text-transform: uppercase;
+      border-radius: 999px; padding: .22rem .5rem; background: var(--bg-tertiary); color: var(--secondary-text);
+    }
+    .chip.live { background: var(--primary-strong); color: white; }
+    .chip.ok { background: color-mix(in srgb, var(--green) 16%, transparent); color: var(--green); }
+
+    .list-row {
+      display: grid; grid-template-columns: 1fr auto; gap: .6rem; align-items: center;
+      padding: .55rem 0; border-top: 1px solid var(--border-color);
+    }
+    .list-row:first-of-type { border-top: 0; padding-top: 0; }
+    .score { text-align: right; font-weight: 800; }
+    .score b { display: block; font-family: var(--display); font-size: 1.35rem; color: var(--secondary-text); line-height: 1; }
+    .score span { color: var(--text-muted); font-size: .7rem; }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: 44px; width: 100%; border-radius: 12px; border: 1px solid var(--border-color);
+      background: var(--bg-tertiary); color: var(--text-primary); font-weight: 800; font-size: .9rem;
+      margin-top: .65rem; cursor: pointer;
+    }
+    .btn.primary { background: var(--primary-strong); border-color: var(--primary-strong); color: white; }
+    .btn.navy { background: var(--secondary); border-color: var(--secondary); color: white; }
+    .btn.ghost { background: transparent; }
+
+    .section-title {
+      font-family: var(--display); font-size: 1.7rem; margin: .1rem 0 .7rem; letter-spacing: .03em;
+    }
+    .field { display: grid; gap: .28rem; margin-bottom: .65rem; }
+    .field span { font-size: .7rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); }
+    .field input, .field select {
+      min-height: 44px; border-radius: 10px; border: 1px solid var(--border-color);
+      background: var(--bg-tertiary); color: var(--text-primary); padding: 0 .75rem; font: inherit;
+    }
+
+    .more-grid { display: grid; gap: .55rem; }
+    .more-item {
+      display: flex; align-items: center; justify-content: space-between;
+      min-height: 52px; padding: .7rem .9rem; border-radius: 14px;
+      background: var(--bg-secondary); border: 1px solid var(--border-color);
+      font-weight: 800; text-decoration: none; color: inherit;
+    }
+
+    .theme-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; }
+    .swatch {
+      border: 1px solid var(--border-color); border-radius: 12px; padding: .7rem;
+      background: var(--bg-secondary);
+    }
+    .swatch i { display: block; height: 28px; border-radius: 8px; margin-bottom: .4rem; }
+    .swatch label { font-size: .75rem; font-weight: 700; }
+
+    .nav {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      border-top: 1px solid var(--border-color);
+      background: var(--bg-secondary);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .nav button {
+      border: 0; background: transparent; color: var(--text-muted);
+      font-size: .68rem; font-weight: 800; letter-spacing: .02em;
+      padding: .45rem 0 .35rem; cursor: pointer;
+    }
+    .nav button.on { color: var(--primary-strong); }
+    .nav svg { display: block; margin: 0 auto .12rem; }
+  </style>
+</head>
+<body>
+  <div class="studio">
+    <p class="studio-note">
+      Mobile-first player app mock. Bottom nav replaces the clipped Overview/Season/Events/Board pills.
+      Theme tokens stay on CSS variables so the in-flight theme builder can restyle without a layout rewrite.
+    </p>
+    <div class="phone" data-theme-host>
+      <header class="topbar">
+        <div class="brand"><span class="mark">G</span> GVDG</div>
+        <div class="top-actions">
+          <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle theme">◐</button>
+        </div>
+      </header>
+
+      <main id="home" class="screen on">
+        <div class="hero">
+          <div class="avatar">QA</div>
+          <div class="who">
+            <h1>QA Admin</h1>
+            <p>PDGA #90000001 · MA2</p>
+          </div>
+          <div class="rating-pill"><b>941</b><span>Live rating</span></div>
+        </div>
+
+        <a class="cta" href="#" data-go="events">
+          <div>
+            <h2>Keep score</h2>
+            <p>No live card. Start a casual round or join one.</p>
+          </div>
+          <span class="cta-go">Play</span>
+        </a>
+
+        <div class="row-cards">
+          <div class="stat"><div class="k">Wallet</div><div class="v">$12.50</div><div class="s">Shop with credit</div></div>
+          <div class="stat"><div class="k">Official</div><div class="v">935</div><div class="s">Peak 958</div></div>
+        </div>
+
+        <section class="card">
+          <h3>Up next</h3>
+          <div class="event-name">GVDG QA Doubles</div>
+          <div class="event-meta">Wed, Jul 8 · ECU North Rec · Pee Dee’s Treasure Map · $5</div>
+          <div class="chip-row">
+            <span class="chip live">Open</span>
+            <span class="chip">Doubles</span>
+            <span class="chip">MA2</span>
+          </div>
+          <button class="btn primary" type="button" data-go="events">Register</button>
+        </section>
+
+        <section class="card">
+          <h3>Last club round</h3>
+          <div class="list-row">
+            <div>
+              <div class="event-name">GVDG QA Weekly</div>
+              <div class="event-meta">Sat, Jul 4 · Competitive</div>
+            </div>
+            <div class="score"><b>+2</b><span>#2</span></div>
+          </div>
+        </section>
+      </main>
+
+      <main id="events" class="screen">
+        <div class="section-title">Events</div>
+        <section class="card">
+          <h3>Open for registration</h3>
+          <div class="event-name">GVDG QA Doubles</div>
+          <div class="event-meta">Wed, Jul 8 · ECU North Rec Complex · par 54</div>
+          <div class="field" style="margin-top:.7rem">
+            <span>Division</span>
+            <select><option>MA2</option><option>MA1</option><option>FA2</option></select>
+          </div>
+          <div class="field">
+            <span>Partner / pair label</span>
+            <input placeholder="Optional" />
+          </div>
+          <button class="btn primary" type="button">Register · $5</button>
+        </section>
+        <section class="card">
+          <h3>Casual</h3>
+          <div class="event-name">ECU North Rec Complex</div>
+          <div class="event-meta">Tonight 6:00 PM · Pee Dee’s Treasure Map · 1 player in</div>
+          <button class="btn navy" type="button">Join round</button>
+          <button class="btn ghost" type="button">Post a new casual round</button>
+        </section>
+      </main>
+
+      <main id="season" class="screen">
+        <div class="section-title">Season</div>
+        <div class="row-cards">
+          <div class="stat"><div class="k">Club rounds</div><div class="v">1</div></div>
+          <div class="stat"><div class="k">Avg to par</div><div class="v">+2</div></div>
+          <div class="stat"><div class="k">Best finish</div><div class="v">2nd</div></div>
+          <div class="stat"><div class="k">Club rating</div><div class="v">898</div></div>
+        </div>
+        <section class="card">
+          <h3>Leagues</h3>
+          <div class="event-name">GVDG QA League · 2026</div>
+          <div class="event-meta">1st of 2 · 8 pts</div>
+        </section>
+        <section class="card">
+          <h3>Club results</h3>
+          <div class="list-row">
+            <div>
+              <div class="event-name">GVDG QA Weekly</div>
+              <div class="event-meta">Sat, Jul 4</div>
+            </div>
+            <div class="score"><b>+2</b><span>#2</span></div>
+          </div>
+        </section>
+        <section class="card">
+          <h3>Ratings</h3>
+          <div class="list-row">
+            <div>
+              <div class="event-name">Competitive</div>
+              <div class="event-meta">1 rated round</div>
+            </div>
+            <div class="score"><b>906</b><span>live</span></div>
+          </div>
+          <div class="list-row">
+            <div>
+              <div class="event-name">Casual</div>
+              <div class="event-meta">ECU North Rec Complex</div>
+            </div>
+            <div class="score"><b>890</b><span>live</span></div>
+          </div>
+        </section>
+      </main>
+
+      <main id="more" class="screen">
+        <div class="section-title">More</div>
+        <div class="more-grid">
+          <a class="more-item" href="gvdg-members.html">Club directory</a>
+          <a class="more-item" href="#">Message board</a>
+          <a class="more-item" href="#">Tee signs</a>
+          <a class="more-item" href="pro-shop.html">Pro shop</a>
+          <a class="more-item" href="#">Edit profile</a>
+          <a class="more-item" href="#">Add a passkey</a>
+        </div>
+        <section class="card" style="margin-top:1rem">
+          <h3>Theme tokens</h3>
+          <p class="event-meta" style="margin-bottom:.7rem">Wired to <code>tokens.css</code>. The in-flight theme builder can own these without changing layout.</p>
+          <div class="theme-grid">
+            <div class="swatch"><i style="background:var(--primary)"></i><label>Primary</label></div>
+            <div class="swatch"><i style="background:var(--secondary)"></i><label>Navy</label></div>
+            <div class="swatch"><i style="background:var(--green)"></i><label>Green</label></div>
+            <div class="swatch"><i style="background:var(--accent)"></i><label>Gold</label></div>
+          </div>
+          <button class="btn" id="themeBtn2" type="button">Light / dark</button>
+        </section>
+        <button class="btn ghost" type="button">Log out</button>
+      </main>
+
+      <nav class="nav" aria-label="Player app">
+        <button class="on" data-screen="home" type="button">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/></svg>
+          Home
+        </button>
+        <button data-screen="events" type="button">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg>
+          Events
+        </button>
+        <button data-screen="season" type="button">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 19V5M4 19h16M7 15l4-6 3 4 3-5"/></svg>
+          Season
+        </button>
+        <button data-screen="more" type="button">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg>
+          More
+        </button>
+      </nav>
+    </div>
+  </div>
+  <script>
+    const phone = document.querySelector("[data-theme-host]");
+    const screens = [...document.querySelectorAll(".screen")];
+    const tabs = [...document.querySelectorAll(".nav button")];
+    function show(id) {
+      screens.forEach((el) => el.classList.toggle("on", el.id === id));
+      tabs.forEach((el) => el.classList.toggle("on", el.dataset.screen === id));
+    }
+    tabs.forEach((el) => el.addEventListener("click", () => show(el.dataset.screen)));
+    document.querySelectorAll("[data-go]").forEach((el) => {
+      el.addEventListener("click", (event) => {
+        event.preventDefault();
+        show(el.dataset.go);
+      });
+    });
+    function toggleTheme() {
+      const root = document.documentElement;
+      const next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+    }
+    document.getElementById("themeBtn").onclick = toggleTheme;
+    document.getElementById("themeBtn2").onclick = toggleTheme;
+  </script>
+</body>
+</html>
