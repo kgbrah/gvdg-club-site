@@ -19,37 +19,31 @@ function icon(Icon) {
 function RoundTools(props) {
   if (!props.show) return null;
   return h("div", { className: "card round-tools", key: "round-tools" }, [
-    h("div", { className: "round-code", key: "code" }, [
-      h("span", { className: "muted", key: "label" }, "Code "),
-      h("strong", { key: "value" }, props.roundCode),
+    h("button", { className: "btn small secondary", key: "share", type: "button", onClick: props.onShare }, [
+      icon(Share2),
+      "Share",
     ]),
-    h("div", { className: "round-actions", key: "actions" }, [
-      h("button", { className: "btn small secondary", key: "share", type: "button", onClick: props.onShare }, [
-        icon(Share2),
-        "Share",
-      ]),
-      props.onWatchShare
-        ? h("button", { className: "btn small secondary", key: "watch", type: "button", onClick: props.onWatchShare }, [
-          icon(Eye),
-          "Watch",
-        ])
-        : null,
-      h(
-        "button",
-        {
-          "aria-label": "Add player",
-          className: "btn small secondary",
-          key: "add",
-          title: "Add player",
-          type: "button",
-          onClick: props.onAddPlayer,
-        },
-        [icon(UserPlus), "Add"],
-      ),
-      h("button", { className: "btn small secondary", key: "manage", type: "button", onClick: props.onManagePlayers }, [
-        icon(Settings2),
-        "Manage",
-      ]),
+    props.onWatchShare
+      ? h("button", { className: "btn small secondary", key: "watch", type: "button", onClick: props.onWatchShare }, [
+        icon(Eye),
+        "Watch",
+      ])
+      : null,
+    h(
+      "button",
+      {
+        "aria-label": "Add player",
+        className: "btn small secondary",
+        key: "add",
+        title: "Add player",
+        type: "button",
+        onClick: props.onAddPlayer,
+      },
+      [icon(UserPlus), "Add"],
+    ),
+    h("button", { className: "btn small secondary", key: "manage", type: "button", onClick: props.onManagePlayers }, [
+      icon(Settings2),
+      "Manage",
     ]),
   ]);
 }
@@ -232,13 +226,16 @@ function HoleGrid(props) {
       h(
         "button",
         {
-          "aria-label": `Hole ${hole.hole}`,
+          "aria-label": hole.score != null ? `Hole ${hole.hole}, ${hole.score}` : `Hole ${hole.hole}`,
           className: [hole.current ? "cur" : "", hole.done ? "done" : "", hole.conflict ? "conflict" : "", hole.ctp ? "ctp" : ""].filter(Boolean).join(" "),
           key: hole.hole,
           type: "button",
           onClick: () => props.onJump(hole.index),
         },
-        String(hole.hole),
+        [
+          h("span", { className: "holegrid-num", key: "num" }, String(hole.hole)),
+          hole.score != null ? h("b", { className: "holegrid-score", key: "score" }, String(hole.score)) : null,
+        ],
       ),
     ),
   );
@@ -246,10 +243,10 @@ function HoleGrid(props) {
 
 export function ScorecardView(props) {
   return h(React.Fragment, null, [
-    props.showWeather ? h(WeatherStrip, { key: "weather", title: "Round weather", weather: props.weather }) : null,
+    h(RoundTools, props),
+    props.showWeather ? h(WeatherStrip, { compact: true, key: "weather", title: "Round weather", weather: props.weather }) : null,
     props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,
     props.potsAceHint ? h("p", { className: "pots-ace-hint", key: "ace-hint" }, props.potsAceHint) : null,
-    h(RoundTools, props),
     h(HoleHeader, props),
     props.yourTurn ? h("p", { className: "your-turn-hint", key: "turn" }, props.yourTurn) : null,
     h(HoleMap, { hole: props.hole, players: props.playerLocations, udiscCourseId: props.udiscCourseId, windFromDeg: props.windFromDeg }),

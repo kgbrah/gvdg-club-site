@@ -99,6 +99,30 @@ export function WeatherStrip(props) {
   const summary = currentWeatherSummary(props.weather);
   const current = props.weather && props.weather.current;
   const meta = summary ? [summary.humidityText, summary.precipText].filter(Boolean).concat(summary.changes) : [];
+  const wind = summary
+    ? h(WeatherWind, {
+      compassState,
+      key: "wind",
+      summary,
+      windDirectionDeg: current && current.windDirectionDeg,
+    })
+    : null;
+
+  if (props.compact) {
+    return h("div", { className: "weather-strip weather-strip-compact", title: props.title || "Round weather" }, [
+      summary
+        ? h("div", { className: "weather-condition", key: "condition" }, [
+          h("div", { className: "weather-temp", key: "temp" }, summary.tempText),
+          h("div", { className: "weather-copy", key: "copy" }, [
+            h("strong", { key: "condition" }, summary.condition),
+            summary.feelsText ? h("span", { key: "feels" }, summary.feelsText) : null,
+          ]),
+        ])
+        : h("div", { className: "weather-empty", key: "empty" }, chips.map((chip) => chip.value).join(" ")),
+      h(WeatherGraphic, { graphic: summary && summary.graphic, key: "graphic" }),
+      wind,
+    ]);
+  }
 
   return h("div", { className: "weather-strip" }, [
     h("div", { className: "weather-head", key: "head" }, [
@@ -115,12 +139,7 @@ export function WeatherStrip(props) {
             ]),
           ]),
           h(WeatherGraphic, { graphic: summary.graphic, key: "graphic" }),
-          h(WeatherWind, {
-            compassState,
-            key: "wind",
-            summary,
-            windDirectionDeg: current && current.windDirectionDeg,
-          }),
+          wind,
         ])
       : h("div", { className: "weather-empty", key: "empty" }, chips.map((chip) => chip.value).join(" ")),
     meta.length
