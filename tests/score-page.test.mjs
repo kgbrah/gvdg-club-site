@@ -513,7 +513,14 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(html, /\.round-tools \{/);
   assert.match(html, /grid-template-columns: repeat\(auto-fit, minmax\(0, 1fr\)\)/);
   assert.match(html, /\.holegrid \{ display: grid; grid-template-columns: repeat\(6, minmax\(0, 1fr\)\)/);
-  assert.match(html, /\.weather-strip-compact/);
+  assert.match(html, /\.weather-strip-compact \{/);
+  assert.match(html, /grid-template-columns: auto minmax\(0, 1fr\) auto/);
+  assert.match(html, /\.weather-compact-copy/);
+  assert.match(html, /\.weather-strip-compact \.weather-wind,/);
+  assert.match(html, /width: auto; grid-column: auto;/);
+  const weather = scoreWeatherSource();
+  assert.match(weather, /weather-compact-copy/);
+  assert.match(weather, /weather-wind-compact/);
   assert.doesNotMatch(html, /\.round-code \{ flex: 1 1 7\.5rem;/);
   assert.doesNotMatch(scorecard, /className: "round-code"/);
   assert.match(scorecard, /compact: true/);
@@ -603,8 +610,9 @@ test('live scoring paints the signed-in player dashboard theme onto the score pa
   assert.match(html, /body\.player-theme-active/);
   assert.match(html, /--player-theme-image/);
   assert.match(main, /from "\.\.\/shared\/player-theme-session\.js"/);
-  assert.match(main, /syncPlayerTheme/);
-  assert.match(main, /togglePlayerThemeMode/);
+  assert.match(main, /loadLocalPlayerTheme/);
+  assert.match(main, /playerTheme\.mode === "dark"/);
+  assert.match(main, /active.abort\(\)/);
   assert.match(controller, /notifyScoreAuthChanged/);
   assert.match(session, /\/me\/dashboard-theme/);
   assert.match(session, /gvdg:score-auth/);

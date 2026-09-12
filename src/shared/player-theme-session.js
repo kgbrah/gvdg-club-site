@@ -33,7 +33,7 @@ export function themeMemberIds({ token, pdgaNo } = {}) {
   return ids;
 }
 
-export function readSessionValue(key, storage) {
+export function readSessionValue(key, storage = globalThis.sessionStorage) {
   try {
     return storage?.getItem?.(key) || "";
   } catch {
@@ -48,13 +48,15 @@ export function loadLocalPlayerTheme({
   sessionStorage: sessions = globalThis.sessionStorage,
 } = {}) {
   const sessionToken = token ?? readSessionValue(TOKEN_KEY, sessions);
+  if (!sessionToken) return { theme: null, memberId: "me", token: "" };
   const sessionPdga = pdgaNo ?? readSessionValue(PDGA_KEY, sessions);
   const ids = themeMemberIds({ token: sessionToken, pdgaNo: sessionPdga });
-  for (const memberId of ids) {
-    const theme = readStoredTheme(storage, memberId);
+  const memberId = ids[0] || "me";
+  for (const cacheId of ids) {
+    const theme = readStoredTheme(storage, cacheId);
     if (theme) return { theme, memberId, token: sessionToken };
   }
-  return { theme: null, memberId: ids[0] || "me", token: sessionToken };
+  return { theme: null, memberId, token: sessionToken };
 }
 
 export function paintPlayerTheme(theme, root) {
@@ -83,7 +85,7 @@ function syncDocumentTheme(theme) {
 }
 
 export async function fetchRemotePlayerTheme({ token, signal, requestImpl } = {}) {
-  if (!token) return null;
+  if (!token) return undefined;
   const request = requestImpl || defaultThemeRequest;
   const response = await request("/me/dashboard-theme", { token, signal });
   if (!response?.ok) return undefined;
@@ -92,10 +94,33 @@ export async function fetchRemotePlayerTheme({ token, signal, requestImpl } = {}
   return sanitizeTheme(data.theme);
 }
 
-export async function defaultThemeRequest(path, { token, signal } = {}) {
+export async function defaultThemeRequest(path, { token, signal, method = "GET", body } = {}) {
   const headers = { Accept: "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  return fetch(`${resolveApiBase()}${path}`, { cache: "no-store", headers, method: "GET", signal });
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  return fetch(`${resolveApiBase()}${path}`, {
+    cache: "no-store",
+    headers,
+    method,
+    signal,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+export async function persistPlayerTheme(theme, { token, signal, requestImpl } = {}) {
+  if (!token) return false;
+  const request = requestImpl || defaultThemeRequest;
+  try {
+    const response = await request("/me/dashboard-theme", {
+      token,
+      signal,
+      method: theme ? "PUT" : "DELETE",
+      body: theme ? { theme } : undefined,
+    });
+    return Boolean(response && response.ok);
+  } catch {
+    return false;
+  }
 }
 
 export async function syncPlayerTheme({
@@ -113,6 +138,9 @@ export async function syncPlayerTheme({
   onTheme?.(local.theme, local.memberId);
   if (!local.token) return local;
   const remote = await fetchRemotePlayerTheme({ token: local.token, signal, requestImpl });
+  if (signal?.aborted) return local;
+  const currentToken = token ?? readSessionValue(TOKEN_KEY, sessions);
+  if (currentToken !== local.token) return local;
   if (remote === undefined) return local;
   writeStoredTheme(storage, local.memberId, remote);
   paintPlayerTheme(remote, root);
@@ -120,11 +148,12 @@ export async function syncPlayerTheme({
   return { ...local, theme: remote };
 }
 
-export function togglePlayerThemeMode(theme, { root, storage = globalThis.localStorage, memberId } = {}) {
+export function togglePlayerThemeMode(theme, { root, storage = globalThis.localStorage, memberId, token, requestImpl } = {}) {
   const next = themeWithMode(theme, theme?.mode === "light" ? "dark" : "light");
   if (!next) return null;
   if (memberId) writeStoredTheme(storage, memberId, next);
   paintPlayerTheme(next, root);
+  if (token) persistPlayerTheme(next, { token, requestImpl }).catch(() => {});
   return next;
 }
 
