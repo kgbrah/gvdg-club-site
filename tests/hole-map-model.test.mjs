@@ -27,6 +27,8 @@ test("projectHoleMap returns a north-up tee-to-basket layout", () => {
   assert.equal(map.basket.label, "A");
   assert.equal(map.windBlowToDeg, 180);
   assert.match(holeMapLabel(map, 3), /Hole 3 map, 250 ft/);
+  assert.ok(map.basket.y / map.height > 0.16 && map.basket.y / map.height < 0.28);
+  assert.ok(map.tee.y / map.height > 0.72 && map.tee.y / map.height < 0.84);
 });
 
 test("projectHoleMap overlays a satellite image on the GPS bounds", () => {
