@@ -178,6 +178,9 @@ async function assertNoHorizontalOverflow(page, label) {
 }
 
 async function assertPdgaRatingsStacked(page, label) {
+  await page.locator("#membersReactRatingPanel details.dash-collapse").evaluateAll((nodes) => {
+    nodes.forEach((node) => { node.open = true; });
+  });
   const rows = await page.locator("#membersReactRatingPanel .dash-event").evaluateAll((events) =>
     events.map((event, index) => {
       const main = event.querySelector(".dash-event-main");

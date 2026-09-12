@@ -8,6 +8,8 @@ test('member dashboard React registration panel includes casual round posts', ()
   assert.match(panel, /requestJson\("\/casual-rounds"/);
   assert.match(panel, /casualRequests/);
   assert.match(casual, /CasualRoundCard/);
+  assert.match(casual, /h\("details", \{ className: "dash-collapse"/);
+  assert.match(casual, /Casual rounds/);
 });
 
 test('member dashboard React board panel owns board loading and posting', () => {
@@ -149,8 +151,21 @@ test('overview dashboard puts the register-for-events box below ratings and abov
   const html = readFileSync('gvdg-members.html', 'utf8');
   assert.match(overview, /import \{ MemberRegistrationPanel \} from "\.\/registration-panel\.js"/);
   assert.match(overview, /h\(PdgaDashboard[\s\S]*h\(MemberRegistrationPanel/);
-  assert.match(pdga, /\.\.\.extras,\s*events\.length \? h\("div", \{ key: "events" \}, \[\s*h\("h4", \{ className: "dash-subtitle", key: "title" \}, "Recent Tournaments"\)/);
+  assert.match(pdga, /\.\.\.extras,\s*events\.length \? h\("details", \{ className: "dash-collapse", key: "events" \}/);
+  assert.match(pdga, /`Recent Tournaments \(\$\{Math\.min\(events\.length, 6\)\}\)`/);
   assert.match(html, /\.react-pdga-dashboard \.react-registration-panel/);
+  assert.match(html, /\.dash-collapse-summary \{ cursor: pointer; \}/);
+});
+
+test('overview dashboard collapses recent tournaments, casual rounds, and live scoring', () => {
+  const pdga = readFileSync('src/members-app/pdga-dashboard.js', 'utf8');
+  const casual = readFileSync('src/members-app/registration-casual.js', 'utf8');
+  const activity = readFileSync('src/members-app/activity-panels.js', 'utf8');
+  assert.match(pdga, /h\("details", \{ className: "dash-collapse", key: "events" \}/);
+  assert.match(casual, /h\("details", \{ className: "dash-collapse"/);
+  assert.match(activity, /h\("details", \{ className: "club-board react-live-scoring dash-collapse"/);
+  assert.doesNotMatch(pdga, /h\("h4", \{ className: "dash-subtitle", key: "title" \}, "Recent Tournaments"\)/);
+  assert.doesNotMatch(activity, /h\("h3", \{ className: "my-dashboard-title", key: "title" \}, "Live Scoring"\)/);
 });
 
 test('member dashboard React registration panel surfaces live events and lists every registered event', () => {

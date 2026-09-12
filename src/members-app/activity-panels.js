@@ -105,9 +105,10 @@ export function LiveScoringPanel({ token }) {
   }, [token]);
 
   if (!token) return null;
-  return h("div", { className: "club-board react-live-scoring", "data-react-live-scoring": state.status }, [
-    h("h3", { className: "my-dashboard-title", key: "title" }, "Live Scoring"),
-    h("div", { className: "live-round-list", key: "list" }, state.items.length
+  const count = state.items.length;
+  return h("details", { className: "club-board react-live-scoring dash-collapse", "data-react-live-scoring": state.status }, [
+    h("summary", { className: "my-dashboard-title dash-collapse-summary", key: "title" }, count ? `Live Scoring (${count})` : "Live Scoring"),
+    h("div", { className: "live-round-list", key: "list" }, count
       ? state.items.map((item) => h(LiveRoundCard, { item, key: `${item.kind}-${item.href}` }))
       : h("p", { className: "dash-note" }, "No active scorecards right now.")),
     h("div", { className: "live-round-actions", key: "actions" }, h("a", { className: "passkey-btn", href: "score.html" }, "Start / join a casual round")),

@@ -179,8 +179,8 @@ export function PdgaDashboard({ pdgaNo, state, children }) {
       h(RatingTile, { label: "Events", value: stats?.events_count != null ? stats.events_count : events.length, key: "events" }),
     ]),
     ...extras,
-    events.length ? h("div", { key: "events" }, [
-      h("h4", { className: "dash-subtitle", key: "title" }, "Recent Tournaments"),
+    events.length ? h("details", { className: "dash-collapse", key: "events" }, [
+      h("summary", { className: "dash-subtitle dash-collapse-summary", key: "title" }, `Recent Tournaments (${Math.min(events.length, 6)})`),
       h("div", { key: "list" }, events.slice(0, 6).map((event, index) => h(RecentEvent, { event, key: `${event.tournament || "event"}-${event.epoch || index}` }))),
     ]) : null,
   ]);
