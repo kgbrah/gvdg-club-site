@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { headingDeg, holeMapLabel, holePoint, projectHoleMap, satelliteImageUrl, windBlowToDeg } from "../src/shared/hole-map-model.js";
+import { headingDeg, holeMapLabel, holePoint, playerMarksOnMap, projectHoleMap, projectMapPoint, satelliteImageUrl, windBlowToDeg } from "../src/shared/hole-map-model.js";
 
 test("holePoint requires numeric lat/lng", () => {
   assert.equal(holePoint(null), null);
@@ -55,4 +55,23 @@ test("heading and wind helpers stay on the compass", () => {
   assert.equal(Math.round(headingDeg({ lat: 0, lng: 0 }, { lat: 1, lng: 0 })), 0);
   assert.equal(windBlowToDeg(90), 270);
   assert.equal(windBlowToDeg(null), null);
+});
+
+test("projectMapPoint places players on the hole and hides off-map GPS", () => {
+  const map = projectHoleMap({
+    hole: 1,
+    tee: { lat: 35.6, lng: -77.37, label: "Gold" },
+    target: { lat: 35.601, lng: -77.37, label: "A" },
+  });
+  const mid = projectMapPoint(map, 35.6005, -77.37);
+  assert.ok(mid);
+  assert.ok(mid.x > 0 && mid.x < map.width);
+  assert.ok(mid.y > 0 && mid.y < map.height);
+  assert.equal(projectMapPoint(map, 40, -90), null);
+  const marks = playerMarksOnMap(map, [
+    { index: 0, initials: "as", lat: 35.6005, lng: -77.37 },
+    { index: 1, initials: "TB", lat: 40, lng: -90 },
+  ]);
+  assert.equal(marks.length, 1);
+  assert.equal(marks[0].initials, "AS");
 });

@@ -44,6 +44,7 @@ export function unionRosterPlayers(
 }
 
 const LIVE_SCORE_IP_LIMIT = 180; // score writes per identity per minute (a card rarely exceeds a few)
+const LIVE_LOCATION_LIMIT = 30; // GPS pings per identity per minute
 
 export async function startLiveEvent(
   env: Env,
@@ -193,6 +194,20 @@ export async function handleClubLive(
         division: ctp.division ?? null,
       }),
       headers: { "X-Auth-Member": id.authMember, "X-Auth-Admin": String(id.authAdmin) },
+    });
+    return json(await r.json().catch(() => ({})), r.status, origin);
+  }
+
+  // Logged-in members on the card may share GPS so watchers see initials on hole maps.
+  if (method === "POST" && sub === "location") {
+    const body = (await readJson(request)) ?? {};
+    const id = await scoreIdentity(request, env, body);
+    if (!id.authMember) return json({ error: "unauthorized" }, 401, origin);
+    if (await kvRateLimited(env, "live-loc:" + id.authMember, LIVE_LOCATION_LIMIT, 60)) return json({ error: "rate_limited" }, 429, origin);
+    const r = await stub.fetch("https://do/location", {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "X-Auth-Member": id.authMember },
     });
     return json(await r.json().catch(() => ({})), r.status, origin);
   }

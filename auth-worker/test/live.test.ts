@@ -2265,3 +2265,56 @@ describe("LiveEventDO UDisc export bridge", () => {
     expect(mine.udiscCourseId).toBe("98765");
   });
 });
+
+describe("LiveEventDO player GPS overlay", () => {
+  it("logged-in members can ping a location that lands on the public snapshot without bumping rev", async () => {
+    const state = new FakeState({});
+    const live = new LiveEventDO(state, { DB: db });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      casual: true,
+      holes: [{ hole: 1, par: 3, tee: { lat: 35.6, lng: -77.37 }, target: { lat: 35.601, lng: -77.37 } }],
+      players: [{ memberId: "m_a", name: "Alex Schwarga" }, { memberId: "g_guest", name: "Walk-on" }],
+    }) }));
+    const before = (await (await live.fetch(new Request("https://do/"))).json()) as { rev: number; playerLocations: unknown[] };
+    const ping = await live.fetch(new Request("https://do/location", { method: "POST", headers: { "X-Auth-Member": "m_a" }, body: JSON.stringify({ lat: 35.6005, lng: -77.37 }) }));
+    expect(ping.status).toBe(200);
+    expect(await ping.json()).toEqual({ ok: true });
+    const after = (await (await live.fetch(new Request("https://do/"))).json()) as { rev: number; playerLocations: { initials: string; lat: number; lng: number; at: number }[] };
+    expect(after.rev).toBe(before.rev);
+    expect(after.playerLocations).toHaveLength(1);
+    expect(after.playerLocations[0]).toMatchObject({ index: 0, initials: "AS", lat: 35.6005, lng: -77.37 });
+    expect(after.playerLocations[0]?.at).toBeGreaterThan(0);
+    expect(state.getStored("locations")).toBeUndefined();
+  });
+
+  it("rejects guests, strangers, bad coordinates, and off-course GPS", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      casual: true,
+      holes: [{ hole: 1, par: 3, tee: { lat: 35.6, lng: -77.37 }, target: { lat: 35.601, lng: -77.37 } }],
+      players: [{ memberId: "m_a", name: "Alex" }, { memberId: "g_guest", name: "Walk-on" }],
+    }) }));
+    expect((await live.fetch(new Request("https://do/location", { method: "POST", headers: { "X-Auth-Member": "g_guest" }, body: JSON.stringify({ lat: 35.6, lng: -77.37 }) }))).status).toBe(403);
+    expect((await live.fetch(new Request("https://do/location", { method: "POST", headers: { "X-Auth-Member": "m_stranger" }, body: JSON.stringify({ lat: 35.6, lng: -77.37 }) }))).status).toBe(403);
+    expect((await live.fetch(new Request("https://do/location", { method: "POST", headers: { "X-Auth-Member": "m_a" }, body: JSON.stringify({ lat: 99, lng: 0 }) }))).status).toBe(400);
+    expect((await live.fetch(new Request("https://do/location", { method: "POST", headers: { "X-Auth-Member": "m_a" }, body: JSON.stringify({ lat: 40, lng: -90 }) }))).status).toBe(400);
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { playerLocations: unknown[] };
+    expect(snap.playerLocations).toEqual([]);
+  });
+
+  it("omits GPS from the final snapshot", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      casual: true,
+      holes: [{ hole: 1, par: 3, tee: { lat: 35.6, lng: -77.37 }, target: { lat: 35.601, lng: -77.37 } }],
+      players: [{ memberId: "m_a", name: "Alex Schwarga" }],
+    }) }));
+    await live.fetch(new Request("https://do/location", { method: "POST", headers: { "X-Auth-Member": "m_a" }, body: JSON.stringify({ lat: 35.6005, lng: -77.37 }) }));
+    await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m_a" }, body: JSON.stringify({ index: 0, hole: 1, strokes: 3 }) }));
+    const fin = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Member": "m_a", "X-Auth-Admin": "true" } }));
+    expect(fin.status).toBe(200);
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { status: string; playerLocations: unknown[] };
+    expect(snap.status).toBe("final");
+    expect(snap.playerLocations).toEqual([]);
+  });
+});

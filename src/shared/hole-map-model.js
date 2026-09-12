@@ -115,3 +115,46 @@ export function holeMapLabel(map, holeNumber) {
   const wind = map.windFromDeg == null ? "" : `, wind from ${Math.round(map.windFromDeg)} degrees`;
   return `${hole}${distance}${wind}`;
 }
+
+export function projectMapPoint(map, lat, lng) {
+  if (!map || !map.bounds) return null;
+  const pointLat = finite(lat);
+  const pointLng = finite(lng);
+  if (pointLat == null || pointLng == null) return null;
+  const pad = 0.00012;
+  if (pointLat < map.bounds.minLat - pad || pointLat > map.bounds.maxLat + pad) return null;
+  if (pointLng < map.bounds.minLng - pad || pointLng > map.bounds.maxLng + pad) return null;
+  const spanLng = Math.max(map.bounds.maxLng - map.bounds.minLng, 1e-7);
+  const spanLat = Math.max(map.bounds.maxLat - map.bounds.minLat, 1e-7);
+  return {
+    x: Number((((pointLng - map.bounds.minLng) / spanLng) * map.width).toFixed(2)),
+    y: Number((((map.bounds.maxLat - pointLat) / spanLat) * map.height).toFixed(2)),
+  };
+}
+
+export function playerMarksOnMap(map, players) {
+  const rows = Array.isArray(players) ? players : [];
+  const marks = [];
+  rows.forEach((player) => {
+    const pt = projectMapPoint(map, player && player.lat, player && player.lng);
+    if (!pt) return;
+    const initials = String((player && player.initials) || "").trim().slice(0, 3).toUpperCase();
+    if (!initials) return;
+    marks.push({
+      key: player.index != null ? String(player.index) : `${initials}:${pt.x}:${pt.y}`,
+      initials,
+      x: pt.x,
+      y: pt.y,
+    });
+  });
+  marks.sort((a, b) => a.x - b.x || a.y - b.y);
+  for (let i = 1; i < marks.length; i += 1) {
+    const prev = marks[i - 1];
+    const dx = marks[i].x - prev.x;
+    const dy = marks[i].y - prev.y;
+    if (dx * dx + dy * dy < 256) {
+      marks[i] = { ...marks[i], x: marks[i].x + 14, y: marks[i].y - 10 };
+    }
+  }
+  return marks;
+}

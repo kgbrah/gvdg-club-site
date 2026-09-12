@@ -42,8 +42,10 @@ export function startScoreApp(options) {
         const scoreBody = options && options.body;
         const scoreShell = options && options.shell;
         const POTS_REFRESH_MS = 30 * 1000;
-        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, roundConfig: null, scoreTargets: [], scoreTargetError: null, weather: null, pots: null };
+        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, roundConfig: null, scoreTargets: [], scoreTargetError: null, weather: null, pots: null, playerLocations: [] };
         let potsTimer = null;
+        let locWatchId = null;
+        let locLastSent = 0;
         const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
         const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
 
@@ -126,6 +128,59 @@ export function startScoreApp(options) {
             await loadPots();
             if (WATCH) renderWatch();
             else if (S.holes.length) renderHole();
+        }
+
+        function stopLiveLocation() {
+            if (locWatchId != null && navigator.geolocation) {
+                try { navigator.geolocation.clearWatch(locWatchId); } catch (e) {}
+            }
+            locWatchId = null;
+        }
+        function startLiveLocation() {
+            if (WATCH || locWatchId != null) return;
+            if (!memberToken()) return;
+            if (!navigator.geolocation) return;
+            locWatchId = navigator.geolocation.watchPosition(function (pos) {
+                const lat = pos.coords && pos.coords.latitude;
+                const lng = pos.coords && pos.coords.longitude;
+                if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+                const now = Date.now();
+                if (now - locLastSent < 8000) return;
+                locLastSent = now;
+                void api(LIVE + '/location', { method: 'POST', body: { lat: lat, lng: lng } }).then(function (r) {
+                    if (r.status === 401 || r.status === 403 || r.status === 409) stopLiveLocation();
+                });
+            }, function (err) {
+                if (err && err.code === 1) stopLiveLocation();
+            }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
+        }
+
+        function locationStamp(rows) {
+            let max = 0;
+            (Array.isArray(rows) ? rows : []).forEach(function (row) {
+                const at = Number(row && row.at);
+                if (Number.isFinite(at) && at > max) max = at;
+            });
+            return max;
+        }
+        function applyPlayerLocations(next) {
+            const rows = Array.isArray(next) ? next : [];
+            if (!rows.length) {
+                const changed = (S.playerLocations || []).length > 0;
+                S.playerLocations = [];
+                return changed;
+            }
+            if (locationStamp(rows) < locationStamp(S.playerLocations)) return false;
+            S.playerLocations = rows;
+            return true;
+        }
+        function applyLiveExtras(snap) {
+            const weatherChanged = Object.prototype.hasOwnProperty.call(snap, 'weather');
+            if (weatherChanged) S.weather = snap.weather || null;
+            const locationsChanged = Object.prototype.hasOwnProperty.call(snap, 'playerLocations')
+                ? applyPlayerLocations(snap.playerLocations)
+                : false;
+            return weatherChanged || locationsChanged;
         }
 
         // ---------- offline score queue ----------
@@ -288,22 +343,19 @@ export function startScoreApp(options) {
         function mergeFromSnap() {
             const snap = S.snap; if (!snap || !Array.isArray(snap.players)) return;
             if (WATCH) {
-                const weatherChanged = Object.prototype.hasOwnProperty.call(snap, 'weather');
-                if (weatherChanged) S.weather = snap.weather || null;
-                if (snap.rev != null) { if (snap.rev <= S.lastRev) { if (weatherChanged) renderWatch(); return; } S.lastRev = snap.rev; }
+                const extrasChanged = applyLiveExtras(snap);
+                if (snap.status === 'final') stopLiveLocation();
+                if (snap.rev != null) { if (snap.rev <= S.lastRev) { if (extrasChanged) renderWatch(); return; } S.lastRev = snap.rev; }
                 if (snap.status) S.status = snap.status;
                 S.roundConfig = snap.roundConfig || S.roundConfig;
                 if (S.pots) S.pots.ctps = withLiveCtpLeaders(S.pots.ctps, snap.liveCtps);
                 renderWatch();
                 return;
             }
-            // Apply weather FIRST: the background weather refresh broadcasts a same-rev snapshot (weather
-            // isn't a scoring change), so the rev gate below would otherwise drop it and the strip would never
-            // update.
-            const weatherChanged = Object.prototype.hasOwnProperty.call(snap, 'weather');
-            if (weatherChanged) S.weather = snap.weather || null;
+            const extrasChanged = applyLiveExtras(snap);
+            if (snap.status === 'final') stopLiveLocation();
             // Drop a stale/out-of-order snapshot (a newer one from another device was already applied).
-            if (snap.rev != null) { if (snap.rev <= S.lastRev) { if (weatherChanged) renderHole(); return; } S.lastRev = snap.rev; }
+            if (snap.rev != null) { if (snap.rev <= S.lastRev) { if (extrasChanged) renderHole(); return; } S.lastRev = snap.rev; }
             if (snap.status) S.status = snap.status; // reflect a finalize (or start) that happened on another device
             S.roundConfig = snap.roundConfig || S.roundConfig;
             S.scoreTargets = Array.isArray(snap.scoreTargets) ? snap.scoreTargets : S.scoreTargets;
@@ -587,6 +639,7 @@ export function startScoreApp(options) {
             const r = await api('/rounds/' + ROUND_CODE + '/finalize', { method: 'POST', body: {} });
             if (r.ok && r.data && r.data.status === 'final') {
                 S.status = 'final';
+                stopLiveLocation();
                 toast('Round finished');
                 if (lbOpen) renderLeaderboard();
             } else if (r.status === 409) {
@@ -620,6 +673,7 @@ export function startScoreApp(options) {
             S.roundConfig = d.roundConfig || null; S.scoreTargets = Array.isArray(d.scoreTargets) ? d.scoreTargets : []; S.scoreTargetError = d.scoreTargetError || null;
             S.courseName = d.courseName || null; S.layoutName = d.layoutName || null; S.udiscCourseId = d.udiscCourseId || null;
             S.weather = d.weather || null;
+            S.playerLocations = Array.isArray(d.playerLocations) ? d.playerLocations : [];
             S.scorerIndex = d.playerIndex;
             if (MODE === 'round') rememberRecentRound({ code: ROUND_CODE, label: 'Casual round ' + ROUND_CODE });
             currentScorerIndex();
@@ -638,6 +692,7 @@ export function startScoreApp(options) {
             renderHole();
             connectWs();
             startPotsPolling();
+            startLiveLocation();
             flushQueue();
         }
 
@@ -827,6 +882,7 @@ export function startScoreApp(options) {
                 udiscCourseId: S.udiscCourseId || '',
                 weather: S.weather,
                 windFromDeg: S.weather && S.weather.current ? S.weather.current.windDirectionDeg : null,
+                playerLocations: S.playerLocations || [],
             });
         }
         async function loadWatch() {
@@ -845,6 +901,7 @@ export function startScoreApp(options) {
             S.layoutName = d.layoutName || null;
             S.udiscCourseId = d.udiscCourseId || null;
             S.weather = d.weather || null;
+            S.playerLocations = Array.isArray(d.playerLocations) ? d.playerLocations : [];
             S.lastRev = d.rev == null ? -1 : d.rev;
             renderWatch();
             startPotsPolling();

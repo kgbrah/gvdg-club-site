@@ -5,14 +5,15 @@
 // Auth is enforced by the Worker BEFORE forwarding here (start/score/finalize are admin-gated; the
 // snapshot + ws reads are public). The DO trusts requests it receives.
 
+import { holeMarker } from "./db-courses.js";
 import { normalizeScorecards, playerScorerId, purgeScorerVotes, purgeScoreTargetScorerVotes, recordScoreTargetVote } from "./live-consensus.js";
 import { canCastCtpVote, dropLiveCtp, recordCtpVote, type LiveCtpStore } from "./live-ctp.js";
 import { isLiveFormatError, normalizeLiveScoringConfig, normalizePairLabel, type LiveScoringConfig } from "./live-format.js";
 import { finalizeLiveEvent } from "./live-finalize.js";
+import { isLoggedInMemberId, locationMoved, locationOnCourse, parseLocationBody, type LivePlayerLocation } from "./live-locations.js";
 import { updateLivePairs } from "./live-pairs.js";
-import { canEnterScorecard, findPlayer, invalidScoreTargetsResponse, scoreTargetForBody, scoringState, targetAnchor } from "./live-state.js";
-import { holeMarker } from "./db-courses.js";
 import { mineData, publicSnapshot } from "./live-snapshot.js";
+import { canEnterScorecard, findPlayer, invalidScoreTargetsResponse, scoreTargetForBody, scoringState, targetAnchor } from "./live-state.js";
 import { j, type CtpVoteBody, type LiveEnv, type LiveMeta, type LiveState, type OverrideBody, type PairAssignmentBody, type RemoveBody, type ScoreBody, type StartBody, type WeatherBody } from "./live-types.js";
 import { assignCards, type PlayerState } from "./scoring.js";
 import { createWeatherState, refreshWeatherState, WEATHER_REFRESH_MS } from "./weather.js";
@@ -28,6 +29,7 @@ export class LiveEventDO {
   private meta: LiveMeta | null = null;
   private players: PlayerState[] = [];
   private liveCtps: LiveCtpStore = {};
+  private locations = new Map<number, LivePlayerLocation>();
 
   constructor(state: LiveState, env: LiveEnv) {
     this.state = state;
@@ -114,6 +116,7 @@ export class LiveEventDO {
     if (action === "score") return this.score(body as ScoreBody, authMember, authAdmin);
     if (action === "ctp") return this.claimCtp(body as CtpVoteBody, authMember, authAdmin);
     if (action === "ctp-forget") return this.forgetCtp(body as { ctpId?: number }, authAdmin);
+    if (action === "location") return this.pingLocation(body, authMember);
     if (action === "join") return this.join(authMember, (body as { name?: string }).name); // casual round: caller joins
     if (action === "guest") return this.addGuest(authMember, (body as { name?: string; team?: string }).name, (body as { team?: string }).team); // add a non-member to my card (+ pair label for doubles)
     if (action === "remove") return this.removePlayer(body as RemoveBody, authMember, authAdmin); // drop a player (accidental/left/no-show)
@@ -126,7 +129,7 @@ export class LiveEventDO {
   }
 
   private snapshot() {
-    return publicSnapshot(this.meta, this.players, this.liveCtps);
+    return publicSnapshot(this.meta, this.players, this.liveCtps, this.locations);
   }
 
   private async start(b: StartBody): Promise<Response> {
@@ -143,6 +146,7 @@ export class LiveEventDO {
     }
     this.meta = { eventId: b.eventId ?? 0, casual: !!b.casual, roundCode: b.roundCode ?? null, courseId: b.courseId ?? null, layoutId: b.layoutId ?? null, createdBy: b.createdBy ?? null, courseName: b.courseName ?? null, layoutName: b.layoutName ?? null, udiscCourseId: b.udiscCourseId ?? null, holes, status: "live", startedAt: b.startedAt ?? "", weather: createWeatherState(b.weatherLocation ?? null), roundConfig, overrides: {}, ctpBuyInRequired: b.ctpBuyInRequired === true };
     this.liveCtps = {};
+    this.locations = new Map();
     this.players = (Array.isArray(b.players) ? b.players : []).map((p) => ({
       memberId: p.memberId ?? null,
       name: String(p.name ?? "Player"),
@@ -223,7 +227,7 @@ export class LiveEventDO {
 
   private mine(authMember: string | null): Response {
     if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
-    return j(mineData(this.meta, this.players, authMember, this.liveCtps));
+    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations));
   }
 
   /** Casual round: the authenticated caller joins (added once, on the single card "c0"). No-op if already in. */
@@ -249,7 +253,7 @@ export class LiveEventDO {
       await this.persist();
       this.broadcast();
     }
-    return j(mineData(this.meta, this.players, authMember, this.liveCtps));
+    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations));
   }
 
   /** Add a non-member guest to the caller's card (the caller must already be on the round). A pair label
@@ -264,7 +268,7 @@ export class LiveEventDO {
     this.players.push({ memberId: null, name: nm.slice(0, 60), division: null, team: normalizePairLabel(team), startingHole: null, cardId: me.cardId ?? "c0", scores: {}, scorecards: {}, ctpEligible: this.meta.ctpBuyInRequired !== true });
     await this.persist();
     this.broadcast();
-    return j(mineData(this.meta, this.players, authMember, this.liveCtps));
+    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations));
   }
 
   /** Remove a player from the card — a casual-round player who registered by accident, had to leave
@@ -296,12 +300,13 @@ export class LiveEventDO {
     target.scores = {};
     target.scorecards = {};
     target.scoredBy = {};
+    this.locations.delete(idx);
     const scoring = scoringState(this.meta, this.players);
     if (scoring.error) purgeScorerVotes(this.players, idx, this.meta.holes);
     else purgeScoreTargetScorerVotes(this.players, idx, this.meta.holes, scoring.targets); // drop this player's votes on cardmates + re-derive consensus, so a leaver can't pin a hole in permanent conflict
     await this.persist();
     this.broadcast();
-    return j(mineData(this.meta, this.players, authMember, this.liveCtps));
+    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations));
   }
 
   private async updatePairs(b: PairAssignmentBody, authMember: string | null, authAdmin: boolean): Promise<Response> {
@@ -312,7 +317,7 @@ export class LiveEventDO {
       await this.persist();
       this.broadcast();
     }
-    return j(mineData(this.meta, this.players, authMember, this.liveCtps));
+    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations));
   }
 
   // Round-scoped single-use override of a hole's par/distance. Admin-gated at the Worker. The layout
@@ -347,6 +352,7 @@ export class LiveEventDO {
     this.meta = null;
     this.players = [];
     this.liveCtps = {};
+    this.locations = new Map();
     await this.persist();
     await this.state.storage.deleteAlarm(); // round reset — stop the background weather refresh
     this.broadcast(); // push the "none" snapshot so live viewers/scorekeepers see the round end
@@ -354,6 +360,7 @@ export class LiveEventDO {
   }
 
   private async finalize(authMember: string | null, authAdmin: boolean, force = false): Promise<Response> {
+    this.locations = new Map();
     return finalizeLiveEvent({
       meta: this.meta,
       players: this.players,
@@ -416,6 +423,20 @@ export class LiveEventDO {
     await this.persist();
     this.broadcast();
     return j(this.snapshot());
+  }
+
+  private pingLocation(body: unknown, authMember: string | null): Response {
+    if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
+    if (!isLoggedInMemberId(authMember)) return j({ error: "members_only" }, 403);
+    const parsed = parseLocationBody(body);
+    if (!parsed) return j({ error: "bad_location" }, 400);
+    if (!locationOnCourse(parsed.lat, parsed.lng, this.meta.holes)) return j({ error: "off_course" }, 400);
+    const meIndex = this.players.findIndex((player) => player.memberId === authMember && !player.removed);
+    if (meIndex < 0) return j({ error: "not_on_card" }, 403);
+    const prev = this.locations.get(meIndex);
+    this.locations.set(meIndex, { lat: parsed.lat, lng: parsed.lng, at: Date.now() });
+    if (locationMoved(prev, parsed)) this.broadcast();
+    return j({ ok: true });
   }
 
   private handleWs(_request: Request): Response {
