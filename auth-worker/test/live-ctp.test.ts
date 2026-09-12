@@ -93,6 +93,16 @@ describe("live CTP card claims", () => {
     expect(ctpAwardWinners(store, card).map((row) => row.name)).toEqual(["Cy"]);
   });
 
+  it("breaks same-timestamp claims by the order they were confirmed", () => {
+    let store: LiveCtpStore = {};
+    store = (recordCtpVote({ store, players: card, ctp, nomineeIndex: 0, scorerIndex: 0, now: "t1" }) as { store: LiveCtpStore }).store;
+    store = (recordCtpVote({ store, players: card, ctp, nomineeIndex: 0, scorerIndex: 1, now: "t1" }) as { store: LiveCtpStore }).store;
+    expect(currentCtpLeader(store["9"]!, card)?.name).toBe("Ann");
+    store = (recordCtpVote({ store, players: card, ctp, nomineeIndex: 2, scorerIndex: 2, now: "t1" }) as { store: LiveCtpStore }).store;
+    expect(currentCtpLeader(store["9"]!, card)?.name).toBe("Cy");
+    expect(store["9"]!.confirmed.c1?.seq).toBeGreaterThan(store["9"]!.confirmed.c0?.seq ?? 0);
+  });
+
   it("does not let a duplicate unanimous vote steal the lead back", () => {
     let store: LiveCtpStore = {};
     store = (recordCtpVote({ store, players: card, ctp, nomineeIndex: 0, scorerIndex: 0, now: "t1" }) as { store: LiveCtpStore }).store;

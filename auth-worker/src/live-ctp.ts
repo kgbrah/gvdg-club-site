@@ -11,6 +11,7 @@ export type CtpDefinition = {
 export type CtpConfirmedClaim = {
   readonly playerIndex: number;
   readonly at: string;
+  readonly seq: number;
 };
 
 export type CtpLiveState = {
@@ -21,6 +22,8 @@ export type CtpLiveState = {
   votes: Record<string, Record<string, number>>;
   /** cardKey -> last unanimous claim on that card */
   confirmed: Record<string, CtpConfirmedClaim>;
+  /** Monotonic confirmation counter; later seq wins when `at` timestamps collide. */
+  nextSeq?: number;
 };
 
 export type LiveCtpStore = Record<string, CtpLiveState>;
@@ -129,6 +132,11 @@ export function divisionMatches(ctpDivision: string | null | undefined, playerDi
   return ctp === player;
 }
 
+function laterClaim(claim: CtpConfirmedClaim, best: { readonly at: string; readonly seq: number }): boolean {
+  if (claim.at !== best.at) return claim.at > best.at;
+  return (claim.seq ?? 0) > best.seq;
+}
+
 export function agreedNominee(
   votes: Record<string, number> | undefined,
   card: readonly { index: number }[],
@@ -144,12 +152,12 @@ export function agreedNominee(
 }
 
 export function currentCtpLeader(state: CtpLiveState, players: readonly PlayerState[]): CtpLeader | null {
-  let best: { at: string; playerIndex: number; cardId: string | null } | null = null;
+  let best: { at: string; seq: number; playerIndex: number; cardId: string | null } | null = null;
   for (const [key, claim] of Object.entries(state.confirmed)) {
     const cardId = key === "null" ? null : key;
     const card = activeCardPlayers(players, cardId);
     if (agreedNominee(state.votes[key], card) !== claim.playerIndex) continue;
-    if (!best || claim.at > best.at) best = { at: claim.at, playerIndex: claim.playerIndex, cardId };
+    if (!best || laterClaim(claim, best)) best = { at: claim.at, seq: claim.seq ?? 0, playerIndex: claim.playerIndex, cardId };
   }
   if (!best) return null;
   const player = players[best.playerIndex];
@@ -276,7 +284,9 @@ export function recordCtpVote(input: RecordCtpVoteInput): RecordCtpVoteResult {
   if (nomineeIndex != null) {
     const previous = state.confirmed[card];
     if (!previous || previous.playerIndex !== nomineeIndex) {
-      state.confirmed = { ...state.confirmed, [card]: { playerIndex: nomineeIndex, at: input.now } };
+      const seq = (state.nextSeq ?? 0) + 1;
+      state.nextSeq = seq;
+      state.confirmed = { ...state.confirmed, [card]: { playerIndex: nomineeIndex, at: input.now, seq } };
     }
   }
 

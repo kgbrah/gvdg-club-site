@@ -30,6 +30,25 @@ function withPrimaryLayout(input: db.EventInput, layoutId: number): db.EventInpu
   };
 }
 
+const LIVE_CTP_PRUNE_ATTEMPTS = 3;
+
+async function pruneLiveCtpClaim(env: Env, eventId: number, ctpId: number): Promise<boolean> {
+  for (let attempt = 0; attempt < LIVE_CTP_PRUNE_ATTEMPTS; attempt++) {
+    try {
+      const stub = env.LIVE.get(env.LIVE.idFromName("event:" + eventId));
+      const res = await stub.fetch("https://do/ctp-forget", {
+        method: "POST",
+        body: JSON.stringify({ ctpId }),
+        headers: { "X-Auth-Admin": "true" },
+      });
+      if (res.ok) return true;
+    } catch {
+      // Retry transient Durable Object failures before refusing the delete.
+    }
+  }
+  return false;
+}
+
 export async function handleAdminEvents(
   request: Request,
   env: Env,
@@ -148,19 +167,13 @@ export async function handleAdminEvents(
       return row ? json({ ctp: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
     }
     if (method === "DELETE" && cid != null && seg[5] == null) {
-      await db.deleteCtp(env.DB, id, cid);
+      // Drop the live claim first. If prune fails, D1 still has the CTP so the admin can retry
+      // without snapshots advertising a deleted award.
       if ((await db.getEventStatus(env.DB, id)) === "live") {
-        try {
-          const stub = env.LIVE.get(env.LIVE.idFromName("event:" + id));
-          await stub.fetch("https://do/ctp-forget", {
-            method: "POST",
-            body: JSON.stringify({ ctpId: cid }),
-            headers: { "X-Auth-Admin": "true" },
-          });
-        } catch {
-          // D1 already dropped the CTP; a missed DO prune is cleaned up on the next vote 404.
-        }
+        const pruned = await pruneLiveCtpClaim(env, id, cid);
+        if (!pruned) return json({ error: "live_ctp_prune_failed" }, 502, origin);
       }
+      await db.deleteCtp(env.DB, id, cid);
       return json({ ok: true }, 200, origin);
     }
   }

@@ -9,6 +9,7 @@ import {
   normalizeAcePot,
   normalizeCtp,
   withLiveCtpLeaders,
+  unawardedLiveCtps,
 } from "../src/shared/live-pots-model.js";
 
 test("dollarsFromCents formats whole and fractional amounts", () => {
@@ -93,4 +94,17 @@ test("withLiveCtpLeaders fills an empty winner from the live card claim", () => 
   );
   assert.equal(cleared[0].winner_name, "");
   assert.equal(cleared[0].live_leader, false);
+});
+
+test("unawardedLiveCtps hides a live leader after an admin records a winner", () => {
+  const live = [
+    { id: 9, hole: 7, leaderName: "Ann" },
+    { id: 10, hole: 8, leaderName: "Cy" },
+  ];
+  const visible = unawardedLiveCtps(live, [
+    { id: 9, hole: 7, winner_name: "Bo" },
+    { id: 10, hole: 8, winner_name: "" },
+  ]);
+  assert.deepEqual(visible.map((ctp) => ctp.id), [10]);
+  assert.equal(unawardedLiveCtps(live, [{ id: 9, winner_name: "Ann", live_leader: true }]).length, 2);
 });

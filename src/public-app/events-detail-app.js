@@ -9,6 +9,7 @@ import {
 } from "../shared/events-model.js";
 import { WeatherStrip } from "../score-app/weather-strip.js";
 import { liveWatchHref } from "../shared/live-watch.js";
+import { unawardedLiveCtps } from "../shared/live-pots-model.js";
 import { displayMatchStatus } from "../shared/match-status.js";
 import { TeeSignSvg } from "../shared/tee-sign-svg.js";
 import { UDiscExportDetails, udiscDeepLink } from "../shared/udisc-export.js";
@@ -202,6 +203,7 @@ function LiveStandings({ snapshot }) {
 
 function LivePanel({ data }) {
   const snapshot = data.liveSnapshot || null;
+  const liveCtps = unawardedLiveCtps(snapshot && snapshot.liveCtps, data.extras && data.extras.ctps);
   return h(React.Fragment, null, [
     h("div", { className: "live-banner", key: "banner" }, [
       h("span", { className: "live-dot", key: "dot" }),
@@ -213,8 +215,8 @@ function LivePanel({ data }) {
     snapshot && snapshot.weather
       ? h("div", { className: "live-weather", key: "weather" }, h(WeatherStrip, { title: "Round weather", weather: snapshot.weather }))
       : null,
-    snapshot && Array.isArray(snapshot.liveCtps) && snapshot.liveCtps.some((ctp) => ctp && ctp.leaderName)
-      ? h("ul", { className: "extras-list", key: "live-ctps" }, snapshot.liveCtps.filter((ctp) => ctp && ctp.leaderName).map((ctp) =>
+    liveCtps.length
+      ? h("ul", { className: "extras-list", key: "live-ctps" }, liveCtps.map((ctp) =>
         h("li", { key: ctp.id || ctp.hole }, `CTP hole ${ctp.hole}${ctp.division ? ` (${ctp.division})` : ""} · Leader: ${ctp.leaderName}`),
       ))
       : null,
