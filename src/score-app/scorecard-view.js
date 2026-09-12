@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Eye, Settings2, Share2, UserPlus } from "luc
 import { HoleMap } from "../shared/hole-map.js";
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
+import { nextHoleScore } from "./score-view-model.js";
 
 const h = React.createElement;
 
@@ -125,8 +126,8 @@ function ScorecardOwner(props) {
 function ScoreRow(props) {
   const row = props.row;
   const current = row.currentScore;
-  const baseMinus = current == null ? props.hole.par : current;
-  const basePlus = current == null ? props.hole.par - 1 : current;
+  const nextMinus = nextHoleScore(current, props.hole.par, "minus");
+  const nextPlus = nextHoleScore(current, props.hole.par, "plus");
   return h("div", { className: "prow" + (row.conflictText ? " conflict" : ""), key: row.key }, [
     h("div", { className: "pinfo", key: "info" }, [
       h("div", { className: "pname", key: "name" }, row.label),
@@ -137,10 +138,11 @@ function ScoreRow(props) {
       h(
         "button",
         {
-          "aria-label": `Decrease ${row.label} on hole ${props.hole.hole}`,
+          "aria-label": nextMinus == null ? `Clear ${row.label} on hole ${props.hole.hole}` : `Decrease ${row.label} on hole ${props.hole.hole}`,
           className: "minus",
+          disabled: current == null && nextMinus == null,
           type: "button",
-          onClick: () => props.onScore(row.source, props.hole.hole, Math.max(1, baseMinus - 1)),
+          onClick: () => props.onScore(row.source, props.hole.hole, nextMinus),
         },
         "-",
       ),
@@ -154,7 +156,7 @@ function ScoreRow(props) {
           "aria-label": `Increase ${row.label} on hole ${props.hole.hole}`,
           className: "plus",
           type: "button",
-          onClick: () => props.onScore(row.source, props.hole.hole, Math.min(30, basePlus + 1)),
+          onClick: () => props.onScore(row.source, props.hole.hole, nextPlus),
         },
         "+",
       ),

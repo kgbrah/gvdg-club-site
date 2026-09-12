@@ -261,12 +261,13 @@ export function startScoreApp(options) {
             const sIdx = currentScorerIndex();
             cm.scorecards = cm.scorecards || {};
             cm.scorecards[hole] = Object.assign({}, cm.scorecards[hole]);
-            if (sIdx != null) cm.scorecards[hole]['player:' + sIdx] = strokes;
-            // Also reflect it as this card's score so the player's own Thru/Total/To-par bar and the
-            // hole-grid "done" dots update immediately (and offline). mergeFromSnap re-blanks it after the
-            // round-trip if it's a genuine conflict; the stepper reads the per-scorer vote first regardless.
+            if (sIdx != null) {
+                if (strokes == null) delete cm.scorecards[hole]['player:' + sIdx];
+                else cm.scorecards[hole]['player:' + sIdx] = strokes;
+            }
             cm.scores = cm.scores || {};
-            cm.scores[hole] = strokes;
+            if (strokes == null) delete cm.scores[hole];
+            else cm.scores[hole] = strokes;
         }
         function setLocalRow(row, hole, strokes) {
             (row.playerIndexes || []).forEach(function (index) { setLocal(index, hole, strokes); });

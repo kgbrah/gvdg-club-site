@@ -25,6 +25,16 @@ export function isMatchplayScoring(state) {
   return Boolean(state.roundConfig && state.roundConfig.scoringStyle === "matchplay");
 }
 
+export function nextHoleScore(current, par, direction) {
+  if (direction === "plus") {
+    if (current == null) return typeof par === "number" ? par : 3;
+    return Math.min(30, current + 1);
+  }
+  if (current == null) return Math.max(1, (typeof par === "number" ? par : 3) - 1);
+  if (current <= 1) return null;
+  return current - 1;
+}
+
 export function strokeLabel(strokes, par) {
   if (typeof strokes !== "number" || typeof par !== "number") return null;
   const delta = strokes - par;

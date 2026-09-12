@@ -498,6 +498,8 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(main, /ScorecardView/);
   assert.match(scorecard, /function ScorecardView\(props\)/);
   assert.match(scorecard, /function ScoreRow\(props\)/);
+  assert.match(scorecard, /nextHoleScore/);
+  assert.match(scorecard, /Clear \$\{row\.label\} on hole/);
   assert.match(scorecard, /function HoleGrid\(props\)/);
   assert.match(scorecard, /export function ScorecardView\(props\)/);
   assert.match(scorecard, /WeatherStrip/);
@@ -537,6 +539,17 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.doesNotMatch(legacy, /const grid = el\('div', 'holegrid'\)/);
   assert.doesNotMatch(legacy, /document\.createElement\('select'\)/);
   assert.doesNotMatch(scorecard, /createRoot|getElementById\("app"\)|replaceChildren/);
+});
+
+test('stepper minus from 1 clears a hole back to unstarted', async () => {
+  const { nextHoleScore } = await import(new URL('../src/score-app/score-view-model.js', import.meta.url));
+  assert.equal(nextHoleScore(null, 3, 'plus'), 3);
+  assert.equal(nextHoleScore(null, 3, 'minus'), 2);
+  assert.equal(nextHoleScore(2, 3, 'minus'), 1);
+  assert.equal(nextHoleScore(1, 3, 'minus'), null);
+  assert.equal(nextHoleScore(1, 3, 'plus'), 2);
+  const controller = scoreControllerSource();
+  assert.match(controller, /if \(strokes == null\) delete cm\.scores\[hole\]/);
 });
 
 test('live CTP and ace pot strip uses public event reads without scoring writes', () => {

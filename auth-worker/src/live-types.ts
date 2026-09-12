@@ -69,7 +69,7 @@ export interface ScoreBody {
   name?: string;
   scorerIndex?: number | null;
   hole: number;
-  strokes: number;
+  strokes: number | null;
 }
 
 export interface CtpVoteBody {
