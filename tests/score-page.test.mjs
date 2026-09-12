@@ -376,13 +376,33 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
       ],
     },
   }), 'Match: Red 1 up');
+  assert.equal(matchStatusText({
+    ...state,
+    roundConfig: { groupFormat: 'singles', scoringStyle: 'matchplay' },
+    snap: {
+      standings: [
+        { targetId: 'player:0', name: 'Alex Schwarga', scoringGroup: { label: 'Blue' }, match: { status: 'won 2&1', outcome: 'lost' } },
+        { targetId: 'player:1', name: 'TJ Braley', scoringGroup: { label: 'Red' }, match: { status: 'won 2&1', outcome: 'won' } },
+      ],
+    },
+  }), 'Match: Red won 2&1');
+  assert.equal(matchStatusText({
+    ...state,
+    roundConfig: { groupFormat: 'singles', scoringStyle: 'matchplay' },
+    snap: {
+      standings: [
+        { targetId: 'player:0', name: 'Alex Schwarga', scoringGroup: { label: 'Blue' }, match: { status: '1 up', outcome: 'trailing' } },
+      ],
+    },
+  }), 'Match: Blue 1 down');
 });
 
 test('player leaderboard renders matchplay and pair labels without primary to-par ranking', () => {
   const source = scoreLeaderboardSource();
   assert.match(source, /const resultHead = isMatchplay \? "Match" : "To par"/);
   assert.ok(source.includes('standing.members.join(" / ")'));
-  assert.match(source, /standing\.match && standing\.match\.status/);
+  assert.match(source, /from "\.\.\/shared\/match-status\.js"/);
+  assert.match(source, /displayMatchStatus\(standing\.match\)/);
   assert.match(readFileSync('src/score-app/score-controller.js', 'utf8'), /Pair changes are blocked after scoring starts/);
 });
 

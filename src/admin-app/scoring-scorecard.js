@@ -1,6 +1,7 @@
 import React from "react";
 
 import { conflictForRow, conflictTitle, isDoubles, isMatchplay, rowTotal, scoreForRow, scoreRows, toPar } from "./scoring-model.js";
+import { displayMatchStatus } from "../shared/match-status.js";
 
 const h = React.createElement;
 
@@ -100,7 +101,7 @@ export function AdminScoringLeaderboard({ snapshot }) {
         h("td", { className: "lb-name", key: "name" }, `${standing.name || "Player"}${standing.scoringGroup && standing.scoringGroup.label && standing.scoringGroup.label !== standing.name ? ` · ${standing.scoringGroup.label}` : ""}${Array.isArray(standing.members) && standing.members.length && standing.targetType === "pair" ? ` - ${standing.members.join(" / ")}` : ""}`),
         h("td", { key: "thru" }, standing.thru ? String(standing.thru) : "N/A"),
         h("td", { key: "total" }, standing.thru ? String(standing.total) : "N/A"),
-        h("td", { key: "final" }, isMatchplay(snap) ? standing.match?.status || "AS" : standing.thru ? toPar(standing.toPar) : "N/A"),
+        h("td", { key: "final" }, isMatchplay(snap) ? displayMatchStatus(standing.match) : standing.thru ? toPar(standing.toPar) : "N/A"),
       ]))),
     ])) : h("div", { key: "empty", role: "status" }, "No scores yet."),
   ]);

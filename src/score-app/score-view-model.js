@@ -1,4 +1,5 @@
 import { aceHint, buildLivePots } from "../shared/live-pots-model.js";
+import { displayMatchStatus } from "../shared/match-status.js";
 
 export function relClass(delta) {
   return delta < 0 ? "under" : delta > 0 ? "over" : "even";
@@ -102,7 +103,7 @@ export function matchStatusText(state) {
   if (!withMatch || !withMatch.match) return "";
   if (withMatch.match.outcome === "draw") return "Match: AS";
   const team = withMatch.scoringGroup && withMatch.scoringGroup.label;
-  const status = withMatch.match.status;
+  const status = displayMatchStatus(withMatch.match);
   return "Match: " + (team && String(team) !== String(withMatch.name) ? team + " " + status : status);
 }
 

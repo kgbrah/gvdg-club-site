@@ -2,6 +2,7 @@ import React from "react";
 
 import { requestJson } from "./api.js";
 import { formatRatingDate, formatToPar, plural } from "./format.js";
+import { displayMatchStatus } from "../shared/match-status.js";
 import { UDiscExportDetails } from "../shared/udisc-export.js";
 
 const h = React.createElement;
@@ -35,11 +36,7 @@ function matchSummary(round) {
   if (!match) return null;
   const scoringGroup = parseObject(round.scoring_group);
   const team = scoringGroup?.label ? `${scoringGroup.label} - ` : "";
-  const raw = String(match.status || "");
-  const status = match.outcome === "lost" || match.outcome === "trailing"
-    ? raw.replace(/^won /, "lost ").replace(/^(\d+) up\b/, "$1 down")
-    : raw;
-  return `${team}${status}`;
+  return `${team}${displayMatchStatus(match)}`;
 }
 
 function roundMeta(round) {

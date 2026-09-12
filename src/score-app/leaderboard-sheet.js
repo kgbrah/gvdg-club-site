@@ -1,5 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
+import { displayMatchStatus } from "../shared/match-status.js";
 import { UDiscExportDetails } from "../shared/udisc-export.js";
 
 const h = React.createElement;
@@ -30,7 +31,7 @@ export function LeaderboardTable({ isDoubles, isMatchplay, relClass, relText, st
         h("td", { className: "name", key: "name" }, standingName(standing)),
         h("td", { key: "thru" }, String(standing.thru || 0)),
         isMatchplay
-          ? h("td", { key: "match" }, standing.match && standing.match.status ? standing.match.status : "AS")
+          ? h("td", { key: "match" }, displayMatchStatus(standing.match))
           : h("td", { className: "tp " + relClass(standing.toPar || 0), key: "toPar" }, standing.thru ? relText(standing.toPar || 0) : "E"),
       ]),
     )),
