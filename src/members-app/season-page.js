@@ -3,6 +3,7 @@ import React from "react";
 import { TOKEN_KEY, requestJson, storageGet } from "./api.js";
 import { applyOfficialRyderTally } from "../public-app/ryder-board-merge.js";
 import { fetchMergedRyderData } from "../shared/ryder-cup-data.js";
+import { ActiveStandingsPanel } from "./activity-panels.js";
 import { ClubRatings } from "./club-ratings.js";
 import { selectDashboardTab } from "./dashboard-shell.js";
 import { formatEventDay, formatToPar } from "./format.js";
@@ -149,6 +150,7 @@ export function MemberSeasonPage() {
       h(StatTile, { label: "Best finish", value: page.bestFinish == null ? "-" : placeLabel(page.bestFinish), key: "best" }),
       h(StatTile, { label: "Club rating", value: page.clubRating == null ? "-" : String(page.clubRating), key: "rating" }),
     ]) : null,
+    h(ActiveStandingsPanel, { key: "active-standings" }),
     page?.standings.length
       ? h("div", { key: "standings" }, [
         h("h4", { className: "dash-subtitle", key: "title" }, "Your leagues"),
@@ -173,7 +175,7 @@ export function MemberSeasonPage() {
         ? page.results.map((row, index) => h(ResultRow, { row, key: row.id || `${row.event_id}-${index}` }))
         : h("p", { className: "dash-note", key: "empty" }, "No finalized club rounds this season yet."),
     ]) : null,
-    h(PdgaDashboard, { pdgaNo: context.pdgaNo, state: pdgaState, compact: true, key: "pdga" }),
+    h(PdgaDashboard, { pdgaNo: context.pdgaNo, state: pdgaState, key: "pdga" }),
     h(ClubRatings, { token, key: "ratings" }),
   ]);
 }

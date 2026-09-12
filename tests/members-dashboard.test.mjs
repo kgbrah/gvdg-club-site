@@ -149,6 +149,7 @@ test('member dashboard React registration section stays available for logged-in 
 test('overview dashboard is a compact home and keeps registration on Events', () => {
   const overview = readFileSync('src/members-app/overview-dashboard.js', 'utf8');
   const more = readFileSync('src/members-app/more-page.js', 'utf8');
+  const activity = readFileSync('src/members-app/activity-panels.js', 'utf8');
   const shell = readFileSync('src/members-app/dashboard-shell.js', 'utf8');
   const html = readFileSync('gvdg-members.html', 'utf8');
   assert.doesNotMatch(overview, /MemberRegistrationPanel/);
@@ -159,6 +160,9 @@ test('overview dashboard is a compact home and keeps registration on Events', ()
   assert.match(more, /Club directory/);
   assert.match(more, /Message board/);
   assert.match(more, /Tee signs/);
+  assert.match(more, /href: "score.html"/);
+  assert.match(more, /WalletPanel/);
+  assert.match(activity, /href: live \? live.href : "score.html"/);
   assert.match(shell, /label: "Home"/);
   assert.match(shell, /player-app-nav/);
   assert.match(html, /body\[data-member-dashboard-tab="more"\] #playerMore/);
@@ -212,3 +216,29 @@ test('member dashboard registration cards post pair label only for doubles event
   assert.match(events, /"data-register-pair": "team"/);
   assert.match(events, /body\.team = team\.trim\(\)/);
 });
+
+test('more page mounts a player theme builder', () => {
+  const more = readFileSync('src/members-app/more-page.js', 'utf8');
+  const theme = readFileSync('src/members-app/dashboard-theme.js', 'utf8');
+  const html = readFileSync('gvdg-members.html', 'utf8');
+  const worker = readFileSync('auth-worker/src/index.ts', 'utf8');
+  assert.match(more, /DashboardThemeBuilder/);
+  assert.match(theme, /\/me\/dashboard-theme/);
+  assert.match(theme, /Apply Theme/);
+  assert.match(theme, /"Dashboard theme"/);
+  assert.match(theme, /Cloud save failed/);
+  assert.match(theme, /editedRef/);
+  assert.match(theme, /paletteEditedRef/);
+  assert.match(theme, /persistGen/);
+  assert.match(theme, /pendingTheme/);
+  assert.doesNotMatch(theme, /Aether|AETHER/);
+  assert.match(html, /#members\.player-theme-active/);
+  assert.match(html, /\.dash-theme-palette/);
+  assert.match(html, /\.dash-theme-preset-grid/);
+  assert.match(html, /\.dash-theme-header/);
+  assert.match(html, /\.dash-theme-sidebar/);
+  assert.match(html, /\.dash-theme-actionbar/);
+  assert.doesNotMatch(html, /\.aether-/);
+  assert.match(worker, /\/me\/dashboard-theme/);
+});
+

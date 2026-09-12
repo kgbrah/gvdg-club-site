@@ -44,6 +44,9 @@ function HomeHero({ context, pdgaState }) {
     h("div", { className: "player-who", key: "who" }, [
       h("h1", { key: "name" }, context.name || "Member"),
       meta ? h("p", { key: "meta" }, meta) : null,
+      pdgaState.status === "empty" ? h("p", { key: "pdga-empty" }, "No PDGA # is linked yet.") : null,
+      pdgaState.status === "missing" ? h("p", { key: "pdga-missing" }, "PDGA stats have not synced yet.") : null,
+      pdgaState.status === "error" ? h("p", { key: "pdga-error" }, "Could not load PDGA stats.") : null,
     ]),
     h("div", {
       className: "player-rating-pill",
@@ -115,7 +118,11 @@ function LastRoundCard({ token }) {
   return h("section", { className: "player-card", "data-react-home-last-round": state.status }, [
     h("h3", { key: "title" }, "Last club round"),
     row
-      ? h("div", { className: "player-list-row", key: "row" }, [
+      ? h("a", {
+        className: "player-list-row",
+        href: row.event_id != null ? `events.html#event/${encodeURIComponent(row.event_id)}` : "events.html",
+        key: "row",
+      }, [
         h("div", { key: "copy" }, [
           h("div", { className: "player-event-name", key: "name" }, row.event_name || "Club event"),
           h("div", { className: "player-card-meta", key: "meta" }, [formatEventDay(row.event_date), row.place != null ? "Competitive" : null].filter(Boolean).join(" · ")),

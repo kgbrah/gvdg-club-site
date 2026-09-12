@@ -1,6 +1,9 @@
 import React from "react";
 
+import { WalletPanel } from "./activity-panels.js";
+import { TOKEN_KEY, storageGet } from "./api.js";
 import { selectDashboardTab, requestLogout } from "./dashboard-shell.js";
+import { DashboardThemeBuilder } from "./dashboard-theme.js";
 
 const h = React.createElement;
 const PASSKEY_STATE_EVENT = "gvdg:member-passkey-state";
@@ -62,24 +65,18 @@ function MoreLink({ tab, label }) {
 }
 
 export function MemberMorePage() {
+  const token = storageGet(TOKEN_KEY);
   return h("div", { className: "react-more-page", "data-react-more-page": "ready" }, [
     h("div", { className: "player-more-grid", key: "links" }, [
       h(MoreLink, { tab: "club", label: "Club directory", key: "club" }),
       h(MoreLink, { tab: "board", label: "Message board", key: "board" }),
       h(MoreLink, { tab: "tee", label: "Tee signs", key: "tee" }),
       h("a", { className: "player-more-item", href: "pro-shop.html", key: "shop" }, "Pro shop"),
+      h("a", { className: "player-more-item", href: "score.html", key: "score" }, "Live scoring"),
     ]),
+    h(WalletPanel, { token, key: "wallet" }),
     h(AccountTools, { key: "account-tools" }),
-    h("section", { className: "player-card", key: "theme" }, [
-      h("h3", { key: "title" }, "Theme tokens"),
-      h("p", { className: "player-card-meta", key: "copy" }, "Wired to tokens.css. The in-flight theme builder can restyle this app without a layout rewrite. Use the header toggle for light / dark."),
-      h("div", { className: "player-theme-grid", key: "swatches" }, [
-        h("div", { className: "player-swatch", key: "primary" }, [h("i", { className: "player-swatch-primary", key: "i" }), h("label", { key: "l" }, "Primary")]),
-        h("div", { className: "player-swatch", key: "navy" }, [h("i", { className: "player-swatch-secondary", key: "i" }), h("label", { key: "l" }, "Navy")]),
-        h("div", { className: "player-swatch", key: "green" }, [h("i", { className: "player-swatch-green", key: "i" }), h("label", { key: "l" }, "Green")]),
-        h("div", { className: "player-swatch", key: "gold" }, [h("i", { className: "player-swatch-accent", key: "i" }), h("label", { key: "l" }, "Gold")]),
-      ]),
-    ]),
+    h(DashboardThemeBuilder, { key: "theme" }),
     h("button", {
       className: "player-logout-btn",
       id: "logoutBtn",

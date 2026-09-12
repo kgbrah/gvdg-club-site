@@ -479,7 +479,13 @@
                 .player-stat {
                     background: var(--bg-secondary); border: 1px solid var(--border-color);
                     border-radius: 14px; padding: 0.8rem 0.85rem;
+                    text-decoration: none; color: inherit; display: block;
                 }
+                .player-keep-score-wrap { margin-bottom: 0.75rem; }
+                .player-keep-score-wrap .player-keep-score { margin-bottom: 0.55rem; }
+                .player-keep-score-wrap .player-btn { margin-top: 0.35rem; }
+                .player-more .wallet-panel { margin: 0.85rem 0; }
+                a.player-list-row { text-decoration: none; color: inherit; }
                 .player-stat-k { color: var(--text-muted); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
                 .player-stat-v { font-family: 'Bebas Neue', sans-serif; font-size: 1.7rem; line-height: 1; margin-top: 0.2rem; color: var(--text-primary); }
                 .player-stat-s { color: var(--text-muted); font-size: 0.75rem; margin-top: 0.2rem; }
@@ -583,6 +589,63 @@
                 .react-live-scoring.dash-collapse { margin: 0 0 2rem; }
                 .react-live-scoring > .dash-collapse-summary { margin-bottom: 0; }
                 .react-live-scoring[open] > .dash-collapse-summary { margin-bottom: 1rem; }
+                #members.player-theme-active {
+                    background-image: var(--player-theme-image);
+                    background-size: cover;
+                    background-position: center;
+                    background-repeat: no-repeat;
+                }
+                @media (min-width: 900px) {
+                    #members.player-theme-active { background-attachment: fixed; }
+                }
+                .dash-theme { margin: 0 0 1.25rem; padding: 0; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-secondary); overflow: hidden; }
+                .dash-theme > summary { padding: 0.85rem 1.1rem 0.55rem; }
+                .dash-theme > .dash-note { padding: 0 1.1rem 0.8rem; }
+                .dash-theme-studio { display: grid; border-top: 1px solid var(--border-color); background: var(--bg-primary); }
+                .dash-theme-header { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; justify-content: space-between; padding: 0.65rem 0.9rem; border-bottom: 1px solid var(--border-color); background: var(--bg-tertiary); }
+                .dash-theme-body { display: grid; }
+                @media (min-width: 900px) {
+                    .dash-theme-body { grid-template-columns: minmax(0, 1.45fr) minmax(16.5rem, 0.9fr); }
+                    .dash-theme-sidebar { border-left: 1px solid var(--border-color); max-height: 44rem; overflow: auto; }
+                    .dash-theme-drop, .dash-theme-wallpaper { min-height: 18rem; height: 18rem; }
+                }
+                .dash-theme-main { display: grid; gap: 0.8rem; padding: 0.85rem; align-content: start; }
+                .dash-theme-sidebar { display: grid; gap: 0.85rem; align-content: start; padding: 0.85rem; background: var(--bg-tertiary); }
+                .dash-theme-drop { position: relative; display: grid; place-items: center; min-height: 13rem; border: 1px dashed var(--border-color); border-radius: 10px; background: var(--bg-tertiary); overflow: hidden; cursor: pointer; }
+                .dash-theme-drop.is-dragging,
+                .dash-theme-drop:hover { border-color: var(--primary); }
+                .dash-theme-drop-copy { color: var(--text-muted); font-size: 0.9rem; padding: 1rem; text-align: center; }
+                .dash-theme-wallpaper { width: 100%; height: 13rem; object-fit: cover; display: block; }
+                .dash-theme-file { position: absolute; width: 0.1px; height: 0.1px; opacity: 0; overflow: hidden; }
+                .dash-theme-toggle { display: inline-flex; border: 1px solid var(--border-color); border-radius: 999px; overflow: hidden; background: var(--bg-secondary); }
+                .dash-theme-toggle button { border: 0; background: transparent; color: var(--text-muted); font: inherit; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 0.4rem 0.8rem; min-height: 36px; }
+                .dash-theme-toggle button.is-active { background: var(--primary); color: white; }
+                .dash-theme-field { display: grid; gap: 0.28rem; color: var(--text-muted); font-size: 0.76rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+                .dash-theme-actions { display: flex; flex-wrap: wrap; gap: 0.7rem; align-items: center; }
+                .dash-theme-mode-group { display: grid; gap: 0.4rem; }
+                .dash-theme-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+                .dash-theme-pills button { border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-secondary); border-radius: 999px; font: inherit; font-size: 0.78rem; padding: 0.32rem 0.7rem; min-height: 34px; }
+                .dash-theme-pills button.is-active { border-color: var(--primary); background: var(--primary); color: white; }
+                .dash-theme-palette { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 0.35rem; }
+                .dash-theme-swatch { position: relative; display: grid; place-items: end start; min-height: 2.8rem; padding: 0.2rem 0.28rem; border-radius: 6px; border: 1px solid var(--border-color); overflow: hidden; cursor: pointer; }
+                .dash-theme-swatch input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; border: 0; }
+                .dash-theme-swatch-role { position: relative; z-index: 1; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.04em; color: var(--text-primary); text-shadow: 0 0 4px var(--bg-primary); pointer-events: none; }
+                .dash-theme-empty, .dash-theme-contrast { margin: 0; color: var(--text-muted); font-size: 0.82rem; }
+                .dash-theme-adjust { display: grid; gap: 0.45rem; padding-top: 0.2rem; border-top: 1px solid var(--border-color); }
+                .dash-theme-sliders { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
+                .dash-theme-slider { display: grid; gap: 0.2rem; color: var(--text-muted); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; }
+                .dash-theme-slider-label { display: flex; justify-content: space-between; gap: 0.5rem; }
+                .dash-theme-slider-label em { font-style: normal; color: var(--text-secondary); }
+                .dash-theme-slider input { width: 100%; accent-color: var(--primary); }
+                .dash-theme-presets { display: grid; gap: 0.45rem; padding-top: 0.2rem; border-top: 1px solid var(--border-color); }
+                .dash-theme-preset-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem; }
+                .dash-theme-preset { display: grid; gap: 0.28rem; text-align: left; border: 1px solid var(--border-color); background: var(--bg-secondary); color: inherit; border-radius: 8px; padding: 0.45rem 0.5rem; min-height: 44px; }
+                .dash-theme-preset.is-active { border-color: var(--primary); }
+                .dash-theme-preset-name { font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); }
+                .dash-theme-preset-bar { display: flex; height: 0.7rem; width: 100%; overflow: hidden; border-radius: 999px; }
+                .dash-theme-preset-bar i { flex: 1; display: block; }
+                .dash-theme-actionbar { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; justify-content: space-between; padding: 0.7rem 0.9rem; border-top: 1px solid var(--border-color); background: var(--bg-tertiary); }
+                .dash-theme-apply { margin-left: auto; }
                 .active-standings { margin: 0.25rem 0 1rem; }
                 .dash-standings-card { background: var(--bg-tertiary, rgba(127,127,127,0.06)); border: 1px solid var(--border-color, rgba(127,127,127,0.25)); border-radius: 10px; padding: 0.7rem 0.9rem; margin-bottom: 0.75rem; }
                 .dash-standings-card .dash-subtitle { margin-top: 0; }
