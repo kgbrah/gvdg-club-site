@@ -212,3 +212,20 @@ test('member dashboard registration cards post pair label only for doubles event
   assert.match(events, /"data-register-pair": "team"/);
   assert.match(events, /body\.team = team\.trim\(\)/);
 });
+
+test('more page mounts an Aether-style theme builder', () => {
+  const more = readFileSync('src/members-app/more-page.js', 'utf8');
+  const theme = readFileSync('src/members-app/dashboard-theme.js', 'utf8');
+  const html = readFileSync('gvdg-members.html', 'utf8');
+  const worker = readFileSync('auth-worker/src/index.ts', 'utf8');
+  assert.match(more, /DashboardThemeBuilder/);
+  assert.match(theme, /\/me\/dashboard-theme/);
+  assert.match(theme, /Apply Theme/);
+  assert.match(theme, /Aether for Omarchy/);
+  assert.match(theme, /"Aether theme"/);
+  assert.match(html, /#members\.player-theme-active/);
+  assert.match(html, /\.aether-palette/);
+  assert.match(html, /\.aether-preset-grid/);
+  assert.match(worker, /\/me\/dashboard-theme/);
+});
+

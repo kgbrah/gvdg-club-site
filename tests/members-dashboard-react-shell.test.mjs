@@ -344,6 +344,7 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(seasonModel, /export function buildSeasonPage/);
   assert.match(readFileSync('src/members-app/more-page.js', 'utf8'), /gvdg:member-add-passkey-requested/);
   assert.match(readFileSync('src/members-app/more-page.js', 'utf8'), /gvdg:member-edit-profile-requested/);
+  assert.match(readFileSync('src/members-app/more-page.js', 'utf8'), /DashboardThemeBuilder/);
   assert.match(pdga, /id: "membersReactRatingPanel"/);
   assert.match(pdga, /data-react-pdga-dashboard/);
   assert.match(pdga, /data-react-live-rating/);

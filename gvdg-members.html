@@ -583,6 +583,54 @@
                 .react-live-scoring.dash-collapse { margin: 0 0 2rem; }
                 .react-live-scoring > .dash-collapse-summary { margin-bottom: 0; }
                 .react-live-scoring[open] > .dash-collapse-summary { margin-bottom: 1rem; }
+                #members.player-theme-active {
+                    background-image: var(--player-theme-image);
+                    background-size: cover;
+                    background-position: center;
+                    background-repeat: no-repeat;
+                }
+                @media (min-width: 900px) {
+                    #members.player-theme-active { background-attachment: fixed; }
+                }
+                .aether-theme { margin: 0 0 1.25rem; padding: 1rem 1.1rem; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-secondary); }
+                .aether-studio { display: grid; gap: 0.9rem; }
+                .aether-drop { position: relative; display: grid; place-items: center; min-height: 11rem; border: 1px dashed var(--border-color); border-radius: 10px; background: var(--bg-tertiary); overflow: hidden; cursor: pointer; }
+                .aether-drop.is-dragging,
+                .aether-drop:hover { border-color: var(--primary); }
+                .aether-drop-copy { color: var(--text-muted); font-size: 0.9rem; padding: 1rem; text-align: center; }
+                .aether-wallpaper { width: 100%; height: 11rem; object-fit: cover; display: block; }
+                .aether-file { position: absolute; width: 0.1px; height: 0.1px; opacity: 0; overflow: hidden; }
+                .aether-toolbar { display: flex; flex-wrap: wrap; gap: 0.7rem; align-items: center; justify-content: space-between; }
+                .aether-toggle { display: inline-flex; border: 1px solid var(--border-color); border-radius: 999px; overflow: hidden; background: var(--bg-tertiary); }
+                .aether-toggle button { border: 0; background: transparent; color: var(--text-muted); font: inherit; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 0.4rem 0.8rem; min-height: 36px; }
+                .aether-toggle button.is-active { background: var(--primary); color: var(--bg-primary); }
+                .aether-field { display: grid; gap: 0.28rem; color: var(--text-muted); font-size: 0.76rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+                .aether-actions { display: flex; flex-wrap: wrap; gap: 0.7rem; align-items: center; }
+                .aether-mode-group { display: grid; gap: 0.4rem; }
+                .aether-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+                .aether-pills button { border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-secondary); border-radius: 999px; font: inherit; font-size: 0.78rem; padding: 0.32rem 0.7rem; min-height: 34px; }
+                .aether-pills button.is-active { border-color: var(--primary); background: var(--primary); color: var(--bg-primary); }
+                .aether-palette { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 0.35rem; }
+                .aether-swatch { position: relative; display: grid; place-items: end start; min-height: 2.4rem; padding: 0.2rem 0.28rem; border-radius: 6px; border: 1px solid var(--border-color); overflow: hidden; cursor: pointer; }
+                .aether-swatch input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; border: 0; }
+                .aether-swatch-role { position: relative; z-index: 1; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.04em; color: var(--text-primary); text-shadow: 0 0 4px var(--bg-primary); pointer-events: none; }
+                .aether-contrast { margin: 0; color: var(--text-muted); font-size: 0.82rem; }
+                .aether-fine-tune { border-top: 1px solid var(--border-color); padding-top: 0.7rem; }
+                .aether-fine-tune > summary { cursor: pointer; font-weight: 700; color: var(--secondary-text); }
+                .aether-sliders { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.55rem; margin: 0.75rem 0; }
+                @media (min-width: 640px) { .aether-sliders { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+                .aether-slider { display: grid; gap: 0.2rem; color: var(--text-muted); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; }
+                .aether-slider-label { display: flex; justify-content: space-between; gap: 0.5rem; }
+                .aether-slider-label em { font-style: normal; color: var(--text-secondary); }
+                .aether-slider input { width: 100%; accent-color: var(--primary); }
+                .aether-presets { display: grid; gap: 0.45rem; }
+                .aether-preset-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem; }
+                @media (min-width: 720px) { .aether-preset-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+                .aether-preset { display: grid; gap: 0.28rem; text-align: left; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: inherit; border-radius: 8px; padding: 0.45rem 0.5rem; min-height: 44px; }
+                .aether-preset.is-active { border-color: var(--primary); }
+                .aether-preset-name { font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); }
+                .aether-preset-bar { display: flex; height: 0.7rem; width: 100%; overflow: hidden; border-radius: 999px; }
+                .aether-preset-bar i { flex: 1; display: block; }
                 .active-standings { margin: 0.25rem 0 1rem; }
                 .dash-standings-card { background: var(--bg-tertiary, rgba(127,127,127,0.06)); border: 1px solid var(--border-color, rgba(127,127,127,0.25)); border-radius: 10px; padding: 0.7rem 0.9rem; margin-bottom: 0.75rem; }
                 .dash-standings-card .dash-subtitle { margin-top: 0; }
