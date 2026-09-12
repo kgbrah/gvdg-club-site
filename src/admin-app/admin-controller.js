@@ -806,9 +806,13 @@ export function startAdminController() {
         function setAdminRegistrationMemberOptionsState(state) {
             window.dispatchEvent(new CustomEvent('gvdg:admin-registration-member-options', { detail: state }));
         }
+        function setAdminRegistrationClubMembersState(state) {
+            window.dispatchEvent(new CustomEvent('gvdg:admin-registration-members-list', { detail: state }));
+        }
         function rgClearSelectedEventState() {
             setAdminRegistrationRosterState({ status: 'ready', registrations: [], manualPlayers: [] });
             setAdminRegistrationMemberOptionsState({ status: 'ready', options: [] });
+            setAdminRegistrationClubMembersState({ status: 'ready', members: [] });
             setAdminRegistrationCtpsState({ status: 'ready', ctps: [] });
             setAdminRegistrationCreditsState({ status: 'ready', payouts: [] });
             setAdminRegistrationAcePotState({ status: 'ready', acePot: null });
@@ -855,6 +859,7 @@ export function startAdminController() {
             }
             setAdminRegistrationControlsState({ selectedEventId: rgEventId, configStatus, config: cfg });
             rgLoadRoster();
+            rgLoadMembers();
             rgLoadCtps();
             rgLoadCredits();
             rgLoadAcePot();
@@ -883,6 +888,19 @@ export function startAdminController() {
             const memberOptions = regs.filter((rg) => rg.member_id).map((rg) => ({ value: rg.member_id, label: rg.name || rg.member_id }));
             setAdminRegistrationMemberOptionsState({ status: ok ? 'ready' : 'error', options: memberOptions });
             setAdminRegistrationRosterState({ status: ok ? 'ready' : 'error', registrations: regs, manualPlayers: manual });
+        }
+        async function rgLoadMembers() {
+            setAdminRegistrationClubMembersState({ status: 'loading', members: [] });
+            let members = [];
+            let ok = true;
+            try {
+                const r = await adminApi('/admin/members');
+                if (!r.ok) throw new Error('members_failed');
+                members = (await r.json()).members || [];
+            } catch (e) {
+                ok = false;
+            }
+            setAdminRegistrationClubMembersState({ status: ok ? 'ready' : 'error', members });
         }
         function setAdminRegistrationRosterState(state) {
             window.dispatchEvent(new CustomEvent('gvdg:admin-registration-roster', { detail: state }));
@@ -916,6 +934,43 @@ export function startAdminController() {
             } else {
                 adminMsg('Add player failed (' + r.status + ')', false);
                 window.dispatchEvent(new CustomEvent('gvdg:admin-registration-manual-player-add-result', { detail: { ok: false, requestId } }));
+            }
+        }
+        async function rgAddMembersFromReact(detail) {
+            const requestId = detail.requestId;
+            if (!requestId) return;
+            if (!rgEventId) {
+                adminMsg('Select an event first', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-registration-members-add-result', { detail: { ok: false, requestId } }));
+                return;
+            }
+            const body = detail.body || {};
+            const ids = Array.isArray(body.member_ids) ? body.member_ids : [];
+            if (detail.valid !== true || !ids.length) {
+                adminMsg('Select at least one member', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-registration-members-add-result', { detail: { ok: false, requestId } }));
+                return;
+            }
+            let r;
+            try {
+                r = await adminApi('/admin/events/' + rgEventId + '/registrations', { method: 'POST', body });
+            } catch (e) {
+                adminMsg('Add members failed', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-registration-members-add-result', { detail: { ok: false, requestId } }));
+                return;
+            }
+            if (r.ok) {
+                const data = await r.json().catch(() => ({}));
+                const added = Array.isArray(data.added) ? data.added.length : 0;
+                const skipped = Array.isArray(data.skipped) ? data.skipped.length : 0;
+                let msg = added ? ('Added ' + added + ' member' + (added === 1 ? '' : 's')) : 'No members added';
+                if (skipped) msg += ' (' + skipped + ' skipped)';
+                adminMsg(msg, added > 0);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-registration-members-add-result', { detail: { ok: true, requestId, added, skipped } }));
+                rgLoadRoster();
+            } else {
+                adminMsg('Add members failed (' + r.status + ')', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-registration-members-add-result', { detail: { ok: false, requestId } }));
             }
         }
         async function rgRemoveManualPlayer(player) {
@@ -1292,6 +1347,9 @@ export function startAdminController() {
             });
             window.addEventListener('gvdg:admin-registration-manual-player-add-request', async (event) => {
                 await rgAddManualPlayerFromReact(event.detail || {});
+            });
+            window.addEventListener('gvdg:admin-registration-members-add-request', async (event) => {
+                await rgAddMembersFromReact(event.detail || {});
             });
             window.addEventListener('gvdg:admin-registration-ctp-winner-request', async (event) => {
                 const detail = event.detail || {};

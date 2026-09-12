@@ -21,6 +21,29 @@ function shuffle<T>(arr: T[]): T[] {
 
 const hasField = (body: Record<string, unknown>, field: string): boolean => Object.prototype.hasOwnProperty.call(body, field);
 
+function uniqueMemberIds(raw: unknown): { ids: string[]; error: "invalid_members" | "too_many_members" | null } {
+  if (!Array.isArray(raw)) return { ids: [], error: "invalid_members" };
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const id = asStr(item, 64);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+  if (!ids.length) return { ids: [], error: "invalid_members" };
+  // Stay under Workers Free's 50 D1 queries/invocation even if each batch statement counts:
+  // status + existing roster + N inserts + final roster. 40 leaves headroom.
+  if (ids.length > 40) return { ids: [], error: "too_many_members" };
+  return { ids, error: null };
+}
+
+function registrationAddonsJson(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const addons = raw as Record<string, unknown>;
+  return JSON.stringify({ ctp: !!addons.ctp, ace: !!addons.ace });
+}
+
 function withPrimaryLayout(input: db.EventInput, layoutId: number): db.EventInput {
   if (!input.event_courses?.length) return { ...input, layout_id: layoutId };
   return {
@@ -93,6 +116,64 @@ export async function handleAdminEvents(
   }
   if (seg[3] === "registrations" && id != null) {
     if (method === "GET" && seg[4] == null) return json({ registrations: await db.listRegistrations(env.DB, id) }, 200, origin);
+    if (method === "POST" && seg[4] == null) {
+      const b = (await readJson(request)) ?? {};
+      const parsed = uniqueMemberIds(b.member_ids);
+      if (parsed.error) return json({ error: parsed.error }, 400, origin);
+      const status = await db.getEventStatus(env.DB, id);
+      if (status == null) return json({ error: "not_found" }, 404, origin);
+      // Live scoring snapshots the roster into the Durable Object at start. Adding D1
+      // registrations after that would leave the member with no live card. Cash signup
+      // is for scheduled events; once live, add a player on the scoring card instead.
+      if (status !== "scheduled") return json({ error: "event_not_open" }, 403, origin);
+      const division = asStr(b.division, 60);
+      const team = asStr(b.team, 40);
+      const addons = registrationAddonsJson(b.addons);
+      const paid = b.paid_entry === true ? 1 : 0;
+      const existing = (await db.listRegistrations(env.DB, id)) as { id?: number; member_id?: string | null; name?: string | null }[];
+      const registered = new Set(existing.map((row) => String(row.member_id || "")).filter(Boolean));
+      const added: { id: number; member_id: string; name: string }[] = [];
+      const skipped: { member_id: string; reason: string }[] = [];
+      const pending: { member_id: string; name: string }[] = [];
+      for (const memberId of parsed.ids) {
+        if (registered.has(memberId)) {
+          skipped.push({ member_id: memberId, reason: "already_registered" });
+          continue;
+        }
+        const member = await getMember(env.ROSTER, memberId);
+        if (!member) {
+          skipped.push({ member_id: memberId, reason: "not_found" });
+          continue;
+        }
+        pending.push({ member_id: memberId, name: member.name });
+      }
+      if (pending.length) {
+        await db.runBatch(
+          env.DB,
+          pending.map((row) =>
+            db.registerMemberStmt(env.DB, {
+              event_id: id,
+              member_id: row.member_id,
+              name: row.name,
+              division,
+              team,
+              addons,
+              paid_entry: paid,
+            }),
+          ),
+        );
+      }
+      const registrations = pending.length
+        ? ((await db.listRegistrations(env.DB, id)) as { id?: number; member_id?: string | null; name?: string | null }[])
+        : existing;
+      const after = new Map(registrations.map((row) => [String(row.member_id || ""), row]));
+      for (const row of pending) {
+        const created = after.get(row.member_id);
+        if (created?.id != null) added.push({ id: created.id, member_id: row.member_id, name: row.name });
+        else skipped.push({ member_id: row.member_id, reason: "failed" });
+      }
+      return json({ registrations, added, skipped }, 200, origin);
+    }
     if (method === "PATCH" && seg[4] != null) {
       const rid = asInt(seg[4]);
       if (rid == null) return json({ error: "not_found" }, 404, origin);

@@ -51,6 +51,7 @@ test('admin registration panel owns selector, settings, assignments, CTP add, an
   assert.match(panel, /export function AdminRegistrationPanel/);
   assert.match(panel, /AdminRegistrationControls/);
   assert.match(panel, /AdminRegistrationRoster/);
+  assert.match(panel, /AdminRegistrationMemberPicker/);
   assert.match(panel, /AdminRegistrationManualPlayerForm/);
   assert.match(panel, /AdminRegistrationCtpsList/);
   assert.match(panel, /AdminRegistrationCreditsList/);
