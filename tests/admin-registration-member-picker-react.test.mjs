@@ -51,10 +51,17 @@ test('admin registration member picker adds club members as registrations from r
 
   assert.match(panel, /import \{ AdminRegistrationMemberPicker \} from "\.\/registration-member-picker\.js"/);
   assert.match(panel, /h\(AdminRegistrationMemberPicker/);
+  assert.match(panel, /key: "picker-" \+ eventId/);
+  assert.match(panel, /eventStatus: selected \? selected.status : ""/);
   assert.match(panel, /h\(AdminRegistrationManualPlayerForm/);
 
   assert.match(picker, /export function availableClubMembers/);
   assert.match(picker, /export function AdminRegistrationMemberPicker/);
+  assert.match(picker, /availableClubMembers\(membersState.members, registrations, ""\)/);
+  assert.match(picker, /availableClubMembers\(membersState.members, registrations, query\)/);
+  assert.match(picker, /unregisteredIds.has\(id\)/);
+  assert.match(picker, /eventStatus === "live"/);
+  assert.match(picker, /Once live scoring starts/);
   assert.match(picker, /data-react-admin-registration-member-picker/);
   assert.match(picker, /gvdg:admin-registration-members-list/);
   assert.match(picker, /gvdg:admin-registration-roster/);
@@ -65,6 +72,7 @@ test('admin registration member picker adds club members as registrations from r
   assert.match(picker, /Mark selected as paid \(cash collected\)/);
   assert.match(picker, /paid_entry: paidEntry/);
   assert.match(picker, /member_ids: selectedIds/);
+  assert.doesNotMatch(picker, /availableIds.has\(id\)/);
   assert.match(html, /class: "rg-member-list"|rg-member-list \{/);
   assert.doesNotMatch(picker, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|🏆|⚠|⏱|—/);
 });

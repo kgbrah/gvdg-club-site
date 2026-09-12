@@ -14,10 +14,10 @@ import { AdminRegistrationAcePot, AdminRegistrationCreditsList, AdminRegistratio
 
 const h = React.createElement;
 
-function RegistrationBody() {
+function RegistrationBody({ eventId, eventStatus }) {
   return h("div", { "data-react-admin-registration-panel": "ready", style: { marginTop: "1rem" } }, [
     h(AdminRegistrationRoster, { key: "roster" }),
-    h(AdminRegistrationMemberPicker, { key: "picker" }),
+    h(AdminRegistrationMemberPicker, { eventStatus, key: "picker-" + eventId }),
     h(AdminRegistrationAssignControls, { key: "assign" }),
     h(AdminRegistrationManualPlayerForm, { key: "manual" }),
     h("div", { className: "al-section", key: "ctps", style: { marginTop: "1rem" } }, [
@@ -41,10 +41,15 @@ function RegistrationBody() {
 
 export function AdminRegistrationPanel() {
   const state = useAdminRegistrationControlsState();
+  const selected = state.events.find((event) => event.id === state.selectedEventId);
 
   return h(React.Fragment, null, [
     h(AdminRegistrationControls, { key: "controls", state }),
-    state.selectedEventId ? h(RegistrationBody, { key: "body" }) : h("p", {
+    state.selectedEventId ? h(RegistrationBody, {
+      eventId: state.selectedEventId,
+      eventStatus: selected ? selected.status : "",
+      key: "body",
+    }) : h("p", {
       className: "al-note",
       "data-react-admin-registration-panel": "empty",
       key: "empty",

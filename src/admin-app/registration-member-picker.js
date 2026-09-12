@@ -53,7 +53,7 @@ function memberMeta(member) {
   return bits.join(" / ");
 }
 
-export function AdminRegistrationMemberPicker() {
+export function AdminRegistrationMemberPicker({ eventStatus }) {
   const [membersState, setMembersState] = React.useState(EMPTY_MEMBERS);
   const [registrations, setRegistrations] = React.useState([]);
   const [query, setQuery] = React.useState("");
@@ -98,10 +98,23 @@ export function AdminRegistrationMemberPicker() {
     return () => window.removeEventListener("gvdg:admin-registration-members-add-result", update);
   }, [pendingRequest]);
 
+  const unregistered = availableClubMembers(membersState.members, registrations, "");
   const available = availableClubMembers(membersState.members, registrations, query);
-  const availableIds = new Set(available.map((member) => member.memberId));
-  const selectedIds = [...selected].filter((id) => availableIds.has(id));
+  const unregisteredIds = new Set(unregistered.map((member) => member.memberId));
+  const selectedIds = [...selected].filter((id) => unregisteredIds.has(id));
   const busy = Boolean(pendingRequest);
+  const live = eventStatus === "live";
+
+  if (live) {
+    return h("div", {
+      className: "al-section",
+      "data-react-admin-registration-member-picker": "live",
+      style: { marginTop: "1rem" },
+    }, [
+      h("h4", { className: "al-h", key: "title" }, "Add club members"),
+      h("p", { className: "al-note", key: "note" }, "Club members can be added while the event is scheduled. Once live scoring starts, add a player on the scoring card instead."),
+    ]);
+  }
 
   function toggleMember(memberId) {
     setSelected((current) => {

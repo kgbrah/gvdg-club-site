@@ -40,10 +40,10 @@ type RegRow = {
 function makeDb(state: { status?: string | null; regs?: RegRow[] } = {}) {
   const regs = state.regs ?? [];
   let nextId = regs.reduce((max, row) => Math.max(max, row.id), 0) + 1;
-  return {
+  const db = {
     prepare: (sql: string) => {
       let binds: unknown[] = [];
-      return {
+      const stmt = {
         bind(...values: unknown[]) {
           binds = values;
           return this;
@@ -58,52 +58,43 @@ function makeDb(state: { status?: string | null; regs?: RegRow[] } = {}) {
           if (/SELECT status FROM events WHERE id = \?/i.test(sql)) {
             return state.status == null ? null : { status: state.status };
           }
-          if (/SELECT \* FROM registrations WHERE event_id = \? AND member_id = \?/i.test(sql)) {
-            return regs.find((row) => row.event_id === binds[0] && row.member_id === binds[1]) ?? null;
-          }
-          if (/INSERT INTO registrations/i.test(sql)) {
-            const eventId = binds[0] as number;
-            const memberId = binds[1] as string;
-            const existing = regs.find((row) => row.event_id === eventId && row.member_id === memberId);
-            if (existing) {
-              existing.name = binds[2] as string;
-              existing.division = (binds[3] as string | null) ?? null;
-              existing.team = (binds[4] as string | null) ?? null;
-              existing.addons = (binds[5] as string | null) ?? null;
-              if (binds[6] != null) existing.email = binds[6] as string;
-              return existing;
-            }
-            const row: RegRow = {
-              id: nextId++,
-              event_id: eventId,
-              member_id: memberId,
-              name: binds[2] as string,
-              division: (binds[3] as string | null) ?? null,
-              team: (binds[4] as string | null) ?? null,
-              addons: (binds[5] as string | null) ?? null,
-              email: (binds[6] as string | null) ?? null,
-              paid_entry: 0,
-              checked_in: 0,
-            };
-            regs.push(row);
-            return row;
-          }
-          if (/UPDATE registrations SET division=COALESCE/i.test(sql)) {
-            const row = regs.find((item) => item.id === binds[5]);
-            if (!row) return null;
-            if (binds[0] != null) row.division = binds[0] as string;
-            if (binds[1] != null) row.team = binds[1] as string;
-            if (binds[2] != null) row.starting_hole = binds[2] as number;
-            if (binds[3] != null) row.checked_in = binds[3] as number;
-            if (binds[4] != null) row.paid_entry = binds[4] as number;
-            return row;
-          }
-          return null;
+          return insertRegistration() ?? null;
         },
-        run: async () => ({ results: [], success: true }),
+        run: async () => {
+          insertRegistration();
+          return { results: [], success: true };
+        },
       };
+      function insertRegistration(): RegRow | null {
+        if (!/INSERT INTO registrations/i.test(sql)) return null;
+        const eventId = binds[0] as number;
+        const memberId = binds[1] as string;
+        const existing = regs.find((row) => row.event_id === eventId && row.member_id === memberId);
+        if (existing) return existing;
+        const row: RegRow = {
+          id: nextId++,
+          event_id: eventId,
+          member_id: memberId,
+          name: binds[2] as string,
+          division: (binds[3] as string | null) ?? null,
+          team: (binds[4] as string | null) ?? null,
+          addons: (binds[5] as string | null) ?? null,
+          email: (binds[6] as string | null) ?? null,
+          paid_entry: binds[7] ? 1 : 0,
+          checked_in: 0,
+        };
+        regs.push(row);
+        return row;
+      }
+      return stmt;
+    },
+    batch: async (statements: Array<{ run: () => Promise<unknown> }>) => {
+      const out = [];
+      for (const statement of statements) out.push(await statement.run());
+      return out;
     },
   };
+  return db;
 }
 
 function env(db: ReturnType<typeof makeDb> = makeDb({ status: "scheduled" })) {
@@ -147,18 +138,19 @@ describe("admin cash registration of club members", () => {
     await expect(empty.json()).resolves.toMatchObject({ error: "invalid_members" });
   });
 
-  it("400 when more than 80 unique member ids are sent", async () => {
-    const ids = Array.from({ length: 81 }, (_, i) => `m_${i + 1}`);
+  it("400 when more than 40 unique member ids are sent", async () => {
+    const ids = Array.from({ length: 41 }, (_, i) => `m_${i + 1}`);
     const res = await call("/admin/events/5/registrations", "POST", await tok("m_admin"), { member_ids: ids });
     expect(res.status).toBe(400);
     await expect(res.json()).resolves.toMatchObject({ error: "too_many_members" });
   });
 
-  it("404 when the event is missing, 403 when it is not scheduled or live", async () => {
+  it("404 when the event is missing, 403 when it is not scheduled", async () => {
     const admin = await tok("m_admin");
     expect((await call("/admin/events/5/registrations", "POST", admin, { member_ids: ["m_jane"] }, makeDb({ status: null }))).status).toBe(404);
     expect((await call("/admin/events/5/registrations", "POST", admin, { member_ids: ["m_jane"] }, makeDb({ status: "cancelled" }))).status).toBe(403);
     expect((await call("/admin/events/5/registrations", "POST", admin, { member_ids: ["m_jane"] }, makeDb({ status: "final" }))).status).toBe(403);
+    expect((await call("/admin/events/5/registrations", "POST", admin, { member_ids: ["m_jane"] }, makeDb({ status: "live" }))).status).toBe(403);
   });
 
   it("adds club members as true registrations even when public registration is closed", async () => {
@@ -184,8 +176,8 @@ describe("admin cash registration of club members", () => {
     });
   });
 
-  it("works on a live event and can mark the batch as paid cash", async () => {
-    const db = makeDb({ status: "live" });
+  it("can mark the batch as paid cash on a scheduled event", async () => {
+    const db = makeDb({ status: "scheduled" });
     const res = await call("/admin/events/5/registrations", "POST", await tok("m_admin"), {
       member_ids: ["m_jane"],
       paid_entry: true,

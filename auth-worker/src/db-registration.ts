@@ -1,4 +1,4 @@
-import type { D1Like } from "./db-types.js";
+import type { D1Like, D1StatementLike } from "./db-types.js";
 
 export interface RegistrationInput {
   event_id: number;
@@ -8,6 +8,7 @@ export interface RegistrationInput {
   team?: string | null;
   addons?: string | null;
   email?: string | null;
+  paid_entry?: number | null;
 }
 
 export async function getMyRegistration(db: D1Like, eventId: number, memberId: string) {
@@ -49,6 +50,18 @@ export async function registerForEvent(db: D1Like, r: RegistrationInput) {
     )
     .bind(r.event_id, r.member_id, r.name, r.division ?? null, r.team ?? null, r.addons ?? null, r.email ?? null)
     .first();
+}
+
+/** Admin cash-signup insert. paid_entry is written with the row so a batch of N members is one D1
+ *  round-trip (plus the roster reads), not N inserts + N paid updates. ON CONFLICT is a no-op so a
+ *  concurrent self-register is not overwritten. */
+export function registerMemberStmt(db: D1Like, r: RegistrationInput): D1StatementLike {
+  return db
+    .prepare(
+      `INSERT INTO registrations (event_id, member_id, name, division, team, addons, email, paid_entry) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(event_id, member_id) DO NOTHING`,
+    )
+    .bind(r.event_id, r.member_id, r.name, r.division ?? null, r.team ?? null, r.addons ?? null, r.email ?? null, r.paid_entry ? 1 : 0);
 }
 
 export async function withdrawRegistration(db: D1Like, eventId: number, memberId: string) {
