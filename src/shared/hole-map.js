@@ -35,6 +35,22 @@ function WindMark(props) {
   );
 }
 
+function ScoreChips({ marks, width, height, compact }) {
+  if (compact) return null;
+  const chips = (marks || []).filter((mark) => mark && mark.label);
+  if (!chips.length) return null;
+  return h("div", { className: "hole-map-chips" }, chips.map((mark) =>
+    h("div", {
+      className: "hole-map-score-chip " + (mark.relClass || "even"),
+      key: mark.key,
+      style: {
+        left: ((mark.x / width) * 100) + "%",
+        top: ((mark.y / height) * 100) + "%",
+      },
+    }, (mark.strokes != null ? mark.strokes + " " : "") + mark.label),
+  ));
+}
+
 function PlayerMark(props) {
   const compact = Boolean(props.compact);
   return h(
@@ -107,6 +123,7 @@ export function HoleMap(props) {
           })),
         ],
       ),
+      h(ScoreChips, { compact, height: map.height, key: "chips", marks: players, width: map.width }),
     ]),
     h("div", { className: "hole-map-caption", key: "caption" }, [
       h("span", { key: "tee" }, map.tee.label),

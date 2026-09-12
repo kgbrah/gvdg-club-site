@@ -145,6 +145,9 @@ export function playerMarksOnMap(map, players) {
       initials,
       x: pt.x,
       y: pt.y,
+      strokes: player.strokes,
+      label: player.label,
+      relClass: player.relClass,
     });
   });
   marks.sort((a, b) => a.x - b.x || a.y - b.y);

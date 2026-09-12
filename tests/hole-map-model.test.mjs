@@ -69,9 +69,11 @@ test("projectMapPoint places players on the hole and hides off-map GPS", () => {
   assert.ok(mid.y > 0 && mid.y < map.height);
   assert.equal(projectMapPoint(map, 40, -90), null);
   const marks = playerMarksOnMap(map, [
-    { index: 0, initials: "as", lat: 35.6005, lng: -77.37 },
+    { index: 0, initials: "as", lat: 35.6005, lng: -77.37, strokes: 3, label: "par", relClass: "even" },
     { index: 1, initials: "TB", lat: 40, lng: -90 },
   ]);
   assert.equal(marks.length, 1);
   assert.equal(marks[0].initials, "AS");
+  assert.equal(marks[0].label, "par");
+  assert.equal(marks[0].strokes, 3);
 });

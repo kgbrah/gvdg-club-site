@@ -567,8 +567,18 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.match(watch, /function WatchHoles/);
   assert.match(watch, /function WatchTeeSign/);
   assert.match(watch, /playerLocations/);
+  assert.match(watch, /function WatchMatchCards/);
+  assert.match(watch, /function WatchStrokeStrip/);
+  assert.match(watch, /watchHoleScoreChips/);
+  assert.match(watch, /watchStrokeHoleChips/);
+  assert.match(watch, /watchMatchCards/);
   assert.match(controller, /function watchHoleViews\(\)/);
   assert.match(controller, /holes: watchHoleViews\(\)/);
+  assert.match(controller, /players: Array.isArray\(snap\.players\)/);
+  const html = readFileSync('score.html', 'utf8');
+  assert.match(html, /\.hole-map-score-chip/);
+  assert.match(html, /\.watch-match-card/);
+  assert.match(html, /\.watch-stroke-strip/);
   assert.match(controller, /LIVE \+ '\/location'/);
   assert.match(controller, /watchPosition/);
   assert.match(controller, /function applyPlayerLocations/);
