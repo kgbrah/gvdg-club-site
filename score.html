@@ -149,6 +149,9 @@
             .weather-graphic { width: 48px; height: 48px; }
             .weather-graphic-icon { font-size: 1.85rem; }
             .weather-wind { grid-column: 1 / -1; justify-content: flex-start; width: 100%; }
+            .weather-strip-compact .weather-wind {
+                width: auto; grid-column: auto; flex: 0 0 auto; margin-left: auto;
+            }
         }
         .center { text-align: center; }
         .stack > * + * { margin-top: 0.7rem; }

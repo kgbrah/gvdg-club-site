@@ -11,6 +11,9 @@ import { WatchView } from "./watch-view.js";
 import { InstallCoachBanner } from "../shared/install-coach-ui.js";
 import {
   SCORE_AUTH_EVENT,
+  TOKEN_KEY,
+  loadLocalPlayerTheme,
+  readSessionValue,
   syncPlayerTheme,
   togglePlayerThemeMode,
   paintPlayerTheme,
@@ -62,8 +65,8 @@ function ScoreShell() {
   });
   const [bodyView, setBodyView] = React.useState(INITIAL_SCORE_VIEW);
   const [darkTheme, setDarkTheme] = React.useState(() => localStorage.getItem("theme") === "dark");
-  const [playerTheme, setPlayerTheme] = React.useState(null);
-  const memberIdRef = React.useRef("me");
+  const [playerTheme, setPlayerTheme] = React.useState(() => loadLocalPlayerTheme().theme);
+  const memberIdRef = React.useRef(loadLocalPlayerTheme().memberId || "me");
   const leaderboardHandlerRef = React.useRef(null);
   const bodyController = React.useMemo(() => ({
     render(kind, props) {
@@ -90,29 +93,36 @@ function ScoreShell() {
 
   React.useEffect(() => {
     const root = themeRoot();
-    const controller = new AbortController();
+    let active = new AbortController();
     function apply(theme, memberId) {
       if (memberId) memberIdRef.current = memberId;
       setPlayerTheme(theme);
     }
     function refresh() {
+      active.abort();
+      active = new AbortController();
+      const signal = active.signal;
       syncPlayerTheme({
         root,
-        signal: controller.signal,
+        signal,
         onTheme: apply,
       }).catch(() => {});
     }
     refresh();
     window.addEventListener(SCORE_AUTH_EVENT, refresh);
     return () => {
-      controller.abort();
+      active.abort();
       window.removeEventListener(SCORE_AUTH_EVENT, refresh);
       paintPlayerTheme(null, root);
     };
   }, []);
 
   React.useEffect(() => {
-    if (playerTheme) return;
+    if (playerTheme) {
+      if (playerTheme.mode === "dark") document.documentElement.setAttribute("data-theme", "dark");
+      else document.documentElement.removeAttribute("data-theme");
+      return;
+    }
     if (darkTheme) {
       document.documentElement.setAttribute("data-theme", "dark");
       localStorage.setItem("theme", "dark");
@@ -127,6 +137,7 @@ function ScoreShell() {
       const next = togglePlayerThemeMode(playerTheme, {
         root: themeRoot(),
         memberId: memberIdRef.current,
+        token: readSessionValue(TOKEN_KEY),
       });
       setPlayerTheme(next);
       return;
