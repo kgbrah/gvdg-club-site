@@ -1,6 +1,7 @@
 // Pure scoring logic for live events — no DO/D1/DOM here so it's unit-testable.
 
 import { countScores, type Breakdown } from "./score-breakdown.js";
+import { clusterPlayerNames, preferredPlayerName } from "./player-identity.js";
 
 export { countScores } from "./score-breakdown.js";
 export type { Breakdown } from "./score-breakdown.js";
@@ -155,19 +156,43 @@ const matchplayPoints = (o: string | null): number => (isWinOutcome(o) ? 2 : isT
 
 /** Aggregate a league's per-event result rows into a per-PLAYER season standings table. Matchplay rounds
  *  (a stored match_result) score 2/1/0 by outcome; stroke rounds keep place-points + cumulative to-par.
- *  Members keyed by member_id; guests grouped by name. See computeTeamStandings for the Red/Blue view. */
+ *  Members keyed by member_id; guests grouped by name, including nicknames / spelling variants of the
+ *  same person. Name-only rows attach to a member when that match is unique. See computeTeamStandings
+ *  for the Red/Blue view. */
 export function computeLeagueStandings(
   rows: { member_id: string | null; name: string; place: number | null; to_par: number | null; match_result?: string | null }[],
 ): LeagueStanding[] {
+  const clustered = clusterPlayerNames(rows.map((row) => row.name));
+  const memberNames = new Map<string, string[]>();
+  for (const row of rows) {
+    if (!row.member_id) continue;
+    const names = memberNames.get(row.member_id) ?? [];
+    names.push(row.name);
+    memberNames.set(row.member_id, names);
+  }
+
+  function memberForName(name: string): string | null {
+    const canonical = clustered.get(name) || name;
+    const matches: string[] = [];
+    for (const [memberId, names] of memberNames) {
+      if (names.some((memberName) => (clustered.get(memberName) || memberName) === canonical)) {
+        matches.push(memberId);
+      }
+    }
+    return matches.length === 1 ? matches[0]! : null;
+  }
+
   const map = new Map<string, LeagueStanding>();
   for (const r of rows) {
-    const key = r.member_id || "name:" + r.name;
+    const memberId = r.member_id || memberForName(r.name);
+    const key = memberId ? "id:" + memberId : "name:" + (clustered.get(r.name) || r.name);
     let s = map.get(key);
     if (!s) {
-      s = { member_id: r.member_id ?? null, name: r.name, events: 0, wins: 0, podiums: 0, total_to_par: 0, best_place: null, points: 0 };
+      s = { member_id: memberId ?? null, name: clustered.get(r.name) || r.name, events: 0, wins: 0, podiums: 0, total_to_par: 0, best_place: null, points: 0 };
       map.set(key, s);
     }
-    s.name = r.name; // keep the most recent display name
+    s.name = preferredPlayerName([s.name, clustered.get(r.name) || r.name]);
+    if (!s.member_id && memberId) s.member_id = memberId;
     s.events++;
     const outcome = parseOutcome(r.match_result);
     if (outcome) {

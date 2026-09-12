@@ -2,6 +2,7 @@ import React from "react";
 import { Trophy, X } from "lucide-react";
 
 import { DOUBLES_LEAGUE_DATA } from "./doubles-league-data.js";
+import { clusterPlayerNames, preferredPlayerName } from "../shared/player-identity.js";
 
 const h = React.createElement;
 const PAGE_SIZE = 25;
@@ -67,6 +68,45 @@ function ModalStat({ value, label }) {
     h("div", { className: "player-modal-stat-val", key: "value" }, value),
     h("div", { className: "player-modal-stat-label", key: "label" }, label),
   ]);
+}
+
+export function mergeDoublesLeaderboard(players) {
+  const clustered = clusterPlayerNames((players || []).map((player) => player && player.n));
+  const map = new Map();
+  for (const player of players || []) {
+    if (!player || !player.n) continue;
+    const key = clustered.get(player.n) || player.n;
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, {
+        ...player,
+        n: key,
+        ss: Array.isArray(player.ss) ? player.ss.map((row) => ({ ...row })) : [],
+      });
+      continue;
+    }
+    const seasons = [...existing.ss];
+    for (const row of player.ss || []) {
+      if (!seasons.some((entry) => entry.season === row.season)) seasons.push(row);
+    }
+    const weeks = (existing.tw || 0) + (player.tw || 0);
+    const caTotal = (Number(existing.ca) || 0) * (existing.tw || 0) + (Number(player.ca) || 0) * (player.tw || 0);
+    map.set(key, {
+      ...existing,
+      n: preferredPlayerName([existing.n, player.n, key]),
+      ts: seasons.length,
+      tp: (existing.tp || 0) + (player.tp || 0),
+      bf: Math.min(existing.bf || 999, player.bf || 999),
+      w: (existing.w || 0) + (player.w || 0),
+      t3: (existing.t3 || 0) + (player.t3 || 0),
+      t5: (existing.t5 || 0) + (player.t5 || 0),
+      t10: (existing.t10 || 0) + (player.t10 || 0),
+      tw: weeks,
+      ca: weeks ? Math.round((caTotal / weeks) * 10) / 10 : existing.ca,
+      ss: seasons,
+    });
+  }
+  return [...map.values()];
 }
 
 function statsFor(data) {
@@ -331,12 +371,12 @@ function PlayerModal({ player, seasonOrder, onClose }) {
 
 export function DoublesLeaguePanel() {
   const data = DOUBLES_LEAGUE_DATA;
-  const leaderboard = data.leaderboard || [];
+  const leaderboard = mergeDoublesLeaderboard(data.leaderboard || []);
   const seasonOrder = data.seasonOrder || [];
   const [activeTab, setActiveTab] = React.useState("champions");
   const [selectedPlayerName, setSelectedPlayerName] = React.useState("");
   const selectedPlayer = leaderboard.find((player) => player.n === selectedPlayerName) || null;
-  const stats = statsFor(data);
+  const stats = statsFor({ ...data, leaderboard });
 
   return h("section", {
     className: "doubles-league-container react-doubles-league",

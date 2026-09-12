@@ -1,3 +1,5 @@
+import { resolvePlayerName } from "../shared/player-identity.js";
+
 const EMPTY_TEAM = { name: "Red Team", players: [] };
 const EMPTY_BLUE = { name: "Blue Team", players: [] };
 
@@ -241,10 +243,11 @@ export function officialRyderTeamStandings(tally) {
   ].sort((a, b) => b.points - a.points || b.wins - a.wins || a.team.localeCompare(b.team));
 }
 
-export function officialRyderPlayerStandings(weeks) {
+export function officialRyderPlayerStandings(weeks, roster) {
+  const rosterNames = (Array.isArray(roster) ? roster : []).map((name) => String(name || "").trim()).filter(Boolean);
   const map = new Map();
   function add(name, points, won) {
-    const label = String(name || "").trim();
+    const label = resolvePlayerName(name, rosterNames);
     if (!label) return;
     const key = label.toLowerCase();
     let row = map.get(key);
@@ -281,7 +284,10 @@ export function applyOfficialRyderTally(leagues, tally, leagueId = 4) {
         officialPending: false,
         officialError: false,
         teamStandings: officialRyderTeamStandings(tally),
-        standings: officialRyderPlayerStandings(tally.weeks),
+        standings: officialRyderPlayerStandings(tally.weeks, [
+          ...((tally.scoreboard && tally.scoreboard.red && tally.scoreboard.red.players) || []),
+          ...((tally.scoreboard && tally.scoreboard.blue && tally.scoreboard.blue.players) || []),
+        ]),
       };
     }
     return {

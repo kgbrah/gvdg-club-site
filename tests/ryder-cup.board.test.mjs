@@ -187,6 +187,41 @@ test("official Ryder standings use sheet points and skip leftover fill-only winn
   ]);
 });
 
+test("official Ryder player standings fold sheet nicknames onto the scoreboard roster", () => {
+  const roster = [
+    "Tj Braley",
+    "Alex Schwarga",
+    "Eder Hernandez",
+    "Joshua Willoughby",
+    'Travis "Trap" Sherrod',
+    "Blake Sargent",
+    "David Doughtie",
+    "Leo Hernandez",
+  ];
+  const players = officialRyderPlayerStandings([
+    {
+      source: "sheet",
+      matches: [
+        { num: 4, red: "Tj Braley", blue: "Blake S", score: "5&4", winner: "red", redPlayers: ["Tj Braley"], bluePlayers: ["Blake S"] },
+        { num: 5, red: "Willoughby", blue: "Schwarga", score: "2&1", winner: "red", redPlayers: ["Willoughby"], bluePlayers: ["Schwarga"] },
+        { num: 6, red: "Trap", blue: "Alex Schwarga", score: "6&5", winner: "red", redPlayers: ["Trap"], bluePlayers: ["Alex Schwarga"] },
+        { num: 8, red: "TJ Braley", blue: "Eder H", score: "2&1", winner: "red", redPlayers: ["TJ Braley"], bluePlayers: ["Eder H"] },
+        { num: 11, red: "David D.", blue: "Leo H.", score: "1&0", winner: "red", redPlayers: ["David D."], bluePlayers: ["Leo H."] },
+      ],
+    },
+  ], roster);
+  assert.deepEqual(players.map((player) => [player.name, player.points, player.events]), [
+    ["Tj Braley", 4, 2],
+    ["David Doughtie", 2, 1],
+    ["Joshua Willoughby", 2, 1],
+    ['Travis "Trap" Sherrod', 2, 1],
+    ["Alex Schwarga", 0, 2],
+    ["Blake Sargent", 0, 1],
+    ["Eder Hernandez", 0, 1],
+    ["Leo Hernandez", 0, 1],
+  ]);
+});
+
 test("applyOfficialRyderTally overlays sheet points and hides D1 numbers until the sheet loads", () => {
   const leagues = [{
     league: { id: 4, name: "Ryder Cup", season: "2026" },

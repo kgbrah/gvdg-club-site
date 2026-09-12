@@ -17,6 +17,8 @@ test("namesMatch is case-insensitive and ignores padding", () => {
   assert.equal(namesMatch("QA Admin", "qa admin"), true);
   assert.equal(namesMatch("QA Admin", "Someone Else"), false);
   assert.equal(namesMatch("", "QA Admin"), false);
+  assert.equal(namesMatch("Tj Braley", "TJ Braley"), true);
+  assert.equal(namesMatch("Schwarga", "Alex Schwarga"), true);
 });
 
 test("buildSeasonPage keeps this year's club results and skips last year", () => {
