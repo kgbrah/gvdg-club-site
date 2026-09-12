@@ -81,3 +81,85 @@ describe("Track G G3 — CTPs, ace pots, assignment", () => {
     expect((await call("/admin/events/5", "PATCH", await tok("m_admin"), { type: "side_quest" })).status).toBe(400);
   });
 });
+
+describe("admin CTP delete prunes live claims first", () => {
+  function deleteEnv(opts: {
+    status: string | null;
+    prune?: (request: Request) => Promise<Response> | Response;
+  }) {
+    const deleted: unknown[][] = [];
+    let pruneCalls = 0;
+    const DB = {
+      prepare: (sql: string) => ({
+        bind(...values: unknown[]) {
+          if (/DELETE FROM ctps/i.test(sql)) deleted.push(values);
+          return this;
+        },
+        first: async () => (/SELECT status FROM events/i.test(sql) ? (opts.status == null ? null : { status: opts.status }) : null),
+        run: async () => ({ results: [], success: true }),
+        all: async () => ({ results: [], success: true }),
+      }),
+    };
+    const LIVE = {
+      idFromName: (name: string) => name,
+      get: () => ({
+        fetch: async (request: Request) => {
+          pruneCalls += 1;
+          if (opts.prune) return opts.prune(request);
+          return new Response("{}", { status: 200 });
+        },
+      }),
+    };
+    return {
+      deleted,
+      pruneCalls: () => pruneCalls,
+      env: { ROSTER: kv(members), RATELIMIT: kv(), DB, JWT_SECRET: SECRET, ALLOWED_ORIGINS: "http://localhost:8080", LIVE } as unknown as Parameters<typeof worker.fetch>[1],
+    };
+  }
+
+  async function del(env: Parameters<typeof worker.fetch>[1]) {
+    return worker.fetch(new Request("https://w/admin/events/5/ctps/9", {
+      method: "DELETE",
+      headers: { Origin: "http://localhost:8080", authorization: "Bearer " + await tok("m_admin") },
+    }), env);
+  }
+
+  it("prunes the live claim before deleting D1 when the event is live", async () => {
+    const state = deleteEnv({ status: "live" });
+    expect((await del(state.env)).status).toBe(200);
+    expect(state.pruneCalls()).toBe(1);
+    expect(state.deleted).toEqual([[9, 5]]);
+  });
+
+  it("skips the Durable Object when the event is not live", async () => {
+    const state = deleteEnv({ status: "scheduled" });
+    expect((await del(state.env)).status).toBe(200);
+    expect(state.pruneCalls()).toBe(0);
+    expect(state.deleted).toEqual([[9, 5]]);
+  });
+
+  it("refuses to delete D1 if the live prune keeps failing", async () => {
+    const state = deleteEnv({
+      status: "live",
+      prune: () => { throw new Error("do_down"); },
+    });
+    const res = await del(state.env);
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: "live_ctp_prune_failed" });
+    expect(state.pruneCalls()).toBe(3);
+    expect(state.deleted).toEqual([]);
+  });
+
+  it("retries a failed prune and deletes only after it succeeds", async () => {
+    const state = deleteEnv({
+      status: "live",
+      prune: () => {
+        if (state.pruneCalls() < 3) throw new Error("do_down");
+        return new Response("{}", { status: 200 });
+      },
+    });
+    expect((await del(state.env)).status).toBe(200);
+    expect(state.pruneCalls()).toBe(3);
+    expect(state.deleted).toEqual([[9, 5]]);
+  });
+});

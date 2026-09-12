@@ -67,6 +67,18 @@ export function withLiveCtpLeaders(ctps, liveCtps) {
   });
 }
 
+export function unawardedLiveCtps(liveCtps, officialCtps) {
+  const awarded = new Set();
+  for (const row of Array.isArray(officialCtps) ? officialCtps : []) {
+    if (row && row.id != null && row.winner_name && row.live_leader !== true) {
+      awarded.add(String(row.id));
+    }
+  }
+  return (Array.isArray(liveCtps) ? liveCtps : []).filter(
+    (ctp) => ctp && ctp.leaderName && !awarded.has(String(ctp.id)),
+  );
+}
+
 export function buildLivePots({ acePot = null, ctps = [], currentHole = null } = {}) {
   const list = (Array.isArray(ctps) ? ctps : []).map(normalizeCtp).filter((ctp) => ctp.hole != null);
   const ace = normalizeAcePot(acePot);
