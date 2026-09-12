@@ -312,36 +312,10 @@ export function DashboardThemeBuilder() {
     open: true,
   }, [
     h("summary", { className: "dash-subtitle dash-collapse-summary", key: "summary" }, "Aether theme"),
-    h("p", { className: "dash-note", key: "copy" }, "Aether for Omarchy, for this dashboard: upload a wallpaper, extract a 16-color palette, fine-tune, apply."),
+    h("p", { className: "dash-note", key: "copy" }, "Aether for Omarchy, for this dashboard: drop a wallpaper, Extract a 16-color ANSI palette, fine-tune, Apply Theme."),
     h("div", { className: "aether-studio", key: "studio" }, [
-      h("label", {
-        className: `aether-drop${dragging ? " is-dragging" : ""}${theme?.wallpaper ? " has-wallpaper" : ""}`,
-        htmlFor: "dashboardThemeFile",
-        key: "drop",
-        onDragEnter: (event) => { event.preventDefault(); setDragging(true); },
-        onDragOver: (event) => event.preventDefault(),
-        onDragLeave: () => setDragging(false),
-        onDrop: (event) => {
-          event.preventDefault();
-          setDragging(false);
-          ingestFile(event.dataTransfer?.files?.[0]);
-        },
-      }, [
-        theme?.wallpaper
-          ? h("img", { className: "aether-wallpaper", src: theme.wallpaper, alt: "Dashboard wallpaper preview", key: "img" })
-          : h("span", { className: "aether-drop-copy", key: "empty" }, "Drop a wallpaper or choose an image"),
-        h("input", {
-          id: "dashboardThemeFile",
-          className: "aether-file",
-          type: "file",
-          accept: "image/jpeg,image/png,image/webp",
-          disabled: busy,
-          ref: fileRef,
-          onChange: onFile,
-          key: "file",
-        }),
-      ]),
-      h("div", { className: "aether-toolbar", key: "toolbar" }, [
+      h("header", { className: "aether-header", key: "header" }, [
+        h("strong", { className: "aether-mark", key: "mark" }, "AETHER"),
         h("div", { className: "aether-toggle", key: "look", role: "group", "aria-label": "Look" }, [
           h("button", {
             type: "button",
@@ -358,6 +332,106 @@ export function DashboardThemeBuilder() {
             key: "light",
           }, "Light"),
         ]),
+      ]),
+      h("div", { className: "aether-body", key: "body" }, [
+        h("div", { className: "aether-main", key: "main" }, [
+          h("label", {
+            className: `aether-drop${dragging ? " is-dragging" : ""}${theme?.wallpaper ? " has-wallpaper" : ""}`,
+            htmlFor: "dashboardThemeFile",
+            key: "drop",
+            onDragEnter: (event) => { event.preventDefault(); setDragging(true); },
+            onDragOver: (event) => event.preventDefault(),
+            onDragLeave: () => setDragging(false),
+            onDrop: (event) => {
+              event.preventDefault();
+              setDragging(false);
+              ingestFile(event.dataTransfer?.files?.[0]);
+            },
+          }, [
+            theme?.wallpaper
+              ? h("img", { className: "aether-wallpaper", src: theme.wallpaper, alt: "Dashboard wallpaper preview", key: "img" })
+              : h("span", { className: "aether-drop-copy", key: "empty" }, "Drop a wallpaper or choose an image"),
+            h("input", {
+              id: "dashboardThemeFile",
+              className: "aether-file",
+              type: "file",
+              accept: "image/jpeg,image/png,image/webp",
+              disabled: busy,
+              ref: fileRef,
+              onChange: onFile,
+              key: "file",
+            }),
+          ]),
+          theme?.palette?.length
+            ? h("div", { className: "aether-palette", key: "palette", "aria-label": "ANSI palette" },
+              theme.palette.map((hex, index) => h("label", {
+                className: "aether-swatch",
+                key: `${hex}-${index}`,
+                title: `${ANSI_SLOT_ROLES[index] || index} ${hex}`,
+                style: { background: hex },
+              }, [
+                h("span", { className: "aether-swatch-role", key: "role" }, ANSI_SLOT_ROLES[index] || String(index)),
+                h("input", {
+                  type: "color",
+                  value: hex,
+                  "aria-label": `${ANSI_SLOT_ROLES[index] || "Color"} ${index}`,
+                  onChange: (event) => recolor(index, event.target.value),
+                  key: "color",
+                }),
+              ])))
+            : h("p", { className: "aether-empty", key: "empty-palette" }, "Extract to fill the 16-color ANSI grid."),
+        ]),
+        h("aside", { className: "aether-sidebar", key: "sidebar" }, [
+          EXTRACT_MODE_GROUPS.map((group) => h("div", { className: "aether-mode-group", key: group.id }, [
+            h("span", { className: "aether-field", key: "label" }, group.label),
+            h("div", { className: "aether-pills", key: "pills" }, group.modes.map((name) => h("button", {
+              type: "button",
+              className: extractMode === name ? "is-active" : "",
+              title: EXTRACT_MODE_META[name]?.description,
+              disabled: busy,
+              onClick: () => changeExtract(name),
+              key: name,
+            }, EXTRACT_MODE_META[name]?.label || name))),
+          ])),
+          h("div", { className: "aether-adjust", key: "tune" }, [
+            h("span", { className: "aether-field", key: "label" }, "Adjust"),
+            h("div", { className: "aether-sliders", key: "sliders" }, ADJUSTMENT_KEYS.map((name) => h(Slider, {
+              name,
+              value: adjustments[name],
+              disabled: busy || !theme,
+              onChange: changeAdjustment,
+              key: name,
+            }))),
+            h("button", {
+              type: "button",
+              className: "board-link",
+              disabled: busy || !theme,
+              onClick: resetAdjustments,
+              key: "reset-adj",
+            }, "Reset adjustments"),
+          ]),
+          contrast
+            ? h("p", { className: "aether-contrast", key: "contrast" }, `Text contrast ${contrast.ratio.toFixed(1)}:1 ${contrast.grade}`)
+            : null,
+          h("div", { className: "aether-presets", key: "presets" }, [
+            h("span", { className: "aether-field", key: "label" }, "Presets"),
+            h("div", { className: "aether-preset-grid", key: "grid" }, presetNames.map((name) => h("button", {
+              type: "button",
+              className: `aether-preset${theme?.preset === name ? " is-active" : ""}`,
+              disabled: busy,
+              onClick: () => applyPreset(name),
+              key: name,
+            }, [
+              h("span", { className: "aether-preset-name", key: "name" }, name),
+              h("span", { className: "aether-preset-bar", key: "bar" }, PRESET_THEMES[name].slice(0, 8).map((hex, index) => h("i", {
+                key: `${name}-${index}`,
+                style: { background: hex },
+              }))),
+            ]))),
+          ]),
+        ]),
+      ]),
+      h("footer", { className: "aether-actionbar", key: "bar" }, [
         h("div", { className: "aether-actions", key: "actions" }, [
           h("button", {
             type: "button",
@@ -369,85 +443,20 @@ export function DashboardThemeBuilder() {
           }, busy ? "Working..." : "Extract"),
           h("button", {
             type: "button",
-            className: "passkey-btn",
-            disabled: busy,
-            onClick: applyTheme,
-            "data-aether-apply": "1",
-            key: "apply",
-          }, "Apply Theme"),
-          h("button", {
-            type: "button",
             className: "board-link",
             disabled: busy || !theme,
             onClick: reset,
             key: "reset",
           }, "Reset"),
         ]),
-      ]),
-      EXTRACT_MODE_GROUPS.map((group) => h("div", { className: "aether-mode-group", key: group.id }, [
-        h("span", { className: "aether-field", key: "label" }, group.label),
-        h("div", { className: "aether-pills", key: "pills" }, group.modes.map((name) => h("button", {
-          type: "button",
-          className: extractMode === name ? "is-active" : "",
-          title: EXTRACT_MODE_META[name]?.description,
-          disabled: busy,
-          onClick: () => changeExtract(name),
-          key: name,
-        }, EXTRACT_MODE_META[name]?.label || name))),
-      ])),
-      theme?.palette?.length
-        ? h("div", { className: "aether-palette", key: "palette", "aria-label": "ANSI palette" },
-          theme.palette.map((hex, index) => h("label", {
-            className: "aether-swatch",
-            key: `${hex}-${index}`,
-            title: `${ANSI_SLOT_ROLES[index] || index} ${hex}`,
-            style: { background: hex },
-          }, [
-            h("span", { className: "aether-swatch-role", key: "role" }, ANSI_SLOT_ROLES[index] || String(index)),
-            h("input", {
-              type: "color",
-              value: hex,
-              "aria-label": `${ANSI_SLOT_ROLES[index] || "Color"} ${index}`,
-              onChange: (event) => recolor(index, event.target.value),
-              key: "color",
-            }),
-          ])))
-        : null,
-      contrast
-        ? h("p", { className: "aether-contrast", key: "contrast" }, `Text contrast ${contrast.ratio.toFixed(1)}:1 ${contrast.grade}`)
-        : null,
-      h("details", { className: "aether-fine-tune", key: "tune" }, [
-        h("summary", { key: "sum" }, "Fine-tune"),
-        h("div", { className: "aether-sliders", key: "sliders" }, ADJUSTMENT_KEYS.map((name) => h(Slider, {
-          name,
-          value: adjustments[name],
-          disabled: busy || !theme,
-          onChange: changeAdjustment,
-          key: name,
-        }))),
         h("button", {
           type: "button",
-          className: "board-link",
-          disabled: busy || !theme,
-          onClick: resetAdjustments,
-          key: "reset-adj",
-        }, "Reset adjustments"),
-      ]),
-      h("div", { className: "aether-presets", key: "presets" }, [
-        h("span", { className: "aether-field", key: "label" }, "Presets"),
-        h("div", { className: "aether-preset-grid", key: "grid" }, presetNames.map((name) => h("button", {
-          type: "button",
-          className: `aether-preset${theme?.preset === name ? " is-active" : ""}`,
+          className: "passkey-btn aether-apply",
           disabled: busy,
-          onClick: () => applyPreset(name),
-          key: name,
-        }, [
-          h("span", { className: "aether-preset-name", key: "name" }, name),
-          h("span", { className: "aether-preset-bar", key: "bar" }, PRESET_THEMES[name].slice(0, 8).map((hex, index) => h("i", {
-            key: `${name}-${index}`,
-            style: { background: hex },
-          }))),
-        ]))),
+          onClick: applyTheme,
+          "data-aether-apply": "1",
+          key: "apply",
+        }, "Apply Theme"),
       ]),
     ]),
     status ? h("p", { className: "dash-note", role: "status", key: "status" }, status) : null,

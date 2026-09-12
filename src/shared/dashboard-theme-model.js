@@ -18,20 +18,19 @@ export const EXTRACT_MODES = [
 ];
 export const EXTRACT_MODE_ALIASES = { mono: "monochromatic" };
 export const EXTRACT_MODE_GROUPS = [
-  { id: "style", label: "Style", modes: ["normal", "pastel", "muted", "bright", "colorful", "material"] },
-  { id: "theory", label: "Color theory", modes: ["monochromatic", "analogous", "complementary"] },
-  { id: "mood", label: "Mood", modes: ["forest", "ocean", "fire"] },
+  { id: "generate", label: "Generate", modes: ["normal", "monochromatic", "analogous", "pastel", "material", "colorful", "muted", "bright"] },
+  { id: "more", label: "More", modes: ["complementary", "forest", "ocean", "fire"] },
 ];
 export const EXTRACT_MODE_META = {
-  normal: { label: "Auto", description: "Balanced 16-color ANSI palette from the wallpaper" },
+  normal: { label: "Normal", description: "Balanced 16-color ANSI palette from the wallpaper" },
   monochromatic: { label: "Mono", description: "Single hue, varying lightness" },
   analogous: { label: "Analogous", description: "Hues within ±30° of the dominant color" },
   complementary: { label: "Complement", description: "Base hue alternating with its opposite" },
-  pastel: { label: "Pastel", description: "Soft, low chroma" },
+  pastel: { label: "Pastel", description: "Soft, muted colors" },
   material: { label: "Material", description: "Material Design-inspired bg/fg" },
-  colorful: { label: "Colorful", description: "Vivid, high chroma" },
-  muted: { label: "Muted", description: "Subdued, desaturated" },
-  bright: { label: "Bright", description: "High lightness with healthy chroma" },
+  colorful: { label: "Colorful", description: "High saturation, vibrant" },
+  muted: { label: "Muted", description: "Desaturated, subtle" },
+  bright: { label: "Bright", description: "High brightness colors" },
   forest: { label: "Forest", description: "Woodland green-black, sage accents" },
   ocean: { label: "Ocean", description: "Deep blue-black, cool accents" },
   fire: { label: "Fire", description: "Bonfire warmth, ember darks" },

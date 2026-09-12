@@ -226,6 +226,9 @@ test('more page mounts an Aether-style theme builder', () => {
   assert.match(html, /#members\.player-theme-active/);
   assert.match(html, /\.aether-palette/);
   assert.match(html, /\.aether-preset-grid/);
+  assert.match(html, /\.aether-header/);
+  assert.match(html, /\.aether-sidebar/);
+  assert.match(html, /\.aether-actionbar/);
   assert.match(worker, /\/me\/dashboard-theme/);
 });
 
