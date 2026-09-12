@@ -70,7 +70,7 @@ function WeatherWind(props) {
     "button",
     {
       "aria-label": windLabel,
-      className: "weather-wind",
+      className: props.compact ? "weather-wind weather-wind-compact" : "weather-wind",
       "data-compass-status": model ? model.compassStatus : props.compassState.status,
       "data-relative": model ? model.relative : props.compassState.relative,
       title: "Tap to orient wind to your phone heading",
@@ -83,8 +83,8 @@ function WeatherWind(props) {
       h(WindArrow, { key: "arrow", model }),
       h("span", { className: "weather-wind-copy", key: "copy" }, [
         h("strong", { key: "speed" }, summary.windText),
-        summary.gustText ? h("span", { key: "gust" }, summary.gustText) : null,
-        h("span", { className: "weather-wind-mode", key: "mode" }, modeText),
+        props.compact ? null : (summary.gustText ? h("span", { key: "gust" }, summary.gustText) : null),
+        props.compact ? null : h("span", { className: "weather-wind-mode", key: "mode" }, modeText),
       ]),
     ],
   );
@@ -101,6 +101,7 @@ export function WeatherStrip(props) {
   const meta = summary ? [summary.humidityText, summary.precipText].filter(Boolean).concat(summary.changes) : [];
   const wind = summary
     ? h(WeatherWind, {
+      compact: Boolean(props.compact),
       compassState,
       key: "wind",
       summary,
@@ -110,16 +111,10 @@ export function WeatherStrip(props) {
 
   if (props.compact) {
     return h("div", { className: "weather-strip weather-strip-compact", title: props.title || "Round weather" }, [
+      summary ? h("div", { className: "weather-temp", key: "temp" }, summary.tempText) : null,
       summary
-        ? h("div", { className: "weather-condition", key: "condition" }, [
-          h("div", { className: "weather-temp", key: "temp" }, summary.tempText),
-          h("div", { className: "weather-copy", key: "copy" }, [
-            h("strong", { key: "condition" }, summary.condition),
-            summary.feelsText ? h("span", { key: "feels" }, summary.feelsText) : null,
-          ]),
-        ])
+        ? h("div", { className: "weather-compact-copy", key: "copy" }, summary.condition)
         : h("div", { className: "weather-empty", key: "empty" }, chips.map((chip) => chip.value).join(" ")),
-      h(WeatherGraphic, { graphic: summary && summary.graphic, key: "graphic" }),
       wind,
     ]);
   }

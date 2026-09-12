@@ -132,25 +132,31 @@
         .weather-empty { color: var(--text-secondary); font-size: 0.86rem; }
         .weather-note { margin-top: 0.55rem; color: var(--text-muted); font-size: 0.72rem; line-height: 1.35; }
         .weather-strip-compact {
-            display: flex; align-items: center; gap: 0.5rem;
-            padding: 0.45rem 0.65rem; margin-bottom: 0.65rem;
+            display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+            align-items: center; gap: 0.55rem;
+            padding: 0.5rem 0.7rem; margin-bottom: 0.65rem;
         }
-        .weather-strip-compact .weather-condition { min-width: 0; flex: 1; }
-        .weather-strip-compact .weather-temp { font-size: 1.55rem; }
-        .weather-strip-compact .weather-copy strong { font-size: 0.86rem; }
-        .weather-strip-compact .weather-copy span { font-size: 0.7rem; }
-        .weather-strip-compact .weather-graphic { width: 36px; height: 36px; }
-        .weather-strip-compact .weather-graphic-icon { font-size: 1.35rem; }
-        .weather-strip-compact .weather-wind { min-height: 36px; padding: 0.25rem 0.5rem; }
-        .weather-strip-compact .weather-wind-copy span { display: none; }
+        .weather-strip-compact .weather-temp { font-size: 1.7rem; line-height: 1; }
+        .weather-compact-copy {
+            min-width: 0; font-size: 0.88rem; font-weight: 700; color: var(--text-primary);
+            line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .weather-strip-compact .weather-wind,
+        .weather-wind-compact {
+            width: auto; max-width: none; min-height: 36px; padding: 0.28rem 0.55rem;
+            flex: 0 0 auto; white-space: nowrap;
+        }
+        .weather-wind-compact .weather-wind-copy { display: block; }
+        .weather-wind-compact .weather-wind-copy span { display: none; }
         @media (max-width: 420px) {
             .weather-head { align-items: flex-start; }
             .weather-main { grid-template-columns: minmax(0, 1fr) auto; }
             .weather-graphic { width: 48px; height: 48px; }
             .weather-graphic-icon { font-size: 1.85rem; }
             .weather-wind { grid-column: 1 / -1; justify-content: flex-start; width: 100%; }
-            .weather-strip-compact .weather-wind {
-                width: auto; grid-column: auto; flex: 0 0 auto; margin-left: auto;
+            .weather-strip-compact .weather-wind,
+            .weather-wind-compact {
+                width: auto; grid-column: auto; flex: 0 0 auto; margin-left: 0;
             }
         }
         .center { text-align: center; }
