@@ -56,8 +56,8 @@ function themeRoot() {
 
 function Slider({ name, value, disabled, onChange }) {
   const limit = ADJUSTMENT_LIMITS[name];
-  return h("label", { className: "aether-slider", key: name }, [
-    h("span", { className: "aether-slider-label", key: "label" }, [
+  return h("label", { className: "dash-theme-slider", key: name }, [
+    h("span", { className: "dash-theme-slider-label", key: "label" }, [
       limit.label,
       h("em", { key: "val" }, String(value)),
     ]),
@@ -89,6 +89,7 @@ export function DashboardThemeBuilder() {
   const [dragging, setDragging] = React.useState(false);
   const pixelsRef = React.useRef(null);
   const fileRef = React.useRef(null);
+  const editedRef = React.useRef(false);
 
   const paint = React.useCallback((next) => {
     const safe = sanitizeTheme(next);
@@ -97,24 +98,42 @@ export function DashboardThemeBuilder() {
       setExtractMode(safe.extractMode);
       setMode(safe.mode);
       setAdjustments(sanitizeAdjustments(safe.adjustments));
+    } else {
+      setExtractMode("normal");
+      setMode("dark");
+      setAdjustments(DEFAULT_ADJUSTMENTS);
     }
     applyDashboardTheme(safe, themeRoot());
     return safe;
   }, []);
 
+  React.useEffect(() => () => {
+    applyDashboardTheme(null, themeRoot());
+  }, []);
+
   React.useEffect(() => {
-    if (!token) return undefined;
+    editedRef.current = false;
+    pixelsRef.current = null;
+    if (!token) {
+      paint(null);
+      return undefined;
+    }
     const local = readStoredTheme(window.localStorage, memberId);
-    if (local) paint(local);
+    paint(local);
     const controller = new AbortController();
     request("/me/dashboard-theme", { token, signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) return;
         const data = await response.json().catch(() => null);
+        if (editedRef.current) return;
         const remote = sanitizeTheme(data?.theme);
         if (remote) {
           writeStoredTheme(window.localStorage, memberId, remote);
           paint(remote);
+          return;
+        }
+        if (data && Object.prototype.hasOwnProperty.call(data, "theme") && !data.theme && !local) {
+          paint(null);
         }
       })
       .catch(() => {});
@@ -124,19 +143,37 @@ export function DashboardThemeBuilder() {
   const persistTimer = React.useRef(0);
 
   async function persist(next, immediate = true) {
+    editedRef.current = true;
     writeStoredTheme(window.localStorage, memberId, next);
-    if (!token) return;
-    const send = () => request("/me/dashboard-theme", {
-      token,
-      method: next ? "PUT" : "DELETE",
-      body: next ? { theme: next } : undefined,
-    }).catch(() => null);
+    if (!token) return true;
+    const send = async () => {
+      try {
+        const response = await request("/me/dashboard-theme", {
+          token,
+          method: next ? "PUT" : "DELETE",
+          body: next ? { theme: next } : undefined,
+        });
+        return Boolean(response && response.ok);
+      } catch {
+        return false;
+      }
+    };
     window.clearTimeout(persistTimer.current);
-    if (immediate) {
-      await send();
-      return;
-    }
-    persistTimer.current = window.setTimeout(send, 400);
+    if (immediate) return send();
+    persistTimer.current = window.setTimeout(() => {
+      send().then((ok) => {
+        if (!ok) setStatus("Saved on this device. Cloud save failed — try again.");
+      });
+    }, 400);
+    return true;
+  }
+
+  async function wallpaperPixels() {
+    if (pixelsRef.current?.length) return pixelsRef.current;
+    if (!theme?.wallpaper) return null;
+    const pixels = await pixelsFromDataUrl(theme.wallpaper);
+    pixelsRef.current = pixels;
+    return pixels;
   }
 
   async function compose(options = {}) {
@@ -202,8 +239,7 @@ export function DashboardThemeBuilder() {
     }
     setBusy(true);
     try {
-      const pixels = pixelsRef.current || (theme?.wallpaper ? await pixelsFromDataUrl(theme.wallpaper) : null);
-      pixelsRef.current = pixels;
+      const pixels = await wallpaperPixels();
       const next = await compose({ pixels, editedPalette: null, preset: null });
       setStatus(next ? "Palette extracted." : "Could not extract a palette.");
     } finally {
@@ -216,19 +252,22 @@ export function DashboardThemeBuilder() {
     if (!theme) return;
     setBusy(true);
     try {
-      await compose({ nextMode, editedPalette: null });
+      const pixels = await wallpaperPixels();
+      await compose({ nextMode, editedPalette: null, ...(pixels ? { pixels } : {}) });
     } finally {
       setBusy(false);
     }
   }
 
   async function changeExtract(nextExtract) {
+    const pixels = pixelsRef.current || (theme?.wallpaper ? await wallpaperPixels() : null);
+    if (!pixels?.length) {
+      setStatus("Drop a wallpaper first to use extraction modes.");
+      return;
+    }
     setExtractMode(nextExtract);
-    if (!theme && !pixelsRef.current) return;
     setBusy(true);
     try {
-      const pixels = pixelsRef.current || (theme?.wallpaper ? await pixelsFromDataUrl(theme.wallpaper) : null);
-      pixelsRef.current = pixels;
       await compose({ nextExtract, pixels, editedPalette: null, preset: null });
       setStatus("Extraction mode updated.");
     } finally {
@@ -252,6 +291,7 @@ export function DashboardThemeBuilder() {
   async function applyPreset(name) {
     setBusy(true);
     try {
+      pixelsRef.current = null;
       const next = await compose({
         preset: name,
         pixels: null,
@@ -286,8 +326,8 @@ export function DashboardThemeBuilder() {
       await extract();
       return;
     }
-    await persist(theme);
-    setStatus("Theme applied to your dashboard.");
+    const ok = await persist(theme);
+    setStatus(ok ? "Theme applied to your dashboard." : "Saved on this device. Cloud save failed — try again.");
   }
 
   async function reset() {
@@ -297,26 +337,26 @@ export function DashboardThemeBuilder() {
     setMode("dark");
     setAdjustments(DEFAULT_ADJUSTMENTS);
     clearStoredTheme(window.localStorage, memberId);
-    await persist(null);
-    setStatus("Club default restored.");
+    const ok = await persist(null);
+    setStatus(ok ? "Club default restored." : "Cleared on this device. Cloud save failed — try again.");
   }
 
   if (!token) return null;
 
   const contrast = themeContrast(theme);
   const presetNames = Object.keys(PRESET_THEMES);
+  const canExtract = Boolean(theme?.wallpaper || pixelsRef.current?.length);
 
   return h("details", {
-    className: "aether-theme dash-collapse",
+    className: "dash-theme dash-collapse",
     "data-react-dashboard-theme": theme ? "custom" : "default",
     open: true,
   }, [
-    h("summary", { className: "dash-subtitle dash-collapse-summary", key: "summary" }, "Aether theme"),
-    h("p", { className: "dash-note", key: "copy" }, "Aether for Omarchy, for this dashboard: drop a wallpaper, Extract a 16-color ANSI palette, fine-tune, Apply Theme."),
-    h("div", { className: "aether-studio", key: "studio" }, [
-      h("header", { className: "aether-header", key: "header" }, [
-        h("strong", { className: "aether-mark", key: "mark" }, "AETHER"),
-        h("div", { className: "aether-toggle", key: "look", role: "group", "aria-label": "Look" }, [
+    h("summary", { className: "dash-subtitle dash-collapse-summary", key: "summary" }, "Dashboard theme"),
+    h("p", { className: "dash-note", key: "copy" }, "Drop a wallpaper, extract a color palette, fine-tune, then apply it to your dashboard."),
+    h("div", { className: "dash-theme-studio", key: "studio" }, [
+      h("header", { className: "dash-theme-header", key: "header" }, [
+        h("div", { className: "dash-theme-toggle", key: "look", role: "group", "aria-label": "Look" }, [
           h("button", {
             type: "button",
             className: mode === "dark" ? "is-active" : "",
@@ -333,10 +373,10 @@ export function DashboardThemeBuilder() {
           }, "Light"),
         ]),
       ]),
-      h("div", { className: "aether-body", key: "body" }, [
-        h("div", { className: "aether-main", key: "main" }, [
+      h("div", { className: "dash-theme-body", key: "body" }, [
+        h("div", { className: "dash-theme-main", key: "main" }, [
           h("label", {
-            className: `aether-drop${dragging ? " is-dragging" : ""}${theme?.wallpaper ? " has-wallpaper" : ""}`,
+            className: `dash-theme-drop${dragging ? " is-dragging" : ""}${theme?.wallpaper ? " has-wallpaper" : ""}`,
             htmlFor: "dashboardThemeFile",
             key: "drop",
             onDragEnter: (event) => { event.preventDefault(); setDragging(true); },
@@ -349,11 +389,11 @@ export function DashboardThemeBuilder() {
             },
           }, [
             theme?.wallpaper
-              ? h("img", { className: "aether-wallpaper", src: theme.wallpaper, alt: "Dashboard wallpaper preview", key: "img" })
-              : h("span", { className: "aether-drop-copy", key: "empty" }, "Drop a wallpaper or choose an image"),
+              ? h("img", { className: "dash-theme-wallpaper", src: theme.wallpaper, alt: "Dashboard wallpaper preview", key: "img" })
+              : h("span", { className: "dash-theme-drop-copy", key: "empty" }, "Drop a wallpaper or choose an image"),
             h("input", {
               id: "dashboardThemeFile",
-              className: "aether-file",
+              className: "dash-theme-file",
               type: "file",
               accept: "image/jpeg,image/png,image/webp",
               disabled: busy,
@@ -363,14 +403,14 @@ export function DashboardThemeBuilder() {
             }),
           ]),
           theme?.palette?.length
-            ? h("div", { className: "aether-palette", key: "palette", "aria-label": "ANSI palette" },
+            ? h("div", { className: "dash-theme-palette", key: "palette", "aria-label": "Color palette" },
               theme.palette.map((hex, index) => h("label", {
-                className: "aether-swatch",
+                className: "dash-theme-swatch",
                 key: `${hex}-${index}`,
                 title: `${ANSI_SLOT_ROLES[index] || index} ${hex}`,
                 style: { background: hex },
               }, [
-                h("span", { className: "aether-swatch-role", key: "role" }, ANSI_SLOT_ROLES[index] || String(index)),
+                h("span", { className: "dash-theme-swatch-role", key: "role" }, ANSI_SLOT_ROLES[index] || String(index)),
                 h("input", {
                   type: "color",
                   value: hex,
@@ -379,23 +419,23 @@ export function DashboardThemeBuilder() {
                   key: "color",
                 }),
               ])))
-            : h("p", { className: "aether-empty", key: "empty-palette" }, "Extract to fill the 16-color ANSI grid."),
+            : h("p", { className: "dash-theme-empty", key: "empty-palette" }, "Extract to fill the color grid."),
         ]),
-        h("aside", { className: "aether-sidebar", key: "sidebar" }, [
-          EXTRACT_MODE_GROUPS.map((group) => h("div", { className: "aether-mode-group", key: group.id }, [
-            h("span", { className: "aether-field", key: "label" }, group.label),
-            h("div", { className: "aether-pills", key: "pills" }, group.modes.map((name) => h("button", {
+        h("aside", { className: "dash-theme-sidebar", key: "sidebar" }, [
+          EXTRACT_MODE_GROUPS.map((group) => h("div", { className: "dash-theme-mode-group", key: group.id }, [
+            h("span", { className: "dash-theme-field", key: "label" }, group.label),
+            h("div", { className: "dash-theme-pills", key: "pills" }, group.modes.map((name) => h("button", {
               type: "button",
               className: extractMode === name ? "is-active" : "",
-              title: EXTRACT_MODE_META[name]?.description,
-              disabled: busy,
+              title: canExtract ? EXTRACT_MODE_META[name]?.description : "Drop a wallpaper first to use extraction modes.",
+              disabled: busy || !canExtract,
               onClick: () => changeExtract(name),
               key: name,
             }, EXTRACT_MODE_META[name]?.label || name))),
           ])),
-          h("div", { className: "aether-adjust", key: "tune" }, [
-            h("span", { className: "aether-field", key: "label" }, "Adjust"),
-            h("div", { className: "aether-sliders", key: "sliders" }, ADJUSTMENT_KEYS.map((name) => h(Slider, {
+          h("div", { className: "dash-theme-adjust", key: "tune" }, [
+            h("span", { className: "dash-theme-field", key: "label" }, "Adjust"),
+            h("div", { className: "dash-theme-sliders", key: "sliders" }, ADJUSTMENT_KEYS.map((name) => h(Slider, {
               name,
               value: adjustments[name],
               disabled: busy || !theme,
@@ -411,19 +451,19 @@ export function DashboardThemeBuilder() {
             }, "Reset adjustments"),
           ]),
           contrast
-            ? h("p", { className: "aether-contrast", key: "contrast" }, `Text contrast ${contrast.ratio.toFixed(1)}:1 ${contrast.grade}`)
+            ? h("p", { className: "dash-theme-contrast", key: "contrast" }, `Text contrast ${contrast.ratio.toFixed(1)}:1 ${contrast.grade}`)
             : null,
-          h("div", { className: "aether-presets", key: "presets" }, [
-            h("span", { className: "aether-field", key: "label" }, "Presets"),
-            h("div", { className: "aether-preset-grid", key: "grid" }, presetNames.map((name) => h("button", {
+          h("div", { className: "dash-theme-presets", key: "presets" }, [
+            h("span", { className: "dash-theme-field", key: "label" }, "Presets"),
+            h("div", { className: "dash-theme-preset-grid", key: "grid" }, presetNames.map((name) => h("button", {
               type: "button",
-              className: `aether-preset${theme?.preset === name ? " is-active" : ""}`,
+              className: `dash-theme-preset${theme?.preset === name ? " is-active" : ""}`,
               disabled: busy,
               onClick: () => applyPreset(name),
               key: name,
             }, [
-              h("span", { className: "aether-preset-name", key: "name" }, name),
-              h("span", { className: "aether-preset-bar", key: "bar" }, PRESET_THEMES[name].slice(0, 8).map((hex, index) => h("i", {
+              h("span", { className: "dash-theme-preset-name", key: "name" }, name),
+              h("span", { className: "dash-theme-preset-bar", key: "bar" }, PRESET_THEMES[name].slice(0, 8).map((hex, index) => h("i", {
                 key: `${name}-${index}`,
                 style: { background: hex },
               }))),
@@ -431,14 +471,14 @@ export function DashboardThemeBuilder() {
           ]),
         ]),
       ]),
-      h("footer", { className: "aether-actionbar", key: "bar" }, [
-        h("div", { className: "aether-actions", key: "actions" }, [
+      h("footer", { className: "dash-theme-actionbar", key: "bar" }, [
+        h("div", { className: "dash-theme-actions", key: "actions" }, [
           h("button", {
             type: "button",
             className: "board-link",
             disabled: busy,
             onClick: extract,
-            "data-aether-extract": "1",
+            "data-theme-extract": "1",
             key: "extract",
           }, busy ? "Working..." : "Extract"),
           h("button", {
@@ -451,10 +491,10 @@ export function DashboardThemeBuilder() {
         ]),
         h("button", {
           type: "button",
-          className: "passkey-btn aether-apply",
+          className: "passkey-btn dash-theme-apply",
           disabled: busy,
           onClick: applyTheme,
-          "data-aether-apply": "1",
+          "data-theme-apply": "1",
           key: "apply",
         }, "Apply Theme"),
       ]),

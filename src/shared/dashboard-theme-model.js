@@ -38,6 +38,7 @@ export const EXTRACT_MODE_META = {
 export const THEME_MODES = ["dark", "light"];
 export const ANSI_SLOT_ROLES = ["BG", "RD", "GR", "YL", "BL", "MG", "CY", "FG", "DIM", "RD+", "GR+", "YL+", "BL+", "MG+", "CY+", "FG+"];
 export const ANSI_HUES = [0, 120, 60, 240, 300, 180];
+export const FILL_TOKEN_KEYS = ["primary", "primary-strong", "secondary", "accent", "green"];
 export const TOKEN_KEYS = [
   "primary",
   "primary-strong",
@@ -678,6 +679,17 @@ function sanitizeHexList(values, max = 16) {
     .slice(0, max);
 }
 
+function applyFillContrast(tokens) {
+  if (!tokens) return tokens;
+  const white = rgb(255, 255, 255);
+  const next = { ...tokens };
+  for (const key of FILL_TOKEN_KEYS) {
+    const color = hexToRgb(next[key]);
+    if (color) next[key] = rgbToHex(ensureContrast(color, white, 4.5));
+  }
+  return next;
+}
+
 export function tokensFromPalette(palette, mode = "dark") {
   const colors = (Array.isArray(palette) ? palette : [])
     .map((color) => (typeof color === "string" ? hexToRgb(color) : color))
@@ -692,7 +704,7 @@ export function tokensFromPalette(palette, mode = "dark") {
     const yellow = colors[3] || red;
     const blue = colors[4] || red;
     const cyan = colors[6] || blue;
-    return {
+    return applyFillContrast({
       primary: rgbToHex(ensureContrast(red, bg, 3)),
       "primary-strong": rgbToHex(shiftLightness(red, mode === "light" ? -0.1 : -0.06)),
       secondary: rgbToHex(blue),
@@ -707,7 +719,7 @@ export function tokensFromPalette(palette, mode = "dark") {
       "text-tertiary": rgbToHex(mix(fg, dim, 0.45)),
       "text-muted": rgbToHex(ensureContrast(dim, bg, 3.2)),
       "secondary-text": rgbToHex(ensureContrast(cyan, bg, 3.5)),
-    };
+    });
   }
   const ordered = colors.slice().sort((left, right) => relativeLuminance(left) - relativeLuminance(right));
   const dark = ordered[0];
@@ -819,6 +831,7 @@ export function sanitizeTheme(raw) {
       if (!tokens[key]) tokens[key] = rebuilt[key];
     }
   }
+  Object.assign(tokens, applyFillContrast(tokens));
   const wallpaper = typeof raw.wallpaper === "string" && WALLPAPER_RE.test(raw.wallpaper) && raw.wallpaper.length <= MAX_WALLPAPER_CHARS
     ? raw.wallpaper
     : null;
@@ -850,16 +863,25 @@ export function readStoredTheme(storage, memberId) {
 
 export function writeStoredTheme(storage, memberId, theme) {
   const safe = sanitizeTheme(theme);
-  if (!safe) {
-    storage?.removeItem?.(themeStorageKey(memberId));
-    return null;
+  const key = themeStorageKey(memberId);
+  try {
+    if (!safe) {
+      storage?.removeItem?.(key);
+      return null;
+    }
+    storage?.setItem?.(key, JSON.stringify(safe));
+  } catch {
+    // Quota / private-mode failures must not block painting or remote persist.
   }
-  storage?.setItem?.(themeStorageKey(memberId), JSON.stringify(safe));
   return safe;
 }
 
 export function clearStoredTheme(storage, memberId) {
-  storage?.removeItem?.(themeStorageKey(memberId));
+  try {
+    storage?.removeItem?.(themeStorageKey(memberId));
+  } catch {
+    // ignore
+  }
 }
 
 export function applyDashboardTheme(theme, root) {

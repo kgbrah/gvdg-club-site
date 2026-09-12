@@ -1,5 +1,5 @@
 export const PRESET_THEMES = {
-  Aether: ["#141114", "#ff637e", "#b4e173", "#ffd568", "#ff9b66", "#c09ef5", "#76ecdb", "#ffffff", "#766974", "#ff637e", "#b4e173", "#ffd568", "#ff9b66", "#c09ef5", "#76ecdb", "#ffffff"],
+  Ember: ["#141114", "#ff637e", "#b4e173", "#ffd568", "#ff9b66", "#c09ef5", "#76ecdb", "#ffffff", "#766974", "#ff637e", "#b4e173", "#ffd568", "#ff9b66", "#c09ef5", "#76ecdb", "#ffffff"],
   Sakura: ["#0d0509", "#e85f6f", "#f29b9a", "#d4a882", "#d9a56c", "#d1b399", "#e8c099", "#f0eaed", "#4a3c45", "#ff7a8a", "#ffb5b4", "#e6ba94", "#ebb97e", "#e3c5ab", "#fbd2ab", "#ffffff"],
   Fireside: ["#0a1220", "#e06b58", "#889889", "#b8b5a2", "#b8b8b6", "#e48b7a", "#d0cac7", "#f0f2f5", "#555c65", "#e06b58", "#9eaca1", "#c8c3b8", "#cdcbc9", "#f0a19a", "#e3ddda", "#f0f2f5"],
   Frost: ["#0a0f1c", "#869aac", "#95a8b8", "#9fadb8", "#9bb0c2", "#a8b9c6", "#b8c7d0", "#d4d5d9", "#5f6374", "#869aac", "#95a8b8", "#9fadb8", "#9bb0c2", "#a8b9c6", "#b8c7d0", "#d4d5d9"],

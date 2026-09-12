@@ -18,6 +18,7 @@ import {
   rgbToOklch,
   sanitizeTheme,
   tokensFromPalette,
+  writeStoredTheme,
 } from "../src/shared/dashboard-theme-model.js";
 
 function forestPixels() {
@@ -60,7 +61,7 @@ test("tokensFromPalette keeps readable text on the generated background", () => 
   assert.notEqual(dark["bg-primary"], light["bg-primary"]);
 });
 
-test("Aether extract modes each emit a 16-color ANSI palette", () => {
+test("extract modes each emit a 16-color palette", () => {
   for (const extractMode of ["normal", "muted", "colorful", "pastel", "monochromatic", "analogous", "material", "forest"]) {
     const palette = paletteFromPixels(forestPixels(), extractMode, "dark");
     assert.equal(palette.length, 16, extractMode);
@@ -87,10 +88,30 @@ test("analogous extraction stays near the wallpaper's dominant hue", () => {
 test("Nord preset maps ANSI slot 0 onto the dashboard background", () => {
   const theme = buildTheme({ preset: "Nord", mode: "dark" });
   assert.equal(theme.palette.length, 16);
-  assert.equal(theme.tokens["bg-primary"], PRESET_THEMES.Nord[0]);
-  assert.equal(theme.tokens.green, PRESET_THEMES.Nord[2]);
+  assert.equal(theme.tokens["bg-primary"], PRESET_THEMES.Nord[0].toLowerCase());
+  const white = rgb(255, 255, 255);
+  assert.ok(contrastRatio(hexToRgb(theme.tokens.green), white) >= 4.5);
   const light = buildTheme({ preset: "Nord", mode: "light" });
   assert.notEqual(light.tokens["bg-primary"], theme.tokens["bg-primary"]);
+});
+
+test("fill tokens stay readable on white tile text", () => {
+  const theme = buildTheme({ preset: "Dracula", mode: "dark" });
+  const white = rgb(255, 255, 255);
+  for (const key of ["primary", "secondary", "accent", "green"]) {
+    assert.ok(contrastRatio(hexToRgb(theme.tokens[key]), white) >= 4.5, key);
+  }
+});
+
+test("writeStoredTheme swallows quota errors so callers can still persist remotely", () => {
+  const palette = paletteFromPixels(forestPixels(), "normal", "dark");
+  const theme = buildTheme({ pixels: forestPixels(), mode: "dark", extractMode: "normal" });
+  const storage = {
+    setItem() { throw new Error("QuotaExceededError"); },
+    removeItem() { throw new Error("QuotaExceededError"); },
+  };
+  assert.equal(writeStoredTheme(storage, "member-a", theme).palette.length, 16);
+  assert.equal(palette.length, 16);
 });
 
 test("adjustments can boost vibrance without dropping the palette", () => {
