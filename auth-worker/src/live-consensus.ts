@@ -47,7 +47,7 @@ export interface RecordScoreVoteInput {
   targetIndex: number;
   scorerId: string;
   hole: number;
-  strokes: number;
+  strokes: number | null;
 }
 
 export function playerScorerId(index: number): string {
@@ -81,6 +81,13 @@ export function recordScoreVote(input: RecordScoreVoteInput): ScoreConflict | nu
   if (!target || target.removed) return null;
   target.scores = target.scores ?? {};
   const scorecards = (target.scorecards ??= {});
+  if (input.strokes == null) {
+    const votes = scorecards[input.hole];
+    if (votes) delete votes[input.scorerId];
+    if (votes && Object.keys(votes).length === 0) delete scorecards[input.hole];
+    syncConsensusScore(input.players, target, input.hole, { unsetIfEmpty: true });
+    return scoreConflictFor(input.players, input.targetIndex, input.hole);
+  }
   const votes = (scorecards[input.hole] ??= {});
   votes[input.scorerId] = input.strokes;
   syncConsensusScore(input.players, target, input.hole);
@@ -141,17 +148,18 @@ function scoreConflictFor(players: PlayerState[], playerIndex: number, hole: num
   return { cardId: player.cardId ?? null, playerIndex, playerName: player.name, hole, values };
 }
 
-function syncConsensusScore(players: PlayerState[], player: PlayerState, hole: number): void {
+function syncConsensusScore(players: PlayerState[], player: PlayerState, hole: number, opts: { unsetIfEmpty?: boolean } = {}): void {
   const values = activeVoteValues(players, player, hole);
   if (values.length === 1) {
     const score = values[0];
     if (score != null) player.scores[hole] = score;
   } else if (values.length > 1) {
     delete player.scores[hole]; // genuine disagreement among active scorers → blank until reconciled
+  } else if (opts.unsetIfEmpty) {
+    delete player.scores[hole];
   }
-  // values.length === 0: no active votes remain (e.g. the sole scorekeeper left, or a removed scorer's
-  // vote was purged) — KEEP the last-known score so a departed scorer's entered scores aren't wiped and
-  // the round still finalizes. A hole that was never scored simply stays unset.
+  // values.length === 0 without unsetIfEmpty: keep the last-known score so a departed scorer's
+  // entered scores aren't wiped. A hole that was never scored simply stays unset.
 }
 
 /** Distinct stroke values among votes cast by scorers CURRENTLY ACTIVE on the card. Votes from removed

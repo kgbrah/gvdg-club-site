@@ -7,7 +7,7 @@ export interface RecordScoreTargetVoteInput {
   target: ScoreTarget;
   scorerId: string;
   hole: number;
-  strokes: number;
+  strokes: number | null;
 }
 
 type TargetAnchor = { index: number; player: PlayerState };
@@ -22,10 +22,16 @@ export function recordScoreTargetVote(input: RecordScoreTargetVoteInput): ScoreC
   for (const member of members) {
     member.player.scores = member.player.scores ?? {};
     const scorecards = (member.player.scorecards ??= {});
-    const votes = (scorecards[input.hole] ??= {});
-    votes[input.scorerId] = input.strokes;
+    if (input.strokes == null) {
+      const votes = scorecards[input.hole];
+      if (votes) delete votes[input.scorerId];
+      if (votes && Object.keys(votes).length === 0) delete scorecards[input.hole];
+    } else {
+      const votes = (scorecards[input.hole] ??= {});
+      votes[input.scorerId] = input.strokes;
+    }
   }
-  syncTargetConsensusScore(input.players, input.target, input.hole);
+  syncTargetConsensusScore(input.players, input.target, input.hole, { unsetIfEmpty: input.strokes == null });
   return scoreTargetConflictFor(input.players, input.target, input.hole);
 }
 
@@ -147,11 +153,18 @@ export function purgeScoreTargetScorerVotes(players: PlayerState[], removedIndex
   }
 }
 
-function recordScoreVote(input: { players: PlayerState[]; targetIndex: number; scorerId: string; hole: number; strokes: number }): ScoreConflict | null {
+function recordScoreVote(input: { players: PlayerState[]; targetIndex: number; scorerId: string; hole: number; strokes: number | null }): ScoreConflict | null {
   const target = input.players[input.targetIndex];
   if (!target || target.removed) return null;
   target.scores = target.scores ?? {};
   const scorecards = (target.scorecards ??= {});
+  if (input.strokes == null) {
+    const votes = scorecards[input.hole];
+    if (votes) delete votes[input.scorerId];
+    if (votes && Object.keys(votes).length === 0) delete scorecards[input.hole];
+    syncConsensusScore(input.players, target, input.hole, { unsetIfEmpty: true });
+    return scoreConflictFor(input.players, input.targetIndex, input.hole);
+  }
   const votes = (scorecards[input.hole] ??= {});
   votes[input.scorerId] = input.strokes;
   syncConsensusScore(input.players, target, input.hole);
@@ -166,12 +179,14 @@ function scoreConflictFor(players: PlayerState[], playerIndex: number, hole: num
   return { cardId: player.cardId ?? null, playerIndex, playerName: player.name, hole, values };
 }
 
-function syncConsensusScore(players: PlayerState[], player: PlayerState, hole: number): void {
+function syncConsensusScore(players: PlayerState[], player: PlayerState, hole: number, opts: { unsetIfEmpty?: boolean } = {}): void {
   const values = activeVoteValues(players, player, hole);
   if (values.length === 1) {
     const score = values[0];
     if (score != null) player.scores[hole] = score;
   } else if (values.length > 1) {
+    delete player.scores[hole];
+  } else if (opts.unsetIfEmpty) {
     delete player.scores[hole];
   }
 }
@@ -185,10 +200,10 @@ function scoreTargetConflictFor(players: PlayerState[], target: ScoreTarget, hol
   return targetConflict({ target, anchor, hole, values });
 }
 
-function syncTargetConsensusScore(players: PlayerState[], target: ScoreTarget, hole: number): void {
+function syncTargetConsensusScore(players: PlayerState[], target: ScoreTarget, hole: number, opts: { unsetIfEmpty?: boolean } = {}): void {
   if (target.type === "player") {
     const player = players[target.playerIndexes[0]];
-    if (player && !player.removed) syncConsensusScore(players, player, hole);
+    if (player && !player.removed) syncConsensusScore(players, player, hole, opts);
     return;
   }
   const values = targetActiveVoteValues(players, target, hole);
@@ -198,6 +213,8 @@ function syncTargetConsensusScore(players: PlayerState[], target: ScoreTarget, h
       const score = values[0];
       if (score != null) member.player.scores[hole] = score;
     } else if (values.length > 1) {
+      delete member.player.scores[hole];
+    } else if (opts.unsetIfEmpty) {
       delete member.player.scores[hole];
     }
   }

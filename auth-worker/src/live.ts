@@ -175,9 +175,10 @@ export class LiveEventDO {
   private async score(b: ScoreBody, authMember: string | null, authAdmin: boolean): Promise<Response> {
     if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
     const hole = Number(b.hole);
-    const strokes = Number(b.strokes);
+    const clear = b.strokes === null;
+    const strokes = clear ? null : Number(b.strokes);
     if (!this.meta.holes.some((h) => h.hole === hole)) return j({ error: "bad_hole" }, 400);
-    if (!Number.isInteger(strokes) || strokes < 1 || strokes > 30) return j({ error: "bad_strokes" }, 400);
+    if (!clear && (!Number.isInteger(strokes) || strokes < 1 || strokes > 30)) return j({ error: "bad_strokes" }, 400);
     const scoring = scoringState(this.meta, this.players);
     if (scoring.globalError) return invalidScoreTargetsResponse(scoring.globalError); // whole round unscorable (bad config)
     const target = scoreTargetForBody(b, this.players, scoring.targets);

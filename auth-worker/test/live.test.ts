@@ -791,6 +791,29 @@ describe("live consensus score targets", () => {
     expect(card[0]?.scores).toMatchObject({ 1: 2 });
     expect(scoreTargetConsensusIssues(card, holes, [playerTarget])).toEqual({ conflicts: [], missing: [] });
   });
+
+  it("clears a hole back to unstarted when a scorer withdraws their vote", () => {
+    const card = players();
+    recordScoreVote({ players: card, targetIndex: 0, scorerId: "player:0", hole: 1, strokes: 3 });
+    expect(card[0]?.scores).toMatchObject({ 1: 3 });
+
+    recordScoreVote({ players: card, targetIndex: 0, scorerId: "player:0", hole: 1, strokes: null });
+    expect(card[0]?.scores).not.toHaveProperty("1");
+    expect(card[0]?.scorecards?.[1]).toBeUndefined();
+    expect(scorecardConsensusIssues(card, holes).missing).toEqual([
+      { cardId: "c0", playerIndex: 0, playerName: "A", hole: 1, missing: 1, required: 1 },
+      { cardId: "c0", playerIndex: 1, playerName: "B", hole: 1, missing: 1, required: 1 },
+    ]);
+  });
+
+  it("clears an agreed pair hole when the last vote is withdrawn", () => {
+    const card = players();
+    recordScoreTargetVote({ players: card, target: pairTarget, scorerId: "player:0", hole: 1, strokes: 3 });
+    recordScoreTargetVote({ players: card, target: pairTarget, scorerId: "player:0", hole: 1, strokes: null });
+    expect(card[0]?.scores).not.toHaveProperty("1");
+    expect(card[1]?.scores).not.toHaveProperty("1");
+    expect(scoreTargetConsensusIssues(card, holes, [pairTarget]).missing).toHaveLength(1);
+  });
 });
 
 describe("LiveEventDO WebSocket handling", () => {
@@ -821,6 +844,10 @@ describe("LiveEventDO WebSocket handling", () => {
     const score = await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify({ index: 0, hole: 1, strokes: 3 }) }));
     expect(score.status).toBe(200);
     expect(server.sent.at(-1)).toContain('"scores":{"1":3}');
+
+    const cleared = await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify({ index: 0, hole: 1, strokes: null }) }));
+    expect(cleared.status).toBe(200);
+    expect(server.sent.at(-1)).toContain('"scores":{}');
   });
 });
 
