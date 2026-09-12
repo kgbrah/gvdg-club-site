@@ -53,7 +53,7 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(chrome, /localStorage\.getItem\("theme"\)/);
   assert.match(chrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app admin-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v105"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v106"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
@@ -293,6 +293,10 @@ test('Events event detail is rendered by the public React bundle', () => {
   assert.match(app, /function FinalResults/);
   assert.match(app, /function EventExtras/);
   assert.match(app, /function TeeSigns/);
+  assert.match(app, /import \{ HoleMap \} from "\.\.\/shared\/hole-map\.js"/);
+  assert.match(app, /compact: true/);
+  assert.match(html, /\.hole-map-satellite/);
+  assert.match(html, /\.hole-map-compact/);
   assert.match(app, /function PlayerRoster/);
   assert.match(app, /WeatherStrip/);
   assert.match(app, /import \{ UDiscExportDetails, udiscDeepLink \} from "\.\.\/shared\/udisc-export\.js"/);

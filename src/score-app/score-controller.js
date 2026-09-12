@@ -479,14 +479,14 @@ export function startScoreApp(options) {
         }
 
         function holeMeta(idx) { return S.holes[idx] || { hole: idx + 1, par: 3 }; }
-        function liveTeeSignView(h) {
+        function liveTeeSignView(h, players) {
             const id = Number(h && h.tee_sign_id);
             if (!id) return null;
             // Matchplay: tint this hole's tee sign in the winning team's color. Halved holes stay as-is
             // (no color) in the scoring app, per spec.
             let highlightColor = null;
             if (isMatchplayScoring(S)) {
-                const w = holeWinners([{ hole: h.hole }], S.cardmates)[h.hole];
+                const w = holeWinners([{ hole: h.hole }], players || S.cardmates)[h.hole];
                 const c = winnerColor(w, { tie: false });
                 if (c) highlightColor = c;
             }
@@ -496,6 +496,20 @@ export function startScoreApp(options) {
                 hole: h.hole,
                 src: API_BASE + '/tee-signs/' + id + '/image',
             };
+        }
+
+        function watchHoleViews() {
+            const players = (S.snap && S.snap.players) || S.cardmates || [];
+            return (S.holes || []).map(function (h) {
+                return {
+                    hole: h.hole,
+                    par: h.par,
+                    distance_ft: h.distance_ft,
+                    tee: h.tee,
+                    target: h.target,
+                    teeSign: liveTeeSignView(h, players),
+                };
+            });
         }
 
         async function postCtpVote(ctp, nomineeIndex) {
@@ -797,6 +811,7 @@ export function startScoreApp(options) {
             renderScoreBody('watch', {
                 connection: S.status === 'final' ? 'Final' : 'Live',
                 courseName: S.courseName,
+                holes: watchHoleViews(),
                 isDoubles: isDoublesScoring(S),
                 isMatchplay: isMatchplayScoring(S),
                 keepScoreHref: liveScoreHref({ eventId: EVENT_ID, roundCode: ROUND_CODE, guestToken: GUEST_TOKEN }),
@@ -809,7 +824,9 @@ export function startScoreApp(options) {
                 showWeather: Boolean(S.weather),
                 standings: Array.isArray(snap.standings) ? snap.standings : [],
                 status: S.status,
+                udiscCourseId: S.udiscCourseId || '',
                 weather: S.weather,
+                windFromDeg: S.weather && S.weather.current ? S.weather.current.windDirectionDeg : null,
             });
         }
         async function loadWatch() {

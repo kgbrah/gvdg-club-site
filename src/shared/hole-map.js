@@ -1,8 +1,8 @@
 import React from "react";
 
-import { holeMapLabel, projectHoleMap, SATELLITE_CREDIT } from "../shared/hole-map-model.js";
-import { safeExternalUrl } from "../shared/safe-url.js";
-import { udiscDeepLink } from "../shared/udisc-export.js";
+import { holeMapLabel, projectHoleMap, SATELLITE_CREDIT } from "./hole-map-model.js";
+import { safeExternalUrl } from "./safe-url.js";
+import { udiscDeepLink } from "./udisc-export.js";
 
 const h = React.createElement;
 
@@ -37,13 +37,16 @@ function WindMark(props) {
 
 export function HoleMap(props) {
   const hole = props.hole;
+  const compact = Boolean(props.compact);
   const map = projectHoleMap(hole, {
-    windFromDeg: props.windFromDeg,
+    height: compact ? 180 : undefined,
+    width: compact ? 320 : undefined,
+    windFromDeg: compact ? null : props.windFromDeg,
   });
   if (!map) return null;
-  const udiscHref = udiscDeepLink(props.udiscCourseId);
+  const udiscHref = compact ? "" : udiscDeepLink(props.udiscCourseId);
   const label = holeMapLabel(map, hole && hole.hole);
-  return h("div", { className: "card hole-map-card" }, [
+  return h("div", { className: compact ? "hole-map-card hole-map-compact" : "card hole-map-card" }, [
     h("div", { className: "hole-map-frame", key: "frame" }, [
       h(SatelliteLayer, { key: "satellite", url: map.satelliteUrl }),
       h(
@@ -74,10 +77,10 @@ export function HoleMap(props) {
             y1: map.tee.y,
             y2: map.basket.y,
           }),
-          h("circle", { className: "hole-map-tee", cx: map.tee.x, cy: map.tee.y, key: "tee", r: 8 }),
-          h("circle", { className: "hole-map-basket", cx: map.basket.x, cy: map.basket.y, key: "basket", r: 9 }),
-          h("circle", { className: "hole-map-basket-inner", cx: map.basket.x, cy: map.basket.y, key: "chains", r: 3.5 }),
-          h(WindMark, { deg: map.windBlowToDeg, key: "wind", x: map.width - 24, y: 24 }),
+          h("circle", { className: "hole-map-tee", cx: map.tee.x, cy: map.tee.y, key: "tee", r: compact ? 6 : 8 }),
+          h("circle", { className: "hole-map-basket", cx: map.basket.x, cy: map.basket.y, key: "basket", r: compact ? 7 : 9 }),
+          h("circle", { className: "hole-map-basket-inner", cx: map.basket.x, cy: map.basket.y, key: "chains", r: compact ? 2.5 : 3.5 }),
+          compact ? null : h(WindMark, { deg: map.windBlowToDeg, key: "wind", x: map.width - 24, y: 24 }),
         ],
       ),
     ]),

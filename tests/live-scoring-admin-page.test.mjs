@@ -66,3 +66,13 @@ test('admin live grid uses pair target rows and target-id score posts', () => {
   assert.doesNotMatch(html + scorecard, /admin-state-store|currentAdminState|publishAdminState/);
   assert.doesNotMatch(html, /function scRenderGrid|function scRenderBoard|function scScoreRows|scGrid'\)\.querySelectorAll|document\.createElement\('(?:thead|tbody|tr|td|th|input)'\)/);
 });
+
+test('admin scoring tee-sign strip overlays satellite hole maps', () => {
+  const html = readFileSync('admin.html', 'utf8');
+  const strip = readFileSync('src/admin-app/scoring-tee-signs.js', 'utf8');
+  assert.match(strip, /import \{ HoleMap \} from "\.\.\/shared\/hole-map\.js"/);
+  assert.match(strip, /compact: true/);
+  assert.match(html, /\.hole-map-satellite/);
+  assert.match(html, /\.hole-map-compact/);
+  assert.match(html, /\.ts-strip-card \{ flex: 0 0 auto; width: 180px;/);
+});

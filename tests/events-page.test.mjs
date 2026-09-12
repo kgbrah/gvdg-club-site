@@ -316,6 +316,10 @@ test('public Events event detail fetches in React', () => {
   assert.match(app, /function FinalResults/);
   assert.match(app, /function EventExtras/);
   assert.match(app, /function TeeSigns/);
+  assert.match(app, /import \{ HoleMap \} from "\.\.\/shared\/hole-map\.js"/);
+  assert.match(app, /h\(HoleMap, \{ compact: true, hole, key: "map" \}\)/);
+  assert.match(source, /\.hole-map-satellite/);
+  assert.match(source, /\.hole-map-compact/);
   assert.match(app, /function PlayerRoster/);
   assert.match(app, /WeatherStrip/);
   assert.match(app, /import \{ UDiscExportDetails, udiscDeepLink \} from "\.\.\/shared\/udisc-export\.js"/);
