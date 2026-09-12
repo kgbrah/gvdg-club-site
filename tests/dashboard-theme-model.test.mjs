@@ -99,7 +99,7 @@ test("Nord preset maps ANSI slot 0 onto the dashboard background", () => {
 test("fill tokens stay readable on white tile text", () => {
   const theme = buildTheme({ preset: "Dracula", mode: "dark" });
   const white = rgb(255, 255, 255);
-  for (const key of ["primary", "secondary", "accent", "green"]) {
+  for (const key of ["primary-strong", "secondary", "accent", "green"]) {
     assert.ok(contrastRatio(hexToRgb(theme.tokens[key]), white) >= 4.5, key);
   }
 });
@@ -108,11 +108,42 @@ test("secondary text tokens meet AA contrast on the theme background", () => {
   for (const name of Object.keys(PRESET_THEMES)) {
     for (const mode of ["dark", "light"]) {
       const theme = buildTheme({ preset: name, mode });
-      const bg = hexToRgb(theme.tokens["bg-primary"]);
-      assert.ok(contrastRatio(hexToRgb(theme.tokens["text-secondary"]), bg) >= 4.5, `${name} ${mode} text-secondary`);
-      assert.ok(contrastRatio(hexToRgb(theme.tokens["text-muted"]), bg) >= 4.5, `${name} ${mode} text-muted`);
+      const surfaces = ["bg-primary", "bg-secondary", "bg-tertiary"].map((key) => hexToRgb(theme.tokens[key]));
+      for (const bg of surfaces) {
+        assert.ok(contrastRatio(hexToRgb(theme.tokens["text-primary"]), bg) >= 4.5, `${name} ${mode} text-primary`);
+        assert.ok(contrastRatio(hexToRgb(theme.tokens["text-secondary"]), bg) >= 4.5, `${name} ${mode} text-secondary`);
+        assert.ok(contrastRatio(hexToRgb(theme.tokens["text-muted"]), bg) >= 4.5, `${name} ${mode} text-muted`);
+        assert.ok(contrastRatio(hexToRgb(theme.tokens.primary), bg) >= 4.5, `${name} ${mode} primary`);
+      }
     }
   }
+});
+
+test("light paper stays light and dark paper stays dark", () => {
+  for (const name of Object.keys(PRESET_THEMES)) {
+    const dark = buildTheme({ preset: name, mode: "dark" });
+    const light = buildTheme({ preset: name, mode: "light" });
+    assert.ok(relativeLuminance(hexToRgb(light.tokens["bg-primary"])) >= 0.85, `${name} light paper`);
+    assert.ok(relativeLuminance(hexToRgb(dark.tokens["bg-primary"])) <= 0.08, `${name} dark paper`);
+    assert.ok(relativeLuminance(hexToRgb(light.tokens["text-primary"])) < 0.32, `${name} light ink`);
+    assert.ok(relativeLuminance(hexToRgb(dark.tokens["text-primary"])) > 0.6, `${name} dark ink`);
+  }
+});
+
+test("wallpaper scrim uses the theme paper so body text is not bleached", () => {
+  const wallpaper = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p94AAAAASUVORK5CYII=";
+  const props = new Map();
+  const root = {
+    style: {
+      setProperty(name, value) { props.set(name, value); },
+      removeProperty(name) { props.delete(name); },
+    },
+    classList: { add() {}, remove() {} },
+  };
+  const theme = buildTheme({ preset: "Nord", mode: "light", wallpaper });
+  applyDashboardTheme(theme, root);
+  const bg = hexToRgb(theme.tokens["bg-primary"]);
+  assert.match(props.get("--player-theme-image"), new RegExp(`rgba\\(${bg.r}, ${bg.g}, ${bg.b}, 0\\.86\\)`));
 });
 
 test("recolored palettes swap anchors when switching to light", () => {
