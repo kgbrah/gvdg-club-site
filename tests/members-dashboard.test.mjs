@@ -155,6 +155,8 @@ test('overview dashboard puts the register-for-events box below ratings and abov
   assert.match(pdga, /`Recent Tournaments \(\$\{Math\.min\(events\.length, 6\)\}\)`/);
   assert.match(html, /\.react-pdga-dashboard \.react-registration-panel/);
   assert.match(html, /\.dash-collapse-summary \{ cursor: pointer; \}/);
+  assert.doesNotMatch(html, /body\[data-member-dashboard-tab="overview"\] #clubRegister/);
+  assert.match(html, /body\[data-member-dashboard-tab="events"\] #clubRegister/);
 });
 
 test('overview dashboard collapses recent tournaments, casual rounds, and live scoring', () => {
@@ -166,6 +168,12 @@ test('overview dashboard collapses recent tournaments, casual rounds, and live s
   assert.match(activity, /h\("details", \{ className: "club-board react-live-scoring dash-collapse"/);
   assert.doesNotMatch(pdga, /h\("h4", \{ className: "dash-subtitle", key: "title" \}, "Recent Tournaments"\)/);
   assert.doesNotMatch(activity, /h\("h3", \{ className: "my-dashboard-title", key: "title" \}, "Live Scoring"\)/);
+  const browserQa = readFileSync("scripts/qa/members-dashboard-browser-qa.mjs", "utf8");
+  const stagingQa = readFileSync("scripts/qa/staging-member-dashboard-e2e.mjs", "utf8");
+  assert.match(browserQa, /overview: \["#myDashboard"\]/);
+  assert.match(stagingQa, /overview: \["#myDashboard"\]/);
+  assert.match(browserQa, /async function openCasualRounds/);
+  assert.match(stagingQa, /async function openCasualRounds/);
 });
 
 test('member dashboard React registration panel surfaces live events and lists every registered event', () => {

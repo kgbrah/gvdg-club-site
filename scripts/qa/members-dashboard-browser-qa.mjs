@@ -13,7 +13,7 @@ const evidenceDir = path.join(repoRoot, ".omo/evidence/members-dashboard-react")
 const teeUploadPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p94AAAAASUVORK5CYII=", "base64");
 const dashboardPanels = ["#myDashboard", "#mySeason", "#clubRegister", "#clubBoard", "#teeCapture", "#membersReactClubPanel"];
 const visibleDashboardPanels = {
-  overview: ["#myDashboard", "#clubRegister"],
+  overview: ["#myDashboard"],
   season: ["#mySeason"],
   events: ["#clubRegister"],
   board: ["#clubBoard"],
@@ -88,6 +88,15 @@ async function waitForText(page, selector, expected, label) {
 async function expectReactTab(page, name) {
   const selected = await page.getByRole("tab", { name }).getAttribute("aria-selected");
   if (selected !== "true") throw new Error(`Expected React tab ${name} to be selected, got ${selected}`);
+}
+
+async function openCasualRounds(page, rootSelector, timeout = 10_000) {
+  const root = page.locator(rootSelector);
+  const summary = root.locator("summary.dash-collapse-summary").filter({ hasText: /Casual rounds/i });
+  const form = root.locator('[data-react-casual-form="ready"]');
+  await summary.waitFor({ state: "visible", timeout });
+  if (!(await form.isVisible())) await summary.click();
+  await form.waitFor({ state: "visible", timeout });
 }
 
 async function expectNoReadinessClasses(page) {
@@ -409,19 +418,16 @@ async function captureState(browser, origin, viewport, slug) {
   if (await page.locator("[data-react-admin-portal]").count()) {
     throw new Error("React admin portal link should only render on the overview tab.");
   }
-  await page.waitForSelector('[data-react-casual-form="ready"]', { timeout: 10_000 });
-  await page.locator('[data-react-registration-panel] input[data-register-pair="team"]').waitFor({ state: "visible", timeout: 10_000 });
-  await page.locator('[data-react-casual-form] textarea').fill(`QA browser casual ${slug}`);
-  await page.getByRole("button", { name: "Post casual round" }).click();
-  await page.waitForFunction(
-    ({ expected }) => document.querySelector("[data-react-registration-panel]")?.textContent?.includes(expected),
-    { expected: `QA browser casual ${slug}` },
-    { timeout: 10_000 },
-  );
+  const eventsPanel = page.locator("#clubRegister");
+  await openCasualRounds(page, "#clubRegister");
+  await eventsPanel.locator('input[data-register-pair="team"]').waitFor({ state: "visible", timeout: 10_000 });
+  await eventsPanel.locator("[data-react-casual-form] textarea").fill(`QA browser casual ${slug}`);
+  await eventsPanel.getByRole("button", { name: "Post casual round" }).click();
+  await waitForText(page, "#clubRegister [data-react-registration-panel]", `QA browser casual ${slug}`, "posted casual round");
   if (!apiState.casualPostBody || apiState.casualPostBody.course_id !== 1 || apiState.casualPostBody.layout_id !== 11) {
     throw new Error(`Casual round POST body was not captured correctly: ${JSON.stringify(apiState.casualPostBody)}`);
   }
-  const postedCasual = page.locator(".casual-register-card").filter({ hasText: `QA browser casual ${slug}` });
+  const postedCasual = eventsPanel.locator(".casual-register-card").filter({ hasText: `QA browser casual ${slug}` });
   await postedCasual.getByRole("button", { name: "Close" }).click();
   await page.getByRole("dialog", { name: "Close this casual round post?" }).waitFor({ state: "visible", timeout: 10_000 });
   await page.getByRole("button", { name: "Keep open" }).click();
@@ -429,7 +435,7 @@ async function captureState(browser, origin, viewport, slug) {
   await postedCasual.getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: "Close post" }).click();
   await page.waitForFunction(
-    ({ expected }) => !document.querySelector("[data-react-registration-panel]")?.textContent?.includes(expected),
+    ({ expected }) => !document.querySelector("#clubRegister [data-react-registration-panel]")?.textContent?.includes(expected),
     { expected: `QA browser casual ${slug}` },
     { timeout: 10_000 },
   );

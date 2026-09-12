@@ -10,7 +10,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
 const dashboardPanels = ["#myDashboard", "#mySeason", "#clubRegister", "#clubBoard", "#teeCapture", "#membersReactClubPanel"];
 const visibleDashboardPanels = {
-  overview: ["#myDashboard", "#clubRegister"],
+  overview: ["#myDashboard"],
   season: ["#mySeason"],
   events: ["#clubRegister"],
   board: ["#clubBoard"],
@@ -172,6 +172,15 @@ async function expectAuthSubmitDetail(page, eventName, expected) {
 async function expectReactTab(page, name) {
   const selected = await page.getByRole("tab", { name }).getAttribute("aria-selected");
   if (selected !== "true") throw new Error(`Expected React tab ${name} to be selected, got ${selected}`);
+}
+
+async function openCasualRounds(page, rootSelector, timeout = 15_000) {
+  const root = page.locator(rootSelector);
+  const summary = root.locator("summary.dash-collapse-summary").filter({ hasText: /Casual rounds/i });
+  const form = root.locator('[data-react-casual-form="ready"]');
+  await summary.waitFor({ state: "visible", timeout });
+  if (!(await form.isVisible())) await summary.click();
+  await form.waitFor({ state: "visible", timeout });
 }
 
 async function expectNoReadinessClasses(page) {
@@ -401,7 +410,7 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
       throw new Error("React admin portal link should only render on the overview tab.");
     }
     await expectDashboardPanel(page, "events", "#clubRegister", "Events tab");
-    await page.locator('[data-react-casual-form="ready"]').waitFor({ state: "visible", timeout: 15_000 });
+    await openCasualRounds(page, "#clubRegister");
 
     await page.getByRole("tab", { name: "Board" }).click();
     await waitForText(page, "#membersReactDashboardShell", "Member Board", "board tab title");
