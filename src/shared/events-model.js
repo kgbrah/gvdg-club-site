@@ -24,10 +24,23 @@ const STATUS_LABELS = {
   final: 'Final',
   cancelled: 'Cancelled',
 };
+const FORMAT_LABELS = {
+  stroke: 'Stroke',
+  matchplay: 'Match play',
+  doubles: 'Doubles',
+  singles: 'Singles',
+  teams: 'Teams',
+};
 
 export function typeLabel(type) {
   if (type == null) return 'Event';
   return TYPE_LABELS[type] || String(type);
+}
+
+export function formatLabel(format) {
+  if (format == null || format === '') return '';
+  const key = String(format).toLowerCase();
+  return FORMAT_LABELS[key] || String(format);
 }
 
 export function statusLabel(status) {

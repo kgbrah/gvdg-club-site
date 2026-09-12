@@ -70,6 +70,13 @@ function clearSession() {
 export function AdminPageChrome() {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [scrolled, setScrolled] = React.useState(false);
+  const [signedIn, setSignedIn] = React.useState(() => {
+    try {
+      return Boolean(sessionStorage.getItem("gvdg_member_token"));
+    } catch {
+      return false;
+    }
+  });
   const page = currentPage();
 
   React.useEffect(() => {
@@ -107,7 +114,16 @@ export function AdminPageChrome() {
   }
 
   function logout(key) {
-    return h("a", { className: "logout-link", href: "gvdg-members.html", key, onClick: clearSession }, "Log out");
+    if (!signedIn) return null;
+    return h("a", {
+      className: "logout-link",
+      href: "gvdg-members.html",
+      key,
+      onClick: () => {
+        clearSession();
+        setSignedIn(false);
+      },
+    }, "Log out");
   }
 
   return h("header", { className: scrolled ? "scrolled" : "", "data-react-admin-chrome": "true" }, h("nav", null, [
@@ -123,7 +139,7 @@ export function AdminPageChrome() {
       ...NAV_ITEMS.map(navLink),
       h("li", { key: "help" }, h(CrottsHelpLink, { onClick: closeMenu })),
       h("li", { className: "nav-mobile-account", key: "mobile-members" }, backToMembers("mobile-members-link")),
-      h("li", { className: "nav-mobile-account", key: "mobile-logout" }, logout("mobile-logout-link")),
+      signedIn ? h("li", { className: "nav-mobile-account", key: "mobile-logout" }, logout("mobile-logout-link")) : null,
     ]),
     h("div", { className: "nav-right", key: "controls" }, [
       h("div", { className: "nav-account", key: "account" }, [backToMembers("desktop-members-link"), logout("desktop-logout-link")]),

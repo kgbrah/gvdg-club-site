@@ -330,6 +330,25 @@ describe("admin event management", () => {
     expect(JSON.parse(String(state.eventConfigBinds?.[8]))).toEqual({ groupFormat: "singles", scoringStyle: "matchplay" });
   });
 
+  it("upgrades stored singles groupFormat when play_format is saved as doubles", async () => {
+    const state: Parameters<typeof db>[0] = {
+      existingEvent: { id: 12, format: "matchplay" },
+      existingEventConfig: {
+        event_id: 12,
+        play_format: "singles",
+        live_scoring_config: JSON.stringify({ groupFormat: "singles", scoringStyle: "matchplay" }),
+      },
+    };
+    const res = await call("/admin/events/12/config", "PUT", {
+      registration_open: true,
+      play_format: "doubles",
+    }, await token("m_admin"), state);
+
+    expect(res.status).toBe(200);
+    expect(state.eventConfigBinds?.[6]).toBe("doubles");
+    expect(JSON.parse(String(state.eventConfigBinds?.[8]))).toEqual({ groupFormat: "doubles", scoringStyle: "matchplay" });
+  });
+
   it("rejects unsupported live scoring config values before writing event config", async () => {
     const state: Parameters<typeof db>[0] = {};
     const adminJwt = await token("m_admin");

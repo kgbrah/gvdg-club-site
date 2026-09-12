@@ -9,7 +9,7 @@ export function PotsStrip(props) {
   if (!pots || !pots.visible) return null;
   const ctps = Array.isArray(pots.ctps) ? pots.ctps : [];
   return h("div", { className: "pots-strip", "data-react-live-pots": "ready" }, [
-    h("div", { className: "pots-title", key: "title" }, "Live pots"),
+    h("div", { className: "pots-title", key: "title" }, pots.title || "Live pots"),
     pots.aceLine
       ? h("div", { className: "pots-ace", key: "ace" }, ["Ace pot · ", pots.aceLine])
       : null,

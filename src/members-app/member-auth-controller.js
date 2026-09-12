@@ -1,6 +1,6 @@
 import { NAME_KEY, PDGA_KEY, TOKEN_KEY, authBase, request, storageGet } from "./api.js";
 import { clearAuthError, setAuthBusy, setAuthFormState, setAuthFormValues, showApplyShell, showAuthError, showLoginShell, showMembersShell, showPinChangeShell } from "./member-auth-dom.js";
-import { applyProfile, memberDashboardContext, resetMemberProfile } from "./member-auth-state.js";
+import { applyProfile, memberAuthProfile, memberDashboardContext, resetMemberProfile } from "./member-auth-state.js";
 import { createPasskeyController, passkeysSupported } from "./member-passkeys.js";
 import { createProfileController } from "./member-profile-controller.js";
 
@@ -139,7 +139,9 @@ export function installMemberAuthController() {
         const data = await response.json();
         storageSet(TOKEN_KEY, data.token);
         setAuthFormValues("pin", { newPin: "", confirmPin: "" });
-        profile.showProfileSetup();
+        const pdga = memberAuthProfile().pdgaNo || storageGet(PDGA_KEY);
+        if (pdga) showMembersContent(data.name || storageGet(NAME_KEY));
+        else profile.showProfileSetup();
       } else if (response.status === 401) {
         showLogin();
       } else {

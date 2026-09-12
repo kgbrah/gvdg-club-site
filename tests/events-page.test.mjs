@@ -10,10 +10,11 @@ test('public Events page pins Live Now to the top section, above the schedule fe
   const html = readFileSync('events.html', 'utf8');
   const source = eventsHubDataSource();
   const app = readFileSync('src/public-app/events-hub-app.js', 'utf8');
-  assert.ok(html.indexOf('id="liveNowSection"') < html.indexOf('id="calendarEvents"'), 'Live Now mount should remain above the schedule feed mount');
+  assert.ok(html.indexOf('id="liveNowSection"') < html.indexOf('id="hub"'), 'Live Now mount should remain above club upcoming');
+  assert.ok(html.indexOf('id="hub"') < html.indexOf('id="calendarEvents"'), 'Club upcoming should sit above the PDGA schedule feed');
   assert.match(source, /function publishLoadedHub\(feed, events, courseIndex\)/);
   assert.match(source, /live: live\.map\(\(event\) => eventHubItem\(event, courseIndex\)\)/);
-  assert.match(source, /feedEvents: feedEvents\.map\(feedHubItem\)/);
+  assert.match(source, /feedEvents: filterDuplicateFeed\(feedEvents, \[\.\.\.live, \.\.\.upcoming\]\)\.map\(feedHubItem\)/);
   assert.match(app, /export function EventsLiveNowApp/);
   assert.match(app, /export function EventsScheduleFeedApp/);
   assert.match(app, /Live Now/);
@@ -358,13 +359,15 @@ test('public registration cards post pair label only for doubles config', () => 
   assert.match(utils, /raw == null && event\.play_format === "doubles"/);
 });
 
-test('Ryder Cup schedule cards link to the league route', () => {
+test('Ryder Cup upcoming cards open the event, previous results keep the league route', () => {
   const eventsSource = eventsHubDataSource();
   const homeSource = readFileSync('src/home-app/feed-panels.js', 'utf8');
   const ryderSource = readFileSync('src/public-app/ryder-cup-app.js', 'utf8');
   assert.match(eventsSource, /const RYDER_CUP_LEAGUE_ID = "4"/);
   assert.match(eventsSource, /function ryderCupFeedHash\(item\)/);
   assert.match(eventsSource, /function ryderCupEventHash\(event\)/);
+  assert.match(eventsSource, /function eventHubItem\(raw, courseIndex\) \{[\s\S]*href: `#event\/\$\{encodeURIComponent\(event\.id\)\}`/);
+  assert.match(eventsSource, /stripFeedDecor/);
   assert.match(eventsSource, /League \/ Results/);
   assert.match(homeSource, /const RYDER_CUP_LEAGUE_URL = "events\.html#league\/4"/);
   assert.match(ryderSource, /events\.html#league\/4/);

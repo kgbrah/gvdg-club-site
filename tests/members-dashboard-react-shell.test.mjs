@@ -241,6 +241,7 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.doesNotMatch(authForms, /id: "loginBtn"|id: "passkeyBtn"|id: "setPinBtn"|id: "profileSaveBtn"|id: "profileSkipBtn"/);
   assert.doesNotMatch(authForms, /profilePhotoPreview/);
   assert.match(authController, /data\.mustChangePin/);
+  assert.match(authController, /memberAuthProfile\(\)\.pdgaNo \|\| storageGet\(PDGA_KEY\)/);
   assert.match(authController, /request\(path, options\)/);
   assert.match(authController, /\/login/);
   assert.match(authController, /\/set-pin/);
