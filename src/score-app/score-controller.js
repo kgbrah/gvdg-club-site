@@ -17,7 +17,7 @@ import {
 } from "./score-view-model.js";
 import { resolveApiBase } from "../shared/api-base.js";
 import { buildLivePots, withLiveCtpLeaders } from "../shared/live-pots-model.js";
-import { isLiveWatchRequest, liveScoreHref, liveWatchHref } from "../shared/live-watch.js";
+import { isLiveWatchRequest, liveRoundCodeFromSearch, liveScoreHref, liveWatchHref } from "../shared/live-watch.js";
 import { holeWinners, winnerColor } from "../shared/matchplay-colors.js";
 import { notifyScoreAuthChanged } from "../shared/player-theme-session.js";
 
@@ -29,7 +29,7 @@ export function startScoreApp(options) {
         const TOKEN_KEY = 'gvdg_member_token', NAME_KEY = 'gvdg_member_name', GUESTREG_KEY = 'gvdg_guest_regs', RECENT_ROUNDS_KEY = 'gvdg_recent_rounds';
         const params = new URLSearchParams(location.search);
         const EVENT_ID = (params.get('event') || '').replace(/[^0-9]/g, '');
-        const ROUND_CODE = (params.get('round') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const ROUND_CODE = liveRoundCodeFromSearch(params);
         const MODE = ROUND_CODE ? 'round' : (EVENT_ID ? 'event' : 'home'); // event scoring · casual round · home
         const WATCH = isLiveWatchRequest(params);
         const LIVE = ROUND_CODE ? ('/rounds/' + ROUND_CODE + '/live') : ('/events/' + EVENT_ID + '/live');

@@ -49,9 +49,8 @@ test('public Events page hides past events behind previous results', () => {
 
 test('public Events page parses feed dates before archiving rows', () => {
   const source = eventsHubDataSource();
-  assert.match(source, /function feedDateInfo\(item\)/);
-  assert.match(source, /Number\(item\?\.epoch\)/);
-  assert.match(source, /parseHomepageEventDate\(String\(item\?\.date \|\| ""\)\)/);
+  assert.match(source, /feedDateInfo/);
+  assert.match(source, /from "\.\.\/shared\/home-feed-parse\.js"/);
   assert.match(source, /function isPastFeedItem\(item\)/);
   assert.match(source, /isPastFeedItem\(item\) \? archived : active/);
 });
@@ -306,6 +305,7 @@ test('public Events event detail fetches in React', () => {
   assert.match(dataApp, /playersFromResults/);
   assert.match(dataApp, /guestRegs\(\)\[event\.id\]/);
   assert.doesNotMatch(app + dataApp, /gvdg:events-event-detail|__gvdgEventsEventDetail/);
+  assert.match(app, /formatLabel\(event\.format\)/);
   assert.match(app, /data-react-events-event-detail/);
   assert.match(app, /function LiveStandings/);
   assert.match(app, /live-matchplay/);

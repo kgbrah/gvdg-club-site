@@ -11,7 +11,7 @@ import {
   statusLabel,
   typeLabel,
 } from "../shared/events-model.js";
-import { parseHomepageEventDate } from "../shared/home-feed-parse.js";
+import { feedDateInfo } from "../shared/home-feed-parse.js";
 import {
   currentEventsRoute,
   currentEventsView,
@@ -113,24 +113,6 @@ function feedDateText(item) {
     return info.dateObj.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", year: "numeric" });
   }
   return "TBD";
-}
-
-function startOfToday() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return today;
-}
-
-function feedDateInfo(item) {
-  const epoch = Number(item?.epoch);
-  if (Number.isFinite(epoch) && epoch > 0) {
-    const ms = epoch < 100000000000 ? epoch * 1000 : epoch;
-    const fromEpoch = new Date(ms);
-    if (!Number.isNaN(fromEpoch.getTime())) {
-      return { dateObj: fromEpoch, isPast: fromEpoch < startOfToday(), isTBD: false };
-    }
-  }
-  return parseHomepageEventDate(String(item?.date || ""));
 }
 
 function isPastFeedItem(item) {

@@ -134,6 +134,33 @@ export function parseHomepageEventDate(raw, now = new Date()) {
   return { day: date.getDate(), month: monthsShort[date.getMonth()], year: date.getFullYear(), isPast: date < today, isTBD: false, dateObj: date };
 }
 
+function hasExplicitFeedYear(raw) {
+  const s = String(raw || "").trim();
+  if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(s)) return true;
+  if (/^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(s)) return true;
+  if (/^[A-Za-z]+\s+\d{1,2},?\s+\d{4}/.test(s)) return true;
+  if (/^\d{1,2}\s+[A-Za-z]+\s+\d{4}/.test(s)) return true;
+  return false;
+}
+
+/** Prefer a calendar date that names its year (Tee Sign Fund 2026-06-01) over a last-updated epoch.
+ *  Bare M/D values like 5/14 keep the epoch so Club Meeting heuristics still work. */
+export function feedDateInfo(item, now = new Date()) {
+  const raw = String(item?.date || "");
+  if (hasExplicitFeedYear(raw)) return parseHomepageEventDate(raw, now);
+  const epoch = Number(item?.epoch);
+  if (Number.isFinite(epoch) && epoch > 0) {
+    const ms = epoch < 100000000000 ? epoch * 1000 : epoch;
+    const fromEpoch = new Date(ms);
+    if (!Number.isNaN(fromEpoch.getTime())) {
+      const today = new Date(now);
+      today.setHours(0, 0, 0, 0);
+      return { dateObj: fromEpoch, isPast: fromEpoch < today, isTBD: false };
+    }
+  }
+  return parseHomepageEventDate(raw, now);
+}
+
 function tbdDate() {
   return { day: 'TBD', month: '', year: '', isPast: false, isTBD: true, dateObj: new Date(9999, 11, 31) };
 }

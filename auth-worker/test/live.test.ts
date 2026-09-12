@@ -536,6 +536,20 @@ describe("live route start payloads", () => {
     expect((must(state.starts[0]).players ?? []).map((p) => p.name).sort()).toEqual(["Alice", "Walkon"]); // registrant NOT dropped
   });
 
+  it("rejects an empty roster before starting a Durable Object", async () => {
+    const state: LiveRouteState = { starts: [], registrations: [], eventPlayers: [] };
+
+    const res = await liveRouteCall("/events/9/live/start", "POST", {}, state);
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      error: "empty_roster",
+      message: "Add players in Registration before starting live scoring.",
+    });
+    expect(state.starts).toEqual([]);
+    expect(state.updatedStatus).toBeUndefined();
+  });
+
   it("rejects invalid competition doubles starts before calling the Durable Object", async () => {
     const state: LiveRouteState = {
       starts: [],
