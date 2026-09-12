@@ -1,6 +1,7 @@
 import React from "react";
 import { Menu, X } from "lucide-react";
 
+import { CrottsHelpLink } from "../shared/crotts-widget.js";
 import { HomeThemeToggle } from "./page-controls.js";
 
 const h = React.createElement;
@@ -72,6 +73,7 @@ export function HomePageChrome() {
       })),
     h("ul", { className: menuOpen ? "nav-links active" : "nav-links", id: "navLinks", key: "links" }, [
       ...NAV_ITEMS.map(navLink),
+      h("li", { key: "help" }, h(CrottsHelpLink, { onClick: () => setMenuOpen(false) })),
       h("li", { key: "donate" }, h("a", {
         className: "nav-donate",
         href: DONATE_URL,

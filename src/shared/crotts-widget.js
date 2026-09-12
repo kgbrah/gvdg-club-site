@@ -1,19 +1,15 @@
 import React from "react";
-import { MessageCircle, Send, X } from "lucide-react";
+import { Send, X } from "lucide-react";
 
 import { resolveApiBase } from "./api-base.js";
 import { sanitizeCrottsActions } from "./crotts-actions.js";
 
 const h = React.createElement;
 const AVATAR = "img/crotts.jpg";
+export const CROTTS_HELP_EVENT = "gvdg:help-request";
 
 const CROTTS_CSS = `
-#crotts-fab{position:fixed;left:18px;bottom:18px;width:60px;height:60px;border-radius:50%;border:3px solid var(--secondary);background:var(--bg-secondary);color:var(--secondary);cursor:pointer;box-shadow:0 4px 14px var(--card-shadow-hover);z-index:9998;padding:0;overflow:hidden;transition:transform .15s ease}
-#crotts-fab:hover{transform:scale(1.06)}
-#crotts-fab img{width:100%;height:100%;object-fit:cover;object-position:center 28%;display:block}
-#crotts-badge{position:absolute;top:1px;right:1px;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:999px;background:var(--secondary);color:white;border:2px solid var(--bg-secondary)}
-#crotts-panel{position:fixed;left:18px;bottom:88px;width:340px;max-width:calc(100vw - 36px);height:460px;max-height:calc(100vh - 120px);background:var(--bg-primary);color:var(--text-primary);border:1px solid var(--border-color);border-radius:12px;box-shadow:0 20px 60px var(--card-shadow-hover);z-index:9999;display:none;flex-direction:column;overflow:hidden;font-family:inherit}
-#crotts-panel.open{display:flex}
+#crotts-panel{position:fixed;left:18px;bottom:18px;width:340px;max-width:calc(100vw - 36px);height:460px;max-height:calc(100vh - 120px);background:var(--bg-primary);color:var(--text-primary);border:1px solid var(--border-color);border-radius:12px;box-shadow:0 20px 60px var(--card-shadow-hover);z-index:9999;display:flex;flex-direction:column;overflow:hidden;font-family:inherit}
 #crotts-head{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--secondary);color:white}
 #crotts-head img{width:36px;height:36px;border-radius:50%;object-fit:cover;object-position:center 28%;border:2px solid color-mix(in srgb, white 60%, transparent)}
 #crotts-head .t{font-weight:700;line-height:1.1}
@@ -33,8 +29,7 @@ const CROTTS_CSS = `
 .crotts-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .crotts-action{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:6px 10px;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font:inherit;font-size:12px;font-weight:700;text-decoration:none;cursor:pointer}
 .crotts-action:hover{border-color:var(--secondary);color:var(--secondary)}
-@media (max-width:768px){#crotts-fab{width:54px;height:54px;left:14px;bottom:calc(82px + env(safe-area-inset-bottom,0px))}#crotts-panel{left:12px;bottom:calc(148px + env(safe-area-inset-bottom,0px));max-width:calc(100vw - 24px);max-height:calc(100vh - 172px)}}
-@media (max-width:768px){body.admin-page #crotts-fab,body.admin-page #crotts-panel{display:none}}
+@media (max-width:768px){#crotts-panel{left:12px;right:12px;width:auto;bottom:calc(14px + env(safe-area-inset-bottom,0px));max-height:calc(100vh - 96px)}}
 `;
 
 function apiBase() {
@@ -53,6 +48,36 @@ function icon(Icon, size = 18) {
 function messageId(counter) {
   counter.current += 1;
   return `crotts-${counter.current}`;
+}
+
+function isHelpHash() {
+  return String(window.location.hash || "").toLowerCase() === "#help";
+}
+
+function clearHelpHash() {
+  if (!isHelpHash()) return;
+  const path = window.location.pathname + window.location.search;
+  try {
+    window.history.replaceState(null, "", path);
+  } catch {
+  }
+}
+
+export function requestCrottsHelp() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(CROTTS_HELP_EVENT));
+}
+
+export function CrottsHelpLink(props) {
+  return h("a", {
+    "aria-haspopup": "dialog",
+    href: "#help",
+    onClick: (event) => {
+      event.preventDefault();
+      requestCrottsHelp();
+      props.onClick?.(event);
+    },
+  }, "Help");
 }
 
 function AssistantBubble({ message }) {
@@ -81,6 +106,22 @@ export function CrottsWidget() {
   const api = React.useMemo(apiBase, []);
 
   React.useEffect(() => {
+    function openHelp() {
+      setOpen(true);
+    }
+    function openHelpFromHash() {
+      if (isHelpHash()) openHelp();
+    }
+    window.addEventListener(CROTTS_HELP_EVENT, openHelp);
+    window.addEventListener("hashchange", openHelpFromHash);
+    if (isHelpHash()) openHelp();
+    return () => {
+      window.removeEventListener(CROTTS_HELP_EVENT, openHelp);
+      window.removeEventListener("hashchange", openHelpFromHash);
+    };
+  }, []);
+
+  React.useEffect(() => {
     if (!open) return;
     setMessages((current) => {
       if (current.length) return current;
@@ -97,6 +138,11 @@ export function CrottsWidget() {
     if (!messagesRef.current) return;
     messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
   }, [messages, busy]);
+
+  function closeHelp() {
+    setOpen(false);
+    clearHelpHash();
+  }
 
   async function sendMessage() {
     const text = draft.trim();
@@ -150,23 +196,13 @@ export function CrottsWidget() {
     }
   }
 
+  if (!open) return null;
+
   return h(React.Fragment, null, [
     h("style", { key: "style" }, CROTTS_CSS),
-    h("button", {
-      "aria-label": open ? "Close Crotts assistant" : "Open Crotts assistant",
-      id: "crotts-fab",
-      key: "fab",
-      onClick: () => setOpen((value) => !value),
-      title: "Ask Crotts",
-      type: "button",
-    }, [
-      h("img", { alt: "Crotts", key: "img", src: AVATAR }),
-      h("span", { id: "crotts-badge", key: "badge" }, icon(MessageCircle, 12)),
-    ]),
     h("section", {
       "aria-label": "Crotts assistant",
-      "aria-modal": open ? "true" : undefined,
-      className: open ? "open" : "",
+      "aria-modal": "true",
       id: "crotts-panel",
       key: "panel",
       role: "dialog",
@@ -181,7 +217,7 @@ export function CrottsWidget() {
           "aria-label": "Close Crotts assistant",
           id: "crotts-close",
           key: "close",
-          onClick: () => setOpen(false),
+          onClick: closeHelp,
           title: "Close",
           type: "button",
         }, icon(X, 20)),

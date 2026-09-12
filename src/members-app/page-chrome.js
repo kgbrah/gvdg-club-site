@@ -2,6 +2,7 @@ import React from "react";
 import { Menu, Moon, Sun, X } from "lucide-react";
 
 import { localStorageGet } from "./api.js";
+import { CrottsHelpLink } from "../shared/crotts-widget.js";
 import { InstallCoachBanner } from "../shared/install-coach-ui.js";
 
 const h = React.createElement;
@@ -95,6 +96,7 @@ export function MemberPageChrome() {
         key: "links",
       }, [
         ...NAV_ITEMS.map(navLink),
+        h("li", { key: "help" }, h(CrottsHelpLink, { onClick: () => setMenuOpen(false) })),
         h("li", { key: "donate" }, h("a", {
           className: "nav-donate",
           href: DONATE_URL,
