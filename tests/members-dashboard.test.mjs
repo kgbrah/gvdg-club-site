@@ -235,7 +235,10 @@ test('more page mounts a player theme builder', () => {
   assert.match(html, /#members\.player-theme-active/);
   assert.match(html, /body\.player-theme-page::before/);
   assert.match(html, /body\.player-theme-active/);
-  assert.match(html, /body\.player-theme-page footer/);
+  assert.match(html, /body\.player-theme-page footer \{ color: var\(--player-theme-footer\)/);
+  assert.match(html, /body\.player-theme-page footer a \{ color: var\(--player-theme-link\)/);
+  assert.match(html, /\.board-avatar \{[^}]*background: var\(--primary-strong\)/);
+  assert.match(html, /\.admin-portal-link:hover\{background:var\(--primary-strong\)/);
   assert.match(html, /\.dash-theme-palette/);
   assert.match(html, /\.dash-theme-preset-grid/);
   assert.match(html, /\.dash-theme-header/);

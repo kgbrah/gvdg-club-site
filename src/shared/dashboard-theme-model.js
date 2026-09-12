@@ -372,7 +372,54 @@ function ensureContrastOnSurfaces(foreground, backgrounds, minimum = 4.5) {
     }
     if (ok) return color;
   }
-  return color;
+  const paper = backgrounds[0];
+  if (!paper) return foreground;
+  if (backgrounds.every((background) => contrastRatio(color, background) >= minimum)) return color;
+  if (contrastRatio(color, paper) >= minimum) return color;
+  if (contrastRatio(foreground, paper) >= minimum) return foreground;
+  return ensureContrast(foreground, paper, minimum);
+}
+
+function surfacesCompatible(tokens, minimum = 4.5) {
+  const backgrounds = surfacesOf(tokens);
+  if (!backgrounds.length) return true;
+  const white = rgb(246, 246, 250);
+  const black = rgb(18, 18, 28);
+  return backgrounds.every((background) => contrastRatio(white, background) >= minimum)
+    || backgrounds.every((background) => contrastRatio(black, background) >= minimum);
+}
+
+function migrateSurfaces(tokens, mode) {
+  const paper = paperFrom(
+    hexToRgb(tokens["bg-primary"]) || (mode === "light" ? rgb(248, 248, 252) : rgb(8, 10, 18)),
+    mode,
+  );
+  const ink = inkFrom(
+    hexToRgb(tokens["text-primary"])
+      || hexToRgb(tokens["text-secondary"])
+      || (mode === "light" ? rgb(18, 18, 28) : rgb(246, 246, 250)),
+    paper,
+    mode,
+  );
+  const card = mix(paper, ink, mode === "light" ? 0.06 : 0.1);
+  const raised = mix(paper, ink, mode === "light" ? 0.11 : 0.16);
+  return {
+    ...tokens,
+    "bg-primary": rgbToHex(paper),
+    "bg-secondary": rgbToHex(card),
+    "bg-tertiary": rgbToHex(raised),
+    "border-color": rgbToHex(mix(paper, ink, 0.22)),
+    "text-primary": rgbToHex(ink),
+    "text-secondary": rgbToHex(mix(ink, paper, 0.22)),
+    "text-tertiary": rgbToHex(mix(ink, paper, 0.45)),
+    "text-muted": rgbToHex(mix(ink, paper, 0.32)),
+  };
+}
+
+function inkReadableOnPaper(tokens) {
+  const foreground = hexToRgb(tokens?.["text-primary"]);
+  const paper = hexToRgb(tokens?.["bg-primary"]);
+  return Boolean(foreground && paper && contrastRatio(foreground, paper) >= 4.5);
 }
 
 function paperFrom(background, mode) {
@@ -927,21 +974,33 @@ export function sanitizeTheme(raw) {
   const adjustments = sanitizeAdjustments(raw.adjustments);
   const palette = sanitizeHexList(raw.palette);
   const sourcePalette = sanitizeHexList(raw.sourcePalette);
-  const tokens = {};
+  let tokens = {};
   if (raw.tokens && typeof raw.tokens === "object") {
     for (const key of TOKEN_KEYS) {
       const value = String(raw.tokens[key] || "").toLowerCase();
       if (HEX.test(value)) tokens[key] = value;
     }
   }
-  if (TOKEN_KEYS.some((key) => !tokens[key])) {
-    const rebuilt = tokensFromPalette(palette.length ? palette : Object.values(tokens), mode);
+  if (palette.length >= 8) {
+    const rebuilt = tokensFromPalette(palette, mode);
     if (!rebuilt) return null;
-    for (const key of TOKEN_KEYS) {
-      if (!tokens[key]) tokens[key] = rebuilt[key];
+    tokens = rebuilt;
+  } else {
+    if (TOKEN_KEYS.some((key) => !tokens[key])) {
+      const rebuilt = tokensFromPalette(palette.length ? palette : Object.values(tokens), mode);
+      if (!rebuilt) return null;
+      for (const key of TOKEN_KEYS) {
+        if (!tokens[key]) tokens[key] = rebuilt[key];
+      }
+    }
+    if (!surfacesCompatible(tokens)) tokens = migrateSurfaces(tokens, mode);
+    Object.assign(tokens, applyAccentContrast(applyTextContrast(applyFillContrast(tokens))));
+    if (!inkReadableOnPaper(tokens)) {
+      tokens = migrateSurfaces(tokens, mode);
+      Object.assign(tokens, applyAccentContrast(applyTextContrast(applyFillContrast(tokens))));
     }
   }
-  Object.assign(tokens, applyAccentContrast(applyTextContrast(applyFillContrast(tokens))));
+  if (!TOKEN_KEYS.every((key) => HEX.test(tokens[key] || ""))) return null;
   const wallpaper = typeof raw.wallpaper === "string" && WALLPAPER_RE.test(raw.wallpaper) && raw.wallpaper.length <= MAX_WALLPAPER_CHARS
     ? raw.wallpaper
     : null;
@@ -1012,6 +1071,8 @@ function clearThemeOn(el) {
   if (!el?.style) return;
   for (const key of TOKEN_KEYS) el.style.removeProperty(`--${key}`);
   el.style.removeProperty("--player-theme-image");
+  el.style.removeProperty("--player-theme-footer");
+  el.style.removeProperty("--player-theme-link");
   el.classList?.remove?.("player-theme-active", "player-theme-page");
 }
 
@@ -1028,6 +1089,23 @@ function paintThemeOn(el, theme) {
   }
 }
 
+function paintPageOn(el, theme) {
+  if (!el?.style) return;
+  el.style.setProperty("--bg-primary", theme.tokens["bg-primary"]);
+  el.style.setProperty("--text-primary", theme.tokens["text-primary"]);
+  el.style.setProperty("--player-theme-footer", theme.tokens["text-muted"]);
+  el.style.setProperty("--player-theme-link", theme.tokens.primary);
+  const image = wallpaperImage(theme);
+  if (image) {
+    el.style.setProperty("--player-theme-image", image);
+    el.classList?.add?.("player-theme-active");
+  } else {
+    el.style.removeProperty("--player-theme-image");
+    el.classList?.remove?.("player-theme-active");
+  }
+  el.classList?.add?.("player-theme-page");
+}
+
 export function applyDashboardTheme(theme, root) {
   if (!root || !root.style) return;
   const page = themePage(root);
@@ -1039,9 +1117,6 @@ export function applyDashboardTheme(theme, root) {
   const safe = sanitizeTheme(theme);
   if (!safe) return;
   paintThemeOn(root, safe);
-  if (page) {
-    paintThemeOn(page, safe);
-    page.classList?.add?.("player-theme-page");
-  }
+  if (page) paintPageOn(page, safe);
 }
 
