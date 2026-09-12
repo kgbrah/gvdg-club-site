@@ -347,6 +347,8 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
     { label: 'To par', value: '-1' },
   ]);
   assert.equal(view.holeGrid[0].done, true);
+  assert.equal(view.holeGrid[0].score, 2);
+  assert.equal(view.holeGrid[1].score, null);
   assert.equal(view.holeGrid[0].ctp, true);
   assert.equal(view.showPots, true);
   assert.equal(view.ctpBadge, "Disc");
@@ -508,9 +510,14 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(holeMap, /safeExternalUrl/);
   assert.match(holeMap, /compact/);
   assert.match(holeMap, /playerMarksOnMap/);
-  assert.match(html, /\.round-tools \{ display: flex; flex-wrap: wrap;/);
-  assert.match(html, /\.round-code \{ flex: 1 1 7\.5rem;/);
-  assert.match(html, /\.round-actions \{ display: flex; flex: 1 1 auto; flex-wrap: wrap;/);
+  assert.match(html, /\.round-tools \{/);
+  assert.match(html, /grid-template-columns: repeat\(auto-fit, minmax\(0, 1fr\)\)/);
+  assert.match(html, /\.holegrid \{ display: grid; grid-template-columns: repeat\(6, minmax\(0, 1fr\)\)/);
+  assert.match(html, /\.weather-strip-compact/);
+  assert.doesNotMatch(html, /\.round-code \{ flex: 1 1 7\.5rem;/);
+  assert.doesNotMatch(scorecard, /className: "round-code"/);
+  assert.match(scorecard, /compact: true/);
+  assert.match(scorecard, /holegrid-score/);
   assert.match(html, /\.hole-map-satellite/);
   assert.match(html, /\.hole-map-frame/);
   assert.match(html, /\.watch-holes/);
@@ -587,13 +594,29 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.doesNotMatch(watchBoot, /\/join/);
 });
 
+test('live scoring paints the signed-in player dashboard theme onto the score page', () => {
+  const html = readFileSync('score.html', 'utf8');
+  const main = scoreMainSource();
+  const controller = scoreControllerSource();
+  const session = readFileSync('src/shared/player-theme-session.js', 'utf8');
+  assert.match(html, /body\.player-theme-page/);
+  assert.match(html, /body\.player-theme-active/);
+  assert.match(html, /--player-theme-image/);
+  assert.match(main, /from "\.\.\/shared\/player-theme-session\.js"/);
+  assert.match(main, /syncPlayerTheme/);
+  assert.match(main, /togglePlayerThemeMode/);
+  assert.match(controller, /notifyScoreAuthChanged/);
+  assert.match(session, /\/me\/dashboard-theme/);
+  assert.match(session, /gvdg:score-auth/);
+});
+
 test('score weather strip is React-owned without legacy DOM replacement', () => {
   const controller = readFileSync('src/score-app/score-controller.js', 'utf8');
   const scorecard = scorecardViewSource();
   const weather = scoreWeatherSource();
   const sharedWeather = readFileSync('src/shared/weather-model.js', 'utf8');
   assert.match(scorecard, /import \{ WeatherStrip \} from "\.\/weather-strip\.js"/);
-  assert.match(scorecard, /h\(WeatherStrip, \{ key: "weather"/);
+  assert.match(scorecard, /h\(WeatherStrip, \{ compact: true, key: "weather"/);
   assert.match(controller, /extrasChanged\) renderHole\(\); return;/);
   assert.match(scoreViewModelSource(), /weather: state\.weather/);
   assert.match(weather, /export function WeatherStrip\(props\)/);

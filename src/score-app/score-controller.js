@@ -19,6 +19,7 @@ import { resolveApiBase } from "../shared/api-base.js";
 import { buildLivePots, withLiveCtpLeaders } from "../shared/live-pots-model.js";
 import { isLiveWatchRequest, liveScoreHref, liveWatchHref } from "../shared/live-watch.js";
 import { holeWinners, winnerColor } from "../shared/matchplay-colors.js";
+import { notifyScoreAuthChanged } from "../shared/player-theme-session.js";
 
 export function startScoreApp(options) {
         "use strict";
@@ -486,6 +487,7 @@ export function startScoreApp(options) {
         // a card), so without this a temp-PIN member logs in but gets bounced right back to the login screen.
         function afterAuth(data) {
             try { sessionStorage.setItem(TOKEN_KEY, data.token); if (data.name) sessionStorage.setItem(NAME_KEY, data.name); } catch (e) {}
+            notifyScoreAuthChanged();
             if (data.mustChangePin) renderSetPin();
             else boot();
         }
@@ -493,6 +495,7 @@ export function startScoreApp(options) {
             const r = await api('/set-pin', { method: 'POST', guest: false, body: { newPin: newPin } });
             if (r.status === 200 && r.data && r.data.token) {
                 try { sessionStorage.setItem(TOKEN_KEY, r.data.token); } catch (e) {}
+                notifyScoreAuthChanged();
                 boot();
                 return { ok: true };
             }
@@ -520,7 +523,7 @@ export function startScoreApp(options) {
                 membersHref: 'gvdg-members.html',
                 message: message,
                 mode: 'login',
-                onGuestContinue: function () { try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {} boot(); },
+                onGuestContinue: function () { try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {} notifyScoreAuthChanged(); boot(); },
                 onLogin: loginWithPin,
                 onPasskeyLogin: supported ? loginWithPasskey : null,
                 passkeysSupported: supported
@@ -703,7 +706,7 @@ export function startScoreApp(options) {
             if (code.length >= 4) location.search = '?round=' + code;
             else toast('Enter a valid code');
         }
-        function signOut() { try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {} renderLogin(); }
+        function signOut() { try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {} notifyScoreAuthChanged(); renderLogin(); }
         function renderHome() {
             renderSetupFlow({
                 view: 'home',

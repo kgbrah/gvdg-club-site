@@ -351,14 +351,18 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
     currentHole: hole && hole.hole,
   });
   const holeScores = (state.cardmates || []).map((player) => player && player.scores ? player.scores[hole.hole] : null);
-  const holeGrid = (state.holes || []).map((currentHole, index) => ({
-    conflict: holeHasConflict(state, currentHole.hole),
-    ctp: pots.holeNumbers.indexOf(currentHole.hole) >= 0,
-    current: index === state.holeIdx,
-    done: Boolean(mine && strokesForRow(state, mine, currentHole.hole, scorerIndex) != null),
-    hole: currentHole.hole,
-    index,
-  }));
+  const holeGrid = (state.holes || []).map((currentHole, index) => {
+    const score = mine ? strokesForRow(state, mine, currentHole.hole, scorerIndex) : null;
+    return {
+      conflict: holeHasConflict(state, currentHole.hole),
+      ctp: pots.holeNumbers.indexOf(currentHole.hole) >= 0,
+      current: index === state.holeIdx,
+      done: score != null,
+      hole: currentHole.hole,
+      index,
+      score,
+    };
+  });
   const ctpMeta = pots.currentHoleCtps.length ? " · CTP" : "";
   const liveCtps = state.snap && Array.isArray(state.snap.liveCtps) ? state.snap.liveCtps : [];
   const liveById = new Map(liveCtps.map((ctp) => [String(ctp.id), ctp]));
