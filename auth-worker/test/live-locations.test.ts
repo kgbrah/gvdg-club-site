@@ -3,10 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   isLoggedInMemberId,
   locationMoved,
+  locationOnCourse,
   parseLocationBody,
   playerInitials,
   publicPlayerLocations,
 } from "../src/live-locations.js";
+
+const NORTH_REC = [{ tee: { lat: 35.6, lng: -77.37 }, target: { lat: 35.601, lng: -77.37 } }];
 
 describe("live player locations", () => {
   it("initials use first and last name characters", () => {
@@ -35,12 +38,19 @@ describe("live player locations", () => {
     expect(locationMoved(prev, { lat: 35.6001, lng: -77.37 })).toBe(true);
   });
 
-  it("drops guests, removed players, and stale pings from the public overlay", () => {
+  it("keeps on-course pings and rejects home/off-course coordinates", () => {
+    expect(locationOnCourse(35.6005, -77.37, NORTH_REC)).toBe(true);
+    expect(locationOnCourse(40, -90, NORTH_REC)).toBe(false);
+    expect(locationOnCourse(35.6, -77.37, [])).toBe(false);
+  });
+
+  it("drops guests, removed players, stale pings, and off-course GPS from the public overlay", () => {
     const now = 1_000_000;
     const locations = new Map([
       [0, { lat: 35.6, lng: -77.37, at: now - 1_000 }],
       [1, { lat: 35.601, lng: -77.371, at: now - 1_000 }],
       [2, { lat: 35.602, lng: -77.372, at: now - 200_000 }],
+      [4, { lat: 40, lng: -90, at: now - 1_000 }],
     ]);
     const published = publicPlayerLocations(
       [
@@ -48,10 +58,12 @@ describe("live player locations", () => {
         { name: "Walk-on", memberId: "g_abc" },
         { name: "TJ Braley", memberId: "m_b" },
         { name: "Gone", memberId: "m_c", removed: true },
+        { name: "Home", memberId: "m_d" },
       ],
       locations,
       now,
+      NORTH_REC,
     );
-    expect(published).toEqual([{ index: 0, initials: "AS", lat: 35.6, lng: -77.37 }]);
+    expect(published).toEqual([{ index: 0, initials: "AS", lat: 35.6, lng: -77.37, at: now - 1_000 }]);
   });
 });

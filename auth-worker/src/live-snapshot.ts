@@ -63,7 +63,7 @@ export function publicSnapshot(
     missing: issues.missing,
     standings,
     liveCtps: publicLiveCtps(liveCtps, players),
-    playerLocations: publicPlayerLocations(players, locations),
+    playerLocations: meta?.status === "live" ? publicPlayerLocations(players, locations, Date.now(), holes) : [],
     updatedAt: meta?.startedAt ?? null,
   };
 }
@@ -103,7 +103,7 @@ export function mineData(
   const myError =
     scoring.globalError ??
     (iAmBroken ? (scoring.cardErrors.find((e) => e.playerIndexes.includes(meIdx)) ?? scoring.cardErrors.find((e) => e.cardId === myCard) ?? scoring.error) : null);
-  const playerLocations = publicPlayerLocations(players, locations);
+  const playerLocations = meta?.status === "live" ? publicPlayerLocations(players, locations, Date.now(), holes) : [];
   const base = {
     eventId: meta?.eventId ?? 0,
     casual: !!meta?.casual,

@@ -155,11 +155,31 @@ export function startScoreApp(options) {
             }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
         }
 
+        function locationStamp(rows) {
+            let max = 0;
+            (Array.isArray(rows) ? rows : []).forEach(function (row) {
+                const at = Number(row && row.at);
+                if (Number.isFinite(at) && at > max) max = at;
+            });
+            return max;
+        }
+        function applyPlayerLocations(next) {
+            const rows = Array.isArray(next) ? next : [];
+            if (!rows.length) {
+                const changed = (S.playerLocations || []).length > 0;
+                S.playerLocations = [];
+                return changed;
+            }
+            if (locationStamp(rows) < locationStamp(S.playerLocations)) return false;
+            S.playerLocations = rows;
+            return true;
+        }
         function applyLiveExtras(snap) {
             const weatherChanged = Object.prototype.hasOwnProperty.call(snap, 'weather');
             if (weatherChanged) S.weather = snap.weather || null;
-            const locationsChanged = Object.prototype.hasOwnProperty.call(snap, 'playerLocations');
-            if (locationsChanged) S.playerLocations = Array.isArray(snap.playerLocations) ? snap.playerLocations : [];
+            const locationsChanged = Object.prototype.hasOwnProperty.call(snap, 'playerLocations')
+                ? applyPlayerLocations(snap.playerLocations)
+                : false;
             return weatherChanged || locationsChanged;
         }
 

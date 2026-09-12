@@ -571,6 +571,8 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.match(controller, /holes: watchHoleViews\(\)/);
   assert.match(controller, /LIVE \+ '\/location'/);
   assert.match(controller, /watchPosition/);
+  assert.match(controller, /function applyPlayerLocations/);
+  assert.match(controller, /function locationStamp/);
   const watchBoot = controller.slice(controller.indexOf('async function loadWatch'), controller.indexOf('function watchRoundCode'));
   assert.doesNotMatch(watchBoot, /\/join/);
 });

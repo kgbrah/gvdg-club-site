@@ -10,7 +10,7 @@ import { normalizeScorecards, playerScorerId, purgeScorerVotes, purgeScoreTarget
 import { canCastCtpVote, dropLiveCtp, recordCtpVote, type LiveCtpStore } from "./live-ctp.js";
 import { isLiveFormatError, normalizeLiveScoringConfig, normalizePairLabel, type LiveScoringConfig } from "./live-format.js";
 import { finalizeLiveEvent } from "./live-finalize.js";
-import { isLoggedInMemberId, locationMoved, parseLocationBody, type LivePlayerLocation } from "./live-locations.js";
+import { isLoggedInMemberId, locationMoved, locationOnCourse, parseLocationBody, type LivePlayerLocation } from "./live-locations.js";
 import { updateLivePairs } from "./live-pairs.js";
 import { mineData, publicSnapshot } from "./live-snapshot.js";
 import { canEnterScorecard, findPlayer, invalidScoreTargetsResponse, scoreTargetForBody, scoringState, targetAnchor } from "./live-state.js";
@@ -360,6 +360,7 @@ export class LiveEventDO {
   }
 
   private async finalize(authMember: string | null, authAdmin: boolean, force = false): Promise<Response> {
+    this.locations = new Map();
     return finalizeLiveEvent({
       meta: this.meta,
       players: this.players,
@@ -429,6 +430,7 @@ export class LiveEventDO {
     if (!isLoggedInMemberId(authMember)) return j({ error: "members_only" }, 403);
     const parsed = parseLocationBody(body);
     if (!parsed) return j({ error: "bad_location" }, 400);
+    if (!locationOnCourse(parsed.lat, parsed.lng, this.meta.holes)) return j({ error: "off_course" }, 400);
     const meIndex = this.players.findIndex((player) => player.memberId === authMember && !player.removed);
     if (meIndex < 0) return j({ error: "not_on_card" }, 403);
     const prev = this.locations.get(meIndex);
