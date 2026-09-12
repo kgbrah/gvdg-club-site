@@ -596,8 +596,23 @@
                     background-position: center;
                     background-repeat: no-repeat;
                 }
+                body.player-theme-page {
+                    background-color: var(--bg-primary);
+                    color: var(--text-primary);
+                }
+                body.player-theme-page::before { display: none; }
+                body.player-theme-active {
+                    background-color: var(--bg-primary);
+                    background-image: var(--player-theme-image);
+                    background-size: cover;
+                    background-position: center;
+                    background-repeat: no-repeat;
+                }
+                body.player-theme-page footer { color: var(--text-muted); }
+                body.player-theme-page footer a { color: var(--primary); }
                 @media (min-width: 900px) {
-                    #members.player-theme-active { background-attachment: fixed; }
+                    #members.player-theme-active,
+                    body.player-theme-active { background-attachment: fixed; }
                 }
                 .dash-theme { margin: 0 0 1.25rem; padding: 0; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-secondary); overflow: hidden; }
                 .dash-theme > summary { padding: 0.85rem 1.1rem 0.55rem; }

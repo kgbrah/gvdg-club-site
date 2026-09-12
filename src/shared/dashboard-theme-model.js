@@ -994,26 +994,54 @@ export function clearStoredTheme(storage, memberId) {
   }
 }
 
+function wallpaperImage(theme) {
+  if (!theme?.wallpaper) return "";
+  const bg = hexToRgb(theme.tokens["bg-primary"]) || (theme.mode === "dark" ? rgb(8, 10, 18) : rgb(248, 248, 252));
+  const start = theme.mode === "dark" ? 0.78 : 0.86;
+  const end = theme.mode === "dark" ? 0.9 : 0.93;
+  const scrim = `linear-gradient(rgba(${bg.r}, ${bg.g}, ${bg.b}, ${start}), rgba(${bg.r}, ${bg.g}, ${bg.b}, ${end}))`;
+  return `${scrim}, url("${theme.wallpaper}")`;
+}
+
+function themePage(root) {
+  const body = root?.ownerDocument?.body;
+  return body && body !== root ? body : null;
+}
+
+function clearThemeOn(el) {
+  if (!el?.style) return;
+  for (const key of TOKEN_KEYS) el.style.removeProperty(`--${key}`);
+  el.style.removeProperty("--player-theme-image");
+  el.classList?.remove?.("player-theme-active", "player-theme-page");
+}
+
+function paintThemeOn(el, theme) {
+  if (!el?.style) return;
+  for (const key of TOKEN_KEYS) el.style.setProperty(`--${key}`, theme.tokens[key]);
+  const image = wallpaperImage(theme);
+  if (image) {
+    el.style.setProperty("--player-theme-image", image);
+    el.classList?.add?.("player-theme-active");
+  } else {
+    el.style.removeProperty("--player-theme-image");
+    el.classList?.remove?.("player-theme-active");
+  }
+}
+
 export function applyDashboardTheme(theme, root) {
   if (!root || !root.style) return;
+  const page = themePage(root);
   if (!theme) {
-    for (const key of TOKEN_KEYS) root.style.removeProperty(`--${key}`);
-    root.style.removeProperty("--player-theme-image");
-    root.classList.remove("player-theme-active");
+    clearThemeOn(root);
+    clearThemeOn(page);
     return;
   }
   const safe = sanitizeTheme(theme);
   if (!safe) return;
-  for (const key of TOKEN_KEYS) root.style.setProperty(`--${key}`, safe.tokens[key]);
-  if (safe.wallpaper) {
-    const bg = hexToRgb(safe.tokens["bg-primary"]) || (safe.mode === "dark" ? rgb(8, 10, 18) : rgb(248, 248, 252));
-    const start = safe.mode === "dark" ? 0.78 : 0.86;
-    const end = safe.mode === "dark" ? 0.9 : 0.93;
-    const scrim = `linear-gradient(rgba(${bg.r}, ${bg.g}, ${bg.b}, ${start}), rgba(${bg.r}, ${bg.g}, ${bg.b}, ${end}))`;
-    root.style.setProperty("--player-theme-image", `${scrim}, url("${safe.wallpaper}")`);
-    root.classList.add("player-theme-active");
-  } else {
-    root.style.removeProperty("--player-theme-image");
-    root.classList.remove("player-theme-active");
+  paintThemeOn(root, safe);
+  if (page) {
+    paintThemeOn(page, safe);
+    page.classList?.add?.("player-theme-page");
   }
 }
+

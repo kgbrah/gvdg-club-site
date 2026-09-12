@@ -217,6 +217,48 @@ test("buildTheme wires wallpaper, mode, and tokens together", () => {
   assert.equal(theme.palette.length, 16);
 });
 
+test("applyDashboardTheme paints the page body so the public forest footer is covered", () => {
+  function fakeEl() {
+    const props = new Map();
+    const classes = new Set();
+    return {
+      props,
+      classes,
+      style: {
+        setProperty(name, value) { props.set(name, value); },
+        removeProperty(name) { props.delete(name); },
+      },
+      classList: {
+        add(...names) { names.forEach((name) => classes.add(name)); },
+        remove(...names) { names.forEach((name) => classes.delete(name)); },
+      },
+    };
+  }
+  const wallpaper = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p94AAAAASUVORK5CYII=";
+  const body = fakeEl();
+  const root = fakeEl();
+  root.ownerDocument = { body };
+  const themed = buildTheme({ preset: "Nord", mode: "light", wallpaper });
+  applyDashboardTheme(themed, root);
+  assert.equal(root.props.get("--primary"), themed.tokens.primary);
+  assert.equal(body.props.get("--primary"), themed.tokens.primary);
+  assert.equal(body.props.get("--text-muted"), themed.tokens["text-muted"]);
+  assert.match(body.props.get("--player-theme-image"), /url\("data:image\/png/);
+  assert.deepEqual([...root.classes], ["player-theme-active"]);
+  assert.ok(body.classes.has("player-theme-page"));
+  assert.ok(body.classes.has("player-theme-active"));
+  const paperOnly = buildTheme({ preset: "Nord", mode: "light" });
+  applyDashboardTheme(paperOnly, root);
+  assert.equal(body.props.has("--player-theme-image"), false);
+  assert.ok(body.classes.has("player-theme-page"));
+  assert.equal(body.classes.has("player-theme-active"), false);
+  applyDashboardTheme(null, root);
+  assert.equal(root.props.size, 0);
+  assert.equal(body.props.size, 0);
+  assert.equal(root.classes.size, 0);
+  assert.equal(body.classes.size, 0);
+});
+
 test("applyDashboardTheme sets and clears CSS variables on the dashboard root", () => {
   const props = new Map();
   const root = {

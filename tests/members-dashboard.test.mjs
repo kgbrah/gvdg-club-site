@@ -233,6 +233,9 @@ test('more page mounts a player theme builder', () => {
   assert.match(theme, /pendingTheme/);
   assert.doesNotMatch(theme, /Aether|AETHER/);
   assert.match(html, /#members\.player-theme-active/);
+  assert.match(html, /body\.player-theme-page::before/);
+  assert.match(html, /body\.player-theme-active/);
+  assert.match(html, /body\.player-theme-page footer/);
   assert.match(html, /\.dash-theme-palette/);
   assert.match(html, /\.dash-theme-preset-grid/);
   assert.match(html, /\.dash-theme-header/);
