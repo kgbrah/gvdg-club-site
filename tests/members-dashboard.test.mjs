@@ -143,6 +143,16 @@ test('member dashboard React registration section stays available for logged-in 
   assert.match(casual, /data-react-casual-form/);
 });
 
+test('overview dashboard puts the register-for-events box below ratings and above recent tournaments', () => {
+  const overview = readFileSync('src/members-app/overview-dashboard.js', 'utf8');
+  const pdga = readFileSync('src/members-app/pdga-dashboard.js', 'utf8');
+  const html = readFileSync('gvdg-members.html', 'utf8');
+  assert.match(overview, /import \{ MemberRegistrationPanel \} from "\.\/registration-panel\.js"/);
+  assert.match(overview, /h\(PdgaDashboard[\s\S]*h\(MemberRegistrationPanel/);
+  assert.match(pdga, /\.\.\.extras,\s*events\.length \? h\("div", \{ key: "events" \}, \[\s*h\("h4", \{ className: "dash-subtitle", key: "title" \}, "Recent Tournaments"\)/);
+  assert.match(html, /\.react-pdga-dashboard \.react-registration-panel/);
+});
+
 test('member dashboard React registration panel surfaces live events and lists every registered event', () => {
   const events = readFileSync('src/members-app/registration-events.js', 'utf8');
   assert.match(events, /liveToJoin = openToJoin\.filter\(\(event\) => event\.status === "live"\)/);

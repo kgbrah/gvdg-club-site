@@ -130,40 +130,37 @@ function RecentEvent({ event }) {
   ]);
 }
 
-export function PdgaDashboard({ pdgaNo, state }) {
+export function PdgaDashboard({ pdgaNo, state, children }) {
   const status = state.status;
   const stats = state.stats;
+  const extras = children ? [children] : [];
 
   if (!pdgaNo) {
-    return h(
-      "div",
-      { className: "react-pdga-dashboard", id: "membersReactRatingPanel", "data-react-pdga-dashboard": "empty" },
-      h("div", { className: "react-pdga-status" }, "No PDGA # is linked to your account yet. PDGA ratings and tournament history will appear here once it is."),
-    );
+    return dashboardShell("empty", [
+      h("div", { className: "react-pdga-status", key: "status" }, "No PDGA # is linked to your account yet. PDGA ratings and tournament history will appear here once it is."),
+      ...extras,
+    ]);
   }
 
   if (status === "loading") {
-    return h(
-      "div",
-      { className: "react-pdga-dashboard", id: "membersReactRatingPanel", "data-react-pdga-dashboard": "loading" },
-      h("div", { className: "react-pdga-status" }, "Loading your stats..."),
-    );
+    return dashboardShell("loading", [
+      h("div", { className: "react-pdga-status", key: "status" }, "Loading your stats..."),
+      ...extras,
+    ]);
   }
 
   if (status === "missing") {
-    return h(
-      "div",
-      { className: "react-pdga-dashboard", id: "membersReactRatingPanel", "data-react-pdga-dashboard": "missing" },
-      h("div", { className: "react-pdga-status" }, `We couldn't find live data for PDGA #${pdgaNo} yet. Check back after the next sync.`),
-    );
+    return dashboardShell("missing", [
+      h("div", { className: "react-pdga-status", key: "status" }, `We couldn't find live data for PDGA #${pdgaNo} yet. Check back after the next sync.`),
+      ...extras,
+    ]);
   }
 
   if (status === "error") {
-    return h(
-      "div",
-      { className: "react-pdga-dashboard", id: "membersReactRatingPanel", "data-react-pdga-dashboard": "error" },
-      h("div", { className: "react-pdga-status error" }, "Could not load PDGA stats. Please refresh and try again."),
-    );
+    return dashboardShell("error", [
+      h("div", { className: "react-pdga-status error", key: "status" }, "Could not load PDGA stats. Please refresh and try again."),
+      ...extras,
+    ]);
   }
 
   const events = Array.isArray(stats?.events) ? stats.events : [];
@@ -173,7 +170,7 @@ export function PdgaDashboard({ pdgaNo, state }) {
     ? `${live - official >= 0 ? "+" : ""}${live - official} vs official`
     : "";
 
-  return h("div", { className: "react-pdga-dashboard", id: "membersReactRatingPanel", "data-react-pdga-dashboard": "ready" }, [
+  return dashboardShell("ready", [
     h("div", { className: "react-pdga-meta", key: "meta" }, `PDGA #${pdgaNo}`),
     h("div", { className: "dash-rating-row", key: "ratings" }, [
       h(RatingTile, { label: "Live Rating", value: live, delta, live: true, key: "live" }),
@@ -181,9 +178,18 @@ export function PdgaDashboard({ pdgaNo, state }) {
       h(RatingTile, { label: "Peak", value: stats?.peak_rating, key: "peak" }),
       h(RatingTile, { label: "Events", value: stats?.events_count != null ? stats.events_count : events.length, key: "events" }),
     ]),
+    ...extras,
     events.length ? h("div", { key: "events" }, [
       h("h4", { className: "dash-subtitle", key: "title" }, "Recent Tournaments"),
       h("div", { key: "list" }, events.slice(0, 6).map((event, index) => h(RecentEvent, { event, key: `${event.tournament || "event"}-${event.epoch || index}` }))),
     ]) : null,
   ]);
+}
+
+function dashboardShell(status, children) {
+  return h("div", {
+    className: "react-pdga-dashboard",
+    id: "membersReactRatingPanel",
+    "data-react-pdga-dashboard": status,
+  }, children);
 }

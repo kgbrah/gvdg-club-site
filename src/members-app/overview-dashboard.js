@@ -6,6 +6,7 @@ import { ClubRatings } from "./club-ratings.js";
 import { selectDashboardTab } from "./dashboard-shell.js";
 import { useMemberContext } from "./member-context.js";
 import { PdgaDashboard, usePdgaStats } from "./pdga-dashboard.js";
+import { MemberRegistrationPanel } from "./registration-panel.js";
 
 const h = React.createElement;
 const PASSKEY_STATE_EVENT = "gvdg:member-passkey-state";
@@ -105,7 +106,8 @@ export function MemberOverviewDashboard() {
 
   return h("div", { className: "react-overview-dashboard", "data-react-overview-dashboard": "ready" }, [
     h(ProfileHeader, { context, pdgaPhoto: pdgaState.stats?.photo || null, key: "profile" }),
-    h(PdgaDashboard, { pdgaNo: context.pdgaNo, state: pdgaState, key: "pdga" }),
+    h(PdgaDashboard, { pdgaNo: context.pdgaNo, state: pdgaState, key: "pdga" },
+      h(MemberRegistrationPanel, { key: "register" })),
     h(ActiveStandingsPanel, { key: "standings" }),
     h(ClubRatings, { token, key: "ratings" }),
     h(LiveScoringPanel, { token, key: "live-scoring" }),
