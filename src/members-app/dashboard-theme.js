@@ -90,6 +90,11 @@ export function DashboardThemeBuilder() {
   const pixelsRef = React.useRef(null);
   const fileRef = React.useRef(null);
   const editedRef = React.useRef(false);
+  const paletteEditedRef = React.useRef(false);
+  const persistTimer = React.useRef(0);
+  const persistGen = React.useRef(0);
+  const persistChain = React.useRef(Promise.resolve());
+  const pendingTheme = React.useRef(null);
 
   const paint = React.useCallback((next) => {
     const safe = sanitizeTheme(next);
@@ -114,6 +119,7 @@ export function DashboardThemeBuilder() {
   React.useEffect(() => {
     editedRef.current = false;
     pixelsRef.current = null;
+    paletteEditedRef.current = false;
     if (!token) {
       paint(null);
       return undefined;
@@ -140,28 +146,39 @@ export function DashboardThemeBuilder() {
     return () => controller.abort();
   }, [token, memberId, paint]);
 
-  const persistTimer = React.useRef(0);
-
   async function persist(next, immediate = true) {
     editedRef.current = true;
     writeStoredTheme(window.localStorage, memberId, next);
+    persistGen.current += 1;
+    const gen = persistGen.current;
+    pendingTheme.current = next;
     if (!token) return true;
-    const send = async () => {
+
+    const sendLatest = async () => {
+      if (gen !== persistGen.current) return true;
+      const payload = pendingTheme.current;
       try {
         const response = await request("/me/dashboard-theme", {
           token,
-          method: next ? "PUT" : "DELETE",
-          body: next ? { theme: next } : undefined,
+          method: payload ? "PUT" : "DELETE",
+          body: payload ? { theme: payload } : undefined,
         });
+        if (gen !== persistGen.current) return true;
         return Boolean(response && response.ok);
       } catch {
-        return false;
+        return gen !== persistGen.current;
       }
     };
+
+    const enqueue = () => {
+      persistChain.current = persistChain.current.catch(() => {}).then(sendLatest);
+      return persistChain.current;
+    };
+
     window.clearTimeout(persistTimer.current);
-    if (immediate) return send();
+    if (immediate) return enqueue();
     persistTimer.current = window.setTimeout(() => {
-      send().then((ok) => {
+      enqueue().then((ok) => {
         if (!ok) setStatus("Saved on this device. Cloud save failed — try again.");
       });
     }, 400);
@@ -186,7 +203,7 @@ export function DashboardThemeBuilder() {
     const editedPalette = options.editedPalette === undefined ? null : options.editedPalette;
     const pixels = Object.prototype.hasOwnProperty.call(options, "pixels")
       ? options.pixels
-      : (preset ? null : pixelsRef.current);
+      : null;
     const next = buildTheme({
       pixels: pixels || undefined,
       mode: nextMode,
@@ -215,6 +232,7 @@ export function DashboardThemeBuilder() {
       }
       const pixels = await pixelsFromDataUrl(wallpaper);
       pixelsRef.current = pixels;
+      paletteEditedRef.current = false;
       const next = await compose({ wallpaper, pixels, preset: null, editedPalette: null });
       if (!next) {
         setStatus("Could not read colors from that image.");
@@ -240,6 +258,7 @@ export function DashboardThemeBuilder() {
     setBusy(true);
     try {
       const pixels = await wallpaperPixels();
+      paletteEditedRef.current = false;
       const next = await compose({ pixels, editedPalette: null, preset: null });
       setStatus(next ? "Palette extracted." : "Could not extract a palette.");
     } finally {
@@ -252,7 +271,7 @@ export function DashboardThemeBuilder() {
     if (!theme) return;
     setBusy(true);
     try {
-      const pixels = await wallpaperPixels();
+      const pixels = paletteEditedRef.current ? null : await wallpaperPixels();
       await compose({ nextMode, editedPalette: null, ...(pixels ? { pixels } : {}) });
     } finally {
       setBusy(false);
@@ -268,6 +287,7 @@ export function DashboardThemeBuilder() {
     setExtractMode(nextExtract);
     setBusy(true);
     try {
+      paletteEditedRef.current = false;
       await compose({ nextExtract, pixels, editedPalette: null, preset: null });
       setStatus("Extraction mode updated.");
     } finally {
@@ -292,6 +312,7 @@ export function DashboardThemeBuilder() {
     setBusy(true);
     try {
       pixelsRef.current = null;
+      paletteEditedRef.current = false;
       const next = await compose({
         preset: name,
         pixels: null,
@@ -309,6 +330,7 @@ export function DashboardThemeBuilder() {
     const palette = theme.palette.slice();
     palette[index] = hex;
     setAdjustments(DEFAULT_ADJUSTMENTS);
+    paletteEditedRef.current = true;
     const next = {
       ...theme,
       palette,
@@ -332,6 +354,7 @@ export function DashboardThemeBuilder() {
 
   async function reset() {
     pixelsRef.current = null;
+    paletteEditedRef.current = false;
     paint(null);
     setExtractMode("normal");
     setMode("dark");

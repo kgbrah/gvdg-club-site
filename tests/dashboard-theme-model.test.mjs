@@ -13,6 +13,7 @@ import {
   medianCut,
   normalizeExtractMode,
   paletteFromPixels,
+  relativeLuminance,
   rgb,
   rgbToHex,
   rgbToOklch,
@@ -101,6 +102,42 @@ test("fill tokens stay readable on white tile text", () => {
   for (const key of ["primary", "secondary", "accent", "green"]) {
     assert.ok(contrastRatio(hexToRgb(theme.tokens[key]), white) >= 4.5, key);
   }
+});
+
+test("secondary text tokens meet AA contrast on the theme background", () => {
+  for (const name of Object.keys(PRESET_THEMES)) {
+    for (const mode of ["dark", "light"]) {
+      const theme = buildTheme({ preset: name, mode });
+      const bg = hexToRgb(theme.tokens["bg-primary"]);
+      assert.ok(contrastRatio(hexToRgb(theme.tokens["text-secondary"]), bg) >= 4.5, `${name} ${mode} text-secondary`);
+      assert.ok(contrastRatio(hexToRgb(theme.tokens["text-muted"]), bg) >= 4.5, `${name} ${mode} text-muted`);
+    }
+  }
+});
+
+test("recolored palettes swap anchors when switching to light", () => {
+  const dark = buildTheme({ preset: "Nord", mode: "dark" });
+  const source = dark.sourcePalette.slice();
+  source[2] = "#112233";
+  const light = buildTheme({ sourcePalette: source, mode: "light" });
+  assert.equal(light.preset, null);
+  assert.ok(
+    relativeLuminance(hexToRgb(light.tokens["bg-primary"]))
+      > relativeLuminance(hexToRgb(dark.tokens["bg-primary"])),
+  );
+  const restored = buildTheme({ sourcePalette: light.sourcePalette, mode: "dark" });
+  assert.ok(
+    relativeLuminance(hexToRgb(restored.tokens["bg-primary"]))
+      < relativeLuminance(hexToRgb(light.tokens["bg-primary"])),
+  );
+});
+
+test("adjustments keep a manually recolored source palette", () => {
+  const source = PRESET_THEMES.Nord.map((hex) => hex.toLowerCase());
+  source[2] = "#112233";
+  const next = buildTheme({ sourcePalette: source, mode: "dark", adjustments: { vibrance: 20 } });
+  assert.equal(next.sourcePalette[2], "#112233");
+  assert.notEqual(next.palette[2], "#112233");
 });
 
 test("writeStoredTheme swallows quota errors so callers can still persist remotely", () => {

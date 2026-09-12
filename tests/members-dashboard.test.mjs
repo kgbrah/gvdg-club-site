@@ -224,6 +224,9 @@ test('more page mounts a player theme builder', () => {
   assert.match(theme, /"Dashboard theme"/);
   assert.match(theme, /Cloud save failed/);
   assert.match(theme, /editedRef/);
+  assert.match(theme, /paletteEditedRef/);
+  assert.match(theme, /persistGen/);
+  assert.match(theme, /pendingTheme/);
   assert.doesNotMatch(theme, /Aether|AETHER/);
   assert.match(html, /#members\.player-theme-active/);
   assert.match(html, /\.dash-theme-palette/);

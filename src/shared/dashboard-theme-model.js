@@ -679,6 +679,25 @@ function sanitizeHexList(values, max = 16) {
     .slice(0, max);
 }
 
+function applyTextContrast(tokens) {
+  if (!tokens) return tokens;
+  const bg = hexToRgb(tokens["bg-primary"]);
+  if (!bg) return tokens;
+  const next = { ...tokens };
+  const pairs = [
+    ["text-primary", 4.5],
+    ["text-secondary", 4.5],
+    ["text-muted", 4.5],
+    ["text-tertiary", 3],
+    ["secondary-text", 4.5],
+  ];
+  for (const [key, minimum] of pairs) {
+    const color = hexToRgb(next[key]);
+    if (color) next[key] = rgbToHex(ensureContrast(color, bg, minimum));
+  }
+  return next;
+}
+
 function applyFillContrast(tokens) {
   if (!tokens) return tokens;
   const white = rgb(255, 255, 255);
@@ -704,7 +723,7 @@ export function tokensFromPalette(palette, mode = "dark") {
     const yellow = colors[3] || red;
     const blue = colors[4] || red;
     const cyan = colors[6] || blue;
-    return applyFillContrast({
+    return applyTextContrast(applyFillContrast({
       primary: rgbToHex(ensureContrast(red, bg, 3)),
       "primary-strong": rgbToHex(shiftLightness(red, mode === "light" ? -0.1 : -0.06)),
       secondary: rgbToHex(blue),
@@ -719,7 +738,7 @@ export function tokensFromPalette(palette, mode = "dark") {
       "text-tertiary": rgbToHex(mix(fg, dim, 0.45)),
       "text-muted": rgbToHex(ensureContrast(dim, bg, 3.2)),
       "secondary-text": rgbToHex(ensureContrast(cyan, bg, 3.5)),
-    });
+    }));
   }
   const ordered = colors.slice().sort((left, right) => relativeLuminance(left) - relativeLuminance(right));
   const dark = ordered[0];
@@ -748,20 +767,22 @@ export function themeContrast(theme) {
   return { ratio, grade: contrastGrade(ratio) };
 }
 
-function swapAnchors(palette) {
+function alignAnchors(palette, mode) {
   const next = palette.slice();
   if (next.length < 8) return next;
   const bg = hexToRgb(next[0]);
   const fg = hexToRgb(next[15] || next[7]);
-  if (bg && fg && relativeLuminance(bg) < relativeLuminance(fg)) {
-    const end = next[15] || next[7];
-    next[15] = next[0];
-    next[0] = end;
-    if (next[7] && next[8]) {
-      const dim = next[8];
-      next[8] = next[7];
-      next[7] = dim;
-    }
+  if (!bg || !fg) return next;
+  const bgDarker = relativeLuminance(bg) < relativeLuminance(fg);
+  const wantsLight = mode === "light";
+  if (wantsLight !== bgDarker) return next;
+  const end = next[15] || next[7];
+  next[15] = next[0];
+  next[0] = end;
+  if (next[7] && next[8]) {
+    const dim = next[8];
+    next[8] = next[7];
+    next[7] = dim;
   }
   return next;
 }
@@ -784,8 +805,8 @@ export function buildTheme({
   if (pixels?.length) source = paletteFromPixels(pixels, safeExtract, safeMode);
   else if (safePreset) {
     source = PRESET_THEMES[safePreset].map((hex) => hex.toLowerCase());
-    if (safeMode === "light") source = swapAnchors(source);
   }
+  if (source.length && !pixels?.length) source = alignAnchors(source, safeMode);
   if (source.length && source.length < 16) {
     const filled = source.slice();
     while (filled.length < 16) filled.push(filled[filled.length - 1]);
@@ -831,7 +852,7 @@ export function sanitizeTheme(raw) {
       if (!tokens[key]) tokens[key] = rebuilt[key];
     }
   }
-  Object.assign(tokens, applyFillContrast(tokens));
+  Object.assign(tokens, applyTextContrast(applyFillContrast(tokens)));
   const wallpaper = typeof raw.wallpaper === "string" && WALLPAPER_RE.test(raw.wallpaper) && raw.wallpaper.length <= MAX_WALLPAPER_CHARS
     ? raw.wallpaper
     : null;
