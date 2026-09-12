@@ -9,6 +9,7 @@ import {
 } from "../shared/events-model.js";
 import { WeatherStrip } from "../score-app/weather-strip.js";
 import { liveWatchHref } from "../shared/live-watch.js";
+import { displayMatchStatus } from "../shared/match-status.js";
 import { TeeSignSvg } from "../shared/tee-sign-svg.js";
 import { UDiscExportDetails, udiscDeepLink } from "../shared/udisc-export.js";
 import { useEventsEventDetail } from "./events-detail-data.js";
@@ -49,18 +50,6 @@ function parseJson(raw, fallback = null) {
   } catch {
     return fallback;
   }
-}
-
-function matchLabel(match) {
-  if (!match || !match.status) return "AS";
-  const status = String(match.status);
-  if (match.outcome !== "lost" && match.outcome !== "trailing") return status;
-  return status.replace(/^won /, "lost ").replace(/^(\d+) up\b/, "$1 down");
-}
-
-function matchText(match) {
-  if (!match || !match.status) return "AS";
-  return `${match.dormie ? "Dormie " : ""}${matchLabel(match)}`;
 }
 
 function parseMatchResult(raw) {
@@ -195,7 +184,7 @@ function LiveStandings({ snapshot }) {
       if (matchplay) {
         return h("tr", { key: `${name}|${index}` }, base.concat([
           h("td", { key: "thru" }, standing && standing.thru ? String(standing.thru) : "-"),
-          h("td", { className: "lb-match", key: "match" }, matchText(standing && standing.match)),
+          h("td", { className: "lb-match", key: "match" }, displayMatchStatus(standing && standing.match)),
         ]));
       }
       return h("tr", { key: `${name}|${index}` }, base.concat([
@@ -281,7 +270,7 @@ function FinalResults({ course, data }) {
                 scoringLabel ? h("span", { className: "lb-members", key: "group" }, ` · ${scoringLabel}`) : null,
               ]),
               matchplay
-                ? h("td", { className: "lb-match", key: "match" }, match ? matchLabel(match) : "-")
+                ? h("td", { className: "lb-match", key: "match" }, match ? displayMatchStatus(match) : "-")
                 : h("td", { key: "total" }, result && result.total != null ? String(result.total) : "-"),
               matchplay ? null : h("td", {
                 className: `lb-topar${toPar < 0 ? " under" : toPar > 0 ? " over" : ""}`,

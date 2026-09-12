@@ -299,6 +299,8 @@ test('public Events event detail fetches in React', () => {
   assert.match(dataApp, /function fetchEventExtrasData/);
   assert.match(dataApp, /function fetchTeeSignsData/);
   assert.match(dataApp, /from "\.\.\/shared\/matchplay-colors\.js"/);
+  assert.match(app, /from "\.\.\/shared\/match-status\.js"/);
+  assert.match(app, /displayMatchStatus/);
   assert.match(dataApp, /holeWinners/);
   assert.match(dataApp, /playersFromResults/);
   assert.match(dataApp, /guestRegs\(\)\[event\.id\]/);

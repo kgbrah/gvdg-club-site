@@ -3,6 +3,7 @@ import React from "react";
 import { RECENT_ROUNDS_KEY, localStorageGet, requestJson } from "./api.js";
 import { dollars, formatEventDay, formatToPar } from "./format.js";
 import { applyOfficialRyderTally } from "../public-app/ryder-board-merge.js";
+import { displayMatchStatus } from "../shared/match-status.js";
 import { fetchMergedRyderData } from "../shared/ryder-cup-data.js";
 
 const h = React.createElement;
@@ -249,7 +250,7 @@ function LiveEventStandings({ event }) {
         h("td", { key: "name" }, standingNameWithTeam(standing)),
         h("td", { key: "thru" }, standing.thru ? String(standing.thru) : "-"),
         matchplay
-          ? h("td", { key: "match" }, standing.match?.status || "AS")
+          ? h("td", { key: "match" }, displayMatchStatus(standing.match))
           : h("td", { key: "total" }, standing.total != null && standing.thru ? String(standing.total) : "-"),
         matchplay ? null : h("td", { key: "par" }, standing.thru ? formatToPar(standing.toPar) : "-"),
       ]))),
