@@ -3,6 +3,7 @@ import React from "react";
 import { MemberBoardPanel } from "./board-panel.js";
 import { MemberClubPanel } from "./club-panel.js";
 import { MemberDashboardShell } from "./dashboard-shell.js";
+import { MemberMorePage } from "./more-page.js";
 import { MemberOverviewDashboard } from "./overview-dashboard.js";
 import { MemberRegistrationPanel, RegistrationProvider } from "./registration-panel.js";
 import { MemberSeasonPage } from "./season-page.js";
@@ -21,6 +22,9 @@ export function MemberDashboardApp() {
     ]),
     h("div", { className: "club-register", id: "clubRegister", key: "registration" }, [
       h("div", { id: "membersReactRegistrationPanel", key: "mount" }, h(MemberRegistrationPanel)),
+    ]),
+    h("div", { className: "player-more", id: "playerMore", key: "more" }, [
+      h("div", { id: "membersReactMorePanel", key: "mount" }, h(MemberMorePage)),
     ]),
     h("div", { className: "club-board", id: "clubBoard", key: "board" }, [
       h("div", { id: "membersReactBoardPanel", key: "mount" }, h(MemberBoardPanel)),

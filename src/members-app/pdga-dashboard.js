@@ -130,7 +130,7 @@ function RecentEvent({ event }) {
   ]);
 }
 
-export function PdgaDashboard({ pdgaNo, state, children }) {
+export function PdgaDashboard({ pdgaNo, state, children, compact = false }) {
   const status = state.status;
   const stats = state.stats;
   const extras = children ? [children] : [];
@@ -170,6 +170,18 @@ export function PdgaDashboard({ pdgaNo, state, children }) {
     ? `${live - official >= 0 ? "+" : ""}${live - official} vs official`
     : "";
 
+  const recent = events.length ? h("details", { className: "dash-collapse", key: "events" }, [
+    h("summary", { className: "dash-subtitle dash-collapse-summary", key: "title" }, `Recent Tournaments (${Math.min(events.length, 6)})`),
+    h("div", { key: "list" }, events.slice(0, 6).map((event, index) => h(RecentEvent, { event, key: `${event.tournament || "event"}-${event.epoch || index}` }))),
+  ]) : null;
+
+  if (compact) {
+    return dashboardShell("ready", [
+      ...extras,
+      recent,
+    ]);
+  }
+
   return dashboardShell("ready", [
     h("div", { className: "react-pdga-meta", key: "meta" }, `PDGA #${pdgaNo}`),
     h("div", { className: "dash-rating-row", key: "ratings" }, [
@@ -179,10 +191,7 @@ export function PdgaDashboard({ pdgaNo, state, children }) {
       h(RatingTile, { label: "Events", value: stats?.events_count != null ? stats.events_count : events.length, key: "events" }),
     ]),
     ...extras,
-    events.length ? h("details", { className: "dash-collapse", key: "events" }, [
-      h("summary", { className: "dash-subtitle dash-collapse-summary", key: "title" }, `Recent Tournaments (${Math.min(events.length, 6)})`),
-      h("div", { key: "list" }, events.slice(0, 6).map((event, index) => h(RecentEvent, { event, key: `${event.tournament || "event"}-${event.epoch || index}` }))),
-    ]) : null,
+    recent,
   ]);
 }
 

@@ -1,6 +1,7 @@
 import React from "react";
 
 import { RECENT_ROUNDS_KEY, localStorageGet, requestJson } from "./api.js";
+import { selectDashboardTab } from "./dashboard-shell.js";
 import { dollars, formatEventDay, formatToPar } from "./format.js";
 import { applyOfficialRyderTally } from "../public-app/ryder-board-merge.js";
 import { displayMatchStatus } from "../shared/match-status.js";
@@ -76,7 +77,7 @@ function LiveRoundCard({ item }) {
   ]);
 }
 
-export function LiveScoringPanel({ token }) {
+export function LiveScoringPanel({ token, compact = false }) {
   const [state, setState] = React.useState({ status: "idle", items: [] });
 
   React.useEffect(() => {
@@ -106,6 +107,25 @@ export function LiveScoringPanel({ token }) {
 
   if (!token) return null;
   const count = state.items.length;
+  if (compact) {
+    const live = state.items[0];
+    return h(live ? "a" : "button", {
+      className: "player-keep-score",
+      href: live ? live.href : undefined,
+      type: live ? undefined : "button",
+      onClick: live ? undefined : (event) => {
+        event.preventDefault();
+        selectDashboardTab("events");
+      },
+      "data-react-live-scoring": state.status,
+    }, [
+      h("div", { key: "copy" }, [
+        h("h2", { key: "title" }, "Keep score"),
+        h("p", { key: "meta" }, live ? live.title : "No live card. Start a casual round or join one."),
+      ]),
+      h("span", { className: "player-keep-score-go", key: "go" }, live ? "Rejoin" : "Play"),
+    ]);
+  }
   return h("details", { className: "club-board react-live-scoring dash-collapse", "data-react-live-scoring": state.status }, [
     h("summary", { className: "my-dashboard-title dash-collapse-summary", key: "title" }, count ? `Live Scoring (${count})` : "Live Scoring"),
     h("div", { className: "live-round-list", key: "list" }, count
@@ -127,7 +147,7 @@ function WalletLine({ transaction }) {
   ]);
 }
 
-export function WalletPanel({ token }) {
+export function WalletPanel({ token, compact = false }) {
   const [state, setState] = React.useState({ status: "idle", wallet: null });
 
   React.useEffect(() => {
@@ -146,6 +166,13 @@ export function WalletPanel({ token }) {
   }, [token]);
 
   if (!token || state.status === "error" || !state.wallet) return null;
+  if (compact) {
+    return h("div", { className: "player-stat react-wallet-panel", "data-react-wallet": state.status }, [
+      h("div", { className: "player-stat-k", key: "label" }, "Wallet"),
+      h("div", { className: "player-stat-v", key: "amount" }, dollars(state.wallet.balance_cents || 0)),
+      h("div", { className: "player-stat-s", key: "hint" }, "Shop with credit"),
+    ]);
+  }
   const transactions = (Array.isArray(state.wallet.transactions) ? state.wallet.transactions : []).slice(0, 4);
   return h("div", { className: "wallet-panel react-wallet-panel", "data-react-wallet": state.status }, [
     h("div", { key: "balance" }, [
