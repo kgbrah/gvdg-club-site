@@ -1,7 +1,6 @@
 import React from "react";
 
 import { RECENT_ROUNDS_KEY, localStorageGet, requestJson } from "./api.js";
-import { selectDashboardTab } from "./dashboard-shell.js";
 import { dollars, formatEventDay, formatToPar } from "./format.js";
 import { applyOfficialRyderTally } from "../public-app/ryder-board-merge.js";
 import { displayMatchStatus } from "../shared/match-status.js";
@@ -109,21 +108,23 @@ export function LiveScoringPanel({ token, compact = false }) {
   const count = state.items.length;
   if (compact) {
     const live = state.items[0];
-    return h(live ? "a" : "button", {
-      className: "player-keep-score",
-      href: live ? live.href : undefined,
-      type: live ? undefined : "button",
-      onClick: live ? undefined : (event) => {
-        event.preventDefault();
-        selectDashboardTab("events");
-      },
-      "data-react-live-scoring": state.status,
-    }, [
-      h("div", { key: "copy" }, [
-        h("h2", { key: "title" }, "Keep score"),
-        h("p", { key: "meta" }, live ? live.title : "No live card. Start a casual round or join one."),
+    const extras = state.items.slice(1);
+    return h("div", { className: "player-keep-score-wrap", "data-react-live-scoring": state.status }, [
+      h("a", {
+        className: "player-keep-score",
+        href: live ? live.href : "score.html",
+        key: "cta",
+      }, [
+        h("div", { key: "copy" }, [
+          h("h2", { key: "title" }, "Keep score"),
+          h("p", { key: "meta" }, live ? live.title : "No live card. Start a casual round or join one."),
+        ]),
+        h("span", { className: "player-keep-score-go", key: "go" }, live ? "Rejoin" : "Play"),
       ]),
-      h("span", { className: "player-keep-score-go", key: "go" }, live ? "Rejoin" : "Play"),
+      extras.length
+        ? h("div", { className: "live-round-list", key: "extras" }, extras.map((item) => h(LiveRoundCard, { item, key: `${item.kind}-${item.href}` })))
+        : null,
+      h("a", { className: "player-btn", href: "score.html", key: "join" }, "Start / join a casual round"),
     ]);
   }
   return h("details", { className: "club-board react-live-scoring dash-collapse", "data-react-live-scoring": state.status }, [
@@ -167,7 +168,11 @@ export function WalletPanel({ token, compact = false }) {
 
   if (!token || state.status === "error" || !state.wallet) return null;
   if (compact) {
-    return h("div", { className: "player-stat react-wallet-panel", "data-react-wallet": state.status }, [
+    return h("a", {
+      className: "player-stat react-wallet-panel",
+      href: "pro-shop.html",
+      "data-react-wallet": state.status,
+    }, [
       h("div", { className: "player-stat-k", key: "label" }, "Wallet"),
       h("div", { className: "player-stat-v", key: "amount" }, dollars(state.wallet.balance_cents || 0)),
       h("div", { className: "player-stat-s", key: "hint" }, "Shop with credit"),
