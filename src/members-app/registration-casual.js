@@ -183,9 +183,10 @@ function CasualRoundCard({ request: round, token, viewerSub, onReload }) {
 }
 
 export function CasualRoundsSection({ token, requests, viewerSub, onReload }) {
-  return h(React.Fragment, null, [
-    h("h4", { className: "register-subhead", key: "title" }, "Casual rounds"),
+  const count = Array.isArray(requests) ? requests.length : 0;
+  return h("details", { className: "dash-collapse", key: "casual" }, [
+    h("summary", { className: "register-subhead dash-collapse-summary", key: "title" }, count ? `Casual rounds (${count})` : "Casual rounds"),
     h(CasualRoundForm, { token, onReload, key: "form" }),
-    ...requests.map((requestItem) => h(CasualRoundCard, { request: requestItem, token, viewerSub, onReload, key: `casual-${requestItem.id}` })),
+    ...(Array.isArray(requests) ? requests : []).map((requestItem) => h(CasualRoundCard, { request: requestItem, token, viewerSub, onReload, key: `casual-${requestItem.id}` })),
   ]);
 }

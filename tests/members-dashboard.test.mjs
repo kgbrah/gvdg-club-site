@@ -7,7 +7,10 @@ test('member dashboard React registration panel includes casual round posts', ()
   const casual = readFileSync('src/members-app/registration-casual.js', 'utf8');
   assert.match(panel, /requestJson\("\/casual-rounds"/);
   assert.match(panel, /casualRequests/);
+  assert.match(panel, /export function RegistrationProvider/);
   assert.match(casual, /CasualRoundCard/);
+  assert.match(casual, /h\("details", \{ className: "dash-collapse"/);
+  assert.match(casual, /Casual rounds/);
 });
 
 test('member dashboard React board panel owns board loading and posting', () => {
@@ -141,6 +144,39 @@ test('member dashboard React registration section stays available for logged-in 
   assert.doesNotMatch(html, /id="clubRegister"[^>]*style="display:\s*none;?"/);
   assert.doesNotMatch(panel, /visibleParent|style\.display|getElementById\("clubRegister"\)/);
   assert.match(casual, /data-react-casual-form/);
+});
+
+test('overview dashboard puts the register-for-events box below ratings and above recent tournaments', () => {
+  const overview = readFileSync('src/members-app/overview-dashboard.js', 'utf8');
+  const pdga = readFileSync('src/members-app/pdga-dashboard.js', 'utf8');
+  const html = readFileSync('gvdg-members.html', 'utf8');
+  assert.match(overview, /import \{ MemberRegistrationPanel \} from "\.\/registration-panel\.js"/);
+  assert.match(overview, /h\(PdgaDashboard[\s\S]*h\(MemberRegistrationPanel/);
+  assert.match(pdga, /\.\.\.extras,\s*events\.length \? h\("details", \{ className: "dash-collapse", key: "events" \}/);
+  assert.match(pdga, /`Recent Tournaments \(\$\{Math\.min\(events\.length, 6\)\}\)`/);
+  assert.match(html, /\.react-pdga-dashboard \.react-registration-panel/);
+  assert.match(html, /\.dash-collapse-summary \{ cursor: pointer; \}/);
+  assert.doesNotMatch(html, /body\[data-member-dashboard-tab="overview"\] #clubRegister/);
+  assert.match(html, /body\[data-member-dashboard-tab="events"\] #clubRegister/);
+});
+
+test('overview dashboard collapses recent tournaments, casual rounds, and live scoring', () => {
+  const pdga = readFileSync('src/members-app/pdga-dashboard.js', 'utf8');
+  const casual = readFileSync('src/members-app/registration-casual.js', 'utf8');
+  const activity = readFileSync('src/members-app/activity-panels.js', 'utf8');
+  assert.match(pdga, /h\("details", \{ className: "dash-collapse", key: "events" \}/);
+  assert.match(casual, /h\("details", \{ className: "dash-collapse"/);
+  assert.match(activity, /h\("details", \{ className: "club-board react-live-scoring dash-collapse"/);
+  assert.doesNotMatch(pdga, /h\("h4", \{ className: "dash-subtitle", key: "title" \}, "Recent Tournaments"\)/);
+  assert.doesNotMatch(activity, /h\("h3", \{ className: "my-dashboard-title", key: "title" \}, "Live Scoring"\)/);
+  const browserQa = readFileSync("scripts/qa/members-dashboard-browser-qa.mjs", "utf8");
+  const stagingQa = readFileSync("scripts/qa/staging-member-dashboard-e2e.mjs", "utf8");
+  assert.match(browserQa, /overview: \["#myDashboard"\]/);
+  assert.match(stagingQa, /overview: \["#myDashboard"\]/);
+  assert.match(browserQa, /async function openCasualRounds/);
+  assert.match(stagingQa, /async function openCasualRounds/);
+  assert.match(browserQa, /#myDashboard \[data-react-registration-panel="ready"\]/);
+  assert.match(stagingQa, /#myDashboard \[data-react-registration-panel="ready"\]/);
 });
 
 test('member dashboard React registration panel surfaces live events and lists every registered event', () => {

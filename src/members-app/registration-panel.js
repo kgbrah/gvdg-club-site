@@ -7,22 +7,27 @@ import { EventRegistrationSections } from "./registration-events.js";
 import { useSessionToken } from "./session-token.js";
 
 const h = React.createElement;
+const RegistrationContext = React.createContext(null);
 
-export function MemberRegistrationPanel() {
-  const context = useMemberContext();
+const idleState = {
+  status: "idle",
+  events: [],
+  registrations: [],
+  casualRequests: [],
+  paymentsConfig: { enabled: false },
+};
+
+export function RegistrationProvider({ children }) {
   const token = useSessionToken();
   const [version, setVersion] = React.useState(0);
-  const [state, setState] = React.useState({
+  const [state, setState] = React.useState(() => ({
+    ...idleState,
     status: token ? "loading" : "idle",
-    events: [],
-    registrations: [],
-    casualRequests: [],
-    paymentsConfig: { enabled: false },
-  });
+  }));
 
   React.useEffect(() => {
     if (!token) {
-      setState((current) => ({ ...current, status: "idle", events: [], registrations: [], casualRequests: [] }));
+      setState({ ...idleState });
       return undefined;
     }
     const controller = new AbortController();
@@ -47,6 +52,19 @@ export function MemberRegistrationPanel() {
   }, [token, version]);
 
   const reload = React.useCallback(() => setVersion((current) => current + 1), []);
+  const value = React.useMemo(() => ({ token, state, reload }), [token, state, reload]);
+  return h(RegistrationContext.Provider, { value }, children);
+}
+
+function useRegistrationData() {
+  const value = React.useContext(RegistrationContext);
+  if (!value) throw new Error("MemberRegistrationPanel requires RegistrationProvider");
+  return value;
+}
+
+export function MemberRegistrationPanel() {
+  const context = useMemberContext();
+  const { token, state, reload } = useRegistrationData();
 
   if (!token) return null;
 

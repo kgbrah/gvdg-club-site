@@ -4,14 +4,14 @@ import { MemberBoardPanel } from "./board-panel.js";
 import { MemberClubPanel } from "./club-panel.js";
 import { MemberDashboardShell } from "./dashboard-shell.js";
 import { MemberOverviewDashboard } from "./overview-dashboard.js";
-import { MemberRegistrationPanel } from "./registration-panel.js";
+import { MemberRegistrationPanel, RegistrationProvider } from "./registration-panel.js";
 import { MemberSeasonPage } from "./season-page.js";
 import { MemberTeeSignsPanel } from "./tee-signs-panel.js";
 
 const h = React.createElement;
 
 export function MemberDashboardApp() {
-  return h(React.Fragment, null, [
+  return h(RegistrationProvider, null, [
     h("div", { id: "membersReactDashboardShell", key: "shell" }, h(MemberDashboardShell)),
     h("div", { className: "my-dashboard", id: "myDashboard", key: "overview" }, [
       h("div", { id: "membersReactOverviewPanel", key: "mount" }, h(MemberOverviewDashboard)),

@@ -10,7 +10,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
 const dashboardPanels = ["#myDashboard", "#mySeason", "#clubRegister", "#clubBoard", "#teeCapture", "#membersReactClubPanel"];
 const visibleDashboardPanels = {
-  overview: ["#myDashboard", "#clubRegister"],
+  overview: ["#myDashboard"],
   season: ["#mySeason"],
   events: ["#clubRegister"],
   board: ["#clubBoard"],
@@ -174,6 +174,15 @@ async function expectReactTab(page, name) {
   if (selected !== "true") throw new Error(`Expected React tab ${name} to be selected, got ${selected}`);
 }
 
+async function openCasualRounds(page, rootSelector, timeout = 15_000) {
+  const root = page.locator(rootSelector);
+  const summary = root.locator("summary.dash-collapse-summary").filter({ hasText: /Casual rounds/i });
+  const form = root.locator('[data-react-casual-form="ready"]');
+  await summary.waitFor({ state: "visible", timeout });
+  if (!(await form.isVisible())) await summary.click();
+  await form.waitFor({ state: "visible", timeout });
+}
+
 async function expectNoReadinessClasses(page) {
   const className = await page.locator("#members").evaluate((node) => node.className || "");
   if (/members-react-(shell|overview|ratings|registration|board|tee-signs|club)-ready/.test(className)) {
@@ -323,7 +332,7 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
     await waitForText(page, "#membersReactDashboardShell", "Player Dashboard", "React dashboard title");
     await expectReactTab(page, "Overview");
     await page.locator('[data-react-overview-dashboard="ready"]').waitFor({ state: "visible", timeout: 15_000 });
-    await page.locator('[data-react-registration-panel="ready"]').waitFor({ state: "visible", timeout: 15_000 });
+    await page.locator('#myDashboard [data-react-registration-panel="ready"]').waitFor({ state: "visible", timeout: 15_000 });
     await page.locator('[data-react-board-panel="ready"]').waitFor({ state: "attached", timeout: 15_000 });
     await page.locator('[data-react-tee-signs-panel="ready"]').waitFor({ state: "attached", timeout: 15_000 });
     await page.locator('[data-react-club-panel="ready"]').waitFor({ state: "attached", timeout: 15_000 });
@@ -401,7 +410,7 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
       throw new Error("React admin portal link should only render on the overview tab.");
     }
     await expectDashboardPanel(page, "events", "#clubRegister", "Events tab");
-    await page.locator('[data-react-casual-form="ready"]').waitFor({ state: "visible", timeout: 15_000 });
+    await openCasualRounds(page, "#clubRegister");
 
     await page.getByRole("tab", { name: "Board" }).click();
     await waitForText(page, "#membersReactDashboardShell", "Member Board", "board tab title");
