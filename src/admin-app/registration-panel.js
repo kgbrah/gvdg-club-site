@@ -7,6 +7,7 @@ import {
   AdminRegistrationMemberOptions,
 } from "./registration-actions.js";
 import { AdminRegistrationControls, useAdminRegistrationControlsState } from "./registration-controls.js";
+import { AdminRegistrationMemberPicker } from "./registration-member-picker.js";
 import { AdminRegistrationManualPlayerForm } from "./registration-manual-player-form.js";
 import { AdminRegistrationRoster } from "./registration-roster.js";
 import { AdminRegistrationAcePot, AdminRegistrationCreditsList, AdminRegistrationCtpsList } from "./registration-widgets.js";
@@ -16,6 +17,7 @@ const h = React.createElement;
 function RegistrationBody() {
   return h("div", { "data-react-admin-registration-panel": "ready", style: { marginTop: "1rem" } }, [
     h(AdminRegistrationRoster, { key: "roster" }),
+    h(AdminRegistrationMemberPicker, { key: "picker" }),
     h(AdminRegistrationAssignControls, { key: "assign" }),
     h(AdminRegistrationManualPlayerForm, { key: "manual" }),
     h("div", { className: "al-section", key: "ctps", style: { marginTop: "1rem" } }, [

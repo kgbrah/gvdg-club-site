@@ -154,6 +154,15 @@
         .al-note a:hover, .al-note a:focus-visible { color: var(--primary); }
         .al-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
         .al-row input, .al-row select { padding: 0.4rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
+        .al-row input[type="checkbox"] { width: auto; padding: 0; border: none; background: transparent; }
+        .register-addon { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.88rem; color: var(--text-secondary); cursor: pointer; }
+        .rg-member-search { flex: 1 1 14rem; min-width: 0; }
+        .rg-member-list { max-height: 16rem; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); margin: 0.5rem 0; }
+        .rg-member-option { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.65rem; cursor: pointer; border-bottom: 1px solid var(--border-color); font-size: 0.9rem; color: var(--text-primary); }
+        .rg-member-option:last-child { border-bottom: none; }
+        .rg-member-option:hover, .rg-member-option:focus-within { background: var(--bg-tertiary); }
+        .rg-member-meta { color: var(--text-muted); font-size: 0.78rem; }
+        .rg-member-empty { padding: 0.7rem 0.75rem; }
         .admin-layout-field { display: grid; gap: 0.2rem; max-width: 520px; margin: 0.35rem 0 0.55rem; }
         .admin-layout-field label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); }
         .admin-layout-field input, .admin-layout-field select { width: 100%; padding: 0.5rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
