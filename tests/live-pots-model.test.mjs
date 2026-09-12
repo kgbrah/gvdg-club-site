@@ -53,10 +53,28 @@ test("buildLivePots marks the current hole CTP and stays hidden when empty", () 
     ],
   });
   assert.equal(pots.visible, true);
+  assert.equal(pots.title, "Live pots");
   assert.equal(pots.aceLine, "$18 in the pot (3 in)");
   assert.deepEqual(pots.holeNumbers, [3, 7]);
   assert.equal(pots.currentHoleCtps.length, 1);
   assert.equal(pots.currentHoleCtps[0].prize, "Disc");
+});
+
+test("finished rounds hide live pots unless a prize was awarded", () => {
+  const liveOnFinal = buildLivePots({
+    roundStatus: "final",
+    acePot: { total_cents: 1800, contributors: 3, status: "active" },
+    ctps: [{ id: 1, hole: 3, prize: "Mini" }],
+  });
+  assert.equal(liveOnFinal.visible, false);
+
+  const awarded = buildLivePots({
+    roundStatus: "final",
+    acePot: { total_cents: 1800, status: "paid_out", winner_name: "Pat" },
+    ctps: [{ id: 1, hole: 3, prize: "Mini", winner_name: "Ann" }],
+  });
+  assert.equal(awarded.visible, true);
+  assert.equal(awarded.title, "Pots");
 });
 
 test("aceHint only fires for an ace on an active pot", () => {

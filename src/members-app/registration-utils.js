@@ -36,18 +36,18 @@ export function registrationLiveConfig(event) {
   const raw = event.liveScoringConfig || event.live_scoring_config || null;
   if (raw && typeof raw === "object") {
     return {
-      groupFormat: raw.groupFormat === "doubles" ? "doubles" : "singles",
+      groupFormat: event.play_format === "doubles" || raw.groupFormat === "doubles" ? "doubles" : "singles",
       scoringStyle: raw.scoringStyle === "matchplay" ? "matchplay" : "stroke",
     };
   }
   if (typeof raw === "string" && raw.trim()) {
     try {
-      return registrationLiveConfig({ liveScoringConfig: JSON.parse(raw) });
+      return registrationLiveConfig({ ...event, liveScoringConfig: JSON.parse(raw), live_scoring_config: null });
     } catch {
-      return { groupFormat: "singles", scoringStyle: "stroke" };
+      return { groupFormat: event.play_format === "doubles" ? "doubles" : "singles", scoringStyle: "stroke" };
     }
   }
-  if (raw == null && event.play_format === "doubles") return { groupFormat: "doubles", scoringStyle: "stroke" };
+  if (raw == null && event.play_format === "doubles") return { groupFormat: "doubles", scoringStyle: event.format === "matchplay" ? "matchplay" : "stroke" };
   return { groupFormat: "singles", scoringStyle: event.format === "matchplay" ? "matchplay" : "stroke" };
 }
 

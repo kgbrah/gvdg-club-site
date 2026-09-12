@@ -11,7 +11,7 @@ function text(value, fallback = "") {
 export function normalizeConfig(raw, fallbackPlayFormat = null, fallbackEventFormat = null) {
   if (raw && typeof raw === "object") {
     return {
-      groupFormat: raw.groupFormat === "doubles" ? "doubles" : "singles",
+      groupFormat: fallbackPlayFormat === "doubles" || raw.groupFormat === "doubles" ? "doubles" : "singles",
       scoringStyle: raw.scoringStyle === "matchplay" ? "matchplay" : "stroke",
     };
   }

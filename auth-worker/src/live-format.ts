@@ -86,11 +86,15 @@ export function normalizeLiveScoringConfigFromLegacy(value: {
   readonly format?: unknown;
 }): LiveScoringConfig {
   const explicit = normalizeStoredLiveScoringConfig(value.liveScoringConfig ?? value.live_scoring_config);
-  if (explicit) return explicit;
-  return {
-    groupFormat: value.play_format === "doubles" ? "doubles" : "singles",
-    scoringStyle: value.event_format === "matchplay" || value.format === "matchplay" ? "matchplay" : "stroke",
-  };
+  const scoringStyle = explicit
+    ? explicit.scoringStyle
+    : (value.event_format === "matchplay" || value.format === "matchplay" ? "matchplay" : "stroke");
+  // Registration play_format=doubles used to leave a stale stored singles config in place.
+  // Doubles pairing is the landmine for Ryder dubs; prefer it over a leftover singles groupFormat.
+  const groupFormat = value.play_format === "doubles"
+    ? "doubles"
+    : (explicit ? explicit.groupFormat : "singles");
+  return { groupFormat, scoringStyle };
 }
 
 export function isLiveFormatError(error: unknown): error is LiveFormatError {

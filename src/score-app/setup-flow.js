@@ -21,7 +21,7 @@ function BackButton({ onBack }) {
   );
 }
 
-function HomeView({ onStart, onJoin, onInvalidCode, onSignOut }) {
+function HomeView({ onStart, onJoin, onInvalidCode, onSignOut, onWatch }) {
   const [joinCode, setJoinCode] = React.useState("");
   const submitJoin = () => {
     const code = joinCode.toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -63,7 +63,7 @@ function HomeView({ onStart, onJoin, onInvalidCode, onSignOut }) {
       ),
       h(
         "button",
-        { className: "btn ghost", type: "button", onClick: () => (joinCode.trim() ? props.onWatch(joinCode) : props.onInvalidCode()), key: "watchButton" },
+        { className: "btn ghost", type: "button", onClick: () => (joinCode.trim() ? onWatch(joinCode) : onInvalidCode()), key: "watchButton" },
         "Watch this round",
       ),
     ]),

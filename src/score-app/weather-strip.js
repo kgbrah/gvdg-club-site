@@ -10,16 +10,12 @@ import {
 
 const h = React.createElement;
 
-function useCompassState(weather) {
+function useCompassState() {
   const [state, setState] = React.useState(() => currentCompassState());
 
   React.useEffect(() => {
     return subscribeCompass(setState);
   }, []);
-
-  React.useEffect(() => {
-    if (weather && weather.current) void enableCompass();
-  }, [weather]);
 
   return state;
 }
@@ -91,7 +87,7 @@ function WeatherWind(props) {
 }
 
 export function WeatherStrip(props) {
-  const compassState = useCompassState(props.weather);
+  const compassState = useCompassState();
 
   const chips = weatherChips(props.weather);
   if (!chips.length) return null;

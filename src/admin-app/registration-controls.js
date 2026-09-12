@@ -1,5 +1,7 @@
 import React from "react";
 
+import { normalizeConfig } from "./scoring-model.js";
+
 const h = React.createElement;
 
 const EMPTY_STATE = {
@@ -172,12 +174,17 @@ function SettingsForm({ state }) {
     if (pendingRequest) return;
     const id = requestId("registration-config");
     setPendingRequest(id);
+    const existing = normalizeConfig(state.config && (state.config.liveScoringConfig || state.config.live_scoring_config), form.playFormat, null);
     dispatchRequest("gvdg:admin-registration-config-save-request", {
       body: {
         ace_fee_cents: dollarsToCents(form.aceFee),
         ctp_fee_cents: dollarsToCents(form.ctpFee),
         divisions: form.divisions.split(",").map((item) => item.trim()).filter(Boolean),
         entry_fee_cents: dollarsToCents(form.entryFee),
+        liveScoringConfig: {
+          groupFormat: form.playFormat === "doubles" ? "doubles" : "singles",
+          scoringStyle: existing.scoringStyle,
+        },
         play_format: form.playFormat || null,
         registration_open: form.registrationOpen,
       },

@@ -79,17 +79,22 @@ export function unawardedLiveCtps(liveCtps, officialCtps) {
   );
 }
 
-export function buildLivePots({ acePot = null, ctps = [], currentHole = null } = {}) {
+export function buildLivePots({ acePot = null, ctps = [], currentHole = null, roundStatus = null } = {}) {
   const list = (Array.isArray(ctps) ? ctps : []).map(normalizeCtp).filter((ctp) => ctp.hole != null);
   const ace = normalizeAcePot(acePot);
   const hole = Number(currentHole);
+  const awardedCtp = list.some((ctp) => ctp.winnerName && !ctp.live);
+  const settledAce = Boolean(ace && ace.visible && ace.status !== "active");
+  const liveVisible = list.length > 0 || Boolean(ace && ace.visible);
+  const isFinal = roundStatus === "final";
   return {
     ace,
     aceLine: acePotLine(ace),
     ctps: list,
     currentHoleCtps: list.filter((ctp) => ctp.hole === hole),
     holeNumbers: list.map((ctp) => ctp.hole),
-    visible: list.length > 0 || Boolean(ace && ace.visible),
+    title: isFinal ? "Pots" : "Live pots",
+    visible: isFinal ? awardedCtp || settledAce : liveVisible,
   };
 }
 

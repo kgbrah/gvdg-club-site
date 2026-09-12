@@ -861,7 +861,7 @@ export function startScoreApp(options) {
         }
         function renderWatch() {
             const snap = S.snap || {};
-            const pots = buildLivePots({ acePot: S.pots && S.pots.acePot, ctps: S.pots && S.pots.ctps });
+            const pots = buildLivePots({ acePot: S.pots && S.pots.acePot, ctps: S.pots && S.pots.ctps, roundStatus: S.status });
             setShellHeader({
                 showLeaderboard: false,
                 subtitle: [S.courseName, S.layoutName].filter(Boolean).join(' · ') || 'Live scoring',

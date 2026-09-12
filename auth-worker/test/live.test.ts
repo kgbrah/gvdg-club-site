@@ -444,6 +444,29 @@ describe("live route start payloads", () => {
     expect(state.updatedStatus).toBe("live");
   });
 
+  it("starts doubles matchplay when play_format is doubles even if stored config is singles", async () => {
+    const state: LiveRouteState = {
+      starts: [],
+      eventFormat: "matchplay",
+      eventConfig: {
+        event_id: 9,
+        play_format: "doubles",
+        live_scoring_config: JSON.stringify({ groupFormat: "singles", scoringStyle: "matchplay" }),
+      },
+      registrations: [
+        { member_id: "m_a", name: "A", division: "MA1", starting_hole: 1, team: "KG/TJ" },
+        { member_id: "m_b", name: "B", division: "MA1", starting_hole: 1, team: "KG/TJ" },
+        { member_id: "m_c", name: "C", division: "MA1", starting_hole: 1, team: "MIKE/CALEB" },
+        { member_id: "m_d", name: "D", division: "MA1", starting_hole: 1, team: "MIKE/CALEB" },
+      ],
+    };
+
+    const res = await liveRouteCall("/events/9/live/start", "POST", {}, state);
+
+    expect(res.status).toBe(200);
+    expect(state.starts[0]?.liveScoringConfig).toEqual({ groupFormat: "doubles", scoringStyle: "matchplay" });
+  });
+
   it("unionRosterPlayers merges registered + manual, dedupes by member then name, registration wins", () => {
     const out = unionRosterPlayers(
       [{ member_id: "m1", name: "Reg One", division: "MA1", starting_hole: 3, team: "Red" }],

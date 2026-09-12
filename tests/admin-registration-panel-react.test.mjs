@@ -62,6 +62,7 @@ test('admin registration panel owns selector, settings, assignments, CTP add, an
   assert.match(controls, /value === "ready"/);
   assert.match(controls, /gvdg:admin-registration-event-select-request/);
   assert.match(controls, /gvdg:admin-registration-config-save-request/);
+  assert.match(controls, /liveScoringConfig:/);
   assert.match(actions, /gvdg:admin-registration-member-options/);
   assert.match(actions, /id: "rgMemberOptions"/);
   assert.match(actions, /gvdg:admin-registration-assign-request/);

@@ -30,7 +30,7 @@ export function nextHoleScore(current, par, direction) {
     if (current == null) return typeof par === "number" ? par : 3;
     return Math.min(30, current + 1);
   }
-  if (current == null) return Math.max(1, (typeof par === "number" ? par : 3) - 1);
+  if (current == null) return null;
   if (current <= 1) return null;
   return current - 1;
 }
@@ -359,6 +359,7 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
     acePot: state.pots && state.pots.acePot,
     ctps: state.pots && state.pots.ctps,
     currentHole: hole && hole.hole,
+    roundStatus: state.status,
   });
   const holeScores = (state.cardmates || []).map((player) => player && player.scores ? player.scores[hole.hole] : null);
   const holeGrid = (state.holes || []).map((currentHole, index) => {

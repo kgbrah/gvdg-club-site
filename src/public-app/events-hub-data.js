@@ -82,6 +82,14 @@ function ryderCupLeagueHash() {
   return leagueHash(RYDER_CUP_LEAGUE_ID);
 }
 
+function stripFeedDecor(value) {
+  return String(value || "").replace(/\*\*/g, "").replace(/\s+/g, " ").trim();
+}
+
+function namesKey(value) {
+  return stripFeedDecor(value).toLowerCase();
+}
+
 function ryderCupFeedHash(item) {
   return isRyderCupName(item?.name) ? ryderCupLeagueHash() : "";
 }
@@ -91,6 +99,20 @@ function ryderCupEventHash(event) {
   const leagueId = event.league_id != null ? String(event.league_id) : "";
   if (leagueId && leagueId === RYDER_CUP_LEAGUE_ID) return leagueHash(leagueId);
   return isRyderCupName(event.name) ? ryderCupLeagueHash() : "";
+}
+
+function feedDateText(item) {
+  const raw = item?.date;
+  if (raw) {
+    const text = String(raw).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(text) || text.includes("T")) return formatEventDate(text);
+    return stripFeedDecor(text) || "TBD";
+  }
+  const info = feedDateInfo(item);
+  if (!info.isTBD && info.dateObj && !Number.isNaN(info.dateObj.getTime())) {
+    return info.dateObj.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  }
+  return "TBD";
 }
 
 function startOfToday() {
@@ -147,12 +169,7 @@ function splitClubEventsByDate(items) {
 }
 
 function feedResultDateText(item) {
-  if (item?.date) return String(item.date);
-  const info = feedDateInfo(item);
-  if (!info.isTBD && info.dateObj && !Number.isNaN(info.dateObj.getTime())) {
-    return info.dateObj.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", year: "numeric" });
-  }
-  return "Date TBD";
+  return feedDateText(item) === "TBD" ? "Date TBD" : feedDateText(item);
 }
 
 function previousResultFromFeed(item, category) {
@@ -163,11 +180,11 @@ function previousResultFromFeed(item, category) {
     cta: leagueTarget ? "League / Results" : (externalHref ? "Results / Details" : ""),
     dateObj: info.dateObj,
     dateText: feedResultDateText(item),
-    detail: String(item?.detail || ""),
+    detail: stripFeedDecor(item?.detail || ""),
     external: Boolean(externalHref),
     href: leagueTarget || externalHref,
     label: category,
-    name: String(item?.name || "Previous result"),
+    name: stripFeedDecor(item?.name) || "Previous result",
   };
 }
 
@@ -196,11 +213,10 @@ function previousResultTime(item) {
 
 function eventHubItem(raw, courseIndex) {
   const event = normalizeEvent(raw);
-  const leagueTarget = ryderCupEventHash(event);
   return {
     courseName: eventCourseSummary(courseIndex, event),
-    dateText: formatEventDate(event.date),
-    href: leagueTarget || `#event/${encodeURIComponent(event.id)}`,
+    dateText: formatEventDate(event.date || event.starts_at),
+    href: `#event/${encodeURIComponent(event.id)}`,
     id: event.id,
     name: event.name,
     status: event.status,
@@ -215,12 +231,20 @@ function feedHubItem(item) {
   const externalHref = leagueTarget ? "" : sanitizeUrl(item?.url);
   return {
     cta: leagueTarget ? "League / Results" : (externalHref ? "Register / Details" : ""),
-    dateText: item?.date ? String(item.date) : "TBD",
-    detail: String(item?.detail || ""),
+    dateText: feedDateText(item),
+    detail: stripFeedDecor(item?.detail || ""),
     external: Boolean(externalHref),
     href: leagueTarget || externalHref,
-    name: String(item?.name || "Event"),
+    name: stripFeedDecor(item?.name) || "Event",
   };
+}
+
+function filterDuplicateFeed(feedItems, clubEvents) {
+  const clubNames = new Set((clubEvents || []).map((event) => namesKey(event && event.name)));
+  return (feedItems || []).filter((item) => {
+    const key = namesKey(item && item.name);
+    return !key || !clubNames.has(key);
+  });
 }
 
 async function loadCourseData(api) {
@@ -251,7 +275,7 @@ function publishLoadedHub(feed, events, courseIndex) {
 
   state.hub = {
     feedClub: feedClub.map(feedHubItem),
-    feedEvents: feedEvents.map(feedHubItem),
+    feedEvents: filterDuplicateFeed(feedEvents, [...live, ...upcoming]).map(feedHubItem),
     hasMainContent: Boolean(feedEvents.length || live.length || upcoming.length),
     live: live.map((event) => eventHubItem(event, courseIndex)),
     upcoming: upcoming.map((event) => eventHubItem(event, courseIndex)),

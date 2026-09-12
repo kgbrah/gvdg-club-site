@@ -50,7 +50,9 @@ test('admin new event form is rendered by React and saved through bridge events'
   assert.match(eventForm, /body\.event_courses = eventCourses/);
   assert.match(eventForm, /courseRowsFromEvent/);
   assert.match(eventForm, /Add course\/layout/);
-  assert.match(eventForm, /id: "aeLeague"/);
+  assert.match(eventForm, /id: "aeFormat"/);
+  assert.match(eventForm, /Scoring style/);
+  assert.doesNotMatch(eventForm, /option\("doubles", "Doubles"\)/);
   assert.match(eventForm, /gvdg:admin-courses-list/);
   assert.match(eventForm, /gvdg:admin-leagues-list/);
   assert.match(eventForm, /gvdg:admin-event-form-layouts/);

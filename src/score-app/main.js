@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { Moon, Trophy, UsersRound } from "lucide-react";
+import { CircleHelp, Moon, Trophy, UsersRound } from "lucide-react";
 
 import { startScoreApp } from "./score-controller.js";
 import { ScoreAuthFlow } from "./auth-flow.js";
@@ -9,6 +9,7 @@ import { ScoreSetupFlow } from "./setup-flow.js";
 import { StatusView } from "./status-view.js";
 import { WatchView } from "./watch-view.js";
 import { InstallCoachBanner } from "../shared/install-coach-ui.js";
+import { CrottsWidget, requestCrottsHelp } from "../shared/crotts-widget.js";
 import {
   SCORE_AUTH_EVENT,
   TOKEN_KEY,
@@ -153,6 +154,17 @@ function ScoreShell() {
         h("small", { id: "barSub", key: "subtitle" }, header.subtitle),
       ]),
       h(
+        "button",
+        {
+          class: "top-link",
+          type: "button",
+          "aria-label": "Help",
+          title: "Help",
+          onClick: () => requestCrottsHelp(),
+        },
+        [icon(CircleHelp), h("span", { class: "top-link-label", key: "label" }, "Help")],
+      ),
+      h(
         "a",
         {
           class: "top-link",
@@ -190,6 +202,7 @@ function ScoreShell() {
     ]),
     h(InstallCoachBanner, { key: "install" }),
     h("main", { id: "app" }, h(ScoreBody, { view: bodyView })),
+    h(CrottsWidget, { key: "help" }),
   ]);
 }
 

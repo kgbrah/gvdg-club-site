@@ -168,6 +168,7 @@ test('score setup screens are React-owned without legacy DOM fallbacks', () => {
   assert.match(controller, /renderScoreBody\('setup', props\)/);
   assert.match(main, /ScoreSetupFlow/);
   assert.match(setup, /Watch this round/);
+  assert.match(setup, /onWatch\(joinCode\)/);
   assert.match(controller, /onWatch: watchRoundCode/);
   assert.match(setup, /export function ScoreSetupFlow\(props\)/);
   assert.doesNotMatch(legacy, /const row = el\('button', 'tap-row'\)/);
@@ -523,6 +524,10 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   const weather = scoreWeatherSource();
   assert.match(weather, /weather-compact-copy/);
   assert.match(weather, /weather-wind-compact/);
+  assert.doesNotMatch(weather, /if \(weather && weather\.current\) void enableCompass\(\)/);
+  assert.match(main, /requestCrottsHelp/);
+  assert.match(main, /CrottsWidget/);
+  assert.match(scorecard, /disabled: current == null/);
   assert.doesNotMatch(html, /\.round-code \{ flex: 1 1 7\.5rem;/);
   assert.doesNotMatch(scorecard, /className: "round-code"/);
   assert.match(scorecard, /compact: true/);
@@ -544,7 +549,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
 test('stepper minus from 1 clears a hole back to unstarted', async () => {
   const { nextHoleScore } = await import(new URL('../src/score-app/score-view-model.js', import.meta.url));
   assert.equal(nextHoleScore(null, 3, 'plus'), 3);
-  assert.equal(nextHoleScore(null, 3, 'minus'), 2);
+  assert.equal(nextHoleScore(null, 3, 'minus'), null);
   assert.equal(nextHoleScore(2, 3, 'minus'), 1);
   assert.equal(nextHoleScore(1, 3, 'minus'), null);
   assert.equal(nextHoleScore(1, 3, 'plus'), 2);
