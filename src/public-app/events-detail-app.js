@@ -3,6 +3,7 @@ import React from "react";
 import {
   formatClubDateTime,
   formatEventDate,
+  formatLabel,
   groupPlayersByDivision,
   statusLabel,
   typeLabel,
@@ -109,7 +110,7 @@ function DetailFacts({ course, courseSummary, event }) {
         value: formatClubDateTime(event.checkin_deadline),
       })
       : null,
-    event.format ? h(DetailFact, { key: "format", label: "Format", value: String(event.format) }) : null,
+    event.format ? h(DetailFact, { key: "format", label: "Format", value: formatLabel(event.format) }) : null,
     venueText
       ? h(DetailFact, {
         key: "course",

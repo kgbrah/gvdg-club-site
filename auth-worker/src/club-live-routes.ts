@@ -86,6 +86,12 @@ export async function startLiveEvent(
   // dropped regardless of how they were entered. (A registered player who was also manually added shows
   // once; the registration wins since it carries division / starting hole / check-in.)
   const roster = unionRosterPlayers(regs, Array.isArray(ev.players) ? ev.players : []);
+  if (!roster.length) {
+    return json({
+      error: "empty_roster",
+      message: "Add players in Registration before starting live scoring.",
+    }, 400, origin);
+  }
   const buyInRequired = (Number(eventConfig?.ctp_fee_cents) || 0) > 0;
   const enteredMemberIds = new Set(
     regs

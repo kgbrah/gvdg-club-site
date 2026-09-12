@@ -287,6 +287,20 @@ export function startAdminController() {
             });
         }
 
+        function scStartErrorMessage(status, body) {
+            const error = body && body.error;
+            if (error === 'no_layout_holes') {
+                return 'That event has no layout with pars - pick one above (or build one on the Layouts tab).';
+            }
+            if (error === 'empty_roster') {
+                return (body && body.message) || 'Add players in Registration before starting live scoring.';
+            }
+            if (error === 'invalid_score_targets' && body && body.message) {
+                return body.message;
+            }
+            return 'Start failed (' + status + ')';
+        }
+
         async function scStartFromReact(detail) {
             scEventId = detail && detail.eventId ? Number(detail.eventId) : scEventId;
             scSelectedEvent = scEventById(scEventId) || scSelectedEvent;
@@ -309,7 +323,7 @@ export function startAdminController() {
                 await scRefresh();
             } else {
                 const e = await r.json().catch(() => ({}));
-                adminMsg(e.error === 'no_layout_holes' ? 'That event has no layout with pars - pick one above (or build one on the Layouts tab).' : 'Start failed (' + r.status + ')', false);
+                adminMsg(scStartErrorMessage(r.status, e), false);
                 finishAdminScoringAction('start', false);
             }
         }

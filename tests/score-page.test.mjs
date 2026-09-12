@@ -587,6 +587,7 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   const watch = readFileSync('src/score-app/watch-view.js', 'utf8');
   const shared = readFileSync('src/shared/live-watch.js', 'utf8');
   assert.match(shared, /export function liveWatchHref/);
+  assert.match(controller, /const ROUND_CODE = liveRoundCodeFromSearch\(params\)/);
   assert.match(controller, /const WATCH = isLiveWatchRequest\(params\)/);
   assert.match(controller, /async function loadWatch\(\)/);
   assert.match(controller, /api\(LIVE, \{ auth: false, guest: false \}\)/);

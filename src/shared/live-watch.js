@@ -17,10 +17,37 @@ export function liveScoreHref({ eventId, roundCode, guestToken } = {}) {
   return href;
 }
 
-export function isLiveWatchRequest(search) {
-  const params = search instanceof URLSearchParams
+function watchSearchParams(search) {
+  return search instanceof URLSearchParams
     ? search
     : new URLSearchParams(String(search || "").replace(/^\?/, ""));
-  const flag = String(params.get("watch") || "").toLowerCase();
+}
+
+function sanitizedRoundCode(value) {
+  return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function isWatchFlag(value) {
+  const flag = String(value || "").toLowerCase();
   return flag === "1" || flag === "true" || flag === "yes";
+}
+
+export function isLiveWatchRequest(search) {
+  const params = watchSearchParams(search);
+  const raw = params.get("watch") || "";
+  if (isWatchFlag(raw)) return true;
+  // `?watch=6CDNME` (no round=) is a spectator link — casual codes are 4–12 chars.
+  const watchCode = sanitizedRoundCode(raw);
+  const round = sanitizedRoundCode(params.get("round"));
+  return !round && watchCode.length >= 4;
+}
+
+export function liveRoundCodeFromSearch(search) {
+  const params = watchSearchParams(search);
+  const round = sanitizedRoundCode(params.get("round"));
+  if (round) return round;
+  const raw = params.get("watch") || "";
+  if (isWatchFlag(raw)) return "";
+  const watchCode = sanitizedRoundCode(raw);
+  return watchCode.length >= 4 ? watchCode : "";
 }
