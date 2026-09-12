@@ -8,6 +8,7 @@ import {
   typeLabel,
 } from "../shared/events-model.js";
 import { WeatherStrip } from "../score-app/weather-strip.js";
+import { HoleMap } from "../shared/hole-map.js";
 import { liveWatchHref } from "../shared/live-watch.js";
 import { unawardedLiveCtps } from "../shared/live-pots-model.js";
 import { displayMatchStatus } from "../shared/match-status.js";
@@ -352,6 +353,7 @@ function TeeSigns({ apiBase, teeSigns }) {
       if (hole.par != null) bits.push(`Par ${hole.par}`);
       if (hole.distance_ft != null) bits.push(`${hole.distance_ft} ft`);
       return h("div", { className, key: String(hole.hole) }, [
+        h(HoleMap, { compact: true, hole, key: "map" }),
         hole.signId != null
           ? h("img", {
             alt: `Tee sign, hole ${hole.hole}`,

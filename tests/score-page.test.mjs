@@ -111,7 +111,7 @@ function scoreControllerManagePlayersSource() {
 
 function scoreControllerHoleSource() {
   const source = scoreControllerSource();
-  const start = source.indexOf('function liveTeeSignView(h)');
+  const start = source.indexOf('function liveTeeSignView(h, players)');
   const end = source.indexOf('// ---------- leaderboard sheet ----------');
   assert.notEqual(start, -1, 'scorecard section should exist');
   assert.notEqual(end, -1, 'leaderboard section should follow scorecard section');
@@ -127,7 +127,7 @@ test('score app imports the controller without a score-legacy shim', () => {
   assert.equal(existsSync('src/score-app/score-legacy.js'), false);
   assert.doesNotMatch(html, /matchplay-colors\.js/);
   assert.match(controller, /from "\.\.\/shared\/matchplay-colors\.js"/);
-  assert.match(controller, /holeWinners\(\[\{ hole: h\.hole \}\], S\.cardmates\)/);
+  assert.match(controller, /holeWinners\(\[\{ hole: h\.hole \}\], players \|\| S\.cardmates\)/);
   assert.doesNotMatch(controller, /window\.GVDGMatchplay/);
   assert.doesNotMatch(main, /score-legacy/);
 });
@@ -501,16 +501,19 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /WeatherStrip/);
   assert.match(scorecard, /HoleMap/);
   assert.match(scorecard, /your-turn-hint/);
-  const holeMap = readFileSync('src/score-app/hole-map.js', 'utf8');
+  const holeMap = readFileSync('src/shared/hole-map.js', 'utf8');
   const html = readFileSync('score.html', 'utf8');
   assert.match(holeMap, /hole-map-satellite/);
   assert.match(holeMap, /SATELLITE_CREDIT/);
   assert.match(holeMap, /safeExternalUrl/);
+  assert.match(holeMap, /compact/);
   assert.match(html, /\.round-tools \{ display: flex; flex-wrap: wrap;/);
   assert.match(html, /\.round-code \{ flex: 1 1 7\.5rem;/);
   assert.match(html, /\.round-actions \{ display: flex; flex: 1 1 auto; flex-wrap: wrap;/);
   assert.match(html, /\.hole-map-satellite/);
   assert.match(html, /\.hole-map-frame/);
+  assert.match(html, /\.watch-holes/);
+  assert.match(html, /\.hole-map-compact/);
   assert.doesNotMatch(legacy, /const head = el\('div', 'hole-head'\)/);
   assert.doesNotMatch(legacy, /const box = el\('div', 'card'\)/);
   assert.doesNotMatch(legacy, /const row = el\('div', 'prow'/);
@@ -557,6 +560,11 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.match(main, /WatchView/);
   assert.match(watch, /data-react-live-watch/);
   assert.match(watch, /Copy watch link/);
+  assert.match(watch, /HoleMap/);
+  assert.match(watch, /function WatchHoles/);
+  assert.match(watch, /function WatchTeeSign/);
+  assert.match(controller, /function watchHoleViews\(\)/);
+  assert.match(controller, /holes: watchHoleViews\(\)/);
   const watchBoot = controller.slice(controller.indexOf('async function loadWatch'), controller.indexOf('function watchRoundCode'));
   assert.doesNotMatch(watchBoot, /\/join/);
 });

@@ -1,6 +1,6 @@
 import React from "react";
 import { ChevronLeft, ChevronRight, Eye, Settings2, Share2, UserPlus } from "lucide-react";
-import { HoleMap } from "./hole-map.js";
+import { HoleMap } from "../shared/hole-map.js";
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
 

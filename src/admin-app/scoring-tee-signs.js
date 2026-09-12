@@ -1,5 +1,6 @@
 import React from "react";
 
+import { HoleMap } from "../shared/hole-map.js";
 import { TeeSignSvg } from "../shared/tee-sign-svg.js";
 import { parseLayoutHoles } from "./scoring-model.js";
 
@@ -72,6 +73,17 @@ function TeeSignCard({ authBase, candidateId, hole, layout, officialId, row, tok
   const color = row?.color || null;
 
   return h("div", { className: "ts-strip-card" }, [
+    h(HoleMap, {
+      compact: true,
+      hole: {
+        distance_ft: distance,
+        hole: holeNumber,
+        par: hole.par,
+        target: hole.target || row?.target,
+        tee: hole.tee || row?.tee,
+      },
+      key: "map",
+    }),
     officialId ? h(OfficialPhoto, { authBase, holeNumber, key: "official", signId: officialId }) : null,
     !officialId && candidateId ? h(CandidatePhoto, { authBase, key: "candidate", signId: candidateId, token }) : null,
     !officialId && candidateId ? h("span", { className: "ts-unverified", key: "unverified" }, "unverified") : null,

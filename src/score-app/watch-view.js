@@ -1,6 +1,7 @@
 import React from "react";
 import { Copy, Trophy } from "lucide-react";
 
+import { HoleMap } from "../shared/hole-map.js";
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
 import { LeaderboardTable } from "./leaderboard-sheet.js";
@@ -15,6 +16,61 @@ function icon(Icon) {
     "aria-hidden": "true",
     focusable: "false",
   });
+}
+
+function WatchTeeSign(props) {
+  if (!props.teeSign) return null;
+  const style = props.teeSign.highlightColor ? { boxShadow: `0 0 0 3px ${props.teeSign.highlightColor}` } : undefined;
+  return h("div", { className: "card tee-sign-card", key: "tee-sign", style }, [
+    h("img", {
+      alt: props.teeSign.alt,
+      height: 400,
+      key: "image",
+      loading: "lazy",
+      src: props.teeSign.src,
+      width: 640,
+    }),
+    h("div", { className: "tee-sign-caption", key: "caption" }, [
+      h("span", { key: "label" }, "Tee sign"),
+      h("span", { key: "hole" }, `Hole ${props.teeSign.hole}`),
+    ]),
+  ]);
+}
+
+function WatchHoles(props) {
+  const holes = Array.isArray(props.holes) ? props.holes : [];
+  const [index, setIndex] = React.useState(0);
+  const safeIndex = holes.length ? Math.min(index, holes.length - 1) : 0;
+  const selected = holes[safeIndex] || null;
+  if (!selected) return null;
+
+  const bits = [`Hole ${selected.hole}`];
+  if (selected.par != null) bits.push(`Par ${selected.par}`);
+  if (selected.distance_ft != null) bits.push(`${selected.distance_ft} ft`);
+
+  return h("div", { className: "watch-holes", key: "holes" }, [
+    h("div", { className: "card", key: "picker" }, [
+      h("h2", { className: "section", key: "title" }, "Hole maps"),
+      h("p", { className: "watch-hole-meta", key: "meta" }, bits.join(" · ")),
+      h("div", { className: "holegrid", key: "grid" }, holes.map((hole, holeIndex) =>
+        h("button", {
+          "aria-label": `Hole ${hole.hole}`,
+          "aria-pressed": holeIndex === safeIndex,
+          className: holeIndex === safeIndex ? "cur" : "",
+          key: hole.hole,
+          type: "button",
+          onClick: () => setIndex(holeIndex),
+        }, String(hole.hole)),
+      )),
+    ]),
+    h(HoleMap, {
+      hole: selected,
+      key: "map",
+      udiscCourseId: props.udiscCourseId,
+      windFromDeg: props.windFromDeg,
+    }),
+    h(WatchTeeSign, { key: "sign", teeSign: selected.teeSign }),
+  ]);
 }
 
 export function WatchView(props) {
@@ -41,6 +97,12 @@ export function WatchView(props) {
         standings,
       }),
     ]),
+    h(WatchHoles, {
+      holes: props.holes,
+      key: "holes",
+      udiscCourseId: props.udiscCourseId,
+      windFromDeg: props.windFromDeg,
+    }),
     h("div", { className: "watch-actions", key: "actions" }, [
       props.onCopyLink
         ? h("button", { className: "btn secondary", key: "copy", type: "button", onClick: props.onCopyLink }, [
