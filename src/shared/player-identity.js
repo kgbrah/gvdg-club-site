@@ -11,6 +11,11 @@ const GIVEN_ALIASES = {
   tj: "tj",
 };
 
+// Club nicknames that cannot be inferred from the legal name.
+const KNOWN_NICKNAMES = {
+  jackie: "jarrett wallace",
+};
+
 function nameWithoutQuotes(name) {
   return String(name || "").replace(/"[^"]*"/g, " ");
 }
@@ -57,6 +62,14 @@ function givenAlias(token) {
   return GIVEN_ALIASES[token] || token;
 }
 
+function expandKnownNickname(name) {
+  const compact = compactPlayerName(name);
+  if (KNOWN_NICKNAMES[compact]) return KNOWN_NICKNAMES[compact];
+  const tokens = playerNameTokens(name);
+  if (tokens.length === 1 && KNOWN_NICKNAMES[tokens[0]]) return KNOWN_NICKNAMES[tokens[0]];
+  return name;
+}
+
 export function preferredPlayerName(names) {
   return [...names].filter((name) => String(name || "").trim()).sort((left, right) => {
     const leftTokens = playerNameTokens(left).length;
@@ -67,8 +80,8 @@ export function preferredPlayerName(names) {
 }
 
 export function playersMatch(left, right) {
-  const a = String(left || "").trim();
-  const b = String(right || "").trim();
+  const a = expandKnownNickname(String(left || "").trim());
+  const b = expandKnownNickname(String(right || "").trim());
   if (!a || !b) return false;
   if (compactPlayerName(a) === compactPlayerName(b)) return true;
 
@@ -85,6 +98,9 @@ export function playersMatch(left, right) {
   const lastB = lastToken(tokensB);
   if (tokensA.length === 1 && lastA.length > 2 && lastA === lastB) return true;
   if (tokensB.length === 1 && lastB.length > 2 && lastA === lastB) return true;
+
+  if (tokensA.length === 1 && tokensB.length >= 2 && tokensA[0].length > 1 && tokensA[0] === tokensB[0]) return true;
+  if (tokensB.length === 1 && tokensA.length >= 2 && tokensB[0].length > 1 && tokensA[0] === tokensB[0]) return true;
 
   if (givenAlias(tokensA[0]) !== givenAlias(tokensB[0])) return false;
   if (lastA && lastA === lastB) return true;
@@ -126,7 +142,7 @@ export function clusterPlayerNames(names) {
   const byCompact = new Map();
   for (const name of labels) {
     find(name);
-    const compact = compactPlayerName(name);
+    const compact = compactPlayerName(expandKnownNickname(name));
     if (!compact) continue;
     const existing = byCompact.get(compact);
     if (existing) union(name, existing);

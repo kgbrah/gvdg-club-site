@@ -33,6 +33,8 @@ describe("computeLeagueStandings unifies nickname and member/guest splits", () =
       row("David Doughtie", "dd", loss),
       row("Benitez", null, win),
       row("Trap", null, win),
+      row("Jackie", null, win),
+      row("Jarrett Wallace", "jw", loss),
     ]);
 
     const byName = Object.fromEntries(standings.map((row) => [row.name, row]));
@@ -51,6 +53,8 @@ describe("computeLeagueStandings unifies nickname and member/guest splits", () =
     expect(byName["David Doughtie"]).toMatchObject({ events: 2, wins: 0, points: 0, member_id: "dd" });
     expect(byName["Benitez"] || byName["Jonathan Benitez"]).toMatchObject({ events: 1, wins: 1, points: 2 });
     expect(byName["Trap"]).toMatchObject({ events: 1, wins: 1, points: 2 });
+    expect(byName["Jarrett Wallace"]).toMatchObject({ events: 2, wins: 1, points: 2, member_id: "jw" });
+    expect(standings.filter((row) => /jackie|jarrett/i.test(row.name))).toHaveLength(1);
   });
 
   it("does not merge two different member ids even with matching names", () => {

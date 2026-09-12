@@ -54,12 +54,18 @@ test("compact aliases and nicknames match the same player", () => {
   assert.equal(playersMatch("PJ Corbett", "P.J. Corbett"), true);
   assert.equal(playersMatch("PJ Corbett", 'P.J. " Where\'s my fuse" Corbett'), true);
   assert.equal(playersMatch("Juan Martinez", 'Juan "Him" Martinez'), true);
+  assert.equal(playersMatch("Jackie", "Jarrett Wallace"), true);
+  assert.equal(playersMatch("Juan", 'Juan "Him" Martinez'), true);
+  assert.equal(playersMatch("Jeff", "Jeff Stelly"), true);
+  assert.equal(playersMatch("TJ", "Tj Braley"), true);
 });
 
 test("distinct players stay distinct", () => {
   assert.equal(playersMatch("Eric Davis", "Eric LaRoque"), false);
   assert.equal(playersMatch("Leo H.", "Eder Hernandez"), false);
   assert.equal(playersMatch("Jesus", "Jackie"), false);
+  assert.equal(playersMatch("Jackie", "Jesus"), false);
+  assert.equal(playersMatch("Jackie", "Jarrett Gaskins"), false);
   assert.equal(playersMatch("Alex Donadio", "Alex Schwarga"), false);
   assert.equal(playersMatch("T.J. Braley", "T.J. Williams"), false);
   assert.equal(playersMatch("David D.", "David Doughtie"), true);
@@ -103,5 +109,28 @@ test("resolvePlayerName maps sheet nicknames onto the Ryder roster", () => {
   assert.equal(resolvePlayerName("Blake S", ROSTER), "Blake Sargent");
   assert.equal(resolvePlayerName("PJ Corbett", ROSTER), 'P.J. " Where\'s my fuse" Corbett');
   assert.equal(resolvePlayerName("Juan Martinez", ROSTER), 'Juan "Him" Martinez');
+  assert.equal(resolvePlayerName("Jackie", ROSTER), "Jarrett Wallace");
+  assert.equal(resolvePlayerName("Juan", ROSTER), 'Juan "Him" Martinez');
+  assert.equal(preferredPlayerName(["Jackie", "Jarrett Wallace"]), "Jarrett Wallace");
   assert.equal(preferredPlayerName(["Schwarga", "Alex Schwarga"]), "Alex Schwarga");
+});
+
+test("Jackie folds into Jarrett Wallace on the 24-player Ryder roster", () => {
+  const names = [
+    ...ROSTER,
+    "Jackie",
+    "TJ Braley",
+    "Schwarga",
+    "Eder H",
+    "Trap",
+    "Vee",
+    "Juan",
+  ];
+  const clustered = clusterPlayerNames(names);
+  const unified = [...new Set(ROSTER.map((name) => clustered.get(name)))];
+  assert.equal(unified.length, 24);
+  assert.equal(clustered.get("Jackie"), "Jarrett Wallace");
+  assert.equal(clustered.get("TJ Braley"), clustered.get("Tj Braley"));
+  assert.equal(resolvePlayerName("TJ Braley", ROSTER), "Tj Braley");
+  assert.equal(clustered.get("Juan"), 'Juan "Him" Martinez');
 });

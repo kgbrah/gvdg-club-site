@@ -1,4 +1,4 @@
-import { resolvePlayerName } from "../shared/player-identity.js";
+import { playersMatch, resolvePlayerName } from "../shared/player-identity.js";
 
 const EMPTY_TEAM = { name: "Red Team", players: [] };
 const EMPTY_BLUE = { name: "Blue Team", players: [] };
@@ -44,23 +44,11 @@ function emptyBoard() {
   };
 }
 
-function nameTokens(name) {
-  return String(name || "").toLowerCase().split(/[^a-z]+/).filter((part) => part.length > 2);
-}
-
-function namesOverlap(left, right) {
-  const a = new Set(nameTokens(left));
-  const b = new Set(nameTokens(right));
-  if (!a.size || !b.size) return false;
-  for (const token of a) if (b.has(token)) return true;
-  return false;
-}
-
 export function sidesOverlap(left, right) {
   const unused = [...right];
   let hits = 0;
   for (const name of left) {
-    const index = unused.findIndex((other) => namesOverlap(name, other));
+    const index = unused.findIndex((other) => playersMatch(name, other));
     if (index < 0) continue;
     unused.splice(index, 1);
     hits += 1;
@@ -246,12 +234,16 @@ export function officialRyderTeamStandings(tally) {
 export function officialRyderPlayerStandings(weeks, roster) {
   const rosterNames = (Array.isArray(roster) ? roster : []).map((name) => String(name || "").trim()).filter(Boolean);
   const map = new Map();
+  for (const name of rosterNames) {
+    map.set(name.toLowerCase(), { name, events: 0, wins: 0, points: 0 });
+  }
   function add(name, points, won) {
     const label = resolvePlayerName(name, rosterNames);
     if (!label) return;
     const key = label.toLowerCase();
     let row = map.get(key);
     if (!row) {
+      if (rosterNames.length) return;
       row = { name: label, events: 0, wins: 0, points: 0 };
       map.set(key, row);
     }
