@@ -91,12 +91,14 @@ function kv(initial: Record<string, string> = {}) {
 
 type StartPayload = {
   readonly liveScoringConfig?: { readonly groupFormat: string; readonly scoringStyle: string };
+  readonly ctpBuyInRequired?: boolean;
   readonly players?: readonly {
     readonly memberId?: string | null;
     readonly name?: string;
     readonly division?: string | null;
     readonly startingHole?: number | null;
     readonly team?: string | null;
+    readonly ctpEligible?: boolean;
   }[];
 };
 type LiveRouteState = {
@@ -434,10 +436,10 @@ describe("live route start payloads", () => {
     expect(state.starts).toHaveLength(1);
     expect(state.starts[0]?.liveScoringConfig).toEqual({ groupFormat: "doubles", scoringStyle: "matchplay" });
     expect(state.starts[0]?.players).toEqual([
-      { memberId: "m_a", name: "A", division: "MA1", startingHole: 1, team: "Pair 1" },
-      { memberId: "m_b", name: "B", division: "MA1", startingHole: 1, team: "Pair 1" },
-      { memberId: "m_c", name: "C", division: "MA1", startingHole: 1, team: "Pair 2" },
-      { memberId: "m_d", name: "D", division: "MA1", startingHole: 1, team: "Pair 2" },
+      { memberId: "m_a", name: "A", division: "MA1", startingHole: 1, team: "Pair 1", ctpEligible: true },
+      { memberId: "m_b", name: "B", division: "MA1", startingHole: 1, team: "Pair 1", ctpEligible: true },
+      { memberId: "m_c", name: "C", division: "MA1", startingHole: 1, team: "Pair 2", ctpEligible: true },
+      { memberId: "m_d", name: "D", division: "MA1", startingHole: 1, team: "Pair 2", ctpEligible: true },
     ]);
     expect(state.updatedStatus).toBe("live");
   });
@@ -472,6 +474,32 @@ describe("live route start payloads", () => {
     const res = await liveRouteCall("/events/9/live/start", "POST", {}, state);
     expect(res.status).toBe(200);
     expect((must(state.starts[0]).players ?? []).map((p) => p.name)).toEqual(["Alice", "Bob", "Walkon Wanda"]);
+  });
+
+  it("stamps CTP buy-in eligibility from registration addons when a fee is charged", async () => {
+    const state: LiveRouteState = {
+      starts: [],
+      eventConfig: { event_id: 9, ctp_fee_cents: 500 },
+      registrations: [
+        { member_id: "m_a", name: "Alice", division: "MA1", starting_hole: 1, team: null, addons: JSON.stringify({ ctp: true }), paid_entry: 1 },
+        { member_id: "m_c", name: "Cara", division: "MA1", starting_hole: 1, team: null, addons: JSON.stringify({ ctp: true }), paid_entry: 0 },
+        { member_id: "m_b", name: "Bob", division: "MA1", starting_hole: 1, team: null, addons: JSON.stringify({ ace: true }), paid_entry: 1 },
+      ],
+      eventPlayers: [
+        { member_id: null, name: "Walkon Wanda", division: "Rec", team: null },
+      ],
+    };
+
+    const res = await liveRouteCall("/events/9/live/start", "POST", {}, state);
+
+    expect(res.status).toBe(200);
+    expect(state.starts[0]?.ctpBuyInRequired).toBe(true);
+    expect(state.starts[0]?.players).toEqual([
+      { memberId: "m_a", name: "Alice", division: "MA1", startingHole: 1, team: null, ctpEligible: true },
+      { memberId: "m_c", name: "Cara", division: "MA1", startingHole: 1, team: null, ctpEligible: false },
+      { memberId: "m_b", name: "Bob", division: "MA1", startingHole: 1, team: null, ctpEligible: false },
+      { memberId: null, name: "Walkon Wanda", division: "Rec", startingHole: null, team: null, ctpEligible: false },
+    ]);
   });
 
   it("the legacy from:'players' flag no longer drops registrants — it still unions both sources", async () => {
@@ -793,6 +821,144 @@ describe("LiveEventDO WebSocket handling", () => {
     const score = await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify({ index: 0, hole: 1, strokes: 3 }) }));
     expect(score.status).toBe(200);
     expect(server.sent.at(-1)).toContain('"scores":{"1":3}');
+  });
+});
+
+describe("LiveEventDO live CTP claims", () => {
+  const start = (live: LiveEventDO) =>
+    live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({
+        eventId: 22,
+        holes: [{ hole: 1, par: 3 }, { hole: 7, par: 3 }],
+        players: [
+          { memberId: "m0", name: "Ann" },
+          { memberId: "m1", name: "Bo" },
+        ],
+      }),
+    }));
+  const vote = (live: LiveEventDO, member: string, nomineeIndex: number, scorerIndex: number) =>
+    live.fetch(new Request("https://do/ctp", {
+      method: "POST",
+      headers: { "X-Auth-Member": member },
+      body: JSON.stringify({ ctpId: 9, hole: 7, nomineeIndex, scorerIndex }),
+    }));
+
+  it("promotes a CTP leader only after the whole card agrees", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await start(live);
+    const first = await vote(live, "m0", 0, 0);
+    expect(first.status).toBe(200);
+    const firstSnap = await first.json() as { liveCtps?: { leaderName?: string | null }[] };
+    expect(firstSnap.liveCtps?.[0]?.leaderName ?? null).toBeNull();
+
+    const second = await vote(live, "m1", 0, 1);
+    expect(second.status).toBe(200);
+    const snap = await second.json() as { liveCtps?: { leaderName?: string | null; cards?: { agreed?: boolean }[] }[] };
+    expect(snap.liveCtps?.[0]?.leaderName).toBe("Ann");
+    expect(snap.liveCtps?.[0]?.cards?.some((card) => card.agreed)).toBe(true);
+  });
+
+  it("rejects a CTP vote from someone not on the card", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await start(live);
+    expect((await vote(live, "ghost", 0, 0)).status).toBe(403);
+  });
+
+  it("drops a deleted CTP from the live snapshot", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await start(live);
+    await vote(live, "m0", 0, 0);
+    await vote(live, "m1", 0, 1);
+    const forbidden = await live.fetch(new Request("https://do/ctp-forget", {
+      method: "POST",
+      body: JSON.stringify({ ctpId: 9 }),
+    }));
+    expect(forbidden.status).toBe(403);
+    const dropped = await live.fetch(new Request("https://do/ctp-forget", {
+      method: "POST",
+      headers: { "X-Auth-Admin": "true" },
+      body: JSON.stringify({ ctpId: 9 }),
+    }));
+    expect(dropped.status).toBe(200);
+    const snap = await dropped.json() as { liveCtps?: unknown[] };
+    expect(snap.liveCtps).toEqual([]);
+  });
+
+  it("awards the live CTP leader when the event is finalized", async () => {
+    const updates: unknown[][] = [];
+    const recDb = {
+      prepare(sql: string) {
+        return {
+          bind(...args: unknown[]) {
+            if (/UPDATE ctps SET winner/i.test(sql)) updates.push(args);
+            return this;
+          },
+          run: async () => ({ results: [], success: true }),
+          first: async () => null,
+          all: async () => ({ results: [], success: true }),
+        };
+      },
+    };
+    const live = new LiveEventDO(new FakeState({}), { DB: recDb });
+    await start(live);
+    await vote(live, "m0", 0, 0);
+    await vote(live, "m1", 0, 1);
+    for (const hole of [1, 7]) {
+      await live.fetch(new Request("https://do/score", {
+        method: "POST",
+        headers: { "X-Auth-Admin": "true" },
+        body: JSON.stringify({ index: 0, scorerIndex: 0, hole, strokes: 3 }),
+      }));
+      await live.fetch(new Request("https://do/score", {
+        method: "POST",
+        headers: { "X-Auth-Admin": "true" },
+        body: JSON.stringify({ index: 1, scorerIndex: 1, hole, strokes: 3 }),
+      }));
+    }
+    const fin = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" } }));
+    expect(fin.status).toBe(200);
+    expect(updates).toContainEqual(["m0", "Ann", 9, 22]);
+  });
+
+  it("writes CTP awards and event status in one D1 batch so a failed finalize can retry", async () => {
+    const batches: string[][] = [];
+    const recDb = {
+      async batch(statements: D1StatementLike[]) {
+        batches.push(statements.map((statement) => ("sql" in statement ? String(statement.sql) : "")));
+        return statements.map(() => ({ results: [], success: true }));
+      },
+      prepare(sql: string) {
+        return {
+          sql,
+          bind() { return this; },
+          run: async () => ({ results: [], success: true }),
+          first: async () => null,
+          all: async () => ({ results: [], success: true }),
+        };
+      },
+    };
+    const live = new LiveEventDO(new FakeState({}), { DB: recDb });
+    await start(live);
+    await vote(live, "m0", 0, 0);
+    await vote(live, "m1", 0, 1);
+    for (const hole of [1, 7]) {
+      await live.fetch(new Request("https://do/score", {
+        method: "POST",
+        headers: { "X-Auth-Admin": "true" },
+        body: JSON.stringify({ index: 0, scorerIndex: 0, hole, strokes: 3 }),
+      }));
+      await live.fetch(new Request("https://do/score", {
+        method: "POST",
+        headers: { "X-Auth-Admin": "true" },
+        body: JSON.stringify({ index: 1, scorerIndex: 1, hole, strokes: 3 }),
+      }));
+    }
+    const fin = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" } }));
+    expect(fin.status).toBe(200);
+    expect(batches).toHaveLength(1);
+    expect(batches[0]?.some((sql) => /UPDATE ctps SET winner/i.test(sql))).toBe(true);
+    expect(batches[0]?.some((sql) => /UPDATE events SET status/i.test(sql))).toBe(true);
   });
 });
 

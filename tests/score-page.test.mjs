@@ -395,6 +395,36 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
       ],
     },
   }), 'Match: Blue 1 down');
+  const guestVote = buildScorecardViewState({
+    state: {
+      ...state,
+      cardId: 'c0',
+      cardmates: [
+        { index: 0, name: 'Ava King', division: 'MA1', isMe: true, ctpEligible: true, scores: {}, scorecards: {} },
+        { index: 1, name: 'Guest', division: 'MA1', ctpEligible: true, scores: {}, scorecards: {} },
+        { index: 2, name: 'Skip', division: 'MA1', ctpEligible: false, scores: {}, scorecards: {} },
+      ],
+      snap: {
+        liveCtps: [{
+          id: 1,
+          hole: 1,
+          myVote: 0,
+          cards: [{
+            cardId: 'c0',
+            votes: [
+              { playerIndex: 0, nomineeIndex: 0 },
+            ],
+          }],
+        }],
+      },
+    },
+    mode: 'round',
+    roundCode: 'QA1234',
+    scorerIndex: 1,
+    teeSign: null,
+  });
+  assert.equal(guestVote.ctpClaim.ctps[0].myVote, null);
+  assert.deepEqual(guestVote.ctpClaim.ctps[0].nominees.map((row) => row.index), [0, 1]);
 });
 
 test('player leaderboard renders matchplay and pair labels without primary to-par ranking', () => {
@@ -498,11 +528,13 @@ test('live CTP and ace pot strip uses public event reads without scoring writes'
   const html = readFileSync('score.html', 'utf8');
   assert.match(controller, /\/events\/' \+ EVENT_ID \+ '\/ctps'/);
   assert.match(controller, /\/events\/' \+ EVENT_ID \+ '\/ace-pot'/);
+  assert.match(controller, /LIVE \+ '\/ctp'/);
   assert.match(controller, /auth: false, guest: false/);
   assert.match(controller, /startPotsPolling\(\)/);
   assert.doesNotMatch(controller, /\/admin\/events\/.*\/ctps/);
   assert.doesNotMatch(controller, /store-credit/);
   assert.match(scorecard, /PotsStrip/);
+  assert.match(scorecard, /function CtpClaim/);
   assert.match(scorecard, /ctp-badge/);
   assert.match(watch, /PotsStrip/);
   assert.match(pots, /data-react-live-pots/);

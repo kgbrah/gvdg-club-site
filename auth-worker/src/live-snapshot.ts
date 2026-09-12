@@ -1,9 +1,10 @@
 import type { ScoreConflict } from "./live-consensus.js";
+import { cardLiveCtps, publicLiveCtps, type LiveCtpStore } from "./live-ctp.js";
 import type { PlayerState } from "./scoring.js";
 import { canEnterScorecard, computeRoundStandings, healthyTargets, publicScoreTargets, resolvedHoles, scorecardIssues, scoringState } from "./live-state.js";
 import type { LiveMeta } from "./live-types.js";
 
-export function publicSnapshot(meta: LiveMeta | null, players: PlayerState[]) {
+export function publicSnapshot(meta: LiveMeta | null, players: PlayerState[], liveCtps: LiveCtpStore = {}) {
   const holes = resolvedHoles(meta);
   const scoring = scoringState(meta, players);
   const issues = scorecardIssues(meta, players, holes, scoring);
@@ -53,11 +54,12 @@ export function publicSnapshot(meta: LiveMeta | null, players: PlayerState[]) {
     conflicts: issues.conflicts,
     missing: issues.missing,
     standings,
+    liveCtps: publicLiveCtps(liveCtps, players),
     updatedAt: meta?.startedAt ?? null,
   };
 }
 
-export function mineData(meta: LiveMeta | null, players: PlayerState[], authMember: string | null): Record<string, unknown> {
+export function mineData(meta: LiveMeta | null, players: PlayerState[], authMember: string | null, liveCtps: LiveCtpStore = {}): Record<string, unknown> {
   const holes = resolvedHoles(meta);
   const scoring = scoringState(meta, players);
   const standings = scoring.globalError
@@ -100,6 +102,7 @@ export function mineData(meta: LiveMeta | null, players: PlayerState[], authMemb
     status: meta?.status ?? "none",
     holes,
     standings,
+    liveCtps: [] as ReturnType<typeof cardLiveCtps>,
   };
   if (meIdx < 0) return { ...base, cardId: null, playerIndex: null, cardmates: [], conflicts: [], missing: [] };
   const me = players[meIdx];
@@ -119,6 +122,7 @@ export function mineData(meta: LiveMeta | null, players: PlayerState[], authMemb
       scorecards: player.scorecards ?? {},
       isMe: index === meIdx,
       canEnterScorecard: canEnterScorecard(player, authMember),
+      ctpEligible: player.ctpEligible !== false,
     }));
   const issues = scorecardIssues(meta, players, holes, scoring);
   return {
@@ -128,5 +132,6 @@ export function mineData(meta: LiveMeta | null, players: PlayerState[], authMemb
     cardmates,
     conflicts: issues.conflicts.filter((conflict: ScoreConflict) => conflict.cardId === cardId),
     missing: issues.missing.filter((missing) => missing.cardId === cardId),
+    liveCtps: cardLiveCtps(liveCtps, players, cardId, meIdx),
   };
 }

@@ -8,6 +8,7 @@ import {
   dollarsFromCents,
   normalizeAcePot,
   normalizeCtp,
+  withLiveCtpLeaders,
 } from "../src/shared/live-pots-model.js";
 
 test("dollarsFromCents formats whole and fractional amounts", () => {
@@ -22,6 +23,7 @@ test("normalizeCtp keeps hole, prize, and winner", () => {
     division: "MA1",
     hole: 7,
     id: "9",
+    live: false,
     prize: "Disc",
     winnerName: "Jane",
   });
@@ -65,4 +67,30 @@ test("aceHint only fires for an ace on an active pot", () => {
   );
   const paid = buildLivePots({ acePot: { total_cents: 4000, status: "paid_out", winner_name: "Pat" } });
   assert.equal(aceHint({ hole: 8, pots: paid, scores: [1] }), "");
+});
+
+test("withLiveCtpLeaders fills an empty winner from the live card claim", () => {
+  const merged = withLiveCtpLeaders(
+    [{ id: 9, hole: 7, prize: "Disc", winner_name: "" }],
+    [{ id: 9, hole: 7, leaderName: "Ann" }],
+  );
+  assert.equal(merged[0].winner_name, "Ann");
+  assert.equal(merged[0].live_leader, true);
+  const awarded = withLiveCtpLeaders(
+    [{ id: 9, hole: 7, winner_name: "Bo" }],
+    [{ id: 9, leaderName: "Ann" }],
+  );
+  assert.equal(awarded[0].winner_name, "Bo");
+  const replaced = withLiveCtpLeaders(
+    [{ id: 9, hole: 7, winner_name: "Ann", live_leader: true }],
+    [{ id: 9, leaderName: "Bo" }],
+  );
+  assert.equal(replaced[0].winner_name, "Bo");
+  assert.equal(replaced[0].live_leader, true);
+  const cleared = withLiveCtpLeaders(
+    [{ id: 9, hole: 7, winner_name: "Ann", live_leader: true }],
+    [{ id: 9, leaderName: null }],
+  );
+  assert.equal(cleared[0].winner_name, "");
+  assert.equal(cleared[0].live_leader, false);
 });

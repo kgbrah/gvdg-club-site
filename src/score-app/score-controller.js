@@ -16,7 +16,7 @@ import {
     udiscExportData,
 } from "./score-view-model.js";
 import { resolveApiBase } from "../shared/api-base.js";
-import { buildLivePots } from "../shared/live-pots-model.js";
+import { buildLivePots, withLiveCtpLeaders } from "../shared/live-pots-model.js";
 import { isLiveWatchRequest, liveScoreHref, liveWatchHref } from "../shared/live-watch.js";
 import { holeWinners, winnerColor } from "../shared/matchplay-colors.js";
 
@@ -111,7 +111,10 @@ export function startScoreApp(options) {
             ]);
             S.pots = {
                 acePot: aceRes.ok && aceRes.data ? aceRes.data.ace_pot : null,
-                ctps: ctpsRes.ok && Array.isArray(ctpsRes.data && ctpsRes.data.ctps) ? ctpsRes.data.ctps : [],
+                ctps: withLiveCtpLeaders(
+                    ctpsRes.ok && Array.isArray(ctpsRes.data && ctpsRes.data.ctps) ? ctpsRes.data.ctps : [],
+                    S.snap && S.snap.liveCtps,
+                ),
             };
         }
         function startPotsPolling() {
@@ -290,6 +293,7 @@ export function startScoreApp(options) {
                 if (snap.rev != null) { if (snap.rev <= S.lastRev) { if (weatherChanged) renderWatch(); return; } S.lastRev = snap.rev; }
                 if (snap.status) S.status = snap.status;
                 S.roundConfig = snap.roundConfig || S.roundConfig;
+                if (S.pots) S.pots.ctps = withLiveCtpLeaders(S.pots.ctps, snap.liveCtps);
                 renderWatch();
                 return;
             }
@@ -306,6 +310,7 @@ export function startScoreApp(options) {
             S.scoreTargetError = myScoreTargetError(snap);
             setConflicts(snap.conflicts);
             setMissing(snap.missing);
+            if (S.pots) S.pots.ctps = withLiveCtpLeaders(S.pots.ctps, snap.liveCtps);
             const byIndex = new Map(snap.players.map((p) => [p.index, p]));
             // Card roster changed (a player was removed elsewhere, or a new walk-on/cardmate joined on
             // another device)? The snapshot omits removed players and includes new ones; rebuild from /mine
@@ -493,6 +498,19 @@ export function startScoreApp(options) {
             };
         }
 
+        async function postCtpVote(ctp, nomineeIndex) {
+            const scorerIndex = currentScorerIndex();
+            if (scorerIndex == null) { toast('Choose a scorecard'); return; }
+            const r = await api(LIVE + '/ctp', { method: 'POST', body: { ctpId: Number(ctp.id), nomineeIndex: nomineeIndex, scorerIndex: scorerIndex } });
+            if (r.ok) { S.snap = r.data; mergeFromSnap(); renderHole(); }
+            else if (r.status === 403) toast('Everyone on this card has to agree — vote as yourself');
+            else if (r.status === 401) toast('Session expired — sign in again');
+            else if (r.status === 409) toast('Round isn’t live');
+            else if (r.status === 404) toast('That CTP isn’t on this event');
+            else if (r.data && r.data.error === "not_in_ctp") toast('That player isn’t in the CTP');
+            else if (r.data && r.data.error === "wrong_division") toast('That CTP is a different division');
+            else toast('Could not mark CTP');
+        }
         function renderHole() {
             if (!S.holes.length) return;
             const h = holeMeta(S.holeIdx);
@@ -512,6 +530,7 @@ export function startScoreApp(options) {
                 onNext: function () { S.holeIdx = Math.min(S.holes.length - 1, S.holeIdx + 1); renderHole(); },
                 onPrevious: function () { S.holeIdx = Math.max(0, S.holeIdx - 1); renderHole(); },
                 onScore: postScore,
+                onCtpVote: EVENT_ID && !WATCH ? postCtpVote : null,
                 onScorerChange: function (index) { S.scorerIndex = index; renderHole(); },
                 onShare: shareRound,
                 onWatchShare: ROUND_CODE || EVENT_ID ? shareWatchLink : null,

@@ -149,6 +149,18 @@ export async function handleAdminEvents(
     }
     if (method === "DELETE" && cid != null && seg[5] == null) {
       await db.deleteCtp(env.DB, id, cid);
+      if ((await db.getEventStatus(env.DB, id)) === "live") {
+        try {
+          const stub = env.LIVE.get(env.LIVE.idFromName("event:" + id));
+          await stub.fetch("https://do/ctp-forget", {
+            method: "POST",
+            body: JSON.stringify({ ctpId: cid }),
+            headers: { "X-Auth-Admin": "true" },
+          });
+        } catch {
+          // D1 already dropped the CTP; a missed DO prune is cleaned up on the next vote 404.
+        }
+      }
       return json({ ok: true }, 200, origin);
     }
   }
