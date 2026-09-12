@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { headingDeg, holeMapLabel, holePoint, playerMarksOnMap, projectHoleMap, projectMapPoint, satelliteImageUrl, windBlowToDeg } from "../src/shared/hole-map-model.js";
+import { headingDeg, holeMapLabel, holePoint, playerMarksOnMap, projectHoleMap, projectMapPoint, satelliteImageUrl, scoreChipAnchor, windBlowToDeg } from "../src/shared/hole-map-model.js";
 
 test("holePoint requires numeric lat/lng", () => {
   assert.equal(holePoint(null), null);
@@ -76,4 +76,11 @@ test("projectMapPoint places players on the hole and hides off-map GPS", () => {
   assert.equal(marks[0].initials, "AS");
   assert.equal(marks[0].label, "par");
   assert.equal(marks[0].strokes, 3);
+});
+
+test("scoreChipAnchor flips chips away from the top and right edges", () => {
+  assert.deepEqual(scoreChipAnchor({ x: 50, y: 80 }, 100, 100), { x: "right", y: "above" });
+  assert.deepEqual(scoreChipAnchor({ x: 90, y: 10 }, 100, 100), { x: "left", y: "below" });
+  assert.deepEqual(scoreChipAnchor({ x: 10, y: 10 }, 100, 100), { x: "right", y: "below" });
+  assert.deepEqual(scoreChipAnchor({ x: 90, y: 80 }, 100, 100), { x: "left", y: "above" });
 });

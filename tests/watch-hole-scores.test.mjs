@@ -57,6 +57,20 @@ test("watchHoleScoreChips read a doubles pair score from the partner", () => {
   assert.equal(chips[0].strokes, 2);
 });
 
+test("watchHoleScoreChips skip players omitted from an explicit doubles target list", () => {
+  const chips = watchHoleScoreChips({
+    hole: 1,
+    par: 3,
+    players: [
+      { index: 0, scores: { 1: 3 } },
+      { index: 1, scores: { 1: 3 } },
+    ],
+    scoreTargets: [{ id: "pair:beta", playerIndexes: [2, 3] }],
+    locations: [{ index: 0, initials: "AS", lat: 35.6, lng: -77.37 }],
+  });
+  assert.equal(chips[0].label, undefined);
+});
+
 test("scoreForPlayerIndexes reads a pair's shared hole score", () => {
   const players = [
     { index: 0, scores: {} },
@@ -88,6 +102,26 @@ test("watchStrokeHoleChips list every scored player or pair on the selected hole
   assert.equal(chips[1].label, "par");
 });
 
+test("watchStrokeHoleChips treat an empty scoreTargets list as authoritative", () => {
+  const chips = watchStrokeHoleChips({
+    hole: 1,
+    par: 3,
+    players: [{ index: 0, name: "Alex", scores: { 1: 3 } }],
+    scoreTargets: [],
+  });
+  assert.equal(chips.length, 0);
+});
+
+test("watchStrokeHoleChips fall back to players when scoreTargets is omitted", () => {
+  const chips = watchStrokeHoleChips({
+    hole: 1,
+    par: 3,
+    players: [{ index: 0, name: "Alex", scores: { 1: 2 } }],
+  });
+  assert.equal(chips.length, 1);
+  assert.equal(chips[0].label, "birdie");
+});
+
 test("watchMatchCards list each pair with thru, status, and hole result chips", () => {
   const cards = watchMatchCards({
     hole: 1,
@@ -101,13 +135,13 @@ test("watchMatchCards list each pair with thru, status, and hole result chips", 
       { id: "t-right", label: "JB", playerIndexes: [1], members: ["Jarrett"] },
     ],
     standings: [
-      { targetId: "t-left", thru: 1, match: { status: "1 up", outcome: "leading" } },
-      { targetId: "t-right", thru: 1, match: { status: "1 up", outcome: "trailing" } },
+      { targetId: "t-left", thru: 1, match: { status: "1 up", outcome: "leading", holesWon: 1, holesLost: 0, holesTied: 0 } },
+      { targetId: "t-right", thru: 1, match: { status: "1 up", outcome: "trailing", holesWon: 0, holesLost: 1, holesTied: 0 } },
     ],
   });
   assert.equal(cards.length, 1);
   assert.equal(cards[0].title, "AS vs JB");
-  assert.equal(cards[0].status, "1 up");
+  assert.equal(cards[0].status, "AS 1 up");
   assert.equal(cards[0].thru, 1);
   assert.equal(cards[0].chips[0].label, "par");
   assert.equal(cards[0].chips[0].result, "won");
@@ -132,16 +166,40 @@ test("watchMatchCards group two targets by card even when cardId is null", () =>
       { id: "d", label: "D", playerIndexes: [3] },
     ],
     standings: [
-      { targetId: "a", thru: 2, match: { status: "AS", outcome: "draw" } },
-      { targetId: "c", thru: 2, match: { status: "1 up", outcome: "leading" } },
+      { targetId: "a", thru: 2, match: { status: "AS", outcome: "draw", holesWon: 0, holesLost: 0, holesTied: 2 } },
+      { targetId: "c", thru: 2, match: { status: "1 up", outcome: "leading", holesWon: 1, holesLost: 0, holesTied: 1 } },
     ],
   });
   assert.equal(cards.length, 2);
   assert.equal(cards[0].title, "A vs B");
+  assert.equal(cards[0].status, "AS");
+  assert.equal(cards[0].thru, 2);
   assert.equal(cards[0].chips[0].result, "halved");
   assert.equal(cards[1].title, "C vs D");
-  assert.equal(cards[1].status, "1 up");
+  assert.equal(cards[1].status, "C 1 up");
   assert.equal(cards[1].chips[0].result, "won");
+});
+
+test("watchMatchCards thru counts completed head-to-head holes, not a side's own scores", () => {
+  const cards = watchMatchCards({
+    hole: 2,
+    par: 3,
+    players: [
+      { index: 0, cardId: "c0", scores: { 1: 3, 2: 3 } },
+      { index: 1, cardId: "c0", scores: { 1: 4 } },
+    ],
+    scoreTargets: [
+      { id: "t-left", label: "AS", playerIndexes: [0] },
+      { id: "t-right", label: "JB", playerIndexes: [1] },
+    ],
+    standings: [
+      { targetId: "t-left", thru: 2, match: { status: "AS", outcome: "draw", holesWon: 0, holesLost: 0, holesTied: 1 } },
+      { targetId: "t-right", thru: 1, match: { status: "AS", outcome: "draw", holesWon: 0, holesLost: 0, holesTied: 1 } },
+    ],
+  });
+  assert.equal(cards[0].thru, 1);
+  assert.equal(cards[0].status, "AS");
+  assert.equal(cards[0].chips.length, 1);
 });
 
 test("watch view uses overlay chips for stroke and match cards for matchplay", () => {
@@ -155,4 +213,8 @@ test("watch view uses overlay chips for stroke and match cards for matchplay", (
   assert.match(watch, /props\.isMatchplay \? h\(WatchMatchCards/);
   assert.match(map, /function ScoreChips/);
   assert.match(map, /if \(compact\) return null/);
+  assert.match(map, /scoreChipAnchor/);
+  const html = readFileSync("score.html", "utf8");
+  assert.match(html, /chip-left\.chip-above/);
+  assert.match(html, /chip-right\.chip-below/);
 });

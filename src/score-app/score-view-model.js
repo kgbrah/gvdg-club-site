@@ -77,8 +77,24 @@ function cardIdForTarget(target, players) {
   return target && target.id ? "target:" + target.id : "card";
 }
 
+function matchThru(match) {
+  if (!match) return 0;
+  const won = Number(match.holesWon);
+  const lost = Number(match.holesLost);
+  const tied = Number(match.holesTied);
+  if (![won, lost, tied].every(Number.isFinite)) return 0;
+  return won + lost + tied;
+}
+
+function matchCardStatus(match, leadTarget) {
+  const status = displayMatchStatus(match);
+  const outcome = match && match.outcome;
+  if (!outcome || outcome === "draw") return status;
+  return targetName(leadTarget) + " " + status;
+}
+
 function scoreTargetsOrPlayers(scoreTargets, players) {
-  if (Array.isArray(scoreTargets) && scoreTargets.length) return scoreTargets;
+  if (Array.isArray(scoreTargets)) return scoreTargets;
   return (Array.isArray(players) ? players : []).map((player) => ({
     id: "player:" + player.index,
     label: player.name,
@@ -86,11 +102,19 @@ function scoreTargetsOrPlayers(scoreTargets, players) {
   }));
 }
 
+function indexesForLocation(scoreTargets, index) {
+  if (Array.isArray(scoreTargets)) {
+    const target = targetForPlayerIndex(scoreTargets, index);
+    return target ? target.playerIndexes : null;
+  }
+  return [index];
+}
+
 export function watchHoleScoreChips({ hole, par, players, locations, scoreTargets }) {
   return (Array.isArray(locations) ? locations : []).map((loc) => {
-    const target = targetForPlayerIndex(scoreTargets, loc.index);
-    const strokes = scoreForPlayerIndexes(players, target ? target.playerIndexes : [loc.index], hole);
-    const label = strokeLabel(strokes, par);
+    const indexes = indexesForLocation(scoreTargets, loc.index);
+    if (!indexes) return loc;
+    const label = strokeLabel(scoreForPlayerIndexes(players, indexes, hole), par);
     if (!label) return loc;
     return { ...loc, strokes: label.strokes, label: label.text, relClass: label.className };
   });
@@ -131,6 +155,7 @@ export function watchMatchCards({ hole, par, players, scoreTargets, standings })
     const lead = leftStanding && (leftStanding.match?.outcome === "leading" || leftStanding.match?.outcome === "won" || leftStanding.match?.outcome === "draw")
       ? leftStanding
       : (rightStanding || leftStanding);
+    const leadTarget = lead === rightStanding ? right : left;
     const leftScore = scoreForPlayerIndexes(players, left.playerIndexes, hole);
     const rightScore = scoreForPlayerIndexes(players, right.playerIndexes, hole);
     const chips = [];
@@ -153,8 +178,8 @@ export function watchMatchCards({ hole, par, players, scoreTargets, standings })
     cards.push({
       key: cardId,
       title: targetName(left) + " vs " + targetName(right),
-      status: displayMatchStatus(lead && lead.match),
-      thru: lead && typeof lead.thru === "number" ? lead.thru : 0,
+      status: matchCardStatus(lead && lead.match, leadTarget),
+      thru: matchThru(lead && lead.match),
       chips,
     });
   });

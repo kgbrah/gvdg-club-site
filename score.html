@@ -201,11 +201,15 @@
         .hole-map-compact .hole-map-player-label { font-size: 8px; }
         .hole-map-chips { position: absolute; inset: 0; pointer-events: none; }
         .hole-map-score-chip {
-            position: absolute; transform: translate(12px, -10px); padding: 0.12rem 0.4rem;
+            position: absolute; padding: 0.12rem 0.4rem;
             border-radius: 999px; font: 700 0.68rem Archivo, sans-serif; white-space: nowrap;
             background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary);
             box-shadow: 0 1px 4px rgba(0,0,0,0.35);
         }
+        .hole-map-score-chip.chip-right.chip-above { transform: translate(12px, -10px); }
+        .hole-map-score-chip.chip-left.chip-above { transform: translate(calc(-100% - 12px), -10px); }
+        .hole-map-score-chip.chip-right.chip-below { transform: translate(12px, 12px); }
+        .hole-map-score-chip.chip-left.chip-below { transform: translate(calc(-100% - 12px), 12px); }
         .hole-map-score-chip.under { color: var(--under); border-color: var(--under); }
         .hole-map-score-chip.over { color: var(--over); border-color: var(--over); }
         .hole-map-score-chip.even { color: var(--even); }
