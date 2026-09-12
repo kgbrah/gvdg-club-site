@@ -7,7 +7,7 @@ import { kvRateLimited } from "./kv-rate-limit.js";
 import { asInt, asStr } from "./input.js";
 import { isLiveFormatError, normalizeLiveScoringConfigFromLegacy, type LiveScoringConfig } from "./live-format.js";
 import { scoringState } from "./live-state.js";
-import { ctpEligibleForStart, parseCtpAddon } from "./live-ctp.js";
+import { ctpEligibleForStart, parseCtpAddon, registrationPaidEntry } from "./live-ctp.js";
 import { assignCards, type PlayerState } from "./scoring.js";
 import { weatherLocationForCourse } from "./weather.js";
 
@@ -72,14 +72,24 @@ export async function startLiveEvent(
     if (isLiveFormatError(error)) return json({ error: "invalid_live_scoring_config" }, 400, origin);
     throw error;
   }
-  const regs = (await db.listRegistrations(env.DB, eid)) as { member_id?: string; name?: string; division?: string | null; starting_hole?: number | null; team?: string | null; addons?: string | null }[];
+  const regs = (await db.listRegistrations(env.DB, eid)) as {
+    member_id?: string;
+    name?: string;
+    division?: string | null;
+    starting_hole?: number | null;
+    team?: string | null;
+    addons?: string | null;
+    paid_entry?: number | boolean | null;
+  }[];
   // Seed the round with BOTH registered players AND manually-added (event_players) walk-ons — nobody is
   // dropped regardless of how they were entered. (A registered player who was also manually added shows
   // once; the registration wins since it carries division / starting hole / check-in.)
   const roster = unionRosterPlayers(regs, Array.isArray(ev.players) ? ev.players : []);
   const buyInRequired = (Number(eventConfig?.ctp_fee_cents) || 0) > 0;
   const enteredMemberIds = new Set(
-    regs.filter((row) => row.member_id && parseCtpAddon(row.addons)).map((row) => String(row.member_id)),
+    regs
+      .filter((row) => row.member_id && parseCtpAddon(row.addons) && registrationPaidEntry(row))
+      .map((row) => String(row.member_id)),
   );
   const players = roster.map((player) => ({
     ...player,

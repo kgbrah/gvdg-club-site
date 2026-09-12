@@ -104,6 +104,10 @@ export function parseCtpAddon(addons: unknown): boolean {
   }
 }
 
+export function registrationPaidEntry(row: { readonly paid_entry?: unknown } | null | undefined): boolean {
+  return row?.paid_entry === 1 || row?.paid_entry === true;
+}
+
 export function ctpEligibleForStart(input: {
   readonly buyInRequired: boolean;
   readonly memberId: string | null | undefined;

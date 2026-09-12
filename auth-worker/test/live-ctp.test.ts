@@ -10,6 +10,7 @@ import {
   parseCtpAddon,
   publicLiveCtps,
   recordCtpVote,
+  registrationPaidEntry,
   type LiveCtpStore,
 } from "../src/live-ctp.js";
 import type { PlayerState } from "../src/scoring.js";
@@ -134,6 +135,9 @@ describe("live CTP card claims", () => {
   it("stamps buy-in eligibility from registration addons", () => {
     expect(parseCtpAddon('{"ctp":true,"ace":false}')).toBe(true);
     expect(parseCtpAddon('{"ace":true}')).toBe(false);
+    expect(registrationPaidEntry({ paid_entry: 1 })).toBe(true);
+    expect(registrationPaidEntry({ paid_entry: 0 })).toBe(false);
+    expect(registrationPaidEntry({ paid_entry: true })).toBe(true);
     const entered = new Set(["m_a"]);
     expect(ctpEligibleForStart({ buyInRequired: false, memberId: "m_b", enteredMemberIds: entered })).toBe(true);
     expect(ctpEligibleForStart({ buyInRequired: true, memberId: "m_a", enteredMemberIds: entered })).toBe(true);

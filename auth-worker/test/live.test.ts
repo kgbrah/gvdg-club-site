@@ -481,8 +481,9 @@ describe("live route start payloads", () => {
       starts: [],
       eventConfig: { event_id: 9, ctp_fee_cents: 500 },
       registrations: [
-        { member_id: "m_a", name: "Alice", division: "MA1", starting_hole: 1, team: null, addons: JSON.stringify({ ctp: true }) },
-        { member_id: "m_b", name: "Bob", division: "MA1", starting_hole: 1, team: null, addons: JSON.stringify({ ace: true }) },
+        { member_id: "m_a", name: "Alice", division: "MA1", starting_hole: 1, team: null, addons: JSON.stringify({ ctp: true }), paid_entry: 1 },
+        { member_id: "m_c", name: "Cara", division: "MA1", starting_hole: 1, team: null, addons: JSON.stringify({ ctp: true }), paid_entry: 0 },
+        { member_id: "m_b", name: "Bob", division: "MA1", starting_hole: 1, team: null, addons: JSON.stringify({ ace: true }), paid_entry: 1 },
       ],
       eventPlayers: [
         { member_id: null, name: "Walkon Wanda", division: "Rec", team: null },
@@ -495,6 +496,7 @@ describe("live route start payloads", () => {
     expect(state.starts[0]?.ctpBuyInRequired).toBe(true);
     expect(state.starts[0]?.players).toEqual([
       { memberId: "m_a", name: "Alice", division: "MA1", startingHole: 1, team: null, ctpEligible: true },
+      { memberId: "m_c", name: "Cara", division: "MA1", startingHole: 1, team: null, ctpEligible: false },
       { memberId: "m_b", name: "Bob", division: "MA1", startingHole: 1, team: null, ctpEligible: false },
       { memberId: null, name: "Walkon Wanda", division: "Rec", startingHole: null, team: null, ctpEligible: false },
     ]);
@@ -917,6 +919,46 @@ describe("LiveEventDO live CTP claims", () => {
     const fin = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" } }));
     expect(fin.status).toBe(200);
     expect(updates).toContainEqual(["m0", "Ann", 9, 22]);
+  });
+
+  it("writes CTP awards and event status in one D1 batch so a failed finalize can retry", async () => {
+    const batches: string[][] = [];
+    const recDb = {
+      async batch(statements: D1StatementLike[]) {
+        batches.push(statements.map((statement) => ("sql" in statement ? String(statement.sql) : "")));
+        return statements.map(() => ({ results: [], success: true }));
+      },
+      prepare(sql: string) {
+        return {
+          sql,
+          bind() { return this; },
+          run: async () => ({ results: [], success: true }),
+          first: async () => null,
+          all: async () => ({ results: [], success: true }),
+        };
+      },
+    };
+    const live = new LiveEventDO(new FakeState({}), { DB: recDb });
+    await start(live);
+    await vote(live, "m0", 0, 0);
+    await vote(live, "m1", 0, 1);
+    for (const hole of [1, 7]) {
+      await live.fetch(new Request("https://do/score", {
+        method: "POST",
+        headers: { "X-Auth-Admin": "true" },
+        body: JSON.stringify({ index: 0, scorerIndex: 0, hole, strokes: 3 }),
+      }));
+      await live.fetch(new Request("https://do/score", {
+        method: "POST",
+        headers: { "X-Auth-Admin": "true" },
+        body: JSON.stringify({ index: 1, scorerIndex: 1, hole, strokes: 3 }),
+      }));
+    }
+    const fin = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" } }));
+    expect(fin.status).toBe(200);
+    expect(batches).toHaveLength(1);
+    expect(batches[0]?.some((sql) => /UPDATE ctps SET winner/i.test(sql))).toBe(true);
+    expect(batches[0]?.some((sql) => /UPDATE events SET status/i.test(sql))).toBe(true);
   });
 });
 

@@ -149,8 +149,7 @@ export async function handleAdminEvents(
     }
     if (method === "DELETE" && cid != null && seg[5] == null) {
       await db.deleteCtp(env.DB, id, cid);
-      const event = await db.getEvent(env.DB, id);
-      if (event && String(event.status) === "live") {
+      if ((await db.getEventStatus(env.DB, id)) === "live") {
         try {
           const stub = env.LIVE.get(env.LIVE.idFromName("event:" + id));
           await stub.fetch("https://do/ctp-forget", {

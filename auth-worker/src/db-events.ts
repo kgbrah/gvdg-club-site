@@ -218,6 +218,10 @@ export async function createEvent(db: D1Like, e: EventInput) {
   return attachEventCoursesToRow(db, event);
 }
 
+export function updateEventStatusStmt(db: D1Like, id: number, status: string) {
+  return db.prepare("UPDATE events SET status = ?, updated_at = datetime('now') WHERE id = ?").bind(status, id);
+}
+
 export async function updateEvent(db: D1Like, id: number, e: EventPatch) {
   const courseId = primaryCourseId(e);
   const layoutId = primaryLayoutId(e);

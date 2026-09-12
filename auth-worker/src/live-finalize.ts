@@ -98,8 +98,8 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
       ...ctpAwardWinners(input.liveCtps ?? {}, input.players).map((winner) =>
         db.setCtpWinnerIfEmptyStmt(input.env.DB, winner.ctpId, meta.eventId, winner.memberId, winner.name),
       ),
+      db.updateEventStatusStmt(input.env.DB, meta.eventId, "final"),
     ]);
-    await db.updateEvent(input.env.DB, meta.eventId, { status: "final" });
   } catch (error) {
     meta.status = "live";
     throw error;
