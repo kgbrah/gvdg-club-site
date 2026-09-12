@@ -25,6 +25,40 @@
             background: var(--bg-primary); color: var(--text-primary);
             min-height: 100vh; min-height: 100dvh; overscroll-behavior-y: contain;
         }
+        body.player-theme-page {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+        }
+        body.player-theme-active {
+            background-color: var(--bg-primary);
+            background-image: var(--player-theme-image);
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+        body.player-theme-page .wrap { background: transparent; }
+        body.player-theme-page .card,
+        body.player-theme-page .topbar,
+        body.player-theme-page .weather-strip,
+        body.player-theme-page .pots-strip,
+        body.player-theme-page .sheet,
+        body.player-theme-page .install-coach {
+            background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
+        }
+        @supports ((-webkit-backdrop-filter: blur(10px)) or (backdrop-filter: blur(10px))) {
+            body.player-theme-page .card,
+            body.player-theme-page .topbar,
+            body.player-theme-page .weather-strip,
+            body.player-theme-page .pots-strip,
+            body.player-theme-page .sheet,
+            body.player-theme-page .install-coach {
+                -webkit-backdrop-filter: blur(10px);
+                backdrop-filter: blur(10px);
+            }
+        }
+        @media (min-width: 900px) {
+            body.player-theme-active { background-attachment: fixed; }
+        }
         .wrap { max-width: 560px; margin: 0 auto; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
         /* ---- top bar ---- */
         .topbar {

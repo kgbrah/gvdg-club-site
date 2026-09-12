@@ -587,6 +587,22 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.doesNotMatch(watchBoot, /\/join/);
 });
 
+test('live scoring paints the signed-in player dashboard theme onto the score page', () => {
+  const html = readFileSync('score.html', 'utf8');
+  const main = scoreMainSource();
+  const controller = scoreControllerSource();
+  const session = readFileSync('src/shared/player-theme-session.js', 'utf8');
+  assert.match(html, /body\.player-theme-page/);
+  assert.match(html, /body\.player-theme-active/);
+  assert.match(html, /--player-theme-image/);
+  assert.match(main, /from "\.\.\/shared\/player-theme-session\.js"/);
+  assert.match(main, /syncPlayerTheme/);
+  assert.match(main, /togglePlayerThemeMode/);
+  assert.match(controller, /notifyScoreAuthChanged/);
+  assert.match(session, /\/me\/dashboard-theme/);
+  assert.match(session, /gvdg:score-auth/);
+});
+
 test('score weather strip is React-owned without legacy DOM replacement', () => {
   const controller = readFileSync('src/score-app/score-controller.js', 'utf8');
   const scorecard = scorecardViewSource();

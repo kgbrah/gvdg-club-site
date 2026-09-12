@@ -9,6 +9,12 @@ import { ScoreSetupFlow } from "./setup-flow.js";
 import { StatusView } from "./status-view.js";
 import { WatchView } from "./watch-view.js";
 import { InstallCoachBanner } from "../shared/install-coach-ui.js";
+import {
+  SCORE_AUTH_EVENT,
+  syncPlayerTheme,
+  togglePlayerThemeMode,
+  paintPlayerTheme,
+} from "../shared/player-theme-session.js";
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
   void import("react-grab");
@@ -44,6 +50,10 @@ function ScoreBody({ view }) {
   }
 }
 
+function themeRoot() {
+  return document.body;
+}
+
 function ScoreShell() {
   const [header, setHeader] = React.useState({
     showLeaderboard: false,
@@ -52,6 +62,8 @@ function ScoreShell() {
   });
   const [bodyView, setBodyView] = React.useState(INITIAL_SCORE_VIEW);
   const [darkTheme, setDarkTheme] = React.useState(() => localStorage.getItem("theme") === "dark");
+  const [playerTheme, setPlayerTheme] = React.useState(null);
+  const memberIdRef = React.useRef("me");
   const leaderboardHandlerRef = React.useRef(null);
   const bodyController = React.useMemo(() => ({
     render(kind, props) {
@@ -77,6 +89,30 @@ function ScoreShell() {
   }, [bodyController]);
 
   React.useEffect(() => {
+    const root = themeRoot();
+    const controller = new AbortController();
+    function apply(theme, memberId) {
+      if (memberId) memberIdRef.current = memberId;
+      setPlayerTheme(theme);
+    }
+    function refresh() {
+      syncPlayerTheme({
+        root,
+        signal: controller.signal,
+        onTheme: apply,
+      }).catch(() => {});
+    }
+    refresh();
+    window.addEventListener(SCORE_AUTH_EVENT, refresh);
+    return () => {
+      controller.abort();
+      window.removeEventListener(SCORE_AUTH_EVENT, refresh);
+      paintPlayerTheme(null, root);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (playerTheme) return;
     if (darkTheme) {
       document.documentElement.setAttribute("data-theme", "dark");
       localStorage.setItem("theme", "dark");
@@ -84,7 +120,19 @@ function ScoreShell() {
       document.documentElement.removeAttribute("data-theme");
       localStorage.setItem("theme", "light");
     }
-  }, [darkTheme]);
+  }, [darkTheme, playerTheme]);
+
+  function onToggleTheme() {
+    if (playerTheme) {
+      const next = togglePlayerThemeMode(playerTheme, {
+        root: themeRoot(),
+        memberId: memberIdRef.current,
+      });
+      setPlayerTheme(next);
+      return;
+    }
+    setDarkTheme((current) => !current);
+  }
 
   return h("div", { class: "wrap" }, [
     h("header", { class: "topbar" }, [
@@ -124,7 +172,7 @@ function ScoreShell() {
           id: "themeBtn",
           title: "Toggle theme",
           type: "button",
-          onClick: () => setDarkTheme((current) => !current),
+          onClick: onToggleTheme,
         },
         icon(Moon),
       ),
