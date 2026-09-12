@@ -149,6 +149,7 @@ test('member dashboard React registration section stays available for logged-in 
 test('overview dashboard is a compact home and keeps registration on Events', () => {
   const overview = readFileSync('src/members-app/overview-dashboard.js', 'utf8');
   const more = readFileSync('src/members-app/more-page.js', 'utf8');
+  const activity = readFileSync('src/members-app/activity-panels.js', 'utf8');
   const shell = readFileSync('src/members-app/dashboard-shell.js', 'utf8');
   const html = readFileSync('gvdg-members.html', 'utf8');
   assert.doesNotMatch(overview, /MemberRegistrationPanel/);
@@ -159,6 +160,9 @@ test('overview dashboard is a compact home and keeps registration on Events', ()
   assert.match(more, /Club directory/);
   assert.match(more, /Message board/);
   assert.match(more, /Tee signs/);
+  assert.match(more, /href: "score.html"/);
+  assert.match(more, /WalletPanel/);
+  assert.match(activity, /href: live \? live.href : "score.html"/);
   assert.match(shell, /label: "Home"/);
   assert.match(shell, /player-app-nav/);
   assert.match(html, /body\[data-member-dashboard-tab="more"\] #playerMore/);

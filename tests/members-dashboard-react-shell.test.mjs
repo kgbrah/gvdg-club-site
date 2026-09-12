@@ -328,11 +328,14 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(readFileSync('src/members-app/more-page.js', 'utf8'), /gvdg:member-passkey-state/);
   assert.match(readFileSync('src/members-app/more-page.js', 'utf8'), /id: "logoutBtn"/);
   assert.match(readFileSync('src/members-app/more-page.js', 'utf8'), /id: "editProfileBtn"/);
+  assert.match(readFileSync('src/members-app/more-page.js', 'utf8'), /href: "score.html"/);
+  assert.match(readFileSync('src/members-app/more-page.js', 'utf8'), /WalletPanel/);
   assert.match(shell, /key: "season"/);
   assert.match(router, /season: "Season"/);
   assert.match(seasonPage, /data-react-season-page/);
   assert.match(seasonPage, /ClubRatings/);
   assert.match(seasonPage, /PdgaDashboard/);
+  assert.match(seasonPage, /ActiveStandingsPanel/);
   assert.match(seasonPage, /\/my-results\?all=1/);
   assert.match(seasonPage, /\/my-ratings\?/);
   assert.match(seasonPage, /\/my-registrations/);
