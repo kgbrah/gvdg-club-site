@@ -47,3 +47,15 @@ test('every matchplay score surface uses displayMatchStatus', () => {
     assert.doesNotMatch(source, /replace\(\/\^won /, `${path} should not inline the won→lost remap`);
   }
 });
+
+test('committed route bundles include the matchplay remap', () => {
+  const remap = /replace\(\/\^won \/i,`lost `\)\.replace\(\/\^\(\\d\+\) up\\b\/i,`\$1 down`\)/;
+  for (const path of [
+    'public-app/public-app.js',
+    'members-app/members-app.js',
+    'admin-app/admin-app.js',
+  ]) {
+    const source = readFileSync(path, 'utf8');
+    assert.match(source, remap, path);
+  }
+});
