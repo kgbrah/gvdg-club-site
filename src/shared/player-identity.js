@@ -64,10 +64,11 @@ function givenAlias(token) {
 
 function expandKnownNickname(name) {
   const compact = compactPlayerName(name);
-  if (KNOWN_NICKNAMES[compact]) return KNOWN_NICKNAMES[compact];
+  const fromCompact = KNOWN_NICKNAMES[compact];
+  if (fromCompact) return fromCompact;
   const tokens = playerNameTokens(name);
-  if (tokens.length === 1 && KNOWN_NICKNAMES[tokens[0]]) return KNOWN_NICKNAMES[tokens[0]];
-  return name;
+  const fromToken = tokens.length === 1 ? KNOWN_NICKNAMES[tokens[0]] : "";
+  return fromToken || name;
 }
 
 export function preferredPlayerName(names) {
