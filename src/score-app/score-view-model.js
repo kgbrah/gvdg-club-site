@@ -263,6 +263,7 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
     weather: state.weather,
     weatherVersion: state.weather && (state.weather.updatedAt || state.weather.nextRefreshAt || (state.weather.current && state.weather.current.fetchedAt) || ""),
     windFromDeg: state.weather && state.weather.current ? state.weather.current.windDirectionDeg : null,
+    playerLocations: Array.isArray(state.playerLocations) ? state.playerLocations : [],
     yourTurn: yourTurnHint({ ...state, scorerIndex }),
   };
 }

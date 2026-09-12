@@ -1,6 +1,6 @@
 import React from "react";
 
-import { holeMapLabel, projectHoleMap, SATELLITE_CREDIT } from "./hole-map-model.js";
+import { holeMapLabel, playerMarksOnMap, projectHoleMap, SATELLITE_CREDIT } from "./hole-map-model.js";
 import { safeExternalUrl } from "./safe-url.js";
 import { udiscDeepLink } from "./udisc-export.js";
 
@@ -35,6 +35,22 @@ function WindMark(props) {
   );
 }
 
+function PlayerMark(props) {
+  const compact = Boolean(props.compact);
+  return h(
+    "g",
+    {
+      className: "hole-map-player",
+      transform: `translate(${props.x} ${props.y})`,
+    },
+    [
+      h("title", { key: "title" }, props.initials),
+      h("circle", { className: "hole-map-player-dot", key: "dot", r: compact ? 8 : 11 }),
+      h("text", { className: "hole-map-player-label", key: "label", y: compact ? 3.2 : 4 }, props.initials),
+    ],
+  );
+}
+
 export function HoleMap(props) {
   const hole = props.hole;
   const compact = Boolean(props.compact);
@@ -46,6 +62,7 @@ export function HoleMap(props) {
   if (!map) return null;
   const udiscHref = compact ? "" : udiscDeepLink(props.udiscCourseId);
   const label = holeMapLabel(map, hole && hole.hole);
+  const players = playerMarksOnMap(map, props.players);
   return h("div", { className: compact ? "hole-map-card hole-map-compact" : "card hole-map-card" }, [
     h("div", { className: "hole-map-frame", key: "frame" }, [
       h(SatelliteLayer, { key: "satellite", url: map.satelliteUrl }),
@@ -81,6 +98,13 @@ export function HoleMap(props) {
           h("circle", { className: "hole-map-basket", cx: map.basket.x, cy: map.basket.y, key: "basket", r: compact ? 7 : 9 }),
           h("circle", { className: "hole-map-basket-inner", cx: map.basket.x, cy: map.basket.y, key: "chains", r: compact ? 2.5 : 3.5 }),
           compact ? null : h(WindMark, { deg: map.windBlowToDeg, key: "wind", x: map.width - 24, y: 24 }),
+          ...players.map((player) => h(PlayerMark, {
+            compact,
+            initials: player.initials,
+            key: `player-${player.key}`,
+            x: player.x,
+            y: player.y,
+          })),
         ],
       ),
     ]),

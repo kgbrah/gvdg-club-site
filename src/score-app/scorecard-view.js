@@ -252,7 +252,7 @@ export function ScorecardView(props) {
     h(RoundTools, props),
     h(HoleHeader, props),
     props.yourTurn ? h("p", { className: "your-turn-hint", key: "turn" }, props.yourTurn) : null,
-    h(HoleMap, { hole: props.hole, udiscCourseId: props.udiscCourseId, windFromDeg: props.windFromDeg }),
+    h(HoleMap, { hole: props.hole, players: props.playerLocations, udiscCourseId: props.udiscCourseId, windFromDeg: props.windFromDeg }),
     h(TeeSignCard, { teeSign: props.teeSign }),
     h(CtpClaim, { ctpClaim: props.ctpClaim, onCtpVote: props.onCtpVote }),
     h(ScorecardBox, props),

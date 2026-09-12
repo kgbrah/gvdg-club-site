@@ -66,7 +66,7 @@ function OfficialPhoto({ authBase, holeNumber, signId }) {
   });
 }
 
-function TeeSignCard({ authBase, candidateId, hole, layout, officialId, row, token }) {
+function TeeSignCard({ authBase, candidateId, hole, layout, officialId, players, row, token }) {
   const holeNumber = hole.hole;
   const distance = hole.overridden && hole.distance_ft != null ? hole.distance_ft : row?.distance_ft ?? null;
   const layoutName = layout?.name || "Layout";
@@ -83,6 +83,7 @@ function TeeSignCard({ authBase, candidateId, hole, layout, officialId, row, tok
         tee: hole.tee || row?.tee,
       },
       key: "map",
+      players,
     }),
     officialId ? h(OfficialPhoto, { authBase, holeNumber, key: "official", signId: officialId }) : null,
     !officialId && candidateId ? h(CandidatePhoto, { authBase, key: "candidate", signId: candidateId, token }) : null,
@@ -124,6 +125,7 @@ export function AdminScoringTeeSigns({ state }) {
       key: holeNumber,
       layout,
       officialId: signIdForHole(signs, holeNumber, "official"),
+      players: Array.isArray(snap.playerLocations) ? snap.playerLocations : [],
       row: rows.get(holeNumber) || {},
       token,
     });

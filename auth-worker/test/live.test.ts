@@ -2265,3 +2265,35 @@ describe("LiveEventDO UDisc export bridge", () => {
     expect(mine.udiscCourseId).toBe("98765");
   });
 });
+
+describe("LiveEventDO player GPS overlay", () => {
+  it("logged-in members can ping a location that lands on the public snapshot without bumping rev", async () => {
+    const state = new FakeState({});
+    const live = new LiveEventDO(state, { DB: db });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      casual: true,
+      holes: [{ hole: 1, par: 3, tee: { lat: 35.6, lng: -77.37 }, target: { lat: 35.601, lng: -77.37 } }],
+      players: [{ memberId: "m_a", name: "Alex Schwarga" }, { memberId: "g_guest", name: "Walk-on" }],
+    }) }));
+    const before = (await (await live.fetch(new Request("https://do/"))).json()) as { rev: number; playerLocations: unknown[] };
+    const ping = await live.fetch(new Request("https://do/location", { method: "POST", headers: { "X-Auth-Member": "m_a" }, body: JSON.stringify({ lat: 35.6005, lng: -77.37 }) }));
+    expect(ping.status).toBe(200);
+    expect(await ping.json()).toEqual({ ok: true });
+    const after = (await (await live.fetch(new Request("https://do/"))).json()) as { rev: number; playerLocations: { initials: string; lat: number; lng: number }[] };
+    expect(after.rev).toBe(before.rev);
+    expect(after.playerLocations).toEqual([{ index: 0, initials: "AS", lat: 35.6005, lng: -77.37 }]);
+    expect(state.getStored("locations")).toBeUndefined();
+  });
+
+  it("rejects guests, strangers, and bad coordinates", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      casual: true,
+      holes: [{ hole: 1, par: 3 }],
+      players: [{ memberId: "m_a", name: "Alex" }, { memberId: "g_guest", name: "Walk-on" }],
+    }) }));
+    expect((await live.fetch(new Request("https://do/location", { method: "POST", headers: { "X-Auth-Member": "g_guest" }, body: JSON.stringify({ lat: 35.6, lng: -77.37 }) }))).status).toBe(403);
+    expect((await live.fetch(new Request("https://do/location", { method: "POST", headers: { "X-Auth-Member": "m_stranger" }, body: JSON.stringify({ lat: 35.6, lng: -77.37 }) }))).status).toBe(403);
+    expect((await live.fetch(new Request("https://do/location", { method: "POST", headers: { "X-Auth-Member": "m_a" }, body: JSON.stringify({ lat: 99, lng: 0 }) }))).status).toBe(400);
+  });
+});

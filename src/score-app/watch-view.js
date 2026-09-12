@@ -66,6 +66,7 @@ function WatchHoles(props) {
     h(HoleMap, {
       hole: selected,
       key: "map",
+      players: props.players,
       udiscCourseId: props.udiscCourseId,
       windFromDeg: props.windFromDeg,
     }),
@@ -100,6 +101,7 @@ export function WatchView(props) {
     h(WatchHoles, {
       holes: props.holes,
       key: "holes",
+      players: props.playerLocations,
       udiscCourseId: props.udiscCourseId,
       windFromDeg: props.windFromDeg,
     }),

@@ -1,10 +1,18 @@
 import type { ScoreConflict } from "./live-consensus.js";
 import { cardLiveCtps, publicLiveCtps, type LiveCtpStore } from "./live-ctp.js";
+import { publicPlayerLocations, type LivePlayerLocation } from "./live-locations.js";
 import type { PlayerState } from "./scoring.js";
 import { canEnterScorecard, computeRoundStandings, healthyTargets, publicScoreTargets, resolvedHoles, scorecardIssues, scoringState } from "./live-state.js";
 import type { LiveMeta } from "./live-types.js";
 
-export function publicSnapshot(meta: LiveMeta | null, players: PlayerState[], liveCtps: LiveCtpStore = {}) {
+const EMPTY_LOCATIONS: ReadonlyMap<number, LivePlayerLocation> = new Map();
+
+export function publicSnapshot(
+  meta: LiveMeta | null,
+  players: PlayerState[],
+  liveCtps: LiveCtpStore = {},
+  locations: ReadonlyMap<number, LivePlayerLocation> = EMPTY_LOCATIONS,
+) {
   const holes = resolvedHoles(meta);
   const scoring = scoringState(meta, players);
   const issues = scorecardIssues(meta, players, holes, scoring);
@@ -55,11 +63,18 @@ export function publicSnapshot(meta: LiveMeta | null, players: PlayerState[], li
     missing: issues.missing,
     standings,
     liveCtps: publicLiveCtps(liveCtps, players),
+    playerLocations: publicPlayerLocations(players, locations),
     updatedAt: meta?.startedAt ?? null,
   };
 }
 
-export function mineData(meta: LiveMeta | null, players: PlayerState[], authMember: string | null, liveCtps: LiveCtpStore = {}): Record<string, unknown> {
+export function mineData(
+  meta: LiveMeta | null,
+  players: PlayerState[],
+  authMember: string | null,
+  liveCtps: LiveCtpStore = {},
+  locations: ReadonlyMap<number, LivePlayerLocation> = EMPTY_LOCATIONS,
+): Record<string, unknown> {
   const holes = resolvedHoles(meta);
   const scoring = scoringState(meta, players);
   const standings = scoring.globalError
@@ -88,6 +103,7 @@ export function mineData(meta: LiveMeta | null, players: PlayerState[], authMemb
   const myError =
     scoring.globalError ??
     (iAmBroken ? (scoring.cardErrors.find((e) => e.playerIndexes.includes(meIdx)) ?? scoring.cardErrors.find((e) => e.cardId === myCard) ?? scoring.error) : null);
+  const playerLocations = publicPlayerLocations(players, locations);
   const base = {
     eventId: meta?.eventId ?? 0,
     casual: !!meta?.casual,
@@ -103,6 +119,7 @@ export function mineData(meta: LiveMeta | null, players: PlayerState[], authMemb
     holes,
     standings,
     liveCtps: [] as ReturnType<typeof cardLiveCtps>,
+    playerLocations,
   };
   if (meIdx < 0) return { ...base, cardId: null, playerIndex: null, cardmates: [], conflicts: [], missing: [] };
   const me = players[meIdx];

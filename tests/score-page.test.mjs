@@ -507,6 +507,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(holeMap, /SATELLITE_CREDIT/);
   assert.match(holeMap, /safeExternalUrl/);
   assert.match(holeMap, /compact/);
+  assert.match(holeMap, /playerMarksOnMap/);
   assert.match(html, /\.round-tools \{ display: flex; flex-wrap: wrap;/);
   assert.match(html, /\.round-code \{ flex: 1 1 7\.5rem;/);
   assert.match(html, /\.round-actions \{ display: flex; flex: 1 1 auto; flex-wrap: wrap;/);
@@ -514,6 +515,8 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(html, /\.hole-map-frame/);
   assert.match(html, /\.watch-holes/);
   assert.match(html, /\.hole-map-compact/);
+  assert.match(html, /\.hole-map-player/);
+  assert.match(html, /\.hole-map-player-dot/);
   assert.doesNotMatch(legacy, /const head = el\('div', 'hole-head'\)/);
   assert.doesNotMatch(legacy, /const box = el\('div', 'card'\)/);
   assert.doesNotMatch(legacy, /const row = el\('div', 'prow'/);
@@ -563,8 +566,11 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.match(watch, /HoleMap/);
   assert.match(watch, /function WatchHoles/);
   assert.match(watch, /function WatchTeeSign/);
+  assert.match(watch, /playerLocations/);
   assert.match(controller, /function watchHoleViews\(\)/);
   assert.match(controller, /holes: watchHoleViews\(\)/);
+  assert.match(controller, /LIVE \+ '\/location'/);
+  assert.match(controller, /watchPosition/);
   const watchBoot = controller.slice(controller.indexOf('async function loadWatch'), controller.indexOf('function watchRoundCode'));
   assert.doesNotMatch(watchBoot, /\/join/);
 });
@@ -576,7 +582,7 @@ test('score weather strip is React-owned without legacy DOM replacement', () => 
   const sharedWeather = readFileSync('src/shared/weather-model.js', 'utf8');
   assert.match(scorecard, /import \{ WeatherStrip \} from "\.\/weather-strip\.js"/);
   assert.match(scorecard, /h\(WeatherStrip, \{ key: "weather"/);
-  assert.match(controller, /weatherChanged\) renderHole\(\); return;/);
+  assert.match(controller, /extrasChanged\) renderHole\(\); return;/);
   assert.match(scoreViewModelSource(), /weather: state\.weather/);
   assert.match(weather, /export function WeatherStrip\(props\)/);
   assert.match(weather, /from "\.\.\/shared\/weather-model\.js"/);
