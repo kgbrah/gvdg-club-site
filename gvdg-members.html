@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Members Directory | Greenville Disc Golf Club</title>
     <meta name="theme-color" content="#FF6B35">
     <meta name="mobile-web-app-capable" content="yes">
@@ -121,7 +121,7 @@
         body[data-member-shell="auth"] .login-gate { display: flex; }
         body[data-member-shell="auth"] .members-content { display: none; }
         body[data-member-shell="members"] .login-gate { display: none; }
-        body[data-member-shell="members"] .members-content { display: block; }
+        body[data-member-shell="members"] .members-content { display: block; padding-bottom: calc(5.25rem + var(--safe-bottom)); }
 
         #members {
             background: var(--bg-secondary); border-radius: 12px; margin: 2rem auto;
@@ -389,6 +389,7 @@
                 #membersReactOverviewPanel,
                 #membersReactSeasonPanel,
                 #membersReactRegistrationPanel,
+                #membersReactMorePanel,
                 #membersReactBoardPanel,
                 #membersReactTeeSignsPanel,
                 #membersReactClubPanel { display: none; }
@@ -398,23 +399,28 @@
                 #membersReactOverviewPanel:not(:empty),
                 #membersReactSeasonPanel:not(:empty),
                 #membersReactRegistrationPanel:not(:empty),
+                #membersReactMorePanel:not(:empty),
                 #membersReactBoardPanel:not(:empty),
                 #membersReactTeeSignsPanel:not(:empty) { display: block; }
+                #playerMore,
                 #clubBoard,
                 #teeCapture,
                 #membersReactClubPanel { display: none; }
                 body[data-member-dashboard-tab] #myDashboard,
                 body[data-member-dashboard-tab] #mySeason,
                 body[data-member-dashboard-tab] #clubRegister,
+                body[data-member-dashboard-tab] #playerMore,
                 body[data-member-dashboard-tab] #clubBoard,
                 body[data-member-dashboard-tab] #teeCapture,
                 body[data-member-dashboard-tab] #membersReactClubPanel { display: none; }
                 body[data-member-dashboard-tab="overview"] #myDashboard,
                 body[data-member-dashboard-tab="season"] #mySeason,
                 body[data-member-dashboard-tab="events"] #clubRegister,
+                body[data-member-dashboard-tab="more"] #playerMore,
                 body[data-member-dashboard-tab="board"] #clubBoard,
                 body[data-member-dashboard-tab="tee"] #teeCapture,
                 body[data-member-dashboard-tab="club"] #membersReactClubPanel:not(:empty) { display: block; }
+                body[data-member-dashboard-tab="overview"] .player-app-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
                 .dash-tabs { display: flex; gap: 0.45rem; overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 0.3rem 0 0.85rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border-color); scrollbar-width: none; }
                 .dash-tabs::-webkit-scrollbar { display: none; }
                 .dash-tab { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.5rem 1.05rem; font-weight: 700; font-size: 0.88rem; cursor: pointer; white-space: nowrap; transition: background .15s ease, color .15s ease; }
@@ -422,6 +428,112 @@
                 .dash-tab.active { background: var(--primary-strong); color: #fff; border-color: var(--primary); }
                 .members-react-tabs .dash-tab { background: none !important; background-color: var(--bg-secondary) !important; color: var(--text-secondary) !important; border-color: var(--border-color) !important; }
                 .members-react-tabs .dash-tab.active { background: none !important; background-color: var(--primary-strong) !important; color: white !important; border-color: var(--primary) !important; }
+                .player-app-nav {
+                    position: fixed; left: 0; right: 0; bottom: 0; z-index: 900;
+                    display: grid; grid-template-columns: repeat(4, 1fr);
+                    border-top: 1px solid var(--border-color);
+                    background: var(--bg-secondary);
+                    padding-bottom: var(--safe-bottom);
+                }
+                .player-app-nav-btn {
+                    border: 0; background: transparent; color: var(--text-muted);
+                    font-size: 0.68rem; font-weight: 800; letter-spacing: 0.02em;
+                    padding: 0.45rem 0 0.35rem; cursor: pointer;
+                    display: flex; flex-direction: column; align-items: center; justify-content: center;
+                    gap: 0.12rem; min-height: 52px;
+                }
+                .player-app-nav-btn.active { color: var(--primary-strong); }
+                .player-app-nav-btn svg { display: block; }
+                .player-home-hero {
+                    display: grid; grid-template-columns: auto 1fr auto; gap: 0.75rem;
+                    align-items: center; padding: 0.15rem 0 0.85rem;
+                }
+                .player-avatar, .player-avatar-fallback {
+                    width: 52px; height: 52px; border-radius: 50%;
+                    border: 2px solid var(--primary); object-fit: cover;
+                }
+                .player-avatar-fallback {
+                    background: var(--secondary); color: white;
+                    display: grid; place-items: center;
+                    font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem;
+                }
+                .player-who { min-width: 0; }
+                .player-who h1 { margin: 0; font-size: 1.05rem; line-height: 1.2; color: var(--text-primary); }
+                .player-who p { margin: 0.15rem 0 0; color: var(--text-muted); font-size: 0.78rem; }
+                .player-rating-pill { text-align: right; }
+                .player-rating-pill b { display: block; font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem; line-height: 0.9; color: var(--primary); }
+                .player-rating-pill span { color: var(--text-muted); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
+                .player-keep-score {
+                    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+                    background: linear-gradient(135deg, var(--green), var(--secondary));
+                    color: white; border: 0; border-radius: 16px; padding: 1rem 1.05rem;
+                    text-decoration: none; margin-bottom: 0.75rem; width: 100%; text-align: left; cursor: pointer;
+                }
+                .player-keep-score h2 { margin: 0; font-family: 'Bebas Neue', sans-serif; font-size: 1.55rem; letter-spacing: 0.03em; }
+                .player-keep-score p { margin: 0.15rem 0 0; font-size: 0.82rem; opacity: 0.92; }
+                .player-keep-score-go {
+                    flex: 0 0 auto; background: white; color: var(--green); font-weight: 800;
+                    border-radius: 999px; padding: 0.55rem 0.8rem; font-size: 0.78rem;
+                }
+                .player-row-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; margin-bottom: 0.75rem; }
+                .player-stat {
+                    background: var(--bg-secondary); border: 1px solid var(--border-color);
+                    border-radius: 14px; padding: 0.8rem 0.85rem;
+                }
+                .player-stat-k { color: var(--text-muted); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
+                .player-stat-v { font-family: 'Bebas Neue', sans-serif; font-size: 1.7rem; line-height: 1; margin-top: 0.2rem; color: var(--text-primary); }
+                .player-stat-s { color: var(--text-muted); font-size: 0.75rem; margin-top: 0.2rem; }
+                .player-card {
+                    background: var(--bg-secondary); border: 1px solid var(--border-color);
+                    border-radius: 16px; padding: 0.9rem 1rem; margin-bottom: 0.7rem;
+                }
+                .player-card h3 {
+                    margin: 0 0 0.65rem; font-size: 0.72rem; letter-spacing: 0.06em;
+                    text-transform: uppercase; color: var(--text-muted);
+                }
+                .player-event-name { font-weight: 800; color: var(--text-primary); }
+                .player-card-meta { color: var(--text-muted); font-size: 0.8rem; margin-top: 0.15rem; line-height: 1.4; }
+                .player-chip-row { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.55rem; }
+                .player-chip {
+                    font-size: 0.7rem; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase;
+                    border-radius: 999px; padding: 0.22rem 0.5rem; background: var(--bg-tertiary); color: var(--secondary-text);
+                }
+                .player-chip.live { background: var(--primary-strong); color: white; }
+                .player-list-row {
+                    display: grid; grid-template-columns: 1fr auto; gap: 0.6rem; align-items: center;
+                }
+                .player-score { text-align: right; font-weight: 800; }
+                .player-score b { display: block; font-family: 'Bebas Neue', sans-serif; font-size: 1.35rem; color: var(--secondary-text); line-height: 1; }
+                .player-score span { color: var(--text-muted); font-size: 0.7rem; }
+                .player-btn {
+                    display: inline-flex; align-items: center; justify-content: center;
+                    min-height: 44px; width: 100%; border-radius: 12px; border: 1px solid var(--border-color);
+                    background: var(--bg-tertiary); color: var(--text-primary); font-weight: 800; font-size: 0.9rem;
+                    margin-top: 0.65rem; cursor: pointer;
+                }
+                .player-btn.primary { background: var(--primary-strong); border-color: var(--primary-strong); color: white; }
+                .player-more-grid { display: grid; gap: 0.55rem; }
+                .player-more-item {
+                    display: flex; align-items: center; justify-content: space-between;
+                    min-height: 52px; padding: 0.7rem 0.9rem; border-radius: 14px;
+                    background: var(--bg-secondary); border: 1px solid var(--border-color);
+                    font-weight: 800; text-decoration: none; color: inherit; cursor: pointer; width: 100%; text-align: left;
+                }
+                .player-theme-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; margin-top: 0.7rem; }
+                .player-swatch { border: 1px solid var(--border-color); border-radius: 12px; padding: 0.7rem; background: var(--bg-secondary); }
+                .player-swatch i { display: block; height: 28px; border-radius: 8px; margin-bottom: 0.4rem; }
+                .player-swatch-primary { background: var(--primary); }
+                .player-swatch-secondary { background: var(--secondary); }
+                .player-swatch-green { background: var(--green); }
+                .player-swatch-accent { background: var(--accent); }
+                .player-swatch label { font-size: 0.75rem; font-weight: 700; }
+                .player-logout-btn {
+                    display: inline-flex; align-items: center; justify-content: center;
+                    min-height: 44px; width: 100%; margin-top: 1rem; border-radius: 12px;
+                    border: 1px solid var(--border-color); background: transparent; color: var(--text-primary);
+                    font-weight: 800; cursor: pointer;
+                }
+                .react-admin-portal-link { display: inline-flex; margin-bottom: 0.85rem; }
                 .members-react-club-panel { display: grid; gap: 2rem; margin-bottom: 2rem; min-width: 0; max-width: 100%; }
                 .members-react-club-panel > * { min-width: 0; max-width: 100%; }
                 .members-stat-icon svg,
@@ -437,7 +549,13 @@
             <style>
                 @media (max-width: 640px) {
                     .members-content { padding-top: 88px; }
-                    #members { margin: 1rem auto; padding: 1rem; border-radius: 10px; max-width: calc(100% - 1rem); }
+                    #members {
+                        margin: 0 auto; padding: 0.75rem 0.9rem 1rem; border-radius: 0;
+                        max-width: 100%; border: 0; box-shadow: none; background: var(--bg-primary);
+                    }
+                    .my-dashboard, .club-register, .player-more, .club-board, .tee-capture {
+                        background: transparent; border: 0; padding: 0; margin-bottom: 1rem;
+                    }
                     .section-title { font-size: clamp(1.85rem, 10vw, 2.45rem); margin-bottom: 1rem; text-align: left; text-wrap: balance; }
                     .welcome-banner { align-items: center; padding: 0.85rem 1rem; margin-bottom: 1rem; gap: 0.75rem; }
                     .welcome-text { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.88rem; line-height: 1.35; }

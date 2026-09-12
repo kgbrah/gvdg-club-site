@@ -3,9 +3,11 @@ import React from "react";
 import { TOKEN_KEY, requestJson, storageGet } from "./api.js";
 import { applyOfficialRyderTally } from "../public-app/ryder-board-merge.js";
 import { fetchMergedRyderData } from "../shared/ryder-cup-data.js";
+import { ClubRatings } from "./club-ratings.js";
 import { selectDashboardTab } from "./dashboard-shell.js";
 import { formatEventDay, formatToPar } from "./format.js";
 import { useMemberContext } from "./member-context.js";
+import { PdgaDashboard, usePdgaStats } from "./pdga-dashboard.js";
 import { buildSeasonPage } from "./season-page-model.js";
 
 const h = React.createElement;
@@ -103,6 +105,7 @@ function StandingCard({ item }) {
 export function MemberSeasonPage() {
   const context = useMemberContext();
   const token = storageGet(TOKEN_KEY);
+  const pdgaState = usePdgaStats(context.pdgaNo);
   const [state, setState] = React.useState({ status: token ? "loading" : "idle", page: null });
 
   React.useEffect(() => {
@@ -170,5 +173,7 @@ export function MemberSeasonPage() {
         ? page.results.map((row, index) => h(ResultRow, { row, key: row.id || `${row.event_id}-${index}` }))
         : h("p", { className: "dash-note", key: "empty" }, "No finalized club rounds this season yet."),
     ]) : null,
+    h(PdgaDashboard, { pdgaNo: context.pdgaNo, state: pdgaState, compact: true, key: "pdga" }),
+    h(ClubRatings, { token, key: "ratings" }),
   ]);
 }

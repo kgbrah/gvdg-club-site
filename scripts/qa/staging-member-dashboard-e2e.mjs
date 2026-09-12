@@ -8,11 +8,12 @@ const DEFAULT_API_URL = "https://auth.gvdgclub.com";
 const TOKEN_KEY = "gvdg_member_token";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
-const dashboardPanels = ["#myDashboard", "#mySeason", "#clubRegister", "#clubBoard", "#teeCapture", "#membersReactClubPanel"];
+const dashboardPanels = ["#myDashboard", "#mySeason", "#clubRegister", "#playerMore", "#clubBoard", "#teeCapture", "#membersReactClubPanel"];
 const visibleDashboardPanels = {
   overview: ["#myDashboard"],
   season: ["#mySeason"],
   events: ["#clubRegister"],
+  more: ["#playerMore"],
   board: ["#clubBoard"],
   tee: ["#teeCapture"],
   club: ["#membersReactClubPanel"],
@@ -174,6 +175,12 @@ async function expectReactTab(page, name) {
   if (selected !== "true") throw new Error(`Expected React tab ${name} to be selected, got ${selected}`);
 }
 
+async function openMoreItem(page, name) {
+  await page.getByRole("tab", { name: "More" }).click();
+  await expectReactTab(page, "More");
+  await page.getByRole("button", { name }).click();
+}
+
 async function openCasualRounds(page, rootSelector, timeout = 15_000) {
   const root = page.locator(rootSelector);
   const summary = root.locator("summary.dash-collapse-summary").filter({ hasText: /Casual rounds/i });
@@ -328,30 +335,19 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
     await page.waitForSelector("#membersReactBoardPanel:not(:empty)", { state: "attached", timeout: 15_000 });
     await page.waitForSelector("#membersReactTeeSignsPanel:not(:empty)", { state: "attached", timeout: 15_000 });
     await page.waitForSelector("#membersReactClubPanel:not(:empty)", { state: "attached", timeout: 15_000 });
+    await page.waitForSelector("#membersReactMorePanel:not(:empty)", { state: "attached", timeout: 15_000 });
     await expectNoReadinessClasses(page);
-    await waitForText(page, "#membersReactDashboardShell", "Player Dashboard", "React dashboard title");
-    await expectReactTab(page, "Overview");
+    await waitForText(page, "#membersReactDashboardShell", "Home", "React dashboard title");
+    await expectReactTab(page, "Home");
     await page.locator('[data-react-overview-dashboard="ready"]').waitFor({ state: "visible", timeout: 15_000 });
-    await page.locator('#myDashboard [data-react-registration-panel="ready"]').waitFor({ state: "visible", timeout: 15_000 });
     await page.locator('[data-react-board-panel="ready"]').waitFor({ state: "attached", timeout: 15_000 });
     await page.locator('[data-react-tee-signs-panel="ready"]').waitFor({ state: "attached", timeout: 15_000 });
     await page.locator('[data-react-club-panel="ready"]').waitFor({ state: "attached", timeout: 15_000 });
-    await page.locator('[data-react-pdga-dashboard="ready"]').waitFor({ state: "visible", timeout: 15_000 });
-    await page.locator('[data-react-account-tools="ready"]').waitFor({ state: "visible", timeout: 15_000 });
-    await waitForText(page, "[data-react-account-tools]", "Edit profile", "React account tools");
-    await page.evaluate(() => {
-      window.dispatchEvent(new CustomEvent("gvdg:member-passkey-state", {
-        detail: { busy: false, message: "Passkey setup cancelled." },
-      }));
-    });
-    await waitForText(page, "[data-react-passkey-status]", "Passkey setup cancelled.", "React passkey status");
-    await page.evaluate(() => {
-      window.dispatchEvent(new CustomEvent("gvdg:member-passkey-state", {
-        detail: { busy: false, message: "" },
-      }));
-    });
     await page.locator('[data-react-member-banner="ready"]').waitFor({ state: "visible", timeout: 15_000 });
-    await waitForText(page, "[data-react-member-banner]", `Welcome back, ${memberName}!`, "React member banner");
+    await waitForText(page, "[data-react-home-hero]", memberName, "React home name");
+    if (await page.locator("#myDashboard [data-react-registration-panel]").count()) {
+      throw new Error("Registration panel should not render on Home.");
+    }
     if (memberIsAdmin) {
       await waitForText(page, "[data-react-admin-portal]", "Admin Portal", "React admin portal");
     } else if (await page.locator("[data-react-admin-portal]").count()) {
@@ -398,35 +394,54 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
     await waitForLiveRating(page);
 
     await page.getByRole("tab", { name: "Season" }).click();
-    await waitForText(page, "#membersReactDashboardShell", "Your Season", "season tab title");
+    await waitForText(page, "#membersReactDashboardShell", "Season", "season tab title");
     await expectReactTab(page, "Season");
     await expectDashboardPanel(page, "season", "#mySeason", "Season tab");
     await page.locator("[data-react-season-page]").waitFor({ state: "visible", timeout: 15_000 });
 
     await page.getByRole("tab", { name: "Events" }).click();
-    await waitForText(page, "#membersReactDashboardShell", "Event Registration", "events tab title");
+    await waitForText(page, "#membersReactDashboardShell", "Events", "events tab title");
     await expectReactTab(page, "Events");
     if (await page.locator("[data-react-admin-portal]").count()) {
       throw new Error("React admin portal link should only render on the overview tab.");
     }
     await expectDashboardPanel(page, "events", "#clubRegister", "Events tab");
+    await page.locator('#clubRegister [data-react-registration-panel="ready"]').waitFor({ state: "visible", timeout: 15_000 });
     await openCasualRounds(page, "#clubRegister");
 
-    await page.getByRole("tab", { name: "Board" }).click();
+    await page.getByRole("tab", { name: "More" }).click();
+    await waitForText(page, "#membersReactDashboardShell", "More", "more tab title");
+    await expectReactTab(page, "More");
+    await expectDashboardPanel(page, "more", "#playerMore", "More tab");
+    await page.locator('[data-react-account-tools="ready"]').waitFor({ state: "visible", timeout: 15_000 });
+    await waitForText(page, "[data-react-account-tools]", "Edit profile", "React account tools");
+    await page.evaluate(() => {
+      window.dispatchEvent(new CustomEvent("gvdg:member-passkey-state", {
+        detail: { busy: false, message: "Passkey setup cancelled." },
+      }));
+    });
+    await waitForText(page, "[data-react-passkey-status]", "Passkey setup cancelled.", "React passkey status");
+    await page.evaluate(() => {
+      window.dispatchEvent(new CustomEvent("gvdg:member-passkey-state", {
+        detail: { busy: false, message: "" },
+      }));
+    });
+
+    await openMoreItem(page, "Message board");
     await waitForText(page, "#membersReactDashboardShell", "Member Board", "board tab title");
-    await expectReactTab(page, "Board");
+    await expectReactTab(page, "More");
     await expectDashboardPanel(page, "board", "#clubBoard", "Board tab");
     await page.locator('[data-react-board-panel="ready"]').waitFor({ state: "visible", timeout: 15_000 });
 
-    await page.getByRole("tab", { name: "Tee Signs" }).click();
+    await openMoreItem(page, "Tee signs");
     await waitForText(page, "#membersReactDashboardShell", "Tee Sign Capture", "tee signs tab title");
-    await expectReactTab(page, "Tee Signs");
+    await expectReactTab(page, "More");
     await expectDashboardPanel(page, "tee", "#teeCapture", "Tee Signs tab");
     await page.locator('[data-react-tee-signs-panel="ready"]').waitFor({ state: "visible", timeout: 15_000 });
 
-    await page.getByRole("tab", { name: "Club" }).click();
+    await openMoreItem(page, "Club directory");
     await waitForText(page, "#membersReactDashboardShell", "GVDG Member Directory", "club tab title");
-    await expectReactTab(page, "Club");
+    await expectReactTab(page, "More");
     await page.locator('[data-react-club-panel="ready"]').waitFor({ state: "visible", timeout: 15_000 });
     await expectDashboardPanel(page, "club", "#membersReactClubPanel", "Club tab");
     await waitForText(page, "[data-react-club-panel]", "Membership Growth Since 2004", "React club growth chart");
@@ -456,6 +471,8 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
     const width = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth));
     const viewport = page.viewportSize()?.width || 390;
     if (width > viewport + 1) throw new Error(`Members dashboard has horizontal overflow: ${width}px > ${viewport}px.`);
+    await page.getByRole("tab", { name: "More" }).click();
+    await expectReactTab(page, "More");
     await page.getByRole("button", { name: "Log Out" }).click();
     await page.locator('[data-react-auth-gate="login"]').waitFor({ state: "visible", timeout: 15_000 });
     if (errors.length) throw new Error(errors.join("\n"));

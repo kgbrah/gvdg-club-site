@@ -56,7 +56,7 @@ export function RegistrationProvider({ children }) {
   return h(RegistrationContext.Provider, { value }, children);
 }
 
-function useRegistrationData() {
+export function useRegistrationData() {
   const value = React.useContext(RegistrationContext);
   if (!value) throw new Error("MemberRegistrationPanel requires RegistrationProvider");
   return value;

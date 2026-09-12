@@ -1,20 +1,24 @@
 import React from "react";
+import { CalendarDays, Home, MoreHorizontal, TrendingUp } from "lucide-react";
 
 import { readMemberContext } from "./member-context.js";
 
 const h = React.createElement;
 
 export const TABS = [
-  { key: "overview", label: "Overview", title: "Player Dashboard" },
-  { key: "season", label: "Season", title: "Your Season" },
-  { key: "events", label: "Events", title: "Event Registration" },
-  { key: "board", label: "Board", title: "Member Board" },
-  { key: "tee", label: "Tee Signs", title: "Tee Sign Capture" },
-  { key: "club", label: "Club", title: "GVDG Member Directory" },
+  { key: "overview", label: "Home", title: "Home", nav: true, icon: Home },
+  { key: "events", label: "Events", title: "Events", nav: true, icon: CalendarDays },
+  { key: "season", label: "Season", title: "Season", nav: true, icon: TrendingUp },
+  { key: "more", label: "More", title: "More", nav: true, icon: MoreHorizontal },
+  { key: "board", label: "Board", title: "Member Board", nav: false },
+  { key: "tee", label: "Tee Signs", title: "Tee Sign Capture", nav: false },
+  { key: "club", label: "Club", title: "GVDG Member Directory", nav: false },
 ];
 
 const DEFAULT_TAB = TABS[0];
 const tabKeys = new Set(TABS.map((tab) => tab.key));
+const NAV_TABS = TABS.filter((tab) => tab.nav);
+const MORE_KEYS = new Set(["more", "board", "tee", "club"]);
 
 function safeTab(value) {
   return tabKeys.has(value) ? value : DEFAULT_TAB.key;
@@ -22,6 +26,11 @@ function safeTab(value) {
 
 function tabTitle(key) {
   return TABS.find((tab) => tab.key === key)?.title || DEFAULT_TAB.title;
+}
+
+function navIsActive(tab, current) {
+  if (tab.key === "more") return MORE_KEYS.has(current);
+  return tab.key === current;
 }
 
 function initialState() {
@@ -47,6 +56,15 @@ export function selectDashboardTab(tab) {
 
 export function requestLogout() {
   window.dispatchEvent(new CustomEvent("gvdg:member-logout-requested"));
+}
+
+function navIcon(Icon) {
+  return h(Icon, {
+    size: 22,
+    strokeWidth: 2.2,
+    "aria-hidden": "true",
+    focusable: "false",
+  });
 }
 
 export function MemberDashboardShell() {
@@ -80,7 +98,6 @@ export function MemberDashboardShell() {
     };
   }, []);
 
-  const welcome = state.name ? `Welcome back, ${state.name}!` : "Welcome back!";
   const adminPortal = state.tab === "overview" && state.isAdmin
     ? h(
       "a",
@@ -96,21 +113,22 @@ export function MemberDashboardShell() {
     : null;
 
   return h("div", { className: "member-dashboard-shell-chrome", "data-member-dashboard-shell": state.tab, ref: shellRef }, [
-    h("h2", { className: "section-title", id: "membersReactDashboardTitle", key: "title" }, state.title),
+    h("h2", { className: "section-title player-app-title", id: "membersReactDashboardTitle", key: "title" }, state.title),
+    adminPortal,
     h(
-      "div",
+      "nav",
       {
-        className: "dash-tabs members-react-tabs",
+        className: "player-app-nav",
         role: "tablist",
-        "aria-label": "Member dashboard sections",
-        key: "tabs",
+        "aria-label": "Player app",
+        key: "nav",
       },
-      TABS.map((tab) => {
-        const active = state.tab === tab.key;
+      NAV_TABS.map((tab) => {
+        const active = navIsActive(tab, state.tab);
         return h(
           "button",
           {
-            className: `dash-tab${active ? " active" : ""}`,
+            className: `player-app-nav-btn${active ? " active" : ""}`,
             type: "button",
             role: "tab",
             "aria-selected": active ? "true" : "false",
@@ -118,31 +136,9 @@ export function MemberDashboardShell() {
             key: tab.key,
             onClick: () => selectDashboardTab(tab.key),
           },
-          tab.label,
+          [navIcon(tab.icon), tab.label],
         );
       }),
     ),
-    h(
-      "div",
-      { className: "welcome-banner react-member-banner", "data-react-member-banner": "ready", key: "welcome" },
-      [
-        h("div", { className: "welcome-text", key: "text" }, [
-          h("strong", { key: "name" }, welcome),
-          h("span", { className: "welcome-subtext", key: "subtext" }, "You're viewing the exclusive GVDG member directory."),
-        ]),
-        h(
-          "button",
-          {
-            className: "logout-btn",
-            id: "logoutBtn",
-            key: "logout",
-            onClick: requestLogout,
-            type: "button",
-          },
-          "Log Out",
-        ),
-      ],
-    ),
-    adminPortal,
   ]);
 }

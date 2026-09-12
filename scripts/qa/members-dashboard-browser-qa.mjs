@@ -11,11 +11,12 @@ const repoRoot = path.resolve(scriptDir, "../..");
 const apiBase = "http://127.0.0.1:8788";
 const evidenceDir = path.join(repoRoot, ".omo/evidence/members-dashboard-react");
 const teeUploadPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p94AAAAASUVORK5CYII=", "base64");
-const dashboardPanels = ["#myDashboard", "#mySeason", "#clubRegister", "#clubBoard", "#teeCapture", "#membersReactClubPanel"];
+const dashboardPanels = ["#myDashboard", "#mySeason", "#clubRegister", "#playerMore", "#clubBoard", "#teeCapture", "#membersReactClubPanel"];
 const visibleDashboardPanels = {
   overview: ["#myDashboard"],
   season: ["#mySeason"],
   events: ["#clubRegister"],
+  more: ["#playerMore"],
   board: ["#clubBoard"],
   tee: ["#teeCapture"],
   club: ["#membersReactClubPanel"],
@@ -88,6 +89,12 @@ async function waitForText(page, selector, expected, label) {
 async function expectReactTab(page, name) {
   const selected = await page.getByRole("tab", { name }).getAttribute("aria-selected");
   if (selected !== "true") throw new Error(`Expected React tab ${name} to be selected, got ${selected}`);
+}
+
+async function openMoreItem(page, name) {
+  await page.getByRole("tab", { name: "More" }).click();
+  await expectReactTab(page, "More");
+  await page.getByRole("button", { name }).click();
 }
 
 async function openCasualRounds(page, rootSelector, timeout = 10_000) {
@@ -331,42 +338,27 @@ async function captureState(browser, origin, viewport, slug) {
   await page.waitForSelector("#membersReactBoardPanel:not(:empty)", { state: "attached", timeout: 10_000 });
   await page.waitForSelector("#membersReactTeeSignsPanel:not(:empty)", { state: "attached", timeout: 10_000 });
   await page.waitForSelector("#membersReactClubPanel:not(:empty)", { state: "attached", timeout: 10_000 });
+  await page.waitForSelector("#membersReactMorePanel:not(:empty)", { state: "attached", timeout: 10_000 });
   await expectNoReadinessClasses(page);
-  await expectReactTab(page, "Overview");
+  await expectReactTab(page, "Home");
   await page.waitForSelector('[data-react-overview-dashboard="ready"]', { timeout: 10_000 });
-  await page.waitForSelector('#myDashboard [data-react-registration-panel="ready"]', { timeout: 10_000 });
   await page.waitForSelector('[data-react-board-panel="ready"]', { state: "attached", timeout: 10_000 });
   await page.waitForSelector('[data-react-tee-signs-panel="ready"]', { state: "attached", timeout: 10_000 });
   await page.waitForSelector('[data-react-club-panel="ready"]', { state: "attached", timeout: 10_000 });
   await page.waitForSelector('[data-react-member-directory="ready"]', { state: "attached", timeout: 10_000 });
   await page.waitForSelector('[data-react-meeting-minutes="ready"]', { state: "attached", timeout: 10_000 });
-  await page.waitForSelector('[data-react-pdga-dashboard="ready"]', { timeout: 10_000 });
-  await waitForText(page, "#membersReactRatingPanel", "941", "React live rating");
-  await waitForText(page, "#membersReactRatingPanel", "Memorial Day Showdown 2026", "React long PDGA event title");
-  await assertPdgaRatingsStacked(page, slug);
-  await page.waitForSelector('[data-react-club-ratings="ready"]', { timeout: 10_000 });
   await page.waitForSelector('[data-react-live-scoring="ready"]', { timeout: 10_000 });
   await page.waitForSelector('[data-react-wallet="ready"]', { timeout: 10_000 });
-  await page.waitForSelector('[data-react-account-tools="ready"]', { timeout: 10_000 });
-  await waitForText(page, "[data-react-club-ratings]", "906", "React club ratings");
+  await waitForText(page, "[data-react-home-hero]", "941", "React live rating");
+  await waitForText(page, "[data-react-home-hero]", "QA Admin", "React home name");
   await waitForText(page, "[data-react-wallet]", "$12.50", "React wallet balance");
-  await waitForText(page, "[data-react-account-tools]", "Edit profile", "React account tools");
-  await page.evaluate(() => {
-    window.dispatchEvent(new CustomEvent("gvdg:member-passkey-state", {
-      detail: { busy: false, message: "Passkey setup cancelled." },
-    }));
-  });
-  await waitForText(page, "[data-react-passkey-status]", "Passkey setup cancelled.", "React passkey status");
-  await page.evaluate(() => {
-    window.dispatchEvent(new CustomEvent("gvdg:member-passkey-state", {
-      detail: { busy: false, message: "" },
-    }));
-  });
+  await waitForText(page, "[data-react-home-next]", "GVDG QA Doubles", "React next event");
+  await waitForText(page, "[data-react-home-last-round]", "GVDG QA Weekly", "React last club round");
   await page.waitForSelector('[data-react-member-banner="ready"]', { timeout: 10_000 });
-  await waitForText(page, "[data-react-member-banner]", "Welcome back, QA Admin!", "React member banner");
   await waitForText(page, "[data-react-admin-portal]", "Admin Portal", "React admin portal");
-  await waitForText(page, "#myDashboard [data-react-registration-panel]", "GVDG QA Doubles", "React registration event");
-  await waitForText(page, "#myDashboard [data-react-registration-panel]", "Warm-up round before league", "React casual round");
+  if (await page.locator("#myDashboard [data-react-registration-panel]").count()) {
+    throw new Error("Registration panel should not render on Home.");
+  }
   const migratedLegacyNodes = await page.locator([
     "#dashTabs",
     "#legacyDashboardHead",
@@ -402,19 +394,25 @@ async function captureState(browser, origin, viewport, slug) {
   await captureFullPage(page, path.join(evidenceDir, `${slug}-overview.png`));
 
   await page.getByRole("tab", { name: "Season" }).click();
-  await waitForText(page, "#membersReactDashboardShell", "Your Season", "season title");
+  await waitForText(page, "#membersReactDashboardShell", "Season", "season title");
   await expectReactTab(page, "Season");
   await expectDashboardPanel(page, "season", "#mySeason", "Season tab");
   await page.locator('[data-react-season-page="ready"]').waitFor({ state: "visible", timeout: 10_000 });
   await waitForText(page, "[data-react-season-page]", "2026 Season", "season year heading");
   await waitForText(page, "[data-react-season-page]", "GVDG QA Weekly", "season result row");
   await waitForText(page, "[data-react-season-page]", "GVDG QA League", "season league standing");
+  await page.waitForSelector('[data-react-pdga-dashboard="ready"]', { timeout: 10_000 });
+  await waitForText(page, "#membersReactRatingPanel", "Memorial Day Showdown 2026", "React long PDGA event title");
+  await assertPdgaRatingsStacked(page, slug);
+  await page.waitForSelector('[data-react-club-ratings="ready"]', { timeout: 10_000 });
+  await waitForText(page, "[data-react-club-ratings]", "906", "React club ratings");
   await captureFullPage(page, path.join(evidenceDir, `${slug}-season.png`));
 
   await page.getByRole("tab", { name: "Events" }).click();
-  await waitForText(page, "#membersReactDashboardShell", "Event Registration", "events title");
+  await waitForText(page, "#membersReactDashboardShell", "Events", "events title");
   await expectReactTab(page, "Events");
   await expectDashboardPanel(page, "events", "#clubRegister", "Events tab");
+  await page.locator('#clubRegister [data-react-registration-panel="ready"]').waitFor({ state: "visible", timeout: 10_000 });
   if (await page.locator("[data-react-admin-portal]").count()) {
     throw new Error("React admin portal link should only render on the overview tab.");
   }
@@ -442,9 +440,28 @@ async function captureState(browser, origin, viewport, slug) {
   await page.waitForTimeout(250);
   await captureFullPage(page, path.join(evidenceDir, `${slug}-events.png`));
 
-  await page.getByRole("tab", { name: "Board" }).click();
+  await page.getByRole("tab", { name: "More" }).click();
+  await waitForText(page, "#membersReactDashboardShell", "More", "more title");
+  await expectReactTab(page, "More");
+  await expectDashboardPanel(page, "more", "#playerMore", "More tab");
+  await page.waitForSelector('[data-react-account-tools="ready"]', { timeout: 10_000 });
+  await waitForText(page, "[data-react-account-tools]", "Edit profile", "React account tools");
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("gvdg:member-passkey-state", {
+      detail: { busy: false, message: "Passkey setup cancelled." },
+    }));
+  });
+  await waitForText(page, "[data-react-passkey-status]", "Passkey setup cancelled.", "React passkey status");
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent("gvdg:member-passkey-state", {
+      detail: { busy: false, message: "" },
+    }));
+  });
+  await captureFullPage(page, path.join(evidenceDir, `${slug}-more.png`));
+
+  await openMoreItem(page, "Message board");
   await waitForText(page, "#membersReactDashboardShell", "Member Board", "board title");
-  await expectReactTab(page, "Board");
+  await expectReactTab(page, "More");
   await expectDashboardPanel(page, "board", "#clubBoard", "Board tab");
   await page.locator('[data-react-board-panel="ready"]').waitFor({ state: "visible", timeout: 10_000 });
   await waitForText(page, "[data-react-board-panel]", "League night", "React board fixture");
@@ -469,9 +486,9 @@ async function captureState(browser, origin, viewport, slug) {
   await page.waitForTimeout(250);
   await captureFullPage(page, path.join(evidenceDir, `${slug}-board.png`));
 
-  await page.getByRole("tab", { name: "Tee Signs" }).click();
+  await openMoreItem(page, "Tee signs");
   await waitForText(page, "#membersReactDashboardShell", "Tee Sign Capture", "tee signs title");
-  await expectReactTab(page, "Tee Signs");
+  await expectReactTab(page, "More");
   await expectDashboardPanel(page, "tee", "#teeCapture", "Tee Signs tab");
   await page.locator('[data-react-tee-signs-panel="ready"]').waitFor({ state: "visible", timeout: 10_000 });
   await waitForText(page, "[data-react-tee-signs-panel]", "Blue - Par 3", "React tee sign fixture");
@@ -490,9 +507,9 @@ async function captureState(browser, origin, viewport, slug) {
   await page.waitForTimeout(250);
   await captureFullPage(page, path.join(evidenceDir, `${slug}-tee.png`));
 
-  await page.getByRole("tab", { name: "Club" }).click();
+  await openMoreItem(page, "Club directory");
   await waitForText(page, "#membersReactDashboardShell", "GVDG Member Directory", "club title");
-  await expectReactTab(page, "Club");
+  await expectReactTab(page, "More");
   await expectDashboardPanel(page, "club", "#membersReactClubPanel", "Club tab");
   await page.locator('[data-react-club-panel="ready"]').waitFor({ state: "visible", timeout: 10_000 });
   const clubPanel = page.locator('[data-react-club-panel]');
@@ -530,6 +547,8 @@ async function captureState(browser, origin, viewport, slug) {
   await captureFullPage(page, path.join(evidenceDir, `${slug}-club.png`));
 
   await assertNoHorizontalOverflow(page, slug);
+  await page.getByRole("tab", { name: "More" }).click();
+  await expectReactTab(page, "More");
   await page.getByRole("button", { name: "Log Out" }).click();
   await page.locator('[data-react-auth-gate="login"]').waitFor({ state: "visible", timeout: 10_000 });
   if (errors.length) throw new Error(errors.join("\n"));

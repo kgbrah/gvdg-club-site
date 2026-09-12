@@ -2,9 +2,10 @@ import { NAME_KEY, PDGA_KEY, storageGet } from "./api.js";
 import { readMemberContext } from "./member-context.js";
 
 const DASH_TITLES = {
-  overview: "Player Dashboard",
-  season: "Your Season",
-  events: "Event Registration",
+  overview: "Home",
+  season: "Season",
+  events: "Events",
+  more: "More",
   board: "Member Board",
   tee: "Tee Sign Capture",
   club: "GVDG Member Directory",

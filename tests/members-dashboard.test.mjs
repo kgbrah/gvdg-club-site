@@ -146,15 +146,22 @@ test('member dashboard React registration section stays available for logged-in 
   assert.match(casual, /data-react-casual-form/);
 });
 
-test('overview dashboard puts the register-for-events box below ratings and above recent tournaments', () => {
+test('overview dashboard is a compact home and keeps registration on Events', () => {
   const overview = readFileSync('src/members-app/overview-dashboard.js', 'utf8');
-  const pdga = readFileSync('src/members-app/pdga-dashboard.js', 'utf8');
+  const more = readFileSync('src/members-app/more-page.js', 'utf8');
+  const shell = readFileSync('src/members-app/dashboard-shell.js', 'utf8');
   const html = readFileSync('gvdg-members.html', 'utf8');
-  assert.match(overview, /import \{ MemberRegistrationPanel \} from "\.\/registration-panel\.js"/);
-  assert.match(overview, /h\(PdgaDashboard[\s\S]*h\(MemberRegistrationPanel/);
-  assert.match(pdga, /\.\.\.extras,\s*events\.length \? h\("details", \{ className: "dash-collapse", key: "events" \}/);
-  assert.match(pdga, /`Recent Tournaments \(\$\{Math\.min\(events\.length, 6\)\}\)`/);
-  assert.match(html, /\.react-pdga-dashboard \.react-registration-panel/);
+  assert.doesNotMatch(overview, /MemberRegistrationPanel/);
+  assert.match(overview, /data-react-home-hero/);
+  assert.match(overview, /LiveScoringPanel, \{ token, compact: true/);
+  assert.match(overview, /WalletPanel, \{ token, compact: true/);
+  assert.match(overview, /selectDashboardTab\("events"\)/);
+  assert.match(more, /Club directory/);
+  assert.match(more, /Message board/);
+  assert.match(more, /Tee signs/);
+  assert.match(shell, /label: "Home"/);
+  assert.match(shell, /player-app-nav/);
+  assert.match(html, /body\[data-member-dashboard-tab="more"\] #playerMore/);
   assert.match(html, /\.dash-collapse-summary \{ cursor: pointer; \}/);
   assert.doesNotMatch(html, /body\[data-member-dashboard-tab="overview"\] #clubRegister/);
   assert.match(html, /body\[data-member-dashboard-tab="events"\] #clubRegister/);
@@ -175,8 +182,8 @@ test('overview dashboard collapses recent tournaments, casual rounds, and live s
   assert.match(stagingQa, /overview: \["#myDashboard"\]/);
   assert.match(browserQa, /async function openCasualRounds/);
   assert.match(stagingQa, /async function openCasualRounds/);
-  assert.match(browserQa, /#myDashboard \[data-react-registration-panel="ready"\]/);
-  assert.match(stagingQa, /#myDashboard \[data-react-registration-panel="ready"\]/);
+  assert.match(browserQa, /#clubRegister \[data-react-registration-panel="ready"\]/);
+  assert.match(stagingQa, /#clubRegister \[data-react-registration-panel="ready"\]/);
 });
 
 test('member dashboard React registration panel surfaces live events and lists every registered event', () => {
