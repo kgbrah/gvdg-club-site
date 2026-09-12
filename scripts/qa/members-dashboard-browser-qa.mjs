@@ -334,7 +334,7 @@ async function captureState(browser, origin, viewport, slug) {
   await expectNoReadinessClasses(page);
   await expectReactTab(page, "Overview");
   await page.waitForSelector('[data-react-overview-dashboard="ready"]', { timeout: 10_000 });
-  await page.waitForSelector('[data-react-registration-panel="ready"]', { timeout: 10_000 });
+  await page.waitForSelector('#myDashboard [data-react-registration-panel="ready"]', { timeout: 10_000 });
   await page.waitForSelector('[data-react-board-panel="ready"]', { state: "attached", timeout: 10_000 });
   await page.waitForSelector('[data-react-tee-signs-panel="ready"]', { state: "attached", timeout: 10_000 });
   await page.waitForSelector('[data-react-club-panel="ready"]', { state: "attached", timeout: 10_000 });
@@ -365,8 +365,8 @@ async function captureState(browser, origin, viewport, slug) {
   await page.waitForSelector('[data-react-member-banner="ready"]', { timeout: 10_000 });
   await waitForText(page, "[data-react-member-banner]", "Welcome back, QA Admin!", "React member banner");
   await waitForText(page, "[data-react-admin-portal]", "Admin Portal", "React admin portal");
-  await waitForText(page, "[data-react-registration-panel]", "GVDG QA Doubles", "React registration event");
-  await waitForText(page, "[data-react-registration-panel]", "Warm-up round before league", "React casual round");
+  await waitForText(page, "#myDashboard [data-react-registration-panel]", "GVDG QA Doubles", "React registration event");
+  await waitForText(page, "#myDashboard [data-react-registration-panel]", "Warm-up round before league", "React casual round");
   const migratedLegacyNodes = await page.locator([
     "#dashTabs",
     "#legacyDashboardHead",

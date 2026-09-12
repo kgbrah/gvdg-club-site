@@ -7,6 +7,7 @@ test('member dashboard React registration panel includes casual round posts', ()
   const casual = readFileSync('src/members-app/registration-casual.js', 'utf8');
   assert.match(panel, /requestJson\("\/casual-rounds"/);
   assert.match(panel, /casualRequests/);
+  assert.match(panel, /export function RegistrationProvider/);
   assert.match(casual, /CasualRoundCard/);
   assert.match(casual, /h\("details", \{ className: "dash-collapse"/);
   assert.match(casual, /Casual rounds/);
@@ -174,6 +175,8 @@ test('overview dashboard collapses recent tournaments, casual rounds, and live s
   assert.match(stagingQa, /overview: \["#myDashboard"\]/);
   assert.match(browserQa, /async function openCasualRounds/);
   assert.match(stagingQa, /async function openCasualRounds/);
+  assert.match(browserQa, /#myDashboard \[data-react-registration-panel="ready"\]/);
+  assert.match(stagingQa, /#myDashboard \[data-react-registration-panel="ready"\]/);
 });
 
 test('member dashboard React registration panel surfaces live events and lists every registered event', () => {

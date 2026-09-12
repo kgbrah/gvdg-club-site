@@ -164,6 +164,7 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(dashboardApp, /MemberOverviewDashboard/);
   assert.match(dashboardApp, /MemberSeasonPage/);
   assert.match(dashboardApp, /MemberRegistrationPanel/);
+  assert.match(dashboardApp, /RegistrationProvider/);
   assert.match(dashboardApp, /MemberBoardPanel/);
   assert.match(dashboardApp, /MemberTeeSignsPanel/);
   assert.match(dashboardApp, /MemberClubPanel/);

@@ -332,7 +332,7 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
     await waitForText(page, "#membersReactDashboardShell", "Player Dashboard", "React dashboard title");
     await expectReactTab(page, "Overview");
     await page.locator('[data-react-overview-dashboard="ready"]').waitFor({ state: "visible", timeout: 15_000 });
-    await page.locator('[data-react-registration-panel="ready"]').waitFor({ state: "visible", timeout: 15_000 });
+    await page.locator('#myDashboard [data-react-registration-panel="ready"]').waitFor({ state: "visible", timeout: 15_000 });
     await page.locator('[data-react-board-panel="ready"]').waitFor({ state: "attached", timeout: 15_000 });
     await page.locator('[data-react-tee-signs-panel="ready"]').waitFor({ state: "attached", timeout: 15_000 });
     await page.locator('[data-react-club-panel="ready"]').waitFor({ state: "attached", timeout: 15_000 });
