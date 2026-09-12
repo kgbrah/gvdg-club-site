@@ -81,4 +81,16 @@ test("withLiveCtpLeaders fills an empty winner from the live card claim", () => 
     [{ id: 9, leaderName: "Ann" }],
   );
   assert.equal(awarded[0].winner_name, "Bo");
+  const replaced = withLiveCtpLeaders(
+    [{ id: 9, hole: 7, winner_name: "Ann", live_leader: true }],
+    [{ id: 9, leaderName: "Bo" }],
+  );
+  assert.equal(replaced[0].winner_name, "Bo");
+  assert.equal(replaced[0].live_leader, true);
+  const cleared = withLiveCtpLeaders(
+    [{ id: 9, hole: 7, winner_name: "Ann", live_leader: true }],
+    [{ id: 9, leaderName: null }],
+  );
+  assert.equal(cleared[0].winner_name, "");
+  assert.equal(cleared[0].live_leader, false);
 });

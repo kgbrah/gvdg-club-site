@@ -16,6 +16,7 @@ export interface PlayerState {
   team?: string | null;
   startingHole?: number | null; // assigned shotgun start (Track G G4); display-only, doesn't affect scoring
   cardId?: string | null; // which scoring card/group this player is on (a player may score only their own card)
+  ctpEligible?: boolean; // false when the event charges a CTP fee and this player did not buy in
   scores: Record<number, number>; // hole -> strokes
   scorecards?: Record<number, Record<string, number>>;
   scoredBy?: Record<number, string | null>; // hole -> who last set it (for live scoring-conflict detection)

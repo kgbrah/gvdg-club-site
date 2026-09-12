@@ -122,6 +122,7 @@ export function mineData(meta: LiveMeta | null, players: PlayerState[], authMemb
       scorecards: player.scorecards ?? {},
       isMe: index === meIdx,
       canEnterScorecard: canEnterScorecard(player, authMember),
+      ctpEligible: player.ctpEligible !== false,
     }));
   const issues = scorecardIssues(meta, players, holes, scoring);
   return {

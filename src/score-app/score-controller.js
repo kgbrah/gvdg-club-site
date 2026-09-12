@@ -507,6 +507,8 @@ export function startScoreApp(options) {
             else if (r.status === 401) toast('Session expired — sign in again');
             else if (r.status === 409) toast('Round isn’t live');
             else if (r.status === 404) toast('That CTP isn’t on this event');
+            else if (r.data && r.data.error === "not_in_ctp") toast('That player isn’t in the CTP');
+            else if (r.data && r.data.error === "wrong_division") toast('That CTP is a different division');
             else toast('Could not mark CTP');
         }
         function renderHole() {

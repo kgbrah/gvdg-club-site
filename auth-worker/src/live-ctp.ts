@@ -94,11 +94,34 @@ export function canCastCtpVote(player: PlayerState, authMember: string | null, a
   return canEnterScorecard(player, authMember);
 }
 
+export function parseCtpAddon(addons: unknown): boolean {
+  if (addons == null) return false;
+  try {
+    const parsed = typeof addons === "string" ? JSON.parse(addons) : addons;
+    return Boolean(parsed && typeof parsed === "object" && (parsed as { ctp?: unknown }).ctp === true);
+  } catch {
+    return false;
+  }
+}
+
+export function ctpEligibleForStart(input: {
+  readonly buyInRequired: boolean;
+  readonly memberId: string | null | undefined;
+  readonly enteredMemberIds: ReadonlySet<string>;
+}): boolean {
+  if (!input.buyInRequired) return true;
+  return Boolean(input.memberId && input.enteredMemberIds.has(input.memberId));
+}
+
+export function playerCtpEligible(player: { readonly ctpEligible?: boolean } | null | undefined): boolean {
+  return player?.ctpEligible !== false;
+}
+
 export function divisionMatches(ctpDivision: string | null | undefined, playerDivision: string | null | undefined): boolean {
   const ctp = String(ctpDivision || "").trim().toLowerCase();
   if (!ctp) return true;
   const player = String(playerDivision || "").trim().toLowerCase();
-  if (!player) return true;
+  if (!player) return false;
   return ctp === player;
 }
 
@@ -126,7 +149,7 @@ export function currentCtpLeader(state: CtpLiveState, players: readonly PlayerSt
   }
   if (!best) return null;
   const player = players[best.playerIndex];
-  if (!player || player.removed) return null;
+  if (!player || player.removed || !playerCtpEligible(player)) return null;
   return {
     ctpId: state.ctpId,
     hole: state.hole,
@@ -207,11 +230,20 @@ export function ctpAwardWinners(store: LiveCtpStore, players: readonly PlayerSta
   return winners;
 }
 
+export function dropLiveCtp(store: LiveCtpStore, ctpId: number): LiveCtpStore {
+  const key = String(ctpId);
+  if (!(key in store)) return store;
+  const next = { ...store };
+  delete next[key];
+  return next;
+}
+
 export function recordCtpVote(input: RecordCtpVoteInput): RecordCtpVoteResult {
   const scorer = input.players[input.scorerIndex];
   if (!scorer || scorer.removed) return { ok: false, error: "bad_scorer", status: 400 };
   const nominee = input.players[input.nomineeIndex];
   if (!nominee || nominee.removed) return { ok: false, error: "no_player", status: 404 };
+  if (!playerCtpEligible(nominee)) return { ok: false, error: "not_in_ctp", status: 400 };
   if ((scorer.cardId ?? null) !== (nominee.cardId ?? null)) return { ok: false, error: "wrong_card", status: 403 };
   if (!divisionMatches(input.ctp.division, nominee.division)) return { ok: false, error: "wrong_division", status: 400 };
 
@@ -238,7 +270,10 @@ export function recordCtpVote(input: RecordCtpVoteInput): RecordCtpVoteResult {
   const mates = activeCardPlayers(input.players, scorer.cardId ?? null);
   const nomineeIndex = agreedNominee(cardVotes, mates);
   if (nomineeIndex != null) {
-    state.confirmed = { ...state.confirmed, [card]: { playerIndex: nomineeIndex, at: input.now } };
+    const previous = state.confirmed[card];
+    if (!previous || previous.playerIndex !== nomineeIndex) {
+      state.confirmed = { ...state.confirmed, [card]: { playerIndex: nomineeIndex, at: input.now } };
+    }
   }
 
   const store = { ...input.store, [key]: state };

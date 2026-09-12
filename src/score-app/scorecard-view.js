@@ -187,18 +187,21 @@ function CtpClaim(props) {
   if (!claim || !claim.ctps || !claim.ctps.length) return null;
   const canVote = typeof props.onCtpVote === "function";
   return h("div", { className: "card ctp-claim", key: "ctp-claim" }, claim.ctps.map((ctp) => {
+    const nominees = Array.isArray(ctp.nominees) ? ctp.nominees : (claim.nominees || []);
     const status = ctp.agreed
       ? (ctp.nomineeName || "this card") + " is this card's CTP"
       : ctp.missingNames && ctp.missingNames.length
         ? "Waiting on " + ctp.missingNames.join(", ")
-        : "Mark who is closest";
+        : nominees.length
+          ? "Mark who is closest"
+          : "No one on this card is in this CTP";
     const leader = ctp.leaderName ? "Live leader: " + ctp.leaderName : "No live CTP yet";
     return h("div", { className: "ctp-claim-block", key: ctp.id || ctp.hole }, [
       h("div", { className: "ctp-claim-title", key: "title" }, "CTP hole " + ctp.hole + (ctp.division ? " · " + ctp.division : "")),
       h("div", { className: "ctp-claim-leader", key: "leader" }, leader),
       h("div", { className: "muted", key: "status" }, status + (ctp.needed ? " (" + ctp.voted + "/" + ctp.needed + ")" : "")),
-      canVote
-        ? h("div", { className: "ctp-claim-picks", key: "picks" }, (claim.nominees || []).map((nominee) =>
+      canVote && nominees.length
+        ? h("div", { className: "ctp-claim-picks", key: "picks" }, nominees.map((nominee) =>
           h("button", {
             className: "btn small" + (ctp.myVote === nominee.index ? " ctp-picked" : " secondary"),
             disabled: ctp.myVote === nominee.index,

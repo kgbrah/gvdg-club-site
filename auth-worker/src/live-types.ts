@@ -39,6 +39,8 @@ export interface LiveMeta {
   roundConfig?: LiveScoringConfig;
   rev?: number;
   overrides?: Record<string, { par?: number; distance_ft?: number }>;
+  /** True when the event charges a CTP buy-in; walk-ons added after start are not eligible. */
+  ctpBuyInRequired?: boolean;
 }
 
 export interface StartBody {
@@ -53,10 +55,11 @@ export interface StartBody {
   udiscCourseId?: string | null;
   holes: { hole: number; par: number; distance_ft?: number | null; tee_sign_id?: number | null; tee?: { label?: string | null; lat?: number | null; lng?: number | null } | null; target?: { label?: string | null; lat?: number | null; lng?: number | null } | null }[];
   liveScoringConfig?: LiveScoringConfig;
-  players: { memberId?: string | null; name: string; division?: string | null; team?: string | null; pairLabel?: string | null; startingHole?: number | null; cardId?: string | null }[];
+  players: { memberId?: string | null; name: string; division?: string | null; team?: string | null; pairLabel?: string | null; startingHole?: number | null; cardId?: string | null; ctpEligible?: boolean }[];
   startedAt?: string;
   cardSize?: number;
   weatherLocation?: WeatherLocation | null;
+  ctpBuyInRequired?: boolean;
 }
 
 export interface ScoreBody {

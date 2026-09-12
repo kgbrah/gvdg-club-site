@@ -6,7 +6,7 @@
 // snapshot + ws reads are public). The DO trusts requests it receives.
 
 import { normalizeScorecards, playerScorerId, purgeScorerVotes, purgeScoreTargetScorerVotes, recordScoreTargetVote } from "./live-consensus.js";
-import { canCastCtpVote, recordCtpVote, type LiveCtpStore } from "./live-ctp.js";
+import { canCastCtpVote, dropLiveCtp, recordCtpVote, type LiveCtpStore } from "./live-ctp.js";
 import { isLiveFormatError, normalizeLiveScoringConfig, normalizePairLabel, type LiveScoringConfig } from "./live-format.js";
 import { finalizeLiveEvent } from "./live-finalize.js";
 import { updateLivePairs } from "./live-pairs.js";
@@ -113,6 +113,7 @@ export class LiveEventDO {
     if (action === "start") return this.start(body as StartBody);
     if (action === "score") return this.score(body as ScoreBody, authMember, authAdmin);
     if (action === "ctp") return this.claimCtp(body as CtpVoteBody, authMember, authAdmin);
+    if (action === "ctp-forget") return this.forgetCtp(body as { ctpId?: number }, authAdmin);
     if (action === "join") return this.join(authMember, (body as { name?: string }).name); // casual round: caller joins
     if (action === "guest") return this.addGuest(authMember, (body as { name?: string; team?: string }).name, (body as { team?: string }).team); // add a non-member to my card (+ pair label for doubles)
     if (action === "remove") return this.removePlayer(body as RemoveBody, authMember, authAdmin); // drop a player (accidental/left/no-show)
@@ -140,7 +141,7 @@ export class LiveEventDO {
       if (isLiveFormatError(error)) return j({ error: "invalid_live_scoring_config", code: error.code, message: error.message }, 400);
       throw error;
     }
-    this.meta = { eventId: b.eventId ?? 0, casual: !!b.casual, roundCode: b.roundCode ?? null, courseId: b.courseId ?? null, layoutId: b.layoutId ?? null, createdBy: b.createdBy ?? null, courseName: b.courseName ?? null, layoutName: b.layoutName ?? null, udiscCourseId: b.udiscCourseId ?? null, holes, status: "live", startedAt: b.startedAt ?? "", weather: createWeatherState(b.weatherLocation ?? null), roundConfig, overrides: {} };
+    this.meta = { eventId: b.eventId ?? 0, casual: !!b.casual, roundCode: b.roundCode ?? null, courseId: b.courseId ?? null, layoutId: b.layoutId ?? null, createdBy: b.createdBy ?? null, courseName: b.courseName ?? null, layoutName: b.layoutName ?? null, udiscCourseId: b.udiscCourseId ?? null, holes, status: "live", startedAt: b.startedAt ?? "", weather: createWeatherState(b.weatherLocation ?? null), roundConfig, overrides: {}, ctpBuyInRequired: b.ctpBuyInRequired === true };
     this.liveCtps = {};
     this.players = (Array.isArray(b.players) ? b.players : []).map((p) => ({
       memberId: p.memberId ?? null,
@@ -149,6 +150,7 @@ export class LiveEventDO {
       team: p.team ?? p.pairLabel ?? null,
       startingHole: p.startingHole ?? null,
       cardId: p.cardId ?? null,
+      ctpEligible: p.ctpEligible !== false,
       scores: {},
       scorecards: {},
     }));
@@ -243,7 +245,7 @@ export class LiveEventDO {
       }
     } else {
       const cardId = this.meta.casual ? "c0" : (this.players[0]?.cardId ?? "c0");
-      this.players.push({ memberId: authMember, name: String(name || "Player").slice(0, 60), division: null, startingHole: null, cardId, scores: {}, scorecards: {} });
+      this.players.push({ memberId: authMember, name: String(name || "Player").slice(0, 60), division: null, startingHole: null, cardId, scores: {}, scorecards: {}, ctpEligible: this.meta.ctpBuyInRequired !== true });
       await this.persist();
       this.broadcast();
     }
@@ -259,7 +261,7 @@ export class LiveEventDO {
     if (!me) return j({ error: "not_on_card" }, 403);
     const nm = String(name || "").trim();
     if (!nm) return j({ error: "name_required" }, 400);
-    this.players.push({ memberId: null, name: nm.slice(0, 60), division: null, team: normalizePairLabel(team), startingHole: null, cardId: me.cardId ?? "c0", scores: {}, scorecards: {} });
+    this.players.push({ memberId: null, name: nm.slice(0, 60), division: null, team: normalizePairLabel(team), startingHole: null, cardId: me.cardId ?? "c0", scores: {}, scorecards: {}, ctpEligible: this.meta.ctpBuyInRequired !== true });
     await this.persist();
     this.broadcast();
     return j(mineData(this.meta, this.players, authMember, this.liveCtps));
@@ -399,6 +401,18 @@ export class LiveEventDO {
     });
     if (!result.ok) return j({ error: result.error }, result.status);
     this.liveCtps = result.store;
+    await this.persist();
+    this.broadcast();
+    return j(this.snapshot());
+  }
+
+  private async forgetCtp(b: { ctpId?: number }, authAdmin: boolean): Promise<Response> {
+    if (!authAdmin) return j({ error: "forbidden" }, 403);
+    const ctpId = Number(b.ctpId);
+    if (!Number.isInteger(ctpId) || ctpId <= 0) return j({ error: "invalid_ctp" }, 400);
+    const next = dropLiveCtp(this.liveCtps, ctpId);
+    if (next === this.liveCtps) return j(this.snapshot());
+    this.liveCtps = next;
     await this.persist();
     this.broadcast();
     return j(this.snapshot());

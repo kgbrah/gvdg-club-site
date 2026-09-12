@@ -7,6 +7,7 @@ import { kvRateLimited } from "./kv-rate-limit.js";
 import { asInt, asStr } from "./input.js";
 import { isLiveFormatError, normalizeLiveScoringConfigFromLegacy, type LiveScoringConfig } from "./live-format.js";
 import { scoringState } from "./live-state.js";
+import { ctpEligibleForStart, parseCtpAddon } from "./live-ctp.js";
 import { assignCards, type PlayerState } from "./scoring.js";
 import { weatherLocationForCourse } from "./weather.js";
 
@@ -58,7 +59,7 @@ export async function startLiveEvent(
   const evLayout = ev.layout_id != null ? ((await db.getLayout(env.DB, ev.layout_id)) as { name?: string | null; course_id?: number | null } | null) : null;
   const evCourse = evLayout?.course_id != null ? ((await db.getCourse(env.DB, evLayout.course_id)) as { name?: string | null; lat?: number | null; lng?: number | null } | null) : null;
   const weatherLocation = weatherLocationForCourse(evCourse, evLayout); // null unless the course has coords
-  const eventConfig = (await db.getEventConfig(env.DB, eid)) as { live_scoring_config?: unknown; play_format?: unknown } | null;
+  const eventConfig = (await db.getEventConfig(env.DB, eid)) as { live_scoring_config?: unknown; play_format?: unknown; ctp_fee_cents?: number | null } | null;
   let liveScoringConfig: LiveScoringConfig;
   try {
     liveScoringConfig = normalizeLiveScoringConfigFromLegacy({
@@ -71,11 +72,19 @@ export async function startLiveEvent(
     if (isLiveFormatError(error)) return json({ error: "invalid_live_scoring_config" }, 400, origin);
     throw error;
   }
-  const regs = (await db.listRegistrations(env.DB, eid)) as { member_id?: string; name?: string; division?: string | null; starting_hole?: number | null; team?: string | null }[];
+  const regs = (await db.listRegistrations(env.DB, eid)) as { member_id?: string; name?: string; division?: string | null; starting_hole?: number | null; team?: string | null; addons?: string | null }[];
   // Seed the round with BOTH registered players AND manually-added (event_players) walk-ons — nobody is
   // dropped regardless of how they were entered. (A registered player who was also manually added shows
   // once; the registration wins since it carries division / starting hole / check-in.)
-  const players = unionRosterPlayers(regs, Array.isArray(ev.players) ? ev.players : []);
+  const roster = unionRosterPlayers(regs, Array.isArray(ev.players) ? ev.players : []);
+  const buyInRequired = (Number(eventConfig?.ctp_fee_cents) || 0) > 0;
+  const enteredMemberIds = new Set(
+    regs.filter((row) => row.member_id && parseCtpAddon(row.addons)).map((row) => String(row.member_id)),
+  );
+  const players = roster.map((player) => ({
+    ...player,
+    ctpEligible: ctpEligibleForStart({ buyInRequired, memberId: player.memberId, enteredMemberIds }),
+  }));
   const validationPlayers: PlayerState[] = players.map((player) => ({ ...player, scores: {}, scorecards: {} }));
   assignCards(validationPlayers);
   const targetValidation = scoringState({ eventId: eid, holes, status: "live", startedAt: "", roundConfig: liveScoringConfig }, validationPlayers);
@@ -85,7 +94,7 @@ export async function startLiveEvent(
   if (startError) {
     return json({ error: "invalid_score_targets", code: startError.code, message: startError.message }, 400, origin);
   }
-  const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, courseName: evCourse?.name ?? null, layoutName: evLayout?.name ?? null, holes, players, liveScoringConfig, startedAt: new Date().toISOString(), weatherLocation }) });
+  const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, courseName: evCourse?.name ?? null, layoutName: evLayout?.name ?? null, holes, players, liveScoringConfig, startedAt: new Date().toISOString(), weatherLocation, ctpBuyInRequired: buyInRequired }) });
   const data = await r.json().catch(() => ({}));
   if (r.status === 200) await db.updateEvent(env.DB, eid, { status: "live" });
   return json(data, r.status, origin);

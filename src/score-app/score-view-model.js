@@ -25,6 +25,13 @@ export function isMatchplayScoring(state) {
   return Boolean(state.roundConfig && state.roundConfig.scoringStyle === "matchplay");
 }
 
+export function ctpNomineeEligible(player, ctp) {
+  if (!player || player.ctpEligible === false) return false;
+  const division = String((ctp && ctp.division) || "").trim().toLowerCase();
+  if (!division) return true;
+  return String(player.division || "").trim().toLowerCase() === division;
+}
+
 export function scoreTargetForPlayer(state, index) {
   return (state.scoreTargets || []).find((target) =>
     target && Array.isArray(target.playerIndexes) && target.playerIndexes.indexOf(index) >= 0) || null;
@@ -195,7 +202,7 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
   const liveCtps = state.snap && Array.isArray(state.snap.liveCtps) ? state.snap.liveCtps : [];
   const liveById = new Map(liveCtps.map((ctp) => [String(ctp.id), ctp]));
   const cardmates = state.cardmates || [];
-  const cardNames = cardmates.map((player) => player.name);
+  const voteIndex = scorerIndex ?? state.myIndex;
   const holeCtps = (pots.currentHoleCtps.length ? pots.currentHoleCtps : liveCtps.filter((ctp) => ctp && ctp.hole === hole.hole)).map((ctp) => {
     const live = liveById.get(String(ctp.id));
     const card = live && Array.isArray(live.cards)
@@ -203,13 +210,14 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
       : null;
     const votes = card && Array.isArray(card.votes) ? card.votes : [];
     const votedIndexes = new Set(votes.map((vote) => vote.playerIndex));
-    const voteIndex = scorerIndex ?? state.myIndex;
-    const myVote = live && live.myVote != null
-      ? live.myVote
-      : (votes.find((vote) => vote.playerIndex === voteIndex) || {}).nomineeIndex;
+    const myVote = (votes.find((vote) => vote.playerIndex === voteIndex) || {}).nomineeIndex;
     const missingNames = live && Array.isArray(live.missingNames)
       ? live.missingNames
       : cardmates.filter((player) => !votedIndexes.has(player.index)).map((player) => player.name);
+    const nominees = cardmates.filter((player) => ctpNomineeEligible(player, live || ctp)).map((player) => ({
+      index: player.index,
+      label: player.name + (player.isMe ? " (you)" : ""),
+    }));
     return {
       id: live ? live.id : ctp.id,
       hole: live ? live.hole : ctp.hole,
@@ -221,12 +229,9 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
       missingNames,
       needed: live && live.needed != null ? live.needed : cardmates.length,
       voted: live && live.voted != null ? live.voted : votedIndexes.size,
+      nominees,
     };
   });
-  const ctpNominees = (state.cardmates || []).map((player) => ({
-    index: player.index,
-    label: player.name + (player.isMe ? " (you)" : ""),
-  }));
 
   return {
     atEnd: state.holeIdx >= state.holes.length - 1,
@@ -236,7 +241,6 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
     ctpClaim: holeCtps.length
       ? {
           ctps: holeCtps,
-          nominees: ctpNominees,
         }
       : null,
     dormie: isMatchDormie(state),

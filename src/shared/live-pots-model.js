@@ -53,10 +53,17 @@ export function withLiveCtpLeaders(ctps, liveCtps) {
     if (row && row.id != null) byId.set(String(row.id), row);
   }
   return (Array.isArray(ctps) ? ctps : []).map((ctp) => {
-    if (!ctp || ctp.winner_name) return ctp;
+    if (!ctp) return ctp;
+    const official = ctp.winner_name && ctp.live_leader !== true;
+    if (official) return ctp;
     const live = byId.get(String(ctp.id));
-    if (!live || !live.leaderName) return ctp;
-    return { ...ctp, winner_name: live.leaderName, live_leader: true };
+    if (live && live.leaderName) {
+      return { ...ctp, winner_name: live.leaderName, live_leader: true };
+    }
+    if (ctp.live_leader) {
+      return { ...ctp, winner_name: "", live_leader: false };
+    }
+    return ctp;
   });
 }
 
