@@ -5,6 +5,7 @@ import { HoleMap } from "../shared/hole-map.js";
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
 import { LeaderboardTable } from "./leaderboard-sheet.js";
+import { watchHoleScoreChips, watchMatchCards, watchStrokeHoleChips } from "./score-view-model.js";
 
 const h = React.createElement;
 
@@ -37,12 +38,75 @@ function WatchTeeSign(props) {
   ]);
 }
 
+function WatchHoleChips({ chips }) {
+  if (!chips || !chips.length) return null;
+  return h("div", { className: "watch-hole-chips", key: "chips" }, chips.map((chip) =>
+    h("span", {
+      className: "watch-hole-chip " + (chip.result || "") + " " + (chip.className || ""),
+      key: chip.key,
+    }, [
+      h("span", { key: "name" }, chip.name),
+      h("span", { className: "rel " + chip.className, key: "score" }, chip.strokes + " " + chip.label),
+    ]),
+  ));
+}
+
+function WatchStrokeStrip({ chips }) {
+  if (!chips || !chips.length) return null;
+  return h("div", { className: "card watch-stroke-strip", key: "stroke" }, [
+    h("span", { className: "muted", key: "label" }, "Thru this hole"),
+    h(WatchHoleChips, { chips, key: "chips" }),
+  ]);
+}
+
+function WatchMatchCards({ cards }) {
+  if (!cards || !cards.length) return null;
+  return h("div", { className: "watch-match-list", key: "matches" }, cards.map((card) =>
+    h("div", { className: "card watch-match-card", key: card.key }, [
+      h("div", { className: "watch-match-head", key: "head" }, [
+        h("strong", { key: "title" }, card.title),
+        h("span", { className: "watch-match-status", key: "status" }, card.status),
+      ]),
+      h("p", { className: "muted watch-match-thru", key: "thru" }, "Thru " + card.thru),
+      card.chips.length
+        ? h(WatchHoleChips, { chips: card.chips, key: "chips" })
+        : h("p", { className: "muted", key: "empty" }, "No score this hole yet"),
+    ]),
+  ));
+}
+
 function WatchHoles(props) {
   const holes = Array.isArray(props.holes) ? props.holes : [];
   const [index, setIndex] = React.useState(0);
   const safeIndex = holes.length ? Math.min(index, holes.length - 1) : 0;
   const selected = holes[safeIndex] || null;
   if (!selected) return null;
+  const mapPlayers = props.isMatchplay
+    ? props.players
+    : watchHoleScoreChips({
+      hole: selected.hole,
+      locations: props.players,
+      par: selected.par,
+      players: props.scorePlayers,
+      scoreTargets: props.scoreTargets,
+    });
+  const strokeChips = props.isMatchplay
+    ? []
+    : watchStrokeHoleChips({
+      hole: selected.hole,
+      par: selected.par,
+      players: props.scorePlayers,
+      scoreTargets: props.scoreTargets,
+    });
+  const matchCards = props.isMatchplay
+    ? watchMatchCards({
+      hole: selected.hole,
+      par: selected.par,
+      players: props.scorePlayers,
+      scoreTargets: props.scoreTargets,
+      standings: props.standings,
+    })
+    : [];
 
   const bits = [`Hole ${selected.hole}`];
   if (selected.par != null) bits.push(`Par ${selected.par}`);
@@ -66,10 +130,11 @@ function WatchHoles(props) {
     h(HoleMap, {
       hole: selected,
       key: "map",
-      players: props.players,
+      players: mapPlayers,
       udiscCourseId: props.udiscCourseId,
       windFromDeg: props.windFromDeg,
     }),
+    props.isMatchplay ? h(WatchMatchCards, { cards: matchCards, key: "matches" }) : h(WatchStrokeStrip, { chips: strokeChips, key: "stroke" }),
     h(WatchTeeSign, { key: "sign", teeSign: selected.teeSign }),
   ]);
 }
@@ -100,8 +165,12 @@ export function WatchView(props) {
     ]),
     h(WatchHoles, {
       holes: props.holes,
+      isMatchplay: props.isMatchplay,
       key: "holes",
       players: props.playerLocations,
+      scorePlayers: props.players,
+      scoreTargets: props.scoreTargets,
+      standings,
       udiscCourseId: props.udiscCourseId,
       windFromDeg: props.windFromDeg,
     }),

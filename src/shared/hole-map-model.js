@@ -145,6 +145,9 @@ export function playerMarksOnMap(map, players) {
       initials,
       x: pt.x,
       y: pt.y,
+      strokes: player.strokes,
+      label: player.label,
+      relClass: player.relClass,
     });
   });
   marks.sort((a, b) => a.x - b.x || a.y - b.y);
@@ -157,4 +160,13 @@ export function playerMarksOnMap(map, players) {
     }
   }
   return marks;
+}
+
+export function scoreChipAnchor(mark, width, height) {
+  const spanX = width > 0 ? width : 1;
+  const spanY = height > 0 ? height : 1;
+  return {
+    x: (mark && mark.x) / spanX > 0.72 ? "left" : "right",
+    y: (mark && mark.y) / spanY < 0.18 ? "below" : "above",
+  };
 }

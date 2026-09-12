@@ -199,6 +199,36 @@
         .hole-map-player-dot { fill: var(--primary-strong); stroke: white; stroke-width: 2; }
         .hole-map-player-label { fill: white; stroke: none; font: 700 10px Archivo, sans-serif; text-anchor: middle; }
         .hole-map-compact .hole-map-player-label { font-size: 8px; }
+        .hole-map-chips { position: absolute; inset: 0; pointer-events: none; }
+        .hole-map-score-chip {
+            position: absolute; padding: 0.12rem 0.4rem;
+            border-radius: 999px; font: 700 0.68rem Archivo, sans-serif; white-space: nowrap;
+            background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary);
+            box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+        }
+        .hole-map-score-chip.chip-right.chip-above { transform: translate(12px, -10px); }
+        .hole-map-score-chip.chip-left.chip-above { transform: translate(calc(-100% - 12px), -10px); }
+        .hole-map-score-chip.chip-right.chip-below { transform: translate(12px, 12px); }
+        .hole-map-score-chip.chip-left.chip-below { transform: translate(calc(-100% - 12px), 12px); }
+        .hole-map-score-chip.under { color: var(--under); border-color: var(--under); }
+        .hole-map-score-chip.over { color: var(--over); border-color: var(--over); }
+        .hole-map-score-chip.even { color: var(--even); }
+        .watch-match-list { display: grid; gap: 0.65rem; }
+        .watch-match-card { padding: 0.85rem 0.95rem; }
+        .watch-match-head { display: flex; justify-content: space-between; gap: 0.6rem; align-items: baseline; }
+        .watch-match-status { font-weight: 800; color: var(--accent); }
+        .watch-match-thru { margin: 0.25rem 0 0; }
+        .watch-stroke-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.65rem; padding: 0.75rem 0.95rem; }
+        .watch-stroke-strip .watch-hole-chips { margin-top: 0; }
+        .watch-hole-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.55rem; }
+        .watch-hole-chip {
+            display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.28rem 0.55rem;
+            border-radius: 999px; border: 1px solid var(--border-color); background: var(--bg-secondary);
+            font-size: 0.78rem; font-weight: 700;
+        }
+        .watch-hole-chip.won { border-color: var(--under); }
+        .watch-hole-chip.lost { border-color: var(--over); }
+        .watch-hole-chip.halved { border-color: var(--even); }
         .hole-map-wind { color: var(--accent); }
         .hole-map-caption { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 0.4rem; font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
         .hole-map-credit { margin-top: 0.2rem; font-size: 0.62rem; color: var(--text-muted); }

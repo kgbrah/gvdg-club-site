@@ -883,6 +883,8 @@ export function startScoreApp(options) {
                 weather: S.weather,
                 windFromDeg: S.weather && S.weather.current ? S.weather.current.windDirectionDeg : null,
                 playerLocations: S.playerLocations || [],
+                players: Array.isArray(snap.players) ? snap.players : [],
+                scoreTargets: Array.isArray(snap.scoreTargets) ? snap.scoreTargets : S.scoreTargets || [],
             });
         }
         async function loadWatch() {

@@ -1,6 +1,6 @@
 import React from "react";
 
-import { holeMapLabel, playerMarksOnMap, projectHoleMap, SATELLITE_CREDIT } from "./hole-map-model.js";
+import { holeMapLabel, playerMarksOnMap, projectHoleMap, SATELLITE_CREDIT, scoreChipAnchor } from "./hole-map-model.js";
 import { safeExternalUrl } from "./safe-url.js";
 import { udiscDeepLink } from "./udisc-export.js";
 
@@ -33,6 +33,23 @@ function WindMark(props) {
       h("title", { key: "title" }, "Wind direction"),
     ],
   );
+}
+
+function ScoreChips({ marks, width, height, compact }) {
+  if (compact) return null;
+  const chips = (marks || []).filter((mark) => mark && mark.label);
+  if (!chips.length) return null;
+  return h("div", { className: "hole-map-chips" }, chips.map((mark) => {
+    const anchor = scoreChipAnchor(mark, width, height);
+    return h("div", {
+      className: "hole-map-score-chip " + (mark.relClass || "even") + " chip-" + anchor.x + " chip-" + anchor.y,
+      key: mark.key,
+      style: {
+        left: ((mark.x / width) * 100) + "%",
+        top: ((mark.y / height) * 100) + "%",
+      },
+    }, (mark.strokes != null ? mark.strokes + " " : "") + mark.label);
+  }));
 }
 
 function PlayerMark(props) {
@@ -107,6 +124,7 @@ export function HoleMap(props) {
           })),
         ],
       ),
+      h(ScoreChips, { compact, height: map.height, key: "chips", marks: players, width: map.width }),
     ]),
     h("div", { className: "hole-map-caption", key: "caption" }, [
       h("span", { key: "tee" }, map.tee.label),

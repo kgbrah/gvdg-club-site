@@ -25,6 +25,167 @@ export function isMatchplayScoring(state) {
   return Boolean(state.roundConfig && state.roundConfig.scoringStyle === "matchplay");
 }
 
+export function strokeLabel(strokes, par) {
+  if (typeof strokes !== "number" || typeof par !== "number") return null;
+  const delta = strokes - par;
+  if (strokes === 1) return { text: "ace", className: "under", delta, strokes };
+  if (delta <= -3) return { text: "albatross", className: "under", delta, strokes };
+  if (delta === -2) return { text: "eagle", className: "under", delta, strokes };
+  if (delta === -1) return { text: "birdie", className: "under", delta, strokes };
+  if (delta === 0) return { text: "par", className: "even", delta, strokes };
+  if (delta === 1) return { text: "bogey", className: "over", delta, strokes };
+  if (delta === 2) return { text: "double", className: "over", delta, strokes };
+  return { text: "+" + delta, className: "over", delta, strokes };
+}
+
+function holeStrokes(player, hole) {
+  if (!player || !player.scores) return null;
+  const value = player.scores[hole];
+  if (typeof value === "number") return value;
+  const alt = player.scores[String(hole)];
+  return typeof alt === "number" ? alt : null;
+}
+
+export function scoreForPlayerIndexes(players, playerIndexes, hole) {
+  const list = Array.isArray(players) ? players : [];
+  for (const index of playerIndexes || []) {
+    const player = list.find((row) => row && row.index === index);
+    const strokes = holeStrokes(player, hole);
+    if (typeof strokes === "number") return strokes;
+  }
+  return null;
+}
+
+function targetName(target) {
+  if (!target) return "Side";
+  if (target.label) return target.label;
+  const members = Array.isArray(target.members) ? target.members.filter(Boolean) : [];
+  return members.length ? members.join(" / ") : "Side";
+}
+
+function targetForPlayerIndex(scoreTargets, index) {
+  return (Array.isArray(scoreTargets) ? scoreTargets : []).find((target) =>
+    target && Array.isArray(target.playerIndexes) && target.playerIndexes.indexOf(index) >= 0) || null;
+}
+
+function cardIdForTarget(target, players) {
+  const list = Array.isArray(players) ? players : [];
+  for (const index of target && target.playerIndexes ? target.playerIndexes : []) {
+    const player = list.find((row) => row && row.index === index);
+    if (player) return player.cardId == null ? "card:null" : player.cardId;
+  }
+  return target && target.id ? "target:" + target.id : "card";
+}
+
+function matchThru(match) {
+  if (!match) return 0;
+  const won = Number(match.holesWon);
+  const lost = Number(match.holesLost);
+  const tied = Number(match.holesTied);
+  if (![won, lost, tied].every(Number.isFinite)) return 0;
+  return won + lost + tied;
+}
+
+function matchCardStatus(match, leadTarget) {
+  const status = displayMatchStatus(match);
+  const outcome = match && match.outcome;
+  if (!outcome || outcome === "draw") return status;
+  return targetName(leadTarget) + " " + status;
+}
+
+function scoreTargetsOrPlayers(scoreTargets, players) {
+  if (Array.isArray(scoreTargets)) return scoreTargets;
+  return (Array.isArray(players) ? players : []).map((player) => ({
+    id: "player:" + player.index,
+    label: player.name,
+    playerIndexes: [player.index],
+  }));
+}
+
+function indexesForLocation(scoreTargets, index) {
+  if (Array.isArray(scoreTargets)) {
+    const target = targetForPlayerIndex(scoreTargets, index);
+    return target ? target.playerIndexes : null;
+  }
+  return [index];
+}
+
+export function watchHoleScoreChips({ hole, par, players, locations, scoreTargets }) {
+  return (Array.isArray(locations) ? locations : []).map((loc) => {
+    const indexes = indexesForLocation(scoreTargets, loc.index);
+    if (!indexes) return loc;
+    const label = strokeLabel(scoreForPlayerIndexes(players, indexes, hole), par);
+    if (!label) return loc;
+    return { ...loc, strokes: label.strokes, label: label.text, relClass: label.className };
+  });
+}
+
+export function watchStrokeHoleChips({ hole, par, players, scoreTargets }) {
+  const chips = [];
+  scoreTargetsOrPlayers(scoreTargets, players).forEach((target) => {
+    const label = strokeLabel(scoreForPlayerIndexes(players, target.playerIndexes, hole), par);
+    if (!label) return;
+    chips.push({
+      key: target.id || String((target.playerIndexes || [])[0]),
+      name: targetName(target),
+      strokes: label.strokes,
+      label: label.text,
+      className: label.className,
+    });
+  });
+  return chips;
+}
+
+export function watchMatchCards({ hole, par, players, scoreTargets, standings }) {
+  const targets = Array.isArray(scoreTargets) ? scoreTargets : [];
+  const rows = Array.isArray(standings) ? standings : [];
+  const groups = new Map();
+  targets.forEach((target) => {
+    const cardId = cardIdForTarget(target, players);
+    if (!groups.has(cardId)) groups.set(cardId, []);
+    groups.get(cardId).push(target);
+  });
+  const cards = [];
+  groups.forEach((group, cardId) => {
+    if (group.length !== 2) return;
+    const left = group[0];
+    const right = group[1];
+    const leftStanding = rows.find((row) => row && row.targetId === left.id) || null;
+    const rightStanding = rows.find((row) => row && row.targetId === right.id) || null;
+    const lead = leftStanding && (leftStanding.match?.outcome === "leading" || leftStanding.match?.outcome === "won" || leftStanding.match?.outcome === "draw")
+      ? leftStanding
+      : (rightStanding || leftStanding);
+    const leadTarget = lead === rightStanding ? right : left;
+    const leftScore = scoreForPlayerIndexes(players, left.playerIndexes, hole);
+    const rightScore = scoreForPlayerIndexes(players, right.playerIndexes, hole);
+    const chips = [];
+    function pushChip(target, strokes, other) {
+      const label = strokeLabel(strokes, par);
+      if (!label) return;
+      let result = "";
+      if (typeof other === "number") result = strokes < other ? "won" : strokes > other ? "lost" : "halved";
+      chips.push({
+        key: target.id,
+        name: targetName(target),
+        strokes: label.strokes,
+        label: label.text,
+        className: label.className,
+        result,
+      });
+    }
+    pushChip(left, leftScore, rightScore);
+    pushChip(right, rightScore, leftScore);
+    cards.push({
+      key: cardId,
+      title: targetName(left) + " vs " + targetName(right),
+      status: matchCardStatus(lead && lead.match, leadTarget),
+      thru: matchThru(lead && lead.match),
+      chips,
+    });
+  });
+  return cards;
+}
+
 export function ctpNomineeEligible(player, ctp) {
   if (!player || player.ctpEligible === false) return false;
   const division = String((ctp && ctp.division) || "").trim().toLowerCase();
