@@ -7,7 +7,7 @@ import { dollars, formatEventDay, formatToPar } from "./format.js";
 import { useMemberContext } from "./member-context.js";
 import { usePdgaStats } from "./pdga-dashboard.js";
 import { useRegistrationData } from "./registration-panel.js";
-import { eventMeta } from "./registration-utils.js";
+import { eventMeta, pickUpNext } from "./registration-utils.js";
 import { EventScheduleFacts } from "../shared/event-schedule.js";
 
 const h = React.createElement;
@@ -60,12 +60,12 @@ function HomeHero({ context, pdgaState }) {
   ]);
 }
 
-function UpNextCard({ events }) {
-  const event = Array.isArray(events) ? events[0] : null;
+function UpNextCard({ events, registrations }) {
+  const { event, registration } = pickUpNext(events, registrations);
   if (!event) {
     return h("section", { className: "player-card", "data-react-home-next": "empty" }, [
       h("h3", { key: "title" }, "Up next"),
-      h("p", { className: "player-card-meta", key: "empty" }, "Nothing open to register for right now."),
+      h("p", { className: "player-card-meta", key: "empty" }, "Nothing on your schedule right now."),
       h("button", {
         type: "button",
         className: "player-btn primary",
@@ -79,22 +79,30 @@ function UpNextCard({ events }) {
   const fee = event.entry_fee_cents ? dollars(event.entry_fee_cents) : null;
   const meta = [when, eventMeta(event), fee].filter(Boolean).join(" · ");
   const live = event.status === "live";
+  const chip = live ? "Live" : registration ? "Registered" : "Open";
+  const actionLabel = live && registration ? "Open scorecard" : registration ? "You're registered" : "Register";
 
-  return h("section", { className: "player-card", "data-react-home-next": "ready" }, [
+  return h("section", { className: "player-card", "data-react-home-next": registration ? "registered" : "ready" }, [
     h("h3", { key: "title" }, "Up next"),
     h("div", { className: "player-event-name", key: "name" }, event.name || "Club event"),
     meta ? h("div", { className: "player-card-meta", key: "meta" }, meta) : null,
     h(EventScheduleFacts, { event, key: "schedule" }),
     h("div", { className: "player-chip-row", key: "chips" }, [
-      h("span", { className: `player-chip${live ? " live" : ""}`, key: "status" }, live ? "Live" : "Open"),
+      h("span", { className: `player-chip${live ? " live" : ""}`, key: "status" }, chip),
       event.play_format === "doubles" ? h("span", { className: "player-chip", key: "format" }, "Doubles") : null,
     ].filter(Boolean)),
     h("button", {
       type: "button",
       className: "player-btn primary",
-      onClick: () => selectDashboardTab("events"),
+      onClick: () => {
+        if (live && registration) {
+          window.location.href = `score.html?event=${encodeURIComponent(event.id)}`;
+          return;
+        }
+        selectDashboardTab("events");
+      },
       key: "register",
-    }, "Register"),
+    }, actionLabel),
   ]);
 }
 
@@ -159,7 +167,7 @@ export function MemberOverviewDashboard() {
         h("div", { className: "player-stat-s", key: "s" }, peak != null ? `Peak ${peak}` : "PDGA official"),
       ]),
     ]),
-    h(UpNextCard, { events: registration.state.events, key: "next" }),
+    h(UpNextCard, { events: registration.state.events, registrations: registration.state.registrations, key: "next" }),
     h(LastRoundCard, { token, key: "last" }),
   ]);
 }

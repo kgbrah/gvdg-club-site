@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { eventFromRegistration } from '../src/members-app/registration-utils.js';
+import { eventFromRegistration, pickUpNext } from '../src/members-app/registration-utils.js';
 import { formatEventDay } from '../src/members-app/format.js';
 
 test('member dashboard React registration panel includes casual round posts', () => {
@@ -162,6 +162,9 @@ test('overview dashboard is a compact home and keeps registration on Events', ()
   assert.match(overview, /selectDashboardTab\("events"\)/);
   assert.match(overview, /EventScheduleFacts/);
   assert.match(overview, /data-react-home-next/);
+  assert.match(overview, /pickUpNext\(events, registrations\)/);
+  assert.match(overview, /You're registered/);
+  assert.doesNotMatch(overview, /Nothing open to register for right now/);
   assert.match(more, /Club directory/);
   assert.match(more, /Message board/);
   assert.match(more, /Tee signs/);
@@ -219,6 +222,19 @@ test('eventFromRegistration copies joined schedule timestamps onto the synth eve
   assert.equal(event.registration_deadline, '2026-09-13T16:00:00.000Z');
   assert.equal(event.checkin_deadline, '2026-09-13T17:00:00.000Z');
   assert.equal(eventFromRegistration({ event_id: 9 }).starts_at, null);
+});
+
+test('pickUpNext prefers a registered event over an open Register CTA', () => {
+  const open = [{ id: 12, name: 'The boys test', status: 'scheduled' }];
+  const mine = [{ event_id: 12, event_name: 'The boys test', event_status: 'scheduled' }];
+  const next = pickUpNext(open, mine);
+  assert.equal(next.event.name, 'The boys test');
+  assert.equal(next.registration.event_id, 12);
+
+  const otherOpen = [{ id: 3, name: 'Some other open round', status: 'scheduled' }, ...open];
+  assert.equal(pickUpNext(otherOpen, mine).event.id, 12);
+  assert.equal(pickUpNext(open, []).registration, null);
+  assert.equal(pickUpNext([], mine).registration.event_id, 12);
 });
 
 test('formatEventDay renders club calendar dates in Eastern without a UTC day shift', () => {
