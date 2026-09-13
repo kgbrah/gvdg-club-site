@@ -320,8 +320,9 @@ test('public Events event detail fetches in React', () => {
   assert.match(app, /import \{ HoleMap \} from "\.\.\/shared\/hole-map\.js"/);
   assert.match(app, /h\(HoleMap, \{ compact: true, hole, key: "map" \}\)/);
   assert.match(source, /\.hole-map-satellite/);
-  assert.match(source, /\.hole-map-compact/);
+  assert.match(source, /\.player-rating/);
   assert.match(app, /function PlayerRoster/);
+  assert.match(app, /EventFieldRoster/);
   assert.match(app, /WeatherStrip/);
   assert.match(app, /import \{ UDiscExportDetails, udiscDeepLink \} from "\.\.\/shared\/udisc-export\.js"/);
   assert.doesNotMatch(app, /function UDiscExportCard|function udiscDeepLink|function scorecardRows/);
@@ -354,6 +355,7 @@ test('public registration cards post pair label only for doubles config', () => 
   assert.match(app, /addons: body\.addons/);
   assert.match(app, /guestReg \? parseObject\(guestReg\.addons\) : \{\}/);
   assert.match(app, /Currently Registering/);
+  assert.match(app, /EventFieldRoster/);
   assert.match(app, /Confirm withdraw/);
   assert.match(utils, /function registrationLiveConfig\(event\)/);
   assert.match(utils, /event\.liveScoringConfig \|\| event\.live_scoring_config/);

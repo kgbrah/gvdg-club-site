@@ -2,6 +2,7 @@ import React from "react";
 
 import { formatLabel } from "../shared/events-model.js";
 import { EventScheduleFacts } from "../shared/event-schedule.js";
+import { EventFieldRoster } from "../shared/event-field-roster.js";
 import { request } from "./api.js";
 import { dollars, formatEventDay } from "./format.js";
 import { memberAlert, memberConfirm } from "./member-dialogs.js";
@@ -129,6 +130,7 @@ export function EventRegistrationCard({ event, registration, token, paymentsConf
     ]),
     eventMeta(event) ? h("div", { className: "register-fee", key: "meta" }, eventMeta(event)) : null,
     h(EventScheduleFacts, { event, key: "schedule" }),
+    !event._synth ? h(EventFieldRoster, { compact: true, key: "field", players: event.field }) : null,
     !event._synth ? h("div", { className: "register-fee", key: "fee" }, `${event.entry_fee_cents ? `${dollars(event.entry_fee_cents)} entry` : "Free entry"}${event.play_format ? ` - ${formatLabel(event.play_format)}` : ""}`) : null,
     registration && event.status === "cancelled"
       ? h("div", { className: "register-status cancelled", key: "status" }, `This event was cancelled${registration.division ? ` - you were in ${registration.division}` : ""}`)

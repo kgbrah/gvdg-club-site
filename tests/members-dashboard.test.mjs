@@ -205,6 +205,7 @@ test('member dashboard React registration panel surfaces live events and lists e
   assert.match(events, /"My events"/); // ALL registrations render, not just the open ones
   assert.match(events, /eventFromRegistration/); // registrations no longer in the open list still render
   assert.match(events, /EventScheduleFacts/);
+  assert.match(events, /EventFieldRoster/);
   assert.match(readFileSync('src/members-app/registration-panel.js', 'utf8'), /requestJson\("\/my-registrations"/);
 });
 
