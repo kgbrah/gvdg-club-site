@@ -1,6 +1,7 @@
 import React from "react";
 import { Menu, X } from "lucide-react";
 
+import { ClubLogo } from "../shared/club-logo.js";
 import { CrottsHelpLink } from "../shared/crotts-widget.js";
 import { InstallCoachBanner } from "../shared/install-coach-ui.js";
 import { PlayerThemeToggle } from "../shared/player-theme-chrome.js";
@@ -48,14 +49,7 @@ export function MemberPageChrome() {
 
   return h(React.Fragment, null, [
     h("header", { "data-react-page-chrome": "true", key: "header" }, h("nav", null, [
-    h("a", { className: "logo", href: "index.html", key: "logo", onClick: () => setMenuOpen(false) },
-      h("img", {
-        alt: "Greenville DGC Logo",
-        className: "logo-image",
-        height: 50,
-        src: "img/logo.png",
-        width: 50,
-      })),
+    h(ClubLogo, { href: "index.html", key: "logo", onClick: () => setMenuOpen(false) }),
     h("div", { className: "nav-right", key: "nav" }, [
       h("button", {
         "aria-controls": "navLinks",

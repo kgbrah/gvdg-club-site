@@ -116,6 +116,45 @@ body.player-theme-page header.scrolled {
 body.player-theme-page .logo {
   color: var(--text-primary);
 }
+header .logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  color: var(--light);
+  text-decoration: none;
+}
+header .logo .logo-image {
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 2.5rem;
+  object-fit: cover;
+  object-position: left center;
+  border-radius: 0.4rem;
+}
+header.scrolled .logo .logo-image {
+  width: 2.2rem;
+  height: 2.2rem;
+  flex-basis: 2.2rem;
+}
+.logo-wordmark {
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 1.35rem;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: inherit;
+}
+.logo-wordmark em {
+  font-style: normal;
+  color: var(--accent);
+}
+body.player-theme-page .logo-wordmark em {
+  color: var(--primary-strong);
+}
 body.player-theme-page .theme-toggle,
 body.player-theme-page .menu-toggle {
   color: var(--text-primary);
