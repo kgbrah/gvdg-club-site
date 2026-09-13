@@ -208,6 +208,7 @@ function eventHubItem(raw, courseIndex) {
     statusLabel: statusLabel(event.status),
     typeClass: event.type,
     typeLabel: typeLabel(event.type),
+    field: Array.isArray(raw?.field) ? raw.field : [],
   };
 }
 
@@ -247,6 +248,18 @@ async function loadCourseData(api) {
   return state.courseData.promise;
 }
 
+function attachOpenFields(events, openEvents) {
+  const byId = new Map();
+  for (const event of Array.isArray(openEvents) ? openEvents : []) {
+    if (event && event.id != null) byId.set(String(event.id), Array.isArray(event.field) ? event.field : []);
+  }
+  return (Array.isArray(events) ? events : []).map((event) => {
+    if (!event || event.id == null) return event;
+    const field = byId.get(String(event.id));
+    return field ? { ...event, field } : event;
+  });
+}
+
 function publishLoadedHub(feed, events, courseIndex) {
   const { active: feedEvents, archived: feedArchived } = splitFeedByDate(feed?.events || []);
   const { active: feedClub, archived: feedClubArchived } = splitFeedByDate(feed?.clubEvents || []);
@@ -283,11 +296,12 @@ async function loadHub({ quiet = false } = {}) {
   }
   try {
     const courseData = await loadCourseData(api);
-    const [feed, eventsData] = await Promise.all([
+    const [feed, eventsData, openData] = await Promise.all([
       fetchPublicJson(api, "/club-feed").catch(() => ({ events: [], clubEvents: [] })),
       fetchPublicJson(api, `/events?limit=${EVENTS_PAGE_LIMIT}&offset=0`).catch(() => ({ events: [] })),
+      fetchPublicJson(api, "/registration/open").catch(() => ({ events: [] })),
     ]);
-    publishLoadedHub(feed, eventsData?.events || [], courseData.index);
+    publishLoadedHub(feed, attachOpenFields(eventsData?.events || [], openData?.events || []), courseData.index);
   } catch {
     if (!quiet) {
       publishEventsLastUpdated(null);
