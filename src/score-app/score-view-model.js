@@ -26,11 +26,12 @@ export function isMatchplayScoring(state) {
 }
 
 export function nextHoleScore(current, par, direction) {
+  const holePar = typeof par === "number" ? par : 3;
   if (direction === "plus") {
-    if (current == null) return typeof par === "number" ? par : 3;
+    if (current == null) return holePar;
     return Math.min(30, current + 1);
   }
-  if (current == null) return null;
+  if (current == null) return Math.max(1, holePar - 1);
   if (current <= 1) return null;
   return current - 1;
 }

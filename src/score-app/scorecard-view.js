@@ -138,11 +138,12 @@ function ScoreRow(props) {
       h(
         "button",
         {
-          "aria-label": current == null
-            ? `No score yet for ${row.label} on hole ${props.hole.hole}`
-            : nextMinus == null ? `Clear ${row.label} on hole ${props.hole.hole}` : `Decrease ${row.label} on hole ${props.hole.hole}`,
+          "aria-label": nextMinus == null
+            ? `Clear ${row.label} on hole ${props.hole.hole}`
+            : current == null
+              ? `Set ${row.label} on hole ${props.hole.hole} to ${nextMinus}`
+              : `Decrease ${row.label} on hole ${props.hole.hole}`,
           className: "minus",
-          disabled: current == null,
           type: "button",
           onClick: () => props.onScore(row.source, props.hole.hole, nextMinus),
         },
