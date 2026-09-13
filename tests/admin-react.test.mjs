@@ -318,6 +318,9 @@ test('admin events list is rendered by React from direct loader events', () => {
   assert.match(eventsList, /gvdg:admin-event-delete-request/);
   assert.doesNotMatch(eventsList, /currentAdminState\("eventsList"|admin-state-store|currentState\(\)/);
   assert.match(eventsList, /EVENT_STATUSES = \["scheduled", "live", "final", "cancelled"\]/);
+  assert.match(eventsList, /MANUAL_STATUSES = \["scheduled", "final", "cancelled"\]/);
+  assert.match(eventsList, /function statusOptions\(current\)/);
+  assert.match(eventsList, /disabled: true, hidden: true/);
   assert.match(eventsList, /className: "admin-evrow"/);
   assert.match(eventsList, /className: `admin-badge \$\{event\.status\}`/);
   assert.match(eventsList, /role: "status"/);

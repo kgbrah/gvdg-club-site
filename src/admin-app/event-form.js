@@ -378,7 +378,12 @@ export function AdminEventForm() {
       formField({ id: "aeStartsAt", label: "Start time (ET)", children: h("input", { id: "aeStartsAt", key: "input", onChange: (event) => updateField("startsAt", event.target.value), type: "datetime-local", value: form.startsAt }) }),
       formField({ id: "aeRegistrationDeadline", label: "Registration deadline (ET)", children: h("input", { id: "aeRegistrationDeadline", key: "input", onChange: (event) => updateField("registrationDeadline", event.target.value), type: "datetime-local", value: form.registrationDeadline }) }),
       formField({ id: "aeCheckinDeadline", label: "Check-in deadline (ET)", children: h("input", { id: "aeCheckinDeadline", key: "input", onChange: (event) => updateField("checkinDeadline", event.target.value), type: "datetime-local", value: form.checkinDeadline }) }),
-      formField({ id: "aeStatus", label: "Status", children: h("select", { id: "aeStatus", key: "input", onChange: (event) => updateField("status", event.target.value), value: form.status }, [option("scheduled", "Scheduled"), option("live", "Live"), option("final", "Final"), option("cancelled", "Cancelled")]) }),
+      formField({ id: "aeStatus", label: "Status", children: h("select", { id: "aeStatus", key: "input", onChange: (event) => updateField("status", event.target.value), value: form.status }, [
+        form.status === "live" ? h("option", { key: "live", value: "live", disabled: true, hidden: true }, "Live (from scoring)") : null,
+        option("scheduled", "Scheduled"),
+        option("final", "Final"),
+        option("cancelled", "Cancelled"),
+      ]) }),
       formField({ id: "aeFormat", label: "Scoring style", children: h("select", { id: "aeFormat", key: "input", onChange: (event) => updateField("format", event.target.value), value: form.format === "doubles" ? "matchplay" : form.format }, [option("", "-"), option("stroke", "Stroke"), option("matchplay", "Match play")]) }),
       h("div", { className: "admin-event-courses", key: "event-courses" }, [
         h("h4", { className: "al-h", key: "title" }, "Courses & layouts"),
