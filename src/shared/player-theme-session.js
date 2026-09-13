@@ -1,6 +1,7 @@
 import { resolveApiBase } from "./api-base.js";
 import {
   applyDashboardTheme,
+  HEX,
   readStoredTheme,
   sanitizeTheme,
   writeStoredTheme,
@@ -10,6 +11,8 @@ export const TOKEN_KEY = "gvdg_member_token";
 export const PDGA_KEY = "gvdg_member_pdga";
 export const SCORE_AUTH_EVENT = "gvdg:score-auth";
 export const THEME_EVENT = "gvdg:player-theme";
+export const CLUB_STATUS_COLOR = "#1A1A2E";
+export const CLUB_STATUS_COLOR_DARK = "#0F0F1E";
 
 export function decodeJwtPayload(token) {
   try {
@@ -78,21 +81,46 @@ export function themeWithMode(theme, mode) {
   return sanitizeTheme({ ...safe, mode: nextMode });
 }
 
-function syncDocumentTheme(theme) {
-  const root = globalThis.document?.documentElement;
-  if (!root) return;
-  const mode = theme?.mode === "dark" || theme?.mode === "light" ? theme.mode : null;
-  if (mode === "dark") root.setAttribute("data-theme", "dark");
-  else if (mode === "light") root.removeAttribute("data-theme");
-  if (mode) persistClubMode(mode);
-}
-
 function persistClubMode(mode) {
   try {
     globalThis.localStorage?.setItem?.("theme", mode);
   } catch {
     // ignore
   }
+}
+
+export function storedClubMode() {
+  try {
+    const theme = globalThis.localStorage?.getItem?.("theme");
+    if (theme === "dark" || theme === "light") return theme;
+  } catch {
+    // ignore
+  }
+  return globalThis.document?.documentElement?.getAttribute?.("data-theme") === "dark" ? "dark" : "light";
+}
+
+export function statusBarColor(theme, mode) {
+  const token = theme?.tokens?.["bg-secondary"];
+  if (HEX.test(String(token || ""))) return token;
+  return (theme?.mode || mode) === "dark" ? CLUB_STATUS_COLOR_DARK : CLUB_STATUS_COLOR;
+}
+
+export function paintStatusBar(theme, mode) {
+  const color = statusBarColor(theme, mode || storedClubMode());
+  const meta = globalThis.document?.querySelector?.('meta[name="theme-color"]');
+  if (meta?.setAttribute) meta.setAttribute("content", color);
+  return color;
+}
+
+function syncDocumentTheme(theme) {
+  const root = globalThis.document?.documentElement;
+  const mode = theme?.mode === "dark" || theme?.mode === "light" ? theme.mode : null;
+  if (root) {
+    if (mode === "dark") root.setAttribute("data-theme", "dark");
+    else if (mode === "light") root.removeAttribute("data-theme");
+  }
+  if (mode) persistClubMode(mode);
+  paintStatusBar(theme, mode);
 }
 
 export function notifyPlayerThemeChanged(theme) {
