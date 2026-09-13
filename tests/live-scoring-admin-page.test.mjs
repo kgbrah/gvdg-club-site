@@ -35,6 +35,17 @@ test('admin live start area sends normalized scoring config', () => {
   assert.doesNotMatch(html + panel, /scUseManualPlayers/);
 });
 
+test('admin live start stays available when the event is marked live but scoring has not started', () => {
+  const html = adminPageAndControllerSource();
+  const scRefresh = html.match(/async function scRefresh\(\) \{[\s\S]*?\n        async function scLoadTeeSignData/ )?.[0];
+  assert.match(html, /async function scShowStartControls\(validation\)/);
+  assert.match(html, /status: 'start'/);
+  assert.ok(scRefresh);
+  assert.match(scRefresh, /scShowStartControls\(/);
+  assert.match(scRefresh, /Event is marked Live, but scoring has not started yet/);
+  assert.doesNotMatch(scRefresh, /status: 'idle'/);
+});
+
 test('admin start defaults preserve saved and legacy format fields separately', () => {
   const source = adminPageAndControllerSource();
   const model = readFileSync('src/admin-app/scoring-model.js', 'utf8');

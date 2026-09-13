@@ -274,7 +274,7 @@ export function EventsLeagueDetailApp() {
   const meta = leagueMeta(league);
   const isMatch = teamStandings.length > 0;
   const isRyder = routeId === "4";
-  const standings = isRyder && ryderTally
+  const standings = isRyder && ryderTally && ryderTally.sheetAvailable
     ? officialRyderPlayerStandings(ryderTally.weeks, [
       ...((ryderTally.scoreboard && ryderTally.scoreboard.red && ryderTally.scoreboard.red.players) || []),
       ...((ryderTally.scoreboard && ryderTally.scoreboard.blue && ryderTally.scoreboard.blue.players) || []),

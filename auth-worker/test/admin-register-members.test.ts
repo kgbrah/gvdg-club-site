@@ -8,6 +8,7 @@ const MEMBERS = {
   "member:m_admin": JSON.stringify({ memberId: "m_admin", name: "Admin", isAdmin: true, pinHash: "x", mustChangePin: false }),
   "member:m_jane": JSON.stringify({ memberId: "m_jane", name: "Jane", pdgaNo: "111", isAdmin: false, pinHash: "x", mustChangePin: false }),
   "member:m_bob": JSON.stringify({ memberId: "m_bob", name: "Bob", pdgaNo: "222", isAdmin: false, pinHash: "x", mustChangePin: false }),
+  "member:m_tj": JSON.stringify({ memberId: "m_tj", name: "TJ Braley", pdgaNo: "333", isAdmin: false, pinHash: "x", mustChangePin: false }),
 };
 
 function kv(initial: Record<string, string> = {}) {
@@ -57,6 +58,12 @@ function makeDb(state: { status?: string | null; regs?: RegRow[] } = {}) {
         first: async () => {
           if (/SELECT status FROM events WHERE id = \?/i.test(sql)) {
             return state.status == null ? null : { status: state.status };
+          }
+          if (/DELETE FROM registrations WHERE id = \? AND event_id = \?/i.test(sql)) {
+            const idx = regs.findIndex((row) => row.id === binds[0] && row.event_id === binds[1]);
+            if (idx < 0) return null;
+            const [removed] = regs.splice(idx, 1);
+            return removed;
           }
           return insertRegistration() ?? null;
         },
@@ -145,12 +152,19 @@ describe("admin cash registration of club members", () => {
     await expect(res.json()).resolves.toMatchObject({ error: "too_many_members" });
   });
 
-  it("404 when the event is missing, 403 when it is not scheduled", async () => {
+  it("404 when the event is missing, 403 when it is closed", async () => {
     const admin = await tok("m_admin");
     expect((await call("/admin/events/5/registrations", "POST", admin, { member_ids: ["m_jane"] }, makeDb({ status: null }))).status).toBe(404);
     expect((await call("/admin/events/5/registrations", "POST", admin, { member_ids: ["m_jane"] }, makeDb({ status: "cancelled" }))).status).toBe(403);
     expect((await call("/admin/events/5/registrations", "POST", admin, { member_ids: ["m_jane"] }, makeDb({ status: "final" }))).status).toBe(403);
-    expect((await call("/admin/events/5/registrations", "POST", admin, { member_ids: ["m_jane"] }, makeDb({ status: "live" }))).status).toBe(403);
+  });
+
+  it("still allows cash signup after the event is marked live if scoring has not started", async () => {
+    const db = makeDb({ status: "live" });
+    const res = await call("/admin/events/5/registrations", "POST", await tok("m_admin"), { member_ids: ["m_jane"] }, db);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { added: Array<{ member_id: string }> };
+    expect(body.added.map((row) => row.member_id)).toEqual(["m_jane"]);
   });
 
   it("adds club members as true registrations even when public registration is closed", async () => {
@@ -223,5 +237,83 @@ describe("admin cash registration of club members", () => {
       { member_id: "m_nobody", reason: "not_found" },
     ]);
     expect(body.registrations.map((row) => row.member_id).sort()).toEqual(["m_bob", "m_jane"]);
+  });
+
+  it("skips a club member whose name already matches a guest registration", async () => {
+    const db = makeDb({
+      status: "scheduled",
+      regs: [{
+        id: 4,
+        event_id: 5,
+        member_id: "g_abc",
+        name: "T.J. Braley",
+        division: null,
+        team: null,
+        addons: null,
+        email: null,
+        paid_entry: 0,
+        checked_in: 0,
+      }],
+    });
+    const res = await call("/admin/events/5/registrations", "POST", await tok("m_admin"), {
+      member_ids: ["m_tj"],
+    }, db);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      added: Array<{ member_id: string }>;
+      skipped: Array<{ member_id: string; reason: string }>;
+      registrations: Array<{ member_id: string }>;
+    };
+    expect(body.added).toEqual([]);
+    expect(body.skipped).toEqual([{ member_id: "m_tj", reason: "already_registered" }]);
+    expect(body.registrations.map((row) => row.member_id)).toEqual(["g_abc"]);
+  });
+
+  it("lets an admin remove a registered player before scoring starts", async () => {
+    const db = makeDb({
+      status: "scheduled",
+      regs: [{
+        id: 9,
+        event_id: 5,
+        member_id: "m_jane",
+        name: "Jane",
+        division: "MA1",
+        team: null,
+        addons: null,
+        email: null,
+        paid_entry: 1,
+        checked_in: 0,
+      }],
+    });
+    const admin = await tok("m_admin");
+    expect((await call("/admin/events/5/registrations/9", "DELETE", await tok("m_jane"))).status).toBe(403);
+    const res = await call("/admin/events/5/registrations/9", "DELETE", admin, undefined, db);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; registration: { member_id: string } };
+    expect(body.ok).toBe(true);
+    expect(body.registration.member_id).toBe("m_jane");
+    const missing = await call("/admin/events/5/registrations/9", "DELETE", admin, undefined, db);
+    expect(missing.status).toBe(404);
+  });
+
+  it("refuses to delete a registration after the event is final", async () => {
+    const db = makeDb({
+      status: "final",
+      regs: [{
+        id: 9,
+        event_id: 5,
+        member_id: "m_jane",
+        name: "Jane",
+        division: null,
+        team: null,
+        addons: null,
+        email: null,
+        paid_entry: 0,
+        checked_in: 0,
+      }],
+    });
+    const res = await call("/admin/events/5/registrations/9", "DELETE", await tok("m_admin"), undefined, db);
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({ error: "event_started" });
   });
 });

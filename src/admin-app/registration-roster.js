@@ -60,8 +60,8 @@ function RosterTable({ state }) {
     className: "al-holes",
     "data-react-admin-registration-roster": "ready",
   }, [
-    h("thead", { key: "head" }, h("tr", null, ["Player", "Division", "Team", "Start hole", "In?", "Paid?", "Credit"].map((label) => (
-      h("th", { key: label }, label)
+    h("thead", { key: "head" }, h("tr", null, ["Player", "Division", "Team", "Start hole", "In?", "Paid?", "Credit", ""].map((label) => (
+      h("th", { key: label || "actions" }, label)
     )))),
     h("tbody", { key: "body" }, rows.length ? [
       ...state.registrations.map((registration, index) => h(RegistrationRow, {
@@ -72,7 +72,7 @@ function RosterTable({ state }) {
         key: player.id || `manual-${index}`,
         player,
       })),
-    ] : h("tr", null, h("td", { colSpan: 7 }, "No players yet."))),
+    ] : h("tr", null, h("td", { colSpan: 8 }, "No players yet."))),
   ]));
 }
 

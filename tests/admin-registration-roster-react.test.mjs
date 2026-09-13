@@ -12,6 +12,7 @@ test('admin registration roster is rendered by React from direct loader events',
   const rosterSurface = manualForm + roster + rows;
   const rgLoadRoster = html.match(/async function rgLoadRoster\(\) \{[\s\S]*?\n        \}/)?.[0];
   const rgRemoveManualPlayer = html.match(/async function rgRemoveManualPlayer\(player\) \{[\s\S]*?\n        \}/)?.[0];
+  const rgRemoveRegistration = html.match(/async function rgRemoveRegistration\(registration\) \{[\s\S]*?\n        \}/)?.[0];
   const rgAwardCredit = html.match(/async function rgAwardCredit\(memberId, name, amountValue\) \{[\s\S]*?\n        \}/)?.[0];
   const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
@@ -32,6 +33,9 @@ test('admin registration roster is rendered by React from direct loader events',
   assert.doesNotMatch(rgLoadRoster, /rgRoster|rgCount|thead|tbody|rgCreditCell|rgToggleCell|elx\('td'|elx\('th'|textContent|addEventListener\('change'|document\.createElement\('(?:thead|tbody|tr|td|th|input|button|span)'\)/);
   assert.ok(rgRemoveManualPlayer);
   assert.doesNotMatch(rgRemoveManualPlayer, /confirm\(/);
+  assert.ok(rgRemoveRegistration);
+  assert.match(rgRemoveRegistration, /\/admin\/events\/' \+ rgEventId \+ '\/registrations\/' \+ registration.id/);
+  assert.doesNotMatch(rgRemoveRegistration, /confirm\(/);
   assert.ok(rgAwardCredit);
   assert.match(rgAwardCredit, /dollarsToCents\(amountValue\)/);
   assert.match(rgAwardCredit, /rgLoadRoster\(\); rgLoadCredits\(\)/);
@@ -43,6 +47,8 @@ test('admin registration roster is rendered by React from direct loader events',
   assert.match(initAdmin, /rgAwardCredit\(detail\.memberId, detail\.memberName, detail\.amountValue\)/);
   assert.match(initAdmin, /gvdg:admin-registration-manual-remove-request/);
   assert.match(initAdmin, /rgRemoveManualPlayer\(player\)/);
+  assert.match(initAdmin, /gvdg:admin-registration-remove-request/);
+  assert.match(initAdmin, /rgRemoveRegistration\(registration\)/);
   assert.match(initAdmin, /gvdg:admin-registration-manual-player-add-request/);
   assert.match(initAdmin, /rgAddManualPlayerFromReact\(event\.detail \|\| \{\}\)/);
   assert.doesNotMatch(initAdmin, /\$\('rgPlayerAdd'\)\.addEventListener/);
@@ -63,6 +69,7 @@ test('admin registration roster is rendered by React from direct loader events',
   assert.match(rosterSurface, /gvdg:admin-registration-roster-patch-request/);
   assert.match(rosterSurface, /gvdg:admin-registration-roster-credit-request/);
   assert.match(rosterSurface, /gvdg:admin-registration-manual-remove-request/);
+  assert.match(rosterSurface, /gvdg:admin-registration-remove-request/);
   assert.doesNotMatch(roster, /currentAdminState\("registrationRoster"|admin-state-store|function currentRosterState/);
   assert.match(roster, /data-react-admin-registration-roster/);
   assert.match(rows, /export function RegistrationRow/);

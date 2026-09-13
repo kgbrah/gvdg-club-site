@@ -49,6 +49,19 @@ export function RegistrationRow({ registration }) {
     if (event.key === "Enter") event.currentTarget.blur();
   }
 
+  async function requestRemove() {
+    const confirmed = await adminConfirm({
+      title: "Remove player",
+      message: registration.paidEntry
+        ? `Remove ${registration.name} from this event? Their entry is marked paid; this does not refund automatically.`
+        : `Remove ${registration.name} from this event?`,
+      confirmText: "Remove",
+      danger: true,
+    });
+    if (!confirmed) return;
+    dispatchRequest("gvdg:admin-registration-remove-request", { registration: registration.source });
+  }
+
   return h("tr", { "data-admin-registration-id": registration.id }, [
     h("td", { className: "lb-name", key: "name" }, registration.name),
     h("td", { key: "division" }, h("input", {
@@ -129,6 +142,11 @@ export function RegistrationRow({ registration }) {
         type: "button",
       }, "Award"),
     ]) : "-"),
+    h("td", { key: "actions" }, h("button", {
+      className: "admin-btn danger",
+      onClick: requestRemove,
+      type: "button",
+    }, "Remove")),
   ]);
 }
 
@@ -154,6 +172,7 @@ export function ManualPlayerRow({ player }) {
     h("td", { key: "starting-hole" }, "-"),
     h("td", { key: "checked-in" }, "-"),
     h("td", { key: "paid-entry" }, "-"),
+    h("td", { key: "credit" }, "-"),
     h("td", { key: "actions" }, h("button", {
       className: "admin-btn danger",
       onClick: requestRemove,

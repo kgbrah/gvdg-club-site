@@ -1,5 +1,7 @@
 import React from "react";
 
+import { useAdminRegistrationControlsState } from "./registration-controls.js";
+
 const h = React.createElement;
 
 const EMPTY_FORM = {
@@ -21,12 +23,16 @@ function dispatchRequest(detail) {
 export function AdminRegistrationManualPlayerForm() {
   const [form, setForm] = React.useState(EMPTY_FORM);
   const [pendingRequest, setPendingRequest] = React.useState("");
+  const [error, setError] = React.useState("");
+  const controls = useAdminRegistrationControlsState();
+  const doubles = String(controls.config && controls.config.play_format || "").toLowerCase() === "doubles";
 
   React.useEffect(() => {
     function update(event) {
       if (event.detail?.requestId !== pendingRequest) return;
       setPendingRequest("");
       if (event.detail?.ok === true) setForm(EMPTY_FORM);
+      if (event.detail?.ok === true) setError("");
     }
     if (!pendingRequest) return undefined;
     window.addEventListener("gvdg:admin-registration-manual-player-add-result", update);
@@ -40,8 +46,17 @@ export function AdminRegistrationManualPlayerForm() {
   function submit(event) {
     event.preventDefault();
     if (pendingRequest) return;
+    if (!form.name.trim()) {
+      setError("Enter a player name.");
+      return;
+    }
+    if (doubles && !form.team.trim()) {
+      setError("Doubles needs a pair label (same label on both teammates).");
+      return;
+    }
     const id = requestId();
     setPendingRequest(id);
+    setError("");
     dispatchRequest({
       body: {
         division: form.division.trim() || null,
@@ -51,7 +66,7 @@ export function AdminRegistrationManualPlayerForm() {
         team: form.team.trim() || null,
       },
       requestId: id,
-      valid: Boolean(form.name.trim()),
+      valid: Boolean(form.name.trim()) && (!doubles || Boolean(form.team.trim())),
     });
   }
 
@@ -101,11 +116,13 @@ export function AdminRegistrationManualPlayerForm() {
         key: "team",
         maxLength: 40,
         onChange: (event) => setField("team", event.target.value),
-        placeholder: "team",
+        placeholder: doubles ? "pair label (e.g. KG/TJ)" : "team",
         value: form.team,
       }),
       h("button", { className: "admin-btn secondary", disabled: busy, key: "submit", type: "submit" }, busy ? "Adding..." : "Add player"),
     ]),
-    h("p", { className: "al-note", key: "note", style: { marginTop: "0.4rem" } }, "Added players appear under Registered players above and play alongside registrants."),
+    h("p", { className: "al-note", key: "note", style: { marginTop: "0.4rem" }, role: error ? "alert" : undefined }, error || (doubles
+      ? "For doubles, use the same pair label on both teammates before starting live scoring."
+      : "Added players appear under Registered players above and play alongside registrants.")),
   ]);
 }

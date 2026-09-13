@@ -127,9 +127,19 @@ function StartControls({ state }) {
         value: config.scoringStyle,
       }),
       h("button", { className: "admin-btn", disabled: pending, id: "scStartBtn", key: "start", onClick: start, type: "button" }, pending ? "Starting..." : "Start live scoring"),
+      h("button", {
+        className: "admin-btn secondary",
+        id: "scAddPlayersBtn",
+        key: "roster",
+        onClick: () => {
+          dispatchRequest("gvdg:admin-tab-request", { tab: "registration" });
+          dispatchRequest("gvdg:admin-registration-event-select-request", { eventId: state.eventId });
+        },
+        type: "button",
+      }, "Add players"),
     ]),
     h("p", { className: "al-note", id: "scStartValidation", key: "validation", role: validation ? "status" : undefined }, validation),
-    h("p", { className: "al-note", key: "note" }, "An event needs a layout with pars to score. Pick one here, or set it on the Layouts tab."),
+    h("p", { className: "al-note", key: "note" }, "An event needs a layout with pars to score. Pick one here, or set it on the Layouts tab. Doubles match play also needs players with pair labels in Registration — Start will refuse an empty roster."),
   ]);
 }
 
