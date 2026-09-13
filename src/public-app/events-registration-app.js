@@ -3,6 +3,7 @@ import { CalendarDays, CheckCircle2 } from "lucide-react";
 
 import { formatLabel, isPastClubCalendarEvent, normalizeEvent } from "../shared/events-model.js";
 import { EventScheduleFacts } from "../shared/event-schedule.js";
+import { EventFieldRoster } from "../shared/event-field-roster.js";
 import { clientOwed, isDoublesRegistration, parseArray, parseObject } from "../members-app/registration-utils.js";
 import { publicApiBase } from "./public-api.js";
 
@@ -325,6 +326,7 @@ function RegistrationCard({ api, event, guestReg, myReg, onRefresh, onSessionExp
     h(EventMeta, { event, key: "meta" }),
     h("div", { className: "register-fee", key: "fee" },
       `${event.entry_fee_cents ? `${dollars(event.entry_fee_cents)} entry` : "Free entry"}${event.play_format ? ` - ${formatLabel(event.play_format)}` : ""}`),
+    h(EventFieldRoster, { compact: true, key: "field", players: event.field }),
     registered ? h("div", { className: "register-status", key: "status" }, [
       h("span", { className: "meta-icon", key: "icon" }, icon(CheckCircle2)),
       h("span", { key: "text" }, `Registered${who}`),

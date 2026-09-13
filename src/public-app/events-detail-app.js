@@ -4,7 +4,6 @@ import {
   formatClubDateTime,
   formatEventDate,
   formatLabel,
-  groupPlayersByDivision,
   statusLabel,
   typeLabel,
 } from "../shared/events-model.js";
@@ -16,7 +15,7 @@ import { displayMatchStatus } from "../shared/match-status.js";
 import { TeeSignSvg } from "../shared/tee-sign-svg.js";
 import { UDiscExportDetails, udiscDeepLink } from "../shared/udisc-export.js";
 import { useEventsEventDetail } from "./events-detail-data.js";
-import { EventLiveChat } from "./events-live-chat.js";
+import { EventFieldRoster } from "../shared/event-field-roster.js";
 
 const h = React.createElement;
 
@@ -383,25 +382,8 @@ function TeeSigns({ apiBase, teeSigns }) {
 }
 
 function PlayerRoster({ event }) {
-  const players = Array.isArray(event.players) ? event.players : [];
-  const grouped = groupPlayersByDivision(players);
-  if (!grouped.length) return null;
-  const showDivisionHeads = !(grouped.length === 1 && grouped[0].division === "Open");
-
-  return h(React.Fragment, null, [
-    h("h3", { className: "roster-title", key: "title" }, `Players (${players.length})`),
-    grouped.map((group) => h("div", { className: "division-group", key: group.division }, [
-      showDivisionHeads ? h("div", { className: "division-name", key: "division" }, group.division) : null,
-      h("div", { className: "player-list", key: "players" }, group.players.map((player, index) => {
-        const name = player && player.name != null ? String(player.name) : "Unnamed";
-        return h("div", { className: "player-row", key: `${name}|${index}` }, [
-          h("span", { className: "player-name", key: "name" }, name),
-          player && player.pdga_no ? h("span", { className: "player-pdga", key: "pdga" }, `#${player.pdga_no}`) : null,
-          player && player.team ? h("span", { className: "player-team", key: "team" }, String(player.team)) : null,
-        ]);
-      })),
-    ])),
-  ]);
+  const field = Array.isArray(event.field) && event.field.length ? event.field : (Array.isArray(event.players) ? event.players : []);
+  return h(EventFieldRoster, { players: field });
 }
 
 export function EventsEventDetailApp() {

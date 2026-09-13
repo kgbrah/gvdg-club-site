@@ -18,7 +18,7 @@ const SECRET = "x".repeat(40);
 const ORIGIN = "http://localhost:8080";
 const MEMBERS = {
   "member:m_admin": JSON.stringify({ memberId: "m_admin", name: "Admin", isAdmin: true, pinHash: "x", mustChangePin: false }),
-  "member:m_jane": JSON.stringify({ memberId: "m_jane", name: "Jane", isAdmin: false, pinHash: "x", mustChangePin: false }),
+  "member:m_jane": JSON.stringify({ memberId: "m_jane", name: "Jane", isAdmin: false, pinHash: "x", mustChangePin: false, pdgaNo: "273070" }),
 };
 
 function kv(initial: Record<string, string> = {}) {
@@ -42,6 +42,9 @@ function db(
     openRegistrationSql?: string;
     existingEvent?: Record<string, unknown>;
     existingEventConfig?: Record<string, unknown> | null;
+    fieldRegs?: Record<string, unknown>[];
+    fieldWalkons?: Record<string, unknown>[];
+    pdgaCache?: Record<string, unknown>[];
   } = {},
 ) {
   return {
@@ -54,7 +57,13 @@ function db(
         },
         all: async () => {
           if (/FROM event_players/i.test(sql)) {
-            return { results: [], success: true };
+            return { results: state.fieldWalkons ?? [], success: true };
+          }
+          if (/FROM registrations WHERE event_id IN/i.test(sql)) {
+            return { results: state.fieldRegs ?? [], success: true };
+          }
+          if (/FROM pdga_cache/i.test(sql)) {
+            return { results: state.pdgaCache ?? [], success: true };
           }
           if (/FROM event_courses ec/i.test(sql)) {
             return { results: [], success: true };
@@ -319,6 +328,24 @@ describe("admin event management", () => {
     expect(state.openRegistrationSql).toMatch(/e\.status IN \('scheduled','live'\)/);
     expect(state.openRegistrationSql).toMatch(/e\.starts_at, e\.registration_deadline, e\.checkin_deadline/);
     expect(state.openRegistrationSql).toMatch(/ORDER BY CASE WHEN e\.status = 'live' THEN 0 ELSE 1 END, e\.date, e\.id/);
+  });
+
+  it("includes the registered field with PDGA ratings grouped for open events", async () => {
+    const state: Parameters<typeof db>[0] = {
+      fieldRegs: [{ event_id: 5, member_id: "m_jane", name: "Jane", division: "MA1", team: null }],
+      fieldWalkons: [{ event_id: 5, member_id: null, name: "Pat Guest", pdga_no: "12345", division: "MA2", team: null }],
+      pdgaCache: [
+        { pdga: "273070", data: JSON.stringify({ official_rating: 941, live_rating: 950 }) },
+        { pdga: "12345", data: JSON.stringify({ official_rating: 890 }) },
+      ],
+    };
+    const res = await call("/registration/open", "GET", undefined, undefined, state);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { events: { field?: { name: string; division: string | null; rating: number | null }[] }[] };
+    expect(body.events[0]?.field).toEqual([
+      { name: "Jane", division: "MA1", team: null, pdga_no: "273070", rating: 941 },
+      { name: "Pat Guest", division: "MA2", team: null, pdga_no: "12345", rating: 890 },
+    ]);
   });
 
   it("persists normalized live scoring config when admin saves event config", async () => {

@@ -314,7 +314,14 @@
         [data-theme="dark"] .player-row { background: var(--bg-primary); }
         .player-name { font-weight: 600; color: var(--text-secondary); }
         .player-pdga { font-size: 0.78rem; color: var(--text-muted); }
+        .player-rating { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; color: var(--text-primary); }
         .player-team { margin-left: auto; font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+        .player-row .player-rating + .player-team { margin-left: 0.5rem; }
+        .event-field-compact { margin-top: 0.75rem; }
+        .event-field-title { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); margin: 0 0 0.4rem; }
+        .event-field-compact .division-group { margin-bottom: 0.7rem; }
+        .event-field-compact .player-list { grid-template-columns: 1fr; gap: 0.3rem; }
+        .event-field-compact .player-row { padding: 0.4rem 0.65rem; }
 
         /* ---- States ---- */
         .status-box { text-align: center; padding: 3rem 1.5rem; color: var(--text-primary); }

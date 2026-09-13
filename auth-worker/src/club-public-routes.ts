@@ -7,6 +7,7 @@ import { bearer, json } from "./http.js";
 import { RECORD_PAGE_DEFAULTS, asInt, parseWindow } from "./input.js";
 import { handleTeeSignImage } from "./tee-sign-routes.js";
 import { readD1OrFallback } from "./d1-retry.js";
+import { publicFieldsByEvent } from "./event-field.js";
 
 const COURSE_CATALOG_CACHE_VERSION = "course-catalog-v2";
 const COURSE_CATALOG_CACHE_NAME = "gvdg-course-catalog";
@@ -99,8 +100,17 @@ export async function handleClubPublic(
     return f ? json({ fundraiser: f }, 200, origin) : json({ error: "not_found" }, 404, origin);
   }
   if (method === "GET" && pathname === "/registration/open") {
-    const events = await readD1OrFallback(() => db.listOpenRegistrationEvents(env.DB), () => []);
-    return json({ events }, 200, origin);
+    const events = await readD1OrFallback(() => db.listOpenRegistrationEvents(env.DB), () => []) as { id?: number }[];
+    const fields = await readD1OrFallback(
+      () => publicFieldsByEvent(env, events.map((event) => Number(event.id)).filter((id) => Number.isInteger(id))),
+      () => new Map<number, never[]>(),
+    );
+    return json({
+      events: events.map((event) => ({
+        ...event,
+        field: fields.get(Number(event.id)) || [],
+      })),
+    }, 200, origin);
   }
   if (method === "GET" && pathname === "/payments/config") {
     return json({ enabled: !!(env.PAYPAL_CLIENT_ID && env.PAYPAL_SECRET), clientId: env.PAYPAL_CLIENT_ID ?? null, env: env.PAYPAL_ENV ?? "sandbox" }, 200, origin);
@@ -128,8 +138,11 @@ export async function handleClubPublic(
   }
   if (method === "GET" && seg[0] === "events" && seg.length === 2) {
     const id = asInt(seg[1]);
-    const ev = id == null ? null : await db.getEvent(env.DB, id);
-    return ev ? json({ event: ev }, 200, origin) : json({ error: "not_found" }, 404, origin);
+    if (id == null) return json({ error: "not_found" }, 404, origin);
+    const ev = await db.getEvent(env.DB, id);
+    if (!ev) return json({ error: "not_found" }, 404, origin);
+    const fields = await readD1OrFallback(() => publicFieldsByEvent(env, [id]), () => new Map());
+    return json({ event: { ...ev, field: fields.get(id) || [] } }, 200, origin);
   }
   if (method === "GET" && seg[0] === "events" && seg.length === 3 && seg[2] === "results") {
     const eid = asInt(seg[1]);
