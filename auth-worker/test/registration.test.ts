@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
 import { signSession } from "../src/jwt.js";
 import { retryableD1LossDb } from "./d1-test-utils.js";
@@ -106,6 +107,12 @@ describe("Track G — event registration", () => {
     const res = await call("/my-registrations", "GET", await tok("m_jane"), undefined, OPEN);
     const body = (await res.json()) as { registrations: Array<Record<string, unknown>> };
     expect(body.registrations[0]).toMatchObject({ event_id: 5, event_name: "Saturday Doubles", event_status: "scheduled", course_name: "River Park North" });
+  });
+  it("listMyRegistrations selects event schedule timestamps under aliased names", () => {
+    const src = readFileSync(new URL("../src/db-registration.ts", import.meta.url), "utf8");
+    expect(src).toMatch(/e\.starts_at AS event_starts_at/);
+    expect(src).toMatch(/e\.registration_deadline AS event_registration_deadline/);
+    expect(src).toMatch(/e\.checkin_deadline AS event_checkin_deadline/);
   });
   it("GET /my-registrations returns an empty list when the dashboard D1 read is transiently unavailable", async () => {
     const res = await call("/my-registrations", "GET", await tok("m_jane"), undefined, OPEN, "scheduled", retryableD1LossDb());

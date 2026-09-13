@@ -29,6 +29,9 @@ export function eventFromRegistration(row) {
     status: row.event_status || null,
     course_name: row.course_name || null,
     layout_name: row.layout_name || null,
+    starts_at: row.event_starts_at || null,
+    registration_deadline: row.event_registration_deadline || null,
+    checkin_deadline: row.event_checkin_deadline || null,
   };
 }
 

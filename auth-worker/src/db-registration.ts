@@ -24,6 +24,9 @@ export async function listMyRegistrations(db: D1Like, memberId: string) {
       .prepare(
         `SELECT r.*,
                 e.name AS event_name, e.date AS event_date, e.status AS event_status,
+                e.starts_at AS event_starts_at,
+                e.registration_deadline AS event_registration_deadline,
+                e.checkin_deadline AS event_checkin_deadline,
                 c.name AS course_name, l.name AS layout_name
          FROM registrations r
          LEFT JOIN events e ON e.id = r.event_id

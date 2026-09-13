@@ -42,6 +42,8 @@ test('admin new event form is rendered by React and saved through bridge events'
   assert.match(main, /createRoot\(eventFormMount\)\.render\(h\(AdminEventForm\)\)/);
   assert.match(eventForm, /export function AdminEventForm/);
   assert.match(eventForm, /data-react-admin-event-form/);
+  assert.match(eventForm, /clubWallClockToIso/);
+  assert.match(eventForm, /isoToClubWallClock/);
   assert.match(eventForm, /React\.useLayoutEffect/);
   assert.match(eventForm, /id: "adminCreateForm"/);
   assert.match(eventForm, /id: "aeName"/);

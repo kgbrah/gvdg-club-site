@@ -300,6 +300,7 @@ describe("admin event management", () => {
     const body = (await res.json()) as { events: { course_name?: string; layout_name?: string; status?: string; total_par?: number }[] };
     expect(body.events[0]).toMatchObject({ course_name: "West Meadowbrook", layout_name: "Gold", status: "live", total_par: 54 });
     expect(state.openRegistrationSql).toMatch(/e\.status IN \('scheduled','live'\)/);
+    expect(state.openRegistrationSql).toMatch(/e\.starts_at, e\.registration_deadline, e\.checkin_deadline/);
     expect(state.openRegistrationSql).toMatch(/ORDER BY CASE WHEN e\.status = 'live' THEN 0 ELSE 1 END, e\.date, e\.id/);
   });
 

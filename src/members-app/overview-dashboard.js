@@ -8,6 +8,7 @@ import { useMemberContext } from "./member-context.js";
 import { usePdgaStats } from "./pdga-dashboard.js";
 import { useRegistrationData } from "./registration-panel.js";
 import { eventMeta } from "./registration-utils.js";
+import { EventScheduleFacts } from "../shared/event-schedule.js";
 
 const h = React.createElement;
 
@@ -83,6 +84,7 @@ function UpNextCard({ events }) {
     h("h3", { key: "title" }, "Up next"),
     h("div", { className: "player-event-name", key: "name" }, event.name || "Club event"),
     meta ? h("div", { className: "player-card-meta", key: "meta" }, meta) : null,
+    h(EventScheduleFacts, { event, key: "schedule" }),
     h("div", { className: "player-chip-row", key: "chips" }, [
       h("span", { className: `player-chip${live ? " live" : ""}`, key: "status" }, live ? "Live" : "Open"),
       event.play_format === "doubles" ? h("span", { className: "player-chip", key: "format" }, "Doubles") : null,

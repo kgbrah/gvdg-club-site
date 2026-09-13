@@ -200,7 +200,7 @@ function ScoreShell() {
         icon(Moon),
       ),
     ]),
-    h(InstallCoachBanner, { key: "install" }),
+    bodyView.kind === "watch" ? null : h(InstallCoachBanner, { key: "install" }),
     h("main", { id: "app" }, h(ScoreBody, { view: bodyView })),
     h(CrottsWidget, { key: "help" }),
   ]);

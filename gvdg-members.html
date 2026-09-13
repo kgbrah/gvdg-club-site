@@ -499,6 +499,14 @@
                 }
                 .player-event-name { font-weight: 800; color: var(--text-primary); }
                 .player-card-meta { color: var(--text-muted); font-size: 0.8rem; margin-top: 0.15rem; line-height: 1.4; }
+                .event-schedule { display: grid; gap: 0.22rem; margin-top: 0.55rem; }
+                .event-schedule-row {
+                    display: grid; grid-template-columns: auto minmax(0, 1fr);
+                    gap: 0.45rem; align-items: baseline; font-size: 0.8rem; line-height: 1.35;
+                }
+                .event-schedule-row dt { color: var(--text-muted); font-weight: 700; }
+                .event-schedule-row dd { margin: 0; color: var(--text-primary); font-weight: 700; overflow-wrap: anywhere; }
+                .register-card .event-schedule { margin-top: 0.4rem; margin-bottom: 0.35rem; }
                 .player-chip-row { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.55rem; }
                 .player-chip {
                     font-size: 0.7rem; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase;
