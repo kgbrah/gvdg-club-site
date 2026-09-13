@@ -298,6 +298,7 @@ test('score controller delegates scorecard derivation to a pure view model', () 
   assert.match(viewModel, /export function buildScorecardViewState/);
   assert.match(viewModel, /export function yourTurnHint\(state\)/);
   assert.match(viewModel, /export function scoreRows\(state\)/);
+  assert.match(viewModel, /export function applyTeeOrder/);
   assert.match(viewModel, /export function strokesForRow/);
   assert.match(viewModel, /export function finalizeBlockers\(state\)/);
   assert.match(viewModel, /export function finishRoundHint\(blockers, mode\)/);
@@ -341,6 +342,9 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
   const view = buildScorecardViewState({ state, mode: 'round', roundCode: 'QA1234', scorerIndex: 0, teeSign: null });
   assert.equal(scoreRows(state).length, 2);
   assert.equal(view.rows[0].currentScore, 2);
+  assert.equal(view.rows[0].teePosition, 1);
+  assert.equal(view.rows[0].honors, false);
+  assert.equal(view.teeOrderHint, 'Tee order: Ava King · then Milo Chen');
   assert.equal(view.rows[0].relative.text, '-1');
   assert.equal(view.rows[1].conflictText.includes('4 vs 5'), true);
   assert.deepEqual(view.totals, [
@@ -502,6 +506,9 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /function ScoreRow\(props\)/);
   assert.match(scorecard, /nextHoleScore/);
   assert.match(scorecard, /Clear \$\{row\.label\} on hole/);
+  assert.match(scorecard, /tee-order-hint/);
+  assert.match(scorecard, /honors-chip/);
+  assert.match(scorecard, /Throws first/);
   assert.match(scorecard, /function HoleGrid\(props\)/);
   assert.match(scorecard, /export function ScorecardView\(props\)/);
   assert.match(scorecard, /WeatherStrip/);
@@ -536,7 +543,9 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /holegrid-score/);
   assert.match(html, /\.hole-map-satellite/);
   assert.match(html, /\.hole-map-frame/);
-  assert.match(html, /\.watch-holes/);
+  assert.match(html, /\.tee-order-hint/);
+  assert.match(html, /\.tee-pos/);
+  assert.match(html, /\.honors-chip/);
   assert.match(html, /\.hole-map-compact/);
   assert.match(html, /\.hole-map-player/);
   assert.match(html, /\.hole-map-player-dot/);
@@ -546,6 +555,82 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.doesNotMatch(legacy, /const grid = el\('div', 'holegrid'\)/);
   assert.doesNotMatch(legacy, /document\.createElement\('select'\)/);
   assert.doesNotMatch(scorecard, /createRoot|getElementById\("app"\)|replaceChildren/);
+});
+
+test('PDGA tee order puts the previous-hole winner first and keeps ties stable', async () => {
+  const { applyTeeOrder, buildScorecardViewState, scoreRows } = await import(new URL('../src/score-app/score-view-model.js', import.meta.url));
+  const base = {
+    holes: [{ hole: 1, par: 3 }, { hole: 2, par: 3 }, { hole: 3, par: 3 }],
+    cardmates: [
+      { index: 0, name: 'Kevin', isMe: true, scores: { 1: 3, 2: 4 } },
+      { index: 1, name: 'Aaron', scores: { 1: 2, 2: 4 } },
+      { index: 2, name: 'Tyler', scores: { 1: 3, 2: 3 } },
+    ],
+    myIndex: 0,
+    roundConfig: { groupFormat: 'singles', scoringStyle: 'stroke' },
+    scoreTargets: [],
+    snap: { standings: [] },
+  };
+
+  const listed = scoreRows({ ...base, holeIdx: 0 });
+  const firstTee = applyTeeOrder(base, listed, 0, 0);
+  assert.deepEqual(firstTee.rows.map((row) => row.label), ['Kevin (you)', 'Aaron', 'Tyler']);
+  assert.equal(firstTee.honorsReady, false);
+  assert.equal(firstTee.hint, 'Tee order: Kevin · then Aaron, Tyler');
+
+  const hole2 = applyTeeOrder(base, listed, 1, 0);
+  assert.deepEqual(hole2.rows.map((row) => row.label), ['Aaron', 'Kevin (you)', 'Tyler']);
+  assert.equal(hole2.honorsReady, true);
+  assert.equal(hole2.hint, 'Honors: Aaron · then Kevin, Tyler');
+
+  const hole3 = applyTeeOrder(base, listed, 2, 0);
+  assert.deepEqual(hole3.rows.map((row) => row.label), ['Tyler', 'Aaron', 'Kevin (you)']);
+  assert.equal(hole3.hint, 'Honors: Tyler · then Aaron, Kevin');
+
+  const waiting = applyTeeOrder({
+    ...base,
+    cardmates: [
+      { index: 0, name: 'Kevin', isMe: true, scores: { 1: 3 } },
+      { index: 1, name: 'Aaron', scores: { 1: 2 } },
+      { index: 2, name: 'Tyler', scores: { 1: 3 } },
+    ],
+  }, listed, 2, 0);
+  assert.deepEqual(waiting.rows.map((row) => row.label), ['Aaron', 'Kevin (you)', 'Tyler']);
+  assert.equal(waiting.honorsReady, false);
+  assert.equal(waiting.hint, 'Tee order after hole 2 scores');
+
+  const view = buildScorecardViewState({
+    state: { ...base, holeIdx: 1, conflicts: [], missing: [], scoreTargetError: null, weather: null, pots: null },
+    mode: 'round',
+    roundCode: 'QA1234',
+    scorerIndex: 0,
+    teeSign: null,
+  });
+  assert.equal(view.rows[0].label, 'Aaron');
+  assert.equal(view.rows[0].honors, true);
+  assert.equal(view.rows[0].teePosition, 1);
+  assert.equal(view.rows[1].label, 'Kevin (you)');
+  assert.equal(view.teeOrderHint, 'Honors: Aaron · then Kevin, Tyler');
+
+  const doubles = applyTeeOrder({
+    holes: [{ hole: 1, par: 3 }, { hole: 2, par: 3 }],
+    cardmates: [
+      { index: 0, name: 'A', scores: { 1: 4 } },
+      { index: 1, name: 'B', scores: { 1: 4 } },
+      { index: 2, name: 'C', scores: { 1: 3 } },
+      { index: 3, name: 'D', scores: { 1: 3 } },
+    ],
+    roundConfig: { groupFormat: 'doubles', scoringStyle: 'stroke' },
+    scoreTargets: [
+      { id: 'pair:red', type: 'pair', label: 'Red', members: ['A', 'B'], playerIndexes: [0, 1] },
+      { id: 'pair:blue', type: 'pair', label: 'Blue', members: ['C', 'D'], playerIndexes: [2, 3] },
+    ],
+  }, [
+    { type: 'pair', targetId: 'pair:red', label: 'Red', playerIndexes: [0, 1] },
+    { type: 'pair', targetId: 'pair:blue', label: 'Blue', playerIndexes: [2, 3] },
+  ], 1, 0);
+  assert.deepEqual(doubles.rows.map((row) => row.label), ['Blue', 'Red']);
+  assert.equal(doubles.hint, 'Honors: Blue · then Red');
 });
 
 test('stepper minus from blank sets birdie; minus from 1 clears the hole', async () => {

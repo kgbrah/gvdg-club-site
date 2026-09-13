@@ -103,6 +103,7 @@
         .pots-ctps { list-style: none; margin: 0.4rem 0 0; padding: 0; display: grid; gap: 0.25rem; color: var(--text-secondary); font-size: 0.88rem; }
         .pots-ace-hint { margin: 0 0 0.75rem; padding: 0.65rem 0.8rem; border-radius: 12px; border: 1px solid var(--accent); background: var(--bg-secondary); color: var(--text-primary); font-size: 0.88rem; font-weight: 700; }
         .ctp-badge { display: inline-block; margin-top: 0.28rem; padding: 0.12rem 0.5rem; border-radius: 999px; border: 1px solid var(--accent); background: var(--bg-tertiary); color: var(--text-primary); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+        .tee-order-hint { margin-top: 0.28rem; font-size: 0.74rem; font-weight: 700; color: var(--text-muted); line-height: 1.3; }
         .ctp-claim { margin-bottom: 0.85rem; }
         .ctp-claim-title { font-weight: 800; color: var(--text-primary); }
         .ctp-claim-leader { margin-top: 0.2rem; font-weight: 700; }
@@ -315,8 +316,21 @@
         .prow { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0; border-top: 1px solid var(--border-color); }
         .prow:first-child { border-top: none; }
         .prow.conflict { border-left: 4px solid var(--over); padding-left: 0.55rem; background: var(--over-soft); }
+        .prow.honors { background: var(--bg-tertiary); }
+        .tee-pos {
+            flex: 0 0 1.55rem; width: 1.55rem; height: 1.55rem; border-radius: 999px;
+            display: grid; place-items: center; font-size: 0.72rem; font-weight: 800;
+            color: var(--text-muted); background: var(--bg-primary); border: 1px solid var(--border-color);
+        }
+        .prow.honors .tee-pos { background: var(--primary-strong); color: var(--light); border-color: var(--primary); }
         .prow .pinfo { flex: 1; min-width: 0; }
-        .prow .pname { font-weight: 700; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .pinfo-head { display: flex; align-items: center; gap: 0.35rem; min-width: 0; }
+        .prow .pname { font-weight: 700; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+        .honors-chip {
+            flex: 0 0 auto; padding: 0.08rem 0.4rem; border-radius: 999px;
+            background: var(--primary-strong); color: var(--light);
+            font-size: 0.58rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+        }
         .prow .pmeta { font-size: 0.74rem; color: var(--text-muted); }
         .prow .conflict-text { color: var(--over); font-weight: 700; }
         .stepper { display: flex; align-items: center; gap: 0.45rem; }
@@ -391,6 +405,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=135"></script>
+    <script type="module" src="score-app/score-app.js?v=136"></script>
 </body>
 </html>

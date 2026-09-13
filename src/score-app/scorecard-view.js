@@ -68,6 +68,7 @@ function HoleHeader(props) {
       h("div", { className: "hpar", key: "par" }, props.holeMeta),
       props.ctpBadge ? h("div", { className: "ctp-badge", key: "ctp" }, props.ctpBadge) : null,
       props.matchStatus ? h("div", { className: "pmeta", key: "match" }, props.matchStatus) : null,
+      props.teeOrderHint ? h("div", { className: "tee-order-hint", key: "tee" }, props.teeOrderHint) : null,
       props.dormie ? h("div", { className: "dormie-badge", key: "dormie" }, "DORMIE - win or halve this hole to close it") : null,
     ]),
     h(
@@ -128,9 +129,23 @@ function ScoreRow(props) {
   const current = row.currentScore;
   const nextMinus = nextHoleScore(current, props.hole.par, "minus");
   const nextPlus = nextHoleScore(current, props.hole.par, "plus");
-  return h("div", { className: "prow" + (row.conflictText ? " conflict" : ""), key: row.key }, [
+  const classes = ["prow"];
+  if (row.conflictText) classes.push("conflict");
+  if (row.honors) classes.push("honors");
+  const teeLabel = row.honors
+    ? `${row.label} has honors, throws first`
+    : row.teePosition
+      ? `${row.label} throws ${row.teePosition}`
+      : null;
+  return h("div", { className: classes.join(" "), key: row.key }, [
+    row.teePosition
+      ? h("div", { "aria-label": teeLabel, className: "tee-pos", key: "tee" }, String(row.teePosition))
+      : null,
     h("div", { className: "pinfo", key: "info" }, [
-      h("div", { className: "pname", key: "name" }, row.label),
+      h("div", { className: "pinfo-head", key: "head" }, [
+        h("div", { className: "pname", key: "name" }, row.label),
+        row.honors ? h("span", { className: "honors-chip", key: "honors" }, "Throws first") : null,
+      ]),
       row.meta ? h("div", { className: "pmeta", key: "meta" }, row.meta) : null,
       row.conflictText ? h("div", { className: "pmeta conflict-text", key: "conflict" }, row.conflictText) : null,
     ]),

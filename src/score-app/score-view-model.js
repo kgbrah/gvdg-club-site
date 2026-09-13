@@ -254,6 +254,49 @@ export function strokesForRow(state, row, hole, scorerIndex) {
   return Number.isInteger(index) ? strokesFor(state, index, hole, scorerIndex) : null;
 }
 
+function teeDisplayName(label) {
+  return String(label || "").replace(/\s+\(you\)$/i, "").trim() || "Player";
+}
+
+function teeSequenceText(rows) {
+  const names = (Array.isArray(rows) ? rows : []).map((row) => teeDisplayName(row.label));
+  if (!names.length) return "";
+  if (names.length === 1) return names[0];
+  return names[0] + " · then " + names.slice(1).join(", ");
+}
+
+/** PDGA 802.02: first tee is scorecard order; later tees sort by previous-hole score, lowest first. Ties keep the previous order. */
+export function applyTeeOrder(state, rows, holeIdx, scorerIndex) {
+  const listed = Array.isArray(rows) ? rows.slice() : [];
+  const holes = Array.isArray(state && state.holes) ? state.holes : [];
+  const currentIdx = Number.isInteger(holeIdx) ? holeIdx : 0;
+  let ordered = listed;
+  let lastApplied = -1;
+  for (let i = 0; i < currentIdx && i < holes.length; i++) {
+    const prev = holes[i];
+    if (!prev) break;
+    const ranked = ordered.map((row, idx) => ({
+      idx,
+      row,
+      score: strokesForRow(state, row, prev.hole, scorerIndex),
+    }));
+    if (ranked.some((item) => typeof item.score !== "number")) break;
+    ordered = ranked.sort((a, b) => a.score - b.score || a.idx - b.idx).map((item) => item.row);
+    lastApplied = i;
+  }
+  const honorsReady = currentIdx > 0 && lastApplied === currentIdx - 1;
+  const sequence = teeSequenceText(ordered);
+  let hint = "";
+  if (!listed.length) hint = "";
+  else if (currentIdx <= 0) hint = sequence ? "Tee order: " + sequence : "";
+  else if (honorsReady) hint = sequence ? "Honors: " + sequence : "";
+  else {
+    const waiting = holes[currentIdx - 1];
+    hint = waiting ? "Tee order after hole " + waiting.hole + " scores" : (sequence ? "Tee order: " + sequence : "");
+  }
+  return { honorsReady, hint, rows: ordered };
+}
+
 export function conflictForRow(state, row, hole) {
   if (row.targetId) {
     return (state.conflicts || []).find((conflict) =>
@@ -309,25 +352,29 @@ function holeMeta(state, index) {
 
 export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, teeSign }) {
   const hole = holeMeta(state, state.holeIdx);
-  const rows = scoreRows(state);
+  const listed = scoreRows(state);
+  const tee = applyTeeOrder(state, listed, state.holeIdx, scorerIndex);
+  const rows = tee.rows;
   const warning = state.scoreTargetError && state.scoreTargetError.message
     ? state.scoreTargetError.message
     : isDoublesScoring(state) && !rows.length
       ? "Set pairs in Manage before scoring doubles."
       : null;
 
-  const rowViews = rows.map((rowData) => {
+  const rowViews = rows.map((rowData, order) => {
     const conflict = conflictForRow(state, rowData, hole.hole);
     const currentScore = strokesForRow(state, rowData, hole.hole, scorerIndex);
     const delta = currentScore == null ? null : currentScore - hole.par;
     return {
       conflictText: conflict ? "Conflict: " + (conflict.values || []).join(" vs ") + " - set yours to match" : "",
       currentScore,
+      honors: tee.honorsReady && order === 0,
       key: rowData.targetId || rowData.index,
       label: rowData.label,
       meta: rowData.meta,
       relative: delta == null ? null : { className: relClass(delta), text: relText(delta) },
       source: rowData,
+      teePosition: order + 1,
     };
   });
 
@@ -433,6 +480,7 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
     show: mode === "round",
     showPots: pots.visible,
     showWeather: Boolean(state.weather),
+    teeOrderHint: tee.hint,
     teeSign,
     totals,
     udiscCourseId: state.udiscCourseId || "",
