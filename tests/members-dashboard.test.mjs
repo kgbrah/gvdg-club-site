@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
+import { eventFromRegistration } from '../src/members-app/registration-utils.js';
+
 test('member dashboard React registration panel includes casual round posts', () => {
   const panel = readFileSync('src/members-app/registration-panel.js', 'utf8');
   const casual = readFileSync('src/members-app/registration-casual.js', 'utf8');
@@ -200,6 +202,22 @@ test('member dashboard React registration panel surfaces live events and lists e
   assert.match(events, /eventFromRegistration/); // registrations no longer in the open list still render
   assert.match(events, /EventScheduleFacts/);
   assert.match(readFileSync('src/members-app/registration-panel.js', 'utf8'), /requestJson\("\/my-registrations"/);
+});
+
+test('eventFromRegistration copies joined schedule timestamps onto the synth event', () => {
+  const event = eventFromRegistration({
+    event_id: 9,
+    event_name: 'Sunday Dubs',
+    event_date: '2026-09-13',
+    event_status: 'scheduled',
+    event_starts_at: '2026-09-13T17:30:00.000Z',
+    event_registration_deadline: '2026-09-13T16:00:00.000Z',
+    event_checkin_deadline: '2026-09-13T17:00:00.000Z',
+  });
+  assert.equal(event.starts_at, '2026-09-13T17:30:00.000Z');
+  assert.equal(event.registration_deadline, '2026-09-13T16:00:00.000Z');
+  assert.equal(event.checkin_deadline, '2026-09-13T17:00:00.000Z');
+  assert.equal(eventFromRegistration({ event_id: 9 }).starts_at, null);
 });
 
 test('member dashboard can post a casual round and jump to a live scorecard', () => {

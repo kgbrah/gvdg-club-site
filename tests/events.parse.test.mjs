@@ -152,11 +152,18 @@ test('eventScheduleFacts shows clock-only times on the event day and full dateti
   assert.equal(priorDay[0].label, 'Register by');
   assert.match(priorDay[0].value, /Sep 12/);
   assert.match(priorDay[0].value, /6:00/);
+
+  assert.deepEqual(eventScheduleFacts({
+    date: '2026-09-13',
+    starts_at: '2026-09-13',
+    registration_deadline: '2026-09-12',
+  }), []);
 });
 
 test('formatClubClock never throws and labels missing timestamps', () => {
   assert.equal(formatClubClock(''), '');
   assert.equal(formatClubClock(null), '');
+  assert.equal(formatClubClock('2026-09-13'), '');
   const out = formatClubClock('2026-07-04T12:00:00.000Z');
   assert.match(out, /8:00/);
   assert.match(out, /EDT/);

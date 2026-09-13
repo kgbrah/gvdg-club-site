@@ -136,7 +136,9 @@ export function formatClubDateTime(raw) {
 
 export function formatClubClock(raw) {
   if (raw == null || raw === '') return '';
-  const d = new Date(raw);
+  const text = raw instanceof Date ? '' : String(raw).trim();
+  if (text && DATE_ONLY.test(text)) return '';
+  const d = raw instanceof Date ? raw : new Date(raw);
   if (Number.isNaN(d.getTime())) return '';
   try {
     return d.toLocaleString([], { hour: 'numeric', minute: '2-digit', timeZone: CLUB_TIME_ZONE, timeZoneName: 'short' });
