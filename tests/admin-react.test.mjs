@@ -143,13 +143,14 @@ test('admin pane visibility is controlled by React state and body attributes', (
   const shellState = readFileSync('src/admin-app/admin-shell-state.js', 'utf8');
   const showPanel = html.match(/function showAdminPanel\(\) \{[\s\S]*?\n        \}/)?.[0];
   const showGate = html.match(/function showGate\(message, withMembersLink\) \{[\s\S]*?\n        \}/)?.[0];
-  const adminSwitch = html.match(/function adminSwitch\(tab\) \{[\s\S]*?\n        \}/)?.[0];
+  const adminSwitch = html.match(/function adminSwitch\(tab, detail\) \{[\s\S]*?\n        \}/)?.[0];
 
   assert.match(html, /data-admin-panel="hidden"/);
-  assert.match(html, /data-admin-tab="events"/);
+  assert.match(html, /data-admin-tab="today"/);
   assert.match(html, /id="adminPaneVisibilityReactApp"/);
   assert.match(html, /\.admin-panel \{ display: none;/);
   assert.match(html, /body\[data-admin-panel="visible"\] #adminPanel \{ display: block; \}/);
+  assert.match(html, /body\[data-admin-tab="today"\] #apane-today/);
   assert.match(html, /body\[data-admin-tab="events"\] #apane-events/);
   assert.match(html, /body\[data-admin-tab="data-archive"\] #apane-data-archive \{ display: block; \}/);
   assert.doesNotMatch(html, /id="adminPanel" class="admin-panel" style=/);
@@ -184,7 +185,7 @@ test('admin navigation is rendered by React and drives pane switching through ev
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const nav = readFileSync('src/admin-app/navigation.js', 'utf8');
   const shellState = readFileSync('src/admin-app/admin-shell-state.js', 'utf8');
-  const adminSwitch = html.match(/function adminSwitch\(tab\) \{[\s\S]*?\n        \}/)?.[0];
+  const adminSwitch = html.match(/function adminSwitch\(tab, detail\) \{[\s\S]*?\n        \}/)?.[0];
   const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminNavigationReactApp"/);
@@ -196,13 +197,14 @@ test('admin navigation is rendered by React and drives pane switching through ev
   assert.doesNotMatch(adminSwitch, /querySelectorAll|classList|\.admin-pane|\.admin-tab|\.admin-mnav/);
   assert.ok(initAdmin);
   assert.match(initAdmin, /window\.addEventListener\('gvdg:admin-tab-request'/);
-  assert.match(initAdmin, /adminSwitch\(tab\)/);
+  assert.match(initAdmin, /adminSwitch\(tab, event\.detail \|\| \{\}\)\.catch/);
   assert.match(main, /import \{ AdminNavigation \} from "\.\/navigation\.js"/);
   assert.match(main, /const navigationMount = document\.getElementById\("adminNavigationReactApp"\)/);
   assert.match(main, /createRoot\(navigationMount\)\.render\(h\(AdminNavigation\)\)/);
   assert.match(nav, /export const ADMIN_NAV_GROUPS/);
+  assert.match(nav, /export const ADMIN_DOCK/);
   assert.match(nav, /export function AdminNavigation/);
-  assert.match(nav, /className: "admin-mobile-nav"/);
+  assert.match(nav, /className: "admin-dock"/);
   assert.match(nav, /className: "admin-sidebar"/);
   assert.match(nav, /aria-current/);
   assert.match(nav, /gvdg:admin-tab-request/);
@@ -210,7 +212,7 @@ test('admin navigation is rendered by React and drives pane switching through ev
   assert.match(nav, /currentAdminActiveTab/);
   assert.doesNotMatch(nav, /__gvdgAdminActiveTab/);
   assert.match(nav, /setActiveTab\(initialTab\(\)\)/);
-  assert.match(nav, /value: selectValue\(group\)/);
+  assert.match(nav, /dockForTab\(activeTab\)/);
   assert.doesNotMatch(nav, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️/);
 });
 
@@ -321,7 +323,7 @@ test('admin events list is rendered by React from direct loader events', () => {
   assert.match(eventsList, /MANUAL_STATUSES = \["scheduled", "final", "cancelled"\]/);
   assert.match(eventsList, /function statusOptions\(current\)/);
   assert.match(eventsList, /disabled: true, hidden: true/);
-  assert.match(eventsList, /className: "admin-evrow"/);
+  assert.match(eventsList, /className: "admin-evrow admin-event-card"/);
   assert.match(eventsList, /className: `admin-badge \$\{event\.status\}`/);
   assert.match(eventsList, /role: "status"/);
   assert.doesNotMatch(eventsList, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️/);

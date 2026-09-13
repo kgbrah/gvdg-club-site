@@ -83,15 +83,23 @@ export function startAdminController() {
         let loadTeeSignReview = async () => {};
         let adminProductInventoryControlsSnapshot = {};
         let adminOrderControlsSnapshot = {};
-        function adminSwitch(tab) {
+        async function adminSwitch(tab, detail) {
             publishAdminActiveTab(tab);
+            const eventId = detail && detail.eventId != null && detail.eventId !== '' ? detail.eventId : null;
             if (tab === 'create') { adminLoadCourses(); adminLoadLeagues(); }
-            if (tab === 'scoring') scLoadEvents();
+            if (tab === 'today' || tab === 'events') adminLoadEvents();
+            if (tab === 'scoring') {
+                await scLoadEvents();
+                if (eventId) await scSelectEventFromReact({ eventId });
+            }
             if (tab === 'layouts') adminLoadCourses();
             if (tab === 'leagues-mgmt') adminLoadLeagues();
             if (tab === 'fundraisers') adminLoadFundraisers();
             if (tab === 'meetings') adminLoadMeetings();
-            if (tab === 'registration') rgLoadEvents();
+            if (tab === 'registration') {
+                await rgLoadEvents();
+                if (eventId) await rgSelectEventFromReact({ eventId });
+            }
             if (tab === 'shop') adminLoadProducts();
             if (tab === 'orders') adminLoadOrders();
             if (tab === 'tee-signs') loadTeeSignReview();
@@ -266,6 +274,10 @@ export function startAdminController() {
                 return;
             }
             scSelectedEvent = scEventById(scEventId);
+            if (!scSelectedEvent) {
+                await scLoadEvents();
+                scSelectedEvent = scEventById(scEventId);
+            }
             if (!scSelectedEvent) {
                 setAdminScoringState({ eventId: String(scEventId), layouts: [], message: 'Event not found.', status: 'error' });
                 return;
@@ -1177,7 +1189,7 @@ export function startAdminController() {
             }).loadReview;
             window.addEventListener('gvdg:admin-tab-request', (event) => {
                 const tab = event.detail && event.detail.tab;
-                if (tab) adminSwitch(tab);
+                if (tab) adminSwitch(tab, event.detail || {}).catch(() => {});
             });
             window.addEventListener('gvdg:admin-event-edit-request', (event) => {
                 const ev = event.detail && event.detail.event;

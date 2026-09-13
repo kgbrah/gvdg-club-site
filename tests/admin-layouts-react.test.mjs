@@ -11,7 +11,7 @@ test('admin course layouts tab is rendered by React from direct loader events', 
   const builder = readFileSync('src/admin-app/layouts-builder.js', 'utf8');
   const model = readFileSync('src/admin-app/layouts-model.js', 'utf8');
   const adminLoadCourses = html.match(/async function adminLoadCourses\(\) \{[\s\S]*?\n        \}/)?.[0];
-  const adminSwitch = html.match(/function adminSwitch\(tab\) \{[\s\S]*?\n        \}/)?.[0];
+  const adminSwitch = html.match(/function adminSwitch\(tab, detail\) \{[\s\S]*?\n        \}/)?.[0];
   const adminLoadCourseLayouts = layoutsController.match(/async function loadCourseLayouts\(detail\) \{[\s\S]*?async function adminAddLayoutPositionFromReact/)?.[0];
 
   assert.match(html, /id="adminLayoutsReactApp"/);

@@ -1,5 +1,5 @@
 const DEFAULT_AUTH_GATE_STATE = { status: "loading" };
-const DEFAULT_ACTIVE_TAB = "events";
+const DEFAULT_ACTIVE_TAB = "today";
 const DEFAULT_MESSAGE_STATE = { text: "", ok: null };
 
 let adminAuthGateState = DEFAULT_AUTH_GATE_STATE;

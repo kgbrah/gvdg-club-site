@@ -2,6 +2,14 @@ import React from "react";
 import { Menu, MoonStar, Sun, X } from "lucide-react";
 
 import { CrottsHelpLink } from "../shared/crotts-widget.js";
+import {
+  TOKEN_KEY,
+  loadLocalPlayerTheme,
+  paintPlayerTheme,
+  readSessionValue,
+  syncPlayerTheme,
+  togglePlayerThemeMode,
+} from "../shared/player-theme-session.js";
 
 const h = React.createElement;
 
@@ -39,23 +47,71 @@ function currentPage() {
   return basename === "" ? "index" : basename;
 }
 
+function themeRoot() {
+  return document.body;
+}
+
 function AdminThemeToggle() {
+  const local = loadLocalPlayerTheme();
   const [theme, setThemeState] = React.useState(storedTheme);
+  const [playerTheme, setPlayerTheme] = React.useState(local.theme);
+  const memberIdRef = React.useRef(local.memberId || "me");
 
   React.useEffect(() => {
+    const root = themeRoot();
+    let active = new AbortController();
+    function apply(nextTheme, memberId) {
+      if (memberId) memberIdRef.current = memberId;
+      setPlayerTheme(nextTheme);
+    }
+    function refresh() {
+      active.abort();
+      active = new AbortController();
+      syncPlayerTheme({
+        root,
+        signal: active.signal,
+        onTheme: apply,
+      }).catch(() => {});
+    }
+    refresh();
+    return () => {
+      active.abort();
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (playerTheme) {
+      if (playerTheme.mode === "dark") document.documentElement.setAttribute("data-theme", "dark");
+      else document.documentElement.removeAttribute("data-theme");
+      return;
+    }
     document.documentElement.setAttribute("data-theme", theme);
     try {
       localStorage.setItem("theme", theme);
     } catch {
     }
-  }, [theme]);
+  }, [theme, playerTheme]);
 
-  const dark = theme === "dark";
+  const dark = playerTheme ? playerTheme.mode === "dark" : theme === "dark";
+
+  function onToggle() {
+    if (playerTheme) {
+      const next = togglePlayerThemeMode(playerTheme, {
+        root: themeRoot(),
+        memberId: memberIdRef.current,
+        token: readSessionValue(TOKEN_KEY),
+      });
+      setPlayerTheme(next);
+      return;
+    }
+    setThemeState((current) => (current === "dark" ? "light" : "dark"));
+  }
+
   return h("button", {
     "aria-label": dark ? "Switch to light mode" : "Switch to dark mode",
     "aria-pressed": dark ? "true" : "false",
     className: "theme-toggle",
-    onClick: () => setThemeState((current) => (current === "dark" ? "light" : "dark")),
+    onClick: onToggle,
     title: dark ? "Switch to light mode" : "Switch to dark mode",
     type: "button",
   }, icon(dark ? Sun : MoonStar, 22));
@@ -121,6 +177,7 @@ export function AdminPageChrome() {
       key,
       onClick: () => {
         clearSession();
+        paintPlayerTheme(null, themeRoot());
         setSignedIn(false);
       },
     }, "Log out");

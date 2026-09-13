@@ -38,6 +38,40 @@
             background: linear-gradient(to bottom, rgba(15,15,30,0.25), rgba(15,15,30,0.15)), url("img/bg/forest-bg.png");
             background-repeat: no-repeat; background-position: center bottom; background-size: cover;
         }
+        body.player-theme-page {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+        }
+        body.player-theme-page::before { display: none; }
+        body.player-theme-active {
+            background-color: var(--bg-primary);
+            background-image: var(--player-theme-image);
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+        body.player-theme-page .admin-panel,
+        body.player-theme-page .admin-gate,
+        body.player-theme-page .admin-evrow,
+        body.player-theme-page .admin-today-card,
+        body.player-theme-page .admin-today-tile,
+        body.player-theme-page .admin-dialog {
+            background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
+        }
+        @supports ((-webkit-backdrop-filter: blur(10px)) or (backdrop-filter: blur(10px))) {
+            body.player-theme-page .admin-panel,
+            body.player-theme-page .admin-gate,
+            body.player-theme-page .admin-dock {
+                -webkit-backdrop-filter: blur(12px);
+                backdrop-filter: blur(12px);
+            }
+        }
+        body.player-theme-page .page-subtitle { color: var(--text-secondary); text-shadow: none; }
+        body.player-theme-page footer { color: var(--player-theme-footer); }
+        body.player-theme-page footer a { color: var(--player-theme-link); }
+        @media (min-width: 900px) {
+            body.player-theme-active { background-attachment: fixed; }
+        }
 
         /* ---- Header / nav (mirrors index.html) ---- */
         header { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: rgba(26, 26, 46, 0.95); backdrop-filter: blur(10px); padding: 1rem 1.5rem; transition: all 0.3s ease; }
@@ -209,6 +243,8 @@
         .fmt-btn[aria-pressed="true"] { border-color: var(--primary); background: var(--bg-tertiary); box-shadow: inset 0 0 0 1px var(--primary); font-weight: 700; }
         .admin-pane { display: none; }
         body[data-admin-tab="events"] #apane-events,
+        body[data-admin-tab="today"] #apane-today,
+        body[data-admin-tab="more"] #apane-more,
         body[data-admin-tab="create"] #apane-create,
         body[data-admin-tab="import"] #apane-import,
         body[data-admin-tab="courses"] #apane-courses,
@@ -224,7 +260,7 @@
         body[data-admin-tab="orders"] #apane-orders,
         body[data-admin-tab="members"] #apane-members,
         body[data-admin-tab="data-archive"] #apane-data-archive { display: block; }
-        /* Grouped sidebar nav: 5 sections on the left, content on the right (stacks on mobile) */
+        /* Grouped sidebar nav on desktop; bottom dock on mobile. */
         .admin-main { display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 1.5rem; align-items: start; }
         .admin-sidebar { display: flex; flex-direction: column; gap: 0.15rem; position: sticky; top: 84px; }
         .admin-navgroup { font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); padding: 0.8rem 0.5rem 0.25rem; }
@@ -233,14 +269,54 @@
         .admin-sidebar .admin-tab:hover { background: var(--bg-secondary); color: var(--text-primary); }
         .admin-sidebar .admin-tab.active { background: var(--secondary); border-color: var(--secondary); color: #fff; }
         .admin-content { min-width: 0; }
-        /* On mobile the 14-item sidebar becomes one compact grouped dropdown (the wrapped-button wall was unusable). */
         .admin-mobile-nav { display: none; }
+        .admin-mobile-chips { display: none; }
+        .admin-dock { display: none; }
+        .admin-pane-heading { font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem; letter-spacing: 0.03em; margin: 0 0 0.75rem; }
+        .admin-pane-kicker { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin: 1rem 0 0.45rem; }
+        .admin-today-card { border: 1px solid var(--border-color); border-radius: 16px; background: var(--bg-secondary); padding: 0.9rem 1rem; margin-bottom: 0.75rem; }
+        .admin-today-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.75rem; }
+        .admin-today-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.45rem; margin-bottom: 0.85rem; }
+        .admin-today-tile { display: grid; gap: 0.2rem; text-align: left; border: 1px solid var(--border-color); border-radius: 14px; background: var(--bg-secondary); color: var(--text-primary); padding: 0.65rem 0.6rem; cursor: pointer; }
+        .admin-today-tile strong { font-size: 0.95rem; }
+        .admin-today-tile span { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+        .admin-event-card { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0.45rem; align-items: center; }
+        .admin-event-card-main { display: grid; gap: 0.15rem; text-align: left; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; padding: 0; }
+        .admin-event-meta { display: block; color: var(--text-muted); font-size: 0.78rem; font-weight: 600; }
+        .admin-event-more { min-width: 44px; min-height: 44px; border: 0; background: transparent; color: var(--text-muted); font-weight: 800; letter-spacing: 0.08em; cursor: pointer; }
+        .admin-event-menu { grid-column: 1 / -1; display: grid; gap: 0.45rem; padding-top: 0.35rem; }
+        .admin-event-menu-status { display: grid; gap: 0.2rem; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); }
+        .admin-events-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; margin-bottom: 0.7rem; }
+        .admin-events-toolbar .admin-pane-heading { margin: 0; }
+        .admin-seg { display: flex; background: var(--bg-tertiary); border-radius: 11px; padding: 0.18rem; margin-bottom: 0.75rem; }
+        .admin-seg button { flex: 1; border: 0; background: transparent; color: var(--text-muted); font: inherit; font-size: 0.78rem; font-weight: 700; padding: 0.42rem 0.2rem; border-radius: 8px; cursor: pointer; }
+        .admin-seg button.on { background: var(--primary-strong); color: var(--light); }
+        .admin-more-list { display: grid; gap: 0.45rem; }
+        .admin-more-link { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; padding: 0.75rem 0.9rem; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-secondary); color: var(--text-primary); font: inherit; font-weight: 700; cursor: pointer; }
+        .admin-chip { flex: 0 0 auto; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-secondary); border-radius: 999px; padding: 0.35rem 0.7rem; font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
+        .admin-chip.on { background: var(--primary-strong); border-color: var(--primary-strong); color: var(--light); }
         @media (max-width: 760px) {
             .admin-main { grid-template-columns: 1fr; gap: 0; }
             .admin-sidebar { display: none; }
-            .admin-mobile-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem; }
-            .admin-mnav { width: 100%; padding: 0.7rem 0.7rem; font-size: 0.92rem; font-weight: 700; border: 1px solid var(--border-color); border-radius: 9px; background: var(--bg-secondary); color: var(--text-primary); }
-            .admin-mnav:last-child { grid-column: 1 / -1; } /* lone Members select spans the full width */
+            .page-title, .page-subtitle, .admin-title { display: none; }
+            .admin-mobile-chips { display: flex; gap: 0.4rem; overflow-x: auto; margin-bottom: 0.85rem; padding-bottom: 0.1rem; }
+            .admin-dock {
+                display: grid;
+                grid-template-columns: repeat(5, minmax(0, 1fr));
+                position: fixed;
+                left: 0; right: 0; bottom: 0;
+                z-index: 900;
+                background: color-mix(in srgb, var(--bg-secondary) 94%, transparent);
+                border-top: 1px solid var(--border-color);
+                padding: 0.35rem 0.25rem calc(0.45rem + env(safe-area-inset-bottom));
+            }
+            .admin-dock-item {
+                display: flex; flex-direction: column; align-items: center; gap: 0.12rem;
+                background: none; border: 0; color: var(--text-muted); font: inherit; font-size: 0.62rem; font-weight: 700;
+                min-height: 44px; cursor: pointer;
+            }
+            .admin-dock-item.on { color: var(--primary-strong); }
+            main { padding-bottom: 6.5rem; }
             .admin-panel { padding: 1.1rem 0.9rem; }
             .admin-form { max-width: none; }
             .al-row > span { max-width: 100%; min-width: 0; }
@@ -381,7 +457,7 @@
         @media print { header, footer { display: none; } }
     </style>
 </head>
-<body class="admin-page" data-auth-base="" data-admin-panel="hidden" data-admin-tab="events">
+<body class="admin-page" data-auth-base="" data-admin-panel="hidden" data-admin-tab="today">
     <div id="adminReactPageChromeApp"></div>
 
     <main>
@@ -398,6 +474,7 @@
                 <div id="adminNavigationReactApp"></div>
                 <div class="admin-content">
             <div id="adminMessageReactApp"></div>
+            <div class="admin-pane" id="apane-today"><div id="adminTodayReactApp"></div></div>
             <div class="admin-pane" id="apane-events"><div id="adminEventsListReactApp"></div></div>
             <div class="admin-pane" id="apane-create">
                 <div id="adminEventFormReactApp"></div>
@@ -473,6 +550,7 @@
                     <div id="adminMembersListReactApp"></div>
                 </div>
             </div>
+            <div class="admin-pane" id="apane-more"><div id="adminMoreReactApp"></div></div>
             <div class="admin-pane" id="apane-data-archive">
                 <div class="al-section">
                     <h4 class="al-h">Archive destinations</h4>
