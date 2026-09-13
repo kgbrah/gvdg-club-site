@@ -509,8 +509,8 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /nextHoleScore/);
   assert.match(scorecard, /Clear \$\{row\.label\} on hole/);
   assert.match(scorecard, /tee-order-hint/);
-  assert.match(scorecard, /honors-chip/);
-  assert.match(scorecard, /Throws first/);
+  assert.doesNotMatch(scorecard, /honors-chip/);
+  assert.doesNotMatch(scorecard, /Throws first/);
   assert.match(scorecard, /function HoleGrid\(props\)/);
   assert.match(scorecard, /export function ScorecardView\(props\)/);
   assert.match(scorecard, /WeatherStrip/);
@@ -547,7 +547,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(html, /\.hole-map-frame/);
   assert.match(html, /\.tee-order-hint/);
   assert.match(html, /\.tee-pos/);
-  assert.match(html, /\.honors-chip/);
+  assert.doesNotMatch(html, /\.honors-chip/);
   assert.match(html, /\.hole-map-compact/);
   assert.match(html, /\.hole-map-player/);
   assert.match(html, /\.hole-map-player-dot/);

@@ -142,10 +142,7 @@ function ScoreRow(props) {
       ? h("div", { "aria-label": teeLabel, className: "tee-pos", key: "tee" }, String(row.teePosition))
       : null,
     h("div", { className: "pinfo", key: "info" }, [
-      h("div", { className: "pinfo-head", key: "head" }, [
-        h("div", { className: "pname", key: "name" }, row.label),
-        row.honors ? h("span", { className: "honors-chip", key: "honors" }, "Throws first") : null,
-      ]),
+      h("div", { className: "pname", key: "name" }, row.label),
       row.meta ? h("div", { className: "pmeta", key: "meta" }, row.meta) : null,
       row.conflictText ? h("div", { className: "pmeta conflict-text", key: "conflict" }, row.conflictText) : null,
     ]),
