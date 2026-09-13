@@ -25,7 +25,7 @@ test('manifest is installable and launches members', () => {
   assert.equal(manifest.short_name, 'GVDG Club');
   assert.equal(manifest.start_url, 'gvdg-members.html');
   assert.equal(manifest.display, 'standalone');
-  assert.equal(manifest.theme_color, '#FF6B35');
+  assert.equal(manifest.theme_color, '#1A1A2E');
   assert.ok(manifest.icons.some((icon) => icon.sizes === '192x192' && icon.purpose.includes('any')));
   assert.ok(manifest.icons.some((icon) => icon.sizes === '512x512' && icon.purpose.includes('any')));
   assert.ok(manifest.icons.some((icon) => icon.sizes === '512x512' && icon.purpose.includes('maskable')));
@@ -47,7 +47,7 @@ test('manifest icons have the declared square dimensions', () => {
 test('app entry pages link manifest, touch icon, theme color, and pwa registrar', () => {
   for (const page of appPages) {
     const html = readFileSync(page, 'utf8');
-    assert.match(html, /<meta name="theme-color" content="#FF6B35">/, page);
+    assert.match(html, /<meta name="theme-color" content="#1A1A2E">/, page);
     assert.match(html, /<link rel="manifest" href="site\.webmanifest">/, page);
     assert.match(html, /<link rel="apple-touch-icon" href="img\/icons\/apple-touch-icon\.png">/, page);
     assert.match(html, /<script src="pwa\.js" defer><\/script>/, page);
@@ -58,7 +58,7 @@ test('live scoring links back to the members dashboard', () => {
   const html = readFileSync('score.html', 'utf8');
   const shellSource = readFileSync('src/score-app/main.js', 'utf8');
   const authSource = readFileSync('src/score-app/auth-flow.js', 'utf8');
-  assert.match(html, /<script type="module" src="score-app\/score-app\.js\?v=142"><\/script>/);
+  assert.match(html, /<script type="module" src="score-app\/score-app\.js\?v=143"><\/script>/);
   assert.match(shellSource, /href: "gvdg-members\.html"/);
   assert.match(shellSource, /"aria-label": "Return to members"/);
   assert.match(authSource, /Return to members/);

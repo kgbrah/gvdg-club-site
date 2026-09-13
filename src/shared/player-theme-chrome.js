@@ -6,6 +6,7 @@ import {
   THEME_EVENT,
   TOKEN_KEY,
   loadLocalPlayerTheme,
+  paintStatusBar,
   readSessionValue,
   syncPlayerTheme,
   togglePlayerThemeMode,
@@ -68,9 +69,11 @@ export function usePlayerThemeSession() {
     if (playerTheme) {
       if (playerTheme.mode === "dark") document.documentElement.setAttribute("data-theme", "dark");
       else document.documentElement.removeAttribute("data-theme");
+      paintStatusBar(playerTheme);
       return;
     }
     document.documentElement.setAttribute("data-theme", theme);
+    paintStatusBar(null, theme);
     try {
       localStorage.setItem("theme", theme);
     } catch {

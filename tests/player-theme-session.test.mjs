@@ -4,9 +4,13 @@ import test from "node:test";
 
 import { buildTheme, themeStorageKey } from "../src/shared/dashboard-theme-model.js";
 import {
+  CLUB_STATUS_COLOR,
+  CLUB_STATUS_COLOR_DARK,
   decodeJwtPayload,
   loadLocalPlayerTheme,
   paintPlayerTheme,
+  paintStatusBar,
+  statusBarColor,
   syncPlayerTheme,
   THEME_EVENT,
   themeMemberIds,
@@ -194,7 +198,32 @@ test("player theme chrome wires the sun/moon switch into custom theme mode", () 
   assert.match(chrome, /togglePlayerThemeMode/);
   assert.match(chrome, /THEME_EVENT/);
   assert.match(chrome, /gvdg:member-dashboard-opened/);
+  assert.match(chrome, /paintStatusBar/);
   assert.equal(THEME_EVENT, "gvdg:player-theme");
+});
+
+test("status bar color follows the player theme instead of brand orange", () => {
+  const theme = buildTheme({ preset: "Nord", mode: "dark" });
+  assert.equal(statusBarColor(theme), theme.tokens["bg-secondary"]);
+  assert.equal(statusBarColor(null, "light"), CLUB_STATUS_COLOR);
+  assert.equal(statusBarColor(null, "dark"), CLUB_STATUS_COLOR_DARK);
+  const meta = {
+    content: "#FF6B35",
+    setAttribute(name, value) { if (name === "content") this.content = value; },
+  };
+  const previous = globalThis.document;
+  globalThis.document = {
+    querySelector(sel) { return sel.includes("theme-color") ? meta : null; },
+    documentElement: { getAttribute() { return "dark"; }, setAttribute() {}, removeAttribute() {} },
+  };
+  try {
+    assert.equal(paintStatusBar(theme), theme.tokens["bg-secondary"]);
+    assert.equal(meta.content, theme.tokens["bg-secondary"]);
+    paintPlayerTheme(null, fakeEl());
+    assert.equal(meta.content, CLUB_STATUS_COLOR_DARK);
+  } finally {
+    globalThis.document = previous;
+  }
 });
 
 test("themeWithMode rebuilds light and dark surfaces from the same palette", () => {
