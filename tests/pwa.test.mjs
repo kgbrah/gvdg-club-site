@@ -74,6 +74,9 @@ test('shared service worker caches app install assets and member fallback', () =
   assert.match(sw, /const OFFLINE_PAGE = "gvdg-members\.html"/);
   assert.match(sw, /const STATIC_DESTINATIONS = new Set/);
   assert.match(sw, /if \(!staticAsset\(req, url\)\) return/);
+  assert.match(sw, /function isCodeAsset/);
+  assert.match(sw, /cache: "reload"/);
+  assert.match(sw, /isCodeAsset\(req, url\)/);
   for (const asset of [
     'site.webmanifest',
     'pwa.js',

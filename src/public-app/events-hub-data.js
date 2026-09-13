@@ -26,6 +26,7 @@ const EMPTY_HUB = { feedClub: [], feedEvents: [], hasMainContent: false, live: [
 const EVENTS_PAGE_LIMIT = 2000;
 const GUEST_REG_KEY = "gvdg_guest_regs";
 const REFRESH_MS = 60 * 1000;
+const LIVE_REFRESH_MS = 5 * 1000;
 const REGISTRATION_REFRESH_EVENT = "gvdg:events-registration-refresh";
 const ROUTE_REFRESH_EVENT = "gvdg:events-route-refresh";
 const RYDER_CUP_LEAGUE_ID = "4";
@@ -37,6 +38,7 @@ const state = {
   loading: false,
   previousResults: [],
   refreshTimer: null,
+  liveTimer: null,
 };
 
 const hubSubscribers = new Set();
@@ -265,6 +267,7 @@ function publishLoadedHub(feed, events, courseIndex) {
   const { active: feedClub, archived: feedClubArchived } = splitFeedByDate(feed?.clubEvents || []);
   const { active: activeEvents, archived: archivedEvents } = splitClubEventsByDate(events || []);
   const { live, upcoming } = bucketEvents(activeEvents);
+  const previousLive = new Map((state.hub.live || []).map((event) => [String(event.id), event.liveSnapshot]));
   const previousResults = [
     ...archivedEvents.map((event) => previousResultFromEvent(event, courseIndex)),
     ...feedArchived.map((item) => previousResultFromFeed(item, "Event")),
@@ -275,7 +278,11 @@ function publishLoadedHub(feed, events, courseIndex) {
     feedClub: feedClub.map(feedHubItem),
     feedEvents: filterDuplicateFeed(feedEvents, [...live, ...upcoming]).map(feedHubItem),
     hasMainContent: Boolean(feedEvents.length || live.length || upcoming.length),
-    live: live.map((event) => eventHubItem(event, courseIndex)),
+    live: live.map((event) => {
+      const item = eventHubItem(event, courseIndex);
+      const snapshot = previousLive.get(String(item.id));
+      return snapshot ? { ...item, liveSnapshot: snapshot } : item;
+    }),
     upcoming: upcoming.map((event) => eventHubItem(event, courseIndex)),
   };
   state.previousResults = previousResults;
@@ -284,6 +291,7 @@ function publishLoadedHub(feed, events, courseIndex) {
   publishEventsView("hub");
   publishEventsLastUpdated(new Date());
   window.dispatchEvent(new CustomEvent(REGISTRATION_REFRESH_EVENT));
+  void refreshLiveSnapshots();
 }
 
 async function loadHub({ quiet = false } = {}) {
@@ -322,6 +330,9 @@ function startRefresh() {
   state.refreshTimer = window.setInterval(() => {
     if (currentEventsView() === "hub") loadHub({ quiet: true });
   }, REFRESH_MS);
+  state.liveTimer = window.setInterval(() => {
+    if (currentEventsView() === "hub") void refreshLiveSnapshots();
+  }, LIVE_REFRESH_MS);
 }
 
 function stopRefresh() {
@@ -329,6 +340,34 @@ function stopRefresh() {
     window.clearInterval(state.refreshTimer);
     state.refreshTimer = null;
   }
+  if (state.liveTimer) {
+    window.clearInterval(state.liveTimer);
+    state.liveTimer = null;
+  }
+}
+
+async function refreshLiveSnapshots() {
+  const live = Array.isArray(state.hub.live) ? state.hub.live : [];
+  if (!live.length) return;
+  const api = publicApiBase();
+  const rows = await Promise.all(live.map(async (event) => {
+    if (!event || event.id == null) return [String(event && event.id || ""), null];
+    try {
+      return [String(event.id), await fetchPublicJson(api, `/events/${encodeURIComponent(event.id)}/live`)];
+    } catch {
+      return [String(event.id), null];
+    }
+  }));
+  const byId = new Map(rows.filter((row) => row[1]));
+  if (!byId.size) return;
+  state.hub = {
+    ...state.hub,
+    live: state.hub.live.map((event) => {
+      const snapshot = byId.get(String(event && event.id));
+      return snapshot ? { ...event, liveSnapshot: snapshot } : event;
+    }),
+  };
+  notifyHub();
 }
 
 function guestRegs() {
