@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Eye, Settings2, Share2, UserPlus } from "luc
 import { HoleMap } from "../shared/hole-map.js";
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
-import { nextHoleScore } from "./score-view-model.js";
+import { nextHoleScore, relClass, relText } from "./score-view-model.js";
 
 const h = React.createElement;
 
@@ -156,6 +156,7 @@ function ScoreRow(props) {
               ? `Set ${row.label} on hole ${props.hole.hole} to ${nextMinus}`
               : `Decrease ${row.label} on hole ${props.hole.hole}`,
           className: "minus",
+          disabled: Boolean(props.locked),
           type: "button",
           onClick: () => props.onScore(row.source, props.hole.hole, nextMinus),
         },
@@ -170,6 +171,7 @@ function ScoreRow(props) {
         {
           "aria-label": `Increase ${row.label} on hole ${props.hole.hole}`,
           className: "plus",
+          disabled: Boolean(props.locked),
           type: "button",
           onClick: () => props.onScore(row.source, props.hole.hole, nextPlus),
         },
@@ -230,7 +232,7 @@ function ScorecardBox(props) {
   return h("div", { className: "card", key: "scorecard" }, [
     h(ScorecardOwner, props),
     props.warning ? h("p", { className: "muted auth-error", key: "warning" }, props.warning) : null,
-    props.rows.map((row) => h(ScoreRow, { key: row.key, row, hole: props.hole, onScore: props.onScore })),
+    props.rows.map((row) => h(ScoreRow, { key: row.key, row, hole: props.hole, locked: props.finish && props.finish.locked, onScore: props.onScore })),
     h(TotalsBar, { totals: props.totals }),
   ]);
 }
@@ -258,6 +260,77 @@ function HoleGrid(props) {
   );
 }
 
+function FinishCard(props) {
+  const finish = props.finish;
+  if (!finish) return null;
+  if (finish.locked) {
+    return h("div", { className: "finalize-card ready", key: "finish" },
+      h("p", { className: "finalize-head" }, finish.status === "final" ? "Round finished — scores are locked" : "Card submitted — scores locked"),
+    );
+  }
+  if (!finish.canFinish) return null;
+  return h("div", { className: "finalize-card ready", key: "finish" }, [
+    h("p", { className: "finalize-head", key: "head" }, "All holes scored — finish this card"),
+    h("p", { className: "muted finish-round-hint", key: "hint" }, "Every player on this card must confirm the scores."),
+    h("button", {
+      className: "btn finish-round-btn",
+      key: "finish",
+      type: "button",
+      onClick: props.onOpenFinish,
+    }, "Finish card"),
+  ]);
+}
+
+function ConfirmScoresSheet(props) {
+  const finish = props.finish;
+  if (!finish || !finish.confirmOpen || finish.locked) return null;
+  const review = finish.review || { holes: [], rows: [], voters: [], waiting: [] };
+  return h(
+    "div",
+    {
+      className: "overlay",
+      key: "confirm-scores",
+      onClick: (event) => {
+        if (event.target === event.currentTarget) props.onCloseFinish();
+      },
+    },
+    h("div", { className: "sheet confirm-scores-sheet", role: "dialog", "aria-label": "Confirm scores" }, [
+      h("div", { className: "grab", key: "grab" }),
+      h("h2", { className: "section", key: "title" }, "Confirm scores"),
+      h("p", { className: "muted", key: "copy" }, "Every player on this card must agree these scores are correct."),
+      h("div", { className: "confirm-scores-table-wrap", key: "table" }, h("table", { className: "confirm-scores-table" }, [
+        h("thead", { key: "head" }, h("tr", null, [
+          h("th", { key: "name" }, "Player"),
+          ...review.holes.map((hole) => h("th", { key: hole }, String(hole))),
+          h("th", { key: "tot" }, "Tot"),
+          h("th", { key: "par" }, "Par"),
+        ])),
+        h("tbody", { key: "body" }, review.rows.map((row) =>
+          h("tr", { key: row.key }, [
+            h("td", { className: "name", key: "name" }, row.label),
+            ...row.scores.map((strokes, index) => h("td", { key: review.holes[index] }, strokes == null ? "—" : String(strokes))),
+            h("td", { key: "tot" }, String(row.total || "—")),
+            h("td", { className: "tp " + relClass(row.toPar || 0), key: "par" }, relText(row.toPar || 0)),
+          ]),
+        )),
+      ])),
+      h("div", { className: "confirm-agree-list", key: "agree" }, review.voters.map((voter) =>
+        h("button", {
+          className: "btn" + (voter.agreed ? " secondary" : ""),
+          disabled: voter.agreed,
+          key: voter.index,
+          type: "button",
+          onClick: () => props.onAgree(voter.index),
+        }, voter.agreed ? voter.label + " agreed" : "Agree — " + voter.label),
+      )),
+      review.waiting.length
+        ? h("p", { className: "muted finish-round-hint", key: "wait" }, "Waiting on " + review.waiting.join(", "))
+        : h("p", { className: "muted finish-round-hint", key: "wait" }, "Locking scores…"),
+      h("button", { className: "btn secondary sheet-close", key: "close", type: "button", onClick: props.onCloseFinish }, "Back"),
+    ]),
+  );
+}
+
 export function ScorecardView(props) {
   return h(React.Fragment, null, [
     h(RoundTools, props),
@@ -271,5 +344,11 @@ export function ScorecardView(props) {
     h(CtpClaim, { ctpClaim: props.ctpClaim, onCtpVote: props.onCtpVote }),
     h(ScorecardBox, props),
     h(HoleGrid, { holes: props.holeGrid, onJump: props.onJumpHole }),
+    h(FinishCard, { finish: props.finish, onOpenFinish: props.onOpenFinish }),
+    h(ConfirmScoresSheet, {
+      finish: props.finish,
+      onAgree: props.onAgreeFinish,
+      onCloseFinish: props.onCloseFinish,
+    }),
   ]);
 }

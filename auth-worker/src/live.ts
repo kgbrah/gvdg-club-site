@@ -13,7 +13,7 @@ import { finalizeLiveEvent } from "./live-finalize.js";
 import { isLoggedInMemberId, locationMoved, locationOnCourse, parseLocationBody, type LivePlayerLocation } from "./live-locations.js";
 import { updateLivePairs } from "./live-pairs.js";
 import { mineData, publicSnapshot } from "./live-snapshot.js";
-import { canEnterScorecard, findPlayer, invalidScoreTargetsResponse, scoreTargetForBody, scoringState, targetAnchor } from "./live-state.js";
+import { attestationForCard, canEnterScorecard, cardKey, findPlayer, invalidScoreTargetsResponse, isCardLocked, issuesForCard, scoreTargetForBody, scorecardIssues, scoringState, targetAnchor } from "./live-state.js";
 import { j, type CtpVoteBody, type LiveEnv, type LiveMeta, type LiveState, type OverrideBody, type PairAssignmentBody, type RemoveBody, type ScoreBody, type StartBody, type WeatherBody } from "./live-types.js";
 import { assignCards, type PlayerState } from "./scoring.js";
 import { createWeatherState, refreshWeatherState, WEATHER_REFRESH_MS } from "./weather.js";
@@ -125,6 +125,7 @@ export class LiveEventDO {
     if (action === "weather") return this.ensureWeather(body as WeatherBody); // one-time weather backfill
     if (action === "override") return this.override(body as OverrideBody);
     if (action === "finalize") return this.finalize(authMember, authAdmin, (body as { force?: boolean }).force === true);
+    if (action === "finish-card") return this.finishCard(body as { playerIndex?: number }, authMember, authAdmin);
     return j({ error: "not_found" }, 404);
   }
 
@@ -203,6 +204,7 @@ export class LiveEventDO {
       }
     }
     if (!target || !anchor) return j({ error: b.targetId ? "no_target" : "no_player" }, 404); // a removed player is no longer scorable
+    if (!authAdmin && isCardLocked(this.meta.lockedCardIds, anchor.player.cardId)) return j({ error: "card_locked" }, 409);
     const meIndex = authMember ? this.players.findIndex((p) => p.memberId === authMember && !p.removed) : -1;
     const me = meIndex >= 0 ? this.players[meIndex] : undefined;
     // Authorize from the Worker-trusted identity ONLY: an admin may score anyone; otherwise the
@@ -219,6 +221,14 @@ export class LiveEventDO {
     if (!authAdmin && !canEnterScorecard(scorer, authMember)) return j({ error: "wrong_scorer" }, 403);
     const scorerId = playerScorerId(scorerIndex);
     const conflict = recordScoreTargetVote({ players: this.players, target, scorerId, hole, strokes });
+    if (!isCardLocked(this.meta.lockedCardIds, anchor.player.cardId) && this.meta.cardAttestations) {
+      const key = cardKey(anchor.player.cardId);
+      if (this.meta.cardAttestations[key]?.length) {
+        const next = { ...this.meta.cardAttestations };
+        delete next[key];
+        this.meta.cardAttestations = next;
+      }
+    }
     await this.persist();
     if (conflict) {
       this.sendAll({ type: "conflict", ...conflict, from: conflict.values[0] ?? null, to: conflict.values[1] ?? null });
@@ -265,6 +275,7 @@ export class LiveEventDO {
     if (!this.meta || this.meta.status !== "live") return j({ error: "round_not_live" }, 409);
     const me = authMember ? this.players.find((p) => p.memberId === authMember && !p.removed) : undefined;
     if (!me) return j({ error: "not_on_card" }, 403);
+    if (isCardLocked(this.meta.lockedCardIds, me.cardId)) return j({ error: "card_locked" }, 409);
     const nm = String(name || "").trim();
     if (!nm) return j({ error: "name_required" }, 400);
     this.players.push({ memberId: null, name: nm.slice(0, 60), division: null, team: normalizePairLabel(team), startingHole: null, cardId: me.cardId ?? "c0", scores: {}, scorecards: {}, ctpEligible: this.meta.ctpBuyInRequired !== true });
@@ -293,6 +304,7 @@ export class LiveEventDO {
       const me = authMember ? this.players.find((p) => p.memberId === authMember && !p.removed) : undefined;
       if (!me) return j({ error: "not_on_card" }, 403);
       if ((me.cardId ?? null) !== (target.cardId ?? null)) return j({ error: "wrong_card" }, 403);
+      if (isCardLocked(this.meta.lockedCardIds, me.cardId)) return j({ error: "card_locked" }, 409);
     }
     // TOMBSTONE, don't splice: the array index is how live scorers target a player, and a casual round
     // has no WebSocket to resync other phones — splicing would shift every later index and silently
@@ -312,6 +324,10 @@ export class LiveEventDO {
   }
 
   private async updatePairs(b: PairAssignmentBody, authMember: string | null, authAdmin: boolean): Promise<Response> {
+    if (!authAdmin && authMember) {
+      const me = this.players.find((p) => p.memberId === authMember && !p.removed);
+      if (me && isCardLocked(this.meta?.lockedCardIds, me.cardId)) return j({ error: "card_locked" }, 409);
+    }
     const result = updateLivePairs({ meta: this.meta, players: this.players, body: b, authMember, authAdmin });
     if (!result.ok) return j(result.body, result.status);
     if (result.changed) {
@@ -374,6 +390,50 @@ export class LiveEventDO {
       persist: () => this.persist(),
       broadcast: () => this.broadcast(),
     });
+  }
+
+  /** Cardmates confirm the scorecard. Every active player on the card must agree before it locks. */
+  private async finishCard(body: { playerIndex?: number }, authMember: string | null, authAdmin: boolean): Promise<Response> {
+    if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
+    const meIndex = authMember ? this.players.findIndex((player) => player.memberId === authMember && !player.removed) : -1;
+    const me = meIndex >= 0 ? this.players[meIndex] : undefined;
+    if (!me && !authAdmin) return j({ error: "not_on_card" }, 403);
+    const requested = Number(body.playerIndex);
+    const voterIndex = Number.isInteger(requested) ? requested : meIndex;
+    const voter = voterIndex >= 0 ? this.players[voterIndex] : undefined;
+    if (!voter || voter.removed) return j({ error: "no_player" }, 404);
+    if (!authAdmin) {
+      if (!me) return j({ error: "not_on_card" }, 403);
+      if ((me.cardId ?? null) !== (voter.cardId ?? null)) return j({ error: "wrong_card" }, 403);
+    }
+    const cardId = voter.cardId ?? null;
+    if (isCardLocked(this.meta.lockedCardIds, cardId)) return j(this.snapshot());
+    const scoring = scoringState(this.meta, this.players);
+    if (scoring.globalError) return invalidScoreTargetsResponse(scoring.globalError);
+    const issues = issuesForCard(scorecardIssues(this.meta, this.players, this.meta.holes, scoring), cardId);
+    if (issues.conflicts.length || issues.missing.length) {
+      return j({ error: "scorecard_incomplete", conflicts: issues.conflicts, missing: issues.missing }, 409);
+    }
+    const key = cardKey(cardId);
+    const votes = { ...(this.meta.cardAttestations || {}) };
+    const agreed = new Set(votes[key] || []);
+    agreed.add(voterIndex);
+    votes[key] = [...agreed];
+    this.meta.cardAttestations = votes;
+    const attestation = attestationForCard(this.meta.cardAttestations, this.players, cardId);
+    if (!attestation.complete) {
+      await this.persist();
+      this.broadcast();
+      return j(this.snapshot());
+    }
+    if (this.meta.casual) return this.finalize(authMember, authAdmin, false);
+    const locked = Array.isArray(this.meta.lockedCardIds) ? this.meta.lockedCardIds.slice() : [];
+    if (!locked.includes(key)) locked.push(key);
+    this.meta.lockedCardIds = locked;
+    delete this.meta.cardAttestations[key];
+    await this.persist();
+    this.broadcast();
+    return j(this.snapshot());
   }
 
   private async claimCtp(b: CtpVoteBody, authMember: string | null, authAdmin: boolean): Promise<Response> {

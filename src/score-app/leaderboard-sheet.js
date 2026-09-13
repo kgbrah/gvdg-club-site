@@ -38,24 +38,22 @@ export function LeaderboardTable({ isDoubles, isMatchplay, relClass, relText, st
   ]);
 }
 
-function FinalizePanel({ blockers, mode, onFinalize, status }) {
+function FinalizePanel({ blockers, cardLocked, mode, onFinalize, status }) {
   if (status === "final") {
     return h("div", { className: "finalize-card ready" },
       h("p", { className: "finalize-head" }, "Round finished - scores are locked."),
     );
   }
-
-  const ready = blockers.ready;
-  const hint = blockers.hint || "";
-  return h("div", { className: "finalize-card " + (ready ? "ready" : "blocked") }, [
-    h("p", { className: "finalize-head", key: "head" }, ready ? "Your card agrees - ready to finish" : "Your card is not ready yet"),
-    ...blockers.lines.map((line, index) => h("p", { className: "muted finalize-line", key: "line-" + index }, line)),
-    mode === "round"
-      ? h("button", { className: "btn finish-round-btn", disabled: !ready, key: "finish", type: "button", onClick: onFinalize }, "Finish round")
-      : null,
-    mode === "round" && hint
-      ? h("p", { className: "muted finish-round-hint", key: "hint" }, hint)
-      : null,
+  if (cardLocked) {
+    return h("div", { className: "finalize-card ready" },
+      h("p", { className: "finalize-head" }, "Card submitted — scores locked"),
+    );
+  }
+  if (!blockers.ready || (mode !== "round" && mode !== "event")) return null;
+  return h("div", { className: "finalize-card ready" }, [
+    h("p", { className: "finalize-head", key: "head" }, "All holes scored — finish this card"),
+    h("p", { className: "muted finish-round-hint", key: "hint" }, "Every player on this card must confirm the scores."),
+    h("button", { className: "btn finish-round-btn", key: "finish", type: "button", onClick: onFinalize }, "Finish card"),
   ]);
 }
 
@@ -84,6 +82,7 @@ function LeaderboardSheet(props) {
       ) : null,
       h(FinalizePanel, {
         blockers: props.blockers,
+        cardLocked: props.cardLocked,
         key: "finalize",
         mode: props.mode,
         onFinalize: props.onFinalize,

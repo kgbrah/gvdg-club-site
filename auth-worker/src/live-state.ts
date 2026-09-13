@@ -153,6 +153,48 @@ export function scorecardIssues(meta: LiveMeta | null, players: PlayerState[], h
   return scorecardConsensusIssues(players, holes, healthyTargets(scoring), { casual: !!meta?.casual, config: scoring.config });
 }
 
+export function cardKey(cardId: string | null | undefined): string {
+  return String(cardId ?? "c0");
+}
+
+export function isCardLocked(lockedCardIds: readonly string[] | null | undefined, cardId: string | null | undefined): boolean {
+  return Array.isArray(lockedCardIds) && lockedCardIds.includes(cardKey(cardId));
+}
+
+export function issuesForCard(
+  issues: { conflicts: { cardId?: string | null }[]; missing: { cardId?: string | null }[] },
+  cardId: string | null | undefined,
+) {
+  const id = cardId ?? null;
+  return {
+    conflicts: issues.conflicts.filter((row) => (row.cardId ?? null) === id),
+    missing: issues.missing.filter((row) => (row.cardId ?? null) === id),
+  };
+}
+
+export function cardmateIndexes(players: readonly PlayerState[], cardId: string | null | undefined): number[] {
+  const id = cardId ?? null;
+  const out: number[] = [];
+  players.forEach((player, index) => {
+    if (player && !player.removed && (player.cardId ?? null) === id) out.push(index);
+  });
+  return out;
+}
+
+export function attestationForCard(
+  cardAttestations: Record<string, number[]> | null | undefined,
+  players: readonly PlayerState[],
+  cardId: string | null | undefined,
+) {
+  const neededIndexes = cardmateIndexes(players, cardId);
+  const agreedIndexes = (cardAttestations?.[cardKey(cardId)] || []).filter((index) => neededIndexes.includes(index));
+  return {
+    neededIndexes,
+    agreedIndexes,
+    complete: neededIndexes.length > 0 && neededIndexes.every((index) => agreedIndexes.includes(index)),
+  };
+}
+
 export function computeRoundStandings(input: {
   readonly holes: readonly { readonly hole: number; readonly par: number }[];
   readonly players: readonly PlayerState[];

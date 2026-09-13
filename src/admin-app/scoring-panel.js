@@ -145,6 +145,7 @@ function StartControls({ state }) {
 
 function LiveControls({ state }) {
   const snap = state.snap || {};
+  const submitted = Array.isArray(snap.lockedCardIds) ? snap.lockedCardIds.length : 0;
   return h("div", { "data-react-admin-scoring-live": snap.status || "ready", id: "scLive", style: { marginTop: "1rem" } }, [
     h("h4", { className: "al-h", key: "score-title" }, [
       "Scorecard ",
@@ -162,7 +163,9 @@ function LiveControls({ state }) {
     h("div", { className: "al-row", key: "actions", style: { marginTop: "0.75rem" } }, [
       h("button", { className: "admin-btn danger", id: "scFinalizeBtn", key: "finalize", onClick: () => dispatchRequest("gvdg:admin-scoring-finalize-request"), type: "button" }, "Finalize results"),
       state.canCancel === true ? h("button", { className: "admin-btn secondary", id: "scCancelBtn", key: "cancel", onClick: () => dispatchRequest("gvdg:admin-scoring-cancel-request"), type: "button" }, "Cancel scoring") : null,
-      h("span", { className: "al-note", key: "note" }, "Finalize writes results and closes the event. Cancel scraps a mis-started round and returns the event to Scheduled."),
+      h("span", { className: "al-note", key: "note" }, submitted
+        ? submitted + " card" + (submitted === 1 ? "" : "s") + " submitted. Finalize writes results and closes the event. Cancel scraps a mis-started round and returns the event to Scheduled."
+        : "Finalize writes results and closes the event. Cancel scraps a mis-started round and returns the event to Scheduled."),
     ]),
   ]);
 }

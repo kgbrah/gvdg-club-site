@@ -1750,6 +1750,85 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
   });
 });
 
+describe("LiveEventDO finish-card", () => {
+  const act = (live: LiveEventDO, path: string, member: string, body: unknown = {}) =>
+    live.fetch(new Request("https://do/" + path, { method: "POST", headers: { "X-Auth-Member": member }, body: JSON.stringify(body) }));
+
+  it("lets event cardmates lock their card without finalizing the round", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({
+        eventId: 40,
+        holes: [{ hole: 1, par: 3 }, { hole: 2, par: 3 }],
+        players: [
+          { memberId: "m_a", name: "A", startingHole: 1 },
+          { memberId: "m_b", name: "B", startingHole: 1 },
+          { memberId: "m_c", name: "C", startingHole: 10 },
+        ],
+      }),
+    }));
+
+    const blocked = await act(live, "finish-card", "m_a");
+    expect(blocked.status).toBe(409);
+    expect(((await blocked.json()) as { error: string }).error).toBe("scorecard_incomplete");
+
+    for (const hole of [1, 2]) {
+      await act(live, "score", "m_a", { index: 0, hole, strokes: 3 });
+      await act(live, "score", "m_a", { index: 1, hole, strokes: 4 });
+    }
+
+    const first = await act(live, "finish-card", "m_a", { playerIndex: 0 });
+    expect(first.status).toBe(200);
+    const pending = (await first.json()) as { status: string; lockedCardIds: string[]; cardAttestations: Record<string, number[]> };
+    expect(pending.status).toBe("live");
+    expect(pending.lockedCardIds).toEqual([]);
+    expect(pending.cardAttestations.h1).toEqual([0]);
+
+    const scoredAgain = await act(live, "score", "m_a", { index: 0, hole: 1, strokes: 2 });
+    expect(scoredAgain.status).toBe(200);
+    expect(((await scoredAgain.json()) as { cardAttestations: Record<string, number[]> }).cardAttestations.h1).toBeUndefined();
+    await act(live, "score", "m_a", { index: 0, hole: 1, strokes: 3 });
+
+    await act(live, "finish-card", "m_a", { playerIndex: 0 });
+    const finished = await act(live, "finish-card", "m_b", { playerIndex: 1 });
+    expect(finished.status).toBe(200);
+    const lockedSnap = (await finished.json()) as { status: string; lockedCardIds: string[] };
+    expect(lockedSnap.status).toBe("live");
+    expect(lockedSnap.lockedCardIds).toEqual(["h1"]);
+
+    const mine = (await (await live.fetch(new Request("https://do/mine", { headers: { "X-Auth-Member": "m_a" } }))).json()) as { cardLocked: boolean };
+    expect(mine.cardLocked).toBe(true);
+
+    const rejected = await act(live, "score", "m_a", { index: 0, hole: 1, strokes: 2 });
+    expect(rejected.status).toBe(409);
+    expect(((await rejected.json()) as { error: string }).error).toBe("card_locked");
+
+    const other = await act(live, "score", "m_c", { index: 2, hole: 1, strokes: 3 });
+    expect(other.status).toBe(200);
+
+    const admin = await live.fetch(new Request("https://do/score", {
+      method: "POST",
+      headers: { "X-Auth-Admin": "true" },
+      body: JSON.stringify({ index: 0, hole: 1, strokes: 2 }),
+    }));
+    expect(admin.status).toBe(200);
+  });
+
+  it("finalizes a casual round through finish-card", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({ casual: true, holes: [{ hole: 1, par: 3 }, { hole: 2, par: 3 }], players: [{ memberId: "m_a", name: "Creator" }] }),
+    }));
+    await act(live, "score", "m_a", { index: 0, hole: 1, strokes: 3 });
+    await act(live, "score", "m_a", { index: 0, hole: 2, strokes: 3 });
+    const finished = await act(live, "finish-card", "m_a");
+    expect(finished.status).toBe(200);
+    expect(((await finished.json()) as { status: string }).status).toBe("final");
+  });
+});
+
 describe("LiveEventDO config-aware score targets and final results", () => {
   const holes = [{ hole: 1, par: 3 }, { hole: 2, par: 3 }];
   const doublesConfig = { groupFormat: "doubles", scoringStyle: "stroke" };

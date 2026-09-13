@@ -523,6 +523,9 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
     };
   });
 
+  const blockers = finalizeBlockers(state);
+  const locked = Boolean(state.cardLocked) || state.status === "final";
+
   return {
     atEnd: state.holeIdx >= state.holes.length - 1,
     atStart: state.holeIdx === 0,
@@ -556,6 +559,57 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
     windFromDeg: state.weather && state.weather.current ? state.weather.current.windDirectionDeg : null,
     playerLocations: Array.isArray(state.playerLocations) ? state.playerLocations : [],
     yourTurn: yourTurnHint({ ...state, scorerIndex }),
+    finish: buildFinishView(state, mode, blockers, locked, scorerIndex),
+  };
+}
+
+function buildFinishView(state, mode, blockers, locked, scorerIndex) {
+  const canMode = mode === "round" || mode === "event";
+  const attestation = state.cardAttestation && typeof state.cardAttestation === "object" ? state.cardAttestation : {};
+  const agreedIndexes = Array.isArray(attestation.agreedIndexes) ? attestation.agreedIndexes : [];
+  const review = cardReview(state, scorerIndex, agreedIndexes);
+  const pendingVotes = agreedIndexes.length > 0 && !locked;
+  return {
+    locked,
+    ready: blockers.ready,
+    status: state.status,
+    canFinish: canMode && blockers.ready && !locked,
+    confirmOpen: Boolean(state.finishConfirmOpen) || pendingVotes,
+    review,
+    waiting: review.waiting,
+  };
+}
+
+export function cardReview(state, scorerIndex, agreedIndexes) {
+  const holes = Array.isArray(state.holes) ? state.holes : [];
+  const agreed = Array.isArray(agreedIndexes) ? agreedIndexes : [];
+  const rows = scoreRows(state).map((row) => {
+    const scores = holes.map((hole) => strokesForRow(state, row, hole.hole, scorerIndex));
+    let total = 0;
+    let toPar = 0;
+    scores.forEach((strokes, index) => {
+      if (typeof strokes !== "number") return;
+      total += strokes;
+      toPar += strokes - (holes[index] && holes[index].par);
+    });
+    return {
+      key: row.targetId || row.index,
+      label: row.label,
+      scores,
+      total,
+      toPar,
+    };
+  });
+  const voters = (state.cardmates || []).filter(Boolean).map((player) => ({
+    index: player.index,
+    label: player.name + (player.isMe ? " (you)" : ""),
+    agreed: agreed.indexOf(player.index) >= 0,
+  }));
+  return {
+    holes: holes.map((hole) => hole.hole),
+    rows,
+    voters,
+    waiting: voters.filter((voter) => !voter.agreed).map((voter) => String(voter.label).replace(/ \(you\)$/, "")),
   };
 }
 
@@ -584,10 +638,14 @@ export function finalizeBlockers(state) {
   return { conflicts, missing, ready: conflicts.length === 0 && missing.length === 0, lines };
 }
 
-export function finishRoundHint(blockers, mode) {
-  if (mode !== "round") return "";
+export function finishRoundHint(blockers, mode, locked) {
+  if (locked || (blockers && blockers.status === "final")) {
+    return mode === "round" ? "Round finished. Scores are locked." : "This card is submitted. Scores are locked.";
+  }
   if (blockers.ready) {
-    return "Anyone on this card can finish. Matching scores on each hole are enough; extra cardmates do not need a second scorecard. Conflicts still block.";
+    return mode === "round"
+      ? "Anyone on this card can finish. Matching scores on each hole are enough; extra cardmates do not need a second scorecard. Conflicts still block."
+      : "Anyone on this card can submit. Matching scores on each hole are enough. Other cards keep playing until an admin finalizes the event.";
   }
   if ((blockers.conflicts || []).length) {
     return "Fix the disagreeing scores first. Extra scorecards are not required unless someone entered a different number.";
