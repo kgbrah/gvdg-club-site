@@ -4,6 +4,7 @@ import { CalendarDays, ExternalLink, MapPin } from "lucide-react";
 import { useEventsHub } from "./events-hub-data.js";
 import { EventScheduleFacts } from "../shared/event-schedule.js";
 import { EventFieldRoster } from "../shared/event-field-roster.js";
+import { liveWatchHref } from "../shared/live-watch.js";
 
 const h = React.createElement;
 
@@ -74,9 +75,10 @@ function EventCard({ event }) {
   const typeClass = cleanClassName(event && event.typeClass);
   const statusClass = cleanClassName(event && event.status);
   const live = event && event.status === "live";
-  const tag = href ? "a" : "div";
+  const watchHref = live ? liveWatchHref({ eventId: event && event.id }) : "";
+  const tag = href && !watchHref ? "a" : "div";
 
-  return h(tag, { className: `event-card${live ? " live" : ""}`, href: href || undefined }, [
+  return h(tag, { className: `event-card${live ? " live" : ""}`, href: tag === "a" ? href : undefined }, [
     h("div", { className: "event-card-top", key: "top" }, [
       h("h3", { className: "event-name", key: "name" }, event && event.name ? String(event.name) : "Event"),
       event && event.typeLabel ? h(Badge, {
@@ -97,6 +99,12 @@ function EventCard({ event }) {
       className: `status-badge ${statusClass}`,
       text: String(event.statusLabel),
     })) : null,
+    watchHref
+      ? h("a", { className: "btn-watch-live", href: watchHref, key: "watch" }, "Watch live")
+      : null,
+    watchHref && href
+      ? h("a", { className: "event-cta", href, key: "details" }, "Event details")
+      : null,
   ]);
 }
 

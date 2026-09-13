@@ -15,6 +15,7 @@ import { displayMatchStatus } from "../shared/match-status.js";
 import { TeeSignSvg } from "../shared/tee-sign-svg.js";
 import { UDiscExportDetails, udiscDeepLink } from "../shared/udisc-export.js";
 import { useEventsEventDetail } from "./events-detail-data.js";
+import { EventLiveChat } from "./events-live-chat.js";
 import { EventFieldRoster } from "../shared/event-field-roster.js";
 
 const h = React.createElement;
@@ -205,6 +206,7 @@ function LiveStandings({ snapshot }) {
 function LivePanel({ data }) {
   const snapshot = data.liveSnapshot || null;
   const liveCtps = unawardedLiveCtps(snapshot && snapshot.liveCtps, data.extras && data.extras.ctps);
+  const canScore = Boolean(data.memberToken || (data.guestReg && data.guestReg.guestToken));
   return h(React.Fragment, null, [
     h("div", { className: "live-banner", key: "banner" }, [
       h("span", { className: "live-dot", key: "dot" }),
@@ -212,7 +214,9 @@ function LivePanel({ data }) {
       h("span", { className: "lb-conn", key: "connection" }, data.liveConnection || "Connecting"),
     ]),
     h("a", { className: "btn-watch-live", href: liveWatchHref({ eventId: data.event && data.event.id }), key: "watch" }, "Watch live"),
-    h("a", { className: "btn-keep-score", href: keepScoreHref(data), key: "score" }, "Keep score for my card"),
+    canScore
+      ? h("a", { className: "btn-keep-score", href: keepScoreHref(data), key: "score" }, "Keep score for my card")
+      : null,
     snapshot && snapshot.weather
       ? h("div", { className: "live-weather", key: "weather" }, h(WeatherStrip, { title: "Round weather", weather: snapshot.weather }))
       : null,
