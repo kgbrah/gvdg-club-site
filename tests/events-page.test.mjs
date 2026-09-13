@@ -13,12 +13,15 @@ test('public Events page pins Live Now to the top section, above the schedule fe
   assert.ok(html.indexOf('id="liveNowSection"') < html.indexOf('id="hub"'), 'Live Now mount should remain above club upcoming');
   assert.ok(html.indexOf('id="hub"') < html.indexOf('id="calendarEvents"'), 'Club upcoming should sit above the PDGA schedule feed');
   assert.match(source, /function publishLoadedHub\(feed, events, courseIndex\)/);
-  assert.match(source, /live: live\.map\(\(event\) => eventHubItem\(event, courseIndex\)\)/);
+  assert.match(source, /eventHubItem\(event, courseIndex\)/);
+  assert.match(source, /liveSnapshot/);
+  assert.match(source, /function refreshLiveSnapshots/);
   assert.match(source, /feedEvents: filterDuplicateFeed\(feedEvents, \[\.\.\.live, \.\.\.upcoming\]\)\.map\(feedHubItem\)/);
   assert.match(app, /export function EventsLiveNowApp/);
   assert.match(app, /export function EventsScheduleFeedApp/);
   assert.match(app, /EventScheduleFacts/);
   assert.match(app, /EventFieldRoster/);
+  assert.match(app, /LiveStandings/);
   assert.match(app, /liveWatchHref/);
   assert.match(app, /Watch live/);
   assert.match(source, /function attachOpenFields/);
@@ -122,6 +125,8 @@ test('public Events hub schedule and club feed publish to React', () => {
   assert.match(app, /export function EventsClubFeedApp/);
   assert.match(app, /data-react-events-hub/);
   assert.match(app, /CalendarDays, ExternalLink, MapPin/);
+  assert.match(app, /LiveStandings/);
+  assert.match(data, /function refreshLiveSnapshots/);
   assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|📅|📍|🥏/);
 });
 
@@ -314,10 +319,12 @@ test('public Events event detail fetches in React', () => {
   assert.doesNotMatch(app + dataApp, /gvdg:events-event-detail|__gvdgEventsEventDetail/);
   assert.match(app, /formatLabel\(event\.format\)/);
   assert.match(app, /data-react-events-event-detail/);
-  assert.match(app, /function LiveStandings/);
-  assert.match(app, /live-matchplay/);
-  assert.match(app, /team-dot/);
-  assert.match(app, /standingTeamLabel/);
+  const standings = readFileSync('src/public-app/live-standings.js', 'utf8');
+  assert.match(app, /import \{ LiveStandings \} from "\.\/live-standings\.js"/);
+  assert.match(standings, /export function LiveStandings/);
+  assert.match(standings, /live-matchplay/);
+  assert.match(standings, /team-dot/);
+  assert.match(standings, /standingTeamLabel/);
   assert.match(app, /Watch live/);
   assert.match(app, /liveWatchHref/);
   assert.match(app, /const canScore = Boolean\(data.memberToken/);

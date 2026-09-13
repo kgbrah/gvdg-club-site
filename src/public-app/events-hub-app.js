@@ -5,6 +5,7 @@ import { useEventsHub } from "./events-hub-data.js";
 import { EventScheduleFacts } from "../shared/event-schedule.js";
 import { EventFieldRoster } from "../shared/event-field-roster.js";
 import { liveWatchHref } from "../shared/live-watch.js";
+import { LiveStandings } from "./live-standings.js";
 
 const h = React.createElement;
 
@@ -102,6 +103,7 @@ function EventCard({ event }) {
     watchHref
       ? h("a", { className: "btn-watch-live", href: watchHref, key: "watch" }, "Watch live")
       : null,
+    live ? h(LiveStandings, { key: "standings", snapshot: event && event.liveSnapshot }) : null,
     watchHref && href
       ? h("a", { className: "event-cta", href, key: "details" }, "Event details")
       : null,

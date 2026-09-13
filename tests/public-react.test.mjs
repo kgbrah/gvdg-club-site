@@ -24,7 +24,7 @@ test('public content pages mount the shared React page chrome', () => {
   for (const page of publicPages) {
     const html = readFileSync(page, 'utf8');
     assert.match(html, /id="publicReactPageChrome"/, page);
-    assert.match(html, /<script type="module" src="public-app\/public-app\.js"><\/script>/, page);
+    assert.match(html, /<script type="module" src="public-app\/public-app\.js(?:\?v=\d+)?">/, page);
     for (const pattern of removedChromePatterns) {
       assert.doesNotMatch(html, pattern, page);
     }
@@ -53,7 +53,7 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(chrome, /localStorage\.getItem\("theme"\)/);
   assert.match(chrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app admin-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v133"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v134"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
@@ -168,6 +168,8 @@ test('Events hub schedule and club feed are rendered by the public React bundle'
   assert.match(app, /import \{ useEventsHub \} from "\.\/events-hub-data\.js"/);
   assert.match(app, /liveWatchHref/);
   assert.match(app, /Watch live/);
+  assert.match(app, /LiveStandings/);
+  assert.match(data, /function refreshLiveSnapshots/);
   assert.match(data, /fetchPublicJson\(api, "\/club-feed"\)/);
   assert.match(data, /fetchPublicJson\(api, `\/events\?limit=\$\{EVENTS_PAGE_LIMIT\}&offset=0`\)/);
   assert.match(data, /publishEventsView\("hub"\)/);
@@ -296,8 +298,10 @@ test('Events event detail is rendered by the public React bundle', () => {
   assert.match(app, /unawardedLiveCtps/);
   assert.match(app, /import \{ EventLiveChat \} from "\.\/events-live-chat\.js"/);
   assert.match(app, /h\(EventLiveChat,/);
-  assert.match(app, /function LiveStandings/);
-  assert.match(app, /team-dot/);
+  const standings = readFileSync('src/public-app/live-standings.js', 'utf8');
+  assert.match(app, /import \{ LiveStandings \} from "\.\/live-standings\.js"/);
+  assert.match(standings, /export function LiveStandings/);
+  assert.match(standings, /team-dot/);
   const chat = readFileSync('src/public-app/events-live-chat.js', 'utf8');
   assert.match(chat, /data-react-live-chat/);
   assert.match(chat, /\/events\/\$\{encodeURIComponent\(eventId\)\}\/chat/);
@@ -305,7 +309,7 @@ test('Events event detail is rendered by the public React bundle', () => {
   assert.match(html, /\.live-chat /);
   assert.match(app, /Watch live/);
   assert.match(app, /const canScore = Boolean\(data.memberToken/);
-  assert.match(app, /live-matchplay/);
+  assert.match(standings, /live-matchplay/);
   assert.match(app, /function FinalResults/);
   assert.match(app, /function EventExtras/);
   assert.match(app, /function TeeSigns/);

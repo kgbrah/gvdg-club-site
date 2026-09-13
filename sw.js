@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v133";
+const CACHE = "gvdg-club-v134";
 const OFFLINE_PAGE = "gvdg-members.html";
 const ASSETS = [
   "tokens.css",
@@ -28,8 +28,22 @@ function staticAsset(req, url) {
   return STATIC_DESTINATIONS.has(req.destination) || /\.(?:css|gif|ico|jpe?g|js|png|svg|webmanifest|webp)$/i.test(url.pathname);
 }
 
+function isCodeAsset(req, url) {
+  return req.destination === "script" || req.destination === "style" || /\.(?:js|css)$/i.test(url.pathname);
+}
+
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()).catch(() => {}));
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+    await Promise.all(ASSETS.map(async (asset) => {
+      try {
+        const res = await fetch(asset, { cache: "reload" });
+        if (res && res.ok) await cache.put(asset, res);
+      } catch {
+      }
+    }));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener("activate", (event) => {
@@ -61,6 +75,21 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (!staticAsset(req, url)) return;
+
+  if (isCodeAsset(req, url)) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (cacheable(res)) {
+            const copy = res.clone();
+            caches.open(CACHE).then((cache) => cache.put(req, copy)).catch(() => {});
+          }
+          return res;
+        })
+        .catch(() => caches.match(req).then((cached) => cached || Response.error()))
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(req).then((cached) => {
