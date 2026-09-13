@@ -332,6 +332,7 @@
         .stepper button.minus { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); }
         .stepper button.plus { background: var(--primary-strong); color: #fff; }
         .stepper button:active { transform: scale(0.9); }
+        .stepper button:disabled { opacity: 0.4; cursor: default; transform: none; }
         .stepper .val { width: 50px; text-align: center; }
         .stepper .val .n { font-size: 1.55rem; font-weight: 700; line-height: 1; }
         .stepper .val .rel { font-size: 0.72rem; font-weight: 700; }
@@ -373,6 +374,13 @@
         .finalize-line { font-size: 0.82rem; }
         .finish-round-btn { margin-top: 0.7rem; }
         .finish-round-hint { font-size: 0.8rem; margin-top: 0.4rem; }
+        .confirm-scores-sheet { max-height: 88vh; }
+        .confirm-scores-table-wrap { overflow-x: auto; margin: 0.75rem 0; }
+        .confirm-scores-table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+        .confirm-scores-table th, .confirm-scores-table td { padding: 0.35rem 0.4rem; border-bottom: 1px solid var(--border-color); text-align: center; }
+        .confirm-scores-table th:first-child, .confirm-scores-table td.name { text-align: left; font-weight: 700; position: sticky; left: 0; background: var(--bg-secondary); }
+        .confirm-agree-list { display: grid; gap: 0.45rem; margin: 0.7rem 0; }
+        .confirm-agree-list .btn { width: 100%; }
         .manage-pairs { margin: 0.75rem 0; }
         .manage-pair-field { display: grid; gap: 0.35rem; }
         .manage-player-row { justify-content: space-between; }
@@ -399,6 +407,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=138"></script>
+    <script type="module" src="score-app/score-app.js?v=139"></script>
 </body>
 </html>

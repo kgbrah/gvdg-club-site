@@ -94,9 +94,9 @@ function scoreUdiscExportSource() {
 function scoreControllerLeaderboardSource() {
   const source = scoreControllerSource();
   const start = source.indexOf('// ---------- leaderboard sheet ----------');
-  const end = source.indexOf('async function finalizeRound()');
+  const end = source.indexOf('async function agreeFinish(');
   assert.notEqual(start, -1, 'leaderboard section should exist');
-  assert.notEqual(end, -1, 'finalize round should follow leaderboard section');
+  assert.notEqual(end, -1, 'finish confirm should follow leaderboard section');
   return source.slice(start, end);
 }
 
@@ -303,8 +303,8 @@ test('score controller delegates scorecard derivation to a pure view model', () 
   assert.match(viewModel, /export function fieldActiveHoleIndex/);
   assert.match(viewModel, /export function strokesForRow/);
   assert.match(viewModel, /export function finalizeBlockers\(state\)/);
-  assert.match(viewModel, /export function finishRoundHint\(blockers, mode\)/);
-  assert.match(controller, /finishRoundHint\(blockers, MODE\)/);
+  assert.match(viewModel, /export function finishRoundHint\(blockers, mode/);
+  assert.match(controller, /finishRoundHint\(blockers, MODE/);
   assert.doesNotMatch(scoreLeaderboardSource(), /Every member on the card must enter matching scores/);
   assert.doesNotMatch(controller, /function scoreRows\(\)|function strokesFor\(|function strokesForRow\(|function conflictForRow\(|function holeHasConflict\(|function isMatchDormie\(|function matchStatusText\(|function myScoreRow\(|function udiscExportData\(\)|function finalizeBlockers\(\)/);
 });
@@ -375,7 +375,10 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
   assert.equal(finalizeBlockers(state).ready, false);
   assert.match(finishRoundHint(finalizeBlockers(state), 'round'), /disagreeing scores/);
   assert.match(finishRoundHint({ ready: true, conflicts: [], missing: [], lines: [] }, 'round'), /Anyone on this card can finish/);
-  assert.equal(finishRoundHint({ ready: true, conflicts: [], missing: [], lines: [] }, 'event'), '');
+  assert.match(finishRoundHint({ ready: true, conflicts: [], missing: [], lines: [] }, 'event'), /Anyone on this card can submit/);
+  assert.match(finishRoundHint({ ready: true, conflicts: [], missing: [], lines: [] }, 'event', true), /submitted/);
+  assert.equal(view.finish.canFinish, false);
+  assert.equal(view.finish.ready, false);
   assert.equal(matchStatusText({
     ...state,
     roundConfig: { groupFormat: 'singles', scoringStyle: 'matchplay' },
@@ -511,6 +514,12 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /tee-order-hint/);
   assert.doesNotMatch(scorecard, /honors-chip/);
   assert.doesNotMatch(scorecard, /Throws first/);
+  assert.match(scorecard, /function FinishCard\(props\)/);
+  assert.match(scorecard, /function ConfirmScoresSheet\(props\)/);
+  assert.match(scorecard, /Finish card/);
+  assert.match(scorecard, /Every player on this card must agree/);
+  assert.doesNotMatch(scorecard, /Your card is not ready yet/);
+  assert.match(controller, /LIVE \+ '\/finish-card'/);
   assert.match(scorecard, /function HoleGrid\(props\)/);
   assert.match(scorecard, /export function ScorecardView\(props\)/);
   assert.match(scorecard, /WeatherStrip/);

@@ -2,7 +2,7 @@ import type { ScoreConflict } from "./live-consensus.js";
 import { cardLiveCtps, publicLiveCtps, type LiveCtpStore } from "./live-ctp.js";
 import { publicPlayerLocations, type LivePlayerLocation } from "./live-locations.js";
 import type { PlayerState } from "./scoring.js";
-import { canEnterScorecard, computeRoundStandings, healthyTargets, publicScoreTargets, resolvedHoles, scorecardIssues, scoringState } from "./live-state.js";
+import { attestationForCard, canEnterScorecard, computeRoundStandings, healthyTargets, isCardLocked, publicScoreTargets, resolvedHoles, scorecardIssues, scoringState } from "./live-state.js";
 import type { LiveMeta } from "./live-types.js";
 
 const EMPTY_LOCATIONS: ReadonlyMap<number, LivePlayerLocation> = new Map();
@@ -64,6 +64,8 @@ export function publicSnapshot(
     standings,
     liveCtps: publicLiveCtps(liveCtps, players),
     playerLocations: meta?.status === "live" ? publicPlayerLocations(players, locations, Date.now(), holes) : [],
+    lockedCardIds: Array.isArray(meta?.lockedCardIds) ? meta.lockedCardIds : [],
+    cardAttestations: meta?.cardAttestations && typeof meta.cardAttestations === "object" ? meta.cardAttestations : {},
     updatedAt: meta?.startedAt ?? null,
   };
 }
@@ -120,6 +122,10 @@ export function mineData(
     standings,
     liveCtps: [] as ReturnType<typeof cardLiveCtps>,
     playerLocations,
+    lockedCardIds: Array.isArray(meta?.lockedCardIds) ? meta.lockedCardIds : [],
+    cardAttestations: meta?.cardAttestations && typeof meta.cardAttestations === "object" ? meta.cardAttestations : {},
+    cardAttestation: { agreedIndexes: [] as number[], neededIndexes: [] as number[], complete: false },
+    cardLocked: false,
   };
   if (meIdx < 0) return { ...base, cardId: null, playerIndex: null, cardmates: [], conflicts: [], missing: [] };
   const me = players[meIdx];
@@ -147,6 +153,8 @@ export function mineData(
     cardId,
     playerIndex: meIdx,
     cardmates,
+    cardLocked: isCardLocked(meta?.lockedCardIds, cardId),
+    cardAttestation: attestationForCard(meta?.cardAttestations, players, cardId),
     conflicts: issues.conflicts.filter((conflict: ScoreConflict) => conflict.cardId === cardId),
     missing: issues.missing.filter((missing) => missing.cardId === cardId),
     liveCtps: cardLiveCtps(liveCtps, players, cardId, meIdx),

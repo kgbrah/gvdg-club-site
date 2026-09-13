@@ -46,7 +46,7 @@ export function startScoreApp(options) {
         const scoreBody = options && options.body;
         const scoreShell = options && options.shell;
         const POTS_REFRESH_MS = 30 * 1000;
-        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, roundConfig: null, scoreTargets: [], scoreTargetError: null, weather: null, pots: null, playerLocations: [] };
+        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, roundConfig: null, scoreTargets: [], scoreTargetError: null, weather: null, pots: null, playerLocations: [], cardLocked: false, cardAttestation: { agreedIndexes: [], neededIndexes: [], complete: false }, finishConfirmOpen: false };
         let potsTimer = null;
         let locWatchId = null;
         let locLastSent = 0;
@@ -290,6 +290,7 @@ export function startScoreApp(options) {
         }
 
         async function postScore(row, hole, strokes) {
+            if (S.cardLocked || S.status === 'final') { toast('This card is already submitted'); return; }
             const scorerIndex = currentScorerIndex();
             if (scorerIndex == null) { toast('Choose a scorecard'); return; }
             const key = pendingKey(scorerIndex, row.index, hole, row.targetId || null);
@@ -316,7 +317,7 @@ export function startScoreApp(options) {
                 if (r.status === 403) toast('You can only score your own card');
                 else if (r.status === 401) toast('Session expired — sign in again');
                 else if (r.status === 429) toast('Easy there — one moment');
-                else if (r.status === 409) toast('Round isn’t live');
+                else if (r.status === 409) toast((r.data && r.data.error === 'card_locked') ? 'This card is already submitted' : 'Round isn’t live');
                 else toast('Could not save that score');
                 // Rejected — roll the phantom optimistic vote back. Reconcile from the snapshot if we have one;
                 // otherwise (no snapshot yet) restore the captured prior value directly.
@@ -362,6 +363,14 @@ export function startScoreApp(options) {
             // Drop a stale/out-of-order snapshot (a newer one from another device was already applied).
             if (snap.rev != null) { if (snap.rev <= S.lastRev) { if (extrasChanged) renderHole(); return; } S.lastRev = snap.rev; }
             if (snap.status) S.status = snap.status; // reflect a finalize (or start) that happened on another device
+            if (typeof snap.cardLocked === 'boolean') S.cardLocked = snap.cardLocked;
+            else if (Array.isArray(snap.lockedCardIds)) S.cardLocked = snap.lockedCardIds.indexOf(String(S.cardId ?? 'c0')) >= 0;
+            if (snap.cardAttestation) S.cardAttestation = snap.cardAttestation;
+            else if (snap.cardAttestations && S.cardId != null) {
+                const votes = snap.cardAttestations[String(S.cardId ?? 'c0')] || [];
+                S.cardAttestation = { agreedIndexes: votes, neededIndexes: (S.cardmates || []).map((row) => row.index), complete: false };
+            }
+            if (S.cardLocked) S.finishConfirmOpen = false;
             S.roundConfig = snap.roundConfig || S.roundConfig;
             S.scoreTargets = Array.isArray(snap.scoreTargets) ? snap.scoreTargets : S.scoreTargets;
             S.scoreTargetError = myScoreTargetError(snap);
@@ -604,6 +613,9 @@ export function startScoreApp(options) {
                 onPrevious: function () { S.holeIdx = Math.max(0, S.holeIdx - 1); renderHole(); },
                 onScore: postScore,
                 onCtpVote: EVENT_ID && !WATCH ? postCtpVote : null,
+                onOpenFinish: openFinishConfirm,
+                onCloseFinish: closeFinishConfirm,
+                onAgreeFinish: agreeFinish,
                 onScorerChange: function (index) { S.scorerIndex = index; renderHole(); },
                 onShare: shareRound,
                 onWatchShare: ROUND_CODE || EVENT_ID ? shareWatchLink : null,
@@ -618,42 +630,68 @@ export function startScoreApp(options) {
         function closeLeaderboard() { lbOpen = false; leaderboardSheet.close(); }
         function renderLeaderboard() {
             const blockers = finalizeBlockers(S);
-            blockers.hint = finishRoundHint(blockers, MODE);
+            blockers.hint = finishRoundHint(blockers, MODE, S.cardLocked || S.status === 'final');
             leaderboardSheet.render({
                 blockers: blockers,
+                cardLocked: S.cardLocked,
                 exportData: udiscExportData(S),
                 isDoubles: isDoublesScoring(S),
                 isMatchplay: isMatchplayScoring(S),
                 mode: MODE,
                 onClose: closeLeaderboard,
-                onFinalize: finalizeRound,
+                onFinalize: openFinishConfirm,
                 relClass: relClass,
                 relText: relText,
                 standings: (S.snap && S.snap.standings) || [],
                 status: S.status,
             });
         }
-        async function finalizeRound() {
-            const confirmed = await dialogs.confirm({
-                cancelText: 'Keep scoring',
-                confirmText: 'Finish round',
-                message: 'This locks the scorecard for everyone.',
-                title: 'Finish round?'
-            });
-            if (!confirmed) return;
-            // Casual finalize is /rounds/<code>/finalize (NOT under /live). The Finish button only shows
-            // for casual rounds; competition rounds are finalized by an admin from the admin console.
-            const r = await api('/rounds/' + ROUND_CODE + '/finalize', { method: 'POST', body: {} });
-            if (r.ok && r.data && r.data.status === 'final') {
-                S.status = 'final';
-                stopLiveLocation();
-                toast('Round finished');
+        function openFinishConfirm() {
+            if (!finalizeBlockers(S).ready && !S.cardLocked) { toast('Finish the remaining holes first'); return; }
+            S.finishConfirmOpen = true;
+            closeLeaderboard();
+            renderHole();
+        }
+        function closeFinishConfirm() {
+            S.finishConfirmOpen = false;
+            renderHole();
+        }
+        async function agreeFinish(playerIndex) {
+            if (S.cardLocked && S.status !== 'final') { toast('This card is already submitted'); return; }
+            const r = await api(LIVE + '/finish-card', { method: 'POST', body: { playerIndex: playerIndex } });
+            if (r.ok) {
+                S.snap = r.data || S.snap;
+                if (r.data && r.data.status === 'final') {
+                    S.status = 'final';
+                    S.cardLocked = true;
+                    S.finishConfirmOpen = false;
+                    stopLiveLocation();
+                    toast('Round finished');
+                } else if (r.data && Array.isArray(r.data.lockedCardIds) && r.data.lockedCardIds.indexOf(String(S.cardId ?? 'c0')) >= 0) {
+                    S.cardLocked = true;
+                    S.finishConfirmOpen = false;
+                    mergeFromSnap();
+                    toast('Card submitted');
+                } else {
+                    if (r.data && r.data.cardAttestation) S.cardAttestation = r.data.cardAttestation;
+                    else if (r.data) mergeFromSnap();
+                    toast('Agreed');
+                }
+                renderHole();
                 if (lbOpen) renderLeaderboard();
-            } else if (r.status === 409) {
-                toast('Can’t finish yet — scorecards don’t agree');
-                if (lbOpen) renderLeaderboard(); // reflect the latest blockers
+            } else if (r.status === 409 && r.data && r.data.error === 'scorecard_incomplete') {
+                if (Array.isArray(r.data.conflicts)) setConflicts(r.data.conflicts);
+                if (Array.isArray(r.data.missing)) setMissing(r.data.missing);
+                S.finishConfirmOpen = false;
+                toast('Can’t finish yet — scores are incomplete');
+                renderHole();
+            } else if (r.status === 409 && r.data && r.data.error === 'card_locked') {
+                S.cardLocked = true;
+                S.finishConfirmOpen = false;
+                toast('This card is already submitted');
+                renderHole();
             } else {
-                toast('Couldn’t finish the round');
+                toast('Couldn’t record that agreement');
             }
         }
 
@@ -677,6 +715,8 @@ export function startScoreApp(options) {
             }
             S.holes = Array.isArray(d.holes) ? d.holes : [];
             S.cardId = d.cardId; S.myIndex = d.playerIndex; S.cardmates = d.cardmates;
+            S.cardLocked = d.cardLocked === true || (Array.isArray(d.lockedCardIds) && d.lockedCardIds.indexOf(String(d.cardId ?? 'c0')) >= 0);
+            S.cardAttestation = d.cardAttestation || { agreedIndexes: [], neededIndexes: [], complete: false };
             S.roundConfig = d.roundConfig || null; S.scoreTargets = Array.isArray(d.scoreTargets) ? d.scoreTargets : []; S.scoreTargetError = d.scoreTargetError || null;
             S.courseName = d.courseName || null; S.layoutName = d.layoutName || null; S.udiscCourseId = d.udiscCourseId || null;
             S.weather = d.weather || null;

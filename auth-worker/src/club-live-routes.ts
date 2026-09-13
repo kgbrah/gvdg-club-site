@@ -181,6 +181,20 @@ export async function handleClubLive(
     return json(await r.json().catch(() => ({})), r.status, origin);
   }
 
+  // Cardmates submit/lock their own card once it agrees. Admin still finalizes the event.
+  if (method === "POST" && sub === "finish-card") {
+    const body = (await readJson(request)) ?? {};
+    const id = await scoreIdentity(request, env, body);
+    if (!id.authMember) return json({ error: "unauthorized" }, 401, origin);
+    if (await kvRateLimited(env, "live-finish:" + id.authMember, 30, 60)) return json({ error: "rate_limited" }, 429, origin);
+    const r = await stub.fetch("https://do/finish-card", {
+      method: "POST",
+      body: JSON.stringify({ playerIndex: body.playerIndex }),
+      headers: { "X-Auth-Member": id.authMember, "X-Auth-Admin": String(id.authAdmin) },
+    });
+    return json(await r.json().catch(() => ({})), r.status, origin);
+  }
+
   // Card-unanimous CTP claim: same identity as scoring. Worker checks the CTP exists on this event;
   // the DO records votes and only promotes a leader when every player on that card agrees.
   if (method === "POST" && sub === "ctp") {

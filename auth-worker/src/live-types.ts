@@ -41,6 +41,10 @@ export interface LiveMeta {
   overrides?: Record<string, { par?: number; distance_ft?: number }>;
   /** True when the event charges a CTP buy-in; walk-ons added after start are not eligible. */
   ctpBuyInRequired?: boolean;
+  /** Event cards that cardmates have submitted. Casual rounds finalize instead of locking. */
+  lockedCardIds?: string[];
+  /** Per-card player indexes who have agreed the scorecard is correct. */
+  cardAttestations?: Record<string, number[]>;
 }
 
 export interface StartBody {
