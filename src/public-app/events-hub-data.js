@@ -214,15 +214,26 @@ function eventHubItem(raw, courseIndex) {
   };
 }
 
-function feedHubItem(item) {
+function findClubEventByName(clubEvents, name) {
+  const key = namesKey(name);
+  if (!key) return null;
+  return (clubEvents || []).find((event) => namesKey(event && event.name) === key) || null;
+}
+
+function feedHubItem(item, clubEvents) {
   const leagueTarget = ryderCupFeedHash(item);
-  const externalHref = leagueTarget ? "" : sanitizeUrl(item?.url);
+  const matched = leagueTarget ? null : findClubEventByName(clubEvents, item?.name);
+  const clubHref = matched && matched.id != null && matched.id !== ""
+    ? `#event/${encodeURIComponent(matched.id)}`
+    : "";
+  const externalHref = leagueTarget || clubHref ? "" : sanitizeUrl(item?.url);
+  const past = Boolean(matched && (matched.status === "final" || matched.status === "cancelled"));
   return {
-    cta: leagueTarget ? "League / Results" : (externalHref ? "Register / Details" : ""),
+    cta: leagueTarget ? "League / Results" : clubHref ? (past ? "View results" : "Event details") : (externalHref ? "Register / Details" : ""),
     dateText: feedDateText(item),
     detail: stripFeedDecor(item?.detail || ""),
     external: Boolean(externalHref),
-    href: leagueTarget || externalHref,
+    href: leagueTarget || clubHref || externalHref,
     name: stripFeedDecor(item?.name) || "Event",
   };
 }
@@ -275,8 +286,8 @@ function publishLoadedHub(feed, events, courseIndex) {
   ].sort((a, b) => previousResultTime(b) - previousResultTime(a));
 
   state.hub = {
-    feedClub: feedClub.map(feedHubItem),
-    feedEvents: filterDuplicateFeed(feedEvents, [...live, ...upcoming]).map(feedHubItem),
+    feedClub: feedClub.map((item) => feedHubItem(item, events || [])),
+    feedEvents: filterDuplicateFeed(feedEvents, [...live, ...upcoming]).map((item) => feedHubItem(item, events || [])),
     hasMainContent: Boolean(feedEvents.length || live.length || upcoming.length),
     live: live.map((event) => {
       const item = eventHubItem(event, courseIndex);

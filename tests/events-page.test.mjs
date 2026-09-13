@@ -16,7 +16,7 @@ test('public Events page pins Live Now to the top section, above the schedule fe
   assert.match(source, /eventHubItem\(event, courseIndex\)/);
   assert.match(source, /liveSnapshot/);
   assert.match(source, /function refreshLiveSnapshots/);
-  assert.match(source, /feedEvents: filterDuplicateFeed\(feedEvents, \[\.\.\.live, \.\.\.upcoming\]\)\.map\(feedHubItem\)/);
+  assert.match(source, /feedEvents: filterDuplicateFeed\(feedEvents, \[\.\.\.live, \.\.\.upcoming\]\)\.map\(\(item\) => feedHubItem\(item, events \|\| \[\]\)\)/);
   assert.match(app, /export function EventsLiveNowApp/);
   assert.match(app, /export function EventsScheduleFeedApp/);
   assert.match(app, /EventScheduleFacts/);
@@ -105,7 +105,7 @@ test('public Events hub schedule and club feed publish to React', () => {
   assert.doesNotMatch(source, /function publishHub\(hub\)|new CustomEvent\('gvdg:events-hub'|window\.__gvdgEventsHub/);
   assert.doesNotMatch(source, /function eventHubItem\(raw\)|function feedHubItem\(item\)|fetchJson\('\/club-feed'\)|fetchJson\('\/events\?limit=/);
   assert.match(data, /function eventHubItem\(raw, courseIndex\)/);
-  assert.match(data, /function feedHubItem\(item\)/);
+  assert.match(data, /function feedHubItem\(item, clubEvents\)/);
   assert.match(data, /fetchPublicJson\(api, "\/club-feed"\)/);
   assert.match(data, /fetchPublicJson\(api, `\/events\?limit=\$\{EVENTS_PAGE_LIMIT\}&offset=0`\)/);
   assert.match(data, /hasMainContent: Boolean\(feedEvents\.length \|\| live\.length \|\| upcoming\.length\)/);
@@ -374,6 +374,16 @@ test('public registration cards post pair label only for doubles config', () => 
   assert.match(utils, /function registrationLiveConfig\(event\)/);
   assert.match(utils, /event\.liveScoringConfig \|\| event\.live_scoring_config/);
   assert.match(utils, /raw == null && event\.play_format === "doubles"/);
+});
+
+test('finished club events in the schedule feed open results', () => {
+  const source = eventsHubDataSource();
+  assert.match(source, /function findClubEventByName\(clubEvents, name\)/);
+  assert.match(source, /function feedHubItem\(item, clubEvents\)/);
+  assert.match(source, /#event\/\$\{encodeURIComponent\(matched\.id\)\}/);
+  assert.match(source, /past \? "View results" : "Event details"/);
+  assert.match(source, /feedClub: feedClub\.map\(\(item\) => feedHubItem\(item, events \|\| \[\]\)\)/);
+  assert.doesNotMatch(source, /feedEvents: filterDuplicateFeed\(feedEvents, \[\.\.\.live, \.\.\.upcoming\]\)\.map\(feedHubItem\)/);
 });
 
 test('Ryder Cup upcoming cards open the event, previous results keep the league route', () => {
