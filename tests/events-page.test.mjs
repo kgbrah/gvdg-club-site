@@ -19,6 +19,8 @@ test('public Events page pins Live Now to the top section, above the schedule fe
   assert.match(app, /export function EventsScheduleFeedApp/);
   assert.match(app, /EventScheduleFacts/);
   assert.match(app, /EventFieldRoster/);
+  assert.match(app, /liveWatchHref/);
+  assert.match(app, /Watch live/);
   assert.match(source, /function attachOpenFields/);
   assert.match(source, /\/registration\/open/);
   assert.match(app, /Live Now/);
@@ -290,7 +292,8 @@ test('public Events event detail fetches in React', () => {
   assert.match(eventsHubDataSource(), /route\?\.view === "event" \|\| route\?\.view === "league"/);
   assert.match(main, /createRoot\(eventsEventDetailMount\)\.render\(h\(EventsEventDetailApp\)\)/);
   assert.match(app, /export function EventsEventDetailApp/);
-  assert.match(app, /EventLiveChat/);
+  assert.match(app, /import \{ EventLiveChat \} from "\.\/events-live-chat\.js"/);
+  assert.match(app, /h\(EventLiveChat,/);
   assert.match(app, /import \{ useEventsEventDetail \} from "\.\/events-detail-data\.js"/);
   assert.match(dataApp, /export function useEventsEventDetail/);
   assert.match(dataApp, /EVENTS_ROUTE_REQUEST_EVENT/);
@@ -317,6 +320,7 @@ test('public Events event detail fetches in React', () => {
   assert.match(app, /standingTeamLabel/);
   assert.match(app, /Watch live/);
   assert.match(app, /liveWatchHref/);
+  assert.match(app, /const canScore = Boolean\(data.memberToken/);
   assert.match(app, /function FinalResults/);
   assert.match(app, /function EventExtras/);
   assert.match(app, /function TeeSigns/);

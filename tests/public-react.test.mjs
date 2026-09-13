@@ -53,7 +53,7 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(chrome, /localStorage\.getItem\("theme"\)/);
   assert.match(chrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app admin-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v132"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v133"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
@@ -166,6 +166,8 @@ test('Events hub schedule and club feed are rendered by the public React bundle'
   assert.match(app, /export function EventsUpcomingApp/);
   assert.match(app, /export function EventsClubFeedApp/);
   assert.match(app, /import \{ useEventsHub \} from "\.\/events-hub-data\.js"/);
+  assert.match(app, /liveWatchHref/);
+  assert.match(app, /Watch live/);
   assert.match(data, /fetchPublicJson\(api, "\/club-feed"\)/);
   assert.match(data, /fetchPublicJson\(api, `\/events\?limit=\$\{EVENTS_PAGE_LIMIT\}&offset=0`\)/);
   assert.match(data, /publishEventsView\("hub"\)/);
@@ -292,7 +294,8 @@ test('Events event detail is rendered by the public React bundle', () => {
   assert.match(app, /data-react-events-final-results/);
   assert.match(app, /function LivePanel/);
   assert.match(app, /unawardedLiveCtps/);
-  assert.match(app, /EventLiveChat/);
+  assert.match(app, /import \{ EventLiveChat \} from "\.\/events-live-chat\.js"/);
+  assert.match(app, /h\(EventLiveChat,/);
   assert.match(app, /function LiveStandings/);
   assert.match(app, /team-dot/);
   const chat = readFileSync('src/public-app/events-live-chat.js', 'utf8');
@@ -301,6 +304,7 @@ test('Events event detail is rendered by the public React bundle', () => {
   assert.doesNotMatch(chat, /innerHTML|insertAdjacentHTML/);
   assert.match(html, /\.live-chat /);
   assert.match(app, /Watch live/);
+  assert.match(app, /const canScore = Boolean\(data.memberToken/);
   assert.match(app, /live-matchplay/);
   assert.match(app, /function FinalResults/);
   assert.match(app, /function EventExtras/);
