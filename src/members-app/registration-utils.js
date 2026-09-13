@@ -82,6 +82,20 @@ export function sortRegistrations(rows) {
   });
 }
 
+export function pickUpNext(events, registrations) {
+  const open = Array.isArray(events) ? events : [];
+  const rows = Array.isArray(registrations) ? registrations : [];
+  const byId = new Map(open.map((event) => [String(event.id), event]));
+  const upcoming = sortRegistrations(rows).filter((row) => row.event_status === "live" || row.event_status === "scheduled");
+  if (upcoming[0]) {
+    const row = upcoming[0];
+    return { event: byId.get(String(row.event_id)) || eventFromRegistration(row), registration: row };
+  }
+  const event = open[0] || null;
+  if (!event) return { event: null, registration: null };
+  return { event, registration: rows.find((row) => String(row.event_id) === String(event.id)) || null };
+}
+
 export function localDateTimeValue(ms) {
   const date = new Date(ms);
   const pad = (value) => String(value).padStart(2, "0");
