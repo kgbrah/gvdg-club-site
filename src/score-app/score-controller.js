@@ -3,7 +3,10 @@ import { createManagePlayersSheetRenderer } from "./manage-players-sheet.js";
 import { createScoreDialogRenderer } from "./dialogs.js";
 import { createScoreNotificationsRenderer } from "./notifications.js";
 import {
+    activeHoleIndex,
     buildScorecardViewState,
+    cardHoleComplete,
+    fieldActiveHoleIndex,
     finalizeBlockers,
     finishRoundHint,
     isDoublesScoring,
@@ -683,11 +686,12 @@ export function startScoreApp(options) {
             currentScorerIndex();
             setConflicts(d.conflicts);
             setMissing(d.missing);
-            // start on the card's shotgun hole if set, else hole 1
             const me = d.cardmates.find((p) => p.isMe);
-            const sh = me && me.startingHole;
-            const startIdx = sh ? S.holes.findIndex((h) => h.hole === sh) : 0;
-            S.holeIdx = startIdx >= 0 ? startIdx : 0;
+            S.holeIdx = activeHoleIndex({
+                holes: S.holes,
+                startingHole: me && me.startingHole,
+                isHoleComplete: function (hole) { return cardHoleComplete(S, hole, S.scorerIndex); },
+            });
             setShellHeader({
                 showLeaderboard: true,
                 subtitle: [S.courseName, S.layoutName].filter(Boolean).join(' · ') || 'Greenville Disc Golf Club',
@@ -889,6 +893,10 @@ export function startScoreApp(options) {
                 playerLocations: S.playerLocations || [],
                 players: Array.isArray(snap.players) ? snap.players : [],
                 scoreTargets: Array.isArray(snap.scoreTargets) ? snap.scoreTargets : S.scoreTargets || [],
+                activeHoleIndex: fieldActiveHoleIndex({
+                    holes: S.holes,
+                    players: Array.isArray(snap.players) ? snap.players : [],
+                }),
             });
         }
         async function loadWatch() {

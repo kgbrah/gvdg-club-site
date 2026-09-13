@@ -77,7 +77,14 @@ function WatchMatchCards({ cards }) {
 
 function WatchHoles(props) {
   const holes = Array.isArray(props.holes) ? props.holes : [];
-  const [index, setIndex] = React.useState(0);
+  const liveIndex = holes.length
+    ? Math.min(Math.max(0, Number(props.activeHoleIndex) || 0), holes.length - 1)
+    : 0;
+  const [index, setIndex] = React.useState(liveIndex);
+  const [followLive, setFollowLive] = React.useState(true);
+  React.useEffect(() => {
+    if (followLive) setIndex(liveIndex);
+  }, [followLive, liveIndex]);
   const safeIndex = holes.length ? Math.min(index, holes.length - 1) : 0;
   const selected = holes[safeIndex] || null;
   if (!selected) return null;
@@ -123,7 +130,10 @@ function WatchHoles(props) {
           className: holeIndex === safeIndex ? "cur" : "",
           key: hole.hole,
           type: "button",
-          onClick: () => setIndex(holeIndex),
+          onClick: () => {
+            setFollowLive(holeIndex === liveIndex);
+            setIndex(holeIndex);
+          },
         }, String(hole.hole)),
       )),
     ]),
@@ -164,6 +174,7 @@ export function WatchView(props) {
       }),
     ]),
     h(WatchHoles, {
+      activeHoleIndex: props.activeHoleIndex,
       holes: props.holes,
       isMatchplay: props.isMatchplay,
       key: "holes",

@@ -299,6 +299,8 @@ test('score controller delegates scorecard derivation to a pure view model', () 
   assert.match(viewModel, /export function yourTurnHint\(state\)/);
   assert.match(viewModel, /export function scoreRows\(state\)/);
   assert.match(viewModel, /export function applyTeeOrder/);
+  assert.match(viewModel, /export function activeHoleIndex/);
+  assert.match(viewModel, /export function fieldActiveHoleIndex/);
   assert.match(viewModel, /export function strokesForRow/);
   assert.match(viewModel, /export function finalizeBlockers\(state\)/);
   assert.match(viewModel, /export function finishRoundHint\(blockers, mode\)/);
@@ -633,6 +635,86 @@ test('PDGA tee order puts the previous-hole winner first and keeps ties stable',
   assert.equal(doubles.hint, 'Honors: Blue · then Red');
 });
 
+test('scorecard and watch open on the hole in progress', async () => {
+  const {
+    activeHoleIndex,
+    cardHoleComplete,
+    fieldActiveHoleIndex,
+  } = await import(new URL('../src/score-app/score-view-model.js', import.meta.url));
+  const holes = Array.from({ length: 18 }, (_, i) => ({ hole: i + 1, par: 3 }));
+  function completeFromScores(scores) {
+    return (hole) => typeof scores[hole] === 'number';
+  }
+
+  assert.equal(activeHoleIndex({ holes, startingHole: 1, isHoleComplete: () => false }), 0);
+  assert.equal(activeHoleIndex({
+    holes,
+    startingHole: 1,
+    isHoleComplete: completeFromScores({ 1: 3, 2: 3, 3: 4, 4: 3 }),
+  }), 4);
+
+  const shotgun = { 8: 3, 9: 3, 10: 4 };
+  assert.equal(activeHoleIndex({
+    holes,
+    startingHole: 8,
+    isHoleComplete: completeFromScores(shotgun),
+  }), 10);
+
+  assert.equal(activeHoleIndex({
+    holes,
+    startingHole: 17,
+    isHoleComplete: completeFromScores({ 17: 3, 18: 3, 1: 2 }),
+  }), 1);
+
+  const finished = {};
+  for (let hole = 1; hole <= 18; hole++) finished[hole] = 3;
+  assert.equal(activeHoleIndex({
+    holes,
+    startingHole: 1,
+    isHoleComplete: completeFromScores(finished),
+  }), 17);
+  assert.equal(activeHoleIndex({
+    holes,
+    startingHole: 8,
+    isHoleComplete: completeFromScores(finished),
+  }), 6);
+
+  const cardState = {
+    holes,
+    cardmates: [
+      { index: 0, name: 'Kevin', isMe: true, scores: { 1: 3, 2: 4 } },
+      { index: 1, name: 'Aaron', scores: { 1: 2 } },
+    ],
+    roundConfig: { groupFormat: 'singles', scoringStyle: 'stroke' },
+    scoreTargets: [],
+  };
+  assert.equal(cardHoleComplete(cardState, 1, 0), true);
+  assert.equal(cardHoleComplete(cardState, 2, 0), false);
+  assert.equal(activeHoleIndex({
+    holes,
+    startingHole: 1,
+    isHoleComplete: (hole) => cardHoleComplete(cardState, hole, 0),
+  }), 1);
+
+  assert.equal(fieldActiveHoleIndex({
+    holes,
+    players: [
+      { name: 'A', startingHole: 1, scores: { 1: 3, 2: 3, 3: 3, 4: 3, 5: 3 } },
+      { name: 'B', startingHole: 1, scores: { 1: 3, 2: 3, 3: 3, 4: 3, 5: 4 } },
+      { name: 'C', startingHole: 1, scores: { 1: 3, 2: 3, 3: 3, 4: 3, 5: 3 } },
+      { name: 'D', startingHole: 1, scores: { 1: 4 } },
+    ],
+  }), 5);
+
+  const controller = scoreControllerSource();
+  const watch = readFileSync('src/score-app/watch-view.js', 'utf8');
+  assert.match(controller, /activeHoleIndex\(/);
+  assert.match(controller, /fieldActiveHoleIndex\(/);
+  assert.match(controller, /cardHoleComplete\(S, hole, S\.scorerIndex\)/);
+  assert.match(watch, /props\.activeHoleIndex/);
+  assert.match(watch, /followLive/);
+});
+
 test('stepper minus from blank sets birdie; minus from 1 clears the hole', async () => {
   const { nextHoleScore } = await import(new URL('../src/score-app/score-view-model.js', import.meta.url));
   assert.equal(nextHoleScore(null, 3, 'plus'), 3);
@@ -687,6 +769,8 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.match(watch, /Copy watch link/);
   assert.match(watch, /HoleMap/);
   assert.match(watch, /function WatchHoles/);
+  assert.match(watch, /props\.activeHoleIndex/);
+  assert.match(watch, /followLive/);
   assert.match(watch, /function WatchTeeSign/);
   assert.match(watch, /playerLocations/);
   assert.match(watch, /function WatchMatchCards/);

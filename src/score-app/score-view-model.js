@@ -254,6 +254,72 @@ export function strokesForRow(state, row, hole, scorerIndex) {
   return Number.isInteger(index) ? strokesFor(state, index, hole, scorerIndex) : null;
 }
 
+export function playOrderIndexes(holes, startingHole) {
+  const list = Array.isArray(holes) ? holes : [];
+  if (!list.length) return [];
+  const startNum = Number(startingHole);
+  let startIdx = 0;
+  if (Number.isInteger(startNum) && startNum > 0) {
+    const found = list.findIndex((hole) => hole && hole.hole === startNum);
+    if (found >= 0) startIdx = found;
+  }
+  return list.map((_, offset) => (startIdx + offset) % list.length);
+}
+
+export function activeHoleIndex({ holes, startingHole, isHoleComplete }) {
+  const list = Array.isArray(holes) ? holes : [];
+  if (!list.length) return 0;
+  const order = playOrderIndexes(list, startingHole);
+  const complete = typeof isHoleComplete === "function" ? isHoleComplete : () => false;
+  for (const idx of order) {
+    const hole = list[idx];
+    if (!hole || !complete(hole.hole)) return idx;
+  }
+  return order[order.length - 1];
+}
+
+export function cardHoleComplete(state, hole, scorerIndex) {
+  const rows = scoreRows(state);
+  if (!rows.length) return false;
+  return rows.every((row) => typeof strokesForRow(state, row, hole, scorerIndex) === "number");
+}
+
+export function fieldActiveHoleIndex({ holes, players }) {
+  const list = Array.isArray(holes) ? holes : [];
+  if (!list.length) return 0;
+  const votes = new Map();
+  (Array.isArray(players) ? players : []).forEach((player) => {
+    if (!player) return;
+    const order = playOrderIndexes(list, player.startingHole);
+    const unfinished = order.some((idx) => {
+      const hole = list[idx];
+      return hole && typeof holeStrokes(player, hole.hole) !== "number";
+    });
+    if (!unfinished && order.some((idx) => list[idx] && typeof holeStrokes(player, list[idx].hole) === "number")) {
+      return;
+    }
+    const idx = activeHoleIndex({
+      holes: list,
+      startingHole: player.startingHole,
+      isHoleComplete: (hole) => typeof holeStrokes(player, hole) === "number",
+    });
+    const holeNum = list[idx] && list[idx].hole;
+    if (holeNum == null) return;
+    votes.set(holeNum, (votes.get(holeNum) || 0) + 1);
+  });
+  if (!votes.size) return 0;
+  let bestHole = null;
+  let bestCount = -1;
+  votes.forEach((count, holeNum) => {
+    if (count > bestCount || (count === bestCount && (bestHole == null || holeNum < bestHole))) {
+      bestCount = count;
+      bestHole = holeNum;
+    }
+  });
+  const idx = list.findIndex((hole) => hole && hole.hole === bestHole);
+  return idx >= 0 ? idx : 0;
+}
+
 function teeDisplayName(label) {
   return String(label || "").replace(/\s+\(you\)$/i, "").trim() || "Player";
 }
