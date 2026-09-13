@@ -528,7 +528,8 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.doesNotMatch(weather, /if \(weather && weather\.current\) void enableCompass\(\)/);
   assert.match(main, /requestCrottsHelp/);
   assert.match(main, /CrottsWidget/);
-  assert.match(scorecard, /disabled: current == null/);
+  assert.doesNotMatch(scorecard, /disabled: current == null/);
+  assert.match(scorecard, /Set \$\{row\.label\} on hole \$\{props\.hole\.hole\} to \$\{nextMinus\}/);
   assert.doesNotMatch(html, /\.round-code \{ flex: 1 1 7\.5rem;/);
   assert.doesNotMatch(scorecard, /className: "round-code"/);
   assert.match(scorecard, /compact: true/);
@@ -547,10 +548,12 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.doesNotMatch(scorecard, /createRoot|getElementById\("app"\)|replaceChildren/);
 });
 
-test('stepper minus from 1 clears a hole back to unstarted', async () => {
+test('stepper minus from blank sets birdie; minus from 1 clears the hole', async () => {
   const { nextHoleScore } = await import(new URL('../src/score-app/score-view-model.js', import.meta.url));
   assert.equal(nextHoleScore(null, 3, 'plus'), 3);
-  assert.equal(nextHoleScore(null, 3, 'minus'), null);
+  assert.equal(nextHoleScore(null, 3, 'minus'), 2);
+  assert.equal(nextHoleScore(null, 4, 'minus'), 3);
+  assert.equal(nextHoleScore(null, 2, 'minus'), 1);
   assert.equal(nextHoleScore(2, 3, 'minus'), 1);
   assert.equal(nextHoleScore(1, 3, 'minus'), null);
   assert.equal(nextHoleScore(1, 3, 'plus'), 2);
