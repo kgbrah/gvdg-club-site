@@ -66,7 +66,7 @@
     }
     return {
       title: 'Update available',
-      body: 'A newer version of the club app is ready. Tap Refresh to load it — takes a second.',
+      body: 'A newer version of the club app is ready. Tap Refresh. If the top bar is still orange, swipe GVDG away from Recents and open it again from the Home Screen.',
       action: 'Refresh',
     };
   }

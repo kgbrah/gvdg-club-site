@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v144";
+const CACHE = "gvdg-club-v145";
 const OFFLINE_PAGE = "gvdg-members.html";
 const ASSETS = [
   "tokens.css",
@@ -29,7 +29,8 @@ function staticAsset(req, url) {
 }
 
 function isCodeAsset(req, url) {
-  return req.destination === "script" || req.destination === "style" || /\.(?:js|css)$/i.test(url.pathname);
+  return req.destination === "script" || req.destination === "style" || req.destination === "manifest"
+    || /\.(?:js|css|webmanifest)$/i.test(url.pathname);
 }
 
 self.addEventListener("install", (event) => {

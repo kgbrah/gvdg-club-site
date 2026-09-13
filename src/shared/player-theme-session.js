@@ -107,8 +107,22 @@ export function statusBarColor(theme, mode) {
 
 export function paintStatusBar(theme, mode) {
   const color = statusBarColor(theme, mode || storedClubMode());
-  const meta = globalThis.document?.querySelector?.('meta[name="theme-color"]');
-  if (meta?.setAttribute) meta.setAttribute("content", color);
+  const doc = globalThis.document;
+  if (!doc) return color;
+  const metas = doc.querySelectorAll?.('meta[name="theme-color"]') || [];
+  for (const node of metas) {
+    if (typeof node.remove === "function") node.remove();
+    else node.parentNode?.removeChild?.(node);
+  }
+  if (!doc.head || typeof doc.createElement !== "function") {
+    const leftover = doc.querySelector?.('meta[name="theme-color"]');
+    leftover?.setAttribute?.("content", color);
+    return color;
+  }
+  const meta = doc.createElement("meta");
+  meta.setAttribute("name", "theme-color");
+  meta.setAttribute("content", color);
+  doc.head.insertBefore(meta, doc.head.firstChild);
   return color;
 }
 

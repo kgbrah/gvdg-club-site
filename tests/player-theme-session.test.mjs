@@ -207,20 +207,28 @@ test("status bar color follows the player theme instead of brand orange", () => 
   assert.equal(statusBarColor(theme), theme.tokens["bg-secondary"]);
   assert.equal(statusBarColor(null, "light"), CLUB_STATUS_COLOR);
   assert.equal(statusBarColor(null, "dark"), CLUB_STATUS_COLOR_DARK);
-  const meta = {
-    content: "#FF6B35",
-    setAttribute(name, value) { if (name === "content") this.content = value; },
-  };
+  const created = [];
   const previous = globalThis.document;
   globalThis.document = {
-    querySelector(sel) { return sel.includes("theme-color") ? meta : null; },
+    head: {
+      insertBefore(node) { created.push(node); },
+    },
+    createElement() {
+      const node = {
+        attrs: {},
+        setAttribute(name, value) { this.attrs[name] = value; },
+        remove() { this.removed = true; },
+      };
+      return node;
+    },
+    querySelectorAll() { return created.filter((node) => !node.removed); },
     documentElement: { getAttribute() { return "dark"; }, setAttribute() {}, removeAttribute() {} },
   };
   try {
     assert.equal(paintStatusBar(theme), theme.tokens["bg-secondary"]);
-    assert.equal(meta.content, theme.tokens["bg-secondary"]);
+    assert.equal(created.at(-1).attrs.content, theme.tokens["bg-secondary"]);
     paintPlayerTheme(null, fakeEl());
-    assert.equal(meta.content, CLUB_STATUS_COLOR_DARK);
+    assert.equal(created.filter((node) => !node.removed).at(-1).attrs.content, CLUB_STATUS_COLOR_DARK);
   } finally {
     globalThis.document = previous;
   }
