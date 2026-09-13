@@ -10,14 +10,14 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Live Scoring · Greenville Disc Golf Club</title>
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest">
+    <link rel="manifest" href="site.webmanifest?v=145">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="pwa.js" defer></script>
     <link rel="stylesheet" href="tokens.css">
-    <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('theme')||'light')}catch(e){}</script>
+    <script>try{var m=localStorage.getItem('theme')||'light';if(m==='dark')document.documentElement.setAttribute('data-theme','dark');var c=m==='dark'?'#0F0F1E':'#1A1A2E';var tags=document.getElementsByTagName('meta');for(var i=0;i<tags.length;i++){if(tags[i].getAttribute('name')==='theme-color')tags[i].setAttribute('content',c)}}catch(e){}</script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
@@ -407,6 +407,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=144"></script>
+    <script type="module" src="score-app/score-app.js?v=145"></script>
 </body>
 </html>

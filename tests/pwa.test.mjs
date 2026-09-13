@@ -48,7 +48,8 @@ test('app entry pages link manifest, touch icon, theme color, and pwa registrar'
   for (const page of appPages) {
     const html = readFileSync(page, 'utf8');
     assert.match(html, /<meta name="theme-color" content="#1A1A2E">/, page);
-    assert.match(html, /<link rel="manifest" href="site\.webmanifest">/, page);
+    assert.match(html, /<link rel="manifest" href="site\.webmanifest(?:\?v=\d+)?">/, page);
+    assert.match(html, /getElementsByTagName\('meta'\)/, page);
     assert.match(html, /<link rel="apple-touch-icon" href="img\/icons\/apple-touch-icon\.png">/, page);
     assert.match(html, /<script src="pwa\.js" defer><\/script>/, page);
   }
@@ -58,7 +59,7 @@ test('live scoring links back to the members dashboard', () => {
   const html = readFileSync('score.html', 'utf8');
   const shellSource = readFileSync('src/score-app/main.js', 'utf8');
   const authSource = readFileSync('src/score-app/auth-flow.js', 'utf8');
-  assert.match(html, /<script type="module" src="score-app\/score-app\.js\?v=144"><\/script>/);
+  assert.match(html, /<script type="module" src="score-app\/score-app\.js\?v=145"><\/script>/);
   assert.match(shellSource, /href: "gvdg-members\.html"/);
   assert.match(shellSource, /"aria-label": "Return to members"/);
   assert.match(authSource, /Return to members/);
@@ -75,6 +76,7 @@ test('shared service worker caches app install assets and member fallback', () =
   assert.match(sw, /const STATIC_DESTINATIONS = new Set/);
   assert.match(sw, /if \(!staticAsset\(req, url\)\) return/);
   assert.match(sw, /function isCodeAsset/);
+  assert.match(sw, /webmanifest/);
   assert.match(sw, /cache: "reload"/);
   assert.match(sw, /isCodeAsset\(req, url\)/);
   for (const asset of [
@@ -105,6 +107,7 @@ test('shared service worker caches app install assets and member fallback', () =
   assert.match(pwa, /SKIP_WAITING/);
   assert.match(pwa, /pwa-update/);
   assert.match(pwa, /Home Screen/);
+  assert.match(pwa, /Recents/);
   assert.match(pwa, /visibilitychange/);
   assert.match(sw, /SKIP_WAITING/);
   const tokens = readFileSync('tokens.css', 'utf8');
