@@ -164,6 +164,7 @@ test('overview dashboard is a compact home and keeps registration on Events', ()
   assert.match(overview, /data-react-home-next/);
   assert.match(overview, /pickUpNext\(events, registrations\)/);
   assert.match(overview, /You're registered/);
+  assert.match(overview, /EventFieldRoster/);
   assert.doesNotMatch(overview, /Nothing open to register for right now/);
   assert.match(more, /Club directory/);
   assert.match(more, /Message board/);

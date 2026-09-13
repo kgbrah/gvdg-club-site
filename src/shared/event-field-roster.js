@@ -21,7 +21,7 @@ export function EventFieldRoster({ players, compact = false, title }) {
   }));
   if (!grouped.length) return null;
   const showDivisionHeads = !(grouped.length === 1 && grouped[0].division === "Open");
-  const heading = title || `Field (${list.length})`;
+  const heading = title || `Registered (${list.length})`;
 
   return h("div", { className: compact ? "event-field event-field-compact" : "event-field" }, [
     h(compact ? "h4" : "h3", { className: compact ? "event-field-title" : "roster-title", key: "title" }, heading),

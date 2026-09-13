@@ -3,6 +3,7 @@ import { CalendarDays, ExternalLink, MapPin } from "lucide-react";
 
 import { useEventsHub } from "./events-hub-data.js";
 import { EventScheduleFacts } from "../shared/event-schedule.js";
+import { EventFieldRoster } from "../shared/event-field-roster.js";
 
 const h = React.createElement;
 
@@ -91,6 +92,7 @@ function EventCard({ event }) {
         : null,
     ]),
     h(EventScheduleFacts, { event, key: "schedule" }),
+    h(EventFieldRoster, { compact: true, key: "field", players: event.field }),
     event && event.statusLabel ? h("div", { className: "event-card-top", key: "status" }, h(Badge, {
       className: `status-badge ${statusClass}`,
       text: String(event.statusLabel),

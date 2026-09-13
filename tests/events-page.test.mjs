@@ -18,6 +18,9 @@ test('public Events page pins Live Now to the top section, above the schedule fe
   assert.match(app, /export function EventsLiveNowApp/);
   assert.match(app, /export function EventsScheduleFeedApp/);
   assert.match(app, /EventScheduleFacts/);
+  assert.match(app, /EventFieldRoster/);
+  assert.match(source, /function attachOpenFields/);
+  assert.match(source, /\/registration\/open/);
   assert.match(app, /Live Now/);
   assert.doesNotMatch(source, /appendChild\(section\('Live Now'|appendChild\(feedList\(feedEvents\)|calendarEl\.appendChild|hubEl\.appendChild/);
 });
