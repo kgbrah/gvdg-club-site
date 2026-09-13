@@ -1,4 +1,5 @@
 import React from "react";
+import { CalendarDays, House, MoreHorizontal, ShoppingBag, Timer } from "lucide-react";
 
 import { currentAdminActiveTab } from "./admin-shell-state.js";
 import { AdminOrdersBadge } from "./orders-badge.js";
@@ -7,29 +8,24 @@ const h = React.createElement;
 
 export const ADMIN_NAV_GROUPS = [
   {
+    label: "Home",
+    items: [
+      { tab: "today", label: "Today" },
+    ],
+  },
+  {
     label: "Events",
     items: [
       { tab: "events", label: "Events" },
       { tab: "create", label: "New Event" },
       { tab: "import", label: "Import" },
       { tab: "registration", label: "Registration" },
+    ],
+  },
+  {
+    label: "Scoring",
+    items: [
       { tab: "scoring", label: "Live Scoring" },
-    ],
-  },
-  {
-    label: "Courses",
-    items: [
-      { tab: "courses", label: "Courses" },
-      { tab: "layouts", label: "Layouts" },
-      { tab: "tee-signs", label: "Tee Signs" },
-    ],
-  },
-  {
-    label: "Club",
-    items: [
-      { tab: "leagues-mgmt", label: "Leagues" },
-      { tab: "fundraisers", label: "Fundraisers" },
-      { tab: "meetings", label: "Meetings" },
     ],
   },
   {
@@ -41,16 +37,54 @@ export const ADMIN_NAV_GROUPS = [
     ],
   },
   {
-    label: "Members",
+    label: "Club",
     items: [
+      { tab: "courses", label: "Courses" },
+      { tab: "layouts", label: "Layouts" },
+      { tab: "tee-signs", label: "Tee Signs" },
+      { tab: "leagues-mgmt", label: "Leagues" },
+      { tab: "fundraisers", label: "Fundraisers" },
+      { tab: "meetings", label: "Meetings" },
       { tab: "members", label: "Members" },
+      { tab: "data-archive", label: "Data archive" },
+    ],
+  },
+];
+
+export const ADMIN_DOCK = [
+  { id: "today", label: "Home", tab: "today", Icon: House, tabs: ["today"] },
+  {
+    id: "events",
+    label: "Events",
+    tab: "events",
+    Icon: CalendarDays,
+    tabs: ["events", "create", "import", "registration"],
+    chips: [
+      { tab: "events", label: "Events" },
+      { tab: "create", label: "New" },
+      { tab: "import", label: "Import" },
+      { tab: "registration", label: "Registration" },
+    ],
+  },
+  { id: "scoring", label: "Scoring", tab: "scoring", Icon: Timer, tabs: ["scoring"] },
+  {
+    id: "shop",
+    label: "Shop",
+    tab: "shop",
+    Icon: ShoppingBag,
+    tabs: ["shop", "orders", "wallets"],
+    chips: [
+      { tab: "shop", label: "Inventory" },
+      { tab: "orders", label: "Orders", badge: "orders" },
+      { tab: "wallets", label: "Wallets" },
     ],
   },
   {
-    label: "Data",
-    items: [
-      { tab: "data-archive", label: "Data archive" },
-    ],
+    id: "more",
+    label: "More",
+    tab: "more",
+    Icon: MoreHorizontal,
+    tabs: ["more", "courses", "layouts", "tee-signs", "leagues-mgmt", "fundraisers", "meetings", "members", "data-archive"],
   },
 ];
 
@@ -69,6 +103,10 @@ function requestTab(tab) {
   window.dispatchEvent(new CustomEvent("gvdg:admin-tab-request", { detail: { tab } }));
 }
 
+function dockForTab(tab) {
+  return ADMIN_DOCK.find((item) => item.tabs.includes(tab)) || ADMIN_DOCK[0];
+}
+
 export function AdminNavigation() {
   const [activeTab, setActiveTab] = React.useState(initialTab);
 
@@ -82,24 +120,39 @@ export function AdminNavigation() {
     return () => window.removeEventListener("gvdg:admin-active-tab", update);
   }, []);
 
-  function selectValue(group) {
-    return group.items.some((item) => item.tab === activeTab) ? activeTab : "";
-  }
+  const dock = dockForTab(activeTab);
+  const chips = dock.chips || [];
 
   return h(React.Fragment, null, [
-    h("div", { className: "admin-mobile-nav", key: "mobile", role: "group", "aria-label": "Admin sections" },
-      ADMIN_NAV_GROUPS.map((group) => h("select", {
-        "aria-label": `${group.label} section`,
-        className: "admin-mnav",
-        key: group.label,
-        onChange: (event) => {
-          if (event.target.value) requestTab(event.target.value);
-        },
-        value: selectValue(group),
+    chips.length ? h("div", {
+      className: "admin-mobile-chips",
+      key: "chips",
+      role: "tablist",
+      "aria-label": `${dock.label} sections`,
+    }, chips.map((item) => h("button", {
+      className: item.tab === activeTab ? "admin-chip on" : "admin-chip",
+      key: item.tab,
+      onClick: () => requestTab(item.tab),
+      type: "button",
+    }, tabLabel(item)))) : null,
+    h("nav", {
+      "aria-label": "Admin tabs",
+      className: "admin-dock",
+      key: "dock",
+    }, ADMIN_DOCK.map((item) => {
+      const on = dock.id === item.id;
+      return h("button", {
+        "aria-current": on ? "page" : undefined,
+        className: on ? "admin-dock-item on" : "admin-dock-item",
+        key: item.id,
+        onClick: () => requestTab(item.tab),
+        type: "button",
       }, [
-        h("option", { disabled: true, hidden: true, key: "placeholder", value: "" }, group.label),
-        ...group.items.map((item) => h("option", { key: item.tab, value: item.tab }, item.label)),
-      ]))),
+        h(item.Icon, { "aria-hidden": true, key: "icon", size: 20, strokeWidth: 2.3 }),
+        item.label,
+        item.id === "shop" ? h(AdminOrdersBadge, { key: "badge" }) : null,
+      ]);
+    })),
     h("nav", { "aria-label": "Admin sections", className: "admin-sidebar", key: "sidebar" },
       ADMIN_NAV_GROUPS.flatMap((group) => [
         h("div", { className: "admin-navgroup", key: `${group.label}-group` }, group.label),

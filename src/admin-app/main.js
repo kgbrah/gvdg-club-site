@@ -20,6 +20,7 @@ import { AdminLayoutsManager } from "./layouts-manager.js";
 import { AdminMemberForm } from "./member-form.js";
 import { AdminMessage } from "./message.js";
 import { AdminMembersList, AdminMemberTempPin, AdminMembershipApplications } from "./members-list.js";
+import { AdminMorePage } from "./more-page.js";
 import { AdminNavigation } from "./navigation.js";
 import { AdminOrdersList } from "./orders-list.js";
 import { AdminPageChrome } from "./page-chrome.js";
@@ -30,6 +31,7 @@ import { AdminRegistrationPanel } from "./registration-panel.js";
 import { AdminScoringPanel } from "./scoring-panel.js";
 import { AdminOrderControls, AdminProductInventoryControls } from "./shop-controls.js";
 import { AdminTeeSignReviewControls, AdminTeeSignReviewList } from "./tee-sign-review.js";
+import { AdminTodayDashboard } from "./today-dashboard.js";
 import { AdminWalletAdjustmentForm } from "./wallet-form.js";
 import { AdminWalletRecentList } from "./wallet-recent-list.js";
 import { startAdminController } from "./admin-controller.js";
@@ -75,6 +77,16 @@ if (dialogsMount) {
 const eventsListMount = document.getElementById("adminEventsListReactApp");
 if (eventsListMount) {
   flushSync(() => createRoot(eventsListMount).render(h(AdminEventsList)));
+}
+
+const todayMount = document.getElementById("adminTodayReactApp");
+if (todayMount) {
+  flushSync(() => createRoot(todayMount).render(h(AdminTodayDashboard)));
+}
+
+const moreMount = document.getElementById("adminMoreReactApp");
+if (moreMount) {
+  flushSync(() => createRoot(moreMount).render(h(AdminMorePage)));
 }
 
 const eventFormMount = document.getElementById("adminEventFormReactApp");
