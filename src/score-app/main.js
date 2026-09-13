@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { CircleHelp, Moon, Trophy, UsersRound } from "lucide-react";
+import { CircleHelp, Moon, Sun, Trophy, UsersRound } from "lucide-react";
 
 import { startScoreApp } from "./score-controller.js";
 import { ScoreAuthFlow } from "./auth-flow.js";
@@ -10,15 +10,8 @@ import { StatusView } from "./status-view.js";
 import { WatchView } from "./watch-view.js";
 import { InstallCoachBanner } from "../shared/install-coach-ui.js";
 import { CrottsWidget, requestCrottsHelp } from "../shared/crotts-widget.js";
-import {
-  SCORE_AUTH_EVENT,
-  TOKEN_KEY,
-  loadLocalPlayerTheme,
-  readSessionValue,
-  syncPlayerTheme,
-  togglePlayerThemeMode,
-  paintPlayerTheme,
-} from "../shared/player-theme-session.js";
+import { usePlayerThemeSession } from "../shared/player-theme-chrome.js";
+import { paintPlayerTheme } from "../shared/player-theme-session.js";
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
   void import("react-grab");
@@ -65,9 +58,7 @@ function ScoreShell() {
     title: "Live Scoring",
   });
   const [bodyView, setBodyView] = React.useState(INITIAL_SCORE_VIEW);
-  const [darkTheme, setDarkTheme] = React.useState(() => localStorage.getItem("theme") === "dark");
-  const [playerTheme, setPlayerTheme] = React.useState(() => loadLocalPlayerTheme().theme);
-  const memberIdRef = React.useRef(loadLocalPlayerTheme().memberId || "me");
+  const { dark, toggle: onToggleTheme } = usePlayerThemeSession();
   const leaderboardHandlerRef = React.useRef(null);
   const bodyController = React.useMemo(() => ({
     render(kind, props) {
@@ -93,58 +84,10 @@ function ScoreShell() {
   }, [bodyController]);
 
   React.useEffect(() => {
-    const root = themeRoot();
-    let active = new AbortController();
-    function apply(theme, memberId) {
-      if (memberId) memberIdRef.current = memberId;
-      setPlayerTheme(theme);
-    }
-    function refresh() {
-      active.abort();
-      active = new AbortController();
-      const signal = active.signal;
-      syncPlayerTheme({
-        root,
-        signal,
-        onTheme: apply,
-      }).catch(() => {});
-    }
-    refresh();
-    window.addEventListener(SCORE_AUTH_EVENT, refresh);
     return () => {
-      active.abort();
-      window.removeEventListener(SCORE_AUTH_EVENT, refresh);
-      paintPlayerTheme(null, root);
+      paintPlayerTheme(null, themeRoot());
     };
   }, []);
-
-  React.useEffect(() => {
-    if (playerTheme) {
-      if (playerTheme.mode === "dark") document.documentElement.setAttribute("data-theme", "dark");
-      else document.documentElement.removeAttribute("data-theme");
-      return;
-    }
-    if (darkTheme) {
-      document.documentElement.setAttribute("data-theme", "dark");
-      localStorage.setItem("theme", "dark");
-    } else {
-      document.documentElement.removeAttribute("data-theme");
-      localStorage.setItem("theme", "light");
-    }
-  }, [darkTheme, playerTheme]);
-
-  function onToggleTheme() {
-    if (playerTheme) {
-      const next = togglePlayerThemeMode(playerTheme, {
-        root: themeRoot(),
-        memberId: memberIdRef.current,
-        token: readSessionValue(TOKEN_KEY),
-      });
-      setPlayerTheme(next);
-      return;
-    }
-    setDarkTheme((current) => !current);
-  }
 
   return h("div", { class: "wrap" }, [
     h("header", { class: "topbar" }, [
@@ -190,14 +133,14 @@ function ScoreShell() {
       h(
         "button",
         {
-          "aria-label": "Toggle theme",
+          "aria-label": dark ? "Switch to light mode" : "Switch to dark mode",
           class: "iconbtn",
           id: "themeBtn",
-          title: "Toggle theme",
+          title: dark ? "Switch to light mode" : "Switch to dark mode",
           type: "button",
           onClick: onToggleTheme,
         },
-        icon(Moon),
+        icon(dark ? Sun : Moon),
       ),
     ]),
     bodyView.kind === "watch" ? null : h(InstallCoachBanner, { key: "install" }),

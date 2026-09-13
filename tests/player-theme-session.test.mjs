@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { buildTheme, themeStorageKey } from "../src/shared/dashboard-theme-model.js";
@@ -7,6 +8,7 @@ import {
   loadLocalPlayerTheme,
   paintPlayerTheme,
   syncPlayerTheme,
+  THEME_EVENT,
   themeMemberIds,
   themeWithMode,
   togglePlayerThemeMode,
@@ -185,6 +187,14 @@ test("togglePlayerThemeMode persists the flipped mode to the dashboard-theme API
   assert.equal(calls[0].path, "/me/dashboard-theme");
   assert.equal(calls[0].method, "PUT");
   assert.equal(calls[0].body.theme.mode, "light");
+});
+
+test("player theme chrome wires the sun/moon switch into custom theme mode", () => {
+  const chrome = readFileSync(new URL("../src/shared/player-theme-chrome.js", import.meta.url), "utf8");
+  assert.match(chrome, /togglePlayerThemeMode/);
+  assert.match(chrome, /THEME_EVENT/);
+  assert.match(chrome, /gvdg:member-dashboard-opened/);
+  assert.equal(THEME_EVENT, "gvdg:player-theme");
 });
 
 test("themeWithMode rebuilds light and dark surfaces from the same palette", () => {

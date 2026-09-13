@@ -1,5 +1,7 @@
 import React from "react";
-import { ArrowUp, MoonStar, Sun } from "lucide-react";
+import { ArrowUp } from "lucide-react";
+
+import { PlayerThemeToggle } from "../shared/player-theme-chrome.js";
 
 const h = React.createElement;
 
@@ -13,42 +15,8 @@ function icon(Icon, props = {}) {
   });
 }
 
-function storedTheme() {
-  try {
-    return localStorage.getItem("theme") === "dark" ? "dark" : "light";
-  } catch {
-    return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
-  }
-}
-
-function persistTheme(theme) {
-  document.documentElement.setAttribute("data-theme", theme);
-  try {
-    localStorage.setItem("theme", theme);
-  } catch {
-    return;
-  }
-}
-
 export function HomeThemeToggle() {
-  const [theme, setTheme] = React.useState(storedTheme);
-  const isDark = theme === "dark";
-
-  React.useEffect(() => {
-    persistTheme(theme);
-  }, [theme]);
-
-  return h(
-    "button",
-    {
-      className: "theme-toggle",
-      type: "button",
-      "aria-label": isDark ? "Switch to light mode" : "Switch to dark mode",
-      "aria-pressed": isDark ? "true" : "false",
-      onClick: () => setTheme((current) => (current === "dark" ? "light" : "dark")),
-    },
-    icon(isDark ? Sun : MoonStar, { size: 22 }),
-  );
+  return h(PlayerThemeToggle);
 }
 
 export function HomeBackToTop() {

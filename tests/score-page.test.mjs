@@ -264,7 +264,8 @@ test('score shell owns topbar state without legacy DOM mutations', () => {
   assert.match(main, /hidden: !header\.showLeaderboard/);
   assert.match(main, /InstallCoachBanner/);
   assert.match(main, /bodyView\.kind === "watch" \? null : h\(InstallCoachBanner/);
-  assert.match(main, /setDarkTheme\(\(current\) => !current\)/);
+  assert.match(main, /usePlayerThemeSession/);
+  assert.match(main, /onClick: onToggleTheme/);
   assert.match(controller, /renderScoreBody\(kind, props\)/);
   assert.match(controller, /scoreShell\.setHeader/);
   assert.match(controller, /scoreShell\.setLeaderboardHandler\(openLeaderboard\)/);
@@ -810,10 +811,11 @@ test('live scoring paints the signed-in player dashboard theme onto the score pa
   assert.match(html, /body\.player-theme-page/);
   assert.match(html, /body\.player-theme-active/);
   assert.match(html, /--player-theme-image/);
-  assert.match(main, /from "\.\.\/shared\/player-theme-session\.js"/);
-  assert.match(main, /loadLocalPlayerTheme/);
-  assert.match(main, /playerTheme\.mode === "dark"/);
-  assert.match(main, /active.abort\(\)/);
+  assert.match(main, /from "\.\.\/shared\/player-theme-chrome\.js"/);
+  assert.match(main, /usePlayerThemeSession/);
+  const chrome = readFileSync('src/shared/player-theme-chrome.js', 'utf8');
+  assert.match(chrome, /togglePlayerThemeMode/);
+  assert.match(chrome, /playerTheme\.mode === "dark"/);
   assert.match(controller, /notifyScoreAuthChanged/);
   assert.match(session, /\/me\/dashboard-theme/);
   assert.match(session, /gvdg:score-auth/);

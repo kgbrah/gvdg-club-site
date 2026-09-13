@@ -23,6 +23,7 @@ import {
   tokensFromPalette,
   writeStoredTheme,
 } from "../shared/dashboard-theme-model.js";
+import { THEME_EVENT, notifyPlayerThemeChanged } from "../shared/player-theme-session.js";
 
 const h = React.createElement;
 
@@ -109,11 +110,34 @@ export function DashboardThemeBuilder() {
       setAdjustments(DEFAULT_ADJUSTMENTS);
     }
     applyDashboardTheme(safe, themeRoot());
+    notifyPlayerThemeChanged(safe);
     return safe;
   }, []);
 
   React.useEffect(() => () => {
     applyDashboardTheme(null, themeRoot());
+    notifyPlayerThemeChanged(null);
+  }, []);
+
+  React.useEffect(() => {
+    function onThemeEvent(event) {
+      if (!Object.prototype.hasOwnProperty.call(event.detail || {}, "theme")) return;
+      const next = sanitizeTheme(event.detail.theme);
+      applyDashboardTheme(next, themeRoot());
+      if (!next) {
+        setTheme(null);
+        setExtractMode("normal");
+        setMode("dark");
+        setAdjustments(DEFAULT_ADJUSTMENTS);
+        return;
+      }
+      setTheme(next);
+      setExtractMode(next.extractMode);
+      setMode(next.mode);
+      setAdjustments(sanitizeAdjustments(next.adjustments));
+    }
+    window.addEventListener(THEME_EVENT, onThemeEvent);
+    return () => window.removeEventListener(THEME_EVENT, onThemeEvent);
   }, []);
 
   React.useEffect(() => {

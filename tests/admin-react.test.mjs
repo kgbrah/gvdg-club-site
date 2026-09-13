@@ -50,12 +50,14 @@ test('admin page chrome is rendered by the admin React bundle', () => {
   assert.match(chrome, /data-react-admin-chrome/);
   assert.match(chrome, /aria-expanded/);
   assert.match(chrome, /aria-current/);
-  assert.match(chrome, /aria-pressed/);
+  assert.match(chrome, /PlayerThemeToggle/);
   assert.match(chrome, /className: current \? "active" : undefined/);
-  assert.match(chrome, /Menu, MoonStar, Sun, X/);
+  assert.match(chrome, /Menu, X/);
   assert.match(chrome, /window\.requestAnimationFrame\(update\)/);
-  assert.match(chrome, /localStorage\.getItem\("theme"\)/);
-  assert.match(chrome, /localStorage\.setItem\("theme", theme\)/);
+  const themeChrome = readFileSync('src/shared/player-theme-chrome.js', 'utf8');
+  assert.match(themeChrome, /aria-pressed/);
+  assert.match(themeChrome, /localStorage\.getItem\("theme"\)/);
+  assert.match(themeChrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(chrome, /sessionStorage\.removeItem\(key\)/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
 });
