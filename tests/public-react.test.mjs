@@ -56,10 +56,33 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(themeChrome, /localStorage\.getItem\("theme"\)/);
   assert.match(themeChrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app admin-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v143"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v144"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
+});
+
+test('header logo uses a theme-aware wordmark instead of baked-in gold text', () => {
+  const logo = readFileSync('src/shared/club-logo.js', 'utf8');
+  const tokens = readFileSync('tokens.css', 'utf8');
+  const chromes = [
+    'src/home-app/page-chrome.js',
+    'src/public-app/page-chrome.js',
+    'src/members-app/page-chrome.js',
+    'src/admin-app/page-chrome.js',
+  ].map((path) => readFileSync(path, 'utf8'));
+  assert.match(logo, /export function ClubLogo/);
+  assert.match(logo, /logo-wordmark/);
+  assert.match(logo, /aria-label": "Greenville DGC home"/);
+  assert.match(tokens, /header \.logo \.logo-image/);
+  assert.match(tokens, /object-position: left center/);
+  assert.match(tokens, /body\.player-theme-page \.logo \{[\s\S]*color: var\(--text-primary\)/);
+  assert.match(tokens, /body\.player-theme-page \.logo-wordmark em \{[\s\S]*color: var\(--primary-strong\)/);
+  for (const chrome of chromes) {
+    assert.match(chrome, /from "\.\.\/shared\/club-logo\.js"/);
+    assert.match(chrome, /h\(ClubLogo/);
+    assert.doesNotMatch(chrome, /alt: "Greenville DGC Logo"/);
+  }
 });
 
 test('Crotts assistant stays hidden until Help is requested', () => {

@@ -1,6 +1,7 @@
 import React from "react";
 import { Menu, X } from "lucide-react";
 
+import { ClubLogo } from "../shared/club-logo.js";
 import { CrottsHelpLink } from "../shared/crotts-widget.js";
 import { HomeThemeToggle } from "./page-controls.js";
 
@@ -63,14 +64,7 @@ export function HomePageChrome() {
   }
 
   return h("header", { className: scrolled ? "scrolled" : "", "data-react-home-chrome": "true" }, h("nav", null, [
-    h("a", { className: "logo", href: "#", key: "logo", onClick: () => setMenuOpen(false) },
-      h("img", {
-        alt: "Greenville DGC Logo",
-        className: "logo-image",
-        height: 50,
-        src: "img/logo.png",
-        width: 50,
-      })),
+    h(ClubLogo, { href: "#", key: "logo", onClick: () => setMenuOpen(false) }),
     h("ul", { className: menuOpen ? "nav-links active" : "nav-links", id: "navLinks", key: "links" }, [
       ...NAV_ITEMS.map(navLink),
       h("li", { key: "help" }, h(CrottsHelpLink, { onClick: () => setMenuOpen(false) })),
