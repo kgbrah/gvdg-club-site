@@ -1,7 +1,8 @@
 import React from "react";
-import { Menu, MoonStar, Sun, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 
 import { CrottsHelpLink } from "../shared/crotts-widget.js";
+import { PlayerThemeToggle } from "../shared/player-theme-chrome.js";
 
 const h = React.createElement;
 
@@ -25,45 +26,10 @@ function icon(Icon, size = 24) {
   });
 }
 
-function storedTheme() {
-  try {
-    const theme = localStorage.getItem("theme");
-    if (theme === "dark" || theme === "light") return theme;
-  } catch {
-  }
-  return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
-}
-
 function currentPage() {
   const path = String(window.location.pathname || "").toLowerCase();
   const basename = path.replace(/[#?].*$/, "").replace(/^.*\//, "").replace(/\.html$/, "");
   return basename === "" ? "index" : basename;
-}
-
-function PublicThemeToggle() {
-  const [theme, setThemeState] = React.useState(storedTheme);
-
-  React.useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    try {
-      localStorage.setItem("theme", theme);
-    } catch {
-    }
-  }, [theme]);
-
-  function toggleTheme() {
-    setThemeState((current) => (current === "dark" ? "light" : "dark"));
-  }
-
-  const dark = theme === "dark";
-  return h("button", {
-    "aria-label": dark ? "Switch to light mode" : "Switch to dark mode",
-    "aria-pressed": dark ? "true" : "false",
-    className: "theme-toggle",
-    onClick: toggleTheme,
-    title: dark ? "Switch to light mode" : "Switch to dark mode",
-    type: "button",
-  }, icon(dark ? Sun : MoonStar, 22));
 }
 
 export function PublicPageChrome() {
@@ -121,7 +87,7 @@ export function PublicPageChrome() {
       }, "Donate")),
     ]),
     h("div", { className: "nav-right", key: "controls" }, [
-      h(PublicThemeToggle, { key: "theme" }),
+      h(PlayerThemeToggle, { key: "theme" }),
       h("button", {
         "aria-controls": "navLinks",
         "aria-expanded": menuOpen ? "true" : "false",

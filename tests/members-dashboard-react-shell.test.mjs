@@ -295,8 +295,8 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(pageChrome, /aria-current/);
   assert.match(pageChrome, /aria-expanded/);
   assert.match(pageChrome, /nav-donate/);
-  assert.match(pageChrome, /localStorageGet\("theme"\)/);
-  assert.match(pageChrome, /Menu, Moon, Sun, X/);
+  assert.match(pageChrome, /PlayerThemeToggle/);
+  assert.match(pageChrome, /Menu, X/);
   assert.doesNotMatch(pageChrome, /querySelector|addEventListener|classList|textContent\s*=|installMemberPageChrome/);
   assert.doesNotMatch(pageChrome, /☰|🌙|☀️/);
   assert.match(shell, /data-react-admin-portal/);

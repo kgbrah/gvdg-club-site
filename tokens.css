@@ -77,6 +77,80 @@
   --team-blue: #2f7fc4;
 }
 
+/* Logged-in member wallpaper + palette — shared by every page, not just dashboard/scoring. */
+body.player-theme-page {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+body.player-theme-page::before {
+  display: none !important;
+}
+body.player-theme-active {
+  background-color: var(--bg-primary);
+  background-image: var(--player-theme-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+@media (min-width: 900px) {
+  body.player-theme-active { background-attachment: fixed; }
+}
+body.player-theme-page footer {
+  color: var(--player-theme-footer, var(--text-muted));
+}
+body.player-theme-page footer a {
+  color: var(--player-theme-link, var(--primary-strong));
+}
+
+.pwa-update {
+  position: fixed;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: calc(0.75rem + var(--safe-bottom));
+  z-index: 3000;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.85rem 0.95rem;
+  border-radius: 14px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  box-shadow: 0 8px 28px var(--shadow);
+}
+.pwa-update-copy {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+.pwa-update-copy strong { display: block; font-size: 0.95rem; }
+.pwa-update-copy p {
+  margin: 0.2rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+.pwa-update-actions { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+.pwa-update-refresh,
+.pwa-update-later {
+  min-height: 44px;
+  border-radius: 10px;
+  padding: 0.4rem 0.9rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+.pwa-update-refresh {
+  border: 1px solid var(--primary-strong);
+  background: var(--primary-strong);
+  color: var(--light);
+}
+.pwa-update-later {
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
 .udisc-export {
   margin: 0.4rem 0;
   border: 1px solid var(--border-color);

@@ -42,8 +42,7 @@ test("admin today, more, and player theme are wired into the admin shell", () =>
   assert.match(html, /id="adminMoreReactApp"/);
   assert.match(html, /\.admin-dock \{/);
   assert.match(chrome, /from "\.\.\/shared\/player-theme-session\.js"/);
-  assert.match(chrome, /syncPlayerTheme/);
-  assert.match(chrome, /togglePlayerThemeMode/);
+  assert.match(chrome, /PlayerThemeToggle/);
   assert.match(chrome, /paintPlayerTheme\(null, themeRoot\(\)\)/);
   assert.match(main, /import \{ AdminTodayDashboard \} from "\.\/today-dashboard\.js"/);
   assert.match(main, /import \{ AdminMorePage \} from "\.\/more-page\.js"/);

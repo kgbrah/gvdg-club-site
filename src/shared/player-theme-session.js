@@ -9,6 +9,7 @@ import {
 export const TOKEN_KEY = "gvdg_member_token";
 export const PDGA_KEY = "gvdg_member_pdga";
 export const SCORE_AUTH_EVENT = "gvdg:score-auth";
+export const THEME_EVENT = "gvdg:player-theme";
 
 export function decodeJwtPayload(token) {
   try {
@@ -65,6 +66,7 @@ export function paintPlayerTheme(theme, root) {
   applyDashboardTheme(safe, root);
   if (safe) root.classList?.add?.("player-theme-page");
   syncDocumentTheme(safe);
+  notifyPlayerThemeChanged(safe);
   return safe;
 }
 
@@ -79,9 +81,26 @@ export function themeWithMode(theme, mode) {
 function syncDocumentTheme(theme) {
   const root = globalThis.document?.documentElement;
   if (!root) return;
-  if (!theme) return;
-  if (theme.mode === "dark") root.setAttribute("data-theme", "dark");
-  else root.removeAttribute("data-theme");
+  const mode = theme?.mode === "dark" || theme?.mode === "light" ? theme.mode : null;
+  if (mode === "dark") root.setAttribute("data-theme", "dark");
+  else if (mode === "light") root.removeAttribute("data-theme");
+  if (mode) persistClubMode(mode);
+}
+
+function persistClubMode(mode) {
+  try {
+    globalThis.localStorage?.setItem?.("theme", mode);
+  } catch {
+    // ignore
+  }
+}
+
+export function notifyPlayerThemeChanged(theme) {
+  try {
+    globalThis.dispatchEvent?.(new CustomEvent(THEME_EVENT, { detail: { theme: theme || null } }));
+  } catch {
+    // ignore
+  }
 }
 
 export async function fetchRemotePlayerTheme({ token, signal, requestImpl } = {}) {

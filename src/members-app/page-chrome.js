@@ -1,9 +1,9 @@
 import React from "react";
-import { Menu, Moon, Sun, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 
-import { localStorageGet } from "./api.js";
 import { CrottsHelpLink } from "../shared/crotts-widget.js";
 import { InstallCoachBanner } from "../shared/install-coach-ui.js";
+import { PlayerThemeToggle } from "../shared/player-theme-chrome.js";
 
 const h = React.createElement;
 
@@ -27,38 +27,15 @@ function icon(Icon, size = 22) {
   });
 }
 
-function storedThemeIsDark() {
-  const stored = localStorageGet("theme");
-  if (stored === "dark") return true;
-  if (stored === "light") return false;
-  return document.documentElement.getAttribute("data-theme") === "dark";
-}
-
 function currentPage() {
   const path = String(window.location.pathname || "").toLowerCase();
   const basename = path.replace(/[#?].*$/, "").replace(/^.*\//, "").replace(/\.html$/, "");
   return basename === "" ? "index" : basename;
 }
 
-function storeTheme(theme) {
-  try {
-    localStorage.setItem("theme", theme);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export function MemberPageChrome() {
   const [menuOpen, setMenuOpen] = React.useState(false);
-  const [darkTheme, setDarkTheme] = React.useState(storedThemeIsDark);
   const page = currentPage();
-
-  React.useEffect(() => {
-    const nextTheme = darkTheme ? "dark" : "light";
-    document.documentElement.setAttribute("data-theme", nextTheme);
-    storeTheme(nextTheme);
-  }, [darkTheme]);
 
   function navLink(item) {
     const current = item.page === page;
@@ -105,14 +82,7 @@ export function MemberPageChrome() {
           target: "_blank",
         }, "Donate")),
       ]),
-      h("button", {
-        "aria-label": darkTheme ? "Switch to light mode" : "Switch to dark mode",
-        className: "theme-toggle",
-        key: "theme",
-        onClick: () => setDarkTheme((current) => !current),
-        title: darkTheme ? "Switch to light mode" : "Switch to dark mode",
-        type: "button",
-      }, icon(darkTheme ? Sun : Moon, 20)),
+      h(PlayerThemeToggle, { key: "theme" }),
     ]),
   ])),
     h(InstallCoachBanner, { key: "install" }),

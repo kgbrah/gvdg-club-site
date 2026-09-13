@@ -168,11 +168,11 @@ test('home React bundle owns theme and back-to-top controls', () => {
   assert.match(main, /createRoot\(backToTopMount\)\.render\(h\(HomeBackToTop\)\)/);
   assert.match(controls, /export function HomeThemeToggle/);
   assert.match(controls, /export function HomeBackToTop/);
-  assert.match(controls, /aria-pressed/);
-  assert.match(controls, /localStorage\.setItem\("theme", theme\)/);
+  assert.match(controls, /PlayerThemeToggle/);
+  const themeChrome = readFileSync('src/shared/player-theme-chrome.js', 'utf8');
+  assert.match(themeChrome, /aria-pressed/);
+  assert.match(themeChrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(controls, /window\.scrollTo\(\{ top: 0, behavior: "smooth" \}\)/);
-  assert.match(controls, /MoonStar/);
-  assert.match(controls, /Sun/);
   assert.match(controls, /ArrowUp/);
   assert.doesNotMatch(controls, /innerHTML|insertAdjacentHTML|document\.createElement|replaceChildren|themeIcon|backToTop|☀️|🌙|↑/);
 });

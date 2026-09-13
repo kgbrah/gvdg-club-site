@@ -270,7 +270,10 @@ test('more page mounts a player theme builder', () => {
   const html = readFileSync('gvdg-members.html', 'utf8');
   const worker = readFileSync('auth-worker/src/index.ts', 'utf8');
   assert.match(more, /DashboardThemeBuilder/);
-  assert.match(theme, /\/me\/dashboard-theme/);
+  assert.match(theme, /notifyPlayerThemeChanged/);
+  assert.match(theme, /THEME_EVENT/);
+  assert.match(theme, /changeMode\("dark"\)/);
+  assert.match(theme, /changeMode\("light"\)/);
   assert.match(theme, /Apply Theme/);
   assert.match(theme, /"Dashboard theme"/);
   assert.match(theme, /Cloud save failed/);
