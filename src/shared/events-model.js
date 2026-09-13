@@ -6,7 +6,8 @@
 //
 // Public API: VALID_STATUSES, VALID_TYPES, normalizeEvent, bucketEvents,
 // groupPlayersByDivision, formatEventDate, formatClubDateTime, formatClubClock,
-// eventScheduleFacts, typeLabel, statusLabel, courseNameFor.
+// clubCivilInstant, isoToClubWallClock, clubWallClockToIso, eventScheduleFacts,
+// typeLabel, statusLabel, courseNameFor.
 
 export const VALID_STATUSES = ['scheduled', 'live', 'final', 'cancelled'];
 export const VALID_TYPES = ['tournament', 'league_round', 'fundraiser', 'meeting'];
@@ -64,7 +65,7 @@ export function parseEventDate(raw) {
 // (America/New_York tracks EST/EDT automatically.)
 export const CLUB_TIME_ZONE = 'America/New_York';
 
-const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 export function clubCalendarDay(raw) {
   if (raw == null || raw === '') return '';
@@ -80,6 +81,64 @@ export function clubCalendarDay(raw) {
 
 export function clubToday(now = new Date()) {
   return now.toLocaleDateString('en-CA', { timeZone: CLUB_TIME_ZONE });
+}
+
+/** YYYY-MM-DD is a Greenville calendar day, not UTC midnight. Noon UTC of that
+ *  civil date is still morning in Eastern, so formatting in America/New_York
+ *  cannot roll it back a day. */
+export function clubCivilInstant(raw) {
+  const text = String(raw == null ? '' : raw).trim();
+  const match = DATE_ONLY.exec(text);
+  if (!match) return null;
+  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0));
+}
+
+function easternParts(date) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: CLUB_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const get = (type) => parts.find((part) => part.type === type)?.value || '';
+  return {
+    year: get('year'),
+    month: get('month'),
+    day: get('day'),
+    hour: get('hour'),
+    minute: get('minute'),
+  };
+}
+
+export function isoToClubWallClock(raw) {
+  if (raw == null || raw === '') return '';
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = easternParts(date);
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+export function clubWallClockToIso(value) {
+  const match = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const utcGuess = Date.UTC(year, month - 1, day, hour, minute);
+  const shown = easternParts(new Date(utcGuess));
+  const shownAsUtc = Date.UTC(
+    Number(shown.year),
+    Number(shown.month) - 1,
+    Number(shown.day),
+    Number(shown.hour),
+    Number(shown.minute),
+  );
+  return new Date(utcGuess - (shownAsUtc - utcGuess)).toISOString();
 }
 
 export function eventClubCalendarDay(event) {
@@ -104,16 +163,30 @@ export function isPastClubCalendarEvent(event, now = new Date()) {
 }
 
 // Format a date for display. Tolerates ISO strings, Date objects and nulls.
-// A bare YYYY-MM-DD is a calendar date: render it in UTC (parseEventDate made it UTC-midnight) so it never
-// shifts a day backward in a behind-UTC zone — the old local render turned a July 4 event into "July 3" in
-// Eastern. A full timestamp is a wall-clock instant: render it in club (Eastern) time.
+// A bare YYYY-MM-DD is a club calendar day: pin it to noon UTC of that civil
+// date, then render in Eastern so it never shifts a day backward. A full
+// timestamp is a wall-clock instant: render it in club (Eastern) time.
 export function formatEventDate(raw) {
+  const text = raw == null ? '' : String(raw).trim();
+  if (!text) return 'Date TBD';
+  if (DATE_ONLY.test(text)) {
+    const civil = clubCivilInstant(text);
+    if (!civil) return 'Date TBD';
+    try {
+      return civil.toLocaleDateString([], {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: CLUB_TIME_ZONE,
+      });
+    } catch (_e) {
+      return text;
+    }
+  }
   const d = parseEventDate(raw);
   if (!d) return 'Date TBD';
-  const dateOnly = typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.trim());
-  const opts = dateOnly
-    ? { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }
-    : { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: CLUB_TIME_ZONE, timeZoneName: 'short' };
+  const opts = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: CLUB_TIME_ZONE, timeZoneName: 'short' };
   try {
     return d.toLocaleString([], opts);
   } catch (_e) {

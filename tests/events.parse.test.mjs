@@ -17,6 +17,9 @@ import {
   formatEventDate,
   formatClubDateTime,
   formatClubClock,
+  clubCivilInstant,
+  isoToClubWallClock,
+  clubWallClockToIso,
   eventScheduleFacts,
   isPastClubCalendarEvent,
   typeLabel,
@@ -113,9 +116,21 @@ test('formatEventDate never throws and labels missing dates', () => {
   assert.ok(out.length > 0);
   // Date-only renders without a time component.
   assert.ok(!/\d:\d\d/.test(out), `expected no time in "${out}"`);
-  // Off-by-one guard: a bare calendar date must NOT shift back a day in a behind-UTC zone (was showing
-  // "Jul 3" for a July 4 event in Eastern). Zone-independent because date-only renders in UTC.
+  // Off-by-one guard: a bare calendar date must NOT shift back a day in Eastern.
   assert.ok(/Jul 4/.test(out) && !/Jul 3/.test(out), `expected "Jul 4" (no shift) in "${out}"`);
+});
+
+test('club calendar dates and wall clocks are Eastern, never UTC midnight', () => {
+  const civil = clubCivilInstant('2026-07-04');
+  assert.ok(civil instanceof Date);
+  assert.equal(civil.toISOString(), '2026-07-04T12:00:00.000Z');
+  assert.equal(clubCivilInstant('2026-07-04T12:00:00.000Z'), null);
+
+  assert.equal(isoToClubWallClock('2026-07-04T12:00:00.000Z'), '2026-07-04T08:00');
+  assert.equal(isoToClubWallClock('2026-01-15T13:00:00.000Z'), '2026-01-15T08:00');
+  assert.equal(clubWallClockToIso('2026-07-04T08:00'), '2026-07-04T12:00:00.000Z');
+  assert.equal(clubWallClockToIso('2026-01-15T08:00'), '2026-01-15T13:00:00.000Z');
+  assert.equal(clubWallClockToIso(''), null);
 });
 
 test('formatClubDateTime renders a timestamp in Eastern time', () => {

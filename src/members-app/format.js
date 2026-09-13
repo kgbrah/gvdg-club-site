@@ -1,3 +1,5 @@
+import { CLUB_TIME_ZONE, clubCivilInstant, parseEventDate } from "../shared/events-model.js";
+
 export function dollars(cents) {
   const value = Number(cents || 0);
   const abs = Math.abs(value);
@@ -7,12 +9,14 @@ export function dollars(cents) {
 export function formatEventDay(value) {
   if (!value) return "";
   const raw = String(value).trim();
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) return raw;
-  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw);
-  return date.toLocaleDateString(undefined, dateOnly
-    ? { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }
-    : { weekday: "short", month: "short", day: "numeric", timeZone: "America/New_York" });
+  const date = clubCivilInstant(raw) || parseEventDate(raw);
+  if (!date) return raw;
+  return date.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: CLUB_TIME_ZONE,
+  });
 }
 
 export function formatRatingDate(value) {

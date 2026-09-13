@@ -1,5 +1,7 @@
 import React from "react";
 
+import { clubWallClockToIso, isoToClubWallClock } from "../shared/events-model.js";
+
 const h = React.createElement;
 
 const EMPTY_FORM = {
@@ -60,17 +62,11 @@ function normalizeLayoutsState(state) {
 }
 
 function toIso(value) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+  return clubWallClockToIso(value);
 }
 
 function toLocalDateTime(raw) {
-  if (!raw) return "";
-  const date = new Date(raw);
-  if (!Number.isFinite(date.getTime())) return "";
-  const pad = (value) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return isoToClubWallClock(raw);
 }
 
 function formFromEvent(event) {
