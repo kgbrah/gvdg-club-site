@@ -5,6 +5,7 @@ import { adminConfirm } from "./admin-dialogs.js";
 const h = React.createElement;
 
 const EVENT_STATUSES = ["scheduled", "live", "final", "cancelled"];
+const MANUAL_STATUSES = ["scheduled", "final", "cancelled"];
 const EMPTY_STATE = { status: "loading", events: [] };
 
 function normalizeEvent(event) {
@@ -25,6 +26,14 @@ function normalizeState(state) {
     status: state.status === "loading" ? "loading" : "ready",
     events,
   };
+}
+
+function statusOptions(current) {
+  const options = MANUAL_STATUSES.map((status) => h("option", { key: status, value: status }, status));
+  if (current === "live") {
+    options.unshift(h("option", { key: "live", value: "live", disabled: true, hidden: true }, "live"));
+  }
+  return options;
 }
 
 function dispatchRequest(name, detail) {
@@ -74,7 +83,7 @@ function AdminEventRow({ event }) {
       key: "select",
       onChange: requestStatusChange,
       value: selectValue,
-    }, EVENT_STATUSES.map((status) => h("option", { key: status, value: status }, status))),
+    }, statusOptions(event.status)),
     h("button", {
       className: "admin-btn secondary",
       key: "edit",

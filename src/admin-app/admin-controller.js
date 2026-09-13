@@ -1189,8 +1189,14 @@ export function startAdminController() {
                 const status = detail.status;
                 if (!ev || ev.id == null || !status) return;
                 const r = await adminApi('/admin/events/' + ev.id, { method: 'PATCH', body: { status } });
-                adminMsg(r.ok ? 'Updated “' + ev.name + '” → ' + status : 'Update failed', r.ok);
-                if (r.ok) adminLoadEvents();
+                if (r.ok) {
+                    adminMsg('Updated “' + ev.name + '” → ' + status, true);
+                    adminLoadEvents();
+                    return;
+                }
+                const e = await r.json().catch(() => ({}));
+                adminMsg((e && e.message) || 'Update failed', false);
+                adminLoadEvents();
             });
             window.addEventListener('gvdg:admin-event-delete-request', async (event) => {
                 const ev = event.detail && event.detail.event;

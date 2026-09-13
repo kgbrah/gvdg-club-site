@@ -293,6 +293,23 @@ describe("admin event management", () => {
     expect(state.removedPlayer).toBe(88);
   });
 
+  it("refuses to mark an event live unless scoring has already started", async () => {
+    const jwt = await token("m_admin");
+    const created = await call("/admin/events", "POST", {
+      type: "tournament",
+      name: "Premature Live",
+      status: "live",
+      course_id: 7,
+      layout_id: 44,
+    }, jwt);
+    expect(created.status).toBe(400);
+    await expect(created.json()).resolves.toMatchObject({ error: "live_via_scoring" });
+
+    const patched = await call("/admin/events/9", "PATCH", { status: "live" }, jwt);
+    expect(patched.status).toBe(400);
+    await expect(patched.json()).resolves.toMatchObject({ error: "live_via_scoring" });
+  });
+
   it("includes course and layout details for open registration events", async () => {
     const state: Parameters<typeof db>[0] = {};
     const res = await call("/registration/open", "GET", undefined, undefined, state);

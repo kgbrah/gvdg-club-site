@@ -52,6 +52,11 @@ const scoringStartedBody = {
   message: "Live scoring already started. Add or remove players on the live scorecard instead.",
 };
 
+const liveViaScoringBody = {
+  error: "live_via_scoring",
+  message: "Start the round from Live Scoring. Setting an event to Live here does not start a card.",
+};
+
 function uniqueMemberIds(raw: unknown): { ids: string[]; error: "invalid_members" | "too_many_members" | null } {
   if (!Array.isArray(raw)) return { ids: [], error: "invalid_members" };
   const ids: string[] = [];
@@ -353,6 +358,7 @@ export async function handleAdminEvents(
       if (layoutId == null) return json({ error: "invalid_layout" }, 500, origin);
       eventInput = withPrimaryLayout(v, layoutId);
     }
+    if (eventInput.status === "live") return json(liveViaScoringBody, 400, origin);
     const row = await db.createEvent(env.DB, { ...eventInput, created_by: adminId });
     return json(layout ? { event: row, layout } : { event: row }, 201, origin);
   }
@@ -370,6 +376,7 @@ export async function handleAdminEvents(
     }
     if (hasField(b, "status")) {
       if (!inSet(EVENT_STATUSES, b.status)) return json({ error: "invalid_event" }, 400, origin);
+      if (b.status === "live" && !(await liveScoringActive(env, id))) return json(liveViaScoringBody, 400, origin);
       patch.status = b.status;
     }
     if (hasField(b, "format")) {
