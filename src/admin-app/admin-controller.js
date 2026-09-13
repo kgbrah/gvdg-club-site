@@ -275,6 +275,9 @@ export function startAdminController() {
                 await scRefresh();
                 return;
             }
+            await scShowStartControls();
+        }
+        async function scShowStartControls(validation) {
             const layouts = await scLayoutsForEvent(scSelectedEvent);
             setAdminScoringState({
                 config: scEventConfig(scSelectedEvent),
@@ -283,7 +286,7 @@ export function startAdminController() {
                 layoutId: scSelectedEvent.layout_id == null ? '' : String(scSelectedEvent.layout_id),
                 layouts,
                 status: 'start',
-                validation: '',
+                validation: validation || '',
             });
         }
 
@@ -325,6 +328,13 @@ export function startAdminController() {
                 const e = await r.json().catch(() => ({}));
                 adminMsg(scStartErrorMessage(r.status, e), false);
                 finishAdminScoringAction('start', false);
+                if (e && e.error === 'empty_roster' && scEventId) {
+                    window.dispatchEvent(new CustomEvent('gvdg:admin-tab-request', { detail: { tab: 'registration' } }));
+                    await rgSelectEventFromReact({ eventId: scEventId });
+                    setAdminRegistrationControlsState({
+                        notice: 'This event has no players yet. Add the pairs (same pair label on both teammates), then come back to Live Scoring to start.',
+                    });
+                }
             }
         }
 
@@ -337,7 +347,9 @@ export function startAdminController() {
             }
             scSnap = await r.json();
             if (scSnap.status !== 'live' && scSnap.status !== 'final') {
-                setAdminScoringState({ event: scSelectedEvent, eventId: String(scEventId), layouts: [], status: 'idle' });
+                await scShowStartControls(scSelectedEvent && scSelectedEvent.status === 'live'
+                    ? 'Event is marked Live, but scoring has not started yet. Add players if needed, then start live scoring here.'
+                    : '');
                 return;
             }
             scTeeSignData = await scLoadTeeSignData();
@@ -871,7 +883,7 @@ export function startAdminController() {
             } catch (e) {
                 configStatus = 'error';
             }
-            setAdminRegistrationControlsState({ selectedEventId: rgEventId, configStatus, config: cfg });
+            setAdminRegistrationControlsState({ selectedEventId: rgEventId, configStatus, config: cfg, notice: null });
             rgLoadRoster();
             rgLoadMembers();
             rgLoadCtps();
@@ -946,7 +958,8 @@ export function startAdminController() {
                 window.dispatchEvent(new CustomEvent('gvdg:admin-registration-manual-player-add-result', { detail: { ok: true, requestId } }));
                 rgLoadRoster();
             } else {
-                adminMsg('Add player failed (' + r.status + ')', false);
+                const e = await r.json().catch(() => ({}));
+                adminMsg(rgRosterMutationError(e, r.status, 'Add player failed'), false);
                 window.dispatchEvent(new CustomEvent('gvdg:admin-registration-manual-player-add-result', { detail: { ok: false, requestId } }));
             }
         }
@@ -983,14 +996,29 @@ export function startAdminController() {
                 window.dispatchEvent(new CustomEvent('gvdg:admin-registration-members-add-result', { detail: { ok: true, requestId, added, skipped } }));
                 rgLoadRoster();
             } else {
-                adminMsg('Add members failed (' + r.status + ')', false);
+                const e = await r.json().catch(() => ({}));
+                adminMsg(rgRosterMutationError(e, r.status, 'Add members failed'), false);
                 window.dispatchEvent(new CustomEvent('gvdg:admin-registration-members-add-result', { detail: { ok: false, requestId } }));
             }
         }
+        function rgRosterMutationError(body, status, fallback) {
+            const error = body && body.error;
+            if (error === 'scoring_started') return (body && body.message) || 'Live scoring already started — add or remove players on the scorecard instead.';
+            if (error === 'already_registered') return 'That player is already on this event.';
+            if (error === 'event_started') return 'This event has already started. Cancel scoring before changing the roster.';
+            return fallback + ' (' + status + ')';
+        }
         async function rgRemoveManualPlayer(player) {
             const r = await adminApi('/admin/events/' + rgEventId + '/players/' + player.id, { method: 'DELETE' });
-            adminMsg(r.ok ? 'Player removed' : 'Remove failed (' + r.status + ')', r.ok);
-            if (r.ok) rgLoadRoster();
+            if (r.ok) { adminMsg('Player removed', true); rgLoadRoster(); return; }
+            const e = await r.json().catch(() => ({}));
+            adminMsg(rgRosterMutationError(e, r.status, 'Remove failed'), false);
+        }
+        async function rgRemoveRegistration(registration) {
+            const r = await adminApi('/admin/events/' + rgEventId + '/registrations/' + registration.id, { method: 'DELETE' });
+            if (r.ok) { adminMsg('Player removed', true); rgLoadRoster(); return; }
+            const e = await r.json().catch(() => ({}));
+            adminMsg(rgRosterMutationError(e, r.status, 'Remove failed'), false);
         }
         async function rgAwardCredit(memberId, name, amountValue) {
             const amount = dollarsToCents(amountValue);
@@ -1358,6 +1386,11 @@ export function startAdminController() {
                 const player = event.detail && event.detail.player;
                 if (!player || player.id == null || !rgEventId) return;
                 await rgRemoveManualPlayer(player);
+            });
+            window.addEventListener('gvdg:admin-registration-remove-request', async (event) => {
+                const registration = event.detail && event.detail.registration;
+                if (!registration || registration.id == null || !rgEventId) return;
+                await rgRemoveRegistration(registration);
             });
             window.addEventListener('gvdg:admin-registration-manual-player-add-request', async (event) => {
                 await rgAddManualPlayerFromReact(event.detail || {});

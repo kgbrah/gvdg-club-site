@@ -482,6 +482,19 @@ describe("live route start payloads", () => {
     ]);
   });
 
+  it("unionRosterPlayers collapses a guest and club member with the same name onto the member", () => {
+    const out = unionRosterPlayers(
+      [
+        { member_id: "g_abc", name: "T.J. Braley", division: null, starting_hole: 1, team: "KG/TJ" },
+        { member_id: "m_tj", name: "TJ Braley", division: "MA1", starting_hole: 1, team: "KG/TJ" },
+      ],
+      [{ member_id: null, name: "TJ Braley", team: "KG/TJ" }],
+    );
+    expect(out).toEqual([
+      { memberId: "m_tj", name: "TJ Braley", division: "MA1", startingHole: 1, team: "KG/TJ" },
+    ]);
+  });
+
   it("seeds the live round with BOTH registered players and manually-added walk-ons (no drop)", async () => {
     const state: LiveRouteState = {
       starts: [],

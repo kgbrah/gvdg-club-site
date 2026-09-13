@@ -9,6 +9,7 @@ import { asInt, asIsoTimestamp, asStr, inSet, jsonStringArray, validEventCourses
 import { AdminLiveConfigError, adminLiveScoringConfigJson } from "./admin-live-config.js";
 import { inlineLayout } from "./admin-event-layout.js";
 import { defaultCtpPayoutNote } from "./admin-payout-notes.js";
+import { playersMatch } from "./player-identity.js";
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -20,6 +21,36 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 const hasField = (body: Record<string, unknown>, field: string): boolean => Object.prototype.hasOwnProperty.call(body, field);
+
+function rosterHasPlayer(
+  rows: readonly { member_id?: string | null; name?: string | null }[],
+  candidate: { memberId?: string | null; name?: string | null },
+): boolean {
+  const memberId = String(candidate.memberId || "").trim();
+  const name = String(candidate.name || "").trim();
+  return rows.some((row) => {
+    const rowId = String(row.member_id || "").trim();
+    if (memberId && rowId && memberId === rowId) return true;
+    return Boolean(name && row.name && playersMatch(name, row.name));
+  });
+}
+
+async function liveScoringActive(env: Env, eventId: number): Promise<boolean> {
+  if (!env.LIVE) return false;
+  try {
+    const stub = env.LIVE.get(env.LIVE.idFromName("event:" + eventId));
+    const res = await stub.fetch("https://do/snapshot");
+    const data = (await res.json().catch(() => ({}))) as { status?: string };
+    return data.status === "live" || data.status === "final";
+  } catch {
+    return false;
+  }
+}
+
+const scoringStartedBody = {
+  error: "scoring_started",
+  message: "Live scoring already started. Add or remove players on the live scorecard instead.",
+};
 
 function uniqueMemberIds(raw: unknown): { ids: string[]; error: "invalid_members" | "too_many_members" | null } {
   if (!Array.isArray(raw)) return { ids: [], error: "invalid_members" };
@@ -86,12 +117,21 @@ export async function handleAdminEvents(
       const b = await readJson(request);
       const name = b && asStr(b.name, 100);
       if (!b || !name) return json({ error: "invalid_player" }, 400, origin);
-      const row = await db.addEventPlayer(env.DB, { event_id: id, member_id: asStr(b.member_id, 64), name, pdga_no: asStr(b.pdga_no, 20), division: asStr(b.division, 40), team: asStr(b.team, 40) });
+      if (await liveScoringActive(env, id)) return json(scoringStartedBody, 409, origin);
+      const existingRegs = (await db.listRegistrations(env.DB, id)) as { member_id?: string | null; name?: string | null }[];
+      const ev = (await db.getEvent(env.DB, id)) as { players?: { member_id?: string | null; name?: string | null }[] } | null;
+      const existingPlayers = Array.isArray(ev?.players) ? ev.players : [];
+      const memberId = asStr(b.member_id, 64);
+      if (rosterHasPlayer([...existingRegs, ...existingPlayers], { memberId, name })) {
+        return json({ error: "already_registered" }, 409, origin);
+      }
+      const row = await db.addEventPlayer(env.DB, { event_id: id, member_id: memberId, name, pdga_no: asStr(b.pdga_no, 20), division: asStr(b.division, 40), team: asStr(b.team, 40) });
       return json({ player: row }, 201, origin);
     }
     if (method === "DELETE" && seg[4] != null) {
       const pid = asInt(seg[4]);
       if (pid == null) return json({ error: "not_found" }, 404, origin);
+      if (await liveScoringActive(env, id)) return json(scoringStartedBody, 409, origin);
       await db.removeEventPlayer(env.DB, id, pid);
       return json({ ok: true }, 200, origin);
     }
@@ -124,25 +164,26 @@ export async function handleAdminEvents(
       if (status == null) return json({ error: "not_found" }, 404, origin);
       // Live scoring snapshots the roster into the Durable Object at start. Adding D1
       // registrations after that would leave the member with no live card. Cash signup
-      // is for scheduled events; once live, add a player on the scoring card instead.
-      if (status !== "scheduled") return json({ error: "event_not_open" }, 403, origin);
+      // is allowed while the event is scheduled, and also if someone marked it Live
+      // before actually starting scoring.
+      if (status !== "scheduled" && status !== "live") return json({ error: "event_not_open" }, 403, origin);
+      if (status === "live" && await liveScoringActive(env, id)) return json(scoringStartedBody, 409, origin);
       const division = asStr(b.division, 60);
       const team = asStr(b.team, 40);
       const addons = registrationAddonsJson(b.addons);
       const paid = b.paid_entry === true ? 1 : 0;
       const existing = (await db.listRegistrations(env.DB, id)) as { id?: number; member_id?: string | null; name?: string | null }[];
-      const registered = new Set(existing.map((row) => String(row.member_id || "")).filter(Boolean));
       const added: { id: number; member_id: string; name: string }[] = [];
       const skipped: { member_id: string; reason: string }[] = [];
       const pending: { member_id: string; name: string }[] = [];
       for (const memberId of parsed.ids) {
-        if (registered.has(memberId)) {
-          skipped.push({ member_id: memberId, reason: "already_registered" });
-          continue;
-        }
         const member = await getMember(env.ROSTER, memberId);
         if (!member) {
           skipped.push({ member_id: memberId, reason: "not_found" });
+          continue;
+        }
+        if (rosterHasPlayer([...existing, ...pending], { memberId, name: member.name })) {
+          skipped.push({ member_id: memberId, reason: "already_registered" });
           continue;
         }
         pending.push({ member_id: memberId, name: member.name });
@@ -183,6 +224,16 @@ export async function handleAdminEvents(
         checked_in: b.checked_in == null ? null : (b.checked_in ? 1 : 0), paid_entry: b.paid_entry == null ? null : (b.paid_entry ? 1 : 0),
       });
       return row ? json({ registration: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
+    }
+    if (method === "DELETE" && seg[4] != null) {
+      const rid = asInt(seg[4]);
+      if (rid == null) return json({ error: "not_found" }, 404, origin);
+      const status = await db.getEventStatus(env.DB, id);
+      if (status == null) return json({ error: "not_found" }, 404, origin);
+      if (status === "final") return json({ error: "event_started" }, 409, origin);
+      if (await liveScoringActive(env, id)) return json(scoringStartedBody, 409, origin);
+      const row = await db.adminDeleteRegistration(env.DB, id, rid);
+      return row ? json({ ok: true, registration: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
     }
   }
   if (seg[3] === "store-credit" && id != null) {

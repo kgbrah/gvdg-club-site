@@ -1,9 +1,11 @@
 import React from "react";
 
+import { playersMatch } from "../shared/player-identity.js";
+
 const h = React.createElement;
 
 const EMPTY_MEMBERS = { members: [], status: "loading" };
-const EMPTY_ROSTER = { registrations: [] };
+const EMPTY_ROSTER = { registrations: [], manualPlayers: [] };
 
 function objectOrEmpty(value) {
   return value && typeof value === "object" ? value : {};
@@ -18,16 +20,23 @@ function memberIdOf(value) {
   return normalizeText(source.memberId || source.member_id).trim();
 }
 
-export function availableClubMembers(members, registrations, query) {
-  const registered = new Set(
-    (Array.isArray(registrations) ? registrations : []).map(memberIdOf).filter(Boolean),
-  );
+function playerNameOf(value) {
+  return normalizeText(objectOrEmpty(value).name).trim();
+}
+
+export function availableClubMembers(members, registrations, query, extraPlayers = []) {
+  const roster = [
+    ...(Array.isArray(registrations) ? registrations : []),
+    ...(Array.isArray(extraPlayers) ? extraPlayers : []),
+  ];
+  const registered = new Set(roster.map(memberIdOf).filter(Boolean));
   const q = normalizeText(query).trim().toLowerCase();
   return (Array.isArray(members) ? members : []).flatMap((member) => {
     const source = objectOrEmpty(member);
     const memberId = memberIdOf(source);
     if (!memberId || registered.has(memberId)) return [];
     const name = normalizeText(source.name, memberId);
+    if (roster.some((row) => playersMatch(name, playerNameOf(row)))) return [];
     const pdgaNo = normalizeText(source.pdgaNo || source.pdga_no);
     const udisc = normalizeText(source.udisc);
     if (q) {
@@ -56,6 +65,7 @@ function memberMeta(member) {
 export function AdminRegistrationMemberPicker({ eventStatus }) {
   const [membersState, setMembersState] = React.useState(EMPTY_MEMBERS);
   const [registrations, setRegistrations] = React.useState([]);
+  const [manualPlayers, setManualPlayers] = React.useState([]);
   const [query, setQuery] = React.useState("");
   const [selected, setSelected] = React.useState(() => new Set());
   const [division, setDivision] = React.useState("");
@@ -75,6 +85,7 @@ export function AdminRegistrationMemberPicker({ eventStatus }) {
     function updateRoster(event) {
       const detail = event.detail && typeof event.detail === "object" ? event.detail : EMPTY_ROSTER;
       setRegistrations(Array.isArray(detail.registrations) ? detail.registrations : []);
+      setManualPlayers(Array.isArray(detail.manualPlayers) ? detail.manualPlayers : []);
     }
     window.addEventListener("gvdg:admin-registration-members-list", updateMembers);
     window.addEventListener("gvdg:admin-registration-roster", updateRoster);
@@ -98,23 +109,12 @@ export function AdminRegistrationMemberPicker({ eventStatus }) {
     return () => window.removeEventListener("gvdg:admin-registration-members-add-result", update);
   }, [pendingRequest]);
 
-  const unregistered = availableClubMembers(membersState.members, registrations, "");
-  const available = availableClubMembers(membersState.members, registrations, query);
+  const unregistered = availableClubMembers(membersState.members, registrations, "", manualPlayers);
+  const available = availableClubMembers(membersState.members, registrations, query, manualPlayers);
   const unregisteredIds = new Set(unregistered.map((member) => member.memberId));
   const selectedIds = [...selected].filter((id) => unregisteredIds.has(id));
   const busy = Boolean(pendingRequest);
   const live = eventStatus === "live";
-
-  if (live) {
-    return h("div", {
-      className: "al-section",
-      "data-react-admin-registration-member-picker": "live",
-      style: { marginTop: "1rem" },
-    }, [
-      h("h4", { className: "al-h", key: "title" }, "Add club members"),
-      h("p", { className: "al-note", key: "note" }, "Club members can be added while the event is scheduled. Once live scoring starts, add a player on the scoring card instead."),
-    ]);
-  }
 
   function toggleMember(memberId) {
     setSelected((current) => {
@@ -179,7 +179,9 @@ export function AdminRegistrationMemberPicker({ eventStatus }) {
     style: { marginTop: "1rem" },
   }, [
     h("h4", { className: "al-h", key: "title" }, "Add club members"),
-    h("p", { className: "al-note", key: "note" }, "Search the roster and add members who paid cash at the event. They show up as registered players, not walk-ons."),
+    h("p", { className: "al-note", key: "note" }, live
+      ? "Once live scoring starts, add a player on the scoring card instead. You can still add members here if scoring has not started yet."
+      : "Search the roster and add members who paid cash at the event. They show up as registered players, not walk-ons."),
     h("div", { className: "al-row", key: "search", style: { marginTop: "0.5rem" } }, [
       h("input", {
         "aria-label": "Search club members",

@@ -84,7 +84,9 @@ export function playersMatch(left, right) {
   const a = expandKnownNickname(String(left || "").trim());
   const b = expandKnownNickname(String(right || "").trim());
   if (!a || !b) return false;
-  if (compactPlayerName(a) === compactPlayerName(b)) return true;
+  const compactA = compactPlayerName(a);
+  const compactB = compactPlayerName(b);
+  if (compactA && compactB && compactA === compactB) return true;
 
   const tokensA = playerNameTokens(a);
   const tokensB = playerNameTokens(b);

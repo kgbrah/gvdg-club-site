@@ -54,9 +54,9 @@ function upcomingRegistrations(registrations, today) {
 function playerStandings(leagues, memberName) {
   return (Array.isArray(leagues) ? leagues : []).map((item) => {
     const players = Array.isArray(item.standings) ? item.standings : [];
-    const index = players.findIndex((player) => namesMatch(player.name, memberName));
-    if (index < 0) return null;
-    const player = players[index];
+    const matches = players.flatMap((player, index) => namesMatch(player.name, memberName) ? [{ index, player }] : []);
+    if (matches.length !== 1) return null;
+    const { index, player } = matches[0];
     const league = item.league || {};
     return {
       leagueId: league.id ?? null,

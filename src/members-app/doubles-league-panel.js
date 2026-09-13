@@ -70,6 +70,27 @@ function ModalStat({ value, label }) {
   ]);
 }
 
+function mergeSeasonMetrics(left, right) {
+  const first = left && typeof left === "object" ? left : {};
+  const second = right && typeof right === "object" ? right : {};
+  const leftWeeks = Number(first.weeks_attended) || 0;
+  const rightWeeks = Number(second.weeks_attended) || 0;
+  const weeks = leftWeeks + rightWeeks;
+  const scoreTotal = (Number(first.avg_score) || 0) * leftWeeks + (Number(second.avg_score) || 0) * rightWeeks;
+  const leftPlace = Number(first.placement);
+  const rightPlace = Number(second.placement);
+  return {
+    ...first,
+    ...second,
+    season: first.season || second.season,
+    total_points: (Number(first.total_points) || 0) + (Number(second.total_points) || 0),
+    best_points: Math.max(Number(first.best_points) || 0, Number(second.best_points) || 0),
+    placement: Math.min(Number.isFinite(leftPlace) ? leftPlace : 999, Number.isFinite(rightPlace) ? rightPlace : 999),
+    weeks_attended: weeks,
+    avg_score: weeks ? Math.round((scoreTotal / weeks) * 10) / 10 : first.avg_score || second.avg_score,
+  };
+}
+
 export function mergeDoublesLeaderboard(players) {
   const clustered = clusterPlayerNames((players || []).map((player) => player && player.n));
   const map = new Map();
@@ -87,7 +108,9 @@ export function mergeDoublesLeaderboard(players) {
     }
     const seasons = [...existing.ss];
     for (const row of player.ss || []) {
-      if (!seasons.some((entry) => entry.season === row.season)) seasons.push(row);
+      const index = seasons.findIndex((entry) => entry && entry.season === row.season);
+      if (index < 0) seasons.push(row);
+      else seasons[index] = mergeSeasonMetrics(seasons[index], row);
     }
     const weeks = (existing.tw || 0) + (player.tw || 0);
     const caTotal = (Number(existing.ca) || 0) * (existing.tw || 0) + (Number(player.ca) || 0) * (player.tw || 0);

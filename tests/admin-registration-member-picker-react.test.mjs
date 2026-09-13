@@ -9,15 +9,28 @@ test('availableClubMembers hides registered players and matches name, id, PDGA, 
     { memberId: 'm_jane', name: 'Jane Doe', pdgaNo: '111', udisc: 'janed' },
     { memberId: 'm_bob', name: 'Bob Smith', pdgaNo: '222', udisc: 'bsmith' },
     { memberId: 'm_ann', name: 'Ann Lee', pdgaNo: '333' },
+    { memberId: 'm_tj', name: 'TJ Braley', pdgaNo: '444' },
   ];
   const registrations = [{ member_id: 'm_bob', name: 'Bob Smith' }];
 
-  assert.deepEqual(availableClubMembers(members, registrations, '').map((m) => m.memberId), ['m_jane', 'm_ann']);
+  assert.deepEqual(availableClubMembers(members, registrations, '').map((m) => m.memberId), ['m_jane', 'm_ann', 'm_tj']);
   assert.deepEqual(availableClubMembers(members, registrations, 'jane').map((m) => m.memberId), ['m_jane']);
   assert.deepEqual(availableClubMembers(members, registrations, '333').map((m) => m.memberId), ['m_ann']);
   assert.deepEqual(availableClubMembers(members, registrations, 'bsmith').map((m) => m.memberId), []);
   assert.deepEqual(availableClubMembers(members, registrations, 'm_ann').map((m) => m.memberId), ['m_ann']);
   assert.deepEqual(availableClubMembers(null, registrations, ''), []);
+});
+
+test('availableClubMembers hides a club member who already registered as a guest or walk-on', () => {
+  const members = [
+    { memberId: 'm_tj', name: 'TJ Braley', pdgaNo: '444' },
+    { memberId: 'm_jane', name: 'Jane Doe', pdgaNo: '111' },
+  ];
+  const guest = [{ member_id: 'g_abc', name: 'T.J. Braley' }];
+  const walkOn = [{ name: 'TJ Braley' }];
+
+  assert.deepEqual(availableClubMembers(members, guest, '').map((m) => m.memberId), ['m_jane']);
+  assert.deepEqual(availableClubMembers(members, [], '', walkOn).map((m) => m.memberId), ['m_jane']);
 });
 
 test('admin registration member picker adds club members as registrations from request events', () => {
@@ -57,8 +70,8 @@ test('admin registration member picker adds club members as registrations from r
 
   assert.match(picker, /export function availableClubMembers/);
   assert.match(picker, /export function AdminRegistrationMemberPicker/);
-  assert.match(picker, /availableClubMembers\(membersState.members, registrations, ""\)/);
-  assert.match(picker, /availableClubMembers\(membersState.members, registrations, query\)/);
+  assert.match(picker, /availableClubMembers\(membersState.members, registrations, "", manualPlayers\)/);
+  assert.match(picker, /availableClubMembers\(membersState.members, registrations, query, manualPlayers\)/);
   assert.match(picker, /unregisteredIds.has\(id\)/);
   assert.match(picker, /eventStatus === "live"/);
   assert.match(picker, /Once live scoring starts/);

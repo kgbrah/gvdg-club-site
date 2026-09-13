@@ -10,32 +10,34 @@ import { scoringState } from "./live-state.js";
 import { ctpEligibleForStart, parseCtpAddon, registrationPaidEntry } from "./live-ctp.js";
 import { assignCards, type PlayerState } from "./scoring.js";
 import { weatherLocationForCourse } from "./weather.js";
+import { playersMatch } from "./player-identity.js";
 
 type RosterPlayer = { memberId: string | null; name: string; division: string | null; startingHole: number | null; team: string | null };
 
 /** Merge a live event's REGISTERED players with its manually-added (event_players) walk-ons into one roster
- *  so neither is dropped. Dedupe the same member (by member_id) and the same walk-on (member-less, by name);
- *  registrations are added first, so a member entered both ways keeps their registration (division / starting
- *  hole / team). A member-less walk-on is never deduped against a member, so distinct people both play. */
+ *  so neither is dropped. Dedupe the same member (by member_id) and the same person (by name, including a
+ *  guest token vs club member). Registrations are added first; a later club-member row with the same name
+ *  replaces a guest so scoring uses the real member id. */
 export function unionRosterPlayers(
   regs: readonly { member_id?: string | null; name?: string | null; division?: string | null; starting_hole?: number | null; team?: string | null }[],
   manual: readonly Record<string, unknown>[],
 ): RosterPlayer[] {
   const out: RosterPlayer[] = [];
   const seenMember = new Set<string>();
-  const seenName = new Set<string>();
-  const norm = (v: unknown) => String(v ?? "").trim().toLowerCase();
+  const isGuest = (id: string | null) => Boolean(id && id.startsWith("g_"));
   const add = (p: RosterPlayer) => {
-    if (p.memberId) {
-      if (seenMember.has(p.memberId)) return;
-      seenMember.add(p.memberId);
-    } else {
-      const n = norm(p.name);
-      if (n) {
-        if (seenName.has(n)) return;
-        seenName.add(n);
+    if (p.memberId && seenMember.has(p.memberId)) return;
+    const matchIdx = out.findIndex((existing) => playersMatch(existing.name, p.name));
+    if (matchIdx >= 0) {
+      const existing = out[matchIdx]!;
+      if (isGuest(existing.memberId) && p.memberId && !isGuest(p.memberId)) {
+        if (existing.memberId) seenMember.delete(existing.memberId);
+        out[matchIdx] = p;
+        if (p.memberId) seenMember.add(p.memberId);
       }
+      return;
     }
+    if (p.memberId) seenMember.add(p.memberId);
     out.push(p);
   };
   for (const r of regs) add({ memberId: r.member_id ?? null, name: String(r.name ?? "Player"), division: r.division ?? null, startingHole: r.starting_hole ?? null, team: r.team ?? null });

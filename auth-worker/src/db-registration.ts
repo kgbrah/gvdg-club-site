@@ -71,6 +71,13 @@ export async function withdrawRegistration(db: D1Like, eventId: number, memberId
   await db.prepare("DELETE FROM registrations WHERE event_id = ? AND member_id = ?").bind(eventId, memberId).run();
 }
 
+export async function adminDeleteRegistration(db: D1Like, eventId: number, registrationId: number) {
+  return db
+    .prepare("DELETE FROM registrations WHERE id = ? AND event_id = ? RETURNING *")
+    .bind(registrationId, eventId)
+    .first();
+}
+
 export async function setCheckedIn(db: D1Like, eventId: number, memberId: string, val: boolean) {
   return db.prepare("UPDATE registrations SET checked_in = ? WHERE event_id = ? AND member_id = ? RETURNING *").bind(val ? 1 : 0, eventId, memberId).first();
 }

@@ -8,6 +8,7 @@ const EMPTY_STATE = {
   config: null,
   configStatus: "idle",
   events: [],
+  notice: "",
   selectedEventId: null,
   status: "loading",
 };
@@ -64,6 +65,7 @@ function normalizeControlsState(state) {
     config: state.config && typeof state.config === "object" ? state.config : null,
     configStatus: normalizeStatus(state.configStatus, "idle"),
     events: Array.isArray(state.events) ? state.events.map(normalizeEvent).filter((event) => event.id) : [],
+    notice: typeof state.notice === "string" && state.notice.trim() ? state.notice.trim() : "",
     selectedEventId: selectedIdValue(state.selectedEventId),
     status: normalizeStatus(state.status),
   };
@@ -143,6 +145,7 @@ function EventSelector({ state }) {
     ]),
     state.status === "loading" ? h("p", { className: "al-note", key: "loading", role: "status" }, "Loading registration events...") : null,
     state.status === "error" ? h("p", { className: "al-note err", key: "error", role: "alert" }, "Unable to load registration events.") : null,
+    state.notice ? h("p", { className: "al-note", key: "notice", role: "status" }, state.notice) : null,
   ]);
 }
 
