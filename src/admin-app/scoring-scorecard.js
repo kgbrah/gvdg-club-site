@@ -2,6 +2,7 @@ import React from "react";
 
 import { conflictForRow, conflictTitle, isDoubles, isMatchplay, rowTotal, scoreForRow, scoreRows, toPar } from "./scoring-model.js";
 import { displayMatchStatus } from "../shared/match-status.js";
+import { fieldActiveHoleIndex } from "../score-app/score-view-model.js";
 
 const h = React.createElement;
 
@@ -42,18 +43,30 @@ function ScoreInput({ hole, row, score }) {
   });
 }
 
+function clampHoleIndex(index, count) {
+  if (!count) return 0;
+  return Math.max(0, Math.min(index, count - 1));
+}
+
 export function AdminScoringScorecard({ snapshot }) {
   const snap = snapshot || {};
   const holes = Array.isArray(snap.holes) ? snap.holes : [];
   const rows = scoreRows(snap);
   const rowHead = [isDoubles(snap) ? "Pair" : "Player", isDoubles(snap) ? "Members" : "Div", "Start"];
+  const seeded = React.useRef(false);
   const [holeIndex, setHoleIndex] = React.useState(0);
 
   React.useEffect(() => {
-    setHoleIndex((current) => {
-      if (!holes.length) return 0;
-      return Math.min(current, holes.length - 1);
-    });
+    if (!holes.length) return;
+    if (!seeded.current) {
+      seeded.current = true;
+      setHoleIndex(clampHoleIndex(fieldActiveHoleIndex({
+        holes,
+        players: Array.isArray(snap.players) ? snap.players : [],
+      }), holes.length));
+      return;
+    }
+    setHoleIndex((current) => clampHoleIndex(current, holes.length));
   }, [holes.length]);
 
   const table = h("div", { className: "sc-scorecard-desktop", key: "desktop", style: { overflowX: "auto" } }, h("table", {
@@ -93,6 +106,7 @@ export function AdminScoringScorecard({ snapshot }) {
   const pager = hole ? h("div", {
     className: "sc-hole-pager",
     "data-admin-hole-pager": "ready",
+    "data-admin-hole-index": String(holeIndex),
     key: "pager",
   }, [
     h("div", { className: "sc-hole-pager-nav", key: "nav" }, [
@@ -219,3 +233,4 @@ export function AdminScoringOverride({ canOverride, snapshot }) {
     h("p", { className: "al-note", key: "note" }, "A temporary override changes par/distance for this live round only. The course layout stays verified and the hole reverts after the round."),
   ]);
 }
+
