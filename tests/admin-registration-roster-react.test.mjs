@@ -76,7 +76,10 @@ test('admin registration roster is rendered by React from direct loader events',
   assert.match(rows, /export function ManualPlayerRow/);
   assert.match(rows, /data-admin-registration-id/);
   assert.match(rows, /data-admin-registration-manual-id/);
-  assert.match(roster, /className: "al-holes"/);
+  assert.match(roster, /className: "admin-roster"/);
+  assert.match(rows, /className: "admin-roster-card"/);
+  assert.match(rows, /aria-pressed/);
+  assert.match(rows, /Check in/);
   assert.match(rows, /className: "credit-award"/);
   assert.match(roster, /role: "status"/);
   assert.match(roster, /role: "alert"/);

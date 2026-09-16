@@ -239,6 +239,12 @@ body.player-theme-page .nav-links a.nav-donate {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
 }
+@media (max-width: 760px) {
+  body.admin-page .pwa-update {
+    bottom: calc(4.75rem + var(--safe-bottom));
+    z-index: 10100;
+  }
+}
 
 .udisc-export {
   margin: 0.4rem 0;

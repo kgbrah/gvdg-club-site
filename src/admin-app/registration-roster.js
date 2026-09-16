@@ -53,27 +53,22 @@ function normalizeRosterState(state) {
   };
 }
 
-function RosterTable({ state }) {
+function RosterList({ state }) {
   const rows = state.registrations.concat(state.manualPlayers);
 
-  return h("div", { style: { overflowX: "auto" } }, h("table", {
-    className: "al-holes",
+  return h("div", {
+    className: "admin-roster",
     "data-react-admin-registration-roster": "ready",
-  }, [
-    h("thead", { key: "head" }, h("tr", null, ["Player", "Division", "Team", "Start hole", "In?", "Paid?", "Credit", ""].map((label) => (
-      h("th", { key: label || "actions" }, label)
-    )))),
-    h("tbody", { key: "body" }, rows.length ? [
-      ...state.registrations.map((registration, index) => h(RegistrationRow, {
-        key: registration.id || `registration-${index}`,
-        registration,
-      })),
-      ...state.manualPlayers.map((player, index) => h(ManualPlayerRow, {
-        key: player.id || `manual-${index}`,
-        player,
-      })),
-    ] : h("tr", null, h("td", { colSpan: 8 }, "No players yet."))),
-  ]));
+  }, rows.length ? [
+    ...state.registrations.map((registration, index) => h(RegistrationRow, {
+      key: registration.id || `registration-${index}`,
+      registration,
+    })),
+    ...state.manualPlayers.map((player, index) => h(ManualPlayerRow, {
+      key: player.id || `manual-${index}`,
+      player,
+    })),
+  ] : h("p", { className: "al-note", key: "empty" }, "No players yet."));
 }
 
 export function AdminRegistrationRoster() {
@@ -92,7 +87,7 @@ export function AdminRegistrationRoster() {
     "Registered players (",
     h("span", { key: "count" }, String(count)),
     ") ",
-    h("span", { className: "al-note", key: "note" }, "- includes manually-added walk-ons; check in, assign division/team/start hole"),
+    h("span", { className: "al-note", key: "note" }, "- tap Check in on the tee; open Details to edit division, team, hole, or paid"),
   ]);
 
   if (state.status === "loading") {
@@ -111,6 +106,6 @@ export function AdminRegistrationRoster() {
 
   return h(React.Fragment, null, [
     title,
-    h(RosterTable, { key: "table", state }),
+    h(RosterList, { key: "list", state }),
   ]);
 }

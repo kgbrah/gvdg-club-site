@@ -82,7 +82,14 @@ export function AdminPageChrome() {
   }
 
   function backToMembers(key) {
-    return h("a", { href: "gvdg-members.html", key, onClick: closeMenu }, "Back to Members");
+    return h("a", { href: "gvdg-members.html", key, onClick: closeMenu }, [
+      h("span", { className: "nav-account-full", key: "full" }, "Back to Members"),
+      h("span", { className: "nav-account-short", key: "short" }, "Members"),
+    ]);
+  }
+
+  function helpLink(key) {
+    return h(CrottsHelpLink, { key, onClick: closeMenu });
   }
 
   function logout(key) {
@@ -103,12 +110,16 @@ export function AdminPageChrome() {
     h(ClubLogo, { href: "index.html", key: "logo", onClick: closeMenu }),
     h("ul", { className: menuOpen ? "nav-links active" : "nav-links", id: "adminNavLinks", key: "links" }, [
       ...NAV_ITEMS.map(navLink),
-      h("li", { key: "help" }, h(CrottsHelpLink, { onClick: closeMenu })),
+      h("li", { key: "help" }, helpLink("mobile-help-link")),
       h("li", { className: "nav-mobile-account", key: "mobile-members" }, backToMembers("mobile-members-link")),
       signedIn ? h("li", { className: "nav-mobile-account", key: "mobile-logout" }, logout("mobile-logout-link")) : null,
     ]),
     h("div", { className: "nav-right", key: "controls" }, [
-      h("div", { className: "nav-account", key: "account" }, [backToMembers("desktop-members-link"), logout("desktop-logout-link")]),
+      h("div", { className: "nav-account", key: "account" }, [
+        backToMembers("desktop-members-link"),
+        helpLink("desktop-help-link"),
+        logout("desktop-logout-link"),
+      ]),
       h("button", {
         "aria-controls": "adminNavLinks",
         "aria-expanded": menuOpen ? "true" : "false",
