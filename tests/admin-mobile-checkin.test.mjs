@@ -48,6 +48,8 @@ test("admin phone chrome hides the public hamburger and stacks the dock above Cr
   assert.match(scoring, /admin-scoring-card/);
   assert.match(scorecard, /className: "sc-score-input"/);
   assert.match(scorecard, /"aria-label": "Previous hole"/);
+  assert.match(scorecard, /fieldActiveHoleIndex/);
+  assert.match(scorecard, /data-admin-hole-index/);
   assert.match(html, /sc-scorecard-desktop \{ display: none/);
   assert.match(html, /\.admin-scoring-card \{/);
   assert.match(html, /@media \(max-width: 768px\) \{/);
