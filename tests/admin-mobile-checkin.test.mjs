@@ -6,12 +6,15 @@ test("admin phone chrome hides the public hamburger and stacks the dock above Cr
   const html = readFileSync("admin.html", "utf8");
   const chrome = readFileSync("src/admin-app/page-chrome.js", "utf8");
   const nav = readFileSync("src/admin-app/navigation.js", "utf8");
+  const more = readFileSync("src/admin-app/more-page.js", "utf8");
   const crotts = readFileSync("src/shared/crotts-widget.js", "utf8");
   const tokens = readFileSync("tokens.css", "utf8");
 
+  assert.match(html, /body\[data-admin-panel="visible"\] \.admin-dock \{/);
   assert.match(html, /z-index: 10050/);
   assert.match(html, /header \.menu-toggle \{ display: none !important; \}/);
-  assert.match(html, /header \.nav-account \{ display: flex !important;/);
+  assert.match(html, /header \.nav-account \{ display: none !important;/);
+  assert.match(html, /header \.logo-wordmark \{ overflow: visible;/);
   assert.match(html, /footer, \.back-link \{ display: none; \}/);
   assert.match(html, /\.admin-btn \{[^}]*min-height: 44px;/);
   assert.match(html, /\.admin-btn\.danger \{[^}]*min-height: 44px;/);
@@ -21,14 +24,25 @@ test("admin phone chrome hides the public hamburger and stacks the dock above Cr
   assert.match(html, /\.admin-dialog-overlay \{[^}]*z-index: 11000;/);
   assert.match(html, /\.admin-roster \{ display: grid;/);
   assert.match(html, /\.admin-roster-card \{/);
+  assert.match(html, /\.admin-more-account \{/);
+  assert.match(html, /@supports[\s\S]*?body\.player-theme-page \.admin-gate,\s*body\.player-theme-page \.admin-dock \{[\s\S]*?backdrop-filter: blur\(12px\)/);
+  assert.doesNotMatch(html, /player-theme-page \.admin-panel,[\s\S]{0,120}player-theme-page \.admin-dock/);
   assert.match(chrome, /helpLink\("desktop-help-link"\)/);
   assert.match(chrome, /CrottsHelpLink/);
   assert.match(chrome, /nav-account-short/);
   assert.match(chrome, /Back to Members/);
+  assert.match(nav, /createPortal/);
+  assert.match(nav, /document\.body/);
+  assert.match(nav, /data-admin-dock": "portal"/);
   assert.match(nav, /"aria-selected": selected \? "true" : "false"/);
   assert.match(nav, /role: "tab"/);
+  assert.match(more, /data-admin-more-account/);
+  assert.match(more, /gvdg-members\.html/);
+  assert.match(more, /CrottsHelpLink/);
+  assert.match(more, /Log out/);
   assert.match(crotts, /body\.admin-page #crotts-panel/);
   assert.match(crotts, /z-index:10040/);
+  assert.match(crotts, /props\.className/);
   assert.match(tokens, /body\.admin-page \.pwa-update/);
 });
 

@@ -72,13 +72,14 @@ export function requestCrottsHelp() {
 export function CrottsHelpLink(props) {
   return h("a", {
     "aria-haspopup": "dialog",
+    className: props.className,
     href: "#help",
     onClick: (event) => {
       event.preventDefault();
       requestCrottsHelp();
       props.onClick?.(event);
     },
-  }, "Help");
+  }, props.children ?? "Help");
 }
 
 function AssistantBubble({ message }) {

@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-title" content="GVDG Club">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=147">
+    <link rel="manifest" href="site.webmanifest?v=148">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -60,7 +60,6 @@
             background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
         }
         @supports ((-webkit-backdrop-filter: blur(10px)) or (backdrop-filter: blur(10px))) {
-            body.player-theme-page .admin-panel,
             body.player-theme-page .admin-gate,
             body.player-theme-page .admin-dock {
                 -webkit-backdrop-filter: blur(12px);
@@ -294,7 +293,8 @@
         .admin-seg button { flex: 1; border: 0; background: transparent; color: var(--text-muted); font: inherit; font-size: 0.78rem; font-weight: 700; padding: 0.42rem 0.2rem; border-radius: 8px; cursor: pointer; }
         .admin-seg button.on { background: var(--primary-strong); color: var(--light); }
         .admin-more-list { display: grid; gap: 0.45rem; }
-        .admin-more-link { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; padding: 0.75rem 0.9rem; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-secondary); color: var(--text-primary); font: inherit; font-weight: 700; cursor: pointer; }
+        .admin-more-link { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; padding: 0.75rem 0.9rem; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-secondary); color: var(--text-primary); font: inherit; font-weight: 700; cursor: pointer; text-decoration: none; box-sizing: border-box; }
+        .admin-more-account { margin-top: 1.25rem; }
         .admin-chip { flex: 0 0 auto; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-secondary); border-radius: 999px; padding: 0.5rem 0.85rem; min-height: 44px; font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
         .admin-chip.on { background: var(--primary-strong); border-color: var(--primary-strong); color: var(--light); }
         .admin-roster { display: grid; gap: 0.65rem; }
@@ -338,10 +338,8 @@
             header .logo-image, header.scrolled .logo-image { height: 32px; }
             header .menu-toggle { display: none !important; }
             header .nav-links { display: none !important; }
-            header .nav-account { display: flex !important; flex-wrap: nowrap; gap: 0.3rem; }
-            header .nav-account a { min-height: 36px; padding: 0.3rem 0.5rem; font-size: 0.68rem; display: inline-flex; align-items: center; white-space: nowrap; }
-            .nav-account-full { display: none; }
-            .nav-account-short { display: inline; }
+            header .nav-account { display: none !important; }
+            header .logo-wordmark { overflow: visible; text-overflow: unset; }
             footer, .back-link { display: none; }
             .admin-mobile-chips {
                 display: flex;
@@ -357,7 +355,7 @@
                 backdrop-filter: blur(10px);
                 border-bottom: 1px solid var(--border-color);
             }
-            .admin-dock {
+            body[data-admin-panel="visible"] .admin-dock {
                 display: grid;
                 grid-template-columns: repeat(5, minmax(0, 1fr));
                 position: fixed;
