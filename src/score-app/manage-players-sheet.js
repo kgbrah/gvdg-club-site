@@ -1,5 +1,8 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
+
+import { useAccessibleDialog } from "../shared/a11y.js";
 
 const h = React.createElement;
 
@@ -72,26 +75,42 @@ function PlayerRow({ onRemove, player }) {
 
 function ManagePlayersSheet(props) {
   const players = props.players || [];
-  return h(
-    "div",
-    {
-      className: "overlay",
-      onClick: (event) => {
-        if (event.target === event.currentTarget) props.onClose();
+  const dialog = useAccessibleDialog({
+    open: true,
+    onClose: props.onClose,
+    labelledBy: "score-manage-players-title",
+    label: "Players",
+  });
+  return createPortal(
+    h(
+      "div",
+      {
+        className: "overlay",
+        role: "presentation",
+        ref: dialog.overlayRef,
       },
-    },
-    h("div", { className: "sheet" }, [
-      h("div", { className: "grab", key: "grab" }),
-      h("h2", { className: "section", key: "title" }, "Players"),
-      h(
-        "p",
-        { className: "muted", key: "copy" },
-        "Remove a player who registered by accident, had to leave, or did not show. Their scores are cleared.",
-      ),
-      props.isDoubles ? h(PairEditor, { key: "pairs", onSavePairs: props.onSavePairs, players }) : null,
-      players.map((player) => h(PlayerRow, { key: "player-" + player.index, onRemove: props.onRemove, player })),
-      h("button", { className: "btn secondary sheet-close", key: "close", type: "button", onClick: props.onClose }, "Close"),
-    ]),
+      h("div", {
+        className: "sheet",
+        role: "dialog",
+        "aria-modal": dialog.isolated ? "true" : undefined,
+        "aria-labelledby": "score-manage-players-title",
+        "aria-label": "Players",
+        tabIndex: -1,
+        ref: dialog.panelRef,
+      }, [
+        h("div", { className: "grab", key: "grab" }),
+        h("h2", { className: "section", id: "score-manage-players-title", key: "title" }, "Players"),
+        h(
+          "p",
+          { className: "muted", key: "copy" },
+          "Remove a player who registered by accident, had to leave, or did not show. Their scores are cleared.",
+        ),
+        props.isDoubles ? h(PairEditor, { key: "pairs", onSavePairs: props.onSavePairs, players }) : null,
+        players.map((player) => h(PlayerRow, { key: "player-" + player.index, onRemove: props.onRemove, player })),
+        h("button", { className: "btn secondary sheet-close", key: "close", type: "button", onClick: props.onClose }, "Close"),
+      ]),
+    ),
+    document.body,
   );
 }
 

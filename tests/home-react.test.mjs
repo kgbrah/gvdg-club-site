@@ -49,6 +49,8 @@ test('home React bundle owns the course modal instead of inline DOM injection', 
   assert.match(main, /createRoot\(courseModalMount\)\.render\(h\(CourseModal\)\)/);
   assert.match(courseModal, /export function CourseModal/);
   assert.match(courseModal, /data-react-course-modal/);
+  assert.match(courseModal, /useAccessibleDialog/);
+  assert.match(courseModal, /createPortal/);
   assert.match(courseModal, /role: "dialog"/);
   assert.match(courseModal, /aria-disabled/);
   assert.match(courseModal, /safeExternalUrl/);

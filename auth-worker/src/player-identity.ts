@@ -19,14 +19,20 @@ function nameWithoutQuotes(name: string | null | undefined): string {
   return String(name || "").replace(/"[^"]*"/g, " ");
 }
 
+function foldLetters(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
 export function compactPlayerName(name: string | null | undefined): string {
-  return nameWithoutQuotes(name).toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return foldLetters(nameWithoutQuotes(name)).replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
 export function playerNameTokens(name: string | null | undefined): string[] {
-  return nameWithoutQuotes(name)
-    .toLowerCase()
-    .replace(/[^a-z]+/g, " ")
+  return foldLetters(nameWithoutQuotes(name))
+    .replace(/[^\p{L}]+/gu, " ")
     .trim()
     .split(/\s+/)
     .filter(Boolean);
@@ -37,9 +43,8 @@ function quotedNicknames(name: string): string[] {
   const re = /"([^"]+)"/g;
   let match: RegExpExecArray | null;
   while ((match = re.exec(name))) {
-    for (const token of String(match[1] || "")
-      .toLowerCase()
-      .replace(/[^a-z]+/g, " ")
+    for (const token of foldLetters(String(match[1] || ""))
+      .replace(/[^\p{L}]+/gu, " ")
       .trim()
       .split(/\s+/)
       .filter((part) => part.length > 1)) {

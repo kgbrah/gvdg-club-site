@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
   clusterPlayerNames,
+  compactPlayerName,
   playersMatch,
   preferredPlayerName,
   resolvePlayerName,
@@ -133,4 +135,36 @@ test("Jackie folds into Jarrett Wallace on the 24-player Ryder roster", () => {
   assert.equal(clustered.get("TJ Braley"), clustered.get("Tj Braley"));
   assert.equal(resolvePlayerName("TJ Braley", ROSTER), "Tj Braley");
   assert.equal(clustered.get("Juan"), 'Juan "Him" Martinez');
+});
+
+test("empty compact names and CJK names stay distinct", () => {
+  assert.equal(compactPlayerName("李"), "李");
+  assert.equal(compactPlayerName("王伟"), "王伟");
+  assert.equal(compactPlayerName("???"), "");
+  assert.equal(compactPlayerName("José García"), "josegarcia");
+  assert.equal(compactPlayerName("Jose Garcia"), "josegarcia");
+
+  assert.equal(playersMatch("李", "王伟"), false);
+  assert.equal(playersMatch("李", "李"), true);
+  assert.equal(playersMatch("王伟", "王 伟"), true);
+  assert.equal(playersMatch("???", "***"), false);
+  assert.equal(playersMatch("???", "???"), false);
+  assert.equal(playersMatch("José García", "Jose Garcia"), true);
+
+  const clustered = clusterPlayerNames(["李", "王伟", "???", "***"]);
+  assert.equal(clustered.get("李"), "李");
+  assert.equal(clustered.get("王伟"), "王伟");
+  assert.notEqual(clustered.get("李"), clustered.get("王伟"));
+});
+
+test("JS and worker player-identity keep Unicode compact folding in sync", () => {
+  const js = readFileSync(new URL("../src/shared/player-identity.js", import.meta.url), "utf8");
+  const ts = readFileSync(new URL("../auth-worker/src/player-identity.ts", import.meta.url), "utf8");
+  for (const source of [js, ts]) {
+    assert.match(source, /function foldLetters/);
+    assert.match(source, /normalize\("NFKD"\)/);
+    assert.match(source, /\\p\{L\}\\p\{N\}/);
+    assert.match(source, /compactA && compactB && compactA === compactB/);
+    assert.match(source, /if \(!compact\) continue/);
+  }
 });
