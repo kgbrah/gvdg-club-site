@@ -1118,5 +1118,6 @@ export function applyDashboardTheme(theme, root) {
   if (!safe) return;
   paintThemeOn(root, safe);
   if (page) paintPageOn(page, safe);
+  else root.classList?.add?.("player-theme-page");
 }
 

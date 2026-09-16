@@ -1,5 +1,6 @@
 import React from "react";
 
+import { CrottsHelpLink } from "../shared/crotts-widget.js";
 import { WalletPanel } from "./activity-panels.js";
 import { TOKEN_KEY, storageGet } from "./api.js";
 import { selectDashboardTab, requestLogout } from "./dashboard-shell.js";
@@ -68,11 +69,13 @@ export function MemberMorePage() {
   const token = storageGet(TOKEN_KEY);
   return h("div", { className: "react-more-page", "data-react-more-page": "ready" }, [
     h("div", { className: "player-more-grid", key: "links" }, [
+      h("a", { className: "player-more-item", href: "index.html", key: "home" }, "Club website"),
       h(MoreLink, { tab: "club", label: "Club directory", key: "club" }),
       h(MoreLink, { tab: "board", label: "Message board", key: "board" }),
       h(MoreLink, { tab: "tee", label: "Tee signs", key: "tee" }),
       h("a", { className: "player-more-item", href: "pro-shop.html", key: "shop" }, "Pro shop"),
       h("a", { className: "player-more-item", href: "score.html", key: "score" }, "Live scoring"),
+      h(CrottsHelpLink, { className: "player-more-item", key: "help" }),
     ]),
     h(WalletPanel, { token, key: "wallet" }),
     h(AccountTools, { key: "account-tools" }),

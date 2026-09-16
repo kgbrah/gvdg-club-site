@@ -24,6 +24,7 @@ import {
   writeStoredTheme,
 } from "../shared/dashboard-theme-model.js";
 import { THEME_EVENT, notifyPlayerThemeChanged } from "../shared/player-theme-session.js";
+import { themeRoot } from "../shared/player-theme-chrome.js";
 
 const h = React.createElement;
 
@@ -49,10 +50,6 @@ export async function pixelsFromDataUrl(dataUrl) {
   context.drawImage(image, 0, 0, width, height);
   const { data } = context.getImageData(0, 0, width, height);
   return samplePixels(data, width, height);
-}
-
-function themeRoot() {
-  return document.getElementById("members");
 }
 
 function Slider({ name, value, disabled, onChange }) {

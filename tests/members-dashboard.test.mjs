@@ -167,6 +167,8 @@ test('overview dashboard is a compact home and keeps registration on Events', ()
   assert.match(overview, /EventFieldRoster/);
   assert.doesNotMatch(overview, /Nothing open to register for right now/);
   assert.match(more, /Club directory/);
+  assert.match(more, /Club website/);
+  assert.match(more, /CrottsHelpLink/);
   assert.match(more, /Message board/);
   assert.match(more, /Tee signs/);
   assert.match(more, /href: "score.html"/);
@@ -282,11 +284,15 @@ test('more page mounts a player theme builder', () => {
   assert.match(theme, /persistGen/);
   assert.match(theme, /pendingTheme/);
   assert.doesNotMatch(theme, /Aether|AETHER/);
-  assert.match(html, /#members\.player-theme-active/);
+  assert.match(theme, /from "\.\.\/shared\/player-theme-chrome\.js"/);
+  assert.match(theme, /themeRoot/);
+  assert.doesNotMatch(theme, /getElementById\("members"\)/);
+  assert.doesNotMatch(html, /#members\.player-theme-active/);
+  assert.match(html, /body\.player-theme-page #members \{/);
+  assert.match(html, /body\[data-member-shell="members"\] footer \{ display: none/);
+  assert.match(html, /body\[data-member-shell="members"\] header \.menu-toggle \{ display: none !important/);
   assert.match(html, /body\.player-theme-page::before/);
   assert.match(html, /body\.player-theme-active/);
-  assert.match(html, /body\.player-theme-page footer \{ color: var\(--player-theme-footer\)/);
-  assert.match(html, /body\.player-theme-page footer a \{ color: var\(--player-theme-link\)/);
   assert.match(html, /\.board-avatar \{[^}]*background: var\(--primary-strong\)/);
   assert.match(html, /\.admin-portal-link:hover\{background:var\(--primary-strong\)/);
   assert.match(html, /\.dash-theme-palette/);

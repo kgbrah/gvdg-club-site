@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-title" content="GVDG Club">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=148">
+    <link rel="manifest" href="site.webmanifest?v=149">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -56,6 +56,7 @@
         body.player-theme-page .admin-today-card,
         body.player-theme-page .admin-today-tile,
         body.player-theme-page .admin-roster-card,
+        body.player-theme-page .admin-scoring-card,
         body.player-theme-page .admin-dialog {
             background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
         }
@@ -242,6 +243,32 @@
         .fmt-btns { display: inline-flex; gap: 0.4rem; flex-wrap: wrap; }
         .fmt-btn { padding: 0.45rem 0.7rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); font: inherit; font-size: 0.9rem; cursor: pointer; }
         .fmt-btn[aria-pressed="true"] { border-color: var(--primary); background: var(--bg-tertiary); box-shadow: inset 0 0 0 1px var(--primary); font-weight: 700; }
+        .admin-scoring-card {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background: var(--bg-secondary);
+            padding: 0.85rem 0.95rem;
+            margin-bottom: 0.75rem;
+        }
+        .admin-scoring-card-block + .admin-scoring-card-block { margin-top: 0.75rem; }
+        .admin-scoring-card .sc-start-field select,
+        .admin-scoring-card #scEvent {
+            min-height: 44px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+        .sc-hole-pager { display: none; }
+        .sc-hole-pager-nav { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.45rem; align-items: center; }
+        .sc-hole-pager-label { display: grid; gap: 0.1rem; text-align: center; }
+        .sc-hole-pager-label strong { font-size: 1.05rem; color: var(--text-primary); }
+        .sc-hole-pager-label span { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+        .sc-hole-pager-btn { min-width: 4.5rem; }
+        .sc-hole-pager-list { display: grid; gap: 0.5rem; }
+        .sc-hole-pager-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0.5rem; align-items: center; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-primary); padding: 0.65rem 0.75rem; }
+        .sc-hole-pager-who { display: grid; gap: 0.1rem; min-width: 0; }
+        .sc-hole-pager-meta { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); }
+        .al-holes .sc-score-input { width: 3rem; }
+        .sc-hole-pager-row .sc-score-input { width: 4.5rem; min-height: 44px; font-size: 16px; }
         .admin-pane { display: none; }
         body[data-admin-tab="events"] #apane-events,
         body[data-admin-tab="today"] #apane-today,
@@ -326,10 +353,10 @@
             .admin-roster-fields .admin-roster-remove,
             .admin-roster-fields .admin-roster-toggle { grid-column: 1 / -1; }
         }
-        @media (min-width: 761px) {
+        @media (min-width: 769px) {
             .admin-roster { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
         }
-        @media (max-width: 760px) {
+        @media (max-width: 768px) {
             .admin-main { grid-template-columns: 1fr; gap: 0; }
             .admin-sidebar { display: none; }
             .page-title, .page-subtitle, .admin-title { display: none; }
@@ -398,7 +425,9 @@
             .order-actions { grid-column: 1 / -1; }
             #apane-registration .al-row > span { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
             #rgDivisions { flex: 1 1 12rem; min-width: 0; }
-            /* Wide builder/scoring tables still scroll; registration roster is cards now. */
+            /* Wide builder tables still scroll; scoring uses a hole pager on phones. */
+            .sc-scorecard-desktop { display: none; }
+            .sc-hole-pager { display: grid; gap: 0.65rem; }
             .al-holes { min-width: 500px; }
             .al-est .src { display: block; }
         }
@@ -424,7 +453,7 @@
         .admin-event-course-row.primary { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
         .admin-event-course-row .admin-btn { min-height: 2.45rem; padding: 0.55rem 0.8rem; }
         .admin-event-course-add { justify-self: start; }
-        @media (max-width: 760px) {
+        @media (max-width: 768px) {
             .admin-event-course-row,
             .admin-event-course-row.primary { grid-template-columns: 1fr; }
             .admin-event-course-row .admin-btn { justify-self: start; }

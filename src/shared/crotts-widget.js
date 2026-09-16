@@ -30,7 +30,7 @@ const CROTTS_CSS = `
 .crotts-action{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:6px 10px;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font:inherit;font-size:12px;font-weight:700;text-decoration:none;cursor:pointer}
 .crotts-action:hover{border-color:var(--secondary);color:var(--secondary)}
 @media (max-width:768px){#crotts-panel{left:12px;right:12px;width:auto;bottom:calc(14px + env(safe-area-inset-bottom,0px));max-height:calc(100vh - 96px)}}
-@media (max-width:760px){body.admin-page #crotts-panel{bottom:calc(4.75rem + env(safe-area-inset-bottom,0px));max-height:calc(100vh - 10.5rem);z-index:10040}}
+@media (max-width:768px){body.admin-page #crotts-panel,body[data-member-shell="members"] #crotts-panel{bottom:calc(4.75rem + env(safe-area-inset-bottom,0px));max-height:calc(100vh - 10.5rem);z-index:10040}}
 `;
 
 function apiBase() {
