@@ -291,6 +291,7 @@ test('more page mounts a player theme builder', () => {
   assert.match(html, /body\.player-theme-page #members \{/);
   assert.match(html, /body\[data-member-shell="members"\] footer \{ display: none/);
   assert.match(html, /body\[data-member-shell="members"\] header \.menu-toggle \{ display: none !important/);
+  assert.match(html, /body\[data-member-shell="members"\] header \.theme-toggle \{ display: none !important/);
   assert.match(html, /body\.player-theme-page::before/);
   assert.match(html, /body\.player-theme-active/);
   assert.match(html, /\.board-avatar \{[^}]*background: var\(--primary-strong\)/);

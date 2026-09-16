@@ -275,11 +275,13 @@ test('admin confirmations render through a shared React dialog service', () => {
   assert.match(main, /createRoot\(dialogsMount\)\.render\(h\(AdminDialogs\)\)/);
   assert.match(dialogs, /export function adminConfirm\(options\)/);
   assert.match(dialogs, /export function AdminDialogs\(\)/);
+  assert.match(dialogs, /useAccessibleDialog/);
+  assert.match(dialogs, /createPortal/);
   assert.match(dialogs, /role: "dialog"/);
   assert.match(dialogs, /aria-modal/);
   assert.match(dialogs, /subscribers/);
   assert.match(dialogs, /queue/);
-  assert.match(dialogs, /Escape/);
+  assert.match(dialogs, /onClose: \(\) => settle\(false\)/);
   assert.match(sources, /adminConfirm\(\{/);
   assert.doesNotMatch(sources, /\b(?:window\.)?confirm\(/);
   assert.doesNotMatch(dialogs, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️/);
