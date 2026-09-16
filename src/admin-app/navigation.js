@@ -1,4 +1,5 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import { CalendarDays, House, MoreHorizontal, ShoppingBag, Timer } from "lucide-react";
 
 import { currentAdminActiveTab } from "./admin-shell-state.js";
@@ -107,6 +108,27 @@ function dockForTab(tab) {
   return ADMIN_DOCK.find((item) => item.tabs.includes(tab)) || ADMIN_DOCK[0];
 }
 
+function AdminDock({ activeId }) {
+  return h("nav", {
+    "aria-label": "Admin tabs",
+    className: "admin-dock",
+    "data-admin-dock": "portal",
+  }, ADMIN_DOCK.map((item) => {
+    const on = activeId === item.id;
+    return h("button", {
+      "aria-current": on ? "page" : undefined,
+      className: on ? "admin-dock-item on" : "admin-dock-item",
+      key: item.id,
+      onClick: () => requestTab(item.tab),
+      type: "button",
+    }, [
+      h(item.Icon, { "aria-hidden": true, key: "icon", size: 20, strokeWidth: 2.3 }),
+      item.label,
+      item.id === "shop" ? h(AdminOrdersBadge, { key: "badge" }) : null,
+    ]);
+  }));
+}
+
 export function AdminNavigation() {
   const [activeTab, setActiveTab] = React.useState(initialTab);
 
@@ -122,6 +144,9 @@ export function AdminNavigation() {
 
   const dock = dockForTab(activeTab);
   const chips = dock.chips || [];
+  const dockNav = typeof document === "undefined"
+    ? null
+    : createPortal(h(AdminDock, { activeId: dock.id }), document.body, "dock");
 
   return h(React.Fragment, null, [
     chips.length ? h("div", {
@@ -140,24 +165,7 @@ export function AdminNavigation() {
         type: "button",
       }, tabLabel(item));
     })) : null,
-    h("nav", {
-      "aria-label": "Admin tabs",
-      className: "admin-dock",
-      key: "dock",
-    }, ADMIN_DOCK.map((item) => {
-      const on = dock.id === item.id;
-      return h("button", {
-        "aria-current": on ? "page" : undefined,
-        className: on ? "admin-dock-item on" : "admin-dock-item",
-        key: item.id,
-        onClick: () => requestTab(item.tab),
-        type: "button",
-      }, [
-        h(item.Icon, { "aria-hidden": true, key: "icon", size: 20, strokeWidth: 2.3 }),
-        item.label,
-        item.id === "shop" ? h(AdminOrdersBadge, { key: "badge" }) : null,
-      ]);
-    })),
+    dockNav,
     h("nav", { "aria-label": "Admin sections", className: "admin-sidebar", key: "sidebar" },
       ADMIN_NAV_GROUPS.flatMap((group) => [
         h("div", { className: "admin-navgroup", key: `${group.label}-group` }, group.label),
