@@ -1,7 +1,9 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import { Trophy, X } from "lucide-react";
 
 import { DOUBLES_LEAGUE_DATA } from "./doubles-league-data.js";
+import { useAccessibleDialog } from "../shared/a11y.js";
 import { clusterPlayerNames, preferredPlayerName } from "../shared/player-identity.js";
 
 const h = React.createElement;
@@ -343,28 +345,28 @@ function SeasonPanel({ leaderboard, seasonOrder }) {
 }
 
 function PlayerModal({ player, seasonOrder, onClose }) {
-  React.useEffect(() => {
-    function handleKeyDown(event) {
-      if (event.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  const dialog = useAccessibleDialog({
+    open: Boolean(player),
+    onClose,
+    labelledBy: "doublesPlayerModalTitle",
+    label: player ? `${player.n} player details` : "Player details",
+  });
 
   if (!player) return null;
   const seasons = [...player.ss].sort((a, b) => seasonOrder.indexOf(a.season) - seasonOrder.indexOf(b.season));
 
-  return h("div", {
+  return createPortal(h("div", {
     className: "player-modal-overlay active",
     role: "presentation",
-    onClick: (event) => {
-      if (event.currentTarget === event.target) onClose();
-    },
+    ref: dialog.overlayRef,
   }, h("div", {
     className: "player-modal",
     role: "dialog",
-    "aria-modal": "true",
+    "aria-modal": dialog.isolated ? "true" : undefined,
     "aria-labelledby": "doublesPlayerModalTitle",
+    "aria-label": `${player.n} player details`,
+    tabIndex: -1,
+    ref: dialog.panelRef,
   }, [
     h("button", { type: "button", className: "player-modal-close", "aria-label": "Close player details", onClick: onClose, key: "close" },
       h(X, { size: 20, "aria-hidden": "true" })),
@@ -389,7 +391,7 @@ function PlayerModal({ player, seasonOrder, onClose }) {
       h("div", { className: placementClass(season.placement), key: "placement" }, ordinal(season.placement)),
       h("div", { key: "weeks" }, season.weeks_attended || "-"),
     ])),
-  ]));
+  ])), document.body);
 }
 
 export function DoublesLeaguePanel() {

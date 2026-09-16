@@ -2,6 +2,8 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { AlertTriangle, WifiOff } from "lucide-react";
 
+import { announce } from "../shared/a11y.js";
+
 const h = React.createElement;
 
 function icon(Icon) {
@@ -94,6 +96,7 @@ export function createScoreNotificationsRenderer() {
       visible: true,
     });
     render();
+    announce(message, { assertive: options.variant === "conflict" });
     window.setTimeout(() => hide(id), hideAfter);
     window.setTimeout(() => remove(id), removeAfter);
     return id;

@@ -1,6 +1,8 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import { ChevronRight, MapPin, Navigation, Play, Target } from "lucide-react";
 
+import { useAccessibleDialog } from "../shared/a11y.js";
 import { safeExternalUrl } from "../shared/safe-url.js";
 
 const h = React.createElement;
@@ -59,6 +61,13 @@ function CourseAction({ href, iconClassName, iconNode, title, subtitle }) {
 
 export function CourseModal() {
   const [course, setCourse] = React.useState(null);
+  const close = React.useCallback(() => setCourse(null), []);
+  const dialog = useAccessibleDialog({
+    open: Boolean(course),
+    onClose: close,
+    labelledBy: "course-modal-title",
+    label: "Course details",
+  });
 
   React.useEffect(() => {
     function handleClick(event) {
@@ -71,33 +80,26 @@ export function CourseModal() {
     return () => document.removeEventListener("click", handleClick);
   }, []);
 
-  React.useEffect(() => {
-    if (!course) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    function handleKeydown(event) {
-      if (event.key === "Escape") setCourse(null);
-    }
-    document.addEventListener("keydown", handleKeydown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", handleKeydown);
-    };
-  }, [course]);
-
   if (!course) return null;
 
-  return h(
-    "div",
-    {
-      className: "course-modal-overlay active",
-      "data-react-course-modal": "open",
-      role: "presentation",
-      onClick: (event) => {
-        if (event.target === event.currentTarget) setCourse(null);
+  return createPortal(
+    h(
+      "div",
+      {
+        className: "course-modal-overlay active",
+        "data-react-course-modal": "open",
+        role: "presentation",
+        ref: dialog.overlayRef,
       },
-    },
-    h("div", { className: "course-modal", role: "dialog", "aria-modal": "true", "aria-labelledby": "course-modal-title" }, [
+      h("div", {
+        className: "course-modal",
+        role: "dialog",
+        "aria-modal": dialog.isolated ? "true" : undefined,
+        "aria-labelledby": "course-modal-title",
+        "aria-label": "Course details",
+        tabIndex: -1,
+        ref: dialog.panelRef,
+      }, [
       h("div", { className: "course-modal-header", key: "header" }, [
         h("h3", { className: "course-modal-title", id: "course-modal-title", key: "title" }, course.course),
         h("p", { className: "course-modal-location", key: "location" }, [
@@ -131,7 +133,9 @@ export function CourseModal() {
           key: "youtube",
         }),
       ]),
-      h("button", { className: "course-modal-close", type: "button", onClick: () => setCourse(null), key: "close" }, "Close"),
+      h("button", { className: "course-modal-close", type: "button", onClick: close, key: "close" }, "Close"),
     ]),
+    ),
+    document.body,
   );
 }

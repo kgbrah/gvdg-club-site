@@ -1,7 +1,9 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { displayMatchStatus } from "../shared/match-status.js";
 import { UDiscExportDetails } from "../shared/udisc-export.js";
+import { useAccessibleDialog } from "../shared/a11y.js";
 
 const h = React.createElement;
 
@@ -58,38 +60,54 @@ function FinalizePanel({ blockers, cardLocked, mode, onFinalize, status }) {
 }
 
 function LeaderboardSheet(props) {
-  return h(
-    "div",
-    {
-      className: "overlay",
-      onClick: (event) => {
-        if (event.target === event.currentTarget) props.onClose();
+  const dialog = useAccessibleDialog({
+    open: true,
+    onClose: props.onClose,
+    labelledBy: "score-leaderboard-title",
+    label: "Live leaderboard",
+  });
+  return createPortal(
+    h(
+      "div",
+      {
+        className: "overlay",
+        role: "presentation",
+        ref: dialog.overlayRef,
       },
-    },
-    h("div", { className: "sheet" }, [
-      h("div", { className: "grab", key: "grab" }),
-      h("h2", { className: "section", key: "title" }, "Live Leaderboard"),
-      h(LeaderboardTable, {
-        isDoubles: props.isDoubles,
-        isMatchplay: props.isMatchplay,
-        key: "table",
-        relClass: props.relClass,
-        relText: props.relText,
-        standings: props.standings,
-      }),
-      props.exportData ? h("div", { className: "udisc-export-section", key: "udisc" },
-        h(UDiscExportDetails, { courseId: props.exportData.courseId, scorecard: props.exportData.scorecard }),
-      ) : null,
-      h(FinalizePanel, {
-        blockers: props.blockers,
-        cardLocked: props.cardLocked,
-        key: "finalize",
-        mode: props.mode,
-        onFinalize: props.onFinalize,
-        status: props.status,
-      }),
-      h("button", { className: "btn secondary sheet-close", key: "close", type: "button", onClick: props.onClose }, "Close"),
-    ]),
+      h("div", {
+        className: "sheet",
+        role: "dialog",
+        "aria-modal": dialog.isolated ? "true" : undefined,
+        "aria-labelledby": "score-leaderboard-title",
+        "aria-label": "Live leaderboard",
+        tabIndex: -1,
+        ref: dialog.panelRef,
+      }, [
+        h("div", { className: "grab", key: "grab" }),
+        h("h2", { className: "section", id: "score-leaderboard-title", key: "title" }, "Live Leaderboard"),
+        h(LeaderboardTable, {
+          isDoubles: props.isDoubles,
+          isMatchplay: props.isMatchplay,
+          key: "table",
+          relClass: props.relClass,
+          relText: props.relText,
+          standings: props.standings,
+        }),
+        props.exportData ? h("div", { className: "udisc-export-section", key: "udisc" },
+          h(UDiscExportDetails, { courseId: props.exportData.courseId, scorecard: props.exportData.scorecard }),
+        ) : null,
+        h(FinalizePanel, {
+          blockers: props.blockers,
+          cardLocked: props.cardLocked,
+          key: "finalize",
+          mode: props.mode,
+          onFinalize: props.onFinalize,
+          status: props.status,
+        }),
+        h("button", { className: "btn secondary sheet-close", key: "close", type: "button", onClick: props.onClose }, "Close"),
+      ]),
+    ),
+    document.body,
   );
 }
 
