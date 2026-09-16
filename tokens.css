@@ -239,8 +239,9 @@ body.player-theme-page .nav-links a.nav-donate {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
 }
-@media (max-width: 760px) {
-  body.admin-page .pwa-update {
+@media (max-width: 768px) {
+  body.admin-page .pwa-update,
+  body[data-member-shell="members"] .pwa-update {
     bottom: calc(4.75rem + var(--safe-bottom));
     z-index: 10100;
   }

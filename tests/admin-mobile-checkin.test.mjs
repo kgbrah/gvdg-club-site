@@ -7,6 +7,8 @@ test("admin phone chrome hides the public hamburger and stacks the dock above Cr
   const chrome = readFileSync("src/admin-app/page-chrome.js", "utf8");
   const nav = readFileSync("src/admin-app/navigation.js", "utf8");
   const more = readFileSync("src/admin-app/more-page.js", "utf8");
+  const scorecard = readFileSync("src/admin-app/scoring-scorecard.js", "utf8");
+  const scoring = readFileSync("src/admin-app/scoring-panel.js", "utf8");
   const crotts = readFileSync("src/shared/crotts-widget.js", "utf8");
   const tokens = readFileSync("tokens.css", "utf8");
 
@@ -40,7 +42,16 @@ test("admin phone chrome hides the public hamburger and stacks the dock above Cr
   assert.match(more, /gvdg-members\.html/);
   assert.match(more, /CrottsHelpLink/);
   assert.match(more, /Log out/);
-  assert.match(crotts, /body\.admin-page #crotts-panel/);
+  assert.match(scorecard, /data-admin-hole-pager": "ready"/);
+  assert.match(scorecard, /className: "sc-hole-pager"/);
+  assert.match(scorecard, /sc-scorecard-desktop/);
+  assert.match(scoring, /admin-scoring-card/);
+  assert.match(scorecard, /className: "sc-score-input"/);
+  assert.match(scorecard, /"aria-label": "Previous hole"/);
+  assert.match(html, /sc-scorecard-desktop \{ display: none/);
+  assert.match(html, /\.admin-scoring-card \{/);
+  assert.match(html, /@media \(max-width: 768px\) \{/);
+  assert.match(crotts, /body\.admin-page #crotts-panel,body\[data-member-shell="members"\] #crotts-panel/);
   assert.match(crotts, /z-index:10040/);
   assert.match(crotts, /props\.className/);
   assert.match(tokens, /body\.admin-page \.pwa-update/);

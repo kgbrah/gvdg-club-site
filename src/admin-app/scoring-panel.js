@@ -190,11 +190,11 @@ export function AdminScoringPanel() {
     };
   }, []);
 
-  return h("div", { "data-react-admin-scoring": state.status }, [
-    h(EventSelector, { eventsState, key: "events", selectedId: state.eventId }),
+  return h("div", { className: "admin-scoring-card", "data-react-admin-scoring": state.status }, [
+    h("div", { className: "admin-scoring-card-block", key: "events" }, h(EventSelector, { eventsState, selectedId: state.eventId })),
     state.status === "loading" ? h("p", { className: "al-note", key: "loading", role: "status" }, "Loading live scoring...") : null,
     state.status === "error" ? h("p", { className: "al-note err", key: "error", role: "alert" }, state.message || "Unable to load live scoring.") : null,
-    state.status === "start" ? h(StartControls, { key: `start-${state.eventId}`, state }) : null,
+    state.status === "start" ? h("div", { className: "admin-scoring-card-block", key: `start-${state.eventId}` }, h(StartControls, { state })) : null,
     state.status === "live" || state.status === "final" ? h(LiveControls, { key: `live-${state.eventId}`, state }) : null,
   ]);
 }

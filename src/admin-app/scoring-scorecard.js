@@ -23,6 +23,7 @@ function ScoreInput({ hole, row, score }) {
   }
 
   return h("input", {
+    className: "sc-score-input",
     max: "30",
     min: "1",
     onBlur: () => {
@@ -36,7 +37,6 @@ function ScoreInput({ hole, row, score }) {
         event.currentTarget.blur();
       }
     },
-    style: { width: "3rem" },
     type: "number",
     value,
   });
@@ -47,8 +47,16 @@ export function AdminScoringScorecard({ snapshot }) {
   const holes = Array.isArray(snap.holes) ? snap.holes : [];
   const rows = scoreRows(snap);
   const rowHead = [isDoubles(snap) ? "Pair" : "Player", isDoubles(snap) ? "Members" : "Div", "Start"];
+  const [holeIndex, setHoleIndex] = React.useState(0);
 
-  return h("div", { style: { overflowX: "auto" } }, h("table", {
+  React.useEffect(() => {
+    setHoleIndex((current) => {
+      if (!holes.length) return 0;
+      return Math.min(current, holes.length - 1);
+    });
+  }, [holes.length]);
+
+  const table = h("div", { className: "sc-scorecard-desktop", key: "desktop", style: { overflowX: "auto" } }, h("table", {
     className: "al-holes",
     "data-react-admin-scoring-grid": "ready",
     id: "scGrid",
@@ -80,6 +88,61 @@ export function AdminScoringScorecard({ snapshot }) {
       ]);
     })),
   ]));
+
+  const hole = holes[holeIndex];
+  const pager = hole ? h("div", {
+    className: "sc-hole-pager",
+    "data-admin-hole-pager": "ready",
+    key: "pager",
+  }, [
+    h("div", { className: "sc-hole-pager-nav", key: "nav" }, [
+      h("button", {
+        "aria-label": "Previous hole",
+        className: "admin-btn secondary sc-hole-pager-btn",
+        disabled: holeIndex === 0,
+        key: "prev",
+        onClick: () => setHoleIndex((current) => Math.max(0, current - 1)),
+        type: "button",
+      }, "Prev"),
+      h("div", { "aria-live": "polite", className: "sc-hole-pager-label", key: "label" }, [
+        h("strong", { key: "hole" }, `Hole ${hole.hole}`),
+        h("span", { key: "meta" }, `Par ${hole.par}${hole.overridden ? " · temp" : ""} · ${holeIndex + 1} of ${holes.length}`),
+      ]),
+      h("button", {
+        "aria-label": "Next hole",
+        className: "admin-btn secondary sc-hole-pager-btn",
+        disabled: holeIndex >= holes.length - 1,
+        key: "next",
+        onClick: () => setHoleIndex((current) => Math.min(holes.length - 1, current + 1)),
+        type: "button",
+      }, "Next"),
+    ]),
+    h("div", { className: "sc-hole-pager-list", key: "list" }, rows.map((row) => {
+      const key = row.targetId || `player:${row.index}`;
+      const conflict = conflictForRow(snap, row, hole.hole);
+      const total = rowTotal(snap, row);
+      const meta = [row.meta, total ? `Tot ${total}` : null].filter(Boolean).join(" · ");
+      return h("div", {
+        className: conflict ? "sc-hole-pager-row sc-conflict" : "sc-hole-pager-row",
+        "data-row-key": key,
+        key,
+      }, [
+        h("div", { className: "sc-hole-pager-who", key: "who" }, [
+          h("span", { className: "lb-name", key: "name" }, row.label),
+          meta ? h("span", { className: "sc-hole-pager-meta", key: "meta" }, meta) : null,
+        ]),
+        h(ScoreInput, { hole: hole.hole, key: "score", row, score: scoreForRow(snap, row, hole.hole) }),
+        conflict ? h("span", {
+          "aria-label": conflictTitle(conflict),
+          className: "sc-conflict-flag",
+          key: "flag",
+          title: conflictTitle(conflict),
+        }, "!") : null,
+      ]);
+    })),
+  ]) : null;
+
+  return h(React.Fragment, null, [table, pager]);
 }
 
 export function AdminScoringLeaderboard({ snapshot }) {

@@ -264,27 +264,58 @@ test("applyDashboardTheme paints the page body so the public forest footer is co
   assert.equal(body.classes.size, 0);
 });
 
+test("applyDashboardTheme treats a body root as the page", () => {
+  function fakeEl() {
+    const props = new Map();
+    const classes = new Set();
+    return {
+      props,
+      classes,
+      style: {
+        setProperty(name, value) { props.set(name, value); },
+        removeProperty(name) { props.delete(name); },
+      },
+      classList: {
+        add(...names) { names.forEach((name) => classes.add(name)); },
+        remove(...names) { names.forEach((name) => classes.delete(name)); },
+      },
+    };
+  }
+  const wallpaper = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p94AAAAASUVORK5CYII=";
+  const body = fakeEl();
+  const themed = buildTheme({ preset: "Nord", mode: "light", wallpaper });
+  applyDashboardTheme(themed, body);
+  assert.equal(body.props.get("--primary"), themed.tokens.primary);
+  assert.match(body.props.get("--player-theme-image"), /url\("data:image\/png/);
+  assert.ok(body.classes.has("player-theme-page"));
+  assert.ok(body.classes.has("player-theme-active"));
+  applyDashboardTheme(null, body);
+  assert.equal(body.props.size, 0);
+  assert.equal(body.classes.size, 0);
+});
+
 test("applyDashboardTheme sets and clears CSS variables on the dashboard root", () => {
   const props = new Map();
+  const classes = new Set();
   const root = {
     style: {
       setProperty(name, value) { props.set(name, value); },
       removeProperty(name) { props.delete(name); },
     },
     classList: {
-      add(name) { root.className = name; },
-      remove() { root.className = ""; },
+      add(...names) { names.forEach((name) => classes.add(name)); },
+      remove(...names) { names.forEach((name) => classes.delete(name)); },
     },
-    className: "",
   };
   const theme = buildTheme({ pixels: forestPixels(), mode: "dark", extractMode: "normal", wallpaper: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p94AAAAASUVORK5CYII=" });
   applyDashboardTheme(theme, root);
   assert.equal(props.get("--primary"), theme.tokens.primary);
   assert.match(props.get("--player-theme-image"), /url\("data:image\/png/);
-  assert.equal(root.className, "player-theme-active");
+  assert.ok(classes.has("player-theme-active"));
+  assert.ok(classes.has("player-theme-page"));
   applyDashboardTheme(null, root);
   assert.equal(props.size, 0);
-  assert.equal(root.className, "");
+  assert.equal(classes.size, 0);
   assert.equal(rgbToHex(rgb(255, 0, 8)), "#ff0008");
 });
 

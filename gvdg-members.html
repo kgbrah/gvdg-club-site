@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-title" content="GVDG Club">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=148">
+    <link rel="manifest" href="site.webmanifest?v=149">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -89,6 +89,9 @@
             }
             .nav-links.active { transform: translateY(0); opacity: 1; pointer-events: all; }
             .nav-links li { padding: 1rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
+            body[data-member-shell="members"] header .menu-toggle { display: none !important; }
+            body[data-member-shell="members"] header .nav-links { display: none !important; }
+            body[data-member-shell="members"] header .logo-wordmark { overflow: visible; text-overflow: unset; }
         }
 
         /* Login Gate */
@@ -239,6 +242,7 @@
 
         footer { text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.9rem; }
         footer a { color: var(--primary); text-decoration: none; }
+        body[data-member-shell="members"] footer { display: none; }
 
         /* ==========================================
            DOUBLES LEAGUE SECTION
@@ -597,12 +601,11 @@
                 .react-live-scoring.dash-collapse { margin: 0 0 2rem; }
                 .react-live-scoring > .dash-collapse-summary { margin-bottom: 0; }
                 .react-live-scoring[open] > .dash-collapse-summary { margin-bottom: 1rem; }
-                #members.player-theme-active {
-                    background-color: var(--bg-primary);
-                    background-image: var(--player-theme-image);
-                    background-size: cover;
-                    background-position: center;
-                    background-repeat: no-repeat;
+                body.player-theme-page #members {
+                    background: transparent;
+                    background-image: none;
+                    border-color: transparent;
+                    box-shadow: none;
                 }
                 body.player-theme-page {
                     background-color: var(--bg-primary);
@@ -616,10 +619,7 @@
                     background-position: center;
                     background-repeat: no-repeat;
                 }
-                body.player-theme-page footer { color: var(--player-theme-footer); }
-                body.player-theme-page footer a { color: var(--player-theme-link); }
                 @media (min-width: 900px) {
-                    #members.player-theme-active,
                     body.player-theme-active { background-attachment: fixed; }
                 }
                 .dash-theme { margin: 0 0 1.25rem; padding: 0; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-secondary); overflow: hidden; }
