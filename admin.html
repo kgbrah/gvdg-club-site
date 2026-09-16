@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-title" content="GVDG Club">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=145">
+    <link rel="manifest" href="site.webmanifest?v=146">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -55,6 +55,7 @@
         body.player-theme-page .admin-evrow,
         body.player-theme-page .admin-today-card,
         body.player-theme-page .admin-today-tile,
+        body.player-theme-page .admin-roster-card,
         body.player-theme-page .admin-dialog {
             background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
         }
@@ -134,6 +135,7 @@
         .nav-account a { color: white; text-decoration: none; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; padding: 0.4rem 0.8rem; transition: all 0.2s ease; -webkit-tap-highlight-color: transparent; }
         .nav-account a:hover { background: rgba(255,255,255,0.15); }
         .nav-mobile-account { display: none; }
+        .nav-account-short { display: none; }
         @media (max-width: 768px) { .nav-mobile-account { display: block; } }
 
         /* ---- Admin panel ---- */
@@ -222,7 +224,7 @@
         .admin-layout-field input, .admin-layout-field select { width: 100%; padding: 0.5rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
         .al-holes { width: 100%; border-collapse: collapse; margin-top: 0.5rem; font-size: 0.85rem; }
         .al-holes th, .al-holes td { padding: 0.3rem 0.4rem; text-align: left; border-bottom: 1px solid var(--border-color); }
-        .al-holes input, .al-holes select { width: 100%; padding: 0.3rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); box-sizing: border-box; }
+        .al-holes input, .al-holes select { width: 100%; padding: 0.3rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); box-sizing: border-box; font-size: 16px; }
         .al-holes input[type=number] { width: 4rem; }
         .al-holes td.sc-conflict { background: var(--over-soft); border-left: 3px solid var(--over); }
         .al-holes td.sc-conflict input { border-color: var(--over); box-shadow: 0 0 0 1px var(--over-soft); }
@@ -278,7 +280,7 @@
         .admin-today-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.75rem; }
         .admin-today-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.45rem; margin-bottom: 0.85rem; }
         .admin-today-tile { display: grid; gap: 0.2rem; text-align: left; border: 1px solid var(--border-color); border-radius: 14px; background: var(--bg-secondary); color: var(--text-primary); padding: 0.65rem 0.6rem; cursor: pointer; }
-        .admin-today-tile strong { font-size: 0.95rem; }
+        .admin-today-tile strong { font-size: 0.95rem; white-space: nowrap; }
         .admin-today-tile span { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
         .admin-event-card { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0.45rem; align-items: center; }
         .admin-event-card-main { display: grid; gap: 0.15rem; text-align: left; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; padding: 0; }
@@ -293,31 +295,90 @@
         .admin-seg button.on { background: var(--primary-strong); color: var(--light); }
         .admin-more-list { display: grid; gap: 0.45rem; }
         .admin-more-link { display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; padding: 0.75rem 0.9rem; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-secondary); color: var(--text-primary); font: inherit; font-weight: 700; cursor: pointer; }
-        .admin-chip { flex: 0 0 auto; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-secondary); border-radius: 999px; padding: 0.35rem 0.7rem; font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
+        .admin-chip { flex: 0 0 auto; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-secondary); border-radius: 999px; padding: 0.5rem 0.85rem; min-height: 44px; font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
         .admin-chip.on { background: var(--primary-strong); border-color: var(--primary-strong); color: var(--light); }
+        .admin-roster { display: grid; gap: 0.65rem; }
+        .admin-roster-card { border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-secondary); padding: 0.75rem 0.85rem; }
+        .admin-roster-face { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.45rem 0.6rem; align-items: center; }
+        .admin-roster-identity { display: grid; gap: 0.15rem; min-width: 0; }
+        .admin-roster-identity .lb-name { font-size: 1.05rem; font-weight: 700; color: var(--text-primary); }
+        .admin-roster-meta { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); }
+        .admin-roster-actions { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; }
+        .admin-roster-chip { display: inline-flex; align-items: center; min-height: 28px; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+        .admin-roster-chip.paid { color: var(--under); background: color-mix(in srgb, var(--under) 16%, transparent); }
+        .admin-roster-chip.unpaid { color: var(--text-muted); background: var(--bg-tertiary); }
+        .admin-roster-chip.walk-on { color: var(--secondary-text); background: color-mix(in srgb, var(--secondary) 16%, transparent); }
+        .admin-roster-checkin { min-width: 6.75rem; white-space: nowrap; }
+        .admin-btn.admin-roster-checkin[aria-pressed="true"] { background: var(--under); color: var(--light); }
+        .admin-roster-details { margin-top: 0.55rem; border-top: 1px solid var(--border-color); padding-top: 0.35rem; }
+        .admin-roster-details > summary { cursor: pointer; font-size: 0.78rem; font-weight: 700; color: var(--secondary-text); min-height: 44px; display: flex; align-items: center; list-style: none; }
+        .admin-roster-details > summary::-webkit-details-marker { display: none; }
+        .admin-roster-fields { display: grid; gap: 0.55rem; margin-top: 0.35rem; }
+        .admin-roster-fields label { display: grid; gap: 0.2rem; font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+        .admin-roster-fields input:not([type="checkbox"]) { width: 100%; min-height: 44px; padding: 0.5rem 0.65rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary); font-size: 16px; }
+        .admin-roster-toggle { display: flex; align-items: center; gap: 0.5rem; min-height: 44px; font-size: 0.9rem; text-transform: none; letter-spacing: 0; color: var(--text-primary); font-weight: 600; }
+        .admin-roster-fields .admin-roster-toggle { display: flex; }
+        .admin-roster-toggle input { width: auto; min-height: 0; }
+        .admin-roster-remove { justify-self: start; }
+        @media (min-width: 520px) {
+            .admin-roster-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .admin-roster-fields .credit-award,
+            .admin-roster-fields .admin-roster-remove,
+            .admin-roster-fields .admin-roster-toggle { grid-column: 1 / -1; }
+        }
+        @media (min-width: 761px) {
+            .admin-roster { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+        }
         @media (max-width: 760px) {
             .admin-main { grid-template-columns: 1fr; gap: 0; }
             .admin-sidebar { display: none; }
             .page-title, .page-subtitle, .admin-title { display: none; }
-            .admin-mobile-chips { display: flex; gap: 0.4rem; overflow-x: auto; margin-bottom: 0.85rem; padding-bottom: 0.1rem; }
+            header { padding: 0.45rem 0.75rem; }
+            header.scrolled { padding: 0.4rem 0.75rem; }
+            header .logo-image, header.scrolled .logo-image { height: 32px; }
+            header .menu-toggle { display: none !important; }
+            header .nav-links { display: none !important; }
+            header .nav-account { display: flex !important; flex-wrap: nowrap; gap: 0.3rem; }
+            header .nav-account a { min-height: 36px; padding: 0.3rem 0.5rem; font-size: 0.68rem; display: inline-flex; align-items: center; white-space: nowrap; }
+            .nav-account-full { display: none; }
+            .nav-account-short { display: inline; }
+            footer, .back-link { display: none; }
+            .admin-mobile-chips {
+                display: flex;
+                gap: 0.4rem;
+                overflow-x: auto;
+                margin: 0 -0.9rem 0.85rem;
+                padding: 0.35rem 0.9rem 0.45rem;
+                position: sticky;
+                top: 3.25rem;
+                z-index: 40;
+                background: color-mix(in srgb, var(--bg-primary) 88%, transparent);
+                -webkit-backdrop-filter: blur(10px);
+                backdrop-filter: blur(10px);
+                border-bottom: 1px solid var(--border-color);
+            }
             .admin-dock {
                 display: grid;
                 grid-template-columns: repeat(5, minmax(0, 1fr));
                 position: fixed;
                 left: 0; right: 0; bottom: 0;
-                z-index: 900;
+                z-index: 10050;
                 background: color-mix(in srgb, var(--bg-secondary) 94%, transparent);
                 border-top: 1px solid var(--border-color);
                 padding: 0.35rem 0.25rem calc(0.45rem + env(safe-area-inset-bottom));
             }
             .admin-dock-item {
                 display: flex; flex-direction: column; align-items: center; gap: 0.12rem;
-                background: none; border: 0; color: var(--text-muted); font: inherit; font-size: 0.62rem; font-weight: 700;
+                background: none; border: 0; color: var(--text-muted); font: inherit; font-size: 0.72rem; font-weight: 700;
                 min-height: 44px; cursor: pointer;
             }
             .admin-dock-item.on { color: var(--primary-strong); }
-            main { padding-bottom: 6.5rem; }
-            .admin-panel { padding: 1.1rem 0.9rem; }
+            main { padding-top: 4.25rem; padding-left: 0.9rem; padding-right: 0.9rem; padding-bottom: 6.5rem; }
+            .admin-panel { padding: 0.35rem 0 0; border: none; border-radius: 0; background: transparent; margin-bottom: 0; }
+            body.player-theme-page .admin-panel { background: transparent; }
+            .admin-today-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .admin-today-tiles .admin-today-tile:last-child { grid-column: 1 / -1; }
+            .admin-today-tile { min-height: 44px; }
             .admin-form { max-width: none; }
             .al-row > span { max-width: 100%; min-width: 0; }
             .al-row input:not([type="checkbox"]), .al-row select { max-width: 100%; }
@@ -339,24 +400,24 @@
             .order-actions { grid-column: 1 / -1; }
             #apane-registration .al-row > span { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
             #rgDivisions { flex: 1 1 12rem; min-width: 0; }
-            /* Wide builder/scoring/roster tables scroll inside their overflow-x wrapper instead of
-               crushing every column to fit (which mashed the "Est." cell into "250 ft par"). */
+            /* Wide builder/scoring tables still scroll; registration roster is cards now. */
             .al-holes { min-width: 500px; }
             .al-est .src { display: block; }
         }
         .admin-form { display: grid; gap: 0.75rem; max-width: 520px; }
         .admin-form label { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 0.2rem; }
-        .admin-form input, .admin-form select, .admin-form textarea { width: 100%; padding: 0.6rem 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95rem; }
+        .admin-form input, .admin-form select, .admin-form textarea { width: 100%; padding: 0.6rem 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); font-size: 16px; }
         /* Long course/event/layout option text grew these unconstrained pickers off the right edge on mobile.
            Cap every admin-pane control to its container, let flex-row controls shrink below their content
            width, and lay the stand-alone Course/Event pickers out full-width like the form fields. */
-        .admin-pane select, .admin-pane input, .admin-pane textarea { max-width: 100%; }
+        .admin-pane select, .admin-pane input:not([type="checkbox"]):not([type="radio"]), .admin-pane textarea { max-width: 100%; font-size: 16px; }
         .al-row span, .al-row select, .al-row input, .order-controls select, .order-controls input { min-width: 0; }
+        .al-row input:not([type="checkbox"]), .al-row select { font-size: 16px; }
         #rgDivisions { width: 100%; } /* size="40" forced ~412px; fill its (now shrinkable) span instead */
-        #alCourse, #scEvent, #scLayout, #rgEvent { display: block; width: 100%; max-width: 520px; margin-top: 0.3rem; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95rem; }
-        .admin-btn { background: var(--primary-strong); color: #fff; border: none; padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
+        #alCourse, #scEvent, #scLayout, #rgEvent { display: block; width: 100%; max-width: 520px; margin-top: 0.3rem; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-size: 16px; }
+        .admin-btn { background: var(--primary-strong); color: #fff; border: none; padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.9rem; min-height: 44px; }
         .admin-btn.secondary { background: transparent; border: 1px solid var(--secondary-text); color: var(--secondary-text); }
-        .admin-btn.danger { background: transparent; border: 1px solid #dc3545; color: #dc3545; padding: 0.35rem 0.7rem; font-size: 0.8rem; }
+        .admin-btn.danger { background: transparent; border: 1px solid #dc3545; color: #dc3545; padding: 0.55rem 0.85rem; font-size: 0.85rem; min-height: 44px; }
         .admin-btn:disabled { opacity: 0.48; cursor: not-allowed; filter: grayscale(0.35); }
         .admin-form-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
         .admin-form-note { color: var(--text-muted); font-size: 0.9rem; margin: 0 0 0.75rem; }
@@ -372,7 +433,7 @@
         }
         .admin-msg { font-size: 0.9rem; margin-bottom: 0.75rem; min-height: 1.2em; }
         .admin-msg.ok { color: var(--green); } .admin-msg.err { color: var(--over); }
-        .admin-dialog-overlay { position: fixed; inset: 0; z-index: 1500; display: grid; place-items: center; padding: 1rem; background: rgba(15, 15, 30, 0.68); }
+        .admin-dialog-overlay { position: fixed; inset: 0; z-index: 11000; display: grid; place-items: center; padding: 1rem; background: rgba(15, 15, 30, 0.68); }
         .admin-dialog { width: min(100%, 28rem); border: 2px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); padding: 1.25rem; }
         .admin-dialog.danger { border-color: var(--over); }
         .admin-dialog-title { margin: 0 0 0.45rem; font-family: 'Bebas Neue', sans-serif; font-size: 1.7rem; line-height: 1.1; letter-spacing: 0.03em; color: var(--text-primary); }
@@ -432,7 +493,7 @@
         .wallet-row .credit { color: var(--green); font-weight: 700; }
         .wallet-row .debit { color: var(--primary); font-weight: 700; }
         .credit-award { display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
-        .credit-award input { width: 5rem; padding: 0.3rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
+        .credit-award input { width: 5rem; min-height: 44px; padding: 0.3rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-size: 16px; }
         .orders-badge { display: inline-flex; min-width: 1.2rem; height: 1.2rem; padding: 0 0.35rem; border-radius: 999px; background: var(--primary-strong); color: #fff; font-size: 0.7rem; font-weight: 700; align-items: center; justify-content: center; }
         .admin-order-controls { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.75rem; }
         .orders-list { display: grid; gap: 0.75rem; }

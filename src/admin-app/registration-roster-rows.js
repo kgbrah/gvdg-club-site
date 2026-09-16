@@ -8,6 +8,16 @@ function dispatchRequest(name, detail) {
   window.dispatchEvent(new CustomEvent(name, { detail }));
 }
 
+function rosterMeta(parts) {
+  return parts.filter(Boolean).join(" / ");
+}
+
+function PaidChip({ paid }) {
+  return h("span", {
+    className: paid ? "admin-roster-chip paid" : "admin-roster-chip unpaid",
+  }, paid ? "Paid" : "Unpaid");
+}
+
 export function RegistrationRow({ registration }) {
   const [division, setDivision] = React.useState(registration.division);
   const [team, setTeam] = React.useState(registration.team);
@@ -49,6 +59,13 @@ export function RegistrationRow({ registration }) {
     if (event.key === "Enter") event.currentTarget.blur();
   }
 
+  function patchFlag(field, value) {
+    dispatchRequest("gvdg:admin-registration-roster-patch-request", {
+      patch: { [field]: value },
+      registration: registration.source,
+    });
+  }
+
   async function requestRemove() {
     const confirmed = await adminConfirm({
       title: "Remove player",
@@ -62,91 +79,114 @@ export function RegistrationRow({ registration }) {
     dispatchRequest("gvdg:admin-registration-remove-request", { registration: registration.source });
   }
 
-  return h("tr", { "data-admin-registration-id": registration.id }, [
-    h("td", { className: "lb-name", key: "name" }, registration.name),
-    h("td", { key: "division" }, h("input", {
-      "aria-label": `Division for ${registration.name}`,
-      maxLength: 40,
-      onBlur: () => patchText("division", division, registration.division),
-      onChange: (event) => setDivision(event.target.value),
-      onKeyDown: submitOnEnter,
-      placeholder: "division",
-      style: { width: "5rem" },
-      type: "text",
-      value: division,
-    })),
-    h("td", { key: "team" }, h("input", {
-      "aria-label": `Team for ${registration.name}`,
-      maxLength: 40,
-      onBlur: () => patchText("team", team, registration.team),
-      onChange: (event) => setTeam(event.target.value),
-      onKeyDown: submitOnEnter,
-      placeholder: "pair/team",
-      style: { width: "5rem" },
-      type: "text",
-      value: team,
-    })),
-    h("td", { key: "starting-hole" }, h("input", {
-      "aria-label": `Starting hole for ${registration.name}`,
-      min: "1",
-      onBlur: patchStartingHole,
-      onChange: (event) => setStartingHole(event.target.value),
-      onKeyDown: submitOnEnter,
-      style: { width: "3.5rem" },
-      type: "number",
-      value: startingHole,
-    })),
-    h("td", { key: "checked-in" }, h("input", {
-      "aria-label": `Checked in ${registration.name}`,
-      checked: checkedIn,
-      onChange: (event) => {
-        setCheckedIn(event.target.checked);
-        dispatchRequest("gvdg:admin-registration-roster-patch-request", {
-          patch: { checked_in: event.target.checked },
-          registration: registration.source,
-        });
-      },
-      type: "checkbox",
-    })),
-    h("td", { key: "paid-entry" }, h("input", {
-      "aria-label": `Paid entry for ${registration.name}`,
-      checked: paidEntry,
-      onChange: (event) => {
-        setPaidEntry(event.target.checked);
-        dispatchRequest("gvdg:admin-registration-roster-patch-request", {
-          patch: { paid_entry: event.target.checked },
-          registration: registration.source,
-        });
-      },
-      type: "checkbox",
-    })),
-    h("td", { key: "credit" }, registration.memberId ? h("span", { className: "credit-award" }, [
-      h("input", {
-        "aria-label": `Store credit amount for ${registration.name}`,
-        key: "amount",
-        min: "0",
-        onChange: (event) => setAmountValue(event.target.value),
-        placeholder: "$",
-        step: "0.01",
-        type: "number",
-        value: amountValue,
-      }),
-      h("button", {
-        className: "admin-btn secondary",
-        key: "award",
-        onClick: () => dispatchRequest("gvdg:admin-registration-roster-credit-request", {
-          amountValue,
-          memberId: registration.memberId,
-          memberName: registration.name,
-        }),
-        type: "button",
-      }, "Award"),
-    ]) : "-"),
-    h("td", { key: "actions" }, h("button", {
-      className: "admin-btn danger",
-      onClick: requestRemove,
-      type: "button",
-    }, "Remove")),
+  const holeLabel = startingHole ? `Hole ${startingHole}` : "";
+  const meta = rosterMeta([holeLabel, division, team]) || "No hole or division yet";
+
+  return h("article", { className: "admin-roster-card", "data-admin-registration-id": registration.id }, [
+    h("div", { className: "admin-roster-face", key: "face" }, [
+      h("div", { className: "admin-roster-identity", key: "id" }, [
+        h("strong", { className: "lb-name", key: "name" }, registration.name),
+        h("span", { className: "admin-roster-meta", key: "meta" }, meta),
+      ]),
+      h("div", { className: "admin-roster-actions", key: "actions" }, [
+        h(PaidChip, { key: "paid", paid: paidEntry }),
+        h("button", {
+          "aria-label": checkedIn ? `${registration.name} is checked in` : `Check in ${registration.name}`,
+          "aria-pressed": checkedIn ? "true" : "false",
+          className: checkedIn ? "admin-btn admin-roster-checkin on" : "admin-btn admin-roster-checkin",
+          key: "checkin",
+          onClick: () => {
+            const next = !checkedIn;
+            setCheckedIn(next);
+            patchFlag("checked_in", next);
+          },
+          type: "button",
+        }, checkedIn ? "In" : "Check in"),
+      ]),
+    ]),
+    h("details", { className: "admin-roster-details", key: "details" }, [
+      h("summary", { key: "sum" }, "Details"),
+      h("div", { className: "admin-roster-fields", key: "fields" }, [
+        h("label", { key: "division" }, [
+          "Division",
+          h("input", {
+            "aria-label": `Division for ${registration.name}`,
+            maxLength: 40,
+            onBlur: () => patchText("division", division, registration.division),
+            onChange: (event) => setDivision(event.target.value),
+            onKeyDown: submitOnEnter,
+            placeholder: "division",
+            type: "text",
+            value: division,
+          }),
+        ]),
+        h("label", { key: "team" }, [
+          "Team",
+          h("input", {
+            "aria-label": `Team for ${registration.name}`,
+            maxLength: 40,
+            onBlur: () => patchText("team", team, registration.team),
+            onChange: (event) => setTeam(event.target.value),
+            onKeyDown: submitOnEnter,
+            placeholder: "pair/team",
+            type: "text",
+            value: team,
+          }),
+        ]),
+        h("label", { key: "starting-hole" }, [
+          "Start hole",
+          h("input", {
+            "aria-label": `Starting hole for ${registration.name}`,
+            min: "1",
+            onBlur: patchStartingHole,
+            onChange: (event) => setStartingHole(event.target.value),
+            onKeyDown: submitOnEnter,
+            type: "number",
+            value: startingHole,
+          }),
+        ]),
+        h("label", { className: "admin-roster-toggle", key: "paid-entry" }, [
+          h("input", {
+            "aria-label": `Paid entry for ${registration.name}`,
+            checked: paidEntry,
+            onChange: (event) => {
+              setPaidEntry(event.target.checked);
+              patchFlag("paid_entry", event.target.checked);
+            },
+            type: "checkbox",
+          }),
+          "Paid entry",
+        ]),
+        registration.memberId ? h("div", { className: "credit-award", key: "credit" }, [
+          h("input", {
+            "aria-label": `Store credit amount for ${registration.name}`,
+            key: "amount",
+            min: "0",
+            onChange: (event) => setAmountValue(event.target.value),
+            placeholder: "$",
+            step: "0.01",
+            type: "number",
+            value: amountValue,
+          }),
+          h("button", {
+            className: "admin-btn secondary",
+            key: "award",
+            onClick: () => dispatchRequest("gvdg:admin-registration-roster-credit-request", {
+              amountValue,
+              memberId: registration.memberId,
+              memberName: registration.name,
+            }),
+            type: "button",
+          }, "Award"),
+        ]) : null,
+        h("button", {
+          className: "admin-btn danger admin-roster-remove",
+          key: "remove",
+          onClick: requestRemove,
+          type: "button",
+        }, "Remove"),
+      ].filter(Boolean)),
+    ]),
   ]);
 }
 
@@ -162,21 +202,23 @@ export function ManualPlayerRow({ player }) {
     dispatchRequest("gvdg:admin-registration-manual-remove-request", { player: player.source });
   }
 
-  return h("tr", { "data-admin-registration-manual-id": player.id }, [
-    h("td", { className: "lb-name", key: "name" }, [
-      player.name,
-      h("span", { className: "al-note", key: "tag" }, " - manual"),
+  const meta = rosterMeta([player.division, player.team]) || "Walk-on";
+
+  return h("article", { className: "admin-roster-card", "data-admin-registration-manual-id": player.id }, [
+    h("div", { className: "admin-roster-face", key: "face" }, [
+      h("div", { className: "admin-roster-identity", key: "id" }, [
+        h("strong", { className: "lb-name", key: "name" }, player.name),
+        h("span", { className: "admin-roster-meta", key: "meta" }, meta),
+      ]),
+      h("div", { className: "admin-roster-actions", key: "actions" }, [
+        h("span", { className: "admin-roster-chip walk-on", key: "tag" }, "Walk-on"),
+        h("button", {
+          className: "admin-btn danger",
+          key: "remove",
+          onClick: requestRemove,
+          type: "button",
+        }, "Remove"),
+      ]),
     ]),
-    h("td", { key: "division" }, player.division || "-"),
-    h("td", { key: "team" }, player.team || "-"),
-    h("td", { key: "starting-hole" }, "-"),
-    h("td", { key: "checked-in" }, "-"),
-    h("td", { key: "paid-entry" }, "-"),
-    h("td", { key: "credit" }, "-"),
-    h("td", { key: "actions" }, h("button", {
-      className: "admin-btn danger",
-      onClick: requestRemove,
-      type: "button",
-    }, "Remove")),
   ]);
 }

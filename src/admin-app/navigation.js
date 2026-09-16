@@ -129,12 +129,17 @@ export function AdminNavigation() {
       key: "chips",
       role: "tablist",
       "aria-label": `${dock.label} sections`,
-    }, chips.map((item) => h("button", {
-      className: item.tab === activeTab ? "admin-chip on" : "admin-chip",
-      key: item.tab,
-      onClick: () => requestTab(item.tab),
-      type: "button",
-    }, tabLabel(item)))) : null,
+    }, chips.map((item) => {
+      const selected = item.tab === activeTab;
+      return h("button", {
+        "aria-selected": selected ? "true" : "false",
+        className: selected ? "admin-chip on" : "admin-chip",
+        key: item.tab,
+        onClick: () => requestTab(item.tab),
+        role: "tab",
+        type: "button",
+      }, tabLabel(item));
+    })) : null,
     h("nav", {
       "aria-label": "Admin tabs",
       className: "admin-dock",
