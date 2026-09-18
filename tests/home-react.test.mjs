@@ -31,7 +31,8 @@ test('home React feed components own events and tournaments without DOM fallback
   assert.match(panels, /export function HomeEventsFeed/);
   assert.match(panels, /export function AreaTournamentsFeed/);
   assert.match(panels, /data-react-home-events/);
-  assert.match(panels, /data-react-home-tournaments/);
+  assert.match(panels, /upcomingTournaments/);
+  assert.match(panels, /TOURNAMENT_FEED_URL\}&_cb=/);
   assert.match(panels, /safeExternalUrl/);
   assert.match(panels, /ChevronDown/);
   assert.match(panels, /MapPin/);

@@ -8,6 +8,7 @@ import {
   parseHomepageEventDate,
   parseTournamentCsv,
   parseTournamentDate,
+  upcomingTournaments,
 } from '../src/shared/home-feed-parse.js';
 
 test('isClubEvent flags club business but keeps tournaments/league rounds', () => {
@@ -29,9 +30,45 @@ test('parseTournamentCsv maps sheet columns into tournament cards', () => {
 });
 
 test('parseTournamentDate handles short month dates', () => {
-  assert.deepEqual(parseTournamentDate('Aug 3, 2026'), { month: 'Aug', day: 3, year: '2026' });
-  assert.deepEqual(parseTournamentDate('Aug 3', new Date(2026, 0, 1)), { month: 'Aug', day: 3, year: 2026 });
+  const now = new Date(2026, 8, 18);
+  const dated = parseTournamentDate('Aug 3, 2026', now);
+  assert.equal(dated.month, 'Aug');
+  assert.equal(dated.day, 3);
+  assert.equal(dated.year, 2026);
+  assert.equal(dated.isPast, true);
+  const upcoming = parseTournamentDate('Oct 23, 2026', now);
+  assert.equal(upcoming.isPast, false);
+  const undated = parseTournamentDate('Aug 3', new Date(2026, 0, 1));
+  assert.equal(undated.month, 'Aug');
+  assert.equal(undated.day, 3);
+  assert.equal(undated.year, 2026);
   assert.equal(parseTournamentDate('TBD'), null);
+});
+
+test('upcomingTournaments hides past dates and sorts soonest first', () => {
+  const now = new Date(2026, 8, 18);
+  const list = upcomingTournaments([
+    { date: 'May 24, 2026', name: 'Ladies Craven Chains' },
+    { date: 'Oct 23, 2026', name: 'Down East Players Cup' },
+    { date: 'Sep 12, 2026', name: 'Joel Smith Memorial' },
+    { date: 'Sep 19, 2026', name: 'The Global at Creekside' },
+    { date: 'Dec 12, 2026', name: 'Scorpion Match Play' },
+    { date: 'Sep 18, 2026', name: 'Today still counts' },
+  ], now);
+  assert.deepEqual(list.map((row) => row.name), [
+    'Today still counts',
+    'The Global at Creekside',
+    'Down East Players Cup',
+    'Scorpion Match Play',
+  ]);
+});
+
+test('upcomingTournaments drops a fully elapsed sheet', () => {
+  const now = new Date(2026, 8, 18);
+  assert.deepEqual(upcomingTournaments([
+    { date: 'May 24, 2026', name: 'Ladies Craven Chains' },
+    { date: 'Sep 12, 2026', name: 'Joel Smith Memorial' },
+  ], now), []);
 });
 
 test('parseHomepageEventCsv filters inactive and blank events', () => {

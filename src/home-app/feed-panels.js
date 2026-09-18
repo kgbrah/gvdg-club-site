@@ -8,6 +8,7 @@ import {
   parseHomepageEventDate,
   parseTournamentCsv,
   parseTournamentDate,
+  upcomingTournaments,
 } from "../shared/home-feed-parse.js";
 
 const h = React.createElement;
@@ -164,9 +165,9 @@ export function AreaTournamentsFeed() {
     let active = true;
     async function load() {
       try {
-        const response = await fetch(TOURNAMENT_FEED_URL);
+        const response = await fetch(`${TOURNAMENT_FEED_URL}&_cb=${Date.now()}`);
         if (!response.ok) throw new Error("feed_error");
-        const tournaments = parseTournamentCsv(await response.text());
+        const tournaments = upcomingTournaments(parseTournamentCsv(await response.text()));
         if (active) setState({ status: tournaments.length ? "ready" : "empty", tournaments });
       } catch (error) {
         if (active) setState({ status: "error", tournaments: [] });
