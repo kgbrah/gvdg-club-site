@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Live Scoring · Greenville Disc Golf Club</title>
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=173">
+    <link rel="manifest" href="site.webmanifest?v=174">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <script src="pwa.js" defer></script>
     <link rel="stylesheet" href="tokens.css">
@@ -286,6 +286,7 @@
         .hole-map-north { fill: white; font: 700 13px Archivo, sans-serif; paint-order: stroke; stroke: black; stroke-width: 3; }
         .hole-map-player { pointer-events: none; }
         .hole-map-player-dot { fill: var(--primary-strong); stroke: white; stroke-width: 2; }
+        .hole-map-player.self .hole-map-player-dot { fill: var(--primary); stroke: white; }
         .hole-map-player-label { fill: white; stroke: none; font: 700 10px Archivo, sans-serif; text-anchor: middle; }
         .hole-map-compact .hole-map-player-label { font-size: 8px; }
         .hole-map-chips { position: absolute; inset: 0; pointer-events: none; }
@@ -377,6 +378,10 @@
             color: var(--text-primary);
             pointer-events: none;
         }
+        .hole-range-hud-btn {
+            pointer-events: auto; cursor: pointer; text-align: left; font: inherit;
+            appearance: none; -webkit-appearance: none;
+        }
         .hole-range-hud strong {
             display: block; font-size: 1.22rem; line-height: 1.05; font-weight: 800; letter-spacing: -0.03em;
         }
@@ -389,6 +394,10 @@
         .hole-range-hud-len {
             display: block; margin-top: 0.1rem; font-size: 0.58rem; font-style: normal; font-weight: 700;
             text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted);
+        }
+        .hole-range-hud-gps {
+            display: block; margin-top: 0.12rem; font-size: 0.58rem; font-style: normal; font-weight: 800;
+            text-transform: uppercase; letter-spacing: 0.04em; color: var(--primary);
         }
         .score-glove-stage .hole-map-card,
         .score-glove-stage .hole-map-compact {
@@ -665,6 +674,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=173"></script>
+    <script type="module" src="score-app/score-app.js?v=174"></script>
 </body>
 </html>

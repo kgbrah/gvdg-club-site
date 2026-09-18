@@ -68,6 +68,20 @@ export function rangeHud({ from, to, mode, holeFt } = {}) {
 
 export const GPS_REMAINING_MAX_FT = 2500;
 
+export function gpsHudPrompt(status) {
+  if (status === "ready") return "";
+  if (status === "denied") return "GPS blocked";
+  if (status === "watching") return "Finding GPS…";
+  if (status === "unavailable") return "GPS unavailable";
+  return "Tap for GPS";
+}
+
+export function withSelfLocation(players, gps) {
+  const rows = Array.isArray(players) ? players.slice() : [];
+  if (!gps || !Number.isFinite(gps.lat) || !Number.isFinite(gps.lng)) return rows;
+  return rows.concat([{ initials: "ME", lat: gps.lat, lng: gps.lng, relClass: "self" }]);
+}
+
 export function currentRangeHud(hole, gps, measure) {
   const holeFt = finite(hole && hole.distance_ft);
   const holeHud = rangeHud({ holeFt, mode: "hole" });

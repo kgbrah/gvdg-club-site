@@ -205,7 +205,7 @@ function PlayerMark(props) {
   return h(
     "g",
     {
-      className: "hole-map-player",
+      className: "hole-map-player" + (props.relClass === "self" ? " self" : ""),
       transform: `translate(${props.x} ${props.y})`,
     },
     [
@@ -301,6 +301,7 @@ export function HoleMap(props) {
             compact,
             initials: player.initials,
             key: `player-${player.key}`,
+            relClass: player.relClass,
             x: player.x,
             y: player.y,
           })),

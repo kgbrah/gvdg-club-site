@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Eye, Ruler, Settings2, Share2, UserPlus, X } from "lucide-react";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { HoleMap } from "../shared/hole-map.js";
-import { currentRangeHud } from "../shared/hole-map-model.js";
+import { currentRangeHud, gpsHudPrompt, withSelfLocation } from "../shared/hole-map-model.js";
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
 import { nextHoleScore, relClass, relText } from "./score-view-model.js";
@@ -120,42 +120,72 @@ function holeHasMap(hole) {
 
 function useDeviceFix() {
   const [fix, setFix] = React.useState(null);
-  React.useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) return undefined;
-    const id = navigator.geolocation.watchPosition(
+  const [status, setStatus] = React.useState("idle");
+  const watchId = React.useRef(null);
+
+  const enableGps = React.useCallback(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setStatus("unavailable");
+      return;
+    }
+    if (watchId.current != null) {
+      try { navigator.geolocation.clearWatch(watchId.current); } catch {
+        /* watch may already be gone */
+      }
+      watchId.current = null;
+    }
+    setStatus("watching");
+    watchId.current = navigator.geolocation.watchPosition(
       (pos) => {
         const lat = pos.coords && pos.coords.latitude;
         const lng = pos.coords && pos.coords.longitude;
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
         setFix({ lat, lng });
+        setStatus("ready");
       },
-      () => {},
+      (err) => {
+        setFix(null);
+        setStatus(err && err.code === 1 ? "denied" : "idle");
+      },
       { enableHighAccuracy: true, maximumAge: 4000, timeout: 12000 },
     );
+  }, []);
+
+  React.useEffect(() => {
+    enableGps();
     return () => {
-      try { navigator.geolocation.clearWatch(id); } catch {
-        /* watch may already be gone */
+      if (watchId.current != null) {
+        try { navigator.geolocation.clearWatch(watchId.current); } catch {
+          /* watch may already be gone */
+        }
+        watchId.current = null;
       }
     };
-  }, []);
-  return fix;
+  }, [enableGps]);
+  return { enableGps, fix, status };
 }
 
 function RangeHud(props) {
   if (!props.hud) return null;
   const circleClass = props.hud.circle === "C1" ? " in-c1" : props.hud.circle === "C2" ? " in-c2" : "";
   const holeFt = props.hud.mode !== "hole" && Number.isFinite(props.hud.holeFt) ? props.hud.holeFt : null;
-  return h("div", {
+  const prompt = gpsHudPrompt(props.gpsStatus);
+  const clickable = Boolean(prompt && props.onEnableGps);
+  return h(clickable ? "button" : "div", {
+    "aria-label": clickable ? prompt : undefined,
     "aria-live": "polite",
-    className: "hole-range-hud" + circleClass,
+    className: "hole-range-hud" + circleClass + (clickable ? " hole-range-hud-btn" : ""),
     key: "range",
-    role: "status",
+    role: clickable ? undefined : "status",
+    type: clickable ? "button" : undefined,
+    onClick: clickable ? props.onEnableGps : undefined,
   }, [
     h("strong", { key: "ft" }, props.hud.ft + " ft"),
     h("span", { key: "cap" }, props.hud.caption),
     holeFt != null
       ? h("em", { className: "hole-range-hud-len", key: "len" }, holeFt + " ft hole")
       : null,
+    prompt ? h("em", { className: "hole-range-hud-gps", key: "gps" }, prompt) : null,
   ]);
 }
 
@@ -176,11 +206,11 @@ function HoleMedia(props) {
           key: "map-card",
           measureFrom: props.measureFrom,
           measureTo: props.measureTo,
-          players: props.playerLocations,
+          players: withSelfLocation(props.playerLocations, props.gpsFix),
           windFromDeg: props.windFromDeg,
           onMapPoint: props.onMapPoint,
         }),
-        h(RangeHud, { hud: props.rangeHud }),
+        h(RangeHud, { gpsStatus: props.gpsStatus, hud: props.rangeHud, onEnableGps: props.onEnableGps }),
       ])
       : h("div", { className: "hole-media-empty", key: "empty" }, "No map for this hole yet"),
     hasSign
@@ -612,24 +642,24 @@ export function ScorecardView(props) {
   const [padRow, setPadRow] = React.useState(null);
   const [measure, setMeasure] = React.useState(null);
   const gps = useDeviceFix();
-  const hud = currentRangeHud(props.hole, gps, measure);
+  const hud = currentRangeHud(props.hole, gps.fix, measure);
   const measuring = Boolean(measure);
-  const measureTo = measure && (measure.b || gps);
+  const measureTo = measure && (measure.b || gps.fix);
   function onMeasure() {
     if (measure && measure.b) {
       setMeasure(null);
       return;
     }
     if (measure && measure.a) {
-      if (gps) {
-        setMeasure({ a: measure.a, b: gps });
+      if (gps.fix) {
+        setMeasure({ a: measure.a, b: gps.fix });
         return;
       }
       setMeasure({ a: measure.a, awaitingTap: true });
       return;
     }
-    if (gps) {
-      setMeasure({ a: gps });
+    if (gps.fix) {
+      setMeasure({ a: gps.fix });
       return;
     }
     setMeasure({ awaitingTap: true });
@@ -654,9 +684,12 @@ export function ScorecardView(props) {
         props.yourTurn ? h("p", { className: "your-turn-hint", key: "turn" }, props.yourTurn) : null,
         h(HoleMedia, {
           ...props,
+          gpsFix: gps.fix,
+          gpsStatus: gps.status,
           measureFrom: measure && measure.a,
           measureTo,
           rangeHud: hud,
+          onEnableGps: gps.enableGps,
           onMapPoint: measuring ? onMapPoint : undefined,
         }),
         h(RoundTools, {
