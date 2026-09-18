@@ -28,6 +28,10 @@ function haversineFt(a, b) {
 
 export const CIRCLE1_M = 10;
 export const CIRCLE2_M = 20;
+export const CIRCLE1_FT = CIRCLE1_M * 3.28084;
+export const CIRCLE2_FT = CIRCLE2_M * 3.28084;
+const FOCUS_C1_PAD_M = 16;
+const FOCUS_C2_PAD_M = 28;
 
 export function remainingFt(from, to) {
   const a = holePoint(from);
@@ -44,6 +48,19 @@ export function puttingCircle(from, to) {
   if (meters <= CIRCLE1_M) return "C1";
   if (meters <= CIRCLE2_M) return "C2";
   return null;
+}
+
+export function mapFocusFromRemaining(ft) {
+  const n = finite(ft);
+  if (n == null) return "hole";
+  if (n <= CIRCLE1_FT) return "c1";
+  if (n <= CIRCLE2_FT) return "c2";
+  return "hole";
+}
+
+export function resolveMapFocus(userFocus, remainingFt) {
+  if (userFocus === "hole" || userFocus === "c1" || userFocus === "c2") return userFocus;
+  return mapFocusFromRemaining(remainingFt);
 }
 
 export function rangeHud({ from, to, mode, holeFt } = {}) {
@@ -83,6 +100,12 @@ export function gpsErrorPolicy(code, hasFix) {
     retryMs: 2000,
     status: hasFix ? "ready" : "watching",
   };
+}
+
+export function nextTeeHud(gps, nextHole) {
+  const ft = remainingFt(gps, nextHole && nextHole.tee);
+  if (ft == null || ft <= 0 || ft > GPS_REMAINING_MAX_FT) return null;
+  return { caption: "next tee", ft };
 }
 
 export function gpsHudPrompt(status) {
@@ -164,6 +187,25 @@ function paddedBounds(tee, basket) {
   };
 }
 
+function focusBounds(basket, radiusMeters) {
+  const meters = finite(radiusMeters) || FOCUS_C2_PAD_M;
+  const dLat = meters / 111320;
+  const cosLat = Math.max(Math.cos(basket.lat * Math.PI / 180), 0.2);
+  const dLng = meters / (111320 * cosLat);
+  return {
+    minLat: basket.lat - dLat,
+    maxLat: basket.lat + dLat,
+    minLng: basket.lng - dLng,
+    maxLng: basket.lng + dLng,
+  };
+}
+
+function boundsForFocus(tee, basket, focus) {
+  if (focus === "c1") return focusBounds(basket, FOCUS_C1_PAD_M);
+  if (focus === "c2") return focusBounds(basket, FOCUS_C2_PAD_M);
+  return paddedBounds(tee, basket);
+}
+
 export function satelliteImageUrl(bounds, width, height) {
   if (!bounds) return "";
   const spanLng = bounds.maxLng - bounds.minLng;
@@ -230,7 +272,8 @@ export function projectHoleMap(hole, options = {}) {
 
   const width = finite(options.width) || 640;
   const height = finite(options.height) || 360;
-  const bounds = paddedBounds(tee, basket);
+  const focus = options.focus === "c1" || options.focus === "c2" ? options.focus : "hole";
+  const bounds = boundsForFocus(tee, basket, focus);
 
   const teePt = { ...mapXy(bounds, width, height, tee.lng, tee.lat), lat: tee.lat, lng: tee.lng, label: tee.label || "Tee" };
   const basketPt = { ...mapXy(bounds, width, height, basket.lng, basket.lat), lat: basket.lat, lng: basket.lng, label: basket.label || "Basket" };
@@ -240,6 +283,7 @@ export function projectHoleMap(hole, options = {}) {
     width,
     height,
     bounds,
+    focus,
     satelliteUrl: satelliteImageUrl(bounds, width, height),
     tee: teePt,
     basket: basketPt,

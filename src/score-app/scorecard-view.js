@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Eye, Ruler, Settings2, Share2, UserPlus, X } from "lucide-react";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { HoleMap } from "../shared/hole-map.js";
-import { currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, withSelfLocation } from "../shared/hole-map-model.js";
+import { currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, nextTeeHud, resolveMapFocus, withSelfLocation } from "../shared/hole-map-model.js";
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
 import { nextHoleScore, relClass, relText } from "./score-view-model.js";
@@ -214,6 +214,7 @@ function RangeHud(props) {
   const holeFt = props.hud.mode !== "hole" && Number.isFinite(props.hud.holeFt) ? props.hud.holeFt : null;
   const prompt = gpsHudPrompt(props.gpsStatus);
   const clickable = Boolean(prompt && props.onEnableGps);
+  const nextTee = props.nextTee;
   return h(clickable ? "button" : "div", {
     "aria-label": clickable ? prompt : undefined,
     "aria-live": "polite",
@@ -227,6 +228,9 @@ function RangeHud(props) {
     h("span", { key: "cap" }, props.hud.caption),
     holeFt != null
       ? h("em", { className: "hole-range-hud-len", key: "len" }, holeFt + " ft hole")
+      : null,
+    nextTee
+      ? h("em", { className: "hole-range-hud-next", key: "next" }, nextTee.ft + " ft next tee")
       : null,
     prompt ? h("em", { className: "hole-range-hud-gps", key: "gps" }, prompt) : null,
   ]);
@@ -245,15 +249,24 @@ function HoleMedia(props) {
       ? h("div", { className: "hole-media-map-wrap", key: "map-wrap" }, [
         h(HoleMap, {
           compact: true,
+          focus: props.mapFocus,
           hole: props.hole,
           key: "map-card",
+          lie: props.lie,
           measureFrom: props.measureFrom,
           measureTo: props.measureTo,
           players: withSelfLocation(props.playerLocations, props.gpsFix),
           windFromDeg: props.windFromDeg,
+          onFocus: props.onMapFocus,
           onMapPoint: props.onMapPoint,
+          onMarkLie: props.onMarkLie,
         }),
-        h(RangeHud, { gpsStatus: props.gpsStatus, hud: props.rangeHud, onEnableGps: props.onEnableGps }),
+        h(RangeHud, {
+          gpsStatus: props.gpsStatus,
+          hud: props.rangeHud,
+          nextTee: props.nextTee,
+          onEnableGps: props.onEnableGps,
+        }),
       ])
       : h("div", { className: "hole-media-empty", key: "empty" }, "No map for this hole yet"),
     hasSign
@@ -684,10 +697,24 @@ function ConfirmScoresSheet(props) {
 export function ScorecardView(props) {
   const [padRow, setPadRow] = React.useState(null);
   const [measure, setMeasure] = React.useState(null);
+  const [lie, setLie] = React.useState(null);
+  const [pinnedFocus, setPinnedFocus] = React.useState(null);
   const gps = useDeviceFix();
   const hud = currentRangeHud(props.hole, gps.fix, measure);
+  const remaining = hud && hud.mode === "remaining" ? hud.ft : null;
+  const mapFocus = resolveMapFocus(pinnedFocus, remaining);
   const measuring = Boolean(measure);
   const measureTo = measure && (measure.b || gps.fix);
+  const showNextTee = Boolean(hud && (hud.circle === "C1" || hud.circle === "C2") && hud.mode === "remaining");
+  const nextTee = showNextTee ? nextTeeHud(gps.fix, props.nextHole) : null;
+  const holeNumber = props.hole && props.hole.hole;
+
+  React.useEffect(() => {
+    setMeasure(null);
+    setLie(null);
+    setPinnedFocus(null);
+  }, [holeNumber]);
+
   function onMeasure() {
     if (measure && measure.b) {
       setMeasure(null);
@@ -719,6 +746,20 @@ export function ScorecardView(props) {
     }
     setMeasure(null);
   }
+  function onMapFocus(id) {
+    setPinnedFocus((current) => (current === id ? null : id));
+  }
+  function onMarkLie() {
+    if (lie) {
+      setLie(null);
+      return;
+    }
+    if (gps.fix) {
+      setLie(gps.fix);
+      return;
+    }
+    gps.enableGps();
+  }
   const measureLabel = measure && measure.b ? "Clear" : measure && measure.a ? "Mark" : "Measure";
   return h(React.Fragment, null, [
     h("div", { className: "score-glove-layout", key: "glove" }, [
@@ -729,11 +770,16 @@ export function ScorecardView(props) {
           ...props,
           gpsFix: gps.fix,
           gpsStatus: gps.status,
+          lie,
+          mapFocus,
           measureFrom: measure && measure.a,
           measureTo,
+          nextTee,
           rangeHud: hud,
           onEnableGps: gps.enableGps,
+          onMapFocus,
           onMapPoint: measuring ? onMapPoint : undefined,
+          onMarkLie,
         }),
         h(RoundTools, {
           ...props,

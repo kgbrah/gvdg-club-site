@@ -286,6 +286,13 @@ export function playOrderStep(holes, holeIdx, startingHole, delta) {
   return order[next];
 }
 
+export function nextPlayHole(holes, holeIdx, startingHole) {
+  const nextIdx = playOrderStep(holes, holeIdx, startingHole, "next");
+  if (nextIdx === holeIdx) return null;
+  const list = Array.isArray(holes) ? holes : [];
+  return list[nextIdx] || null;
+}
+
 export function activeHoleIndex({ holes, startingHole, isHoleComplete }) {
   const list = Array.isArray(holes) ? holes : [];
   if (!list.length) return 0;
@@ -566,6 +573,7 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
     holeGrid,
     holeMeta: "Par " + hole.par + (hole.distance_ft ? " · " + hole.distance_ft + " ft" : "") + (hole.overridden ? " (today)" : "") + ctpMeta,
     matchStatus: isMatchplayScoring(state) ? matchStatusText(state) : "",
+    nextHole: nextPlayHole(state.holes, state.holeIdx, startHole),
     pots,
     potsAceHint: aceHint({ hole: hole && hole.hole, pots, scores: holeScores }),
     roundCode,
