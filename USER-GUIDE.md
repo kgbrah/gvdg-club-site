@@ -174,10 +174,10 @@ The **score app** (tap **Live Scoring**, or open a round link someone shares) le
 - **Event round:** for club games, a helper starts it, and players get added from who signed up.
 
 ### 🔢 Keep score, hole by hole
-1. You see one hole at a time with a big number. Score buttons sit near the top so you can tap them without scrolling past the map.
+1. You see **one hole at a time**. The map fills the top of the screen. Scores sit in the **bottom third** so you can tap them with one thumb.
 2. Tap **−** or **+** to change a score, or tap the number itself for a pad (birdie / par / bogey, or 1–10).
-3. Tap the arrow **›** to go to the next hole, or **‹** to go back. On shotgun start, those arrows follow the holes in play order.
-4. Map and tee-sign pictures hide behind chips. Tap **Map** or **Tee sign** only when you want them.
+3. Tap the arrow **›** under the scores (right thumb) to go to the next hole, or **‹** to go back. On shotgun start, those arrows follow the holes in play order.
+4. The map stays on. Tap **Tee sign** on the map if you want the picture.
 - **Important:** the official score is the one the card **agrees on**. If two people type different numbers, the hole stays blank until they match. One phone on the card is enough. 🤝
 
 ### 🌦️ Check round weather

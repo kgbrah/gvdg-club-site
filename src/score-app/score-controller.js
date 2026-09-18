@@ -616,7 +616,6 @@ export function startScoreApp(options) {
             renderScoreBody('scorecard', {
                 ...scorecardState,
                 onAddPlayer: addGuestPrompt,
-                onJumpHole: function (index) { S.holeIdx = index; renderHole(); },
                 onManagePlayers: openManagePlayers,
                 onNext: function () { S.holeIdx = playOrderStep(S.holes, S.holeIdx, startingHoleForState(S), 1); renderHole(); },
                 onPrevious: function () { S.holeIdx = playOrderStep(S.holes, S.holeIdx, startingHoleForState(S), -1); renderHole(); },
