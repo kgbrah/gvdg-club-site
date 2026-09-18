@@ -11,6 +11,7 @@ import { canCastCtpVote, dropLiveCtp, recordCtpVote, type LiveCtpStore } from ".
 import { isLiveFormatError, normalizeLiveScoringConfig, normalizePairLabel, type LiveScoringConfig } from "./live-format.js";
 import { finalizeLiveEvent } from "./live-finalize.js";
 import { isLoggedInMemberId, locationMoved, locationOnCourse, parseLocationBody, type LivePlayerLocation } from "./live-locations.js";
+import { sanitizeDiscColor } from "./disc-color-routes.js";
 import { parseThrowsBody } from "./play-stats.js";
 import { updateLivePairs } from "./live-pairs.js";
 import { mineData, publicSnapshot } from "./live-snapshot.js";
@@ -521,7 +522,11 @@ export class LiveEventDO {
       if (!canEnterScorecard(player, authMember) && index !== meIndex) return j({ error: "wrong_scorer" }, 403);
     }
     player.throws = { ...(player.throws || {}), [parsed.hole]: parsed.throws };
+    player.throwAt = Date.now();
+    const discColor = sanitizeDiscColor((body as { discColor?: unknown }).discColor);
+    if (discColor) player.discColor = discColor;
     await this.persist();
+    this.broadcast();
     return j({ ok: true, hole: parsed.hole, throws: parsed.throws.length });
   }
 

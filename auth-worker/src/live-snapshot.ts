@@ -7,6 +7,27 @@ import type { LiveMeta } from "./live-types.js";
 
 const EMPTY_LOCATIONS: ReadonlyMap<number, LivePlayerLocation> = new Map();
 
+export function publicPlayerThrows(
+  raw: PlayerState["throws"] | null | undefined,
+): Record<number, { lat: number; lng: number; n: number }[]> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<number, { lat: number; lng: number; n: number }[]> = {};
+  for (const [key, rows] of Object.entries(raw)) {
+    const hole = Number(key);
+    if (!Number.isInteger(hole) || hole < 1 || hole > 36) continue;
+    if (!Array.isArray(rows) || !rows.length) continue;
+    const throws = rows.slice(0, 18).flatMap((row, index) => {
+      const lat = Number((row as { lat?: unknown } | null)?.lat);
+      const lng = Number((row as { lng?: unknown } | null)?.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return [];
+      return [{ lat: Number(lat.toFixed(5)), lng: Number(lng.toFixed(5)), n: Number((row as { n?: unknown }).n) || index + 1 }];
+    });
+    if (throws.length) out[hole] = throws;
+  }
+  return out;
+}
+
 export function publicSnapshot(
   meta: LiveMeta | null,
   players: PlayerState[],
@@ -58,6 +79,9 @@ export function publicSnapshot(
         startingHole: player.startingHole ?? null,
         scores: player.scores,
         scorecards: player.scorecards ?? {},
+        throws: publicPlayerThrows(player.throws),
+        discColor: player.discColor ?? null,
+        throwAt: Number.isFinite(player.throwAt) ? player.throwAt : null,
       })),
     conflicts: issues.conflicts,
     missing: issues.missing,

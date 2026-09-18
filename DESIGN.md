@@ -738,12 +738,12 @@ Spacing follows a 4px base through rem values.
 
 ### Score Watch View
 
-- Structure: React-owned spectator screen with a live banner, optional weather, leaderboard table, copy-watch-link, and keep-score action mounted in the score app shell; the score controller fetches the public live snapshot and never joins the card.
+- Structure: React-owned spectator screen with a live banner, optional weather, leaderboard table, copy-watch-link, and keep-score action mounted in the score app shell; the score controller fetches the public live snapshot and never joins the card. The hole map shows the followed player's marked lies and flies their disc as they mark or score.
 - Variants: live event watch, casual-round watch by code, finished round, archived casual round after the live object is gone, empty standings, and connection/final status.
-- Spacing: reuses `.card`, `.section`, `.btn`, `.weather-strip`, and `.lb` primitives with a compact `.watch-banner` and `.watch-actions` row.
-- States: `?watch=1` skips member login and `/join`; WebSocket snapshots rerender the table; if the live object is gone, `GET /rounds/:code/live` serves durable D1 results as a final snapshot. Conflict alerts stay off for spectators.
-- Accessibility: copy and keep-score are real controls; the live banner exposes connection text; the leaderboard table keeps rank/player/thru/result headers.
-- Motion: static layout; only existing button press feedback applies.
+- Spacing: reuses `.card`, `.section`, `.btn`, `.weather-strip`, and `.lb` primitives with a compact `.watch-banner` and `.watch-actions` row. Follow chips sit under the hole map when more than one player has marked.
+- States: `?watch=1` skips member login and `/join`; WebSocket snapshots rerender the table, lie marks, and disc flights; if the live object is gone, `GET /rounds/:code/live` serves durable D1 results as a final snapshot. Conflict alerts stay off for spectators. Auto-follow the most recently marked player; tapping a chip pins that player's lies.
+- Accessibility: copy and keep-score are real controls; the live banner exposes connection text; the leaderboard table keeps rank/player/thru/result headers; follow chips expose `aria-pressed`.
+- Motion: the followed player's disc flies on the watch hole map the same way it does on the scorecard (tee or last lie → new mark, then into the basket on a score), using that player's saved plastic. Respect `prefers-reduced-motion`.
 
 ### Scorecard View
 

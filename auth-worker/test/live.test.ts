@@ -899,6 +899,39 @@ describe("LiveEventDO WebSocket handling", () => {
     expect(cleared.status).toBe(200);
     expect(server.sent.at(-1)).toContain('"scores":{}');
   });
+
+  it("broadcasts marked lies and disc color on the public snapshot", async () => {
+    const state = new FakeState({
+      meta: { eventId: 7, holes: [{ hole: 1, par: 3 }], status: "live", startedAt: "2026-06-26T00:00:00Z" },
+      players: [{ memberId: "m_jane", name: "Jane", division: null, startingHole: null, scores: {} }],
+    });
+    const client = new FakeSocket();
+    const server = new FakeSocket();
+    vi.stubGlobal("Response", class {
+      readonly status: number;
+
+      constructor(_body: BodyInit | null = null, init?: ResponseInit) {
+        this.status = init?.status ?? 200;
+      }
+    });
+    vi.stubGlobal("WebSocketPair", function WebSocketPair() {
+      return { 0: client, 1: server };
+    });
+    const live = new LiveEventDO(state, { DB: db });
+    await live.fetch(new Request("https://do/ws"));
+    const posted = await live.fetch(new Request("https://do/throws", {
+      method: "POST",
+      headers: { "X-Auth-Member": "m_jane" },
+      body: JSON.stringify({ hole: 1, throws: [{ lat: 35.6, lng: -77.37 }], discColor: "tiedye" }),
+    }));
+    expect(posted.status).toBe(200);
+    const last = JSON.parse(String(server.sent.at(-1) || "{}")) as {
+      players?: { throws?: Record<string, { lat: number; lng: number; n: number }[]>; discColor?: string | null; throwAt?: number | null }[];
+    };
+    expect(last.players?.[0]?.throws?.["1"]).toEqual([{ lat: 35.6, lng: -77.37, n: 1 }]);
+    expect(last.players?.[0]?.discColor).toBe("tiedye");
+    expect(Number(last.players?.[0]?.throwAt)).toBeGreaterThan(0);
+  });
 });
 
 describe("LiveEventDO live CTP claims", () => {

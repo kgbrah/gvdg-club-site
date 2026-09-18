@@ -333,6 +333,10 @@ export function startScoreApp(options) {
             const scorerIndex = currentScorerIndex();
             const body = { hole: hole, throws: throws || [] };
             if (Number.isInteger(scorerIndex)) body.scorerIndex = scorerIndex;
+            try {
+                const discColor = document.documentElement && document.documentElement.getAttribute("data-disc-color");
+                if (discColor) body.discColor = discColor;
+            } catch (e) {}
             void api(LIVE + '/throws', { method: 'POST', body: body });
         }
         async function postScore(row, hole, strokes) {

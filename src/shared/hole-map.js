@@ -412,10 +412,11 @@ export function HoleMap(props) {
     : "";
   const teePt = map && map.tee;
   const basketPt = map && map.basket;
+  const throwsKey = props.throwsKey == null ? "" : String(props.throwsKey);
   React.useEffect(() => {
     setFlight(null);
     throwCountRef.current = null;
-  }, [holeKey]);
+  }, [holeKey, throwsKey]);
   React.useEffect(() => {
     if (!map || !teePt) return;
     const marks = throws.map((row, index) => {
@@ -564,6 +565,7 @@ export function HoleMap(props) {
           )),
           h(FlyingDisc, {
             compact,
+            discColor: props.discColor,
             flight,
             key: flight ? flight.id : "disc-idle",
             onDone: () => setFlight(null),

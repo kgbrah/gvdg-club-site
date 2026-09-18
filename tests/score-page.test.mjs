@@ -751,7 +751,8 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(holeMap, /flightPoint/);
   assert.match(holeMap, /requestAnimationFrame/);
   assert.match(holeMap, /hole-map-disc-flight/);
-  assert.match(holeMap, /scoreFlight/);
+  assert.match(holeMap, /props\.throwsKey/);
+  assert.match(holeMap, /discColor: props\.discColor/);
   assert.match(holeMap, /hole-map-throw-line/);
   assert.match(holeMap, /Lie /);
   assert.match(holeMap, /Undo/);
@@ -761,6 +762,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /holeStatChips/);
   assert.match(scorecard, /onThrows/);
   assert.match(controller, /LIVE \+ '\/throws'/);
+  assert.match(controller, /data-disc-color/);
   assert.match(scorecard, /lastThrowHud/);
   assert.match(html, /hole-map-lie-actions/);
   assert.match(html, /hole-map-disc-flight/);
@@ -1069,6 +1071,10 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.match(watch, /followLive/);
   assert.match(watch, /function WatchTeeSign/);
   assert.match(watch, /playerLocations/);
+  assert.match(watch, /watchFollowPlayer/);
+  assert.match(watch, /throwsKey/);
+  assert.match(watch, /scoreFlight/);
+  assert.match(watch, /function WatchFollowBar/);
   assert.match(watch, /function WatchMatchCards/);
   assert.match(watch, /function WatchStrokeStrip/);
   assert.match(watch, /watchHoleScoreChips/);
@@ -1087,6 +1093,22 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.match(controller, /function locationStamp/);
   const watchBoot = controller.slice(controller.indexOf('async function loadWatch'), controller.indexOf('function watchRoundCode'));
   assert.doesNotMatch(watchBoot, /\/join/);
+});
+
+test("watch follow prefers the most recently marked player on the hole", async () => {
+  const {
+    watchFollowPlayer,
+    watchHoleThrows,
+  } = await import(new URL("../src/score-app/score-view-model.js", import.meta.url));
+  const players = [
+    { index: 0, name: "KG", throwAt: 10, throws: { 1: [{ lat: 35.1, lng: -77.1, n: 1 }] } },
+    { index: 1, name: "JR", throwAt: 20, throws: { 1: [{ lat: 35.2, lng: -77.2, n: 1 }, { lat: 35.21, lng: -77.21, n: 2 }] } },
+  ];
+  const latest = watchFollowPlayer({ players, hole: 1 });
+  assert.equal(latest && latest.name, "JR");
+  assert.equal(watchHoleThrows(latest, 1).length, 2);
+  const pinned = watchFollowPlayer({ players, hole: 1, followIndex: 0 });
+  assert.equal(pinned && pinned.name, "KG");
 });
 
 test('live scoring paints the signed-in player dashboard theme onto the score page', () => {

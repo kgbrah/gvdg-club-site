@@ -154,6 +154,70 @@ export function watchStrokeHoleChips({ hole, par, players, scoreTargets }) {
   return chips;
 }
 
+export function watchHoleThrows(player, hole) {
+  if (!player || player.throws == null) return [];
+  const rows = player.throws[hole] || player.throws[String(hole)];
+  return Array.isArray(rows) ? rows : [];
+}
+
+export function watchThrowSignature(player, hole) {
+  const rows = watchHoleThrows(player, hole);
+  return String(player && player.index) + ":" + rows.map((row) => (row && row.n) + "@" + (row && row.lat) + "," + (row && row.lng)).join("|");
+}
+
+export function watchScoreSignature(player, hole) {
+  if (!player) return "";
+  const scores = player.scores || {};
+  const strokes = Object.prototype.hasOwnProperty.call(scores, hole)
+    ? scores[hole]
+    : scores[String(hole)];
+  return String(player.index) + ":" + (strokes == null ? "" : String(strokes));
+}
+
+export function watchFollowOptions({ players, hole }) {
+  const list = Array.isArray(players) ? players : [];
+  const seen = new Set();
+  const options = [];
+  list.forEach((player) => {
+    if (!player || seen.has(player.index)) return;
+    const throws = watchHoleThrows(player, hole);
+    if (!throws.length && !Number(player.throwAt)) return;
+    seen.add(player.index);
+    options.push({
+      index: player.index,
+      name: player.name || ("Player " + (player.index + 1)),
+      throws,
+      discColor: player.discColor || null,
+      throwAt: Number(player.throwAt) || 0,
+    });
+  });
+  options.sort((a, b) => b.throwAt - a.throwAt || a.index - b.index);
+  return options;
+}
+
+export function watchFollowPlayer({ players, hole, followIndex }) {
+  const list = Array.isArray(players) ? players : [];
+  if (Number.isInteger(followIndex)) {
+    const pinned = list.find((player) => player && player.index === followIndex);
+    if (pinned) return pinned;
+  }
+  const onHole = watchFollowOptions({ players: list, hole });
+  if (onHole.length) {
+    const index = onHole[0].index;
+    return list.find((player) => player && player.index === index) || null;
+  }
+  let best = null;
+  let bestAt = -1;
+  list.forEach((player) => {
+    const at = Number(player && player.throwAt) || 0;
+    if (at > bestAt) {
+      best = player;
+      bestAt = at;
+    }
+  });
+  return best;
+}
+
 export function watchMatchCards({ hole, par, players, scoreTargets, standings }) {
   const targets = Array.isArray(scoreTargets) ? scoreTargets : [];
   const rows = Array.isArray(standings) ? standings : [];

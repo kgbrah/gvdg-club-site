@@ -5,7 +5,15 @@ import { HoleMap } from "../shared/hole-map.js";
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
 import { LeaderboardTable } from "./leaderboard-sheet.js";
-import { watchHoleScoreChips, watchMatchCards, watchStrokeHoleChips } from "./score-view-model.js";
+import {
+  watchFollowOptions,
+  watchFollowPlayer,
+  watchHoleScoreChips,
+  watchHoleThrows,
+  watchMatchCards,
+  watchScoreSignature,
+  watchStrokeHoleChips,
+} from "./score-view-model.js";
 
 const h = React.createElement;
 
@@ -75,6 +83,23 @@ function WatchMatchCards({ cards }) {
   ));
 }
 
+function WatchFollowBar({ options, follow, pinned, onPin }) {
+  if (!follow && !(options && options.length)) return null;
+  return h("div", { className: "watch-follow", key: "follow" }, [
+    h("p", { className: "watch-follow-label", key: "label" }, follow ? follow.name + "'s lies" : "Marked lies"),
+    options && options.length > 1
+      ? h("div", { className: "watch-follow-chips", key: "chips", role: "group", "aria-label": "Follow player lies" },
+        options.map((row) => h("button", {
+          "aria-pressed": follow && follow.index === row.index ? "true" : "false",
+          className: "watch-follow-chip" + (follow && follow.index === row.index ? " is-active" : ""),
+          key: row.index,
+          type: "button",
+          onClick: () => onPin(pinned === row.index ? null : row.index),
+        }, row.name)))
+      : null,
+  ]);
+}
+
 function WatchHoles(props) {
   const holes = Array.isArray(props.holes) ? props.holes : [];
   const liveIndex = holes.length
@@ -87,6 +112,31 @@ function WatchHoles(props) {
   }, [followLive, liveIndex]);
   const safeIndex = holes.length ? Math.min(index, holes.length - 1) : 0;
   const selected = holes[safeIndex] || null;
+  const [pinned, setPinned] = React.useState(null);
+  const [scoreFlight, setScoreFlight] = React.useState(0);
+  const scoreSigRef = React.useRef("");
+  const follow = selected
+    ? watchFollowPlayer({
+      followIndex: pinned,
+      hole: selected.hole,
+      players: props.scorePlayers,
+    })
+    : null;
+  const followOptions = selected ? watchFollowOptions({ hole: selected.hole, players: props.scorePlayers }) : [];
+  const followThrows = follow && selected ? watchHoleThrows(follow, selected.hole) : [];
+  const scoreSig = selected ? watchScoreSignature(follow, selected.hole) : "";
+  React.useEffect(() => {
+    scoreSigRef.current = "";
+    setScoreFlight(0);
+  }, [follow && follow.index, selected && selected.hole]);
+  React.useEffect(() => {
+    const prev = scoreSigRef.current;
+    scoreSigRef.current = scoreSig;
+    if (!prev) return;
+    const prevStrokes = prev.slice(prev.indexOf(":") + 1);
+    const nextStrokes = scoreSig.slice(scoreSig.indexOf(":") + 1);
+    if (nextStrokes && nextStrokes !== prevStrokes) setScoreFlight((value) => value + 1);
+  }, [scoreSig]);
   if (!selected) return null;
   const mapPlayers = props.isMatchplay
     ? props.players
@@ -138,11 +188,22 @@ function WatchHoles(props) {
       )),
     ]),
     h(HoleMap, {
+      discColor: follow && follow.discColor,
       hole: selected,
       key: "map",
       players: mapPlayers,
+      scoreFlight,
+      throws: followThrows,
+      throwsKey: follow ? follow.index : "none",
       udiscCourseId: props.udiscCourseId,
       windFromDeg: props.windFromDeg,
+    }),
+    h(WatchFollowBar, {
+      follow,
+      key: "follow",
+      options: followOptions,
+      pinned,
+      onPin: setPinned,
     }),
     props.isMatchplay ? h(WatchMatchCards, { cards: matchCards, key: "matches" }) : h(WatchStrokeStrip, { chips: strokeChips, key: "stroke" }),
     h(WatchTeeSign, { key: "sign", teeSign: selected.teeSign }),
