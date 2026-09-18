@@ -25,18 +25,30 @@ const card = {
 
 test("mine cache stores a live card and restores it", () => {
   const storage = memoryStorage();
-  const key = mineCacheKey("ABCD", "");
-  assert.equal(key, "gvdg_score_mine:ABCD");
+  const key = mineCacheKey("ABCD", "", "jwt-token-ava");
+  assert.equal(key, "gvdg_score_mine:ABCD:" + "jwt-token-ava".slice(-16));
   assert.equal(writeMineCache(key, card, storage), true);
   assert.deepEqual(readMineCache(key, storage).cardId, "c0");
 });
 
 test("mine cache ignores empty or incomplete payloads", () => {
   const storage = memoryStorage();
-  const key = mineCacheKey("", "12");
+  const key = mineCacheKey("", "12", "tok");
   assert.equal(writeMineCache(key, { cardId: null, holes: [], cardmates: [] }, storage), false);
   assert.equal(writeMineCache(key, { cardId: "c0", holes: [], cardmates: [{ index: 0 }] }, storage), false);
   assert.equal(readMineCache(key, storage), null);
+});
+
+test("mine cache keys differ by token so another player cannot restore the card", () => {
+  assert.notEqual(mineCacheKey("ABCD", "", "token-ava"), mineCacheKey("ABCD", "", "token-milo"));
+});
+
+test("mine cache expires after a day", () => {
+  const storage = memoryStorage();
+  const key = mineCacheKey("ABCD", "", "tok");
+  assert.equal(writeMineCache(key, card, storage), true);
+  const dayAndHour = Date.now() + (25 * 60 * 60 * 1000);
+  assert.equal(readMineCache(key, storage, dayAndHour), null);
 });
 
 test("transient mine failures include network and 5xx", () => {

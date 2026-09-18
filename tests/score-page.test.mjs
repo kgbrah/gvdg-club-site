@@ -309,7 +309,7 @@ test('score controller delegates scorecard derivation to a pure view model', () 
   assert.match(controller, /playOrderStep\(S\.holes, S\.holeIdx, startingHoleForState\(S\), 1\)/);
   assert.match(controller, /readMemberToken/);
   assert.match(controller, /createWakeLock/);
-  assert.match(controller, /readMineCache\(MINE_KEY\)/);
+  assert.match(controller, /readMineCache\(currentMineKey\(\)\)/);
   assert.match(controller, /wakeLock\.start\(\)/);
   assert.doesNotMatch(scoreLeaderboardSource(), /Every member on the card must enter matching scores/);
   assert.doesNotMatch(controller, /function scoreRows\(\)|function strokesFor\(|function strokesForRow\(|function conflictForRow\(|function holeHasConflict\(|function isMatchDormie\(|function matchStatusText\(|function myScoreRow\(|function udiscExportData\(\)|function finalizeBlockers\(\)/);

@@ -57,11 +57,11 @@ export function startScoreApp(options) {
         let locLastSent = 0;
         const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
         const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
-        const MINE_KEY = mineCacheKey(ROUND_CODE, EVENT_ID);
         const wakeLock = createWakeLock();
 
         // ---------- tiny helpers ----------
         function memberToken() { return readMemberToken() || null; }
+        function currentMineKey() { return mineCacheKey(ROUND_CODE, EVENT_ID, memberToken() || GUEST_TOKEN); }
         function rememberRecentRound(entry) {
             try {
                 if (!entry || !entry.code) return;
@@ -707,7 +707,7 @@ export function startScoreApp(options) {
         // ---------- boot ----------
         function persistMineCache() {
             if (!S.cardId) return;
-            writeMineCache(MINE_KEY, {
+            writeMineCache(currentMineKey(), {
                 cardAttestation: S.cardAttestation,
                 cardId: S.cardId,
                 cardLocked: S.cardLocked,
@@ -773,7 +773,7 @@ export function startScoreApp(options) {
             }
             if (r.status === 401) { renderLogin('Please sign in to keep score.'); return; }
             if (!r.ok || !r.data) {
-                const cached = isTransientMineFailure(r) ? readMineCache(MINE_KEY) : null;
+                const cached = isTransientMineFailure(r) ? readMineCache(currentMineKey()) : null;
                 if (cached) { applyMinePayload(cached, { offline: true }); return; }
                 renderMessage('Couldn’t load your card', 'Check your connection and try again.', true); return;
             }
@@ -783,7 +783,7 @@ export function startScoreApp(options) {
                 else renderMessage('No card yet', 'Either the round hasn’t started or you’re not on a card for this event. Ask an admin to start the round and assign cards.', true);
                 return;
             }
-            writeMineCache(MINE_KEY, d);
+            writeMineCache(currentMineKey(), d);
             applyMinePayload(d);
         }
 
