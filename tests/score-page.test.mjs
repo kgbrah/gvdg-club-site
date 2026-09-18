@@ -661,6 +661,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /HoleMap/);
   assert.match(scorecard, /your-turn-hint/);
   const holeMap = readFileSync('src/shared/hole-map.js', 'utf8');
+  const holeMapModel = readFileSync('src/shared/hole-map-model.js', 'utf8');
   const html = readFileSync('score.html', 'utf8');
   assert.match(holeMap, /hole-map-satellite/);
   assert.match(holeMap, /SATELLITE_CREDIT/);
@@ -682,7 +683,8 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(holeMap, /onMapPoint/);
   assert.match(scorecard, /function useDeviceFix/);
   assert.match(scorecard, /currentRangeHud/);
-  assert.doesNotMatch(scorecard, /tooFar/);
+  assert.match(holeMapModel, /GPS_REMAINING_MAX_FT = 2500/);
+  assert.match(holeMapModel, /primary\.ft > GPS_REMAINING_MAX_FT/);
   assert.match(scorecard, /function RangeHud/);
   assert.match(scorecard, /hole-range-hud-len/);
   assert.match(scorecard, /hud\.holeFt/);

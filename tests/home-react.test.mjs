@@ -15,7 +15,7 @@ test('homepage feeds are rendered by the home React bundle', () => {
   assert.match(html, /id="homeReactTournamentsApp"/);
   assert.match(html, /<div id="homeReactEventsApp"><\/div>/);
   assert.match(html, /<div id="homeReactTournamentsApp"><\/div>/);
-  assert.match(html, /<script type="module" src="home-app\/home-app\.js\?v=171"><\/script>/);
+  assert.match(html, /<script type="module" src="home-app\/home-app\.js\?v=172"><\/script>/);
   assert.doesNotMatch(html, /<script type="module" src="home-feeds\.js"><\/script>/);
   assert.doesNotMatch(html, /<div id="homeReactEventsApp"><div class="event-list">/);
   assert.doesNotMatch(html, /<div id="homeReactTournamentsApp"><div class="tournament-list">/);
@@ -31,7 +31,8 @@ test('home React feed components own events and tournaments without DOM fallback
   assert.match(panels, /export function HomeEventsFeed/);
   assert.match(panels, /export function AreaTournamentsFeed/);
   assert.match(panels, /data-react-home-events/);
-  assert.match(panels, /upcomingTournaments/);
+  assert.match(panels, /parseTournamentDate\(tournament\.date, now\)/);
+  assert.match(panels, /row\.when\.isPast === false/);
   assert.match(panels, /TOURNAMENT_FEED_URL\}&_cb=/);
   assert.match(panels, /safeExternalUrl/);
   assert.match(panels, /ChevronDown/);
