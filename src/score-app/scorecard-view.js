@@ -405,7 +405,7 @@ function HoleMedia(props) {
           lie: props.lie,
           measureFrom: props.measureFrom,
           measureTo: props.measureTo,
-          players: withSelfLocation(props.playerLocations, props.gpsFix),
+          players: withSelfLocation(props.playerLocations, props.gpsFix, props.selfMark),
           throws: props.throws,
           windFromDeg: props.windFromDeg,
           scoreFlight: props.scoreFlight,

@@ -603,6 +603,7 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
     weatherVersion: state.weather && (state.weather.updatedAt || state.weather.nextRefreshAt || (state.weather.current && state.weather.current.fetchedAt) || ""),
     windFromDeg: state.weather && state.weather.current ? state.weather.current.windDirectionDeg : null,
     playerLocations: Array.isArray(state.playerLocations) ? state.playerLocations : [],
+    selfMark: selfMapMark(state),
     yourTurn: yourTurnHint({ ...state, scorerIndex }),
     finish: buildFinishView(state, mode, blockers, locked, scorerIndex),
     formatLabel: roundFormatLabel(state),
@@ -706,6 +707,28 @@ export function udiscExportData(state) {
     .filter((hole) => me.scores[hole.hole] != null)
     .map((hole) => ({ hole: hole.hole, par: hole.par, strokes: me.scores[hole.hole] }));
   return { courseId: state.udiscCourseId, scorecard };
+}
+
+function selfMapMark(state) {
+  const mates = Array.isArray(state && state.cardmates) ? state.cardmates : [];
+  const me = mates.find((player) => player && player.isMe)
+    || mates.find((player) => player && player.index === state.myIndex);
+  const index = Number.isInteger(state && state.myIndex)
+    ? state.myIndex
+    : (me && Number.isInteger(me.index) ? me.index : null);
+  if (!Number.isInteger(index) && !me) return null;
+  const loc = (Array.isArray(state.playerLocations) ? state.playerLocations : [])
+    .find((row) => row && row.index === index);
+  const name = String((me && me.name) || "");
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const fromName = parts.length
+    ? (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase()
+    : "";
+  const initials = String((loc && loc.initials) || fromName).trim().toUpperCase();
+  return {
+    index: Number.isInteger(index) ? index : undefined,
+    initials: initials || undefined,
+  };
 }
 
 export function finalizeBlockers(state) {

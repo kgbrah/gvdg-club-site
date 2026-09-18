@@ -234,10 +234,46 @@ export function gpsHudPrompt(status, mode) {
   return "Tap for GPS";
 }
 
-export function withSelfLocation(players, gps) {
+export function withSelfLocation(players, gps, self) {
   const rows = Array.isArray(players) ? players.slice() : [];
   if (!gps || !Number.isFinite(gps.lat) || !Number.isFinite(gps.lng)) return rows;
-  return rows.concat([{ initials: "ME", lat: gps.lat, lng: gps.lng, relClass: "self" }]);
+  const selfIndex = self && Number.isInteger(self.index) ? self.index : null;
+  const selfInitials = playerMapInitials(self && (self.initials || self.name));
+  const idx = rows.findIndex((row) => {
+    if (!row) return false;
+    if (selfIndex != null && row.index === selfIndex) return true;
+    if (row.relClass === "self") return true;
+    return false;
+  });
+  if (idx >= 0) {
+    const current = rows[idx];
+    rows[idx] = {
+      ...current,
+      initials: playerMapInitials(current.initials) || selfInitials || "ME",
+      lat: gps.lat,
+      lng: gps.lng,
+      relClass: "self",
+    };
+    return rows;
+  }
+  return rows.concat([{
+    index: selfIndex,
+    initials: selfInitials || "ME",
+    lat: gps.lat,
+    lng: gps.lng,
+    relClass: "self",
+  }]);
+}
+
+function playerMapInitials(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (/^[A-Za-z]{1,3}$/.test(text)) return text.toUpperCase();
+  const parts = text.split(/\s+/).filter(Boolean);
+  if (!parts.length) return "";
+  const first = parts[0][0] || "";
+  const last = parts.length > 1 ? (parts[parts.length - 1][0] || "") : "";
+  return (first + last).toUpperCase();
 }
 
 export function currentRangeHud(hole, gps, measure, lastLie) {

@@ -207,12 +207,19 @@ test("gpsHudPrompt asks guests to tap until remaining is live", () => {
   assert.equal(gpsHudPrompt(), "Tap for GPS");
 });
 
-test("withSelfLocation stamps the device as ME without dropping other marks", () => {
-  const others = [{ initials: "KG", lat: 35.6, lng: -77.37 }];
+test("withSelfLocation updates the device pin instead of adding ME", () => {
+  const others = [{ index: 0, initials: "KG", lat: 35.6, lng: -77.37 }];
   assert.deepEqual(withSelfLocation(others, null), others);
-  assert.deepEqual(withSelfLocation(others, { lat: 35.601, lng: -77.371 }), [
-    { initials: "KG", lat: 35.6, lng: -77.37 },
-    { initials: "ME", lat: 35.601, lng: -77.371, relClass: "self" },
+  assert.deepEqual(withSelfLocation(others, { lat: 35.601, lng: -77.371 }, { index: 0, initials: "KG" }), [
+    { index: 0, initials: "KG", lat: 35.601, lng: -77.371, relClass: "self" },
+  ]);
+  assert.deepEqual(withSelfLocation(
+    [{ index: 1, initials: "TB", lat: 35.6, lng: -77.37 }],
+    { lat: 35.601, lng: -77.371 },
+    { index: 0, initials: "KG" },
+  ), [
+    { index: 1, initials: "TB", lat: 35.6, lng: -77.37 },
+    { index: 0, initials: "KG", lat: 35.601, lng: -77.371, relClass: "self" },
   ]);
 });
 

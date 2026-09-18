@@ -370,6 +370,7 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
   assert.equal(scoreRows(state).length, 2);
   assert.equal(view.rows[0].currentScore, 2);
   assert.equal(view.rows[0].isMe, true);
+  assert.deepEqual(view.selfMark, { index: 0, initials: "AK" });
   assert.equal(view.rows[0].teePosition, 1);
   assert.equal(view.rows[0].honors, false);
   assert.equal(view.teeOrderHint, 'Tee order: Ava King · then Milo Chen');
@@ -724,7 +725,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(controller, /GPS_WATCH_OPTIONS/);
   assert.match(controller, /locRetryTimer/);
   assert.match(scorecard, /gpsHudPrompt/);
-  assert.match(scorecard, /withSelfLocation/);
+  assert.match(scorecard, /withSelfLocation\(props\.playerLocations, props\.gpsFix, props\.selfMark\)/);
   assert.match(scorecard, /hole-range-hud-btn/);
   assert.match(html, /hole-range-hud-btn/);
   assert.match(html, /hole-range-hud-gps/);
