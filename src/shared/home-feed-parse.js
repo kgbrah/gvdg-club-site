@@ -41,11 +41,37 @@ export function parseTournamentCsv(csv) {
   return tournaments;
 }
 
+const TOURNAMENT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const TOURNAMENT_MONTH_INDEX = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+};
+
 export function parseTournamentDate(raw, now = new Date()) {
   if (!raw) return null;
   const match = String(raw).match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s*(\d{4})?/i);
   if (!match) return null;
-  return { month: match[1].substring(0, 3), day: parseInt(match[2], 10), year: match[3] || now.getFullYear() };
+  const monthIndex = TOURNAMENT_MONTH_INDEX[match[1].substring(0, 3).toLowerCase()];
+  if (monthIndex == null) return null;
+  const day = parseInt(match[2], 10);
+  const year = match[3] ? parseInt(match[3], 10) : now.getFullYear();
+  const dateObj = new Date(year, monthIndex, day);
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  return {
+    month: TOURNAMENT_MONTHS[monthIndex],
+    day,
+    year,
+    dateObj,
+    isPast: dateObj < today,
+  };
+}
+
+export function upcomingTournaments(tournaments, now = new Date()) {
+  return (Array.isArray(tournaments) ? tournaments : [])
+    .map((tournament) => ({ tournament, date: parseTournamentDate(tournament && tournament.date, now) }))
+    .filter((row) => row.date && !row.date.isPast)
+    .sort((a, b) => a.date.dateObj - b.date.dateObj)
+    .map((row) => row.tournament);
 }
 
 export function parseHomepageEventCsv(csv) {
