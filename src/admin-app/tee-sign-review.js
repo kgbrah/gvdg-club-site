@@ -1,6 +1,7 @@
 import React from "react";
 
 import { adminConfirm } from "./admin-dialogs.js";
+import { readMemberToken } from "../shared/member-session.js";
 
 const h = React.createElement;
 
@@ -136,7 +137,7 @@ function TeeSignPhoto({ authBase, sign }) {
       return undefined;
     }
     if (sign.status !== "candidate") return undefined;
-    const token = sessionStorage.getItem("gvdg_member_token");
+    const token = readMemberToken();
     fetch(`${authBase}/tee-signs/${encodeURIComponent(sign.id)}/image`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     }).then((response) => response.ok ? response.blob() : null)

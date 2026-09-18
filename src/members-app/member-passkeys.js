@@ -1,4 +1,5 @@
 import { TOKEN_KEY, authBase, storageGet } from "./api.js";
+import { writeMemberSessionValue } from "../shared/member-session.js";
 import { clearAuthError, setAuthBusy, showAuthError } from "./member-auth-dom.js";
 import { applyProfile } from "./member-auth-state.js";
 
@@ -160,7 +161,7 @@ export function createPasskeyController({ api, showMembersContent, showPinChange
         return;
       }
       const data = await verifyResponse.json();
-      sessionStorage.setItem(TOKEN_KEY, data.token);
+      writeMemberSessionValue(TOKEN_KEY, data.token);
       applyProfile(data);
       if (data.mustChangePin) showPinChange();
       else showMembersContent(data.name);

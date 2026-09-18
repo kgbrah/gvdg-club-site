@@ -1,5 +1,7 @@
 import React from "react";
-import { ChevronLeft, ChevronRight, Eye, Settings2, Share2, UserPlus } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ChevronLeft, ChevronRight, Eye, Map, Settings2, Share2, UserPlus } from "lucide-react";
+import { useAccessibleDialog } from "../shared/a11y.js";
 import { HoleMap } from "../shared/hole-map.js";
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
@@ -86,22 +88,67 @@ function HoleHeader(props) {
   ]);
 }
 
-function TeeSignCard(props) {
-  if (!props.teeSign) return null;
-  const style = props.teeSign.highlightColor ? { boxShadow: `0 0 0 3px ${props.teeSign.highlightColor}` } : undefined;
-  return h("div", { className: "card tee-sign-card", key: "tee-sign", style }, [
-    h("img", {
-      alt: props.teeSign.alt,
-      height: 400,
-      key: "image",
-      loading: "lazy",
-      src: props.teeSign.src,
-      width: 640,
-    }),
-    h("div", { className: "tee-sign-caption", key: "caption" }, [
-      h("span", { key: "label" }, "Tee sign"),
-      h("span", { key: "hole" }, `Hole ${props.teeSign.hole}`),
+function holeHasMap(hole) {
+  return Boolean(hole && hole.tee && hole.target);
+}
+
+function HoleMedia(props) {
+  const [open, setOpen] = React.useState(null);
+  const hasMap = holeHasMap(props.hole);
+  const hasSign = Boolean(props.teeSign);
+  if (!hasMap && !hasSign) return null;
+  const mapOpen = hasMap && open === "map";
+  const signOpen = hasSign && open === "sign";
+  const style = props.teeSign && props.teeSign.highlightColor
+    ? { boxShadow: `0 0 0 3px ${props.teeSign.highlightColor}` }
+    : undefined;
+  const dist = props.hole && props.hole.distance_ft ? `${props.hole.distance_ft} ft` : "Map";
+  return h("div", { className: "hole-media", key: "media" }, [
+    h("div", { className: "hole-media-chips", key: "chips" }, [
+      hasMap
+        ? h("button", {
+          "aria-expanded": mapOpen ? "true" : "false",
+          className: "hole-media-chip" + (mapOpen ? " open" : ""),
+          key: "map",
+          type: "button",
+          onClick: () => setOpen(mapOpen ? null : "map"),
+        }, [icon(Map), mapOpen ? "Hide map" : dist])
+        : null,
+      hasSign
+        ? h("button", {
+          "aria-expanded": signOpen ? "true" : "false",
+          className: "hole-media-chip" + (signOpen ? " open" : ""),
+          key: "sign",
+          type: "button",
+          onClick: () => setOpen(signOpen ? null : "sign"),
+        }, signOpen ? "Hide tee sign" : "Tee sign")
+        : null,
     ]),
+    mapOpen
+      ? h(HoleMap, {
+        compact: true,
+        hole: props.hole,
+        key: "map-card",
+        players: props.playerLocations,
+        windFromDeg: props.windFromDeg,
+      })
+      : null,
+    signOpen
+      ? h("div", { className: "card tee-sign-card", key: "tee-sign", style }, [
+        h("img", {
+          alt: props.teeSign.alt,
+          height: 400,
+          key: "image",
+          loading: "lazy",
+          src: props.teeSign.src,
+          width: 640,
+        }),
+        h("div", { className: "tee-sign-caption", key: "caption" }, [
+          h("span", { key: "label" }, "Tee sign"),
+          h("span", { key: "hole" }, `Hole ${props.teeSign.hole}`),
+        ]),
+      ])
+      : null,
   ]);
 }
 
@@ -122,6 +169,86 @@ function ScorecardOwner(props) {
       ),
     ),
   ]);
+}
+
+function padChoices(par) {
+  const holePar = typeof par === "number" ? par : 3;
+  return {
+    shortcuts: [
+      { label: "Birdie", value: Math.max(1, holePar - 1) },
+      { label: "Par", value: holePar },
+      { label: "Bogey", value: holePar + 1 },
+    ],
+    numbers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  };
+}
+
+function ScorePad(props) {
+  const dialog = useAccessibleDialog({
+    open: true,
+    onClose: props.onClose,
+    labelledBy: "score-pad-title",
+    label: "Enter score",
+  });
+  const hole = props.hole;
+  const row = props.row;
+  const choices = padChoices(hole.par);
+  function pick(value) {
+    props.onScore(row.source, hole.hole, value);
+    props.onClose();
+  }
+  return createPortal(
+    h(
+      "div",
+      {
+        className: "overlay",
+        role: "presentation",
+        ref: dialog.overlayRef,
+      },
+      h("div", {
+        className: "sheet score-pad-sheet",
+        role: "dialog",
+        "aria-modal": dialog.isolated ? "true" : undefined,
+        "aria-labelledby": "score-pad-title",
+        "aria-label": "Enter score",
+        tabIndex: -1,
+        ref: dialog.panelRef,
+      }, [
+        h("div", { className: "grab", key: "grab" }),
+        h("h2", { className: "section", id: "score-pad-title", key: "title" }, row.label + " · Hole " + hole.hole),
+        h("p", { className: "muted", key: "par" }, "Par " + hole.par),
+        h("div", { className: "score-pad-shortcuts", key: "shortcuts" }, choices.shortcuts.map((item) =>
+          h("button", {
+            className: "btn" + (row.currentScore === item.value ? "" : " secondary"),
+            key: item.label,
+            type: "button",
+            onClick: () => pick(item.value),
+          }, item.label + " · " + item.value),
+        )),
+        h("div", { className: "score-pad-grid", key: "grid" }, choices.numbers.map((value) =>
+          h("button", {
+            className: "score-pad-key" + (row.currentScore === value ? " current" : ""),
+            key: value,
+            type: "button",
+            onClick: () => pick(value),
+          }, String(value)),
+        )),
+        h("button", {
+          className: "btn secondary",
+          key: "clear",
+          type: "button",
+          onClick: () => pick(null),
+        }, "Clear hole"),
+        h("button", {
+          className: "btn ghost sheet-close",
+          key: "close",
+          type: "button",
+          onClick: props.onClose,
+        }, "Back"),
+      ]),
+    ),
+    document.body,
+  );
 }
 
 function ScoreRow(props) {
@@ -162,7 +289,14 @@ function ScoreRow(props) {
         },
         "-",
       ),
-      h("div", { className: "val", key: "value" }, [
+      h("button", {
+        "aria-label": `Enter score for ${row.label} on hole ${props.hole.hole}`,
+        className: "val",
+        disabled: Boolean(props.locked),
+        key: "value",
+        type: "button",
+        onClick: () => props.onOpenPad(row),
+      }, [
         h("div", { className: "n", key: "score" }, current == null ? "-" : String(current)),
         row.relative ? h("div", { className: `rel ${row.relative.className}`, key: "relative" }, row.relative.text) : null,
       ]),
@@ -229,10 +363,17 @@ function CtpClaim(props) {
 }
 
 function ScorecardBox(props) {
-  return h("div", { className: "card", key: "scorecard" }, [
+  return h("div", { className: "card score-entry-card", key: "scorecard" }, [
     h(ScorecardOwner, props),
     props.warning ? h("p", { className: "muted auth-error", key: "warning" }, props.warning) : null,
-    props.rows.map((row) => h(ScoreRow, { key: row.key, row, hole: props.hole, locked: props.finish && props.finish.locked, onScore: props.onScore })),
+    props.rows.map((row) => h(ScoreRow, {
+      key: row.key,
+      row,
+      hole: props.hole,
+      locked: props.finish && props.finish.locked,
+      onScore: props.onScore,
+      onOpenPad: props.onOpenPad,
+    })),
     h(TotalsBar, { totals: props.totals }),
   ]);
 }
@@ -260,6 +401,8 @@ function HoleGrid(props) {
   );
 }
 
+const FINISH_COPY = "Anyone on this card can confirm. Matching scores on each hole are enough.";
+
 function FinishCard(props) {
   const finish = props.finish;
   if (!finish) return null;
@@ -271,7 +414,7 @@ function FinishCard(props) {
   if (!finish.canFinish) return null;
   return h("div", { className: "finalize-card ready", key: "finish" }, [
     h("p", { className: "finalize-head", key: "head" }, "All holes scored — finish this card"),
-    h("p", { className: "muted finish-round-hint", key: "hint" }, "Every player on this card must confirm the scores."),
+    h("p", { className: "muted finish-round-hint", key: "hint" }, FINISH_COPY),
     h("button", {
       className: "btn finish-round-btn",
       key: "finish",
@@ -283,72 +426,98 @@ function FinishCard(props) {
 
 function ConfirmScoresSheet(props) {
   const finish = props.finish;
-  if (!finish || !finish.confirmOpen || finish.locked) return null;
+  const open = Boolean(finish && finish.confirmOpen && !finish.locked);
+  const dialog = useAccessibleDialog({
+    open,
+    onClose: props.onCloseFinish,
+    labelledBy: "score-confirm-title",
+    label: "Confirm scores",
+  });
+  if (!open) return null;
   const review = finish.review || { holes: [], rows: [], voters: [], waiting: [] };
-  return h(
-    "div",
-    {
-      className: "overlay",
-      key: "confirm-scores",
-      onClick: (event) => {
-        if (event.target === event.currentTarget) props.onCloseFinish();
+  return createPortal(
+    h(
+      "div",
+      {
+        className: "overlay",
+        key: "confirm-scores",
+        role: "presentation",
+        ref: dialog.overlayRef,
       },
-    },
-    h("div", { className: "sheet confirm-scores-sheet", role: "dialog", "aria-label": "Confirm scores" }, [
-      h("div", { className: "grab", key: "grab" }),
-      h("h2", { className: "section", key: "title" }, "Confirm scores"),
-      h("p", { className: "muted", key: "copy" }, "Every player on this card must agree these scores are correct."),
-      h("div", { className: "confirm-scores-table-wrap", key: "table" }, h("table", { className: "confirm-scores-table" }, [
-        h("thead", { key: "head" }, h("tr", null, [
-          h("th", { key: "name" }, "Player"),
-          ...review.holes.map((hole) => h("th", { key: hole }, String(hole))),
-          h("th", { key: "tot" }, "Tot"),
-          h("th", { key: "par" }, "Par"),
+      h("div", {
+        className: "sheet confirm-scores-sheet",
+        role: "dialog",
+        "aria-modal": dialog.isolated ? "true" : undefined,
+        "aria-labelledby": "score-confirm-title",
+        "aria-label": "Confirm scores",
+        tabIndex: -1,
+        ref: dialog.panelRef,
+      }, [
+        h("div", { className: "grab", key: "grab" }),
+        h("h2", { className: "section", id: "score-confirm-title", key: "title" }, "Confirm scores"),
+        h("p", { className: "muted", key: "copy" }, FINISH_COPY),
+        h("div", { className: "confirm-scores-table-wrap", key: "table" }, h("table", { className: "confirm-scores-table" }, [
+          h("thead", { key: "head" }, h("tr", null, [
+            h("th", { key: "name" }, "Player"),
+            ...review.holes.map((hole) => h("th", { key: hole }, String(hole))),
+            h("th", { key: "tot" }, "Tot"),
+            h("th", { key: "par" }, "Par"),
+          ])),
+          h("tbody", { key: "body" }, review.rows.map((row) =>
+            h("tr", { key: row.key }, [
+              h("td", { className: "name", key: "name" }, row.label),
+              ...row.scores.map((strokes, index) => h("td", { key: review.holes[index] }, strokes == null ? "—" : String(strokes))),
+              h("td", { key: "tot" }, String(row.total || "—")),
+              h("td", { className: "tp " + relClass(row.toPar || 0), key: "par" }, relText(row.toPar || 0)),
+            ]),
+          )),
         ])),
-        h("tbody", { key: "body" }, review.rows.map((row) =>
-          h("tr", { key: row.key }, [
-            h("td", { className: "name", key: "name" }, row.label),
-            ...row.scores.map((strokes, index) => h("td", { key: review.holes[index] }, strokes == null ? "—" : String(strokes))),
-            h("td", { key: "tot" }, String(row.total || "—")),
-            h("td", { className: "tp " + relClass(row.toPar || 0), key: "par" }, relText(row.toPar || 0)),
-          ]),
+        h("div", { className: "confirm-agree-list", key: "agree" }, review.voters.map((voter) =>
+          h("button", {
+            className: "btn" + (voter.agreed ? " secondary" : ""),
+            disabled: voter.agreed,
+            key: voter.index,
+            type: "button",
+            onClick: () => props.onAgree(voter.index),
+          }, voter.agreed ? voter.label + " agreed" : "Agree — " + voter.label),
         )),
-      ])),
-      h("div", { className: "confirm-agree-list", key: "agree" }, review.voters.map((voter) =>
-        h("button", {
-          className: "btn" + (voter.agreed ? " secondary" : ""),
-          disabled: voter.agreed,
-          key: voter.index,
-          type: "button",
-          onClick: () => props.onAgree(voter.index),
-        }, voter.agreed ? voter.label + " agreed" : "Agree — " + voter.label),
-      )),
-      review.waiting.length
-        ? h("p", { className: "muted finish-round-hint", key: "wait" }, "Waiting on " + review.waiting.join(", "))
-        : h("p", { className: "muted finish-round-hint", key: "wait" }, "Locking scores…"),
-      h("button", { className: "btn secondary sheet-close", key: "close", type: "button", onClick: props.onCloseFinish }, "Back"),
-    ]),
+        review.waiting.length
+          ? h("p", { className: "muted finish-round-hint", key: "wait" }, "Waiting on " + review.waiting.join(", "))
+          : h("p", { className: "muted finish-round-hint", key: "wait" }, "Locking scores…"),
+        h("button", { className: "btn secondary sheet-close", key: "close", type: "button", onClick: props.onCloseFinish }, "Back"),
+      ]),
+    ),
+    document.body,
   );
 }
 
 export function ScorecardView(props) {
+  const [padRow, setPadRow] = React.useState(null);
   return h(React.Fragment, null, [
-    h(RoundTools, props),
-    props.showWeather ? h(WeatherStrip, { compact: true, key: "weather", title: "Round weather", weather: props.weather }) : null,
-    props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,
-    props.potsAceHint ? h("p", { className: "pots-ace-hint", key: "ace-hint" }, props.potsAceHint) : null,
     h(HoleHeader, props),
     props.yourTurn ? h("p", { className: "your-turn-hint", key: "turn" }, props.yourTurn) : null,
-    h(HoleMap, { hole: props.hole, players: props.playerLocations, udiscCourseId: props.udiscCourseId, windFromDeg: props.windFromDeg }),
-    h(TeeSignCard, { teeSign: props.teeSign }),
-    h(CtpClaim, { ctpClaim: props.ctpClaim, onCtpVote: props.onCtpVote }),
-    h(ScorecardBox, props),
+    props.showWeather ? h(WeatherStrip, { compact: true, key: "weather", title: "Round weather", weather: props.weather }) : null,
+    h(ScorecardBox, { ...props, onOpenPad: setPadRow }),
     h(HoleGrid, { holes: props.holeGrid, onJump: props.onJumpHole }),
+    h(HoleMedia, props),
+    h(CtpClaim, { ctpClaim: props.ctpClaim, onCtpVote: props.onCtpVote }),
+    props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,
+    props.potsAceHint ? h("p", { className: "pots-ace-hint", key: "ace-hint" }, props.potsAceHint) : null,
+    h(RoundTools, props),
     h(FinishCard, { finish: props.finish, onOpenFinish: props.onOpenFinish }),
     h(ConfirmScoresSheet, {
       finish: props.finish,
       onAgree: props.onAgreeFinish,
       onCloseFinish: props.onCloseFinish,
     }),
+    padRow
+      ? h(ScorePad, {
+        hole: props.hole,
+        key: "pad",
+        row: padRow,
+        onClose: () => setPadRow(null),
+        onScore: props.onScore,
+      })
+      : null,
   ]);
 }

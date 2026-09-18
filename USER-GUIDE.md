@@ -53,10 +53,10 @@ There are four parts:
 2. Pick a past event to see who won and all the scores.
 
 ### 🤖 Talk to Crotts, the helper robot
-1. On most pages, look in the **bottom-left corner** for a round button with a face on it. That's **Crotts**.
-2. Tap it. A little chat window opens.
+1. Tap **Help** (on the website menu, or **More → Help** in the members app).
+2. A little chat window opens.
 3. Type a question like "When is the next tournament?" and press send.
-4. Crotts knows about the club's events and courses and will try to help. He's like a friendly helper who knows a lot about the club.
+4. Crotts knows about the club's events and courses and will try to help.
 
 ### 💚 Give money (donate)
 1. On the home page, tap a **Donate** button.
@@ -94,13 +94,12 @@ A passkey means you don't have to type your PIN every time — you can use your 
 3. Your phone or computer asks for your fingerprint/face. Say yes.
 4. Next time, tap **Log in with a passkey** and use your fingerprint/face. Easy!
 
-### 📊 Your dashboard (the Overview tab)
-After you log in on the **Members** page, you see your **dashboard**. It has tabs across the top:
-- **📊 Overview** — your player info, ratings, and any live games.
-- **📝 Events** — sign up for games.
-- **💬 Board** — the members' message board.
-- **🪧 Tee Signs** — course sign pictures.
-- **🥏 Club** — club info.
+### 📊 Your dashboard
+After you log in on the **Members** page, you see your **dashboard**. On a phone it has tabs along the bottom:
+- **Home** — your rating, tonight's event, and keep-score shortcuts.
+- **Events** — sign up for games.
+- **Season** — ratings and past rounds.
+- **More** — message board, tee signs, club directory, scoring, help, and log out.
 
 Tap a tab to switch rooms.
 
@@ -175,10 +174,11 @@ The **score app** (tap **Live Scoring**, or open a round link someone shares) le
 - **Event round:** for club games, a helper starts it, and players get added from who signed up.
 
 ### 🔢 Keep score, hole by hole
-1. You see one hole at a time with a big number.
-2. Tap **−** to lower the score or **+** to raise it for each player.
-3. Tap the arrow **›** to go to the next hole, or **‹** to go back.
-- **Important:** everyone on the card keeps their **own** score. If two people scoring the same card don't agree on a number, the app leaves that hole blank until they match. This keeps scores honest. 🤝
+1. You see one hole at a time with a big number. Score buttons sit near the top so you can tap them without scrolling past the map.
+2. Tap **−** or **+** to change a score, or tap the number itself for a pad (birdie / par / bogey, or 1–10).
+3. Tap the arrow **›** to go to the next hole, or **‹** to go back. On shotgun start, those arrows follow the holes in play order.
+4. Map and tee-sign pictures hide behind chips. Tap **Map** or **Tee sign** only when you want them.
+- **Important:** the official score is the one the card **agrees on**. If two people type different numbers, the hole stays blank until they match. One phone on the card is enough. 🤝
 
 ### 🌦️ Check round weather
 - During a live round, the scorecard can show the current course weather.
@@ -200,10 +200,10 @@ The **score app** (tap **Live Scoring**, or open a round link someone shares) le
 3. Tap **Share** to send the card link to a friend.
 
 ### 🏁 Finish the round
-1. When everyone is done, open the leaderboard sheet.
-2. Tap **Finish round**.
-3. The app only lets you finish if all the scores match up. If they don't, it tells you which hole to fix first.
-4. When it's finished, the scores are saved forever and show up in the results and everyone's history. 🎉
+1. When every hole has a matching score, tap **Finish card** on the scorecard (or in the leaderboard sheet).
+2. Anyone on the card can confirm. Extra phones do not have to type the same numbers.
+3. If scores disagree, the app tells you which hole to fix first.
+4. When it's finished, the scores are saved and show up in the results. 🎉
 
 ---
 

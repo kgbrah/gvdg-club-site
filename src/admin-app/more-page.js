@@ -1,6 +1,7 @@
 import React from "react";
 
 import { CrottsHelpLink } from "../shared/crotts-widget.js";
+import { clearMemberSession, readMemberToken } from "../shared/member-session.js";
 import { themeRoot } from "../shared/player-theme-chrome.js";
 import { paintPlayerTheme } from "../shared/player-theme-session.js";
 
@@ -17,26 +18,16 @@ const MORE_LINKS = [
   { tab: "data-archive", label: "Data archive" },
 ];
 
-const SESSION_KEYS = ["gvdg_member_token", "gvdg_member_name", "gvdg_member_pdga"];
-
 function requestTab(tab) {
   window.dispatchEvent(new CustomEvent("gvdg:admin-tab-request", { detail: { tab } }));
 }
 
 function clearSession() {
-  for (const key of SESSION_KEYS) {
-    sessionStorage.removeItem(key);
-  }
+  clearMemberSession();
 }
 
 function AccountLinks() {
-  const [signedIn, setSignedIn] = React.useState(() => {
-    try {
-      return Boolean(sessionStorage.getItem("gvdg_member_token"));
-    } catch {
-      return false;
-    }
-  });
+  const [signedIn, setSignedIn] = React.useState(() => Boolean(readMemberToken()));
 
   return h("div", { className: "admin-more-account", "data-admin-more-account": "ready" }, [
     h("p", { className: "admin-pane-kicker", key: "kicker" }, "Account"),

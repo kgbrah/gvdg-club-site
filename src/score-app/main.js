@@ -89,6 +89,12 @@ function ScoreShell() {
     };
   }, []);
 
+  React.useEffect(() => {
+    const glove = bodyView.kind === "scorecard";
+    document.body.classList.toggle("score-glove", glove);
+    return () => document.body.classList.remove("score-glove");
+  }, [bodyView.kind]);
+
   return h("div", { class: "wrap" }, [
     h("header", { class: "topbar" }, [
       h("img", { src: "img/logo.png", alt: "GVDG", class: "logo", width: 32, height: 32 }),
@@ -143,7 +149,7 @@ function ScoreShell() {
         icon(dark ? Sun : Moon),
       ),
     ]),
-    bodyView.kind === "watch" ? null : h(InstallCoachBanner, { key: "install" }),
+    bodyView.kind === "watch" || bodyView.kind === "scorecard" ? null : h(InstallCoachBanner, { key: "install" }),
     h("main", { id: "app" }, h(ScoreBody, { view: bodyView })),
     h(CrottsWidget, { key: "help" }),
   ]);

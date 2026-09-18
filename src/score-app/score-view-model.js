@@ -266,6 +266,26 @@ export function playOrderIndexes(holes, startingHole) {
   return list.map((_, offset) => (startIdx + offset) % list.length);
 }
 
+export function startingHoleForState(state) {
+  const mates = Array.isArray(state && state.cardmates) ? state.cardmates : [];
+  const me = mates.find((player) => player && player.isMe) || mates[0];
+  return me && me.startingHole;
+}
+
+export function playOrderPosition(holes, holeIdx, startingHole) {
+  const order = playOrderIndexes(holes, startingHole);
+  const pos = order.indexOf(holeIdx);
+  return { order, pos: pos < 0 ? 0 : pos };
+}
+
+export function playOrderStep(holes, holeIdx, startingHole, delta) {
+  const { order, pos } = playOrderPosition(holes, holeIdx, startingHole);
+  if (!order.length) return 0;
+  const next = pos + (delta === "next" || delta === 1 ? 1 : -1);
+  if (next < 0 || next >= order.length) return holeIdx;
+  return order[next];
+}
+
 export function activeHoleIndex({ holes, startingHole, isHoleComplete }) {
   const list = Array.isArray(holes) ? holes : [];
   if (!list.length) return 0;
@@ -525,10 +545,12 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
 
   const blockers = finalizeBlockers(state);
   const locked = Boolean(state.cardLocked) || state.status === "final";
+  const startHole = startingHoleForState(state);
+  const playPos = playOrderPosition(state.holes, state.holeIdx, startHole);
 
   return {
-    atEnd: state.holeIdx >= state.holes.length - 1,
-    atStart: state.holeIdx === 0,
+    atEnd: playPos.pos >= playPos.order.length - 1,
+    atStart: playPos.pos <= 0,
     choices: scorecardChoices(state),
     ctpBadge: pots.currentHoleCtps.length ? pots.currentHoleCtps.map((ctp) => ctp.prize || ctp.division || "CTP").join(" · ") : "",
     ctpClaim: holeCtps.length

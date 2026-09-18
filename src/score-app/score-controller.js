@@ -11,14 +11,19 @@ import {
     finishRoundHint,
     isDoublesScoring,
     isMatchplayScoring,
+    playOrderStep,
     relClass,
     relText,
     scorePendingKey as pendingKey,
     scoreTargetForPlayer,
     scorecardChoices,
+    startingHoleForState,
     udiscExportData,
 } from "./score-view-model.js";
 import { resolveApiBase } from "../shared/api-base.js";
+import { clearMemberSession, readMemberToken, writeMemberSession } from "../shared/member-session.js";
+import { createWakeLock } from "../shared/wake-lock.js";
+import { isTransientMineFailure, mineCacheKey, readMineCache, writeMineCache } from "./score-session-cache.js";
 import { buildLivePots, withLiveCtpLeaders } from "../shared/live-pots-model.js";
 import { isLiveWatchRequest, liveRoundCodeFromSearch, liveScoreHref, liveWatchHref } from "../shared/live-watch.js";
 import { holeWinners, winnerColor } from "../shared/matchplay-colors.js";
@@ -29,7 +34,7 @@ export function startScoreApp(options) {
         options = options || {};
         const API_BASE = resolveApiBase({ datasetKeys: ['apiBase'] });
 
-        const TOKEN_KEY = 'gvdg_member_token', NAME_KEY = 'gvdg_member_name', GUESTREG_KEY = 'gvdg_guest_regs', RECENT_ROUNDS_KEY = 'gvdg_recent_rounds';
+        const GUESTREG_KEY = 'gvdg_guest_regs', RECENT_ROUNDS_KEY = 'gvdg_recent_rounds';
         const params = new URLSearchParams(location.search);
         const EVENT_ID = (params.get('event') || '').replace(/[^0-9]/g, '');
         const ROUND_CODE = liveRoundCodeFromSearch(params);
@@ -52,9 +57,11 @@ export function startScoreApp(options) {
         let locLastSent = 0;
         const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
         const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
+        const MINE_KEY = mineCacheKey(ROUND_CODE, EVENT_ID);
+        const wakeLock = createWakeLock();
 
         // ---------- tiny helpers ----------
-        function memberToken() { try { return sessionStorage.getItem(TOKEN_KEY); } catch (e) { return null; } }
+        function memberToken() { return readMemberToken() || null; }
         function rememberRecentRound(entry) {
             try {
                 if (!entry || !entry.code) return;
@@ -411,6 +418,7 @@ export function startScoreApp(options) {
             renderHole();
             if (lbOpen) renderLeaderboard();
             if (managePlayersOpen) renderManagePlayers();
+            persistMineCache();
         }
 
         // ---------- WebSocket live sync ----------
@@ -499,7 +507,7 @@ export function startScoreApp(options) {
         // account still requires it — the must-change-PIN gate rejects EVERY protected route (incl. joining
         // a card), so without this a temp-PIN member logs in but gets bounced right back to the login screen.
         function afterAuth(data) {
-            try { sessionStorage.setItem(TOKEN_KEY, data.token); if (data.name) sessionStorage.setItem(NAME_KEY, data.name); } catch (e) {}
+            writeMemberSession({ token: data.token, name: data.name || undefined });
             notifyScoreAuthChanged();
             if (data.mustChangePin) renderSetPin();
             else boot();
@@ -507,7 +515,7 @@ export function startScoreApp(options) {
         async function saveNewPin(newPin) {
             const r = await api('/set-pin', { method: 'POST', guest: false, body: { newPin: newPin } });
             if (r.status === 200 && r.data && r.data.token) {
-                try { sessionStorage.setItem(TOKEN_KEY, r.data.token); } catch (e) {}
+                writeMemberSession({ token: r.data.token });
                 notifyScoreAuthChanged();
                 boot();
                 return { ok: true };
@@ -530,13 +538,14 @@ export function startScoreApp(options) {
             return { ok: false, message: r.status === 401 ? "That ID/PIN didn't match." : 'Sign-in failed - try again.' };
         }
         function renderLogin(message) {
+            wakeLock.stop();
             const supported = passkeysSupported();
             renderAuthFlow({
                 guestAvailable: !!GUEST_TOKEN,
                 membersHref: 'gvdg-members.html',
                 message: message,
                 mode: 'login',
-                onGuestContinue: function () { try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {} notifyScoreAuthChanged(); boot(); },
+                onGuestContinue: function () { clearMemberSession(); notifyScoreAuthChanged(); boot(); },
                 onLogin: loginWithPin,
                 onPasskeyLogin: supported ? loginWithPasskey : null,
                 passkeysSupported: supported
@@ -609,8 +618,8 @@ export function startScoreApp(options) {
                 onAddPlayer: addGuestPrompt,
                 onJumpHole: function (index) { S.holeIdx = index; renderHole(); },
                 onManagePlayers: openManagePlayers,
-                onNext: function () { S.holeIdx = Math.min(S.holes.length - 1, S.holeIdx + 1); renderHole(); },
-                onPrevious: function () { S.holeIdx = Math.max(0, S.holeIdx - 1); renderHole(); },
+                onNext: function () { S.holeIdx = playOrderStep(S.holes, S.holeIdx, startingHoleForState(S), 1); renderHole(); },
+                onPrevious: function () { S.holeIdx = playOrderStep(S.holes, S.holeIdx, startingHoleForState(S), -1); renderHole(); },
                 onScore: postScore,
                 onCtpVote: EVENT_ID && !WATCH ? postCtpVote : null,
                 onOpenFinish: openFinishConfirm,
@@ -696,23 +705,32 @@ export function startScoreApp(options) {
         }
 
         // ---------- boot ----------
-        async function loadMine() {
-            let r = await api(LIVE + '/mine');
-            // Casual round: if we're not on it yet, join with the code, then re-load our card.
-            if (MODE === 'round' && r.ok && r.data && r.data.cardId == null && r.data.status === 'live') {
-                const jr = await api('/rounds/' + ROUND_CODE + '/join', { method: 'POST', body: {} });
-                if (jr.ok) r = await api(LIVE + '/mine');
-            }
-            if (r.status === 401) { renderLogin('Please sign in to keep score.'); return; }
-            if (!r.ok || !r.data) { renderMessage('Couldn’t load your card', 'Check your connection and try again.', true); return; }
-            const d = r.data;
+        function persistMineCache() {
+            if (!S.cardId) return;
+            writeMineCache(MINE_KEY, {
+                cardAttestation: S.cardAttestation,
+                cardId: S.cardId,
+                cardLocked: S.cardLocked,
+                cardmates: S.cardmates,
+                conflicts: S.conflicts,
+                courseName: S.courseName,
+                holes: S.holes,
+                layoutName: S.layoutName,
+                missing: S.missing,
+                playerIndex: S.myIndex,
+                playerLocations: S.playerLocations,
+                roundConfig: S.roundConfig,
+                scoreTargetError: S.scoreTargetError,
+                scoreTargets: S.scoreTargets,
+                status: S.status,
+                udiscCourseId: S.udiscCourseId,
+                weather: S.weather,
+            });
+        }
+        function applyMinePayload(d, options) {
+            const offline = Boolean(options && options.offline);
             S.snap = d;
             S.status = d.status || null;
-            if (d.cardId == null || !Array.isArray(d.cardmates) || !d.cardmates.length) {
-                if (MODE === 'round') renderMessage('Round not found', 'That round code isn’t active. Double-check it, or start a new round.', true);
-                else renderMessage('No card yet', 'Either the round hasn’t started or you’re not on a card for this event. Ask an admin to start the round and assign cards.', true);
-                return;
-            }
             S.holes = Array.isArray(d.holes) ? d.holes : [];
             S.cardId = d.cardId; S.myIndex = d.playerIndex; S.cardmates = d.cardmates;
             S.cardLocked = d.cardLocked === true || (Array.isArray(d.lockedCardIds) && d.lockedCardIds.indexOf(String(d.cardId ?? 'c0')) >= 0);
@@ -738,10 +756,35 @@ export function startScoreApp(options) {
                 title: MODE === 'round' ? ('Round ' + ROUND_CODE) : ('Card ' + (S.cardId || ''))
             });
             renderHole();
-            connectWs();
+            if (!offline) connectWs();
             startPotsPolling();
-            startLiveLocation();
+            if (!offline) startLiveLocation();
             flushQueue();
+            void wakeLock.start();
+            if (offline) toast('Offline — showing last saved card. Scores sync when reconnected.');
+            else persistMineCache();
+        }
+        async function loadMine() {
+            let r = await api(LIVE + '/mine');
+            // Casual round: if we're not on it yet, join with the code, then re-load our card.
+            if (MODE === 'round' && r.ok && r.data && r.data.cardId == null && r.data.status === 'live') {
+                const jr = await api('/rounds/' + ROUND_CODE + '/join', { method: 'POST', body: {} });
+                if (jr.ok) r = await api(LIVE + '/mine');
+            }
+            if (r.status === 401) { renderLogin('Please sign in to keep score.'); return; }
+            if (!r.ok || !r.data) {
+                const cached = isTransientMineFailure(r) ? readMineCache(MINE_KEY) : null;
+                if (cached) { applyMinePayload(cached, { offline: true }); return; }
+                renderMessage('Couldn’t load your card', 'Check your connection and try again.', true); return;
+            }
+            const d = r.data;
+            if (d.cardId == null || !Array.isArray(d.cardmates) || !d.cardmates.length) {
+                if (MODE === 'round') renderMessage('Round not found', 'That round code isn’t active. Double-check it, or start a new round.', true);
+                else renderMessage('No card yet', 'Either the round hasn’t started or you’re not on a card for this event. Ask an admin to start the round and assign cards.', true);
+                return;
+            }
+            writeMineCache(MINE_KEY, d);
+            applyMinePayload(d);
         }
 
         // ---- casual round: home, course/layout pickers, create, add guest ----
@@ -751,7 +794,7 @@ export function startScoreApp(options) {
             if (code.length >= 4) location.search = '?round=' + code;
             else toast('Enter a valid code');
         }
-        function signOut() { try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {} notifyScoreAuthChanged(); renderLogin(); }
+        function signOut() { clearMemberSession(); wakeLock.stop(); notifyScoreAuthChanged(); renderLogin(); }
         function renderHome() {
             renderSetupFlow({
                 view: 'home',

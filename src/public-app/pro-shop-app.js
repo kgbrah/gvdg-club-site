@@ -1,10 +1,10 @@
 import React from "react";
 
 import { resolveApiBase } from "../shared/api-base.js";
+import { readMemberToken } from "../shared/member-session.js";
 
 const h = React.createElement;
 
-const TOKEN_KEY = "gvdg_member_token";
 const ORDER_LABELS = {
   submitted: "Order received",
   processing: "Being prepared",
@@ -25,11 +25,7 @@ function useLatest(value) {
 }
 
 function currentToken() {
-  try {
-    return sessionStorage.getItem(TOKEN_KEY) || "";
-  } catch {
-    return "";
-  }
+  return readMemberToken();
 }
 
 function authBase() {

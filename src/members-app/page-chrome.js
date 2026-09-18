@@ -49,7 +49,7 @@ export function MemberPageChrome() {
 
   return h(React.Fragment, null, [
     h("header", { "data-react-page-chrome": "true", key: "header" }, h("nav", null, [
-    h(ClubLogo, { href: "index.html", key: "logo", onClick: () => setMenuOpen(false) }),
+    h(ClubLogo, { href: "gvdg-members.html", key: "logo", onClick: () => setMenuOpen(false) }),
     h("div", { className: "nav-right", key: "nav" }, [
       h("button", {
         "aria-controls": "navLinks",

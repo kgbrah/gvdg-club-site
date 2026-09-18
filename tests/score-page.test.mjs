@@ -263,7 +263,7 @@ test('score shell owns topbar state without legacy DOM mutations', () => {
   assert.match(main, /setLeaderboardHandler\(handler\)/);
   assert.match(main, /hidden: !header\.showLeaderboard/);
   assert.match(main, /InstallCoachBanner/);
-  assert.match(main, /bodyView\.kind === "watch" \? null : h\(InstallCoachBanner/);
+  assert.match(main, /bodyView\.kind === "watch" \|\| bodyView\.kind === "scorecard" \? null : h\(InstallCoachBanner/);
   assert.match(main, /usePlayerThemeSession/);
   assert.match(main, /onClick: onToggleTheme/);
   assert.match(controller, /renderScoreBody\(kind, props\)/);
@@ -304,8 +304,13 @@ test('score controller delegates scorecard derivation to a pure view model', () 
   assert.match(viewModel, /export function fieldActiveHoleIndex/);
   assert.match(viewModel, /export function strokesForRow/);
   assert.match(viewModel, /export function finalizeBlockers\(state\)/);
-  assert.match(viewModel, /export function finishRoundHint\(blockers, mode/);
-  assert.match(controller, /finishRoundHint\(blockers, MODE/);
+  assert.match(viewModel, /export function playOrderStep/);
+  assert.match(viewModel, /export function startingHoleForState/);
+  assert.match(controller, /playOrderStep\(S\.holes, S\.holeIdx, startingHoleForState\(S\), 1\)/);
+  assert.match(controller, /readMemberToken/);
+  assert.match(controller, /createWakeLock/);
+  assert.match(controller, /readMineCache\(MINE_KEY\)/);
+  assert.match(controller, /wakeLock\.start\(\)/);
   assert.doesNotMatch(scoreLeaderboardSource(), /Every member on the card must enter matching scores/);
   assert.doesNotMatch(controller, /function scoreRows\(\)|function strokesFor\(|function strokesForRow\(|function conflictForRow\(|function holeHasConflict\(|function isMatchDormie\(|function matchStatusText\(|function myScoreRow\(|function udiscExportData\(\)|function finalizeBlockers\(\)/);
 });
@@ -316,7 +321,9 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
     finalizeBlockers,
     finishRoundHint,
     matchStatusText,
+    playOrderStep,
     scoreRows,
+    startingHoleForState,
     udiscExportData,
     yourTurnHint,
   } = await import(new URL('../src/score-app/score-view-model.js', import.meta.url));
@@ -441,6 +448,33 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
   assert.deepEqual(guestVote.ctpClaim.ctps[0].nominees.map((row) => row.index), [0, 1]);
 });
 
+test('shotgun hole pager follows play order instead of layout index', async () => {
+  const { buildScorecardViewState, playOrderStep, startingHoleForState } = await import(new URL('../src/score-app/score-view-model.js', import.meta.url));
+  const shotgunHoles = [{ hole: 1, par: 3 }, { hole: 2, par: 3 }, { hole: 3, par: 3 }];
+  assert.equal(startingHoleForState({ cardmates: [{ isMe: true, startingHole: 8 }] }), 8);
+  assert.equal(playOrderStep(shotgunHoles, 2, 3, 1), 0);
+  assert.equal(playOrderStep(shotgunHoles, 2, 3, -1), 2);
+  assert.equal(playOrderStep(shotgunHoles, 0, 2, 1), 0);
+  const shotgunView = buildScorecardViewState({
+    state: {
+      holes: shotgunHoles,
+      holeIdx: 1,
+      cardmates: [{ index: 0, name: 'Ava', isMe: true, startingHole: 3, scores: {}, scorecards: {} }],
+      conflicts: [],
+      missing: [],
+      roundConfig: { groupFormat: 'singles', scoringStyle: 'stroke' },
+      scoreTargets: [],
+      snap: { standings: [] },
+    },
+    mode: 'round',
+    roundCode: 'QA1234',
+    scorerIndex: 0,
+    teeSign: null,
+  });
+  assert.equal(shotgunView.atEnd, true);
+  assert.equal(shotgunView.atStart, false);
+});
+
 test('player leaderboard renders matchplay and pair labels without primary to-par ranking', () => {
   const source = scoreLeaderboardSource();
   assert.match(source, /const resultHead = isMatchplay \? "Match" : "To par"/);
@@ -518,7 +552,13 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /function FinishCard\(props\)/);
   assert.match(scorecard, /function ConfirmScoresSheet\(props\)/);
   assert.match(scorecard, /Finish card/);
-  assert.match(scorecard, /Every player on this card must agree/);
+  assert.match(scorecard, /Anyone on this card can confirm/);
+  assert.match(scorecard, /useAccessibleDialog/);
+  assert.match(scorecard, /createPortal/);
+  assert.match(scorecard, /ScorePad/);
+  assert.match(scorecard, /hole-media-chip/);
+  assert.match(scorecard, /compact: true/);
+  assert.match(scorecard, /HoleMap/);
   assert.doesNotMatch(scorecard, /Your card is not ready yet/);
   assert.match(controller, /LIVE \+ '\/finish-card'/);
   assert.match(scorecard, /function HoleGrid\(props\)/);
