@@ -108,11 +108,12 @@ export function nextTeeHud(gps, nextHole) {
   return { caption: "next tee", ft };
 }
 
-export function gpsHudPrompt(status) {
-  if (status === "ready") return "";
+export function gpsHudPrompt(status, mode) {
+  if (mode === "remaining" || mode === "throw") return "";
   if (status === "denied") return "GPS blocked";
   if (status === "watching") return "Finding GPS…";
   if (status === "unavailable") return "GPS unavailable";
+  if (status === "ready" && mode !== "hole") return "";
   return "Tap for GPS";
 }
 
@@ -134,7 +135,6 @@ export function currentRangeHud(hole, gps, measure) {
     primary = rangeHud({ from: measure.a, to: hole.target });
   } else if (gps && hole && hole.target) {
     primary = rangeHud({ from: gps, to: hole.target });
-    if (primary && primary.ft > GPS_REMAINING_MAX_FT) primary = null;
   }
   if (!primary) return holeHud;
   if (holeFt == null || holeFt <= 0) return primary;

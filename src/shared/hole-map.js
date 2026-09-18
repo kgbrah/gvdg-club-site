@@ -352,6 +352,7 @@ export function HoleMap(props) {
       h(ScoreChips, { compact, height: map.height, key: "chips", marks: players, width: map.width }),
       h(MapFocusChips, { focus: map.focus, key: "focus", onFocus: props.onFocus }),
       h(MapLieChip, { key: "lie-chip", lie: props.lie, onMarkLie: props.onMarkLie }),
+      props.hud || null,
     ]),
     h("div", { className: "hole-map-caption", key: "caption" }, [
       h("span", { key: "tee" }, map.tee.label),

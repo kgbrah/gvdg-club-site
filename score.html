@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Live Scoring · Greenville Disc Golf Club</title>
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=176">
+    <link rel="manifest" href="site.webmanifest?v=177">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <script src="pwa.js" defer></script>
     <link rel="stylesheet" href="tokens.css">
@@ -456,7 +456,8 @@
         .score-glove-tools {
             position: relative; left: auto; bottom: auto; z-index: 2;
             display: flex; gap: 0.3rem; margin: 0.28rem 0 0.1rem; padding: 0;
-            border-radius: 12px; background: transparent; flex: 0 0 auto; align-self: flex-start;
+            border-radius: 12px; background: transparent; flex: 0 0 auto;
+            align-self: stretch; align-items: center; width: 100%;
         }
         .score-glove-tool {
             min-height: 36px; min-width: 36px; padding: 0 0.4rem;
@@ -471,6 +472,13 @@
             color: var(--light);
         }
         .score-glove-tool span { display: none; }
+        .score-glove-tools .scorecard-owner {
+            margin-left: auto; padding: 0; margin-bottom: 0; border: 0; gap: 0;
+            min-width: 0; flex: 1 1 8.5rem; max-width: 14rem;
+        }
+        .score-glove-tools .scorecard-owner select {
+            width: 100%; min-height: 36px; font-size: 0.78rem; padding: 0 0.55rem;
+        }
         .score-glove-stage .holegrid {
             flex: 0 0 auto; min-height: 0; margin: 0.22rem 0 0.12rem;
             align-content: start; overflow: hidden; gap: 4px;
@@ -510,7 +518,6 @@
         }
         .score-glove-dock .prow { padding: 0.22rem 0; gap: 0.4rem; }
         .score-glove-dock .prow .pname { font-size: 0.92rem; }
-        .score-glove-dock .scorecard-owner { padding-bottom: 0.15rem; }
         .score-glove-dock .totbar { margin-top: 0.12rem; padding-top: 0.18rem; }
         .score-glove-dock .totbar .v { font-size: 1.05rem; }
         .score-glove-dock .ctp-claim { margin: 0.35rem 0 0; padding: 0.5rem; }
@@ -702,6 +709,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=176"></script>
+    <script type="module" src="score-app/score-app.js?v=177"></script>
 </body>
 </html>
