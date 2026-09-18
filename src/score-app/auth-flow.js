@@ -89,9 +89,59 @@ function LoginView(props) {
     props.guestAvailable
       ? h("button", { className: "btn ghost", key: "guest", type: "button", onClick: props.onGuestContinue }, "Keep score as a guest")
       : null,
+    props.openPlayAvailable
+      ? h("p", { className: "muted center", key: "open-note" }, "Casual rounds don't need a club login.")
+      : null,
+    props.openPlayAvailable
+      ? h("button", { className: "btn ghost", key: "open", type: "button", onClick: props.onOpenPlay }, "Play without an account")
+      : null,
     h("p", { className: "muted center return-members", key: "members" },
       h("a", { className: "link", href: props.membersHref || "gvdg-members.html" }, "Return to members"),
     ),
+  ]);
+}
+
+function OpenPlayView(props) {
+  const [name, setName] = React.useState(props.defaultName || "");
+  const [error, setError] = React.useState("");
+  const [pending, setPending] = React.useState(false);
+
+  async function submit(event) {
+    event.preventDefault();
+    const cleanName = name.trim();
+    if (!cleanName) {
+      setError("Enter the name that should appear on the card.");
+      return;
+    }
+    setPending(true);
+    setError("");
+    try {
+      const result = await props.onStart({ name: cleanName });
+      if (result && result.ok === false) setError(result.message || "Could not start. Try again.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return h("form", { className: "card stack", onSubmit: submit, "data-score-auth": "open-play" }, [
+    h("h2", { className: "section", key: "title" }, "Play without an account"),
+    h("p", { className: "muted", key: "copy" }, props.message || "Your name on the card. No club PIN needed."),
+    h("label", { className: "lbl", htmlFor: "openPlayName", key: "label" }, "Name on the card"),
+    h("input", {
+      autoComplete: "nickname",
+      className: "field",
+      id: "openPlayName",
+      key: "input",
+      maxLength: 60,
+      placeholder: "Your name",
+      value: name,
+      onChange: (event) => setName(event.target.value),
+    }),
+    h("p", { className: "muted auth-error", key: "error", role: "alert" }, error),
+    h("button", { className: "btn", disabled: pending, key: "submit", type: "submit" }, pending ? "Starting..." : "Keep score"),
+    props.onSignIn
+      ? h("button", { className: "btn ghost", disabled: pending, key: "signin", type: "button", onClick: props.onSignIn }, "Sign in with a club account")
+      : null,
   ]);
 }
 
@@ -159,5 +209,6 @@ function SetPinView(props) {
 
 export function ScoreAuthFlow(props) {
   if (props.mode === "setPin") return h(SetPinView, props);
+  if (props.mode === "openPlay") return h(OpenPlayView, props);
   return h(LoginView, props);
 }

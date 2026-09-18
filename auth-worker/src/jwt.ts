@@ -12,6 +12,10 @@ export interface SessionClaims {
    *  before that no longer matches and is rejected server-side — i.e. stateless session revocation.
    *  Absent/legacy tokens (and members without the field) are treated as version 0. */
   pinVer?: number;
+  /** Open-play (casual scoring without a club account). Member routes MUST reject these. */
+  play?: boolean;
+  /** Display name baked into an open-play token so join/create cannot spoof a different name. */
+  name?: string;
 }
 
 function keyOf(secret: string): Uint8Array {
@@ -29,15 +33,34 @@ export async function signSession(claims: SessionClaims, secret: string, ttlSeco
     .sign(keyOf(secret));
 }
 
+/** Sign an open-play scoring token. Same HS256 key as member sessions, but `play: true` so
+ *  requireAuth rejects it on every member/admin/shop/event-pay route. */
+export async function signOpenPlaySession(
+  claims: { readonly sub: string; readonly name: string },
+  secret: string,
+  ttlSeconds: number,
+): Promise<string> {
+  const nowSec = Math.floor(Date.now() / 1000);
+  return new SignJWT({ play: true, name: claims.name })
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setSubject(claims.sub)
+    .setIssuedAt(nowSec)
+    .setExpirationTime(nowSec + ttlSeconds)
+    .sign(keyOf(secret));
+}
+
 /** Verify a session token. Returns the claims, or null on any failure (bad sig, expired, malformed). */
 export async function verifySession(token: string, secret: string): Promise<SessionClaims | null> {
   try {
     const { payload } = await jwtVerify(token, keyOf(secret), { algorithms: ["HS256"] });
     if (typeof payload.sub !== "string") return null;
+    const name = typeof payload.name === "string" ? payload.name.trim() : "";
     return {
       sub: payload.sub,
       mustChangePin: payload.mustChangePin === true,
       pinVer: typeof payload.pinVer === "number" ? payload.pinVer : 0,
+      play: payload.play === true,
+      name: name ? name.slice(0, 60) : undefined,
     };
   } catch {
     return null;

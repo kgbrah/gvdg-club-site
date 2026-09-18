@@ -174,10 +174,11 @@ A "tee sign" is the sign at each hole that shows the hole number and how far it 
 The **score app** (tap **Play** on the members dock, or open a round link someone shares) lets you keep score while you play, like a smart scorecard.
 
 ### 🟢 Start or join a scorecard
-- **Play tab:** tap **Play**. Rejoin a live card, **Start a round** for a casual card, or type a code to **Join** / **Watch**.
-- **Join with a link:** someone shares a round link or a short **code**. Open the link, or type the code on Play, and you're on the card.
+- **Play without an account:** open the score app (or a round link someone shares). You only need a **name on the card** — no club PIN. Start a casual round, share the code, or join one already going.
+- **Play tab:** members tap **Play**. Rejoin a live card, **Start a round** for a casual card, or type a code to **Join** / **Watch**. Friends without logins can still use the round link.
+- **Join with a link:** someone shares a round link or a short **code**. Open the link, or type the code, and you're on the card.
 - **Casual round:** you and friends can start your own card to play for fun.
-- **Event round:** for club games, a helper starts it, and players get added from who signed up.
+- **Event round:** for club games, a helper starts it, and players get added from who signed up. Event scoring still needs a member login or a guest registration.
 
 ### 🔢 Keep score, hole by hole
 1. You see **one hole at a time**. The map fills the top of the screen. Scores sit in the **bottom third** so you can tap them with one thumb.

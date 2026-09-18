@@ -21,7 +21,7 @@ function BackButton({ onBack }) {
   );
 }
 
-function HomeView({ onStart, onJoin, onInvalidCode, onSignOut, onWatch }) {
+function HomeView({ onStart, onJoin, onInvalidCode, onSignOut, onSignIn, onWatch, signedIn, playerName }) {
   const [joinCode, setJoinCode] = React.useState("");
   const submitJoin = () => {
     const code = joinCode.toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -35,8 +35,13 @@ function HomeView({ onStart, onJoin, onInvalidCode, onSignOut, onWatch }) {
       h(
         "p",
         { className: "muted", key: "copy" },
-        "Start a casual round and share the code with your card, or join a round someone already started.",
+        signedIn
+          ? "Start a casual round and share the code with your card, or join a round someone already started."
+          : "No club login needed. Start a card, share the code, or join one already going.",
       ),
+      playerName && !signedIn
+        ? h("p", { className: "muted", key: "who" }, "Playing as " + playerName + ".")
+        : null,
       h(
         "button",
         { className: "btn", type: "button", onClick: onStart, key: "start" },
@@ -67,11 +72,17 @@ function HomeView({ onStart, onJoin, onInvalidCode, onSignOut, onWatch }) {
         "Watch this round",
       ),
     ]),
-    h(
-      "button",
-      { className: "btn ghost", type: "button", onClick: onSignOut, key: "signOut" },
-      [icon(LogOut), "Sign out"],
-    ),
+    signedIn
+      ? h(
+          "button",
+          { className: "btn ghost", type: "button", onClick: onSignOut, key: "signOut" },
+          [icon(LogOut), "Sign out"],
+        )
+      : h(
+          "button",
+          { className: "btn ghost", type: "button", onClick: onSignIn, key: "signIn" },
+          "Sign in with a club account",
+        ),
   ]);
 }
 

@@ -7,6 +7,7 @@ import { finalizeRoundStandings, healthyTargets, invalidScoreTargetsResponse, re
 import { j, metadataJson, type LiveEnv, type LiveMeta, type ScoringState } from "./live-types.js";
 import { roundRatingForScoreWithWeather, solveSsa, type Propagator, type RatingMethod, type RatingStream } from "./rating-engine.js";
 import { clearRoundRatingsForCasualRound, clearRoundRatingsForEvent, createRoundRating, findRatingAnchor, getLayoutRatingBaseline, upsertLayoutRatingBaseline, upsertPlayerRatingFromRounds } from "./rating-store.js";
+import { isOpenPlayId } from "./authz.js";
 import { ratingWeatherFromJson } from "./weather.js";
 
 export type FinalizeLiveEventInput = {
@@ -201,7 +202,7 @@ async function persistRoundRatings(env: LiveEnv, meta: LiveMeta, standings: Fina
   if (stream === "casual" && !meta.roundCode) return; // no durable key → nothing to attach ratings to
   const now = new Date().toISOString();
   const roundDate = meta.startedAt || now;
-  const ranked = standings.filter((s) => s.place != null && s.memberId); // only completed, ranked, member rounds
+  const ranked = standings.filter((s) => s.place != null && s.memberId && !isOpenPlayId(s.memberId)); // only completed, ranked, club-member rounds
   const ratingWeather = ratingWeatherFromJson(meta.weather ? JSON.stringify(meta.weather) : null);
 
   // Rating context: casual reads the per-layout SSA baseline; competition solves SSA from finishers' anchors.

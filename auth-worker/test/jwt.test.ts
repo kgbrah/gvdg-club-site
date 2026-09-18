@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { signSession, verifySession } from "../src/jwt.js";
+import { signOpenPlaySession, signSession, verifySession } from "../src/jwt.js";
 
 const SECRET = "test-secret-at-least-32-bytes-long-aaaa";
 
@@ -10,6 +10,7 @@ describe("session JWT", () => {
     expect(claims).not.toBeNull();
     expect(claims!.sub).toBe("pdga:12345");
     expect(claims!.mustChangePin).toBe(true);
+    expect(claims!.play).toBe(false);
   });
 
   it("returns null when verified with the wrong secret", async () => {
@@ -31,5 +32,11 @@ describe("session JWT", () => {
   it("returns null for garbage", async () => {
     expect(await verifySession("not.a.jwt", SECRET)).toBeNull();
     expect(await verifySession("", SECRET)).toBeNull();
+  });
+
+  it("round-trips an open-play scoring token", async () => {
+    const token = await signOpenPlaySession({ sub: "op_ab", name: "Pat" }, SECRET, 900);
+    const claims = await verifySession(token, SECRET);
+    expect(claims).toMatchObject({ sub: "op_ab", play: true, name: "Pat", mustChangePin: false });
   });
 });

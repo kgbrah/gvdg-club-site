@@ -79,7 +79,7 @@ export async function handleLogin(request: Request, env: Env, origin: string | n
 export async function handleMe(request: Request, env: Env, origin: string | null): Promise<Response> {
   const token = bearer(request);
   const claims = token ? await verifySession(token, env.JWT_SECRET) : null;
-  if (!claims) return json({ error: "unauthorized" }, 401, origin);
+  if (!claims || claims.play) return json({ error: "unauthorized" }, 401, origin);
   const member = await getMember(env.ROSTER, claims.sub);
   if (!member) return json({ error: "unauthorized" }, 401, origin);
   return json(

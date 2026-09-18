@@ -79,7 +79,7 @@ export function MemberPlayPage() {
     }, [
       h("div", { key: "copy" }, [
         h("h2", { key: "title" }, "Start a round"),
-        h("p", { key: "meta" }, "Casual card. Share the code with your group."),
+        h("p", { key: "meta" }, "Casual card. Share the code — friends don’t need a club login."),
       ]),
       h("span", { className: "player-keep-score-go", key: "go" }, "Start"),
     ]),
