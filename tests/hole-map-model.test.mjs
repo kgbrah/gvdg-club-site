@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CIRCLE1_M, CIRCLE2_M, circleEllipse, currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, headingDeg, holeMapLabel, holePoint, latLngFromMapPoint, playerMarksOnMap, projectHoleMap, projectMapPoint, puttingCircle, rangeHud, remainingFt, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, windBlowToDeg, withSelfLocation } from "../src/shared/hole-map-model.js";
+import { CIRCLE1_M, CIRCLE2_M, circleEllipse, currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, headingDeg, holeMapLabel, holePoint, latLngFromMapPoint, mapFocusFromRemaining, nextTeeHud, playerMarksOnMap, projectHoleMap, projectMapPoint, puttingCircle, rangeHud, remainingFt, resolveMapFocus, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, windBlowToDeg, withSelfLocation } from "../src/shared/hole-map-model.js";
 
 test("holePoint requires numeric lat/lng", () => {
   assert.equal(holePoint(null), null);
@@ -147,6 +147,45 @@ test("range HUD captions hole length, remaining, and throw", () => {
     ft: 82,
     mode: "remaining",
   });
+});
+
+test("map focus auto-zooms into C2 then C1 and can be pinned", () => {
+  assert.equal(mapFocusFromRemaining(20), "c1");
+  assert.equal(mapFocusFromRemaining(50), "c2");
+  assert.equal(mapFocusFromRemaining(120), "hole");
+  assert.equal(mapFocusFromRemaining(null), "hole");
+  assert.equal(resolveMapFocus(null, 20), "c1");
+  assert.equal(resolveMapFocus("hole", 20), "hole");
+  assert.equal(resolveMapFocus("c2", 20), "c2");
+});
+
+test("C1 and C2 focus tighten the satellite bounds around the basket", () => {
+  const hole = {
+    distance_ft: 308,
+    tee: { lat: 35.6, lng: -77.37, label: "Gold" },
+    target: { lat: 35.601, lng: -77.37, label: "A" },
+  };
+  const full = projectHoleMap(hole);
+  const c2 = projectHoleMap(hole, { focus: "c2" });
+  const c1 = projectHoleMap(hole, { focus: "c1" });
+  assert.equal(full.focus, "hole");
+  assert.equal(c1.focus, "c1");
+  assert.ok(c2.bounds.maxLat - c2.bounds.minLat < full.bounds.maxLat - full.bounds.minLat);
+  assert.ok(c1.bounds.maxLat - c1.bounds.minLat < c2.bounds.maxLat - c2.bounds.minLat);
+  assert.ok(Math.abs(c1.basket.x / c1.width - 0.5) < 0.05);
+  assert.ok(Math.abs(c1.basket.y / c1.height - 0.5) < 0.05);
+  assert.ok(c1.circle1);
+  assert.ok(c1.circle2.rx > c1.circle1.rx);
+});
+
+test("nextTeeHud reports distance to the following tee", () => {
+  const gps = { lat: 35.601, lng: -77.37 };
+  const next = { tee: { lat: 35.6015, lng: -77.37 } };
+  const hud = nextTeeHud(gps, next);
+  assert.equal(hud.caption, "next tee");
+  assert.ok(hud.ft > 0 && hud.ft < 250);
+  assert.equal(nextTeeHud(gps, null), null);
+  assert.equal(nextTeeHud(null, next), null);
 });
 
 test("gpsErrorPolicy keeps the last fix and retries timeouts", () => {

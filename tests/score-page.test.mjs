@@ -524,12 +524,14 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
 });
 
 test('shotgun hole pager follows play order instead of layout index', async () => {
-  const { buildScorecardViewState, playOrderStep, startingHoleForState } = await import(new URL('../src/score-app/score-view-model.js', import.meta.url));
+  const { buildScorecardViewState, nextPlayHole, playOrderStep, startingHoleForState } = await import(new URL('../src/score-app/score-view-model.js', import.meta.url));
   const shotgunHoles = [{ hole: 1, par: 3 }, { hole: 2, par: 3 }, { hole: 3, par: 3 }];
   assert.equal(startingHoleForState({ cardmates: [{ isMe: true, startingHole: 8 }] }), 8);
   assert.equal(playOrderStep(shotgunHoles, 2, 3, 1), 0);
   assert.equal(playOrderStep(shotgunHoles, 2, 3, -1), 2);
   assert.equal(playOrderStep(shotgunHoles, 0, 2, 1), 0);
+  assert.equal(nextPlayHole(shotgunHoles, 2, 3).hole, 1);
+  assert.equal(nextPlayHole(shotgunHoles, 1, 3), null);
   const shotgunView = buildScorecardViewState({
     state: {
       holes: shotgunHoles,
@@ -547,6 +549,7 @@ test('shotgun hole pager follows play order instead of layout index', async () =
     teeSign: null,
   });
   assert.equal(shotgunView.atEnd, true);
+  assert.equal(shotgunView.nextHole, null);
   assert.equal(shotgunView.atStart, false);
 });
 
@@ -700,8 +703,16 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /function RangeHud/);
   assert.match(scorecard, /hole-range-hud-len/);
   assert.match(scorecard, /hud\.holeFt/);
-  assert.match(scorecard, /Ruler/);
-  assert.match(scorecard, /Measure/);
+  assert.match(holeMap, /function MapFocusChips/);
+  assert.match(holeMap, /function MapLieChip/);
+  assert.match(holeMap, /Mark lie/);
+  assert.match(holeMap, /focus: props\.focus/);
+  assert.match(scorecard, /resolveMapFocus/);
+  assert.match(scorecard, /nextTeeHud/);
+  assert.match(scorecard, /onMarkLie/);
+  assert.match(html, /hole-map-focus-btn/);
+  assert.match(html, /hole-range-hud-next/);
+  assert.match(holeMapModel, /function boundsForFocus/);
   assert.match(scorecard, /hole-range-hud/);
   assert.match(scorecard, /onMapPoint/);
   assert.match(scorecard, /aria-pressed/);

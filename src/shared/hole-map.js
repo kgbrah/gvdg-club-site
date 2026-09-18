@@ -20,6 +20,37 @@ function SatelliteLayer({ url }) {
   });
 }
 
+function MapFocusChips(props) {
+  if (typeof props.onFocus !== "function") return null;
+  return h("div", { "aria-label": "Map zoom", className: "hole-map-focus", role: "group" }, [
+    { id: "hole", label: "Hole" },
+    { id: "c2", label: "C2" },
+    { id: "c1", label: "C1" },
+  ].map((item) => h("button", {
+    "aria-pressed": props.focus === item.id ? "true" : "false",
+    className: "hole-map-focus-btn" + (props.focus === item.id ? " active" : ""),
+    key: item.id,
+    type: "button",
+    onClick: (event) => {
+      event.stopPropagation();
+      props.onFocus(item.id);
+    },
+  }, item.label)));
+}
+
+function MapLieChip(props) {
+  if (typeof props.onMarkLie !== "function") return null;
+  return h("button", {
+    "aria-pressed": props.lie ? "true" : "false",
+    className: "hole-map-lie-btn" + (props.lie ? " active" : ""),
+    type: "button",
+    onClick: (event) => {
+      event.stopPropagation();
+      props.onMarkLie();
+    },
+  }, props.lie ? "Clear lie" : "Mark lie");
+}
+
 function WindMark(props) {
   if (props.deg == null) return null;
   return h(
@@ -220,9 +251,10 @@ export function HoleMap(props) {
   const hole = props.hole;
   const compact = Boolean(props.compact);
   const map = projectHoleMap(hole, {
+    focus: props.focus,
     height: compact ? 180 : undefined,
     width: compact ? 320 : undefined,
-    windFromDeg: compact ? null : props.windFromDeg,
+    windFromDeg: props.windFromDeg,
   });
   if (!map) return null;
   const udiscHref = compact ? "" : udiscDeepLink(props.udiscCourseId);
@@ -230,6 +262,7 @@ export function HoleMap(props) {
   const players = playerMarksOnMap(map, props.players);
   const measureFrom = projectMapPoint(map, props.measureFrom && props.measureFrom.lat, props.measureFrom && props.measureFrom.lng);
   const measureTo = projectMapPoint(map, props.measureTo && props.measureTo.lat, props.measureTo && props.measureTo.lng);
+  const lie = projectMapPoint(map, props.lie && props.lie.lat, props.lie && props.lie.lng);
   function onMapPointer(event) {
     if (typeof props.onMapPoint !== "function") return;
     event.preventDefault();
@@ -238,7 +271,7 @@ export function HoleMap(props) {
   }
   return h("div", { className: compact ? "hole-map-card hole-map-compact" : "card hole-map-card" }, [
     h("div", { className: "hole-map-frame", key: "frame" }, [
-      h(SatelliteLayer, { key: "satellite", url: map.satelliteUrl }),
+      h(SatelliteLayer, { key: map.satelliteUrl || "satellite", url: map.satelliteUrl }),
       h(
         "svg",
         {
@@ -296,7 +329,7 @@ export function HoleMap(props) {
             x: map.basket.x,
             y: map.basket.y,
           }),
-          compact ? null : h(WindMark, { deg: map.windBlowToDeg, key: "wind", x: map.width - 24, y: 24 }),
+          map.windBlowToDeg == null ? null : h(WindMark, { deg: map.windBlowToDeg, key: "wind", x: map.width - 24, y: 24 }),
           ...players.map((player) => h(PlayerMark, {
             compact,
             initials: player.initials,
@@ -305,6 +338,9 @@ export function HoleMap(props) {
             x: player.x,
             y: player.y,
           })),
+          !measureFrom && lie
+            ? h(LieMark, { compact, key: "lie", label: "Lie", x: lie.x, y: lie.y })
+            : null,
           measureFrom
             ? h(LieMark, { compact, key: "lie-a", label: "Start", x: measureFrom.x, y: measureFrom.y })
             : null,
@@ -314,6 +350,8 @@ export function HoleMap(props) {
         ],
       ),
       h(ScoreChips, { compact, height: map.height, key: "chips", marks: players, width: map.width }),
+      h(MapFocusChips, { focus: map.focus, key: "focus", onFocus: props.onFocus }),
+      h(MapLieChip, { key: "lie-chip", lie: props.lie, onMarkLie: props.onMarkLie }),
     ]),
     h("div", { className: "hole-map-caption", key: "caption" }, [
       h("span", { key: "tee" }, map.tee.label),
