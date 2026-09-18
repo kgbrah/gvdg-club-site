@@ -17,7 +17,11 @@ function cleanUrl(value, fallback) {
 }
 
 function jsonHeaders(token) {
-  const headers = { Accept: "application/json" };
+  const headers = {
+    Accept: "application/json",
+    Origin: DEFAULT_SITE_URL,
+    "User-Agent": "Mozilla/5.0 (compatible; GVDG-QA/1.0)",
+  };
   if (token) headers.Authorization = "Bearer " + token;
   return headers;
 }
@@ -70,6 +74,9 @@ async function requestJson(apiBase, path, options = {}) {
       }
       if (!response.ok) {
         const message = data && typeof data.error === "string" ? data.error : text.slice(0, 200);
+        if (path === "/login" && response.status === 401) {
+          throw new Error("QA login rejected. Update GVDG_STAGING_QA_IDENTIFIER and GVDG_STAGING_QA_PIN to a live staging member.");
+        }
         throw new Error(`API ${init.method} ${path} failed with ${response.status}: ${message}`);
       }
       return data;
@@ -97,6 +104,15 @@ async function qaToken(apiBase) {
     body: { identifier, pin },
   });
   if (!data || typeof data.token !== "string") throw new Error("Login succeeded without a token.");
+  if (data.mustChangePin === true) {
+    const next = await requestJson(apiBase, "/set-pin", {
+      method: "POST",
+      token: data.token,
+      body: { newPin: pin },
+    });
+    if (!next || typeof next.token !== "string") throw new Error("Forced PIN change did not return a usable token.");
+    return next.token;
+  }
   return data.token;
 }
 
@@ -186,7 +202,10 @@ async function runBrowserQa({ siteUrl, apiBase, token, member, course, layout })
     const page = await context.newPage();
     const errors = collectPageErrors(page);
     await page.addInitScript(
-      ({ key, value }) => sessionStorage.setItem(key, value),
+      ({ key, value }) => {
+        try { localStorage.setItem(key, value); } catch { /* private mode */ }
+        try { sessionStorage.setItem(key, value); } catch { /* private mode */ }
+      },
       { key: TOKEN_KEY, value: token },
     );
 
@@ -197,7 +216,7 @@ async function runBrowserQa({ siteUrl, apiBase, token, member, course, layout })
     await page.locator("[data-group-format='singles']").click();
     await page.locator("[data-scoring-style='stroke']").click();
     await page.locator("[data-create-round='casual']").click();
-    await page.waitForURL(/round=[A-Z0-9]+/, { timeout: 20_000 });
+    await page.waitForURL(/round=[A-Z0-9]+/, { timeout: 20_000, waitUntil: "domcontentloaded" });
 
     roundCode = new URL(page.url()).searchParams.get("round") || "";
     if (!roundCode) throw new Error("Created round did not put a round code in the URL.");

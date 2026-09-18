@@ -44,7 +44,11 @@ function cleanUrl(value, fallback) {
 }
 
 function jsonHeaders(token) {
-  const headers = { Accept: "application/json" };
+  const headers = {
+    Accept: "application/json",
+    Origin: DEFAULT_SITE_URL,
+    "User-Agent": "Mozilla/5.0 (compatible; GVDG-QA/1.0)",
+  };
   if (token) headers.Authorization = "Bearer " + token;
   return headers;
 }
@@ -66,6 +70,9 @@ async function requestJson(apiBase, path, options = {}) {
   const data = text ? JSON.parse(text) : null;
   if (!response.ok) {
     const message = data && typeof data.error === "string" ? data.error : text.slice(0, 200);
+    if (path === "/login" && response.status === 401) {
+      throw new Error("QA login rejected. Update GVDG_STAGING_QA_IDENTIFIER and GVDG_STAGING_QA_PIN to a live staging member.");
+    }
     throw new Error(`API ${init.method} ${path} failed with ${response.status}: ${message}`);
   }
   return data;
@@ -86,6 +93,15 @@ async function qaToken(apiBase) {
     body: { identifier, pin },
   });
   if (!data || typeof data.token !== "string") throw new Error("Login succeeded without a token.");
+  if (data.mustChangePin === true) {
+    const next = await requestJson(apiBase, "/set-pin", {
+      method: "POST",
+      token: data.token,
+      body: { newPin: pin },
+    });
+    if (!next || typeof next.token !== "string") throw new Error("Forced PIN change did not return a usable token.");
+    return next.token;
+  }
   return data.token;
 }
 
@@ -121,18 +137,19 @@ async function waitForText(page, selector, expected, label) {
 }
 
 async function waitForLiveRating(page) {
+  const selector = "[data-react-home-hero] [data-react-live-rating] .dash-tile-num";
   try {
     await page.waitForFunction(
-      () => /^\d{3,4}$/.test(document.querySelector("[data-react-live-rating] .dash-tile-num")?.textContent?.trim() || ""),
-      null,
+      ({ selector: query }) => /^\d{3,4}$/.test(document.querySelector(query)?.textContent?.trim() || ""),
+      { selector },
       { timeout: 15_000 },
     );
   } catch {
     const body = await page.locator("body").innerText().catch(() => "");
-    const actual = await page.locator("[data-react-live-rating] .dash-tile-num").innerText().catch(() => "<missing>");
+    const actual = await page.locator(selector).innerText().catch(() => "<missing>");
     throw new Error(`Expected a numeric React live rating, got ${actual.trim()}. Page text:\n${body}`);
   }
-  return (await page.locator("[data-react-live-rating] .dash-tile-num").innerText()).trim();
+  return (await page.locator(selector).innerText()).trim();
 }
 
 async function installAuthSubmitCapture(page) {
@@ -325,7 +342,10 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
     const page = await context.newPage();
     const errors = collectPageErrors(page);
     await page.addInitScript(
-      ({ key, value }) => sessionStorage.setItem(key, value),
+      ({ key, value }) => {
+        try { localStorage.setItem(key, value); } catch { /* private mode */ }
+        try { sessionStorage.setItem(key, value); } catch { /* private mode */ }
+      },
       { key: TOKEN_KEY, value: token },
     );
 
