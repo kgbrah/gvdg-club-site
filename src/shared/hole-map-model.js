@@ -67,6 +67,23 @@ export function rangeHud({ from, to, mode, holeFt } = {}) {
 }
 
 export const GPS_REMAINING_MAX_FT = 2500;
+export const GPS_WATCH_OPTIONS = {
+  enableHighAccuracy: true,
+  maximumAge: 8000,
+  timeout: 60000,
+};
+
+export function gpsErrorPolicy(code, hasFix) {
+  if (Number(code) === 1) {
+    return { keepFix: true, restart: false, retryMs: 0, status: "denied" };
+  }
+  return {
+    keepFix: true,
+    restart: true,
+    retryMs: 2000,
+    status: hasFix ? "ready" : "watching",
+  };
+}
 
 export function gpsHudPrompt(status) {
   if (status === "ready") return "";

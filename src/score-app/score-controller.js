@@ -28,6 +28,7 @@ import { readOpenPlayName, readOpenPlayToken, writeOpenPlaySession } from "./ope
 import { buildLivePots, withLiveCtpLeaders } from "../shared/live-pots-model.js";
 import { isLiveWatchRequest, liveRoundCodeFromSearch, liveScoreHref, liveWatchHref } from "../shared/live-watch.js";
 import { holeWinners, winnerColor } from "../shared/matchplay-colors.js";
+import { GPS_WATCH_OPTIONS, gpsErrorPolicy } from "../shared/hole-map-model.js";
 import { notifyScoreAuthChanged } from "../shared/player-theme-session.js";
 import {
     buildShareCard,
@@ -63,6 +64,7 @@ export function startScoreApp(options) {
         const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, roundConfig: null, scoreTargets: [], scoreTargetError: null, weather: null, pots: null, playerLocations: [], cardLocked: false, cardAttestation: { agreedIndexes: [], neededIndexes: [], complete: false }, finishConfirmOpen: false };
         let potsTimer = null;
         let locWatchId = null;
+        let locRetryTimer = null;
         let locLastSent = 0;
         const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
         const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
@@ -157,11 +159,23 @@ export function startScoreApp(options) {
                 try { navigator.geolocation.clearWatch(locWatchId); } catch (e) {}
             }
             locWatchId = null;
+            if (locRetryTimer != null) {
+                clearTimeout(locRetryTimer);
+                locRetryTimer = null;
+            }
         }
         function startLiveLocation() {
-            if (WATCH || locWatchId != null) return;
+            if (WATCH) return;
             if (!memberToken()) return;
             if (!navigator.geolocation) return;
+            if (locRetryTimer != null) {
+                clearTimeout(locRetryTimer);
+                locRetryTimer = null;
+            }
+            if (locWatchId != null && navigator.geolocation) {
+                try { navigator.geolocation.clearWatch(locWatchId); } catch (e) {}
+                locWatchId = null;
+            }
             locWatchId = navigator.geolocation.watchPosition(function (pos) {
                 const lat = pos.coords && pos.coords.latitude;
                 const lng = pos.coords && pos.coords.longitude;
@@ -173,8 +187,16 @@ export function startScoreApp(options) {
                     if (r.status === 401 || r.status === 403 || r.status === 409) stopLiveLocation();
                 });
             }, function (err) {
-                if (err && err.code === 1) stopLiveLocation();
-            }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
+                const policy = gpsErrorPolicy(err && err.code, true);
+                if (!policy.restart) {
+                    stopLiveLocation();
+                    return;
+                }
+                locRetryTimer = setTimeout(function () {
+                    locRetryTimer = null;
+                    startLiveLocation();
+                }, policy.retryMs);
+            }, GPS_WATCH_OPTIONS);
         }
 
         function locationStamp(rows) {

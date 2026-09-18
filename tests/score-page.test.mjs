@@ -681,8 +681,12 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(holeMap, /hole-map-c2/);
   assert.match(holeMap, /function LieMark/);
   assert.match(holeMap, /onMapPoint/);
-  assert.match(scorecard, /function useDeviceFix/);
-  assert.match(scorecard, /enableGps/);
+  assert.match(scorecard, /gpsErrorPolicy/);
+  assert.match(scorecard, /visibilitychange/);
+  assert.match(scorecard, /GPS_WATCH_OPTIONS/);
+  assert.match(controller, /gpsErrorPolicy/);
+  assert.match(controller, /GPS_WATCH_OPTIONS/);
+  assert.match(controller, /locRetryTimer/);
   assert.match(scorecard, /gpsHudPrompt/);
   assert.match(scorecard, /withSelfLocation/);
   assert.match(scorecard, /hole-range-hud-btn/);
