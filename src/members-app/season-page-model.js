@@ -36,6 +36,22 @@ function inYear(value, year) {
   return dateYear(value) === year;
 }
 
+function seasonResultRows(results, casual, year) {
+  const events = (Array.isArray(results) ? results : []).filter((row) => inYear(row.event_date || row.created_at, year)).map((row) => ({
+    ...row,
+    kind: "event",
+    sort: Date.parse(row.event_date || row.created_at || "") || 0,
+  }));
+  const casualRows = (Array.isArray(casual) ? casual : []).filter((row) => inYear(row.finalized_at || row.created_at, year)).map((row) => ({
+    ...row,
+    kind: "casual",
+    event_name: row.course_name || ("Casual round " + (row.round_code || "")),
+    event_date: row.finalized_at || row.created_at || "",
+    sort: Date.parse(row.finalized_at || row.created_at || "") || 0,
+  }));
+  return events.concat(casualRows).sort((a, b) => (b.sort || 0) - (a.sort || 0));
+}
+
 function seasonRounds(ratings, year) {
   const competitive = Array.isArray(ratings?.competitive?.rounds) ? ratings.competitive.rounds : [];
   const casual = Array.isArray(ratings?.casual?.rounds) ? ratings.casual.rounds : [];
@@ -74,6 +90,7 @@ function playerStandings(leagues, memberName) {
 
 export function buildSeasonPage({
   results = [],
+  casual = [],
   ratings = null,
   registrations = [],
   leagues = [],
@@ -82,7 +99,7 @@ export function buildSeasonPage({
 } = {}) {
   const year = easternYear(now);
   const today = easternDateOnly(now);
-  const seasonResults = (Array.isArray(results) ? results : []).filter((row) => inYear(row.event_date || row.created_at, year));
+  const seasonResults = seasonResultRows(results, casual, year);
   const stroke = seasonResults
     .map((row) => numberOrNull(row.to_par))
     .filter((value) => value != null);

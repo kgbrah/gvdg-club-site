@@ -127,7 +127,7 @@ Member-authenticated:
 - `GET /me`
 - `POST /set-pin`
 - `POST /profile`
-- `GET /my-results`
+- `GET /my-results` (event results plus `casual` finalized rounds)
 - `GET /my-ratings`
 - `GET /my-live-rounds`
 - `GET /my-registrations`

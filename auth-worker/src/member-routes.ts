@@ -9,6 +9,7 @@ import { requireAuth, ttl } from "./authz.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { RECORD_PAGE_DEFAULTS, parseWindow } from "./input.js";
 import { getMemberRatings, summarizeRatingRows } from "./ratings.js";
+import { publicMemberCasualResult } from "./casual-archive.js";
 import { readD1OrFallback } from "./d1-retry.js";
 
 // Iteration count must stay <=100000 to match crypto.ts / the workerd PBKDF2 cap, so the
@@ -105,8 +106,14 @@ export async function handleMyResults(request: Request, env: Env, origin: string
     maxLimit: RECORD_PAGE_DEFAULTS.memberResults.maxLimit,
   });
   const requestedLimit = q.get("all") === "1" ? RECORD_PAGE_DEFAULTS.memberResults.maxLimit : limit;
-  const results = await readD1OrFallback(() => db.listMemberResults(env.DB, claims.sub, { limit: requestedLimit, offset }), () => []);
-  return json({ results }, 200, origin);
+  const [results, casualRows] = await Promise.all([
+    readD1OrFallback(() => db.listMemberResults(env.DB, claims.sub, { limit: requestedLimit, offset }), () => []),
+    readD1OrFallback(() => db.listMemberCasualResults(env.DB, claims.sub, { limit: requestedLimit, offset }), () => []),
+  ]);
+  const casual = (Array.isArray(casualRows) ? casualRows : []).map((row) =>
+    publicMemberCasualResult((row || {}) as Record<string, unknown>),
+  );
+  return json({ results, casual }, 200, origin);
 }
 
 export async function handleMyRatings(request: Request, env: Env, origin: string | null): Promise<Response> {

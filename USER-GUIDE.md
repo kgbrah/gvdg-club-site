@@ -103,7 +103,7 @@ A passkey means you don't have to type your PIN every time — you can use your 
 ### 📊 Your dashboard
 After you log in on the **Members** page, you see your **dashboard**. On a phone it has tabs along the bottom:
 - **Home** — your rating, unpaid event fees, course conditions, tonight's event, and a keep-score shortcut.
-- **Play** — start a casual round, join with a code, or rejoin a live card.
+- **Play** — start a casual round, join with a code, rejoin a live card, or open a finished scorecard.
 - **Events** — sign up for games.
 - **Season** — ratings and past rounds.
 - **More** — message board, tee signs, club directory, help, and log out.
@@ -217,7 +217,7 @@ The **score app** (tap **Keep score** on the public site, **Play** on the member
 1. When every hole has a matching score, tap **Finish card** at the bottom of the scorecard (or in the leaderboard sheet).
 2. Check the totals, then tap **Looks good — lock card**. One confirmation is enough. Extra phones do not have to type the same numbers.
 3. If scores disagree, the app tells you which hole to fix first — tap that message to jump there.
-4. When it's finished, the scores are saved and show up in the results. 🎉
+4. When it's finished, the scores are saved. Open **Play → Recent rounds** or **Season** to see the scorecard again. 🎉
 
 ---
 

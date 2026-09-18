@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-title" content="GVDG Club">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=167">
+    <link rel="manifest" href="site.webmanifest?v=168">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -509,6 +509,10 @@
                 .player-play-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; }
                 .player-play-actions .player-btn { margin-top: 0; }
                 .player-play-error { color: var(--over); font-weight: 700; }
+                .recent-round-score { margin-top: 0.28rem; font-family: 'Bebas Neue', sans-serif; font-size: 1.35rem; letter-spacing: 0.03em; line-height: 1; }
+                .recent-round-score.under, .season-result-par.under { color: var(--under); }
+                .recent-round-score.even, .season-result-par.even { color: var(--accent); }
+                .recent-round-score.over, .season-result-par.over { color: var(--team-red); }
                 .player-row-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; margin-bottom: 0.75rem; }
                 .player-stat {
                     background: var(--bg-secondary); border: 1px solid var(--border-color);

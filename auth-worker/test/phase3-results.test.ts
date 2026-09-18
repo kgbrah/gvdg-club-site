@@ -6,12 +6,20 @@ import { arrayField, jsonObject } from "./json.js";
 const SECRET = "x".repeat(40);
 const MEMBER = JSON.stringify({ memberId: "m_jane", name: "Jane", isAdmin: false, pinHash: "x", mustChangePin: false });
 const ROWS = [{ id: 1, event_id: 5, member_id: "m_jane", name: "Jane", place: 1, total: 54, to_par: -3, breakdown: '{"birdies":4}', event_name: "Fall Open", event_date: "2026-09-20" }];
+const CASUAL = [{ id: 9, round_code: "JQEU74", course_name: "Ayden Park", layout_name: "Blue", member_id: "m_jane", name: "Jane", total: 56, to_par: 2, finalized_at: "2026-09-18T12:00:00Z" }];
 
 function kv(initial: Record<string, string> = {}) {
   const m = new Map(Object.entries(initial));
   return { get: async (k: string) => m.get(k) ?? null, put: async (k: string, v: string) => void m.set(k, v), delete: async (k: string) => void m.delete(k) };
 }
-const db = { prepare: () => ({ bind() { return this; }, all: async () => ({ results: ROWS, success: true }), first: async () => null, run: async () => ({ results: [], success: true }) }) };
+const db = {
+  prepare: (sql: string) => ({
+    bind() { return this; },
+    all: async () => ({ results: /FROM casual_results/i.test(sql) ? CASUAL : ROWS, success: true }),
+    first: async () => null,
+    run: async () => ({ results: [], success: true }),
+  }),
+};
 const env = () => ({ ROSTER: kv({ "member:m_jane": MEMBER }), RATELIMIT: kv(), DB: db, JWT_SECRET: SECRET, ALLOWED_ORIGINS: "http://localhost:8080", LIVE: undefined } as unknown as Parameters<typeof worker.fetch>[1]);
 const get = async (path: string, token?: string) => {
   const h: Record<string, string> = { Origin: "http://localhost:8080" };
@@ -29,6 +37,8 @@ describe("Phase 3 result routes", () => {
     expect(res.status).toBe(200);
     const j = await jsonObject(res);
     expect(arrayField(j, "results")[0]).toMatchObject({ event_name: "Fall Open", place: 1, to_par: -3 });
+    expect(arrayField(j, "casual")[0]).toMatchObject({ round_code: "JQEU74", course_name: "Ayden Park", to_par: 2 });
+    expect(arrayField(j, "casual")[0]).not.toHaveProperty("member_id");
   });
   it("GET /events/:id/results is public (club archive)", async () => {
     const res = await get("/events/5/results");

@@ -346,6 +346,7 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   const playPage = readFileSync('src/members-app/play-page.js', 'utf8');
   assert.match(playPage, /data-react-play-page/);
   assert.match(playPage, /data-react-play-join/);
+  assert.match(playPage, /data-react-play-recent/);
   assert.match(playPage, /liveScoreHref/);
   assert.match(playPage, /liveWatchHref/);
   assert.match(playPage, /variant: "play"/);
@@ -366,6 +367,8 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(seasonPage, /PdgaDashboard/);
   assert.match(seasonPage, /ActiveStandingsPanel/);
   assert.match(seasonPage, /\/my-results\?all=1/);
+  assert.match(seasonPage, /liveWatchHref/);
+  assert.match(seasonPage, /resultsData\?\.casual/);
   assert.match(seasonPage, /\/my-ratings\?/);
   assert.match(seasonPage, /\/my-registrations/);
   assert.match(seasonPage, /\/leagues\/active/);

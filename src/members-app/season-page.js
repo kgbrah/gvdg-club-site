@@ -10,11 +10,13 @@ import { formatEventDay, formatToPar } from "./format.js";
 import { useMemberContext } from "./member-context.js";
 import { PdgaDashboard, usePdgaStats } from "./pdga-dashboard.js";
 import { buildSeasonPage } from "./season-page-model.js";
+import { liveWatchHref } from "../shared/live-watch.js";
+import { relClass } from "./play-page-model.js";
 
 const h = React.createElement;
 
 function emptyPayload() {
-  return { results: [], ratings: null, registrations: [], leagues: [], ryderTally: undefined };
+  return { results: [], casual: [], ratings: null, registrations: [], leagues: [], ryderTally: undefined };
 }
 
 function fallbackUnlessAborted(error, fallback) {
@@ -32,6 +34,7 @@ async function loadSeasonPayload(token, signal) {
   ]);
   return {
     results: Array.isArray(resultsData?.results) ? resultsData.results : [],
+    casual: Array.isArray(resultsData?.casual) ? resultsData.casual : [],
     ratings,
     registrations: Array.isArray(registrationData?.registrations) ? registrationData.registrations : [],
     leagues: applyOfficialRyderTally(
@@ -60,20 +63,26 @@ function placeLabel(place) {
 }
 
 function ResultRow({ row }) {
-  const title = row.event_name || "Club event";
-  const when = formatEventDay(row.event_date);
+  const casual = row.kind === "casual" || row.round_code;
+  const title = casual
+    ? (row.course_name || row.event_name || "Casual round")
+    : (row.event_name || "Club event");
+  const when = formatEventDay(row.event_date || row.finalized_at);
   const score = row.to_par != null ? formatToPar(row.to_par) : row.total != null ? String(row.total) : "-";
+  const href = casual
+    ? liveWatchHref({ roundCode: row.round_code })
+    : (row.event_id != null ? `events.html#event/${encodeURIComponent(row.event_id)}` : "events.html");
   return h("a", {
     className: "dash-event season-result",
-    href: row.event_id != null ? `events.html#event/${encodeURIComponent(row.event_id)}` : "events.html",
+    href,
   }, [
     h("div", { className: "dash-event-copy", key: "copy" }, [
       h("div", { className: "dash-event-name", key: "name" }, title),
-      when ? h("div", { className: "dash-event-date", key: "date" }, when) : null,
+      when ? h("div", { className: "dash-event-date", key: "date" }, [when, casual ? "Casual" : "", row.layout_name].filter(Boolean).join(" · ")) : null,
     ]),
     h("div", { className: "season-result-score", key: "score" }, [
       h("div", { className: "season-result-place", key: "place" }, row.place != null ? `#${row.place}` : "—"),
-      h("div", { className: "season-result-par", key: "par" }, score),
+      h("div", { className: "season-result-par " + relClass(row.to_par), key: "par" }, score),
     ]),
   ]);
 }
@@ -173,7 +182,7 @@ export function MemberSeasonPage() {
       h("h4", { className: "dash-subtitle", key: "title" }, "Club results"),
       page.results.length
         ? page.results.map((row, index) => h(ResultRow, { row, key: row.id || `${row.event_id}-${index}` }))
-        : h("p", { className: "dash-note", key: "empty" }, "No finalized club rounds this season yet."),
+        : h("p", { className: "dash-note", key: "empty" }, "No finalized club or casual rounds this season yet."),
     ]) : null,
     h(PdgaDashboard, { pdgaNo: context.pdgaNo, state: pdgaState, key: "pdga" }),
     h(ClubRatings, { token, key: "ratings" }),

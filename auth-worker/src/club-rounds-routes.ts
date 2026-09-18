@@ -15,6 +15,7 @@ import { asInt, asStr } from "./input.js";
 import { isLiveFormatError, normalizeLiveScoringConfig, type LiveScoringConfig } from "./live-format.js";
 import { mintOpenPlaySession } from "./open-play.js";
 import { weatherLocationForCourse } from "./weather.js";
+import { buildCasualArchiveSnapshot, shouldUseCasualArchive } from "./casual-archive.js";
 
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // unambiguous (no 0/O/1/I/L)
 function genCode(): string {
@@ -81,7 +82,16 @@ export async function handleCasualRounds(
   const sub = seg[2];
 
   // Public reads: snapshot + WebSocket (memberIds redacted, identified by index).
-  if (method === "GET" && sub === "live" && !seg[3]) return proxy(stub, "/snapshot", undefined, origin);
+  // After the DO is evicted, a finished casual round still has D1 results — serve those as a final snapshot
+  // so Play/Season history links keep working.
+  if (method === "GET" && sub === "live" && !seg[3]) {
+    const live = await stub.fetch("https://do/snapshot");
+    const snapshot = await live.json().catch(() => ({}));
+    if (!shouldUseCasualArchive(snapshot)) return json(snapshot, live.status, origin);
+    const archived = await buildCasualArchiveSnapshot(env.DB, code);
+    if (archived) return json(archived, 200, origin);
+    return json(snapshot, live.status, origin);
+  }
   if (sub === "live" && seg[3] === "ws") return stub.fetch(request);
 
   // Public read: durable finalized results (survives the DO's eviction; casual finalize persists to D1).
