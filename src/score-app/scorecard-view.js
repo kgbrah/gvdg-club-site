@@ -21,30 +21,40 @@ function icon(Icon) {
 }
 
 function RoundTools(props) {
-  if (!props.show) return null;
+  const showManage = Boolean(props.show);
   return h("div", { className: "score-glove-tools", key: "round-tools" }, [
-    h("button", { className: "score-glove-tool", key: "share", type: "button", onClick: props.onShare }, [
-      icon(Share2),
-      h("span", { key: "label" }, "Share"),
-    ]),
+    h(
+      "button",
+      {
+        "aria-label": "Share scorecard",
+        className: "score-glove-tool",
+        key: "share",
+        title: "Share scorecard",
+        type: "button",
+        onClick: props.onShare,
+      },
+      [icon(Share2), h("span", { key: "label" }, "Share")],
+    ),
     props.onWatchShare
       ? h("button", { className: "score-glove-tool", key: "watch", type: "button", onClick: props.onWatchShare }, [
         icon(Eye),
         h("span", { key: "label" }, "Watch"),
       ])
       : null,
-    h(
-      "button",
-      {
-        "aria-label": "Add player",
-        className: "score-glove-tool",
-        key: "add",
-        title: "Add player",
-        type: "button",
-        onClick: props.onAddPlayer,
-      },
-      [icon(UserPlus), h("span", { key: "label" }, "Add")],
-    ),
+    showManage
+      ? h(
+        "button",
+        {
+          "aria-label": "Add player",
+          className: "score-glove-tool",
+          key: "add",
+          title: "Add player",
+          type: "button",
+          onClick: props.onAddPlayer,
+        },
+        [icon(UserPlus), h("span", { key: "label" }, "Add")],
+      )
+      : null,
     h(
       "button",
       {
@@ -58,10 +68,12 @@ function RoundTools(props) {
       },
       [icon(Ruler), h("span", { key: "label" }, props.measureLabel || "Measure")],
     ),
-    h("button", { className: "score-glove-tool", key: "manage", type: "button", onClick: props.onManagePlayers }, [
-      icon(Settings2),
-      h("span", { key: "label" }, "Manage"),
-    ]),
+    showManage
+      ? h("button", { className: "score-glove-tool", key: "manage", type: "button", onClick: props.onManagePlayers }, [
+        icon(Settings2),
+        h("span", { key: "label" }, "Manage"),
+      ])
+      : null,
   ]);
 }
 

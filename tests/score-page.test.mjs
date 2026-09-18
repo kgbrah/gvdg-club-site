@@ -579,6 +579,12 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /score-glove-layout/);
   assert.match(scorecard, /score-glove-dock/);
   assert.match(scorecard, /score-glove-scores/);
+  assert.match(scorecard, /Share scorecard/);
+  assert.match(scorecard, /showManage/);
+  assert.doesNotMatch(scorecard, /if \(!props\.show\) return null/);
+  assert.match(controller, /buildShareCard\(S/);
+  assert.match(controller, /shareCardPng/);
+  assert.match(controller, /canShareFiles/);
   assert.doesNotMatch(scorecard, /Your card is not ready yet/);
   assert.match(controller, /LIVE \+ '\/finish-card'/);
   assert.doesNotMatch(scorecard, /function HoleGrid\(props\)/);
