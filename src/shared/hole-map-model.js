@@ -66,6 +66,24 @@ export function rangeHud({ from, to, mode, holeFt } = {}) {
   };
 }
 
+export function currentRangeHud(hole, gps, measure) {
+  const holeFt = finite(hole && hole.distance_ft);
+  const holeHud = rangeHud({ holeFt, mode: "hole" });
+  let primary = null;
+  if (measure && measure.a && measure.b) {
+    primary = rangeHud({ from: measure.a, mode: "throw", to: measure.b });
+  } else if (measure && measure.a && gps) {
+    primary = rangeHud({ from: measure.a, mode: "throw", to: gps });
+  } else if (measure && measure.a && hole && hole.target) {
+    primary = rangeHud({ from: measure.a, to: hole.target });
+  } else if (gps && hole && hole.target) {
+    primary = rangeHud({ from: gps, to: hole.target });
+  }
+  if (!primary) return holeHud;
+  if (holeFt == null || holeFt <= 0) return primary;
+  return { ...primary, holeFt: Math.round(holeFt) };
+}
+
 
 export function headingDeg(from, to) {
   const dLng = (to.lng - from.lng) * Math.PI / 180;

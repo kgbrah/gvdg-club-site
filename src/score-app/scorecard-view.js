@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Eye, Ruler, Settings2, Share2, UserPlus } from "lucide-react";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { HoleMap } from "../shared/hole-map.js";
-import { rangeHud } from "../shared/hole-map-model.js";
+import { currentRangeHud } from "../shared/hole-map-model.js";
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
 import { nextHoleScore, relClass, relText } from "./score-view-model.js";
@@ -141,32 +141,10 @@ function useDeviceFix() {
   return fix;
 }
 
-function currentRangeHud(hole, gps, measure) {
-  if (measure && measure.a && measure.b) {
-    return rangeHud({ from: measure.a, mode: "throw", to: measure.b });
-  }
-  if (measure && measure.a && gps) {
-    return rangeHud({ from: measure.a, mode: "throw", to: gps });
-  }
-  if (measure && measure.a && hole && hole.target) {
-    return rangeHud({ from: measure.a, to: hole.target });
-  }
-  if (gps && hole && hole.target) {
-    const hud = rangeHud({ from: gps, to: hole.target });
-    const holeFt = Number(hole.distance_ft);
-    const tooFar = hud && (
-      (Number.isFinite(holeFt) && holeFt > 0 && hud.ft > Math.max(holeFt * 4, 1200))
-      || hud.ft > 2500
-    );
-    if (tooFar) return rangeHud({ holeFt: hole.distance_ft, mode: "hole" });
-    return hud;
-  }
-  return rangeHud({ holeFt: hole && hole.distance_ft, mode: "hole" });
-}
-
 function RangeHud(props) {
   if (!props.hud) return null;
   const circleClass = props.hud.circle === "C1" ? " in-c1" : props.hud.circle === "C2" ? " in-c2" : "";
+  const holeFt = props.hud.mode !== "hole" && Number.isFinite(props.hud.holeFt) ? props.hud.holeFt : null;
   return h("div", {
     "aria-live": "polite",
     className: "hole-range-hud" + circleClass,
@@ -175,6 +153,9 @@ function RangeHud(props) {
   }, [
     h("strong", { key: "ft" }, props.hud.ft + " ft"),
     h("span", { key: "cap" }, props.hud.caption),
+    holeFt != null
+      ? h("em", { className: "hole-range-hud-len", key: "len" }, holeFt + " ft hole")
+      : null,
   ]);
 }
 

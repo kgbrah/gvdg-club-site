@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Live Scoring · Greenville Disc Golf Club</title>
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=164">
+    <link rel="manifest" href="site.webmanifest?v=165">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <script src="pwa.js" defer></script>
     <link rel="stylesheet" href="tokens.css">
@@ -376,6 +376,10 @@
         }
         .hole-range-hud.in-c1 strong { color: var(--under); }
         .hole-range-hud.in-c2 strong { color: var(--accent); }
+        .hole-range-hud-len {
+            display: block; margin-top: 0.1rem; font-size: 0.58rem; font-style: normal; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted);
+        }
         .score-glove-stage .hole-map-card,
         .score-glove-stage .hole-map-compact {
             flex: 0 0 auto; min-height: 0; display: flex; flex-direction: column; margin: 0;
@@ -623,6 +627,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=164"></script>
+    <script type="module" src="score-app/score-app.js?v=165"></script>
 </body>
 </html>

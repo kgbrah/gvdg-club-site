@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CIRCLE1_M, CIRCLE2_M, circleEllipse, headingDeg, holeMapLabel, holePoint, latLngFromMapPoint, playerMarksOnMap, projectHoleMap, projectMapPoint, puttingCircle, rangeHud, remainingFt, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, windBlowToDeg } from "../src/shared/hole-map-model.js";
+import { CIRCLE1_M, CIRCLE2_M, circleEllipse, currentRangeHud, headingDeg, holeMapLabel, holePoint, latLngFromMapPoint, playerMarksOnMap, projectHoleMap, projectMapPoint, puttingCircle, rangeHud, remainingFt, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, windBlowToDeg } from "../src/shared/hole-map-model.js";
 
 test("holePoint requires numeric lat/lng", () => {
   assert.equal(holePoint(null), null);
@@ -147,6 +147,34 @@ test("range HUD captions hole length, remaining, and throw", () => {
     ft: 82,
     mode: "remaining",
   });
+});
+
+test("currentRangeHud keeps GPS remaining even when far off the hole", () => {
+  const hole = { distance_ft: 308, target: { lat: 35.6, lng: -77.37 } };
+  const near = northOf(hole.target, 25);
+  const far = { lat: 35.227, lng: -80.843 };
+  assert.deepEqual(currentRangeHud(hole, near, null), {
+    caption: "to basket",
+    circle: null,
+    ft: 82,
+    holeFt: 308,
+    mode: "remaining",
+  });
+  const farHud = currentRangeHud(hole, far, null);
+  assert.equal(farHud.mode, "remaining");
+  assert.equal(farHud.caption, "to basket");
+  assert.equal(farHud.holeFt, 308);
+  assert.ok(farHud.ft > 2500);
+  assert.deepEqual(currentRangeHud(hole, null, null), {
+    caption: "hole",
+    circle: null,
+    ft: 308,
+    mode: "hole",
+  });
+  const throwHud = currentRangeHud(hole, near, { a: near, b: hole.target });
+  assert.equal(throwHud.mode, "throw");
+  assert.equal(throwHud.holeFt, 308);
+  assert.equal(throwHud.ft, 82);
 });
 
 test("projectHoleMap stamps GPS and PDGA circles; map taps invert", () => {
