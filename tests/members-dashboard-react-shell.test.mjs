@@ -349,6 +349,15 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(playPage, /variant: "play"/);
   assert.match(dashboardApp, /id: "playerPlay"/);
   assert.match(dashboardApp, /MemberPlayPage/);
+  assert.match(readFileSync('src/members-app/overview-dashboard.js', 'utf8'), /HomeJobs/);
+  const homeJobs = readFileSync('src/members-app/home-jobs.js', 'utf8');
+  assert.match(homeJobs, /data-react-home-jobs/);
+  assert.match(homeJobs, /data-react-home-pay/);
+  assert.match(homeJobs, /data-react-home-conditions/);
+  assert.match(homeJobs, /pickUnpaidJobs/);
+  assert.match(homeJobs, /homeConditionRows/);
+  assert.match(readFileSync('src/members-app/registration-utils.js', 'utf8'), /export function pickUnpaidJobs/);
+  assert.match(html, /\.player-jobs \{ display: grid;/);
   assert.match(seasonPage, /data-react-season-page/);
   assert.match(seasonPage, /ClubRatings/);
   assert.match(seasonPage, /PdgaDashboard/);

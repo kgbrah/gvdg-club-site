@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   formatConditionWhen,
+  homeConditionRows,
   isStaleCondition,
   latestConditionsByCourse,
   matchCourseCondition,
@@ -54,4 +55,14 @@ test("stale reports are older than 48 hours and names normalize for matching", (
     { course_id: 1, course_name: "ECU North Rec Complex", status: "wet", id: 1 },
     { course_id: 1, course_name: "ECU North Rec Complex", status: "dry", id: 2 },
   ]).map((row) => row.status).join(","), "dry");
+});
+
+test("homeConditionRows drops stale reports and ranks alerts first", () => {
+  const rows = homeConditionRows([
+    { id: 1, course_id: 1, course_name: "ECU North Rec Complex", status: "dry", created_at: "2026-09-11 15:00:00" },
+    { id: 2, course_id: 2, course_name: "West Meadowbrook Park", status: "wet", created_at: "2026-09-11 15:30:00" },
+    { id: 3, course_id: 3, course_name: "Ayden Park", status: "closed", created_at: "2026-09-09 15:00:00" },
+    { id: 4, course_id: 4, course_name: "Snipers Landing", status: "flooded", created_at: "2026-09-11 14:00:00" },
+  ], NOW, 3);
+  assert.deepEqual(rows.map((row) => row.courseName), ["Snipers Landing", "West Meadowbrook Park", "ECU North Rec Complex"]);
 });

@@ -101,3 +101,12 @@ export function latestConditionsByCourse(reports) {
   }
   return [...byKey.values()].sort((a, b) => String(a.courseName).localeCompare(String(b.courseName)));
 }
+
+const HOME_CONDITION_RANK = { closed: 0, flooded: 1, wet: 2, playable: 3, dry: 4 };
+
+export function homeConditionRows(reports, now = Date.now(), limit = 4) {
+  return latestConditionsByCourse(reports)
+    .filter((row) => !isStaleCondition(row.createdAt, now))
+    .sort((a, b) => (HOME_CONDITION_RANK[a.status] ?? 9) - (HOME_CONDITION_RANK[b.status] ?? 9) || String(a.courseName).localeCompare(String(b.courseName)))
+    .slice(0, Math.max(0, Number(limit) || 0));
+}

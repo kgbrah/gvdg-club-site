@@ -346,6 +346,8 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
     await page.locator('[data-react-club-panel="ready"]').waitFor({ state: "attached", timeout: 15_000 });
     await page.locator('[data-react-member-banner="ready"]').waitFor({ state: "visible", timeout: 15_000 });
     await waitForText(page, "[data-react-home-hero]", memberName, "React home name");
+    await page.locator('[data-react-home-jobs="ready"]').waitFor({ state: "visible", timeout: 15_000 });
+    await page.locator('[data-react-home-conditions]').waitFor({ state: "visible", timeout: 15_000 });
     if (await page.locator("#myDashboard [data-react-registration-panel]").count()) {
       throw new Error("Registration panel should not render on Home.");
     }

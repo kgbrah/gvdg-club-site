@@ -158,6 +158,7 @@ test('overview dashboard is a compact home and keeps registration on Events', ()
   assert.doesNotMatch(overview, /MemberRegistrationPanel/);
   assert.match(overview, /data-react-home-hero/);
   assert.match(overview, /LiveScoringPanel, \{ token, compact: true/);
+  assert.match(overview, /HomeJobs/);
   assert.match(overview, /WalletPanel, \{ token, compact: true/);
   assert.match(overview, /selectDashboardTab\("events"\)/);
   assert.match(overview, /EventScheduleFacts/);
@@ -185,6 +186,7 @@ test('overview dashboard is a compact home and keeps registration on Events', ()
   assert.match(html, /body\[data-member-dashboard-tab="more"\] #playerMore/);
   assert.match(html, /body\[data-member-dashboard-tab="play"\] #playerPlay/);
   assert.match(html, /grid-template-columns: repeat\(5, 1fr\)/);
+  assert.match(html, /\.player-jobs \{ display: grid;/);
   assert.match(html, /\.dash-collapse-summary \{ cursor: pointer; \}/);
   assert.doesNotMatch(html, /body\[data-member-dashboard-tab="overview"\] #clubRegister/);
   assert.match(html, /body\[data-member-dashboard-tab="events"\] #clubRegister/);
@@ -205,6 +207,8 @@ test('overview dashboard collapses recent tournaments, casual rounds, and live s
   assert.match(stagingQa, /overview: \["#myDashboard"\]/);
   assert.match(browserQa, /play: \["#playerPlay"\]/);
   assert.match(stagingQa, /play: \["#playerPlay"\]/);
+  assert.match(browserQa, /data-react-home-jobs/);
+  assert.match(stagingQa, /data-react-home-jobs/);
   assert.match(browserQa, /async function openCasualRounds/);
   assert.match(stagingQa, /async function openCasualRounds/);
   assert.match(browserQa, /#clubRegister \[data-react-registration-panel="ready"\]/);

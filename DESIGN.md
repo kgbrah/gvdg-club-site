@@ -616,6 +616,15 @@ Spacing follows a 4px base through rem values.
 - Accessibility: round-code input has a label; Join and Watch are real buttons; dock Play tab is `role="tab"`.
 - Motion: static layout.
 
+### Member Home Jobs
+
+- Structure: Home jobs strip after keep-score: a Pay CTA when a live/scheduled registration still owes an entry fee, plus a compact course-conditions card. Report opens the Club tab; Pay opens Events where PayPal still lives.
+- Variants: unpaid due (PayPal on/off labels Pay vs Due), multiple unpaid (+ N more), no unpaid (Pay hidden), fresh reports ranked closed/flooded/wet first, empty 48h window.
+- Spacing: Pay reuses `.player-keep-score`. Conditions is a `.player-card` with a 44px Report control and badge row.
+- States: `pickUnpaidJobs` uses `/my-registrations` + `/registration/open` already loaded by RegistrationProvider. Conditions fetch `/course-conditions` and drop stale reports.
+- Accessibility: Pay and Report are real buttons; condition badges are text labels.
+- Motion: static layout.
+
 ### Member Dashboard Dialogs
 
 - Structure: React-owned document-level modal renderer for member dashboard alerts and confirmations mounts into the static `membersReactDialogsApp` root; separate dashboard roots call a shared dialog service instead of native browser dialogs.

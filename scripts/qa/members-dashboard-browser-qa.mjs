@@ -351,11 +351,14 @@ async function captureState(browser, origin, viewport, slug) {
   await page.waitForSelector('[data-react-meeting-minutes="ready"]', { state: "attached", timeout: 10_000 });
   await page.waitForSelector('[data-react-live-scoring="ready"]', { timeout: 10_000 });
   await page.waitForSelector('[data-react-wallet="ready"]', { timeout: 10_000 });
+  await page.waitForSelector('[data-react-home-jobs="ready"]', { timeout: 10_000 });
   await waitForText(page, "[data-react-home-hero]", "941", "React live rating");
   await waitForText(page, "[data-react-home-hero]", "QA Admin", "React home name");
   await waitForText(page, "[data-react-wallet]", "$12.50", "React wallet balance");
   await waitForText(page, "[data-react-home-next]", "GVDG QA Doubles", "React next event");
   await waitForText(page, "[data-react-home-last-round]", "GVDG QA Weekly", "React last club round");
+  await waitForText(page, "[data-react-home-conditions]", "ECU North Rec Complex", "React home conditions");
+  await waitForText(page, "[data-react-home-conditions]", "Wet", "React home wet condition");
   await page.waitForSelector('[data-react-member-banner="ready"]', { timeout: 10_000 });
   await waitForText(page, "[data-react-admin-portal]", "Admin Portal", "React admin portal");
   if (await page.locator("#myDashboard [data-react-registration-panel]").count()) {
