@@ -52,10 +52,10 @@ function seasonResultRows(results, casual, year) {
   return events.concat(casualRows).sort((a, b) => (b.sort || 0) - (a.sort || 0));
 }
 
-function seasonRounds(ratings, year) {
-  const competitive = Array.isArray(ratings?.competitive?.rounds) ? ratings.competitive.rounds : [];
-  const casual = Array.isArray(ratings?.casual?.rounds) ? ratings.casual.rounds : [];
-  return competitive.concat(casual).filter((round) => inYear(round.date, year));
+function seasonRounds(ratings, year, kind = "competitive") {
+  const group = kind === "casual" ? ratings?.casual : ratings?.competitive;
+  const rounds = Array.isArray(group?.rounds) ? group.rounds : [];
+  return rounds.filter((round) => inYear(round.date, year));
 }
 
 function upcomingRegistrations(registrations, today) {
@@ -100,19 +100,20 @@ export function buildSeasonPage({
   const year = easternYear(now);
   const today = easternDateOnly(now);
   const seasonResults = seasonResultRows(results, casual, year);
-  const stroke = seasonResults
+  const competitiveResults = seasonResults.filter((row) => row.kind !== "casual");
+  const stroke = competitiveResults
     .map((row) => numberOrNull(row.to_par))
     .filter((value) => value != null);
-  const places = seasonResults
+  const places = competitiveResults
     .map((row) => numberOrNull(row.place))
     .filter((value) => value != null)
     .sort((a, b) => a - b);
-  const rated = seasonRounds(ratings, year).filter((round) => numberOrNull(round.rating) != null);
+  const rated = seasonRounds(ratings, year, "competitive").filter((round) => numberOrNull(round.rating) != null);
   const ratingValues = rated.map((round) => numberOrNull(round.rating)).filter((value) => value != null);
 
   return {
     year,
-    rounds: seasonResults.length,
+    rounds: competitiveResults.length,
     avgToPar: stroke.length
       ? Math.round((stroke.reduce((sum, value) => sum + value, 0) / stroke.length) * 10) / 10
       : null,

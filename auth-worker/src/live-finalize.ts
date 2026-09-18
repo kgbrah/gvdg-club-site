@@ -8,6 +8,7 @@ import { j, metadataJson, type LiveEnv, type LiveMeta, type ScoringState } from 
 import { roundRatingForScoreWithWeather, solveSsa, type Propagator, type RatingMethod, type RatingStream } from "./rating-engine.js";
 import { clearRoundRatingsForCasualRound, clearRoundRatingsForEvent, createRoundRating, findRatingAnchor, getLayoutRatingBaseline, upsertLayoutRatingBaseline, upsertPlayerRatingFromRounds } from "./rating-store.js";
 import { isOpenPlayId } from "./authz.js";
+import { withPlayBreakdown } from "./play-stats.js";
 import { ratingWeatherFromJson } from "./weather.js";
 
 export type FinalizeLiveEventInput = {
@@ -62,6 +63,10 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
     forced = incomplete;
     standings = finalizeRoundStandings({ holes, players: input.players, config: scoring.config, targets: scoring.targets });
   }
+  standings = standings.map((standing) => {
+    const player = input.players.find((row) => (standing.memberId && row.memberId === standing.memberId) || row.name === standing.name);
+    return { ...standing, breakdown: withPlayBreakdown(standing.breakdown, player, holes) };
+  });
   meta.status = "final";
   if (meta.casual || !meta.eventId) {
     if (meta.casual && meta.roundCode) {

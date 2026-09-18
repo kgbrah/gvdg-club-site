@@ -10,6 +10,7 @@ import { kvRateLimited } from "./kv-rate-limit.js";
 import { RECORD_PAGE_DEFAULTS, parseWindow } from "./input.js";
 import { getMemberRatings, summarizeRatingRows } from "./ratings.js";
 import { publicMemberCasualResult } from "./casual-archive.js";
+import { playRowKind, playStatsByKind } from "./play-stats.js";
 import { readD1OrFallback } from "./d1-retry.js";
 
 // Iteration count must stay <=100000 to match crypto.ts / the workerd PBKDF2 cap, so the
@@ -114,6 +115,29 @@ export async function handleMyResults(request: Request, env: Env, origin: string
     publicMemberCasualResult((row || {}) as Record<string, unknown>),
   );
   return json({ results, casual }, 200, origin);
+}
+
+function easternYear(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric" }).formatToParts(now);
+  return Number(parts.find((part) => part.type === "year")?.value) || now.getFullYear();
+}
+
+export async function handlePlayStats(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const claims = await requireAuth(request, env);
+  if (!claims) return json({ error: "unauthorized" }, 401, origin);
+  const yearParam = Number(new URL(request.url).searchParams.get("year"));
+  const year = Number.isInteger(yearParam) && yearParam >= 2000 && yearParam <= 2100 ? yearParam : easternYear();
+  const rows = await readD1OrFallback(() => db.listSeasonPlayRows(env.DB, year), () => []);
+  const tagged = (Array.isArray(rows) ? rows : []).map((raw) => {
+    const row = (raw || {}) as { member_id?: unknown; name?: unknown; breakdown?: unknown; kind?: unknown };
+    return {
+      breakdown: row.breakdown,
+      kind: playRowKind(row),
+      member_id: row.member_id,
+      name: row.name,
+    };
+  });
+  return json({ year, ...playStatsByKind(tagged, claims.sub) }, 200, origin);
 }
 
 export async function handleMyRatings(request: Request, env: Env, origin: string | null): Promise<Response> {

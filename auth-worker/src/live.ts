@@ -11,6 +11,7 @@ import { canCastCtpVote, dropLiveCtp, recordCtpVote, type LiveCtpStore } from ".
 import { isLiveFormatError, normalizeLiveScoringConfig, normalizePairLabel, type LiveScoringConfig } from "./live-format.js";
 import { finalizeLiveEvent } from "./live-finalize.js";
 import { isLoggedInMemberId, locationMoved, locationOnCourse, parseLocationBody, type LivePlayerLocation } from "./live-locations.js";
+import { parseThrowsBody } from "./play-stats.js";
 import { updateLivePairs } from "./live-pairs.js";
 import { mineData, publicSnapshot } from "./live-snapshot.js";
 import { attestationForCard, canEnterScorecard, cardKey, findPlayer, invalidScoreTargetsResponse, isCardLocked, issuesForCard, scoreTargetForBody, scorecardIssues, scoringState, targetAnchor } from "./live-state.js";
@@ -117,6 +118,7 @@ export class LiveEventDO {
     if (action === "ctp") return this.claimCtp(body as CtpVoteBody, authMember, authAdmin);
     if (action === "ctp-forget") return this.forgetCtp(body as { ctpId?: number }, authAdmin);
     if (action === "location") return this.pingLocation(body, authMember);
+    if (action === "throws") return this.saveThrows(body, authMember, authAdmin);
     if (action === "join") return this.join(authMember, (body as { name?: string }).name); // casual round: caller joins
     if (action === "guest") return this.addGuest(authMember, (body as { name?: string; team?: string }).name, (body as { team?: string }).team); // add a non-member to my card (+ pair label for doubles)
     if (action === "remove") return this.removePlayer(body as RemoveBody, authMember, authAdmin); // drop a player (accidental/left/no-show)
@@ -499,6 +501,28 @@ export class LiveEventDO {
     this.locations.set(meIndex, { lat: parsed.lat, lng: parsed.lng, at: Date.now() });
     if (locationMoved(prev, parsed)) this.broadcast();
     return j({ ok: true });
+  }
+
+  private async saveThrows(body: unknown, authMember: string | null, authAdmin: boolean): Promise<Response> {
+    if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
+    const parsed = parseThrowsBody(body);
+    if (!parsed) return j({ error: "bad_throws" }, 400);
+    if (!this.meta.holes.some((hole) => hole.hole === parsed.hole)) return j({ error: "bad_hole" }, 400);
+    const meIndex = authMember ? this.players.findIndex((player) => player.memberId === authMember && !player.removed) : -1;
+    const me = meIndex >= 0 ? this.players[meIndex] : undefined;
+    if (!me && !authAdmin) return j({ error: "not_on_card" }, 403);
+    const requested = Number((body as { scorerIndex?: unknown }).scorerIndex);
+    const index = Number.isInteger(requested) ? requested : meIndex;
+    const player = index >= 0 ? this.players[index] : undefined;
+    if (!player || player.removed) return j({ error: "no_player" }, 404);
+    if (!authAdmin) {
+      if (!me) return j({ error: "not_on_card" }, 403);
+      if ((me.cardId ?? null) !== (player.cardId ?? null)) return j({ error: "wrong_card" }, 403);
+      if (!canEnterScorecard(player, authMember) && index !== meIndex) return j({ error: "wrong_scorer" }, 403);
+    }
+    player.throws = { ...(player.throws || {}), [parsed.hole]: parsed.throws };
+    await this.persist();
+    return j({ ok: true, hole: parsed.hole, throws: parsed.throws.length });
   }
 
   private handleWs(_request: Request): Response {

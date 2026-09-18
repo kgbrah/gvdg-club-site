@@ -329,6 +329,12 @@ export function startScoreApp(options) {
             if (Array.isArray(msg.values) && msg.values.length > 1) S.conflicts.push({ cardId: msg.cardId, playerIndex: msg.playerIndex, playerName: msg.playerName, targetId: msg.targetId, label: msg.label, hole: msg.hole, values: msg.values });
         }
 
+        function postThrows(hole, throws) {
+            const scorerIndex = currentScorerIndex();
+            const body = { hole: hole, throws: throws || [] };
+            if (Number.isInteger(scorerIndex)) body.scorerIndex = scorerIndex;
+            void api(LIVE + '/throws', { method: 'POST', body: body });
+        }
         async function postScore(row, hole, strokes) {
             if (S.cardLocked || S.status === 'final') { toast('This card is already submitted'); return; }
             const scorerIndex = currentScorerIndex();
@@ -676,6 +682,7 @@ export function startScoreApp(options) {
                 onPrevious: function () { S.holeIdx = playOrderStep(S.holes, S.holeIdx, startingHoleForState(S), -1); renderHole(); },
                 onJumpHole: function (index) { S.holeIdx = index; renderHole(); },
                 onScore: postScore,
+                onThrows: postThrows,
                 onCtpVote: EVENT_ID && !WATCH ? postCtpVote : null,
                 onOpenFinish: openFinishConfirm,
                 onCloseFinish: closeFinishConfirm,

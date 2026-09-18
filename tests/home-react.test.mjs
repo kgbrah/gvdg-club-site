@@ -15,7 +15,7 @@ test('homepage feeds are rendered by the home React bundle', () => {
   assert.match(html, /id="homeReactTournamentsApp"/);
   assert.match(html, /<div id="homeReactEventsApp"><\/div>/);
   assert.match(html, /<div id="homeReactTournamentsApp"><\/div>/);
-  assert.match(html, /<script type="module" src="home-app\/home-app\.js\?v=178"><\/script>/);
+  assert.match(html, /<script type="module" src="home-app\/home-app\.js\?v=179"><\/script>/);
   assert.doesNotMatch(html, /<script type="module" src="home-feeds\.js"><\/script>/);
   assert.doesNotMatch(html, /<div id="homeReactEventsApp"><div class="event-list">/);
   assert.doesNotMatch(html, /<div id="homeReactTournamentsApp"><div class="tournament-list">/);

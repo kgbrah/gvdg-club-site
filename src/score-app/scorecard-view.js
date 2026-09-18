@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Eye, Ruler, Settings2, Share2, UserPlus, X }
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { HoleMap } from "../shared/hole-map.js";
 import { addThrow, currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, lastThrow, lastThrowHud, nextTeeHud, readThrows, resolveMapFocus, undoThrow, withSelfLocation, writeThrows } from "../shared/hole-map-model.js";
+import { holePlayStats, holeStatChips } from "../shared/play-stats.js";
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
 import { nextHoleScore, relClass, relText } from "./score-view-model.js";
@@ -18,6 +19,17 @@ function icon(Icon) {
     "aria-hidden": "true",
     focusable: "false",
   });
+}
+
+function HoleStatChips(props) {
+  const chips = Array.isArray(props.chips) ? props.chips : [];
+  if (!chips.length) return null;
+  return h("div", { className: "hole-stat-chips", key: "stats" }, chips.map((chip) =>
+    h("span", {
+      className: "hole-stat-chip " + (chip.hit ? "hit" : "miss"),
+      key: chip.id,
+    }, chip.label),
+  ));
 }
 
 function RoundTools(props) {
@@ -742,6 +754,7 @@ export function ScorecardView(props) {
   function persistThrows(next) {
     setThrows(next);
     writeThrows(storage, props.roundCode, holeNumber, next);
+    if (typeof props.onThrows === "function") props.onThrows(holeNumber, next);
   }
 
   function onMeasure() {
@@ -822,6 +835,7 @@ export function ScorecardView(props) {
           onMeasure,
         }),
         h(HoleGrid, { holes: props.holeGrid, onJump: props.onJumpHole }),
+        h(HoleStatChips, { chips: holeStatChips(holePlayStats(props.hole, throws, ((props.holeGrid || []).find((hole) => hole.current) || {}).score)) }),
         props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,
         props.potsAceHint ? h("p", { className: "pots-ace-hint", key: "ace-hint" }, props.potsAceHint) : null,
       ]),

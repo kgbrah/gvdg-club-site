@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-title" content="GVDG Club">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=178">
+    <link rel="manifest" href="site.webmanifest?v=179">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -554,6 +554,94 @@
                 .player-stat-k { color: var(--text-muted); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
                 .player-stat-v { font-family: 'Bebas Neue', sans-serif; font-size: 1.7rem; line-height: 1; margin-top: 0.2rem; color: var(--text-primary); }
                 .player-stat-s { color: var(--text-muted); font-size: 0.75rem; margin-top: 0.2rem; }
+                .play-stats-panel { margin-bottom: 0.75rem; }
+                .play-stats-split { display: grid; grid-template-columns: 1fr; gap: 0.85rem; margin-bottom: 0.75rem; }
+                .play-stats-split .play-stats-panel { margin-bottom: 0; }
+                .play-stats-split-status { margin: 0; }
+                @media (min-width: 780px) {
+                    .play-stats-split { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                    .play-stats-split-status { grid-column: 1 / -1; }
+                }
+                .play-stats-kind { display: flex; gap: 0.3rem; margin: 0.2rem 0 0.65rem; }
+                .play-stats-kind button {
+                    min-height: 36px; padding: 0 0.8rem; border-radius: 999px;
+                    border: 1px solid var(--border-color); background: var(--bg-tertiary);
+                    color: var(--text-secondary); font: 800 0.68rem Archivo, sans-serif;
+                    letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer;
+                }
+                .play-stats-kind button.active {
+                    background: var(--primary-strong); color: var(--light); border-color: var(--primary-strong);
+                }
+                .play-stats-grid {
+                    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem;
+                }
+                .play-stats-grid.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                @media (min-width: 768px) {
+                    .play-stats-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+                }
+                .play-stat-card {
+                    background: var(--bg-tertiary); border: 1px solid var(--border-color);
+                    border-radius: 12px; padding: 0.7rem 0.75rem;
+                }
+                .play-stat-k { color: var(--text-muted); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
+                .play-stat-v { font-family: 'Bebas Neue', sans-serif; font-size: 1.7rem; line-height: 1; margin-top: 0.15rem; color: var(--text-primary); }
+                .play-stat-s { color: var(--text-muted); font-size: 0.72rem; margin-top: 0.18rem; }
+                .play-stat-leaders { margin: 0.45rem 0 0; padding: 0; list-style: none; display: grid; gap: 0.18rem; }
+                .play-stat-leaders li { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.72rem; color: var(--text-secondary); }
+                .play-stat-leaders b { color: var(--text-primary); font-weight: 800; }
+                .play-score-mix-wrap { margin: 0 0 0.7rem; }
+                .play-score-mix {
+                    display: flex; height: 1.85rem; border-radius: 10px; overflow: hidden;
+                    border: 1px solid var(--border-color); margin: 0.35rem 0 0.5rem;
+                    background: var(--bg-tertiary);
+                }
+                .play-score-mix-seg {
+                    display: flex; align-items: center; justify-content: center; min-width: 0;
+                    font: 800 0.62rem Archivo, sans-serif; letter-spacing: 0.02em;
+                }
+                .play-score-mix-seg.tone-eagle { background: var(--under); color: var(--bg-secondary); }
+                .play-score-mix-seg.tone-birdie { background: color-mix(in srgb, var(--under) 58%, var(--bg-tertiary)); color: var(--text-primary); }
+                .play-score-mix-seg.tone-par { background: color-mix(in srgb, var(--accent) 62%, var(--bg-tertiary)); color: var(--text-primary); }
+                .play-score-mix-seg.tone-bogey { background: color-mix(in srgb, var(--over) 48%, var(--bg-tertiary)); color: var(--over); }
+                .play-score-mix-seg.tone-double { background: var(--over); color: var(--bg-secondary); }
+                .play-score-legend {
+                    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.28rem;
+                }
+                .play-score-legend-item {
+                    background: var(--bg-tertiary); border: 1px solid var(--border-color);
+                    border-radius: 10px; padding: 0.4rem 0.28rem 0.45rem; text-align: center; min-width: 0;
+                }
+                .play-score-legend-k {
+                    display: block; color: var(--text-muted); font-size: 0.58rem; font-weight: 800;
+                    letter-spacing: 0.04em; text-transform: uppercase;
+                }
+                .play-score-legend-item b {
+                    display: block; font-family: 'Bebas Neue', sans-serif; font-size: 1.15rem;
+                    line-height: 1; margin-top: 0.12rem; color: var(--text-primary); font-weight: 400;
+                }
+                .play-score-legend-item small {
+                    display: block; color: var(--text-muted); font-size: 0.62rem; margin-top: 0.12rem;
+                    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+                }
+                .play-score-legend-item.tone-eagle b, .play-stat-card.tone-eagle .play-stat-v { color: var(--under); }
+                .play-score-legend-item.tone-birdie b, .play-stat-card.tone-birdie .play-stat-v { color: var(--under); }
+                .play-score-legend-item.tone-bogey b, .play-stat-card.tone-bogey .play-stat-v { color: var(--over); }
+                .play-score-legend-item.tone-double b, .play-stat-card.tone-double .play-stat-v { color: var(--over); }
+                .play-score-legend-item .play-stat-leaders { text-align: left; margin-top: 0.35rem; }
+                @media (max-width: 420px) {
+                    .play-score-legend { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.2rem; }
+                    .play-score-legend-item { padding: 0.32rem 0.12rem 0.38rem; }
+                    .play-score-legend-item b { font-size: 1.02rem; }
+                }
+                .hole-stat-chips { display: flex; flex-wrap: wrap; gap: 0.28rem; margin: 0.2rem 0 0.1rem; }
+                .hole-stat-chip {
+                    min-height: 22px; padding: 0 0.45rem; border-radius: 999px;
+                    border: 1px solid var(--border-color); font: 800 0.58rem Archivo, sans-serif;
+                    letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted);
+                    background: color-mix(in srgb, var(--bg-secondary) 80%, transparent);
+                }
+                .hole-stat-chip.hit { color: var(--under); border-color: var(--under); }
+                .hole-stat-chip.miss { color: var(--over); border-color: var(--over); }
                 .player-card {
                     background: var(--bg-secondary); border: 1px solid var(--border-color);
                     border-radius: 16px; padding: 0.9rem 1rem; margin-bottom: 0.7rem;

@@ -129,6 +129,11 @@ test('member dashboard mounts a personal season page from existing member APIs',
   assert.match(page, /data-react-season-page/);
   assert.match(page, /\/my-results\?all=1/);
   assert.match(model, /export function buildSeasonPage/);
+  assert.match(page, /PlayStatsPanel/);
+  assert.match(html, /\.play-stats-grid/);
+  assert.match(html, /\.play-score-mix/);
+  assert.match(html, /\.play-stats-kind/);
+  assert.match(html, /\.play-stats-split/);
   assert.doesNotMatch(page, /\/admin\//);
   assert.doesNotMatch(page, /createMember|isAdmin/);
 });

@@ -9,6 +9,7 @@ import { selectDashboardTab } from "./dashboard-shell.js";
 import { formatEventDay, formatToPar } from "./format.js";
 import { useMemberContext } from "./member-context.js";
 import { PdgaDashboard, usePdgaStats } from "./pdga-dashboard.js";
+import { PlayStatsPanel } from "./play-stats-panel.js";
 import { buildSeasonPage } from "./season-page-model.js";
 import { liveWatchHref } from "../shared/live-watch.js";
 import { relClass } from "./play-page-model.js";
@@ -154,11 +155,12 @@ export function MemberSeasonPage() {
     state.status === "loading" ? h("p", { className: "dash-note", key: "loading" }, "Loading your season...") : null,
     state.status === "error" ? h("p", { className: "dash-note", key: "error" }, "Could not load every season number. Showing what we have.") : null,
     page ? h("div", { className: "doubles-quick-stats", key: "stats" }, [
-      h(StatTile, { label: "Club rounds", value: String(page.rounds), key: "rounds" }),
-      h(StatTile, { label: "Avg to par", value: page.avgToPar == null ? "-" : formatToPar(page.avgToPar), key: "avg" }),
+      h(StatTile, { label: "Event rounds", value: String(page.rounds), key: "rounds" }),
+      h(StatTile, { label: "Event avg", value: page.avgToPar == null ? "-" : formatToPar(page.avgToPar), key: "avg" }),
       h(StatTile, { label: "Best finish", value: page.bestFinish == null ? "-" : placeLabel(page.bestFinish), key: "best" }),
       h(StatTile, { label: "Club rating", value: page.clubRating == null ? "-" : String(page.clubRating), key: "rating" }),
     ]) : null,
+    h(PlayStatsPanel, { key: "play-stats" }),
     h(ActiveStandingsPanel, { key: "active-standings" }),
     page?.standings.length
       ? h("div", { key: "standings" }, [

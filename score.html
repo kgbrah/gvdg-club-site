@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Live Scoring · Greenville Disc Golf Club</title>
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=178">
+    <link rel="manifest" href="site.webmanifest?v=179">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <script src="pwa.js" defer></script>
     <link rel="stylesheet" href="tokens.css">
@@ -362,6 +362,15 @@
             display: block; margin-top: 0.08rem; font-size: 0.58rem; font-weight: 700;
             color: var(--text-muted); font-style: normal;
         }
+        .hole-stat-chips { display: flex; flex-wrap: wrap; gap: 0.28rem; margin: 0.18rem 0 0.05rem; }
+        .hole-stat-chip {
+            min-height: 22px; padding: 0 0.45rem; border-radius: 999px;
+            border: 1px solid var(--border-color); font: 800 0.58rem Archivo, sans-serif;
+            letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted);
+            background: color-mix(in srgb, var(--bg-secondary) 80%, transparent);
+        }
+        .hole-stat-chip.hit { color: var(--under); border-color: var(--under); }
+        .hole-stat-chip.miss { color: var(--over); border-color: var(--over); }
         .hole-map-caption { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 0.4rem; font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
         .hole-map-credit { margin-top: 0.2rem; font-size: 0.62rem; color: var(--text-muted); }
         .hole-map-udisc { display: inline-block; margin-top: 0.45rem; font-size: 0.82rem; font-weight: 700; color: var(--primary-strong); }
@@ -723,6 +732,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=178"></script>
+    <script type="module" src="score-app/score-app.js?v=179"></script>
 </body>
 </html>

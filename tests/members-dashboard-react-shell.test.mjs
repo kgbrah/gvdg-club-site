@@ -362,7 +362,16 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(homeJobs, /payEventWithWallet/);
   assert.match(readFileSync('src/members-app/registration-utils.js', 'utf8'), /export function pickUnpaidJobs/);
   assert.match(html, /\.player-jobs \{ display: grid;/);
-  assert.match(seasonPage, /data-react-season-page/);
+  assert.match(seasonPage, /PlayStatsPanel/);
+  assert.match(html, /\.play-stats-grid/);
+  assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /\/play-stats/);
+  assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /play-stats-split/);
+  assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /play-stats-kind/);
+  assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /competitive/);
+  assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /kind: "casual"/);
+  assert.match(html, /\.play-score-mix/);
+  assert.match(html, /\.play-stats-split/);
+  assert.match(readFileSync('src/members-app/overview-dashboard.js', 'utf8'), /PlayStatsPanel/);
   assert.match(seasonPage, /ClubRatings/);
   assert.match(seasonPage, /PdgaDashboard/);
   assert.match(seasonPage, /ActiveStandingsPanel/);

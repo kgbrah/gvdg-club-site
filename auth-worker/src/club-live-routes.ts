@@ -47,6 +47,7 @@ export function unionRosterPlayers(
 
 const LIVE_SCORE_IP_LIMIT = 180; // score writes per identity per minute (a card rarely exceeds a few)
 const LIVE_LOCATION_LIMIT = 30; // GPS pings per identity per minute
+const LIVE_THROWS_LIMIT = 60;
 
 export async function startLiveEvent(
   env: Env,
@@ -215,6 +216,19 @@ export async function handleClubLive(
         hole: asInt(ctp.hole) ?? body.hole,
         division: ctp.division ?? null,
       }),
+      headers: { "X-Auth-Member": id.authMember, "X-Auth-Admin": String(id.authAdmin) },
+    });
+    return json(await r.json().catch(() => ({})), r.status, origin);
+  }
+
+  if (method === "POST" && sub === "throws") {
+    const body = (await readJson(request)) ?? {};
+    const id = await scoreIdentity(request, env, body);
+    if (!id.authMember) return json({ error: "unauthorized" }, 401, origin);
+    if (await kvRateLimited(env, "live-throws:" + id.authMember, LIVE_THROWS_LIMIT, 60)) return json({ error: "rate_limited" }, 429, origin);
+    const r = await stub.fetch("https://do/throws", {
+      method: "POST",
+      body: JSON.stringify(body),
       headers: { "X-Auth-Member": id.authMember, "X-Auth-Admin": String(id.authAdmin) },
     });
     return json(await r.json().catch(() => ({})), r.status, origin);

@@ -7,6 +7,7 @@ import { dollars, formatEventDay, formatToPar } from "./format.js";
 import { HomeJobs } from "./home-jobs.js";
 import { useMemberContext } from "./member-context.js";
 import { usePdgaStats } from "./pdga-dashboard.js";
+import { PlayStatsPanel } from "./play-stats-panel.js";
 import { useRegistrationData } from "./registration-panel.js";
 import { eventMeta, pickUpNext } from "./registration-utils.js";
 import { EventScheduleFacts } from "../shared/event-schedule.js";
@@ -178,6 +179,7 @@ export function MemberOverviewDashboard() {
       ]),
     ]),
     h(UpNextCard, { events: registration.state.events, registrations: registration.state.registrations, key: "next" }),
+    h(PlayStatsPanel, { compact: true, key: "play-stats" }),
     h(LastRoundCard, { token, key: "last" }),
   ]);
 }

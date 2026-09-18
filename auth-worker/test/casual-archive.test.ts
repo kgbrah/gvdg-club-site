@@ -48,6 +48,7 @@ describe("casual archive snapshot", () => {
       place: null,
       udisc_course_id: null,
       scorecard: null,
+      breakdown: null,
     });
   });
 

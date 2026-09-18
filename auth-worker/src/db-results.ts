@@ -173,3 +173,35 @@ export async function listMemberCasualResults(db: D1Like, memberId: string, opts
       .all()
   ).results;
 }
+
+export async function listSeasonPlayRows(db: D1Like, year: number) {
+  const start = `${year}-01-01`;
+  const end = `${year + 1}-01-01`;
+  const events = (
+    await db
+      .prepare(
+        `SELECT r.member_id AS member_id, r.name AS name, r.breakdown AS breakdown, 'competitive' AS kind
+         FROM results r JOIN events e ON e.id = r.event_id
+         WHERE r.member_id IS NOT NULL
+           AND r.member_id NOT LIKE 'g_%'
+           AND COALESCE(e.date, r.created_at) >= ?
+           AND COALESCE(e.date, r.created_at) < ?`,
+      )
+      .bind(start, end)
+      .all()
+  ).results;
+  const casual = (
+    await db
+      .prepare(
+        `SELECT cr.member_id AS member_id, cr.name AS name, cr.breakdown AS breakdown, 'casual' AS kind
+         FROM casual_results cr JOIN casual_rounds r ON r.id = cr.casual_round_id
+         WHERE cr.member_id IS NOT NULL
+           AND cr.member_id NOT LIKE 'g_%'
+           AND COALESCE(r.finalized_at, cr.created_at) >= ?
+           AND COALESCE(r.finalized_at, cr.created_at) < ?`,
+      )
+      .bind(start, end)
+      .all()
+  ).results;
+  return [...(Array.isArray(events) ? events : []), ...(Array.isArray(casual) ? casual : [])];
+}

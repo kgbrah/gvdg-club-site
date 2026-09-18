@@ -177,5 +177,11 @@ export async function handleCasualRounds(
     const r = await stub.fetch("https://do/location", { method: "POST", headers: hdr, body: JSON.stringify(b) });
     return json(await r.json().catch(() => ({})), r.status, origin);
   }
+  if (sub === "live" && method === "POST" && seg[3] === "throws") {
+    if (await kvRateLimited(env, "live-throws:" + actor.sub, 60, 60)) return json({ error: "rate_limited" }, 429, origin);
+    const b = (await readJson(request)) ?? {};
+    const r = await stub.fetch("https://do/throws", { method: "POST", headers: { ...hdr, "X-Auth-Admin": "false" }, body: JSON.stringify(b) });
+    return json(await r.json().catch(() => ({})), r.status, origin);
+  }
   return json({ error: "not_found" }, 404, origin);
 }

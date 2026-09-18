@@ -159,5 +159,6 @@ export function publicMemberCasualResult(row: Record<string, unknown>) {
     place: row.place ?? null,
     udisc_course_id: row.udisc_course_id ?? null,
     scorecard: row.scorecard ?? null,
+    breakdown: row.breakdown ?? null,
   };
 }

@@ -64,8 +64,8 @@ test("buildSeasonPage keeps this year's club results and skips last year", () =>
   assert.equal(page.rounds, 2);
   assert.equal(page.avgToPar, -3);
   assert.equal(page.bestFinish, 1);
-  assert.equal(page.clubRating, 898);
-  assert.equal(page.ratedRounds, 2);
+  assert.equal(page.clubRating, 906);
+  assert.equal(page.ratedRounds, 1);
   assert.equal(page.results.map((row) => row.event_name).join(","), "Fall Open,Match");
   assert.equal(page.upcoming.length, 1);
   assert.equal(page.upcoming[0].event_name, "Next Week");
@@ -95,7 +95,7 @@ test("buildSeasonPage empty payload stays numeric zeros", () => {
   assert.equal(page.standings.length, 0);
 });
 
-test("buildSeasonPage mixes this year's casual rounds into club results", () => {
+test("buildSeasonPage lists casual rounds without mixing them into competitive scoring", () => {
   const page = buildSeasonPage({
     now: NOW,
     results: [
@@ -105,9 +105,16 @@ test("buildSeasonPage mixes this year's casual rounds into club results", () => 
       { id: 9, round_code: "JQEU74", course_name: "Ayden Park", layout_name: "Blue", finalized_at: "2026-09-08T16:00:00Z", total: 56, to_par: 2, place: 2 },
       { id: 8, round_code: "OLD001", course_name: "Last Year Park", finalized_at: "2025-08-01T16:00:00Z", total: 54, to_par: -2 },
     ],
+    ratings: {
+      competitive: { live_rating: 910, rounds: [{ date: "2026-07-04", rating: 906 }] },
+      casual: { live_rating: 890, rounds: [{ date: "2026-07-05T14:00:00Z", rating: 890 }] },
+    },
   });
-  assert.equal(page.rounds, 2);
-  assert.equal(page.avgToPar, -0.5);
+  assert.equal(page.rounds, 1);
+  assert.equal(page.avgToPar, -3);
+  assert.equal(page.bestFinish, 1);
+  assert.equal(page.clubRating, 906);
+  assert.equal(page.ratedRounds, 1);
   assert.equal(page.results[0].kind, "event");
   assert.equal(page.results[1].kind, "casual");
   assert.equal(page.results[1].round_code, "JQEU74");

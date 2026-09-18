@@ -5,6 +5,23 @@ export interface Breakdown {
   pars: number;
   bogeys: number;
   doubles_plus: number;
+  holes?: number;
+  birdie_hit?: number;
+  par_hit?: number;
+  fir_hit?: number;
+  fir_att?: number;
+  c1r_hit?: number;
+  c1r_att?: number;
+  c2r_hit?: number;
+  c2r_att?: number;
+  parked_hit?: number;
+  parked_att?: number;
+  scramble_hit?: number;
+  scramble_att?: number;
+  c1_putt_hit?: number;
+  c1_putt_att?: number;
+  c2_putt_hit?: number;
+  c2_putt_att?: number;
 }
 
 export function countScores(pars: readonly (number | null | undefined)[], strokes: readonly (number | null | undefined)[]): Breakdown {
