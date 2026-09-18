@@ -149,7 +149,7 @@ test("range HUD captions hole length, remaining, and throw", () => {
   });
 });
 
-test("currentRangeHud keeps GPS remaining even when far off the hole", () => {
+test("currentRangeHud uses GPS remaining on the hole and falls back when GPS is miles away", () => {
   const hole = { distance_ft: 308, target: { lat: 35.6, lng: -77.37 } };
   const near = northOf(hole.target, 25);
   const far = { lat: 35.227, lng: -80.843 };
@@ -161,10 +161,9 @@ test("currentRangeHud keeps GPS remaining even when far off the hole", () => {
     mode: "remaining",
   });
   const farHud = currentRangeHud(hole, far, null);
-  assert.equal(farHud.mode, "remaining");
-  assert.equal(farHud.caption, "to basket");
-  assert.equal(farHud.holeFt, 308);
-  assert.ok(farHud.ft > 2500);
+  assert.equal(farHud.mode, "hole");
+  assert.equal(farHud.caption, "hole");
+  assert.equal(farHud.ft, 308);
   assert.deepEqual(currentRangeHud(hole, null, null), {
     caption: "hole",
     circle: null,

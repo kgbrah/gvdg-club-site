@@ -66,6 +66,8 @@ export function rangeHud({ from, to, mode, holeFt } = {}) {
   };
 }
 
+export const GPS_REMAINING_MAX_FT = 2500;
+
 export function currentRangeHud(hole, gps, measure) {
   const holeFt = finite(hole && hole.distance_ft);
   const holeHud = rangeHud({ holeFt, mode: "hole" });
@@ -78,6 +80,7 @@ export function currentRangeHud(hole, gps, measure) {
     primary = rangeHud({ from: measure.a, to: hole.target });
   } else if (gps && hole && hole.target) {
     primary = rangeHud({ from: gps, to: hole.target });
+    if (primary && primary.ft > GPS_REMAINING_MAX_FT) primary = null;
   }
   if (!primary) return holeHud;
   if (holeFt == null || holeFt <= 0) return primary;
