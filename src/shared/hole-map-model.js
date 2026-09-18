@@ -38,7 +38,7 @@ export function windBlowToDeg(windFromDeg) {
 
 const SATELLITE_EXPORT = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export";
 export const SATELLITE_CREDIT = "Imagery: Esri, Maxar, Earthstar Geographics";
-const BOUNDS_PAD_RATIO = 0.45;
+const BOUNDS_PAD_RATIO = 0.7;
 const BOUNDS_MIN_DEG = 0.00032;
 
 function paddedBounds(tee, basket) {

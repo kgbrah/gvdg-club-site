@@ -735,9 +735,9 @@ Spacing follows a 4px base through rem values.
 
 ### Scorecard View
 
-- Structure: React-owned live hole screen. The GPS hole map fills the upper stage; a thumb-zone dock (about the bottom third) holds the score steppers, with hole `‹ ›` pinned to the bottom edge for one-handed reach. Optional tee-sign chip overlays the map. Round tools sit as overlay icons on the map. The score controller supplies derived rows and callbacks only.
-- Variants: event card, casual round with share/add/manage tools, singles rows, doubles pair rows, matchplay status, dormie badge, hole map with wind overlay, waiting-on-you hint, tee-sign highlight, score conflicts, score-target warning, and current-hole states.
-- Spacing: `.score-glove-layout` is a column: `.score-glove-stage` flexes to fill leftover height, `.score-glove-dock` is `34dvh` so scores stay in the one-handed thumb zone. `.score-glove-scores` scrolls inside the dock; `.hole-head` stays pinned to the bottom. The 18-hole jump grid is not on the live card.
+- Structure: React-owned live hole screen. A landscape GPS hole map sits in the upper stage as a 16:9 card; a thumb-zone dock (about the bottom third) holds the score steppers, with hole `‹ ›` clustered around the hole label for one-handed reach. Optional tee-sign chip overlays the map. Round tools sit under the map, not on top of it. The score controller supplies derived rows and callbacks only.
+- Variants: event card, casual round with share/add/manage tools, singles rows, doubles pair rows, matchplay status, dormie badge, hole map with concrete tee pad and basket marks, waiting-on-you hint, tee-sign highlight, score conflicts, score-target warning, and current-hole states.
+- Spacing: `.score-glove-layout` is a column: `.score-glove-stage` holds weather, a 16:9 map (`max-height: 28dvh`), and tools; `.score-glove-dock` is `34dvh` so scores stay in the one-handed thumb zone. `.score-glove-scores` scrolls inside the dock; `.hole-head` stays pinned to the bottom with nav buttons next to the hole label. The 18-hole jump grid is not on the live card.
 - States: scorer changes, hole navigation, plus/minus steppers, and weather refreshes rerender through React; compass updates use the shared weather subscription helpers. `src/score-app/score-view-model.js` derives scorecard choices, player/pair rows, current scores, relative labels, conflicts, totals, match status, finalize blockers, and UDisc export data so React-facing state is pure and testable.
 - Accessibility: navigation and score steppers expose action labels, scorer selection has a label, and tool buttons pair Lucide icons with text.
 - Motion: static layout; only existing active press feedback and weather wind-arrow rotation apply.
@@ -772,8 +772,8 @@ Spacing follows a 4px base through rem values.
 ### Round Weather
 
 - Structure: compact header, primary temperature/condition group, condition graphic, wind action, secondary meta pills, and course-location note.
-- Variants: pending/unavailable states use a single empty message; live weather promotes condition, feels-like temperature, a graphic condition cue, and wind while keeping humidity, precipitation, and changes secondary.
-- Spacing: condition and graphic share the first row on narrow phones with wind below; condition, graphic, and wind form a compact three-part row above `420px`.
+- Variants: pending/unavailable states use a single empty message; live weather promotes condition, feels-like temperature, a graphic condition cue, and wind while keeping humidity, precipitation, and changes secondary. Compact live scoring keeps the condition emoji beside the temperature.
+- Spacing: condition and graphic share the first row on narrow phones with wind below; condition, graphic, and wind form a compact three-part row above `420px`. Compact scoring uses a flex row: temp, condition, emoji, wind.
 - States: the score app and Events live detail render Round Weather through React using direct imports from `src/shared/weather-model.js`; public HTML shells must not load a standalone weather script or depend on a `GVDGWeather` global. Wind starts `North-up`, moves through `Listening...`, and changes to `Phone-relative` when device orientation produces a heading.
 - Accessibility: wind is a real button with an arrow title/label that explains whether the arrow is north-up or phone-relative; the condition graphic is a labeled image cue and does not replace the text condition.
 - Motion: only the wind arrow rotates, using a short transform transition.
