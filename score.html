@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Live Scoring · Greenville Disc Golf Club</title>
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=163">
+    <link rel="manifest" href="site.webmanifest?v=164">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <script src="pwa.js" defer></script>
     <link rel="stylesheet" href="tokens.css">
@@ -539,7 +539,7 @@
         }
         .stepper .val .n { font-size: 1.55rem; font-weight: 700; line-height: 1; }
         .stepper .val .rel { font-size: 0.72rem; font-weight: 700; }
-        .rel.under { color: var(--under); } .rel.over { color: var(--over); } .rel.even { color: var(--even); }
+        .rel.under { color: var(--under); } .rel.over { color: var(--team-red); } .rel.even { color: var(--accent); }
         .totbar { display: flex; justify-content: space-around; margin-top: 0.9rem; padding-top: 0.8rem; border-top: 2px solid var(--border-color); }
         .totbar div { text-align: center; }
         .totbar .k { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); font-weight: 700; }
@@ -562,10 +562,12 @@
         .holegrid button.under:not(.cur) { background: color-mix(in srgb, var(--under) 16%, var(--bg-secondary)); border-color: var(--under); }
         .holegrid button.under:not(.cur) .holegrid-score,
         .holegrid button.under:not(.cur) .holegrid-rel { color: var(--under); }
-        .holegrid button.over:not(.cur) { background: color-mix(in srgb, var(--over) 16%, var(--bg-secondary)); border-color: var(--over); }
+        .holegrid button.over:not(.cur) { background: color-mix(in srgb, var(--team-red) 16%, var(--bg-secondary)); border-color: var(--team-red); }
         .holegrid button.over:not(.cur) .holegrid-score,
-        .holegrid button.over:not(.cur) .holegrid-rel { color: var(--over); }
-        .holegrid button.even:not(.cur) .holegrid-score { color: var(--even); }
+        .holegrid button.over:not(.cur) .holegrid-rel { color: var(--team-red); }
+        .holegrid button.even:not(.cur) { background: color-mix(in srgb, var(--accent) 18%, var(--bg-secondary)); border-color: var(--accent); }
+        .holegrid button.even:not(.cur) .holegrid-score,
+        .holegrid button.even:not(.cur) .holegrid-rel { color: var(--accent); }
         .holegrid button.conflict { border-color: var(--over); color: var(--over); box-shadow: inset 0 0 0 1px var(--over); }
         .holegrid button.conflict::before { content: "⚑"; position: absolute; right: 4px; top: 2px; font-size: 0.7rem; line-height: 1; }
         .holegrid button.cur.conflict { background: var(--over); border-color: var(--over); color: #fff; }
@@ -621,6 +623,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=163"></script>
+    <script type="module" src="score-app/score-app.js?v=164"></script>
 </body>
 </html>
