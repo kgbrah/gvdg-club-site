@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Live Scoring · Greenville Disc Golf Club</title>
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=168">
+    <link rel="manifest" href="site.webmanifest?v=169">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <script src="pwa.js" defer></script>
     <link rel="stylesheet" href="tokens.css">
@@ -603,8 +603,15 @@
         .finalize-line { font-size: 0.82rem; }
         .finish-round-btn { margin-top: 0.7rem; }
         .finish-round-hint { font-size: 0.8rem; margin-top: 0.4rem; }
-        .score-glove-finish { flex: 0 0 auto; padding: 0.28rem 0 0.1rem; }
-        .score-glove-finish .btn { width: 100%; min-height: 44px; margin: 0; }
+        .score-glove-finish { flex: 0 0 auto; display: flex; align-items: stretch; gap: 0.4rem; padding: 0.28rem 0 0.1rem; }
+        .score-glove-finish .btn { flex: 1 1 auto; width: auto; min-height: 44px; margin: 0; }
+        .score-glove-finish-dismiss {
+            flex: 0 0 44px; width: 44px; min-width: 44px; min-height: 44px; padding: 0;
+            border-radius: 13px; border: 1px solid var(--border-color);
+            background: var(--bg-tertiary); color: var(--text-muted); cursor: pointer;
+            display: grid; place-items: center;
+        }
+        .score-glove-finish-dismiss:active { transform: scale(0.98); }
         .confirm-scores-sheet { max-height: 88vh; }
         .confirm-score-rows { display: grid; gap: 0.4rem; margin: 0.75rem 0; }
         .confirm-score-row {
@@ -643,6 +650,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=168"></script>
+    <script type="module" src="score-app/score-app.js?v=169"></script>
 </body>
 </html>

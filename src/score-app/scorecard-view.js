@@ -1,6 +1,6 @@
 import React from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Eye, Ruler, Settings2, Share2, UserPlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, Ruler, Settings2, Share2, UserPlus, X } from "lucide-react";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { HoleMap } from "../shared/hole-map.js";
 import { currentRangeHud } from "../shared/hole-map-model.js";
@@ -495,6 +495,7 @@ function FinishCard(props) {
 
 function FinishDockBar(props) {
   const finish = props.finish;
+  const [dismissed, setDismissed] = React.useState({});
   if (!finish || finish.locked) return null;
   if (finish.canFinish) {
     return h("div", { className: "score-glove-finish", key: "finish-bar" }, h("button", {
@@ -503,14 +504,31 @@ function FinishDockBar(props) {
       onClick: props.onOpenFinish,
     }, "Finish card"));
   }
-  if (finish.blocker) {
-    return h("div", { className: "score-glove-finish", key: "finish-bar" }, h("button", {
-      className: "btn secondary finish-round-btn",
-      type: "button",
-      onClick: () => props.onJump && props.onJump(finish.blocker.index),
-    }, finish.blocker.text));
+  let blocker = finish.blocker;
+  if (blocker && blocker.kind === "missing") {
+    const skipped = Array.isArray(finish.skipped) && finish.skipped.length ? finish.skipped : [blocker];
+    blocker = skipped.find((row) => row && !dismissed[row.hole]) || null;
   }
-  return null;
+  if (!blocker) return null;
+  const jump = h("button", {
+    className: "btn secondary finish-round-btn",
+    key: "jump",
+    type: "button",
+    onClick: () => props.onJump && props.onJump(blocker.index),
+  }, blocker.text);
+  if (blocker.kind !== "missing") {
+    return h("div", { className: "score-glove-finish", key: "finish-bar" }, jump);
+  }
+  return h("div", { className: "score-glove-finish", key: "finish-bar" }, [
+    jump,
+    h("button", {
+      "aria-label": "Dismiss",
+      className: "score-glove-finish-dismiss",
+      key: "dismiss",
+      type: "button",
+      onClick: () => setDismissed((prev) => ({ ...prev, [blocker.hole]: true })),
+    }, icon(X)),
+  ]);
 }
 
 function ConfirmScoresSheet(props) {
