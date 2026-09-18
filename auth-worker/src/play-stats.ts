@@ -41,7 +41,7 @@ export type PlayCategory = {
   min: number;
   invert: boolean;
   group: "mix" | "score" | "throw";
-  tone: "eagle" | "birdie" | "par" | "bogey" | "double" | null;
+  tone: "ace" | "eagle" | "birdie" | "par" | "bogey" | "double" | null;
 };
 
 type LatLng = { lat: number; lng: number };
