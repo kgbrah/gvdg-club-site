@@ -1,6 +1,6 @@
 import React from "react";
 
-import { holeMapLabel, latLngFromMapPoint, playerMarksOnMap, projectHoleMap, projectMapPoint, SATELLITE_CREDIT, scoreChipAnchor } from "./hole-map-model.js";
+import { holeMapLabel, latLngFromMapPoint, playerMarksOnMap, projectHoleMap, projectMapPoint, SATELLITE_CREDIT, scoreChipAnchor, throwSegments } from "./hole-map-model.js";
 import { safeExternalUrl } from "./safe-url.js";
 import { udiscDeepLink } from "./udisc-export.js";
 
@@ -40,15 +40,46 @@ function MapFocusChips(props) {
 
 function MapLieChip(props) {
   if (typeof props.onMarkLie !== "function") return null;
-  return h("button", {
-    "aria-pressed": props.lie ? "true" : "false",
-    className: "hole-map-lie-btn" + (props.lie ? " active" : ""),
-    type: "button",
-    onClick: (event) => {
-      event.stopPropagation();
-      props.onMarkLie();
+  const count = Array.isArray(props.throws) ? props.throws.length : 0;
+  return h("div", { className: "hole-map-lie-actions" }, [
+    h("button", {
+      "aria-pressed": count > 0 ? "true" : "false",
+      className: "hole-map-lie-btn" + (count ? " active" : ""),
+      key: "mark",
+      type: "button",
+      onClick: (event) => {
+        event.stopPropagation();
+        props.onMarkLie();
+      },
+    }, count ? "Lie " + (count + 1) : "Mark lie"),
+    count && typeof props.onUndoThrow === "function"
+      ? h("button", {
+        className: "hole-map-lie-undo",
+        key: "undo",
+        type: "button",
+        onClick: (event) => {
+          event.stopPropagation();
+          props.onUndoThrow();
+        },
+      }, "Undo")
+      : null,
+  ]);
+}
+
+function ThrowMark(props) {
+  const r = props.compact ? 7 : 8;
+  return h(
+    "g",
+    {
+      className: "hole-map-throw",
+      transform: `translate(${props.x} ${props.y})`,
     },
-  }, props.lie ? "Clear lie" : "Mark lie");
+    [
+      h("title", { key: "title" }, props.label || ("Throw " + props.n)),
+      h("circle", { className: "hole-map-throw-dot", key: "dot", r }),
+      h("text", { className: "hole-map-throw-label", key: "label", y: props.compact ? 3 : 3.5 }, String(props.n)),
+    ],
+  );
 }
 
 function WindMark(props) {
@@ -260,9 +291,20 @@ export function HoleMap(props) {
   const udiscHref = compact ? "" : udiscDeepLink(props.udiscCourseId);
   const label = holeMapLabel(map, hole && hole.hole);
   const players = playerMarksOnMap(map, props.players);
+  const throws = Array.isArray(props.throws) ? props.throws : (props.lie ? [props.lie] : []);
+  const segments = throwSegments(throws, hole && hole.tee).map((seg) => {
+    const a = projectMapPoint(map, seg.a && seg.a.lat, seg.a && seg.a.lng);
+    const b = projectMapPoint(map, seg.b && seg.b.lat, seg.b && seg.b.lng);
+    if (!a || !b) return null;
+    return { ...seg, a, b };
+  }).filter(Boolean);
+  const throwMarks = throws.map((row, index) => {
+    const pt = projectMapPoint(map, row && row.lat, row && row.lng);
+    if (!pt) return null;
+    return { ...pt, n: row.n || index + 1 };
+  }).filter(Boolean);
   const measureFrom = projectMapPoint(map, props.measureFrom && props.measureFrom.lat, props.measureFrom && props.measureFrom.lng);
   const measureTo = projectMapPoint(map, props.measureTo && props.measureTo.lat, props.measureTo && props.measureTo.lng);
-  const lie = projectMapPoint(map, props.lie && props.lie.lat, props.lie && props.lie.lng);
   function onMapPointer(event) {
     if (typeof props.onMapPoint !== "function") return;
     event.preventDefault();
@@ -304,6 +346,14 @@ export function HoleMap(props) {
             y1: map.tee.y,
             y2: map.basket.y,
           }),
+          ...segments.map((seg) => h("line", {
+            className: "hole-map-throw-line",
+            key: "throw-line-" + seg.n,
+            x1: seg.a.x,
+            x2: seg.b.x,
+            y1: seg.a.y,
+            y2: seg.b.y,
+          })),
           measureFrom && measureTo
             ? h("line", {
               className: "hole-map-measure-line",
@@ -338,9 +388,13 @@ export function HoleMap(props) {
             x: player.x,
             y: player.y,
           })),
-          !measureFrom && lie
-            ? h(LieMark, { compact, key: "lie", label: "Lie", x: lie.x, y: lie.y })
-            : null,
+          ...throwMarks.map((mark) => h(ThrowMark, {
+            compact,
+            key: "throw-" + mark.n,
+            n: mark.n,
+            x: mark.x,
+            y: mark.y,
+          })),
           measureFrom
             ? h(LieMark, { compact, key: "lie-a", label: "Start", x: measureFrom.x, y: measureFrom.y })
             : null,
@@ -351,7 +405,12 @@ export function HoleMap(props) {
       ),
       h(ScoreChips, { compact, height: map.height, key: "chips", marks: players, width: map.width }),
       h(MapFocusChips, { focus: map.focus, key: "focus", onFocus: props.onFocus }),
-      h(MapLieChip, { key: "lie-chip", lie: props.lie, onMarkLie: props.onMarkLie }),
+      h(MapLieChip, {
+        key: "lie-chip",
+        throws,
+        onMarkLie: props.onMarkLie,
+        onUndoThrow: props.onUndoThrow,
+      }),
       props.hud || null,
     ]),
     h("div", { className: "hole-map-caption", key: "caption" }, [

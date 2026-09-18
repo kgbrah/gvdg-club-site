@@ -108,6 +108,83 @@ export function nextTeeHud(gps, nextHole) {
   return { caption: "next tee", ft };
 }
 
+export const THROW_MIN_FT = 8;
+
+export function throwsStorageKey(roundCode, hole) {
+  return "gvdg-throws:" + String(roundCode || "") + ":" + String(hole || "");
+}
+
+export function lastThrow(throws) {
+  const rows = Array.isArray(throws) ? throws : [];
+  return rows.length ? rows[rows.length - 1] : null;
+}
+
+export function addThrow(throws, point, minFt = THROW_MIN_FT) {
+  const next = holePoint(point);
+  const rows = Array.isArray(throws) ? throws.slice() : [];
+  if (!next) return rows;
+  const prev = lastThrow(rows);
+  if (prev) {
+    const gap = remainingFt(prev, next);
+    if (gap != null && gap < minFt) return rows;
+  }
+  return rows.concat([{ lat: next.lat, lng: next.lng, n: rows.length + 1 }]);
+}
+
+export function undoThrow(throws) {
+  const rows = Array.isArray(throws) ? throws : [];
+  return rows.slice(0, -1).map((row, index) => ({ lat: row.lat, lng: row.lng, n: index + 1 }));
+}
+
+export function throwSegments(throws, tee) {
+  const rows = Array.isArray(throws) ? throws : [];
+  const points = [];
+  const start = holePoint(tee);
+  if (start) points.push(start);
+  rows.forEach((row) => points.push(row));
+  const segs = [];
+  for (let i = 1; i < points.length; i += 1) {
+    segs.push({
+      a: points[i - 1],
+      b: points[i],
+      ft: remainingFt(points[i - 1], points[i]),
+      n: i,
+    });
+  }
+  return segs;
+}
+
+export function lastThrowHud(throws, tee) {
+  const segs = throwSegments(throws, tee);
+  const last = segs[segs.length - 1];
+  if (!last || last.ft == null) return null;
+  return { caption: "throw " + last.n, ft: last.ft };
+}
+
+export function readThrows(storage, roundCode, hole) {
+  try {
+    const raw = storage && storage.getItem(throwsStorageKey(roundCode, hole));
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((row) => holePoint(row))
+      .filter(Boolean)
+      .map((row, index) => ({ lat: row.lat, lng: row.lng, n: index + 1 }));
+  } catch {
+    return [];
+  }
+}
+
+export function writeThrows(storage, roundCode, hole, throws) {
+  if (!storage || typeof storage.setItem !== "function") return false;
+  try {
+    storage.setItem(throwsStorageKey(roundCode, hole), JSON.stringify(Array.isArray(throws) ? throws : []));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function gpsHudPrompt(status, mode) {
   if (mode === "remaining" || mode === "throw") return "";
   if (status === "denied") return "GPS blocked";
@@ -123,7 +200,7 @@ export function withSelfLocation(players, gps) {
   return rows.concat([{ initials: "ME", lat: gps.lat, lng: gps.lng, relClass: "self" }]);
 }
 
-export function currentRangeHud(hole, gps, measure) {
+export function currentRangeHud(hole, gps, measure, lastLie) {
   const holeFt = finite(hole && hole.distance_ft);
   const holeHud = rangeHud({ holeFt, mode: "hole" });
   let primary = null;
@@ -135,6 +212,8 @@ export function currentRangeHud(hole, gps, measure) {
     primary = rangeHud({ from: measure.a, to: hole.target });
   } else if (gps && hole && hole.target) {
     primary = rangeHud({ from: gps, to: hole.target });
+  } else if (lastLie && hole && hole.target) {
+    primary = rangeHud({ from: lastLie, to: hole.target });
   }
   if (!primary) return holeHud;
   if (holeFt == null || holeFt <= 0) return primary;

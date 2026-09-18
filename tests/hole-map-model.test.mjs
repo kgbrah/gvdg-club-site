@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CIRCLE1_M, CIRCLE2_M, circleEllipse, currentRangeHud, GPS_REMAINING_MAX_FT, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, headingDeg, holeMapLabel, holePoint, latLngFromMapPoint, mapFocusFromRemaining, nextTeeHud, playerMarksOnMap, projectHoleMap, projectMapPoint, puttingCircle, rangeHud, remainingFt, resolveMapFocus, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, windBlowToDeg, withSelfLocation } from "../src/shared/hole-map-model.js";
+import { addThrow, CIRCLE1_M, CIRCLE2_M, circleEllipse, currentRangeHud, GPS_REMAINING_MAX_FT, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, headingDeg, holeMapLabel, holePoint, lastThrow, lastThrowHud, latLngFromMapPoint, mapFocusFromRemaining, nextTeeHud, playerMarksOnMap, projectHoleMap, projectMapPoint, puttingCircle, rangeHud, readThrows, remainingFt, resolveMapFocus, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, throwSegments, throwsStorageKey, undoThrow, windBlowToDeg, withSelfLocation, writeThrows } from "../src/shared/hole-map-model.js";
 
 test("holePoint requires numeric lat/lng", () => {
   assert.equal(holePoint(null), null);
@@ -216,7 +216,32 @@ test("withSelfLocation stamps the device as ME without dropping other marks", ()
   ]);
 });
 
-test("currentRangeHud uses GPS remaining on the hole even when GPS is far", () => {
+test("throw log numbers lies from the tee and skips tiny duplicates", () => {
+  const tee = { lat: 35.6, lng: -77.37 };
+  const landing = { lat: 35.6008, lng: -77.37 };
+  const next = { lat: 35.601, lng: -77.37 };
+  const first = addThrow([], landing);
+  assert.deepEqual(first, [{ lat: 35.6008, lng: -77.37, n: 1 }]);
+  assert.equal(addThrow(first, landing).length, 1);
+  const two = addThrow(first, next);
+  assert.equal(two[1].n, 2);
+  assert.equal(lastThrow(two).lat, 35.601);
+  const segs = throwSegments(two, tee);
+  assert.equal(segs.length, 2);
+  assert.ok(segs[0].ft > 0);
+  assert.equal(lastThrowHud(two, tee).caption, "throw 2");
+  assert.equal(undoThrow(two).length, 1);
+  const store = new Map();
+  const storage = {
+    getItem: (key) => store.get(key) || null,
+    setItem: (key, value) => store.set(key, value),
+  };
+  writeThrows(storage, "ABC", 1, two);
+  assert.equal(throwsStorageKey("ABC", 1), "gvdg-throws:ABC:1");
+  assert.deepEqual(readThrows(storage, "ABC", 1).map((row) => row.n), [1, 2]);
+});
+
+test("currentRangeHud can remain from the last lie when GPS is off", () => {
   const hole = { distance_ft: 308, target: { lat: 35.6, lng: -77.37 } };
   const near = northOf(hole.target, 25);
   const far = { lat: 35.227, lng: -80.843 };
@@ -242,6 +267,9 @@ test("currentRangeHud uses GPS remaining on the hole even when GPS is far", () =
   assert.equal(throwHud.mode, "throw");
   assert.equal(throwHud.holeFt, 308);
   assert.equal(throwHud.ft, 82);
+  const fromLie = currentRangeHud(hole, null, null, near);
+  assert.equal(fromLie.mode, "remaining");
+  assert.equal(fromLie.ft, 82);
 });
 
 test("projectHoleMap stamps GPS and PDGA circles; map taps invert", () => {

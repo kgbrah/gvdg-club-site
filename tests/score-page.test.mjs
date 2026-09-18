@@ -708,9 +708,15 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /function RangeHud/);
   assert.match(scorecard, /hole-range-hud-len/);
   assert.match(scorecard, /hud\.holeFt/);
-  assert.match(holeMap, /function MapFocusChips/);
-  assert.match(holeMap, /function MapLieChip/);
-  assert.match(holeMap, /Mark lie/);
+  assert.match(holeMap, /function ThrowMark/);
+  assert.match(holeMap, /hole-map-throw-line/);
+  assert.match(holeMap, /Lie /);
+  assert.match(holeMap, /Undo/);
+  assert.match(scorecard, /addThrow/);
+  assert.match(scorecard, /onUndoThrow/);
+  assert.match(scorecard, /lastThrowHud/);
+  assert.match(html, /hole-map-lie-actions/);
+  assert.match(html, /hole-range-hud-throw/);
   assert.match(holeMap, /focus: props\.focus/);
   assert.match(scorecard, /resolveMapFocus/);
   assert.match(scorecard, /nextTeeHud/);
