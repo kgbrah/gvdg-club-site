@@ -408,6 +408,7 @@ function HoleMedia(props) {
           players: withSelfLocation(props.playerLocations, props.gpsFix),
           throws: props.throws,
           windFromDeg: props.windFromDeg,
+          scoreFlight: props.scoreFlight,
           onFocus: props.onMapFocus,
           onMapPoint: props.onMapPoint,
           onMarkLie: props.onMarkLie,
@@ -896,6 +897,7 @@ export function ScorecardView(props) {
   const [measure, setMeasure] = React.useState(null);
   const [throws, setThrows] = React.useState([]);
   const [pinnedFocus, setPinnedFocus] = React.useState(null);
+  const [scoreFlight, setScoreFlight] = React.useState(0);
   const gps = useDeviceFix();
   const lie = lastThrow(throws);
   const hud = currentRangeHud(props.hole, gps.fix, measure, lie);
@@ -968,6 +970,10 @@ export function ScorecardView(props) {
   function onUndoThrow() {
     persistThrows(undoThrow(throws));
   }
+  function onScore(source, hole, strokes) {
+    if (strokes != null) setScoreFlight((value) => value + 1);
+    if (typeof props.onScore === "function") props.onScore(source, hole, strokes);
+  }
   const measureLabel = measure && measure.b ? "Clear" : measure && measure.a ? "Mark" : "Measure";
   const solo = props.solo === true || (Array.isArray(props.rows) && props.rows.length === 1);
   const playerBand = Math.min(Math.max(Array.isArray(props.rows) ? props.rows.length : 1, 1), 4);
@@ -990,6 +996,7 @@ export function ScorecardView(props) {
           measureTo,
           nextTee,
           rangeHud: hud,
+          scoreFlight,
           throws,
           onEnableGps: gps.enableGps,
           onMapFocus,
@@ -1019,7 +1026,7 @@ export function ScorecardView(props) {
       ]),
       h("div", { className: "score-glove-dock", key: "dock" }, [
         h("div", { className: "score-glove-scores", key: "scores" }, [
-          h(ScorecardBox, { ...props, onOpenPad: setPadRow }),
+          h(ScorecardBox, { ...props, onOpenPad: setPadRow, onScore }),
           h(CtpClaim, { ctpClaim: props.ctpClaim, onCtpVote: props.onCtpVote }),
           h(FinishCard, { finish: props.finish, onOpenFinish: props.onOpenFinish }),
         ]),
@@ -1040,7 +1047,7 @@ export function ScorecardView(props) {
         key: "pad",
         row: padRow,
         onClose: () => setPadRow(null),
-        onScore: props.onScore,
+        onScore,
       })
       : null,
   ]);

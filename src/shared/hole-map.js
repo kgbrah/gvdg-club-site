@@ -1,6 +1,6 @@
 import React from "react";
 
-import { holeMapLabel, latLngFromMapPoint, playerMarksOnMap, projectHoleMap, projectMapPoint, SATELLITE_CREDIT, scoreChipAnchor, throwSegments } from "./hole-map-model.js";
+import { flightArc, holeMapLabel, latLngFromMapPoint, playerMarksOnMap, projectHoleMap, projectMapPoint, SATELLITE_CREDIT, scoreChipAnchor, throwSegments } from "./hole-map-model.js";
 import { safeExternalUrl } from "./safe-url.js";
 import { udiscDeepLink } from "./udisc-export.js";
 
@@ -64,6 +64,43 @@ function MapLieChip(props) {
       }, "Undo")
       : null,
   ]);
+}
+
+function prefersReducedMotion() {
+  return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function FlyingDisc(props) {
+  const flight = props.flight;
+  if (!flight || !flight.path) return null;
+  const compact = Boolean(props.compact);
+  const plate = compact ? 5.3 : 6.1;
+  return h("g", {
+    "aria-hidden": "true",
+    className: "hole-map-disc-flight" + (flight.kind === "putt" ? " putt" : ""),
+    key: flight.id,
+    style: {
+      animationDuration: flight.ms + "ms",
+      offsetPath: "path(\"" + flight.path + "\")",
+    },
+    onAnimationEnd: (event) => {
+      if (event.target !== event.currentTarget) return;
+      if (typeof props.onDone === "function") props.onDone();
+    },
+  }, h("g", { className: "hole-map-disc", style: { animationDuration: flight.ms + "ms" } }, [
+    h("ellipse", {
+      className: "hole-map-disc-shadow",
+      cx: 0.5,
+      cy: compact ? 3.1 : 3.6,
+      key: "shadow",
+      rx: plate * 0.92,
+      ry: compact ? 1.5 : 1.8,
+    }),
+    h("ellipse", { className: "hole-map-disc-plate", key: "plate", rx: plate, ry: plate }),
+    h("ellipse", { className: "hole-map-disc-rim", key: "rim", rx: plate, ry: plate }),
+    h("ellipse", { className: "hole-map-disc-inner", key: "inner", rx: plate * 0.62, ry: plate * 0.62 }),
+    h("ellipse", { className: "hole-map-disc-dome", key: "dome", rx: plate * 0.22, ry: plate * 0.22 }),
+  ]));
 }
 
 function ThrowMark(props) {
@@ -287,11 +324,60 @@ export function HoleMap(props) {
     width: compact ? 320 : undefined,
     windFromDeg: props.windFromDeg,
   });
+  const [flight, setFlight] = React.useState(null);
+  const throwCountRef = React.useRef(null);
+  const scoreFlightRef = React.useRef(Number(props.scoreFlight) || 0);
+  const holeKey = hole && hole.hole;
+  const throws = Array.isArray(props.throws) ? props.throws : (props.lie ? [props.lie] : []);
+  const throwCount = throws.length;
+  const lastThrowKey = throwCount
+    ? String(throws[throwCount - 1].lat) + "," + String(throws[throwCount - 1].lng)
+    : "";
+  const teePt = map && map.tee;
+  const basketPt = map && map.basket;
+  React.useEffect(() => {
+    setFlight(null);
+    throwCountRef.current = null;
+  }, [holeKey]);
+  React.useEffect(() => {
+    if (!map || !teePt) return;
+    const marks = throws.map((row, index) => {
+      const pt = projectMapPoint(map, row && row.lat, row && row.lng);
+      if (!pt) return null;
+      return { ...pt, n: row.n || index + 1 };
+    }).filter(Boolean);
+    if (prefersReducedMotion()) {
+      throwCountRef.current = marks.length;
+      return;
+    }
+    if (throwCountRef.current == null) {
+      throwCountRef.current = marks.length;
+      return;
+    }
+    const prev = throwCountRef.current;
+    throwCountRef.current = marks.length;
+    if (marks.length !== prev + 1) return;
+    const to = marks[marks.length - 1];
+    const arc = flightArc(marks[marks.length - 2] || teePt, to, "lie");
+    if (!arc) return;
+    setFlight({ ...arc, hideN: to.n, id: "lie-" + to.n + "-" + marks.length });
+  }, [throwCount, lastThrowKey, holeKey, throws, map, teePt]);
+  React.useEffect(() => {
+    const token = Number(props.scoreFlight) || 0;
+    if (token === scoreFlightRef.current) return;
+    scoreFlightRef.current = token;
+    if (!token || prefersReducedMotion() || !map || !teePt || !basketPt) return;
+    const last = throws.length
+      ? projectMapPoint(map, throws[throws.length - 1].lat, throws[throws.length - 1].lng)
+      : null;
+    const arc = flightArc(last || teePt, basketPt, "putt");
+    if (!arc) return;
+    setFlight({ ...arc, id: "putt-" + token });
+  }, [props.scoreFlight]);
   if (!map) return null;
   const udiscHref = compact ? "" : udiscDeepLink(props.udiscCourseId);
   const label = holeMapLabel(map, hole && hole.hole);
   const players = playerMarksOnMap(map, props.players);
-  const throws = Array.isArray(props.throws) ? props.throws : (props.lie ? [props.lie] : []);
   const segments = throwSegments(throws, hole && hole.tee).map((seg) => {
     const a = projectMapPoint(map, seg.a && seg.a.lat, seg.a && seg.a.lng);
     const b = projectMapPoint(map, seg.b && seg.b.lat, seg.b && seg.b.lng);
@@ -388,13 +474,23 @@ export function HoleMap(props) {
             x: player.x,
             y: player.y,
           })),
-          ...throwMarks.map((mark) => h(ThrowMark, {
+          ...throwMarks.map((mark) => (
+            flight && flight.hideN === mark.n
+              ? null
+              : h(ThrowMark, {
+                compact,
+                key: "throw-" + mark.n,
+                n: mark.n,
+                x: mark.x,
+                y: mark.y,
+              })
+          )),
+          h(FlyingDisc, {
             compact,
-            key: "throw-" + mark.n,
-            n: mark.n,
-            x: mark.x,
-            y: mark.y,
-          })),
+            flight,
+            key: flight ? flight.id : "disc-idle",
+            onDone: () => setFlight(null),
+          }),
           measureFrom
             ? h(LieMark, { compact, key: "lie-a", label: "Start", x: measureFrom.x, y: measureFrom.y })
             : null,

@@ -154,6 +154,35 @@ export function throwSegments(throws, tee) {
   return segs;
 }
 
+export function flightArc(from, to, kind = "lie") {
+  if (!from || !to) return null;
+  const x1 = Number(from.x);
+  const y1 = Number(from.y);
+  const x2 = Number(to.x);
+  const y2 = Number(to.y);
+  if (![x1, y1, x2, y2].every(Number.isFinite)) return null;
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.hypot(dx, dy);
+  if (len < 2) return null;
+  let nx = -dy / len;
+  let ny = dx / len;
+  if (ny > 0) {
+    nx = -nx;
+    ny = -ny;
+  }
+  const loft = Math.max(8, Math.min(kind === "putt" ? 20 : 26, len * 0.24));
+  const qx = (x1 + x2) / 2 + nx * loft;
+  const qy = (y1 + y2) / 2 + ny * loft;
+  return {
+    kind,
+    ms: Math.round(380 + Math.min(len * 2.4, kind === "putt" ? 480 : 420)),
+    path: `M ${x1.toFixed(1)} ${y1.toFixed(1)} Q ${qx.toFixed(1)} ${qy.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`,
+    from: { x: x1, y: y1 },
+    to: { x: x2, y: y2 },
+  };
+}
+
 export function lastThrowHud(throws, tee) {
   const segs = throwSegments(throws, tee);
   const last = segs[segs.length - 1];
