@@ -18,6 +18,8 @@ export const DISC_COLORS = [
   { id: "pink", label: "Pink", token: "--disc-pink" },
   { id: "teal", label: "Teal", token: "--disc-teal" },
   { id: "purple", label: "Purple", token: "--disc-purple" },
+  { id: "multicolor", label: "Multicolor", token: "--disc-multicolor", pattern: "multicolor" },
+  { id: "tiedye", label: "Tie-dye", token: "--disc-tiedye", pattern: "tiedye" },
 ];
 
 const DISC_IDS = new Set(DISC_COLORS.map((row) => row.id));
@@ -31,6 +33,11 @@ export function sanitizeDiscColor(value) {
 export function discColorToken(id) {
   const row = DISC_COLORS.find((item) => item.id === sanitizeDiscColor(id));
   return "var(" + (row ? row.token : "--disc-orange") + ")";
+}
+
+export function discColorPattern(id) {
+  const row = DISC_COLORS.find((item) => item.id === sanitizeDiscColor(id));
+  return row && (row.pattern === "multicolor" || row.pattern === "tiedye") ? row.pattern : "solid";
 }
 
 export function discColorStorageKey(memberId) {
@@ -68,6 +75,7 @@ export function applyDiscColor(id, root) {
     if (!node || !node.style) return;
     node.style.setProperty("--disc-plate", token);
     node.setAttribute("data-disc-color", color);
+    node.setAttribute("data-disc-pattern", discColorPattern(color));
   });
   return color;
 }

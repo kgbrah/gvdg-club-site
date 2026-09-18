@@ -1,6 +1,7 @@
 import React from "react";
 
 import { flightArc, flightPoint, holeMapLabel, latLngFromMapPoint, playerMarksOnMap, projectHoleMap, projectMapPoint, SATELLITE_CREDIT, scoreChipAnchor, throwSegments } from "./hole-map-model.js";
+import { discColorPattern } from "./disc-color.js";
 import { safeExternalUrl } from "./safe-url.js";
 import { udiscDeepLink } from "./udisc-export.js";
 
@@ -74,6 +75,55 @@ function easeFlight(t) {
   return t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2;
 }
 
+const MULTICOLOR_STOPS = [
+  "var(--disc-orange)",
+  "var(--disc-gold)",
+  "var(--disc-teal)",
+  "var(--disc-blue)",
+  "var(--disc-purple)",
+  "var(--disc-pink)",
+];
+
+function pieSlice(index, count, radius) {
+  const start = (index / count) * Math.PI * 2 - Math.PI / 2;
+  const end = ((index + 1) / count) * Math.PI * 2 - Math.PI / 2;
+  const x0 = Math.cos(start) * radius;
+  const y0 = Math.sin(start) * radius;
+  const x1 = Math.cos(end) * radius;
+  const y1 = Math.sin(end) * radius;
+  return `M 0 0 L ${x0.toFixed(2)} ${y0.toFixed(2)} A ${radius} ${radius} 0 0 1 ${x1.toFixed(2)} ${y1.toFixed(2)} Z`;
+}
+
+function liveDiscPattern(explicit) {
+  if (explicit) return discColorPattern(explicit);
+  try {
+    return discColorPattern(document.documentElement?.getAttribute?.("data-disc-color"));
+  } catch {
+    return "solid";
+  }
+}
+
+function DiscPlastic({ plate, pattern }) {
+  if (pattern === "multicolor") {
+    return MULTICOLOR_STOPS.map((fill, index) => h("path", {
+      d: pieSlice(index, MULTICOLOR_STOPS.length, plate),
+      fill,
+      key: "slice-" + index,
+    }));
+  }
+  if (pattern === "tiedye") {
+    return [
+      h("ellipse", { fill: "var(--disc-teal)", key: "base", rx: plate, ry: plate }),
+      h("ellipse", { cx: -plate * 0.28, cy: -plate * 0.16, fill: "var(--disc-pink)", key: "dye-1", rx: plate * 0.58, ry: plate * 0.4, transform: "rotate(-26)" }),
+      h("ellipse", { cx: plate * 0.3, cy: -plate * 0.14, fill: "var(--disc-gold)", key: "dye-2", rx: plate * 0.5, ry: plate * 0.34, transform: "rotate(34)" }),
+      h("ellipse", { cx: plate * 0.1, cy: plate * 0.3, fill: "var(--disc-purple)", key: "dye-3", rx: plate * 0.52, ry: plate * 0.36, transform: "rotate(-16)" }),
+      h("ellipse", { cx: -plate * 0.2, cy: plate * 0.22, fill: "var(--disc-orange)", key: "dye-4", rx: plate * 0.4, ry: plate * 0.28, transform: "rotate(24)" }),
+      h("ellipse", { cx: plate * 0.04, cy: -plate * 0.34, fill: "var(--disc-blue)", key: "dye-5", rx: plate * 0.26, ry: plate * 0.2, transform: "rotate(48)" }),
+    ];
+  }
+  return h("ellipse", { className: "hole-map-disc-plate", key: "plate", rx: plate, ry: plate });
+}
+
 function FlyingDisc(props) {
   const flight = props.flight;
   const [progress, setProgress] = React.useState(0);
@@ -101,17 +151,19 @@ function FlyingDisc(props) {
   const compact = Boolean(props.compact);
   const plate = compact ? 5.3 : 6.1;
   const putt = flight.kind === "putt";
+  const pattern = liveDiscPattern(props.discColor);
   const scale = putt && progress > 0.72 ? Math.max(0.28, 1 - (progress - 0.72) / 0.28 * 0.72) : 1;
   const opacity = putt && progress > 0.86
     ? Math.max(0, 1 - (progress - 0.86) / 0.14)
     : (progress < 0.05 ? progress / 0.05 : 1);
   return h("g", {
     "aria-hidden": "true",
-    className: "hole-map-disc-flight" + (putt ? " putt" : ""),
+    className: "hole-map-disc-flight" + (putt ? " putt" : "") + (pattern !== "solid" ? " " + pattern : ""),
     key: flight.id,
     opacity,
     transform: `translate(${pt.x.toFixed(2)} ${pt.y.toFixed(2)}) rotate(${(progress * (putt ? 220 : 180)).toFixed(1)}) scale(${scale.toFixed(3)})`,
   }, [
+    h("defs", { key: "defs" }, h("clipPath", { id: "gvdg-disc-plate-clip" }, h("ellipse", { rx: plate, ry: plate }))),
     h("ellipse", {
       className: "hole-map-disc-shadow",
       cx: 0.5,
@@ -120,7 +172,8 @@ function FlyingDisc(props) {
       rx: plate * 0.92,
       ry: compact ? 1.5 : 1.8,
     }),
-    h("ellipse", { className: "hole-map-disc-plate", key: "plate", rx: plate, ry: plate }),
+    h("g", { className: "hole-map-disc-plastic", clipPath: "url(#gvdg-disc-plate-clip)", key: "plastic" },
+      h(DiscPlastic, { pattern, plate })),
     h("ellipse", { className: "hole-map-disc-rim", key: "rim", rx: plate, ry: plate }),
     h("ellipse", { className: "hole-map-disc-inner", key: "inner", rx: plate * 0.62, ry: plate * 0.62 }),
     h("ellipse", { className: "hole-map-disc-dome", key: "dome", rx: plate * 0.22, ry: plate * 0.22 }),

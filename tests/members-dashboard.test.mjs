@@ -303,7 +303,8 @@ test('more page mounts a player theme builder', () => {
   assert.match(picker, /Live scoring disc/);
   assert.match(picker, /useDiscColorSession/);
   assert.match(html, /\.disc-color-grid/);
-  assert.match(html, /\.disc-color-swatch/);
+  assert.match(html, /\.disc-color-chip\.is-tiedye/);
+  assert.match(html, /\.disc-color-chip\.is-multicolor/);
   assert.match(worker, /\/me\/disc-color/);
   assert.match(theme, /notifyPlayerThemeChanged/);
   assert.match(theme, /THEME_EVENT/);

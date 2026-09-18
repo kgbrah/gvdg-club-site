@@ -824,7 +824,7 @@
                 .dash-theme-apply { margin-left: auto; }
                 .disc-color-pref { margin-bottom: 1.25rem; }
                 .disc-color-grid {
-                    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.45rem;
+                    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.45rem;
                     padding: 0 1.1rem 1rem;
                 }
                 .disc-color-swatch {
@@ -840,7 +840,18 @@
                     background: var(--disc-swatch);
                     box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--disc-swatch) 55%, var(--dark)), 0 0 0 1px var(--border-color);
                 }
-                .disc-color-label { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+                .disc-color-chip.is-multicolor {
+                    background: conic-gradient(from 20deg, var(--disc-orange), var(--disc-gold), var(--disc-teal), var(--disc-blue), var(--disc-purple), var(--disc-pink), var(--disc-orange));
+                }
+                .disc-color-chip.is-tiedye {
+                    background:
+                        radial-gradient(circle at 30% 28%, var(--disc-gold) 0 16%, transparent 17%),
+                        radial-gradient(circle at 72% 24%, var(--disc-pink) 0 14%, transparent 15%),
+                        radial-gradient(circle at 24% 72%, var(--disc-teal) 0 18%, transparent 19%),
+                        radial-gradient(circle at 76% 74%, var(--disc-purple) 0 16%, transparent 17%),
+                        conic-gradient(from 210deg, var(--disc-orange), var(--disc-teal), var(--disc-pink), var(--disc-purple), var(--disc-gold), var(--disc-blue), var(--disc-orange));
+                }
+                .disc-color-label { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; text-align: center; line-height: 1.15; color: var(--text-muted); }
                 .active-standings { margin: 0.25rem 0 1rem; }
                 .dash-standings-card { background: var(--bg-tertiary, rgba(127,127,127,0.06)); border: 1px solid var(--border-color, rgba(127,127,127,0.25)); border-radius: 10px; padding: 0.7rem 0.9rem; margin-bottom: 0.75rem; }
                 .dash-standings-card .dash-subtitle { margin-top: 0; }

@@ -6,6 +6,7 @@ import {
   DEFAULT_DISC_COLOR,
   DISC_COLORS,
   applyDiscColor,
+  discColorPattern,
   discColorStorageKey,
   discColorToken,
   fetchRemoteDiscColor,
@@ -27,10 +28,15 @@ function memoryStorage(seed = {}) {
 test("sanitizeDiscColor only accepts named plastics", () => {
   assert.equal(sanitizeDiscColor("teal"), "teal");
   assert.equal(sanitizeDiscColor("ORANGE"), "orange");
+  assert.equal(sanitizeDiscColor("tiedye"), "tiedye");
+  assert.equal(sanitizeDiscColor("multicolor"), "multicolor");
   assert.equal(sanitizeDiscColor("javascript:alert(1)"), DEFAULT_DISC_COLOR);
   assert.equal(sanitizeDiscColor(""), DEFAULT_DISC_COLOR);
-  assert.equal(DISC_COLORS.length, 10);
+  assert.equal(DISC_COLORS.length, 12);
   assert.equal(discColorToken("pink"), "var(--disc-pink)");
+  assert.equal(discColorPattern("tiedye"), "tiedye");
+  assert.equal(discColorPattern("multicolor"), "multicolor");
+  assert.equal(discColorPattern("orange"), "solid");
 });
 
 test("disc color storage is keyed per member", () => {

@@ -23,7 +23,11 @@ export function DiscColorPicker() {
         type: "button",
         onClick: () => choose(row.id),
       }, [
-        h("span", { className: "disc-color-chip", key: "chip", "aria-hidden": "true" }),
+        h("span", {
+          className: "disc-color-chip" + (row.pattern ? " is-" + row.pattern : ""),
+          key: "chip",
+          "aria-hidden": "true",
+        }),
         h("span", { className: "disc-color-label", key: "label" }, row.label),
       ])),
     ),

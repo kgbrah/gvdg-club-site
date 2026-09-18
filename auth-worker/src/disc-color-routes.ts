@@ -14,6 +14,8 @@ const DISC_IDS = new Set([
   "pink",
   "teal",
   "purple",
+  "multicolor",
+  "tiedye",
 ]);
 
 export function sanitizeDiscColor(raw: unknown): string | null {

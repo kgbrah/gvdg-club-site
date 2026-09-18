@@ -59,6 +59,8 @@
   --disc-pink: #E85D9A;
   --disc-teal: #148F8F;
   --disc-purple: #6B4C9A;
+  --disc-multicolor: var(--disc-orange);
+  --disc-tiedye: var(--disc-pink);
   --disc-plate: var(--disc-orange);
 
   /* Mobile safe areas */

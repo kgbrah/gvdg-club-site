@@ -81,6 +81,10 @@ describe("GET/PUT/DELETE /me/disc-color", () => {
     const get = await worker.fetch(jsonRequest("/me/disc-color", "GET", undefined, auth), env);
     expect(((await get.json()) as { discColor: string }).discColor).toBe("teal");
 
+    const dye = await worker.fetch(jsonRequest("/me/disc-color", "PUT", { discColor: "tiedye" }, auth), env);
+    expect(dye.status).toBe(200);
+    expect(((await dye.json()) as { discColor: string }).discColor).toBe("tiedye");
+
     const del = await worker.fetch(jsonRequest("/me/disc-color", "DELETE", undefined, auth), env);
     expect(del.status).toBe(200);
     expect(((await (await worker.fetch(jsonRequest("/me/disc-color", "GET", undefined, auth), env)).json()) as { discColor: null }).discColor).toBeNull();
