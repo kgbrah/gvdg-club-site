@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CIRCLE1_M, CIRCLE2_M, circleEllipse, currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, headingDeg, holeMapLabel, holePoint, latLngFromMapPoint, mapFocusFromRemaining, nextTeeHud, playerMarksOnMap, projectHoleMap, projectMapPoint, puttingCircle, rangeHud, remainingFt, resolveMapFocus, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, windBlowToDeg, withSelfLocation } from "../src/shared/hole-map-model.js";
+import { CIRCLE1_M, CIRCLE2_M, circleEllipse, currentRangeHud, GPS_REMAINING_MAX_FT, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, headingDeg, holeMapLabel, holePoint, latLngFromMapPoint, mapFocusFromRemaining, nextTeeHud, playerMarksOnMap, projectHoleMap, projectMapPoint, puttingCircle, rangeHud, remainingFt, resolveMapFocus, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, windBlowToDeg, withSelfLocation } from "../src/shared/hole-map-model.js";
 
 test("holePoint requires numeric lat/lng", () => {
   assert.equal(holePoint(null), null);
@@ -196,8 +196,10 @@ test("gpsErrorPolicy keeps the last fix and retries timeouts", () => {
   assert.equal(GPS_WATCH_OPTIONS.enableHighAccuracy, true);
 });
 
-test("gpsHudPrompt asks guests to tap until a fix lands", () => {
+test("gpsHudPrompt asks guests to tap until remaining is live", () => {
   assert.equal(gpsHudPrompt("ready"), "");
+  assert.equal(gpsHudPrompt("ready", "remaining"), "");
+  assert.equal(gpsHudPrompt("ready", "hole"), "Tap for GPS");
   assert.equal(gpsHudPrompt("denied"), "GPS blocked");
   assert.equal(gpsHudPrompt("watching"), "Finding GPS…");
   assert.equal(gpsHudPrompt("unavailable"), "GPS unavailable");
@@ -214,7 +216,7 @@ test("withSelfLocation stamps the device as ME without dropping other marks", ()
   ]);
 });
 
-test("currentRangeHud uses GPS remaining on the hole and falls back when GPS is miles away", () => {
+test("currentRangeHud uses GPS remaining on the hole even when GPS is far", () => {
   const hole = { distance_ft: 308, target: { lat: 35.6, lng: -77.37 } };
   const near = northOf(hole.target, 25);
   const far = { lat: 35.227, lng: -80.843 };
@@ -226,9 +228,10 @@ test("currentRangeHud uses GPS remaining on the hole and falls back when GPS is 
     mode: "remaining",
   });
   const farHud = currentRangeHud(hole, far, null);
-  assert.equal(farHud.mode, "hole");
-  assert.equal(farHud.caption, "hole");
-  assert.equal(farHud.ft, 308);
+  assert.equal(farHud.mode, "remaining");
+  assert.equal(farHud.caption, "to basket");
+  assert.ok(farHud.ft > GPS_REMAINING_MAX_FT);
+  assert.equal(farHud.holeFt, 308);
   assert.deepEqual(currentRangeHud(hole, null, null), {
     caption: "hole",
     circle: null,

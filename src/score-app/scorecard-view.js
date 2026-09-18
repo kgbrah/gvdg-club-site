@@ -74,6 +74,7 @@ function RoundTools(props) {
         h("span", { key: "label" }, "Manage"),
       ])
       : null,
+    h(ScorecardOwner, { ...props, compact: true, key: "owner" }),
   ]);
 }
 
@@ -142,16 +143,26 @@ function useDeviceFix() {
       watchId.current = null;
     }
     setStatus((current) => (current === "ready" || fixRef.current ? "ready" : "watching"));
+    function onFix(pos) {
+      const lat = pos.coords && pos.coords.latitude;
+      const lng = pos.coords && pos.coords.longitude;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      const next = { lat, lng };
+      fixRef.current = next;
+      setFix(next);
+      setStatus("ready");
+    }
+    try {
+      navigator.geolocation.getCurrentPosition(onFix, () => {}, {
+        enableHighAccuracy: true,
+        maximumAge: GPS_WATCH_OPTIONS.maximumAge,
+        timeout: 8000,
+      });
+    } catch {
+      /* getCurrentPosition is a kickstart; watch owns retries */
+    }
     watchId.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        const lat = pos.coords && pos.coords.latitude;
-        const lng = pos.coords && pos.coords.longitude;
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-        const next = { lat, lng };
-        fixRef.current = next;
-        setFix(next);
-        setStatus("ready");
-      },
+      onFix,
       (err) => {
         const policy = gpsErrorPolicy(err && err.code, Boolean(fixRef.current));
         if (!policy.keepFix) {
@@ -212,7 +223,7 @@ function RangeHud(props) {
   if (!props.hud) return null;
   const circleClass = props.hud.circle === "C1" ? " in-c1" : props.hud.circle === "C2" ? " in-c2" : "";
   const holeFt = props.hud.mode !== "hole" && Number.isFinite(props.hud.holeFt) ? props.hud.holeFt : null;
-  const prompt = gpsHudPrompt(props.gpsStatus);
+  const prompt = gpsHudPrompt(props.gpsStatus, props.hud && props.hud.mode);
   const clickable = Boolean(prompt && props.onEnableGps);
   const nextTee = props.nextTee;
   return h(clickable ? "button" : "div", {
@@ -251,6 +262,12 @@ function HoleMedia(props) {
           compact: true,
           focus: props.mapFocus,
           hole: props.hole,
+          hud: h(RangeHud, {
+            gpsStatus: props.gpsStatus,
+            hud: props.rangeHud,
+            nextTee: props.nextTee,
+            onEnableGps: props.onEnableGps,
+          }),
           key: "map-card",
           lie: props.lie,
           measureFrom: props.measureFrom,
@@ -260,12 +277,6 @@ function HoleMedia(props) {
           onFocus: props.onMapFocus,
           onMapPoint: props.onMapPoint,
           onMarkLie: props.onMarkLie,
-        }),
-        h(RangeHud, {
-          gpsStatus: props.gpsStatus,
-          hud: props.rangeHud,
-          nextTee: props.nextTee,
-          onEnableGps: props.onEnableGps,
         }),
       ])
       : h("div", { className: "hole-media-empty", key: "empty" }, "No map for this hole yet"),
@@ -299,12 +310,16 @@ function HoleMedia(props) {
 
 function ScorecardOwner(props) {
   if (!props.choices || props.choices.length <= 1) return null;
-  return h("div", { className: "scorecard-owner", key: "owner" }, [
-    h("label", { htmlFor: "scorecardOwner", key: "label" }, "Scorecard"),
+  const compact = Boolean(props.compact);
+  return h("div", { className: "scorecard-owner" + (compact ? " compact" : ""), key: "owner" }, [
+    compact
+      ? null
+      : h("label", { htmlFor: "scorecardOwner", key: "label" }, "Scorecard"),
     h(
       "select",
       {
-        id: "scorecardOwner",
+        "aria-label": "Scorecard",
+        id: compact ? "scorecardOwnerTools" : "scorecardOwner",
         key: "select",
         value: String(props.scorerIndex),
         onChange: (event) => props.onScorerChange(Number(event.target.value)),
@@ -552,7 +567,6 @@ function CtpClaim(props) {
 
 function ScorecardBox(props) {
   return h("div", { className: "score-entry-card", key: "scorecard" }, [
-    h(ScorecardOwner, props),
     props.warning ? h("p", { className: "muted auth-error", key: "warning" }, props.warning) : null,
     props.rows.map((row) => h(ScoreRow, {
       key: row.key,
