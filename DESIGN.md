@@ -618,11 +618,11 @@ Spacing follows a 4px base through rem values.
 
 ### Member Home Jobs
 
-- Structure: Home jobs strip after keep-score: a Pay CTA when a live/scheduled registration still owes an entry fee, plus a compact course-conditions card. Report opens the Club tab; Pay opens Events where PayPal still lives.
-- Variants: unpaid due (PayPal on/off labels Pay vs Due), multiple unpaid (+ N more), no unpaid (Pay hidden), fresh reports ranked closed/flooded/wet first, empty 48h window.
+- Structure: Home jobs strip after keep-score: a Pay CTA when a live/scheduled registration still owes an entry fee, plus a compact course-conditions card. If store credit covers the fee, Pay confirms and debits the wallet; otherwise it opens Events.
+- Variants: unpaid due, wallet covers (Pay), wallet short (Due → Events), multiple unpaid (+ N more), no unpaid (Pay hidden), fresh reports ranked closed/flooded/wet first, empty 48h window.
 - Spacing: Pay reuses `.player-keep-score`. Conditions is a `.player-card` with a 44px Report control and badge row.
-- States: `pickUnpaidJobs` uses `/my-registrations` + `/registration/open` already loaded by RegistrationProvider. Conditions fetch `/course-conditions` and drop stale reports.
-- Accessibility: Pay and Report are real buttons; condition badges are text labels.
+- States: `pickUnpaidJobs` uses `/my-registrations` + `/registration/open`. Wallet pay POSTs `/events/:id/pay/wallet` with an atomic debit. Conditions fetch `/course-conditions` and drop stale reports.
+- Accessibility: Pay and Report are real buttons; wallet pay confirms before debiting; condition badges are text labels.
 - Motion: static layout.
 
 ### Member Dashboard Dialogs

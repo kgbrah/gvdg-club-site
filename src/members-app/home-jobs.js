@@ -3,21 +3,75 @@ import React from "react";
 import { requestJson } from "./api.js";
 import { selectDashboardTab } from "./dashboard-shell.js";
 import { dollars } from "./format.js";
+import { memberAlert, memberConfirm } from "./member-dialogs.js";
 import { pickUnpaidJobs } from "./registration-utils.js";
+import {
+  announceWalletUpdated,
+  payEventWithWallet,
+  walletPayErrorMessage,
+} from "./registration-payments.js";
 import { homeConditionRows } from "../shared/course-conditions-model.js";
 
 const h = React.createElement;
 
-function HomePayJob({ events, registrations, paymentsConfig }) {
+function HomePayJob({ events, registrations, token, onReload }) {
   const jobs = pickUnpaidJobs(events, registrations);
+  const [wallet, setWallet] = React.useState({ status: "idle", balanceCents: 0 });
+  const [busy, setBusy] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!token || !jobs.length) {
+      setWallet({ status: "idle", balanceCents: 0 });
+      return undefined;
+    }
+    const controller = new AbortController();
+    requestJson("/shop/wallet", { token, signal: controller.signal })
+      .then((payload) => setWallet({ status: "ready", balanceCents: Number(payload.balance_cents || 0) }))
+      .catch((error) => {
+        if (error.name !== "AbortError") setWallet({ status: "ready", balanceCents: 0 });
+      });
+    return () => controller.abort();
+  }, [token, jobs.length]);
+
   if (!jobs.length) return null;
   const first = jobs[0];
   const extra = jobs.length - 1;
+  const canWallet = wallet.status === "ready" && wallet.balanceCents >= first.owed;
+
+  async function onClick() {
+    if (!canWallet) {
+      selectDashboardTab("events");
+      return;
+    }
+    const confirmed = await memberConfirm({
+      confirmText: "Pay",
+      message: `Pay ${dollars(first.owed)} from store credit for ${first.event.name || "this event"}?`,
+      title: "Pay with store credit?",
+    });
+    if (!confirmed) return;
+    setBusy(true);
+    try {
+      const result = await payEventWithWallet(first.event.id, token);
+      if (!result.ok) {
+        await memberAlert({
+          message: walletPayErrorMessage(result.data.error),
+          title: "Store credit payment failed",
+        });
+        return;
+      }
+      announceWalletUpdated();
+      onReload?.();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return h("button", {
     type: "button",
     className: "player-keep-score player-pay-job",
-    "data-react-home-pay": "due",
-    onClick: () => selectDashboardTab("events"),
+    "data-react-home-pay": canWallet ? "wallet" : "due",
+    disabled: busy,
+    onClick,
   }, [
     h("div", { key: "copy" }, [
       h("h2", { key: "title" }, `Pay ${dollars(first.owed)}`),
@@ -25,7 +79,7 @@ function HomePayJob({ events, registrations, paymentsConfig }) {
         ? `${first.event.name || "Club event"} + ${extra} more`
         : first.event.name || "Club event"),
     ]),
-    h("span", { className: "player-keep-score-go", key: "go" }, paymentsConfig?.enabled ? "Pay" : "Due"),
+    h("span", { className: "player-keep-score-go", key: "go" }, busy ? "Paying..." : canWallet ? "Pay" : "Due"),
   ]);
 }
 
@@ -75,9 +129,9 @@ function HomeConditionsCard() {
   ]);
 }
 
-export function HomeJobs({ events, registrations, paymentsConfig }) {
+export function HomeJobs({ events, registrations, token, onReload }) {
   return h("div", { className: "player-jobs", "data-react-home-jobs": "ready" }, [
-    h(HomePayJob, { events, registrations, paymentsConfig, key: "pay" }),
+    h(HomePayJob, { events, registrations, token, onReload, key: "pay" }),
     h(HomeConditionsCard, { key: "conditions" }),
   ]);
 }

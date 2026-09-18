@@ -165,7 +165,8 @@ export function MemberOverviewDashboard() {
     h(HomeJobs, {
       events: registration.state.events,
       registrations: registration.state.registrations,
-      paymentsConfig: registration.state.paymentsConfig,
+      token,
+      onReload: registration.reload,
       key: "jobs",
     }),
     h("div", { className: "player-row-cards", key: "stats" }, [

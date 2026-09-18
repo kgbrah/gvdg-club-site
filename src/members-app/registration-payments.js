@@ -1,7 +1,8 @@
 import React from "react";
 
-import { request } from "./api.js";
-import { memberAlert } from "./member-dialogs.js";
+import { request, requestJson } from "./api.js";
+import { dollars } from "./format.js";
+import { memberAlert, memberConfirm } from "./member-dialogs.js";
 
 const h = React.createElement;
 let paypalSdkPromise = null;
@@ -25,6 +26,94 @@ function loadPaypalSdk(config) {
     document.head.appendChild(script);
   });
   return paypalSdkPromise;
+}
+
+export function announceWalletUpdated() {
+  window.dispatchEvent(new CustomEvent("gvdg:wallet-updated"));
+}
+
+export async function payEventWithWallet(eventId, token) {
+  const response = await request(`/events/${encodeURIComponent(eventId)}/pay/wallet`, {
+    method: "POST",
+    token,
+  });
+  const data = await response.json().catch(() => ({}));
+  return { ok: response.ok, status: response.status, data };
+}
+
+export function walletPayErrorMessage(error) {
+  if (error === "already_paid") return "You're already paid for this event.";
+  if (error === "nothing_owed") return "There's nothing left to pay.";
+  if (error === "insufficient_store_credit") return "Not enough store credit for this entry.";
+  if (error === "capture_in_progress") return "Another payment is already in progress. Try again in a moment.";
+  if (error === "not_registered") return "Register for the event before paying.";
+  return "We couldn't take store credit for this event. Try again or pay at the event.";
+}
+
+export function WalletPayButton({ eventId, eventName, owed, token, onReload }) {
+  const [wallet, setWallet] = React.useState({ status: "idle", balanceCents: 0 });
+  const [busy, setBusy] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!token) {
+      setWallet({ status: "idle", balanceCents: 0 });
+      return undefined;
+    }
+    const controller = new AbortController();
+    setWallet((current) => ({ ...current, status: "loading" }));
+    requestJson("/shop/wallet", { token, signal: controller.signal })
+      .then((payload) => setWallet({ status: "ready", balanceCents: Number(payload.balance_cents || 0) }))
+      .catch((error) => {
+        if (error.name !== "AbortError") setWallet({ status: "ready", balanceCents: 0 });
+      });
+    return () => controller.abort();
+  }, [token]);
+
+  if (!token || owed <= 0) return null;
+  const balance = wallet.balanceCents;
+  const covers = wallet.status === "ready" && balance >= owed;
+
+  async function pay() {
+    const confirmed = await memberConfirm({
+      confirmText: "Pay",
+      message: `Pay ${dollars(owed)} from store credit${eventName ? ` for ${eventName}` : ""}?`,
+      title: "Pay with store credit?",
+    });
+    if (!confirmed) return;
+    setBusy(true);
+    try {
+      const result = await payEventWithWallet(eventId, token);
+      if (!result.ok) {
+        await memberAlert({
+          message: walletPayErrorMessage(result.data.error),
+          title: "Store credit payment failed",
+        });
+        return;
+      }
+      announceWalletUpdated();
+      onReload?.();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return h("div", {
+    className: "register-wallet-pay",
+    "data-react-wallet-pay": busy ? "busy" : covers ? "due" : wallet.status === "ready" ? "short" : wallet.status,
+  }, [
+    wallet.status === "loading"
+      ? h("p", { className: "register-fee", key: "loading" }, "Checking store credit...")
+      : covers
+        ? h("button", {
+          type: "button",
+          className: "player-btn primary",
+          disabled: busy,
+          key: "pay",
+          onClick: pay,
+        }, busy ? "Paying..." : `Pay ${dollars(owed)} with store credit`)
+        : h("p", { className: "register-fee", key: "short" },
+          `Store credit ${dollars(balance)} — need ${dollars(Math.max(0, owed - balance))} more to pay from the wallet.`),
+  ]);
 }
 
 export function PayPalButtons({ eventId, token, paymentsConfig, onReload }) {

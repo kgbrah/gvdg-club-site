@@ -179,6 +179,7 @@ test('overview dashboard is a compact home and keeps registration on Events', ()
   assert.match(activity, /selectDashboardTab\("play"\)/);
   assert.match(activity, /variant === "play"/);
   assert.match(activity, /href: live\.href/);
+  assert.match(activity, /event_entry/);
   assert.match(shell, /label: "Home"/);
   assert.match(shell, /label: "Play"/);
   assert.match(shell, /key: "play"/);
@@ -187,6 +188,11 @@ test('overview dashboard is a compact home and keeps registration on Events', ()
   assert.match(html, /body\[data-member-dashboard-tab="play"\] #playerPlay/);
   assert.match(html, /grid-template-columns: repeat\(5, 1fr\)/);
   assert.match(html, /\.player-jobs \{ display: grid;/);
+  const payments = readFileSync('src/members-app/registration-payments.js', 'utf8');
+  assert.match(payments, /export function WalletPayButton/);
+  assert.match(payments, /pay\/wallet/);
+  assert.match(readFileSync('src/members-app/registration-events.js', 'utf8'), /WalletPayButton/);
+  assert.match(readFileSync('src/members-app/home-jobs.js', 'utf8'), /payEventWithWallet/);
   assert.match(html, /\.dash-collapse-summary \{ cursor: pointer; \}/);
   assert.doesNotMatch(html, /body\[data-member-dashboard-tab="overview"\] #clubRegister/);
   assert.match(html, /body\[data-member-dashboard-tab="events"\] #clubRegister/);
