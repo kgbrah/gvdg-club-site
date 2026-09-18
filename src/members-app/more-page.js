@@ -4,6 +4,7 @@ import { CrottsHelpLink } from "../shared/crotts-widget.js";
 import { WalletPanel } from "./activity-panels.js";
 import { TOKEN_KEY, storageGet } from "./api.js";
 import { selectDashboardTab, requestLogout } from "./dashboard-shell.js";
+import { DiscColorPicker } from "./disc-color-picker.js";
 import { DashboardThemeBuilder } from "./dashboard-theme.js";
 
 const h = React.createElement;
@@ -79,6 +80,7 @@ export function MemberMorePage() {
     ]),
     h(WalletPanel, { token, key: "wallet" }),
     h(AccountTools, { key: "account-tools" }),
+    h(DiscColorPicker, { key: "disc-color" }),
     h(DashboardThemeBuilder, { key: "theme" }),
     h("button", {
       className: "player-logout-btn",

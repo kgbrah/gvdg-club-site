@@ -14,6 +14,7 @@ import {
 } from "./member-routes.js";
 import { handleBoard } from "./member-board-routes.js";
 import { handleDashboardTheme } from "./dashboard-theme-routes.js";
+import { handleDiscColor } from "./disc-color-routes.js";
 import { handleAssistant } from "./assistant-route.js";
 import { handleWebAuthnRoute } from "./webauthn-routes.js";
 import { handleMyTeeSigns, handleTeeSignUpload } from "./tee-sign-routes.js";
@@ -65,6 +66,7 @@ export default {
       if (pathname === "/set-pin" && method === "POST") return await handleSetPin(request, env, origin);
       if (pathname === "/profile" && method === "POST") return await handleProfile(request, env, origin);
       if (pathname === "/me/dashboard-theme") return await handleDashboardTheme(request, env, origin, method);
+      if (pathname === "/me/disc-color") return await handleDiscColor(request, env, origin, method);
       if (pathname === "/assistant" && method === "POST") return await handleAssistant(request, env, origin);
 
       const webAuthn = await handleWebAuthnRoute(request, env, origin, pathname, method);

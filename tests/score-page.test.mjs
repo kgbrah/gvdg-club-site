@@ -1103,6 +1103,20 @@ test('live scoring paints the signed-in player dashboard theme onto the score pa
   assert.match(session, /gvdg:score-auth/);
 });
 
+test('live scoring disc uses the member plastic from profile prefs', () => {
+  const html = readFileSync('score.html', 'utf8');
+  const main = scoreMainSource();
+  const more = readFileSync('src/members-app/more-page.js', 'utf8');
+  const picker = readFileSync('src/members-app/disc-color-picker.js', 'utf8');
+  const disc = readFileSync('src/shared/disc-color.js', 'utf8');
+  assert.match(main, /from "\.\.\/shared\/disc-color\.js"/);
+  assert.match(main, /useDiscColorSession\(\)/);
+  assert.match(html, /fill: var\(--disc-plate\)/);
+  assert.match(more, /DiscColorPicker/);
+  assert.match(picker, /Live scoring disc/);
+  assert.match(disc, /\/me\/disc-color/);
+});
+
 test('score weather strip is React-owned without legacy DOM replacement', () => {
   const controller = readFileSync('src/score-app/score-controller.js', 'utf8');
   const scorecard = scorecardViewSource();

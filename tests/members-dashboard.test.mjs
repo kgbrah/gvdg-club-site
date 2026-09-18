@@ -295,9 +295,16 @@ test('member dashboard registration cards post pair label only for doubles event
 test('more page mounts a player theme builder', () => {
   const more = readFileSync('src/members-app/more-page.js', 'utf8');
   const theme = readFileSync('src/members-app/dashboard-theme.js', 'utf8');
+  const picker = readFileSync('src/members-app/disc-color-picker.js', 'utf8');
   const html = readFileSync('gvdg-members.html', 'utf8');
   const worker = readFileSync('auth-worker/src/index.ts', 'utf8');
   assert.match(more, /DashboardThemeBuilder/);
+  assert.match(more, /DiscColorPicker/);
+  assert.match(picker, /Live scoring disc/);
+  assert.match(picker, /useDiscColorSession/);
+  assert.match(html, /\.disc-color-grid/);
+  assert.match(html, /\.disc-color-swatch/);
+  assert.match(worker, /\/me\/disc-color/);
   assert.match(theme, /notifyPlayerThemeChanged/);
   assert.match(theme, /THEME_EVENT/);
   assert.match(theme, /changeMode\("dark"\)/);

@@ -48,6 +48,19 @@
   --condition-flooded: #0b3a6a;
   --condition-closed: #9b1c1c;
 
+  /* Live scoring disc plastics */
+  --disc-orange: #FF6B35;
+  --disc-blue: #004E89;
+  --disc-gold: #F7B801;
+  --disc-forest: #2D5016;
+  --disc-white: #F4F4F9;
+  --disc-ink: #1A1A2E;
+  --disc-fire: #C8472E;
+  --disc-pink: #E85D9A;
+  --disc-teal: #148F8F;
+  --disc-purple: #6B4C9A;
+  --disc-plate: var(--disc-orange);
+
   /* Mobile safe areas */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);

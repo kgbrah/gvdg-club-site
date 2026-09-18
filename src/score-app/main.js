@@ -12,6 +12,7 @@ import { InstallCoachBanner } from "../shared/install-coach-ui.js";
 import { CrottsWidget, requestCrottsHelp } from "../shared/crotts-widget.js";
 import { usePlayerThemeSession } from "../shared/player-theme-chrome.js";
 import { paintPlayerTheme } from "../shared/player-theme-session.js";
+import { useDiscColorSession } from "../shared/disc-color.js";
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
   void import("react-grab");
@@ -69,6 +70,7 @@ function ScoreShell() {
   });
   const [bodyView, setBodyView] = React.useState(INITIAL_SCORE_VIEW);
   const { dark, toggle: onToggleTheme } = usePlayerThemeSession();
+  useDiscColorSession();
   const leaderboardHandlerRef = React.useRef(null);
   const bodyController = React.useMemo(() => ({
     render(kind, props) {

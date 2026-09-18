@@ -359,10 +359,10 @@
         }
         .hole-map-disc-flight { pointer-events: none; }
         .hole-map-disc-shadow { fill: rgba(0, 0, 0, 0.38); }
-        .hole-map-disc-plate { fill: color-mix(in srgb, var(--light) 78%, var(--accent)); }
-        .hole-map-disc-rim { fill: none; stroke: var(--dark); stroke-width: 1.05; }
-        .hole-map-disc-inner { fill: none; stroke: color-mix(in srgb, var(--primary) 62%, var(--dark)); stroke-width: 0.7; }
-        .hole-map-disc-dome { fill: var(--primary-strong); }
+        .hole-map-disc-plate { fill: var(--disc-plate); }
+        .hole-map-disc-rim { fill: none; stroke: color-mix(in srgb, var(--disc-plate) 45%, var(--dark)); stroke-width: 1.05; }
+        .hole-map-disc-inner { fill: none; stroke: color-mix(in srgb, var(--disc-plate) 62%, var(--light)); stroke-width: 0.7; }
+        .hole-map-disc-dome { fill: color-mix(in srgb, var(--disc-plate) 72%, var(--dark)); }
         .hole-range-hud-next,
         .hole-range-hud-throw {
             display: block; margin-top: 0.08rem; font-size: 0.58rem; font-weight: 700;
