@@ -135,7 +135,10 @@ export function HomeHeroSection() {
     h("div", { className: "hero-content", key: "content" }, [
       h("h1", { className: "hero-title", key: "title" }, "Greenville Disc Golf Club"),
       h("p", { className: "hero-subtitle", key: "subtitle" }, "Eastern North Carolina's Premier Disc Golf Community"),
-      h("a", { className: "cta-button", href: "#membership", key: "cta" }, "Join the Club"),
+      h("div", { className: "hero-actions", key: "cta" }, [
+        h("a", { className: "cta-button", href: "score.html", key: "score" }, "Keep score"),
+        h("a", { className: "cta-button cta-button-ghost", href: "#membership", key: "join" }, "Join the Club"),
+      ]),
     ]),
     h("div", { className: "scroll-indicator", key: "scroll", "aria-hidden": "true" }),
   ]);

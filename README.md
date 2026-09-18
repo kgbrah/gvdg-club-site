@@ -67,6 +67,7 @@ The frontend picks its API base automatically through `src/shared/api-base.js`: 
 - **Pro shop** (`pro-shop.html`) — browse products, buy with PayPal or store credit; a **member wallet** (append-only store-credit ledger).
 
 ### Live scoring (`score.html`)
+- **Public Keep score** on the club home and nav — park players start or join a casual card with a name, no club login.
 - **UDisc-style live scoring** for **events** and **casual rounds**, on one or many scorecards.
 - **Any cardmate keeps score**; members may only score **their own card**; admins can score anyone.
 - **Consensus scoring** — a hole's official score is set only when the active scorers agree; disagreement blanks the hole and blocks finishing until resolved.

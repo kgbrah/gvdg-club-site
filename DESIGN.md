@@ -107,10 +107,10 @@ Spacing follows a 4px base through rem values.
 ### Home Hero And About
 
 - Structure: homepage hero markup and the About story/board carousel render from the `home-app` React bundle into `homeReactHeroApp` and `homeReactAboutApp`; the static `#about` anchor wrapper remains in `index.html`.
-- Variants: image-backed hero carousel, hero dots, previous/next hero controls, membership CTA, scroll indicator, About story slide, animated stat cards, board-member slide, and About carousel indicators.
+- Variants: image-backed hero carousel, hero dots, previous/next hero controls, keep-score CTA, membership CTA, scroll indicator, About story slide, animated stat cards, board-member slide, and About carousel indicators.
 - Spacing: reuses `.hero`, `.carousel-*`, `.hero-content`, `#about`, `.about-carousel-*`, `.stat-card`, and `.board-member-*` primitives so the homepage keeps the established full-bleed hero and compact About carousel rhythm.
 - States: React owns hero/about markup, board-member markup, Lucide icons, active slide state, touch swipes, hero autoplay/pause, carousel transforms, active indicator state, reveal visibility, and stat counter animation; `index.html` must not keep `homeReactInteractionsApp`, and no selector-driven homepage controller may mutate carousel or counter DOM.
-- Accessibility: carousel controls are labelled buttons, hero slides expose image labels, the CTA is a real anchor, board icons are decorative SVGs, and stat values keep visible labels.
+- Accessibility: carousel controls are labelled buttons, hero slides expose image labels, the keep-score and membership CTAs are real anchors, board icons are decorative SVGs, and stat values keep visible labels.
 - Motion: preserves the existing hero fade carousel, About carousel transform, scroll reveal, stat counter, and button hover states only.
 
 ### Home Courses App
@@ -151,8 +151,8 @@ Spacing follows a 4px base through rem values.
 
 ### Home Page Chrome
 
-- Structure: homepage header, logo, public nav links, donate link, theme toggle, and mobile menu control render from the `home-app` React bundle into `homeReactPageChromeApp`; `nav.js` does not run on the homepage.
-- Variants: desktop inline nav, mobile collapsed nav, mobile open nav, current-page link, donate link, light theme, dark theme, and scrolled header.
+- Structure: homepage header, logo, public nav links (including Keep score → `score.html`), donate link, theme toggle, and mobile menu control render from the `home-app` React bundle into `homeReactPageChromeApp`; `nav.js` does not run on the homepage.
+- Variants: desktop inline nav, mobile collapsed nav, mobile open nav, current-page link, keep-score link, donate link, light theme, dark theme, and scrolled header.
 - Spacing: reuses `header`, `nav`, `.nav-links`, `.nav-right`, `.theme-toggle`, `.menu-toggle`, and `.logo-image` primitives so the public homepage rhythm remains unchanged.
 - States: React owns menu expanded state, current-page nav state, donate link rendering, theme toggle placement, and the `header.scrolled` class; inline homepage scripts must not mutate `.menu-toggle`, `.nav-links`, or `header`.
 - Accessibility: menu and theme controls are real buttons with labels, `aria-expanded`, `aria-controls`, and Lucide icons; current page uses `aria-current="page"`.
@@ -160,8 +160,8 @@ Spacing follows a 4px base through rem values.
 
 ### Public Page Chrome
 
-- Structure: Events, Ryder Cup, Pro Shop, and Blog mount a shared React-owned header, logo, public nav links, donate link, theme toggle, and mobile menu into `publicReactPageChrome`; `nav.js` does not run on these public content pages.
-- Variants: desktop inline nav, mobile collapsed nav, mobile open nav, current-page link, donate link, light theme, dark theme, and scrolled header.
+- Structure: Events, Ryder Cup, Pro Shop, and Blog mount a shared React-owned header, logo, public nav links (including Keep score → `score.html`), donate link, theme toggle, and mobile menu into `publicReactPageChrome`; `nav.js` does not run on these public content pages.
+- Variants: desktop inline nav, mobile collapsed nav, mobile open nav, current-page link, keep-score link, donate link, light theme, dark theme, and scrolled header.
 - Spacing: reuses each page's existing `header`, `nav`, `.nav-links`, `.nav-right`, `.theme-toggle`, `.menu-toggle`, and `.logo-image` primitives so the surrounding page layout stays unchanged during migration.
 - States: React owns menu expanded state, current-page nav state, donate link rendering, `data-theme` persistence, and the `header.scrolled` class; page scripts must not mutate `.menu-toggle`, `.nav-links`, `.theme-icon`, or `header`.
 - Accessibility: menu and theme controls are real buttons with labels, `aria-expanded`, `aria-controls`, `aria-pressed`, and Lucide icons; current page uses `aria-current="page"`.
@@ -591,7 +591,7 @@ Spacing follows a 4px base through rem values.
 
 ### Member Page Chrome
 
-- Structure: React-owned header with logo link, shared public nav links, donate link, mobile menu control, and theme toggle mounted into `membersReactPageChrome`. Signed-in phone and standalone PWA hide the entire public header so the bottom dock is the IA; the logo stays in-app (`gvdg-members.html`).
+- Structure: React-owned header with logo link, shared public nav links (including Keep score → `score.html`), donate link, mobile menu control, and theme toggle mounted into `membersReactPageChrome`. Signed-in phone and standalone PWA hide the entire public header so the bottom dock is the IA; the logo stays in-app (`gvdg-members.html`).
 - Variants: desktop inline nav, mobile collapsed nav, open mobile nav, signed-in phone (header hidden, dock only), light theme, and dark theme.
 - Spacing: preserves the existing member page `header`, `nav`, `nav-right`, `nav-links`, `theme-toggle`, and `menu-toggle` primitives on desktop. At `max-width: 768px` and in `display-mode: standalone`, signed-in members drop the marketing header and the 100px content offset.
 - States: React owns menu expanded state, current-page nav state, external donate link, and `data-theme` persistence; the member page does not load `nav.js` or mutate header nodes with query selectors.
