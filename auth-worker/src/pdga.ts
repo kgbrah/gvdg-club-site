@@ -34,12 +34,14 @@ export interface PdgaStats {
   events: PdgaEvent[];
   play?: PlayTotals;
   play_rounds?: PdgaPlayRound[];
+  stats_version?: number;
 }
 
 const UA = "Mozilla/5.0 (compatible; GVDGClubBot/1.0; +https://gvdgclub.com)";
 const CACHE_TTL_MS = 15 * 60 * 1000;
+const PDGA_STATS_VERSION = 2;
 const RECENT_ROUNDS = 8; // "live" rating = mean of the most recent N round ratings (recent-form estimate)
-const MAX_HOLE_ROUNDS = 8;
+const MAX_HOLE_ROUNDS = 80; // newest-first hole mix; keeps worker subrequests bounded
 const STAGING_QA_PDGA = "90000001";
 const STAGING_QA_PLAY = {
   holes: 54,
@@ -82,6 +84,7 @@ const STAGING_QA_STATS: PdgaStats = {
   play_rounds: [
     { tournament: "GVDG QA Monthly", date: "2026-06-20", division: "MA1", round: "1", breakdown: STAGING_QA_PLAY, group_format: "singles", scoring_style: "stroke" },
   ],
+  stats_version: PDGA_STATS_VERSION,
 };
 
 function cap(re: RegExp, s: string): string | null {
@@ -197,23 +200,11 @@ function roundKey(round: PdgaRound): string {
 }
 
 function emptyPdgaStats(pdga: string): PdgaStats {
-  return { pdga, name: null, official_rating: null, rating_date: null, live_rating: null, peak_rating: null, events_count: 0, events: [], play: emptyPlayTotals(), play_rounds: [] };
+  return { pdga, name: null, official_rating: null, rating_date: null, live_rating: null, peak_rating: null, events_count: 0, events: [], play: emptyPlayTotals(), play_rounds: [], stats_version: PDGA_STATS_VERSION };
 }
 
 function fallbackPdgaStats(pdga: string): PdgaStats | null {
   return pdga === STAGING_QA_PDGA ? STAGING_QA_STATS : null;
-}
-
-function easternYear(now = new Date()): number {
-  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric" }).formatToParts(now);
-  return Number(parts.find((part) => part.type === "year")?.value) || now.getFullYear();
-}
-
-function eventYear(event: PdgaEvent): number | null {
-  const match = String(event.date || "").match(/(\d{4})/);
-  if (match) return Number(match[1]);
-  if (event.epoch) return new Date(event.epoch * 1000).getUTCFullYear();
-  return null;
 }
 
 type LiveRoundTarget = { eventId: string; division: string; round: number; tournament: string; date: string };
@@ -256,12 +247,10 @@ function parseLiveRoundPlayer(json: unknown, pdga: string): { breakdown: PlayTot
 async function fetchPdgaHoleRounds(
   pdga: string,
   events: readonly PdgaEvent[],
-  year: number,
   doFetch: typeof fetch,
   headers: Record<string, string>,
 ): Promise<PdgaPlayRound[]> {
-  const seasonEvents = events.filter((event) => eventYear(event) == null || eventYear(event) === year);
-  const targets = holeScoreTargets(seasonEvents);
+  const targets = holeScoreTargets(events);
   const results = await Promise.allSettled(targets.map(async (target) => {
     const url = `https://www.pdga.com/apps/tournament/live-api/live_results_fetch_round?TournID=${encodeURIComponent(target.eventId)}&Division=${encodeURIComponent(target.division)}&Round=${target.round}`;
     const response = await doFetch(url, { headers: { ...headers, accept: "application/json" } });
@@ -283,6 +272,20 @@ async function fetchPdgaHoleRounds(
   return results.flatMap((result) => result.status === "fulfilled" && result.value ? [result.value] : []);
 }
 
+function withStatsVersion(stats: PdgaStats): PdgaStats {
+  return { ...stats, stats_version: PDGA_STATS_VERSION };
+}
+
+export function isFreshPdgaCache(cached: unknown, fetchedAt: number, now = Date.now()): cached is PdgaStats {
+  if (now - fetchedAt >= CACHE_TTL_MS) return false;
+  if (!cached || typeof cached !== "object") return false;
+  const stats = cached as PdgaStats;
+  if (stats.stats_version !== PDGA_STATS_VERSION) return false;
+  if (!Array.isArray(stats.play_rounds)) return false;
+  if (Array.isArray(stats.events) && stats.events.length < Number(stats.events_count || 0)) return false;
+  return true;
+}
+
 /** Build the full stats object for a digits-only PDGA number from its player, detail, and pending-event pages. */
 export async function fetchPdgaStats(pdga: string, doFetch: typeof fetch = fetch): Promise<PdgaStats> {
   const headers = { "user-agent": UA, accept: "text/html" };
@@ -297,7 +300,7 @@ export async function fetchPdgaStats(pdga: string, doFetch: typeof fetch = fetch
   }));
   const refreshed = recentResults.flatMap((result) => result.status === "fulfilled" && result.value ? [result.value] : []);
   const events = mergeEvents(refreshed, detailEvents);
-  const play_rounds = await fetchPdgaHoleRounds(pdga, events, easternYear(), doFetch, headers);
+  const play_rounds = await fetchPdgaHoleRounds(pdga, events, doFetch, headers);
   const play = play_rounds.length ? sumPlayTotals(play_rounds.map((round) => ({ breakdown: round.breakdown }))) : emptyPlayTotals();
 
   const ratings = events.flatMap((e) => e.rounds.map((r) => r.rating));
@@ -305,7 +308,7 @@ export async function fetchPdgaStats(pdga: string, doFetch: typeof fetch = fetch
   const live_rating = recent.length ? Math.round(recent.reduce((a, b) => a + b, 0) / recent.length) : null;
   const peak_rating = ratings.length ? ratings.reduce((m, r) => Math.max(m, r), 0) : null;
 
-  return {
+  return withStatsVersion({
     pdga,
     name: player.name,
     official_rating: player.official_rating,
@@ -313,10 +316,10 @@ export async function fetchPdgaStats(pdga: string, doFetch: typeof fetch = fetch
     live_rating,
     peak_rating,
     events_count: events.length,
-    events: events.slice(0, 20),
+    events,
     play,
     play_rounds,
-  };
+  });
 }
 
 /** GET /pdga-stats?pdga=<digits> — D1-cached (15m), IP-rate-limited, public read of pdga.com ratings. */
@@ -334,10 +337,9 @@ export async function handlePdgaStats(request: Request, env: Env, origin: string
       () => env.DB.prepare("SELECT data, fetched_at FROM pdga_cache WHERE pdga = ?1").bind(pdga).first<{ data: string; fetched_at: number }>(),
       () => null,
     );
-    if (row && now - Number(row.fetched_at) < CACHE_TTL_MS) {
-      const cached = JSON.parse(row.data) as PdgaStats;
-      // Pre-hole-mix cache rows have ratings but no play_rounds; refetch those once.
-      if (cached && typeof cached === "object" && Array.isArray(cached.play_rounds)) {
+    if (row) {
+      const cached = JSON.parse(row.data);
+      if (isFreshPdgaCache(cached, Number(row.fetched_at), now)) {
         return json(cached, 200, origin, headers);
       }
     }
@@ -351,6 +353,7 @@ export async function handlePdgaStats(request: Request, env: Env, origin: string
   } catch {
     stats = fallbackPdgaStats(pdga) ?? emptyPdgaStats(pdga);
   }
+  stats = withStatsVersion(stats);
   // Only cache a useful result, so a transient pdga.com outage isn't pinned for the full TTL.
   if (stats.official_rating != null || stats.events.length) {
     try {

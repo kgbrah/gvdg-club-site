@@ -402,6 +402,16 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(pdga, /setInterval\(refreshIfStale, PDGA_REFRESH_MS\)/);
   assert.match(pdga, /addEventListener\("focus", refreshIfStale\)/);
   assert.match(pdga, /addEventListener\("visibilitychange", refreshWhenVisible\)/);
+  assert.match(pdga, /Tournaments \(\$\{events\.length\}\)/);
+  assert.doesNotMatch(pdga, /events\.slice\(0, 6\)/);
+  assert.doesNotMatch(pdga, /Math\.min\(events\.length, 6\)/);
+  assert.match(pdga, /export function groupPdgaEventsByYear/);
+  assert.match(pdga, /export function pdgaEventYear/);
+  assert.match(pdga, /className: "dash-event-year"/);
+  assert.match(pdga, /className: "dash-event-year-summary"/);
+  assert.match(html, /\.dash-event-year \{/);
+  assert.match(html, /\.dash-event-year-summary \{/);
+  assert.match(html, /\.dash-event-year-list \{/);
   assert.match(pdga, /className: "dash-event-main"/);
   assert.match(pdga, /export function pdgaEventTitle\(value\)/);
   assert.match(pdga, /pdgaEventTitle\(event\.tournament\) \|\| "Event"/);
@@ -471,9 +481,17 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
 });
 
 test('PDGA event titles decode common HTML entities without innerHTML', async () => {
-  const { pdgaEventTitle } = await import(new URL('../src/members-app/pdga-dashboard.js', import.meta.url));
+  const { pdgaEventTitle, groupPdgaEventsByYear, pdgaEventYear } = await import(new URL('../src/members-app/pdga-dashboard.js', import.meta.url));
 
   assert.equal(pdgaEventTitle('2026 Ayden Founders&#039; Day Classic'), "2026 Ayden Founders' Day Classic");
-  assert.equal(pdgaEventTitle('CEP Charity &amp; Rated'), 'CEP Charity & Rated');
+  assert.equal(pdgaEventTitle('CEP Charity & Rated'), 'CEP Charity & Rated');
   assert.equal(pdgaEventTitle('Hex &#x26; Flex'), 'Hex & Flex');
+
+  const grouped = groupPdgaEventsByYear([
+    { tournament: "Winter", date: "31-Dec-2024", epoch: 1735689600 },
+    { tournament: "Spring", date: "12-Apr-2026", epoch: 1775966400 },
+    { tournament: "Summer", date: "11-Jul-2026", epoch: 1783742400 },
+  ]);
+  assert.deepEqual(grouped.map((group) => [group.year, group.events.length]), [["2026", 2], ["2024", 1]]);
+  assert.equal(pdgaEventYear({ date: "11-Jul-2026" }), "2026");
 });

@@ -636,7 +636,7 @@ Spacing follows a 4px base through rem values.
 
 ### Dashboard Rating Panel
 
-- Structure: panel header with category label/count and a prominent live rating, followed by compact per-round rows; PDGA Recent Tournaments cards use a one-column grid with a title/date block, then a labeled full-width rating row so long tournament names cannot force ratings into a side column. Escaped PDGA event-name entities are decoded to safe React text before rendering.
+- Structure: panel header with category label/count and a prominent live rating, followed by compact per-round rows; PDGA tournament cards list every scraped event, grouped by year, using a one-column grid with a title/date block, then a labeled full-width rating row so long tournament names cannot force ratings into a side column. Escaped PDGA event-name entities are decoded to safe React text before rendering. The dashboard re-fetches `/pdga-stats` every 15 minutes while the tab is visible (and on window focus) so newly posted rounds appear without a hard reload.
 - Variants: competitive and casual; both use the same primitive so histories stay visually separate but comparable.
 - Spacing: `0.75rem-1rem` panel padding, `0.6rem` row gaps, single column on mobile and two columns on tablet/desktop.
 - States: empty state text inside each panel; rows remain stable with or without UDisc export actions.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parsePlayerPage, parseDetailRounds, fetchPdgaStats } from "../src/pdga.js";
+import { parsePlayerPage, parseDetailRounds, fetchPdgaStats, isFreshPdgaCache } from "../src/pdga.js";
 
 // Fixtures mirror the real pdga.com markup (verified against player #273070).
 const PLAYER_HTML = `
@@ -135,6 +135,53 @@ describe("pdga.com parsers", () => {
     expect(stats.live_rating).toBe(883);
   });
 
+  it("returns every parsed event instead of a recent slice", async () => {
+    const rows = Array.from({ length: 25 }, (_, index) => {
+      const epoch = 1770000000 - index * 86400;
+      return `<tr><td class="tournament"><a href="/tour/event/${100000 + index}">Event ${index + 1}</a></td><td class="date" data-text="${epoch}">01-Jan-2026</td><td class="division">MA2</td><td class="round">1</td><td class="score">54</td><td class="round-rating">900</td></tr>`;
+    }).join("");
+    const stub: typeof fetch = async (input) =>
+      new Response(String(input).endsWith("/details") ? `<table>${rows}</table>` : PLAYER_HTML, { status: 200 });
+    const stats = await fetchPdgaStats("273070", stub);
+    expect(stats.events_count).toBe(25);
+    expect(stats.events).toHaveLength(25);
+    expect(stats.stats_version).toBe(2);
+  });
+
+  it("includes hole-by-hole mix from earlier seasons, not only the current year", async () => {
+    const live = JSON.stringify({
+      data: {
+        scores: [{
+          PDGANum: 273070,
+          Name: "Kevin Gray",
+          Holes: 18,
+          Scores: "2,3,3,5,3,3,4,5,4,4,6,4,3,4,4,3,3,4",
+          Pars: "3,3,3,4,3,3,3,4,4,3,3,3,3,3,4,3,3,4",
+          Teammates: [],
+          Team: null,
+        }],
+      },
+    });
+    const priorYearDetails = `
+<table>
+<tr><td class="tournament"><a href="/tour/event/90001">Winter Classic</a></td><td class="date" data-text="1735689600">31-Dec-2024</td><td class="division">MA2</td><td class="round">1</td><td class="score">54</td><td class="round-rating">910</td></tr>
+</table>`;
+    const stub: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.includes("TournID=90001") && url.includes("Round=1")) {
+        return new Response(live, { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("live_results_fetch_round")) {
+        return new Response(JSON.stringify({ data: { scores: [] } }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.endsWith("/details")) return new Response(priorYearDetails, { status: 200 });
+      return new Response(PLAYER_HTML, { status: 200 });
+    };
+    const stats = await fetchPdgaStats("273070", stub);
+    expect(stats.play?.holes).toBe(18);
+    expect(stats.play_rounds?.[0]?.tournament).toBe("Winter Classic");
+  });
+
   it("adds hole-by-hole PDGA mix from live scorecards", async () => {
     const live = JSON.stringify({
       data: {
@@ -164,5 +211,26 @@ describe("pdga.com parsers", () => {
     expect(stats.play?.holes).toBe(18);
     expect(stats.play?.birdies).toBe(1);
     expect(stats.play_rounds?.[0]).toMatchObject({ group_format: "singles", scoring_style: "stroke" });
+  });
+});
+
+describe("pdga cache freshness", () => {
+  const now = 1_800_000_000_000;
+  const fresh = {
+    pdga: "273070",
+    events_count: 2,
+    events: [{ tournament: "A" }, { tournament: "B" }],
+    play_rounds: [],
+    stats_version: 2,
+  };
+
+  it("keeps a current full payload", () => {
+    expect(isFreshPdgaCache(fresh, now - 60_000, now)).toBe(true);
+  });
+
+  it("refetches truncated event lists and old cache versions", () => {
+    expect(isFreshPdgaCache({ ...fresh, events: fresh.events.slice(0, 1) }, now - 60_000, now)).toBe(false);
+    expect(isFreshPdgaCache({ ...fresh, stats_version: 1 }, now - 60_000, now)).toBe(false);
+    expect(isFreshPdgaCache(fresh, now - 16 * 60 * 1000, now)).toBe(false);
   });
 });

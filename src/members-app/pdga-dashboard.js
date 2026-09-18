@@ -25,6 +25,36 @@ export function pdgaEventTitle(value) {
   }).trim();
 }
 
+export function pdgaEventYear(event) {
+  const match = String(event && event.date || "").match(/(\d{4})/);
+  if (match) return match[1];
+  const epoch = Number(event && event.epoch);
+  if (Number.isFinite(epoch) && epoch > 0) {
+    return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", year: "numeric" }).format(new Date(epoch * 1000));
+  }
+  return "Unknown";
+}
+
+export function pdgaCurrentYear(now = new Date()) {
+  return new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric" }).format(now);
+}
+
+export function groupPdgaEventsByYear(events) {
+  const groups = [];
+  const index = new Map();
+  for (const event of Array.isArray(events) ? events : []) {
+    const year = pdgaEventYear(event);
+    let group = index.get(year);
+    if (!group) {
+      group = { year, events: [] };
+      index.set(year, group);
+      groups.push(group);
+    }
+    group.events.push(event);
+  }
+  return groups.sort((a, b) => String(b.year).localeCompare(String(a.year), undefined, { numeric: true }));
+}
+
 function ratingValue(value) {
   return value == null ? "-" : String(value);
 }
@@ -130,6 +160,30 @@ function RecentEvent({ event }) {
   ]);
 }
 
+function eventCard(event, index) {
+  return h(RecentEvent, { event, key: `${event.tournament || "event"}-${event.epoch || index}` });
+}
+
+function TournamentList({ events }) {
+  const groups = groupPdgaEventsByYear(events);
+  const currentYear = pdgaCurrentYear();
+  const list = groups.length <= 1
+    ? groups.flatMap((group) => group.events.map(eventCard))
+    : groups.map((group) => h("details", {
+      className: "dash-event-year",
+      key: group.year,
+      open: group.year === currentYear || undefined,
+    }, [
+      h("summary", { className: "dash-event-year-summary", key: "summary" }, `${group.year} (${group.events.length})`),
+      h("div", { className: "dash-event-year-list", key: "list" }, group.events.map(eventCard)),
+    ]));
+
+  return h("details", { className: "dash-collapse", key: "events" }, [
+    h("summary", { className: "dash-subtitle dash-collapse-summary", key: "title" }, `Tournaments (${events.length})`),
+    h("div", { key: "list" }, list),
+  ]);
+}
+
 export function PdgaDashboard({ pdgaNo, state, children, compact = false }) {
   const status = state.status;
   const stats = state.stats;
@@ -170,15 +224,12 @@ export function PdgaDashboard({ pdgaNo, state, children, compact = false }) {
     ? `${live - official >= 0 ? "+" : ""}${live - official} vs official`
     : "";
 
-  const recent = events.length ? h("details", { className: "dash-collapse", key: "events" }, [
-    h("summary", { className: "dash-subtitle dash-collapse-summary", key: "title" }, `Recent Tournaments (${Math.min(events.length, 6)})`),
-    h("div", { key: "list" }, events.slice(0, 6).map((event, index) => h(RecentEvent, { event, key: `${event.tournament || "event"}-${event.epoch || index}` }))),
-  ]) : null;
+  const history = events.length ? h(TournamentList, { events, key: "events" }) : null;
 
   if (compact) {
     return dashboardShell("ready", [
       ...extras,
-      recent,
+      history,
     ]);
   }
 
@@ -191,7 +242,7 @@ export function PdgaDashboard({ pdgaNo, state, children, compact = false }) {
       h(RatingTile, { label: "Events", value: stats?.events_count != null ? stats.events_count : events.length, key: "events" }),
     ]),
     ...extras,
-    recent,
+    history,
   ]);
 }
 
