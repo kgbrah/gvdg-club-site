@@ -96,7 +96,7 @@ A passkey means you don't have to type your PIN every time — you can use your 
 
 ### 📊 Your dashboard
 After you log in on the **Members** page, you see your **dashboard**. On a phone it has tabs along the bottom:
-- **Home** — your rating, tonight's event, and a keep-score shortcut.
+- **Home** — your rating, unpaid event fees, course conditions, tonight's event, and a keep-score shortcut.
 - **Play** — start a casual round, join with a code, or rejoin a live card.
 - **Events** — sign up for games.
 - **Season** — ratings and past rounds.
@@ -122,6 +122,7 @@ Tap a tab to switch rooms.
 5. Tap to finish. Now you're signed up! To un-sign-up, tap **Withdraw**.
 
 ### 💳 Pay for a game
+If you owe an entry fee, **Home** shows a **Pay** job. Tap it to jump to Events.
 There are a few ways, and the club picks which one is on:
 - **PayPal:** if you owe money, PayPal buttons appear. Tap and pay in PayPal.
 - **Store credit (wallet):** if you have club credit, you can use that.
@@ -143,6 +144,10 @@ A "tee sign" is the sign at each hole that shows the hole number and how far it 
 1. Go to the **Tee Signs** tab.
 2. Take or pick a **photo** of a tee sign and upload it.
 3. The computer reads the sign and guesses the hole info. A helper checks it and says yes. Thanks for helping the club! 🙌
+
+### ⛳ Course conditions
+1. On **Home**, look at **Course conditions**. Wet, flooded, and closed courses show first.
+2. Tap **Report** to tell the club what you just walked (dry, playable, wet, flooded, or closed).
 
 ### 📖 Find another member (directory)
 1. Go to the member directory part.

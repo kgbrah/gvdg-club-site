@@ -4,6 +4,7 @@ import { TOKEN_KEY, requestJson, storageGet } from "./api.js";
 import { LiveScoringPanel, WalletPanel } from "./activity-panels.js";
 import { selectDashboardTab } from "./dashboard-shell.js";
 import { dollars, formatEventDay, formatToPar } from "./format.js";
+import { HomeJobs } from "./home-jobs.js";
 import { useMemberContext } from "./member-context.js";
 import { usePdgaStats } from "./pdga-dashboard.js";
 import { useRegistrationData } from "./registration-panel.js";
@@ -161,6 +162,12 @@ export function MemberOverviewDashboard() {
   return h("div", { className: "react-overview-dashboard player-home", "data-react-overview-dashboard": "ready" }, [
     h(HomeHero, { context, pdgaState, key: "hero" }),
     h(LiveScoringPanel, { token, compact: true, key: "live-scoring" }),
+    h(HomeJobs, {
+      events: registration.state.events,
+      registrations: registration.state.registrations,
+      paymentsConfig: registration.state.paymentsConfig,
+      key: "jobs",
+    }),
     h("div", { className: "player-row-cards", key: "stats" }, [
       h(WalletPanel, { token, compact: true, key: "wallet" }),
       h("div", { className: "player-stat", key: "official" }, [

@@ -244,6 +244,17 @@ export async function installMemberDashboardApiRoutes(page, apiBase) {
       return route.fulfill(json({ ok: true }));
     }
     if (pathName === "/courses") return route.fulfill(json({ courses: [{ id: 1, name: "ECU North Rec Complex" }] }));
+    if (pathName === "/course-conditions") return route.fulfill(json({
+      reports: [{
+        id: 1,
+        course_id: 1,
+        course_name: "ECU North Rec Complex",
+        member_name: "QA Admin",
+        status: "wet",
+        note: "12 is a puddle",
+        created_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      }],
+    }));
     if (pathName === "/courses/1/layouts") return route.fulfill(json({ layouts: [{ id: 11, name: "Pee Dee's Treasure Map" }] }));
     if (pathName === "/meetings") return route.fulfill(json({ meetings: [] }));
     if (pathName === "/board" && method === "GET") {

@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-title" content="GVDG Club">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=152">
+    <link rel="manifest" href="site.webmanifest?v=153">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -517,6 +517,31 @@
                 }
                 .player-keep-score-wrap { margin-bottom: 0.75rem; }
                 .player-keep-score-wrap .player-keep-score { margin-bottom: 0.55rem; }
+                .player-jobs { display: grid; gap: 0.55rem; margin-bottom: 0.75rem; }
+                .player-jobs .player-keep-score { margin-bottom: 0; }
+                .player-job-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.15rem; }
+                .player-card .player-job-head h3 { margin: 0; }
+                .player-job-link {
+                    display: inline-flex; align-items: center; justify-content: center;
+                    min-height: 44px; padding: 0 0.85rem; border-radius: 12px;
+                    border: 1px solid var(--border-color); background: var(--bg-tertiary);
+                    color: var(--text-primary); font-weight: 800; font-size: 0.82rem;
+                    cursor: pointer; white-space: nowrap;
+                }
+                .player-conditions { display: grid; gap: 0.55rem; margin-top: 0.65rem; }
+                .player-condition-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+                .player-condition-name { font-weight: 800; color: var(--text-primary); }
+                .player-jobs .course-condition-badge {
+                    position: static; display: inline-flex; align-items: center;
+                    padding: 0.3rem 0.65rem; border-radius: 999px;
+                    font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em;
+                    text-transform: uppercase; color: white; box-shadow: none; flex: 0 0 auto;
+                }
+                .player-jobs .course-condition-badge.dry { background: var(--condition-dry); }
+                .player-jobs .course-condition-badge.playable { background: var(--condition-playable); }
+                .player-jobs .course-condition-badge.wet { background: var(--condition-wet); }
+                .player-jobs .course-condition-badge.flooded { background: var(--condition-flooded); }
+                .player-jobs .course-condition-badge.closed { background: var(--condition-closed); }
                 .player-keep-score-wrap .player-btn { margin-top: 0.35rem; }
                 .player-more .wallet-panel { margin: 0.85rem 0; }
                 a.player-list-row { text-decoration: none; color: inherit; }

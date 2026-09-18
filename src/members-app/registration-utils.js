@@ -65,6 +65,17 @@ export function clientOwed(event, addons) {
   return total;
 }
 
+export function pickUnpaidJobs(events, registrations) {
+  const byId = new Map((Array.isArray(events) ? events : []).map((event) => [String(event.id), event]));
+  return sortRegistrations(Array.isArray(registrations) ? registrations : [])
+    .filter((row) => row && (row.event_status === "live" || row.event_status === "scheduled") && !row.paid_entry)
+    .map((row) => {
+      const event = byId.get(String(row.event_id)) || eventFromRegistration(row);
+      return { event, registration: row, owed: clientOwed(event, parseObject(row.addons)) };
+    })
+    .filter((job) => job.owed > 0);
+}
+
 export function eventMeta(event) {
   const layout = event.layout_name ? `${event.layout_name}${event.total_par != null ? ` - par ${event.total_par}` : ""}` : null;
   return [event.course_name, layout].filter(Boolean).join(" - ");
