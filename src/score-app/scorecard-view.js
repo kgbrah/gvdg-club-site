@@ -547,6 +547,39 @@ function ScorePad(props) {
   );
 }
 
+function chipName(label) {
+  const name = String(label || "").replace(/\s*\(you\)\s*$/i, "").trim();
+  return name.split(/\s+/)[0] || name || "Player";
+}
+
+function ScorePlayerRail(props) {
+  const rows = Array.isArray(props.rows) ? props.rows : [];
+  if (rows.length < 2) return null;
+  const hole = props.hole && props.hole.hole;
+  return h("div", {
+    "aria-label": "Players on this card",
+    className: "score-player-rail",
+    key: "rail",
+    role: "group",
+  }, rows.map((row) => {
+    const active = row.key === props.activeKey;
+    const rel = row.relative && row.relative.className;
+    const scoreLabel = row.currentScore == null ? "no score" : String(row.currentScore);
+    return h("button", {
+      "aria-current": active ? "true" : undefined,
+      "aria-label": (active ? "Scoring " : "Score ") + row.label + (hole ? " on hole " + hole : "") + ", " + scoreLabel,
+      "aria-pressed": active ? "true" : "false",
+      className: "score-player-chip" + (active ? " active" : "") + (rel ? " " + rel : ""),
+      key: row.key,
+      type: "button",
+      onClick: () => props.onFocus(row.key),
+    }, [
+      h("span", { className: "score-player-chip-name", key: "name" }, chipName(row.label) + (row.isMe ? " · you" : "")),
+      h("b", { key: "score" }, row.currentScore == null ? "—" : String(row.currentScore)),
+    ]);
+  }));
+}
+
 function ScoreRow(props) {
   const row = props.row;
   const current = row.currentScore;
@@ -701,16 +734,31 @@ function CtpClaim(props) {
 }
 
 function ScorecardBox(props) {
-  return h("div", { className: "score-entry-card", key: "scorecard" }, [
+  const rows = Array.isArray(props.rows) ? props.rows : [];
+  const collapse = rows.length > 1;
+  const fallbackKey = ((rows.find((row) => row.isMe) || rows[0] || {}).key);
+  const [focusKey, setFocusKey] = React.useState(fallbackKey);
+  const activeKey = collapse && rows.some((row) => row.key === focusKey) ? focusKey : fallbackKey;
+  const active = rows.find((row) => row.key === activeKey) || rows[0];
+  return h("div", { className: "score-entry-card" + (collapse ? " collapsed-others" : ""), key: "scorecard" }, [
     props.warning ? h("p", { className: "muted auth-error", key: "warning" }, props.warning) : null,
-    props.rows.map((row) => h(ScoreRow, {
-      key: row.key,
-      row,
+    h(ScorePlayerRail, {
+      activeKey,
       hole: props.hole,
-      locked: props.finish && props.finish.locked,
-      onScore: props.onScore,
-      onOpenPad: props.onOpenPad,
-    })),
+      key: "rail",
+      rows,
+      onFocus: setFocusKey,
+    }),
+    active
+      ? h(ScoreRow, {
+        hole: props.hole,
+        key: active.key,
+        locked: props.finish && props.finish.locked,
+        row: active,
+        onOpenPad: props.onOpenPad,
+        onScore: props.onScore,
+      })
+      : null,
     h(TotalsBar, { totals: props.totals }),
   ]);
 }

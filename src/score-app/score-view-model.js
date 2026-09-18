@@ -461,14 +461,20 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
       ? "Set pairs in Manage before scoring doubles."
       : null;
 
+  const cardmates = state.cardmates || [];
   const rowViews = rows.map((rowData, order) => {
     const conflict = conflictForRow(state, rowData, hole.hole);
     const currentScore = strokesForRow(state, rowData, hole.hole, scorerIndex);
     const delta = currentScore == null ? null : currentScore - hole.par;
+    const isMe = (rowData.playerIndexes || []).some((index) => {
+      const player = cardmates.find((item) => item && item.index === index);
+      return Boolean(player && player.isMe);
+    });
     return {
       conflictText: conflict ? "Conflict: " + (conflict.values || []).join(" vs ") + " - set yours to match" : "",
       currentScore,
       honors: tee.honorsReady && order === 0,
+      isMe,
       key: rowData.targetId || rowData.index,
       label: rowData.label,
       meta: rowData.meta,
@@ -528,7 +534,6 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
   const ctpMeta = pots.currentHoleCtps.length ? " · CTP" : "";
   const liveCtps = state.snap && Array.isArray(state.snap.liveCtps) ? state.snap.liveCtps : [];
   const liveById = new Map(liveCtps.map((ctp) => [String(ctp.id), ctp]));
-  const cardmates = state.cardmates || [];
   const voteIndex = scorerIndex ?? state.myIndex;
   const holeCtps = (pots.currentHoleCtps.length ? pots.currentHoleCtps : liveCtps.filter((ctp) => ctp && ctp.hole === hole.hole)).map((ctp) => {
     const live = liveById.get(String(ctp.id));

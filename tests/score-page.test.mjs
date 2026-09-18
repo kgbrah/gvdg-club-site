@@ -369,6 +369,7 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
   const view = buildScorecardViewState({ state, mode: 'round', roundCode: 'QA1234', scorerIndex: 0, teeSign: null });
   assert.equal(scoreRows(state).length, 2);
   assert.equal(view.rows[0].currentScore, 2);
+  assert.equal(view.rows[0].isMe, true);
   assert.equal(view.rows[0].teePosition, 1);
   assert.equal(view.rows[0].honors, false);
   assert.equal(view.teeOrderHint, 'Tee order: Ava King · then Milo Chen');
@@ -663,6 +664,8 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /score-glove-layout/);
   assert.match(scorecard, /players-/);
   assert.match(scorecard, /function LiveRoundStats\(props\)/);
+  assert.match(scorecard, /function ScorePlayerRail\(props\)/);
+  assert.match(scorecard, /collapsed-others/);
   assert.match(scorecard, /liveRoundStatsFromCard/);
   assert.match(scorecard, /readAllThrows/);
   assert.match(scorecard, /Live stats/);
@@ -775,7 +778,8 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(html, /\.confirm-score-row \{/);
   assert.match(html, /flex: 0 1 auto; max-height: min\(38dvh, 20rem\)/);
   assert.match(html, /\.score-glove-layout\.solo \.score-glove-stage \.hole-map-frame \{/);
-  assert.match(html, /\.score-glove-layout\.players-4/);
+  assert.match(html, /\.score-player-rail \{/);
+  assert.match(html, /\.score-player-chip \{/);
   assert.match(html, /\.live-round-stats \{/);
   assert.match(html, /overflow: hidden;/);
   assert.match(html, /\.score-glove-layout:not\(\.solo\) \.live-round-stats/);
