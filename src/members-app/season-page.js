@@ -160,7 +160,7 @@ export function MemberSeasonPage() {
       h(StatTile, { label: "Best finish", value: page.bestFinish == null ? "-" : placeLabel(page.bestFinish), key: "best" }),
       h(StatTile, { label: "Club rating", value: page.clubRating == null ? "-" : String(page.clubRating), key: "rating" }),
     ]) : null,
-    h(PlayStatsPanel, { key: "play-stats" }),
+    h(PlayStatsPanel, { key: "play-stats", pdgaStats: pdgaState.stats }),
     h(ActiveStandingsPanel, { key: "active-standings" }),
     page?.standings.length
       ? h("div", { key: "standings" }, [

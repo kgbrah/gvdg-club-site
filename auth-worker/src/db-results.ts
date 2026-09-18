@@ -180,8 +180,22 @@ export async function listSeasonPlayRows(db: D1Like, year: number) {
   const events = (
     await db
       .prepare(
-        `SELECT r.member_id AS member_id, r.name AS name, r.breakdown AS breakdown, 'competitive' AS kind
+        `SELECT r.member_id AS member_id, r.name AS name, r.breakdown AS breakdown, 'competitive' AS kind,
+                CASE
+                  WHEN json_extract(r.scoring_group, '$.targetType') = 'pair' THEN 'doubles'
+                  WHEN json_extract(ec.live_scoring_config, '$.groupFormat') = 'doubles' THEN 'doubles'
+                  WHEN ec.play_format = 'doubles' THEN 'doubles'
+                  WHEN e.format = 'doubles' THEN 'doubles'
+                  ELSE 'singles'
+                END AS group_format,
+                CASE
+                  WHEN r.match_result IS NOT NULL AND TRIM(r.match_result) != '' AND r.match_result != 'null' THEN 'matchplay'
+                  WHEN json_extract(ec.live_scoring_config, '$.scoringStyle') = 'matchplay' THEN 'matchplay'
+                  WHEN e.format = 'matchplay' THEN 'matchplay'
+                  ELSE 'stroke'
+                END AS scoring_style
          FROM results r JOIN events e ON e.id = r.event_id
+         LEFT JOIN event_config ec ON ec.event_id = e.id
          WHERE r.member_id IS NOT NULL
            AND r.member_id NOT LIKE 'g_%'
            AND COALESCE(e.date, r.created_at) >= ?
@@ -193,7 +207,17 @@ export async function listSeasonPlayRows(db: D1Like, year: number) {
   const casual = (
     await db
       .prepare(
-        `SELECT cr.member_id AS member_id, cr.name AS name, cr.breakdown AS breakdown, 'casual' AS kind
+        `SELECT cr.member_id AS member_id, cr.name AS name, cr.breakdown AS breakdown, 'casual' AS kind,
+                CASE
+                  WHEN json_extract(cr.scoring_group, '$.targetType') = 'pair' THEN 'doubles'
+                  WHEN json_extract(r.scoring_config, '$.groupFormat') = 'doubles' THEN 'doubles'
+                  ELSE 'singles'
+                END AS group_format,
+                CASE
+                  WHEN cr.match_result IS NOT NULL AND TRIM(cr.match_result) != '' AND cr.match_result != 'null' THEN 'matchplay'
+                  WHEN json_extract(r.scoring_config, '$.scoringStyle') = 'matchplay' THEN 'matchplay'
+                  ELSE 'stroke'
+                END AS scoring_style
          FROM casual_results cr JOIN casual_rounds r ON r.id = cr.casual_round_id
          WHERE cr.member_id IS NOT NULL
            AND cr.member_id NOT LIKE 'g_%'

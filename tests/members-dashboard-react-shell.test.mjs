@@ -367,10 +367,15 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /\/play-stats/);
   assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /play-stats-split/);
   assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /play-stats-kind/);
+  assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /play-stats-filters/);
   assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /competitive/);
-  assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /kind: "casual"/);
+  assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /kind === "casual"/);
+  assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /pdgaStats/);
+  assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /context.pdgaNo/);
+  assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /showRank: !pdga/);
   assert.match(html, /\.play-score-mix/);
   assert.match(html, /\.play-stats-split/);
+  assert.match(html, /\.play-stats-filters/);
   assert.match(readFileSync('src/members-app/overview-dashboard.js', 'utf8'), /PlayStatsPanel/);
   assert.match(seasonPage, /ClubRatings/);
   assert.match(seasonPage, /PdgaDashboard/);

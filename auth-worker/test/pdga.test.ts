@@ -47,7 +47,7 @@ describe("pdga.com parsers", () => {
   it("groups detail rounds into events, most recent first", () => {
     const events = parseDetailRounds(DETAILS_HTML);
     expect(events.length).toBe(2);
-    expect(events[0]).toMatchObject({ tournament: "GVDG Monthly", date: "31-May-2026", division: "MA2" });
+    expect(events[0]).toMatchObject({ tournament: "GVDG Monthly", date: "31-May-2026", division: "MA2", eventId: "104398" });
     expect(events[0]?.rounds.map((r) => r.rating)).toEqual([888, 836]);
     expect(events[1]).toMatchObject({ tournament: "Spring Open", division: "MA1" });
     expect(events[1]?.rounds[0]?.rating).toBe(925);
@@ -133,5 +133,36 @@ describe("pdga.com parsers", () => {
     // Then the existing evaluated history remains available instead of failing the whole response.
     expect(stats.events[0]?.tournament).toBe("GVDG Monthly");
     expect(stats.live_rating).toBe(883);
+  });
+
+  it("adds hole-by-hole PDGA mix from live scorecards", async () => {
+    const live = JSON.stringify({
+      data: {
+        scores: [{
+          PDGANum: 273070,
+          Name: "Kevin Gray",
+          Holes: 18,
+          Scores: "2,3,3,5,3,3,4,5,4,4,6,4,3,4,4,3,3,4",
+          Pars: "3,3,3,4,3,3,3,4,4,3,3,3,3,3,4,3,3,4",
+          Teammates: [],
+          Team: null,
+        }],
+      },
+    });
+    const stub: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.includes("TournID=104398") && url.includes("Round=2")) {
+        return new Response(live, { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.includes("live_results_fetch_round")) {
+        return new Response(JSON.stringify({ data: { scores: [] } }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.endsWith("/details")) return new Response(DETAILS_HTML, { status: 200 });
+      return new Response(PLAYER_HTML, { status: 200 });
+    };
+    const stats = await fetchPdgaStats("273070", stub);
+    expect(stats.play?.holes).toBe(18);
+    expect(stats.play?.birdies).toBe(1);
+    expect(stats.play_rounds?.[0]).toMatchObject({ group_format: "singles", scoring_style: "stroke" });
   });
 });

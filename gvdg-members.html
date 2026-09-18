@@ -558,11 +558,12 @@
                 .play-stats-split { display: grid; grid-template-columns: 1fr; gap: 0.85rem; margin-bottom: 0.75rem; }
                 .play-stats-split .play-stats-panel { margin-bottom: 0; }
                 .play-stats-split-status { margin: 0; }
+                .play-stats-filters { display: grid; gap: 0.35rem; }
                 @media (min-width: 780px) {
-                    .play-stats-split { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-                    .play-stats-split-status { grid-column: 1 / -1; }
+                    .play-stats-split { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+                    .play-stats-split-status, .play-stats-filters { grid-column: 1 / -1; }
                 }
-                .play-stats-kind { display: flex; gap: 0.3rem; margin: 0.2rem 0 0.65rem; }
+                .play-stats-kind { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.2rem 0 0.65rem; }
                 .play-stats-kind button {
                     min-height: 36px; padding: 0 0.8rem; border-radius: 999px;
                     border: 1px solid var(--border-color); background: var(--bg-tertiary);
@@ -587,8 +588,9 @@
                 .play-stat-v { font-family: 'Bebas Neue', sans-serif; font-size: 1.7rem; line-height: 1; margin-top: 0.15rem; color: var(--text-primary); }
                 .play-stat-s { color: var(--text-muted); font-size: 0.72rem; margin-top: 0.18rem; }
                 .play-stat-leaders { margin: 0.45rem 0 0; padding: 0; list-style: none; display: grid; gap: 0.18rem; }
-                .play-stat-leaders li { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.72rem; color: var(--text-secondary); }
-                .play-stat-leaders b { color: var(--text-primary); font-weight: 800; }
+                .play-stat-leaders li { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.72rem; color: var(--text-secondary); min-width: 0; }
+                .play-stat-leaders span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .play-stat-leaders b { color: var(--text-primary); font-weight: 800; flex: 0 0 auto; }
                 .play-score-mix-wrap { margin: 0 0 0.7rem; }
                 .play-score-mix {
                     display: flex; height: 1.85rem; border-radius: 10px; overflow: hidden;
@@ -627,7 +629,6 @@
                 .play-score-legend-item.tone-birdie b, .play-stat-card.tone-birdie .play-stat-v { color: var(--under); }
                 .play-score-legend-item.tone-bogey b, .play-stat-card.tone-bogey .play-stat-v { color: var(--over); }
                 .play-score-legend-item.tone-double b, .play-stat-card.tone-double .play-stat-v { color: var(--over); }
-                .play-score-legend-item .play-stat-leaders { text-align: left; margin-top: 0.35rem; }
                 @media (max-width: 420px) {
                     .play-score-legend { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.2rem; }
                     .play-score-legend-item { padding: 0.32rem 0.12rem 0.38rem; }

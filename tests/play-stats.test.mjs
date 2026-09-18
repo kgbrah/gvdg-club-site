@@ -11,14 +11,21 @@ import {
   holeStatChips,
   parseBreakdown,
   playKindLabel,
+  playRowGroup,
   playRowKind,
+  playRowStyle,
   playStatsByKind,
   playStatsView,
+  playViewKey,
   rankCategory,
   regulationStrokes,
   roundPlayStats,
+  selectPlayStatsView,
   statPct,
   sumPlayTotals,
+  totalsFromPdgaScoreLine,
+  mergePartnerPlayInputs,
+  pdgaRowsFromStats,
 } from "../src/shared/play-stats.js";
 
 const TEE = { lat: 35.6, lng: -77.37 };
@@ -134,4 +141,65 @@ test("casual scoring percentages stay out of the competitive club ranks", () => 
   assert.equal(payload.casual.mine.totals.holes, 18);
   assert.equal(payload.competitive.mine.totals.birdies, 8);
   assert.equal(payload.casual.mine.totals.birdies, 16);
+});
+
+test("doubles, singles, match play, and stroke stay on separate tracks", () => {
+  const payload = playStatsByKind([
+    { member_id: "b", name: "Ben", kind: "competitive", group_format: "singles", scoring_style: "stroke", breakdown: { eagles: 0, birdies: 8, pars: 8, bogeys: 2, doubles_plus: 0 } },
+    { member_id: "b", name: "Ben", kind: "competitive", group_format: "doubles", scoring_style: "stroke", breakdown: { eagles: 0, birdies: 16, pars: 2, bogeys: 0, doubles_plus: 0 } },
+    { member_id: "b", name: "Ben", kind: "competitive", group_format: "singles", scoring_style: "matchplay", breakdown: { eagles: 0, birdies: 4, pars: 12, bogeys: 2, doubles_plus: 0 } },
+  ], "b");
+  const singles = selectPlayStatsView(payload.competitive, "singles", "all");
+  const doubles = selectPlayStatsView(payload.competitive, "doubles", "all");
+  const stroke = selectPlayStatsView(payload.competitive, "all", "stroke");
+  const matchplay = selectPlayStatsView(payload.competitive, "all", "matchplay");
+  const singlesStroke = selectPlayStatsView(payload.competitive, "singles", "stroke");
+  assert.equal(playRowGroup({ group_format: "doubles" }), "doubles");
+  assert.equal(playRowStyle({ scoring_style: "matchplay" }), "matchplay");
+  assert.equal(playViewKey("singles", "stroke"), "singles-stroke");
+  assert.equal(singles.mine.totals.birdies, 12);
+  assert.equal(doubles.mine.totals.birdies, 16);
+  assert.equal(stroke.mine.totals.birdies, 24);
+  assert.equal(matchplay.mine.totals.birdies, 4);
+  assert.equal(singlesStroke.mine.totals.birdies, 8);
+  assert.equal(singlesStroke.mine.totals.holes, 18);
+  assert.notEqual(payload.competitive.mine.totals.birdies, doubles.mine.totals.birdies);
+});
+
+test("PDGA hole lines become a scoring mix without touching club ranks", () => {
+  const mix = totalsFromPdgaScoreLine(
+    "2,3,3,5,3,3,4,5,4,4,6,4,3,4,4,3,3,4,,,,,,,,,,,,,,,,,,",
+    "3,3,3,4,3,3,3,4,4,3,3,3,3,3,4,3,3,4,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3",
+    18,
+  );
+  assert.equal(mix.holes, 18);
+  assert.equal(mix.birdies, 1);
+  assert.equal(mix.pars, 10);
+  assert.equal(mix.bogeys, 6);
+  assert.equal(mix.doubles_plus, 1);
+  const payload = playStatsByKind([
+    { member_id: "b", name: "Ben", kind: "competitive", breakdown: { eagles: 0, birdies: 8, pars: 8, bogeys: 2, doubles_plus: 0 } },
+    { member_id: "b", name: "Ben", kind: "pdga", breakdown: mix },
+  ], "b");
+  assert.equal(playKindLabel("pdga"), "PDGA");
+  assert.equal(payload.competitive.mine.totals.birdies, 8);
+  assert.equal(payload.pdga.mine.totals.birdies, 1);
+  assert.equal(payload.pdga.mine.totals.holes, 18);
+  const fromStats = pdgaRowsFromStats({
+    name: "Ben",
+    play_rounds: [{ breakdown: mix, group_format: "singles", scoring_style: "stroke" }],
+  }, "b", "Ben");
+  assert.equal(fromStats[0].kind, "pdga");
+  assert.equal(fromStats[0].member_id, "b");
+});
+
+test("doubles partners both receive the team hole mix", () => {
+  const merged = mergePartnerPlayInputs([
+    { scores: { 1: 2 }, throws: { 1: [northOf(BASKET, 8)] } },
+    { scores: {}, throws: {} },
+  ]);
+  const play = roundPlayStats([HOLE], merged.throws, merged.scores);
+  assert.equal(play.holes, 1);
+  assert.equal(play.birdies, 1);
+  assert.equal(play.c1r_hit, 1);
 });

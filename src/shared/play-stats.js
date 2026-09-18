@@ -166,6 +166,71 @@ export function addHoleToTotals(totals, hole, throws, score) {
   return totals;
 }
 
+export function totalsFromHoleScores(pars, scores) {
+  const totals = emptyPlayTotals();
+  const n = Math.min(
+    Array.isArray(pars) ? pars.length : 0,
+    Array.isArray(scores) ? scores.length : 0,
+  );
+  for (let i = 0; i < n; i += 1) applyScoreMix(totals, Number(pars[i]), Number(scores[i]));
+  return totals;
+}
+
+export function parseScoreCsv(raw, limit) {
+  const values = String(raw || "").split(",");
+  const out = [];
+  for (const value of values) {
+    const n = Number(String(value).trim());
+    if (!Number.isInteger(n) || n <= 0) {
+      if (out.length) break;
+      continue;
+    }
+    out.push(n);
+    if (limit && out.length >= limit) break;
+  }
+  return out;
+}
+
+export function totalsFromPdgaScoreLine(scoresRaw, parsRaw, holes) {
+  const scores = parseScoreCsv(scoresRaw);
+  const pars = parseScoreCsv(parsRaw);
+  const n = Math.min(Number(holes) || 18, scores.length, pars.length);
+  return totalsFromHoleScores(pars.slice(0, n), scores.slice(0, n));
+}
+
+export function mergePartnerPlayInputs(players) {
+  const scores = {};
+  const throwsByHole = {};
+  for (const player of Array.isArray(players) ? players : []) {
+    if (!player) continue;
+    for (const [hole, score] of Object.entries(player.scores || {})) {
+      const n = Number(hole);
+      if (scores[n] == null && Number.isFinite(Number(score)) && Number(score) > 0) scores[n] = Number(score);
+    }
+    for (const [hole, marks] of Object.entries(player.throws || {})) {
+      const n = Number(hole);
+      if (throwsByHole[n] == null && Array.isArray(marks) && marks.length) throwsByHole[n] = marks;
+    }
+  }
+  return { scores, throws: throwsByHole };
+}
+
+export function partnersForStanding(standing, players) {
+  const group = standing && standing.scoringGroup;
+  const list = Array.isArray(players) ? players : [];
+  if (group && group.targetType === "pair" && Array.isArray(group.members) && group.members.length) {
+    const names = new Set(group.members.map((name) => String(name)));
+    const partners = list.filter((player) => player && !player.removed && names.has(player.name));
+    if (partners.length) return partners;
+  }
+  const one = list.find((row) => (
+    (standing && standing.memberId && row.memberId === standing.memberId) ||
+    (standing && row.name === standing.name)
+  ));
+  return one ? [one] : [];
+}
+
+
 export function roundPlayStats(holes, throwsByHole, scores) {
   const totals = emptyPlayTotals();
   for (const hole of Array.isArray(holes) ? holes : []) {
@@ -326,14 +391,47 @@ export function playStatsView(players, memberId) {
   });
 }
 
-export const PLAY_KINDS = ["competitive", "casual"];
+export const PLAY_KINDS = ["competitive", "casual", "pdga"];
+export const PLAY_GROUPS = ["all", "singles", "doubles"];
+export const PLAY_STYLES = ["all", "stroke", "matchplay"];
 
 export function playRowKind(row) {
-  return row && String(row.kind || "").toLowerCase() === "casual" ? "casual" : "competitive";
+  const kind = String(row && row.kind || "").toLowerCase();
+  if (kind === "casual") return "casual";
+  if (kind === "pdga") return "pdga";
+  return "competitive";
 }
 
 export function playKindLabel(kind) {
-  return kind === "casual" ? "Casual" : "Competitive";
+  if (kind === "casual") return "Casual";
+  if (kind === "pdga") return "PDGA";
+  return "Competitive";
+}
+
+export function playRowGroup(row) {
+  return String(row && (row.groupFormat || row.group_format) || "").toLowerCase() === "doubles" ? "doubles" : "singles";
+}
+
+export function playRowStyle(row) {
+  return String(row && (row.scoringStyle || row.scoring_style) || "").toLowerCase() === "matchplay" ? "matchplay" : "stroke";
+}
+
+export function playGroupLabel(group) {
+  if (group === "doubles") return "Doubles";
+  if (group === "singles") return "Singles";
+  return "All";
+}
+
+export function playStyleLabel(style) {
+  if (style === "matchplay") return "Match play";
+  if (style === "stroke") return "Stroke";
+  return "All";
+}
+
+export function playViewKey(group, style) {
+  const g = group === "doubles" || group === "singles" ? group : "all";
+  const s = style === "matchplay" || style === "stroke" ? style : "all";
+  return g + "-" + s;
 }
 
 export function playersFromRows(rows) {
@@ -365,17 +463,65 @@ export function playStatsBucket(rows, memberId) {
   };
 }
 
+export function playStatsKindPayload(rows, memberId) {
+  const views = {};
+  for (const group of PLAY_GROUPS) {
+    for (const style of PLAY_STYLES) {
+      const filtered = (Array.isArray(rows) ? rows : []).filter((row) => (
+        (group === "all" || playRowGroup(row) === group) &&
+        (style === "all" || playRowStyle(row) === style)
+      ));
+      views[playViewKey(group, style)] = playStatsBucket(filtered, memberId);
+    }
+  }
+  return { ...views[playViewKey("all", "all")], views };
+}
+
+export function selectPlayStatsView(kindPayload, group, style) {
+  if (!kindPayload) return null;
+  const key = playViewKey(group, style);
+  return (kindPayload.views && kindPayload.views[key]) || kindPayload;
+}
+
 export function playStatsByKind(rows, memberId) {
   const competitive = [];
   const casual = [];
+  const pdga = [];
   for (const row of Array.isArray(rows) ? rows : []) {
-    if (playRowKind(row) === "casual") casual.push(row);
+    const kind = playRowKind(row);
+    if (kind === "casual") casual.push(row);
+    else if (kind === "pdga") pdga.push(row);
     else competitive.push(row);
   }
   return {
-    casual: playStatsBucket(casual, memberId),
-    competitive: playStatsBucket(competitive, memberId),
+    casual: playStatsKindPayload(casual, memberId),
+    competitive: playStatsKindPayload(competitive, memberId),
+    pdga: playStatsKindPayload(pdga, memberId),
   };
+}
+
+export function pdgaRowsFromStats(stats, memberId, memberName) {
+  const rounds = Array.isArray(stats && stats.play_rounds) ? stats.play_rounds : [];
+  if (rounds.length) {
+    return rounds.map((round) => ({
+      breakdown: round.breakdown != null ? round.breakdown : round,
+      group_format: playRowGroup(round),
+      kind: "pdga",
+      member_id: memberId,
+      name: memberName || String(stats && stats.name || "Player"),
+      scoring_style: playRowStyle(round),
+    }));
+  }
+  const play = stats && stats.play;
+  if (!play || !num(play.holes)) return [];
+  return [{
+    breakdown: play,
+    group_format: "singles",
+    kind: "pdga",
+    member_id: memberId,
+    name: memberName || String(stats.name || "Player"),
+    scoring_style: "stroke",
+  }];
 }
 
 export function scoreMixRows(categories) {

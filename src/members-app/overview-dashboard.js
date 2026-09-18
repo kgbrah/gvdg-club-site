@@ -179,7 +179,7 @@ export function MemberOverviewDashboard() {
       ]),
     ]),
     h(UpNextCard, { events: registration.state.events, registrations: registration.state.registrations, key: "next" }),
-    h(PlayStatsPanel, { compact: true, key: "play-stats" }),
+    h(PlayStatsPanel, { compact: true, key: "play-stats", pdgaStats: pdgaState.stats }),
     h(LastRoundCard, { token, key: "last" }),
   ]);
 }

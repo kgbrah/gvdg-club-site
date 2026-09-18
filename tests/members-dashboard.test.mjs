@@ -134,6 +134,7 @@ test('member dashboard mounts a personal season page from existing member APIs',
   assert.match(html, /\.play-score-mix/);
   assert.match(html, /\.play-stats-kind/);
   assert.match(html, /\.play-stats-split/);
+  assert.match(html, /\.play-stats-filters/);
   assert.doesNotMatch(page, /\/admin\//);
   assert.doesNotMatch(page, /createMember|isAdmin/);
 });

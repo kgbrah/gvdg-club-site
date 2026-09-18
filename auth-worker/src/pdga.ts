@@ -8,11 +8,21 @@
 
 import type { Env } from "./env.js";
 import { clientIp, json } from "./http.js";
-import { kvRateLimited } from "./kv-rate-limit.js";
 import { readD1OrFallback } from "./d1-retry.js";
+import { kvRateLimited } from "./kv-rate-limit.js";
+import { emptyPlayTotals, sumPlayTotals, totalsFromPdgaScoreLine, type PlayTotals } from "./play-stats.js";
 
 export interface PdgaRound { rating: number; score: number | null; round: string }
-export interface PdgaEvent { tournament: string; date: string; epoch: number; division: string; rounds: PdgaRound[] }
+export interface PdgaPlayRound {
+  tournament: string;
+  date: string;
+  division: string;
+  round: string;
+  breakdown: PlayTotals;
+  group_format: "singles" | "doubles";
+  scoring_style: "stroke" | "matchplay";
+}
+export interface PdgaEvent { tournament: string; date: string; epoch: number; division: string; eventId?: string | null; rounds: PdgaRound[] }
 export interface PdgaStats {
   pdga: string;
   name: string | null;
@@ -22,12 +32,39 @@ export interface PdgaStats {
   peak_rating: number | null;
   events_count: number;
   events: PdgaEvent[];
+  play?: PlayTotals;
+  play_rounds?: PdgaPlayRound[];
 }
 
 const UA = "Mozilla/5.0 (compatible; GVDGClubBot/1.0; +https://gvdgclub.com)";
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const RECENT_ROUNDS = 8; // "live" rating = mean of the most recent N round ratings (recent-form estimate)
+const MAX_HOLE_ROUNDS = 8;
 const STAGING_QA_PDGA = "90000001";
+const STAGING_QA_PLAY = {
+  holes: 54,
+  eagles: 1,
+  birdies: 12,
+  pars: 28,
+  bogeys: 11,
+  doubles_plus: 2,
+  birdie_hit: 13,
+  par_hit: 41,
+  fir_hit: 0,
+  fir_att: 0,
+  c1r_hit: 0,
+  c1r_att: 0,
+  c2r_hit: 0,
+  c2r_att: 0,
+  parked_hit: 0,
+  parked_att: 0,
+  scramble_hit: 0,
+  scramble_att: 0,
+  c1_putt_hit: 0,
+  c1_putt_att: 0,
+  c2_putt_hit: 0,
+  c2_putt_att: 0,
+} satisfies PlayTotals;
 const STAGING_QA_STATS: PdgaStats = {
   pdga: STAGING_QA_PDGA,
   name: "GVDG QA Dashboard",
@@ -40,6 +77,10 @@ const STAGING_QA_STATS: PdgaStats = {
     { tournament: "GVDG QA Monthly", date: "2026-06-20", epoch: 1781913600, division: "MA1", rounds: [{ rating: 958, score: 54, round: "1" }] },
     { tournament: "GVDG QA League", date: "2026-05-12", epoch: 1778544000, division: "MA1", rounds: [{ rating: 941, score: 56, round: "1" }] },
     { tournament: "GVDG QA Flex", date: "2026-04-18", epoch: 1776470400, division: "MA1", rounds: [{ rating: 924, score: 58, round: "1" }] },
+  ],
+  play: STAGING_QA_PLAY,
+  play_rounds: [
+    { tournament: "GVDG QA Monthly", date: "2026-06-20", division: "MA1", round: "1", breakdown: STAGING_QA_PLAY, group_format: "singles", scoring_style: "stroke" },
   ],
 };
 
@@ -66,6 +107,7 @@ export function parseDetailRounds(html: string): PdgaEvent[] {
     const ratingStr = cap(/<td class="round-rating">\s*(\d+)\s*</i, row);
     if (!ratingStr) continue; // header rows / non-round rows have no round-rating cell
     const tournament = (cap(/<td class="tournament">(?:<a[^>]*>)?\s*([^<]+)/i, row) ?? "Event").trim();
+    const eventId = cap(/href="\/tour\/event\/(\d+)/i, row);
     const date = (cap(/<td class="date"[^>]*>\s*([^<]+?)\s*</i, row) ?? "").trim();
     const epoch = parseInt(cap(/<td class="date"[^>]*data-text="(\d+)"/i, row) ?? "0", 10) || 0;
     const division = (cap(/<td class="division">\s*([^<]*?)\s*</i, row) ?? "").trim();
@@ -74,8 +116,10 @@ export function parseDetailRounds(html: string): PdgaEvent[] {
     const key = `${tournament}|${date}|${division}`;
     const existing = events.get(key);
     const parsedRound = { rating: parseInt(ratingStr, 10), score: scoreStr ? parseInt(scoreStr, 10) : null, round };
-    if (existing) existing.rounds.push(parsedRound);
-    else events.set(key, { tournament, date, epoch, division, rounds: [parsedRound] });
+    if (existing) {
+      existing.rounds.push(parsedRound);
+      if (eventId && !existing.eventId) existing.eventId = eventId;
+    } else events.set(key, { tournament, date, epoch, division, eventId, rounds: [parsedRound] });
   }
   return [...events.values()]
     .map((event) => ({ ...event, rounds: newestRoundsFirst(event.rounds) }))
@@ -117,7 +161,7 @@ function parseRecentEvent(html: string, pdga: string, event: PlayerEventRef): Pd
     if (match[1] && match[2] && match[3]) rounds.push({ round: match[1], score: Number(match[2]), rating: Number(match[3]) });
   }
   return rounds.length
-    ? { tournament: event.tournament, date: event.date, epoch: event.epoch, division: event.division, rounds: newestRoundsFirst(rounds) }
+    ? { tournament: event.tournament, date: event.date, epoch: event.epoch, division: event.division, eventId: event.id, rounds: newestRoundsFirst(rounds) }
     : null;
 }
 
@@ -139,7 +183,7 @@ function mergeEvents(refreshed: readonly PdgaEvent[], detailed: readonly PdgaEve
     }
     const rounds = new Map(existing.rounds.map((round) => [roundKey(round), round]));
     for (const round of event.rounds) rounds.set(roundKey(round), round);
-    events.set(key, { ...existing, ...event, rounds: newestRoundsFirst([...rounds.values()]) });
+    events.set(key, { ...existing, ...event, eventId: event.eventId || existing.eventId, rounds: newestRoundsFirst([...rounds.values()]) });
   }
   return [...events.values()].sort((a, b) => b.epoch - a.epoch);
 }
@@ -153,11 +197,90 @@ function roundKey(round: PdgaRound): string {
 }
 
 function emptyPdgaStats(pdga: string): PdgaStats {
-  return { pdga, name: null, official_rating: null, rating_date: null, live_rating: null, peak_rating: null, events_count: 0, events: [] };
+  return { pdga, name: null, official_rating: null, rating_date: null, live_rating: null, peak_rating: null, events_count: 0, events: [], play: emptyPlayTotals(), play_rounds: [] };
 }
 
 function fallbackPdgaStats(pdga: string): PdgaStats | null {
   return pdga === STAGING_QA_PDGA ? STAGING_QA_STATS : null;
+}
+
+function easternYear(now = new Date()): number {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric" }).formatToParts(now);
+  return Number(parts.find((part) => part.type === "year")?.value) || now.getFullYear();
+}
+
+function eventYear(event: PdgaEvent): number | null {
+  const match = String(event.date || "").match(/(\d{4})/);
+  if (match) return Number(match[1]);
+  if (event.epoch) return new Date(event.epoch * 1000).getUTCFullYear();
+  return null;
+}
+
+type LiveRoundTarget = { eventId: string; division: string; round: number; tournament: string; date: string };
+
+function holeScoreTargets(events: readonly PdgaEvent[]): LiveRoundTarget[] {
+  const out: LiveRoundTarget[] = [];
+  const seen = new Set<string>();
+  for (const event of events) {
+    const eventId = String(event.eventId || "").replace(/\D/g, "");
+    const division = String(event.division || "").trim();
+    if (!eventId || !division) continue;
+    for (const round of event.rounds) {
+      const n = Number(round.round);
+      if (!Number.isInteger(n) || n < 1) continue;
+      const key = `${eventId}|${division}|${n}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ eventId, division, round: n, tournament: event.tournament, date: event.date });
+      if (out.length >= MAX_HOLE_ROUNDS) return out;
+    }
+  }
+  return out;
+}
+
+function parseLiveRoundPlayer(json: unknown, pdga: string): { breakdown: PlayTotals; groupFormat: "singles" | "doubles" } | null {
+  const data = json && typeof json === "object" && "data" in json ? (json as { data?: unknown }).data : json;
+  const scores = data && typeof data === "object" && Array.isArray((data as { scores?: unknown }).scores)
+    ? (data as { scores: Record<string, unknown>[] }).scores
+    : [];
+  const player = scores.find((row) => String(row?.PDGANum ?? "").replace(/\D/g, "") === pdga);
+  if (!player) return null;
+  const holes = Number(player.Holes) || 18;
+  const breakdown = totalsFromPdgaScoreLine(player.Scores, player.Pars, holes);
+  if (!breakdown.holes) return null;
+  const teammates = Array.isArray(player.Teammates) ? player.Teammates : [];
+  const doubles = teammates.length > 0 || (player.Team != null && String(player.Team) !== "");
+  return { breakdown, groupFormat: doubles ? "doubles" : "singles" };
+}
+
+async function fetchPdgaHoleRounds(
+  pdga: string,
+  events: readonly PdgaEvent[],
+  year: number,
+  doFetch: typeof fetch,
+  headers: Record<string, string>,
+): Promise<PdgaPlayRound[]> {
+  const seasonEvents = events.filter((event) => eventYear(event) == null || eventYear(event) === year);
+  const targets = holeScoreTargets(seasonEvents);
+  const results = await Promise.allSettled(targets.map(async (target) => {
+    const url = `https://www.pdga.com/apps/tournament/live-api/live_results_fetch_round?TournID=${encodeURIComponent(target.eventId)}&Division=${encodeURIComponent(target.division)}&Round=${target.round}`;
+    const response = await doFetch(url, { headers: { ...headers, accept: "application/json" } });
+    if (!response.ok) return null;
+    let json: unknown = null;
+    try { json = await response.json(); } catch { return null; }
+    const parsed = parseLiveRoundPlayer(json, pdga);
+    if (!parsed) return null;
+    return {
+      tournament: target.tournament,
+      date: target.date,
+      division: target.division,
+      round: String(target.round),
+      breakdown: parsed.breakdown,
+      group_format: parsed.groupFormat,
+      scoring_style: "stroke" as const,
+    };
+  }));
+  return results.flatMap((result) => result.status === "fulfilled" && result.value ? [result.value] : []);
 }
 
 /** Build the full stats object for a digits-only PDGA number from its player, detail, and pending-event pages. */
@@ -174,6 +297,8 @@ export async function fetchPdgaStats(pdga: string, doFetch: typeof fetch = fetch
   }));
   const refreshed = recentResults.flatMap((result) => result.status === "fulfilled" && result.value ? [result.value] : []);
   const events = mergeEvents(refreshed, detailEvents);
+  const play_rounds = await fetchPdgaHoleRounds(pdga, events, easternYear(), doFetch, headers);
+  const play = play_rounds.length ? sumPlayTotals(play_rounds.map((round) => ({ breakdown: round.breakdown }))) : emptyPlayTotals();
 
   const ratings = events.flatMap((e) => e.rounds.map((r) => r.rating));
   const recent = ratings.slice(0, RECENT_ROUNDS);
@@ -189,6 +314,8 @@ export async function fetchPdgaStats(pdga: string, doFetch: typeof fetch = fetch
     peak_rating,
     events_count: events.length,
     events: events.slice(0, 20),
+    play,
+    play_rounds,
   };
 }
 
@@ -207,7 +334,13 @@ export async function handlePdgaStats(request: Request, env: Env, origin: string
       () => env.DB.prepare("SELECT data, fetched_at FROM pdga_cache WHERE pdga = ?1").bind(pdga).first<{ data: string; fetched_at: number }>(),
       () => null,
     );
-    if (row && now - Number(row.fetched_at) < CACHE_TTL_MS) return json(JSON.parse(row.data), 200, origin, headers);
+    if (row && now - Number(row.fetched_at) < CACHE_TTL_MS) {
+      const cached = JSON.parse(row.data) as PdgaStats;
+      // Pre-hole-mix cache rows have ratings but no play_rounds; refetch those once.
+      if (cached && typeof cached === "object" && Array.isArray(cached.play_rounds)) {
+        return json(cached, 200, origin, headers);
+      }
+    }
   } catch (error) {
     console.warn(JSON.stringify({ message: "pdga_cache_read_failed", error: error instanceof Error ? error.message : String(error) }));
   }

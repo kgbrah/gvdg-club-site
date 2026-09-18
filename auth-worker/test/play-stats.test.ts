@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { holePlayStats, parseBreakdown, parseThrowsBody, playStatsByKind, playStatsView, roundPlayStats, withPlayBreakdown } from "../src/play-stats.js";
+import { holePlayStats, mergePartnerPlayInputs, parseBreakdown, parseThrowsBody, playStatsByKind, playStatsView, roundPlayStats, selectPlayStatsView, totalsFromPdgaScoreLine, withPlayBreakdown } from "../src/play-stats.js";
 
 const TEE = { lat: 35.6, lng: -77.37 };
 const BASKET = { lat: 35.6008, lng: -77.37 };
@@ -50,5 +50,25 @@ describe("play stats", () => {
     const casualBirdie = split.casual.categories.find((row) => row.id === "birdieMix");
     expect(competitiveBirdie?.mine?.hit).toBe(8);
     expect(casualBirdie?.mine?.hit).toBe(14);
+  });
+
+  it("keeps doubles and matchplay out of singles stroke mix", () => {
+    const split = playStatsByKind([
+      { member_id: "b", name: "Ben", kind: "competitive", group_format: "singles", scoring_style: "stroke", breakdown: { eagles: 0, birdies: 8, pars: 8, bogeys: 2, doubles_plus: 0 } },
+      { member_id: "b", name: "Ben", kind: "competitive", group_format: "doubles", scoring_style: "stroke", breakdown: { eagles: 0, birdies: 16, pars: 2, bogeys: 0, doubles_plus: 0 } },
+    ], "b");
+    expect(selectPlayStatsView(split.competitive, "singles", "stroke")?.mine.totals.birdies).toBe(8);
+    expect(selectPlayStatsView(split.competitive, "doubles", "all")?.mine.totals.birdies).toBe(16);
+  });
+
+  it("copies doubles team hole mix onto a partner with no personal scores", () => {
+    const merged = mergePartnerPlayInputs([
+      { scores: { 1: 2 }, throws: { 1: [{ ...northOf(BASKET, 8), n: 1 }] } },
+      { scores: {}, throws: {} },
+    ]);
+    const play = roundPlayStats([HOLE], merged.throws, merged.scores);
+    expect(play.birdies).toBe(1);
+    expect(play.c1r_hit).toBe(1);
+    expect(totalsFromPdgaScoreLine("2,3", "3,3", 2).birdies).toBe(1);
   });
 });

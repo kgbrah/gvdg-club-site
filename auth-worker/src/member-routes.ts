@@ -129,12 +129,21 @@ export async function handlePlayStats(request: Request, env: Env, origin: string
   const year = Number.isInteger(yearParam) && yearParam >= 2000 && yearParam <= 2100 ? yearParam : easternYear();
   const rows = await readD1OrFallback(() => db.listSeasonPlayRows(env.DB, year), () => []);
   const tagged = (Array.isArray(rows) ? rows : []).map((raw) => {
-    const row = (raw || {}) as { member_id?: unknown; name?: unknown; breakdown?: unknown; kind?: unknown };
+    const row = (raw || {}) as {
+      member_id?: unknown;
+      name?: unknown;
+      breakdown?: unknown;
+      kind?: unknown;
+      group_format?: unknown;
+      scoring_style?: unknown;
+    };
     return {
       breakdown: row.breakdown,
+      group_format: row.group_format,
       kind: playRowKind(row),
       member_id: row.member_id,
       name: row.name,
+      scoring_style: row.scoring_style,
     };
   });
   return json({ year, ...playStatsByKind(tagged, claims.sub) }, 200, origin);

@@ -293,6 +293,77 @@ export function sumPlayTotals(rows: readonly unknown[]): PlayTotals {
   return totals;
 }
 
+export function totalsFromHoleScores(pars: readonly unknown[], scores: readonly unknown[]): PlayTotals {
+  const totals = emptyPlayTotals();
+  const n = Math.min(pars.length, scores.length);
+  for (let i = 0; i < n; i += 1) applyScoreMix(totals, Number(pars[i]), Number(scores[i]));
+  return totals;
+}
+
+export function parseScoreCsv(raw: unknown, limit?: number): number[] {
+  const values = String(raw || "").split(",");
+  const out: number[] = [];
+  for (const value of values) {
+    const n = Number(String(value).trim());
+    if (!Number.isInteger(n) || n <= 0) {
+      if (out.length) break;
+      continue;
+    }
+    out.push(n);
+    if (limit && out.length >= limit) break;
+  }
+  return out;
+}
+
+export function totalsFromPdgaScoreLine(scoresRaw: unknown, parsRaw: unknown, holes: unknown): PlayTotals {
+  const scores = parseScoreCsv(scoresRaw);
+  const pars = parseScoreCsv(parsRaw);
+  const n = Math.min(Number(holes) || 18, scores.length, pars.length);
+  return totalsFromHoleScores(pars.slice(0, n), scores.slice(0, n));
+}
+
+type PlayInput = {
+  scores?: Record<number, number> | null;
+  throws?: Record<number, unknown> | null;
+  memberId?: string | null;
+  name?: string;
+  removed?: boolean;
+};
+
+export function mergePartnerPlayInputs(players: readonly PlayInput[] | null | undefined) {
+  const scores: Record<number, number> = {};
+  const throwsByHole: Record<number, unknown> = {};
+  for (const player of players || []) {
+    if (!player) continue;
+    for (const [hole, score] of Object.entries(player.scores || {})) {
+      const n = Number(hole);
+      if (scores[n] == null && Number.isFinite(Number(score)) && Number(score) > 0) scores[n] = Number(score);
+    }
+    for (const [hole, marks] of Object.entries(player.throws || {})) {
+      const n = Number(hole);
+      if (throwsByHole[n] == null && Array.isArray(marks) && marks.length) throwsByHole[n] = marks;
+    }
+  }
+  return { scores, throws: throwsByHole };
+}
+
+export function partnersForStanding(
+  standing: { memberId?: string | null; name?: string; scoringGroup?: { targetType?: string; members?: readonly string[] } | null } | null | undefined,
+  players: readonly PlayInput[],
+): PlayInput[] {
+  const group = standing?.scoringGroup;
+  if (group?.targetType === "pair" && Array.isArray(group.members) && group.members.length) {
+    const names = new Set(group.members.map((name) => String(name)));
+    const partners = players.filter((player) => player && !player.removed && names.has(String(player.name || "")));
+    if (partners.length) return partners;
+  }
+  const one = players.find((row) => (
+    (standing?.memberId && row.memberId === standing.memberId) ||
+    (standing && row.name === standing.name)
+  ));
+  return one ? [one] : [];
+}
+
 export const PLAY_CATEGORIES: readonly PlayCategory[] = [
   { att: "holes", group: "mix", hit: "eagles", id: "eagle", invert: false, label: "Eagle+", min: 18, short: "Eagle", tone: "eagle" },
   { att: "holes", group: "mix", hit: "birdies", id: "birdieMix", invert: false, label: "Birdie", min: 18, short: "Birdie", tone: "birdie" },
@@ -377,10 +448,40 @@ export function playStatsView(
   });
 }
 
-type PlayRow = { memberId?: unknown; member_id?: unknown; name?: unknown; breakdown?: unknown; kind?: unknown };
+type PlayRow = {
+  memberId?: unknown;
+  member_id?: unknown;
+  name?: unknown;
+  breakdown?: unknown;
+  kind?: unknown;
+  groupFormat?: unknown;
+  group_format?: unknown;
+  scoringStyle?: unknown;
+  scoring_style?: unknown;
+};
 
-export function playRowKind(row: PlayRow | null | undefined): "casual" | "competitive" {
-  return row && String(row.kind || "").toLowerCase() === "casual" ? "casual" : "competitive";
+export const PLAY_GROUPS = ["all", "singles", "doubles"] as const;
+export const PLAY_STYLES = ["all", "stroke", "matchplay"] as const;
+
+export function playRowKind(row: PlayRow | null | undefined): "casual" | "competitive" | "pdga" {
+  const kind = String(row?.kind || "").toLowerCase();
+  if (kind === "casual") return "casual";
+  if (kind === "pdga") return "pdga";
+  return "competitive";
+}
+
+export function playRowGroup(row: PlayRow | null | undefined): "singles" | "doubles" {
+  return String(row?.groupFormat || row?.group_format || "").toLowerCase() === "doubles" ? "doubles" : "singles";
+}
+
+export function playRowStyle(row: PlayRow | null | undefined): "stroke" | "matchplay" {
+  return String(row?.scoringStyle || row?.scoring_style || "").toLowerCase() === "matchplay" ? "matchplay" : "stroke";
+}
+
+export function playViewKey(group: string | null | undefined, style: string | null | undefined): string {
+  const g = group === "doubles" || group === "singles" ? group : "all";
+  const s = style === "matchplay" || style === "stroke" ? style : "all";
+  return `${g}-${s}`;
 }
 
 function playersFromRows(rows: readonly PlayRow[]): RankPlayer[] {
@@ -411,16 +512,45 @@ export function playStatsBucket(rows: readonly PlayRow[], memberId: string | nul
   };
 }
 
+export function playStatsKindPayload(rows: readonly PlayRow[], memberId: string | null) {
+  const views: Record<string, ReturnType<typeof playStatsBucket>> = {};
+  for (const group of PLAY_GROUPS) {
+    for (const style of PLAY_STYLES) {
+      const filtered = rows.filter((row) => (
+        (group === "all" || playRowGroup(row) === group) &&
+        (style === "all" || playRowStyle(row) === style)
+      ));
+      views[playViewKey(group, style)] = playStatsBucket(filtered, memberId);
+    }
+  }
+  const all = views[playViewKey("all", "all")] ?? playStatsBucket([], memberId);
+  return { ...all, views };
+}
+
+export function selectPlayStatsView(
+  kindPayload: ReturnType<typeof playStatsKindPayload> | null | undefined,
+  group: string | null | undefined,
+  style: string | null | undefined,
+) {
+  if (!kindPayload) return null;
+  const key = playViewKey(group, style);
+  return kindPayload.views?.[key] || kindPayload;
+}
+
 export function playStatsByKind(rows: readonly PlayRow[], memberId: string | null) {
   const competitive: PlayRow[] = [];
   const casual: PlayRow[] = [];
+  const pdga: PlayRow[] = [];
   for (const row of rows) {
-    if (playRowKind(row) === "casual") casual.push(row);
+    const kind = playRowKind(row);
+    if (kind === "casual") casual.push(row);
+    else if (kind === "pdga") pdga.push(row);
     else competitive.push(row);
   }
   return {
-    casual: playStatsBucket(casual, memberId),
-    competitive: playStatsBucket(competitive, memberId),
+    casual: playStatsKindPayload(casual, memberId),
+    competitive: playStatsKindPayload(competitive, memberId),
+    pdga: playStatsKindPayload(pdga, memberId),
   };
 }
 
@@ -443,7 +573,7 @@ export function parseThrowsBody(body: unknown): { hole: number; throws: { lat: n
 
 export function withPlayBreakdown(
   breakdown: Breakdown,
-  player: PlayerState | null | undefined,
+  player: PlayInput | PlayerState | null | undefined,
   holes: readonly HoleInput[],
 ): Breakdown & PlayTotals {
   const play = roundPlayStats(holes, player?.throws ?? {}, player?.scores ?? {});
