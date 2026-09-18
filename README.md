@@ -298,7 +298,7 @@ All authorization is re-checked server-side. Base URL is the Worker (`auth.gvdgc
 `POST /login` · `POST /assistant` · `POST /webauthn/auth/{options,verify}` · `GET /pdga-stats` · `GET /courses` · `GET /leagues[/:id]` · `GET /events[/:id]` · `GET /events/:id/{results,ctps,ace-pot}` · `GET /fundraisers[/:id]` · `GET /meetings[/:id]` · `GET /registration/open` · `GET /payments/config` · live snapshots + `/ws`.
 
 ### Member-authenticated (Bearer JWT)
-`GET /me` · `POST /set-pin` · `POST /profile` · `GET /my-results` · `GET /my-ratings` · `GET /my-live-rounds` · `GET /my-registrations` · `GET|POST /board[/…]` · `POST /webauthn/register/{options,verify}` · `POST /tee-signs` · `GET /my-tee-signs` · live score/card writes (own card only).
+`GET /me` · `POST /set-pin` · `POST /profile` · `GET /my-results` (club events + `casual` history) · `GET /my-ratings` · `GET /my-live-rounds` · `GET /my-registrations` · `GET|POST /board[/…]` · `POST /webauthn/register/{options,verify}` · `POST /tee-signs` · `GET /my-tee-signs` · live score/card writes (own card only).
 
 ### Registration & shop (member, some guest-optional)
 `GET /events/:id/registration` · `POST /events/:id/{register,checkin}` · `POST /events/:id/pay/{create-order,capture}` · `GET /shop/products` · `POST /shop/pay/{create-order,capture}` · `GET /shop/wallet` · `GET /shop/orders`.

@@ -1,8 +1,10 @@
 import React from "react";
 
-import { TOKEN_KEY, storageGet } from "./api.js";
+import { TOKEN_KEY, requestJson, storageGet } from "./api.js";
 import { LiveScoringPanel } from "./activity-panels.js";
+import { formatEventDay, formatToPar } from "./format.js";
 import { liveScoreHref, liveWatchHref } from "../shared/live-watch.js";
+import { recentPlayRounds, relClass } from "./play-page-model.js";
 
 const h = React.createElement;
 
@@ -68,6 +70,55 @@ function PlayJoinCard() {
   ]);
 }
 
+function RecentRoundCard({ item }) {
+  const meta = [formatEventDay(item.when), item.layout].filter(Boolean).join(" · ");
+  const score = item.toPar != null ? formatToPar(item.toPar) : item.total != null ? String(item.total) : "";
+  return h("div", { className: "live-round-card" }, [
+    h("div", { key: "body" }, [
+      h("span", { className: "live-round-badge", key: "badge" }, "Finished"),
+      h("div", { className: "live-round-title", key: "title" }, item.title),
+      meta ? h("div", { className: "live-round-meta", key: "meta" }, meta) : null,
+      score
+        ? h("div", { className: "recent-round-score " + relClass(item.toPar), key: "score" }, [
+          item.total != null ? h("span", { key: "total" }, String(item.total) + " ") : null,
+          h("span", { key: "par" }, score),
+        ])
+        : null,
+    ]),
+    h("a", { className: "passkey-btn", href: item.href, key: "link" }, "Scorecard"),
+  ]);
+}
+
+function RecentRoundsPanel({ token }) {
+  const [state, setState] = React.useState({ status: token ? "loading" : "idle", items: [] });
+
+  React.useEffect(() => {
+    if (!token) {
+      setState({ status: "idle", items: [] });
+      return undefined;
+    }
+    const controller = new AbortController();
+    setState({ status: "loading", items: [] });
+    requestJson("/my-results", { token, signal: controller.signal })
+      .then((data) => {
+        setState({ status: "ready", items: recentPlayRounds(data?.casual) });
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError") setState({ status: "ready", items: [] });
+      });
+    return () => controller.abort();
+  }, [token]);
+
+  return h("section", { className: "player-card", "data-react-play-recent": state.status }, [
+    h("h3", { key: "title" }, "Recent rounds"),
+    state.items.length
+      ? h("div", { className: "live-round-list", key: "list" }, state.items.map((item) =>
+        h(RecentRoundCard, { item, key: item.code })))
+      : h("p", { className: "player-card-meta", key: "empty" },
+        state.status === "loading" ? "Looking up finished cards..." : "Finish a card and it lands here."),
+  ]);
+}
+
 export function MemberPlayPage() {
   const token = storageGet(TOKEN_KEY);
   if (!token) return null;
@@ -84,6 +135,7 @@ export function MemberPlayPage() {
       h("span", { className: "player-keep-score-go", key: "go" }, "Start"),
     ]),
     h(LiveScoringPanel, { token, variant: "play", key: "live" }),
+    h(RecentRoundsPanel, { token, key: "recent" }),
     h(PlayJoinCard, { key: "join" }),
   ]);
 }

@@ -94,3 +94,22 @@ test("buildSeasonPage empty payload stays numeric zeros", () => {
   assert.equal(page.upcoming.length, 0);
   assert.equal(page.standings.length, 0);
 });
+
+test("buildSeasonPage mixes this year's casual rounds into club results", () => {
+  const page = buildSeasonPage({
+    now: NOW,
+    results: [
+      { id: 1, event_id: 10, event_name: "Fall Open", event_date: "2026-09-20", place: 1, to_par: -3 },
+    ],
+    casual: [
+      { id: 9, round_code: "JQEU74", course_name: "Ayden Park", layout_name: "Blue", finalized_at: "2026-09-08T16:00:00Z", total: 56, to_par: 2, place: 2 },
+      { id: 8, round_code: "OLD001", course_name: "Last Year Park", finalized_at: "2025-08-01T16:00:00Z", total: 54, to_par: -2 },
+    ],
+  });
+  assert.equal(page.rounds, 2);
+  assert.equal(page.avgToPar, -0.5);
+  assert.equal(page.results[0].kind, "event");
+  assert.equal(page.results[1].kind, "casual");
+  assert.equal(page.results[1].round_code, "JQEU74");
+  assert.equal(page.results[1].event_name, "Ayden Park");
+});

@@ -609,11 +609,11 @@ Spacing follows a 4px base through rem values.
 
 ### Member Play Page
 
-- Structure: React-owned Play tab with a start-round CTA, open live-card list, and join/watch code form. Home keep-score with no live card routes here instead of jumping straight to `score.html`.
-- Variants: live event card, live casual card, empty cards, invalid join code, start casual round. Start copy notes friends can join the round link without a club login.
+- Structure: React-owned Play tab with a start-round CTA, open live-card list, recent finished rounds, and join/watch code form. Home keep-score with no live card routes here instead of jumping straight to `score.html`.
+- Variants: live event card, live casual card, finished casual card, empty cards, empty history, invalid join code, start casual round. Start copy notes friends can join the round link without a club login.
 - Spacing: reuses `.player-keep-score`, `.player-card`, and `.live-round-card`. Join actions are a two-column thumb row.
-- States: `/my-live-rounds` plus recent casual `/mine` checks populate cards; join/watch navigate to `score.html` with `liveScoreHref` / `liveWatchHref`.
-- Accessibility: round-code input has a label; Join and Watch are real buttons; dock Play tab is `role="tab"`.
+- States: `/my-live-rounds` plus recent casual `/mine` checks populate live cards; `/my-results` `casual` fills Recent rounds. Join/watch and finished scorecards navigate to `score.html` with `liveScoreHref` / `liveWatchHref`.
+- Accessibility: round-code input has a label; Join, Watch, and Scorecard are real buttons/links; dock Play tab is `role="tab"`.
 - Motion: static layout.
 
 ### Member Home Jobs
@@ -727,9 +727,9 @@ Spacing follows a 4px base through rem values.
 ### Score Watch View
 
 - Structure: React-owned spectator screen with a live banner, optional weather, leaderboard table, copy-watch-link, and keep-score action mounted in the score app shell; the score controller fetches the public live snapshot and never joins the card.
-- Variants: live event watch, casual-round watch by code, finished round, empty standings, and connection/final status.
+- Variants: live event watch, casual-round watch by code, finished round, archived casual round after the live object is gone, empty standings, and connection/final status.
 - Spacing: reuses `.card`, `.section`, `.btn`, `.weather-strip`, and `.lb` primitives with a compact `.watch-banner` and `.watch-actions` row.
-- States: `?watch=1` skips member login and `/join`; WebSocket snapshots rerender the table; conflict alerts stay off for spectators.
+- States: `?watch=1` skips member login and `/join`; WebSocket snapshots rerender the table; if the live object is gone, `GET /rounds/:code/live` serves durable D1 results as a final snapshot. Conflict alerts stay off for spectators.
 - Accessibility: copy and keep-score are real controls; the live banner exposes connection text; the leaderboard table keeps rank/player/thru/result headers.
 - Motion: static layout; only existing button press feedback applies.
 

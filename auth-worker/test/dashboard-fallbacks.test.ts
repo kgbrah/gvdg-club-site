@@ -44,7 +44,7 @@ describe("dashboard D1 fallback reads", () => {
   it("fails open for member dashboard list endpoints when D1 is transiently unavailable", async () => {
     const jwt = await token();
 
-    await expect((await get("/my-results", jwt)).json()).resolves.toEqual({ results: [] });
+    await expect((await get("/my-results", jwt)).json()).resolves.toEqual({ results: [], casual: [] });
     await expect((await get("/my-ratings?competitiveLimit=250&casualLimit=250", jwt)).json()).resolves.toEqual({
       competitive: { live_rating: null, rated_rounds: 0, rounds_count: 0, rounds: [] },
       casual: { live_rating: null, rated_rounds: 0, rounds_count: 0, rounds: [] },
