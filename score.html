@@ -551,19 +551,19 @@
         .score-glove-stage .hole-map-lie-undo { min-height: 32px; }
         .live-round-stats {
             flex: 1 1 auto; min-height: 0; overflow: hidden;
-            margin: 0.22rem 0 0.04rem; padding: 0.28rem 0.42rem 0.3rem;
+            margin: 0.18rem 0 0.04rem; padding: 0.18rem 0.36rem 0.2rem;
             border: 1px solid var(--border-color); border-radius: 12px;
             background: var(--bg-secondary);
-            display: flex; flex-direction: column; gap: 0.22rem;
+            display: flex; flex-direction: column; gap: 0.12rem;
         }
         .score-glove-layout:not(.solo) .live-round-stats {
             flex: 0 0 auto; overflow: hidden;
         }
         .live-round-stats-head {
             display: flex; align-items: center; justify-content: space-between; gap: 0.4rem;
-            margin: 0; padding: 0; border: 0; width: 100%; min-height: 40px;
+            margin: 0; padding: 0; border: 0; width: 100%; min-height: 28px;
             background: transparent; color: inherit; font: inherit; text-align: left;
-            cursor: default;
+            cursor: default; flex: 0 0 auto;
         }
         button.live-round-stats-head { cursor: pointer; }
         .live-round-stats-copy {
@@ -593,13 +593,16 @@
             color: var(--light);
         }
         .live-round-stats.open .live-round-stats-toggle svg { color: var(--light); }
-        .live-stats-body { min-height: 0; display: flex; flex-direction: column; gap: 0.22rem; }
-        .live-stats-mix-wrap { margin: 0; }
+        .live-stats-body {
+            min-height: 0; flex: 1 1 auto; overflow: hidden;
+            display: flex; flex-direction: column; gap: 0.12rem;
+        }
+        .live-stats-mix-wrap { margin: 0; flex: 0 0 auto; }
         .live-stats-mix {
-            display: flex; height: 0.48rem; border-radius: 999px; overflow: hidden;
+            display: flex; height: 0.4rem; border-radius: 999px; overflow: hidden;
             border: 1px solid var(--border-color); background: var(--bg-tertiary);
         }
-        .live-stats-mix.empty { min-height: 0.48rem; }
+        .live-stats-mix.empty { min-height: 0.4rem; }
         .live-stats-mix-seg { min-width: 0; }
         .live-stats-mix-seg.tone-ace { background: var(--under); }
         .live-stats-mix-seg.tone-eagle { background: color-mix(in srgb, var(--under) 72%, var(--bg-tertiary)); }
@@ -608,19 +611,19 @@
         .live-stats-mix-seg.tone-bogey { background: color-mix(in srgb, var(--over) 48%, var(--bg-tertiary)); }
         .live-stats-mix-seg.tone-double { background: var(--over); }
         .live-stats-mix-legend {
-            display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.12rem; margin-top: 0.18rem;
+            display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.08rem; margin-top: 0.12rem;
         }
         .live-stats-mix-item {
             background: var(--bg-tertiary); border: 1px solid var(--border-color);
-            border-radius: 8px; padding: 0.12rem 0.06rem 0.14rem; text-align: center; min-width: 0;
+            border-radius: 8px; padding: 0.06rem 0.04rem 0.08rem; text-align: center; min-width: 0;
         }
         .live-stats-k {
-            display: block; color: var(--text-muted); font-size: 0.46rem; font-weight: 800;
+            display: block; color: var(--text-muted); font-size: 0.42rem; font-weight: 800;
             letter-spacing: 0.04em; text-transform: uppercase;
         }
         .live-stats-mix-item b, .live-stat-tile b {
-            display: block; font-family: 'Bebas Neue', sans-serif; font-size: 0.88rem;
-            line-height: 1; margin-top: 0.04rem; color: var(--text-primary); font-weight: 400;
+            display: block; font-family: 'Bebas Neue', sans-serif; font-size: 0.78rem;
+            line-height: 1; margin-top: 0.02rem; color: var(--text-primary); font-weight: 400;
         }
         .live-stats-mix-item.tone-ace b, .live-stat-tile.tone-ace b,
         .live-stats-mix-item.tone-eagle b, .live-stat-tile.tone-birdie b { color: var(--under); }
@@ -628,25 +631,30 @@
         .live-stats-mix-item.tone-bogey b, .live-stat-tile.tone-bogey b { color: var(--over); }
         .live-stats-mix-item.tone-double b { color: var(--over); }
         .live-stats-grid {
-            display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.14rem;
+            display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-auto-rows: minmax(0, 1fr); gap: 0.08rem;
+            flex: 1 1 auto; min-height: 0;
         }
         .live-stat-tile {
             background: var(--bg-tertiary); border: 1px solid var(--border-color);
-            border-radius: 8px; padding: 0.16rem 0.12rem 0.18rem; text-align: center; min-width: 0;
+            border-radius: 8px; padding: 0.06rem 0.08rem 0.08rem; text-align: center;
+            min-width: 0; min-height: 0;
+            display: flex; flex-direction: column; justify-content: center;
         }
         .live-stat-tile small {
-            display: block; color: var(--text-muted); font-size: 0.48rem; margin-top: 0.02rem;
+            display: block; color: var(--text-muted); font-size: 0.42rem; margin-top: 0;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .live-stats-peek {
-            display: none; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.14rem;
+            display: none; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.1rem;
         }
         .live-round-stats.compact:not(.open) .live-stats-peek { display: grid; }
         .live-round-stats.compact:not(.open) .live-stats-body { display: none; }
-        .live-stat-tile.peek { padding: 0.1rem 0.06rem 0.12rem; }
+        .live-stat-tile.peek { padding: 0.08rem 0.06rem 0.1rem; min-height: 0; }
         .live-stat-tile.peek b { font-size: 0.78rem; }
         .live-stats-hint {
-            margin: 0; color: var(--text-muted); font-size: 0.6rem; line-height: 1.25; font-weight: 600;
+            margin: 0; color: var(--text-muted); font-size: 0.52rem; line-height: 1.2; font-weight: 600;
+            flex: 0 0 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .score-glove-dock {
             flex: 0 1 auto; max-height: min(38dvh, 20rem); min-height: 0;

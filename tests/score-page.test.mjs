@@ -797,6 +797,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(html, /\.score-glove-stage \.hole-range-hud \{/);
   assert.match(html, /\.live-stats-mix-legend \{/);
   assert.match(html, /\.live-stats-grid \{/);
+  assert.match(html, /grid-auto-rows: minmax\(0, 1fr\)/);
   assert.match(html, /grid-template-columns: repeat\(6, minmax\(0, 1fr\)\)/);
   assert.match(html, /display-mode: browser/);
   assert.match(html, /height: 100svh/);
