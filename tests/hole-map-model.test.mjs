@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { addThrow, CIRCLE1_M, CIRCLE2_M, circleEllipse, currentRangeHud, flightArc, flightPoint, GPS_REMAINING_MAX_FT, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, headingDeg, holeMapLabel, holePoint, lastThrow, lastThrowHud, latLngFromMapPoint, mapFocusFromRemaining, nextTeeHud, playerMarksOnMap, projectHoleMap, projectMapPoint, puttingCircle, rangeHud, readAllThrows, readThrows, remainingFt, resolveMapFocus, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, throwSegments, throwsStorageKey, undoThrow, windBlowToDeg, withSelfLocation, writeThrows } from "../src/shared/hole-map-model.js";
+import { addThrow, CIRCLE1_M, CIRCLE2_M, circleEllipse, currentRangeHud, flightArc, flightPoint, GPS_REMAINING_MAX_FT, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, headingDeg, holeMapLabel, holePoint, lastThrow, lastThrowHud, latLngFromMapPoint, mapFocusFromRemaining, nextTeeHud, playerMarksOnMap, playerPhotoSrc, projectHoleMap, projectMapPoint, puttingCircle, rangeHud, readAllThrows, readThrows, remainingFt, resolveMapFocus, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, throwSegments, throwsStorageKey, undoThrow, windBlowToDeg, withSelfLocation, writeThrows } from "../src/shared/hole-map-model.js";
 
 test("holePoint requires numeric lat/lng", () => {
   assert.equal(holePoint(null), null);
@@ -205,6 +205,20 @@ test("gpsHudPrompt asks guests to tap until remaining is live", () => {
   assert.equal(gpsHudPrompt("unavailable"), "GPS unavailable");
   assert.equal(gpsHudPrompt("idle"), "Tap for GPS");
   assert.equal(gpsHudPrompt(), "Tap for GPS");
+});
+
+test("playerPhotoSrc keeps profile pictures and playerMarksOnMap pass them through", () => {
+  const photo = "data:image/png;base64,iVBORw0KGgo=";
+  assert.equal(playerPhotoSrc(photo), photo);
+  assert.equal(playerPhotoSrc("javascript:alert(1)"), "");
+  const map = projectHoleMap({
+    hole: 1,
+    par: 3,
+    tee: { lat: 35.6, lng: -77.37 },
+    target: { lat: 35.601, lng: -77.37 },
+  });
+  const marks = playerMarksOnMap(map, [{ index: 0, initials: "KG", lat: 35.6004, lng: -77.37, photo }]);
+  assert.equal(marks[0].photo, photo);
 });
 
 test("withSelfLocation updates the device pin instead of adding ME", () => {

@@ -1,3 +1,5 @@
+import { sanitizeProfilePhoto } from "./profile-photo.js";
+
 export const LOCATION_STALE_MS = 90_000;
 export const LOCATION_HOLD_MS = 6 * 60 * 60 * 1000; // keep last-known pin for a live round after GPS sleeps
 export const LOCATION_MOVE_DEG = 0.00004; // ~4.4m; ignore consumer-GPS jitter
@@ -17,6 +19,7 @@ export type PublicPlayerLocation = {
   readonly at: number;
   readonly fresh: boolean;
   readonly source: "gps" | "lie";
+  readonly photo?: string;
 };
 
 type HoleCoords = {
@@ -138,7 +141,7 @@ export function locationsFromRecord(raw: unknown): Map<number, LivePlayerLocatio
 }
 
 export function publicPlayerLocations(
-  players: readonly { name: string; memberId?: string | null; removed?: boolean; throws?: Record<number, { lat?: number; lng?: number }[] | null> | null }[],
+  players: readonly { name: string; memberId?: string | null; removed?: boolean; throws?: Record<number, { lat?: number; lng?: number }[] | null> | null; photo?: string | null }[],
   locations: ReadonlyMap<number, LivePlayerLocation>,
   now = Date.now(),
   holes: readonly HoleCoords[] | null | undefined = null,
@@ -163,6 +166,7 @@ export function publicPlayerLocations(
     if (!locationOnCourse(point.lat, point.lng, holes)) continue;
     const initials = playerInitials(player.name);
     if (!initials) continue;
+    const photo = sanitizeProfilePhoto(player.photo);
     out.push({
       index,
       initials,
@@ -171,6 +175,7 @@ export function publicPlayerLocations(
       at: point.at,
       fresh: point.source === "gps" ? fresh : false,
       source: point.source,
+      ...(photo ? { photo } : {}),
     });
   }
   return out;

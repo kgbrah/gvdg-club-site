@@ -12,6 +12,7 @@ import { isLiveFormatError, normalizeLiveScoringConfig, normalizePairLabel, type
 import { finalizeLiveEvent } from "./live-finalize.js";
 import { isLoggedInMemberId, locationMoved, locationOnCourse, locationsFromRecord, locationsToRecord, parseLocationBody, type LivePlayerLocation } from "./live-locations.js";
 import { sanitizeDiscColor } from "./disc-color-routes.js";
+import { sanitizeProfilePhoto } from "./profile-photo.js";
 import { parseThrowsBody } from "./play-stats.js";
 import { updateLivePairs } from "./live-pairs.js";
 import { mineData, publicSnapshot } from "./live-snapshot.js";
@@ -125,7 +126,7 @@ export class LiveEventDO {
     if (action === "ctp-forget") return this.forgetCtp(body as { ctpId?: number }, authAdmin);
     if (action === "location") return this.pingLocation(body, authMember);
     if (action === "throws") return this.saveThrows(body, authMember, authAdmin);
-    if (action === "join") return this.join(authMember, (body as { name?: string }).name); // casual round: caller joins
+    if (action === "join") return this.join(authMember, (body as { name?: string; photo?: unknown }).name, (body as { photo?: unknown }).photo);
     if (action === "guest") return this.addGuest(authMember, (body as { name?: string; team?: string }).name, (body as { team?: string }).team); // add a non-member to my card (+ pair label for doubles)
     if (action === "remove") return this.removePlayer(body as RemoveBody, authMember, authAdmin); // drop a player (accidental/left/no-show)
     if (action === "pairs") return this.updatePairs(body as PairAssignmentBody, authMember, authAdmin);
@@ -166,6 +167,7 @@ export class LiveEventDO {
       ctpEligible: p.ctpEligible !== false,
       scores: {},
       scorecards: {},
+      photo: sanitizeProfilePhoto(p.photo),
     }));
     assignCards(this.players, b.cardSize); // group into cards (by starting hole, else buckets of 4)
     await this.persist();
@@ -251,25 +253,34 @@ export class LiveEventDO {
   }
 
   /** Casual round: the authenticated caller joins (added once, on the single card "c0"). No-op if already in. */
-  private async join(authMember: string | null, name?: string): Promise<Response> {
+  private async join(authMember: string | null, name?: string, photoRaw?: unknown): Promise<Response> {
     if (!this.meta || this.meta.status !== "live") return j({ error: "round_not_live" }, 409);
     if (!authMember) return j({ error: "unauthorized" }, 401);
+    const photo = sanitizeProfilePhoto(photoRaw);
     const existing = this.players.find((p) => p.memberId === authMember);
     if (existing) {
       // Already a player: no-op — unless they were removed (accidental/left), in which case rejoining
       // reactivates the same slot (index stays stable) with a fresh, empty card.
+      let changed = false;
+      if (photo && existing.photo !== photo) {
+        existing.photo = photo;
+        changed = true;
+      }
       if (existing.removed) {
         existing.removed = false;
         existing.name = String(name || existing.name).slice(0, 60);
         existing.scores = {};
         existing.scorecards = {};
         existing.scoredBy = {};
+        changed = true;
+      }
+      if (changed) {
         await this.persist();
         this.broadcast();
       }
     } else {
       const cardId = this.meta.casual ? "c0" : (this.players[0]?.cardId ?? "c0");
-      this.players.push({ memberId: authMember, name: String(name || "Player").slice(0, 60), division: null, startingHole: null, cardId, scores: {}, scorecards: {}, ctpEligible: this.meta.ctpBuyInRequired !== true });
+      this.players.push({ memberId: authMember, name: String(name || "Player").slice(0, 60), division: null, startingHole: null, cardId, scores: {}, scorecards: {}, ctpEligible: this.meta.ctpBuyInRequired !== true, photo });
       await this.persist();
       this.broadcast();
     }
@@ -505,8 +516,16 @@ export class LiveEventDO {
     if (meIndex < 0) return j({ error: "not_on_card" }, 403);
     const prev = this.locations.get(meIndex);
     this.locations.set(meIndex, { lat: parsed.lat, lng: parsed.lng, at: Date.now() });
-    await this.persistLocations();
-    if (locationMoved(prev, parsed)) this.broadcast();
+    const me = this.players[meIndex];
+    const photo = sanitizeProfilePhoto((body as { photo?: unknown }).photo);
+    let photoChanged = false;
+    if (me && photo && me.photo !== photo) {
+      me.photo = photo;
+      photoChanged = true;
+    }
+    if (photoChanged) await this.persist();
+    else await this.persistLocations();
+    if (photoChanged || locationMoved(prev, parsed)) this.broadcast();
     return j({ ok: true });
   }
 

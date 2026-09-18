@@ -130,11 +130,14 @@ function indexesForLocation(scoreTargets, index) {
 
 export function watchHoleScoreChips({ hole, par, players, locations, scoreTargets }) {
   return (Array.isArray(locations) ? locations : []).map((loc) => {
+    const mate = (Array.isArray(players) ? players : []).find((player) => player && player.index === loc.index);
+    const photo = loc.photo || (mate && mate.photo) || null;
+    const indexed = photo ? { ...loc, photo } : loc;
     const indexes = indexesForLocation(scoreTargets, loc.index);
-    if (!indexes) return loc;
+    if (!indexes) return indexed;
     const label = strokeLabel(scoreForPlayerIndexes(players, indexes, hole), par);
-    if (!label) return loc;
-    return { ...loc, strokes: label.strokes, label: label.text, relClass: label.className };
+    if (!label) return indexed;
+    return { ...indexed, strokes: label.strokes, label: label.text, relClass: label.className };
   });
 }
 
@@ -789,10 +792,13 @@ function selfMapMark(state) {
     ? (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase()
     : "";
   const initials = String((loc && loc.initials) || fromName).trim().toUpperCase();
-  return {
+  const mark = {
     index: Number.isInteger(index) ? index : undefined,
     initials: initials || undefined,
   };
+  const photo = (me && me.photo) || (loc && loc.photo) || "";
+  if (photo) mark.photo = photo;
+  return mark;
 }
 
 export function finalizeBlockers(state) {

@@ -1,6 +1,6 @@
 import React from "react";
 
-import { flightArc, flightPoint, holeMapLabel, latLngFromMapPoint, playerMarksOnMap, projectHoleMap, projectMapPoint, SATELLITE_CREDIT, scoreChipAnchor, throwSegments } from "./hole-map-model.js";
+import { flightArc, flightPoint, holeMapLabel, latLngFromMapPoint, playerMarksOnMap, playerPhotoSrc, projectHoleMap, projectMapPoint, SATELLITE_CREDIT, scoreChipAnchor, throwSegments } from "./hole-map-model.js";
 import { discColorPattern } from "./disc-color.js";
 import { safeExternalUrl } from "./safe-url.js";
 import { udiscDeepLink } from "./udisc-export.js";
@@ -378,16 +378,40 @@ function CircleRing(props) {
 
 function PlayerMark(props) {
   const compact = Boolean(props.compact);
+  const r = compact ? 8 : 11;
+  const photo = playerPhotoSrc(props.photo);
+  const [failed, setFailed] = React.useState(false);
+  const clipId = "hole-map-player-clip-" + String(props.markKey || "x");
+  const showPhoto = Boolean(photo) && !failed;
   return h(
     "g",
     {
-      className: "hole-map-player" + (props.relClass === "self" ? " self" : "") + (props.stale ? " is-stale" : ""),
+      className: "hole-map-player" + (props.relClass === "self" ? " self" : "") + (props.stale ? " is-stale" : "") + (showPhoto ? " has-photo" : ""),
       transform: `translate(${props.x} ${props.y})`,
     },
     [
       h("title", { key: "title" }, props.initials),
-      h("circle", { className: "hole-map-player-dot", key: "dot", r: compact ? 8 : 11 }),
-      h("text", { className: "hole-map-player-label", key: "label", y: compact ? 3.2 : 4 }, props.initials),
+      showPhoto
+        ? h("g", { key: "photo" }, [
+          h("defs", { key: "defs" }, h("clipPath", { id: clipId }, h("circle", { r }))),
+          h("circle", { className: "hole-map-player-ring", key: "ring", r: r + 1.15 }),
+          h("image", {
+            className: "hole-map-player-photo",
+            clipPath: "url(#" + clipId + ")",
+            height: r * 2,
+            href: photo,
+            key: "img",
+            onError: () => setFailed(true),
+            preserveAspectRatio: "xMidYMid slice",
+            width: r * 2,
+            x: -r,
+            y: -r,
+          }),
+        ])
+        : h("circle", { className: "hole-map-player-dot", key: "dot", r }),
+      showPhoto
+        ? null
+        : h("text", { className: "hole-map-player-label", key: "label", y: compact ? 3.2 : 4 }, props.initials),
     ],
   );
 }
@@ -555,6 +579,8 @@ export function HoleMap(props) {
             compact,
             initials: player.initials,
             key: `player-${player.key}`,
+            markKey: player.key,
+            photo: player.photo,
             relClass: player.relClass,
             stale: player.stale,
             x: player.x,

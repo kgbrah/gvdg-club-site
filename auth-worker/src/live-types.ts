@@ -59,7 +59,7 @@ export interface StartBody {
   udiscCourseId?: string | null;
   holes: { hole: number; par: number; distance_ft?: number | null; tee_sign_id?: number | null; tee?: { label?: string | null; lat?: number | null; lng?: number | null } | null; target?: { label?: string | null; lat?: number | null; lng?: number | null } | null }[];
   liveScoringConfig?: LiveScoringConfig;
-  players: { memberId?: string | null; name: string; division?: string | null; team?: string | null; pairLabel?: string | null; startingHole?: number | null; cardId?: string | null; ctpEligible?: boolean }[];
+  players: { memberId?: string | null; name: string; division?: string | null; team?: string | null; pairLabel?: string | null; startingHole?: number | null; cardId?: string | null; ctpEligible?: boolean; photo?: string | null }[];
   startedAt?: string;
   cardSize?: number;
   weatherLocation?: WeatherLocation | null;

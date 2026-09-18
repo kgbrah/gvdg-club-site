@@ -2,6 +2,7 @@ import type { Env } from "./env.js";
 import * as db from "./db.js";
 import { adminGate, requireAuth } from "./authz.js";
 import { getMember } from "./roster.js";
+import { withMemberPhotos } from "./profile-photo.js";
 import { json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { asInt, asStr } from "./input.js";
@@ -101,10 +102,10 @@ export async function startLiveEvent(
       .filter((row) => row.member_id && parseCtpAddon(row.addons) && registrationPaidEntry(row))
       .map((row) => String(row.member_id)),
   );
-  const players = roster.map((player) => ({
+  const players = await withMemberPhotos(env.ROSTER, roster.map((player) => ({
     ...player,
     ctpEligible: ctpEligibleForStart({ buyInRequired, memberId: player.memberId, enteredMemberIds }),
-  }));
+  })));
   const validationPlayers: PlayerState[] = players.map((player) => ({ ...player, scores: {}, scorecards: {} }));
   assignCards(validationPlayers);
   const targetValidation = scoringState({ eventId: eid, holes, status: "live", startedAt: "", roundConfig: liveScoringConfig }, validationPlayers);
@@ -240,9 +241,10 @@ export async function handleClubLive(
     const id = await scoreIdentity(request, env, body);
     if (!id.authMember) return json({ error: "unauthorized" }, 401, origin);
     if (await kvRateLimited(env, "live-loc:" + id.authMember, LIVE_LOCATION_LIMIT, 60)) return json({ error: "rate_limited" }, 429, origin);
+    const member = id.authMember && !id.authMember.startsWith("g_") ? await getMember(env.ROSTER, id.authMember) : null;
     const r = await stub.fetch("https://do/location", {
       method: "POST",
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, photo: member?.photo ?? null }),
       headers: { "X-Auth-Member": id.authMember },
     });
     return json(await r.json().catch(() => ({})), r.status, origin);

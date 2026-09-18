@@ -2463,6 +2463,20 @@ describe("LiveEventDO player GPS overlay", () => {
     expect(state.getStored("locations")).toMatchObject({ 0: { lat: 35.6005, lng: -77.37 } });
   });
 
+  it("publishes a profile photo on the GPS pin when the player has one", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    const photo = "data:image/png;base64,iVBORw0KGgo=";
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      casual: true,
+      holes: [{ hole: 1, par: 3, tee: { lat: 35.6, lng: -77.37 }, target: { lat: 35.601, lng: -77.37 } }],
+      players: [{ memberId: "m_a", name: "Alex Schwarga", photo }],
+    }) }));
+    await live.fetch(new Request("https://do/location", { method: "POST", headers: { "X-Auth-Member": "m_a" }, body: JSON.stringify({ lat: 35.6005, lng: -77.37 }) }));
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { players: { photo?: string }[]; playerLocations: { photo?: string }[] };
+    expect(snap.players[0]?.photo).toBe(photo);
+    expect(snap.playerLocations[0]?.photo).toBe(photo);
+  });
+
   it("rejects guests, strangers, bad coordinates, and off-course GPS", async () => {
     const live = new LiveEventDO(new FakeState({}), { DB: db });
     await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({

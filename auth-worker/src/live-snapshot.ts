@@ -92,6 +92,7 @@ export function publicSnapshot(
         scorecards: player.scorecards ?? {},
         throws: publicPlayerThrows(player.throws),
         discColor: player.discColor ?? null,
+        photo: player.photo ?? null,
         throwAt: Number.isFinite(player.throwAt) ? player.throwAt : null,
       })),
     conflicts: issues.conflicts,
@@ -181,6 +182,7 @@ export function mineData(
       isMe: index === meIdx,
       canEnterScorecard: canEnterScorecard(player, authMember),
       ctpEligible: player.ctpEligible !== false,
+      photo: player.photo ?? null,
     }));
   const issues = scorecardIssues(meta, players, holes, scoring);
   return {

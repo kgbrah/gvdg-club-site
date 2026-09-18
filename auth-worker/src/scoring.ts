@@ -22,6 +22,7 @@ export interface PlayerState {
   scoredBy?: Record<number, string | null>; // hole -> who last set it (for live scoring-conflict detection)
   throws?: Record<number, { lat: number; lng: number; n: number }[]>;
   discColor?: string | null;
+  photo?: string | null;
   throwAt?: number;
   removed?: boolean; // tombstoned (accidental join / left early / no-show): kept in the array so positional
   // indexes never shift under live scorers, but filtered out of the card, snapshot, and standings.

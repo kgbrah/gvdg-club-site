@@ -9,6 +9,7 @@ import type { Env } from "./env.js";
 import * as db from "./db.js";
 import { requireAuth, requireRoundActor } from "./authz.js";
 import { getMember } from "./roster.js";
+import { withMemberPhotos } from "./profile-photo.js";
 import { json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { asInt, asStr } from "./input.js";
@@ -68,9 +69,10 @@ export async function handleCasualRounds(
     const code = genCode();
     const pairLabel = asStr(b.pairLabel, 40) ?? asStr(b.pair_label, 40) ?? asStr(b.team, 40);
     const initialPlayer = { memberId: actor.sub, name: actor.name, ...(pairLabel ? { team: pairLabel } : {}) };
+    const seeded = await withMemberPhotos(env.ROSTER, [initialPlayer]);
     const r = await roundStub(env, code).fetch("https://do/start", {
       method: "POST",
-      body: JSON.stringify({ casual: true, roundCode: code, courseId: layout?.course_id ?? null, layoutId, createdBy: actor.sub, courseName: course?.name ?? null, layoutName: layout?.name ?? null, udiscCourseId: course?.udisc_course_id ?? null, weatherLocation, holes, players: [initialPlayer], liveScoringConfig, startedAt: new Date().toISOString() }),
+      body: JSON.stringify({ casual: true, roundCode: code, courseId: layout?.course_id ?? null, layoutId, createdBy: actor.sub, courseName: course?.name ?? null, layoutName: layout?.name ?? null, udiscCourseId: course?.udisc_course_id ?? null, weatherLocation, holes, players: seeded, liveScoringConfig, startedAt: new Date().toISOString() }),
     });
     if (r.status !== 200) return json({ error: "start_failed" }, 502, origin);
     return json({ code }, 201, origin);
@@ -120,7 +122,8 @@ export async function handleCasualRounds(
 
   if (method === "POST" && sub === "join") {
     if (await kvRateLimited(env, "round-join:" + actor.sub, 60, 60)) return json({ error: "rate_limited" }, 429, origin);
-    return proxy(stub, "/join", { method: "POST", headers: hdr, body: JSON.stringify({ name: actor.name }) }, origin);
+    const member = actor.kind === "member" ? await getMember(env.ROSTER, actor.sub) : null;
+    return proxy(stub, "/join", { method: "POST", headers: hdr, body: JSON.stringify({ name: actor.name, photo: member?.photo ?? null }) }, origin);
   }
   if (method === "POST" && sub === "guest") {
     if (await kvRateLimited(env, "round-guest:" + actor.sub, 30, 60)) return json({ error: "rate_limited" }, 429, origin); // cap walk-on spam → DO/snapshot bloat
@@ -174,7 +177,8 @@ export async function handleCasualRounds(
   if (sub === "live" && method === "POST" && seg[3] === "location") {
     if (await kvRateLimited(env, "live-loc:" + actor.sub, 30, 60)) return json({ error: "rate_limited" }, 429, origin);
     const b = (await readJson(request)) ?? {};
-    const r = await stub.fetch("https://do/location", { method: "POST", headers: hdr, body: JSON.stringify(b) });
+    const member = actor.kind === "member" ? await getMember(env.ROSTER, actor.sub) : null;
+    const r = await stub.fetch("https://do/location", { method: "POST", headers: hdr, body: JSON.stringify({ ...b, photo: member?.photo ?? null }) });
     return json(await r.json().catch(() => ({})), r.status, origin);
   }
   if (sub === "live" && method === "POST" && seg[3] === "throws") {

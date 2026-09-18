@@ -56,7 +56,7 @@ describe("live player locations", () => {
     ]);
     const published = publicPlayerLocations(
       [
-        { name: "Alex Schwarga", memberId: "m_a" },
+        { name: "Alex Schwarga", memberId: "m_a", photo: "data:image/png;base64,iVBORw0KGgo=" },
         { name: "Walk-on", memberId: "g_abc" },
         { name: "TJ Braley", memberId: "m_b" },
         { name: "Gone", memberId: "m_c", removed: true },
@@ -67,7 +67,7 @@ describe("live player locations", () => {
       NORTH_REC,
     );
     expect(published).toEqual([
-      { index: 0, initials: "AS", lat: 35.6, lng: -77.37, at: now - 1_000, fresh: true, source: "gps" },
+      { index: 0, initials: "AS", lat: 35.6, lng: -77.37, at: now - 1_000, fresh: true, source: "gps", photo: "data:image/png;base64,iVBORw0KGgo=" },
       { index: 2, initials: "TB", lat: 35.602, lng: -77.372, at: now - 200_000, fresh: false, source: "gps" },
     ]);
     expect(lastLiePoint({ throws: { 3: [{ lat: 35.6008, lng: -77.3702 }] } })).toEqual({ lat: 35.6008, lng: -77.3702 });

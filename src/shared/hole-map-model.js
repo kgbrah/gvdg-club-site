@@ -274,13 +274,15 @@ export function withSelfLocation(players, gps, self) {
     };
     return rows;
   }
-  return rows.concat([{
+  const row = {
     index: selfIndex,
     initials: selfInitials || "ME",
     lat: gps.lat,
     lng: gps.lng,
     relClass: "self",
-  }]);
+  };
+  if (self && self.photo) row.photo = self.photo;
+  return rows.concat([row]);
 }
 
 function playerMapInitials(value) {
@@ -491,6 +493,15 @@ export function projectMapPoint(map, lat, lng) {
 }
 
 
+export function playerPhotoSrc(value) {
+  if (typeof value !== "string") return "";
+  const photo = value.trim();
+  if (!photo || photo.length > 200000) return "";
+  if (/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(photo)) return photo;
+  if (/^https:\/\/([a-z0-9-]+\.)*pdga\.com\//i.test(photo) && photo.length <= 500 && !/[\s<>]/.test(photo)) return photo;
+  return "";
+}
+
 export function playerMarksOnMap(map, players) {
   const rows = Array.isArray(players) ? players : [];
   const marks = [];
@@ -508,6 +519,7 @@ export function playerMarksOnMap(map, players) {
       label: player.label,
       relClass: player.relClass,
       stale: player.fresh === false,
+      photo: playerPhotoSrc(player.photo),
     });
   });
   marks.sort((a, b) => a.x - b.x || a.y - b.y);
