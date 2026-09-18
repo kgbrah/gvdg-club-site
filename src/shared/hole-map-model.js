@@ -13,14 +13,59 @@ export function holePoint(value) {
   return { lat, lng, label };
 }
 
-function haversineFt(a, b) {
+function haversineMeters(a, b) {
   const radiusMeters = 6371000;
   const rad = (degrees) => degrees * Math.PI / 180;
   const dLat = rad(b.lat - a.lat);
   const dLng = rad(b.lng - a.lng);
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
-  return Math.round(2 * radiusMeters * Math.asin(Math.min(1, Math.sqrt(h))) * 3.28084);
+  return 2 * radiusMeters * Math.asin(Math.min(1, Math.sqrt(h)));
 }
+
+function haversineFt(a, b) {
+  return Math.round(haversineMeters(a, b) * 3.28084);
+}
+
+export const CIRCLE1_M = 10;
+export const CIRCLE2_M = 20;
+
+export function remainingFt(from, to) {
+  const a = holePoint(from);
+  const b = holePoint(to);
+  if (!a || !b) return null;
+  return haversineFt(a, b);
+}
+
+export function puttingCircle(from, to) {
+  const a = holePoint(from);
+  const b = holePoint(to);
+  if (!a || !b) return null;
+  const meters = haversineMeters(a, b);
+  if (meters <= CIRCLE1_M) return "C1";
+  if (meters <= CIRCLE2_M) return "C2";
+  return null;
+}
+
+export function rangeHud({ from, to, mode, holeFt } = {}) {
+  if (mode === "hole") {
+    const ft = finite(holeFt);
+    if (ft == null || ft <= 0) return null;
+    return { caption: "hole", circle: null, ft: Math.round(ft), mode: "hole" };
+  }
+  const ft = remainingFt(from, to);
+  if (ft == null) return null;
+  const circle = puttingCircle(from, to);
+  if (mode === "throw") {
+    return { caption: "throw", circle, ft, mode: "throw" };
+  }
+  return {
+    caption: circle ? "in " + circle : "to basket",
+    circle,
+    ft,
+    mode: "remaining",
+  };
+}
+
 
 export function headingDeg(from, to) {
   const dLng = (to.lng - from.lng) * Math.PI / 180;
@@ -83,6 +128,48 @@ export function satelliteImageUrl(bounds, width, height) {
   return SATELLITE_EXPORT + "?" + params.toString();
 }
 
+function mapXy(bounds, width, height, lng, lat) {
+  const spanLng = Math.max(bounds.maxLng - bounds.minLng, 1e-7);
+  const spanLat = Math.max(bounds.maxLat - bounds.minLat, 1e-7);
+  return {
+    x: Number((((lng - bounds.minLng) / spanLng) * width).toFixed(2)),
+    y: Number((((bounds.maxLat - lat) / spanLat) * height).toFixed(2)),
+  };
+}
+
+export function circleEllipse(map, radiusMeters) {
+  const basket = holePoint(map && map.basket);
+  if (!map || !map.bounds || !basket) return null;
+  const meters = finite(radiusMeters);
+  if (meters == null || meters <= 0) return null;
+  const dLat = meters / 111320;
+  const cosLat = Math.max(Math.cos(basket.lat * Math.PI / 180), 0.2);
+  const dLng = meters / (111320 * cosLat);
+  const north = mapXy(map.bounds, map.width, map.height, basket.lng, basket.lat + dLat);
+  const east = mapXy(map.bounds, map.width, map.height, basket.lng + dLng, basket.lat);
+  const rx = Math.abs(east.x - map.basket.x);
+  const ry = Math.abs(north.y - map.basket.y);
+  if (!(rx > 0) || !(ry > 0)) return null;
+  return {
+    cx: map.basket.x,
+    cy: map.basket.y,
+    rx: Number(rx.toFixed(2)),
+    ry: Number(ry.toFixed(2)),
+  };
+}
+
+export function latLngFromMapPoint(map, x, y) {
+  if (!map || !map.bounds) return null;
+  const spanLng = Math.max(map.bounds.maxLng - map.bounds.minLng, 1e-7);
+  const spanLat = Math.max(map.bounds.maxLat - map.bounds.minLat, 1e-7);
+  const width = map.width || 1;
+  const height = map.height || 1;
+  const lng = map.bounds.minLng + (Number(x) / width) * spanLng;
+  const lat = map.bounds.maxLat - (Number(y) / height) * spanLat;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng };
+}
+
 export function projectHoleMap(hole, options = {}) {
   const tee = holePoint(hole && hole.tee);
   const basket = holePoint(hole && hole.target);
@@ -92,18 +179,9 @@ export function projectHoleMap(hole, options = {}) {
   const width = finite(options.width) || 640;
   const height = finite(options.height) || 360;
   const bounds = paddedBounds(tee, basket);
-  const spanLng = Math.max(bounds.maxLng - bounds.minLng, 1e-7);
-  const spanLat = Math.max(bounds.maxLat - bounds.minLat, 1e-7);
 
-  function xy(lng, lat) {
-    return {
-      x: Number((((lng - bounds.minLng) / spanLng) * width).toFixed(2)),
-      y: Number((((bounds.maxLat - lat) / spanLat) * height).toFixed(2)),
-    };
-  }
-
-  const teePt = { ...xy(tee.lng, tee.lat), label: tee.label || "Tee" };
-  const basketPt = { ...xy(basket.lng, basket.lat), label: basket.label || "Basket" };
+  const teePt = { ...mapXy(bounds, width, height, tee.lng, tee.lat), lat: tee.lat, lng: tee.lng, label: tee.label || "Tee" };
+  const basketPt = { ...mapXy(bounds, width, height, basket.lng, basket.lat), lat: basket.lat, lng: basket.lng, label: basket.label || "Basket" };
   const distanceFt = finite(hole && hole.distance_ft) || haversineFt(tee, basket);
   const windFrom = finite(options.windFromDeg);
   return {
@@ -118,8 +196,11 @@ export function projectHoleMap(hole, options = {}) {
     distanceFt,
     windBlowToDeg: windBlowToDeg(windFrom),
     windFromDeg: windFrom,
+    circle1: circleEllipse({ bounds, width, height, basket: basketPt }, CIRCLE1_M),
+    circle2: circleEllipse({ bounds, width, height, basket: basketPt }, CIRCLE2_M),
   };
 }
+
 
 export function holeMapLabel(map, holeNumber) {
   if (!map) return "";
@@ -137,13 +218,9 @@ export function projectMapPoint(map, lat, lng) {
   const pad = 0.00012;
   if (pointLat < map.bounds.minLat - pad || pointLat > map.bounds.maxLat + pad) return null;
   if (pointLng < map.bounds.minLng - pad || pointLng > map.bounds.maxLng + pad) return null;
-  const spanLng = Math.max(map.bounds.maxLng - map.bounds.minLng, 1e-7);
-  const spanLat = Math.max(map.bounds.maxLat - map.bounds.minLat, 1e-7);
-  return {
-    x: Number((((pointLng - map.bounds.minLng) / spanLng) * map.width).toFixed(2)),
-    y: Number((((map.bounds.maxLat - pointLat) / spanLat) * map.height).toFixed(2)),
-  };
+  return mapXy(map.bounds, map.width, map.height, pointLng, pointLat);
 }
+
 
 export function playerMarksOnMap(map, players) {
   const rows = Array.isArray(players) ? players : [];

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { headingDeg, holeMapLabel, holePoint, playerMarksOnMap, projectHoleMap, projectMapPoint, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, windBlowToDeg } from "../src/shared/hole-map-model.js";
+import { CIRCLE1_M, CIRCLE2_M, circleEllipse, headingDeg, holeMapLabel, holePoint, latLngFromMapPoint, playerMarksOnMap, projectHoleMap, projectMapPoint, puttingCircle, rangeHud, remainingFt, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, windBlowToDeg } from "../src/shared/hole-map-model.js";
 
 test("holePoint requires numeric lat/lng", () => {
   assert.equal(holePoint(null), null);
@@ -98,4 +98,77 @@ test("scoreChipAnchor flips chips away from the top and right edges", () => {
   assert.deepEqual(scoreChipAnchor({ x: 90, y: 10 }, 100, 100), { x: "left", y: "below" });
   assert.deepEqual(scoreChipAnchor({ x: 10, y: 10 }, 100, 100), { x: "right", y: "below" });
   assert.deepEqual(scoreChipAnchor({ x: 90, y: 80 }, 100, 100), { x: "left", y: "above" });
+});
+
+function northOf(from, meters) {
+  return { lat: from.lat + (meters / 6371000) * (180 / Math.PI), lng: from.lng };
+}
+
+test("remaining distance and putting circles use PDGA 10m / 20m", () => {
+  const basket = { lat: 35.6, lng: -77.37 };
+  const inC1 = northOf(basket, CIRCLE1_M);
+  const inC2 = northOf(basket, 15);
+  const outside = northOf(basket, 25);
+  assert.equal(CIRCLE1_M, 10);
+  assert.equal(CIRCLE2_M, 20);
+  assert.equal(remainingFt(inC1, basket), 33);
+  assert.equal(remainingFt(inC2, basket), 49);
+  assert.equal(remainingFt(outside, basket), 82);
+  assert.equal(puttingCircle(inC1, basket), "C1");
+  assert.equal(puttingCircle(inC2, basket), "C2");
+  assert.equal(puttingCircle(outside, basket), null);
+  assert.equal(remainingFt(null, basket), null);
+});
+
+test("range HUD captions hole length, remaining, and throw", () => {
+  const basket = { lat: 35.6, lng: -77.37 };
+  assert.deepEqual(rangeHud({ holeFt: 297, mode: "hole" }), {
+    caption: "hole",
+    circle: null,
+    ft: 297,
+    mode: "hole",
+  });
+  assert.equal(rangeHud({ holeFt: 0, mode: "hole" }), null);
+  assert.deepEqual(rangeHud({ from: northOf(basket, 10), to: basket }), {
+    caption: "in C1",
+    circle: "C1",
+    ft: 33,
+    mode: "remaining",
+  });
+  assert.deepEqual(rangeHud({ from: northOf(basket, 15), mode: "throw", to: basket }), {
+    caption: "throw",
+    circle: "C2",
+    ft: 49,
+    mode: "throw",
+  });
+  assert.deepEqual(rangeHud({ from: northOf(basket, 25), to: basket }), {
+    caption: "to basket",
+    circle: null,
+    ft: 82,
+    mode: "remaining",
+  });
+});
+
+test("projectHoleMap stamps GPS and PDGA circles; map taps invert", () => {
+  const map = projectHoleMap({
+    hole: 1,
+    distance_ft: 250,
+    tee: { lat: 35.6, lng: -77.37, label: "Gold" },
+    target: { lat: 35.601, lng: -77.37, label: "A" },
+  });
+  assert.equal(map.tee.lat, 35.6);
+  assert.equal(map.basket.lat, 35.601);
+  assert.ok(map.circle1);
+  assert.ok(map.circle2);
+  assert.equal(map.circle1.cx, map.basket.x);
+  assert.equal(map.circle1.cy, map.basket.y);
+  assert.ok(map.circle2.rx > map.circle1.rx);
+  assert.ok(map.circle2.ry > map.circle1.ry);
+  const c1 = circleEllipse(map, CIRCLE1_M);
+  const c2 = circleEllipse(map, CIRCLE2_M);
+  assert.equal(c1.rx, map.circle1.rx);
+  assert.equal(c2.ry, map.circle2.ry);
+  const back = latLngFromMapPoint(map, map.tee.x, map.tee.y);
+  assert.ok(Math.abs(back.lat - map.tee.lat) < 1e-8);
+  assert.ok(Math.abs(back.lng - map.tee.lng) < 1e-8);
 });

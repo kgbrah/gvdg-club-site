@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Live Scoring · Greenville Disc Golf Club</title>
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=160">
+    <link rel="manifest" href="site.webmanifest?v=161">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <script src="pwa.js" defer></script>
     <link rel="stylesheet" href="tokens.css">
@@ -266,6 +266,23 @@
         .hole-map-basket-chain-body { fill: color-mix(in srgb, var(--light) 50%, var(--dark)); stroke: none; opacity: 0.4; }
         .hole-map-basket-cage { stroke: var(--light); stroke-width: 0.55; fill: none; }
         .hole-map-basket-flag { fill: var(--over); stroke: var(--dark); stroke-width: 0.4; }
+        .hole-map-c2 {
+            fill: none;
+            stroke: var(--light);
+            stroke-width: 1.15;
+            stroke-dasharray: 5 4;
+            opacity: 0.55;
+        }
+        .hole-map-c1 {
+            fill: color-mix(in srgb, var(--accent) 18%, transparent);
+            stroke: var(--accent);
+            stroke-width: 1.25;
+            stroke-dasharray: 4 3;
+            opacity: 0.9;
+        }
+        .hole-map-measure { cursor: crosshair; }
+        .hole-map-measure-line { fill: none; stroke: var(--primary-strong); stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 5 4; }
+        .hole-map-lie-dot { fill: var(--primary-strong); stroke: var(--light); stroke-width: 1.6; }
         .hole-map-north { fill: white; font: 700 13px Archivo, sans-serif; paint-order: stroke; stroke: black; stroke-width: 3; }
         .hole-map-player { pointer-events: none; }
         .hole-map-player-dot { fill: var(--primary-strong); stroke: white; stroke-width: 2; }
@@ -340,6 +357,25 @@
             flex: 0 0 auto; min-height: 0; margin: 0; position: relative;
             display: flex; flex-direction: column; width: 100%;
         }
+        .hole-media-map-wrap { position: relative; }
+        .hole-range-hud {
+            position: absolute; left: 0.4rem; bottom: 0.4rem; z-index: 2;
+            min-width: 4.6rem; padding: 0.28rem 0.6rem 0.32rem;
+            border-radius: 12px;
+            background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            pointer-events: none;
+        }
+        .hole-range-hud strong {
+            display: block; font-size: 1.22rem; line-height: 1.05; font-weight: 800; letter-spacing: -0.03em;
+        }
+        .hole-range-hud span {
+            display: block; margin-top: 0.08rem; font-size: 0.62rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);
+        }
+        .hole-range-hud.in-c1 strong { color: var(--under); }
+        .hole-range-hud.in-c2 strong { color: var(--accent); }
         .score-glove-stage .hole-map-card,
         .score-glove-stage .hole-map-compact {
             flex: 0 0 auto; min-height: 0; display: flex; flex-direction: column; margin: 0;
@@ -376,6 +412,11 @@
             border: 1px solid var(--border-color); border-radius: 10px;
             background: var(--bg-secondary); color: var(--text-primary);
             font: 700 0.68rem Archivo, sans-serif; cursor: pointer;
+        }
+        .score-glove-tool.active {
+            border-color: var(--primary);
+            background: var(--primary-strong);
+            color: var(--light);
         }
         .score-glove-tool span { display: none; }
         .score-glove-stage .pots-strip,
@@ -559,6 +600,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=160"></script>
+    <script type="module" src="score-app/score-app.js?v=161"></script>
 </body>
 </html>

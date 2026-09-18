@@ -1,8 +1,9 @@
 import React from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Eye, Settings2, Share2, UserPlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, Ruler, Settings2, Share2, UserPlus } from "lucide-react";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { HoleMap } from "../shared/hole-map.js";
+import { rangeHud } from "../shared/hole-map-model.js";
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
 import { nextHoleScore, relClass, relText } from "./score-view-model.js";
@@ -43,6 +44,19 @@ function RoundTools(props) {
         onClick: props.onAddPlayer,
       },
       [icon(UserPlus), h("span", { key: "label" }, "Add")],
+    ),
+    h(
+      "button",
+      {
+        "aria-label": props.measureLabel || "Measure",
+        "aria-pressed": props.measuring ? "true" : "false",
+        className: "score-glove-tool" + (props.measuring ? " active" : ""),
+        key: "measure",
+        title: props.measureLabel || "Measure",
+        type: "button",
+        onClick: props.onMeasure,
+      },
+      [icon(Ruler), h("span", { key: "label" }, props.measureLabel || "Measure")],
     ),
     h("button", { className: "score-glove-tool", key: "manage", type: "button", onClick: props.onManagePlayers }, [
       icon(Settings2),
@@ -92,6 +106,59 @@ function holeHasMap(hole) {
   return Boolean(hole && hole.tee && hole.target);
 }
 
+function useDeviceFix() {
+  const [fix, setFix] = React.useState(null);
+  React.useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return undefined;
+    const id = navigator.geolocation.watchPosition(
+      (pos) => {
+        const lat = pos.coords && pos.coords.latitude;
+        const lng = pos.coords && pos.coords.longitude;
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+        setFix({ lat, lng });
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 4000, timeout: 12000 },
+    );
+    return () => {
+      try { navigator.geolocation.clearWatch(id); } catch {
+        /* watch may already be gone */
+      }
+    };
+  }, []);
+  return fix;
+}
+
+function currentRangeHud(hole, gps, measure) {
+  if (measure && measure.a && measure.b) {
+    return rangeHud({ from: measure.a, mode: "throw", to: measure.b });
+  }
+  if (measure && measure.a && gps) {
+    return rangeHud({ from: measure.a, mode: "throw", to: gps });
+  }
+  if (measure && measure.a && hole && hole.target) {
+    return rangeHud({ from: measure.a, to: hole.target });
+  }
+  if (gps && hole && hole.target) {
+    return rangeHud({ from: gps, to: hole.target });
+  }
+  return rangeHud({ holeFt: hole && hole.distance_ft, mode: "hole" });
+}
+
+function RangeHud(props) {
+  if (!props.hud) return null;
+  const circleClass = props.hud.circle === "C1" ? " in-c1" : props.hud.circle === "C2" ? " in-c2" : "";
+  return h("div", {
+    "aria-live": "polite",
+    className: "hole-range-hud" + circleClass,
+    key: "range",
+    role: "status",
+  }, [
+    h("strong", { key: "ft" }, props.hud.ft + " ft"),
+    h("span", { key: "cap" }, props.hud.caption),
+  ]);
+}
+
 function HoleMedia(props) {
   const [signOpen, setSignOpen] = React.useState(false);
   const hasMap = holeHasMap(props.hole);
@@ -102,13 +169,19 @@ function HoleMedia(props) {
     : undefined;
   return h("div", { className: "hole-media", key: "media" }, [
     hasMap
-      ? h(HoleMap, {
-        compact: true,
-        hole: props.hole,
-        key: "map-card",
-        players: props.playerLocations,
-        windFromDeg: props.windFromDeg,
-      })
+      ? h("div", { className: "hole-media-map-wrap", key: "map-wrap" }, [
+        h(HoleMap, {
+          compact: true,
+          hole: props.hole,
+          key: "map-card",
+          measureFrom: props.measureFrom,
+          measureTo: props.measureTo,
+          players: props.playerLocations,
+          windFromDeg: props.windFromDeg,
+          onMapPoint: props.onMapPoint,
+        }),
+        h(RangeHud, { hud: props.rangeHud }),
+      ])
       : h("div", { className: "hole-media-empty", key: "empty" }, "No map for this hole yet"),
     hasSign
       ? h("button", {
@@ -458,13 +531,61 @@ function ConfirmScoresSheet(props) {
 
 export function ScorecardView(props) {
   const [padRow, setPadRow] = React.useState(null);
+  const [measure, setMeasure] = React.useState(null);
+  const gps = useDeviceFix();
+  const hud = currentRangeHud(props.hole, gps, measure);
+  const measuring = Boolean(measure);
+  const measureTo = measure && (measure.b || gps);
+  function onMeasure() {
+    if (measure && measure.b) {
+      setMeasure(null);
+      return;
+    }
+    if (measure && measure.a) {
+      if (gps) {
+        setMeasure({ a: measure.a, b: gps });
+        return;
+      }
+      setMeasure({ a: measure.a, awaitingTap: true });
+      return;
+    }
+    if (gps) {
+      setMeasure({ a: gps });
+      return;
+    }
+    setMeasure({ awaitingTap: true });
+  }
+  function onMapPoint(point) {
+    if (!measure) return;
+    if (!measure.a) {
+      setMeasure({ a: point });
+      return;
+    }
+    if (!measure.b) {
+      setMeasure({ a: measure.a, b: point });
+      return;
+    }
+    setMeasure(null);
+  }
+  const measureLabel = measure && measure.b ? "Clear" : measure && measure.a ? "Mark" : "Measure";
   return h(React.Fragment, null, [
     h("div", { className: "score-glove-layout", key: "glove" }, [
       h("div", { className: "score-glove-stage", key: "stage" }, [
         props.showWeather ? h(WeatherStrip, { compact: true, key: "weather", title: "Round weather", weather: props.weather }) : null,
         props.yourTurn ? h("p", { className: "your-turn-hint", key: "turn" }, props.yourTurn) : null,
-        h(HoleMedia, props),
-        h(RoundTools, props),
+        h(HoleMedia, {
+          ...props,
+          measureFrom: measure && measure.a,
+          measureTo,
+          rangeHud: hud,
+          onMapPoint: measuring ? onMapPoint : undefined,
+        }),
+        h(RoundTools, {
+          ...props,
+          measureLabel,
+          measuring,
+          onMeasure,
+        }),
         props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,
         props.potsAceHint ? h("p", { className: "pots-ace-hint", key: "ace-hint" }, props.potsAceHint) : null,
       ]),
