@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-title" content="GVDG Club">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=151">
+    <link rel="manifest" href="site.webmanifest?v=152">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -400,6 +400,7 @@
                 #membersReactDashboardApp,
                 #membersReactDashboardShell,
                 #membersReactOverviewPanel,
+                #membersReactPlayPanel,
                 #membersReactSeasonPanel,
                 #membersReactRegistrationPanel,
                 #membersReactMorePanel,
@@ -410,16 +411,19 @@
                 #membersReactDashboardApp:not(:empty),
                 #membersReactDashboardShell:not(:empty),
                 #membersReactOverviewPanel:not(:empty),
+                #membersReactPlayPanel:not(:empty),
                 #membersReactSeasonPanel:not(:empty),
                 #membersReactRegistrationPanel:not(:empty),
                 #membersReactMorePanel:not(:empty),
                 #membersReactBoardPanel:not(:empty),
                 #membersReactTeeSignsPanel:not(:empty) { display: block; }
+                #playerPlay,
                 #playerMore,
                 #clubBoard,
                 #teeCapture,
                 #membersReactClubPanel { display: none; }
                 body[data-member-dashboard-tab] #myDashboard,
+                body[data-member-dashboard-tab] #playerPlay,
                 body[data-member-dashboard-tab] #mySeason,
                 body[data-member-dashboard-tab] #clubRegister,
                 body[data-member-dashboard-tab] #playerMore,
@@ -427,6 +431,7 @@
                 body[data-member-dashboard-tab] #teeCapture,
                 body[data-member-dashboard-tab] #membersReactClubPanel { display: none; }
                 body[data-member-dashboard-tab="overview"] #myDashboard,
+                body[data-member-dashboard-tab="play"] #playerPlay,
                 body[data-member-dashboard-tab="season"] #mySeason,
                 body[data-member-dashboard-tab="events"] #clubRegister,
                 body[data-member-dashboard-tab="more"] #playerMore,
@@ -443,14 +448,14 @@
                 .members-react-tabs .dash-tab.active { background: none !important; background-color: var(--primary-strong) !important; color: white !important; border-color: var(--primary) !important; }
                 .player-app-nav {
                     position: fixed; left: 0; right: 0; bottom: 0; z-index: 900;
-                    display: grid; grid-template-columns: repeat(4, 1fr);
+                    display: grid; grid-template-columns: repeat(5, 1fr);
                     border-top: 1px solid var(--border-color);
                     background: var(--bg-secondary);
                     padding-bottom: var(--safe-bottom);
                 }
                 .player-app-nav-btn {
                     border: 0; background: transparent; color: var(--text-muted);
-                    font-size: 0.68rem; font-weight: 800; letter-spacing: 0.02em;
+                    font-size: 0.62rem; font-weight: 800; letter-spacing: 0.02em;
                     padding: 0.45rem 0 0.35rem; cursor: pointer;
                     display: flex; flex-direction: column; align-items: center; justify-content: center;
                     gap: 0.12rem; min-height: 52px;
@@ -488,6 +493,22 @@
                     flex: 0 0 auto; background: white; color: var(--green); font-weight: 800;
                     border-radius: 999px; padding: 0.55rem 0.8rem; font-size: 0.78rem;
                 }
+                button.player-keep-score { font: inherit; }
+                .player-play { display: grid; gap: 0.75rem; }
+                .player-play-join { display: grid; gap: 0.45rem; margin-top: 0.45rem; }
+                .player-play-label {
+                    font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em;
+                    text-transform: uppercase; color: var(--text-muted);
+                }
+                .player-play-code {
+                    min-height: 48px; border: 1px solid var(--border-color); border-radius: 12px;
+                    background: var(--bg-primary); color: var(--text-primary);
+                    font: 800 1rem Archivo, sans-serif; letter-spacing: 0.08em;
+                    text-transform: uppercase; padding: 0 0.85rem;
+                }
+                .player-play-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; }
+                .player-play-actions .player-btn { margin-top: 0; }
+                .player-play-error { color: var(--over); font-weight: 700; }
                 .player-row-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; margin-bottom: 0.75rem; }
                 .player-stat {
                     background: var(--bg-secondary); border: 1px solid var(--border-color);
