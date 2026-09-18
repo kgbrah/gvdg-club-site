@@ -87,6 +87,7 @@ export function CourseModal() {
       "div",
       {
         className: "course-modal-overlay active",
+        "data-a11y-overlay": "true",
         "data-react-course-modal": "open",
         role: "presentation",
         ref: dialog.overlayRef,

@@ -188,6 +188,7 @@ function ScorePad(props) {
       "div",
       {
         className: "overlay",
+        "data-a11y-overlay": "true",
         role: "presentation",
         ref: dialog.overlayRef,
       },
@@ -404,6 +405,7 @@ function ConfirmScoresSheet(props) {
       {
         className: "overlay",
         key: "confirm-scores",
+        "data-a11y-overlay": "true",
         role: "presentation",
         ref: dialog.overlayRef,
       },

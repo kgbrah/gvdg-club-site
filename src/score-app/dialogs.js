@@ -59,6 +59,7 @@ function ScoreDialog(props) {
       "div",
       {
         className: "overlay score-dialog-overlay",
+        "data-a11y-overlay": "true",
         role: "presentation",
         ref: a11y.overlayRef,
       },

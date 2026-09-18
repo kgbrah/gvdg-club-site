@@ -84,6 +84,41 @@ function focusables(panel) {
   });
 }
 
+function overlayZIndex(node) {
+  if (!node || typeof window === "undefined" || typeof window.getComputedStyle !== "function") return 0;
+  const raw = window.getComputedStyle(node).zIndex;
+  const value = Number.parseInt(raw, 10);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function isA11yOverlay(node) {
+  if (!node || node.nodeType !== 1) return false;
+  if (node.getAttribute("data-a11y-overlay") === "true") return true;
+  const classes = node.classList;
+  if (!classes) return false;
+  if (classes.contains("overlay")) return true;
+  for (const name of classes) {
+    if (name.endsWith("-overlay")) return true;
+  }
+  return false;
+}
+
+function isOverlayAbove(candidate, overlay) {
+  if (!candidate || candidate === overlay || !isA11yOverlay(candidate)) return false;
+  const candidateZ = overlayZIndex(candidate);
+  const overlayZ = overlayZIndex(overlay);
+  if (candidateZ !== overlayZ) return candidateZ > overlayZ;
+  return Boolean(overlay.compareDocumentPosition(candidate) & Node.DOCUMENT_POSITION_FOLLOWING);
+}
+
+function isTopmostOverlay(overlay) {
+  if (!overlay || !overlay.isConnected || typeof document === "undefined") return false;
+  for (const node of document.body.children) {
+    if (node !== overlay && isOverlayAbove(node, overlay)) return false;
+  }
+  return isA11yOverlay(overlay);
+}
+
 function isolateSiblings(overlay, applied) {
   if (!overlay || typeof document === "undefined") return applied;
   const announcer = document.getElementById(ANNOUNCER_ID);
@@ -93,6 +128,9 @@ function isolateSiblings(overlay, applied) {
     if (node === overlay || node === announcer) continue;
     if (node.contains(overlay)) continue;
     if (seen.has(node)) continue;
+    // Nested dialogs portal as sibling overlays. The players sheet must not
+    // inert a later confirm, or Remove / Leave never receive the tap.
+    if (isA11yOverlay(node) && isOverlayAbove(node, overlay)) continue;
     if (inertSupported) {
       if (node.hasAttribute("inert")) continue;
       node.setAttribute("inert", "");
@@ -143,6 +181,14 @@ export function useAccessibleDialog({
   const [isolated, setIsolated] = React.useState(false);
   onCloseRef.current = onClose;
 
+  React.useLayoutEffect(() => {
+    if (!open) return undefined;
+    const overlay = overlayRef.current;
+    if (!overlay) return undefined;
+    overlay.setAttribute("data-a11y-overlay", "true");
+    return () => overlay.removeAttribute("data-a11y-overlay");
+  }, [open]);
+
   React.useEffect(() => {
     if (!open) {
       setIsolated(false);
@@ -186,6 +232,7 @@ export function useAccessibleDialog({
     }
 
     function onKeyDown(event) {
+      if (!isTopmostOverlay(overlay)) return;
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
@@ -211,6 +258,7 @@ export function useAccessibleDialog({
     }
 
     function onBackdrop(event) {
+      if (!isTopmostOverlay(overlay)) return;
       if (closeOnBackdrop && event.target === overlay) close();
     }
 
