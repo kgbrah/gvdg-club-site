@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Eye, Ruler, Settings2, Share2, UserPlus, X } from "lucide-react";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { HoleMap } from "../shared/hole-map.js";
-import { currentRangeHud, gpsHudPrompt, withSelfLocation } from "../shared/hole-map-model.js";
+import { currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, withSelfLocation } from "../shared/hole-map-model.js";
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
 import { nextHoleScore, relClass, relText } from "./score-view-model.js";
@@ -122,11 +122,18 @@ function useDeviceFix() {
   const [fix, setFix] = React.useState(null);
   const [status, setStatus] = React.useState("idle");
   const watchId = React.useRef(null);
+  const retryTimer = React.useRef(null);
+  const fixRef = React.useRef(null);
+  const alive = React.useRef(true);
 
   const enableGps = React.useCallback(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       setStatus("unavailable");
       return;
+    }
+    if (retryTimer.current != null) {
+      clearTimeout(retryTimer.current);
+      retryTimer.current = null;
     }
     if (watchId.current != null) {
       try { navigator.geolocation.clearWatch(watchId.current); } catch {
@@ -134,26 +141,62 @@ function useDeviceFix() {
       }
       watchId.current = null;
     }
-    setStatus("watching");
+    setStatus((current) => (current === "ready" || fixRef.current ? "ready" : "watching"));
     watchId.current = navigator.geolocation.watchPosition(
       (pos) => {
         const lat = pos.coords && pos.coords.latitude;
         const lng = pos.coords && pos.coords.longitude;
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-        setFix({ lat, lng });
+        const next = { lat, lng };
+        fixRef.current = next;
+        setFix(next);
         setStatus("ready");
       },
       (err) => {
-        setFix(null);
-        setStatus(err && err.code === 1 ? "denied" : "idle");
+        const policy = gpsErrorPolicy(err && err.code, Boolean(fixRef.current));
+        if (!policy.keepFix) {
+          fixRef.current = null;
+          setFix(null);
+        }
+        setStatus(policy.status);
+        if (!policy.restart || !alive.current) return;
+        retryTimer.current = setTimeout(() => {
+          retryTimer.current = null;
+          if (alive.current) enableGps();
+        }, policy.retryMs);
       },
-      { enableHighAccuracy: true, maximumAge: 4000, timeout: 12000 },
+      GPS_WATCH_OPTIONS,
     );
   }, []);
 
   React.useEffect(() => {
+    alive.current = true;
     enableGps();
+    function onResume() {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      enableGps();
+    }
+    document.addEventListener("visibilitychange", onResume);
+    window.addEventListener("focus", onResume);
+    window.addEventListener("pageshow", onResume);
+    window.addEventListener("online", onResume);
+    let permission;
+    if (navigator.permissions && typeof navigator.permissions.query === "function") {
+      navigator.permissions.query({ name: "geolocation" }).then((status) => {
+        permission = status;
+        permission.onchange = () => {
+          if (permission.state !== "denied") enableGps();
+        };
+      }).catch(() => {});
+    }
     return () => {
+      alive.current = false;
+      document.removeEventListener("visibilitychange", onResume);
+      window.removeEventListener("focus", onResume);
+      window.removeEventListener("pageshow", onResume);
+      window.removeEventListener("online", onResume);
+      if (permission) permission.onchange = null;
+      if (retryTimer.current != null) clearTimeout(retryTimer.current);
       if (watchId.current != null) {
         try { navigator.geolocation.clearWatch(watchId.current); } catch {
           /* watch may already be gone */

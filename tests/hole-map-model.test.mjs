@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CIRCLE1_M, CIRCLE2_M, circleEllipse, currentRangeHud, gpsHudPrompt, headingDeg, holeMapLabel, holePoint, latLngFromMapPoint, playerMarksOnMap, projectHoleMap, projectMapPoint, puttingCircle, rangeHud, remainingFt, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, windBlowToDeg, withSelfLocation } from "../src/shared/hole-map-model.js";
+import { CIRCLE1_M, CIRCLE2_M, circleEllipse, currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, headingDeg, holeMapLabel, holePoint, latLngFromMapPoint, playerMarksOnMap, projectHoleMap, projectMapPoint, puttingCircle, rangeHud, remainingFt, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, windBlowToDeg, withSelfLocation } from "../src/shared/hole-map-model.js";
 
 test("holePoint requires numeric lat/lng", () => {
   assert.equal(holePoint(null), null);
@@ -147,6 +147,14 @@ test("range HUD captions hole length, remaining, and throw", () => {
     ft: 82,
     mode: "remaining",
   });
+});
+
+test("gpsErrorPolicy keeps the last fix and retries timeouts", () => {
+  assert.deepEqual(gpsErrorPolicy(1, true), { keepFix: true, restart: false, retryMs: 0, status: "denied" });
+  assert.deepEqual(gpsErrorPolicy(3, true), { keepFix: true, restart: true, retryMs: 2000, status: "ready" });
+  assert.deepEqual(gpsErrorPolicy(2, false), { keepFix: true, restart: true, retryMs: 2000, status: "watching" });
+  assert.equal(GPS_WATCH_OPTIONS.timeout, 60000);
+  assert.equal(GPS_WATCH_OPTIONS.enableHighAccuracy, true);
 });
 
 test("gpsHudPrompt asks guests to tap until a fix lands", () => {
