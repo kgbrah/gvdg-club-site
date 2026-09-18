@@ -1,6 +1,7 @@
 import { aceHint, buildLivePots } from "../shared/live-pots-model.js";
 import { displayMatchStatus } from "../shared/match-status.js";
 import { playGroupLabel, playStyleLabel } from "../shared/play-stats.js";
+import { remainingFt } from "../shared/hole-map-model.js";
 
 export function relClass(delta) {
   return delta < 0 ? "under" : delta > 0 ? "over" : "even";
@@ -218,7 +219,82 @@ export function watchFollowPlayer({ players, hole, followIndex }) {
       bestAt = at;
     }
   });
-  return best;
+  return best || list[0] || null;
+}
+
+export function watchReplayPlayers(players) {
+  const list = Array.isArray(players) ? players : [];
+  const seen = new Set();
+  const options = [];
+  list.forEach((player) => {
+    if (!player || seen.has(player.index)) return;
+    seen.add(player.index);
+    options.push({
+      index: player.index,
+      name: player.name || ("Player " + (player.index + 1)),
+      discColor: player.discColor || null,
+      photo: player.photo || null,
+    });
+  });
+  return options.sort((a, b) => a.index - b.index);
+}
+
+export function watchReplayHole({ player, hole }) {
+  const throws = watchHoleThrows(player, hole && hole.hole);
+  const scores = (player && player.scores) || {};
+  const key = hole && hole.hole;
+  let strokes = null;
+  if (key != null) {
+    if (Object.prototype.hasOwnProperty.call(scores, key)) strokes = scores[key];
+    else if (Object.prototype.hasOwnProperty.call(scores, String(key))) strokes = scores[String(key)];
+  }
+  const parsed = strokes == null || strokes === "" ? null : Number(strokes);
+  return {
+    hole: key,
+    par: hole && hole.par,
+    tee: hole && hole.tee,
+    throws,
+    throwCount: throws.length,
+    strokes: parsed != null && Number.isFinite(parsed) ? parsed : null,
+  };
+}
+
+export function watchReplayStepCount(plan) {
+  if (!plan) return 1;
+  return 1 + plan.throwCount + (plan.strokes != null ? 1 : 0);
+}
+
+export function watchReplayVisibleThrows(plan, step) {
+  const throws = plan && Array.isArray(plan.throws) ? plan.throws : [];
+  const shown = Math.max(0, Math.min(Number(step) || 0, throws.length));
+  return throws.slice(0, shown);
+}
+
+export function watchReplayIsScoreStep(plan, step) {
+  return Boolean(plan && plan.strokes != null && Number(step) > plan.throwCount);
+}
+
+export function watchReplayDelayMs(plan, step) {
+  if (!(Number(step) > 0)) return 700;
+  if (watchReplayIsScoreStep(plan, step)) return 2200;
+  return 2000;
+}
+
+export function watchReplayCaption(plan, step) {
+  if (!plan) return "";
+  const n = Math.max(0, Number(step) || 0);
+  if (n <= 0) return "On the tee";
+  if (n <= plan.throwCount) {
+    const lie = plan.throws[n - 1];
+    const prev = n === 1 ? plan.tee : plan.throws[n - 2];
+    const ft = remainingFt(prev, lie);
+    return ft != null ? ("Lie " + n + " · " + ft + " ft") : ("Lie " + n + " of " + plan.throwCount);
+  }
+  if (plan.strokes != null) {
+    const label = strokeLabel(plan.strokes, plan.par);
+    return label ? ("In the basket · " + label.strokes + " " + label.text) : "In the basket";
+  }
+  return "";
 }
 
 export function watchMatchCards({ hole, par, players, scoreTargets, standings }) {

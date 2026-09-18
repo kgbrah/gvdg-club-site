@@ -85,7 +85,7 @@ function RecentRoundCard({ item }) {
         ])
         : null,
     ]),
-    h("a", { className: "passkey-btn", href: item.href, key: "link" }, "Scorecard"),
+    h("a", { className: "passkey-btn", href: item.href, key: "link" }, "Replay"),
   ]);
 }
 

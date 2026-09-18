@@ -7,6 +7,12 @@ import {
   scoreForPlayerIndexes,
   watchHoleScoreChips,
   watchMatchCards,
+  watchReplayCaption,
+  watchReplayHole,
+  watchReplayIsScoreStep,
+  watchReplayPlayers,
+  watchReplayStepCount,
+  watchReplayVisibleThrows,
   watchStrokeHoleChips,
 } from "../src/score-app/score-view-model.js";
 
@@ -200,6 +206,28 @@ test("watchMatchCards thru counts completed head-to-head holes, not a side's own
   assert.equal(cards[0].thru, 1);
   assert.equal(cards[0].status, "AS");
   assert.equal(cards[0].chips.length, 1);
+});
+
+test("watch replay reveals throws one at a time then the score", () => {
+  const player = {
+    index: 0,
+    name: "KG",
+    scores: { 1: 3 },
+    throws: { 1: [{ lat: 35.6005, lng: -77.37, n: 1 }, { lat: 35.6008, lng: -77.37, n: 2 }] },
+  };
+  const hole = { hole: 1, par: 3, tee: { lat: 35.6, lng: -77.37 } };
+  const plan = watchReplayHole({ player, hole });
+  assert.equal(plan.throwCount, 2);
+  assert.equal(plan.strokes, 3);
+  assert.equal(watchReplayStepCount(plan), 4);
+  assert.equal(watchReplayVisibleThrows(plan, 0).length, 0);
+  assert.equal(watchReplayVisibleThrows(plan, 1).length, 1);
+  assert.equal(watchReplayVisibleThrows(plan, 2).length, 2);
+  assert.equal(watchReplayIsScoreStep(plan, 2), false);
+  assert.equal(watchReplayIsScoreStep(plan, 3), true);
+  assert.equal(watchReplayCaption(plan, 0), "On the tee");
+  assert.match(watchReplayCaption(plan, 3), /In the basket/);
+  assert.deepEqual(watchReplayPlayers([player, { index: 1, name: "JR" }]).map((row) => row.name), ["KG", "JR"]);
 });
 
 test("watch view uses overlay chips for stroke and match cards for matchplay", () => {

@@ -103,7 +103,7 @@ A passkey means you don't have to type your PIN every time — you can use your 
 ### 📊 Your dashboard
 After you log in on the **Members** page, you see your **dashboard**. On a phone it has tabs along the bottom:
 - **Home** — your rating, unpaid event fees, course conditions, tonight's event, and a keep-score shortcut.
-- **Play** — start a casual round, join with a code, rejoin a live card, or open a finished scorecard.
+- **Play** — start a casual round, join with a code, rejoin a live card, or replay a finished round.
 - **Events** — sign up for games.
 - **Season** — ratings and past rounds.
 - **More** — message board, tee signs, club directory, help, and log out.
@@ -217,7 +217,12 @@ The **score app** (tap **Keep score** on the public site, **Play** on the member
 1. When every hole has a matching score, tap **Finish card** at the bottom of the scorecard (or in the leaderboard sheet).
 2. Check the totals, then tap **Looks good — lock card**. One confirmation is enough. Extra phones do not have to type the same numbers.
 3. If scores disagree, the app tells you which hole to fix first — tap that message to jump there.
-4. When it's finished, the scores are saved. Open **Play → Recent rounds** or **Season** to see the scorecard again. 🎉
+4. When it's finished, the scores are saved. Open **Play → Recent rounds** or **Season** and tap **Replay** to watch the disc fly hole by hole. Use Play / Pause, Next, and Prev, or tap a hole number to jump. 🎉
+
+### 🎬 Replay a finished round
+1. Open the round from **Play** or **Season**, or from a watch link after the card is locked.
+2. The map starts on hole 1. The disc flies from the tee to each marked lie, then into the basket.
+3. Tap a player chip to replay someone else. Tap a hole to skip ahead.
 
 ---
 

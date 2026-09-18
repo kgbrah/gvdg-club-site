@@ -32,7 +32,7 @@ test("Play tab mounts a recent-rounds panel that watches finished cards", () => 
   const html = readFileSync("gvdg-members.html", "utf8");
   assert.match(playPage, /data-react-play-recent/);
   assert.match(playPage, /Recent rounds/);
-  assert.match(playPage, /Scorecard/);
+  assert.match(playPage, /Replay/);
   assert.match(playPage, /\/my-results/);
   assert.match(playPage, /recentPlayRounds/);
   assert.match(html, /\.recent-round-score/);

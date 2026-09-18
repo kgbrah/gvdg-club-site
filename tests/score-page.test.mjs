@@ -1077,6 +1077,10 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.match(watch, /watchFollowPlayer/);
   assert.match(watch, /throwsKey/);
   assert.match(watch, /scoreFlight/);
+  assert.match(watch, /function WatchReplayBar/);
+  assert.match(watch, /watchReplayVisibleThrows/);
+  assert.match(watch, /Replay round/);
+  assert.match(watch, /props\.status === "final"/);
   assert.match(watch, /function WatchFollowBar/);
   assert.match(watch, /function WatchMatchCards/);
   assert.match(watch, /function WatchStrokeStrip/);
@@ -1090,6 +1094,7 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.match(html, /\.hole-map-score-chip/);
   assert.match(html, /\.watch-match-card/);
   assert.match(html, /\.watch-stroke-strip/);
+  assert.match(html, /\.watch-replay/);
   assert.match(controller, /LIVE \+ '\/location'/);
   assert.match(controller, /watchPosition/);
   assert.match(controller, /function applyPlayerLocations/);

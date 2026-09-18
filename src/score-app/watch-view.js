@@ -1,5 +1,5 @@
 import React from "react";
-import { Copy, Trophy } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Pause, Play, Trophy } from "lucide-react";
 
 import { HoleMap } from "../shared/hole-map.js";
 import { PotsStrip } from "./pots-strip.js";
@@ -11,6 +11,13 @@ import {
   watchHoleScoreChips,
   watchHoleThrows,
   watchMatchCards,
+  watchReplayCaption,
+  watchReplayDelayMs,
+  watchReplayHole,
+  watchReplayIsScoreStep,
+  watchReplayPlayers,
+  watchReplayStepCount,
+  watchReplayVisibleThrows,
   watchScoreSignature,
   watchStrokeHoleChips,
 } from "./score-view-model.js";
@@ -100,19 +107,43 @@ function WatchFollowBar({ options, follow, pinned, onPin }) {
   ]);
 }
 
+function WatchReplayBar({ caption, playing, onPlay, onPrevHole, onPrevThrow, onNextThrow, onNextHole }) {
+  return h("div", { className: "watch-replay", key: "replay" }, [
+    h("p", { className: "watch-replay-caption", key: "caption" }, caption || "Replay"),
+    h("div", { className: "watch-replay-controls", key: "controls", role: "group", "aria-label": "Replay throws" }, [
+      h("button", { "aria-label": "Previous hole", className: "watch-replay-btn", key: "prev-hole", type: "button", onClick: onPrevHole }, icon(ChevronLeft)),
+      h("button", { "aria-label": "Previous throw", className: "watch-replay-btn", key: "prev-throw", type: "button", onClick: onPrevThrow }, "Prev"),
+      h("button", {
+        "aria-label": playing ? "Pause replay" : "Play replay",
+        "aria-pressed": playing ? "true" : "false",
+        className: "watch-replay-btn watch-replay-play",
+        key: "play",
+        type: "button",
+        onClick: onPlay,
+      }, [icon(playing ? Pause : Play), playing ? " Pause" : " Play"]),
+      h("button", { "aria-label": "Next throw", className: "watch-replay-btn", key: "next-throw", type: "button", onClick: onNextThrow }, "Next"),
+      h("button", { "aria-label": "Next hole", className: "watch-replay-btn", key: "next-hole", type: "button", onClick: onNextHole }, icon(ChevronRight)),
+    ]),
+  ]);
+}
+
 function WatchHoles(props) {
+  const replay = props.status === "final";
   const holes = Array.isArray(props.holes) ? props.holes : [];
   const liveIndex = holes.length
     ? Math.min(Math.max(0, Number(props.activeHoleIndex) || 0), holes.length - 1)
     : 0;
-  const [index, setIndex] = React.useState(liveIndex);
-  const [followLive, setFollowLive] = React.useState(true);
+  const [index, setIndex] = React.useState(replay ? 0 : liveIndex);
+  const [followLive, setFollowLive] = React.useState(!replay);
   React.useEffect(() => {
     if (followLive) setIndex(liveIndex);
   }, [followLive, liveIndex]);
-  const safeIndex = holes.length ? Math.min(index, holes.length - 1) : 0;
+  const safeIndex = holes.length ? Math.min(Math.max(0, index), holes.length - 1) : 0;
   const selected = holes[safeIndex] || null;
-  const [pinned, setPinned] = React.useState(null);
+  const replayRoster = replay ? watchReplayPlayers(props.scorePlayers) : [];
+  const [pinned, setPinned] = React.useState(replay && replayRoster[0] ? replayRoster[0].index : null);
+  const [step, setStep] = React.useState(0);
+  const [playing, setPlaying] = React.useState(replay);
   const [scoreFlight, setScoreFlight] = React.useState(0);
   const scoreSigRef = React.useRef("");
   const follow = selected
@@ -122,21 +153,52 @@ function WatchHoles(props) {
       players: props.scorePlayers,
     })
     : null;
-  const followOptions = selected ? watchFollowOptions({ hole: selected.hole, players: props.scorePlayers }) : [];
-  const followThrows = follow && selected ? watchHoleThrows(follow, selected.hole) : [];
+  const followOptions = replay
+    ? replayRoster
+    : (selected ? watchFollowOptions({ hole: selected.hole, players: props.scorePlayers }) : []);
+  const plan = replay ? watchReplayHole({ player: follow, hole: selected }) : null;
+  const stepMax = watchReplayStepCount(plan);
+  const safeStep = Math.max(0, Math.min(step, stepMax - 1));
+  const followThrows = replay
+    ? watchReplayVisibleThrows(plan, safeStep)
+    : (follow && selected ? watchHoleThrows(follow, selected.hole) : []);
   const scoreSig = selected ? watchScoreSignature(follow, selected.hole) : "";
   React.useEffect(() => {
     scoreSigRef.current = "";
     setScoreFlight(0);
+    setStep(0);
   }, [follow && follow.index, selected && selected.hole]);
   React.useEffect(() => {
+    if (replay) return;
     const prev = scoreSigRef.current;
     scoreSigRef.current = scoreSig;
     if (!prev) return;
     const prevStrokes = prev.slice(prev.indexOf(":") + 1);
     const nextStrokes = scoreSig.slice(scoreSig.indexOf(":") + 1);
     if (nextStrokes && nextStrokes !== prevStrokes) setScoreFlight((value) => value + 1);
-  }, [scoreSig]);
+  }, [replay, scoreSig]);
+  const scoreStep = replay && watchReplayIsScoreStep(plan, safeStep);
+  React.useEffect(() => {
+    if (!replay || !scoreStep) return;
+    setScoreFlight((value) => value + 1);
+  }, [replay, scoreStep, follow && follow.index, selected && selected.hole]);
+  React.useEffect(() => {
+    if (!replay || !playing || !plan) return;
+    const id = setTimeout(() => {
+      if (safeStep < stepMax - 1) {
+        setStep(safeStep + 1);
+        return;
+      }
+      if (safeIndex < holes.length - 1) {
+        setFollowLive(false);
+        setIndex(safeIndex + 1);
+        setStep(0);
+        return;
+      }
+      setPlaying(false);
+    }, watchReplayDelayMs(plan, safeStep));
+    return () => clearTimeout(id);
+  }, [replay, playing, safeStep, stepMax, safeIndex, holes.length, plan && plan.hole, plan && plan.throwCount, plan && plan.strokes]);
   if (!selected) return null;
   const mapPlayers = props.isMatchplay
     ? props.players
@@ -169,9 +231,30 @@ function WatchHoles(props) {
   if (selected.par != null) bits.push(`Par ${selected.par}`);
   if (selected.distance_ft != null) bits.push(`${selected.distance_ft} ft`);
 
+  function goHole(nextIndex) {
+    if (!holes.length) return;
+    const bounded = Math.max(0, Math.min(nextIndex, holes.length - 1));
+    setFollowLive(false);
+    setIndex(bounded);
+    setStep(0);
+  }
+
+  function goThrow(delta) {
+    setPlaying(false);
+    if (delta < 0 && safeStep <= 0) {
+      if (safeIndex > 0) goHole(safeIndex - 1);
+      return;
+    }
+    if (delta > 0 && safeStep >= stepMax - 1) {
+      if (safeIndex < holes.length - 1) goHole(safeIndex + 1);
+      return;
+    }
+    setStep(safeStep + delta);
+  }
+
   return h("div", { className: "watch-holes", key: "holes" }, [
     h("div", { className: "card", key: "picker" }, [
-      h("h2", { className: "section", key: "title" }, "Hole maps"),
+      h("h2", { className: "section", key: "title" }, replay ? "Replay" : "Hole maps"),
       h("p", { className: "watch-hole-meta", key: "meta" }, bits.join(" · ")),
       h("div", { className: "holegrid", key: "grid" }, holes.map((hole, holeIndex) =>
         h("button", {
@@ -181,25 +264,41 @@ function WatchHoles(props) {
           key: hole.hole,
           type: "button",
           onClick: () => {
-            setFollowLive(holeIndex === liveIndex);
+            setFollowLive(!replay && holeIndex === liveIndex);
             setIndex(holeIndex);
+            setStep(0);
+            setPlaying(false);
           },
         }, String(hole.hole)),
       )),
     ]),
+    replay
+      ? h(WatchReplayBar, {
+        caption: watchReplayCaption(plan, safeStep),
+        key: "replay",
+        playing,
+        onPlay: () => setPlaying((value) => !value),
+        onPrevHole: () => goHole(safeIndex - 1),
+        onPrevThrow: () => goThrow(-1),
+        onNextThrow: () => goThrow(1),
+        onNextHole: () => goHole(safeIndex + 1),
+      })
+      : null,
     h(HoleMap, {
       discColor: follow && follow.discColor,
       hole: selected,
       key: "map",
       players: mapPlayers,
       scoreFlight,
-      throwGroups: followOptions.map((row) => ({
-        active: Boolean(follow && follow.index === row.index),
-        key: row.index,
-        throws: row.throws,
-      })),
+      throwGroups: replay
+        ? [{ active: true, key: follow ? follow.index : "replay", throws: followThrows }]
+        : followOptions.map((row) => ({
+          active: Boolean(follow && follow.index === row.index),
+          key: row.index,
+          throws: row.throws,
+        })),
       throws: followThrows,
-      throwsKey: follow ? follow.index : "none",
+      throwsKey: (follow ? follow.index : "none") + (replay ? ":replay" : ""),
       udiscCourseId: props.udiscCourseId,
       windFromDeg: props.windFromDeg,
     }),
@@ -208,7 +307,10 @@ function WatchHoles(props) {
       key: "follow",
       options: followOptions,
       pinned,
-      onPin: setPinned,
+      onPin: (value) => {
+        setPinned(value);
+        setStep(0);
+      },
     }),
     props.isMatchplay ? h(WatchMatchCards, { cards: matchCards, key: "matches" }) : h(WatchStrokeStrip, { chips: strokeChips, key: "stroke" }),
     h(WatchTeeSign, { key: "sign", teeSign: selected.teeSign }),
@@ -219,8 +321,8 @@ export function WatchView(props) {
   const standings = Array.isArray(props.standings) ? props.standings : [];
   return h("div", { className: "watch-view", "data-react-live-watch": props.status || "live" }, [
     h("div", { className: "watch-banner", key: "banner" }, [
-      h("span", { className: "live-dot", key: "dot" }),
-      h("span", { key: "label" }, props.status === "final" ? "Round finished" : "Watching live"),
+      h("span", { className: "live-dot" + (props.status === "final" ? " is-final" : ""), key: "dot" }),
+      h("span", { key: "label" }, props.status === "final" ? "Replay round" : "Watching live"),
       h("span", { className: "lb-conn", key: "connection" }, props.connection || "Live"),
     ]),
     props.courseName || props.layoutName
@@ -229,7 +331,7 @@ export function WatchView(props) {
     props.showWeather ? h(WeatherStrip, { key: "weather", title: "Round weather", weather: props.weather }) : null,
     props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,
     h("div", { className: "card", key: "board" }, [
-      h("h2", { className: "section", key: "title" }, [icon(Trophy), " Live leaderboard"]),
+      h("h2", { className: "section", key: "title" }, [icon(Trophy), props.status === "final" ? " Final leaderboard" : " Live leaderboard"]),
       h(LeaderboardTable, {
         isDoubles: props.isDoubles,
         isMatchplay: props.isMatchplay,
@@ -248,6 +350,7 @@ export function WatchView(props) {
       scorePlayers: props.players,
       scoreTargets: props.scoreTargets,
       standings,
+      status: props.status,
       udiscCourseId: props.udiscCourseId,
       windFromDeg: props.windFromDeg,
     }),
@@ -258,9 +361,11 @@ export function WatchView(props) {
           "Copy watch link",
         ])
         : null,
-      props.keepScoreHref
-        ? h("a", { className: "btn", href: props.keepScoreHref, key: "score" }, "Keep score")
-        : null,
+      props.status === "final"
+        ? null
+        : (props.keepScoreHref
+          ? h("a", { className: "btn", href: props.keepScoreHref, key: "score" }, "Keep score")
+          : null),
     ].filter(Boolean)),
   ]);
 }
