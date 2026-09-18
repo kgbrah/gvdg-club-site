@@ -6,18 +6,16 @@ import { installImportController } from "./import-controller.js";
 import { installTeeSignReviewController } from "./tee-sign-review-controller.js";
 import { normalizeConfig as normalizeScoringConfig } from "./scoring-model.js";
 import { resolveApiBase } from "../shared/api-base.js";
+import { readMemberToken } from "../shared/member-session.js";
 
 export function startAdminController() {
         // ============================================================
         //  Config + auth — admin.html relies on the session the member
         //  established on the Members page. The session token lives in
-        //  sessionStorage under 'gvdg_member_token' and is preserved
-        //  across same-origin, same-tab navigation.
+        //  localStorage under 'gvdg_member_token' (migrated from sessionStorage)
+        //  and is preserved across PWA restarts.
         // ============================================================
         const AUTH_BASE = resolveApiBase({ datasetKeys: ['authBase'] });
-        const TOKEN_KEY = 'gvdg_member_token';
-        const NAME_KEY = 'gvdg_member_name';
-        const PDGA_KEY = 'gvdg_member_pdga';
         let ME_ID = null;   // the signed-in admin's memberId (from /me .sub), for the self-demote warning
 
         // Shared fetch helper (mirrors gvdg-members.html `api()`).
@@ -45,7 +43,7 @@ export function startAdminController() {
 
         // On load: verify the session token grants admin, then show the panel.
         async function checkAdminSession() {
-            const token = sessionStorage.getItem(TOKEN_KEY);
+            const token = readMemberToken();
             if (!token) {
                 showGate('Admin sign-in required — please log in on the Members page first.', true);
                 return;
@@ -76,7 +74,7 @@ export function startAdminController() {
             const message = text || '';
             setAdminMessageState({ text: message, ok: message ? ok === true : null });
         }
-        function adminApi(path, opts) { return api(path, { ...(opts || {}), token: sessionStorage.getItem(TOKEN_KEY) }); }
+        function adminApi(path, opts) { return api(path, { ...(opts || {}), token: readMemberToken() }); }
         function dollarsFromCents(c) { const n = Number(c || 0); const abs = Math.abs(n); const out = '$' + (abs / 100).toLocaleString(undefined, { minimumFractionDigits: abs % 100 ? 2 : 0 }); return n < 0 ? '-' + out : out; }
         function dollarsToCents(v) { const n = parseFloat(v); return Number.isFinite(n) ? Math.round(n * 100) : null; }
         let adminCoursesCache = [];
@@ -371,7 +369,7 @@ export function startAdminController() {
         async function scLoadTeeSignData() {
             const courseId = scSelectedEvent && scSelectedEvent.course_id;
             if (!courseId) return { teeSigns: [], layouts: [] };
-            const token = sessionStorage.getItem(TOKEN_KEY);
+            const token = readMemberToken();
             const [td, ld] = await Promise.all([
                 api('/courses/' + encodeURIComponent(courseId) + '/tee-signs', { token }).then((r) => r.ok ? r.json() : null).catch(() => null),
                 api('/courses/' + encodeURIComponent(courseId) + '/layouts').then((r) => r.ok ? r.json() : null).catch(() => null),

@@ -1,17 +1,14 @@
 import { resolveApiBase } from "../shared/api-base.js";
+import { TOKEN_KEY, readMemberToken } from "../shared/member-session.js";
 
-export const ADMIN_TOKEN_KEY = "gvdg_member_token";
+export const ADMIN_TOKEN_KEY = TOKEN_KEY;
 
 export function adminAuthBase() {
   return resolveApiBase({ datasetKeys: ["authBase"] });
 }
 
 export function adminToken() {
-  try {
-    return sessionStorage.getItem(ADMIN_TOKEN_KEY) || "";
-  } catch {
-    return "";
-  }
+  return readMemberToken();
 }
 
 export function adminRequest(path, { body, method = "GET", signal, token = adminToken() } = {}) {

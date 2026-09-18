@@ -1,5 +1,6 @@
 import { NAME_KEY, PDGA_KEY, storageGet } from "./api.js";
 import { setMemberContext } from "./member-context.js";
+import { writeMemberSessionValue } from "../shared/member-session.js";
 
 let memberProfile = {
   isAdmin: false,
@@ -9,20 +10,6 @@ let memberProfile = {
   sub: null,
   udisc: null,
 };
-
-function storageSet(key, value) {
-  try {
-    sessionStorage.setItem(key, value);
-  } catch {
-  }
-}
-
-function storageRemove(key) {
-  try {
-    sessionStorage.removeItem(key);
-  } catch {
-  }
-}
 
 export function memberDashboardContext() {
   return {
@@ -53,9 +40,9 @@ export function applyProfile(data = {}) {
     udisc: data.udisc || null,
   };
 
-  if (data.name) storageSet(NAME_KEY, data.name);
-  if (data.pdgaNo) storageSet(PDGA_KEY, data.pdgaNo);
-  else storageRemove(PDGA_KEY);
+  if (data.name) writeMemberSessionValue(NAME_KEY, data.name);
+  if (data.pdgaNo) writeMemberSessionValue(PDGA_KEY, data.pdgaNo);
+  else writeMemberSessionValue(PDGA_KEY, "");
 
   publishMemberProfile();
 }

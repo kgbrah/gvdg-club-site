@@ -6,6 +6,7 @@ import { EventScheduleFacts } from "../shared/event-schedule.js";
 import { EventFieldRoster } from "../shared/event-field-roster.js";
 import { clientOwed, isDoublesRegistration, parseArray, parseObject } from "../members-app/registration-utils.js";
 import { publicApiBase } from "./public-api.js";
+import { clearMemberSession, readMemberToken } from "../shared/member-session.js";
 
 const h = React.createElement;
 const REGISTRATION_REFRESH_EVENT = "gvdg:events-registration-refresh";
@@ -25,11 +26,7 @@ function apiBase() {
 }
 
 function memberToken() {
-  try {
-    return sessionStorage.getItem("gvdg_member_token") || null;
-  } catch {
-    return null;
-  }
+  return readMemberToken() || null;
 }
 
 function guestRegs() {
@@ -222,10 +219,7 @@ function RegisterForm({ api, event, onRefresh, onSessionExpired, token }) {
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
         if (response.status === 401 || payload.error === "session_expired") {
-          try {
-            sessionStorage.removeItem("gvdg_member_token");
-          } catch {
-          }
+          clearMemberSession();
           onSessionExpired();
         }
         setError(registrationError(response, payload));

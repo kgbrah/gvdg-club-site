@@ -6,9 +6,10 @@ import {
   sanitizeTheme,
   writeStoredTheme,
 } from "./dashboard-theme-model.js";
+import { PDGA_KEY, TOKEN_KEY, readMemberSessionValue, readMemberToken } from "./member-session.js";
 
-export const TOKEN_KEY = "gvdg_member_token";
-export const PDGA_KEY = "gvdg_member_pdga";
+export { TOKEN_KEY } from "./member-session.js";
+export { PDGA_KEY };
 export const SCORE_AUTH_EVENT = "gvdg:score-auth";
 export const THEME_EVENT = "gvdg:player-theme";
 export const CLUB_STATUS_COLOR = "#1A1A2E";
@@ -38,11 +39,7 @@ export function themeMemberIds({ token, pdgaNo } = {}) {
 }
 
 export function readSessionValue(key, storage = globalThis.sessionStorage) {
-  try {
-    return storage?.getItem?.(key) || "";
-  } catch {
-    return "";
-  }
+  return readMemberSessionValue(key, { session: storage });
 }
 
 export function loadLocalPlayerTheme({
@@ -51,9 +48,9 @@ export function loadLocalPlayerTheme({
   storage = globalThis.localStorage,
   sessionStorage: sessions = globalThis.sessionStorage,
 } = {}) {
-  const sessionToken = token ?? readSessionValue(TOKEN_KEY, sessions);
+  const sessionToken = token ?? readMemberToken({ persistent: storage, session: sessions });
   if (!sessionToken) return { theme: null, memberId: "me", token: "" };
-  const sessionPdga = pdgaNo ?? readSessionValue(PDGA_KEY, sessions);
+  const sessionPdga = pdgaNo ?? readMemberSessionValue(PDGA_KEY, { persistent: storage, session: sessions });
   const ids = themeMemberIds({ token: sessionToken, pdgaNo: sessionPdga });
   const memberId = ids[0] || "me";
   for (const cacheId of ids) {

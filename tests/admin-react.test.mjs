@@ -58,7 +58,7 @@ test('admin page chrome is rendered by the admin React bundle', () => {
   assert.match(themeChrome, /aria-pressed/);
   assert.match(themeChrome, /localStorage\.getItem\("theme"\)/);
   assert.match(themeChrome, /localStorage\.setItem\("theme", theme\)/);
-  assert.match(chrome, /sessionStorage\.removeItem\(key\)/);
+  assert.match(chrome, /clearMemberSession/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
 });
 

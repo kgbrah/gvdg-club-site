@@ -10,6 +10,7 @@ import {
   publishEventsView,
 } from "./events-state.js";
 import { fetchPublicJson, publicApiBase } from "./public-api.js";
+import { NAME_KEY, readMemberSessionValue, readMemberToken } from "../shared/member-session.js";
 
 const GUEST_REG_KEY = "gvdg_guest_regs";
 const EMPTY_EXTRAS = { acePot: null, ctps: [], loaded: false };
@@ -24,19 +25,11 @@ function currentEventRouteId() {
 }
 
 function memberToken() {
-  try {
-    return sessionStorage.getItem("gvdg_member_token") || null;
-  } catch {
-    return null;
-  }
+  return readMemberToken() || null;
 }
 
 function memberName() {
-  try {
-    return sessionStorage.getItem("gvdg_member_name") || "";
-  } catch {
-    return "";
-  }
+  return readMemberSessionValue(NAME_KEY);
 }
 
 function guestRegs() {

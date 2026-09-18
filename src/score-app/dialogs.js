@@ -1,6 +1,9 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { AlertTriangle, UserPlus } from "lucide-react";
+
+import { useAccessibleDialog } from "../shared/a11y.js";
 
 const h = React.createElement;
 
@@ -22,15 +25,16 @@ function ScoreDialog(props) {
   const [value, setValue] = React.useState(dialog.initialValue || "");
   const [error, setError] = React.useState("");
   const isPrompt = dialog.kind === "prompt";
+  const a11y = useAccessibleDialog({
+    open: true,
+    onClose: () => props.onResolve(isPrompt ? null : false),
+    labelledBy: titleId,
+    label: dialog.title || "Dialog",
+  });
 
   React.useEffect(() => {
     if (isPrompt) inputRef.current?.focus();
-    function onKeyDown(event) {
-      if (event.key === "Escape") props.onResolve(isPrompt ? null : false);
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isPrompt, props.onResolve]);
+  }, [isPrompt]);
 
   function cancel() {
     props.onResolve(isPrompt ? null : false);
@@ -50,24 +54,26 @@ function ScoreDialog(props) {
     props.onResolve(nextValue);
   }
 
-  return h(
-    "div",
-    {
-      className: "overlay score-dialog-overlay",
-      onClick: (event) => {
-        if (event.target === event.currentTarget) cancel();
-      },
-    },
+  return createPortal(
     h(
-      "form",
+      "div",
       {
-        "aria-describedby": bodyId,
-        "aria-labelledby": titleId,
-        "aria-modal": "true",
-        className: "sheet score-dialog",
-        role: "dialog",
-        onSubmit: submit,
+        className: "overlay score-dialog-overlay",
+        role: "presentation",
+        ref: a11y.overlayRef,
       },
+      h(
+        "form",
+        {
+          "aria-describedby": bodyId,
+          "aria-labelledby": titleId,
+          "aria-modal": a11y.isolated ? "true" : undefined,
+          className: "sheet score-dialog",
+          role: "dialog",
+          tabIndex: -1,
+          ref: a11y.panelRef,
+          onSubmit: submit,
+        },
       [
         h("div", { className: "score-dialog-icon" + (dialog.danger ? " danger" : ""), key: "icon" }, icon(dialog.danger ? AlertTriangle : UserPlus)),
         h("h2", { className: "section", id: titleId, key: "title" }, dialog.title),
@@ -99,7 +105,9 @@ function ScoreDialog(props) {
           ),
         ]),
       ],
+      ),
     ),
+    document.body,
   );
 }
 

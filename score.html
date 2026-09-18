@@ -10,11 +10,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Live Scoring · Greenville Disc Golf Club</title>
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=149">
+    <link rel="manifest" href="site.webmanifest?v=150">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="pwa.js" defer></script>
     <link rel="stylesheet" href="tokens.css">
     <script>try{var m=localStorage.getItem('theme')||'light';if(m==='dark')document.documentElement.setAttribute('data-theme','dark');var c=m==='dark'?'#0F0F1E':'#1A1A2E';var tags=document.getElementsByTagName('meta');for(var i=0;i<tags.length;i++){if(tags[i].getAttribute('name')==='theme-color')tags[i].setAttribute('content',c)}}catch(e){}</script>
@@ -73,14 +70,14 @@
         .topbar h1 { font-family: 'Bebas Neue', sans-serif; font-size: clamp(1.08rem, 4.8vw, 1.4rem); letter-spacing: 0.04em; font-weight: 400; flex: 1; line-height: 1; min-width: 0; overflow: hidden; }
         .topbar h1 small { display: block; font-family: 'Archivo'; font-size: 0.58rem; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 600; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .top-link {
-            display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: 0 0 40px; padding: 0;
+            display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: 0 0 44px; padding: 0;
             border: 1px solid var(--border-color); border-radius: 11px; background: var(--bg-tertiary); color: var(--primary);
             font-size: 0.78rem; font-weight: 700; text-decoration: none; cursor: pointer;
         }
         .top-link-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
         .iconbtn {
             border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary);
-            width: 40px; height: 40px; flex: 0 0 40px; border-radius: 11px; font-size: 1rem; cursor: pointer; display: grid; place-items: center;
+            width: 44px; height: 44px; flex: 0 0 44px; border-radius: 11px; font-size: 1rem; cursor: pointer; display: grid; place-items: center;
         }
         .top-link svg, .iconbtn svg { width: 18px; height: 18px; }
         .iconbtn[hidden] { display: none; }
@@ -89,7 +86,7 @@
             .topbar { gap: 0.35rem; padding-left: 0.5rem; padding-right: 0.5rem; }
             .topbar .logo { width: 28px; height: 28px; flex-basis: 28px; }
             .topbar h1 small { font-size: 0.54rem; }
-            .top-link, .iconbtn { width: 38px; height: 38px; flex-basis: 38px; border-radius: 10px; }
+            .top-link, .iconbtn { width: 44px; height: 44px; flex-basis: 44px; border-radius: 10px; }
         }
         main { flex: 1; padding: 1rem 0.9rem calc(1.2rem + var(--safe-bottom)); }
         /* ---- generic ---- */
@@ -144,7 +141,7 @@
         }
         .weather-strip-compact .weather-wind,
         .weather-wind-compact {
-            width: auto; max-width: none; min-height: 36px; padding: 0.28rem 0.55rem;
+            width: auto; max-width: none; min-height: 44px; padding: 0.28rem 0.55rem;
             flex: 0 0 auto; white-space: nowrap;
         }
         .weather-wind-compact .weather-wind-copy { display: block; }
@@ -173,7 +170,7 @@
         .btn.ghost { background: transparent; color: var(--primary); border: 1.5px solid var(--primary); }
         .btn.danger { background: var(--over); color: white; }
         .btn:disabled { opacity: 0.5; cursor: default; }
-        .btn.small { min-height: 40px; width: auto; font-size: 0.85rem; padding: 0 0.85rem; border-radius: 10px; }
+        .btn.small { min-height: 44px; width: auto; font-size: 0.85rem; padding: 0 0.85rem; border-radius: 10px; }
         input.field {
             width: 100%; min-height: 50px; padding: 0 0.9rem; border: 1.5px solid var(--border-color);
             border-radius: 12px; background: var(--bg-primary); color: var(--text-primary); font-size: 1rem; font-family: 'Archivo';
@@ -229,10 +226,10 @@
             gap: 0.4rem; padding: 0.45rem; margin-bottom: 0.65rem;
         }
         .round-tools .btn {
-            width: 100%; min-width: 0; min-height: 42px; padding-inline: 0.35rem;
+            width: 100%; min-width: 0; min-height: 44px; padding-inline: 0.35rem;
             font-size: 0.78rem;
         }
-        .navbtn { width: 46px; height: 46px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); font-size: 1.4rem; cursor: pointer; display: grid; place-items: center; }
+        .navbtn { width: 48px; height: 48px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); font-size: 1.4rem; cursor: pointer; display: grid; place-items: center; }
         .navbtn svg { width: 20px; height: 20px; }
         .navbtn:disabled { opacity: 0.35; }
         .tee-sign-card { padding: 0.55rem; overflow: hidden; }
@@ -290,6 +287,45 @@
         .hole-map-compact { padding: 0; }
         .hole-map-compact .hole-map-caption { margin-top: 0.25rem; font-size: 0.62rem; }
         .hole-map-compact .hole-map-credit { font-size: 0.52rem; }
+        .hole-media { display: grid; gap: 0.55rem; margin: 0.75rem 0 0.85rem; }
+        .hole-media-chips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem; }
+        .hole-media-chip {
+            min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+            border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-secondary);
+            color: var(--text-primary); font: 700 0.82rem Archivo, sans-serif; cursor: pointer;
+        }
+        .hole-media-chip.open { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+        .score-entry-card { margin-bottom: 0.65rem; }
+        .score-pad-sheet { display: grid; gap: 0.7rem; }
+        .score-pad-shortcuts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.4rem; }
+        .score-pad-shortcuts .btn { min-height: 48px; font-size: 0.82rem; padding: 0 0.4rem; }
+        .score-pad-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.4rem; }
+        .score-pad-key {
+            min-height: 48px; border-radius: 12px; border: 1px solid var(--border-color);
+            background: var(--bg-tertiary); color: var(--text-primary); font: 800 1.1rem Archivo, sans-serif; cursor: pointer;
+        }
+        .score-pad-key.current { border-color: var(--primary); background: var(--primary-strong); color: var(--light); }
+        body.score-glove.player-theme-active { background-image: none; }
+        body.score-glove.player-theme-page .card,
+        body.score-glove.player-theme-page .topbar,
+        body.score-glove.player-theme-page .weather-strip,
+        body.score-glove.player-theme-page .pots-strip,
+        body.score-glove.player-theme-page .sheet {
+            background: var(--bg-secondary);
+        }
+        @supports ((-webkit-backdrop-filter: blur(10px)) or (backdrop-filter: blur(10px))) {
+            body.score-glove.player-theme-page .card,
+            body.score-glove.player-theme-page .topbar,
+            body.score-glove.player-theme-page .weather-strip,
+            body.score-glove.player-theme-page .pots-strip,
+            body.score-glove.player-theme-page .sheet {
+                -webkit-backdrop-filter: none;
+                backdrop-filter: none;
+            }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .toast, .toast.conflict, .toast.is-hiding, .btn:active, .navbtn, .stepper button { transition: none; animation: none; }
+        }
         .watch-holes { display: grid; gap: 0.75rem; margin-top: 0.85rem; }
         .watch-holes .section { margin: 0 0 0.45rem; }
         .watch-hole-meta { margin: 0 0 0.55rem; font-size: 0.88rem; font-weight: 700; }
@@ -328,12 +364,15 @@
         .prow .pmeta { font-size: 0.74rem; color: var(--text-muted); }
         .prow .conflict-text { color: var(--over); font-weight: 700; }
         .stepper { display: flex; align-items: center; gap: 0.45rem; }
-        .stepper button { width: 44px; height: 44px; border-radius: 50%; border: none; font-size: 1.5rem; font-weight: 700; cursor: pointer; display: grid; place-items: center; }
+        .stepper button { width: 48px; height: 48px; border-radius: 50%; border: none; font-size: 1.5rem; font-weight: 700; cursor: pointer; display: grid; place-items: center; }
         .stepper button.minus { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); }
         .stepper button.plus { background: var(--primary-strong); color: #fff; }
         .stepper button:active { transform: scale(0.9); }
         .stepper button:disabled { opacity: 0.4; cursor: default; transform: none; }
-        .stepper .val { width: 50px; text-align: center; }
+        .stepper .val {
+            width: 56px; height: auto; min-height: 48px; text-align: center; border-radius: 12px; border: 1px solid var(--border-color);
+            background: var(--bg-primary); color: inherit; font: inherit; padding: 0.15rem 0.1rem;
+        }
         .stepper .val .n { font-size: 1.55rem; font-weight: 700; line-height: 1; }
         .stepper .val .rel { font-size: 0.72rem; font-weight: 700; }
         .rel.under { color: var(--under); } .rel.over { color: var(--over); } .rel.even { color: var(--even); }
@@ -407,6 +446,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=149"></script>
+    <script type="module" src="score-app/score-app.js?v=150"></script>
 </body>
 </html>

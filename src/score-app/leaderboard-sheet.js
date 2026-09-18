@@ -54,7 +54,7 @@ function FinalizePanel({ blockers, cardLocked, mode, onFinalize, status }) {
   if (!blockers.ready || (mode !== "round" && mode !== "event")) return null;
   return h("div", { className: "finalize-card ready" }, [
     h("p", { className: "finalize-head", key: "head" }, "All holes scored — finish this card"),
-    h("p", { className: "muted finish-round-hint", key: "hint" }, "Every player on this card must confirm the scores."),
+    h("p", { className: "muted finish-round-hint", key: "hint" }, "Anyone on this card can confirm. Matching scores on each hole are enough."),
     h("button", { className: "btn finish-round-btn", key: "finish", type: "button", onClick: onFinalize }, "Finish card"),
   ]);
 }

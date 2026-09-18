@@ -1,16 +1,12 @@
 import { resolveApiBase } from "../shared/api-base.js";
+import { readMemberSessionValue } from "../shared/member-session.js";
 
-export const TOKEN_KEY = "gvdg_member_token";
-export const NAME_KEY = "gvdg_member_name";
-export const PDGA_KEY = "gvdg_member_pdga";
+export { NAME_KEY, PDGA_KEY, TOKEN_KEY } from "../shared/member-session.js";
+
 export const RECENT_ROUNDS_KEY = "gvdg_recent_rounds";
 
 export function storageGet(key) {
-  try {
-    return sessionStorage.getItem(key);
-  } catch {
-    return null;
-  }
+  return readMemberSessionValue(key) || null;
 }
 
 export function localStorageGet(key) {

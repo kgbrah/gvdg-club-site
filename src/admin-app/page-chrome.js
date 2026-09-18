@@ -3,6 +3,7 @@ import { Menu, X } from "lucide-react";
 
 import { ClubLogo } from "../shared/club-logo.js";
 import { CrottsHelpLink } from "../shared/crotts-widget.js";
+import { clearMemberSession, readMemberToken } from "../shared/member-session.js";
 import { PlayerThemeToggle, themeRoot } from "../shared/player-theme-chrome.js";
 import { paintPlayerTheme } from "../shared/player-theme-session.js";
 
@@ -15,8 +16,6 @@ const NAV_ITEMS = [
   { label: "Pro Shop", href: "pro-shop.html", page: "pro-shop" },
   { label: "Admin", href: "admin.html", page: "admin" },
 ];
-
-const SESSION_KEYS = ["gvdg_member_token", "gvdg_member_name", "gvdg_member_pdga"];
 
 function icon(Icon, size = 24) {
   return h(Icon, {
@@ -34,21 +33,13 @@ function currentPage() {
 }
 
 function clearSession() {
-  for (const key of SESSION_KEYS) {
-    sessionStorage.removeItem(key);
-  }
+  clearMemberSession();
 }
 
 export function AdminPageChrome() {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [scrolled, setScrolled] = React.useState(false);
-  const [signedIn, setSignedIn] = React.useState(() => {
-    try {
-      return Boolean(sessionStorage.getItem("gvdg_member_token"));
-    } catch {
-      return false;
-    }
-  });
+  const [signedIn, setSignedIn] = React.useState(() => Boolean(readMemberToken()));
   const page = currentPage();
 
   React.useEffect(() => {

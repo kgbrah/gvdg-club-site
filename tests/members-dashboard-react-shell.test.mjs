@@ -127,7 +127,9 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.doesNotMatch(html, /<header>[\s\S]*class="menu-toggle"/);
   assert.doesNotMatch(html, /<ul class="nav-links" id="navLinks"><\/ul>/);
   assert.doesNotMatch(html, /☰|🌙|☀️/);
-  assert.match(html, /body\[data-member-shell="members"\] \.members-content \{ display: block;/);
+  assert.match(html, /body\[data-member-shell="members"\] header \{ display: none !important; \}/);
+  assert.match(html, /@media \(display-mode: standalone\)/);
+  assert.match(pageChrome, /href: "gvdg-members\.html"/);
   assert.match(html, /body\[data-member-shell="members"\] \.login-gate \{ display: none; \}/);
   assert.match(html, /#membersReactDashboardApp:not\(:empty\)/);
   assert.match(html, /#membersReactDashboardShell:not\(:empty\)/);

@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-title" content="GVDG Club">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=149">
+    <link rel="manifest" href="site.webmanifest?v=150">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -93,6 +93,14 @@
             body[data-member-shell="members"] header .nav-links { display: none !important; }
             body[data-member-shell="members"] header .theme-toggle { display: none !important; }
             body[data-member-shell="members"] header .logo-wordmark { overflow: visible; text-overflow: unset; }
+            body[data-member-shell="members"] header { display: none !important; }
+            body[data-member-shell="members"] .members-content { padding-top: 0.75rem; }
+            body[data-member-shell="members"] .install-coach { margin-top: 0.75rem; }
+        }
+        @media (display-mode: standalone) {
+            body[data-member-shell="members"] header { display: none !important; }
+            body[data-member-shell="members"] .members-content { padding-top: 0.75rem; }
+            body[data-member-shell="members"] .install-coach { margin-top: 0.75rem; }
         }
 
         /* Login Gate */

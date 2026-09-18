@@ -3,23 +3,10 @@ import { clearAuthError, setAuthBusy, setAuthFormState, setAuthFormValues, showA
 import { applyProfile, memberAuthProfile, memberDashboardContext, resetMemberProfile } from "./member-auth-state.js";
 import { createPasskeyController, passkeysSupported } from "./member-passkeys.js";
 import { createProfileController } from "./member-profile-controller.js";
+import { clearMemberSession, writeMemberSessionValue } from "../shared/member-session.js";
 
 let installed = false;
 let sessionExpiredShown = false;
-
-function storageRemove(key) {
-  try {
-    sessionStorage.removeItem(key);
-  } catch {
-  }
-}
-
-function storageSet(key, value) {
-  try {
-    sessionStorage.setItem(key, value);
-  } catch {
-  }
-}
 
 function detailString(event, key) {
   const value = event.detail?.[key];
@@ -36,7 +23,7 @@ export function installMemberAuthController() {
   function handleSessionExpired() {
     if (sessionExpiredShown) return;
     sessionExpiredShown = true;
-    storageRemove(TOKEN_KEY);
+    clearMemberSession();
     showLogin();
     showAuthError("login", "Your session expired - please sign in again.");
     setTimeout(() => {
@@ -66,9 +53,7 @@ export function installMemberAuthController() {
   }
 
   function logout() {
-    storageRemove(TOKEN_KEY);
-    storageRemove(NAME_KEY);
-    storageRemove(PDGA_KEY);
+    clearMemberSession();
     resetMemberProfile();
     setAuthFormValues("login", { pin: "" });
     showLogin();
@@ -92,7 +77,7 @@ export function installMemberAuthController() {
       const response = await api("/login", { method: "POST", body: { identifier, pin } });
       if (response.status === 200) {
         const data = await response.json();
-        storageSet(TOKEN_KEY, data.token);
+        writeMemberSessionValue(TOKEN_KEY, data.token);
         applyProfile(data);
         setAuthFormValues("login", { pin: "" });
         if (data.mustChangePin) showPinChange();
@@ -137,7 +122,7 @@ export function installMemberAuthController() {
       const response = await api("/set-pin", { method: "POST", token, body: { newPin } });
       if (response.status === 200) {
         const data = await response.json();
-        storageSet(TOKEN_KEY, data.token);
+        writeMemberSessionValue(TOKEN_KEY, data.token);
         setAuthFormValues("pin", { newPin: "", confirmPin: "" });
         const pdga = memberAuthProfile().pdgaNo || storageGet(PDGA_KEY);
         if (pdga) showMembersContent(data.name || storageGet(NAME_KEY));
@@ -250,3 +235,4 @@ export function installMemberAuthController() {
   window.addEventListener("gvdg:member-logout-requested", logout);
   window.addEventListener("gvdg:member-auth-ready", checkSession, { once: true });
 }
+

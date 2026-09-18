@@ -180,7 +180,7 @@ Spacing follows a 4px base through rem values.
 
 - Structure: the Admin page header, logo, public nav links, account links, theme toggle, and mobile menu render from the `admin-app` React bundle into `adminReactPageChromeApp`; the page keeps only the head pre-paint theme script inline.
 - Variants: desktop inline nav, mobile collapsed nav, mobile open nav, compact phone chrome (public hamburger hidden, Back to Members / Help / Log out in `.nav-account`), current Admin link, Back to Members account link, Help account link, Log out account link, light theme, dark theme, and scrolled header.
-- Spacing: reuses the existing `header`, `nav`, `.nav-links`, `.nav-right`, `.nav-account`, `.nav-mobile-account`, `.theme-toggle`, `.menu-toggle`, and `.logo-image` primitives. At `max-width: 760px` the public hamburger and footer hide so the admin dock is the IA, Help lives in `.nav-account`, and Crotts/PWA toasts sit above the dock.
+- Spacing: reuses the existing `header`, `nav`, `.nav-links`, `.nav-right`, `.nav-account`, `.nav-mobile-account`, `.theme-toggle`, `.menu-toggle`, and `.logo-image` primitives. At `max-width: 768px` the public hamburger and footer hide so the admin dock is the IA, Help lives in `.nav-account`, and Crotts/PWA toasts sit above the dock.
 - States: React owns menu expanded state, current-page nav state, `data-theme` persistence, logout session-key clearing, and the `header.scrolled` class; `admin.html` must not mutate `.menu-toggle`, `.nav-links`, `.theme-icon`, `.logout-link`, or `header`.
 - Accessibility: menu and theme controls are real buttons with labels, `aria-expanded`, `aria-controls`, `aria-pressed`, and Lucide icons; current page uses `aria-current="page"` plus the existing active-link class; dock section chips use `role="tablist"` with `aria-selected`.
 - Motion: mobile menu reveal and header scroll shadow preserve the existing transform/opacity/box-shadow transitions only.
@@ -591,9 +591,9 @@ Spacing follows a 4px base through rem values.
 
 ### Member Page Chrome
 
-- Structure: React-owned fixed header with logo link, shared public nav links, donate link, mobile menu control, and theme toggle mounted into `membersReactPageChrome`.
-- Variants: desktop inline nav, mobile collapsed nav, open mobile nav, light theme, and dark theme.
-- Spacing: preserves the existing member page `header`, `nav`, `nav-right`, `nav-links`, `theme-toggle`, and `menu-toggle` primitives so the chrome keeps the same fixed-header rhythm.
+- Structure: React-owned header with logo link, shared public nav links, donate link, mobile menu control, and theme toggle mounted into `membersReactPageChrome`. Signed-in phone and standalone PWA hide the entire public header so the bottom dock is the IA; the logo stays in-app (`gvdg-members.html`).
+- Variants: desktop inline nav, mobile collapsed nav, open mobile nav, signed-in phone (header hidden, dock only), light theme, and dark theme.
+- Spacing: preserves the existing member page `header`, `nav`, `nav-right`, `nav-links`, `theme-toggle`, and `menu-toggle` primitives on desktop. At `max-width: 768px` and in `display-mode: standalone`, signed-in members drop the marketing header and the 100px content offset.
 - States: React owns menu expanded state, current-page nav state, external donate link, and `data-theme` persistence; the member page does not load `nav.js` or mutate header nodes with query selectors.
 - Accessibility: menu and theme controls are real buttons with labels, `aria-expanded`, and Lucide icons; current page uses `aria-current="page"`.
 - Motion: mobile menu reveal uses the existing transform/opacity transition; icon changes do not resize controls.

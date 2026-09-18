@@ -25,13 +25,15 @@ test("shared a11y module provides announce and a React dialog hook without raw h
   assert.match(tokens, /clip-path: inset\(50%\)/);
 });
 
-test("course, player, leaderboard, manage-player, and admin dialogs use the shared a11y hook", () => {
+test("course, player, leaderboard, manage-player, confirm-scores, score-dialog, and admin dialogs use the shared a11y hook", () => {
   const course = source("src/home-app/course-modal.js");
   const doubles = source("src/members-app/doubles-league-panel.js");
   const leaderboard = source("src/score-app/leaderboard-sheet.js");
   const manage = source("src/score-app/manage-players-sheet.js");
   const notifications = source("src/score-app/notifications.js");
   const adminDialogs = source("src/admin-app/admin-dialogs.js");
+  const scorecard = source("src/score-app/scorecard-view.js");
+  const scoreDialogs = source("src/score-app/dialogs.js");
 
   for (const [name, src] of [
     ["course", course],
@@ -39,6 +41,8 @@ test("course, player, leaderboard, manage-player, and admin dialogs use the shar
     ["leaderboard", leaderboard],
     ["manage", manage],
     ["admin", adminDialogs],
+    ["confirm", scorecard],
+    ["score-dialog", scoreDialogs],
   ]) {
     assert.match(src, /useAccessibleDialog/, name);
     assert.match(src, /createPortal/, name);
@@ -55,6 +59,8 @@ test("course, player, leaderboard, manage-player, and admin dialogs use the shar
   assert.match(leaderboard, /label: "Live leaderboard"/);
   assert.match(manage, /labelledBy: "score-manage-players-title"/);
   assert.match(adminDialogs, /labelledBy: titleId/);
+  assert.match(scorecard, /labelledBy: "score-confirm-title"/);
+  assert.match(scoreDialogs, /labelledBy: titleId/);
   assert.match(notifications, /from "\.\.\/shared\/a11y\.js"/);
   assert.match(notifications, /announce\(message, \{ assertive: options\.variant === "conflict" \}\)/);
 });
