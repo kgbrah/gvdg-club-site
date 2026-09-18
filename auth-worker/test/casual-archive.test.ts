@@ -69,7 +69,7 @@ describe("casual archive snapshot", () => {
         name: "Jane",
         total: 7,
         to_par: 0,
-        scorecard: JSON.stringify([{ hole: 1, par: 3, strokes: 3 }, { hole: 2, par: 4, strokes: 4 }]),
+        scorecard: JSON.stringify([{ hole: 1, par: 3, strokes: 3, throws: [{ lat: 35.6, lng: -77.37 }] }, { hole: 2, par: 4, strokes: 4 }]),
       }],
       {
         layout: { id: 5, holes: JSON.stringify([{ hole: 1, par: 3, tee: { lat: 1, lng: 2 }, target: { lat: 3, lng: 4 } }, { hole: 2, par: 4 }]) },
@@ -86,6 +86,7 @@ describe("casual archive snapshot", () => {
     });
     expect(snapshot?.holes[0]).toMatchObject({ hole: 1, par: 3, tee: { lat: 1, lng: 2 } });
     expect(snapshot?.players[0]).toMatchObject({ name: "Jane", scores: { 1: 3, 2: 4 } });
+    expect(snapshot?.players[0]?.throws?.[1]).toEqual([{ lat: 35.6, lng: -77.37, n: 1 }]);
     expect(snapshot?.standings[0]).toMatchObject({ name: "Jane", total: 7, toPar: 0, thru: 2 });
   });
 

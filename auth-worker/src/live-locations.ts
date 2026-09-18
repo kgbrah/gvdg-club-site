@@ -1,4 +1,5 @@
 export const LOCATION_STALE_MS = 90_000;
+export const LOCATION_HOLD_MS = 6 * 60 * 60 * 1000; // keep last-known pin for a live round after GPS sleeps
 export const LOCATION_MOVE_DEG = 0.00004; // ~4.4m; ignore consumer-GPS jitter
 export const COURSE_PAD_DEG = 0.008; // ~900m around the layout bbox; drop home/off-course pings
 
@@ -14,6 +15,8 @@ export type PublicPlayerLocation = {
   readonly lat: number;
   readonly lng: number;
   readonly at: number;
+  readonly fresh: boolean;
+  readonly source: "gps" | "lie";
 };
 
 type HoleCoords = {
@@ -91,8 +94,51 @@ export function locationOnCourse(
   return lat >= bounds.minLat && lat <= bounds.maxLat && lng >= bounds.minLng && lng <= bounds.maxLng;
 }
 
+export function lastLiePoint(
+  player: { throws?: Record<number, { lat?: number; lng?: number }[] | null> | null } | null | undefined,
+): { lat: number; lng: number } | null {
+  const throws = player?.throws;
+  if (!throws || typeof throws !== "object") return null;
+  const holes = Object.keys(throws).map(Number).filter((hole) => Number.isInteger(hole)).sort((a, b) => a - b);
+  for (let i = holes.length - 1; i >= 0; i--) {
+    const hole = holes[i];
+    if (hole == null) continue;
+    const rows = throws[hole];
+    if (!Array.isArray(rows) || !rows.length) continue;
+    const last = rows[rows.length - 1];
+    const lat = Number(last?.lat);
+    const lng = Number(last?.lng);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+  }
+  return null;
+}
+
+export function locationsToRecord(
+  locations: ReadonlyMap<number, LivePlayerLocation>,
+): Record<string, LivePlayerLocation> {
+  const out: Record<string, LivePlayerLocation> = {};
+  locations.forEach((value, index) => {
+    out[String(index)] = value;
+  });
+  return out;
+}
+
+export function locationsFromRecord(raw: unknown): Map<number, LivePlayerLocation> {
+  const out = new Map<number, LivePlayerLocation>();
+  if (!raw || typeof raw !== "object") return out;
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const index = Number(key);
+    if (!Number.isInteger(index) || index < 0) continue;
+    const parsed = parseLocationBody(value);
+    const at = Number((value as { at?: unknown } | null)?.at);
+    if (!parsed) continue;
+    out.set(index, { lat: parsed.lat, lng: parsed.lng, at: Number.isFinite(at) ? at : 0 });
+  }
+  return out;
+}
+
 export function publicPlayerLocations(
-  players: readonly { name: string; memberId?: string | null; removed?: boolean }[],
+  players: readonly { name: string; memberId?: string | null; removed?: boolean; throws?: Record<number, { lat?: number; lng?: number }[] | null> | null }[],
   locations: ReadonlyMap<number, LivePlayerLocation>,
   now = Date.now(),
   holes: readonly HoleCoords[] | null | undefined = null,
@@ -103,11 +149,29 @@ export function publicPlayerLocations(
     if (!player || player.removed) continue;
     if (!isLoggedInMemberId(player.memberId)) continue;
     const loc = locations.get(index);
-    if (!loc || now - loc.at > LOCATION_STALE_MS) continue;
-    if (!locationOnCourse(loc.lat, loc.lng, holes)) continue;
+    const fresh = Boolean(loc && now - loc.at <= LOCATION_STALE_MS);
+    const held = Boolean(loc && now - loc.at <= LOCATION_HOLD_MS);
+    const lie = lastLiePoint(player);
+    const point = held && loc
+      ? { lat: loc.lat, lng: loc.lng, at: loc.at, source: "gps" as const }
+      : lie
+        ? { lat: lie.lat, lng: lie.lng, at: loc?.at || 0, source: "lie" as const }
+        : loc
+          ? { lat: loc.lat, lng: loc.lng, at: loc.at, source: "gps" as const }
+          : null;
+    if (!point) continue;
+    if (!locationOnCourse(point.lat, point.lng, holes)) continue;
     const initials = playerInitials(player.name);
     if (!initials) continue;
-    out.push({ index, initials, lat: loc.lat, lng: loc.lng, at: loc.at });
+    out.push({
+      index,
+      initials,
+      lat: point.lat,
+      lng: point.lng,
+      at: point.at,
+      fresh: point.source === "gps" ? fresh : false,
+      source: point.source,
+    });
   }
   return out;
 }

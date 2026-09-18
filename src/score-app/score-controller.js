@@ -66,6 +66,8 @@ export function startScoreApp(options) {
         let locWatchId = null;
         let locRetryTimer = null;
         let locLastSent = 0;
+        let locLastFix = null;
+        let locLifecycleBound = false;
         const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
         const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
         const wakeLock = createWakeLock();
@@ -164,10 +166,40 @@ export function startScoreApp(options) {
                 locRetryTimer = null;
             }
         }
+        function postLiveLocation(lat, lng, force) {
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+            locLastFix = { lat: lat, lng: lng };
+            const now = Date.now();
+            if (!force && now - locLastSent < 8000) return;
+            locLastSent = now;
+            void api(LIVE + '/location', { method: 'POST', body: { lat: lat, lng: lng } }).then(function (r) {
+                if (r.status === 401 || r.status === 403 || r.status === 409) stopLiveLocation();
+            });
+        }
+        function onLiveLocationResume() {
+            if (WATCH) return;
+            if (S.status === 'final') return;
+            startLiveLocation();
+        }
+        function onLiveLocationVisibility() {
+            if (document.visibilityState === 'visible') {
+                onLiveLocationResume();
+                return;
+            }
+            if (locLastFix) postLiveLocation(locLastFix.lat, locLastFix.lng, true);
+        }
+        function bindLiveLocationLifecycle() {
+            if (WATCH || locLifecycleBound) return;
+            locLifecycleBound = true;
+            document.addEventListener('visibilitychange', onLiveLocationVisibility);
+            window.addEventListener('pageshow', onLiveLocationResume);
+            window.addEventListener('online', onLiveLocationResume);
+        }
         function startLiveLocation() {
             if (WATCH) return;
             if (!memberToken()) return;
             if (!navigator.geolocation) return;
+            bindLiveLocationLifecycle();
             if (locRetryTimer != null) {
                 clearTimeout(locRetryTimer);
                 locRetryTimer = null;
@@ -179,13 +211,7 @@ export function startScoreApp(options) {
             locWatchId = navigator.geolocation.watchPosition(function (pos) {
                 const lat = pos.coords && pos.coords.latitude;
                 const lng = pos.coords && pos.coords.longitude;
-                if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-                const now = Date.now();
-                if (now - locLastSent < 8000) return;
-                locLastSent = now;
-                void api(LIVE + '/location', { method: 'POST', body: { lat: lat, lng: lng } }).then(function (r) {
-                    if (r.status === 401 || r.status === 403 || r.status === 409) stopLiveLocation();
-                });
+                postLiveLocation(lat, lng, false);
             }, function (err) {
                 const policy = gpsErrorPolicy(err && err.code, true);
                 if (!policy.restart) {

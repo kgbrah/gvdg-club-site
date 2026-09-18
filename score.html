@@ -287,6 +287,7 @@
         .hole-map-player { pointer-events: none; }
         .hole-map-player-dot { fill: var(--primary-strong); stroke: white; stroke-width: 2; }
         .hole-map-player.self .hole-map-player-dot { fill: var(--primary); stroke: white; }
+        .hole-map-player.is-stale { opacity: 0.55; }
         .hole-map-player-label { fill: white; stroke: none; font: 700 10px Archivo, sans-serif; text-anchor: middle; }
         .hole-map-compact .hole-map-player-label { font-size: 8px; }
         .hole-map-chips { position: absolute; inset: 0; pointer-events: none; }
@@ -352,7 +353,9 @@
             fill: none; stroke: var(--primary-strong); stroke-width: 2.2;
             stroke-linecap: round; stroke-dasharray: 5 4;
         }
+        .hole-map-throw-line.is-muted { stroke-opacity: 0.32; }
         .hole-map-throw { pointer-events: none; }
+        .hole-map-throw.is-muted { opacity: 0.42; }
         .hole-map-throw-dot { fill: var(--primary-strong); stroke: white; stroke-width: 1.6; }
         .hole-map-throw-label {
             fill: white; stroke: none; font: 800 8px Archivo, sans-serif; text-anchor: middle;

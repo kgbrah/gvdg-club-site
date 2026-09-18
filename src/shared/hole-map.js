@@ -185,7 +185,7 @@ function ThrowMark(props) {
   return h(
     "g",
     {
-      className: "hole-map-throw",
+      className: "hole-map-throw" + (props.muted ? " is-muted" : ""),
       transform: `translate(${props.x} ${props.y})`,
     },
     [
@@ -381,7 +381,7 @@ function PlayerMark(props) {
   return h(
     "g",
     {
-      className: "hole-map-player" + (props.relClass === "self" ? " self" : ""),
+      className: "hole-map-player" + (props.relClass === "self" ? " self" : "") + (props.stale ? " is-stale" : ""),
       transform: `translate(${props.x} ${props.y})`,
     },
     [
@@ -456,17 +456,24 @@ export function HoleMap(props) {
   const udiscHref = compact ? "" : udiscDeepLink(props.udiscCourseId);
   const label = holeMapLabel(map, hole && hole.hole);
   const players = playerMarksOnMap(map, props.players);
-  const segments = throwSegments(throws, hole && hole.tee).map((seg) => {
-    const a = projectMapPoint(map, seg.a && seg.a.lat, seg.a && seg.a.lng);
-    const b = projectMapPoint(map, seg.b && seg.b.lat, seg.b && seg.b.lng);
-    if (!a || !b) return null;
-    return { ...seg, a, b };
-  }).filter(Boolean);
-  const throwMarks = throws.map((row, index) => {
-    const pt = projectMapPoint(map, row && row.lat, row && row.lng);
-    if (!pt) return null;
-    return { ...pt, n: row.n || index + 1 };
-  }).filter(Boolean);
+  const throwGroups = Array.isArray(props.throwGroups) && props.throwGroups.length
+    ? props.throwGroups
+    : [{ key: "self", throws, active: true }];
+  const groupGeometry = throwGroups.map((group) => {
+    const rows = Array.isArray(group.throws) ? group.throws : [];
+    const segs = throwSegments(rows, hole && hole.tee).map((seg) => {
+      const a = projectMapPoint(map, seg.a && seg.a.lat, seg.a && seg.a.lng);
+      const b = projectMapPoint(map, seg.b && seg.b.lat, seg.b && seg.b.lng);
+      if (!a || !b) return null;
+      return { ...seg, a, b };
+    }).filter(Boolean);
+    const marks = rows.map((row, index) => {
+      const pt = projectMapPoint(map, row && row.lat, row && row.lng);
+      if (!pt) return null;
+      return { ...pt, n: row.n || index + 1 };
+    }).filter(Boolean);
+    return { ...group, segs, marks };
+  });
   const measureFrom = projectMapPoint(map, props.measureFrom && props.measureFrom.lat, props.measureFrom && props.measureFrom.lng);
   const measureTo = projectMapPoint(map, props.measureTo && props.measureTo.lat, props.measureTo && props.measureTo.lng);
   function onMapPointer(event) {
@@ -510,14 +517,14 @@ export function HoleMap(props) {
             y1: map.tee.y,
             y2: map.basket.y,
           }),
-          ...segments.map((seg) => h("line", {
-            className: "hole-map-throw-line",
-            key: "throw-line-" + seg.n,
+          ...groupGeometry.flatMap((group) => group.segs.map((seg) => h("line", {
+            className: "hole-map-throw-line" + (group.active === false ? " is-muted" : ""),
+            key: "throw-line-" + group.key + "-" + seg.n,
             x1: seg.a.x,
             x2: seg.b.x,
             y1: seg.a.y,
             y2: seg.b.y,
-          })),
+          }))),
           measureFrom && measureTo
             ? h("line", {
               className: "hole-map-measure-line",
@@ -549,20 +556,22 @@ export function HoleMap(props) {
             initials: player.initials,
             key: `player-${player.key}`,
             relClass: player.relClass,
+            stale: player.stale,
             x: player.x,
             y: player.y,
           })),
-          ...throwMarks.map((mark) => (
-            flight && flight.hideN === mark.n
+          ...groupGeometry.flatMap((group) => group.marks.map((mark) => (
+            group.active !== false && flight && flight.hideN === mark.n
               ? null
               : h(ThrowMark, {
                 compact,
-                key: "throw-" + mark.n,
+                key: "throw-" + group.key + "-" + mark.n,
+                muted: group.active === false,
                 n: mark.n,
                 x: mark.x,
                 y: mark.y,
               })
-          )),
+          ))),
           h(FlyingDisc, {
             compact,
             discColor: props.discColor,

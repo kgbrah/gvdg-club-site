@@ -86,7 +86,7 @@ export function rangeHud({ from, to, mode, holeFt } = {}) {
 export const GPS_REMAINING_MAX_FT = 2500;
 export const GPS_WATCH_OPTIONS = {
   enableHighAccuracy: true,
-  maximumAge: 8000,
+  maximumAge: 15000,
   timeout: 60000,
 };
 
@@ -507,6 +507,7 @@ export function playerMarksOnMap(map, players) {
       strokes: player.strokes,
       label: player.label,
       relClass: player.relClass,
+      stale: player.fresh === false,
     });
   });
   marks.sort((a, b) => a.x - b.x || a.y - b.y);

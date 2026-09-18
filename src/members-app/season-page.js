@@ -72,7 +72,7 @@ function ResultRow({ row }) {
   const score = row.to_par != null ? formatToPar(row.to_par) : row.total != null ? String(row.total) : "-";
   const href = casual
     ? liveWatchHref({ roundCode: row.round_code })
-    : (row.event_id != null ? `events.html#event/${encodeURIComponent(row.event_id)}` : "events.html");
+    : (row.event_id != null ? liveWatchHref({ eventId: row.event_id }) : "events.html");
   return h("a", {
     className: "dash-event season-result",
     href,

@@ -181,7 +181,7 @@ export function watchFollowOptions({ players, hole }) {
   list.forEach((player) => {
     if (!player || seen.has(player.index)) return;
     const throws = watchHoleThrows(player, hole);
-    if (!throws.length && !Number(player.throwAt)) return;
+    if (!throws.length) return;
     seen.add(player.index);
     options.push({
       index: player.index,

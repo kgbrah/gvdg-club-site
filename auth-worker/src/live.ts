@@ -10,7 +10,7 @@ import { normalizeScorecards, playerScorerId, purgeScorerVotes, purgeScoreTarget
 import { canCastCtpVote, dropLiveCtp, recordCtpVote, type LiveCtpStore } from "./live-ctp.js";
 import { isLiveFormatError, normalizeLiveScoringConfig, normalizePairLabel, type LiveScoringConfig } from "./live-format.js";
 import { finalizeLiveEvent } from "./live-finalize.js";
-import { isLoggedInMemberId, locationMoved, locationOnCourse, parseLocationBody, type LivePlayerLocation } from "./live-locations.js";
+import { isLoggedInMemberId, locationMoved, locationOnCourse, locationsFromRecord, locationsToRecord, parseLocationBody, type LivePlayerLocation } from "./live-locations.js";
 import { sanitizeDiscColor } from "./disc-color-routes.js";
 import { parseThrowsBody } from "./play-stats.js";
 import { updateLivePairs } from "./live-pairs.js";
@@ -43,6 +43,7 @@ export class LiveEventDO {
     this.meta = (await this.state.storage.get<LiveMeta>("meta")) ?? null;
     this.players = (await this.state.storage.get<PlayerState[]>("players")) ?? [];
     this.liveCtps = (await this.state.storage.get<LiveCtpStore>("liveCtps")) ?? {};
+    this.locations = locationsFromRecord(await this.state.storage.get("locations"));
     normalizeScorecards(this.players, this.meta?.holes ?? []);
     this.loaded = true;
   }
@@ -51,6 +52,10 @@ export class LiveEventDO {
     await this.state.storage.put("meta", this.meta);
     await this.state.storage.put("players", this.players);
     await this.state.storage.put("liveCtps", this.liveCtps);
+  }
+
+  private async persistLocations(): Promise<void> {
+    await this.state.storage.put("locations", locationsToRecord(this.locations));
   }
 
   /** Fetch latest weather and fold into meta WITHOUT persisting — the caller persists once. */
@@ -490,7 +495,7 @@ export class LiveEventDO {
     return j(this.snapshot());
   }
 
-  private pingLocation(body: unknown, authMember: string | null): Response {
+  private async pingLocation(body: unknown, authMember: string | null): Promise<Response> {
     if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
     if (!isLoggedInMemberId(authMember)) return j({ error: "members_only" }, 403);
     const parsed = parseLocationBody(body);
@@ -500,6 +505,7 @@ export class LiveEventDO {
     if (meIndex < 0) return j({ error: "not_on_card" }, 403);
     const prev = this.locations.get(meIndex);
     this.locations.set(meIndex, { lat: parsed.lat, lng: parsed.lng, at: Date.now() });
+    await this.persistLocations();
     if (locationMoved(prev, parsed)) this.broadcast();
     return j({ ok: true });
   }

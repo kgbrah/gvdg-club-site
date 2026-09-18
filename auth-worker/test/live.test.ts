@@ -2458,9 +2458,9 @@ describe("LiveEventDO player GPS overlay", () => {
     const after = (await (await live.fetch(new Request("https://do/"))).json()) as { rev: number; playerLocations: { initials: string; lat: number; lng: number; at: number }[] };
     expect(after.rev).toBe(before.rev);
     expect(after.playerLocations).toHaveLength(1);
-    expect(after.playerLocations[0]).toMatchObject({ index: 0, initials: "AS", lat: 35.6005, lng: -77.37 });
+    expect(after.playerLocations[0]).toMatchObject({ index: 0, initials: "AS", lat: 35.6005, lng: -77.37, fresh: true, source: "gps" });
     expect(after.playerLocations[0]?.at).toBeGreaterThan(0);
-    expect(state.getStored("locations")).toBeUndefined();
+    expect(state.getStored("locations")).toMatchObject({ 0: { lat: 35.6005, lng: -77.37 } });
   });
 
   it("rejects guests, strangers, bad coordinates, and off-course GPS", async () => {

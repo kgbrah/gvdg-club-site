@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   isLoggedInMemberId,
+  lastLiePoint,
   locationMoved,
   locationOnCourse,
+  locationsFromRecord,
   parseLocationBody,
   playerInitials,
   publicPlayerLocations,
@@ -44,7 +46,7 @@ describe("live player locations", () => {
     expect(locationOnCourse(35.6, -77.37, [])).toBe(false);
   });
 
-  it("drops guests, removed players, stale pings, and off-course GPS from the public overlay", () => {
+  it("holds last-known GPS after the phone sleeps and falls back to the last lie", () => {
     const now = 1_000_000;
     const locations = new Map([
       [0, { lat: 35.6, lng: -77.37, at: now - 1_000 }],
@@ -64,6 +66,20 @@ describe("live player locations", () => {
       now,
       NORTH_REC,
     );
-    expect(published).toEqual([{ index: 0, initials: "AS", lat: 35.6, lng: -77.37, at: now - 1_000 }]);
+    expect(published).toEqual([
+      { index: 0, initials: "AS", lat: 35.6, lng: -77.37, at: now - 1_000, fresh: true, source: "gps" },
+      { index: 2, initials: "TB", lat: 35.602, lng: -77.372, at: now - 200_000, fresh: false, source: "gps" },
+    ]);
+    expect(lastLiePoint({ throws: { 3: [{ lat: 35.6008, lng: -77.3702 }] } })).toEqual({ lat: 35.6008, lng: -77.3702 });
+    const fromLie = publicPlayerLocations(
+      [{ name: "KG", memberId: "m_kg", throws: { 1: [{ lat: 35.6004, lng: -77.3701 }] } }],
+      new Map(),
+      now,
+      NORTH_REC,
+    );
+    expect(fromLie).toEqual([
+      { index: 0, initials: "K", lat: 35.6004, lng: -77.3701, at: 0, fresh: false, source: "lie" },
+    ]);
+    expect(locationsFromRecord({ 0: { lat: 35.6, lng: -77.37, at: 9 } }).get(0)).toEqual({ lat: 35.6, lng: -77.37, at: 9 });
   });
 });

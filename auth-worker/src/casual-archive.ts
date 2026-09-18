@@ -32,7 +32,21 @@ function parseHoles(raw: unknown): { hole: number; par: number; distance_ft?: nu
   });
 }
 
-function parseScorecard(raw: unknown): { hole: number; par: number; strokes: number }[] {
+function parseThrows(raw: unknown): { lat: number; lng: number; n: number }[] {
+  if (!Array.isArray(raw)) return [];
+  const throws: { lat: number; lng: number; n: number }[] = [];
+  for (const row of raw) {
+    const lat = Number((row as { lat?: unknown } | null)?.lat);
+    const lng = Number((row as { lng?: unknown } | null)?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) continue;
+    throws.push({ lat: Number(lat.toFixed(5)), lng: Number(lng.toFixed(5)), n: throws.length + 1 });
+    if (throws.length >= 18) break;
+  }
+  return throws;
+}
+
+function parseScorecard(raw: unknown): { hole: number; par: number; strokes: number; throws: { lat: number; lng: number; n: number }[] }[] {
   const parsed = parseJson(raw);
   if (!Array.isArray(parsed)) return [];
   return parsed.flatMap((item) => {
@@ -41,8 +55,16 @@ function parseScorecard(raw: unknown): { hole: number; par: number; strokes: num
     const par = Number((item as { par?: unknown }).par);
     const strokes = Number((item as { strokes?: unknown }).strokes);
     if (!Number.isInteger(hole) || !Number.isInteger(par) || !Number.isInteger(strokes)) return [];
-    return [{ hole, par, strokes }];
+    return [{ hole, par, strokes, throws: parseThrows((item as { throws?: unknown }).throws) }];
   });
+}
+
+function throwsFromScorecard(scorecard: { hole: number; throws: { lat: number; lng: number; n: number }[] }[]) {
+  const throws: Record<number, { lat: number; lng: number; n: number }[]> = {};
+  for (const hole of scorecard) {
+    if (hole.throws.length) throws[hole.hole] = hole.throws;
+  }
+  return throws;
 }
 
 function asInt(value: unknown): number | null {
@@ -90,6 +112,7 @@ export async function buildCasualArchiveSnapshot(database: D1Like, roundCode: st
       startingHole: null,
       scores,
       scorecards: {},
+      throws: throwsFromScorecard(scorecard),
     };
   });
 

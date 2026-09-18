@@ -28,6 +28,17 @@ export function publicPlayerThrows(
   return out;
 }
 
+export function attachThrowsToScorecard<T extends { hole: number }>(
+  holes: readonly T[] | null | undefined,
+  throwsByHole: PlayerState["throws"] | Record<number, unknown> | null | undefined,
+): Array<T & { throws?: { lat: number; lng: number; n: number }[] }> {
+  const cleaned = publicPlayerThrows(throwsByHole as PlayerState["throws"]);
+  return (Array.isArray(holes) ? holes : []).map((hole) => {
+    const throws = cleaned[hole.hole];
+    return throws && throws.length ? { ...hole, throws } : hole;
+  });
+}
+
 export function publicSnapshot(
   meta: LiveMeta | null,
   players: PlayerState[],

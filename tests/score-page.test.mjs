@@ -751,7 +751,8 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(holeMap, /flightPoint/);
   assert.match(holeMap, /requestAnimationFrame/);
   assert.match(holeMap, /hole-map-disc-flight/);
-  assert.match(holeMap, /props\.throwsKey/);
+  assert.match(holeMap, /throwGroups/);
+  assert.match(html, /hole-map-player\.is-stale/);
   assert.match(holeMap, /discColor: props\.discColor/);
   assert.match(holeMap, /hole-map-throw-line/);
   assert.match(holeMap, /Lie /);
@@ -1091,6 +1092,10 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.match(controller, /watchPosition/);
   assert.match(controller, /function applyPlayerLocations/);
   assert.match(controller, /function locationStamp/);
+  assert.match(controller, /function bindLiveLocationLifecycle/);
+  assert.match(controller, /visibilitychange/);
+  assert.match(controller, /pageshow/);
+  assert.match(watch, /throwGroups/);
   const watchBoot = controller.slice(controller.indexOf('async function loadWatch'), controller.indexOf('function watchRoundCode'));
   assert.doesNotMatch(watchBoot, /\/join/);
 });

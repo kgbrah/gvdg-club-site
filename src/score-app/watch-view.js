@@ -193,6 +193,11 @@ function WatchHoles(props) {
       key: "map",
       players: mapPlayers,
       scoreFlight,
+      throwGroups: followOptions.map((row) => ({
+        active: Boolean(follow && follow.index === row.index),
+        key: row.index,
+        throws: row.throws,
+      })),
       throws: followThrows,
       throwsKey: follow ? follow.index : "none",
       udiscCourseId: props.udiscCourseId,

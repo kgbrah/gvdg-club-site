@@ -5,6 +5,7 @@ import type { LiveScoringConfig } from "./live-format.js";
 import { finalizeStandings, type FinalLiveStanding, type PlayerState } from "./scoring.js";
 import { finalizeRoundStandings, healthyTargets, invalidScoreTargetsResponse, resolvedHoles, roundConfig, scoringState } from "./live-state.js";
 import { j, metadataJson, type LiveEnv, type LiveMeta, type ScoringState } from "./live-types.js";
+import { attachThrowsToScorecard } from "./live-snapshot.js";
 import { roundRatingForScoreWithWeather, solveSsa, type Propagator, type RatingMethod, type RatingStream } from "./rating-engine.js";
 import { clearRoundRatingsForCasualRound, clearRoundRatingsForEvent, createRoundRating, findRatingAnchor, getLayoutRatingBaseline, upsertLayoutRatingBaseline, upsertPlayerRatingFromRounds } from "./rating-store.js";
 import { isOpenPlayId } from "./authz.js";
@@ -65,7 +66,11 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
   }
   standings = standings.map((standing) => {
     const merged = mergePartnerPlayInputs(partnersForStanding(standing, input.players));
-    return { ...standing, breakdown: withPlayBreakdown(standing.breakdown, merged, holes) };
+    return {
+      ...standing,
+      breakdown: withPlayBreakdown(standing.breakdown, merged, holes),
+      holes: attachThrowsToScorecard(standing.holes, merged.throws),
+    };
   });
   meta.status = "final";
   if (meta.casual || !meta.eventId) {
