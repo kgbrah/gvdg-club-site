@@ -22,6 +22,7 @@ function walletDate(value) {
 
 function walletSource(source) {
   if (source === "event_payout") return "Event payout";
+  if (source === "event_entry") return "Event entry";
   if (source === "store_purchase") return "Pro shop";
   if (source === "manual_adjustment") return "Admin adjustment";
   return "Store credit";
@@ -188,13 +189,20 @@ export function WalletPanel({ token, compact = false }) {
       return undefined;
     }
     const controller = new AbortController();
-    setState({ status: "loading", wallet: null });
-    requestJson("/shop/wallet", { token, signal: controller.signal })
-      .then((wallet) => setState({ status: "ready", wallet }))
-      .catch((error) => {
-        if (error.name !== "AbortError") setState({ status: "error", wallet: null });
-      });
-    return () => controller.abort();
+    function load() {
+      setState((current) => ({ ...current, status: current.wallet ? current.status : "loading" }));
+      requestJson("/shop/wallet", { token, signal: controller.signal })
+        .then((wallet) => setState({ status: "ready", wallet }))
+        .catch((error) => {
+          if (error.name !== "AbortError") setState({ status: "error", wallet: null });
+        });
+    }
+    load();
+    window.addEventListener("gvdg:wallet-updated", load);
+    return () => {
+      controller.abort();
+      window.removeEventListener("gvdg:wallet-updated", load);
+    };
   }, [token]);
 
   if (!token || state.status === "error" || !state.wallet) return null;

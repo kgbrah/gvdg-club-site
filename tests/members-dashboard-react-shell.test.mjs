@@ -356,6 +356,7 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(homeJobs, /data-react-home-conditions/);
   assert.match(homeJobs, /pickUnpaidJobs/);
   assert.match(homeJobs, /homeConditionRows/);
+  assert.match(homeJobs, /payEventWithWallet/);
   assert.match(readFileSync('src/members-app/registration-utils.js', 'utf8'), /export function pickUnpaidJobs/);
   assert.match(html, /\.player-jobs \{ display: grid;/);
   assert.match(seasonPage, /data-react-season-page/);

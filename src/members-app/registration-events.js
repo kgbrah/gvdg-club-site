@@ -6,7 +6,7 @@ import { EventFieldRoster } from "../shared/event-field-roster.js";
 import { request } from "./api.js";
 import { dollars, formatEventDay } from "./format.js";
 import { memberAlert, memberConfirm } from "./member-dialogs.js";
-import { PayPalButtons } from "./registration-payments.js";
+import { PayPalButtons, WalletPayButton } from "./registration-payments.js";
 import { clientOwed, eventFromRegistration, eventMeta, isDoublesRegistration, parseArray, parseObject, sortRegistrations } from "./registration-utils.js";
 
 const h = React.createElement;
@@ -139,14 +139,17 @@ export function EventRegistrationCard({ event, registration, token, paymentsConf
       ? h("div", { className: "register-status", key: "registered" }, `Registered${registration.division ? ` - ${registration.division}` : ""}${registration.checked_in ? " - checked in" : ""}`)
       : null,
     registration?.paid_entry ? h("div", { className: "register-status", key: "paid" }, "Paid") : null,
+    registration && !registration.paid_entry && owed > 0
+      ? h("div", { className: "register-fee", key: "owed" }, `Amount due: ${dollars(owed)}`)
+      : null,
+    registration && !registration.paid_entry && owed > 0
+      ? h(WalletPayButton, { eventId: event.id, eventName: event.name, owed, token, onReload, key: "wallet" })
+      : null,
     registration && !registration.paid_entry && owed > 0 && paymentsConfig?.enabled
-      ? h(React.Fragment, { key: "payment" }, [
-        h("div", { className: "register-fee", key: "owed" }, `Amount due: ${dollars(owed)}`),
-        h(PayPalButtons, { eventId: event.id, token, paymentsConfig, onReload, key: "paypal" }),
-      ])
+      ? h(PayPalButtons, { eventId: event.id, token, paymentsConfig, onReload, key: "paypal" })
       : null,
     registration && !registration.paid_entry && owed > 0 && !paymentsConfig?.enabled
-      ? h("div", { className: "register-fee", key: "offline" }, `Amount due: ${dollars(owed)} - pay at the event (an admin will mark you paid).`)
+      ? h("div", { className: "register-fee", key: "offline" }, "Or pay at the event (an admin will mark you paid).")
       : null,
     registration
       ? h(RegisteredEventActions, { event, registration, token, onReload, key: "actions" })

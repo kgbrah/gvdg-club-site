@@ -153,3 +153,129 @@ describe("Track G — paid add-on lock (free ace-pot / CTP entry)", () => {
     expect((await call("/events/5/register", "POST", await tok(), { division: "MA1" }, e)).status).toBe(201);
   });
 });
+
+type WalletRow = Record<string, unknown>;
+
+function makeWalletPayDb({
+  paid = 0,
+  paymentRef = null as string | null,
+  credits = 5000,
+  registered = true,
+  entry = 1000,
+  ctp = 500,
+}: {
+  paid?: number;
+  paymentRef?: string | null;
+  credits?: number;
+  registered?: boolean;
+  entry?: number;
+  ctp?: number;
+} = {}) {
+  const walletRows: WalletRow[] = credits
+    ? [{ id: 1, member_id: "m_jane", amount_cents: credits, source: "event_payout", idempotency_key: null }]
+    : [];
+  let reg: WalletRow | null = registered
+    ? { id: 1, addons: '{"ctp":true}', paid_entry: paid, payment_ref: paymentRef, amount_paid_cents: paid ? entry + ctp : 0 }
+    : null;
+  let nextId = 10;
+  const balanceOf = (memberId: string) => walletRows
+    .filter((row) => row.member_id === memberId)
+    .reduce((sum, row) => sum + Number(row.amount_cents), 0);
+  return {
+    prepare(sql: string) {
+      let bound: unknown[] = [];
+      const stmt = {
+        bind(...args: unknown[]) { bound = args; return stmt; },
+        all: async () => ({ results: [] as WalletRow[], success: true }),
+        first: async () => {
+          if (/SELECT \* FROM registrations WHERE event_id = \? AND member_id/i.test(sql)) return registered ? { ...reg } : null;
+          if (/SELECT \* FROM registrations WHERE id = \?/i.test(sql)) return reg ? { ...reg } : null;
+          if (/FROM event_config/i.test(sql)) return { entry_fee_cents: entry, ctp_fee_cents: ctp, ace_fee_cents: 300 };
+          if (/INSERT INTO wallet_transactions/i.test(sql)) {
+            const [member_id, member_name, amount_cents, transaction_type, source, event_id, order_id, note, created_by, idempotency_key, sumMember, guardAmount] = bound;
+            if (walletRows.some((row) => row.idempotency_key === idempotency_key)) {
+              throw new Error("UNIQUE constraint failed: wallet_transactions.idempotency_key");
+            }
+            if (balanceOf(String(sumMember)) + Number(guardAmount) < 0) return null;
+            const row: WalletRow = {
+              id: nextId++, member_id, member_name, amount_cents, transaction_type, source,
+              event_id, order_id, note, created_by, idempotency_key,
+            };
+            walletRows.push(row);
+            return row;
+          }
+          if (/SELECT \* FROM wallet_transactions WHERE idempotency_key/i.test(sql)) {
+            return walletRows.find((row) => row.idempotency_key === bound[0]) ?? null;
+          }
+          if (/COALESCE\(SUM\(amount_cents\)/i.test(sql)) return { balance_cents: balanceOf(String(bound[0])) };
+          if (/UPDATE registrations SET paid_entry = 1/i.test(sql)) {
+            if (!reg || Number(reg.paid_entry) === 1) return null;
+            reg = { ...reg, paid_entry: 1, payment_ref: bound[0], amount_paid_cents: bound[1] };
+            return { ...reg };
+          }
+          if (/UPDATE registrations SET payment_ref = \? WHERE id = \? AND paid_entry = 0/i.test(sql)) {
+            if (!reg || Number(reg.paid_entry) === 1) return null;
+            const nextRef = String(bound[0]);
+            if (reg.payment_ref != null && reg.payment_ref !== nextRef) return null;
+            reg = { ...reg, payment_ref: nextRef };
+            return { id: 1 };
+          }
+          return null;
+        },
+        run: async () => {
+          if (/UPDATE registrations SET payment_ref = NULL/i.test(sql) && reg && Number(reg.paid_entry) === 0 && reg.payment_ref === bound[1]) {
+            reg = { ...reg, payment_ref: null };
+          }
+          return { results: [] as WalletRow[], success: true };
+        },
+      };
+      return stmt;
+    },
+    walletRows,
+    getReg: () => reg,
+  };
+}
+
+describe("event entry store-credit pay", () => {
+  it("requires auth", async () => {
+    expect((await call("/events/5/pay/wallet", "POST", undefined, {}, env({ DB: makeWalletPayDb() }))).status).toBe(401);
+  });
+  it("works in manual mode without PayPal credentials", async () => {
+    const dbState = makeWalletPayDb();
+    const res = await call("/events/5/pay/wallet", "POST", await tok(), {}, env({ DB: dbState }));
+    expect(res.status).toBe(201);
+    const body = await jsonObject(res);
+    expect(objectField(body, "registration").paid_entry).toBe(1);
+    expect(body.balance_cents).toBe(3500);
+    expect(dbState.walletRows.some((row) => row.source === "event_entry" && row.amount_cents === -1500)).toBe(true);
+  });
+  it("is idempotent on retry — no second debit", async () => {
+    const dbState = makeWalletPayDb();
+    const auth = await tok();
+    const e = env({ DB: dbState });
+    expect((await call("/events/5/pay/wallet", "POST", auth, {}, e)).status).toBe(201);
+    const retry = await call("/events/5/pay/wallet", "POST", auth, {}, e);
+    expect(retry.status).toBe(200);
+    expect((await jsonObject(retry)).balance_cents).toBe(3500);
+    expect(dbState.walletRows.filter((row) => row.source === "event_entry")).toHaveLength(1);
+  });
+  it("returns 402 when store credit cannot cover the fee", async () => {
+    const res = await call("/events/5/pay/wallet", "POST", await tok(), {}, env({ DB: makeWalletPayDb({ credits: 400 }) }));
+    expect(res.status).toBe(402);
+    expect((await jsonObject(res)).error).toBe("insufficient_store_credit");
+  });
+  it("returns 400 when the member is not registered", async () => {
+    expect((await call("/events/5/pay/wallet", "POST", await tok(), {}, env({ DB: makeWalletPayDb({ registered: false }) }))).status).toBe(400);
+  });
+  it("returns 409 when a PayPal capture already holds the slot", async () => {
+    const res = await call("/events/5/pay/wallet", "POST", await tok(), {}, env({ DB: makeWalletPayDb({ paymentRef: "ORDER123" }) }));
+    expect(res.status).toBe(409);
+    expect((await jsonObject(res)).error).toBe("capture_in_progress");
+  });
+  it("returns the paid registration without debiting again", async () => {
+    const dbState = makeWalletPayDb({ paid: 1, paymentRef: "ORDER123", credits: 5000 });
+    const res = await call("/events/5/pay/wallet", "POST", await tok(), {}, env({ DB: dbState }));
+    expect(res.status).toBe(200);
+    expect(dbState.walletRows.filter((row) => row.source === "event_entry")).toHaveLength(0);
+  });
+});

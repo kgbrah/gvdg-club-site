@@ -8,6 +8,8 @@ import { kvRateLimited } from "./kv-rate-limit.js";
 import { notifyRegistration } from "./register-notify.js";
 import { asInt, asStr } from "./input.js";
 import { deadlinePassed } from "./event-deadlines.js";
+import * as shopDb from "./shop-db.js";
+import { createWalletDebitOnce, findWalletTransactionByIdempotencyKey } from "./wallet-idempotency.js";
 
 const GUEST_REGISTER_IP_LIMIT = 15; // guest sign-ups per IP per minute
 
@@ -21,6 +23,71 @@ function guestMemberId(request: Request, body?: Record<string, unknown> | null):
 }
 function genGuestToken(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function parseAddons(raw: unknown): { ctp?: boolean; ace?: boolean } {
+  if (raw && typeof raw === "object") return raw as { ctp?: boolean; ace?: boolean };
+  try { return JSON.parse(String(raw || "{}")) as { ctp?: boolean; ace?: boolean }; } catch { return {}; }
+}
+
+function eventWalletKeys(eventId: number, memberId: string) {
+  return {
+    paymentRef: "wallet:event:" + eventId + ":" + memberId,
+    debitKey: "event_entry:" + memberId + ":" + eventId,
+  };
+}
+
+async function payEventWithWallet(env: Env, origin: string | null, eventId: number, memberId: string): Promise<Response> {
+  if (await kvRateLimited(env, "evwallet:" + memberId, 10, 60)) return json({ error: "rate_limited" }, 429, origin);
+  const member = await getMember(env.ROSTER, memberId);
+  if (!member) return json({ error: "unauthorized" }, 401, origin);
+  const reg = (await db.getMyRegistration(env.DB, eventId, memberId)) as { id: number; addons?: string; paid_entry?: number; payment_ref?: string } | null;
+  if (!reg) return json({ error: "not_registered" }, 400, origin);
+  const cfg = (await db.getEventConfig(env.DB, eventId)) as OwedConfig | null;
+  const owed = computeOwed(cfg ?? {}, parseAddons(reg.addons));
+  if (owed <= 0) return json({ error: "nothing_owed" }, 400, origin);
+
+  const balanceFor = () => shopDb.walletBalance(env.DB, memberId);
+  if (reg.paid_entry === 1) return json({ registration: reg, balance_cents: await balanceFor() }, 200, origin);
+
+  const { paymentRef, debitKey } = eventWalletKeys(eventId, memberId);
+  const prior = await findWalletTransactionByIdempotencyKey(env.DB, debitKey);
+  if (prior) {
+    const updated = await db.markRegistrationPaid(env.DB, reg.id, paymentRef, owed);
+    return json({ registration: updated ?? (await db.getRegistration(env.DB, reg.id)), transaction: prior, balance_cents: await balanceFor() }, 200, origin);
+  }
+
+  const balance = await balanceFor();
+  if (balance < owed) return json({ error: "insufficient_store_credit", balance_cents: balance, total_cents: owed }, 402, origin);
+
+  if (!(await db.reserveCapture(env.DB, reg.id, paymentRef))) {
+    return json({ error: "capture_in_progress" }, 409, origin);
+  }
+
+  const debit = await createWalletDebitOnce(env.DB, {
+    member_id: memberId,
+    member_name: member.name,
+    amount_cents: -owed,
+    transaction_type: "debit",
+    source: "event_entry",
+    event_id: eventId,
+    note: "Event entry #" + eventId,
+    idempotency_key: debitKey,
+  });
+  if (!debit.ok) {
+    await db.releaseCapture(env.DB, reg.id, paymentRef);
+    if (debit.error === "insufficient_balance") {
+      return json({ error: "insufficient_store_credit", balance_cents: await balanceFor(), total_cents: owed }, 402, origin);
+    }
+    return json({ error: "payment_failed" }, 409, origin);
+  }
+
+  const updated = await db.markRegistrationPaid(env.DB, reg.id, paymentRef, owed);
+  return json({
+    registration: updated ?? (await db.getRegistration(env.DB, reg.id)),
+    transaction: debit.transaction,
+    balance_cents: await balanceFor(),
+  }, debit.created ? 201 : 200, origin);
 }
 
 export async function handleClubRegistration(
@@ -44,6 +111,7 @@ export async function handleClubRegistration(
 
   if (seg[2] === "pay" && method === "POST") {
     if (!claims) return json({ error: "unauthorized" }, 401, origin);
+    if (seg[3] === "wallet") return payEventWithWallet(env, origin, eid, claims.sub);
     if (!(env.PAYPAL_CLIENT_ID && env.PAYPAL_SECRET)) return json({ error: "payments_not_configured" }, 503, origin);
     const reg = (await db.getMyRegistration(env.DB, eid, claims.sub)) as { id: number; addons?: string; paid_entry?: number; payment_ref?: string } | null;
     if (!reg) return json({ error: "not_registered" }, 400, origin);

@@ -122,11 +122,10 @@ Tap a tab to switch rooms.
 5. Tap to finish. Now you're signed up! To un-sign-up, tap **Withdraw**.
 
 ### 💳 Pay for a game
-If you owe an entry fee, **Home** shows a **Pay** job. Tap it to jump to Events.
-There are a few ways, and the club picks which one is on:
-- **PayPal:** if you owe money, PayPal buttons appear. Tap and pay in PayPal.
-- **Store credit (wallet):** if you have club credit, you can use that.
-- **Pay at the event:** sometimes it just says "pay at the event" — bring money on game day.
+If you owe an entry fee, **Home** shows a **Pay** job.
+- **Store credit:** if your wallet covers the fee, tap **Pay**, confirm, and you're marked paid.
+- **PayPal:** on Events, PayPal buttons appear when the club has online pay on.
+- **Pay at the event:** if you don't have enough credit, tap **Due** to open Events, or bring money on game day and a helper will mark you paid.
 
 ### ✅ Check in on game day
 1. When you get to the game, open the event.

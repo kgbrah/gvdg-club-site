@@ -39,7 +39,16 @@ fall back to manual mode.
   owes (entry + opted-in add-ons) and only marks them paid if PayPal reports `COMPLETED` with a captured
   amount `>=` what's owed. The client is never trusted for the price.
 - Re-capturing the same order is **idempotent** (no double-charge / double-credit).
-- A free event (no entry fee) needs no payment regardless.
+- a free event (no entry fee) needs no payment regardless.
+
+## Store credit (wallet)
+
+Members can pay an owed entry from **store credit** even when PayPal is off. `POST /events/:id/pay/wallet`
+recomputes the amount server-side, atomically debits the append-only wallet (same balance guard as the
+pro shop), and marks the registration paid. Retries are idempotent. A PayPal capture already in progress
+blocks the wallet debit so the member cannot be charged twice. Guests do not have wallets.
+
+Admin cash/Venmo override still works. Wallet pay does not replace PayPal — both can be offered at once.
 
 ## Admin override stays available
 
