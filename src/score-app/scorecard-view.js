@@ -152,7 +152,14 @@ function currentRangeHud(hole, gps, measure) {
     return rangeHud({ from: measure.a, to: hole.target });
   }
   if (gps && hole && hole.target) {
-    return rangeHud({ from: gps, to: hole.target });
+    const hud = rangeHud({ from: gps, to: hole.target });
+    const holeFt = Number(hole.distance_ft);
+    const tooFar = hud && (
+      (Number.isFinite(holeFt) && holeFt > 0 && hud.ft > Math.max(holeFt * 4, 1200))
+      || hud.ft > 2500
+    );
+    if (tooFar) return rangeHud({ holeFt: hole.distance_ft, mode: "hole" });
+    return hud;
   }
   return rangeHud({ holeFt: hole && hole.distance_ft, mode: "hole" });
 }
@@ -401,6 +408,48 @@ function TotalsBar(props) {
   );
 }
 
+function HoleGrid(props) {
+  const holes = Array.isArray(props.holes) ? props.holes : [];
+  if (!holes.length) return null;
+  return h(
+    "div",
+    { className: "holegrid", key: "grid" },
+    holes.map((hole) => {
+      const rel = hole.relative;
+      const classes = [
+        hole.current ? "cur" : "",
+        hole.done ? "done" : "",
+        hole.conflict ? "conflict" : "",
+        hole.ctp ? "ctp" : "",
+        rel ? rel.className : "",
+      ].filter(Boolean).join(" ");
+      const label = rel
+        ? `Hole ${hole.hole}, ${rel.text} ${hole.score}`
+        : hole.score != null
+          ? `Hole ${hole.hole}, ${hole.score}`
+          : `Hole ${hole.hole}`;
+      return h(
+        "button",
+        {
+          "aria-current": hole.current ? "true" : undefined,
+          "aria-label": label,
+          className: classes,
+          key: hole.hole,
+          type: "button",
+          onClick: () => props.onJump && props.onJump(hole.index),
+        },
+        [
+          h("span", { className: "holegrid-num", key: "num" }, String(hole.hole)),
+          hole.score != null
+            ? h("b", { className: "holegrid-score", key: "score" }, String(hole.score))
+            : h("span", { className: "holegrid-empty", key: "empty" }, "·"),
+          rel ? h("span", { className: "holegrid-rel", key: "rel" }, rel.text) : null,
+        ],
+      );
+    }),
+  );
+}
+
 function CtpClaim(props) {
   const claim = props.ctpClaim;
   if (!claim || !claim.ctps || !claim.ctps.length) return null;
@@ -598,6 +647,7 @@ export function ScorecardView(props) {
           measuring,
           onMeasure,
         }),
+        h(HoleGrid, { holes: props.holeGrid, onJump: props.onJumpHole }),
         props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,
         props.potsAceHint ? h("p", { className: "pots-ace-hint", key: "ace-hint" }, props.potsAceHint) : null,
       ]),

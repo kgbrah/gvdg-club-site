@@ -652,6 +652,7 @@ export function startScoreApp(options) {
                 onManagePlayers: openManagePlayers,
                 onNext: function () { S.holeIdx = playOrderStep(S.holes, S.holeIdx, startingHoleForState(S), 1); renderHole(); },
                 onPrevious: function () { S.holeIdx = playOrderStep(S.holes, S.holeIdx, startingHoleForState(S), -1); renderHole(); },
+                onJumpHole: function (index) { S.holeIdx = index; renderHole(); },
                 onScore: postScore,
                 onCtpVote: EVENT_ID && !WATCH ? postCtpVote : null,
                 onOpenFinish: openFinishConfirm,

@@ -498,6 +498,7 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
   const holeScores = (state.cardmates || []).map((player) => player && player.scores ? player.scores[hole.hole] : null);
   const holeGrid = (state.holes || []).map((currentHole, index) => {
     const score = mine ? strokesForRow(state, mine, currentHole.hole, scorerIndex) : null;
+    const relative = score == null ? null : strokeLabel(score, currentHole.par);
     return {
       conflict: holeHasConflict(state, currentHole.hole),
       ctp: pots.holeNumbers.indexOf(currentHole.hole) >= 0,
@@ -505,6 +506,8 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
       done: score != null,
       hole: currentHole.hole,
       index,
+      par: currentHole.par,
+      relative,
       score,
     };
   });
