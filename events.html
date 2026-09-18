@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-title" content="GVDG Club">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=159">
+    <link rel="manifest" href="site.webmanifest?v=160">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -370,15 +370,25 @@
         .hole-map-fairway-shadow { fill: none; stroke: black; stroke-width: 6; stroke-linecap: round; opacity: 0.45; }
         .hole-map-fairway { fill: none; stroke: white; stroke-width: 3; stroke-dasharray: 7 6; stroke-linecap: round; }
         .hole-map-tee-pad {
-            fill: color-mix(in srgb, var(--light) 58%, var(--text-muted));
-            stroke: color-mix(in srgb, var(--green) 55%, var(--text-muted));
-            stroke-width: 1.35;
+            fill: color-mix(in srgb, var(--light) 38%, var(--text-muted));
+            stroke: color-mix(in srgb, var(--dark) 45%, var(--text-muted));
+            stroke-width: 1.2;
         }
-        .hole-map-basket-shadow { fill: rgba(0, 0, 0, 0.35); }
-        .hole-map-basket-pole { fill: var(--dark); stroke: white; stroke-width: 1; }
-        .hole-map-basket-tray { fill: var(--accent); stroke: white; stroke-width: 1; }
-        .hole-map-basket-band { fill: var(--primary); stroke: white; stroke-width: 1; }
-        .hole-map-basket-chain { stroke: var(--light); stroke-width: 1.15; stroke-linecap: round; }
+        .hole-map-tee-pad-front {
+            fill: color-mix(in srgb, var(--dark) 28%, var(--text-muted));
+            stroke: none;
+        }
+        .hole-map-basket-shadow { fill: rgba(0, 0, 0, 0.4); }
+        .hole-map-basket-base { fill: var(--dark); stroke: var(--light); stroke-width: 0.6; }
+        .hole-map-basket-pole { fill: var(--dark); stroke: var(--light); stroke-width: 0.55; }
+        .hole-map-basket-tray { fill: none; stroke: var(--light); stroke-width: 1.05; }
+        .hole-map-basket-tray-fill { fill: color-mix(in srgb, var(--dark) 88%, var(--light)); stroke: none; }
+        .hole-map-basket-band { fill: var(--dark); stroke: var(--light); stroke-width: 1.05; }
+        .hole-map-basket-chain { stroke: color-mix(in srgb, var(--light) 72%, var(--text-muted)); stroke-width: 0.7; stroke-linecap: round; }
+        .hole-map-basket-chain-inner { stroke-width: 0.55; opacity: 0.85; }
+        .hole-map-basket-chain-body { fill: color-mix(in srgb, var(--light) 50%, var(--dark)); stroke: none; opacity: 0.4; }
+        .hole-map-basket-cage { stroke: var(--light); stroke-width: 0.55; fill: none; }
+        .hole-map-basket-flag { fill: var(--over); stroke: var(--dark); stroke-width: 0.4; }
         .hole-map-north { fill: white; font: 700 13px Archivo, sans-serif; paint-order: stroke; stroke: black; stroke-width: 3; }
         .hole-map-player { pointer-events: none; }
         .hole-map-player-dot { fill: var(--primary-strong); stroke: white; stroke-width: 2; }
@@ -399,7 +409,7 @@
         .tee-sign-label, .tee-sign-par { font: 600 14px system-ui, sans-serif; fill: currentColor; }
         .tee-sign-dist { font: 600 14px system-ui, sans-serif; fill: currentColor; opacity: 0.8; }
     </style>
-  <script type="module" src="public-app/public-app.js?v=159"></script>
+  <script type="module" src="public-app/public-app.js?v=160"></script>
   <script src="pwa.js" defer></script>
 </head>
 <body data-api-base="" data-page="events" data-events-view="status">

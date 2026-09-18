@@ -31,6 +31,16 @@ export function headingDeg(from, to) {
   return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
 }
 
+export function teePadRotationDeg(tee, basket) {
+  if (!tee || !basket) return 0;
+  const dx = Number(basket.x) - Number(tee.x);
+  const dy = Number(basket.y) - Number(tee.y);
+  if (!Number.isFinite(dx) || !Number.isFinite(dy) || (dx === 0 && dy === 0)) return 0;
+  // Local pad +Y is the long throwing axis. Align it with the on-screen
+  // tee→basket line, not geographic heading (the 16:9 map is stretched).
+  return Number(((Math.atan2(dy, dx) * 180 / Math.PI) - 90).toFixed(2));
+}
+
 export function windBlowToDeg(windFromDeg) {
   const from = finite(windFromDeg);
   return from == null ? null : (from + 180) % 360;
@@ -104,6 +114,7 @@ export function projectHoleMap(hole, options = {}) {
     tee: teePt,
     basket: basketPt,
     headingDeg: headingDeg(tee, basket),
+    teeRotationDeg: teePadRotationDeg(teePt, basketPt),
     distanceFt,
     windBlowToDeg: windBlowToDeg(windFrom),
     windFromDeg: windFrom,

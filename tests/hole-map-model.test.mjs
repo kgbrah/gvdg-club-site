@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { headingDeg, holeMapLabel, holePoint, playerMarksOnMap, projectHoleMap, projectMapPoint, satelliteImageUrl, scoreChipAnchor, windBlowToDeg } from "../src/shared/hole-map-model.js";
+import { headingDeg, holeMapLabel, holePoint, playerMarksOnMap, projectHoleMap, projectMapPoint, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, windBlowToDeg } from "../src/shared/hole-map-model.js";
 
 test("holePoint requires numeric lat/lng", () => {
   assert.equal(holePoint(null), null);
@@ -57,6 +57,19 @@ test("heading and wind helpers stay on the compass", () => {
   assert.equal(Math.round(headingDeg({ lat: 0, lng: 0 }, { lat: 1, lng: 0 })), 0);
   assert.equal(windBlowToDeg(90), 270);
   assert.equal(windBlowToDeg(null), null);
+});
+
+test("tee pad rotation follows the on-screen fairway, not compass heading", () => {
+  assert.equal(teePadRotationDeg({ x: 10, y: 10 }, { x: 10, y: 0 }), -180);
+  assert.equal(teePadRotationDeg({ x: 0, y: 10 }, { x: 10, y: 10 }), -90);
+  assert.equal(teePadRotationDeg({ x: 0, y: 0 }, { x: 10, y: 10 }), -45);
+  const southeast = projectHoleMap({
+    tee: { lat: 35.6, lng: -77.37, label: "Gold" },
+    target: { lat: 35.599, lng: -77.369, label: "A" },
+  });
+  assert.ok(southeast.teeRotationDeg > -90 && southeast.teeRotationDeg < 0);
+  assert.ok(southeast.basket.x > southeast.tee.x);
+  assert.ok(southeast.basket.y > southeast.tee.y);
 });
 
 test("projectMapPoint places players on the hole and hides off-map GPS", () => {

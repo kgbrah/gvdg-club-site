@@ -54,34 +54,50 @@ function ScoreChips({ marks, width, height, compact }) {
 
 function TeePad(props) {
   const compact = Boolean(props.compact);
-  const width = compact ? 12 : 16;
-  const height = compact ? 18 : 22;
-  const heading = Number.isFinite(props.headingDeg) ? props.headingDeg : 0;
+  const width = compact ? 11 : 14;
+  const length = compact ? 20 : 26;
+  const rotation = Number.isFinite(props.rotationDeg) ? props.rotationDeg : 0;
+  const front = compact ? 2 : 2.6;
+  const padY = -length * 0.72;
   return h(
     "g",
     {
       className: "hole-map-tee-mark",
-      transform: `translate(${props.x} ${props.y}) rotate(${180 - heading})`,
+      transform: `translate(${props.x} ${props.y}) rotate(${rotation})`,
     },
     [
       h("title", { key: "title" }, props.label || "Tee"),
       h("rect", {
         className: "hole-map-tee-pad",
-        height,
+        height: length,
         key: "pad",
-        rx: compact ? 1.6 : 2.2,
+        rx: compact ? 1.4 : 2,
         width,
         x: -width / 2,
-        y: -height / 2,
+        y: padY,
+      }),
+      h("rect", {
+        className: "hole-map-tee-pad-front",
+        height: front,
+        key: "front",
+        rx: compact ? 0.6 : 0.8,
+        width: width - 2,
+        x: -(width - 2) / 2,
+        y: padY + length - front,
       }),
     ],
   );
 }
 
+
 function BasketMark(props) {
   const compact = Boolean(props.compact);
-  const scale = compact ? 1.2 : 1.35;
-  const chains = compact ? [-3.2, 0, 3.2] : [-4.2, -1.4, 1.4, 4.2];
+  const scale = compact ? 1.7 : 2;
+  const outer = compact
+    ? [-6.2, -4.7, -3.1, -1.55, 0, 1.55, 3.1, 4.7, 6.2]
+    : [-7, -5.6, -4.2, -2.8, -1.4, 0, 1.4, 2.8, 4.2, 5.6, 7];
+  const inner = compact ? [-3.8, -1.3, 1.3, 3.8] : [-4.8, -2.9, -1, 1, 2.9, 4.8];
+  const cage = compact ? [-5.4, -2.7, 0, 2.7, 5.4] : [-6.4, -3.8, -1.3, 1.3, 3.8, 6.4];
   return h(
     "g",
     {
@@ -90,21 +106,61 @@ function BasketMark(props) {
     },
     [
       h("title", { key: "title" }, props.label || "Basket"),
-      h("ellipse", { className: "hole-map-basket-shadow", cx: 0, cy: 9.2, key: "shadow", rx: 7.4, ry: 2.4 }),
-      h("rect", { className: "hole-map-basket-pole", height: 22, key: "pole", rx: 0.8, width: 2.6, x: -1.3, y: -16 }),
-      h("ellipse", { className: "hole-map-basket-tray", cx: 0, cy: 6.2, key: "tray", rx: 7.6, ry: 2.5 }),
-      h("ellipse", { className: "hole-map-basket-band", cx: 0, cy: -8.2, key: "band", rx: 6.4, ry: 2.15 }),
-      ...chains.map((dx, index) => h("line", {
-        className: "hole-map-basket-chain",
-        key: "chain-" + index,
-        x1: dx * 0.62,
-        x2: dx,
-        y1: -8.2,
-        y2: 5.8,
+      h("ellipse", { className: "hole-map-basket-shadow", cx: 1.2, cy: 11.8, key: "shadow", rx: 7.6, ry: 2.4 }),
+      h("ellipse", { className: "hole-map-basket-base", cx: 0, cy: 10.8, key: "base", rx: 4.2, ry: 1.25 }),
+      h("rect", { className: "hole-map-basket-pole", height: 25, key: "pole", rx: 0.6, width: 1.6, x: -0.8, y: -14.4 }),
+      h("path", {
+        className: "hole-map-basket-chain-body",
+        d: "M-5.6 -10.8 L-6.4 2.8 L6.4 2.8 L5.6 -10.8 Z",
+        key: "chain-body",
+      }),
+      ...inner.map((dx, index) => h("line", {
+        className: "hole-map-basket-chain hole-map-basket-chain-inner",
+        key: "inner-" + index,
+        x1: dx * 0.82,
+        x2: dx * 0.2,
+        y1: -10.7,
+        y2: 2.4,
       })),
+      ...outer.map((dx, index) => h("line", {
+        className: "hole-map-basket-chain",
+        key: "outer-" + index,
+        x1: dx * 0.9,
+        x2: dx,
+        y1: -10.85,
+        y2: 2.95,
+      })),
+      h("ellipse", { className: "hole-map-basket-tray-fill", cx: 0, cy: 6.2, key: "tray-floor", rx: 7.2, ry: 2.35 }),
+      ...cage.map((dx, index) => h("line", {
+        className: "hole-map-basket-cage",
+        key: "cage-" + index,
+        x1: dx * 0.94,
+        x2: dx,
+        y1: 3,
+        y2: 7,
+      })),
+      h("ellipse", {
+        className: "hole-map-basket-tray",
+        cx: 0,
+        cy: 3,
+        key: "tray-rim",
+        rx: 7.1,
+        ry: 2.3,
+      }),
+      h("ellipse", {
+        className: "hole-map-basket-band",
+        cx: 0,
+        cy: -10.9,
+        key: "band",
+        rx: 6.4,
+        ry: 2.05,
+      }),
+      h("rect", { className: "hole-map-basket-pole", height: 3.2, key: "pin", width: 0.65, x: -0.32, y: -17.8 }),
+      h("polygon", { className: "hole-map-basket-flag", key: "flag", points: "0.32,-17.6 5.4,-16.1 0.32,-14.5" }),
     ],
   );
 }
+
 
 function PlayerMark(props) {
   const compact = Boolean(props.compact);
@@ -168,9 +224,9 @@ export function HoleMap(props) {
           }),
           h(TeePad, {
             compact,
-            headingDeg: map.headingDeg,
             key: "tee",
             label: map.tee.label,
+            rotationDeg: map.teeRotationDeg,
             x: map.tee.x,
             y: map.tee.y,
           }),
