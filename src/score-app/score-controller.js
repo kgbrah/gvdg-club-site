@@ -29,6 +29,14 @@ import { buildLivePots, withLiveCtpLeaders } from "../shared/live-pots-model.js"
 import { isLiveWatchRequest, liveRoundCodeFromSearch, liveScoreHref, liveWatchHref } from "../shared/live-watch.js";
 import { holeWinners, winnerColor } from "../shared/matchplay-colors.js";
 import { notifyScoreAuthChanged } from "../shared/player-theme-session.js";
+import {
+    buildShareCard,
+    canShareFiles,
+    downloadShareFile,
+    shareCardFile,
+    shareCardPng,
+    shareCardText,
+} from "./scorecard-share.js";
 
 export function startScoreApp(options) {
         "use strict";
@@ -963,10 +971,54 @@ export function startScoreApp(options) {
             toast(p.name + ' removed');
         }
         function shareRound() {
-            const url = location.origin + location.pathname + '?round=' + ROUND_CODE;
-            if (navigator.share) { navigator.share({ title: 'GVDG round ' + ROUND_CODE, text: 'Join my disc golf card — code ' + ROUND_CODE, url: url }).catch(function () {}); }
-            else if (navigator.clipboard) { navigator.clipboard.writeText(url).then(function () { toast('Link copied'); }).catch(function () { toast('Code: ' + ROUND_CODE); }); }
-            else toast('Code: ' + ROUND_CODE);
+            const url = shareCardUrl();
+            const model = buildShareCard(S, {
+                now: new Date(),
+                roundCode: ROUND_CODE,
+                scorerIndex: currentScorerIndex(),
+            });
+            const title = model.course && model.course !== "Disc golf"
+                ? ("GVDG · " + model.course)
+                : (ROUND_CODE ? ("GVDG round " + ROUND_CODE) : "GVDG scorecard");
+            const text = shareCardText(model, url);
+            shareRoundPayload(model, { title: title, text: text, url: url });
+        }
+        function shareCardUrl() {
+            if (ROUND_CODE) return location.origin + location.pathname + "?round=" + ROUND_CODE;
+            if (EVENT_ID) return location.origin + location.pathname + "?event=" + EVENT_ID + "&watch=1";
+            return location.origin + location.pathname;
+        }
+        async function shareRoundPayload(model, payload) {
+            let file = null;
+            if (model && model.scored) {
+                try {
+                    file = shareCardFile(await shareCardPng(model), model);
+                } catch {
+                    file = null;
+                }
+            }
+            if (file && canShareFiles(file)) {
+                navigator.share({
+                    files: [file],
+                    title: payload.title,
+                    text: payload.text,
+                    url: payload.url,
+                }).catch(function () {});
+                return;
+            }
+            if (file) downloadShareFile(file);
+            if (navigator.share) {
+                navigator.share({ title: payload.title, text: payload.text, url: payload.url }).catch(function () {});
+                if (file) toast("Scorecard saved");
+                return;
+            }
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(payload.url).then(function () {
+                    toast(file ? "Scorecard saved · link copied" : "Link copied");
+                }).catch(function () { toast(ROUND_CODE ? ("Code: " + ROUND_CODE) : payload.url); });
+                return;
+            }
+            toast(ROUND_CODE ? ("Code: " + ROUND_CODE) : payload.url);
         }
         function watchHref() {
             return liveWatchHref({ eventId: EVENT_ID, roundCode: ROUND_CODE });
