@@ -588,22 +588,38 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
   };
 }
 
-function finishBlocker(state, blockers) {
+function holeIsBehindCurrent(state, holeNumber) {
   const holes = Array.isArray(state.holes) ? state.holes : [];
-  function locate(holeNumber) {
-    const index = holes.findIndex((row) => row && row.hole === holeNumber);
-    return { hole: holeNumber, index: index >= 0 ? index : 0 };
-  }
+  const startHole = startingHoleForState(state);
+  const { order, pos } = playOrderPosition(holes, state.holeIdx, startHole);
+  const index = holes.findIndex((row) => row && row.hole === holeNumber);
+  if (index < 0) return false;
+  const missingPos = order.indexOf(index);
+  return missingPos >= 0 && missingPos < pos;
+}
+
+function locateHole(state, holeNumber) {
+  const holes = Array.isArray(state.holes) ? state.holes : [];
+  const index = holes.findIndex((row) => row && row.hole === holeNumber);
+  return { hole: holeNumber, index: index >= 0 ? index : 0 };
+}
+
+function skippedUnscoredHoles(state, blockers) {
+  return (blockers.missing || [])
+    .filter((row) => row && Number.isFinite(Number(row.hole)) && holeIsBehindCurrent(state, Number(row.hole)))
+    .map((row) => {
+      const hole = Number(row.hole);
+      return { ...locateHole(state, hole), kind: "missing", text: "Hole " + hole + " needs a score" };
+    });
+}
+
+function finishBlocker(state, blockers) {
   const conflict = (blockers.conflicts || [])[0];
   if (conflict && Number.isFinite(Number(conflict.hole))) {
     const values = Array.isArray(conflict.values) ? conflict.values.join(" vs ") : "";
-    return { ...locate(Number(conflict.hole)), kind: "conflict", text: "Hole " + conflict.hole + (values ? ": " + values : "") };
+    return { ...locateHole(state, Number(conflict.hole)), kind: "conflict", text: "Hole " + conflict.hole + (values ? ": " + values : "") };
   }
-  const missing = (blockers.missing || [])[0];
-  if (missing && Number.isFinite(Number(missing.hole))) {
-    return { ...locate(Number(missing.hole)), kind: "missing", text: "Hole " + missing.hole + " needs a score" };
-  }
-  return null;
+  return skippedUnscoredHoles(state, blockers)[0] || null;
 }
 
 function buildFinishView(state, mode, blockers, locked, scorerIndex) {
@@ -611,6 +627,7 @@ function buildFinishView(state, mode, blockers, locked, scorerIndex) {
   const attestation = state.cardAttestation && typeof state.cardAttestation === "object" ? state.cardAttestation : {};
   const agreedIndexes = Array.isArray(attestation.agreedIndexes) ? attestation.agreedIndexes : [];
   const review = cardReview(state, scorerIndex, agreedIndexes);
+  const skipped = locked || blockers.ready ? [] : skippedUnscoredHoles(state, blockers);
   return {
     locked,
     ready: blockers.ready,
@@ -620,6 +637,7 @@ function buildFinishView(state, mode, blockers, locked, scorerIndex) {
     review,
     waiting: review.waiting,
     voterIndex: scorerIndex ?? state.myIndex,
+    skipped,
     blocker: locked || blockers.ready ? null : finishBlocker(state, blockers),
   };
 }

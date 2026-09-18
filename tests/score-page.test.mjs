@@ -409,6 +409,59 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
   assert.equal(view.finish.ready, false);
   assert.equal(view.finish.blocker.kind, 'conflict');
   assert.match(view.finish.blocker.text, /4 vs 5/);
+  const missingOnCurrent = buildScorecardViewState({
+    state: { ...state, conflicts: [], missing: [{ cardId: 'card-a', playerName: 'Ava King', hole: 1 }], holeIdx: 0 },
+    mode: 'round',
+    roundCode: 'QA1234',
+    scorerIndex: 0,
+    teeSign: null,
+  });
+  assert.equal(missingOnCurrent.finish.blocker, null);
+  assert.deepEqual(missingOnCurrent.finish.skipped, []);
+  const missingAhead = buildScorecardViewState({
+    state: { ...state, conflicts: [], missing: [{ cardId: 'card-a', playerName: 'Ava King', hole: 2 }], holeIdx: 0 },
+    mode: 'round',
+    roundCode: 'QA1234',
+    scorerIndex: 0,
+    teeSign: null,
+  });
+  assert.equal(missingAhead.finish.blocker, null);
+  assert.deepEqual(missingAhead.finish.skipped, []);
+  const missingBehind = buildScorecardViewState({
+    state: { ...state, conflicts: [], missing: [{ cardId: 'card-a', playerName: 'Ava King', hole: 1 }], holeIdx: 1 },
+    mode: 'round',
+    roundCode: 'QA1234',
+    scorerIndex: 0,
+    teeSign: null,
+  });
+  assert.equal(missingBehind.finish.blocker.kind, 'missing');
+  assert.equal(missingBehind.finish.blocker.hole, 1);
+  assert.equal(missingBehind.finish.skipped.length, 1);
+  const shotgunHoles = Array.from({ length: 18 }, (_, i) => ({ hole: i + 1, par: 3 }));
+  const shotgunBase = {
+    ...state,
+    holes: shotgunHoles,
+    conflicts: [],
+    missing: [{ hole: 10 }, { hole: 9 }],
+    cardmates: [{ index: 0, name: 'Ava King', isMe: true, startingHole: 10, scores: {}, scorecards: {} }],
+  };
+  const shotgunOnStart = buildScorecardViewState({
+    state: { ...shotgunBase, holeIdx: 9 },
+    mode: 'round',
+    roundCode: 'QA1234',
+    scorerIndex: 0,
+    teeSign: null,
+  });
+  assert.equal(shotgunOnStart.finish.blocker, null);
+  const shotgunPastStart = buildScorecardViewState({
+    state: { ...shotgunBase, holeIdx: 10 },
+    mode: 'round',
+    roundCode: 'QA1234',
+    scorerIndex: 0,
+    teeSign: null,
+  });
+  assert.equal(shotgunPastStart.finish.blocker.kind, 'missing');
+  assert.equal(shotgunPastStart.finish.blocker.hole, 10);
   assert.equal(matchStatusText({
     ...state,
     roundConfig: { groupFormat: 'singles', scoringStyle: 'matchplay' },
@@ -573,6 +626,8 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.doesNotMatch(scorecard, /Throws first/);
   assert.match(scorecard, /function FinishCard\(props\)/);
   assert.match(scorecard, /function FinishDockBar\(props\)/);
+  assert.match(scorecard, /score-glove-finish-dismiss/);
+  assert.match(scorecard, /"aria-label": "Dismiss"/);
   assert.match(scorecard, /function ConfirmScoresSheet\(props\)/);
   assert.match(scorecard, /Finish card/);
   assert.match(scorecard, /Looks good — lock card/);
@@ -647,6 +702,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(html, /grid-template-columns: repeat\(auto-fit, minmax\(0, 1fr\)\)/);
   assert.match(html, /\.score-glove-dock \{/);
   assert.match(html, /\.score-glove-finish \{/);
+  assert.match(html, /\.score-glove-finish-dismiss \{/);
   assert.match(html, /\.confirm-score-row \{/);
   assert.match(html, /flex: 0 0 34dvh/);
   assert.match(html, /max-height: 34dvh/);
