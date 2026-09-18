@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CIRCLE1_M, CIRCLE2_M, circleEllipse, currentRangeHud, headingDeg, holeMapLabel, holePoint, latLngFromMapPoint, playerMarksOnMap, projectHoleMap, projectMapPoint, puttingCircle, rangeHud, remainingFt, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, windBlowToDeg } from "../src/shared/hole-map-model.js";
+import { CIRCLE1_M, CIRCLE2_M, circleEllipse, currentRangeHud, gpsHudPrompt, headingDeg, holeMapLabel, holePoint, latLngFromMapPoint, playerMarksOnMap, projectHoleMap, projectMapPoint, puttingCircle, rangeHud, remainingFt, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, windBlowToDeg, withSelfLocation } from "../src/shared/hole-map-model.js";
 
 test("holePoint requires numeric lat/lng", () => {
   assert.equal(holePoint(null), null);
@@ -147,6 +147,24 @@ test("range HUD captions hole length, remaining, and throw", () => {
     ft: 82,
     mode: "remaining",
   });
+});
+
+test("gpsHudPrompt asks guests to tap until a fix lands", () => {
+  assert.equal(gpsHudPrompt("ready"), "");
+  assert.equal(gpsHudPrompt("denied"), "GPS blocked");
+  assert.equal(gpsHudPrompt("watching"), "Finding GPS…");
+  assert.equal(gpsHudPrompt("unavailable"), "GPS unavailable");
+  assert.equal(gpsHudPrompt("idle"), "Tap for GPS");
+  assert.equal(gpsHudPrompt(), "Tap for GPS");
+});
+
+test("withSelfLocation stamps the device as ME without dropping other marks", () => {
+  const others = [{ initials: "KG", lat: 35.6, lng: -77.37 }];
+  assert.deepEqual(withSelfLocation(others, null), others);
+  assert.deepEqual(withSelfLocation(others, { lat: 35.601, lng: -77.371 }), [
+    { initials: "KG", lat: 35.6, lng: -77.37 },
+    { initials: "ME", lat: 35.601, lng: -77.371, relClass: "self" },
+  ]);
 });
 
 test("currentRangeHud uses GPS remaining on the hole and falls back when GPS is miles away", () => {
