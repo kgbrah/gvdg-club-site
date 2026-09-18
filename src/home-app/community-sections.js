@@ -82,7 +82,7 @@ export function HomeMembershipSection() {
         target: "_blank",
       }, "Pay $15 dues"),
       h("a", {
-        className: "cta-button",
+        className: "cta-button cta-button-ghost",
         href: "gvdg-members.html#apply",
         key: "apply",
       }, "Create your app login"),
@@ -119,6 +119,13 @@ export function HomeContactSection() {
 }
 
 export function HomeFooter() {
-  return h("footer", { "data-react-home-footer": "ready" },
-    h("p", null, "\u00a9 2026 Greenville Disc Golf Club. All rights reserved. | Greenville, NC"));
+  return h("footer", { "data-react-home-footer": "ready" }, [
+    h("nav", { "aria-label": "Club links", className: "footer-links", key: "links" }, [
+      h("a", { href: "score.html", key: "score" }, "Keep score"),
+      h("a", { href: "events.html", key: "events" }, "Events"),
+      h("a", { href: "gvdg-members.html", key: "members" }, "Members"),
+      h("a", { href: "#contact", key: "contact" }, "Contact"),
+    ]),
+    h("p", { key: "copy" }, "\u00a9 2026 Greenville Disc Golf Club. All rights reserved. | Greenville, NC"),
+  ]);
 }

@@ -106,12 +106,12 @@ Spacing follows a 4px base through rem values.
 
 ### Home Hero And About
 
-- Structure: homepage hero markup and the About story/board carousel render from the `home-app` React bundle into `homeReactHeroApp` and `homeReactAboutApp`; the static `#about` anchor wrapper remains in `index.html`.
-- Variants: image-backed hero carousel, hero dots, previous/next hero controls, keep-score CTA, membership CTA, scroll indicator, About story slide, animated stat cards, board-member slide, and About carousel indicators.
-- Spacing: reuses `.hero`, `.carousel-*`, `.hero-content`, `#about`, `.about-carousel-*`, `.stat-card`, and `.board-member-*` primitives so the homepage keeps the established full-bleed hero and compact About carousel rhythm.
-- States: React owns hero/about markup, board-member markup, Lucide icons, active slide state, touch swipes, hero autoplay/pause, carousel transforms, active indicator state, reveal visibility, and stat counter animation; `index.html` must not keep `homeReactInteractionsApp`, and no selector-driven homepage controller may mutate carousel or counter DOM.
-- Accessibility: carousel controls are labelled buttons, hero slides expose image labels, the keep-score and membership CTAs are real anchors, board icons are decorative SVGs, and stat values keep visible labels.
-- Motion: preserves the existing hero fade carousel, About carousel transform, scroll reveal, stat counter, and button hover states only.
+- Structure: homepage hero markup and the About story, stats, and board grid render from the `home-app` React bundle into `homeReactHeroApp` and `homeReactAboutApp`; the static `#about` anchor wrapper remains in `index.html`.
+- Variants: image-backed hero carousel, hero dots, previous/next hero controls (desktop), keep-score CTA, membership CTA, About story with stats, board-member grid, and no About carousel.
+- Spacing: reuses `.hero`, `.carousel-*`, `.hero-content`, `#about`, `.stat-card`, and `.board-member-*` primitives. Phone hero is shorter than the viewport so Keep score sits in the thumb zone; photos use a dark overlay.
+- States: React owns hero/about markup, board-member markup, Lucide icons, active slide state, touch swipes, hero autoplay/pause (honors reduced motion), carousel transforms, active indicator state, reveal visibility, and stat counter animation; `index.html` must not keep `homeReactInteractionsApp`, and no selector-driven homepage controller may mutate carousel or counter DOM.
+- Accessibility: carousel controls are labelled buttons, hero photos are decorative, the keep-score and membership CTAs are real anchors, board icons are decorative SVGs, and stat values keep visible labels.
+- Motion: preserves the existing hero fade carousel, scroll reveal, stat counter, and button hover states only.
 
 ### Home Courses App
 
@@ -125,7 +125,7 @@ Spacing follows a 4px base through rem values.
 ### Home Community Sections
 
 - Structure: homepage Membership, Contact, and Footer content render from the `home-app` React bundle into `homeReactMembershipApp`, `homeReactContactApp`, and `homeReactFooterApp`; the `#membership` and `#contact` anchors remain static in `index.html`.
-- Variants: membership perk grid, external PayPal membership CTA, email contact link, external Facebook link with Instagram text, location card, and copyright footer.
+- Variants: membership perk grid, external PayPal membership CTA, outline app-login CTA, email contact link, external Facebook link with Instagram text, location card, footer club links, and copyright footer.
 - Spacing: reuses `.membership-content`, `.membership-perks`, `.perk`, `.price`, `.contact-info`, `.contact-box`, `.contact-icon`, `.contact-label`, `.contact-detail`, and `footer` primitives so the lower homepage retains the established section rhythm; mobile footer padding leaves room for the fixed back-to-top and Crotts controls.
 - States: React owns perk/contact/footer markup, safe external links, mailto link rendering, and Lucide iconography; `index.html` must not keep static `.membership-perks`, `.contact-box`, or `footer` markup and must not render emoji icons in these sections.
 - Accessibility: email and social actions are real links, external links use safe new-tab attributes, contact cards keep visible labels, and SVG icons are decorative.

@@ -13,7 +13,7 @@
     <meta name="apple-mobile-web-app-title" content="GVDG Club">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=156">
+    <link rel="manifest" href="site.webmanifest?v=157">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -76,7 +76,7 @@ body::before{
         .carousel { position: absolute; inset: 0; width: 100%; height: 100%; }
         .carousel-slide { position: absolute; inset: 0; opacity: 0; transition: opacity 0.8s ease-in-out; background-size: cover; background-position: center; }
         .carousel-slide.active { opacity: 1; }
-        .carousel-slide::after { content: ''; position: absolute; inset: 0; background: transparent; }
+        .carousel-slide::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(15, 15, 30, 0.28) 0%, rgba(15, 15, 30, 0.52) 48%, rgba(15, 15, 30, 0.78) 100%); }
         .carousel-slide:nth-child(1) { background-image: url('img/slide1.jpg'); }
         .carousel-slide:nth-child(2) { background-image: url('img/slide2.jpg'); }
         .carousel-slide:nth-child(3) { background-image: url('img/slide3.jpg'); }
@@ -85,7 +85,7 @@ body::before{
         .carousel-controls { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; z-index: 10; padding: 1rem; }
 .carousel-controls { position: absolute !important; bottom: 30px !important; left: 50% !important; transform: translateX(-50%) !important; display: flex !important; justify-content: center !important; align-items: center !important; gap: 16px !important; z-index: 10 !important; padding: 10px !important; width: auto !important; }
 .carousel-dot { width: 12px !important; height: 12px !important; min-width: 12px !important; min-height: 12px !important; max-width: 12px !important; max-height: 12px !important; padding: 0 !important; box-sizing: border-box !important; background-clip: border-box !important; border-radius: 50% !important; background: rgba(255, 255, 255, 0.4) !important; border: 2px solid rgba(255, 255, 255, 0.8) !important; cursor: pointer !important; transition: all 0.3s ease !important; -webkit-tap-highlight-color: transparent !important; position: relative !important; flex-shrink: 0 !important; flex-grow: 0 !important; }
-.carousel-dot::before { content: '' !important; position: absolute !important; top: 50% !important; left: 50% !important; transform: translate(-50%, -50%) !important; width: 44px !important; height: 44px !important; background: transparent !important; border: none !important; border-radius: 50% !important; pointer-events: none !important; }
+.carousel-dot::before { content: '' !important; position: absolute !important; top: 50% !important; left: 50% !important; transform: translate(-50%, -50%) !important; width: 44px !important; height: 44px !important; background: transparent !important; border: none !important; border-radius: 50% !important; pointer-events: auto !important; }
 .carousel-dot.active { background: white !important; border-color: white !important; transform: scale(1.3) !important; width: 12px !important; height: 12px !important; }
 .carousel-dot:hover { background: rgba(255, 255, 255, 0.8) !important; border-color: white !important; }
 @media (max-width: 768px) { .carousel-controls { bottom: 25px !important; gap: 14px !important; } .carousel-dot { width: 10px !important; height: 10px !important; min-width: 10px !important; min-height: 10px !important; max-width: 10px !important; max-height: 10px !important; } .carousel-dot.active { width: 10px !important; height: 10px !important; transform: scale(1.4) !important; } }
@@ -109,11 +109,24 @@ body::before{
         .hero-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; }
         .cta-button-ghost { background: transparent; color: white; box-shadow: none; border: 2px solid rgba(255, 255, 255, 0.85); }
         .cta-button-ghost:hover { background: rgba(255, 255, 255, 0.14); color: white; box-shadow: none; }
+        #membership .cta-button-ghost { border-color: rgba(255, 255, 255, 0.9); }
+        .footer-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.35rem 1.1rem; margin-bottom: 1rem; }
+        footer .footer-links a { color: white; text-decoration: none; font-weight: 700; min-height: 44px; display: inline-flex; align-items: center; padding: 0.35rem 0.5rem; }
+        footer .footer-links a:hover { color: var(--primary); }
+        .events-footer-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.75rem 1.25rem; }
+        .events-footer a { color: var(--primary); font-weight: 700; }
         .membership-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; }
         .scroll-indicator { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 10; animation: bounce 2s infinite; }
         @keyframes bounce { 0%, 20%, 50%, 80%, 100% { transform: translateX(-50%) translateY(0); } 40% { transform: translateX(-50%) translateY(-10px); } 60% { transform: translateX(-50%) translateY(-5px); } }
         .scroll-indicator::after { content: '↓'; display: block; color: white; font-size: 2rem; opacity: 0.7; }
-        @media (max-width: 768px) { .hero { min-height: 500px; } .scroll-indicator { bottom: 100px; } }
+        @media (max-width: 768px) {
+          .hero { height: 70svh; min-height: 32rem; max-height: 40rem; align-items: flex-end; }
+          .hero .carousel-arrow { display: none; }
+          .hero-content { width: 100%; padding: 0 1.25rem 4.25rem; }
+          .hero-actions, .membership-actions { flex-direction: column; align-items: stretch; max-width: 22rem; margin: 0 auto; }
+          .hero-actions .cta-button, .membership-actions .cta-button { width: 100%; text-align: center; box-sizing: border-box; }
+          .scroll-indicator { display: none; }
+        }
         section { padding: clamp(3rem, 8vw, 6rem) 2rem; max-width: 1200px; margin: 0 auto; }
         .section-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(2rem, 6vw, 3.5rem); text-align: center; margin-bottom: 3rem; letter-spacing: 0.05em; color: var(--text-primary); opacity: 0; transform: translateY(20px); transition: all 0.6s ease; }
         .section-title.visible { opacity: 1; transform: translateY(0); }
@@ -133,7 +146,9 @@ body::before{
         .about-carousel { display: flex; transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1); width: 100%; }
         .carousel-slide-about { min-width: 100%; width: 100%; padding: 2rem 0; flex-shrink: 0; box-sizing: border-box; }
         .carousel-slide-about .about-content { display: grid; grid-template-columns: 1fr; gap: 3rem; align-items: center; width: 100%; }
-        @media (min-width: 768px) { .carousel-slide-about .about-content { grid-template-columns: 1fr 1fr; } }
+        #about .about-content { display: grid; grid-template-columns: 1fr; gap: 2rem; align-items: start; width: 100%; }
+        #about .about-content .stats-grid { margin-top: 0; }
+        @media (min-width: 768px) { .carousel-slide-about .about-content, #about .about-content { grid-template-columns: 1fr 1fr; } }
         .about-carousel-nav { display: flex; justify-content: center; align-items: center; gap: 2rem; margin-top: 2.5rem; }
         .board-members-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
         @media (min-width: 768px) { .board-members-grid { grid-template-columns: repeat(3, 1fr); } }
@@ -145,7 +160,7 @@ body::before{
         .board-member-role { font-size: 0.85rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 0.05em; background: rgba(255, 255, 255, 0.15); padding: 0.4rem 0.8rem; border-radius: 20px; }
         .board-member-card.founder .board-member-icon { background: linear-gradient(135deg, var(--primary), var(--accent)); }
         .board-member-card.founder { background: linear-gradient(135deg, var(--primary), var(--secondary)); }
-        .board-slide-header { text-align: center; margin-bottom: 2rem; }
+        .board-slide-header { text-align: center; margin: 2.5rem 0 1.5rem; }
         .board-slide-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(1.8rem, 4vw, 2.5rem); color: var(--primary); margin-bottom: 0.5rem; }
         .board-slide-subtitle { font-size: 1rem; color: var(--text-tertiary); font-weight: 600; }
 
@@ -359,7 +374,7 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
 @media (max-width: 768px) {
   .hide-mobile { display: none !important; } .show-mobile { display: block !important; } .text-center-mobile { text-align: center !important; } .stack-mobile { flex-direction: column !important; }
   section { padding: 3rem 1rem; } section h2 { margin-bottom: 1.5rem; text-align: center; } .container { width: 100%; max-width: 100%; padding-left: 1rem; padding-right: 1rem; }
-  footer { padding: 2rem 4.75rem 5rem; text-align: center; } footer p { max-width: 18rem; } footer .links, footer nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem; margin-bottom: 1rem; } footer a { padding: 0.5rem; min-height: 44px; display: inline-flex; align-items: center; }
+  footer { padding: 2rem 4.75rem 5rem; text-align: center; } footer p { max-width: 22rem; } footer .links, footer nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem; margin-bottom: 1rem; } footer a { padding: 0.5rem; min-height: 44px; display: inline-flex; align-items: center; }
   .btn, button, input[type="submit"] { min-height: 48px; padding: 0.875rem 1.5rem; font-size: 1rem; border-radius: 8px; -webkit-tap-highlight-color: transparent; }
   .membership-perks { gap: 1rem; margin: 2rem 0; }
   .perk { min-height: 128px; padding: 1.5rem 1rem; }
@@ -488,7 +503,13 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
     <section id="events">
         <h2 class="section-title fade-in visible">Upcoming Events</h2>
         <div id="homeReactEventsApp"></div>
-        <div class="events-footer" style="text-align: center; margin-top: 2rem;"><p style="color: var(--text-muted); font-size: 0.9rem;">Want to host an event? <a href="#contact" style="color: var(--primary);">Contact us!</a></p></div>
+        <div class="events-footer" style="text-align: center; margin-top: 2rem;">
+            <p class="events-footer-links" style="color: var(--text-muted); font-size: 0.9rem;">
+                <a href="events.html">Club events and registration</a>
+                <span aria-hidden="true">·</span>
+                Want to host? <a href="#contact">Contact us</a>
+            </p>
+        </div>
     </section>
 
 <section id="area-tournaments" class="section">
