@@ -86,6 +86,7 @@ function ManagePlayersSheet(props) {
       "div",
       {
         className: "overlay",
+        "data-a11y-overlay": "true",
         role: "presentation",
         ref: dialog.overlayRef,
       },

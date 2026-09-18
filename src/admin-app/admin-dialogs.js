@@ -70,6 +70,7 @@ export function AdminDialogs() {
   return createPortal(
     h("div", {
       className: "admin-dialog-overlay",
+      "data-a11y-overlay": "true",
       ref: a11y.overlayRef,
       role: "presentation",
     }, h("div", {

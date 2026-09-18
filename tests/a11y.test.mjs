@@ -15,6 +15,15 @@ test("shared a11y module provides announce and a React dialog hook without raw h
   assert.match(a11y, /assertive/);
   assert.match(a11y, /ANNOUNCE_DELAY_MS = 140/);
   assert.match(a11y, /setAttribute\("inert"/);
+  assert.match(a11y, /function isA11yOverlay\(/);
+  assert.match(a11y, /function isTopmostOverlay\(/);
+  assert.match(a11y, /function isOverlayAbove\(/);
+  assert.match(a11y, /data-a11y-overlay/);
+  assert.match(a11y, /classes\.contains\("overlay"\)/);
+  assert.match(a11y, /endsWith\("-overlay"\)/);
+  assert.match(a11y, /isOverlayAbove\(node, overlay\)\) continue/);
+  assert.match(a11y, /if \(!isTopmostOverlay\(overlay\)\) return;/);
+  assert.match(a11y, /DOCUMENT_POSITION_FOLLOWING/);
   assert.match(a11y, /keydown/);
   assert.match(a11y, /Escape/);
   assert.match(a11y, /pagehide/);
@@ -50,6 +59,7 @@ test("course, player, leaderboard, manage-player, confirm-scores, score-dialog, 
     assert.match(src, /dialog\.overlayRef|a11y\.overlayRef/, name);
     assert.match(src, /dialog\.panelRef|a11y\.panelRef/, name);
     assert.match(src, /dialog\.isolated|a11y\.isolated/, name);
+    assert.match(src, /"data-a11y-overlay": "true"/, name);
   }
 
   assert.match(course, /labelledBy: "course-modal-title"/);
@@ -63,4 +73,21 @@ test("course, player, leaderboard, manage-player, confirm-scores, score-dialog, 
   assert.match(scoreDialogs, /labelledBy: titleId/);
   assert.match(notifications, /from "\.\.\/shared\/a11y\.js"/);
   assert.match(notifications, /announce\(message, \{ assertive: options\.variant === "conflict" \}\)/);
+});
+
+test("nested score confirms are not isolated by the players sheet behind them", () => {
+  const a11y = source("src/shared/a11y.js");
+  const manage = source("src/score-app/manage-players-sheet.js");
+  const dialogs = source("src/score-app/dialogs.js");
+  const controller = source("src/score-app/score-controller.js");
+  assert.match(manage, /createPortal\(/);
+  assert.match(manage, /document\.body/);
+  assert.match(dialogs, /createPortal\(/);
+  assert.match(dialogs, /document\.body/);
+  assert.match(dialogs, /score-dialog-overlay/);
+  assert.match(controller, /Leave this round\?/);
+  assert.match(controller, /Remove player/);
+  assert.match(a11y, /Nested dialogs portal as sibling overlays/);
+  assert.match(a11y, /isOverlayAbove\(node, overlay\)\) continue/);
+  assert.match(a11y, /if \(!isTopmostOverlay\(overlay\)\) return;/);
 });

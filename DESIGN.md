@@ -720,8 +720,8 @@ Spacing follows a 4px base through rem values.
 - Structure: React-owned document-level modal renderer for score prompts and confirmations mounts into the static `scoreReactDialogsApp` root; the score controller supplies dialog copy and awaits resolved values only.
 - Variants: add-player prompt, doubles pair-label prompt, finish-round confirmation, and remove/leave danger confirmation.
 - Spacing: reuses `.overlay`, `.sheet`, `.field`, `.lbl`, `.btn`, `.muted`, and compact modal actions; dialogs center in the viewport and stay within safe-area padding.
-- States: overlay click, Escape, and cancel resolve without side effects; required prompt fields show inline errors; danger confirmations use the score conflict token.
-- Accessibility: dialogs expose `role="dialog"`, `aria-modal`, labelled title/body, autofocus prompt inputs, and real submit/cancel buttons.
+- States: overlay click, Escape, and cancel resolve without side effects; required prompt fields show inline errors; danger confirmations use the score conflict token. Nested remove/leave confirms stay tappable above the players sheet: sibling overlays are not marked `inert`, and only the topmost overlay owns Escape and backdrop.
+- Accessibility: dialogs expose `role="dialog"`, `aria-modal`, labelled title/body, autofocus prompt inputs, and real submit/cancel buttons. Overlay roots stamp `data-a11y-overlay` so a later confirm is never isolated by the sheet behind it.
 - Motion: static modal; only existing button active states apply.
 
 ### Score Watch View

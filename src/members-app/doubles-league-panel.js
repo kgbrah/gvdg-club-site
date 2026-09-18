@@ -357,6 +357,7 @@ function PlayerModal({ player, seasonOrder, onClose }) {
 
   return createPortal(h("div", {
     className: "player-modal-overlay active",
+    "data-a11y-overlay": "true",
     role: "presentation",
     ref: dialog.overlayRef,
   }, h("div", {
