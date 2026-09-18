@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Eye, Ruler, Settings2, Share2, UserPlus, X } from "lucide-react";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { HoleMap } from "../shared/hole-map.js";
-import { currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, nextTeeHud, resolveMapFocus, withSelfLocation } from "../shared/hole-map-model.js";
+import { addThrow, currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, lastThrow, lastThrowHud, nextTeeHud, readThrows, resolveMapFocus, undoThrow, withSelfLocation, writeThrows } from "../shared/hole-map-model.js";
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
 import { nextHoleScore, relClass, relText } from "./score-view-model.js";
@@ -226,6 +226,7 @@ function RangeHud(props) {
   const prompt = gpsHudPrompt(props.gpsStatus, props.hud && props.hud.mode);
   const clickable = Boolean(prompt && props.onEnableGps);
   const nextTee = props.nextTee;
+  const lastThrowLine = props.lastThrow;
   return h(clickable ? "button" : "div", {
     "aria-label": clickable ? prompt : undefined,
     "aria-live": "polite",
@@ -242,6 +243,9 @@ function RangeHud(props) {
       : null,
     nextTee
       ? h("em", { className: "hole-range-hud-next", key: "next" }, nextTee.ft + " ft next tee")
+      : null,
+    lastThrowLine
+      ? h("em", { className: "hole-range-hud-throw", key: "throw" }, lastThrowLine.ft + " ft " + lastThrowLine.caption)
       : null,
     prompt ? h("em", { className: "hole-range-hud-gps", key: "gps" }, prompt) : null,
   ]);
@@ -265,6 +269,7 @@ function HoleMedia(props) {
           hud: h(RangeHud, {
             gpsStatus: props.gpsStatus,
             hud: props.rangeHud,
+            lastThrow: props.lastThrow,
             nextTee: props.nextTee,
             onEnableGps: props.onEnableGps,
           }),
@@ -273,10 +278,12 @@ function HoleMedia(props) {
           measureFrom: props.measureFrom,
           measureTo: props.measureTo,
           players: withSelfLocation(props.playerLocations, props.gpsFix),
+          throws: props.throws,
           windFromDeg: props.windFromDeg,
           onFocus: props.onMapFocus,
           onMapPoint: props.onMapPoint,
           onMarkLie: props.onMarkLie,
+          onUndoThrow: props.onUndoThrow,
         }),
       ])
       : h("div", { className: "hole-media-empty", key: "empty" }, "No map for this hole yet"),
@@ -711,23 +718,31 @@ function ConfirmScoresSheet(props) {
 export function ScorecardView(props) {
   const [padRow, setPadRow] = React.useState(null);
   const [measure, setMeasure] = React.useState(null);
-  const [lie, setLie] = React.useState(null);
+  const [throws, setThrows] = React.useState([]);
   const [pinnedFocus, setPinnedFocus] = React.useState(null);
   const gps = useDeviceFix();
-  const hud = currentRangeHud(props.hole, gps.fix, measure);
+  const lie = lastThrow(throws);
+  const hud = currentRangeHud(props.hole, gps.fix, measure, lie);
   const remaining = hud && hud.mode === "remaining" ? hud.ft : null;
   const mapFocus = resolveMapFocus(pinnedFocus, remaining);
   const measuring = Boolean(measure);
   const measureTo = measure && (measure.b || gps.fix);
   const showNextTee = Boolean(hud && (hud.circle === "C1" || hud.circle === "C2") && hud.mode === "remaining");
   const nextTee = showNextTee ? nextTeeHud(gps.fix, props.nextHole) : null;
+  const lastThrowLine = lastThrowHud(throws, props.hole && props.hole.tee);
   const holeNumber = props.hole && props.hole.hole;
+  const storage = typeof sessionStorage === "undefined" ? null : sessionStorage;
 
   React.useEffect(() => {
     setMeasure(null);
-    setLie(null);
     setPinnedFocus(null);
-  }, [holeNumber]);
+    setThrows(readThrows(storage, props.roundCode, holeNumber));
+  }, [holeNumber, props.roundCode]);
+
+  function persistThrows(next) {
+    setThrows(next);
+    writeThrows(storage, props.roundCode, holeNumber, next);
+  }
 
   function onMeasure() {
     if (measure && measure.b) {
@@ -749,30 +764,32 @@ export function ScorecardView(props) {
     setMeasure({ awaitingTap: true });
   }
   function onMapPoint(point) {
-    if (!measure) return;
-    if (!measure.a) {
-      setMeasure({ a: point });
+    if (measure) {
+      if (!measure.a) {
+        setMeasure({ a: point });
+        return;
+      }
+      if (!measure.b) {
+        setMeasure({ a: measure.a, b: point });
+        return;
+      }
+      setMeasure(null);
       return;
     }
-    if (!measure.b) {
-      setMeasure({ a: measure.a, b: point });
-      return;
-    }
-    setMeasure(null);
+    persistThrows(addThrow(throws, point));
   }
   function onMapFocus(id) {
     setPinnedFocus((current) => (current === id ? null : id));
   }
   function onMarkLie() {
-    if (lie) {
-      setLie(null);
-      return;
-    }
     if (gps.fix) {
-      setLie(gps.fix);
+      persistThrows(addThrow(throws, gps.fix));
       return;
     }
     gps.enableGps();
+  }
+  function onUndoThrow() {
+    persistThrows(undoThrow(throws));
   }
   const measureLabel = measure && measure.b ? "Clear" : measure && measure.a ? "Mark" : "Measure";
   return h(React.Fragment, null, [
@@ -784,16 +801,19 @@ export function ScorecardView(props) {
           ...props,
           gpsFix: gps.fix,
           gpsStatus: gps.status,
+          lastThrow: lastThrowLine,
           lie,
           mapFocus,
           measureFrom: measure && measure.a,
           measureTo,
           nextTee,
           rangeHud: hud,
+          throws,
           onEnableGps: gps.enableGps,
           onMapFocus,
-          onMapPoint: measuring ? onMapPoint : undefined,
+          onMapPoint,
           onMarkLie,
+          onUndoThrow,
         }),
         h(RoundTools, {
           ...props,

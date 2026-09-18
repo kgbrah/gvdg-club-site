@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Live Scoring · Greenville Disc Golf Club</title>
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=177">
+    <link rel="manifest" href="site.webmanifest?v=178">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <script src="pwa.js" defer></script>
     <link rel="stylesheet" href="tokens.css">
@@ -334,8 +334,12 @@
         .hole-map-focus-btn.active {
             background: var(--primary-strong); color: var(--light); border-color: var(--primary-strong);
         }
-        .hole-map-lie-btn {
+        .hole-map-lie-actions {
             position: absolute; right: 0.4rem; bottom: 0.4rem; z-index: 2;
+            display: flex; gap: 0.22rem; pointer-events: auto;
+        }
+        .hole-map-lie-btn,
+        .hole-map-lie-undo {
             min-height: 32px; padding: 0 0.65rem; border-radius: 999px;
             border: 1px solid var(--border-color);
             background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
@@ -344,7 +348,17 @@
         .hole-map-lie-btn.active {
             background: var(--primary-strong); color: var(--light); border-color: var(--primary-strong);
         }
-        .hole-range-hud-next {
+        .hole-map-throw-line {
+            fill: none; stroke: var(--primary-strong); stroke-width: 2.2;
+            stroke-linecap: round; stroke-dasharray: 5 4;
+        }
+        .hole-map-throw { pointer-events: none; }
+        .hole-map-throw-dot { fill: var(--primary-strong); stroke: white; stroke-width: 1.6; }
+        .hole-map-throw-label {
+            fill: white; stroke: none; font: 800 8px Archivo, sans-serif; text-anchor: middle;
+        }
+        .hole-range-hud-next,
+        .hole-range-hud-throw {
             display: block; margin-top: 0.08rem; font-size: 0.58rem; font-weight: 700;
             color: var(--text-muted); font-style: normal;
         }
@@ -709,6 +723,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=177"></script>
+    <script type="module" src="score-app/score-app.js?v=178"></script>
 </body>
 </html>
