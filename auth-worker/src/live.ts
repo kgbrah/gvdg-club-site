@@ -392,7 +392,7 @@ export class LiveEventDO {
     });
   }
 
-  /** Cardmates confirm the scorecard. Every active player on the card must agree before it locks. */
+  /** Anyone on the card can lock it once every hole has a living consensus score. */
   private async finishCard(body: { playerIndex?: number }, authMember: string | null, authAdmin: boolean): Promise<Response> {
     if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
     const meIndex = authMember ? this.players.findIndex((player) => player.memberId === authMember && !player.removed) : -1;

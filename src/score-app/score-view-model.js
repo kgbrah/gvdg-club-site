@@ -429,7 +429,7 @@ export function yourTurnHint(state) {
     if (row === mine) return false;
     return strokesForRow(state, row, hole.hole, state.scorerIndex ?? state.myIndex) != null;
   });
-  return others ? "Your card is waiting on this hole." : "";
+  return others ? "Card is waiting on you — hole " + hole.hole : "";
 }
 
 function holeMeta(state, index) {
@@ -588,20 +588,39 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
   };
 }
 
+function finishBlocker(state, blockers) {
+  const holes = Array.isArray(state.holes) ? state.holes : [];
+  function locate(holeNumber) {
+    const index = holes.findIndex((row) => row && row.hole === holeNumber);
+    return { hole: holeNumber, index: index >= 0 ? index : 0 };
+  }
+  const conflict = (blockers.conflicts || [])[0];
+  if (conflict && Number.isFinite(Number(conflict.hole))) {
+    const values = Array.isArray(conflict.values) ? conflict.values.join(" vs ") : "";
+    return { ...locate(Number(conflict.hole)), kind: "conflict", text: "Hole " + conflict.hole + (values ? ": " + values : "") };
+  }
+  const missing = (blockers.missing || [])[0];
+  if (missing && Number.isFinite(Number(missing.hole))) {
+    return { ...locate(Number(missing.hole)), kind: "missing", text: "Hole " + missing.hole + " needs a score" };
+  }
+  return null;
+}
+
 function buildFinishView(state, mode, blockers, locked, scorerIndex) {
   const canMode = mode === "round" || mode === "event";
   const attestation = state.cardAttestation && typeof state.cardAttestation === "object" ? state.cardAttestation : {};
   const agreedIndexes = Array.isArray(attestation.agreedIndexes) ? attestation.agreedIndexes : [];
   const review = cardReview(state, scorerIndex, agreedIndexes);
-  const pendingVotes = agreedIndexes.length > 0 && !locked;
   return {
     locked,
     ready: blockers.ready,
     status: state.status,
     canFinish: canMode && blockers.ready && !locked,
-    confirmOpen: Boolean(state.finishConfirmOpen) || pendingVotes,
+    confirmOpen: Boolean(state.finishConfirmOpen) && !locked,
     review,
     waiting: review.waiting,
+    voterIndex: scorerIndex ?? state.myIndex,
+    blocker: locked || blockers.ready ? null : finishBlocker(state, blockers),
   };
 }
 

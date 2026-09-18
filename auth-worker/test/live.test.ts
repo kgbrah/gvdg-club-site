@@ -1780,20 +1780,7 @@ describe("LiveEventDO finish-card", () => {
 
     const first = await act(live, "finish-card", "m_a", { playerIndex: 0 });
     expect(first.status).toBe(200);
-    const pending = (await first.json()) as { status: string; lockedCardIds: string[]; cardAttestations: Record<string, number[]> };
-    expect(pending.status).toBe("live");
-    expect(pending.lockedCardIds).toEqual([]);
-    expect(pending.cardAttestations.h1).toEqual([0]);
-
-    const scoredAgain = await act(live, "score", "m_a", { index: 0, hole: 1, strokes: 2 });
-    expect(scoredAgain.status).toBe(200);
-    expect(((await scoredAgain.json()) as { cardAttestations: Record<string, number[]> }).cardAttestations.h1).toBeUndefined();
-    await act(live, "score", "m_a", { index: 0, hole: 1, strokes: 3 });
-
-    await act(live, "finish-card", "m_a", { playerIndex: 0 });
-    const finished = await act(live, "finish-card", "m_b", { playerIndex: 1 });
-    expect(finished.status).toBe(200);
-    const lockedSnap = (await finished.json()) as { status: string; lockedCardIds: string[] };
+    const lockedSnap = (await first.json()) as { status: string; lockedCardIds: string[] };
     expect(lockedSnap.status).toBe("live");
     expect(lockedSnap.lockedCardIds).toEqual(["h1"]);
 

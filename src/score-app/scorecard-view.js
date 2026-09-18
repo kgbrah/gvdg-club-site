@@ -490,17 +490,27 @@ function FinishCard(props) {
       h("p", { className: "finalize-head" }, finish.status === "final" ? "Round finished — scores are locked" : "Card submitted — scores locked"),
     );
   }
-  if (!finish.canFinish) return null;
-  return h("div", { className: "finalize-card ready", key: "finish" }, [
-    h("p", { className: "finalize-head", key: "head" }, "All holes scored — finish this card"),
-    h("p", { className: "muted finish-round-hint", key: "hint" }, FINISH_COPY),
-    h("button", {
+  return null;
+}
+
+function FinishDockBar(props) {
+  const finish = props.finish;
+  if (!finish || finish.locked) return null;
+  if (finish.canFinish) {
+    return h("div", { className: "score-glove-finish", key: "finish-bar" }, h("button", {
       className: "btn finish-round-btn",
-      key: "finish",
       type: "button",
       onClick: props.onOpenFinish,
-    }, "Finish card"),
-  ]);
+    }, "Finish card"));
+  }
+  if (finish.blocker) {
+    return h("div", { className: "score-glove-finish", key: "finish-bar" }, h("button", {
+      className: "btn secondary finish-round-btn",
+      type: "button",
+      onClick: () => props.onJump && props.onJump(finish.blocker.index),
+    }, finish.blocker.text));
+  }
+  return null;
 }
 
 function ConfirmScoresSheet(props) {
@@ -514,6 +524,7 @@ function ConfirmScoresSheet(props) {
   });
   if (!open) return null;
   const review = finish.review || { holes: [], rows: [], voters: [], waiting: [] };
+  const grid = Array.isArray(props.holeGrid) ? props.holeGrid : [];
   return createPortal(
     h(
       "div",
@@ -536,34 +547,42 @@ function ConfirmScoresSheet(props) {
         h("div", { className: "grab", key: "grab" }),
         h("h2", { className: "section", id: "score-confirm-title", key: "title" }, "Confirm scores"),
         h("p", { className: "muted", key: "copy" }, FINISH_COPY),
-        h("div", { className: "confirm-scores-table-wrap", key: "table" }, h("table", { className: "confirm-scores-table" }, [
-          h("thead", { key: "head" }, h("tr", null, [
-            h("th", { key: "name" }, "Player"),
-            ...review.holes.map((hole) => h("th", { key: hole }, String(hole))),
-            h("th", { key: "tot" }, "Tot"),
-            h("th", { key: "par" }, "Par"),
-          ])),
-          h("tbody", { key: "body" }, review.rows.map((row) =>
-            h("tr", { key: row.key }, [
-              h("td", { className: "name", key: "name" }, row.label),
-              ...row.scores.map((strokes, index) => h("td", { key: review.holes[index] }, strokes == null ? "—" : String(strokes))),
-              h("td", { key: "tot" }, String(row.total || "—")),
-              h("td", { className: "tp " + relClass(row.toPar || 0), key: "par" }, relText(row.toPar || 0)),
-            ]),
-          )),
-        ])),
-        h("div", { className: "confirm-agree-list", key: "agree" }, review.voters.map((voter) =>
-          h("button", {
-            className: "btn" + (voter.agreed ? " secondary" : ""),
-            disabled: voter.agreed,
-            key: voter.index,
-            type: "button",
-            onClick: () => props.onAgree(voter.index),
-          }, voter.agreed ? voter.label + " agreed" : "Agree — " + voter.label),
+        h("div", { className: "confirm-score-rows", key: "rows" }, review.rows.map((row) =>
+          h("div", { className: "confirm-score-row", key: row.key }, [
+            h("span", { className: "name", key: "name" }, row.label),
+            h("span", { className: "tot", key: "tot" }, String(row.total || "—")),
+            h("span", { className: "tp " + relClass(row.toPar || 0), key: "par" }, relText(row.toPar || 0)),
+          ]),
         )),
-        review.waiting.length
-          ? h("p", { className: "muted finish-round-hint", key: "wait" }, "Waiting on " + review.waiting.join(", "))
-          : h("p", { className: "muted finish-round-hint", key: "wait" }, "Locking scores…"),
+        grid.length
+          ? h("div", { className: "confirm-holegrid holegrid", key: "grid" }, grid.map((hole) => {
+            const rel = hole.relative;
+            const classes = [
+              hole.conflict ? "conflict" : "",
+              rel ? rel.className : "",
+            ].filter(Boolean).join(" ");
+            return h("button", {
+              className: classes,
+              key: hole.hole,
+              type: "button",
+              onClick: () => {
+                if (props.onCloseFinish) props.onCloseFinish();
+                if (props.onJump) props.onJump(hole.index);
+              },
+            }, [
+              h("span", { className: "holegrid-num", key: "num" }, String(hole.hole)),
+              hole.score != null
+                ? h("b", { className: "holegrid-score", key: "score" }, String(hole.score))
+                : h("span", { className: "holegrid-empty", key: "empty" }, "·"),
+            ]);
+          }))
+          : null,
+        h("button", {
+          className: "btn finish-round-btn",
+          key: "lock",
+          type: "button",
+          onClick: () => props.onAgree && props.onAgree(finish.voterIndex),
+        }, "Looks good — lock card"),
         h("button", { className: "btn secondary sheet-close", key: "close", type: "button", onClick: props.onCloseFinish }, "Back"),
       ]),
     ),
@@ -638,13 +657,16 @@ export function ScorecardView(props) {
           h(CtpClaim, { ctpClaim: props.ctpClaim, onCtpVote: props.onCtpVote }),
           h(FinishCard, { finish: props.finish, onOpenFinish: props.onOpenFinish }),
         ]),
+        h(FinishDockBar, { finish: props.finish, onJump: props.onJumpHole, onOpenFinish: props.onOpenFinish }),
         h(HoleHeader, props),
       ]),
     ]),
     h(ConfirmScoresSheet, {
       finish: props.finish,
+      holeGrid: props.holeGrid,
       onAgree: props.onAgreeFinish,
       onCloseFinish: props.onCloseFinish,
+      onJump: props.onJumpHole,
     }),
     padRow
       ? h(ScorePad, {
