@@ -1,6 +1,6 @@
 import React from "react";
 
-import { flightArc, holeMapLabel, latLngFromMapPoint, playerMarksOnMap, projectHoleMap, projectMapPoint, SATELLITE_CREDIT, scoreChipAnchor, throwSegments } from "./hole-map-model.js";
+import { flightArc, flightPoint, holeMapLabel, latLngFromMapPoint, playerMarksOnMap, projectHoleMap, projectMapPoint, SATELLITE_CREDIT, scoreChipAnchor, throwSegments } from "./hole-map-model.js";
 import { safeExternalUrl } from "./safe-url.js";
 import { udiscDeepLink } from "./udisc-export.js";
 
@@ -70,24 +70,48 @@ function prefersReducedMotion() {
   return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+function easeFlight(t) {
+  return t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2;
+}
+
 function FlyingDisc(props) {
   const flight = props.flight;
-  if (!flight || !flight.path) return null;
+  const [progress, setProgress] = React.useState(0);
+  React.useEffect(() => {
+    if (!flight) return undefined;
+    let start = 0;
+    let raf = 0;
+    const tick = (ts) => {
+      if (!start) start = ts;
+      const next = Math.min(1, (ts - start) / Math.max(Number(flight.ms) || 1600, 1));
+      setProgress(next);
+      if (next < 1) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+      if (typeof props.onDone === "function") props.onDone();
+    };
+    setProgress(0);
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [flight && flight.id]);
+  if (!flight) return null;
+  const pt = flightPoint(flight, easeFlight(progress));
+  if (!pt) return null;
   const compact = Boolean(props.compact);
   const plate = compact ? 5.3 : 6.1;
+  const putt = flight.kind === "putt";
+  const scale = putt && progress > 0.72 ? Math.max(0.28, 1 - (progress - 0.72) / 0.28 * 0.72) : 1;
+  const opacity = putt && progress > 0.86
+    ? Math.max(0, 1 - (progress - 0.86) / 0.14)
+    : (progress < 0.05 ? progress / 0.05 : 1);
   return h("g", {
     "aria-hidden": "true",
-    className: "hole-map-disc-flight" + (flight.kind === "putt" ? " putt" : ""),
+    className: "hole-map-disc-flight" + (putt ? " putt" : ""),
     key: flight.id,
-    style: {
-      animationDuration: flight.ms + "ms",
-      offsetPath: "path(\"" + flight.path + "\")",
-    },
-    onAnimationEnd: (event) => {
-      if (event.target !== event.currentTarget) return;
-      if (typeof props.onDone === "function") props.onDone();
-    },
-  }, h("g", { className: "hole-map-disc", style: { animationDuration: flight.ms + "ms" } }, [
+    opacity,
+    transform: `translate(${pt.x.toFixed(2)} ${pt.y.toFixed(2)}) rotate(${(progress * (putt ? 220 : 180)).toFixed(1)}) scale(${scale.toFixed(3)})`,
+  }, [
     h("ellipse", {
       className: "hole-map-disc-shadow",
       cx: 0.5,
@@ -100,7 +124,7 @@ function FlyingDisc(props) {
     h("ellipse", { className: "hole-map-disc-rim", key: "rim", rx: plate, ry: plate }),
     h("ellipse", { className: "hole-map-disc-inner", key: "inner", rx: plate * 0.62, ry: plate * 0.62 }),
     h("ellipse", { className: "hole-map-disc-dome", key: "dome", rx: plate * 0.22, ry: plate * 0.22 }),
-  ]));
+  ]);
 }
 
 function ThrowMark(props) {

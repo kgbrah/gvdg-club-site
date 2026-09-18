@@ -171,15 +171,33 @@ export function flightArc(from, to, kind = "lie") {
     nx = -nx;
     ny = -ny;
   }
-  const loft = Math.max(8, Math.min(kind === "putt" ? 20 : 26, len * 0.24));
+  const loft = Math.max(6, Math.min(kind === "putt" ? 16 : 18, len * 0.16));
   const qx = (x1 + x2) / 2 + nx * loft;
   const qy = (y1 + y2) / 2 + ny * loft;
   return {
     kind,
-    ms: Math.round(380 + Math.min(len * 2.4, kind === "putt" ? 480 : 420)),
+    ms: Math.round(1400 + Math.min(len * 7, 1800)),
     path: `M ${x1.toFixed(1)} ${y1.toFixed(1)} Q ${qx.toFixed(1)} ${qy.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`,
     from: { x: x1, y: y1 },
+    q: { x: qx, y: qy },
     to: { x: x2, y: y2 },
+  };
+}
+
+export function flightPoint(arc, t) {
+  if (!arc || !arc.from || !arc.to) return null;
+  const clamped = Math.max(0, Math.min(1, Number(t) || 0));
+  const q = arc.q;
+  if (!q || !Number.isFinite(q.x) || !Number.isFinite(q.y)) {
+    return {
+      x: arc.from.x + (arc.to.x - arc.from.x) * clamped,
+      y: arc.from.y + (arc.to.y - arc.from.y) * clamped,
+    };
+  }
+  const u = 1 - clamped;
+  return {
+    x: u * u * arc.from.x + 2 * u * clamped * q.x + clamped * clamped * arc.to.x,
+    y: u * u * arc.from.y + 2 * u * clamped * q.y + clamped * clamped * arc.to.y,
   };
 }
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { addThrow, CIRCLE1_M, CIRCLE2_M, circleEllipse, currentRangeHud, flightArc, GPS_REMAINING_MAX_FT, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, headingDeg, holeMapLabel, holePoint, lastThrow, lastThrowHud, latLngFromMapPoint, mapFocusFromRemaining, nextTeeHud, playerMarksOnMap, projectHoleMap, projectMapPoint, puttingCircle, rangeHud, readAllThrows, readThrows, remainingFt, resolveMapFocus, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, throwSegments, throwsStorageKey, undoThrow, windBlowToDeg, withSelfLocation, writeThrows } from "../src/shared/hole-map-model.js";
+import { addThrow, CIRCLE1_M, CIRCLE2_M, circleEllipse, currentRangeHud, flightArc, flightPoint, GPS_REMAINING_MAX_FT, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, headingDeg, holeMapLabel, holePoint, lastThrow, lastThrowHud, latLngFromMapPoint, mapFocusFromRemaining, nextTeeHud, playerMarksOnMap, projectHoleMap, projectMapPoint, puttingCircle, rangeHud, readAllThrows, readThrows, remainingFt, resolveMapFocus, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, throwSegments, throwsStorageKey, undoThrow, windBlowToDeg, withSelfLocation, writeThrows } from "../src/shared/hole-map-model.js";
 
 test("holePoint requires numeric lat/lng", () => {
   assert.equal(holePoint(null), null);
@@ -241,7 +241,13 @@ test("throw log numbers lies from the tee and skips tiny duplicates", () => {
   const arc = flightArc({ x: 10, y: 80 }, { x: 90, y: 20 }, "lie");
   assert.equal(arc.kind, "lie");
   assert.match(arc.path, /^M 10\.0 80\.0 Q /);
-  assert.ok(arc.ms >= 380);
+  assert.ok(arc.ms >= 1400);
+  assert.deepEqual(flightPoint(arc, 0), arc.from);
+  assert.deepEqual(flightPoint(arc, 1), arc.to);
+  const mid = flightPoint(arc, 0.5);
+  assert.equal(mid.x, 0.25 * arc.from.x + 0.5 * arc.q.x + 0.25 * arc.to.x);
+  assert.equal(mid.y, 0.25 * arc.from.y + 0.5 * arc.q.y + 0.25 * arc.to.y);
+  assert.notEqual(mid.y, (arc.from.y + arc.to.y) / 2);
   assert.equal(flightArc({ x: 1, y: 1 }, { x: 1.2, y: 1.1 }), null);
   const store = new Map();
   const storage = {

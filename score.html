@@ -357,34 +357,7 @@
         .hole-map-throw-label {
             fill: white; stroke: none; font: 800 8px Archivo, sans-serif; text-anchor: middle;
         }
-        .hole-map-disc-flight {
-            offset-anchor: center; offset-rotate: 0deg; offset-distance: 0%;
-            animation-name: gvdg-disc-fly; animation-timing-function: cubic-bezier(.18,.82,.22,1);
-            animation-fill-mode: forwards; pointer-events: none;
-        }
-        .hole-map-disc-flight.putt { animation-name: gvdg-disc-putt; }
-        @keyframes gvdg-disc-fly {
-            0% { offset-distance: 0%; opacity: 0; }
-            10% { opacity: 1; }
-            100% { offset-distance: 100%; opacity: 1; }
-        }
-        @keyframes gvdg-disc-putt {
-            0% { offset-distance: 0%; opacity: 0; }
-            12% { opacity: 1; }
-            78% { opacity: 1; }
-            100% { offset-distance: 100%; opacity: 0; }
-        }
-        .hole-map-disc { transform-origin: 0px 0px; animation: gvdg-disc-wobble linear; }
-        @keyframes gvdg-disc-wobble {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(210deg); }
-        }
-        .hole-map-disc-flight.putt .hole-map-disc { animation-name: gvdg-disc-finish; animation-timing-function: ease-in; animation-fill-mode: forwards; }
-        @keyframes gvdg-disc-finish {
-            0% { transform: rotate(0deg) scale(1); }
-            68% { transform: rotate(150deg) scale(1); }
-            100% { transform: rotate(220deg) scale(0.28); }
-        }
+        .hole-map-disc-flight { pointer-events: none; }
         .hole-map-disc-shadow { fill: rgba(0, 0, 0, 0.38); }
         .hole-map-disc-plate { fill: color-mix(in srgb, var(--light) 78%, var(--accent)); }
         .hole-map-disc-rim { fill: none; stroke: var(--dark); stroke-width: 1.05; }
