@@ -92,7 +92,7 @@ function TeePad(props) {
 
 function BasketMark(props) {
   const compact = Boolean(props.compact);
-  const scale = compact ? 1.275 : 1.5;
+  const scale = compact ? 0.6375 : 0.75;
   const outer = compact
     ? [-6.2, -4.7, -3.1, -1.55, 0, 1.55, 3.1, 4.7, 6.2]
     : [-7, -5.6, -4.2, -2.8, -1.4, 0, 1.4, 2.8, 4.2, 5.6, 7];
