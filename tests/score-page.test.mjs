@@ -668,6 +668,8 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /Live stats/);
   assert.match(scorecard, /LIVE_STATS_PEEK_IDS/);
   assert.match(scorecard, /aria-expanded/);
+  assert.match(scorecard, /Minimize live stats/);
+  assert.match(scorecard, /Expand live stats/);
   assert.doesNotMatch(scorecard, /if \(!props\.solo\) return null/);
   assert.match(scorecard, /export function SoloScorecardPreview/);
   assert.match(main, /SoloScorecardPreview/);
@@ -777,6 +779,8 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(html, /overflow: hidden;/);
   assert.match(html, /\.score-glove-layout:not\(\.solo\) \.live-round-stats/);
   assert.match(html, /\.live-round-stats\.compact:not\(\.open\)/);
+  assert.match(html, /\.score-glove-layout:not\(\.solo\) \.live-round-stats\.open \.live-stats-body/);
+  assert.match(html, /\.live-round-stats-toggle/);
   assert.match(html, /\.live-stats-mix-legend \{/);
   assert.match(html, /\.live-stats-grid \{/);
   assert.match(html, /grid-template-columns: repeat\(6, minmax\(0, 1fr\)\)/);

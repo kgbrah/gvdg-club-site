@@ -105,13 +105,17 @@ function LiveRoundStats(props) {
         String(holeCount),
       ]),
     ]),
-    solo ? null : icon(expanded ? ChevronUp : ChevronDown),
+    solo ? null : h("span", { className: "live-round-stats-toggle", key: "toggle" }, [
+      h("span", { key: "label" }, expanded ? "Minimize" : "Expand"),
+      icon(expanded ? ChevronUp : ChevronDown),
+    ]),
   ];
   const head = solo
     ? h("div", { className: "live-round-stats-head", key: "head" }, headChildren)
     : h("button", {
       "aria-controls": "live-round-stats-body",
       "aria-expanded": expanded ? "true" : "false",
+      "aria-label": expanded ? "Minimize live stats" : "Expand live stats",
       className: "live-round-stats-head",
       key: "head",
       type: "button",
