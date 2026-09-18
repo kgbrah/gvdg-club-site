@@ -113,6 +113,9 @@ test('home React bundle owns membership contact and footer sections', () => {
   assert.match(community, /data-react-home-membership/);
   assert.match(community, /data-react-home-contact/);
   assert.match(community, /data-react-home-footer/);
+  assert.match(community, /footer-links/);
+  assert.match(community, /href: "score.html"/);
+  assert.match(community, /cta-button-ghost/);
   assert.match(community, /safeExternalUrl/);
   assert.match(community, /Trophy/);
   assert.match(community, /MessageCircle/);
@@ -126,7 +129,7 @@ test('home React bundle owns membership contact and footer sections', () => {
   assert.doesNotMatch(community, /🏆|💬|🎯|📊|📧|📱|📍|&copy;/);
 });
 
-test('home React bundle owns hero and about carousel sections', () => {
+test('home React bundle owns hero and about sections', () => {
   const html = readFileSync('index.html', 'utf8');
   const main = readFileSync('src/home-app/main.js', 'utf8');
   const heroAbout = readFileSync('src/home-app/hero-about-app.js', 'utf8');
@@ -146,19 +149,25 @@ test('home React bundle owns hero and about carousel sections', () => {
   assert.match(heroAbout, /Keep score/);
   assert.match(heroAbout, /cta-button-ghost/);
   assert.match(heroAbout, /#membership/);
-  assert.match(html, /\.hero-actions/);
+  assert.match(html, /\.hero-actions, \.membership-actions \{ flex-direction: column/);
   assert.match(html, /\.cta-button-ghost/);
+  assert.match(html, /\.hero \.carousel-arrow \{ display: none; \}/);
+  assert.match(html, /linear-gradient\(180deg, rgba\(15, 15, 30, 0\.28\)/);
+  assert.match(html, /Club events and registration/);
+  assert.match(html, /#about \.about-content \.stats-grid \{ margin-top: 0; \}/);
   assert.match(heroAbout, /nextCircularIndex/);
   assert.match(heroAbout, /window\.setInterval/);
   assert.match(heroAbout, /onMouseEnter: \(\) => setPaused\(true\)/);
   assert.match(heroAbout, /useSwipe/);
   assert.match(heroAbout, /useAnimatedCount/);
-  assert.match(heroAbout, /style: \{ transform: `translateX\(-\$\{current \* 100\}%\)` \}/);
-  assert.match(heroAbout, /className: "carousel-slide-about"/);
-  assert.match(heroAbout, /ChevronLeft/);
-  assert.match(heroAbout, /ChevronRight/);
+  assert.match(heroAbout, /prefers-reduced-motion/);
+  assert.match(heroAbout, /Start a card on a local course/);
+  assert.match(heroAbout, /Meet Our Board/);
+  assert.match(heroAbout, /board-members-grid/);
+  assert.match(heroAbout, /value: 22/);
   assert.match(heroAbout, /Disc3/);
   assert.match(heroAbout, /CircleDollarSign/);
+  assert.doesNotMatch(heroAbout, /carousel-slide-about|about-carousel|AboutIndicator/);
   assert.doesNotMatch(heroAbout, /document\.|innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|data-count/);
   assert.doesNotMatch(heroAbout, /🥏|💰|‹|›/);
 });
