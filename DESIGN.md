@@ -717,11 +717,11 @@ Spacing follows a 4px base through rem values.
 
 ### Scorecard View
 
-- Structure: React-owned live hole screen with Round Weather, casual-round tools, hole navigation, optional GPS hole map, optional tee-sign card, scorecard selector, player/pair steppers, totals bar, and hole jump grid; the score controller supplies derived rows and callbacks only.
-- Variants: event card, casual round with share/add/manage tools, singles rows, doubles pair rows, matchplay status, dormie badge, hole map with wind overlay, UDisc course link, waiting-on-you hint, tee-sign highlight, score conflicts, score-target warning, completed holes, and current-hole states.
-- Spacing: reuses `.weather-strip`, `.round-tools`, `.hole-head`, `.hole-map-card`, `.tee-sign-card`, `.scorecard-owner`, `.prow`, `.stepper`, `.totbar`, and `.holegrid` primitives so the migrated view keeps the existing mobile rhythm.
-- States: scorer changes, hole navigation, jump-grid taps, plus/minus steppers, and weather refreshes rerender through React; compass updates use the shared weather subscription helpers. `src/score-app/score-view-model.js` derives scorecard choices, player/pair rows, current scores, relative labels, conflicts, totals, hole-grid state, match status, finalize blockers, and UDisc export data so React-facing state is pure and testable.
-- Accessibility: navigation and score steppers expose action labels, scorer selection has a label, tool buttons pair Lucide icons with text, and hole jump buttons expose hole labels.
+- Structure: React-owned live hole screen. The GPS hole map fills the upper stage; a thumb-zone dock (about the bottom third) holds the score steppers, with hole `‹ ›` pinned to the bottom edge for one-handed reach. Optional tee-sign chip overlays the map. Round tools sit as overlay icons on the map. The score controller supplies derived rows and callbacks only.
+- Variants: event card, casual round with share/add/manage tools, singles rows, doubles pair rows, matchplay status, dormie badge, hole map with wind overlay, waiting-on-you hint, tee-sign highlight, score conflicts, score-target warning, and current-hole states.
+- Spacing: `.score-glove-layout` is a column: `.score-glove-stage` flexes to fill leftover height, `.score-glove-dock` is `34dvh` so scores stay in the one-handed thumb zone. `.score-glove-scores` scrolls inside the dock; `.hole-head` stays pinned to the bottom. The 18-hole jump grid is not on the live card.
+- States: scorer changes, hole navigation, plus/minus steppers, and weather refreshes rerender through React; compass updates use the shared weather subscription helpers. `src/score-app/score-view-model.js` derives scorecard choices, player/pair rows, current scores, relative labels, conflicts, totals, match status, finalize blockers, and UDisc export data so React-facing state is pure and testable.
+- Accessibility: navigation and score steppers expose action labels, scorer selection has a label, and tool buttons pair Lucide icons with text.
 - Motion: static layout; only existing active press feedback and weather wind-arrow rotation apply.
 
 ### Matchplay Winner Colors

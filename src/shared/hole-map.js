@@ -89,6 +89,7 @@ export function HoleMap(props) {
           "aria-label": label,
           className: "hole-map",
           key: "map",
+          preserveAspectRatio: "xMidYMid slice",
           role: "img",
           viewBox: `0 0 ${map.width} ${map.height}`,
         },

@@ -559,9 +559,13 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /hole-media-chip/);
   assert.match(scorecard, /compact: true/);
   assert.match(scorecard, /HoleMap/);
+  assert.match(scorecard, /score-glove-layout/);
+  assert.match(scorecard, /score-glove-dock/);
+  assert.match(scorecard, /score-glove-scores/);
   assert.doesNotMatch(scorecard, /Your card is not ready yet/);
   assert.match(controller, /LIVE \+ '\/finish-card'/);
-  assert.match(scorecard, /function HoleGrid\(props\)/);
+  assert.doesNotMatch(scorecard, /function HoleGrid\(props\)/);
+  assert.doesNotMatch(scorecard, /onJumpHole/);
   assert.match(scorecard, /export function ScorecardView\(props\)/);
   assert.match(scorecard, /WeatherStrip/);
   assert.match(scorecard, /HoleMap/);
@@ -573,8 +577,13 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(holeMap, /safeExternalUrl/);
   assert.match(holeMap, /compact/);
   assert.match(holeMap, /playerMarksOnMap/);
+  assert.match(holeMap, /preserveAspectRatio: "xMidYMid slice"/);
   assert.match(html, /\.round-tools \{/);
   assert.match(html, /grid-template-columns: repeat\(auto-fit, minmax\(0, 1fr\)\)/);
+  assert.match(html, /\.score-glove-dock \{/);
+  assert.match(html, /flex: 0 0 34dvh/);
+  assert.match(html, /max-height: 34dvh/);
+  assert.match(html, /\.score-glove-scores \{/);
   assert.match(html, /\.holegrid \{ display: grid; grid-template-columns: repeat\(6, minmax\(0, 1fr\)\)/);
   assert.match(html, /\.weather-strip-compact \{/);
   assert.match(html, /grid-template-columns: auto minmax\(0, 1fr\) auto/);
@@ -592,7 +601,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.doesNotMatch(html, /\.round-code \{ flex: 1 1 7\.5rem;/);
   assert.doesNotMatch(scorecard, /className: "round-code"/);
   assert.match(scorecard, /compact: true/);
-  assert.match(scorecard, /holegrid-score/);
+  assert.doesNotMatch(scorecard, /holegrid-score/);
   assert.match(html, /\.hole-map-satellite/);
   assert.match(html, /\.hole-map-frame/);
   assert.match(html, /\.tee-order-hint/);

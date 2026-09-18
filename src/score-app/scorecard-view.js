@@ -1,6 +1,6 @@
 import React from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Eye, Map, Settings2, Share2, UserPlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, Settings2, Share2, UserPlus } from "lucide-react";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { HoleMap } from "../shared/hole-map.js";
 import { PotsStrip } from "./pots-strip.js";
@@ -21,32 +21,32 @@ function icon(Icon) {
 
 function RoundTools(props) {
   if (!props.show) return null;
-  return h("div", { className: "card round-tools", key: "round-tools" }, [
-    h("button", { className: "btn small secondary", key: "share", type: "button", onClick: props.onShare }, [
+  return h("div", { className: "score-glove-tools", key: "round-tools" }, [
+    h("button", { className: "score-glove-tool", key: "share", type: "button", onClick: props.onShare }, [
       icon(Share2),
-      "Share",
+      h("span", { key: "label" }, "Share"),
     ]),
     props.onWatchShare
-      ? h("button", { className: "btn small secondary", key: "watch", type: "button", onClick: props.onWatchShare }, [
+      ? h("button", { className: "score-glove-tool", key: "watch", type: "button", onClick: props.onWatchShare }, [
         icon(Eye),
-        "Watch",
+        h("span", { key: "label" }, "Watch"),
       ])
       : null,
     h(
       "button",
       {
         "aria-label": "Add player",
-        className: "btn small secondary",
+        className: "score-glove-tool",
         key: "add",
         title: "Add player",
         type: "button",
         onClick: props.onAddPlayer,
       },
-      [icon(UserPlus), "Add"],
+      [icon(UserPlus), h("span", { key: "label" }, "Add")],
     ),
-    h("button", { className: "btn small secondary", key: "manage", type: "button", onClick: props.onManagePlayers }, [
+    h("button", { className: "score-glove-tool", key: "manage", type: "button", onClick: props.onManagePlayers }, [
       icon(Settings2),
-      "Manage",
+      h("span", { key: "label" }, "Manage"),
     ]),
   ]);
 }
@@ -65,7 +65,7 @@ function HoleHeader(props) {
       },
       icon(ChevronLeft),
     ),
-    h("div", { key: "mid", style: { flex: "1", textAlign: "center" } }, [
+    h("div", { key: "mid", className: "hole-head-mid" }, [
       h("div", { className: "hnum", key: "number" }, `Hole ${props.hole.hole}`),
       h("div", { className: "hpar", key: "par" }, props.holeMeta),
       props.ctpBadge ? h("div", { className: "ctp-badge", key: "ctp" }, props.ctpBadge) : null,
@@ -93,38 +93,15 @@ function holeHasMap(hole) {
 }
 
 function HoleMedia(props) {
-  const [open, setOpen] = React.useState(null);
+  const [signOpen, setSignOpen] = React.useState(false);
   const hasMap = holeHasMap(props.hole);
   const hasSign = Boolean(props.teeSign);
   if (!hasMap && !hasSign) return null;
-  const mapOpen = hasMap && open === "map";
-  const signOpen = hasSign && open === "sign";
   const style = props.teeSign && props.teeSign.highlightColor
     ? { boxShadow: `0 0 0 3px ${props.teeSign.highlightColor}` }
     : undefined;
-  const dist = props.hole && props.hole.distance_ft ? `${props.hole.distance_ft} ft` : "Map";
   return h("div", { className: "hole-media", key: "media" }, [
-    h("div", { className: "hole-media-chips", key: "chips" }, [
-      hasMap
-        ? h("button", {
-          "aria-expanded": mapOpen ? "true" : "false",
-          className: "hole-media-chip" + (mapOpen ? " open" : ""),
-          key: "map",
-          type: "button",
-          onClick: () => setOpen(mapOpen ? null : "map"),
-        }, [icon(Map), mapOpen ? "Hide map" : dist])
-        : null,
-      hasSign
-        ? h("button", {
-          "aria-expanded": signOpen ? "true" : "false",
-          className: "hole-media-chip" + (signOpen ? " open" : ""),
-          key: "sign",
-          type: "button",
-          onClick: () => setOpen(signOpen ? null : "sign"),
-        }, signOpen ? "Hide tee sign" : "Tee sign")
-        : null,
-    ]),
-    mapOpen
+    hasMap
       ? h(HoleMap, {
         compact: true,
         hole: props.hole,
@@ -132,8 +109,17 @@ function HoleMedia(props) {
         players: props.playerLocations,
         windFromDeg: props.windFromDeg,
       })
+      : h("div", { className: "hole-media-empty", key: "empty" }, "No map for this hole yet"),
+    hasSign
+      ? h("button", {
+        "aria-expanded": signOpen ? "true" : "false",
+        className: "hole-media-chip" + (signOpen ? " open" : ""),
+        key: "sign",
+        type: "button",
+        onClick: () => setSignOpen((open) => !open),
+      }, signOpen ? "Hide tee sign" : "Tee sign")
       : null,
-    signOpen
+    signOpen && hasSign
       ? h("div", { className: "card tee-sign-card", key: "tee-sign", style }, [
         h("img", {
           alt: props.teeSign.alt,
@@ -363,7 +349,7 @@ function CtpClaim(props) {
 }
 
 function ScorecardBox(props) {
-  return h("div", { className: "card score-entry-card", key: "scorecard" }, [
+  return h("div", { className: "score-entry-card", key: "scorecard" }, [
     h(ScorecardOwner, props),
     props.warning ? h("p", { className: "muted auth-error", key: "warning" }, props.warning) : null,
     props.rows.map((row) => h(ScoreRow, {
@@ -376,29 +362,6 @@ function ScorecardBox(props) {
     })),
     h(TotalsBar, { totals: props.totals }),
   ]);
-}
-
-function HoleGrid(props) {
-  return h(
-    "div",
-    { className: "holegrid", key: "grid" },
-    props.holes.map((hole) =>
-      h(
-        "button",
-        {
-          "aria-label": hole.score != null ? `Hole ${hole.hole}, ${hole.score}` : `Hole ${hole.hole}`,
-          className: [hole.current ? "cur" : "", hole.done ? "done" : "", hole.conflict ? "conflict" : "", hole.ctp ? "ctp" : ""].filter(Boolean).join(" "),
-          key: hole.hole,
-          type: "button",
-          onClick: () => props.onJump(hole.index),
-        },
-        [
-          h("span", { className: "holegrid-num", key: "num" }, String(hole.hole)),
-          hole.score != null ? h("b", { className: "holegrid-score", key: "score" }, String(hole.score)) : null,
-        ],
-      ),
-    ),
-  );
 }
 
 const FINISH_COPY = "Anyone on this card can confirm. Matching scores on each hole are enough.";
@@ -494,17 +457,24 @@ function ConfirmScoresSheet(props) {
 export function ScorecardView(props) {
   const [padRow, setPadRow] = React.useState(null);
   return h(React.Fragment, null, [
-    h(HoleHeader, props),
-    props.yourTurn ? h("p", { className: "your-turn-hint", key: "turn" }, props.yourTurn) : null,
-    props.showWeather ? h(WeatherStrip, { compact: true, key: "weather", title: "Round weather", weather: props.weather }) : null,
-    h(ScorecardBox, { ...props, onOpenPad: setPadRow }),
-    h(HoleGrid, { holes: props.holeGrid, onJump: props.onJumpHole }),
-    h(HoleMedia, props),
-    h(CtpClaim, { ctpClaim: props.ctpClaim, onCtpVote: props.onCtpVote }),
-    props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,
-    props.potsAceHint ? h("p", { className: "pots-ace-hint", key: "ace-hint" }, props.potsAceHint) : null,
-    h(RoundTools, props),
-    h(FinishCard, { finish: props.finish, onOpenFinish: props.onOpenFinish }),
+    h("div", { className: "score-glove-layout", key: "glove" }, [
+      h("div", { className: "score-glove-stage", key: "stage" }, [
+        props.showWeather ? h(WeatherStrip, { compact: true, key: "weather", title: "Round weather", weather: props.weather }) : null,
+        props.yourTurn ? h("p", { className: "your-turn-hint", key: "turn" }, props.yourTurn) : null,
+        h(HoleMedia, props),
+        h(RoundTools, props),
+        props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,
+        props.potsAceHint ? h("p", { className: "pots-ace-hint", key: "ace-hint" }, props.potsAceHint) : null,
+      ]),
+      h("div", { className: "score-glove-dock", key: "dock" }, [
+        h("div", { className: "score-glove-scores", key: "scores" }, [
+          h(ScorecardBox, { ...props, onOpenPad: setPadRow }),
+          h(CtpClaim, { ctpClaim: props.ctpClaim, onCtpVote: props.onCtpVote }),
+          h(FinishCard, { finish: props.finish, onOpenFinish: props.onOpenFinish }),
+        ]),
+        h(HoleHeader, props),
+      ]),
+    ]),
     h(ConfirmScoresSheet, {
       finish: props.finish,
       onAgree: props.onAgreeFinish,
