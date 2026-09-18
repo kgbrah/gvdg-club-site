@@ -45,13 +45,14 @@ const MAX_HOLE_ROUNDS = 80; // newest-first hole mix; keeps worker subrequests b
 const STAGING_QA_PDGA = "90000001";
 const STAGING_QA_PLAY = {
   holes: 54,
+  aces: 0,
   eagles: 1,
   birdies: 12,
   pars: 28,
   bogeys: 11,
   doubles_plus: 2,
-  birdie_hit: 13,
-  par_hit: 41,
+  birdie_hit: 12,
+  par_hit: 28,
   fir_hit: 0,
   fir_att: 0,
   c1r_hit: 0,

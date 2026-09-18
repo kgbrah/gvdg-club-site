@@ -80,21 +80,28 @@ test("roundPlayStats and breakdown parsing keep score mix plus throw stats", () 
     { 1: 2, 2: 4 },
   );
   assert.equal(totals.holes, 2);
+  assert.equal(totals.birdies, 1);
+  assert.equal(totals.bogeys, 1);
   assert.equal(totals.birdie_hit, 1);
-  assert.equal(totals.par_hit, 1);
+  assert.equal(totals.par_hit, 0);
   assert.equal(totals.c1r_hit, 1);
   assert.equal(totals.c1r_att, 1);
+  const aceRound = roundPlayStats([HOLE], {}, { 1: 1 });
+  assert.equal(aceRound.aces, 1);
+  assert.equal(aceRound.eagles, 0);
+  assert.equal(aceRound.birdie_hit, 0);
 
-  const parsed = parseBreakdown('{"eagles":1,"birdies":3,"pars":8,"bogeys":5,"doubles_plus":1,"fir_hit":10,"fir_att":12}');
+  const parsed = parseBreakdown('{"eagles":1,"birdies":3,"pars":8,"bogeys":5,"doubles_plus":1,"fir_hit":10,"fir_att":12,"birdie_hit":4,"par_hit":12}');
   assert.equal(parsed.holes, 18);
   assert.equal(parsed.eagles, 1);
   assert.equal(parsed.birdies, 3);
-  assert.equal(parsed.birdie_hit, 4);
-  assert.equal(parsed.par_hit, 12);
+  assert.equal(parsed.birdie_hit, 3);
+  assert.equal(parsed.par_hit, 8);
   assert.equal(parsed.fir_hit, 10);
   const summed = sumPlayTotals([parsed, { breakdown: { birdies: 2, pars: 16, bogeys: 0, doubles_plus: 0, eagles: 0 } }]);
   assert.equal(summed.holes, 36);
-  assert.equal(summed.birdie_hit, 6);
+  assert.equal(summed.birdie_hit, 5);
+  assert.equal(summed.par_hit, 24);
 });
 
 test("club ranks only count members with enough attempts", () => {
@@ -226,5 +233,37 @@ test("live round stats update from scored holes and marked lies", () => {
   assert.equal(live.mix.find((row) => row.id === "birdieMix").mine.hit, 1);
   assert.equal(live.mix.find((row) => row.id === "parMix").mine.hit, 1);
   assert.equal(live.throwStats.find((row) => row.id === "c1r").mine.hit, 1);
+  assert.equal(live.throwStats.find((row) => row.id === "birdie").short, "Birdie");
+  assert.equal(live.throwStats.find((row) => row.id === "par").short, "Par");
+  assert.equal(live.throwStats.find((row) => row.id === "birdie").mine.hit, 1);
+  assert.equal(live.throwStats.find((row) => row.id === "par").mine.hit, 1);
   assert.equal(live.throwStats.find((row) => row.id === "birdie").mine.pct, statPct(1, 2));
+  assert.equal(live.throwStats.find((row) => row.id === "par").mine.pct, statPct(1, 2));
+
+  const stacked = liveRoundStatsFromCard({
+    holes: [
+      HOLE,
+      { hole: 2, par: 4, tee: TEE, target: BASKET },
+      { hole: 3, par: 3, tee: TEE, target: BASKET },
+      { hole: 4, par: 3, tee: TEE, target: BASKET },
+      { hole: 5, par: 3, tee: TEE, target: BASKET },
+      { hole: 6, par: 3, tee: TEE, target: BASKET },
+    ],
+    holeGrid: [
+      { hole: 1, score: 1 },
+      { hole: 2, score: 2 },
+      { hole: 3, score: 2 },
+      { hole: 4, score: 3 },
+      { hole: 5, score: 4 },
+      { hole: 6, score: 5 },
+    ],
+  });
+  assert.equal(stacked.mix.find((row) => row.id === "ace").mine.hit, 1);
+  assert.equal(stacked.mix.find((row) => row.id === "eagle").mine.hit, 1);
+  assert.equal(stacked.mix.find((row) => row.id === "birdieMix").mine.hit, 1);
+  assert.equal(stacked.mix.find((row) => row.id === "parMix").mine.hit, 1);
+  assert.equal(stacked.mix.find((row) => row.id === "bogey").mine.hit, 1);
+  assert.equal(stacked.mix.find((row) => row.id === "double").mine.hit, 1);
+  assert.equal(stacked.throwStats.find((row) => row.id === "birdie").mine.hit, 1);
+  assert.equal(stacked.throwStats.find((row) => row.id === "par").mine.hit, 1);
 });

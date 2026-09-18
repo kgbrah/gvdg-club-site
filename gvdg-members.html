@@ -601,13 +601,14 @@
                     display: flex; align-items: center; justify-content: center; min-width: 0;
                     font: 800 0.62rem Archivo, sans-serif; letter-spacing: 0.02em;
                 }
-                .play-score-mix-seg.tone-eagle { background: var(--under); color: var(--bg-secondary); }
+                .play-score-mix-seg.tone-ace { background: var(--under); color: var(--bg-secondary); }
+                .play-score-mix-seg.tone-eagle { background: color-mix(in srgb, var(--under) 72%, var(--bg-tertiary)); color: var(--text-primary); }
                 .play-score-mix-seg.tone-birdie { background: color-mix(in srgb, var(--under) 58%, var(--bg-tertiary)); color: var(--text-primary); }
                 .play-score-mix-seg.tone-par { background: color-mix(in srgb, var(--accent) 62%, var(--bg-tertiary)); color: var(--text-primary); }
                 .play-score-mix-seg.tone-bogey { background: color-mix(in srgb, var(--over) 48%, var(--bg-tertiary)); color: var(--over); }
                 .play-score-mix-seg.tone-double { background: var(--over); color: var(--bg-secondary); }
                 .play-score-legend {
-                    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.28rem;
+                    display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.28rem;
                 }
                 .play-score-legend-item {
                     background: var(--bg-tertiary); border: 1px solid var(--border-color);
@@ -625,12 +626,13 @@
                     display: block; color: var(--text-muted); font-size: 0.62rem; margin-top: 0.12rem;
                     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
                 }
+                .play-score-legend-item.tone-ace b, .play-stat-card.tone-ace .play-stat-v,
                 .play-score-legend-item.tone-eagle b, .play-stat-card.tone-eagle .play-stat-v { color: var(--under); }
                 .play-score-legend-item.tone-birdie b, .play-stat-card.tone-birdie .play-stat-v { color: var(--under); }
                 .play-score-legend-item.tone-bogey b, .play-stat-card.tone-bogey .play-stat-v { color: var(--over); }
                 .play-score-legend-item.tone-double b, .play-stat-card.tone-double .play-stat-v { color: var(--over); }
                 @media (max-width: 420px) {
-                    .play-score-legend { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.2rem; }
+                    .play-score-legend { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.16rem; }
                     .play-score-legend-item { padding: 0.32rem 0.12rem 0.38rem; }
                     .play-score-legend-item b { font-size: 1.02rem; }
                 }

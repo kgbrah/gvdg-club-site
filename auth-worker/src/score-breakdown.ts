@@ -31,9 +31,9 @@ export function countScores(pars: readonly (number | null | undefined)[], stroke
     const par = pars[i];
     const s = strokes[i];
     if (s == null || par == null) continue;
-    if (s === 1) b.aces++;
     const d = s - par;
-    if (d <= -2) b.eagles++;
+    if (s === 1) b.aces++;
+    else if (d <= -2) b.eagles++;
     else if (d === -1) b.birdies++;
     else if (d === 0) b.pars++;
     else if (d === 1) b.bogeys++;

@@ -8,6 +8,7 @@ export const CIRCLE2_M = 20;
 
 export type PlayTotals = {
   holes: number;
+  aces: number;
   eagles: number;
   birdies: number;
   pars: number;
@@ -178,6 +179,7 @@ export function holePlayStats(hole: HoleInput | null | undefined, throws: unknow
 export function emptyPlayTotals(): PlayTotals {
   return {
     holes: 0,
+    aces: 0,
     eagles: 0,
     birdies: 0,
     pars: 0,
@@ -206,13 +208,14 @@ function applyScoreMix(totals: PlayTotals, par: number, strokes: number) {
   if (!Number.isInteger(strokes) || strokes <= 0 || !Number.isFinite(par)) return;
   totals.holes += 1;
   const delta = strokes - par;
-  if (delta <= -2) totals.eagles += 1;
+  if (strokes === 1) totals.aces += 1;
+  else if (delta <= -2) totals.eagles += 1;
   else if (delta === -1) totals.birdies += 1;
   else if (delta === 0) totals.pars += 1;
   else if (delta === 1) totals.bogeys += 1;
   else totals.doubles_plus += 1;
-  if (delta <= -1) totals.birdie_hit += 1;
-  if (delta <= 0) totals.par_hit += 1;
+  if (delta === -1) totals.birdie_hit += 1;
+  if (delta === 0) totals.par_hit += 1;
 }
 
 function addSample(totals: PlayTotals, value: { hit: number; att: number } | null, hitKey: keyof PlayTotals, attKey: keyof PlayTotals) {
@@ -252,19 +255,24 @@ export function parseBreakdown(raw: unknown): PlayTotals {
   if (!obj || typeof obj !== "object") return totals;
   const row = obj as Record<string, unknown>;
   const n = (key: string) => finite(row[key]) ?? 0;
-  const eagles = n("eagles");
+  const aces = n("aces");
+  let eagles = n("eagles");
   const birdies = n("birdies");
   const pars = n("pars");
   const bogeys = n("bogeys");
   const doubles = n("doubles_plus");
+  const mix = aces + eagles + birdies + pars + bogeys + doubles;
+  const holes = n("holes");
+  if (holes && mix > holes && aces) eagles = Math.max(0, eagles - aces);
+  totals.aces = aces;
   totals.eagles = eagles;
   totals.birdies = birdies;
   totals.pars = pars;
   totals.bogeys = bogeys;
   totals.doubles_plus = doubles;
-  totals.holes = n("holes") || eagles + birdies + pars + bogeys + doubles;
-  totals.birdie_hit = n("birdie_hit") || eagles + birdies;
-  totals.par_hit = n("par_hit") || eagles + birdies + pars;
+  totals.holes = holes || (aces + eagles + birdies + pars + bogeys + doubles);
+  totals.birdie_hit = birdies;
+  totals.par_hit = pars;
   totals.fir_hit = n("fir_hit");
   totals.fir_att = n("fir_att");
   totals.c1r_hit = n("c1r_hit");
@@ -365,13 +373,14 @@ export function partnersForStanding(
 }
 
 export const PLAY_CATEGORIES: readonly PlayCategory[] = [
-  { att: "holes", group: "mix", hit: "eagles", id: "eagle", invert: false, label: "Eagle+", min: 18, short: "Eagle", tone: "eagle" },
+  { att: "holes", group: "mix", hit: "aces", id: "ace", invert: false, label: "Ace", min: 18, short: "Ace", tone: "ace" },
+  { att: "holes", group: "mix", hit: "eagles", id: "eagle", invert: false, label: "Eagle", min: 18, short: "Eagle", tone: "eagle" },
   { att: "holes", group: "mix", hit: "birdies", id: "birdieMix", invert: false, label: "Birdie", min: 18, short: "Birdie", tone: "birdie" },
   { att: "holes", group: "mix", hit: "pars", id: "parMix", invert: false, label: "Par", min: 18, short: "Par", tone: "par" },
   { att: "holes", group: "mix", hit: "bogeys", id: "bogey", invert: true, label: "Bogey", min: 18, short: "Bogey", tone: "bogey" },
   { att: "holes", group: "mix", hit: "doubles_plus", id: "double", invert: true, label: "Double+", min: 18, short: "Dbl+", tone: "double" },
-  { att: "holes", group: "score", hit: "birdie_hit", id: "birdie", invert: false, label: "Birdie+", min: 18, short: "Birdie+", tone: "birdie" },
-  { att: "holes", group: "score", hit: "par_hit", id: "par", invert: false, label: "Par+", min: 18, short: "Par+", tone: "par" },
+  { att: "holes", group: "score", hit: "birdie_hit", id: "birdie", invert: false, label: "Birdie", min: 18, short: "Birdie", tone: "birdie" },
+  { att: "holes", group: "score", hit: "par_hit", id: "par", invert: false, label: "Par", min: 18, short: "Par", tone: "par" },
   { att: "fir_att", group: "throw", hit: "fir_hit", id: "fir", invert: false, label: "Fairways", min: 9, short: "FIR", tone: null },
   { att: "c1r_att", group: "throw", hit: "c1r_hit", id: "c1r", invert: false, label: "C1 in reg", min: 9, short: "C1R", tone: null },
   { att: "c2r_att", group: "throw", hit: "c2r_hit", id: "c2r", invert: false, label: "C2 in reg", min: 9, short: "C2R", tone: null },

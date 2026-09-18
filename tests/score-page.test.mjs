@@ -666,6 +666,9 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /liveRoundStatsFromCard/);
   assert.match(scorecard, /readAllThrows/);
   assert.match(scorecard, /Live stats/);
+  assert.match(scorecard, /LIVE_STATS_PEEK_IDS/);
+  assert.match(scorecard, /aria-expanded/);
+  assert.doesNotMatch(scorecard, /if \(!props\.solo\) return null/);
   assert.match(scorecard, /export function SoloScorecardPreview/);
   assert.match(main, /SoloScorecardPreview/);
   assert.match(main, /get\("preview"\) === "solo-stats"/);
@@ -771,8 +774,12 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(html, /flex: 0 1 auto; max-height: min\(38dvh, 20rem\)/);
   assert.match(html, /\.score-glove-layout\.solo \.score-glove-stage \.hole-map-frame \{/);
   assert.match(html, /\.live-round-stats \{/);
+  assert.match(html, /overflow: hidden;/);
+  assert.match(html, /\.score-glove-layout:not\(\.solo\) \.live-round-stats/);
+  assert.match(html, /\.live-round-stats\.compact:not\(\.open\)/);
   assert.match(html, /\.live-stats-mix-legend \{/);
   assert.match(html, /\.live-stats-grid \{/);
+  assert.match(html, /grid-template-columns: repeat\(6, minmax\(0, 1fr\)\)/);
   assert.match(html, /display-mode: browser/);
   assert.match(html, /height: 100svh/);
   assert.match(html, /\.score-glove-scores \{/);

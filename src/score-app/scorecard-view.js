@@ -1,6 +1,6 @@
 import React from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Eye, Ruler, Settings2, Share2, UserPlus, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Eye, Ruler, Settings2, Share2, UserPlus, X } from "lucide-react";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { HoleMap } from "../shared/hole-map.js";
 import { addThrow, currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, lastThrow, lastThrowHud, nextTeeHud, readAllThrows, readThrows, resolveMapFocus, undoThrow, withSelfLocation, writeThrows } from "../shared/hole-map-model.js";
@@ -32,9 +32,22 @@ function HoleStatChips(props) {
   ));
 }
 
+const LIVE_STATS_PEEK_IDS = ["fir", "c1r", "c2r", "birdie"];
+
 function liveStatSample(mine) {
   if (!mine || !mine.att) return "—";
   return mine.hit + "/" + mine.att;
+}
+
+function LiveStatTile(row, compact) {
+  return h("div", {
+    className: "live-stat-tile" + (row.tone ? " tone-" + row.tone : "") + (compact ? " peek" : ""),
+    key: row.id,
+  }, [
+    h("span", { className: "live-stats-k", key: "k" }, row.short || row.label),
+    h("b", { key: "v" }, row.mine.att ? formatPct(row.mine.pct) : "—"),
+    compact ? null : h("small", { key: "s" }, liveStatSample(row.mine)),
+  ]);
 }
 
 function LiveMixBar(props) {
@@ -61,7 +74,9 @@ function LiveMixBar(props) {
 }
 
 function LiveRoundStats(props) {
-  if (!props.solo) return null;
+  const solo = props.solo === true;
+  const [open, setOpen] = React.useState(false);
+  const expanded = solo || open;
   const storage = typeof sessionStorage === "undefined" ? null : sessionStorage;
   const throwsByHole = readAllThrows(storage, props.roundCode, props.holes);
   if (props.currentHole != null) throwsByHole[props.currentHole] = Array.isArray(props.throws) ? props.throws : [];
@@ -78,13 +93,9 @@ function LiveRoundStats(props) {
   const hint = thru
     ? (hasThrows ? null : "Mark lies for fairways, C1, and putting")
     : "Score holes and mark lies — mix, FIR, C1, and putting fill in live.";
-  return h("section", {
-    "aria-label": "Live round stats",
-    "aria-live": "polite",
-    className: "live-round-stats",
-    key: "live-stats",
-  }, [
-    h("div", { className: "live-round-stats-head", key: "head" }, [
+  const peek = LIVE_STATS_PEEK_IDS.map((id) => view.throwStats.find((row) => row.id === id)).filter(Boolean);
+  const headChildren = [
+    h("div", { className: "live-round-stats-copy", key: "copy" }, [
       h("div", { className: "live-round-stats-title", key: "title" }, "Live stats"),
       h("div", { className: "live-round-stats-meta", key: "meta" }, [
         props.formatLabel || "Singles · Stroke",
@@ -94,26 +105,42 @@ function LiveRoundStats(props) {
         String(holeCount),
       ]),
     ]),
-    h("div", { className: "live-stats-mix-wrap", key: "mix" }, [
-      h(LiveMixBar, { key: "bar", rows: view.mix }),
-      h("div", { className: "live-stats-mix-legend", key: "legend" }, view.mix.map((row) =>
-        h("div", {
-          className: "live-stats-mix-item" + (row.tone ? " tone-" + row.tone : ""),
-          key: row.id,
-        }, [
-          h("span", { className: "live-stats-k", key: "k" }, row.short || row.label),
-          h("b", { key: "v" }, String(row.mine.hit)),
-        ]),
-      )),
-    ]),
-    h("div", { className: "live-stats-grid", key: "grid" }, view.throwStats.map((row) =>
-      h("div", { className: "live-stat-tile" + (row.tone ? " tone-" + row.tone : ""), key: row.id }, [
-        h("span", { className: "live-stats-k", key: "k" }, row.short || row.label),
-        h("b", { key: "v" }, row.mine.att ? formatPct(row.mine.pct) : "—"),
-        h("small", { key: "s" }, liveStatSample(row.mine)),
+    solo ? null : icon(expanded ? ChevronUp : ChevronDown),
+  ];
+  const head = solo
+    ? h("div", { className: "live-round-stats-head", key: "head" }, headChildren)
+    : h("button", {
+      "aria-controls": "live-round-stats-body",
+      "aria-expanded": expanded ? "true" : "false",
+      className: "live-round-stats-head",
+      key: "head",
+      type: "button",
+      onClick: () => setOpen((value) => !value),
+    }, headChildren);
+  return h("section", {
+    "aria-label": "Live round stats",
+    "aria-live": "polite",
+    className: "live-round-stats" + (solo ? "" : " compact") + (expanded ? " open" : ""),
+    key: "live-stats",
+  }, [
+    head,
+    h("div", { className: "live-stats-peek", key: "peek" }, peek.map((row) => LiveStatTile(row, true))),
+    h("div", { className: "live-stats-body", id: "live-round-stats-body", key: "body" }, [
+      h("div", { className: "live-stats-mix-wrap", key: "mix" }, [
+        h(LiveMixBar, { key: "bar", rows: view.mix }),
+        h("div", { className: "live-stats-mix-legend", key: "legend" }, view.mix.map((row) =>
+          h("div", {
+            className: "live-stats-mix-item" + (row.tone ? " tone-" + row.tone : ""),
+            key: row.id,
+          }, [
+            h("span", { className: "live-stats-k", key: "k" }, row.short || row.label),
+            h("b", { key: "v" }, String(row.mine.hit)),
+          ]),
+        )),
       ]),
-    )),
-    hint ? h("p", { className: "live-stats-hint", key: "hint" }, hint) : null,
+      h("div", { className: "live-stats-grid", key: "grid" }, view.throwStats.map((row) => LiveStatTile(row, false))),
+      hint ? h("p", { className: "live-stats-hint", key: "hint" }, hint) : null,
+    ]),
   ]);
 }
 

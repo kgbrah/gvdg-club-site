@@ -227,19 +227,20 @@ export async function installMemberDashboardApiRoutes(page, apiBase) {
     if (pathName === "/play-stats") return route.fulfill(json({
       year: 2026,
       competitive: {
-        mine: { memberId: "member-1", name: "QA Admin", totals: { holes: 18, eagles: 1, birdies: 3, pars: 8, bogeys: 5, doubles_plus: 1, birdie_hit: 4, par_hit: 12 } },
+        mine: { memberId: "member-1", name: "QA Admin", totals: { holes: 18, aces: 0, eagles: 1, birdies: 3, pars: 8, bogeys: 5, doubles_plus: 1, birdie_hit: 3, par_hit: 8 } },
         categories: [
-          { id: "eagle", group: "mix", label: "Eagle+", short: "Eagle", tone: "eagle", mine: { pct: 5.6, rank: 4, field: 8, hit: 1, att: 18 }, leaders: [], field: 8, min: 18 },
+          { id: "ace", group: "mix", label: "Ace", short: "Ace", tone: "ace", mine: { pct: 0, rank: null, field: 8, hit: 0, att: 18 }, leaders: [], field: 8, min: 18 },
+          { id: "eagle", group: "mix", label: "Eagle", short: "Eagle", tone: "eagle", mine: { pct: 5.6, rank: 4, field: 8, hit: 1, att: 18 }, leaders: [], field: 8, min: 18 },
           { id: "birdieMix", group: "mix", label: "Birdie", short: "Birdie", tone: "birdie", mine: { pct: 16.7, rank: 2, field: 8, hit: 3, att: 18 }, leaders: [], field: 8, min: 18 },
           { id: "parMix", group: "mix", label: "Par", short: "Par", tone: "par", mine: { pct: 44.4, rank: 5, field: 8, hit: 8, att: 18 }, leaders: [], field: 8, min: 18 },
           { id: "bogey", group: "mix", label: "Bogey", short: "Bogey", tone: "bogey", mine: { pct: 27.8, rank: 6, field: 8, hit: 5, att: 18 }, leaders: [], field: 8, min: 18 },
           { id: "double", group: "mix", label: "Double+", short: "Dbl+", tone: "double", mine: { pct: 5.6, rank: 3, field: 8, hit: 1, att: 18 }, leaders: [], field: 8, min: 18 },
-          { id: "birdie", group: "score", label: "Birdie+", mine: { pct: 22.2, rank: 2, field: 8, hit: 4, att: 18 }, leaders: [], field: 8, min: 18 },
-          { id: "par", group: "score", label: "Par+", mine: { pct: 66.7, rank: 3, field: 8, hit: 12, att: 18 }, leaders: [], field: 8, min: 18 },
+          { id: "birdie", group: "score", label: "Birdie", mine: { pct: 16.7, rank: 2, field: 8, hit: 3, att: 18 }, leaders: [], field: 8, min: 18 },
+          { id: "par", group: "score", label: "Par", mine: { pct: 44.4, rank: 5, field: 8, hit: 8, att: 18 }, leaders: [], field: 8, min: 18 },
         ],
       },
       casual: {
-        mine: { memberId: "member-1", name: "QA Admin", totals: { holes: 18, eagles: 0, birdies: 6, pars: 10, bogeys: 2, doubles_plus: 0, birdie_hit: 6, par_hit: 16 } },
+        mine: { memberId: "member-1", name: "QA Admin", totals: { holes: 18, eagles: 0, birdies: 6, pars: 10, bogeys: 2, doubles_plus: 0, birdie_hit: 6, par_hit: 10 } },
         categories: [
           { id: "birdieMix", group: "mix", label: "Birdie", short: "Birdie", tone: "birdie", mine: { pct: 33.3, rank: 1, field: 4, hit: 6, att: 18 }, leaders: [], field: 4, min: 18 },
         ],
