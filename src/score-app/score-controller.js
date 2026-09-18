@@ -24,6 +24,7 @@ import { resolveApiBase } from "../shared/api-base.js";
 import { clearMemberSession, readMemberToken, writeMemberSession } from "../shared/member-session.js";
 import { createWakeLock } from "../shared/wake-lock.js";
 import { isTransientMineFailure, mineCacheKey, readMineCache, writeMineCache } from "./score-session-cache.js";
+import { readOpenPlayName, readOpenPlayToken, writeOpenPlaySession } from "./open-play-session.js";
 import { buildLivePots, withLiveCtpLeaders } from "../shared/live-pots-model.js";
 import { isLiveWatchRequest, liveRoundCodeFromSearch, liveScoreHref, liveWatchHref } from "../shared/live-watch.js";
 import { holeWinners, winnerColor } from "../shared/matchplay-colors.js";
@@ -41,8 +42,8 @@ export function startScoreApp(options) {
         const MODE = ROUND_CODE ? 'round' : (EVENT_ID ? 'event' : 'home'); // event scoring · casual round · home
         const WATCH = isLiveWatchRequest(params);
         const LIVE = ROUND_CODE ? ('/rounds/' + ROUND_CODE + '/live') : ('/events/' + EVENT_ID + '/live');
-        // A guest scores an EVENT via their registration token (URL ?gt= or saved at registration); casual
-        // rounds are members-only, so there is no guest token there.
+        // A guest scores an EVENT via their registration token (URL ?gt= or saved at registration).
+        // Casual rounds accept a member session OR an open-play scoring token (no club PIN).
         function guestTokenStored() { try { const a = JSON.parse(localStorage.getItem(GUESTREG_KEY) || '{}'); return (a[EVENT_ID] && a[EVENT_ID].guestToken) || null; } catch (e) { return null; } }
         const GUEST_TOKEN = MODE === 'event' ? (params.get('gt') || guestTokenStored()) : null;
 
@@ -61,7 +62,9 @@ export function startScoreApp(options) {
 
         // ---------- tiny helpers ----------
         function memberToken() { return readMemberToken() || null; }
-        function currentMineKey() { return mineCacheKey(ROUND_CODE, EVENT_ID, memberToken() || GUEST_TOKEN); }
+        function scoringToken() { return memberToken() || readOpenPlayToken() || GUEST_TOKEN || null; }
+        function currentMineKey() { return mineCacheKey(ROUND_CODE, EVENT_ID, scoringToken()); }
+        function hasScoringIdentity() { return !!(memberToken() || readOpenPlayToken()); }
         function rememberRecentRound(entry) {
             try {
                 if (!entry || !entry.code) return;
@@ -97,7 +100,7 @@ export function startScoreApp(options) {
             opts = opts || {};
             const headers = {};
             let url = path;
-            const tok = memberToken();
+            const tok = memberToken() || (opts.auth !== false ? readOpenPlayToken() : null);
             if (tok && opts.auth !== false) headers['Authorization'] = 'Bearer ' + tok;
             else if (!tok && GUEST_TOKEN && opts.guest !== false) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'gt=' + encodeURIComponent(GUEST_TOKEN);
             let body = opts.body;
@@ -547,12 +550,34 @@ export function startScoreApp(options) {
                 mode: 'login',
                 onGuestContinue: function () { clearMemberSession(); notifyScoreAuthChanged(); boot(); },
                 onLogin: loginWithPin,
+                onOpenPlay: MODE === 'event' ? null : function () { renderOpenPlay(); },
                 onPasskeyLogin: supported ? loginWithPasskey : null,
+                openPlayAvailable: MODE !== 'event',
                 passkeysSupported: supported
             });
             if (supported) {
                 prefetchPasskey(); // warm the Worker + hold a challenge so the tap has no network before get()
             }
+        }
+        function renderOpenPlay(after) {
+            wakeLock.stop();
+            renderAuthFlow({
+                defaultName: readOpenPlayName(),
+                message: MODE === 'round' ? 'Enter the name that should appear on this card.' : 'Your name on the card. No club PIN needed.',
+                mode: 'openPlay',
+                onSignIn: function () { renderLogin(); },
+                onStart: function (payload) { return startOpenPlay(payload.name, after); }
+            });
+        }
+        async function startOpenPlay(name, after) {
+            const r = await api('/rounds/open-play', { method: 'POST', auth: false, guest: false, body: { name: name } });
+            if (!r.ok || !r.data || !r.data.token) {
+                return { ok: false, message: r.status === 429 ? 'Too many tries — wait a minute and try again.' : 'Could not start without an account. Try again.' };
+            }
+            writeOpenPlaySession({ token: r.data.token, name: r.data.name || name });
+            if (typeof after === 'function') after();
+            else boot();
+            return { ok: true };
         }
 
         function holeMeta(idx) { return S.holes[idx] || { hole: idx + 1, par: 3 }; }
@@ -770,7 +795,7 @@ export function startScoreApp(options) {
                 const jr = await api('/rounds/' + ROUND_CODE + '/join', { method: 'POST', body: {} });
                 if (jr.ok) r = await api(LIVE + '/mine');
             }
-            if (r.status === 401) { renderLogin('Please sign in to keep score.'); return; }
+            if (r.status === 401) { if (MODE === 'round') renderOpenPlay(); else renderLogin('Please sign in to keep score.'); return; }
             if (!r.ok || !r.data) {
                 const cached = isTransientMineFailure(r) ? readMineCache(currentMineKey()) : null;
                 if (cached) { applyMinePayload(cached, { offline: true }); return; }
@@ -793,16 +818,23 @@ export function startScoreApp(options) {
             if (code.length >= 4) location.search = '?round=' + code;
             else toast('Enter a valid code');
         }
-        function signOut() { clearMemberSession(); wakeLock.stop(); notifyScoreAuthChanged(); renderLogin(); }
+        function signOut() { clearMemberSession(); wakeLock.stop(); notifyScoreAuthChanged(); if (MODE === 'home') renderHome(); else renderLogin(); }
         function renderHome() {
             renderSetupFlow({
                 view: 'home',
-                onStart: renderCoursePick,
+                signedIn: !!memberToken(),
+                playerName: memberToken() ? '' : readOpenPlayName(),
+                onStart: startCasualSetup,
                 onJoin: joinRoundCode,
                 onWatch: watchRoundCode,
                 onInvalidCode: function () { toast('Enter a valid code'); },
-                onSignOut: signOut
+                onSignOut: signOut,
+                onSignIn: function () { renderLogin(); }
             });
+        }
+        function startCasualSetup() {
+            if (!hasScoringIdentity()) { renderOpenPlay(function () { renderCoursePick(); }); return; }
+            renderCoursePick();
         }
         async function renderCoursePick() {
             renderLoading();
@@ -845,6 +877,7 @@ export function startScoreApp(options) {
             const liveScoringConfig = config || defaultLiveScoringConfig();
             const r = await api('/rounds', { method: 'POST', body: { course_id: course.id, layout_id: layout.id, liveScoringConfig: { groupFormat: liveScoringConfig.groupFormat, scoringStyle: liveScoringConfig.scoringStyle } } });
             if (r.ok && r.data && r.data.code) { location.search = '?round=' + r.data.code; return; }
+            if (r.status === 401) { renderOpenPlay(function () { createRound(course, layout, liveScoringConfig); }); return; }
             renderMessage('Could not start round', (r.data && r.data.error === 'no_layout_holes') ? 'That layout has no holes/pars yet.' : 'Please try again.', false);
         }
         async function addGuestPrompt() {
@@ -1016,8 +1049,9 @@ export function startScoreApp(options) {
                 await loadWatch();
                 return;
             }
-            if (MODE === 'home') { if (!memberToken()) { renderLogin(); return; } renderHome(); return; }
-            if (!memberToken() && !GUEST_TOKEN) { renderLogin(); return; }
+            if (MODE === 'home') { renderHome(); return; }
+            if (MODE === 'event' && !memberToken() && !GUEST_TOKEN) { renderLogin(); return; }
+            if (MODE === 'round' && !hasScoringIdentity()) { renderOpenPlay(); return; }
             renderLoading();
             await loadMine();
         }

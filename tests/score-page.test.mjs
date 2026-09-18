@@ -184,15 +184,32 @@ test('score auth screens are React-owned without legacy DOM fallbacks', () => {
   const controller = readFileSync('src/score-app/score-controller.js', 'utf8');
   assert.match(controller, /renderScoreBody\('auth', props\)/);
   assert.match(main, /ScoreAuthFlow/);
-  assert.match(auth, /function LoginView\(props\)/);
-  assert.match(auth, /function SetPinView\(props\)/);
-  assert.match(auth, /export function ScoreAuthFlow\(props\)/);
+  assert.match(auth, /function OpenPlayView\(props\)/);
+  assert.match(auth, /Play without an account/);
+  assert.match(auth, /mode === "openPlay"/);
+  assert.match(controller, /\/rounds\/open-play/);
+  assert.match(controller, /openPlayAvailable: MODE !== 'event'/);
+  assert.match(controller, /function startOpenPlay\(/);
+  assert.match(controller, /if \(MODE === 'home'\) \{ renderHome\(\); return; \}/);
+  assert.match(controller, /readOpenPlayToken/);
+  assert.doesNotMatch(controller, /casual\s+rounds are members-only/);
   assert.match(auth, /KeyRound/);
   assert.doesNotMatch(legacy, /const c = el\('div', 'card stack'\)/);
   assert.doesNotMatch(legacy, /const idL = el\('label', 'lbl', 'PDGA # or UDisc username'\)/);
   assert.doesNotMatch(legacy, /const pkb = el\('button', 'btn secondary'/);
   assert.doesNotMatch(legacy, /np\.placeholder = 'New 4-digit PIN'/);
   assert.doesNotMatch(auth, /createRoot|getElementById\("app"\)|replaceChildren/);
+});
+
+test('open play session is stored off the member token', () => {
+  const session = readFileSync('src/score-app/open-play-session.js', 'utf8');
+  const setup = scoreSetupSource();
+  assert.match(session, /export const OPEN_PLAY_TOKEN_KEY = "gvdg_open_play_token"/);
+  assert.match(session, /export function writeOpenPlaySession/);
+  assert.doesNotMatch(session, /gvdg_member_token/);
+  assert.match(setup, /No club login needed/);
+  assert.match(setup, /Sign in with a club account/);
+  assert.match(setup, /signedIn/);
 });
 
 test('score status screens are React-owned without legacy message DOM fallbacks', () => {

@@ -610,7 +610,7 @@ Spacing follows a 4px base through rem values.
 ### Member Play Page
 
 - Structure: React-owned Play tab with a start-round CTA, open live-card list, and join/watch code form. Home keep-score with no live card routes here instead of jumping straight to `score.html`.
-- Variants: live event card, live casual card, empty cards, invalid join code, start casual round.
+- Variants: live event card, live casual card, empty cards, invalid join code, start casual round. Start copy notes friends can join the round link without a club login.
 - Spacing: reuses `.player-keep-score`, `.player-card`, and `.live-round-card`. Join actions are a two-column thumb row.
 - States: `/my-live-rounds` plus recent casual `/mine` checks populate cards; join/watch navigate to `score.html` with `liveScoreHref` / `liveWatchHref`.
 - Accessibility: round-code input has a label; Join and Watch are real buttons; dock Play tab is `role="tab"`.
@@ -682,7 +682,7 @@ Spacing follows a 4px base through rem values.
 ### Score Setup Flow
 
 - Structure: stacked cards for home, course pick, layout pick, and casual round setup, rendered as React components inside the existing score app shell; the score controller only dispatches setup view state and callbacks.
-- Variants: empty course/layout states, selected setup options, and back navigation.
+- Variants: empty course/layout states, selected setup options, back navigation, signed-in vs open-play home (Sign out vs Sign in).
 - Spacing: reuses `.card`, `.stack`, `.tap-row`, `.setup-grid`, and `.setup-option` primitives from the score app.
 - States: setup options use `aria-pressed` and tokenized borders/backgrounds for selected state; legacy setup fallback nodes must be absent, not hidden.
 - Accessibility: course/layout rows and setup options are real buttons; join-code entry submits on Enter.
@@ -691,9 +691,9 @@ Spacing follows a 4px base through rem values.
 ### Score Auth Flow
 
 - Structure: React-owned login and forced-PIN cards mounted in the score app shell; the score controller supplies auth, passkey, guest, and set-PIN callbacks only.
-- Variants: member login, passkey-supported login, guest-token continuation, forced PIN change, pending submit states, and inline errors.
+- Variants: member login, passkey-supported login, guest-token continuation, open-play name (no club PIN), forced PIN change, pending submit states, and inline errors.
 - Spacing: reuses `.card`, `.stack`, `.field`, `.lbl`, `.btn`, `.muted`, and `.return-members`; auth errors use the score conflict color token.
-- States: submit buttons disable while pending; validation errors render in a polite inline error row; successful auth leaves the auth renderer through the normal boot path.
+- States: submit buttons disable while pending; validation errors render in a polite inline error row; successful auth leaves the auth renderer through the normal boot path. Open play POSTs `/rounds/open-play` then uses that bearer only on casual-round routes; member JWT still wins when both exist. Event scoring stays member-or-guest-registration.
 - Accessibility: login and PIN inputs are labelled, forms submit on Enter, errors use alert semantics, and passkey support uses a Lucide icon with text.
 - Motion: static card flow; only existing button active states apply.
 
