@@ -577,6 +577,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(holeMap, /safeExternalUrl/);
   assert.match(holeMap, /compact/);
   assert.match(holeMap, /playerMarksOnMap/);
+  assert.match(holeMap, /preserveAspectRatio: "xMidYMid slice"/);
   assert.match(html, /\.round-tools \{/);
   assert.match(html, /grid-template-columns: repeat\(auto-fit, minmax\(0, 1fr\)\)/);
   assert.match(html, /\.score-glove-dock \{/);
