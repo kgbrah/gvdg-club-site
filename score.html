@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Live Scoring · Greenville Disc Golf Club</title>
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=172">
+    <link rel="manifest" href="site.webmanifest?v=173">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <script src="pwa.js" defer></script>
     <link rel="stylesheet" href="tokens.css">
@@ -343,6 +343,13 @@
         }
         .score-pad-key.current { border-color: var(--primary); background: var(--primary-strong); color: var(--light); }
         body.score-glove .wrap { height: 100dvh; max-height: 100dvh; overflow: hidden; }
+        body.score-glove .topbar {
+            min-height: calc(48px + var(--safe-top));
+            padding: calc(0.32rem + var(--safe-top)) 0.5rem 0.32rem;
+            gap: 0.3rem;
+        }
+        body.score-glove .top-link,
+        body.score-glove .iconbtn { width: 40px; height: 40px; flex-basis: 40px; }
         body.score-glove main#app {
             flex: 1; min-height: 0; padding: 0; display: flex; flex-direction: column; overflow: hidden;
         }
@@ -351,10 +358,13 @@
             flex: 1 1 auto; min-height: 0; position: relative;
             display: flex; flex-direction: column; padding: 0.4rem 0.55rem 0;
         }
-        .score-glove-stage .weather-strip-compact { margin: 0 0 0.4rem; flex: 0 0 auto; }
+        .score-glove-stage .weather-strip-compact { margin: 0 0 0.25rem; padding: 0.28rem 0.5rem; flex: 0 0 auto; }
+        .score-glove-stage .weather-strip-compact .weather-temp { font-size: 1.35rem; }
+        .score-glove-stage .weather-strip-compact .weather-graphic-icon { font-size: 1.35rem; }
+        .score-glove-stage .weather-wind-compact { min-height: 36px; padding: 0.18rem 0.45rem; }
         .score-glove-stage .your-turn-hint { margin: 0 0 0.35rem; padding: 0.4rem 0.55rem; font-size: 0.78rem; }
         .score-glove-stage .hole-media {
-            flex: 0 0 auto; min-height: 0; margin: 0; position: relative;
+            flex: 1 1 auto; min-height: 0; margin: 0; position: relative;
             display: flex; flex-direction: column; width: 100%;
         }
         .hole-media-map-wrap { position: relative; }
@@ -382,12 +392,13 @@
         }
         .score-glove-stage .hole-map-card,
         .score-glove-stage .hole-map-compact {
-            flex: 0 0 auto; min-height: 0; display: flex; flex-direction: column; margin: 0;
+            flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; margin: 0;
             background: transparent; border: 0; box-shadow: none; padding: 0;
         }
+        .score-glove-stage .hole-media-map-wrap { flex: 1 1 auto; min-height: 0; }
         .score-glove-stage .hole-map-frame {
-            flex: 0 0 auto; aspect-ratio: 16 / 9; width: 100%; height: auto;
-            max-height: 28dvh;
+            flex: 1 1 auto; aspect-ratio: 16 / 9; width: 100%; height: auto;
+            max-height: none; min-height: 8.5rem;
         }
         .score-glove-stage .hole-map-caption,
         .score-glove-stage .hole-map-credit { display: none; }
@@ -407,11 +418,11 @@
         }
         .score-glove-tools {
             position: relative; left: auto; bottom: auto; z-index: 2;
-            display: flex; gap: 0.35rem; margin: 0.45rem 0 0.15rem; padding: 0;
+            display: flex; gap: 0.3rem; margin: 0.28rem 0 0.1rem; padding: 0;
             border-radius: 12px; background: transparent; flex: 0 0 auto; align-self: flex-start;
         }
         .score-glove-tool {
-            min-height: 40px; min-width: 40px; padding: 0 0.45rem;
+            min-height: 36px; min-width: 36px; padding: 0 0.4rem;
             display: inline-flex; align-items: center; justify-content: center; gap: 0.25rem;
             border: 1px solid var(--border-color); border-radius: 10px;
             background: var(--bg-secondary); color: var(--text-primary);
@@ -424,8 +435,8 @@
         }
         .score-glove-tool span { display: none; }
         .score-glove-stage .holegrid {
-            flex: 1 1 auto; min-height: 0; margin: 0.35rem 0 0.25rem;
-            align-content: start; overflow: auto; gap: 5px;
+            flex: 0 0 auto; min-height: 0; margin: 0.22rem 0 0.12rem;
+            align-content: start; overflow: hidden; gap: 4px;
         }
         .score-glove-stage .holegrid button {
             min-height: 0; padding: 0.18rem 0.08rem; gap: 0;
@@ -436,24 +447,24 @@
         .score-glove-stage .pots-strip,
         .score-glove-stage .pots-ace-hint { display: none; }
         .score-glove-dock {
-            flex: 0 0 34dvh; max-height: 34dvh; min-height: 11.5rem;
+            flex: 0 1 auto; max-height: min(38dvh, 20rem); min-height: 0;
             overflow: hidden; display: flex; flex-direction: column;
-            padding: 0.25rem 0.65rem 0;
+            padding: 0.12rem 0.65rem 0;
             background: var(--bg-secondary); border-top: 1px solid var(--border-color);
             box-shadow: 0 -10px 28px var(--shadow);
         }
         .score-glove-scores {
-            flex: 1 1 auto; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch;
+            flex: 0 1 auto; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch;
         }
         .score-glove-dock .hole-head {
             flex: 0 0 auto; margin: 0; gap: 0.45rem; justify-content: center;
-            padding: 0.28rem 0 calc(0.32rem + var(--safe-bottom));
+            padding: 0.16rem 0 calc(0.18rem + var(--safe-bottom));
             border-top: 1px solid var(--border-color);
         }
         .score-glove-dock .hole-head-mid { flex: 0 1 8.25rem; text-align: center; min-width: 0; }
-        .score-glove-dock .hole-head .hnum { font-size: 1.35rem; }
-        .score-glove-dock .hole-head .hpar { font-size: 0.72rem; font-weight: 700; }
-        .score-glove-dock .navbtn { width: 48px; height: 48px; }
+        .score-glove-dock .hole-head .hnum { font-size: 1.15rem; }
+        .score-glove-dock .hole-head .hpar { font-size: 0.68rem; font-weight: 700; }
+        .score-glove-dock .navbtn { width: 44px; height: 44px; }
         .score-glove-dock .tee-order-hint { display: none; }
         .score-glove-dock .dormie-badge { font-size: 0.62rem; line-height: 1.2; }
         .score-glove-dock .score-entry-card {
@@ -462,14 +473,18 @@
         }
         .score-glove-dock .prow { padding: 0.22rem 0; gap: 0.4rem; }
         .score-glove-dock .prow .pname { font-size: 0.92rem; }
-        .score-glove-dock .scorecard-owner { padding-bottom: 0.4rem; }
-        .score-glove-dock .totbar { margin-top: 0.25rem; padding-top: 0.25rem; }
+        .score-glove-dock .scorecard-owner { padding-bottom: 0.15rem; }
+        .score-glove-dock .totbar { margin-top: 0.12rem; padding-top: 0.18rem; }
         .score-glove-dock .totbar .v { font-size: 1.05rem; }
         .score-glove-dock .ctp-claim { margin: 0.35rem 0 0; padding: 0.5rem; }
         .score-glove-dock .finalize-card { margin: 0.35rem 0 0; }
         body.score-glove #crotts-panel {
-            bottom: calc(34dvh + 12px);
-            max-height: calc(100dvh - 34dvh - 5.5rem);
+            bottom: calc(12.5rem + var(--safe-bottom));
+            max-height: calc(100dvh - 16rem);
+        }
+        @media (display-mode: browser) {
+            body.score-glove .wrap { height: 100svh; max-height: 100svh; }
+            body.score-glove .topbar { min-height: 48px; padding-top: 0.28rem; padding-bottom: 0.28rem; }
         }
         body.score-glove.player-theme-active { background-image: none; }
         body.score-glove.player-theme-page .card,
@@ -650,6 +665,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=172"></script>
+    <script type="module" src="score-app/score-app.js?v=173"></script>
 </body>
 </html>

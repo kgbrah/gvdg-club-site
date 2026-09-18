@@ -706,8 +706,9 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(html, /\.score-glove-finish \{/);
   assert.match(html, /\.score-glove-finish-dismiss \{/);
   assert.match(html, /\.confirm-score-row \{/);
-  assert.match(html, /flex: 0 0 34dvh/);
-  assert.match(html, /max-height: 34dvh/);
+  assert.match(html, /flex: 0 1 auto; max-height: min\(38dvh, 20rem\)/);
+  assert.match(html, /display-mode: browser/);
+  assert.match(html, /height: 100svh/);
   assert.match(html, /\.score-glove-scores \{/);
   assert.match(html, /\.holegrid \{ display: grid; grid-template-columns: repeat\(6, minmax\(0, 1fr\)\)/);
   assert.match(html, /\.weather-strip-compact \{/);
@@ -715,7 +716,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(html, /\.weather-compact-copy/);
   assert.match(html, /\.weather-strip-compact \.weather-graphic/);
   assert.match(html, /\.weather-strip-compact \.weather-wind,/);
-  assert.match(html, /max-height: 28dvh/);
+  assert.match(html, /max-height: none; min-height: 8\.5rem/);
   assert.match(html, /justify-content: center;/);
   assert.match(html, /width: auto; grid-column: auto;/);
   const weather = scoreWeatherSource();
