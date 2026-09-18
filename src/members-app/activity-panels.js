@@ -2,6 +2,7 @@ import React from "react";
 
 import { RECENT_ROUNDS_KEY, localStorageGet, requestJson } from "./api.js";
 import { dollars, formatEventDay, formatToPar } from "./format.js";
+import { selectDashboardTab } from "./dashboard-shell.js";
 import { applyOfficialRyderTally } from "../public-app/ryder-board-merge.js";
 import { displayMatchStatus } from "../shared/match-status.js";
 import { fetchMergedRyderData } from "../shared/ryder-cup-data.js";
@@ -76,7 +77,7 @@ function LiveRoundCard({ item }) {
   ]);
 }
 
-export function LiveScoringPanel({ token, compact = false }) {
+export function LiveScoringPanel({ token, compact = false, variant = "home" }) {
   const [state, setState] = React.useState({ status: "idle", items: [] });
 
   React.useEffect(() => {
@@ -106,25 +107,51 @@ export function LiveScoringPanel({ token, compact = false }) {
 
   if (!token) return null;
   const count = state.items.length;
+  if (variant === "play") {
+    return h("section", { className: "player-card", "data-react-live-scoring": state.status, "data-react-play-live": "ready" }, [
+      h("h3", { key: "title" }, "Your cards"),
+      count
+        ? h("div", { className: "live-round-list", key: "list" }, state.items.map((item) => h(LiveRoundCard, { item, key: `${item.kind}-${item.href}` })))
+        : h("p", { className: "player-card-meta", key: "empty" }, state.status === "loading" ? "Looking for a live card..." : "No live card yet."),
+    ]);
+  }
   if (compact) {
     const live = state.items[0];
     const extras = state.items.slice(1);
     return h("div", { className: "player-keep-score-wrap", "data-react-live-scoring": state.status }, [
-      h("a", {
-        className: "player-keep-score",
-        href: live ? live.href : "score.html",
-        key: "cta",
-      }, [
-        h("div", { key: "copy" }, [
-          h("h2", { key: "title" }, "Keep score"),
-          h("p", { key: "meta" }, live ? live.title : "No live card. Start a casual round or join one."),
+      live
+        ? h("a", {
+          className: "player-keep-score",
+          href: live.href,
+          key: "cta",
+        }, [
+          h("div", { key: "copy" }, [
+            h("h2", { key: "title" }, "Keep score"),
+            h("p", { key: "meta" }, live.title),
+          ]),
+          h("span", { className: "player-keep-score-go", key: "go" }, "Rejoin"),
+        ])
+        : h("button", {
+          className: "player-keep-score",
+          type: "button",
+          key: "cta",
+          onClick: () => selectDashboardTab("play"),
+        }, [
+          h("div", { key: "copy" }, [
+            h("h2", { key: "title" }, "Keep score"),
+            h("p", { key: "meta" }, "No live card. Start a casual round or join one."),
+          ]),
+          h("span", { className: "player-keep-score-go", key: "go" }, "Play"),
         ]),
-        h("span", { className: "player-keep-score-go", key: "go" }, live ? "Rejoin" : "Play"),
-      ]),
       extras.length
         ? h("div", { className: "live-round-list", key: "extras" }, extras.map((item) => h(LiveRoundCard, { item, key: `${item.kind}-${item.href}` })))
         : null,
-      h("a", { className: "player-btn", href: "score.html", key: "join" }, "Start / join a casual round"),
+      h("button", {
+        className: "player-btn",
+        type: "button",
+        key: "join",
+        onClick: () => selectDashboardTab("play"),
+      }, "Start / join a casual round"),
     ]);
   }
   return h("details", { className: "club-board react-live-scoring dash-collapse", "data-react-live-scoring": state.status }, [
@@ -132,7 +159,11 @@ export function LiveScoringPanel({ token, compact = false }) {
     h("div", { className: "live-round-list", key: "list" }, count
       ? state.items.map((item) => h(LiveRoundCard, { item, key: `${item.kind}-${item.href}` }))
       : h("p", { className: "dash-note" }, "No active scorecards right now.")),
-    h("div", { className: "live-round-actions", key: "actions" }, h("a", { className: "passkey-btn", href: "score.html" }, "Start / join a casual round")),
+    h("div", { className: "live-round-actions", key: "actions" }, h("button", {
+      className: "passkey-btn",
+      type: "button",
+      onClick: () => selectDashboardTab("play"),
+    }, "Start / join a casual round")),
   ]);
 }
 

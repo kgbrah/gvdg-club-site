@@ -1,5 +1,5 @@
 import React from "react";
-import { CalendarDays, Home, MoreHorizontal, TrendingUp } from "lucide-react";
+import { CalendarDays, Home, MoreHorizontal, PlayCircle, TrendingUp } from "lucide-react";
 
 import { readMemberContext } from "./member-context.js";
 
@@ -7,6 +7,7 @@ const h = React.createElement;
 
 export const TABS = [
   { key: "overview", label: "Home", title: "Home", nav: true, icon: Home },
+  { key: "play", label: "Play", title: "Play", nav: true, icon: PlayCircle },
   { key: "events", label: "Events", title: "Events", nav: true, icon: CalendarDays },
   { key: "season", label: "Season", title: "Season", nav: true, icon: TrendingUp },
   { key: "more", label: "More", title: "More", nav: true, icon: MoreHorizontal },

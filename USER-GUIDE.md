@@ -96,10 +96,11 @@ A passkey means you don't have to type your PIN every time — you can use your 
 
 ### 📊 Your dashboard
 After you log in on the **Members** page, you see your **dashboard**. On a phone it has tabs along the bottom:
-- **Home** — your rating, tonight's event, and keep-score shortcuts.
+- **Home** — your rating, tonight's event, and a keep-score shortcut.
+- **Play** — start a casual round, join with a code, or rejoin a live card.
 - **Events** — sign up for games.
 - **Season** — ratings and past rounds.
-- **More** — message board, tee signs, club directory, scoring, help, and log out.
+- **More** — message board, tee signs, club directory, help, and log out.
 
 Tap a tab to switch rooms.
 
@@ -166,10 +167,11 @@ A "tee sign" is the sign at each hole that shows the hole number and how far it 
 
 ## Part 3: Live Scoring (keeping score during a round)
 
-The **score app** (tap **Live Scoring**, or open a round link someone shares) lets you keep score while you play, like a smart scorecard.
+The **score app** (tap **Play** on the members dock, or open a round link someone shares) lets you keep score while you play, like a smart scorecard.
 
 ### 🟢 Start or join a scorecard
-- **Join with a link:** someone shares a round link or a short **code**. Open the link, or type the code, and you're on the card.
+- **Play tab:** tap **Play**. Rejoin a live card, **Start a round** for a casual card, or type a code to **Join** / **Watch**.
+- **Join with a link:** someone shares a round link or a short **code**. Open the link, or type the code on Play, and you're on the card.
 - **Casual round:** you and friends can start your own card to play for fun.
 - **Event round:** for club games, a helper starts it, and players get added from who signed up.
 

@@ -3,6 +3,7 @@ import { readMemberContext } from "./member-context.js";
 
 const DASH_TITLES = {
   overview: "Home",
+  play: "Play",
   season: "Season",
   events: "Events",
   more: "More",

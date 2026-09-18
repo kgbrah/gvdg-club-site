@@ -8,9 +8,10 @@ const DEFAULT_API_URL = "https://auth.gvdgclub.com";
 const TOKEN_KEY = "gvdg_member_token";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
-const dashboardPanels = ["#myDashboard", "#mySeason", "#clubRegister", "#playerMore", "#clubBoard", "#teeCapture", "#membersReactClubPanel"];
+const dashboardPanels = ["#myDashboard", "#playerPlay", "#mySeason", "#clubRegister", "#playerMore", "#clubBoard", "#teeCapture", "#membersReactClubPanel"];
 const visibleDashboardPanels = {
   overview: ["#myDashboard"],
+  play: ["#playerPlay"],
   season: ["#mySeason"],
   events: ["#clubRegister"],
   more: ["#playerMore"],

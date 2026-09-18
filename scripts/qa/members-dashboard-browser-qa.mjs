@@ -11,9 +11,10 @@ const repoRoot = path.resolve(scriptDir, "../..");
 const apiBase = "http://127.0.0.1:8788";
 const evidenceDir = path.join(repoRoot, ".omo/evidence/members-dashboard-react");
 const teeUploadPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p94AAAAASUVORK5CYII=", "base64");
-const dashboardPanels = ["#myDashboard", "#mySeason", "#clubRegister", "#playerMore", "#clubBoard", "#teeCapture", "#membersReactClubPanel"];
+const dashboardPanels = ["#myDashboard", "#playerPlay", "#mySeason", "#clubRegister", "#playerMore", "#clubBoard", "#teeCapture", "#membersReactClubPanel"];
 const visibleDashboardPanels = {
   overview: ["#myDashboard"],
+  play: ["#playerPlay"],
   season: ["#mySeason"],
   events: ["#clubRegister"],
   more: ["#playerMore"],
@@ -333,6 +334,7 @@ async function captureState(browser, origin, viewport, slug) {
   await page.goto(`${origin}/gvdg-members.html`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("#membersReactDashboardShell:not(:empty)", { timeout: 10_000 });
   await page.waitForSelector("#membersReactOverviewPanel:not(:empty)", { state: "attached", timeout: 10_000 });
+  await page.waitForSelector("#membersReactPlayPanel:not(:empty)", { state: "attached", timeout: 10_000 });
   await page.waitForSelector("#membersReactSeasonPanel:not(:empty)", { state: "attached", timeout: 10_000 });
   await page.waitForSelector("#membersReactRegistrationPanel:not(:empty)", { state: "attached", timeout: 10_000 });
   await page.waitForSelector("#membersReactBoardPanel:not(:empty)", { state: "attached", timeout: 10_000 });
@@ -392,6 +394,15 @@ async function captureState(browser, origin, viewport, slug) {
     throw new Error("Migrated member dashboard legacy nodes are still present in the DOM.");
   }
   await captureFullPage(page, path.join(evidenceDir, `${slug}-overview.png`));
+
+  await page.getByRole("tab", { name: "Play" }).click();
+  await waitForText(page, "#membersReactDashboardShell", "Play", "play title");
+  await expectReactTab(page, "Play");
+  await expectDashboardPanel(page, "play", "#playerPlay", "Play tab");
+  await page.locator('[data-react-play-page="ready"]').waitFor({ state: "visible", timeout: 10_000 });
+  await waitForText(page, "[data-react-play-page]", "Start a round", "play start card");
+  await waitForText(page, "[data-react-play-join]", "Join a card", "play join card");
+  await captureFullPage(page, path.join(evidenceDir, `${slug}-play.png`));
 
   await page.getByRole("tab", { name: "Season" }).click();
   await waitForText(page, "#membersReactDashboardShell", "Season", "season title");
