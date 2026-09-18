@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-title" content="GVDG Club">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=160">
+    <link rel="manifest" href="site.webmanifest?v=161">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -389,6 +389,22 @@
         .hole-map-basket-chain-body { fill: color-mix(in srgb, var(--light) 50%, var(--dark)); stroke: none; opacity: 0.4; }
         .hole-map-basket-cage { stroke: var(--light); stroke-width: 0.55; fill: none; }
         .hole-map-basket-flag { fill: var(--over); stroke: var(--dark); stroke-width: 0.4; }
+        .hole-map-c2 {
+            fill: none;
+            stroke: var(--light);
+            stroke-width: 1.15;
+            stroke-dasharray: 5 4;
+            opacity: 0.55;
+        }
+        .hole-map-c1 {
+            fill: color-mix(in srgb, var(--accent) 18%, transparent);
+            stroke: var(--accent);
+            stroke-width: 1.25;
+            stroke-dasharray: 4 3;
+            opacity: 0.9;
+        }
+        .hole-map-measure-line { fill: none; stroke: var(--primary-strong); stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 5 4; }
+        .hole-map-lie-dot { fill: var(--primary-strong); stroke: var(--light); stroke-width: 1.6; }
         .hole-map-north { fill: white; font: 700 13px Archivo, sans-serif; paint-order: stroke; stroke: black; stroke-width: 3; }
         .hole-map-player { pointer-events: none; }
         .hole-map-player-dot { fill: var(--primary-strong); stroke: white; stroke-width: 2; }
@@ -409,7 +425,7 @@
         .tee-sign-label, .tee-sign-par { font: 600 14px system-ui, sans-serif; fill: currentColor; }
         .tee-sign-dist { font: 600 14px system-ui, sans-serif; fill: currentColor; opacity: 0.8; }
     </style>
-  <script type="module" src="public-app/public-app.js?v=160"></script>
+  <script type="module" src="public-app/public-app.js?v=161"></script>
   <script src="pwa.js" defer></script>
 </head>
 <body data-api-base="" data-page="events" data-events-view="status">

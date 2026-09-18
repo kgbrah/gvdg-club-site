@@ -1,6 +1,6 @@
 import React from "react";
 
-import { holeMapLabel, playerMarksOnMap, projectHoleMap, SATELLITE_CREDIT, scoreChipAnchor } from "./hole-map-model.js";
+import { holeMapLabel, latLngFromMapPoint, playerMarksOnMap, projectHoleMap, projectMapPoint, SATELLITE_CREDIT, scoreChipAnchor } from "./hole-map-model.js";
 import { safeExternalUrl } from "./safe-url.js";
 import { udiscDeepLink } from "./udisc-export.js";
 
@@ -92,7 +92,7 @@ function TeePad(props) {
 
 function BasketMark(props) {
   const compact = Boolean(props.compact);
-  const scale = compact ? 1.7 : 2;
+  const scale = compact ? 1.275 : 1.5;
   const outer = compact
     ? [-6.2, -4.7, -3.1, -1.55, 0, 1.55, 3.1, 4.7, 6.2]
     : [-7, -5.6, -4.2, -2.8, -1.4, 0, 1.4, 2.8, 4.2, 5.6, 7];
@@ -162,6 +162,44 @@ function BasketMark(props) {
 }
 
 
+function LieMark(props) {
+  const r = props.compact ? 5 : 6;
+  return h(
+    "g",
+    {
+      className: "hole-map-lie",
+      transform: `translate(${props.x} ${props.y})`,
+    },
+    [
+      h("title", { key: "title" }, props.label || "Measure"),
+      h("circle", { className: "hole-map-lie-dot", key: "dot", r }),
+    ],
+  );
+}
+
+function mapPointFromEvent(event, map) {
+  const svg = event.currentTarget;
+  if (!svg || typeof svg.createSVGPoint !== "function") return null;
+  const pt = svg.createSVGPoint();
+  pt.x = event.clientX;
+  pt.y = event.clientY;
+  const ctm = svg.getScreenCTM && svg.getScreenCTM();
+  if (!ctm) return null;
+  const local = pt.matrixTransform(ctm.inverse());
+  return latLngFromMapPoint(map, local.x, local.y);
+}
+
+function CircleRing(props) {
+  if (!props.ring) return null;
+  return h("ellipse", {
+    className: props.className,
+    cx: props.ring.cx,
+    cy: props.ring.cy,
+    rx: props.ring.rx,
+    ry: props.ring.ry,
+  });
+}
+
 function PlayerMark(props) {
   const compact = Boolean(props.compact);
   return h(
@@ -190,6 +228,14 @@ export function HoleMap(props) {
   const udiscHref = compact ? "" : udiscDeepLink(props.udiscCourseId);
   const label = holeMapLabel(map, hole && hole.hole);
   const players = playerMarksOnMap(map, props.players);
+  const measureFrom = projectMapPoint(map, props.measureFrom && props.measureFrom.lat, props.measureFrom && props.measureFrom.lng);
+  const measureTo = projectMapPoint(map, props.measureTo && props.measureTo.lat, props.measureTo && props.measureTo.lng);
+  function onMapPointer(event) {
+    if (typeof props.onMapPoint !== "function") return;
+    event.preventDefault();
+    const point = mapPointFromEvent(event, map);
+    if (point) props.onMapPoint(point);
+  }
   return h("div", { className: compact ? "hole-map-card hole-map-compact" : "card hole-map-card" }, [
     h("div", { className: "hole-map-frame", key: "frame" }, [
       h(SatelliteLayer, { key: "satellite", url: map.satelliteUrl }),
@@ -197,15 +243,18 @@ export function HoleMap(props) {
         "svg",
         {
           "aria-label": label,
-          className: "hole-map",
+          className: "hole-map" + (props.onMapPoint ? " hole-map-measure" : ""),
           key: "map",
           preserveAspectRatio: "xMidYMid meet",
           role: "img",
           viewBox: `0 0 ${map.width} ${map.height}`,
+          onPointerDown: props.onMapPoint ? onMapPointer : undefined,
         },
         [
           h("title", { key: "title" }, label),
           h("text", { className: "hole-map-north", key: "north", x: 14, y: 22 }, "N"),
+          h(CircleRing, { className: "hole-map-c2", key: "c2", ring: map.circle2 }),
+          h(CircleRing, { className: "hole-map-c1", key: "c1", ring: map.circle1 }),
           h("line", {
             className: "hole-map-fairway-shadow",
             key: "fairway-shadow",
@@ -222,6 +271,16 @@ export function HoleMap(props) {
             y1: map.tee.y,
             y2: map.basket.y,
           }),
+          measureFrom && measureTo
+            ? h("line", {
+              className: "hole-map-measure-line",
+              key: "measure-line",
+              x1: measureFrom.x,
+              x2: measureTo.x,
+              y1: measureFrom.y,
+              y2: measureTo.y,
+            })
+            : null,
           h(TeePad, {
             compact,
             key: "tee",
@@ -245,6 +304,12 @@ export function HoleMap(props) {
             x: player.x,
             y: player.y,
           })),
+          measureFrom
+            ? h(LieMark, { compact, key: "lie-a", label: "Start", x: measureFrom.x, y: measureFrom.y })
+            : null,
+          measureTo
+            ? h(LieMark, { compact, key: "lie-b", label: "Landing", x: measureTo.x, y: measureTo.y })
+            : null,
         ],
       ),
       h(ScoreChips, { compact, height: map.height, key: "chips", marks: players, width: map.width }),
