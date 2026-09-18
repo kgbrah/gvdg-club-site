@@ -667,8 +667,13 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /compact: true/);
   assert.match(html, /\.holegrid-rel/);
   assert.match(html, /\.score-glove-stage \.holegrid \{/);
-  assert.match(html, /\.holegrid button\.even:not\(\.cur\) \{[^}]*var\(--accent\)/s);
-  assert.match(html, /\.holegrid button\.over:not\(\.cur\) \{[^}]*var\(--team-red\)/s);
+  assert.match(html, /\.holegrid button\.even \{[^}]*var\(--accent\)/s);
+  assert.match(html, /\.holegrid button\.over \{[^}]*var\(--team-red\)/s);
+  assert.match(html, /\.holegrid button\.under \{[^}]*var\(--under\)/s);
+  assert.match(html, /\.holegrid button\.cur\.over \{[^}]*var\(--team-red\)/s);
+  assert.match(html, /\.holegrid button\.cur\.under \{[^}]*var\(--under\)/s);
+  assert.match(html, /\.holegrid button\.cur\.even \{[^}]*var\(--accent\)/s);
+  assert.doesNotMatch(html, /\.holegrid button\.over:not\(\.cur\)/);
   assert.match(html, /\.rel\.even \{ color: var\(--accent\)/);
   assert.match(html, /\.rel\.over \{ color: var\(--team-red\)/);
   assert.match(html, /\.hole-map-satellite/);
