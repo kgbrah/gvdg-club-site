@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Live Scoring · Greenville Disc Golf Club</title>
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=157">
+    <link rel="manifest" href="site.webmanifest?v=158">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <script src="pwa.js" defer></script>
     <link rel="stylesheet" href="tokens.css">
@@ -130,19 +130,23 @@
         .weather-empty { color: var(--text-secondary); font-size: 0.86rem; }
         .weather-note { margin-top: 0.55rem; color: var(--text-muted); font-size: 0.72rem; line-height: 1.35; }
         .weather-strip-compact {
-            display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
-            align-items: center; gap: 0.55rem;
-            padding: 0.5rem 0.7rem; margin-bottom: 0.65rem;
+            display: flex; align-items: center; gap: 0.45rem;
+            padding: 0.45rem 0.65rem; margin-bottom: 0.65rem;
         }
         .weather-strip-compact .weather-temp { font-size: 1.7rem; line-height: 1; }
         .weather-compact-copy {
             min-width: 0; font-size: 0.88rem; font-weight: 700; color: var(--text-primary);
             line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
+        .weather-strip-compact .weather-graphic {
+            width: auto; height: auto; border: 0; background: transparent; border-radius: 0;
+            flex: 0 0 auto;
+        }
+        .weather-strip-compact .weather-graphic-icon { font-size: 1.7rem; }
         .weather-strip-compact .weather-wind,
         .weather-wind-compact {
             width: auto; max-width: none; min-height: 44px; padding: 0.28rem 0.55rem;
-            flex: 0 0 auto; white-space: nowrap;
+            flex: 0 0 auto; white-space: nowrap; margin-left: auto;
         }
         .weather-wind-compact .weather-wind-copy { display: block; }
         .weather-wind-compact .weather-wind-copy span { display: none; }
@@ -154,7 +158,7 @@
             .weather-wind { grid-column: 1 / -1; justify-content: flex-start; width: 100%; }
             .weather-strip-compact .weather-wind,
             .weather-wind-compact {
-                width: auto; grid-column: auto; flex: 0 0 auto; margin-left: 0;
+                width: auto; grid-column: auto; flex: 0 0 auto; margin-left: auto;
             }
         }
         .center { text-align: center; }
@@ -242,9 +246,16 @@
         .hole-map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; background: transparent; }
         .hole-map-fairway-shadow { fill: none; stroke: black; stroke-width: 6; stroke-linecap: round; opacity: 0.45; }
         .hole-map-fairway { fill: none; stroke: white; stroke-width: 3; stroke-dasharray: 7 6; stroke-linecap: round; }
-        .hole-map-tee { fill: var(--primary-strong); stroke: white; stroke-width: 2; }
-        .hole-map-basket { fill: var(--under); stroke: white; stroke-width: 2; }
-        .hole-map-basket-inner { fill: white; }
+        .hole-map-tee-pad {
+            fill: color-mix(in srgb, var(--light) 58%, var(--text-muted));
+            stroke: color-mix(in srgb, var(--green) 55%, var(--text-muted));
+            stroke-width: 1.35;
+        }
+        .hole-map-basket-shadow { fill: rgba(0, 0, 0, 0.35); }
+        .hole-map-basket-pole { fill: var(--dark); stroke: white; stroke-width: 1; }
+        .hole-map-basket-tray { fill: var(--accent); stroke: white; stroke-width: 1; }
+        .hole-map-basket-band { fill: var(--primary); stroke: white; stroke-width: 1; }
+        .hole-map-basket-chain { stroke: var(--light); stroke-width: 1.15; stroke-linecap: round; }
         .hole-map-north { fill: white; font: 700 13px Archivo, sans-serif; paint-order: stroke; stroke: black; stroke-width: 3; }
         .hole-map-player { pointer-events: none; }
         .hole-map-player-dot { fill: var(--primary-strong); stroke: white; stroke-width: 2; }
@@ -316,15 +327,18 @@
         .score-glove-stage .weather-strip-compact { margin: 0 0 0.4rem; flex: 0 0 auto; }
         .score-glove-stage .your-turn-hint { margin: 0 0 0.35rem; padding: 0.4rem 0.55rem; font-size: 0.78rem; }
         .score-glove-stage .hole-media {
-            flex: 1; min-height: 0; margin: 0; position: relative;
-            display: flex; flex-direction: column;
+            flex: 0 0 auto; min-height: 0; margin: 0; position: relative;
+            display: flex; flex-direction: column; width: 100%;
         }
         .score-glove-stage .hole-map-card,
         .score-glove-stage .hole-map-compact {
-            flex: 1; min-height: 0; display: flex; flex-direction: column; margin: 0;
+            flex: 0 0 auto; min-height: 0; display: flex; flex-direction: column; margin: 0;
             background: transparent; border: 0; box-shadow: none; padding: 0;
         }
-        .score-glove-stage .hole-map-frame { flex: 1; aspect-ratio: auto; min-height: 0; height: auto; }
+        .score-glove-stage .hole-map-frame {
+            flex: 0 0 auto; aspect-ratio: 16 / 9; width: 100%; height: auto;
+            max-height: 28dvh;
+        }
         .score-glove-stage .hole-map-caption,
         .score-glove-stage .hole-map-credit { display: none; }
         .score-glove-stage .hole-media-empty {
@@ -342,10 +356,9 @@
             position: absolute; inset: 0.45rem; z-index: 3; margin: 0; overflow: auto;
         }
         .score-glove-tools {
-            position: absolute; left: 0.55rem; bottom: 0.45rem; z-index: 2;
-            display: flex; gap: 0.3rem; margin: 0; padding: 0.2rem;
-            border-radius: 12px;
-            background: color-mix(in srgb, var(--bg-secondary) 90%, transparent);
+            position: relative; left: auto; bottom: auto; z-index: 2;
+            display: flex; gap: 0.35rem; margin: 0.45rem 0 0.15rem; padding: 0;
+            border-radius: 12px; background: transparent; flex: 0 0 auto; align-self: flex-start;
         }
         .score-glove-tool {
             min-height: 40px; min-width: 40px; padding: 0 0.45rem;
@@ -368,14 +381,14 @@
             flex: 1 1 auto; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch;
         }
         .score-glove-dock .hole-head {
-            flex: 0 0 auto; margin: 0; gap: 0.4rem;
+            flex: 0 0 auto; margin: 0; gap: 0.45rem; justify-content: center;
             padding: 0.28rem 0 calc(0.32rem + var(--safe-bottom));
             border-top: 1px solid var(--border-color);
         }
-        .score-glove-dock .hole-head-mid { flex: 1; text-align: center; min-width: 0; }
+        .score-glove-dock .hole-head-mid { flex: 0 1 8.25rem; text-align: center; min-width: 0; }
         .score-glove-dock .hole-head .hnum { font-size: 1.35rem; }
         .score-glove-dock .hole-head .hpar { font-size: 0.72rem; font-weight: 700; }
-        .score-glove-dock .navbtn { width: 52px; height: 52px; }
+        .score-glove-dock .navbtn { width: 48px; height: 48px; }
         .score-glove-dock .tee-order-hint { display: none; }
         .score-glove-dock .dormie-badge { font-size: 0.62rem; line-height: 1.2; }
         .score-glove-dock .score-entry-card {
@@ -536,6 +549,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=157"></script>
+    <script type="module" src="score-app/score-app.js?v=158"></script>
 </body>
 </html>

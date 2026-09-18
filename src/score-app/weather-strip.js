@@ -111,6 +111,7 @@ export function WeatherStrip(props) {
       summary
         ? h("div", { className: "weather-compact-copy", key: "copy" }, summary.condition)
         : h("div", { className: "weather-empty", key: "empty" }, chips.map((chip) => chip.value).join(" ")),
+      h(WeatherGraphic, { graphic: summary && summary.graphic, key: "graphic" }),
       wind,
     ]);
   }
