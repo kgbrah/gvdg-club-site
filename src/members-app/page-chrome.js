@@ -10,6 +10,7 @@ const h = React.createElement;
 
 const NAV_ITEMS = [
   { label: "Home", href: "index.html", page: "index" },
+  { label: "Keep score", href: "score.html", page: "score" },
   { label: "Events", href: "events.html", page: "events" },
   { label: "Ryder Cup", href: "ryder-cup.html", page: "ryder-cup" },
   { label: "Pro Shop", href: "pro-shop.html", page: "pro-shop" },

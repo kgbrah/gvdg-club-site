@@ -13,7 +13,7 @@
     <meta name="apple-mobile-web-app-title" content="GVDG Club">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=155">
+    <link rel="manifest" href="site.webmanifest?v=156">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -47,7 +47,7 @@ body::before{
         .theme-toggle svg { display: block; width: 22px; height: 22px; min-width: 22px; flex: 0 0 22px; pointer-events: none; }
         .theme-toggle:hover { background: rgba(255, 255, 255, 0.2); transform: rotate(20deg) scale(1.1); }
         .theme-toggle:active { transform: rotate(20deg) scale(0.95); }
-        .nav-links { display: flex; gap: 2.5rem; list-style: none; }
+        .nav-links { display: flex; gap: 1.25rem; list-style: none; }
         .nav-links a { color: white; text-decoration: none; font-weight: 600; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; position: relative; transition: color 0.3s ease; -webkit-tap-highlight-color: transparent; }
         .nav-links a::after { content: ''; position: absolute; bottom: -5px; left: 0; width: 0; height: 2px; background: var(--primary); transition: width 0.3s ease; }
         .nav-links a:hover::after, .nav-links a:active::after { width: 100%; }
@@ -106,6 +106,9 @@ body::before{
         .cta-button { display: inline-block; background: var(--primary-strong); color: white; padding: 1rem 2.5rem; min-height: 44px; border-radius: 50px; text-decoration: none; font-weight: 700; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.05em; transition: all 0.3s ease; box-shadow: 0 5px 20px rgba(200, 65, 15, 0.4); -webkit-tap-highlight-color: transparent; }
         .cta-button:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(200, 65, 15, 0.5); background: #a83809; }
         .cta-button:active { transform: translateY(-1px); }
+        .hero-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; }
+        .cta-button-ghost { background: transparent; color: white; box-shadow: none; border: 2px solid rgba(255, 255, 255, 0.85); }
+        .cta-button-ghost:hover { background: rgba(255, 255, 255, 0.14); color: white; box-shadow: none; }
         .membership-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; }
         .scroll-indicator { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 10; animation: bounce 2s infinite; }
         @keyframes bounce { 0%, 20%, 50%, 80%, 100% { transform: translateX(-50%) translateY(0); } 40% { transform: translateX(-50%) translateY(-10px); } 60% { transform: translateX(-50%) translateY(-5px); } }
@@ -418,7 +421,7 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
 @media (min-width: 769px) {
     nav { display: grid !important; grid-template-columns: auto 1fr auto !important; align-items: center !important; gap: 2rem !important; max-width: 1200px; margin: 0 auto; }
     .logo { grid-column: 1; justify-self: start !important; }
-    .nav-links { grid-column: 2; justify-self: center !important; display: flex !important; justify-content: center !important; gap: 2rem !important; list-style: none; margin: 0; padding: 0; position: static !important; transform: none !important; opacity: 1 !important; pointer-events: all !important; background: transparent !important; flex-direction: row !important; }
+    .nav-links { grid-column: 2; justify-self: center !important; display: flex !important; justify-content: center !important; gap: 1.1rem !important; list-style: none; margin: 0; padding: 0; position: static !important; transform: none !important; opacity: 1 !important; pointer-events: all !important; background: transparent !important; flex-direction: row !important; }
     .nav-links li { padding: 0 !important; border: none !important; }
     .nav-right { grid-column: 3; justify-self: end !important; display: flex !important; align-items: center !important; gap: 1rem !important; }
     .menu-toggle { display: none !important; }

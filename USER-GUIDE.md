@@ -20,6 +20,12 @@ There are four parts:
 2. Go to **greenvillediscgolf.com**.
 3. That's it — you're on the home page! Scroll down with your finger or mouse to see more.
 
+### 🥏 Keep score without a login
+1. On the home page, tap **Keep score**. You can also open the menu and tap **Keep score**.
+2. Type the name you want on the card. You do **not** need a club PIN.
+3. Start a casual round, or type a friend's short **code** to join theirs.
+4. Share the code so the rest of the card can score with you.
+
 ### 📅 See upcoming tournaments and events
 1. On the home page, scroll down to the tournaments part, **or** tap **Club Events** in the menu.
 2. You'll see a list of games coming up. Newest and soonest are near the top.
@@ -171,10 +177,11 @@ A "tee sign" is the sign at each hole that shows the hole number and how far it 
 
 ## Part 3: Live Scoring (keeping score during a round)
 
-The **score app** (tap **Play** on the members dock, or open a round link someone shares) lets you keep score while you play, like a smart scorecard.
+The **score app** (tap **Keep score** on the public site, **Play** on the members dock, or open a round link someone shares) lets you keep score while you play, like a smart scorecard.
 
 ### 🟢 Start or join a scorecard
-- **Play without an account:** open the score app (or a round link someone shares). You only need a **name on the card** — no club PIN. Start a casual round, share the code, or join one already going.
+- **Keep score on the public site:** tap **Keep score** on the home page or in the menu. No club login. Type a **name on the card**, then start a casual round or join with a code.
+- **Play without an account:** you only need a name. Start a card, share the code, or join one already going.
 - **Play tab:** members tap **Play**. Rejoin a live card, **Start a round** for a casual card, or type a code to **Join** / **Watch**. Friends without logins can still use the round link.
 - **Join with a link:** someone shares a round link or a short **code**. Open the link, or type the code, and you're on the card.
 - **Casual round:** you and friends can start your own card to play for fun.

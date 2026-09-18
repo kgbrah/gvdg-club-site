@@ -142,6 +142,12 @@ test('home React bundle owns hero and about carousel sections', () => {
   assert.match(heroAbout, /export function HomeAboutSection/);
   assert.match(heroAbout, /data-react-home-hero/);
   assert.match(heroAbout, /data-react-home-about/);
+  assert.match(heroAbout, /href: "score.html"/);
+  assert.match(heroAbout, /Keep score/);
+  assert.match(heroAbout, /cta-button-ghost/);
+  assert.match(heroAbout, /#membership/);
+  assert.match(html, /\.hero-actions/);
+  assert.match(html, /\.cta-button-ghost/);
   assert.match(heroAbout, /nextCircularIndex/);
   assert.match(heroAbout, /window\.setInterval/);
   assert.match(heroAbout, /onMouseEnter: \(\) => setPaused\(true\)/);
@@ -196,6 +202,8 @@ test('home React bundle owns page chrome menu and header scroll state', () => {
   assert.match(chrome, /HomeThemeToggle/);
   assert.match(chrome, /Menu, X/);
   assert.match(chrome, /window\.requestAnimationFrame\(update\)/);
+  assert.match(chrome, /href: "score.html"/);
+  assert.match(chrome, /Keep score/);
   assert.doesNotMatch(chrome, /querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
 });
 

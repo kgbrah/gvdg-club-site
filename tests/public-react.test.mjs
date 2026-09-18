@@ -50,13 +50,15 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(chrome, /nav-donate/);
   assert.match(chrome, /Menu, X/);
   assert.match(chrome, /window\.requestAnimationFrame\(update\)/);
+  assert.match(chrome, /href: "score.html"/);
+  assert.match(chrome, /Keep score/);
   const themeChrome = readFileSync('src/shared/player-theme-chrome.js', 'utf8');
   assert.match(themeChrome, /aria-pressed/);
   assert.match(themeChrome, /togglePlayerThemeMode/);
   assert.match(themeChrome, /localStorage\.getItem\("theme"\)/);
   assert.match(themeChrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app admin-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v155"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v156"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
