@@ -416,8 +416,9 @@
         .score-glove-stage .weather-wind-compact { min-height: 36px; padding: 0.18rem 0.45rem; }
         .score-glove-stage .your-turn-hint { margin: 0 0 0.35rem; padding: 0.4rem 0.55rem; font-size: 0.78rem; }
         .score-glove-stage .hole-media {
-            flex: 1 1 auto; min-height: 0; margin: 0; position: relative;
+            flex: 0 1 auto; min-height: 0; margin: 0; position: relative;
             display: flex; flex-direction: column; width: 100%;
+            max-height: min(28dvh, 13rem); overflow: hidden;
         }
         .hole-media-map-wrap { position: relative; }
         .hole-range-hud {
@@ -452,13 +453,16 @@
         }
         .score-glove-stage .hole-map-card,
         .score-glove-stage .hole-map-compact {
-            flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; margin: 0;
-            background: transparent; border: 0; box-shadow: none; padding: 0;
+            flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; margin: 0;
+            background: transparent; border: 0; box-shadow: none; padding: 0; width: 100%;
         }
-        .score-glove-stage .hole-media-map-wrap { flex: 1 1 auto; min-height: 0; }
+        .score-glove-stage .hole-media-map-wrap {
+            flex: 0 1 auto; min-height: 0; width: 100%;
+            display: flex; flex-direction: column; justify-content: center;
+        }
         .score-glove-stage .hole-map-frame {
-            flex: 1 1 auto; aspect-ratio: 16 / 9; width: 100%; height: auto;
-            max-height: none; min-height: 8.5rem;
+            flex: 0 0 auto; aspect-ratio: 16 / 9; width: 100%; height: auto;
+            max-height: min(28dvh, 13rem); min-height: 0;
         }
         .score-glove-stage .hole-map-caption,
         .score-glove-stage .hole-map-credit { display: none; }
@@ -520,16 +524,32 @@
         .score-glove-layout.solo .score-glove-stage .hole-map-compact {
             flex: 0 0 auto; overflow: hidden;
         }
+        .score-glove-layout.solo .score-glove-stage .hole-media,
         .score-glove-layout.solo .score-glove-stage .hole-map-frame {
             flex: 0 0 auto; width: 100%; height: auto; max-height: min(24dvh, 12rem);
         }
-        .score-glove-layout:not(.solo) .score-glove-stage .hole-media,
-        .score-glove-layout:not(.solo) .score-glove-stage .hole-media-map-wrap,
-        .score-glove-layout:not(.solo) .score-glove-stage .hole-map-card,
-        .score-glove-layout:not(.solo) .score-glove-stage .hole-map-compact,
-        .score-glove-layout:not(.solo) .score-glove-stage .hole-map-frame {
-            min-height: 0; overflow: hidden;
+        .score-glove-layout.players-2 .score-glove-stage .hole-media,
+        .score-glove-layout.players-2 .score-glove-stage .hole-map-frame { max-height: min(22dvh, 11rem); }
+        .score-glove-layout.players-3 .score-glove-stage .hole-media,
+        .score-glove-layout.players-3 .score-glove-stage .hole-map-frame { max-height: min(18dvh, 9.25rem); }
+        .score-glove-layout.players-4 .score-glove-stage .hole-media,
+        .score-glove-layout.players-4 .score-glove-stage .hole-map-frame { max-height: min(14dvh, 7.5rem); }
+        .score-glove-layout:not(.solo):has(.live-round-stats.open) .score-glove-stage .hole-media,
+        .score-glove-layout:not(.solo):has(.live-round-stats.open) .score-glove-stage .hole-map-frame {
+            max-height: min(12dvh, 6.5rem);
         }
+        .score-glove-stage .hole-range-hud {
+            z-index: 4; left: 0.32rem; bottom: 0.32rem;
+            padding: 0.18rem 0.48rem 0.2rem; min-width: 3.9rem;
+        }
+        .score-glove-stage .hole-range-hud strong { font-size: 1.02rem; }
+        .score-glove-stage .hole-range-hud span { font-size: 0.54rem; margin-top: 0.04rem; }
+        .score-glove-stage .hole-range-hud-len,
+        .score-glove-stage .hole-range-hud-gps { font-size: 0.52rem; }
+        .score-glove-stage .hole-map-lie-actions { z-index: 4; right: 0.32rem; bottom: 0.32rem; }
+        .score-glove-stage .hole-map-lie-btn,
+        .score-glove-stage .hole-map-lie-undo { min-height: 32px; }
+        .score-glove-layout.players-4 .score-glove-stage .hole-range-hud strong { font-size: 0.92rem; }
         .live-round-stats {
             flex: 1 1 auto; min-height: 0; overflow: hidden;
             margin: 0.22rem 0 0.04rem; padding: 0.28rem 0.42rem 0.3rem;
@@ -538,18 +558,7 @@
             display: flex; flex-direction: column; gap: 0.22rem;
         }
         .score-glove-layout:not(.solo) .live-round-stats {
-            flex: 0 0 auto; position: relative; z-index: 8; overflow: visible;
-        }
-        .score-glove-layout:not(.solo) .live-round-stats.open {
-            overflow: visible;
-        }
-        .score-glove-layout:not(.solo) .live-round-stats.open .live-stats-body {
-            position: absolute; left: 0; right: 0; top: calc(100% + 0.16rem);
-            z-index: 8; margin: 0; padding: 0.32rem 0.42rem 0.38rem;
-            border: 1px solid var(--border-color); border-radius: 12px;
-            background: var(--bg-secondary);
-            box-shadow: 0 14px 32px var(--shadow);
-            overflow: hidden;
+            flex: 0 0 auto; overflow: hidden;
         }
         .live-round-stats-head {
             display: flex; align-items: center; justify-content: space-between; gap: 0.4rem;
@@ -647,6 +656,9 @@
             background: var(--bg-secondary); border-top: 1px solid var(--border-color);
             box-shadow: 0 -10px 28px var(--shadow);
         }
+        .score-glove-layout.players-2 .score-glove-dock { max-height: min(42dvh, 22rem); }
+        .score-glove-layout.players-3 .score-glove-dock { max-height: min(46dvh, 24rem); }
+        .score-glove-layout.players-4 .score-glove-dock { max-height: min(50dvh, 26rem); }
         .score-glove-scores {
             flex: 0 1 auto; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch;
         }

@@ -922,8 +922,12 @@ export function ScorecardView(props) {
   }
   const measureLabel = measure && measure.b ? "Clear" : measure && measure.a ? "Mark" : "Measure";
   const solo = props.solo === true || (Array.isArray(props.rows) && props.rows.length === 1);
+  const playerBand = Math.min(Math.max(Array.isArray(props.rows) ? props.rows.length : 1, 1), 4);
   return h(React.Fragment, null, [
-    h("div", { className: "score-glove-layout" + (solo ? " solo" : ""), key: "glove" }, [
+    h("div", {
+      className: "score-glove-layout" + (solo ? " solo" : "") + " players-" + playerBand,
+      key: "glove",
+    }, [
       h("div", { className: "score-glove-stage", key: "stage" }, [
         props.showWeather ? h(WeatherStrip, { compact: true, key: "weather", title: "Round weather", weather: props.weather }) : null,
         props.yourTurn ? h("p", { className: "your-turn-hint", key: "turn" }, props.yourTurn) : null,

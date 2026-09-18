@@ -661,7 +661,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /compact: true/);
   assert.match(scorecard, /HoleMap/);
   assert.match(scorecard, /score-glove-layout/);
-  assert.match(scorecard, /score-glove-layout" \+ \(solo \? " solo" : ""\)/);
+  assert.match(scorecard, /players-/);
   assert.match(scorecard, /function LiveRoundStats\(props\)/);
   assert.match(scorecard, /liveRoundStatsFromCard/);
   assert.match(scorecard, /readAllThrows/);
@@ -775,12 +775,14 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(html, /\.confirm-score-row \{/);
   assert.match(html, /flex: 0 1 auto; max-height: min\(38dvh, 20rem\)/);
   assert.match(html, /\.score-glove-layout\.solo \.score-glove-stage \.hole-map-frame \{/);
+  assert.match(html, /\.score-glove-layout\.players-4/);
   assert.match(html, /\.live-round-stats \{/);
   assert.match(html, /overflow: hidden;/);
   assert.match(html, /\.score-glove-layout:not\(\.solo\) \.live-round-stats/);
   assert.match(html, /\.live-round-stats\.compact:not\(\.open\)/);
-  assert.match(html, /\.score-glove-layout:not\(\.solo\) \.live-round-stats\.open \.live-stats-body/);
   assert.match(html, /\.live-round-stats-toggle/);
+  assert.match(html, /\.score-glove-stage \.hole-map-lie-actions/);
+  assert.match(html, /\.score-glove-stage \.hole-range-hud \{/);
   assert.match(html, /\.live-stats-mix-legend \{/);
   assert.match(html, /\.live-stats-grid \{/);
   assert.match(html, /grid-template-columns: repeat\(6, minmax\(0, 1fr\)\)/);
@@ -793,7 +795,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(html, /\.weather-compact-copy/);
   assert.match(html, /\.weather-strip-compact \.weather-graphic/);
   assert.match(html, /\.weather-strip-compact \.weather-wind,/);
-  assert.match(html, /max-height: none; min-height: 8\.5rem/);
+  assert.match(html, /max-height: min\(28dvh, 13rem\)/);
   assert.match(html, /justify-content: center;/);
   assert.match(html, /width: auto; grid-column: auto;/);
   const weather = scoreWeatherSource();
