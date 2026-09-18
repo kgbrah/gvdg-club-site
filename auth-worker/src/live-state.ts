@@ -191,7 +191,7 @@ export function attestationForCard(
   return {
     neededIndexes,
     agreedIndexes,
-    complete: neededIndexes.length > 0 && neededIndexes.every((index) => agreedIndexes.includes(index)),
+    complete: neededIndexes.length > 0 && agreedIndexes.length > 0,
   };
 }
 

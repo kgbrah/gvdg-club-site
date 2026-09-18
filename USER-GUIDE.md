@@ -214,9 +214,9 @@ The **score app** (tap **Keep score** on the public site, **Play** on the member
 3. Tap **Share** to send the card link to a friend.
 
 ### 🏁 Finish the round
-1. When every hole has a matching score, tap **Finish card** on the scorecard (or in the leaderboard sheet).
-2. Anyone on the card can confirm. Extra phones do not have to type the same numbers.
-3. If scores disagree, the app tells you which hole to fix first.
+1. When every hole has a matching score, tap **Finish card** at the bottom of the scorecard (or in the leaderboard sheet).
+2. Check the totals, then tap **Looks good — lock card**. One confirmation is enough. Extra phones do not have to type the same numbers.
+3. If scores disagree, the app tells you which hole to fix first — tap that message to jump there.
 4. When it's finished, the scores are saved and show up in the results. 🎉
 
 ---

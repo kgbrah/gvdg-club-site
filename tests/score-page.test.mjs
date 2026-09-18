@@ -398,7 +398,7 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
       { index: 0, name: 'Ava King', division: 'MA1', isMe: true, scores: {}, scorecards: {} },
       { index: 1, name: 'Milo Chen', division: 'MA1', scores: { 1: 5 }, scorecards: { 1: { 'player:1': 5 } } },
     ],
-  }), 'Your card is waiting on this hole.');
+  }), 'Card is waiting on you — hole 1');
   assert.deepEqual(udiscExportData(state), { courseId: '123', scorecard: [{ hole: 1, par: 3, strokes: 2 }] });
   assert.equal(finalizeBlockers(state).ready, false);
   assert.match(finishRoundHint(finalizeBlockers(state), 'round'), /disagreeing scores/);
@@ -407,6 +407,8 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
   assert.match(finishRoundHint({ ready: true, conflicts: [], missing: [], lines: [] }, 'event', true), /submitted/);
   assert.equal(view.finish.canFinish, false);
   assert.equal(view.finish.ready, false);
+  assert.equal(view.finish.blocker.kind, 'conflict');
+  assert.match(view.finish.blocker.text, /4 vs 5/);
   assert.equal(matchStatusText({
     ...state,
     roundConfig: { groupFormat: 'singles', scoringStyle: 'matchplay' },
@@ -570,9 +572,13 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.doesNotMatch(scorecard, /honors-chip/);
   assert.doesNotMatch(scorecard, /Throws first/);
   assert.match(scorecard, /function FinishCard\(props\)/);
+  assert.match(scorecard, /function FinishDockBar\(props\)/);
   assert.match(scorecard, /function ConfirmScoresSheet\(props\)/);
   assert.match(scorecard, /Finish card/);
+  assert.match(scorecard, /Looks good — lock card/);
   assert.match(scorecard, /Anyone on this card can confirm/);
+  assert.doesNotMatch(scorecard, /Agree — /);
+  assert.match(scorecard, /score-glove-finish/);
   assert.match(scorecard, /useAccessibleDialog/);
   assert.match(scorecard, /createPortal/);
   assert.match(scorecard, /ScorePad/);
@@ -640,6 +646,8 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(html, /\.round-tools \{/);
   assert.match(html, /grid-template-columns: repeat\(auto-fit, minmax\(0, 1fr\)\)/);
   assert.match(html, /\.score-glove-dock \{/);
+  assert.match(html, /\.score-glove-finish \{/);
+  assert.match(html, /\.confirm-score-row \{/);
   assert.match(html, /flex: 0 0 34dvh/);
   assert.match(html, /max-height: 34dvh/);
   assert.match(html, /\.score-glove-scores \{/);

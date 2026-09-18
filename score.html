@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Live Scoring · Greenville Disc Golf Club</title>
     <link rel="icon" type="image/png" href="img/logo.png">
-    <link rel="manifest" href="site.webmanifest?v=166">
+    <link rel="manifest" href="site.webmanifest?v=167">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <script src="pwa.js" defer></script>
     <link rel="stylesheet" href="tokens.css">
@@ -603,13 +603,20 @@
         .finalize-line { font-size: 0.82rem; }
         .finish-round-btn { margin-top: 0.7rem; }
         .finish-round-hint { font-size: 0.8rem; margin-top: 0.4rem; }
+        .score-glove-finish { flex: 0 0 auto; padding: 0.28rem 0 0.1rem; }
+        .score-glove-finish .btn { width: 100%; min-height: 44px; margin: 0; }
         .confirm-scores-sheet { max-height: 88vh; }
-        .confirm-scores-table-wrap { overflow-x: auto; margin: 0.75rem 0; }
-        .confirm-scores-table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: 0.78rem; }
-        .confirm-scores-table th, .confirm-scores-table td { padding: 0.35rem 0.4rem; border-bottom: 1px solid var(--border-color); text-align: center; }
-        .confirm-scores-table th:first-child, .confirm-scores-table td.name { text-align: left; font-weight: 700; position: sticky; left: 0; background: var(--bg-secondary); }
-        .confirm-agree-list { display: grid; gap: 0.45rem; margin: 0.7rem 0; }
-        .confirm-agree-list .btn { width: 100%; }
+        .confirm-score-rows { display: grid; gap: 0.4rem; margin: 0.75rem 0; }
+        .confirm-score-row {
+            display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+            padding: 0.55rem 0.7rem; border-radius: 12px;
+            background: var(--bg-primary); border: 1px solid var(--border-color); font-weight: 700;
+        }
+        .confirm-score-row .tot { font-variant-numeric: tabular-nums; }
+        .confirm-score-row .tp.under { color: var(--under); }
+        .confirm-score-row .tp.over { color: var(--team-red); }
+        .confirm-score-row .tp.even { color: var(--accent); }
+        .confirm-holegrid { margin: 0 0 0.85rem; }
         .manage-pairs { margin: 0.75rem 0; }
         .manage-pair-field { display: grid; gap: 0.35rem; }
         .manage-player-row { justify-content: space-between; }
@@ -636,6 +643,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=166"></script>
+    <script type="module" src="score-app/score-app.js?v=167"></script>
 </body>
 </html>
