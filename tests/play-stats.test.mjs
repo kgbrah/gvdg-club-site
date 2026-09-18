@@ -9,6 +9,8 @@ import {
   formatRank,
   holePlayStats,
   holeStatChips,
+  livePlayStatsView,
+  liveRoundStatsFromCard,
   parseBreakdown,
   playKindLabel,
   playRowGroup,
@@ -202,4 +204,27 @@ test("doubles partners both receive the team hole mix", () => {
   assert.equal(play.holes, 1);
   assert.equal(play.birdies, 1);
   assert.equal(play.c1r_hit, 1);
+});
+
+test("live round stats update from scored holes and marked lies", () => {
+  const holes = [HOLE, { hole: 2, par: 3, tee: TEE, target: BASKET }];
+  const empty = liveRoundStatsFromCard({ holes, holeGrid: holes.map((hole, index) => ({ hole: hole.hole, index, score: null })) });
+  assert.equal(empty.totals.holes, 0);
+  assert.equal(empty.mix.find((row) => row.id === "birdieMix").mine.hit, 0);
+  assert.equal(empty.throwStats.find((row) => row.id === "fir").mine.att, 0);
+  assert.equal(livePlayStatsView(empty.totals).find((row) => row.id === "par").mine.pct, null);
+
+  const live = liveRoundStatsFromCard({
+    holes,
+    holeGrid: [
+      { hole: 1, score: 2 },
+      { hole: 2, score: 3 },
+    ],
+    throwsByHole: { 1: [northOf(BASKET, 8)] },
+  });
+  assert.equal(live.totals.holes, 2);
+  assert.equal(live.mix.find((row) => row.id === "birdieMix").mine.hit, 1);
+  assert.equal(live.mix.find((row) => row.id === "parMix").mine.hit, 1);
+  assert.equal(live.throwStats.find((row) => row.id === "c1r").mine.hit, 1);
+  assert.equal(live.throwStats.find((row) => row.id === "birdie").mine.pct, statPct(1, 2));
 });

@@ -185,6 +185,17 @@ export function writeThrows(storage, roundCode, hole, throws) {
   }
 }
 
+export function readAllThrows(storage, roundCode, holes) {
+  const out = {};
+  for (const hole of Array.isArray(holes) ? holes : []) {
+    const n = hole && (hole.hole != null ? hole.hole : hole);
+    if (n == null) continue;
+    const rows = readThrows(storage, roundCode, n);
+    if (rows.length) out[n] = rows;
+  }
+  return out;
+}
+
 export function gpsHudPrompt(status, mode) {
   if (mode === "remaining" || mode === "throw") return "";
   if (status === "denied") return "GPS blocked";

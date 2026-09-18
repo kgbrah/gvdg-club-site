@@ -383,6 +383,23 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
   assert.equal(view.holeGrid[0].score, 2);
   assert.equal(view.holeGrid[0].relative.text, 'birdie');
   assert.equal(view.holeGrid[0].relative.className, 'under');
+  assert.equal(view.solo, false);
+  assert.equal(view.formatLabel, 'Singles · Stroke');
+  assert.equal(view.holes.length, 2);
+  const soloView = buildScorecardViewState({
+    state: {
+      ...state,
+      cardmates: [state.cardmates[0]],
+      conflicts: [],
+      missing: [],
+    },
+    mode: 'round',
+    roundCode: 'QA1234',
+    scorerIndex: 0,
+    teeSign: null,
+  });
+  assert.equal(soloView.solo, true);
+  assert.equal(soloView.rows.length, 1);
   assert.equal(view.holeGrid[1].score, null);
   assert.equal(view.holeGrid[1].relative, null);
   assert.equal(view.holeGrid[0].ctp, true);
@@ -644,6 +661,14 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /compact: true/);
   assert.match(scorecard, /HoleMap/);
   assert.match(scorecard, /score-glove-layout/);
+  assert.match(scorecard, /score-glove-layout" \+ \(solo \? " solo" : ""\)/);
+  assert.match(scorecard, /function LiveRoundStats\(props\)/);
+  assert.match(scorecard, /liveRoundStatsFromCard/);
+  assert.match(scorecard, /readAllThrows/);
+  assert.match(scorecard, /Live stats/);
+  assert.match(scorecard, /export function SoloScorecardPreview/);
+  assert.match(main, /SoloScorecardPreview/);
+  assert.match(main, /get\("preview"\) === "solo-stats"/);
   assert.match(scorecard, /score-glove-dock/);
   assert.match(scorecard, /score-glove-scores/);
   assert.match(scorecard, /Share scorecard/);
@@ -744,6 +769,10 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(html, /\.score-glove-finish-dismiss \{/);
   assert.match(html, /\.confirm-score-row \{/);
   assert.match(html, /flex: 0 1 auto; max-height: min\(38dvh, 20rem\)/);
+  assert.match(html, /\.score-glove-layout\.solo \.score-glove-stage \.hole-map-frame \{/);
+  assert.match(html, /\.live-round-stats \{/);
+  assert.match(html, /\.live-stats-mix-legend \{/);
+  assert.match(html, /\.live-stats-grid \{/);
   assert.match(html, /display-mode: browser/);
   assert.match(html, /height: 100svh/);
   assert.match(html, /\.score-glove-scores \{/);

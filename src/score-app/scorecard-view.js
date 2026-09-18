@@ -3,11 +3,11 @@ import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Eye, Ruler, Settings2, Share2, UserPlus, X } from "lucide-react";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { HoleMap } from "../shared/hole-map.js";
-import { addThrow, currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, lastThrow, lastThrowHud, nextTeeHud, readThrows, resolveMapFocus, undoThrow, withSelfLocation, writeThrows } from "../shared/hole-map-model.js";
-import { holePlayStats, holeStatChips } from "../shared/play-stats.js";
+import { addThrow, currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, lastThrow, lastThrowHud, nextTeeHud, readAllThrows, readThrows, resolveMapFocus, undoThrow, withSelfLocation, writeThrows } from "../shared/hole-map-model.js";
+import { formatPct, holePlayStats, holeStatChips, liveRoundStatsFromCard } from "../shared/play-stats.js";
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
-import { nextHoleScore, relClass, relText } from "./score-view-model.js";
+import { nextHoleScore, relClass, relText, strokeLabel } from "./score-view-model.js";
 
 const h = React.createElement;
 
@@ -30,6 +30,91 @@ function HoleStatChips(props) {
       key: chip.id,
     }, chip.label),
   ));
+}
+
+function liveStatSample(mine) {
+  if (!mine || !mine.att) return "—";
+  return mine.hit + "/" + mine.att;
+}
+
+function LiveMixBar(props) {
+  const parts = (Array.isArray(props.rows) ? props.rows : []).filter((row) => row && row.mine && row.mine.hit > 0);
+  if (!parts.length) {
+    return h("div", {
+      "aria-hidden": "true",
+      className: "live-stats-mix empty",
+    });
+  }
+  const label = parts.map((row) => (row.short || row.label) + " " + row.mine.hit).join(", ");
+  return h("div", {
+    "aria-label": label,
+    className: "live-stats-mix",
+    role: "img",
+  }, parts.map((row) =>
+    h("span", {
+      className: "live-stats-mix-seg tone-" + (row.tone || "par"),
+      key: row.id,
+      style: { flexGrow: Math.max(row.mine.hit, 1) },
+      title: (row.short || row.label) + " " + row.mine.hit,
+    }),
+  ));
+}
+
+function LiveRoundStats(props) {
+  if (!props.solo) return null;
+  const storage = typeof sessionStorage === "undefined" ? null : sessionStorage;
+  const throwsByHole = readAllThrows(storage, props.roundCode, props.holes);
+  if (props.currentHole != null) throwsByHole[props.currentHole] = Array.isArray(props.throws) ? props.throws : [];
+  const view = liveRoundStatsFromCard({
+    holeGrid: props.holeGrid,
+    holes: props.holes,
+    throwsByHole,
+  });
+  const holeCount = Array.isArray(props.holes) && props.holes.length
+    ? props.holes.length
+    : (Array.isArray(props.holeGrid) ? props.holeGrid.length : 0);
+  const thru = view.totals.holes;
+  const hasThrows = view.throwStats.some((row) => row.mine && row.mine.att);
+  const hint = thru
+    ? (hasThrows ? null : "Mark lies for fairways, C1, and putting")
+    : "Score holes and mark lies — mix, FIR, C1, and putting fill in live.";
+  return h("section", {
+    "aria-label": "Live round stats",
+    "aria-live": "polite",
+    className: "live-round-stats",
+    key: "live-stats",
+  }, [
+    h("div", { className: "live-round-stats-head", key: "head" }, [
+      h("div", { className: "live-round-stats-title", key: "title" }, "Live stats"),
+      h("div", { className: "live-round-stats-meta", key: "meta" }, [
+        props.formatLabel || "Singles · Stroke",
+        " · Thru ",
+        String(thru),
+        "/",
+        String(holeCount),
+      ]),
+    ]),
+    h("div", { className: "live-stats-mix-wrap", key: "mix" }, [
+      h(LiveMixBar, { key: "bar", rows: view.mix }),
+      h("div", { className: "live-stats-mix-legend", key: "legend" }, view.mix.map((row) =>
+        h("div", {
+          className: "live-stats-mix-item" + (row.tone ? " tone-" + row.tone : ""),
+          key: row.id,
+        }, [
+          h("span", { className: "live-stats-k", key: "k" }, row.short || row.label),
+          h("b", { key: "v" }, String(row.mine.hit)),
+        ]),
+      )),
+    ]),
+    h("div", { className: "live-stats-grid", key: "grid" }, view.throwStats.map((row) =>
+      h("div", { className: "live-stat-tile" + (row.tone ? " tone-" + row.tone : ""), key: row.id }, [
+        h("span", { className: "live-stats-k", key: "k" }, row.short || row.label),
+        h("b", { key: "v" }, row.mine.att ? formatPct(row.mine.pct) : "—"),
+        h("small", { key: "s" }, liveStatSample(row.mine)),
+      ]),
+    )),
+    hint ? h("p", { className: "live-stats-hint", key: "hint" }, hint) : null,
+  ]);
 }
 
 function RoundTools(props) {
@@ -805,8 +890,9 @@ export function ScorecardView(props) {
     persistThrows(undoThrow(throws));
   }
   const measureLabel = measure && measure.b ? "Clear" : measure && measure.a ? "Mark" : "Measure";
+  const solo = props.solo === true || (Array.isArray(props.rows) && props.rows.length === 1);
   return h(React.Fragment, null, [
-    h("div", { className: "score-glove-layout", key: "glove" }, [
+    h("div", { className: "score-glove-layout" + (solo ? " solo" : ""), key: "glove" }, [
       h("div", { className: "score-glove-stage", key: "stage" }, [
         props.showWeather ? h(WeatherStrip, { compact: true, key: "weather", title: "Round weather", weather: props.weather }) : null,
         props.yourTurn ? h("p", { className: "your-turn-hint", key: "turn" }, props.yourTurn) : null,
@@ -827,6 +913,15 @@ export function ScorecardView(props) {
           onMapPoint,
           onMarkLie,
           onUndoThrow,
+        }),
+        h(LiveRoundStats, {
+          currentHole: holeNumber,
+          formatLabel: props.formatLabel,
+          holeGrid: props.holeGrid,
+          holes: props.holes,
+          roundCode: props.roundCode,
+          solo,
+          throws,
         }),
         h(RoundTools, {
           ...props,
@@ -866,4 +961,119 @@ export function ScorecardView(props) {
       })
       : null,
   ]);
+}
+
+function previewHoles() {
+  const origin = { lat: 35.55785, lng: -77.360886 };
+  const holes = [];
+  for (let i = 0; i < 18; i += 1) {
+    const hole = i + 1;
+    const par = hole % 6 === 0 ? 4 : 3;
+    const tee = {
+      lat: origin.lat + i * 0.00016,
+      lng: origin.lng + (i % 4) * 0.00011,
+    };
+    const north = par === 4 ? 0.00095 : 0.00074;
+    holes.push({
+      distance_ft: par === 4 ? 340 : 270,
+      hole,
+      par,
+      target: { lat: tee.lat + north, lng: tee.lng + 0.00018 },
+      tee,
+    });
+  }
+  return holes;
+}
+
+const PREVIEW_WEATHER = {
+  current: {
+    condition: "Clear",
+    conditionCode: 0,
+    temperatureF: 92,
+    windDirectionDeg: 292,
+    windSpeedMph: 8,
+  },
+};
+
+export function SoloScorecardPreview() {
+  const holes = React.useMemo(previewHoles, []);
+  const [holeIdx, setHoleIdx] = React.useState(0);
+  const [scores, setScores] = React.useState({});
+  const hole = holes[holeIdx] || holes[0];
+  const holeGrid = holes.map((row, index) => {
+    const score = Object.prototype.hasOwnProperty.call(scores, row.hole) ? scores[row.hole] : null;
+    return {
+      conflict: false,
+      ctp: false,
+      current: index === holeIdx,
+      done: score != null,
+      hole: row.hole,
+      index,
+      par: row.par,
+      relative: score == null ? null : strokeLabel(score, row.par),
+      score,
+    };
+  });
+  let thru = 0;
+  let total = 0;
+  let toPar = 0;
+  holeGrid.forEach((row) => {
+    if (typeof row.score !== "number") return;
+    thru += 1;
+    total += row.score;
+    toPar += row.score - row.par;
+  });
+  const currentScore = Object.prototype.hasOwnProperty.call(scores, hole.hole) ? scores[hole.hole] : null;
+  const delta = currentScore == null ? null : currentScore - hole.par;
+  const rows = [{
+    conflictText: "",
+    currentScore,
+    honors: false,
+    key: 0,
+    label: "Kevin Gray (you)",
+    meta: "",
+    relative: delta == null ? null : { className: relClass(delta), text: relText(delta) },
+    source: { playerIndexes: [0] },
+    teePosition: 1,
+  }];
+
+  React.useEffect(() => {
+    document.body.classList.add("score-glove");
+    return () => document.body.classList.remove("score-glove");
+  }, []);
+
+  return h(ScorecardView, {
+    atEnd: holeIdx >= holes.length - 1,
+    atStart: holeIdx <= 0,
+    formatLabel: "Singles · Stroke",
+    hole,
+    holeGrid,
+    holeMeta: "Par " + hole.par + " · " + hole.distance_ft + " ft",
+    holes,
+    nextHole: holes[holeIdx + 1] || null,
+    onJumpHole: setHoleIdx,
+    onNext: () => setHoleIdx((index) => Math.min(holes.length - 1, index + 1)),
+    onPrevious: () => setHoleIdx((index) => Math.max(0, index - 1)),
+    onScore: function (_row, holeNumber, value) {
+      setScores((current) => {
+        const next = Object.assign({}, current);
+        if (value == null) delete next[holeNumber];
+        else next[holeNumber] = value;
+        return next;
+      });
+    },
+    onShare: function () {},
+    roundCode: "PREVIEW",
+    rows,
+    show: false,
+    showWeather: true,
+    solo: true,
+    totals: [
+      { label: "Thru", value: thru + "/" + holes.length },
+      { label: "Total", value: total ? String(total) : "-" },
+      { label: "To par", value: thru ? relText(toPar) : "E" },
+    ],
+    weather: PREVIEW_WEATHER,
+    windFromDeg: PREVIEW_WEATHER.current.windDirectionDeg,
+  });
 }

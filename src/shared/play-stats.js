@@ -310,6 +310,7 @@ export const PLAY_CATEGORIES = [
 
 export const SCORE_MIX_IDS = PLAY_CATEGORIES.filter((row) => row.group === "mix").map((row) => row.id);
 export const COMPACT_STAT_IDS = ["birdie", "par", "fir", "c1Putt"];
+export const LIVE_ROUND_STAT_IDS = ["fir", "c1r", "c2r", "parked", "c1Putt", "c2Putt", "scramble", "birdie", "par"];
 
 export function statPct(hit, att) {
   if (!att) return null;
@@ -538,4 +539,41 @@ export function holeStatChips(stats) {
   if (stats.parked && stats.parked.hit === 1) chips.push({ hit: true, id: "parked", label: "Parked" });
   if (stats.scramble && stats.scramble.hit === 1) chips.push({ hit: true, id: "scramble", label: "Scramble" });
   return chips;
+}
+
+export function livePlayStatsView(totals) {
+  const t = totals && typeof totals === "object" ? totals : emptyPlayTotals();
+  return PLAY_CATEGORIES.map((category) => {
+    const hit = num(t[category.hit]);
+    const att = num(t[category.att]);
+    return {
+      group: category.group,
+      id: category.id,
+      label: category.label,
+      mine: { att, hit, pct: statPct(hit, att) },
+      short: category.short || category.label,
+      tone: category.tone || null,
+    };
+  });
+}
+
+export function scoresFromHoleGrid(holeGrid) {
+  const scores = {};
+  for (const hole of Array.isArray(holeGrid) ? holeGrid : []) {
+    if (!hole || hole.hole == null) continue;
+    if (Number.isInteger(hole.score) && hole.score > 0) scores[hole.hole] = hole.score;
+  }
+  return scores;
+}
+
+export function liveRoundStatsFromCard({ holes, holeGrid, throwsByHole } = {}) {
+  const totals = roundPlayStats(holes, throwsByHole, scoresFromHoleGrid(holeGrid));
+  const categories = livePlayStatsView(totals);
+  const byId = new Map(categories.map((row) => [row.id, row]));
+  return {
+    categories,
+    mix: SCORE_MIX_IDS.map((id) => byId.get(id)).filter(Boolean),
+    throwStats: LIVE_ROUND_STAT_IDS.map((id) => byId.get(id)).filter(Boolean),
+    totals,
+  };
 }

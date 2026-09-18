@@ -4,7 +4,7 @@ import { CircleHelp, Moon, Sun, Trophy, UsersRound } from "lucide-react";
 
 import { startScoreApp } from "./score-controller.js";
 import { ScoreAuthFlow } from "./auth-flow.js";
-import { ScorecardView } from "./scorecard-view.js";
+import { ScorecardView, SoloScorecardPreview } from "./scorecard-view.js";
 import { ScoreSetupFlow } from "./setup-flow.js";
 import { StatusView } from "./status-view.js";
 import { WatchView } from "./watch-view.js";
@@ -31,6 +31,15 @@ function icon(Icon, size = 18) {
   });
 }
 
+function previewSoloRequested() {
+  try {
+    const params = new URLSearchParams(location.search);
+    return params.get("preview") === "solo-stats";
+  } catch {
+    return false;
+  }
+}
+
 function ScoreBody({ view }) {
   switch (view.kind) {
     case "auth":
@@ -52,10 +61,11 @@ function themeRoot() {
 }
 
 function ScoreShell() {
+  const previewSolo = previewSoloRequested();
   const [header, setHeader] = React.useState({
     showLeaderboard: false,
-    subtitle: "Greenville Disc Golf Club",
-    title: "Live Scoring",
+    subtitle: previewSolo ? "Covenant Church · Covey" : "Greenville Disc Golf Club",
+    title: previewSolo ? "Round PREVIEW" : "Live Scoring",
   });
   const [bodyView, setBodyView] = React.useState(INITIAL_SCORE_VIEW);
   const { dark, toggle: onToggleTheme } = usePlayerThemeSession();
@@ -67,6 +77,7 @@ function ScoreShell() {
   }), []);
 
   React.useEffect(() => {
+    if (previewSolo) return undefined;
     startScoreApp({
       body: bodyController,
       shell: {
@@ -81,7 +92,7 @@ function ScoreShell() {
     return () => {
       leaderboardHandlerRef.current = null;
     };
-  }, [bodyController]);
+  }, [bodyController, previewSolo]);
 
   React.useEffect(() => {
     return () => {
@@ -90,10 +101,10 @@ function ScoreShell() {
   }, []);
 
   React.useEffect(() => {
-    const glove = bodyView.kind === "scorecard";
+    const glove = previewSolo || bodyView.kind === "scorecard";
     document.body.classList.toggle("score-glove", glove);
     return () => document.body.classList.remove("score-glove");
-  }, [bodyView.kind]);
+  }, [bodyView.kind, previewSolo]);
 
   return h("div", { class: "wrap" }, [
     h("header", { class: "topbar" }, [
@@ -149,8 +160,8 @@ function ScoreShell() {
         icon(dark ? Sun : Moon),
       ),
     ]),
-    bodyView.kind === "watch" || bodyView.kind === "scorecard" ? null : h(InstallCoachBanner, { key: "install" }),
-    h("main", { id: "app" }, h(ScoreBody, { view: bodyView })),
+    previewSolo || bodyView.kind === "watch" || bodyView.kind === "scorecard" ? null : h(InstallCoachBanner, { key: "install" }),
+    h("main", { id: "app" }, previewSolo ? h(SoloScorecardPreview) : h(ScoreBody, { view: bodyView })),
     h(CrottsWidget, { key: "help" }),
   ]);
 }

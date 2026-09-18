@@ -514,6 +514,78 @@
         .score-glove-stage .holegrid-rel { font-size: 0.48rem; line-height: 1.1; }
         .score-glove-stage .pots-strip,
         .score-glove-stage .pots-ace-hint { display: none; }
+        .score-glove-layout.solo .score-glove-stage .hole-media,
+        .score-glove-layout.solo .score-glove-stage .hole-media-map-wrap,
+        .score-glove-layout.solo .score-glove-stage .hole-map-card,
+        .score-glove-layout.solo .score-glove-stage .hole-map-compact {
+            flex: 0 0 auto; overflow: hidden;
+        }
+        .score-glove-layout.solo .score-glove-stage .hole-map-frame {
+            flex: 0 0 auto; width: 100%; height: auto; max-height: min(28dvh, 13.5rem);
+        }
+        .live-round-stats {
+            flex: 1 1 auto; min-height: 8rem; overflow: auto; -webkit-overflow-scrolling: touch;
+            margin: 0.32rem 0 0.08rem; padding: 0.42rem 0.5rem 0.45rem;
+            border: 1px solid var(--border-color); border-radius: 14px;
+            background: var(--bg-secondary);
+        }
+        .live-round-stats-head {
+            display: flex; align-items: baseline; justify-content: space-between; gap: 0.45rem;
+            margin-bottom: 0.32rem;
+        }
+        .live-round-stats-title {
+            font-size: 0.62rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+            color: var(--text-muted);
+        }
+        .live-round-stats-meta {
+            min-width: 0; font-size: 0.62rem; font-weight: 700; color: var(--text-muted);
+            letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .live-stats-mix-wrap { margin: 0 0 0.35rem; }
+        .live-stats-mix {
+            display: flex; height: 0.72rem; border-radius: 999px; overflow: hidden;
+            border: 1px solid var(--border-color); background: var(--bg-tertiary);
+        }
+        .live-stats-mix.empty { min-height: 0.72rem; }
+        .live-stats-mix-seg { min-width: 0; }
+        .live-stats-mix-seg.tone-eagle { background: var(--under); }
+        .live-stats-mix-seg.tone-birdie { background: color-mix(in srgb, var(--under) 58%, var(--bg-tertiary)); }
+        .live-stats-mix-seg.tone-par { background: color-mix(in srgb, var(--accent) 62%, var(--bg-tertiary)); }
+        .live-stats-mix-seg.tone-bogey { background: color-mix(in srgb, var(--over) 48%, var(--bg-tertiary)); }
+        .live-stats-mix-seg.tone-double { background: var(--over); }
+        .live-stats-mix-legend {
+            display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.22rem; margin-top: 0.32rem;
+        }
+        .live-stats-mix-item {
+            background: var(--bg-tertiary); border: 1px solid var(--border-color);
+            border-radius: 10px; padding: 0.28rem 0.1rem 0.3rem; text-align: center; min-width: 0;
+        }
+        .live-stats-k {
+            display: block; color: var(--text-muted); font-size: 0.52rem; font-weight: 800;
+            letter-spacing: 0.04em; text-transform: uppercase;
+        }
+        .live-stats-mix-item b, .live-stat-tile b {
+            display: block; font-family: 'Bebas Neue', sans-serif; font-size: 1.05rem;
+            line-height: 1; margin-top: 0.08rem; color: var(--text-primary); font-weight: 400;
+        }
+        .live-stats-mix-item.tone-eagle b, .live-stat-tile.tone-birdie b { color: var(--under); }
+        .live-stats-mix-item.tone-birdie b { color: var(--under); }
+        .live-stats-mix-item.tone-bogey b, .live-stat-tile.tone-bogey b { color: var(--over); }
+        .live-stats-mix-item.tone-double b { color: var(--over); }
+        .live-stats-grid {
+            display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.28rem;
+        }
+        .live-stat-tile {
+            background: var(--bg-tertiary); border: 1px solid var(--border-color);
+            border-radius: 10px; padding: 0.32rem 0.28rem 0.36rem; text-align: center; min-width: 0;
+        }
+        .live-stat-tile small {
+            display: block; color: var(--text-muted); font-size: 0.58rem; margin-top: 0.08rem;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .live-stats-hint {
+            margin: 0.32rem 0 0; color: var(--text-muted); font-size: 0.68rem; line-height: 1.3; font-weight: 600;
+        }
         .score-glove-dock {
             flex: 0 1 auto; max-height: min(38dvh, 20rem); min-height: 0;
             overflow: hidden; display: flex; flex-direction: column;

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { addThrow, CIRCLE1_M, CIRCLE2_M, circleEllipse, currentRangeHud, GPS_REMAINING_MAX_FT, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, headingDeg, holeMapLabel, holePoint, lastThrow, lastThrowHud, latLngFromMapPoint, mapFocusFromRemaining, nextTeeHud, playerMarksOnMap, projectHoleMap, projectMapPoint, puttingCircle, rangeHud, readThrows, remainingFt, resolveMapFocus, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, throwSegments, throwsStorageKey, undoThrow, windBlowToDeg, withSelfLocation, writeThrows } from "../src/shared/hole-map-model.js";
+import { addThrow, CIRCLE1_M, CIRCLE2_M, circleEllipse, currentRangeHud, GPS_REMAINING_MAX_FT, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, headingDeg, holeMapLabel, holePoint, lastThrow, lastThrowHud, latLngFromMapPoint, mapFocusFromRemaining, nextTeeHud, playerMarksOnMap, projectHoleMap, projectMapPoint, puttingCircle, rangeHud, readAllThrows, readThrows, remainingFt, resolveMapFocus, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, throwSegments, throwsStorageKey, undoThrow, windBlowToDeg, withSelfLocation, writeThrows } from "../src/shared/hole-map-model.js";
 
 test("holePoint requires numeric lat/lng", () => {
   assert.equal(holePoint(null), null);
@@ -239,6 +239,11 @@ test("throw log numbers lies from the tee and skips tiny duplicates", () => {
   writeThrows(storage, "ABC", 1, two);
   assert.equal(throwsStorageKey("ABC", 1), "gvdg-throws:ABC:1");
   assert.deepEqual(readThrows(storage, "ABC", 1).map((row) => row.n), [1, 2]);
+  writeThrows(storage, "ABC", 2, first);
+  const all = readAllThrows(storage, "ABC", [{ hole: 1 }, { hole: 2 }, { hole: 3 }]);
+  assert.equal(all[1].length, 2);
+  assert.equal(all[2].length, 1);
+  assert.equal(all[3], undefined);
 });
 
 test("currentRangeHud can remain from the last lie when GPS is off", () => {

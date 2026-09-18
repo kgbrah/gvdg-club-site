@@ -1,5 +1,6 @@
 import { aceHint, buildLivePots } from "../shared/live-pots-model.js";
 import { displayMatchStatus } from "../shared/match-status.js";
+import { playGroupLabel, playStyleLabel } from "../shared/play-stats.js";
 
 export function relClass(delta) {
   return delta < 0 ? "under" : delta > 0 ? "over" : "even";
@@ -23,6 +24,12 @@ export function isDoublesScoring(state) {
 
 export function isMatchplayScoring(state) {
   return Boolean(state.roundConfig && state.roundConfig.scoringStyle === "matchplay");
+}
+
+export function roundFormatLabel(state) {
+  const group = isDoublesScoring(state) ? "doubles" : "singles";
+  const style = isMatchplayScoring(state) ? "matchplay" : "stroke";
+  return playGroupLabel(group) + " · " + playStyleLabel(style);
 }
 
 export function nextHoleScore(current, par, direction) {
@@ -593,6 +600,9 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
     playerLocations: Array.isArray(state.playerLocations) ? state.playerLocations : [],
     yourTurn: yourTurnHint({ ...state, scorerIndex }),
     finish: buildFinishView(state, mode, blockers, locked, scorerIndex),
+    formatLabel: roundFormatLabel(state),
+    holes: Array.isArray(state.holes) ? state.holes : [],
+    solo: rowViews.length === 1,
   };
 }
 
