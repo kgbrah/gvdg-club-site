@@ -161,3 +161,54 @@ export function isPlaceholderLayout(layout: { name?: unknown; holes?: unknown })
   const holes = parseScorableHoles(layout.holes);
   return holes.length > 0 && holes.every((hole) => hole.par === 3 && !hole.tee && !hole.target);
 }
+
+function holesFromUdisc(layout: UdiscLayout): LayoutHole[] {
+  return layout.holes.map((hole) => ({
+    hole: hole.hole,
+    par: hole.par,
+    tee: hole.tee,
+    target: hole.target,
+  }));
+}
+
+export type LayoutApply =
+  | { action: "update"; layoutId: number; name: string; holes: LayoutHole[]; total_par: number }
+  | { action: "create"; name: string; holes: LayoutHole[]; total_par: number };
+
+export function planUdiscLayoutApply(opts: {
+  existingLayouts: { id: number; name: string; holes?: unknown }[];
+  existingPositions: { kind: string; label: string; lat?: number | null; lng?: number | null }[];
+  layouts: UdiscLayout[];
+}): { layouts: LayoutApply[]; positions: PositionInput[]; mapped: boolean } {
+  const layouts: LayoutApply[] = [];
+  const positions = mergePositions(opts.existingPositions, opts.layouts.flatMap((layout) => layout.positions));
+  let placeholder = opts.existingLayouts.find((layout) => isPlaceholderLayout(layout)) ?? null;
+  const usedIds = new Set<number>();
+  for (const layout of opts.layouts) {
+    const name = (layout.name && layout.name.trim()) || "Main";
+    const { holes, total_par } = enrichHoles(holesFromUdisc(layout));
+    const sameName = opts.existingLayouts.find(
+      (row) => !usedIds.has(row.id) && db.normalizeLayoutLabel(row.name) === db.normalizeLayoutLabel(name),
+    );
+    if (sameName && layoutHasSatelliteMap(sameName.holes)) {
+      usedIds.add(sameName.id);
+      continue;
+    }
+    if (sameName) {
+      usedIds.add(sameName.id);
+      layouts.push({ action: "update", layoutId: sameName.id, name, holes, total_par });
+      continue;
+    }
+    if (placeholder) {
+      usedIds.add(placeholder.id);
+      layouts.push({ action: "update", layoutId: placeholder.id, name, holes, total_par });
+      placeholder = null;
+      continue;
+    }
+    layouts.push({ action: "create", name, holes, total_par });
+  }
+  const mapped = opts.layouts.some((layout) =>
+    layout.holes.some((hole) => hole.tee?.lat != null && hole.tee?.lng != null && hole.target?.lat != null && hole.target?.lng != null),
+  );
+  return { layouts, positions, mapped };
+}
