@@ -67,6 +67,9 @@ export function publicSnapshot(
     status: meta?.status ?? "none",
     rev: meta?.rev ?? 0,
     eventId: meta?.eventId ?? null,
+    courseId: meta?.courseId ?? null,
+    layoutId: meta?.layoutId ?? null,
+    roundCode: meta?.roundCode ?? null,
     roundConfig: scoring.config,
     scoreTargets: publicScoreTargets(players, scoring.targets),
     // Public /ws broadcast: only a WHOLE-round error rides the global field (a per-card break must NOT bleed
@@ -144,6 +147,8 @@ export function mineData(
   const playerLocations = meta?.status === "live" ? publicPlayerLocations(players, locations, Date.now(), holes) : [];
   const base = {
     eventId: meta?.eventId ?? 0,
+    courseId: meta?.courseId ?? null,
+    layoutId: meta?.layoutId ?? null,
     casual: !!meta?.casual,
     roundConfig: scoring.config,
     scoreTargets: publicScoreTargets(players, scoring.targets),

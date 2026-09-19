@@ -276,6 +276,7 @@ function useDeviceFix() {
       const lng = pos.coords && pos.coords.longitude;
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
       const next = { lat, lng };
+      if (Number.isFinite(pos.coords && pos.coords.accuracy)) next.accuracyM = pos.coords.accuracy;
       fixRef.current = next;
       setFix(next);
       setStatus("ready");
@@ -383,10 +384,31 @@ function HoleMedia(props) {
   const [signOpen, setSignOpen] = React.useState(false);
   const hasMap = holeHasMap(props.hole);
   const hasSign = Boolean(props.teeSign);
-  if (!hasMap && !hasSign) return null;
+  const canSurvey = typeof props.onMarkTee === "function" || typeof props.onMarkPin === "function";
+  if (!hasMap && !hasSign && !canSurvey) return null;
   const style = props.teeSign && props.teeSign.highlightColor
     ? { boxShadow: `0 0 0 3px ${props.teeSign.highlightColor}` }
     : undefined;
+  const surveyBtns = canSurvey
+    ? h("div", { className: "hole-map-lie-actions hole-map-survey-empty", key: "survey" }, [
+      typeof props.onMarkTee === "function"
+        ? h("button", {
+          className: "hole-map-survey-btn" + (props.surveyed && props.surveyed.tee ? " active" : ""),
+          key: "tee",
+          type: "button",
+          onClick: props.onMarkTee,
+        }, props.surveyed && props.surveyed.tee ? "Tee saved" : "Mark tee")
+        : null,
+      typeof props.onMarkPin === "function"
+        ? h("button", {
+          className: "hole-map-survey-btn" + (props.surveyed && props.surveyed.target ? " active" : ""),
+          key: "pin",
+          type: "button",
+          onClick: props.onMarkPin,
+        }, props.surveyed && props.surveyed.target ? "Pin saved" : "Mark pin")
+        : null,
+    ])
+    : null;
   return h("div", { className: "hole-media", key: "media" }, [
     hasMap
       ? h("div", { className: "hole-media-map-wrap", key: "map-wrap" }, [
@@ -406,16 +428,25 @@ function HoleMedia(props) {
           measureFrom: props.measureFrom,
           measureTo: props.measureTo,
           players: withSelfLocation(props.playerLocations, props.gpsFix, props.selfMark),
+          surveyed: props.surveyed,
           throws: props.throws,
           windFromDeg: props.windFromDeg,
           scoreFlight: props.scoreFlight,
           onFocus: props.onMapFocus,
           onMapPoint: props.onMapPoint,
           onMarkLie: props.onMarkLie,
+          onMarkPin: props.onMarkPin,
+          onMarkTee: props.onMarkTee,
           onUndoThrow: props.onUndoThrow,
         }),
       ])
-      : h("div", { className: "hole-media-empty", key: "empty" }, "No map for this hole yet"),
+      : h("div", { className: "hole-media-empty", key: "empty" }, [
+        h("span", { key: "copy" }, "No map for this hole yet"),
+        canSurvey
+          ? h("span", { className: "hole-media-empty-hint", key: "hint" }, "Stand on the tee or at the basket and mark it")
+          : null,
+        surveyBtns,
+      ]),
     hasSign
       ? h("button", {
         "aria-expanded": signOpen ? "true" : "false",
@@ -896,6 +927,7 @@ export function ScorecardView(props) {
   const [padRow, setPadRow] = React.useState(null);
   const [measure, setMeasure] = React.useState(null);
   const [throws, setThrows] = React.useState([]);
+  const [surveyed, setSurveyed] = React.useState({});
   const [pinnedFocus, setPinnedFocus] = React.useState(null);
   const [scoreFlight, setScoreFlight] = React.useState(0);
   const gps = useDeviceFix();
@@ -914,6 +946,7 @@ export function ScorecardView(props) {
   React.useEffect(() => {
     setMeasure(null);
     setPinnedFocus(null);
+    setSurveyed({});
     setThrows(readThrows(storage, props.roundCode, holeNumber));
   }, [holeNumber, props.roundCode]);
 
@@ -970,6 +1003,20 @@ export function ScorecardView(props) {
   function onUndoThrow() {
     persistThrows(undoThrow(throws));
   }
+  function onMapMark(kind) {
+    if (!gps.fix) {
+      gps.enableGps();
+      return;
+    }
+    if (Number.isFinite(gps.fix.accuracyM) && gps.fix.accuracyM > 25) {
+      if (typeof props.onMapMark === "function") props.onMapMark(kind, holeNumber, gps.fix, "gps_inaccurate");
+      return;
+    }
+    if (typeof props.onMapMark === "function") {
+      props.onMapMark(kind, holeNumber, gps.fix);
+      setSurveyed((current) => ({ ...current, [kind === "tee" ? "tee" : "target"]: true }));
+    }
+  }
   function onScore(source, hole, strokes) {
     if (strokes != null) setScoreFlight((value) => value + 1);
     if (typeof props.onScore === "function") props.onScore(source, hole, strokes);
@@ -997,11 +1044,14 @@ export function ScorecardView(props) {
           nextTee,
           rangeHud: hud,
           scoreFlight,
+          surveyed,
           throws,
           onEnableGps: gps.enableGps,
           onMapFocus,
           onMapPoint,
           onMarkLie,
+          onMarkPin: typeof props.onMapMark === "function" ? () => onMapMark("target") : null,
+          onMarkTee: typeof props.onMapMark === "function" ? () => onMapMark("tee") : null,
           onUndoThrow,
         }),
         h(LiveRoundStats, {

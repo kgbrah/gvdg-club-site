@@ -17,6 +17,7 @@ import { isLiveFormatError, normalizeLiveScoringConfig, type LiveScoringConfig }
 import { mintOpenPlaySession } from "./open-play.js";
 import { weatherLocationForCourse } from "./weather.js";
 import { buildCasualArchiveSnapshot, shouldUseCasualArchive } from "./casual-archive.js";
+import { overlayLiveSnapshot, submitLiveMapMark } from "./course-map-marks-routes.js";
 
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // unambiguous (no 0/O/1/I/L)
 function genCode(): string {
@@ -61,7 +62,7 @@ export async function handleCasualRounds(
       if (isLiveFormatError(error)) return json({ error: "invalid_live_scoring_config" }, 400, origin);
       throw error;
     }
-    const holes = await db.getLayoutHoles(env.DB, layoutId);
+    const holes = await db.layoutHolesWithCrowdMap(env.DB, layoutId);
     if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin);
     const layout = (await db.getLayout(env.DB, layoutId)) as { name?: string | null; course_id?: number | null } | null;
     const course = layout?.course_id != null ? ((await db.getCourse(env.DB, layout.course_id)) as { name?: string | null; udisc_course_id?: string | null; lat?: number | null; lng?: number | null } | null) : null;
@@ -89,10 +90,10 @@ export async function handleCasualRounds(
   if (method === "GET" && sub === "live" && !seg[3]) {
     const live = await stub.fetch("https://do/snapshot");
     const snapshot = await live.json().catch(() => ({}));
-    if (!shouldUseCasualArchive(snapshot)) return json(snapshot, live.status, origin);
+    if (!shouldUseCasualArchive(snapshot)) return json(await overlayLiveSnapshot(env, snapshot as Record<string, unknown>), live.status, origin);
     const archived = await buildCasualArchiveSnapshot(env.DB, code);
-    if (archived) return json(archived, 200, origin);
-    return json(snapshot, live.status, origin);
+    if (archived) return json(await overlayLiveSnapshot(env, archived as Record<string, unknown>), 200, origin);
+    return json(await overlayLiveSnapshot(env, snapshot as Record<string, unknown>), live.status, origin);
   }
   if (sub === "live" && seg[3] === "ws") return stub.fetch(request);
 
@@ -186,6 +187,34 @@ export async function handleCasualRounds(
     const b = (await readJson(request)) ?? {};
     const r = await stub.fetch("https://do/throws", { method: "POST", headers: { ...hdr, "X-Auth-Admin": "false" }, body: JSON.stringify(b) });
     return json(await r.json().catch(() => ({})), r.status, origin);
+  }
+  if (sub === "live" && method === "POST" && seg[3] === "map-mark") {
+    const b = (await readJson(request)) ?? {};
+    const mineRes = await stub.fetch("https://do/mine", { headers: hdr });
+    const mine = await mineRes.json().catch(() => ({})) as Record<string, unknown>;
+    if (mineRes.status !== 200) return json(mine, mineRes.status, origin);
+    return submitLiveMapMark({
+      env,
+      origin,
+      memberId: actor.sub,
+      roundCode: code,
+      snapshot: {
+        status: typeof mine.status === "string" ? mine.status : undefined,
+        layoutId: mine.layoutId as number | null,
+        courseId: mine.courseId as number | null,
+        eventId: mine.eventId as number | null,
+        holes: Array.isArray(mine.holes) ? mine.holes as { hole: number }[] : [],
+        players: [{ memberId: actor.sub }],
+      },
+      body: b,
+      overlay: async (patch) => {
+        await stub.fetch("https://do/map-overlay", {
+          method: "POST",
+          headers: hdr,
+          body: JSON.stringify(patch),
+        });
+      },
+    });
   }
   return json({ error: "not_found" }, 404, origin);
 }

@@ -1112,6 +1112,22 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.doesNotMatch(watchBoot, /\/join/);
 });
 
+test("live scoring lets members mark tee pads and baskets for the club map", () => {
+  const controller = scoreControllerSource();
+  const scorecard = readFileSync('src/score-app/scorecard-view.js', 'utf8');
+  const holeMap = readFileSync('src/shared/hole-map.js', 'utf8');
+  const html = readFileSync('score.html', 'utf8');
+  assert.match(controller, /LIVE \+ '\/map-mark'/);
+  assert.match(controller, /function postMapMark/);
+  assert.match(controller, /onMapMark: memberToken\(\)/);
+  assert.match(scorecard, /onMarkTee/);
+  assert.match(scorecard, /onMarkPin/);
+  assert.match(scorecard, /accuracyM/);
+  assert.match(holeMap, /Mark tee/);
+  assert.match(holeMap, /Mark pin/);
+  assert.match(html, /\.hole-map-survey-btn/);
+});
+
 test("watch follow prefers the most recently marked player on the hole", async () => {
   const {
     watchFollowPlayer,

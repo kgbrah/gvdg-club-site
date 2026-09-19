@@ -365,6 +365,41 @@ export function startScoreApp(options) {
             } catch (e) {}
             void api(LIVE + '/throws', { method: 'POST', body: body });
         }
+        function patchHoleMarker(hole, kind, point) {
+            const row = (S.holes || []).find(function (h) { return h && h.hole === hole; });
+            if (!row || !point) return;
+            const label = kind === 'tee'
+                ? ((row.tee && row.tee.label) || 'Tee')
+                : ((row.target && row.target.label) || 'Basket');
+            const marker = { label: label, lat: point.lat, lng: point.lng };
+            if (kind === 'tee') row.tee = marker;
+            else row.target = marker;
+        }
+        function postMapMark(kind, hole, fix, reason) {
+            if (reason === 'gps_inaccurate') { toast('GPS is too fuzzy — wait for a better fix'); return; }
+            if (!memberToken()) { toast('Sign in to help map this course'); return; }
+            if (S.status === 'final') { toast('This round is already final'); return; }
+            const lat = fix && fix.lat;
+            const lng = fix && fix.lng;
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) { toast('Need GPS to mark that'); return; }
+            const body = { hole: hole, kind: kind, lat: lat, lng: lng };
+            if (Number.isFinite(fix.accuracyM)) body.accuracyM = fix.accuracyM;
+            void api(LIVE + '/map-mark', { method: 'POST', body: body }).then(function (r) {
+                if (r.ok && r.data) {
+                    patchHoleMarker(hole, kind, r.data.consensus || r.data.point);
+                    if (r.data.published) toast(kind === 'tee' ? 'Tee pad published on the club map' : 'Basket published on the club map');
+                    else toast((kind === 'tee' ? 'Tee pad saved' : 'Basket saved') + ' · ' + String(r.data.members || 1) + ' mark' + (r.data.members === 1 ? '' : 's'));
+                    renderHole();
+                    return;
+                }
+                if (r.status === 401 || r.status === 403) toast('Sign in to help map this course');
+                else if (r.data && r.data.error === 'gps_inaccurate') toast('GPS is too fuzzy — wait for a better fix');
+                else if (r.data && r.data.error === 'too_far') toast('That mark is too far from this hole');
+                else if (r.data && r.data.error === 'off_course') toast('That GPS point is off this course');
+                else if (r.data && r.data.error === 'rate_limited') toast('Slow down a second');
+                else toast('Could not save that map mark');
+            });
+        }
         async function postScore(row, hole, strokes) {
             if (S.cardLocked || S.status === 'final') { toast('This card is already submitted'); return; }
             const scorerIndex = currentScorerIndex();
@@ -429,6 +464,7 @@ export function startScoreApp(options) {
                 if (snap.status === 'final') stopLiveLocation();
                 if (snap.rev != null) { if (snap.rev <= S.lastRev) { if (extrasChanged) renderWatch(); return; } S.lastRev = snap.rev; }
                 if (snap.status) S.status = snap.status;
+                if (Array.isArray(snap.holes) && snap.holes.length) S.holes = snap.holes;
                 S.roundConfig = snap.roundConfig || S.roundConfig;
                 if (S.pots) S.pots.ctps = withLiveCtpLeaders(S.pots.ctps, snap.liveCtps);
                 renderWatch();
@@ -439,6 +475,7 @@ export function startScoreApp(options) {
             // Drop a stale/out-of-order snapshot (a newer one from another device was already applied).
             if (snap.rev != null) { if (snap.rev <= S.lastRev) { if (extrasChanged) renderHole(); return; } S.lastRev = snap.rev; }
             if (snap.status) S.status = snap.status; // reflect a finalize (or start) that happened on another device
+            if (Array.isArray(snap.holes) && snap.holes.length) S.holes = snap.holes;
             if (typeof snap.cardLocked === 'boolean') S.cardLocked = snap.cardLocked;
             else if (Array.isArray(snap.lockedCardIds)) S.cardLocked = snap.lockedCardIds.indexOf(String(S.cardId ?? 'c0')) >= 0;
             if (snap.cardAttestation) S.cardAttestation = snap.cardAttestation;
@@ -713,6 +750,7 @@ export function startScoreApp(options) {
                 onJumpHole: function (index) { S.holeIdx = index; renderHole(); },
                 onScore: postScore,
                 onThrows: postThrows,
+                onMapMark: memberToken() && S.status !== 'final' ? postMapMark : null,
                 onCtpVote: EVENT_ID && !WATCH ? postCtpVote : null,
                 onOpenFinish: openFinishConfirm,
                 onCloseFinish: closeFinishConfirm,

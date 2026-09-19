@@ -63,6 +63,16 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       # Deploy the LIVE worker ONCE. [env.gvdgclub] and [env.staging] now target the same Worker
       # (gvdg-member-auth-staging = the one auth.gvdgclub.com is attached to), so one deploy suffices.
+      - name: Apply D1 migrations
+        if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_CF_ACCOUNT == 'true' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          wranglerVersion: 4.105.0
+          workingDirectory: auth-worker
+          command: d1 migrations apply DB --env gvdgclub --remote
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - name: Deploy Worker (production — auth.gvdgclub.com)
         if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_CF_ACCOUNT == 'true' }}
         uses: cloudflare/wrangler-action@v3

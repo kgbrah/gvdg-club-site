@@ -12,6 +12,7 @@ import { ctpEligibleForStart, parseCtpAddon, registrationPaidEntry } from "./liv
 import { assignCards, type PlayerState } from "./scoring.js";
 import { weatherLocationForCourse } from "./weather.js";
 import { playersMatch } from "./player-identity.js";
+import { overlayLiveSnapshot, submitLiveMapMark } from "./course-map-marks-routes.js";
 
 type RosterPlayer = { memberId: string | null; name: string; division: string | null; startingHole: number | null; team: string | null };
 
@@ -59,7 +60,7 @@ export async function startLiveEvent(
   const stub = env.LIVE.get(env.LIVE.idFromName("event:" + eid));
   const ev = (await db.getEvent(env.DB, eid)) as (Record<string, unknown> & { layout_id?: number | null; players?: Record<string, unknown>[] }) | null;
   if (!ev) return json({ error: "not_found" }, 404, origin);
-  const holes = await db.getLayoutHoles(env.DB, ev.layout_id);
+  const holes = await db.layoutHolesWithCrowdMap(env.DB, ev.layout_id);
   if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin);
   const evLayout = ev.layout_id != null ? ((await db.getLayout(env.DB, ev.layout_id)) as { name?: string | null; course_id?: number | null } | null) : null;
   const evCourse = evLayout?.course_id != null ? ((await db.getCourse(env.DB, evLayout.course_id)) as { name?: string | null; lat?: number | null; lng?: number | null } | null) : null;
@@ -115,7 +116,7 @@ export async function startLiveEvent(
   if (startError) {
     return json({ error: "invalid_score_targets", code: startError.code, message: startError.message }, 400, origin);
   }
-  const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, courseName: evCourse?.name ?? null, layoutName: evLayout?.name ?? null, holes, players, liveScoringConfig, startedAt: new Date().toISOString(), weatherLocation, ctpBuyInRequired: buyInRequired }) });
+  const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, courseId: evLayout?.course_id ?? null, layoutId: ev.layout_id ?? null, courseName: evCourse?.name ?? null, layoutName: evLayout?.name ?? null, holes, players, liveScoringConfig, startedAt: new Date().toISOString(), weatherLocation, ctpBuyInRequired: buyInRequired }) });
   const data = await r.json().catch(() => ({}));
   if (r.status === 200) await db.updateEvent(env.DB, eid, { status: "live" });
   return json(data, r.status, origin);
@@ -158,7 +159,11 @@ export async function handleClubLive(
   const stub = env.LIVE.get(env.LIVE.idFromName("event:" + eid));
 
   // Public reads: the live leaderboard/scorecard snapshot and the WebSocket. No identity, memberIds redacted.
-  if (method === "GET" && !sub) return liveProxy(stub, "/snapshot", undefined, origin);
+  if (method === "GET" && !sub) {
+    const r = await stub.fetch("https://do/snapshot");
+    const snapshot = await r.json().catch(() => ({}));
+    return json(await overlayLiveSnapshot(env, snapshot as Record<string, unknown>), r.status, origin);
+  }
   if (sub === "ws") return stub.fetch(request);
 
   // A player's own card (members via JWT, guests via ?gt= token) — tells the score app which card is theirs.
@@ -233,6 +238,37 @@ export async function handleClubLive(
       headers: { "X-Auth-Member": id.authMember, "X-Auth-Admin": String(id.authAdmin) },
     });
     return json(await r.json().catch(() => ({})), r.status, origin);
+  }
+
+  if (method === "POST" && sub === "map-mark") {
+    const body = (await readJson(request)) ?? {};
+    const id = await scoreIdentity(request, env, body);
+    if (!id.authMember) return json({ error: "unauthorized" }, 401, origin);
+    const memberId = id.authMember;
+    const mineRes = await stub.fetch("https://do/mine", { headers: { "X-Auth-Member": memberId } });
+    const mine = await mineRes.json().catch(() => ({})) as Record<string, unknown>;
+    if (mineRes.status !== 200) return json(mine, mineRes.status, origin);
+    return submitLiveMapMark({
+      env,
+      origin,
+      memberId,
+      snapshot: {
+        status: typeof mine.status === "string" ? mine.status : undefined,
+        layoutId: mine.layoutId as number | null,
+        courseId: mine.courseId as number | null,
+        eventId: mine.eventId as number | null,
+        holes: Array.isArray(mine.holes) ? mine.holes as { hole: number }[] : [],
+        players: [{ memberId }],
+      },
+      body,
+      overlay: async (patch) => {
+        await stub.fetch("https://do/map-overlay", {
+          method: "POST",
+          headers: { "X-Auth-Member": memberId },
+          body: JSON.stringify(patch),
+        });
+      },
+    });
   }
 
   // Logged-in members on the card may share GPS so watchers see initials on hole maps.

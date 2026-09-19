@@ -40,19 +40,48 @@ function MapFocusChips(props) {
 }
 
 function MapLieChip(props) {
-  if (typeof props.onMarkLie !== "function") return null;
+  if (typeof props.onMarkLie !== "function" && typeof props.onMarkTee !== "function" && typeof props.onMarkPin !== "function") {
+    return null;
+  }
   const count = Array.isArray(props.throws) ? props.throws.length : 0;
+  const marked = props.surveyed || {};
   return h("div", { className: "hole-map-lie-actions" }, [
-    h("button", {
-      "aria-pressed": count > 0 ? "true" : "false",
-      className: "hole-map-lie-btn" + (count ? " active" : ""),
-      key: "mark",
-      type: "button",
-      onClick: (event) => {
-        event.stopPropagation();
-        props.onMarkLie();
-      },
-    }, count ? "Lie " + (count + 1) : "Mark lie"),
+    typeof props.onMarkTee === "function"
+      ? h("button", {
+        "aria-pressed": marked.tee ? "true" : "false",
+        className: "hole-map-survey-btn" + (marked.tee ? " active" : ""),
+        key: "tee",
+        type: "button",
+        onClick: (event) => {
+          event.stopPropagation();
+          props.onMarkTee();
+        },
+      }, marked.tee ? "Tee saved" : "Mark tee")
+      : null,
+    typeof props.onMarkPin === "function"
+      ? h("button", {
+        "aria-pressed": marked.target ? "true" : "false",
+        className: "hole-map-survey-btn" + (marked.target ? " active" : ""),
+        key: "pin",
+        type: "button",
+        onClick: (event) => {
+          event.stopPropagation();
+          props.onMarkPin();
+        },
+      }, marked.target ? "Pin saved" : "Mark pin")
+      : null,
+    typeof props.onMarkLie === "function"
+      ? h("button", {
+        "aria-pressed": count > 0 ? "true" : "false",
+        className: "hole-map-lie-btn" + (count ? " active" : ""),
+        key: "mark",
+        type: "button",
+        onClick: (event) => {
+          event.stopPropagation();
+          props.onMarkLie();
+        },
+      }, count ? "Lie " + (count + 1) : "Mark lie")
+      : null,
     count && typeof props.onUndoThrow === "function"
       ? h("button", {
         className: "hole-map-lie-undo",
@@ -617,8 +646,11 @@ export function HoleMap(props) {
       h(MapFocusChips, { focus: map.focus, key: "focus", onFocus: props.onFocus }),
       h(MapLieChip, {
         key: "lie-chip",
+        surveyed: props.surveyed,
         throws,
         onMarkLie: props.onMarkLie,
+        onMarkPin: props.onMarkPin,
+        onMarkTee: props.onMarkTee,
         onUndoThrow: props.onUndoThrow,
       }),
       props.hud || null,

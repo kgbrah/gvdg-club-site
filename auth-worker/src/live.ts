@@ -11,6 +11,7 @@ import { canCastCtpVote, dropLiveCtp, recordCtpVote, type LiveCtpStore } from ".
 import { isLiveFormatError, normalizeLiveScoringConfig, normalizePairLabel, type LiveScoringConfig } from "./live-format.js";
 import { finalizeLiveEvent } from "./live-finalize.js";
 import { isLoggedInMemberId, locationMoved, locationOnCourse, locationsFromRecord, locationsToRecord, parseLocationBody, type LivePlayerLocation } from "./live-locations.js";
+import { normalizeMapMarkKind } from "./course-map-marks.js";
 import { sanitizeDiscColor } from "./disc-color-routes.js";
 import { sanitizeProfilePhoto } from "./profile-photo.js";
 import { parseThrowsBody } from "./play-stats.js";
@@ -125,6 +126,7 @@ export class LiveEventDO {
     if (action === "ctp") return this.claimCtp(body as CtpVoteBody, authMember, authAdmin);
     if (action === "ctp-forget") return this.forgetCtp(body as { ctpId?: number }, authAdmin);
     if (action === "location") return this.pingLocation(body, authMember);
+    if (action === "map-overlay") return this.overlayMap(body as { hole?: unknown; kind?: unknown; lat?: unknown; lng?: unknown }, authMember);
     if (action === "throws") return this.saveThrows(body, authMember, authAdmin);
     if (action === "join") return this.join(authMember, (body as { name?: string; photo?: unknown }).name, (body as { photo?: unknown }).photo);
     if (action === "guest") return this.addGuest(authMember, (body as { name?: string; team?: string }).name, (body as { team?: string }).team); // add a non-member to my card (+ pair label for doubles)
@@ -501,6 +503,26 @@ export class LiveEventDO {
     const next = dropLiveCtp(this.liveCtps, ctpId);
     if (next === this.liveCtps) return j(this.snapshot());
     this.liveCtps = next;
+    await this.persist();
+    this.broadcast();
+    return j(this.snapshot());
+  }
+
+  private async overlayMap(body: { hole?: unknown; kind?: unknown; lat?: unknown; lng?: unknown }, authMember: string | null): Promise<Response> {
+    if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
+    if (!authMember) return j({ error: "unauthorized" }, 401);
+    const onCard = this.players.some((player) => player.memberId === authMember && !player.removed);
+    if (!onCard) return j({ error: "not_on_card" }, 403);
+    const holeNum = Number(body.hole);
+    const kind = normalizeMapMarkKind(body.kind);
+    const parsed = parseLocationBody(body);
+    if (!Number.isInteger(holeNum) || !kind || !parsed) return j({ error: "invalid_mark" }, 400);
+    const hole = this.meta.holes.find((row) => row.hole === holeNum);
+    if (!hole) return j({ error: "bad_hole" }, 400);
+    const label = kind === "tee" ? (hole.tee?.label || "Tee") : (hole.target?.label || "Basket");
+    const marker = holeMarker({ label, lat: parsed.lat, lng: parsed.lng });
+    if (kind === "tee") hole.tee = marker;
+    else hole.target = marker;
     await this.persist();
     this.broadcast();
     return j(this.snapshot());

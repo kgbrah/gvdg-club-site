@@ -340,16 +340,19 @@
         }
         .hole-map-lie-actions {
             position: absolute; right: 0.4rem; bottom: 0.4rem; z-index: 2;
-            display: flex; gap: 0.22rem; pointer-events: auto;
+            display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.22rem; max-width: 62%;
+            pointer-events: auto;
         }
         .hole-map-lie-btn,
-        .hole-map-lie-undo {
+        .hole-map-lie-undo,
+        .hole-map-survey-btn {
             min-height: 32px; padding: 0 0.65rem; border-radius: 999px;
             border: 1px solid var(--border-color);
             background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
             color: var(--text-primary); font: 800 0.68rem Archivo, sans-serif; cursor: pointer;
         }
-        .hole-map-lie-btn.active {
+        .hole-map-lie-btn.active,
+        .hole-map-survey-btn.active {
             background: var(--primary-strong); color: var(--light); border-color: var(--primary-strong);
         }
         .hole-map-throw-line {
@@ -479,11 +482,13 @@
         .score-glove-stage .hole-map-caption,
         .score-glove-stage .hole-map-credit { display: none; }
         .score-glove-stage .hole-media-empty {
-            flex: 1; min-height: 8rem; display: grid; place-items: center;
+            flex: 1; min-height: 8rem; display: grid; place-items: center; gap: 0.35rem;
             border: 1px dashed var(--border-color); border-radius: 12px;
             color: var(--text-muted); font-weight: 700; font-size: 0.88rem;
-            background: var(--bg-tertiary);
+            background: var(--bg-tertiary); padding: 0.7rem;
         }
+        .hole-media-empty-hint { font-size: 0.72rem; font-weight: 650; text-align: center; }
+        .hole-map-survey-empty { position: static; max-width: none; justify-content: center; }
         .score-glove-stage .hole-media-chip {
             position: absolute; top: 0.45rem; right: 0.45rem; z-index: 2;
             min-height: 36px; padding: 0 0.75rem;
@@ -554,7 +559,8 @@
         .score-glove-stage .hole-range-hud-gps { font-size: 0.52rem; }
         .score-glove-stage .hole-map-lie-actions { z-index: 4; right: 0.32rem; bottom: 0.32rem; }
         .score-glove-stage .hole-map-lie-btn,
-        .score-glove-stage .hole-map-lie-undo { min-height: 32px; }
+        .score-glove-stage .hole-map-lie-undo,
+        .score-glove-stage .hole-map-survey-btn { min-height: 32px; }
         .live-round-stats {
             flex: 1 1 auto; min-height: 0; overflow: hidden;
             margin: 0.18rem 0 0.04rem; padding: 0.18rem 0.36rem 0.2rem;
