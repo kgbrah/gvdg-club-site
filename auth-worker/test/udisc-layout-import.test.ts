@@ -3,6 +3,7 @@ import {
   attachUdiscUrlsFromIndex,
   isPlaceholderLayout,
   isUdiscLayoutCron,
+  knownUdiscUrl,
   mergePositions,
   pickNextUdiscImportCourse,
   pickUdiscSearchMatch,
@@ -77,6 +78,29 @@ describe("pickNextUdiscImportCourse", () => {
         { course_id: 5, status: "failed", attempts: 3 },
       ])?.id,
     ).toBe(4);
+  });
+
+  it("jumps Ashe County Park ahead of nearer unmapped courses", () => {
+    const next = pickNextUdiscImportCourse(
+      [
+        ...courses,
+        { id: 9, name: "Ashe County Park", lat: 36.435, lng: -81.469, mapped: 0 },
+      ],
+      [{ course_id: 5, status: "failed", attempts: 3 }],
+    );
+    expect(next?.id).toBe(9);
+  });
+});
+
+describe("knownUdiscUrl", () => {
+  it("attaches the Ashe County Park UDisc URL without waiting on the index", () => {
+    expect(knownUdiscUrl({ name: "Ashe County Park" })).toBe("https://udisc.com/courses/ashe-county-park-wllg");
+    expect(
+      attachUdiscUrlsFromIndex(
+        [{ id: 9, name: "Ashe County Park", mapped: 0 }],
+        [],
+      ),
+    ).toEqual([{ id: 9, udisc_url: "https://udisc.com/courses/ashe-county-park-wllg" }]);
   });
 });
 

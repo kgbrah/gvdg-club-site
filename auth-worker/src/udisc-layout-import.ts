@@ -24,6 +24,10 @@ import { bustCourseCatalogCache } from "./course-catalog-cache.js";
 export const UDISC_LAYOUT_IMPORT_CRON = "*/15 * * * *";
 export const UDISC_IMPORT_MAX_ATTEMPTS = 3;
 export const UDISC_IMPORTS_PER_TICK = 4;
+export const UDISC_IMPORT_PRIORITY = ["Ashe County Park"];
+export const KNOWN_UDISC_URLS: Record<string, string> = {
+  "ashe county park": "https://udisc.com/courses/ashe-county-park-wllg",
+};
 const UDISC_FETCH = { maxBytes: 3_000_000, timeoutMs: 20_000 } as const;
 const UDISC_INDEX_PAGES = 20;
 
@@ -78,8 +82,11 @@ export function pickNextUdiscImportCourse(
     return true;
   });
   pending.sort((a, b) => {
-    const urlA = Boolean(normalizeUdiscCourseUrl(a.udisc_url));
-    const urlB = Boolean(normalizeUdiscCourseUrl(b.udisc_url));
+    const priorityA = importPriority(a);
+    const priorityB = importPriority(b);
+    if (priorityA !== priorityB) return priorityA - priorityB;
+    const urlA = Boolean(normalizeUdiscCourseUrl(a.udisc_url) || knownUdiscUrl(a));
+    const urlB = Boolean(normalizeUdiscCourseUrl(b.udisc_url) || knownUdiscUrl(b));
     if (urlA !== urlB) return urlA ? -1 : 1;
     const milesA = milesFromClub(a);
     const milesB = milesFromClub(b);
@@ -87,6 +94,17 @@ export function pickNextUdiscImportCourse(
     return a.name.localeCompare(b.name);
   });
   return pending[0] ?? null;
+}
+
+export function knownUdiscUrl(course: { name?: string | null }): string | null {
+  const key = normalizeCourseName(String(course.name || ""));
+  return KNOWN_UDISC_URLS[key] ?? null;
+}
+
+function importPriority(course: ImportCourse): number {
+  const key = normalizeCourseName(course.name);
+  const index = UDISC_IMPORT_PRIORITY.findIndex((name) => normalizeCourseName(name) === key);
+  return index === -1 ? UDISC_IMPORT_PRIORITY.length : index;
 }
 
 function milesFromClub(course: ImportCourse): number {
@@ -138,7 +156,8 @@ export function attachUdiscUrlsFromIndex(
   const taken = new Set<string>();
   for (const course of courses) {
     if (normalizeUdiscCourseUrl(course.udisc_url)) continue;
-    const match = pickUdiscSearchMatch(course, urls.filter((url) => !taken.has(url)));
+    const known = knownUdiscUrl(course);
+    const match = known || pickUdiscSearchMatch(course, urls.filter((url) => !taken.has(url)));
     if (!match) continue;
     taken.add(match);
     attached.push({ id: course.id, udisc_url: match });
@@ -497,7 +516,7 @@ async function fetchUdiscIndexUrls(): Promise<string[]> {
 }
 
 async function resolveUdiscUrl(course: ImportCourse, indexUrls: string[]): Promise<string | null> {
-  const existing = normalizeUdiscCourseUrl(course.udisc_url);
+  const existing = normalizeUdiscCourseUrl(course.udisc_url) || knownUdiscUrl(course);
   if (existing) return existing;
   if (!indexUrls.length) indexUrls.push(...(await fetchUdiscIndexUrls()));
   return pickUdiscSearchMatch(course, indexUrls);
