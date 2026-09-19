@@ -105,6 +105,7 @@ Cloudflare Worker  auth-worker/src/index.ts   (default export { fetch, scheduled
   ├─ R2  PHOTOS      tee-sign images
   └─ AI  + OpenRouter/Gemini  Crotts assistant + tee-sign OCR
   scheduled()  cron "17 8 * * *"  → daily ratings recompute (never on the request path)
+               cron "*/15 * * * *" → one UDisc layout import (existing importer, unmapped courses only)
 ```
 
 ### The split router
@@ -279,7 +280,7 @@ Production (`www.greenvillediscgolf.com`, GitHub Pages, pinned by `CNAME`) is **
 
 ## Configuration & secrets
 
-Worker bindings (per environment in `auth-worker/wrangler.toml`): `ROSTER` + `RATELIMIT` (KV), `DB` (D1), `PHOTOS` (R2), `AI` (Workers AI), `LIVE` (Durable Object `LiveEventDO`), `ASSISTANT_RL` (unsafe rate-limit), and a daily cron trigger.
+Worker bindings (per environment in `auth-worker/wrangler.toml`): `ROSTER` + `RATELIMIT` (KV), `DB` (D1), `PHOTOS` (R2), `AI` (Workers AI), `LIVE` (Durable Object `LiveEventDO`), `ASSISTANT_RL` (unsafe rate-limit), daily ratings cron, and a 15-minute UDisc layout-import cron.
 
 **Secrets** (never committed; set via `wrangler secret put` or synced by CI):
 `JWT_SECRET`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `PAYPAL_CLIENT_ID` / `PAYPAL_SECRET`, `RESEND_API_KEY`, `PIN_PEPPER`.

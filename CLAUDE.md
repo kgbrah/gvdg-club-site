@@ -305,7 +305,7 @@ Per the parent `CLAUDE.md`, **nothing is "done" until it runs in the real app.**
 
 Bindings (per env — Wrangler does **not** inherit top-level into named envs, so each block redeclares):
 `ROSTER`+`RATELIMIT` (KV), `DB` (D1 `gvdg-staging`), `PHOTOS` (R2), `AI` (Workers AI), `LIVE` (Durable
-Object `LiveEventDO`), `ASSISTANT_RL` (unsafe ratelimit, 20/60s), `[triggers] crons=["17 8 * * *"]`.
+Object `LiveEventDO`), `ASSISTANT_RL` (unsafe ratelimit, 20/60s), `[triggers] crons=["17 8 * * *", "*/15 * * * *"]`.
 `[vars]` per env: `ALLOWED_ORIGINS`, `SESSION_TTL_SEC`, model ids, `PAYPAL_ENV`, WebAuthn `RP_ID`/
 `EXPECTED_ORIGIN` (dev `gvdgclub.com` vs prod `greenvillediscgolf.com`), Resend senders. **Secrets** (never
 committed, set via `wrangler secret put` / synced by CI): `JWT_SECRET`, `OPENROUTER_API_KEY`,

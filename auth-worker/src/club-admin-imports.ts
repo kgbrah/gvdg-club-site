@@ -14,6 +14,7 @@ import {
 } from "./imports/nearby-courses.js";
 import { json, readJson } from "./http.js";
 import { asStr } from "./input.js";
+import { runUdiscLayoutImportTick } from "./udisc-layout-import.js";
 
 const DEFAULT_DGS_FEED = "https://raw.githubusercontent.com/mostlysober252/GVDG-DGS-Scraper-2.0/main/tournaments.json";
 const IMPORT_BODY_BYTES = 600_000;
@@ -48,6 +49,9 @@ export async function handleAdminImport(request: Request, env: Env, origin: stri
     }
     if (kind === "nearby-courses") {
       return json(await importNearbyCourses(env, b && typeof b === "object" ? b as Record<string, unknown> : {}), 200, origin);
+    }
+    if (kind === "udisc-layouts") {
+      return json({ source: "udisc-layouts", ...(await runUdiscLayoutImportTick(env)) }, 200, origin);
     }
     return json({ error: "not_found" }, 404, origin);
   } catch (e) {

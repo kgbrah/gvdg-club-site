@@ -25,7 +25,8 @@ Bindings are declared in `wrangler.toml`:
 - `AI` Workers AI binding;
 - `LIVE` Durable Object binding for `LiveEventDO`;
 - `ASSISTANT_RL` Cloudflare rate-limit binding;
-- daily cron `17 8 * * *` for ratings recompute.
+- daily cron `17 8 * * *` for ratings recompute;
+- 15-minute cron `*/15 * * * *` for one UDisc layout import (existing importer).
 
 Named envs `staging` and `gvdgclub` currently point at the same shared-dev Worker for `auth.gvdgclub.com`.
 The top-level config is the owner-operated production template and still contains `REPLACE_WITH_*`

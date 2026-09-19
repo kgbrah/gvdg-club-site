@@ -28,6 +28,7 @@ export type { Env } from "./env.js";
 export { LiveEventDO } from "./live.js";
 
 import { runRatingsRecompute } from "./ratings-recompute.js";
+import { isUdiscLayoutCron, runUdiscLayoutImportTick } from "./udisc-layout-import.js";
 
 /**
  * STOPGAP: when no Workers KV namespace is bound (deployed dev/staging while this account's KV data
@@ -88,17 +89,26 @@ export default {
       return json({ error: "server_error" }, 500, origin);
     }
   },
-  // Daily ratings recompute: refreshes each member's PDGA anchor + re-solves every round_ratings row and
-  // rolls up player_ratings. Idempotent (all upserts). Cron only — never reachable from the public fetch path.
+  // Daily ratings recompute (08:17 UTC) and the 15-minute UDisc layout importer.
+  // Cron only — never reachable from the public fetch path.
   async scheduled(controller: ScheduledController, rawEnv: RawEnv, ctx: ExecutionContext): Promise<void> {
     const env = withKvFallback(rawEnv);
     ctx.waitUntil(
       (async () => {
         try {
+          if (isUdiscLayoutCron(controller.cron)) {
+            const result = await runUdiscLayoutImportTick(env);
+            console.log(JSON.stringify({ message: "udisc_layout_import_tick", cron: controller.cron, ...result }));
+            return;
+          }
           const result = await runRatingsRecompute(env);
           console.log(JSON.stringify({ message: "ratings_recompute_complete", cron: controller.cron, ...result }));
         } catch (error) {
-          console.error(JSON.stringify({ message: "ratings_recompute_failed", cron: controller.cron, error: error instanceof Error ? error.stack : String(error) }));
+          console.error(JSON.stringify({
+            message: isUdiscLayoutCron(controller.cron) ? "udisc_layout_import_failed" : "ratings_recompute_failed",
+            cron: controller.cron,
+            error: error instanceof Error ? error.stack : String(error),
+          }));
           throw error;
         }
       })(),

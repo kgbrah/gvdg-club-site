@@ -3,9 +3,13 @@ export { parseCsvRows } from "./imports/csv.js";
 export { normalizeCsvEvents, normalizeDgs, type EventCandidate } from "./imports/events.js";
 export {
   courseIdFromHtml,
+  normalizeUdiscCourseUrl,
   parseUdiscCourse,
+  parseUdiscCourseUrls,
   parseUdiscLayout,
   parseUdiscLayouts,
+  udiscSearchUrl,
+  udiscSlugName,
   type CourseCandidate,
   type UdiscHole,
   type UdiscLayout,

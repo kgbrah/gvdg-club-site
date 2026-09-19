@@ -244,3 +244,55 @@ export function parseUdiscLayout(html: string, url: string): UdiscLayout {
     }
   );
 }
+
+const UDISC_COURSE_PATH = /^\/courses\/([a-z0-9]+(?:-[a-z0-9]+)*-[A-Za-z0-9]{4})\/?$/i;
+const UDISC_COURSE_HREF = /(?:https:\/\/(?:www\.)?udisc\.com)?\/courses\/([a-z0-9]+(?:-[a-z0-9]+)*-[A-Za-z0-9]{4})/gi;
+
+export function normalizeUdiscCourseUrl(raw: string | null | undefined): string | null {
+  if (!raw || typeof raw !== "string") return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(raw.trim());
+  } catch {
+    if (/^\/courses\//i.test(raw.trim())) {
+      try { parsed = new URL(`https://udisc.com${raw.trim()}`); } catch { return null; }
+    } else {
+      return null;
+    }
+  }
+  if (parsed.protocol === "http:") parsed.protocol = "https:";
+  if (parsed.protocol !== "https:") return null;
+  const host = parsed.hostname.toLowerCase();
+  if (host !== "udisc.com" && host !== "www.udisc.com") return null;
+  parsed.hostname = "udisc.com";
+  parsed.hash = "";
+  parsed.search = "";
+  const path = parsed.pathname.replace(/\/+$/, "") || "/";
+  const match = path.match(UDISC_COURSE_PATH);
+  if (!match) return null;
+  return `https://udisc.com/courses/${match[1]}`;
+}
+
+export function udiscSearchUrl(query: string): string {
+  return `https://udisc.com/courses?q=${encodeURIComponent(query.trim())}`;
+}
+
+export function parseUdiscCourseUrls(html: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const match of html.matchAll(UDISC_COURSE_HREF)) {
+    const url = normalizeUdiscCourseUrl(`https://udisc.com/courses/${match[1]}`);
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    out.push(url);
+  }
+  return out;
+}
+
+export function udiscSlugName(url: string): string {
+  const normalized = normalizeUdiscCourseUrl(url);
+  if (!normalized) return "";
+  const slug = normalized.split("/").pop() ?? "";
+  return slug.replace(/-[A-Za-z0-9]{4}$/, "").replace(/-/g, " ");
+}
+
