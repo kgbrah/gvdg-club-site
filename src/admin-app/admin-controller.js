@@ -213,6 +213,32 @@ export function startAdminController() {
             }
         }
 
+        async function adminImportNearbyCoursesFromReact(detail) {
+            const requestId = detail.requestId;
+            if (!requestId) return;
+            adminMsg('Importing nearby courses...', true);
+            let r;
+            try {
+                r = await adminApi('/admin/import/nearby-courses', { method: 'POST', body: {} });
+            } catch (err) {
+                const message = 'Nearby course import failed';
+                adminMsg(message, false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-nearby-courses-import-result', { detail: { ok: false, requestId, message } }));
+                return;
+            }
+            if (r.ok) {
+                const d = await r.json();
+                const imported = d && d.imported != null ? d.imported : 0;
+                adminMsg('Imported ' + imported + ' nearby courses', true);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-nearby-courses-import-result', { detail: { ok: true, requestId, imported } }));
+                adminLoadCourses();
+            } else {
+                const message = 'Nearby course import failed (' + r.status + ')';
+                adminMsg(message, false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-nearby-courses-import-result', { detail: { ok: false, requestId, message } }));
+            }
+        }
+
         // ============================================================
         //  Live Scoring (S2). React owns the visible scorekeeper UI; this
         //  bridge loads events/snapshots, handles admin API requests, and
@@ -1439,6 +1465,9 @@ export function startAdminController() {
             });
             window.addEventListener('gvdg:admin-course-create-request', async (event) => {
                 await adminAddCourseFromReact(event.detail || {});
+            });
+            window.addEventListener('gvdg:admin-nearby-courses-import-request', async (event) => {
+                await adminImportNearbyCoursesFromReact(event.detail || {});
             });
             window.addEventListener('gvdg:admin-product-inventory-controls-request', async (event) => {
                 await adminLoadProducts(event.detail || {});

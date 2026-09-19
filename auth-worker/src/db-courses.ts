@@ -9,6 +9,7 @@ export interface CourseInput {
   udisc_course_id?: string | null;
   lat?: number | null;
   lng?: number | null;
+  is_default?: number | boolean | null;
   created_by?: string | null;
 }
 
@@ -45,9 +46,36 @@ export async function getCourse(db: D1Like, id: number) {
 export async function createCourse(db: D1Like, c: CourseInput) {
   return db
     .prepare(
-      "INSERT INTO courses (name, location, udisc_url, udisc_course_id, lat, lng, is_default, created_by) VALUES (?, ?, ?, ?, ?, ?, 0, ?) RETURNING *",
+      "INSERT INTO courses (name, location, udisc_url, udisc_course_id, lat, lng, is_default, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
     )
-    .bind(c.name, c.location ?? null, c.udisc_url ?? null, c.udisc_course_id ?? null, c.lat ?? null, c.lng ?? null, c.created_by ?? null)
+    .bind(
+      c.name,
+      c.location ?? null,
+      c.udisc_url ?? null,
+      c.udisc_course_id ?? null,
+      c.lat ?? null,
+      c.lng ?? null,
+      c.is_default ? 1 : 0,
+      c.created_by ?? null,
+    )
+    .first();
+}
+
+export async function createCourseIfNew(db: D1Like, c: CourseInput) {
+  return db
+    .prepare(
+      "INSERT OR IGNORE INTO courses (name, location, udisc_url, udisc_course_id, lat, lng, is_default, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
+    )
+    .bind(
+      c.name,
+      c.location ?? null,
+      c.udisc_url ?? null,
+      c.udisc_course_id ?? null,
+      c.lat ?? null,
+      c.lng ?? null,
+      c.is_default ? 1 : 0,
+      c.created_by ?? null,
+    )
     .first();
 }
 

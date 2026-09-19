@@ -9,7 +9,7 @@ import { handleTeeSignImage } from "./tee-sign-routes.js";
 import { readD1OrFallback } from "./d1-retry.js";
 import { publicFieldsByEvent } from "./event-field.js";
 
-const COURSE_CATALOG_CACHE_VERSION = "course-catalog-v2";
+const COURSE_CATALOG_CACHE_VERSION = "course-catalog-v3";
 const COURSE_CATALOG_CACHE_NAME = "gvdg-course-catalog";
 
 function courseCatalogCacheKey(request: Request): Request {

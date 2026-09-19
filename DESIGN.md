@@ -290,9 +290,9 @@ Spacing follows a 4px base through rem values.
 ### Admin Courses Form and List
 
 - Structure: the Admin courses add form renders from `admin-app` into `adminCourseFormReactApp`, and the courses summary list renders into `adminCoursesListReactApp`; legacy admin code fetches `/courses`, continues populating the event/layout course selects, handles create-request events, and publishes list/result state events only.
-- Variants: empty list and course row with optional location.
-- Spacing: reuses `.admin-form`, `.admin-btn`, `.admin-cand`, and the existing courses-pane top margin so the form and course rows keep the same compact divider rhythm.
-- States: React owns add-form field values, busy submit labels, successful resets, course-row markup, and empty rendering from direct `gvdg:admin-courses-list` loader events; the controller must not publish a `coursesList` snapshot. `admin.html` must not keep static `adminCourseForm` markup, read `ac*` fields, reset that form, mutate `adminCoursesList`, clear its text, or append `.admin-cand` rows directly.
+- Variants: empty list, course row with optional location, and nearby DiscGolfAPI import (150 miles of Greenville).
+- Spacing: reuses `.admin-form`, `.admin-btn`, `.admin-cand`, `.dash-note`, and the existing courses-pane top margin so the form and course rows keep the same compact divider rhythm.
+- States: React owns add-form field values, busy submit labels, successful resets, nearby-import busy label, course-row markup, and empty rendering from direct `gvdg:admin-courses-list` loader events; the controller must not publish a `coursesList` snapshot. `admin.html` must not keep static `adminCourseForm` markup, read `ac*` fields, reset that form, mutate `adminCoursesList`, clear its text, or append `.admin-cand` rows directly.
 - Accessibility: form labels target stable control ids, required fields remain native inputs, and course rows are static text because no row action exists in the current admin workflow.
 - Motion: static list rows; no decorative motion.
 
@@ -694,9 +694,9 @@ Spacing follows a 4px base through rem values.
 ### Score Setup Flow
 
 - Structure: stacked cards for home, course pick, layout pick, and casual round setup, rendered as React components inside the existing score app shell; the score controller only dispatches setup view state and callbacks.
-- Variants: empty course/layout states, selected setup options, back navigation, signed-in vs open-play home (Sign out vs Sign in).
-- Spacing: reuses `.card`, `.stack`, `.tap-row`, `.setup-grid`, and `.setup-option` primitives from the score app.
-- States: setup options use `aria-pressed` and tokenized borders/backgrounds for selected state; legacy setup fallback nodes must be absent, not hidden.
+- Variants: empty course/layout states, selected setup options, back navigation, signed-in vs open-play home (Sign out vs Sign in), course search, 100-mile / 150-mile / all distance chips, and nearest-first course rows with mile labels.
+- Spacing: reuses `.card`, `.stack`, `.tap-row`, `.setup-grid`, `.setup-option`, `.course-search`, and `.course-range` primitives from the score app.
+- States: setup options use `aria-pressed` and tokenized borders/backgrounds for selected state; course pick defaults to the 100-mile ring and searches the full catalog when a query is entered; legacy setup fallback nodes must be absent, not hidden.
 - Accessibility: course/layout rows and setup options are real buttons; join-code entry submits on Enter.
 - Motion: no decorative animation; navigation is immediate and preserves the existing active press feedback.
 

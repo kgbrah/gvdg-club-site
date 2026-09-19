@@ -150,6 +150,28 @@ test('casual round flow shows setup after layout selection', () => {
   assert.match(setup, /Match play/);
 });
 
+test('casual round course pick searches and sorts by distance', () => {
+  const setup = scoreSetupSource();
+  const html = readFileSync('score.html', 'utf8');
+  assert.match(setup, /function CoursePickView/);
+  assert.match(setup, /function filterCoursesForPick/);
+  assert.match(setup, /id: "courseSearch"/);
+  assert.match(setup, /100 mi/);
+  assert.match(setup, /150 mi/);
+  assert.match(setup, /nearest first/);
+  assert.match(setup, /Course list includes DiscGolfAPI data/);
+  assert.match(html, /\.course-search/);
+  assert.match(html, /\.course-range/);
+});
+
+test('nearby course catalog seeds 150 miles of Greenville', () => {
+  const sql = readFileSync('auth-worker/migrations/0029_nearby_courses.sql', 'utf8');
+  const inserts = sql.match(/INSERT OR IGNORE INTO courses/g) || [];
+  assert.ok(inserts.length >= 100, `expected 100+ nearby courses, got ${inserts.length}`);
+  assert.match(sql, /Default \(par 3s\)/);
+  assert.match(sql, /DiscGolfAPI/);
+});
+
 test('createRound sends explicit live scoring config defaults and selections', () => {
   const setup = scoreSetupSource();
   const legacy = scoreControllerSetupSource();

@@ -1,5 +1,17 @@
 import type { Env } from "./env.js";
+import * as db from "./db.js";
 import { safeFetch, normalizeDgs, normalizeCsvEvents, parseCsvRows, parseUdiscLayouts, ImportError } from "./imports.js";
+import {
+  DAY_TRIP_MILES,
+  DISCGOLFAPI_ATTRIBUTION,
+  DISCGOLFAPI_HOST,
+  NEARBY_REGIONS,
+  defaultLayoutName,
+  defaultPar3Holes,
+  discGolfApiUrl,
+  parseDiscGolfApiCourses,
+  planNearbyCourseImport,
+} from "./imports/nearby-courses.js";
 import { json, readJson } from "./http.js";
 import { asStr } from "./input.js";
 
@@ -34,9 +46,72 @@ export async function handleAdminImport(request: Request, env: Env, origin: stri
       // `udisc_course_id` (course-level) lets the admin save it on the course to enable "Add to UDisc".
       return json({ source: "udisc", name, udisc_course_id, layouts, candidate: layouts[0] ?? null }, 200, origin);
     }
+    if (kind === "nearby-courses") {
+      return json(await importNearbyCourses(env, b && typeof b === "object" ? b as Record<string, unknown> : {}), 200, origin);
+    }
     return json({ error: "not_found" }, 404, origin);
   } catch (e) {
     if (e instanceof ImportError) return json({ error: "import_failed", reason: e.message }, 400, origin);
     throw e;
   }
+}
+
+async function importNearbyCourses(env: Env, body: Record<string, unknown>): Promise<{
+  source: "nearby-courses";
+  attribution: string;
+  imported: number;
+  skipped: number;
+  considered: number;
+  courses: { name: string; location: string; miles: number; holes: number }[];
+}> {
+  const catalog: ReturnType<typeof parseDiscGolfApiCourses> = [];
+  for (const region of NEARBY_REGIONS) {
+    const text = await safeFetch(discGolfApiUrl(region), [DISCGOLFAPI_HOST], {
+      maxBytes: 2_000_000,
+      timeoutMs: 15_000,
+      headers: { Accept: "application/json" },
+    });
+    let payload: unknown;
+    try { payload = JSON.parse(text); } catch { throw new ImportError("import_parse_failed"); }
+    catalog.push(...parseDiscGolfApiCourses(payload));
+  }
+  const existing = (await db.listCourses(env.DB)) as {
+    name: string;
+    location?: string | null;
+    lat?: number | null;
+    lng?: number | null;
+  }[];
+  const plan = planNearbyCourseImport(catalog, existing, { maxMiles: DAY_TRIP_MILES });
+  const dryRun = body.dry_run === true;
+  const imported: typeof plan.insert = [];
+  if (!dryRun) {
+    for (const course of plan.insert) {
+      const row = await db.createCourseIfNew(env.DB, {
+        name: course.name,
+        location: course.location || null,
+        lat: course.lat,
+        lng: course.lng,
+        is_default: 1,
+        created_by: "nearby-courses",
+      }) as { id: number } | null;
+      if (!row) continue;
+      const holes = defaultPar3Holes(course.holes);
+      await db.createLayout(env.DB, {
+        course_id: row.id,
+        name: defaultLayoutName(),
+        holes,
+        total_par: holes.reduce((sum, h) => sum + h.par, 0),
+      });
+      imported.push(course);
+    }
+  }
+  const applied = dryRun ? plan.insert : imported;
+  return {
+    source: "nearby-courses",
+    attribution: DISCGOLFAPI_ATTRIBUTION,
+    imported: applied.length,
+    skipped: plan.skipped + (plan.insert.length - applied.length),
+    considered: plan.considered,
+    courses: applied.map((c) => ({ name: c.name, location: c.location, miles: c.miles, holes: c.holes })),
+  };
 }

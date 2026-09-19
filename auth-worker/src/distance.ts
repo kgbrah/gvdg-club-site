@@ -18,6 +18,8 @@ export interface DistanceResult {
 const FEET_PER_METER = 3.28084;
 const EARTH_RADIUS_M = 6371000;
 
+const FEET_PER_MILE = 5280;
+
 /** Great-circle distance between two coordinates, in feet. */
 export function haversineFeet(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
   const toRad = (d: number) => (d * Math.PI) / 180;
@@ -28,6 +30,11 @@ export function haversineFeet(a: { lat: number; lng: number }, b: { lat: number;
     Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
   const meters = 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
   return Math.round(meters * FEET_PER_METER);
+}
+
+/** Great-circle distance between two coordinates, in miles. */
+export function haversineMiles(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  return haversineFeet(a, b) / FEET_PER_MILE;
 }
 
 // Typical GVDG-area distances by par; admins override anything that looks off.

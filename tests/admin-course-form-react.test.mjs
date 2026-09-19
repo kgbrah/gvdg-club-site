@@ -31,5 +31,9 @@ test('admin course add form is rendered by React from request events', () => {
   assert.match(form, /id: "acUdisc"/);
   assert.match(form, /id: "acUdiscCourseId"/);
   assert.match(form, /udisc_course_id: udiscCourseId \|\| null/);
+  assert.match(form, /gvdg:admin-nearby-courses-import-request/);
+  assert.match(form, /id: "nearbyCoursesImportBtn"/);
+  assert.match(html, /adminImportNearbyCoursesFromReact\(event\.detail \|\| \{\}\)/);
+  assert.match(html, /adminApi\('\/admin\/import\/nearby-courses', \{ method: 'POST', body: \{\} \}\)/);
   assert.doesNotMatch(form, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️|🏆|⚠|⏱|—/);
 });

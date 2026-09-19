@@ -11,3 +11,21 @@ export {
   type UdiscLayout,
   type UdiscPosition,
 } from "./imports/udisc.js";
+export {
+  CLUB_ORIGIN,
+  DAY_TRIP_MILES,
+  DISCGOLFAPI_ATTRIBUTION,
+  DISCGOLFAPI_HOST,
+  MIN_HOLES,
+  NEARBY_MILES,
+  NEARBY_REGIONS,
+  defaultLayoutName,
+  defaultPar3Holes,
+  discGolfApiUrl,
+  normalizeCourseName,
+  parseDiscGolfApiCourses,
+  planNearbyCourseImport,
+  type NearbyCourseCandidate,
+  type NearbyExistingCourse,
+  type NearbyImportPlan,
+} from "./imports/nearby-courses.js";
