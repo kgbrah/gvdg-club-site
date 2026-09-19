@@ -1103,6 +1103,9 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.match(controller, /visibilitychange/);
   assert.match(controller, /pageshow/);
   assert.match(watch, /throwGroups/);
+  const watchBody = watch.slice(watch.indexOf("export function WatchView"));
+  assert.ok(watchBody.indexOf("h(WatchHoles") < watchBody.indexOf("Live leaderboard"));
+  assert.ok(watchBody.indexOf("Live leaderboard") < watchBody.indexOf("Round weather"));
   const watchBoot = controller.slice(controller.indexOf('async function loadWatch'), controller.indexOf('function watchRoundCode'));
   assert.doesNotMatch(watchBoot, /\/join/);
 });

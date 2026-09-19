@@ -253,25 +253,6 @@ function WatchHoles(props) {
   }
 
   return h("div", { className: "watch-holes", key: "holes" }, [
-    h("div", { className: "card", key: "picker" }, [
-      h("h2", { className: "section", key: "title" }, replay ? "Replay" : "Hole maps"),
-      h("p", { className: "watch-hole-meta", key: "meta" }, bits.join(" · ")),
-      h("div", { className: "holegrid", key: "grid" }, holes.map((hole, holeIndex) =>
-        h("button", {
-          "aria-label": `Hole ${hole.hole}`,
-          "aria-pressed": holeIndex === safeIndex,
-          className: holeIndex === safeIndex ? "cur" : "",
-          key: hole.hole,
-          type: "button",
-          onClick: () => {
-            setFollowLive(!replay && holeIndex === liveIndex);
-            setIndex(holeIndex);
-            setStep(0);
-            setPlaying(false);
-          },
-        }, String(hole.hole)),
-      )),
-    ]),
     replay
       ? h(WatchReplayBar, {
         caption: watchReplayCaption(plan, safeStep),
@@ -283,7 +264,7 @@ function WatchHoles(props) {
         onNextThrow: () => goThrow(1),
         onNextHole: () => goHole(safeIndex + 1),
       })
-      : null,
+      : h("p", { className: "watch-hole-meta", key: "meta" }, bits.join(" · ")),
     h(HoleMap, {
       discColor: follow && follow.discColor,
       hole: selected,
@@ -312,6 +293,25 @@ function WatchHoles(props) {
         setStep(0);
       },
     }),
+    h("div", { className: "card", key: "picker" }, [
+      h("h2", { className: "section", key: "title" }, replay ? "Holes" : "Hole maps"),
+      replay ? h("p", { className: "watch-hole-meta", key: "meta" }, bits.join(" · ")) : null,
+      h("div", { className: "holegrid", key: "grid" }, holes.map((hole, holeIndex) =>
+        h("button", {
+          "aria-label": `Hole ${hole.hole}`,
+          "aria-pressed": holeIndex === safeIndex,
+          className: holeIndex === safeIndex ? "cur" : "",
+          key: hole.hole,
+          type: "button",
+          onClick: () => {
+            setFollowLive(!replay && holeIndex === liveIndex);
+            setIndex(holeIndex);
+            setStep(0);
+            setPlaying(false);
+          },
+        }, String(hole.hole)),
+      )),
+    ]),
     props.isMatchplay ? h(WatchMatchCards, { cards: matchCards, key: "matches" }) : h(WatchStrokeStrip, { chips: strokeChips, key: "stroke" }),
     h(WatchTeeSign, { key: "sign", teeSign: selected.teeSign }),
   ]);
@@ -328,19 +328,6 @@ export function WatchView(props) {
     props.courseName || props.layoutName
       ? h("p", { className: "muted watch-meta", key: "meta" }, [props.courseName, props.layoutName].filter(Boolean).join(" · "))
       : null,
-    props.showWeather ? h(WeatherStrip, { key: "weather", title: "Round weather", weather: props.weather }) : null,
-    props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,
-    h("div", { className: "card", key: "board" }, [
-      h("h2", { className: "section", key: "title" }, [icon(Trophy), props.status === "final" ? " Final leaderboard" : " Live leaderboard"]),
-      h(LeaderboardTable, {
-        isDoubles: props.isDoubles,
-        isMatchplay: props.isMatchplay,
-        key: "table",
-        relClass: props.relClass,
-        relText: props.relText,
-        standings,
-      }),
-    ]),
     h(WatchHoles, {
       activeHoleIndex: props.activeHoleIndex,
       holes: props.holes,
@@ -354,6 +341,18 @@ export function WatchView(props) {
       udiscCourseId: props.udiscCourseId,
       windFromDeg: props.windFromDeg,
     }),
+    props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,
+    h("div", { className: "card", key: "board" }, [
+      h("h2", { className: "section", key: "title" }, [icon(Trophy), props.status === "final" ? " Final leaderboard" : " Live leaderboard"]),
+      h(LeaderboardTable, {
+        isDoubles: props.isDoubles,
+        isMatchplay: props.isMatchplay,
+        key: "table",
+        relClass: props.relClass,
+        relText: props.relText,
+        standings,
+      }),
+    ]),
     h("div", { className: "watch-actions", key: "actions" }, [
       props.onCopyLink
         ? h("button", { className: "btn secondary", key: "copy", type: "button", onClick: props.onCopyLink }, [
@@ -367,5 +366,6 @@ export function WatchView(props) {
           ? h("a", { className: "btn", href: props.keepScoreHref, key: "score" }, "Keep score")
           : null),
     ].filter(Boolean)),
+    props.showWeather ? h(WeatherStrip, { key: "weather", title: "Round weather", weather: props.weather }) : null,
   ]);
 }
