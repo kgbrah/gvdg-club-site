@@ -1,5 +1,6 @@
-// DiscGolfAPI nearby-course import. Pulls listed courses around Greenville, NC, skips ones already
-// in the club catalog (name or GPS), and mints a par-3 default layout so a card can start immediately.
+// DiscGolfAPI course import. Pulls every listed North Carolina course plus VA/SC listings
+// within 150 miles of Greenville, skips ones already in the club catalog (name or GPS),
+// and mints a par-3 default layout so a card can start immediately.
 // Attribution required: https://discgolfapi.com/licence/
 
 import { haversineMiles } from "../distance.js";
@@ -12,6 +13,8 @@ export const MAX_HOLES = 36;
 export const DISCGOLFAPI_HOST = "io.discgolfapi.com";
 export const DISCGOLFAPI_ATTRIBUTION = "Course data supplied by DiscGolfAPI.";
 export const NEARBY_REGIONS = ["NC", "VA", "SC"] as const;
+export const HOME_REGION = "NC";
+export const DISCGOLFAPI_PAGE = 250;
 
 const ALWAYS_DUP_MILES = 0.12;
 const SIMILAR_DUP_MILES = 0.5;
@@ -36,6 +39,7 @@ export interface NearbyCourseCandidate {
   lng: number;
   holes: number;
   miles: number;
+  region: string;
   source_id: string | null;
   website: string | null;
 }
@@ -62,8 +66,19 @@ type ApiCourse = {
   primary_layout?: ApiLayout | null;
 };
 
-export function discGolfApiUrl(region: string, limit = 250): string {
-  return `https://${DISCGOLFAPI_HOST}/v1/courses?country=US&region=${encodeURIComponent(region)}&limit=${limit}`;
+export function discGolfApiUrl(region: string, limit = DISCGOLFAPI_PAGE, offset = 0): string {
+  const params = new URLSearchParams({
+    country: "US",
+    region,
+    limit: String(limit),
+    offset: String(Math.max(0, offset)),
+  });
+  return `https://${DISCGOLFAPI_HOST}/v1/courses?${params.toString()}`;
+}
+
+export function discGolfApiTotal(payload: unknown): number {
+  const total = payload && typeof payload === "object" ? (payload as { total?: unknown }).total : null;
+  return typeof total === "number" && Number.isFinite(total) ? total : 0;
 }
 
 export function parseDiscGolfApiCourses(payload: unknown): NearbyCourseCandidate[] {
@@ -86,7 +101,7 @@ export function planNearbyCourseImport(
   const maxMiles = opts.maxMiles ?? DAY_TRIP_MILES;
   const nearby = catalog
     .map((c) => ({ ...c, miles: round1(haversineMiles(origin, { lat: c.lat, lng: c.lng })) }))
-    .filter((c) => c.miles <= maxMiles)
+    .filter((c) => isHomeCourse(c) || c.miles <= maxMiles)
     .sort((a, b) => a.miles - b.miles || a.name.localeCompare(b.name));
 
   const taken = existing.map((row) => ({
@@ -161,9 +176,15 @@ function parseApiCourse(raw: unknown): NearbyCourseCandidate | null {
     lng,
     holes,
     miles: 0,
+    region: region || "",
     source_id: str(c.id),
     website,
   };
+}
+
+function isHomeCourse(c: NearbyCourseCandidate): boolean {
+  if (c.region === HOME_REGION) return true;
+  return /(^|,\s*)NC$/i.test(c.location.trim());
 }
 
 function holeCount(c: ApiCourse): number | null {

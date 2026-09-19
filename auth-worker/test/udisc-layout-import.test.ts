@@ -10,7 +10,7 @@ import {
   UDISC_LAYOUT_IMPORT_CRON,
 } from "../src/udisc-layout-import.js";
 import { COURSE_CATALOG_CACHE_NAME, bustCourseCatalogCache } from "../src/course-catalog-cache.js";
-import { normalizeUdiscCourseUrl, parseUdiscCourseUrls, udiscIndexUrl, udiscSlugName } from "../src/imports/udisc.js";
+import { normalizeUdiscCourseUrl, parseUdiscCourseUrls, udiscIndexUrl, udiscNcIndexUrl, udiscSlugName } from "../src/imports/udisc.js";
 
 describe("isUdiscLayoutCron", () => {
   it("matches the 15-minute trigger and ignores the ratings cron", () => {
@@ -168,6 +168,12 @@ describe("udiscIndexUrl", () => {
     expect(url).toContain("neLat=");
     expect(url).toContain("swLng=");
     expect(url).toContain("page=2");
+  });
+
+  it("covers the whole NC bounding box so western courses can hydrate", () => {
+    const url = udiscNcIndexUrl();
+    expect(url).toContain("neLng=-75.4000");
+    expect(url).toContain("swLng=-84.3200");
   });
 });
 

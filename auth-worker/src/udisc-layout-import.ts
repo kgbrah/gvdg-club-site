@@ -8,7 +8,7 @@ import {
   upsertUdiscImport,
   type UdiscImportRow,
 } from "./db-udisc-layout-imports.js";
-import { ImportError, parseUdiscCourseUrls, parseUdiscLayouts, safeFetch, udiscIndexUrl } from "./imports.js";
+import { ImportError, parseUdiscCourseUrls, parseUdiscLayouts, safeFetch, udiscIndexUrl, udiscNcIndexUrl } from "./imports.js";
 import {
   CLUB_ORIGIN,
   DAY_TRIP_MILES,
@@ -471,20 +471,26 @@ async function finish(env: Env, now: number, tick: UdiscLayoutImportTick): Promi
 async function fetchUdiscIndexUrls(): Promise<string[]> {
   const seen = new Set<string>();
   const urls: string[] = [];
-  for (let page = 1; page <= UDISC_INDEX_PAGES; page += 1) {
-    try {
-      const html = await safeFetch(udiscIndexUrl(CLUB_ORIGIN, DAY_TRIP_MILES, page), ["udisc.com"], UDISC_FETCH);
-      const pageUrls = parseUdiscCourseUrls(html);
-      let fresh = 0;
-      for (const url of pageUrls) {
-        if (seen.has(url)) continue;
-        seen.add(url);
-        urls.push(url);
-        fresh += 1;
+  const sources = [
+    (page: number) => udiscIndexUrl(CLUB_ORIGIN, DAY_TRIP_MILES, page),
+    (page: number) => udiscNcIndexUrl(page),
+  ];
+  for (const source of sources) {
+    for (let page = 1; page <= UDISC_INDEX_PAGES; page += 1) {
+      try {
+        const html = await safeFetch(source(page), ["udisc.com"], UDISC_FETCH);
+        const pageUrls = parseUdiscCourseUrls(html);
+        let fresh = 0;
+        for (const url of pageUrls) {
+          if (seen.has(url)) continue;
+          seen.add(url);
+          urls.push(url);
+          fresh += 1;
+        }
+        if (page > 1 && fresh === 0) break;
+      } catch {
+        break;
       }
-      if (page > 1 && fresh === 0) break;
-    } catch {
-      break;
     }
   }
   return urls;

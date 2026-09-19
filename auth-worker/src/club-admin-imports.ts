@@ -5,9 +5,11 @@ import {
   DAY_TRIP_MILES,
   DISCGOLFAPI_ATTRIBUTION,
   DISCGOLFAPI_HOST,
+  DISCGOLFAPI_PAGE,
   NEARBY_REGIONS,
   defaultLayoutName,
   defaultPar3Holes,
+  discGolfApiTotal,
   discGolfApiUrl,
   parseDiscGolfApiCourses,
   planNearbyCourseImport,
@@ -15,6 +17,7 @@ import {
 import { json, readJson } from "./http.js";
 import { asStr } from "./input.js";
 import { runUdiscLayoutImportTick } from "./udisc-layout-import.js";
+import { bustCourseCatalogCache } from "./course-catalog-cache.js";
 
 const DEFAULT_DGS_FEED = "https://raw.githubusercontent.com/mostlysober252/GVDG-DGS-Scraper-2.0/main/tournaments.json";
 const IMPORT_BODY_BYTES = 600_000;
@@ -70,14 +73,7 @@ async function importNearbyCourses(env: Env, body: Record<string, unknown>): Pro
 }> {
   const catalog: ReturnType<typeof parseDiscGolfApiCourses> = [];
   for (const region of NEARBY_REGIONS) {
-    const text = await safeFetch(discGolfApiUrl(region), [DISCGOLFAPI_HOST], {
-      maxBytes: 2_000_000,
-      timeoutMs: 15_000,
-      headers: { Accept: "application/json" },
-    });
-    let payload: unknown;
-    try { payload = JSON.parse(text); } catch { throw new ImportError("import_parse_failed"); }
-    catalog.push(...parseDiscGolfApiCourses(payload));
+    catalog.push(...(await fetchDiscGolfApiRegion(region)));
   }
   const existing = (await db.listCourses(env.DB)) as {
     name: string;
@@ -108,6 +104,9 @@ async function importNearbyCourses(env: Env, body: Record<string, unknown>): Pro
       });
       imported.push(course);
     }
+    if (imported.length) {
+      try { await bustCourseCatalogCache(); } catch { /* cache bust is best-effort */ }
+    }
   }
   const applied = dryRun ? plan.insert : imported;
   return {
@@ -118,4 +117,26 @@ async function importNearbyCourses(env: Env, body: Record<string, unknown>): Pro
     considered: plan.considered,
     courses: applied.map((c) => ({ name: c.name, location: c.location, miles: c.miles, holes: c.holes })),
   };
+}
+
+async function fetchDiscGolfApiRegion(region: string) {
+  const catalog: ReturnType<typeof parseDiscGolfApiCourses> = [];
+  let offset = 0;
+  for (let page = 0; page < 8; page += 1) {
+    const text = await safeFetch(discGolfApiUrl(region, DISCGOLFAPI_PAGE, offset), [DISCGOLFAPI_HOST], {
+      maxBytes: 2_000_000,
+      timeoutMs: 15_000,
+      headers: { Accept: "application/json" },
+    });
+    let payload: unknown;
+    try { payload = JSON.parse(text); } catch { throw new ImportError("import_parse_failed"); }
+    const rows = parseDiscGolfApiCourses(payload);
+    catalog.push(...rows);
+    const rawCount = payload && typeof payload === "object" && Array.isArray((payload as { courses?: unknown }).courses)
+      ? ((payload as { courses: unknown[] }).courses.length)
+      : rows.length;
+    offset += DISCGOLFAPI_PAGE;
+    if (rawCount < DISCGOLFAPI_PAGE || offset >= discGolfApiTotal(payload)) break;
+  }
+  return catalog;
 }

@@ -1,4 +1,4 @@
-export const COURSE_CATALOG_CACHE_VERSION = "course-catalog-v5";
+export const COURSE_CATALOG_CACHE_VERSION = "course-catalog-v6";
 export const COURSE_CATALOG_CACHE_NAME = "gvdg-course-catalog";
 
 export function courseCatalogCacheKey(request: Request): Request {

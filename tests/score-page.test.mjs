@@ -182,6 +182,15 @@ test('nearby course catalog seeds 150 miles of Greenville', () => {
   assert.match(sql, /DiscGolfAPI/);
 });
 
+test('NC course catalog seeds every listed North Carolina course', () => {
+  const sql = readFileSync('auth-worker/migrations/0031_nc_courses.sql', 'utf8');
+  const inserts = sql.match(/INSERT OR IGNORE INTO courses/g) || [];
+  assert.ok(inserts.length >= 100, `expected 100+ remaining NC courses, got ${inserts.length}`);
+  assert.match(sql, /Asheville|Charlotte|Andrews/);
+  assert.match(sql, /Default \(par 3s\)/);
+  assert.match(sql, /DiscGolfAPI/);
+});
+
 test('createRound sends explicit live scoring config defaults and selections', () => {
   const setup = scoreSetupSource();
   const legacy = scoreControllerSetupSource();

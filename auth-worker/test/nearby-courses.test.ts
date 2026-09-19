@@ -3,6 +3,7 @@ import {
   CLUB_ORIGIN,
   DAY_TRIP_MILES,
   defaultPar3Holes,
+  discGolfApiUrl,
   normalizeCourseName,
   parseDiscGolfApiCourses,
   planNearbyCourseImport,
@@ -42,7 +43,7 @@ describe("parseDiscGolfApiCourses", () => {
 });
 
 describe("planNearbyCourseImport", () => {
-  it("keeps new courses inside 150 miles and skips seeded GPS/name matches", () => {
+  it("keeps every NC course and 150-mile VA/SC courses, skipping seeded GPS/name matches", () => {
     const catalog = parseDiscGolfApiCourses({
       courses: [
         { name: "The Meadow at West Meadowbrook Park", lat: 35.6274259, lon: -77.3770867, locality: "Greenville", region_code: "NC", holes: 18, existence_status: "existing", operational_status: "open" },
@@ -52,6 +53,7 @@ describe("planNearbyCourseImport", () => {
         { name: "Western Carolina University", lat: 35.6068806, lon: -77.3665364, locality: "Greenville", region_code: "NC", holes: 18, existence_status: "existing", operational_status: "open" },
         { name: "Washington High School", lat: 35.5577149, lon: -77.0136058, locality: "Washington", region_code: "NC", holes: 9, existence_status: "existing", operational_status: "open" },
         { name: "Asheville far", lat: 35.595, lon: -82.551, locality: "Asheville", region_code: "NC", holes: 18, existence_status: "existing", operational_status: "open" },
+        { name: "Far Virginia", lat: 38.03, lon: -78.48, locality: "Charlottesville", region_code: "VA", holes: 18, existence_status: "existing", operational_status: "open" },
       ],
     });
     const plan = planNearbyCourseImport(catalog, SEED, { maxMiles: DAY_TRIP_MILES });
@@ -59,11 +61,20 @@ describe("planNearbyCourseImport", () => {
     expect(names).toContain("Lake Wilson DGC");
     expect(names).toContain("Washington High School");
     expect(names).toContain("Creekside Park, Archdale");
+    expect(names).toContain("Asheville far");
     expect(names).not.toContain("The Meadow at West Meadowbrook Park");
     expect(names).not.toContain("Western Carolina University");
-    expect(names).not.toContain("Asheville far");
+    expect(names).not.toContain("Far Virginia");
     expect(plan.insert.find((c) => c.name === "Lake Wilson DGC")?.miles).toBeGreaterThan(30);
     expect(plan.insert.find((c) => c.name === "Lake Wilson DGC")?.miles).toBeLessThan(40);
+    expect(plan.insert.find((c) => c.name === "Asheville far")?.miles).toBeGreaterThan(150);
+  });
+});
+
+describe("discGolfApiUrl", () => {
+  it("pages region results with offset", () => {
+    expect(discGolfApiUrl("NC")).toBe("https://io.discgolfapi.com/v1/courses?country=US&region=NC&limit=250&offset=0");
+    expect(discGolfApiUrl("NC", 250, 250)).toContain("offset=250");
   });
 });
 

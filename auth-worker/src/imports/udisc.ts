@@ -300,11 +300,37 @@ export function udiscIndexUrl(origin: { lat: number; lng: number }, miles: numbe
   const latDelta = miles / 69;
   const cos = Math.cos((origin.lat * Math.PI) / 180);
   const lngDelta = miles / (69 * (Number.isFinite(cos) && Math.abs(cos) > 0.2 ? cos : 0.2));
+  return udiscBoundsUrl(
+    {
+      neLat: origin.lat + latDelta,
+      neLng: origin.lng + lngDelta,
+      swLat: origin.lat - latDelta,
+      swLng: origin.lng - lngDelta,
+    },
+    page,
+  );
+}
+
+export const NC_UDISC_BOUNDS = {
+  neLat: 36.62,
+  neLng: -75.4,
+  swLat: 33.8,
+  swLng: -84.32,
+} as const;
+
+export function udiscNcIndexUrl(page = 1): string {
+  return udiscBoundsUrl(NC_UDISC_BOUNDS, page);
+}
+
+function udiscBoundsUrl(
+  bounds: { neLat: number; neLng: number; swLat: number; swLng: number },
+  page = 1,
+): string {
   const params = new URLSearchParams({
-    neLat: (origin.lat + latDelta).toFixed(4),
-    neLng: (origin.lng + lngDelta).toFixed(4),
-    swLat: (origin.lat - latDelta).toFixed(4),
-    swLng: (origin.lng - lngDelta).toFixed(4),
+    neLat: bounds.neLat.toFixed(4),
+    neLng: bounds.neLng.toFixed(4),
+    swLat: bounds.swLat.toFixed(4),
+    swLng: bounds.swLng.toFixed(4),
   });
   if (page > 1) params.set("page", String(page));
   return `https://udisc.com/courses?${params.toString()}`;
