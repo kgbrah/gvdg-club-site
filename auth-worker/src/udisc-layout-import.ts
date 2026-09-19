@@ -123,3 +123,41 @@ export function pickUdiscSearchMatch(
   if (second && top.score - second.score < 0.1 && top.score < 0.99) return null;
   return top.url;
 }
+
+export function attachUdiscUrlsFromCatalog(
+  courses: ImportCourse[],
+  catalog: NearbyCourseCandidate[],
+): { id: number; udisc_url: string }[] {
+  const attached: { id: number; udisc_url: string }[] = [];
+  const taken = new Set<number>();
+  for (const api of catalog) {
+    const url = normalizeUdiscCourseUrl(api.website);
+    if (!url) continue;
+    let best: { course: ImportCourse; score: number } | null = null;
+    for (const course of courses) {
+      if (taken.has(course.id) || normalizeUdiscCourseUrl(course.udisc_url)) continue;
+      const miles =
+        Number.isFinite(Number(course.lat)) && Number.isFinite(Number(course.lng))
+          ? haversineMiles({ lat: Number(course.lat), lng: Number(course.lng) }, { lat: api.lat, lng: api.lng })
+          : 99;
+      if (miles > 0.5) continue;
+      const score = Math.max(
+        normalizeCourseName(course.name) === normalizeCourseName(api.name) ? 1 : 0,
+        tokenJaccard(course.name, api.name),
+      );
+      if (score < 0.45) continue;
+      if (!best || score > best.score) best = { course, score };
+    }
+    if (!best) continue;
+    taken.add(best.course.id);
+    attached.push({ id: best.course.id, udisc_url: url });
+  }
+  return attached;
+}
+
+export function isPlaceholderLayout(layout: { name?: unknown; holes?: unknown }): boolean {
+  if (layoutHasSatelliteMap(layout.holes)) return false;
+  if (String(layout.name ?? "") === nearbyDefaultLayoutName()) return true;
+  const holes = parseScorableHoles(layout.holes);
+  return holes.length > 0 && holes.every((hole) => hole.par === 3 && !hole.tee && !hole.target);
+}
