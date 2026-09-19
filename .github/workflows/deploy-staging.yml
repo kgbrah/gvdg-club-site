@@ -39,7 +39,13 @@ jobs:
         working-directory: auth-worker
         run: |
           npm run typegen:check
-          npm run audit
+          if npm run audit; then
+            true
+          else
+            status=$?
+            if [ "$status" -eq 1 ]; then exit 1; fi
+            echo "npm audit skipped (registry status $status)"
+          fi
           npm run typecheck
           npm test
           node scripts/validate-wrangler-config.mjs --env staging
