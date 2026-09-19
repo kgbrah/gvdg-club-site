@@ -8,16 +8,12 @@ import {
   upsertUdiscImport,
   type UdiscImportRow,
 } from "./db-udisc-layout-imports.js";
-import { ImportError, parseUdiscCourseUrls, parseUdiscLayouts, safeFetch, udiscSearchUrl } from "./imports.js";
+import { ImportError, parseUdiscCourseUrls, parseUdiscLayouts, safeFetch, udiscIndexUrl } from "./imports.js";
 import {
   CLUB_ORIGIN,
-  DISCGOLFAPI_HOST,
-  NEARBY_REGIONS,
+  DAY_TRIP_MILES,
   defaultLayoutName as nearbyDefaultLayoutName,
-  discGolfApiUrl,
   normalizeCourseName,
-  parseDiscGolfApiCourses,
-  type NearbyCourseCandidate,
 } from "./imports/nearby-courses.js";
 import { normalizeUdiscCourseUrl, udiscSlugName, type UdiscLayout } from "./imports/udisc.js";
 import { haversineMiles } from "./distance.js";
@@ -27,7 +23,9 @@ import { bustCourseCatalogCache } from "./course-catalog-cache.js";
 
 export const UDISC_LAYOUT_IMPORT_CRON = "*/15 * * * *";
 export const UDISC_IMPORT_MAX_ATTEMPTS = 3;
+export const UDISC_IMPORTS_PER_TICK = 4;
 const UDISC_FETCH = { maxBytes: 3_000_000, timeoutMs: 20_000 } as const;
+const UDISC_INDEX_PAGES = 20;
 
 export function isUdiscLayoutCron(cron: string): boolean {
   const value = cron.trim();
@@ -66,17 +64,20 @@ export function pickNextUdiscImportCourse(
   imports: ImportAttempt[],
 ): ImportCourse | null {
   const byId = new Map(imports.map((row) => [row.course_id, row]));
-  const pending = courses.filter((course) => {
+  const isDone = (course: ImportCourse) => {
     const row = byId.get(course.id);
-    if (row && DONE.has(row.status)) return false;
-    if (row && row.status === "failed" && row.attempts >= UDISC_IMPORT_MAX_ATTEMPTS) return false;
+    if (!row) return false;
+    if (DONE.has(row.status)) return true;
+    return row.status === "failed" && row.attempts >= UDISC_IMPORT_MAX_ATTEMPTS;
+  };
+  const unmappedPending = courses.some((course) => !isMapped(course) && !isDone(course));
+  const pending = courses.filter((course) => {
+    if (isDone(course)) return false;
+    if (unmappedPending && isMapped(course)) return false;
     if (isMapped(course) && hasUdiscId(course)) return false;
     return true;
   });
   pending.sort((a, b) => {
-    const fillA = isMapped(a) && !hasUdiscId(a);
-    const fillB = isMapped(b) && !hasUdiscId(b);
-    if (fillA !== fillB) return fillA ? -1 : 1;
     const urlA = Boolean(normalizeUdiscCourseUrl(a.udisc_url));
     const urlB = Boolean(normalizeUdiscCourseUrl(b.udisc_url));
     if (urlA !== urlB) return urlA ? -1 : 1;
@@ -129,33 +130,18 @@ export function pickUdiscSearchMatch(
   return top.url;
 }
 
-export function attachUdiscUrlsFromCatalog(
+export function attachUdiscUrlsFromIndex(
   courses: ImportCourse[],
-  catalog: NearbyCourseCandidate[],
+  urls: string[],
 ): { id: number; udisc_url: string }[] {
   const attached: { id: number; udisc_url: string }[] = [];
-  const taken = new Set<number>();
-  for (const api of catalog) {
-    const url = normalizeUdiscCourseUrl(api.website);
-    if (!url) continue;
-    let best: { course: ImportCourse; score: number } | null = null;
-    for (const course of courses) {
-      if (taken.has(course.id) || normalizeUdiscCourseUrl(course.udisc_url)) continue;
-      const miles =
-        Number.isFinite(Number(course.lat)) && Number.isFinite(Number(course.lng))
-          ? haversineMiles({ lat: Number(course.lat), lng: Number(course.lng) }, { lat: api.lat, lng: api.lng })
-          : 99;
-      if (miles > 0.5) continue;
-      const score = Math.max(
-        normalizeCourseName(course.name) === normalizeCourseName(api.name) ? 1 : 0,
-        tokenJaccard(course.name, api.name),
-      );
-      if (score < 0.45) continue;
-      if (!best || score > best.score) best = { course, score };
-    }
-    if (!best) continue;
-    taken.add(best.course.id);
-    attached.push({ id: best.course.id, udisc_url: url });
+  const taken = new Set<string>();
+  for (const course of courses) {
+    if (normalizeUdiscCourseUrl(course.udisc_url)) continue;
+    const match = pickUdiscSearchMatch(course, urls.filter((url) => !taken.has(url)));
+    if (!match) continue;
+    taken.add(match);
+    attached.push({ id: course.id, udisc_url: match });
   }
   return attached;
 }
@@ -261,7 +247,7 @@ export type UdiscLayoutImportTick = {
 
 export async function runUdiscLayoutImportTick(env: Env): Promise<UdiscLayoutImportTick> {
   const now = Date.now();
-  const courses = (await db.listCourses(env.DB)) as unknown as ImportCourse[];
+  let courses = (await db.listCourses(env.DB)) as unknown as ImportCourse[];
   let imports: UdiscImportRow[] = [];
   let state = null as Awaited<ReturnType<typeof getUdiscImportState>>;
   try {
@@ -271,41 +257,108 @@ export async function runUdiscLayoutImportTick(env: Env): Promise<UdiscLayoutImp
     return finish(env, now, { action: "failed", remaining: unmappedCount(courses), error: error instanceof Error ? error.message : String(error) });
   }
 
-  if (!state?.hydrated_at) {
-    const attached = await hydrateUdiscUrls(env, courses);
-    await markUdiscImportHydrated(env.DB, now);
-    const remaining = unmappedCount((await db.listCourses(env.DB)) as unknown as ImportCourse[]);
-    return finish(env, now, { action: "hydrated", remaining, attached: attached.length });
+  const missingUrl = courses.some((course) => !isMapped(course) && !normalizeUdiscCourseUrl(course.udisc_url));
+  let indexUrls: string[] = [];
+  let attached = 0;
+  if (!state?.hydrated_at || missingUrl) {
+    indexUrls = await fetchUdiscIndexUrls();
+    const rows = attachUdiscUrlsFromIndex(courses, indexUrls);
+    for (const row of rows) {
+      await db.updateCourse(env.DB, row.id, { udisc_url: row.udisc_url });
+    }
+    attached = rows.length;
+    if (rows.length) {
+      courses = (await db.listCourses(env.DB)) as unknown as ImportCourse[];
+    }
+    if (!state?.hydrated_at) await markUdiscImportHydrated(env.DB, now);
   }
 
-  const next = pickNextUdiscImportCourse(courses, imports);
-  if (!next) {
-    return finish(env, now, { action: "done", remaining: unmappedCount(courses) });
+  let last: UdiscLayoutImportTick | null = null;
+  for (let n = 0; n < UDISC_IMPORTS_PER_TICK; n += 1) {
+    const next = pickNextUdiscImportCourse(courses, imports);
+    if (!next) break;
+    last = await importOneCourse(env, now, next, courses, indexUrls);
+    imports = await listUdiscImports(env.DB).catch(() => imports);
+    const updated = courses.find((course) => course.id === next.id);
+    if (updated && last.udisc_url) updated.udisc_url = last.udisc_url;
+    if (last.action === "imported" && last.mapped && updated) updated.mapped = 1;
   }
 
-  const prior = imports.find((row) => row.course_id === next.id);
-  const attempts = (prior?.attempts ?? 0) + 1;
+  if (!last) {
+    return finish(env, now, {
+      action: attached ? "hydrated" : "done",
+      remaining: unmappedCount(courses),
+      attached: attached || undefined,
+    });
+  }
+  if (attached) last.attached = attached;
+  return finish(env, now, last);
+}
+
+async function importOneCourse(
+  env: Env,
+  now: number,
+  next: ImportCourse,
+  courses: ImportCourse[],
+  indexUrls: string[],
+): Promise<UdiscLayoutImportTick> {
+  const prior = (await listUdiscImports(env.DB).catch(() => [])) as ImportAttempt[];
+  const attempts = ((prior.find((row) => row.course_id === next.id)?.attempts ?? 0) + 1);
   try {
-    const resolved = await resolveUdiscUrl(next);
+    let resolved = await resolveUdiscUrl(next, indexUrls);
     if (!resolved) {
       await upsertUdiscImport(env.DB, {
         course_id: next.id,
         status: "no_url",
-        attempts,
+        attempts: UDISC_IMPORT_MAX_ATTEMPTS,
         attempted_at: now,
         finished_at: now,
         error: "no_udisc_url",
       });
-      return finish(env, now, {
+      return {
         action: "skipped",
         remaining: unmappedCount(courses) - (isMapped(next) ? 0 : 1),
         course_id: next.id,
         name: next.name,
         error: "no_udisc_url",
-      });
+      };
     }
 
-    const html = await safeFetch(resolved, ["udisc.com"], UDISC_FETCH);
+    let html: string;
+    try {
+      html = await safeFetch(resolved, ["udisc.com"], UDISC_FETCH);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("fetch_failed_404")) {
+        if (!indexUrls.length) indexUrls.push(...(await fetchUdiscIndexUrls()));
+        const fresh = pickUdiscSearchMatch(next, indexUrls);
+        if (fresh && fresh !== resolved) {
+          resolved = fresh;
+          html = await safeFetch(resolved, ["udisc.com"], UDISC_FETCH);
+        } else {
+          await upsertUdiscImport(env.DB, {
+            course_id: next.id,
+            status: "no_url",
+            udisc_url: resolved,
+            attempts: UDISC_IMPORT_MAX_ATTEMPTS,
+            attempted_at: now,
+            finished_at: now,
+            error: "fetch_failed_404",
+          });
+          return {
+            action: "skipped",
+            remaining: unmappedCount(courses) - (isMapped(next) ? 0 : 1),
+            course_id: next.id,
+            name: next.name,
+            udisc_url: resolved,
+            error: "fetch_failed_404",
+          };
+        }
+      } else {
+        throw error;
+      }
+    }
+
     const parsed = parseUdiscLayouts(html, resolved);
     if (!parsed.layouts.length) {
       await db.updateCourse(env.DB, next.id, { udisc_url: resolved, udisc_course_id: parsed.udisc_course_id });
@@ -318,14 +371,14 @@ export async function runUdiscLayoutImportTick(env: Env): Promise<UdiscLayoutImp
         finished_at: now,
         error: "no_layouts",
       });
-      return finish(env, now, {
+      return {
         action: "skipped",
         remaining: unmappedCount(courses) - (isMapped(next) ? 0 : 1),
         course_id: next.id,
         name: next.name,
         udisc_url: resolved,
         error: "no_layouts",
-      });
+      };
     }
 
     const existingLayouts = (await db.listLayouts(env.DB, next.id)) as { id: number; name: string; holes?: unknown }[];
@@ -362,7 +415,7 @@ export async function runUdiscLayoutImportTick(env: Env): Promise<UdiscLayoutImp
       attempted_at: now,
       finished_at: now,
     });
-    return finish(env, now, {
+    return {
       action: "imported",
       remaining: Math.max(0, unmappedCount(courses) - (plan.mapped && !isMapped(next) ? 1 : 0)),
       course_id: next.id,
@@ -370,25 +423,26 @@ export async function runUdiscLayoutImportTick(env: Env): Promise<UdiscLayoutImp
       udisc_url: resolved,
       layouts: plan.layouts.length,
       mapped: plan.mapped,
-    });
+    };
   } catch (error) {
     const message = error instanceof ImportError ? error.message : error instanceof Error ? error.message : String(error);
+    const exhausted = attempts >= UDISC_IMPORT_MAX_ATTEMPTS || message.includes("fetch_failed_404");
     await upsertUdiscImport(env.DB, {
       course_id: next.id,
-      status: "failed",
+      status: exhausted ? "no_url" : "failed",
       udisc_url: normalizeUdiscCourseUrl(next.udisc_url),
-      attempts,
+      attempts: exhausted ? UDISC_IMPORT_MAX_ATTEMPTS : attempts,
       attempted_at: now,
       error: message.slice(0, 500),
-      finished_at: attempts >= UDISC_IMPORT_MAX_ATTEMPTS ? now : null,
+      finished_at: exhausted ? now : null,
     });
-    return finish(env, now, {
-      action: "failed",
+    return {
+      action: exhausted ? "skipped" : "failed",
       remaining: unmappedCount(courses),
       course_id: next.id,
       name: next.name,
       error: message,
-    });
+    };
   }
 }
 
@@ -414,31 +468,31 @@ async function finish(env: Env, now: number, tick: UdiscLayoutImportTick): Promi
   return tick;
 }
 
-async function hydrateUdiscUrls(env: Env, courses: ImportCourse[]): Promise<{ id: number; udisc_url: string }[]> {
-  const catalog: NearbyCourseCandidate[] = [];
-  for (const region of NEARBY_REGIONS) {
+async function fetchUdiscIndexUrls(): Promise<string[]> {
+  const seen = new Set<string>();
+  const urls: string[] = [];
+  for (let page = 1; page <= UDISC_INDEX_PAGES; page += 1) {
     try {
-      const text = await safeFetch(discGolfApiUrl(region), [DISCGOLFAPI_HOST], {
-        maxBytes: 2_000_000,
-        timeoutMs: 15_000,
-        headers: { Accept: "application/json" },
-      });
-      catalog.push(...parseDiscGolfApiCourses(JSON.parse(text)));
+      const html = await safeFetch(udiscIndexUrl(CLUB_ORIGIN, DAY_TRIP_MILES, page), ["udisc.com"], UDISC_FETCH);
+      const pageUrls = parseUdiscCourseUrls(html);
+      let fresh = 0;
+      for (const url of pageUrls) {
+        if (seen.has(url)) continue;
+        seen.add(url);
+        urls.push(url);
+        fresh += 1;
+      }
+      if (page > 1 && fresh === 0) break;
     } catch {
-      /* keep going with whatever regions loaded */
+      break;
     }
   }
-  const attached = attachUdiscUrlsFromCatalog(courses, catalog);
-  for (const row of attached) {
-    await db.updateCourse(env.DB, row.id, { udisc_url: row.udisc_url });
-  }
-  return attached;
+  return urls;
 }
 
-async function resolveUdiscUrl(course: ImportCourse): Promise<string | null> {
+async function resolveUdiscUrl(course: ImportCourse, indexUrls: string[]): Promise<string | null> {
   const existing = normalizeUdiscCourseUrl(course.udisc_url);
   if (existing) return existing;
-  const query = [course.name, course.location].filter(Boolean).join(" ");
-  const html = await safeFetch(udiscSearchUrl(query), ["udisc.com"], UDISC_FETCH);
-  return pickUdiscSearchMatch(course, parseUdiscCourseUrls(html));
+  if (!indexUrls.length) indexUrls.push(...(await fetchUdiscIndexUrls()));
+  return pickUdiscSearchMatch(course, indexUrls);
 }

@@ -10,6 +10,7 @@ export {
   parseUdiscLayouts,
   udiscSearchUrl,
   udiscSlugName,
+  udiscIndexUrl,
   type CourseCandidate,
   type UdiscHole,
   type UdiscLayout,

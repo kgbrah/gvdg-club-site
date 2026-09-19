@@ -296,3 +296,17 @@ export function udiscSlugName(url: string): string {
   return slug.replace(/-[A-Za-z0-9]{4}$/, "").replace(/-/g, " ");
 }
 
+export function udiscIndexUrl(origin: { lat: number; lng: number }, miles: number, page = 1): string {
+  const latDelta = miles / 69;
+  const cos = Math.cos((origin.lat * Math.PI) / 180);
+  const lngDelta = miles / (69 * (Number.isFinite(cos) && Math.abs(cos) > 0.2 ? cos : 0.2));
+  const params = new URLSearchParams({
+    neLat: (origin.lat + latDelta).toFixed(4),
+    neLng: (origin.lng + lngDelta).toFixed(4),
+    swLat: (origin.lat - latDelta).toFixed(4),
+    swLng: (origin.lng - lngDelta).toFixed(4),
+  });
+  if (page > 1) params.set("page", String(page));
+  return `https://udisc.com/courses?${params.toString()}`;
+}
+
