@@ -98,6 +98,20 @@ export function courseSub(course, origin = CLUB_ORIGIN) {
   return loc ? `${label} mi · ${loc}` : `${label} mi`;
 }
 
+export function googleMapsDirectionsUrl(course) {
+  const lat = courseCoord(course && course.lat);
+  const lng = courseCoord(course && course.lng);
+  const name = String((course && course.name) || "").trim();
+  const loc = String((course && course.location) || "").trim();
+  const destination = lat != null && lng != null ? `${lat},${lng}` : [name, loc].filter(Boolean).join(", ");
+  if (!destination) return "";
+  const url = new URL("https://www.google.com/maps/dir/");
+  url.searchParams.set("api", "1");
+  url.searchParams.set("destination", destination);
+  url.searchParams.set("travelmode", "driving");
+  return url.href;
+}
+
 export function sortLayoutsForPick(layouts) {
   const rows = Array.isArray(layouts) ? layouts.slice() : [];
   rows.sort((a, b) => {

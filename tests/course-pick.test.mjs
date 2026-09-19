@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   courseHasMap,
   filterCoursesForPick,
+  googleMapsDirectionsUrl,
   layoutHasMap,
   sortLayoutsForPick,
 } from "../src/score-app/course-pick.js";
@@ -72,4 +73,14 @@ test("sortLayoutsForPick puts tee/pin layouts first", () => {
     holes: [{ hole: 1, par: 3, tee: { lat: 35.6, lng: -77.37 }, target: { lat: 35.601, lng: -77.37 } }],
   };
   assert.deepEqual(sortLayoutsForPick([bare, mapped]).map((row) => row.name), ["Long", "Default (par 3s)"]);
+});
+
+test("googleMapsDirectionsUrl uses GPS when present and name otherwise", () => {
+  const withGps = googleMapsDirectionsUrl(course({ lat: 35.6264, lng: -77.375 }));
+  assert.match(withGps, /^https:\/\/www\.google\.com\/maps\/dir\/\?/);
+  assert.match(withGps, /destination=35.6264%2C-77.375/);
+  assert.match(withGps, /travelmode=driving/);
+  const named = googleMapsDirectionsUrl({ name: "Ayden Park", location: "Ayden, NC" });
+  assert.match(named, /destination=Ayden\+Park%2C\+Ayden%2C\+NC/);
+  assert.equal(googleMapsDirectionsUrl({}), "");
 });

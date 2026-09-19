@@ -198,23 +198,31 @@
         .toast svg { flex: 0 0 18px; }
         /* ---- event / card pickers ---- */
         .tap-row {
-            display: flex; align-items: center; gap: 0.75rem; width: 100%; text-align: left;
+            display: flex; align-items: center; gap: 0.5rem; width: 100%; text-align: left;
             background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 14px;
-            padding: 0.85rem; cursor: pointer; margin-bottom: 0.6rem; color: var(--text-primary);
+            padding: 0.7rem 0.7rem 0.7rem 0.85rem; margin-bottom: 0.6rem; color: var(--text-primary);
             font-family: 'Archivo', -apple-system, BlinkMacSystemFont, sans-serif;
         }
-        .tap-row:active { transform: scale(0.99); }
+        button.tap-row { cursor: pointer; }
+        button.tap-row:active { transform: scale(0.99); }
+        .tap-row-main {
+            display: flex; align-items: center; gap: 0.75rem; flex: 1; min-width: 0;
+            background: transparent; border: 0; padding: 0; margin: 0; color: inherit;
+            font: inherit; text-align: left; cursor: pointer;
+        }
+        .tap-row-main:active { transform: scale(0.99); }
         .tap-row .grow { flex: 1; min-width: 0; }
-        .tap-row .title-row { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
-        .tap-row .title { font-weight: 700; font-size: 1.02rem; color: var(--text-primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-        .tap-row .sub { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.1rem; }
-        .tap-row .chev { color: var(--text-muted); font-size: 1.3rem; }
+        .tap-row .title { font-weight: 700; font-size: 1.02rem; color: var(--text-primary); line-height: 1.25; }
+        .tap-row .sub-row { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.18rem; min-width: 0; }
+        .tap-row .sub { font-size: 0.8rem; color: var(--text-muted); min-width: 0; }
+        .tap-row .chev { color: var(--text-muted); font-size: 1.3rem; flex: 0 0 auto; }
         .course-map-badge {
             flex: 0 0 auto;
             font-size: 0.62rem;
             font-weight: 800;
             letter-spacing: 0.04em;
             text-transform: uppercase;
+            white-space: nowrap;
             color: var(--under);
             border: 1px solid color-mix(in srgb, var(--under) 55%, var(--border-color));
             background: color-mix(in srgb, var(--under) 14%, var(--bg-secondary));
@@ -222,6 +230,13 @@
             padding: 0.08rem 0.42rem;
             line-height: 1.2;
         }
+        .course-directions {
+            flex: 0 0 auto; width: 44px; height: 44px; border-radius: 12px;
+            display: grid; place-items: center; text-decoration: none;
+            border: 1px solid var(--border-color); background: var(--bg-tertiary);
+            color: var(--primary);
+        }
+        .course-directions:active { transform: scale(0.96); }
         .course-search { position: relative; }
         .course-search svg { position: absolute; left: 0.9rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
         .course-search .field { padding-left: 2.2rem; }

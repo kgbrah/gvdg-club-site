@@ -1,13 +1,15 @@
 import React from "react";
-import { ArrowLeft, ChevronRight, LogOut, PlayCircle, Search } from "lucide-react";
+import { ArrowLeft, ChevronRight, LogOut, Navigation, PlayCircle, Search } from "lucide-react";
 import {
   COURSE_RANGES,
   courseHasMap,
   courseSub,
   filterCoursesForPick,
+  googleMapsDirectionsUrl,
   layoutHasMap,
   sortLayoutsForPick,
 } from "./course-pick.js";
+import { safeExternalUrl } from "../shared/safe-url.js";
 
 const h = React.createElement;
 
@@ -31,6 +33,32 @@ function BackButton({ onBack }) {
 
 function MapBadge() {
   return h("span", { className: "course-map-badge", key: "map" }, "Mapped");
+}
+
+function CourseMeta({ text, mapped }) {
+  return h("div", { className: "sub-row", key: "meta" }, [
+    text ? h("div", { className: "sub", key: "sub" }, text) : null,
+    mapped ? h(MapBadge) : null,
+  ]);
+}
+
+function DirectionsLink({ course }) {
+  const href = safeExternalUrl(googleMapsDirectionsUrl(course));
+  if (!href) return null;
+  return h(
+    "a",
+    {
+      className: "course-directions",
+      href,
+      target: "_blank",
+      rel: "noopener noreferrer",
+      key: "directions",
+      "aria-label": `Directions to ${course.name}`,
+      title: "Directions",
+      onClick: (event) => event.stopPropagation(),
+    },
+    icon(Navigation, { size: 18, key: "nav" }),
+  );
 }
 
 function HomeView({ onStart, onJoin, onInvalidCode, onSignOut, onSignIn, onWatch, signedIn, playerName }) {
@@ -146,17 +174,21 @@ function CoursePickView({ courses, onBack, onSelect }) {
     filtered.length
       ? filtered.map((course) =>
           h(
-            "button",
-            { className: "tap-row", type: "button", key: course.id || course.name, onClick: () => onSelect(course) },
+            "div",
+            { className: "tap-row", key: course.id || course.name },
             [
-              h("div", { className: "grow", key: "content" }, [
-                h("div", { className: "title-row", key: "title-row" }, [
-                  h("div", { className: "title", key: "title" }, course.name),
-                  courseHasMap(course) ? h(MapBadge) : null,
-                ]),
-                h("div", { className: "sub", key: "sub" }, courseSub(course)),
-              ]),
-              h("div", { className: "chev", key: "chev" }, icon(ChevronRight)),
+              h(
+                "button",
+                { className: "tap-row-main", type: "button", onClick: () => onSelect(course), key: "select" },
+                [
+                  h("div", { className: "grow", key: "content" }, [
+                    h("div", { className: "title", key: "title" }, course.name),
+                    h(CourseMeta, { text: courseSub(course), mapped: courseHasMap(course), key: "meta" }),
+                  ]),
+                  h("div", { className: "chev", key: "chev" }, icon(ChevronRight)),
+                ],
+              ),
+              h(DirectionsLink, { course, key: "dir" }),
             ],
           ),
         )
@@ -177,11 +209,12 @@ function LayoutPickView({ course, layouts, onBack, onSelect }) {
             { className: "tap-row", type: "button", key: layout.id || layout.name, onClick: () => onSelect(layout) },
             [
               h("div", { className: "grow", key: "content" }, [
-                h("div", { className: "title-row", key: "title-row" }, [
-                  h("div", { className: "title", key: "title" }, layout.name || "Layout"),
-                  layoutHasMap(layout) ? h(MapBadge) : null,
-                ]),
-                h("div", { className: "sub", key: "sub" }, layout.total_par != null ? `Par ${layout.total_par}` : ""),
+                h("div", { className: "title", key: "title" }, layout.name || "Layout"),
+                h(CourseMeta, {
+                  text: layout.total_par != null ? `Par ${layout.total_par}` : "",
+                  mapped: layoutHasMap(layout),
+                  key: "meta",
+                }),
               ]),
               h("div", { className: "chev", key: "chev" }, icon(ChevronRight)),
             ],

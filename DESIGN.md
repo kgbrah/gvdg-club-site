@@ -694,10 +694,10 @@ Spacing follows a 4px base through rem values.
 ### Score Setup Flow
 
 - Structure: stacked cards for home, course pick, layout pick, and casual round setup, rendered as React components inside the existing score app shell; the score controller only dispatches setup view state and callbacks.
-- Variants: empty course/layout states, selected setup options, back navigation, signed-in vs open-play home (Sign out vs Sign in), course search, 100-mile / 150-mile / all distance chips, mapped courses (tee + pin GPS so satellite can render) listed above unmapped ones regardless of distance, nearest-first within each group, and a Mapped badge on hole-map courses.
-- Spacing: reuses `.card`, `.stack`, `.tap-row`, `.setup-grid`, `.setup-option`, `.course-search`, and `.course-range` primitives from the score app.
+- Variants: empty course/layout states, selected setup options, back navigation, signed-in vs open-play home (Sign out vs Sign in), course search, 100-mile / 150-mile / all distance chips, mapped courses (tee + pin GPS so satellite can render) listed above unmapped ones regardless of distance, nearest-first within each group, a Mapped badge on the location line, and a Google Maps directions control on each course row.
+- Spacing: reuses `.card`, `.stack`, `.tap-row`, `.tap-row-main`, `.sub-row`, `.course-directions`, `.setup-grid`, `.setup-option`, `.course-search`, and `.course-range` primitives from the score app.
 - States: setup options use `aria-pressed` and tokenized borders/backgrounds for selected state; course pick defaults to the 100-mile ring and searches the full catalog when a query is entered; mapped-first sort stays in effect during search and range filters; a Worker cron imports up to four unmapped UDisc layouts (pars + tee/pin GPS) every 15 minutes, refreshing slugs from UDisc's map index so dead listings do not stall the queue; each mapped import busts the course catalog cache and a Grok bot redeploys when the live map count rises; legacy setup fallback nodes must be absent, not hidden.
-- Accessibility: course/layout rows and setup options are real buttons; join-code entry submits on Enter.
+- Accessibility: course select and setup options are real buttons; directions is a separate labelled link that opens Google Maps; join-code entry submits on Enter.
 - Motion: no decorative animation; navigation is immediate and preserves the existing active press feedback.
 
 ### Score Auth Flow

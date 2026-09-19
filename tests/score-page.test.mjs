@@ -161,10 +161,17 @@ test('casual round course pick searches and sorts mapped courses first', () => {
   assert.match(pick, /150 mi/);
   assert.match(setup, /maps first, then nearest/);
   assert.match(setup, /course-map-badge/);
+  assert.match(setup, /course-directions/);
+  assert.match(setup, /Directions to/);
+  assert.match(setup, /googleMapsDirectionsUrl/);
+  assert.match(setup, /CourseMeta/);
   assert.match(setup, /Course list includes DiscGolfAPI data/);
   assert.match(html, /\.course-search/);
   assert.match(html, /\.course-range/);
   assert.match(html, /\.course-map-badge/);
+  assert.match(html, /\.course-directions/);
+  assert.match(html, /\.tap-row-main/);
+  assert.match(html, /\.sub-row/);
 });
 
 test('nearby course catalog seeds 150 miles of Greenville', () => {
