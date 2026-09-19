@@ -8,15 +8,8 @@ import { RECORD_PAGE_DEFAULTS, asInt, parseWindow } from "./input.js";
 import { handleTeeSignImage } from "./tee-sign-routes.js";
 import { readD1OrFallback } from "./d1-retry.js";
 import { publicFieldsByEvent } from "./event-field.js";
-
-const COURSE_CATALOG_CACHE_VERSION = "course-catalog-v4";
-const COURSE_CATALOG_CACHE_NAME = "gvdg-course-catalog";
-
-function courseCatalogCacheKey(request: Request): Request {
-  const url = new URL(request.url);
-  url.searchParams.set("__gvdg_cache", COURSE_CATALOG_CACHE_VERSION);
-  return new Request(url.toString(), { method: "GET" });
-}
+import { COURSE_CATALOG_CACHE_NAME, courseCatalogCacheKey } from "./course-catalog-cache.js";
+import { getUdiscImportState } from "./db-udisc-layout-imports.js";
 
 const CATALOG_CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -59,6 +52,28 @@ export async function handleClubPublic(
       const listed = await db.listCoursesCatalog(env.DB);
       return { payload: { courses: listed.results }, cacheable: listed.cacheable };
     });
+  }
+  if (method === "GET" && pathname === "/courses/map-import") {
+    const listed = await db.listCoursesCatalog(env.DB);
+    const courses = listed.results as { mapped?: number | boolean }[];
+    const mapped = courses.filter((course) => Number(course.mapped) === 1 || course.mapped === true).length;
+    let state = null as Awaited<ReturnType<typeof getUdiscImportState>>;
+    try {
+      state = await getUdiscImportState(env.DB);
+    } catch {
+      state = null;
+    }
+    return json({
+      total: courses.length,
+      mapped,
+      remaining: Math.max(0, courses.length - mapped),
+      last_status: state?.last_status ?? null,
+      last_name: state?.last_name ?? null,
+      last_course_id: state?.last_course_id ?? null,
+      last_error: state?.last_error ?? null,
+      last_run_at: state?.last_run_at ?? null,
+      hydrated_at: state?.hydrated_at ?? null,
+    }, 200, origin);
   }
   if (method === "GET" && pathname === "/leagues") return json({ leagues: await db.listLeagues(env.DB) }, 200, origin);
   // Club standings for member dashboards: active leagues (with team + player standings) + any live events.

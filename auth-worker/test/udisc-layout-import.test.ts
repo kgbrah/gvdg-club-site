@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   attachUdiscUrlsFromCatalog,
   isPlaceholderLayout,
@@ -9,6 +9,7 @@ import {
   planUdiscLayoutApply,
   UDISC_LAYOUT_IMPORT_CRON,
 } from "../src/udisc-layout-import.js";
+import { COURSE_CATALOG_CACHE_NAME, bustCourseCatalogCache } from "../src/course-catalog-cache.js";
 import { normalizeUdiscCourseUrl, parseUdiscCourseUrls, udiscSlugName } from "../src/imports/udisc.js";
 
 describe("isUdiscLayoutCron", () => {
@@ -77,5 +78,99 @@ describe("pickNextUdiscImportCourse", () => {
         { course_id: 5, status: "failed", attempts: 3 },
       ])?.id,
     ).toBe(4);
+  });
+});
+
+describe("planUdiscLayoutApply", () => {
+  const layout = {
+    name: "White",
+    udisc_url: "https://udisc.com/courses/x-AAAA",
+    udisc_course_id: "1",
+    note: "",
+    holes: [
+      {
+        hole: 1,
+        par: 3,
+        tee: { label: "Hole 1 tee", lat: 35.6, lng: -77.37 },
+        target: { label: "Hole 1 basket", lat: 35.601, lng: -77.37 },
+      },
+    ],
+    positions: [
+      { kind: "tee" as const, label: "Hole 1 tee", lat: 35.6, lng: -77.37 },
+      { kind: "target" as const, label: "Hole 1 basket", lat: 35.601, lng: -77.37 },
+    ],
+  };
+
+  it("replaces the default par-3 placeholder and keeps existing GPS layouts", () => {
+    const plan = planUdiscLayoutApply({
+      existingLayouts: [
+        { id: 10, name: "Default (par 3s)", holes: JSON.stringify([{ hole: 1, par: 3 }]) },
+        {
+          id: 11,
+          name: "Gold",
+          holes: JSON.stringify([{ hole: 1, par: 3, tee: { lat: 1, lng: 2 }, target: { lat: 3, lng: 4 } }]),
+        },
+      ],
+      existingPositions: [],
+      layouts: [layout, { ...layout, name: "Gold", holes: layout.holes, positions: layout.positions }],
+    });
+    expect(plan.layouts).toEqual([
+      expect.objectContaining({ action: "update", layoutId: 10, name: "White" }),
+    ]);
+    expect(plan.mapped).toBe(true);
+    expect(plan.positions).toHaveLength(2);
+  });
+});
+
+describe("mergePositions / isPlaceholderLayout / attachUdiscUrlsFromCatalog", () => {
+  it("fills missing coords without clobbering existing pins", () => {
+    const merged = mergePositions(
+      [{ kind: "tee", label: "Hole 1 tee", lat: 35.6, lng: null }],
+      [{ kind: "tee", label: "Hole 1 tee", lat: 99, lng: -77.37 }, { kind: "target", label: "Hole 1 basket", lat: 35.6, lng: -77.37 }],
+    );
+    expect(merged.find((p) => p.kind === "tee")).toMatchObject({ lat: 35.6, lng: -77.37 });
+    expect(merged).toHaveLength(2);
+  });
+
+  it("treats Default (par 3s) as a placeholder and GPS layouts as real", () => {
+    expect(isPlaceholderLayout({ name: "Default (par 3s)", holes: JSON.stringify([{ hole: 1, par: 3 }]) })).toBe(true);
+    expect(
+      isPlaceholderLayout({
+        name: "White",
+        holes: JSON.stringify([{ hole: 1, par: 3, tee: { lat: 1, lng: 2 }, target: { lat: 3, lng: 4 } }]),
+      }),
+    ).toBe(false);
+  });
+
+  it("attaches DiscGolfAPI UDisc websites onto unmatched catalog rows", () => {
+    const attached = attachUdiscUrlsFromCatalog(
+      [
+        { id: 1, name: "Washington High School", lat: 35.5577, lng: -77.0136 },
+        { id: 2, name: "West Meadowbrook Park", lat: 35.6264, lng: -77.375, udisc_url: "https://udisc.com/courses/west-meadowbrook-park-40Aw" },
+      ],
+      [
+        {
+          name: "Washington High School Disc Golf Course",
+          location: "Washington, NC",
+          lat: 35.5577,
+          lng: -77.0136,
+          holes: 9,
+          miles: 20,
+          source_id: "1",
+          website: "http://udisc.com/courses/washington-high-school-Ab12",
+        },
+      ],
+    );
+    expect(attached).toEqual([{ id: 1, udisc_url: "https://udisc.com/courses/washington-high-school-Ab12" }]);
+  });
+});
+
+describe("bustCourseCatalogCache", () => {
+  it("deletes the course catalog cache after a mapped import", async () => {
+    const deleted: string[] = [];
+    vi.stubGlobal("caches", { delete: async (name: string) => { deleted.push(name); return true; } });
+    await expect(bustCourseCatalogCache()).resolves.toBe(true);
+    expect(deleted).toEqual([COURSE_CATALOG_CACHE_NAME]);
+    vi.unstubAllGlobals();
   });
 });

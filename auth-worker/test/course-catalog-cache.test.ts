@@ -92,3 +92,24 @@ describe("public course catalog cache", () => {
     expect(courses.calls()).toBeGreaterThan(afterFirst);
   });
 });
+
+describe("course map-import status", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("reports mapped counts and last import tick", async () => {
+    installCache();
+    const courses = courseDb("full-then-loss");
+    const response = await worker.fetch(
+      new Request("https://w/courses/map-import", { headers: { Origin: "https://gvdgclub.com" } }),
+      env(courses.db),
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json() as { total: number; mapped: number; remaining: number };
+    expect(body.total).toBe(2);
+    expect(body.mapped).toBe(0);
+    expect(body.remaining).toBe(2);
+  });
+});
+
