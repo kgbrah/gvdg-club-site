@@ -749,7 +749,7 @@
             .toast, .toast.conflict, .toast.is-hiding, .btn:active, .navbtn, .stepper button { transition: none; animation: none; }
             .hole-map-disc-flight { display: none; }
         }
-        .watch-holes { display: grid; gap: 0.75rem; margin-top: 0.35rem; }
+        .watch-holes { display: grid; gap: 0.75rem; margin: 0; }
         .watch-holes .section { margin: 0 0 0.45rem; }
         .watch-hole-meta { margin: 0 0 0.55rem; font-size: 0.88rem; font-weight: 700; }
         .watch-follow { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.65rem; }
@@ -770,18 +770,23 @@
         }
         .watch-replay-play { background: var(--primary); color: var(--bg-secondary); border-color: var(--primary); }
         .watch-banner .live-dot.is-final { background: var(--text-muted); }
+        .watch-view { display: grid; gap: 0.85rem; align-items: start; }
+        .watch-view > .card,
+        .watch-view > .weather-strip,
+        .watch-view > .pots-strip { margin: 0; }
+        .watch-banner { display: flex; align-items: center; gap: 0.55rem; margin: 0; font-weight: 800; }
+        .watch-banner .live-dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--primary); display: inline-block; }
+        .watch-banner .lb-conn { margin-left: auto; font-size: 0.78rem; color: var(--text-muted); }
+        .watch-meta { margin: 0; }
+        .watch-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.55rem; margin: 0; position: relative; z-index: 0; }
+        .watch-actions .btn { width: auto; flex: 0 0 auto; }
+        .watch-view > .weather-strip { position: relative; z-index: 0; }
         .install-coach { display: grid; gap: 0.55rem; margin: 0.75rem 0.9rem 0; padding: 0.75rem 0.85rem; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-secondary); }
         .install-coach-copy strong { display: block; font-size: 0.9rem; }
         .install-coach-copy p { margin: 0.2rem 0 0; color: var(--text-muted); font-size: 0.82rem; line-height: 1.35; }
         .install-coach-actions { display: flex; flex-wrap: wrap; gap: 0.45rem; }
         .install-coach-btn, .install-coach-dismiss { min-height: 40px; border-radius: 8px; padding: 0.35rem 0.8rem; font-weight: 700; cursor: pointer; }
         .install-coach-btn { border: 1px solid var(--green); background: var(--green); color: var(--bg-secondary); }
-        .watch-banner { display: flex; align-items: center; gap: 0.55rem; margin-bottom: 0.85rem; font-weight: 800; }
-        .watch-banner .live-dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--primary); display: inline-block; }
-        .watch-banner .lb-conn { margin-left: auto; font-size: 0.78rem; color: var(--text-muted); }
-        .watch-meta { margin: 0 0 0.75rem; }
-        .watch-actions { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 0.85rem; }
-        .watch-actions .btn { width: auto; }
         .install-coach-dismiss { border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-secondary); }
         .scorecard-owner { display: flex; align-items: center; gap: 0.65rem; padding-bottom: 0.75rem; margin-bottom: 0.1rem; border-bottom: 1px solid var(--border-color); }
         .scorecard-owner label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); white-space: nowrap; }

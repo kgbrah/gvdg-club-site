@@ -1095,6 +1095,8 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.match(html, /\.watch-match-card/);
   assert.match(html, /\.watch-stroke-strip/);
   assert.match(html, /\.watch-replay/);
+  assert.match(html, /\.watch-view \{ display: grid/);
+  assert.match(html, /\.watch-actions/);
   assert.match(controller, /LIVE \+ '\/location'/);
   assert.match(controller, /watchPosition/);
   assert.match(controller, /function applyPlayerLocations/);
