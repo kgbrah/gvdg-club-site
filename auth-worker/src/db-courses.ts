@@ -26,10 +26,22 @@ async function listed<T>(
 }
 
 export async function listCoursesCatalog(db: D1Like) {
-  return listed(
+  const catalog = await listed(
     () => db.prepare("SELECT * FROM courses ORDER BY is_default DESC, name").all(),
     fallbackCourses,
   );
+  const layouts = (await readD1OrFallback(
+    () => db.prepare("SELECT id, course_id, holes FROM course_layouts").all(),
+    () => ({ results: [], success: true }),
+  )).results as { id?: unknown; course_id?: unknown; holes?: unknown }[];
+  const consensus = (await readD1OrFallback(
+    () => db.prepare("SELECT layout_id, hole, kind, published FROM course_map_consensus WHERE published = 1").all(),
+    () => ({ results: [], success: true }),
+  )).results as { layout_id?: unknown; hole?: unknown; kind?: unknown; published?: unknown }[];
+  return {
+    results: withCourseMapFlags(catalog.results, mappedCourseIdsFromSources(layouts, consensus)),
+    cacheable: catalog.cacheable,
+  };
 }
 
 export async function listCourses(db: D1Like) {
@@ -186,6 +198,56 @@ export function parseScorableHoles(holesJson: string | unknown): ScorableHole[] 
       };
     })
     .filter((hole) => Number.isFinite(hole.hole) && Number.isFinite(hole.par));
+}
+
+export function layoutHasSatelliteMap(holesJson: unknown): boolean {
+  return parseScorableHoles(holesJson).some(
+    (hole) =>
+      hole.tee?.lat != null &&
+      hole.tee?.lng != null &&
+      hole.target?.lat != null &&
+      hole.target?.lng != null,
+  );
+}
+
+export function mappedCourseIdsFromSources(
+  layouts: { id?: unknown; course_id?: unknown; holes?: unknown }[],
+  consensus: { layout_id?: unknown; hole?: unknown; kind?: unknown; published?: unknown }[] = [],
+): Set<number> {
+  const mapped = new Set<number>();
+  const layoutCourse = new Map<number, number>();
+  for (const layout of layouts) {
+    const courseId = Number(layout.course_id);
+    const layoutId = Number(layout.id);
+    if (Number.isInteger(courseId) && Number.isInteger(layoutId)) layoutCourse.set(layoutId, courseId);
+    if (Number.isInteger(courseId) && layoutHasSatelliteMap(layout.holes)) mapped.add(courseId);
+  }
+  const published = new Map<string, Set<string>>();
+  for (const row of consensus) {
+    if (Number(row.published) !== 1 && row.published !== true) continue;
+    const kind = row.kind === "tee" || row.kind === "target" ? row.kind : null;
+    const layoutId = Number(row.layout_id);
+    const hole = Number(row.hole);
+    if (!kind || !Number.isInteger(layoutId) || !Number.isInteger(hole)) continue;
+    const key = `${layoutId}:${hole}`;
+    const kinds = published.get(key) ?? new Set<string>();
+    kinds.add(kind);
+    published.set(key, kinds);
+  }
+  for (const [key, kinds] of published) {
+    if (!kinds.has("tee") || !kinds.has("target")) continue;
+    const layoutId = Number(key.split(":")[0]);
+    const courseId = layoutCourse.get(layoutId);
+    if (courseId != null) mapped.add(courseId);
+  }
+  return mapped;
+}
+
+export function withCourseMapFlags<T extends { id?: unknown }>(courses: T[], mappedIds: Set<number>): T[] {
+  return courses.map((course) => ({
+    ...course,
+    mapped: mappedIds.has(Number(course.id)) ? 1 : 0,
+  })) as T[];
 }
 
 export async function getLayoutHoles(db: D1Like, layoutId: number | null | undefined): Promise<ScorableHole[]> {

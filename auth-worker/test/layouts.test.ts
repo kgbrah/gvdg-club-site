@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseScorableHoles } from "../src/db-courses.js";
+import { parseScorableHoles, layoutHasSatelliteMap, mappedCourseIdsFromSources, withCourseMapFlags } from "../src/db-courses.js";
 import { enrichHoles } from "../src/layouts.js";
 
 describe("parseScorableHoles", () => {
@@ -19,6 +19,35 @@ describe("parseScorableHoles", () => {
 
   it("returns an empty list for invalid JSON", () => {
     expect(parseScorableHoles("{nope")).toEqual([]);
+  });
+});
+
+describe("mapped course flags", () => {
+  it("treats tee+pin GPS as a satellite map and default par 3s as unmapped", () => {
+    expect(layoutHasSatelliteMap(JSON.stringify([{ hole: 1, par: 3 }]))).toBe(false);
+    expect(layoutHasSatelliteMap(JSON.stringify([{ hole: 1, par: 3, distance_ft: 250 }]))).toBe(false);
+    expect(
+      layoutHasSatelliteMap(
+        JSON.stringify([{ hole: 1, par: 3, tee: { lat: 35.6, lng: -77.37 }, target: { lat: 35.601, lng: -77.37 } }]),
+      ),
+    ).toBe(true);
+  });
+
+  it("marks a course mapped from layout GPS or published crowd tee+pin", () => {
+    const layouts = [
+      { id: 11, course_id: 1, holes: JSON.stringify([{ hole: 1, par: 3, tee: { lat: 1, lng: 2 }, target: { lat: 3, lng: 4 } }]) },
+      { id: 22, course_id: 2, holes: JSON.stringify([{ hole: 1, par: 3 }]) },
+      { id: 33, course_id: 3, holes: JSON.stringify([{ hole: 1, par: 3 }]) },
+    ];
+    const consensus = [
+      { layout_id: 33, hole: 1, kind: "tee", published: 1 },
+      { layout_id: 33, hole: 1, kind: "target", published: 1 },
+      { layout_id: 22, hole: 1, kind: "tee", published: 1 },
+    ];
+    const mapped = mappedCourseIdsFromSources(layouts, consensus);
+    expect([...mapped].sort()).toEqual([1, 3]);
+    const flagged = withCourseMapFlags([{ id: 1 }, { id: 2 }, { id: 3 }], mapped) as { id: number; mapped: number }[];
+    expect(flagged.map((row) => row.mapped)).toEqual([1, 0, 1]);
   });
 });
 

@@ -150,18 +150,21 @@ test('casual round flow shows setup after layout selection', () => {
   assert.match(setup, /Match play/);
 });
 
-test('casual round course pick searches and sorts by distance', () => {
+test('casual round course pick searches and sorts mapped courses first', () => {
   const setup = scoreSetupSource();
+  const pick = readFileSync('src/score-app/course-pick.js', 'utf8');
   const html = readFileSync('score.html', 'utf8');
   assert.match(setup, /function CoursePickView/);
-  assert.match(setup, /function filterCoursesForPick/);
+  assert.match(setup, /filterCoursesForPick/);
   assert.match(setup, /id: "courseSearch"/);
-  assert.match(setup, /100 mi/);
-  assert.match(setup, /150 mi/);
-  assert.match(setup, /nearest first/);
+  assert.match(pick, /100 mi/);
+  assert.match(pick, /150 mi/);
+  assert.match(setup, /maps first, then nearest/);
+  assert.match(setup, /course-map-badge/);
   assert.match(setup, /Course list includes DiscGolfAPI data/);
   assert.match(html, /\.course-search/);
   assert.match(html, /\.course-range/);
+  assert.match(html, /\.course-map-badge/);
 });
 
 test('nearby course catalog seeds 150 miles of Greenville', () => {

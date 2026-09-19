@@ -205,9 +205,23 @@
         }
         .tap-row:active { transform: scale(0.99); }
         .tap-row .grow { flex: 1; min-width: 0; }
-        .tap-row .title { font-weight: 700; font-size: 1.02rem; color: var(--text-primary); }
+        .tap-row .title-row { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
+        .tap-row .title { font-weight: 700; font-size: 1.02rem; color: var(--text-primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
         .tap-row .sub { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.1rem; }
         .tap-row .chev { color: var(--text-muted); font-size: 1.3rem; }
+        .course-map-badge {
+            flex: 0 0 auto;
+            font-size: 0.62rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--under, #2f9e44);
+            border: 1px solid color-mix(in srgb, var(--under, #2f9e44) 55%, var(--border-color));
+            background: color-mix(in srgb, var(--under, #2f9e44) 14%, var(--bg-secondary));
+            border-radius: 999px;
+            padding: 0.08rem 0.42rem;
+            line-height: 1.2;
+        }
         .course-search { position: relative; }
         .course-search svg { position: absolute; left: 0.9rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
         .course-search .field { padding-left: 2.2rem; }

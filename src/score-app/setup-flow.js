@@ -1,5 +1,13 @@
 import React from "react";
 import { ArrowLeft, ChevronRight, LogOut, PlayCircle, Search } from "lucide-react";
+import {
+  COURSE_RANGES,
+  courseHasMap,
+  courseSub,
+  filterCoursesForPick,
+  layoutHasMap,
+  sortLayoutsForPick,
+} from "./course-pick.js";
 
 const h = React.createElement;
 
@@ -21,62 +29,8 @@ function BackButton({ onBack }) {
   );
 }
 
-const CLUB_ORIGIN = { lat: 35.6127, lng: -77.3664 };
-const COURSE_RANGES = [
-  { value: "nearby", label: "100 mi", miles: 100 },
-  { value: "daytrip", label: "150 mi", miles: 150 },
-  { value: "all", label: "All", miles: Infinity },
-];
-
-function courseCoord(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-}
-
-function milesFromClub(course) {
-  const lat = courseCoord(course && course.lat);
-  const lng = courseCoord(course && course.lng);
-  if (lat == null || lng == null) return null;
-  const toRad = (d) => (d * Math.PI) / 180;
-  const dLat = toRad(lat - CLUB_ORIGIN.lat);
-  const dLng = toRad(lng - CLUB_ORIGIN.lng);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(CLUB_ORIGIN.lat)) * Math.cos(toRad(lat)) * Math.sin(dLng / 2) ** 2;
-  return (2 * 3958.8 * Math.asin(Math.min(1, Math.sqrt(h))));
-}
-
-function filterCoursesForPick(courses, query, range) {
-  const q = String(query || "").trim().toLowerCase();
-  const maxMiles = (COURSE_RANGES.find((option) => option.value === range) || COURSE_RANGES[0]).miles;
-  const rows = (Array.isArray(courses) ? courses : []).map((course) => ({
-    course,
-    miles: milesFromClub(course),
-  }));
-  const matched = rows.filter(({ course, miles }) => {
-    if (q) {
-      const hay = `${course.name || ""} ${course.location || ""}`.toLowerCase();
-      if (!hay.includes(q)) return false;
-      return true;
-    }
-    if (maxMiles === Infinity) return true;
-    return miles != null && miles <= maxMiles;
-  });
-  matched.sort((a, b) => {
-    if (a.miles == null && b.miles == null) return String(a.course.name || "").localeCompare(String(b.course.name || ""));
-    if (a.miles == null) return 1;
-    if (b.miles == null) return -1;
-    return a.miles - b.miles;
-  });
-  return matched.map((row) => row.course);
-}
-
-function courseSub(course) {
-  const miles = milesFromClub(course);
-  const loc = course.location ? String(course.location) : "";
-  if (miles == null) return loc;
-  const label = miles < 10 ? miles.toFixed(1) : String(Math.round(miles));
-  return loc ? `${label} mi · ${loc}` : `${label} mi`;
+function MapBadge() {
+  return h("span", { className: "course-map-badge", key: "map" }, "Mapped");
 }
 
 function HomeView({ onStart, onJoin, onInvalidCode, onSignOut, onSignIn, onWatch, signedIn, playerName }) {
@@ -148,6 +102,7 @@ function CoursePickView({ courses, onBack, onSelect }) {
   const [query, setQuery] = React.useState("");
   const [range, setRange] = React.useState("nearby");
   const filtered = filterCoursesForPick(courses, query, range);
+  const mappedCount = filtered.filter(courseHasMap).length;
 
   return h("div", { className: "stack" }, [
     h(BackButton, { onBack, key: "back" }),
@@ -185,7 +140,7 @@ function CoursePickView({ courses, onBack, onSelect }) {
       "p",
       { className: "muted", key: "count" },
       filtered.length
-        ? `${filtered.length} course${filtered.length === 1 ? "" : "s"} · nearest first`
+        ? `${filtered.length} course${filtered.length === 1 ? "" : "s"}${mappedCount ? ` · ${mappedCount} mapped` : ""} · maps first, then nearest`
         : "No courses match that search.",
     ),
     filtered.length
@@ -195,7 +150,10 @@ function CoursePickView({ courses, onBack, onSelect }) {
             { className: "tap-row", type: "button", key: course.id || course.name, onClick: () => onSelect(course) },
             [
               h("div", { className: "grow", key: "content" }, [
-                h("div", { className: "title", key: "title" }, course.name),
+                h("div", { className: "title-row", key: "title-row" }, [
+                  h("div", { className: "title", key: "title" }, course.name),
+                  courseHasMap(course) ? h(MapBadge) : null,
+                ]),
                 h("div", { className: "sub", key: "sub" }, courseSub(course)),
               ]),
               h("div", { className: "chev", key: "chev" }, icon(ChevronRight)),
@@ -208,17 +166,21 @@ function CoursePickView({ courses, onBack, onSelect }) {
 }
 
 function LayoutPickView({ course, layouts, onBack, onSelect }) {
+  const sorted = sortLayoutsForPick(layouts);
   return h("div", { className: "stack" }, [
     h(BackButton, { onBack, key: "back" }),
     h("h2", { className: "section", key: "title" }, course.name),
-    layouts.length
-      ? layouts.map((layout) =>
+    sorted.length
+      ? sorted.map((layout) =>
           h(
             "button",
             { className: "tap-row", type: "button", key: layout.id || layout.name, onClick: () => onSelect(layout) },
             [
               h("div", { className: "grow", key: "content" }, [
-                h("div", { className: "title", key: "title" }, layout.name || "Layout"),
+                h("div", { className: "title-row", key: "title-row" }, [
+                  h("div", { className: "title", key: "title" }, layout.name || "Layout"),
+                  layoutHasMap(layout) ? h(MapBadge) : null,
+                ]),
                 h("div", { className: "sub", key: "sub" }, layout.total_par != null ? `Par ${layout.total_par}` : ""),
               ]),
               h("div", { className: "chev", key: "chev" }, icon(ChevronRight)),
