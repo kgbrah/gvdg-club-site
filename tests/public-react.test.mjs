@@ -45,13 +45,10 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(chrome, /export function PublicPageChrome/);
   assert.match(chrome, /data-react-public-chrome/);
   assert.match(chrome, /aria-expanded/);
-  assert.match(chrome, /aria-current/);
   assert.match(chrome, /PlayerThemeToggle/);
-  assert.match(chrome, /nav-donate/);
+  assert.match(chrome, /SiteNavItems/);
   assert.match(chrome, /Menu, X/);
   assert.match(chrome, /window\.requestAnimationFrame\(update\)/);
-  assert.match(chrome, /href: "score.html"/);
-  assert.match(chrome, /Keep score/);
   const themeChrome = readFileSync('src/shared/player-theme-chrome.js', 'utf8');
   assert.match(themeChrome, /aria-pressed/);
   assert.match(themeChrome, /togglePlayerThemeMode/);
@@ -129,9 +126,9 @@ test('Crotts assistant stays hidden until Help is requested', () => {
   assert.match(homeMain, /createRoot\(crottsMount\)\.render\(h\(CrottsWidget\)\)/);
   assert.match(membersMain, /createRoot\(crottsMount\)\.render\(h\(CrottsWidget\)\)/);
   assert.match(adminMain, /createRoot\(crottsMount\)\.render\(h\(CrottsWidget\)\)/);
-  assert.match(homeChrome, /CrottsHelpLink/);
-  assert.match(publicChrome, /CrottsHelpLink/);
-  assert.match(membersChrome, /CrottsHelpLink/);
+  assert.match(homeChrome, /SiteNavItems/);
+  assert.match(publicChrome, /SiteNavItems/);
+  assert.match(membersChrome, /SiteNavItems/);
   assert.match(adminChrome, /CrottsHelpLink/);
   assert.match(widget, /export function CrottsWidget/);
   assert.match(widget, /export function CrottsHelpLink/);

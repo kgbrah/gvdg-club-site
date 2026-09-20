@@ -206,6 +206,50 @@ body.player-theme-page .nav-links a.nav-donate {
   }
 }
 
+header .nav-more { position: relative; list-style: none; }
+header .nav-more-btn {
+  display: inline-flex; align-items: center; gap: 0.2rem;
+  margin: 0; padding: 0; min-height: 44px; border: 0; background: transparent;
+  color: white; cursor: pointer;
+  font: 600 0.95rem Archivo, sans-serif; text-transform: uppercase; letter-spacing: 0.05em;
+}
+header .nav-more-btn:hover,
+header .nav-more-btn.is-current,
+header .nav-more-btn[aria-current="true"] { color: var(--primary); }
+header .nav-more-caret { display: block; flex: 0 0 auto; transition: transform 0.2s ease; }
+header .nav-more.is-open .nav-more-caret { transform: rotate(180deg); }
+header .nav-more-menu {
+  display: none; position: absolute; top: calc(100% + 0.35rem); right: 0;
+  min-width: 11rem; margin: 0; padding: 0.4rem 0; list-style: none;
+  background: var(--dark); border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px; box-shadow: 0 14px 32px rgba(15, 15, 30, 0.35); z-index: 1100;
+}
+header .nav-more.is-open .nav-more-menu { display: block; }
+header .nav-more-menu a {
+  display: block; padding: 0.55rem 0.95rem;
+  color: white; text-decoration: none; font-weight: 700; font-size: 0.82rem;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+header .nav-more-menu a:hover,
+header .nav-more-menu a[aria-current="page"] { color: var(--primary); }
+body.player-theme-page header .nav-more-btn,
+body.player-theme-page header .nav-more-menu a { color: var(--text-primary); }
+body.player-theme-page header .nav-more-btn:hover,
+body.player-theme-page header .nav-more-btn.is-current,
+body.player-theme-page header .nav-more-menu a:hover,
+body.player-theme-page header .nav-more-menu a[aria-current="page"] { color: var(--primary); }
+body.player-theme-page header .nav-more-menu {
+  background: var(--bg-secondary); border-color: var(--border-color); box-shadow: 0 14px 32px var(--shadow);
+}
+@media (min-width: 769px) {
+  header .nav-home { display: none !important; }
+}
+@media (max-width: 768px) {
+  header .nav-more-btn { display: none !important; }
+  header .nav-more,
+  header .nav-more-menu { display: contents !important; }
+}
+
 .pwa-update {
   position: fixed;
   left: 0.75rem;

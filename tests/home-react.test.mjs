@@ -207,14 +207,15 @@ test('home React bundle owns page chrome menu and header scroll state', () => {
   assert.match(chrome, /export function HomePageChrome/);
   assert.match(chrome, /data-react-home-chrome/);
   assert.match(chrome, /aria-expanded/);
-  assert.match(chrome, /aria-current/);
-  assert.match(chrome, /nav-donate/);
-  assert.match(chrome, /CrottsHelpLink/);
+  assert.match(chrome, /SiteNavItems/);
   assert.match(chrome, /HomeThemeToggle/);
   assert.match(chrome, /Menu, X/);
   assert.match(chrome, /window\.requestAnimationFrame\(update\)/);
-  assert.match(chrome, /href: "score.html"/);
-  assert.match(chrome, /Keep score/);
+  const siteNav = readFileSync('src/shared/site-nav.js', 'utf8');
+  assert.match(siteNav, /href: "score.html"/);
+  assert.match(siteNav, /Keep score/);
+  assert.match(siteNav, /nav-donate/);
+  assert.match(siteNav, /nav-more/);
   assert.doesNotMatch(chrome, /querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
 });
 

@@ -2,22 +2,10 @@ import React from "react";
 import { Menu, X } from "lucide-react";
 
 import { ClubLogo } from "../shared/club-logo.js";
-import { CrottsHelpLink } from "../shared/crotts-widget.js";
 import { PlayerThemeToggle } from "../shared/player-theme-chrome.js";
+import { siteCurrentPage, SiteNavItems, useSiteMoreMenu } from "../shared/site-nav.js";
 
 const h = React.createElement;
-
-const NAV_ITEMS = [
-  { label: "Home", href: "index.html", page: "index" },
-  { label: "Keep score", href: "score.html", page: "score" },
-  { label: "Events", href: "events.html", page: "events" },
-  { label: "Ryder Cup", href: "ryder-cup.html", page: "ryder-cup" },
-  { label: "Pro Shop", href: "pro-shop.html", page: "pro-shop" },
-  { label: "Blog", href: "gvdg-blog.html", page: "gvdg-blog" },
-  { label: "Members", href: "gvdg-members.html", page: "gvdg-members" },
-];
-
-const DONATE_URL = "https://www.paypal.com/paypalme/greenvillediscgolf";
 
 function icon(Icon, size = 24) {
   return h(Icon, {
@@ -28,16 +16,11 @@ function icon(Icon, size = 24) {
   });
 }
 
-function currentPage() {
-  const path = String(window.location.pathname || "").toLowerCase();
-  const basename = path.replace(/[#?].*$/, "").replace(/^.*\//, "").replace(/\.html$/, "");
-  return basename === "" ? "index" : basename;
-}
-
 export function PublicPageChrome() {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [scrolled, setScrolled] = React.useState(false);
-  const page = currentPage();
+  const page = siteCurrentPage();
+  const more = useSiteMoreMenu(menuOpen);
 
   React.useEffect(() => {
     let ticking = false;
@@ -57,30 +40,18 @@ export function PublicPageChrome() {
 
   function closeMenu() {
     setMenuOpen(false);
-  }
-
-  function navLink(item) {
-    const current = item.page === page;
-    return h("li", { key: item.href }, h("a", {
-      href: item.href,
-      "aria-current": current ? "page" : undefined,
-      onClick: closeMenu,
-    }, item.label));
+    more.closeMore();
   }
 
   return h("header", { className: scrolled ? "scrolled" : "", "data-react-public-chrome": "true" }, h("nav", null, [
     h(ClubLogo, { href: "index.html", key: "logo", onClick: closeMenu }),
-    h("ul", { className: menuOpen ? "nav-links active" : "nav-links", id: "navLinks", key: "links" }, [
-      ...NAV_ITEMS.map(navLink),
-      h("li", { key: "help" }, h(CrottsHelpLink, { onClick: closeMenu })),
-      h("li", { key: "donate" }, h("a", {
-        className: "nav-donate",
-        href: DONATE_URL,
-        onClick: closeMenu,
-        rel: "noopener noreferrer",
-        target: "_blank",
-      }, "Donate")),
-    ]),
+    h("ul", { className: menuOpen ? "nav-links active" : "nav-links", id: "navLinks", key: "links" },
+      SiteNavItems({
+        moreOpen: more.moreOpen,
+        page,
+        onNavigate: closeMenu,
+        onToggleMore: more.onToggleMore,
+      })),
     h("div", { className: "nav-right", key: "controls" }, [
       h(PlayerThemeToggle, { key: "theme" }),
       h("button", {
