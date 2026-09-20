@@ -159,6 +159,8 @@ test('casual round course pick searches and sorts mapped courses first', () => {
   assert.match(setup, /id: "courseSearch"/);
   assert.match(pick, /100 mi/);
   assert.match(pick, /150 mi/);
+  assert.match(setup, /useDeviceOrigin/);
+  assert.match(setup, /courseSub\(course, origin\)/);
   assert.match(setup, /maps first, then nearest/);
   assert.match(setup, /course-map-badge/);
   assert.match(setup, /course-directions/);

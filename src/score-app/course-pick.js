@@ -17,15 +17,22 @@ function finiteCoord(value) {
 }
 
 export function milesFromClub(course, origin = CLUB_ORIGIN) {
+  return milesFromOrigin(course, origin);
+}
+
+export function milesFromOrigin(course, origin) {
+  if (!origin) return null;
   const lat = courseCoord(course && course.lat);
   const lng = courseCoord(course && course.lng);
-  if (lat == null || lng == null) return null;
+  const fromLat = courseCoord(origin.lat);
+  const fromLng = courseCoord(origin.lng);
+  if (lat == null || lng == null || fromLat == null || fromLng == null) return null;
   const toRad = (d) => (d * Math.PI) / 180;
-  const dLat = toRad(lat - origin.lat);
-  const dLng = toRad(lng - origin.lng);
+  const dLat = toRad(lat - fromLat);
+  const dLng = toRad(lng - fromLng);
   const h =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(origin.lat)) * Math.cos(toRad(lat)) * Math.sin(dLng / 2) ** 2;
+    Math.cos(toRad(fromLat)) * Math.cos(toRad(lat)) * Math.sin(dLng / 2) ** 2;
   return 2 * 3958.8 * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
@@ -63,12 +70,12 @@ function compareNames(a, b) {
   return String((a && a.name) || "").localeCompare(String((b && b.name) || ""));
 }
 
-export function filterCoursesForPick(courses, query, range, origin = CLUB_ORIGIN) {
+export function filterCoursesForPick(courses, query, range, origin) {
   const q = String(query || "").trim().toLowerCase();
   const maxMiles = (COURSE_RANGES.find((option) => option.value === range) || COURSE_RANGES[0]).miles;
   const rows = (Array.isArray(courses) ? courses : []).map((course) => ({
     course,
-    miles: milesFromClub(course, origin),
+    miles: milesFromOrigin(course, origin),
     mapped: courseHasMap(course),
   }));
   const matched = rows.filter(({ course, miles }) => {
@@ -76,7 +83,7 @@ export function filterCoursesForPick(courses, query, range, origin = CLUB_ORIGIN
       const hay = `${course.name || ""} ${course.location || ""}`.toLowerCase();
       return hay.includes(q);
     }
-    if (maxMiles === Infinity) return true;
+    if (maxMiles === Infinity || !origin) return true;
     return miles != null && miles <= maxMiles;
   });
   matched.sort((a, b) => {
@@ -90,15 +97,15 @@ export function filterCoursesForPick(courses, query, range, origin = CLUB_ORIGIN
   return matched.map((row) => row.course);
 }
 
-export function courseSub(course, origin = CLUB_ORIGIN) {
-  const miles = milesFromClub(course, origin);
+export function courseSub(course, origin) {
+  const miles = milesFromOrigin(course, origin);
   const loc = course && course.location ? String(course.location) : "";
   if (miles == null) return loc;
   const label = miles < 10 ? miles.toFixed(1) : String(Math.round(miles));
   return loc ? `${label} mi · ${loc}` : `${label} mi`;
 }
 
-export function googleMapsDirectionsUrl(course) {
+export function googleMapsDirectionsUrl(course, origin) {
   const lat = courseCoord(course && course.lat);
   const lng = courseCoord(course && course.lng);
   const name = String((course && course.name) || "").trim();
@@ -109,6 +116,9 @@ export function googleMapsDirectionsUrl(course) {
   url.searchParams.set("api", "1");
   url.searchParams.set("destination", destination);
   url.searchParams.set("travelmode", "driving");
+  const fromLat = origin && courseCoord(origin.lat);
+  const fromLng = origin && courseCoord(origin.lng);
+  if (fromLat != null && fromLng != null) url.searchParams.set("origin", `${fromLat},${fromLng}`);
   return url.href;
 }
 

@@ -42,8 +42,8 @@ function CourseMeta({ text, mapped }) {
   ]);
 }
 
-function DirectionsLink({ course }) {
-  const href = safeExternalUrl(googleMapsDirectionsUrl(course));
+function DirectionsLink({ course, origin }) {
+  const href = safeExternalUrl(googleMapsDirectionsUrl(course, origin));
   if (!href) return null;
   return h(
     "a",
@@ -126,10 +126,33 @@ function HomeView({ onStart, onJoin, onInvalidCode, onSignOut, onSignIn, onWatch
   ]);
 }
 
+function useDeviceOrigin() {
+  const [origin, setOrigin] = React.useState(null);
+  React.useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return undefined;
+    let cancelled = false;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords && pos.coords.latitude;
+        const lng = pos.coords && pos.coords.longitude;
+        if (cancelled || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+        setOrigin({ lat, lng });
+      },
+      () => {},
+      { enableHighAccuracy: false, maximumAge: 120000, timeout: 10000 },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return origin;
+}
+
 function CoursePickView({ courses, onBack, onSelect }) {
   const [query, setQuery] = React.useState("");
   const [range, setRange] = React.useState("nearby");
-  const filtered = filterCoursesForPick(courses, query, range);
+  const origin = useDeviceOrigin();
+  const filtered = filterCoursesForPick(courses, query, range, origin);
   const mappedCount = filtered.filter(courseHasMap).length;
 
   return h("div", { className: "stack" }, [
@@ -168,7 +191,7 @@ function CoursePickView({ courses, onBack, onSelect }) {
       "p",
       { className: "muted", key: "count" },
       filtered.length
-        ? `${filtered.length} course${filtered.length === 1 ? "" : "s"}${mappedCount ? ` · ${mappedCount} mapped` : ""} · maps first, then nearest`
+        ? `${filtered.length} course${filtered.length === 1 ? "" : "s"}${mappedCount ? ` · ${mappedCount} mapped` : ""}${origin ? " · maps first, then nearest" : " · maps first"}`
         : "No courses match that search.",
     ),
     filtered.length
@@ -183,12 +206,12 @@ function CoursePickView({ courses, onBack, onSelect }) {
                 [
                   h("div", { className: "grow", key: "content" }, [
                     h("div", { className: "title", key: "title" }, course.name),
-                    h(CourseMeta, { text: courseSub(course), mapped: courseHasMap(course), key: "meta" }),
+                    h(CourseMeta, { text: courseSub(course, origin), mapped: courseHasMap(course), key: "meta" }),
                   ]),
                   h("div", { className: "chev", key: "chev" }, icon(ChevronRight)),
                 ],
               ),
-              h(DirectionsLink, { course, key: "dir" }),
+              h(DirectionsLink, { course, origin, key: "dir" }),
             ],
           ),
         )
