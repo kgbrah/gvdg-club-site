@@ -50,7 +50,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE && key !== "gvdg-maps-v1").map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
@@ -62,6 +62,18 @@ self.addEventListener("message", (event) => {
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
+  if (req.method === "GET" && url.hostname.endsWith("arcgisonline.com") && url.pathname.includes("/World_Imagery/")) {
+    event.respondWith(
+      caches.open("gvdg-maps-v1").then((cache) => cache.match(req).then((cached) => {
+        if (cached) return cached;
+        return fetch(req).then((res) => {
+          if (res && (res.ok || res.type === "opaque")) cache.put(req, res.clone()).catch(() => {});
+          return res;
+        });
+      }))
+    );
+    return;
+  }
   if (req.method !== "GET" || url.origin !== self.location.origin) return;
 
   if (req.mode === "navigate" || req.destination === "document") {
