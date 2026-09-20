@@ -11,19 +11,22 @@ import {
 import { clubToday } from "../src/shared/events-model.js";
 
 test("admin event buckets put live first and keep scheduled upcoming", () => {
-  const live = normalizeAdminEvent({ id: 1, name: "Live dubs", status: "live", date: "2026-09-13", starts_at: "2026-09-13T12:15:00.000Z" });
-  const later = normalizeAdminEvent({ id: 2, name: "Next week", status: "scheduled", date: "2026-09-19" });
-  const done = normalizeAdminEvent({ id: 3, name: "Done", status: "final", date: "2026-09-01" });
+  const today = clubToday();
+  const yesterday = clubToday(new Date(Date.now() - 24 * 60 * 60 * 1000));
+  const lastMonth = clubToday(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+  const nextWeek = clubToday(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+  const live = normalizeAdminEvent({ id: 1, name: "Live dubs", status: "live", date: yesterday, starts_at: `${yesterday}T12:15:00.000Z` });
+  const later = normalizeAdminEvent({ id: 2, name: "Next week", status: "scheduled", date: nextWeek });
+  const done = normalizeAdminEvent({ id: 3, name: "Done", status: "final", date: lastMonth });
   const buckets = bucketAdminEvents([later, done, live]);
   assert.equal(buckets.live[0].id, "1");
   assert.equal(buckets.upcoming[0].id, "2");
   assert.equal(buckets.past[0].id, "3");
   assert.equal(pickTodayEvent([later, live]).id, "1");
-  const today = clubToday();
   const laterSameStatus = normalizeAdminEvent({ id: 4, name: "Later", status: "scheduled", date: "2026-12-01" });
   const todaysRound = normalizeAdminEvent({ id: 5, name: "Today's round", status: "scheduled", date: today });
   assert.equal(pickTodayEvent([laterSameStatus, todaysRound]).id, "5");
-  assert.match(formatAdminEventWhen(live), /Sep/);
+  assert.match(formatAdminEventWhen(live), /[A-Z][a-z]{2}/);
 });
 
 test("admin today, more, and player theme are wired into the admin shell", () => {
