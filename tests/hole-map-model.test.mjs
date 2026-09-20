@@ -255,7 +255,8 @@ test("throw log numbers lies from the tee and skips tiny duplicates", () => {
   const arc = flightArc({ x: 10, y: 80 }, { x: 90, y: 20 }, "lie");
   assert.equal(arc.kind, "lie");
   assert.match(arc.path, /^M 10\.0 80\.0 Q /);
-  assert.ok(arc.ms >= 1400);
+  assert.ok(arc.ms >= 2000);
+  assert.ok(arc.ms <= 3800);
   assert.deepEqual(flightPoint(arc, 0), arc.from);
   assert.deepEqual(flightPoint(arc, 1), arc.to);
   const mid = flightPoint(arc, 0.5);

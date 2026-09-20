@@ -176,7 +176,7 @@ export function flightArc(from, to, kind = "lie") {
   const qy = (y1 + y2) / 2 + ny * loft;
   return {
     kind,
-    ms: Math.round(1400 + Math.min(len * 7, 1800)),
+    ms: Math.round(2000 + Math.min(len * 8, 1800)),
     path: `M ${x1.toFixed(1)} ${y1.toFixed(1)} Q ${qx.toFixed(1)} ${qy.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`,
     from: { x: x1, y: y1 },
     q: { x: qx, y: qy },

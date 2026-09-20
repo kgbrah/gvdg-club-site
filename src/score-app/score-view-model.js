@@ -275,9 +275,9 @@ export function watchReplayIsScoreStep(plan, step) {
 }
 
 export function watchReplayDelayMs(plan, step) {
-  if (!(Number(step) > 0)) return 700;
-  if (watchReplayIsScoreStep(plan, step)) return 2200;
-  return 2000;
+  if (!(Number(step) > 0)) return 2400;
+  if (watchReplayIsScoreStep(plan, step)) return 4500;
+  return 4200;
 }
 
 export function watchReplayCaption(plan, step) {

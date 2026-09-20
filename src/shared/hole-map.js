@@ -162,7 +162,7 @@ function FlyingDisc(props) {
     let raf = 0;
     const tick = (ts) => {
       if (!start) start = ts;
-      const next = Math.min(1, (ts - start) / Math.max(Number(flight.ms) || 1600, 1));
+      const next = Math.min(1, (ts - start) / Math.max(Number(flight.ms) || 2800, 1));
       setProgress(next);
       if (next < 1) {
         raf = requestAnimationFrame(tick);

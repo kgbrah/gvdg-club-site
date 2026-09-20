@@ -8,6 +8,7 @@ import {
   watchHoleScoreChips,
   watchMatchCards,
   watchReplayCaption,
+  watchReplayDelayMs,
   watchReplayHole,
   watchReplayIsScoreStep,
   watchReplayPlayers,
@@ -227,6 +228,9 @@ test("watch replay reveals throws one at a time then the score", () => {
   assert.equal(watchReplayIsScoreStep(plan, 3), true);
   assert.equal(watchReplayCaption(plan, 0), "On the tee");
   assert.match(watchReplayCaption(plan, 3), /In the basket/);
+  assert.equal(watchReplayDelayMs(plan, 0), 2400);
+  assert.equal(watchReplayDelayMs(plan, 1), 4200);
+  assert.equal(watchReplayDelayMs(plan, 3), 4500);
   assert.deepEqual(watchReplayPlayers([player, { index: 1, name: "JR" }]).map((row) => row.name), ["KG", "JR"]);
 });
 
