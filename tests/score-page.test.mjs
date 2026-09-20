@@ -1137,6 +1137,10 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.match(html, /\.watch-stroke-strip/);
   assert.match(html, /\.watch-replay/);
   assert.match(html, /\.watch-view \{ display: grid/);
+  assert.match(html, /\.watch-holes \.hole-map-frame/);
+  assert.match(html, /aspect-ratio: 16 \/ 20\.25/);
+  assert.match(html, /max-height: min\(70dvh, 42rem\)/);
+  assert.match(watch, /large: true/);
   assert.match(html, /\.watch-actions/);
   assert.match(controller, /LIVE \+ '\/location'/);
   assert.match(controller, /watchPosition/);

@@ -249,4 +249,7 @@ test("watch view uses overlay chips for stroke and match cards for matchplay", (
   const html = readFileSync("score.html", "utf8");
   assert.match(html, /chip-left\.chip-above/);
   assert.match(html, /chip-right\.chip-below/);
+  assert.match(html, /\.watch-holes \.hole-map-frame/);
+  assert.match(watch, /preloadRoundMaps/);
+  assert.match(watch, /large: true/);
 });

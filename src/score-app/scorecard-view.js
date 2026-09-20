@@ -3,7 +3,8 @@ import { createPortal } from "react-dom";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Eye, Ruler, Settings2, Share2, UserPlus, X } from "lucide-react";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { HoleMap } from "../shared/hole-map.js";
-import { addThrow, currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, lastThrow, lastThrowHud, nextTeeHud, readAllThrows, readThrows, resolveMapFocus, undoThrow, withSelfLocation, writeThrows } from "../shared/hole-map-model.js";
+import { addThrow, currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, lastThrow, lastThrowHud, nextTeeHud, HOLE_MAP_COMPACT_SIZE, readAllThrows, readThrows, resolveMapFocus, undoThrow, withSelfLocation, writeThrows } from "../shared/hole-map-model.js";
+import { preloadRoundMaps } from "../shared/satellite-preload.js";
 import { formatPct, holePlayStats, holeStatChips, liveRoundStatsFromCard } from "../shared/play-stats.js";
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
@@ -937,6 +938,17 @@ export function ScorecardView(props) {
   const mapFocus = resolveMapFocus(pinnedFocus, remaining);
   const measuring = Boolean(measure);
   const measureTo = measure && (measure.b || gps.fix);
+  const holes = Array.isArray(props.holes) ? props.holes : [];
+  const activeHoleIndex = Math.max(0, holes.findIndex((row) => row && props.hole && row.hole === props.hole.hole));
+  React.useEffect(() => {
+    preloadRoundMaps(holes, {
+      activeIndex: activeHoleIndex,
+      ahead: 2,
+      all: true,
+      size: HOLE_MAP_COMPACT_SIZE,
+      zooms: true,
+    });
+  }, [holes, activeHoleIndex, mapFocus]);
   const showNextTee = Boolean(hud && (hud.circle === "C1" || hud.circle === "C2") && hud.mode === "remaining");
   const nextTee = showNextTee ? nextTeeHud(gps.fix, props.nextHole) : null;
   const lastThrowLine = lastThrowHud(throws, props.hole && props.hole.tee);

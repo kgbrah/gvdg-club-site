@@ -28,6 +28,9 @@ function haversineFt(a, b) {
 
 export const CIRCLE1_M = 10;
 export const CIRCLE2_M = 20;
+export const HOLE_MAP_SIZE = { width: 640, height: 360 };
+export const HOLE_MAP_COMPACT_SIZE = { width: 320, height: 180 };
+export const HOLE_MAP_WATCH_SIZE = { width: 960, height: 1215 };
 export const CIRCLE1_FT = CIRCLE1_M * 3.28084;
 export const CIRCLE2_FT = CIRCLE2_M * 3.28084;
 const FOCUS_C1_PAD_M = 16;

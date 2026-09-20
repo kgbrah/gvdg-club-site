@@ -1,6 +1,6 @@
 import React from "react";
 
-import { flightArc, flightPoint, holeMapLabel, latLngFromMapPoint, playerMarksOnMap, playerPhotoSrc, projectHoleMap, projectMapPoint, SATELLITE_CREDIT, scoreChipAnchor, throwSegments } from "./hole-map-model.js";
+import { flightArc, flightPoint, holeMapLabel, HOLE_MAP_COMPACT_SIZE, HOLE_MAP_SIZE, HOLE_MAP_WATCH_SIZE, latLngFromMapPoint, playerMarksOnMap, playerPhotoSrc, projectHoleMap, projectMapPoint, SATELLITE_CREDIT, scoreChipAnchor, throwSegments } from "./hole-map-model.js";
 import { discColorPattern } from "./disc-color.js";
 import { safeExternalUrl } from "./safe-url.js";
 import { udiscDeepLink } from "./udisc-export.js";
@@ -16,6 +16,8 @@ function SatelliteLayer({ url }) {
     className: "hole-map-satellite",
     decoding: "async",
     draggable: false,
+    fetchPriority: "high",
+    loading: "eager",
     onError: () => setFailed(true),
     src: href,
   });
@@ -448,10 +450,12 @@ function PlayerMark(props) {
 export function HoleMap(props) {
   const hole = props.hole;
   const compact = Boolean(props.compact);
+  const large = Boolean(props.large);
+  const size = compact ? HOLE_MAP_COMPACT_SIZE : large ? HOLE_MAP_WATCH_SIZE : HOLE_MAP_SIZE;
   const map = projectHoleMap(hole, {
     focus: props.focus,
-    height: compact ? 180 : undefined,
-    width: compact ? 320 : undefined,
+    height: size.height,
+    width: size.width,
     windFromDeg: props.windFromDeg,
   });
   const [flight, setFlight] = React.useState(null);
@@ -535,7 +539,11 @@ export function HoleMap(props) {
     const point = mapPointFromEvent(event, map);
     if (point) props.onMapPoint(point);
   }
-  return h("div", { className: compact ? "hole-map-card hole-map-compact" : "card hole-map-card" }, [
+  return h("div", {
+    className: compact
+      ? "hole-map-card hole-map-compact"
+      : ("card hole-map-card" + (large ? " hole-map-watch" : "")),
+  }, [
     h("div", { className: "hole-map-frame", key: "frame" }, [
       h(SatelliteLayer, { key: map.satelliteUrl || "satellite", url: map.satelliteUrl }),
       h(

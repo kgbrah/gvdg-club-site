@@ -2,6 +2,8 @@ import React from "react";
 import { ChevronLeft, ChevronRight, Copy, Pause, Play, Trophy } from "lucide-react";
 
 import { HoleMap } from "../shared/hole-map.js";
+import { HOLE_MAP_WATCH_SIZE } from "../shared/hole-map-model.js";
+import { preloadRoundMaps } from "../shared/satellite-preload.js";
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
 import { LeaderboardTable } from "./leaderboard-sheet.js";
@@ -199,6 +201,14 @@ function WatchHoles(props) {
     }, watchReplayDelayMs(plan, safeStep));
     return () => clearTimeout(id);
   }, [replay, playing, safeStep, stepMax, safeIndex, holes.length, plan && plan.hole, plan && plan.throwCount, plan && plan.strokes]);
+  React.useEffect(() => {
+    preloadRoundMaps(holes, {
+      activeIndex: safeIndex,
+      all: true,
+      ahead: 2,
+      size: HOLE_MAP_WATCH_SIZE,
+    });
+  }, [holes, safeIndex]);
   if (!selected) return null;
   const mapPlayers = props.isMatchplay
     ? props.players
@@ -269,6 +279,7 @@ function WatchHoles(props) {
       discColor: follow && follow.discColor,
       hole: selected,
       key: "map",
+      large: true,
       players: mapPlayers,
       scoreFlight,
       throwGroups: replay
