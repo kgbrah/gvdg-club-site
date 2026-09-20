@@ -785,6 +785,10 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /hud\.holeFt/);
   assert.match(holeMap, /function ThrowMark/);
   assert.match(holeMap, /function FlyingDisc/);
+  assert.match(holeMap, /large \? 13\.7/);
+  assert.match(holeMap, /large \? 18/);
+  assert.match(holeMap, /props\.large \? 13\.5/);
+  assert.match(html, /\.hole-map-watch \.hole-map-throw-label/);
   assert.match(holeMap, /function DiscPlastic/);
   assert.match(holeMap, /tiedye/);
   assert.match(holeMap, /multicolor/);

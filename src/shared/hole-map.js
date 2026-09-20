@@ -180,7 +180,8 @@ function FlyingDisc(props) {
   const pt = flightPoint(flight, easeFlight(progress));
   if (!pt) return null;
   const compact = Boolean(props.compact);
-  const plate = compact ? 5.3 : 6.1;
+  const large = Boolean(props.large);
+  const plate = compact ? 5.3 : large ? 13.7 : 6.1;
   const putt = flight.kind === "putt";
   const pattern = liveDiscPattern(props.discColor);
   const scale = putt && progress > 0.72 ? Math.max(0.28, 1 - (progress - 0.72) / 0.28 * 0.72) : 1;
@@ -198,10 +199,10 @@ function FlyingDisc(props) {
     h("ellipse", {
       className: "hole-map-disc-shadow",
       cx: 0.5,
-      cy: compact ? 3.1 : 3.6,
+      cy: compact ? 3.1 : large ? 8.1 : 3.6,
       key: "shadow",
       rx: plate * 0.92,
-      ry: compact ? 1.5 : 1.8,
+      ry: compact ? 1.5 : large ? 4 : 1.8,
     }),
     h("g", { className: "hole-map-disc-plastic", clipPath: "url(#gvdg-disc-plate-clip)", key: "plastic" },
       h(DiscPlastic, { pattern, plate })),
@@ -212,7 +213,9 @@ function FlyingDisc(props) {
 }
 
 function ThrowMark(props) {
-  const r = props.compact ? 7 : 8;
+  const compact = Boolean(props.compact);
+  const large = Boolean(props.large);
+  const r = compact ? 7 : large ? 18 : 8;
   return h(
     "g",
     {
@@ -222,7 +225,7 @@ function ThrowMark(props) {
     [
       h("title", { key: "title" }, props.label || ("Throw " + props.n)),
       h("circle", { className: "hole-map-throw-dot", key: "dot", r }),
-      h("text", { className: "hole-map-throw-label", key: "label", y: props.compact ? 3 : 3.5 }, String(props.n)),
+      h("text", { className: "hole-map-throw-label", key: "label", y: compact ? 3 : large ? 8 : 3.5 }, String(props.n)),
     ],
   );
 }
@@ -370,7 +373,7 @@ function BasketMark(props) {
 
 
 function LieMark(props) {
-  const r = props.compact ? 5 : 6;
+  const r = props.compact ? 5 : props.large ? 13.5 : 6;
   return h(
     "g",
     {
@@ -629,6 +632,7 @@ export function HoleMap(props) {
               : h(ThrowMark, {
                 compact,
                 key: "throw-" + group.key + "-" + mark.n,
+                large,
                 muted: group.active === false,
                 n: mark.n,
                 x: mark.x,
@@ -640,13 +644,14 @@ export function HoleMap(props) {
             discColor: props.discColor,
             flight,
             key: flight ? flight.id : "disc-idle",
+            large,
             onDone: () => setFlight(null),
           }),
           measureFrom
-            ? h(LieMark, { compact, key: "lie-a", label: "Start", x: measureFrom.x, y: measureFrom.y })
+            ? h(LieMark, { compact, key: "lie-a", label: "Start", large, x: measureFrom.x, y: measureFrom.y })
             : null,
           measureTo
-            ? h(LieMark, { compact, key: "lie-b", label: "Landing", x: measureTo.x, y: measureTo.y })
+            ? h(LieMark, { compact, key: "lie-b", label: "Landing", large, x: measureTo.x, y: measureTo.y })
             : null,
         ],
       ),
