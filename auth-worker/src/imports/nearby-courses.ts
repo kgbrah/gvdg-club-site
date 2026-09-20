@@ -1,5 +1,5 @@
-// DiscGolfAPI course import. Pulls every listed North Carolina course plus VA/SC listings
-// within 150 miles of Greenville, skips ones already in the club catalog (name or GPS),
+// DiscGolfAPI course import. Pulls every listed North Carolina course plus nearby
+// listings within 250 miles of Greenville, skips ones already in the club catalog (name or GPS),
 // and mints a par-3 default layout so a card can start immediately.
 // Attribution required: https://discgolfapi.com/licence/
 
@@ -7,12 +7,12 @@ import { haversineMiles } from "../distance.js";
 
 export const CLUB_ORIGIN = { lat: 35.6127, lng: -77.3664 } as const;
 export const NEARBY_MILES = 100;
-export const DAY_TRIP_MILES = 150;
+export const DAY_TRIP_MILES = 250;
 export const MIN_HOLES = 6;
 export const MAX_HOLES = 36;
 export const DISCGOLFAPI_HOST = "io.discgolfapi.com";
 export const DISCGOLFAPI_ATTRIBUTION = "Course data supplied by DiscGolfAPI.";
-export const NEARBY_REGIONS = ["NC", "VA", "SC"] as const;
+export const NEARBY_REGIONS = ["NC", "VA", "SC", "MD", "WV", "DE", "GA", "TN"] as const;
 export const HOME_REGION = "NC";
 export const DISCGOLFAPI_PAGE = 250;
 

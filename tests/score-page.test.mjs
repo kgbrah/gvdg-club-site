@@ -157,8 +157,11 @@ test('casual round course pick searches and sorts mapped courses first', () => {
   assert.match(setup, /function CoursePickView/);
   assert.match(setup, /filterCoursesForPick/);
   assert.match(setup, /id: "courseSearch"/);
-  assert.match(pick, /100 mi/);
-  assert.match(pick, /150 mi/);
+  assert.match(pick, /Within 10 miles/);
+  assert.match(pick, /Within 250 miles/);
+  assert.match(pick, /All courses/);
+  assert.match(setup, /COURSE_RANGE_DEFAULT/);
+  assert.match(setup, /id: "courseRadius"/);
   assert.match(setup, /useDeviceOrigin/);
   assert.match(setup, /courseSub\(course, origin\)/);
   assert.match(setup, /maps first, then nearest/);
@@ -180,6 +183,15 @@ test('nearby course catalog seeds 150 miles of Greenville', () => {
   const sql = readFileSync('auth-worker/migrations/0029_nearby_courses.sql', 'utf8');
   const inserts = sql.match(/INSERT OR IGNORE INTO courses/g) || [];
   assert.ok(inserts.length >= 100, `expected 100+ nearby courses, got ${inserts.length}`);
+  assert.match(sql, /Default \(par 3s\)/);
+  assert.match(sql, /DiscGolfAPI/);
+});
+
+test('250-mile course catalog adds VA/SC/MD neighbors beyond the 150-mile ring', () => {
+  const sql = readFileSync('auth-worker/migrations/0033_250_mile_courses.sql', 'utf8');
+  const inserts = sql.match(/INSERT OR IGNORE INTO courses/g) || [];
+  assert.ok(inserts.length >= 100, `expected 100+ 250-mile courses, got ${inserts.length}`);
+  assert.match(sql, /Lynchburg|Myrtle Beach|Charleston/);
   assert.match(sql, /Default \(par 3s\)/);
   assert.match(sql, /DiscGolfAPI/);
 });

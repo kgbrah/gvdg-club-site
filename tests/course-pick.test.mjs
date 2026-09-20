@@ -63,7 +63,7 @@ test("filterCoursesForPick lists mapped courses above unmapped ones regardless o
 test("filterCoursesForPick keeps mapped-first order inside a search and a 100-mile ring", () => {
   const farMapped = course({ id: 2, name: "Park Mapped", lat: 36.2, lng: -78.5, mapped: 1 });
   const nearBare = course({ id: 3, name: "Park Bare", lat: 35.62, lng: -77.37, mapped: 0 });
-  const names = filterCoursesForPick([farMapped, nearBare], "park", "nearby", ORIGIN).map((row) => row.name);
+  const names = filterCoursesForPick([farMapped, nearBare], "park", "100", ORIGIN).map((row) => row.name);
   assert.deepEqual(names, ["Park Mapped", "Park Bare"]);
 });
 
@@ -85,10 +85,12 @@ test("course distances and range rings use the supplied origin, not a hardcoded 
   assert.ok(milesFromOrigin(ayden, ashe) > 100);
   assert.equal(courseSub(ashePark, ashe), "0.1 mi · Jefferson, NC");
   assert.equal(courseSub(ashePark), "Jefferson, NC");
-  const nearbyFromAshe = filterCoursesForPick([ashePark, ayden], "", "nearby", ashe).map((row) => row.name);
+  const nearbyFromAshe = filterCoursesForPick([ashePark, ayden], "", "100", ashe).map((row) => row.name);
   assert.deepEqual(nearbyFromAshe, ["Ashe County Park"]);
-  const beforeGps = filterCoursesForPick([ashePark, ayden], "", "nearby").map((row) => row.name);
+  const beforeGps = filterCoursesForPick([ashePark, ayden], "", "100").map((row) => row.name);
   assert.deepEqual(beforeGps, ["Ashe County Park", "Ayden Park"]);
+  const closeOnly = filterCoursesForPick([ashePark, ayden], "", "10", ashe).map((row) => row.name);
+  assert.deepEqual(closeOnly, ["Ashe County Park"]);
 });
 
 test("googleMapsDirectionsUrl uses GPS when present and name otherwise", () => {

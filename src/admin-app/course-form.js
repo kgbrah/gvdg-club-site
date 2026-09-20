@@ -149,7 +149,7 @@ export function AdminCourseForm() {
       }),
       h("button", { className: "admin-btn", disabled: busy, key: "submit", type: "submit" }, busy ? "Adding..." : "Add course"),
     ]),
-    h("p", { className: "dash-note", key: "nearbyNote" }, "Import every listed North Carolina course, plus VA/SC courses within 150 miles of Greenville. Existing club courses stay put. New ones get a par-3 default layout so a card can start right away."),
+    h("p", { className: "dash-note", key: "nearbyNote" }, "Import every listed North Carolina course, plus nearby courses within 250 miles of Greenville. Existing club courses stay put. New ones get a par-3 default layout so a card can start right away."),
     h("button", {
       className: "admin-btn secondary",
       disabled: nearbyBusy,

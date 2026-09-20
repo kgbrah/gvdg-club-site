@@ -1,6 +1,7 @@
 import React from "react";
 import { ArrowLeft, ChevronRight, LogOut, Navigation, PlayCircle, Search } from "lucide-react";
 import {
+  COURSE_RANGE_DEFAULT,
   COURSE_RANGES,
   courseHasMap,
   courseSub,
@@ -150,7 +151,7 @@ function useDeviceOrigin() {
 
 function CoursePickView({ courses, onBack, onSelect }) {
   const [query, setQuery] = React.useState("");
-  const [range, setRange] = React.useState("nearby");
+  const [range, setRange] = React.useState(COURSE_RANGE_DEFAULT);
   const origin = useDeviceOrigin();
   const filtered = filterCoursesForPick(courses, query, range, origin);
   const mappedCount = filtered.filter(courseHasMap).length;
@@ -170,23 +171,23 @@ function CoursePickView({ courses, onBack, onSelect }) {
         onChange: (event) => setQuery(event.target.value),
       }),
     ]),
-    h(
-      "div",
-      { className: "course-range", key: "range", role: "group", "aria-label": "Distance" },
-      COURSE_RANGES.map((option) =>
-        h(
-          "button",
-          {
-            className: range === option.value ? "btn small" : "btn ghost small",
-            type: "button",
-            key: option.value,
-            "aria-pressed": range === option.value ? "true" : "false",
-            onClick: () => setRange(option.value),
-          },
-          option.label,
+    h("div", { className: "course-range", key: "range" }, [
+      h("label", { className: "lbl", htmlFor: "courseRadius", key: "radiusLabel" }, "Search radius"),
+      h(
+        "select",
+        {
+          className: "field",
+          id: "courseRadius",
+          key: "radius",
+          value: range,
+          "aria-label": "Search radius",
+          onChange: (event) => setRange(event.target.value),
+        },
+        COURSE_RANGES.map((option) =>
+          h("option", { key: option.value, value: option.value }, option.label),
         ),
       ),
-    ),
+    ]),
     h(
       "p",
       { className: "muted", key: "count" },

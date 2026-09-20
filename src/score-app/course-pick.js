@@ -1,9 +1,13 @@
 export const CLUB_ORIGIN = { lat: 35.6127, lng: -77.3664 };
 export const COURSE_RANGES = [
-  { value: "nearby", label: "100 mi", miles: 100 },
-  { value: "daytrip", label: "150 mi", miles: 150 },
-  { value: "all", label: "All", miles: Infinity },
+  { value: "all", label: "All courses", miles: Infinity },
+  { value: "10", label: "Within 10 miles", miles: 10 },
+  { value: "25", label: "Within 25 miles", miles: 25 },
+  { value: "50", label: "Within 50 miles", miles: 50 },
+  { value: "100", label: "Within 100 miles", miles: 100 },
+  { value: "250", label: "Within 250 miles", miles: 250 },
 ];
+export const COURSE_RANGE_DEFAULT = "all";
 
 function courseCoord(value) {
   const n = Number(value);
@@ -81,7 +85,7 @@ export function filterCoursesForPick(courses, query, range, origin) {
   const matched = rows.filter(({ course, miles }) => {
     if (q) {
       const hay = `${course.name || ""} ${course.location || ""}`.toLowerCase();
-      return hay.includes(q);
+      if (!hay.includes(q)) return false;
     }
     if (maxMiles === Infinity || !origin) return true;
     return miles != null && miles <= maxMiles;

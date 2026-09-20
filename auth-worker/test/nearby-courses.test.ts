@@ -43,7 +43,7 @@ describe("parseDiscGolfApiCourses", () => {
 });
 
 describe("planNearbyCourseImport", () => {
-  it("keeps every NC course and 150-mile VA/SC courses, skipping seeded GPS/name matches", () => {
+  it("keeps every NC course and 250-mile nearby courses, skipping seeded GPS/name matches", () => {
     const catalog = parseDiscGolfApiCourses({
       courses: [
         { name: "The Meadow at West Meadowbrook Park", lat: 35.6274259, lon: -77.3770867, locality: "Greenville", region_code: "NC", holes: 18, existence_status: "existing", operational_status: "open" },
@@ -62,12 +62,14 @@ describe("planNearbyCourseImport", () => {
     expect(names).toContain("Washington High School");
     expect(names).toContain("Creekside Park, Archdale");
     expect(names).toContain("Asheville far");
+    expect(names).toContain("Far Virginia");
     expect(names).not.toContain("The Meadow at West Meadowbrook Park");
     expect(names).not.toContain("Western Carolina University");
-    expect(names).not.toContain("Far Virginia");
     expect(plan.insert.find((c) => c.name === "Lake Wilson DGC")?.miles).toBeGreaterThan(30);
     expect(plan.insert.find((c) => c.name === "Lake Wilson DGC")?.miles).toBeLessThan(40);
     expect(plan.insert.find((c) => c.name === "Asheville far")?.miles).toBeGreaterThan(150);
+    expect(plan.insert.find((c) => c.name === "Far Virginia")?.miles).toBeGreaterThan(150);
+    expect(plan.insert.find((c) => c.name === "Far Virginia")?.miles).toBeLessThan(250);
   });
 });
 
