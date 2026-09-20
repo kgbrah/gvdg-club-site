@@ -9,11 +9,11 @@ export const SITE_NAV_HOME = { label: "Home", href: "index.html", page: "index" 
 export const SITE_NAV_PRIMARY = [
   { label: "Keep score", href: "score.html", page: "score" },
   { label: "Events", href: "events.html", page: "events" },
+  { label: "Pro Shop", href: "pro-shop.html", page: "pro-shop" },
   { label: "Members", href: "gvdg-members.html", page: "gvdg-members" },
 ];
 export const SITE_NAV_MORE = [
   { label: "Ryder Cup", href: "ryder-cup.html", page: "ryder-cup" },
-  { label: "Pro Shop", href: "pro-shop.html", page: "pro-shop" },
   { label: "Blog", href: "gvdg-blog.html", page: "gvdg-blog" },
 ];
 export const SITE_DONATE_URL = "https://www.paypal.com/paypalme/greenvillediscgolf";
@@ -64,7 +64,7 @@ export function SiteNavItems({ page, moreOpen, onNavigate, onToggleMore }) {
           className: "nav-more-caret",
           focusable: "false",
           key: "caret",
-          size: 16,
+          size: 14,
           strokeWidth: 2.4,
         }),
       ]),

@@ -163,7 +163,7 @@ Spacing follows a 4px base through rem values.
 
 ### Home Page Chrome
 
-- Structure: homepage header, logo, a compact public nav (Keep score, Events, Members, a More menu for Ryder Cup / Pro Shop / Blog / Help, and Donate), theme toggle, and mobile menu control render from the `home-app` React bundle into `homeReactPageChromeApp`; `nav.js` does not run on the homepage.
+- Structure: homepage header, logo, a compact public nav (Keep score, Events, Pro Shop, Members, a More menu for Ryder Cup / Blog / Help, and Donate), theme toggle, and mobile menu control render from the `home-app` React bundle into `homeReactPageChromeApp`; `nav.js` does not run on the homepage.
 - Variants: desktop inline nav with More overflow, mobile collapsed nav (full list, including Home), mobile open nav, current-page link, keep-score link, donate link, light theme, dark theme, and scrolled header.
 - Spacing: reuses `header`, `nav`, `.nav-links`, `.nav-right`, `.theme-toggle`, `.menu-toggle`, and `.logo-image` primitives so the public homepage rhythm remains unchanged.
 - States: React owns menu expanded state, current-page nav state, donate link rendering, theme toggle placement, and the `header.scrolled` class; inline homepage scripts must not mutate `.menu-toggle`, `.nav-links`, or `header`.
@@ -172,7 +172,7 @@ Spacing follows a 4px base through rem values.
 
 ### Public Page Chrome
 
-- Structure: Events, Ryder Cup, Pro Shop, and Blog mount a shared React-owned header, logo, compact public nav (Keep score, Events, Members, More, Donate), theme toggle, and mobile menu into `publicReactPageChrome`; `nav.js` does not run on these public content pages.
+- Structure: Events, Ryder Cup, Pro Shop, and Blog mount a shared React-owned header, logo, compact public nav (Keep score, Events, Pro Shop, Members, More, Donate), theme toggle, and mobile menu into `publicReactPageChrome`; `nav.js` does not run on these public content pages.
 - Variants: desktop inline nav with More overflow, mobile collapsed nav (full list, including Home), mobile open nav, current-page link, keep-score link, donate link, light theme, dark theme, and scrolled header.
 - Spacing: reuses each page's existing `header`, `nav`, `.nav-links`, `.nav-right`, `.theme-toggle`, `.menu-toggle`, and `.logo-image` primitives so the surrounding page layout stays unchanged during migration.
 - States: React owns menu expanded state, current-page nav state, donate link rendering, `data-theme` persistence, and the `header.scrolled` class; page scripts must not mutate `.menu-toggle`, `.nav-links`, `.theme-icon`, or `header`.
@@ -603,7 +603,7 @@ Spacing follows a 4px base through rem values.
 
 ### Member Page Chrome
 
-- Structure: React-owned header with logo link, compact public nav (Keep score, Events, Members, More, Donate), mobile menu control, and theme toggle mounted into `membersReactPageChrome`. Signed-in phone and standalone PWA hide the entire public header so the bottom dock is the IA; the logo stays in-app (`gvdg-members.html`).
+- Structure: React-owned header with logo link, compact public nav (Keep score, Events, Pro Shop, Members, More, Donate), mobile menu control, and theme toggle mounted into `membersReactPageChrome`. Signed-in phone and standalone PWA hide the entire public header so the bottom dock is the IA; the logo stays in-app (`gvdg-members.html`).
 - Variants: desktop inline nav with More overflow, mobile collapsed nav, open mobile nav, signed-in phone (header hidden, dock only), light theme, and dark theme.
 - Spacing: preserves the existing member page `header`, `nav`, `nav-right`, `nav-links`, `theme-toggle`, and `menu-toggle` primitives on desktop. At `max-width: 768px` and in `display-mode: standalone`, signed-in members drop the marketing header and the 100px content offset.
 - States: React owns menu expanded state, current-page nav state, external donate link, and `data-theme` persistence; the member page does not load `nav.js` or mutate header nodes with query selectors.

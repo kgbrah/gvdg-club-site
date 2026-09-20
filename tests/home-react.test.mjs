@@ -216,6 +216,8 @@ test('home React bundle owns page chrome menu and header scroll state', () => {
   assert.match(siteNav, /Keep score/);
   assert.match(siteNav, /nav-donate/);
   assert.match(siteNav, /nav-more/);
+  assert.match(siteNav, /SITE_NAV_PRIMARY = \[[\s\S]*Pro Shop[\s\S]*Members/);
+  assert.doesNotMatch(siteNav, /SITE_NAV_MORE = \[[\s\S]*Pro Shop/);
   assert.doesNotMatch(chrome, /querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
 });
 
