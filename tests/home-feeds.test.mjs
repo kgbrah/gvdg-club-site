@@ -82,8 +82,23 @@ test('parseHomepageEventDate handles common sheet date formats', () => {
   const now = new Date('2026-03-20T12:00:00Z');
   assert.equal(parseHomepageEventDate('2026-08-01', now).month, 'Aug');
   assert.equal(parseHomepageEventDate('8/1/26', now).year, 2026);
-  assert.equal(parseHomepageEventDate('01/15', now).year, 2027);
+  assert.equal(parseHomepageEventDate('01/15', now).year, 2026);
+  assert.equal(parseHomepageEventDate('01/15', now).isPast, true);
+  assert.equal(parseHomepageEventDate('8/1', now).year, 2026);
   assert.equal(parseHomepageEventDate('TBD', now).isTBD, true);
+  const december = new Date('2026-12-01T12:00:00Z');
+  assert.equal(parseHomepageEventDate('1/5', december).year, 2027);
+  assert.equal(parseHomepageEventDate('1/5', december).isPast, false);
+});
+
+test('yearless homepage sheet dates stay in this year so old league nights drop off', () => {
+  const now = new Date('2026-09-20T12:00:00-04:00');
+  const rows = ['5/14', '6/1', '8/3', '9/13', '9/20', '10/5'];
+  const upcoming = rows
+    .map((date) => parseHomepageEventDate(date, now))
+    .filter((info) => !info.isPast && !info.isTBD)
+    .map((info) => `${info.month} ${info.day} ${info.year}`);
+  assert.deepEqual(upcoming, ['Sep 20 2026', 'Oct 5 2026']);
 });
 
 test('feedDateInfo prefers an explicit-year calendar date over a last-updated epoch', () => {

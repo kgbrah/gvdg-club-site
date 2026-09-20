@@ -197,12 +197,21 @@ const SAMPLE = [
 ];
 
 test('bucketEvents splits by status (unknown status -> upcoming)', () => {
-  const { live, upcoming, past, cancelled } = bucketEvents(SAMPLE);
+  const now = new Date('2026-06-25T16:00:00.000Z');
+  const { live, upcoming, past, cancelled } = bucketEvents(SAMPLE, now);
   assert.deepEqual(live.map((e) => e.id), ['a']);
   assert.deepEqual(past.map((e) => e.id), ['f', 'e']); // most recent first
   assert.deepEqual(cancelled.map((e) => e.id), ['g']);
   // upcoming = scheduled + unknown status, soonest first, date-less last.
   assert.deepEqual(upcoming.map((e) => e.id), ['c', 'b', 'h', 'd']);
+});
+
+test('bucketEvents moves elapsed scheduled events out of upcoming', () => {
+  const now = new Date('2026-09-20T16:00:00.000Z');
+  const { upcoming, past } = bucketEvents(SAMPLE, now);
+  assert.deepEqual(upcoming.map((e) => e.id), ['d']);
+  assert.ok(past.some((e) => e.id === 'c'));
+  assert.ok(past.some((e) => e.id === 'b'));
 });
 
 test('bucketEvents is empty-safe', () => {

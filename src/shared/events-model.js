@@ -298,7 +298,7 @@ export function normalizeEventCourses(raw) {
 //   - past      : status === 'final'                      (most recent first)
 //   - cancelled : status === 'cancelled'                  (kept out of the way)
 // Events with no parseable date sort to the end of their bucket.
-export function bucketEvents(rawEvents) {
+export function bucketEvents(rawEvents, now = new Date()) {
   const list = Array.isArray(rawEvents) ? rawEvents.map(normalizeEvent) : [];
   const live = [];
   const upcoming = [];
@@ -309,6 +309,7 @@ export function bucketEvents(rawEvents) {
     if (ev.status === 'live') live.push(ev);
     else if (ev.status === 'final') past.push(ev);
     else if (ev.status === 'cancelled') cancelled.push(ev);
+    else if (isPastClubCalendarEvent(ev, now)) past.push(ev);
     else upcoming.push(ev); // 'scheduled' + any unrecognized status
   }
 

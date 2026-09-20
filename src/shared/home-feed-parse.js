@@ -98,6 +98,16 @@ export function isClubEvent(event) {
   return CLUB_EVENT_RE.test((((event && event.title) || '') + ' ' + ((event && event.description) || '')));
 }
 
+function inferYearlessDate(month, day, now) {
+  const year = now.getFullYear();
+  const candidate = new Date(year, month, day);
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  if (candidate >= today) return candidate;
+  if (now.getMonth() >= 9 && month <= 2) return new Date(year + 1, month, day);
+  return candidate;
+}
+
 export function parseHomepageEventDate(raw, now = new Date()) {
   if (!raw || typeof raw !== 'string') return tbdDate();
   const s = raw.trim();
@@ -122,14 +132,7 @@ export function parseHomepageEventDate(raw, now = new Date()) {
   if (!date) {
     match = s.match(/^(\d{1,2})[/-](\d{1,2})$/);
     if (match) {
-      const year = now.getFullYear();
-      const month = +match[1] - 1;
-      const day = +match[2];
-      let candidate = new Date(year, month, day);
-      const sixtyAgo = new Date(now);
-      sixtyAgo.setDate(sixtyAgo.getDate() - 60);
-      if (candidate < sixtyAgo) candidate = new Date(year + 1, month, day);
-      date = candidate;
+      date = inferYearlessDate(+match[1] - 1, +match[2], now);
     }
   }
   if (!date) {

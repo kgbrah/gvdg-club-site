@@ -112,7 +112,7 @@ Spacing follows a 4px base through rem values.
 - Structure: homepage events and Area Tournaments render from the `home-app` React bundle into `homeReactEventsApp` and `homeReactTournamentsApp`; feed parsing lives in `src/shared/home-feed-parse.js`.
 - Variants: loading, ready, empty, error, collapsed mobile list, expanded mobile list, local Ryder Cup links, safe external links, and no-link rows.
 - Spacing: reuses `.event-list`, `.event-item`, `.tournament-list`, `.tournament-item`, `.event-toggle`, and `.tournament-toggle` primitives so the public homepage rhythm remains unchanged.
-- States: React owns fetch status, loading/empty/error rendering, sorting/filtering display state, show-all toggles, hidden-mobile row classes, and footer link rendering; static loading fallback nodes must be absent from `index.html`, and no DOM renderer may mutate `eventList`, `tournament-list`, or toggle button text.
+- States: React owns fetch status, loading/empty/error rendering, sorting/filtering display state, show-all toggles, hidden-mobile row classes, and footer link rendering; yearless sheet dates (`5/14`) stay in the current year and drop once they pass (only Jan–Mar dates wrap after October); static loading fallback nodes must be absent from `index.html`, and no DOM renderer may mutate `eventList`, `tournament-list`, or toggle button text.
 - Accessibility: loading states expose status text; linked rows are anchors, unlinked rows are non-interactive blocks, toggle controls are real buttons, and location/chevron iconography uses Lucide SVGs.
 - Motion: rows preserve the existing hover and fade-in classes; toggles rotate the existing chevron only.
 
