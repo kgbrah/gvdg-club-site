@@ -383,3 +383,199 @@ export function currentWeatherSummary(weather) {
 export function formatLiveWeather(weather) {
     return weatherChips(weather).map((chip) => chip.label + ": " + chip.value).join(" - ");
 }
+
+const OPEN_METEO_CURRENT_FIELDS = [
+    "temperature_2m",
+    "relative_humidity_2m",
+    "apparent_temperature",
+    "precipitation",
+    "rain",
+    "showers",
+    "snowfall",
+    "weather_code",
+    "cloud_cover",
+    "wind_speed_10m",
+    "wind_direction_10m",
+    "wind_gusts_10m",
+    "is_day",
+];
+const WEATHER_UA = "GreenvilleDiscGolfClub/1.0 (https://gvdgclub.com; weather@gvdgclub.com)";
+const FALLBACK_TTL_MS = 5 * 60 * 1000;
+const fallbackCache = new Map();
+
+function finiteNumber(value) {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string" && value.trim()) {
+        const n = Number(value);
+        return Number.isFinite(n) ? n : null;
+    }
+    return null;
+}
+
+function round1(value) {
+    const n = finiteNumber(value);
+    return n == null ? null : Math.round(n * 10) / 10;
+}
+
+function round2(value) {
+    const n = finiteNumber(value);
+    return n == null ? null : Math.round(n * 100) / 100;
+}
+
+function nwsUnitValue(value) {
+    if (value && typeof value === "object") return finiteNumber(value.value);
+    return finiteNumber(value);
+}
+
+function nwsWeatherCode(text) {
+    if (!text) return null;
+    const t = String(text).toLowerCase();
+    if (/thunder|t-?storm/.test(t)) return 95;
+    if (/\bsnow|sleet|ice|wintry/.test(t)) return 71;
+    if (/\bfog|mist|haze/.test(t)) return 45;
+    if (/drizzle/.test(t)) return 51;
+    if (/shower/.test(t)) return 80;
+    if (/\brain/.test(t)) return /heavy/.test(t) ? 65 : /light/.test(t) ? 61 : 63;
+    if (/overcast/.test(t) || /mostly cloudy/.test(t)) return 3;
+    if (/partly cloudy|partly sunny/.test(t)) return 2;
+    if (/mostly clear|mostly sunny|fair/.test(t)) return 1;
+    if (/clear|sunny/.test(t)) return 0;
+    if (/cloud/.test(t)) return 3;
+    return null;
+}
+
+export function parseOpenMeteoCurrent(payload, fetchedAt) {
+    const current = payload && payload.current;
+    if (!current || typeof current !== "object") return null;
+    const isDay = finiteNumber(current.is_day);
+    return {
+        source: "open-meteo",
+        observedAt: typeof current.time === "string" && current.time ? current.time : fetchedAt,
+        fetchedAt,
+        temperatureF: round1(current.temperature_2m),
+        apparentTemperatureF: round1(current.apparent_temperature),
+        relativeHumidity: round1(current.relative_humidity_2m),
+        precipitationIn: round2(current.precipitation),
+        rainIn: round2(current.rain),
+        showersIn: round2(current.showers),
+        snowfallIn: round2(current.snowfall),
+        weatherCode: finiteNumber(current.weather_code),
+        cloudCover: round1(current.cloud_cover),
+        windSpeedMph: round1(current.wind_speed_10m),
+        windDirectionDeg: round1(current.wind_direction_10m),
+        windGustMph: round1(current.wind_gusts_10m),
+        isDay: isDay == null ? null : isDay > 0,
+    };
+}
+
+export function parseNwsObservation(payload, fetchedAt) {
+    const props = payload && payload.properties && typeof payload.properties === "object"
+        ? payload.properties
+        : payload;
+    if (!props || typeof props !== "object") return null;
+    const celsius = nwsUnitValue(props.temperature);
+    if (celsius == null) return null;
+    const precipIn = round2(nwsUnitValue(props.precipitationLastHour) == null ? null : nwsUnitValue(props.precipitationLastHour) / 25.4);
+    const heatC = nwsUnitValue(props.heatIndex);
+    return {
+        source: "nws",
+        observedAt: typeof props.timestamp === "string" && props.timestamp ? props.timestamp : fetchedAt,
+        fetchedAt,
+        temperatureF: round1(celsius * 9 / 5 + 32),
+        apparentTemperatureF: heatC == null ? round1(celsius * 9 / 5 + 32) : round1(heatC * 9 / 5 + 32),
+        relativeHumidity: round1(nwsUnitValue(props.relativeHumidity)),
+        precipitationIn: precipIn,
+        rainIn: precipIn != null && precipIn > 0 ? precipIn : 0,
+        showersIn: 0,
+        snowfallIn: 0,
+        weatherCode: nwsWeatherCode(props.textDescription),
+        cloudCover: null,
+        windSpeedMph: round1(nwsUnitValue(props.windSpeed) == null ? null : nwsUnitValue(props.windSpeed) * 0.621371),
+        windDirectionDeg: round1(nwsUnitValue(props.windDirection)),
+        windGustMph: round1(nwsUnitValue(props.windGust) == null ? null : nwsUnitValue(props.windGust) * 0.621371),
+        isDay: null,
+    };
+}
+
+function openMeteoUrl(location) {
+    const url = new URL("https://api.open-meteo.com/v1/forecast");
+    url.searchParams.set("latitude", Number(location.lat).toFixed(6));
+    url.searchParams.set("longitude", Number(location.lng).toFixed(6));
+    url.searchParams.set("current", OPEN_METEO_CURRENT_FIELDS.join(","));
+    url.searchParams.set("temperature_unit", "fahrenheit");
+    url.searchParams.set("wind_speed_unit", "mph");
+    url.searchParams.set("precipitation_unit", "inch");
+    url.searchParams.set("timezone", "auto");
+    url.searchParams.set("forecast_days", "1");
+    return url;
+}
+
+async function readJson(doFetch, url, headers) {
+    try {
+        const response = await doFetch(url, { headers });
+        if (!response || !response.ok) return null;
+        return await response.json();
+    } catch (_err) {
+        return null;
+    }
+}
+
+async function fetchNwsObservation(location, doFetch, fetchedAt) {
+    const headers = { Accept: "application/geo+json", "User-Agent": WEATHER_UA };
+    const points = await readJson(
+        doFetch,
+        "https://api.weather.gov/points/" + Number(location.lat).toFixed(4) + "," + Number(location.lng).toFixed(4),
+        headers,
+    );
+    const stationsUrl = points && points.properties && points.properties.observationStations;
+    if (!stationsUrl) return null;
+    const stations = await readJson(doFetch, stationsUrl, headers);
+    const feature = stations && Array.isArray(stations.features) ? stations.features[0] : null;
+    const stationId = feature && feature.properties && feature.properties.stationIdentifier
+        || (typeof feature?.id === "string" ? (feature.id.match(/stations\/([A-Z0-9]+)$/i) || [])[1] : null);
+    if (!stationId) return null;
+    const observation = await readJson(doFetch, "https://api.weather.gov/stations/" + stationId + "/observations/latest", headers);
+    return parseNwsObservation(observation, fetchedAt);
+}
+
+function locationKey(location) {
+    return Number(location.lat).toFixed(4) + "," + Number(location.lng).toFixed(4);
+}
+
+export async function fetchCourseWeather(location, doFetch = fetch) {
+    if (!location || !Number.isFinite(Number(location.lat)) || !Number.isFinite(Number(location.lng))) return null;
+    const key = locationKey(location);
+    const cached = fallbackCache.get(key);
+    if (cached && cached.sample && Date.now() - cached.at < FALLBACK_TTL_MS) return cached.sample;
+    if (cached && cached.inflight) return cached.inflight;
+
+    const inflight = (async function () {
+        const fetchedAt = new Date().toISOString();
+        const om = parseOpenMeteoCurrent(await readJson(doFetch, openMeteoUrl(location), {
+            Accept: "application/json",
+            "User-Agent": WEATHER_UA,
+        }), fetchedAt);
+        const sample = om || await fetchNwsObservation(location, doFetch, fetchedAt);
+        fallbackCache.set(key, { at: Date.now(), sample: sample || null });
+        return sample || null;
+    })();
+
+    fallbackCache.set(key, { ...(cached || {}), inflight, at: cached ? cached.at : 0, sample: cached ? cached.sample : null });
+    try {
+        return await inflight;
+    } finally {
+        const cur = fallbackCache.get(key);
+        if (cur) delete cur.inflight;
+    }
+}
+
+export function mergeFallbackWeather(weather, sample) {
+    if (!weather || !sample) return weather || null;
+    return {
+        ...weather,
+        current: sample,
+        error: null,
+        updatedAt: sample.fetchedAt || weather.updatedAt,
+    };
+}
+

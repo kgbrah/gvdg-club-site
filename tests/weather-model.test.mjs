@@ -219,6 +219,70 @@ test('shared weather helper exports no standalone DOM renderer', async () => {
   assert.doesNotMatch(source, /createElement|createElementNS|appendChild|replaceChildren|querySelectorAll/);
 });
 
+test('parses NWS observations and falls back when Open-Meteo is rate limited', async () => {
+  const weather = await loadWeatherDisplay();
+  const parsed = weather.parseNwsObservation({
+    properties: {
+      timestamp: '2026-09-21T12:15:00+00:00',
+      textDescription: 'Clear',
+      temperature: { value: 24 },
+      heatIndex: { value: 24.8 },
+      relativeHumidity: { value: 88.6 },
+      windDirection: { value: 240 },
+      windSpeed: { value: 16.1 },
+      windGust: { value: 32.2 },
+      precipitationLastHour: { value: 0 },
+    },
+  }, '2026-09-21T12:16:00.000Z');
+  assert.equal(parsed.source, 'nws');
+  assert.equal(parsed.temperatureF, 75.2);
+  assert.equal(parsed.windSpeedMph, 10);
+  assert.equal(parsed.weatherCode, 0);
+
+  const calls = [];
+  const doFetch = async (url) => {
+    calls.push(String(url));
+    if (String(url).includes('open-meteo')) {
+      return { ok: false, json: async () => ({ error: true }) };
+    }
+    if (String(url).includes('/points/')) {
+      return { ok: true, json: async () => ({ properties: { observationStations: 'https://api.weather.gov/gridpoints/MHX/30,95/stations' } }) };
+    }
+    if (String(url).includes('/stations') && !String(url).includes('/observations')) {
+      return { ok: true, json: async () => ({ features: [{ properties: { stationIdentifier: 'KPGV' } }] }) };
+    }
+    return {
+      ok: true,
+      json: async () => ({
+        properties: {
+          timestamp: '2026-09-21T12:15:00+00:00',
+          textDescription: 'Clear',
+          temperature: { value: 24 },
+          heatIndex: { value: 24.8 },
+          relativeHumidity: { value: 88.6 },
+          windDirection: { value: 240 },
+          windSpeed: { value: 16.1 },
+          windGust: { value: 32.2 },
+          precipitationLastHour: { value: 0 },
+        },
+      }),
+    };
+  };
+
+  const sample = await weather.fetchCourseWeather({ lat: 35.6264, lng: -77.375, label: 'West Meadowbrook' }, doFetch);
+  assert.equal(sample.source, 'nws');
+  assert.equal(sample.temperatureF, 75.2);
+  assert.ok(calls.some((url) => url.includes('open-meteo')));
+  assert.ok(calls.some((url) => url.includes('api.weather.gov/points/')));
+  const merged = weather.mergeFallbackWeather({
+    location: { lat: 35.6264, lng: -77.375, label: 'West Meadowbrook' },
+    current: null,
+    error: 'weather_unavailable',
+  }, sample);
+  assert.equal(merged.error, null);
+  assert.equal(merged.current.temperatureF, 75.2);
+});
+
 test('React weather surfaces import the module instead of loading a global script', async () => {
   const scoreHtml = await readFile(new URL('../score.html', import.meta.url), 'utf8');
   const eventsHtml = await readFile(new URL('../events.html', import.meta.url), 'utf8');
@@ -227,5 +291,6 @@ test('React weather surfaces import the module instead of loading a global scrip
   assert.doesNotMatch(scoreHtml, /<script src="weather-display\.js"/);
   assert.doesNotMatch(eventsHtml, /<script src="weather-display\.js"/);
   assert.match(strip, /from "\.\.\/shared\/weather-model\.js"/);
+  assert.match(strip, /fetchCourseWeather/);
   assert.doesNotMatch(strip, /weatherApi|GVDGWeather/);
 });

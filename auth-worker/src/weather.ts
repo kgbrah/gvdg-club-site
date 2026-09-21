@@ -7,7 +7,7 @@ export type WeatherLocation = {
 };
 
 export type WeatherCondition = {
-  readonly source: "open-meteo";
+  readonly source: "open-meteo" | "nws";
   readonly observedAt: string;
   readonly fetchedAt: string;
   readonly temperatureF: number | null;
@@ -39,7 +39,9 @@ type LatLng = { readonly lat: number; readonly lng: number };
 
 export const WEATHER_REFRESH_MS = 5 * 60 * 1000;
 const WEATHER_FETCH_TIMEOUT_MS = 3500;
+const NWS_FETCH_TIMEOUT_MS = 8000;
 const WEATHER_HISTORY_LIMIT = 72;
+const WEATHER_UA = "GreenvilleDiscGolfClub/1.0 (https://gvdgclub.com; weather@gvdgclub.com)";
 const OPEN_METEO_CURRENT_FIELDS = [
   "temperature_2m",
   "relative_humidity_2m",
@@ -61,8 +63,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function asNumber(value: unknown): number | null {
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  return value;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
 }
 
 function asString(value: unknown): string | null {
@@ -75,6 +81,23 @@ function round1(value: number | null): number | null {
 
 function round2(value: number | null): number | null {
   return value == null ? null : Math.round(value * 100) / 100;
+}
+
+function cToF(celsius: number | null): number | null {
+  return celsius == null ? null : celsius * 9 / 5 + 32;
+}
+
+function kmhToMph(kmh: number | null): number | null {
+  return kmh == null ? null : kmh * 0.621371;
+}
+
+function mmToIn(mm: number | null): number | null {
+  return mm == null ? null : mm / 25.4;
+}
+
+function nwsUnitValue(value: unknown): number | null {
+  if (isRecord(value)) return asNumber(value["value"]);
+  return asNumber(value);
 }
 
 function coordFrom(value: unknown): LatLng | null {
@@ -196,6 +219,62 @@ export function parseOpenMeteoCurrent(payload: unknown, fetchedAt: string): Weat
   };
 }
 
+function nwsWeatherCode(text: string | null): number | null {
+  if (!text) return null;
+  const t = text.toLowerCase();
+  if (/thunder|t-?storm/.test(t)) return 95;
+  if (/\bsnow|sleet|ice|wintry/.test(t)) return 71;
+  if (/\bfog|mist|haze/.test(t)) return 45;
+  if (/drizzle/.test(t)) return 51;
+  if (/shower/.test(t)) return 80;
+  if (/\brain/.test(t)) return /heavy/.test(t) ? 65 : /light/.test(t) ? 61 : 63;
+  if (/overcast/.test(t) || /mostly cloudy/.test(t)) return 3;
+  if (/partly cloudy|partly sunny/.test(t)) return 2;
+  if (/mostly clear|mostly sunny|fair/.test(t)) return 1;
+  if (/clear|sunny/.test(t)) return 0;
+  if (/cloud/.test(t)) return 3;
+  return null;
+}
+
+export function parseNwsObservation(payload: unknown, fetchedAt: string): WeatherCondition | null {
+  if (!isRecord(payload)) return null;
+  const props = isRecord(payload["properties"]) ? payload["properties"] : payload;
+  const temperatureF = round1(cToF(nwsUnitValue(props["temperature"])));
+  if (temperatureF == null) return null;
+  const text = asString(props["textDescription"]);
+  const precipIn = round2(mmToIn(nwsUnitValue(props["precipitationLastHour"])));
+  const rainIn = precipIn != null && precipIn > 0 ? precipIn : 0;
+  return {
+    source: "nws",
+    observedAt: asString(props["timestamp"]) ?? fetchedAt,
+    fetchedAt,
+    temperatureF,
+    apparentTemperatureF: round1(cToF(nwsUnitValue(props["heatIndex"]))) ?? temperatureF,
+    relativeHumidity: round1(nwsUnitValue(props["relativeHumidity"])),
+    precipitationIn: precipIn,
+    rainIn,
+    showersIn: 0,
+    snowfallIn: 0,
+    weatherCode: nwsWeatherCode(text),
+    cloudCover: null,
+    windSpeedMph: round1(kmhToMph(nwsUnitValue(props["windSpeed"]))),
+    windDirectionDeg: round1(nwsUnitValue(props["windDirection"])),
+    windGustMph: round1(kmhToMph(nwsUnitValue(props["windGust"]))),
+    isDay: null,
+  };
+}
+
+function nwsStationId(feature: unknown): string | null {
+  if (!isRecord(feature)) return null;
+  const props = isRecord(feature["properties"]) ? feature["properties"] : null;
+  const ident = props ? asString(props["stationIdentifier"]) : null;
+  if (ident) return ident;
+  const id = asString(feature["id"]);
+  if (!id) return null;
+  const match = id.match(/stations\/([A-Z0-9]+)$/i);
+  return match && match[1] ? match[1] : null;
+}
+
 export function ratingWeatherFromJson(weatherJson: string | null | undefined): RatingWeather {
   if (!weatherJson) return { windGustMph: null };
   try {
@@ -207,28 +286,69 @@ export function ratingWeatherFromJson(weatherJson: string | null | undefined): R
   }
 }
 
+async function fetchJson(
+  url: URL | string,
+  doFetch: FetchLike,
+  timeoutMs: number,
+  headers: Record<string, string>,
+): Promise<unknown | null> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await doFetch(url, { headers, signal: controller.signal });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function fetchNwsWeather(
+  location: WeatherLocation,
+  doFetch: FetchLike,
+  fetchedAt: string,
+): Promise<WeatherCondition | null> {
+  const headers = { Accept: "application/geo+json", "User-Agent": WEATHER_UA };
+  const pointsUrl = `https://api.weather.gov/points/${location.lat.toFixed(4)},${location.lng.toFixed(4)}`;
+  const points = await fetchJson(pointsUrl, doFetch, NWS_FETCH_TIMEOUT_MS, headers);
+  if (!isRecord(points) || !isRecord(points["properties"])) return null;
+  const stationsUrl = asString(points["properties"]["observationStations"]);
+  if (!stationsUrl) return null;
+  const stations = await fetchJson(stationsUrl, doFetch, NWS_FETCH_TIMEOUT_MS, headers);
+  if (!isRecord(stations) || !Array.isArray(stations["features"])) return null;
+  const stationId = nwsStationId(stations["features"][0]);
+  if (!stationId) return null;
+  const observation = await fetchJson(
+    `https://api.weather.gov/stations/${stationId}/observations/latest`,
+    doFetch,
+    NWS_FETCH_TIMEOUT_MS,
+    headers,
+  );
+  return parseNwsObservation(observation, fetchedAt);
+}
+
 export async function fetchCurrentWeather(
   location: WeatherLocation,
   doFetch: FetchLike = fetch,
   fetchedAt = new Date().toISOString(),
 ): Promise<WeatherCondition | null> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), WEATHER_FETCH_TIMEOUT_MS);
+  // Open-Meteo's free tier rate-limits shared Cloudflare egress IPs (daily 429). Fall back to
+  // National Weather Service observations so a live round still gets wind/temp after the quota trips.
   try {
-    const response = await doFetch(openMeteoUrl(location), {
-      headers: { Accept: "application/json" },
-      signal: controller.signal,
+    const payload = await fetchJson(openMeteoUrl(location), doFetch, WEATHER_FETCH_TIMEOUT_MS, {
+      Accept: "application/json",
+      "User-Agent": WEATHER_UA,
     });
-    if (!response.ok) return null;
-    const payload: unknown = await response.json();
-    return parseOpenMeteoCurrent(payload, fetchedAt);
+    const sample = parseOpenMeteoCurrent(payload, fetchedAt);
+    if (sample) return sample;
+    return await fetchNwsWeather(location, doFetch, fetchedAt);
   } catch {
     // Weather is best-effort: swallow EVERYTHING, including a non-Error abort DOMException on timeout
     // (which is not always `instanceof Error` in workerd) — never let a weather fetch throw, or the DO
     // alarm that awaits it crashes and wedges the Durable Object.
     return null;
-  } finally {
-    clearTimeout(timeoutId);
   }
 }
 

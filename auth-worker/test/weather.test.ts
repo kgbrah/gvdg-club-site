@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { parseOpenMeteoCurrent, ratingWeatherFromJson, weatherLocationForCourse } from "../src/weather.js";
+import {
+  createWeatherState,
+  fetchCurrentWeather,
+  parseNwsObservation,
+  parseOpenMeteoCurrent,
+  ratingWeatherFromJson,
+  refreshWeatherState,
+  weatherLocationForCourse,
+} from "../src/weather.js";
 
 describe("live round weather", () => {
   it("parses current rain and wind conditions from Open-Meteo", () => {
@@ -36,6 +44,34 @@ describe("live round weather", () => {
     });
   });
 
+  it("parses NWS station observations into round weather", () => {
+    const parsed = parseNwsObservation({
+      properties: {
+        timestamp: "2026-09-21T12:15:00+00:00",
+        textDescription: "Clear",
+        temperature: { value: 24 },
+        heatIndex: { value: 24.8 },
+        relativeHumidity: { value: 88.6 },
+        windDirection: { value: 240 },
+        windSpeed: { value: 16.1 },
+        windGust: { value: 32.2 },
+        precipitationLastHour: { value: 0 },
+      },
+    }, "2026-09-21T12:16:00.000Z");
+
+    expect(parsed).toMatchObject({
+      source: "nws",
+      observedAt: "2026-09-21T12:15:00+00:00",
+      temperatureF: 75.2,
+      apparentTemperatureF: 76.6,
+      relativeHumidity: 88.6,
+      windSpeedMph: 10,
+      windGustMph: 20,
+      weatherCode: 0,
+      rainIn: 0,
+    });
+  });
+
   it("resolves weather coordinates from course GPS or layout hole GPS", () => {
     expect(weatherLocationForCourse(
       { name: "North Rec", location: "Greenville, NC", lat: 35.631092, lng: -77.319923 },
@@ -54,5 +90,52 @@ describe("live round weather", () => {
       current: { windGustMph: 18.4 },
       history: [{ windGustMph: 19.1 }, { wind_gusts_10m: 25.24 }],
     }))).toEqual({ windGustMph: 25.2 });
+  });
+
+  it("falls back to NWS when Open-Meteo is rate limited", async () => {
+    const doFetch: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.includes("open-meteo")) {
+        return new Response(JSON.stringify({ error: true, reason: "Daily API request limit exceeded." }), { status: 429 });
+      }
+      if (url.includes("api.weather.gov/points/")) {
+        return new Response(JSON.stringify({
+          properties: { observationStations: "https://api.weather.gov/gridpoints/MHX/30,95/stations" },
+        }));
+      }
+      if (url.includes("/stations") && !url.includes("/observations")) {
+        return new Response(JSON.stringify({
+          features: [{ properties: { stationIdentifier: "KPGV" } }],
+        }));
+      }
+      if (url.includes("/observations/latest")) {
+        return new Response(JSON.stringify({
+          properties: {
+            timestamp: "2026-09-21T12:15:00+00:00",
+            textDescription: "Clear",
+            temperature: { value: 24 },
+            heatIndex: { value: 24.8 },
+            relativeHumidity: { value: 88.6 },
+            windDirection: { value: 240 },
+            windSpeed: { value: 16.1 },
+            windGust: { value: 32.2 },
+            precipitationLastHour: { value: 0 },
+          },
+        }));
+      }
+      return new Response("missing", { status: 404 });
+    };
+
+    const location = { lat: 35.6264, lng: -77.375, label: "West Meadowbrook Park - Greenville, NC" };
+    const sample = await fetchCurrentWeather(location, doFetch, "2026-09-21T12:16:00.000Z");
+    expect(sample?.source).toBe("nws");
+    expect(sample?.temperatureF).toBe(75.2);
+
+    const started = createWeatherState(location, Date.parse("2026-09-21T12:00:00.000Z"));
+    expect(started).not.toBeNull();
+    const next = await refreshWeatherState(started!, doFetch, Date.parse("2026-09-21T12:00:00.000Z"));
+    expect(next.error).toBeNull();
+    expect(next.current?.source).toBe("nws");
+    expect(next.current?.windSpeedMph).toBe(10);
   });
 });

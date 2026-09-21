@@ -3,6 +3,8 @@ import {
   compassState as currentCompassState,
   currentWeatherSummary,
   enableCompass,
+  fetchCourseWeather,
+  mergeFallbackWeather,
   subscribeCompass,
   weatherChips,
   windArrowModel,
@@ -86,14 +88,48 @@ function WeatherWind(props) {
   );
 }
 
+function useResolvedWeather(serverWeather) {
+  const hasCurrent = Boolean(serverWeather && serverWeather.current);
+  const loc = serverWeather && serverWeather.location;
+  const lat = loc ? loc.lat : null;
+  const lng = loc ? loc.lng : null;
+  const canFallback = Boolean(!hasCurrent && Number.isFinite(Number(lat)) && Number.isFinite(Number(lng)));
+  const [fallback, setFallback] = React.useState(null);
+  const [pending, setPending] = React.useState(canFallback);
+
+  React.useEffect(() => {
+    if (!canFallback) {
+      setFallback(null);
+      setPending(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setPending(true);
+    fetchCourseWeather(loc).then((sample) => {
+      if (cancelled) return;
+      setPending(false);
+      setFallback(sample ? mergeFallbackWeather(serverWeather, sample) : null);
+    });
+    return function () {
+      cancelled = true;
+    };
+  }, [hasCurrent, lat, lng, serverWeather && serverWeather.error]);
+
+  if (hasCurrent) return serverWeather;
+  if (fallback && fallback.current) return fallback;
+  if (pending && serverWeather) return { ...serverWeather, error: null };
+  return serverWeather;
+}
+
 export function WeatherStrip(props) {
   const compassState = useCompassState();
+  const weather = useResolvedWeather(props.weather);
 
-  const chips = weatherChips(props.weather);
+  const chips = weatherChips(weather);
   if (!chips.length) return null;
 
-  const summary = currentWeatherSummary(props.weather);
-  const current = props.weather && props.weather.current;
+  const summary = currentWeatherSummary(weather);
+  const current = weather && weather.current;
   const meta = summary ? [summary.humidityText, summary.precipText].filter(Boolean).concat(summary.changes) : [];
   const wind = summary
     ? h(WeatherWind, {
@@ -137,8 +173,8 @@ export function WeatherStrip(props) {
     meta.length
       ? h("div", { className: "weather-meta", key: "meta" }, meta.map((text) => h("span", { key: text }, text)))
       : null,
-    props.weather && props.weather.location && props.weather.location.label
-      ? h("div", { className: "weather-note", key: "note" }, props.weather.location.label)
+    weather && weather.location && weather.location.label
+      ? h("div", { className: "weather-note", key: "note" }, weather.location.label)
       : null,
   ]);
 }

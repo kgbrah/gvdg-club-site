@@ -883,6 +883,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(weather, /weather-compact-copy/);
   assert.match(weather, /weather-wind-compact/);
   assert.match(weather, /WeatherGraphic/);
+  assert.match(weather, /useResolvedWeather|fetchCourseWeather/);
   assert.match(weather, /graphic: summary && summary.graphic/);
   assert.doesNotMatch(weather, /if \(weather && weather\.current\) void enableCompass\(\)/);
   assert.match(main, /requestCrottsHelp/);

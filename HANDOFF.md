@@ -34,7 +34,7 @@ It supersedes the 7 earlier slice PRs (#1–#7) — everything in those, plus a 
 - **Live scoring** — a Durable Object + WebSocket engine with a consensus model; singles/doubles/match-play; casual rounds and event rounds; Ryder-Cup team coloring; offline/PWA support.
 - **Pro shop** — products, PayPal/store-credit checkout, orders, wallet ledger.
 - **Ratings** — a dashboard estimate + a full PDGA-SSA engine recomputed by a daily cron.
-- **Integrations** — "Crotts" AI assistant (OpenRouter → Workers AI), tee-sign OCR (Gemini → OpenRouter → Workers AI), Open-Meteo weather, Resend email.
+- **Integrations** — "Crotts" AI assistant (OpenRouter → Workers AI), tee-sign OCR (Gemini → OpenRouter → Workers AI), Open-Meteo weather with NWS fallback, Resend email.
 - **Admin panel** — 16 tabs including member management with **promote/demote admin** (last-admin-protected).
 
 ---

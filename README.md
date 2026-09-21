@@ -80,7 +80,7 @@ The frontend picks its API base automatically through `src/shared/api-base.js`: 
 ### Integrations
 - **Crotts AI** — provider chain OpenRouter → Cloudflare Workers AI → dev stub.
 - **Tee-sign OCR (vision)** — Gemini → OpenRouter → Workers AI.
-- **Weather** — Open-Meteo (feeds both the app and the rating engine).
+- **Weather** — Open-Meteo, with National Weather Service observations as fallback when the free quota trips (feeds both the app and the rating engine).
 - **Email** — Resend (order/registration notifications), best-effort.
 - **PayPal** — Orders v2 auto-capture + `paypal.me` fallback.
 - **Ratings** — two distinct systems: a simple dashboard estimate and a full PDGA-SSA engine recomputed by a daily cron.
