@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   attachUdiscUrlsFromIndex,
+  inheritMappedUdiscUrl,
   isPlaceholderLayout,
   isUdiscLayoutCron,
   knownUdiscUrl,
@@ -56,6 +57,47 @@ describe("pickUdiscSearchMatch", () => {
       ),
     ).toBeNull();
   });
+
+  it("matches NC Wesleyan aliases and ignores a Virginia slug", () => {
+    const urls = [
+      "https://udisc.com/courses/north-carolina-wesleyan-university-Xw47",
+      "https://udisc.com/courses/virginia-wesleyan-university-abcd",
+      "https://udisc.com/courses/haywood-community-college-mG4h",
+    ];
+    expect(
+      pickUdiscSearchMatch(
+        { name: "Wesleyan College Disc Golf Course", location: "Rocky Mount, NC" },
+        urls,
+      ),
+    ).toBe("https://udisc.com/courses/north-carolina-wesleyan-university-Xw47");
+    expect(
+      pickUdiscSearchMatch(
+        { name: "NC Wesleyan University", location: "Rocky Mount, NC" },
+        urls,
+      ),
+    ).toBe("https://udisc.com/courses/north-carolina-wesleyan-university-Xw47");
+    expect(
+      pickUdiscSearchMatch(
+        { name: "Virginia Wesleyan College", location: "Virginia Beach, VA" },
+        urls,
+      ),
+    ).toBe("https://udisc.com/courses/virginia-wesleyan-university-abcd");
+  });
+
+  it("does not attach generic community-college or community-park slugs", () => {
+    expect(
+      pickUdiscSearchMatch(
+        { name: "Nash Community College DGC", location: "Rocky Mount, NC" },
+        ["https://udisc.com/courses/haywood-community-college-mG4h"],
+      ),
+    ).toBeNull();
+    expect(
+      pickUdiscSearchMatch(
+        { name: "Hildebran Community Park Disc Golf Course", location: "Hildebran, NC" },
+        ["https://udisc.com/courses/zebulon-community-park-ZxWn"],
+      ),
+    ).toBeNull();
+  });
 });
 
 describe("pickNextUdiscImportCourse", () => {
@@ -90,6 +132,43 @@ describe("pickNextUdiscImportCourse", () => {
     );
     expect(next?.id).toBe(9);
   });
+
+  it("retries no_url after a UDisc URL is attached", () => {
+    expect(
+      pickNextUdiscImportCourse(
+        [{
+          id: 144,
+          name: "Wesleyan College Disc Golf Course",
+          mapped: 0,
+          lat: 35.955,
+          lng: -77.813,
+        }],
+        [{ course_id: 144, status: "no_url", attempts: 3 }],
+      )?.id,
+    ).toBe(144);
+    expect(
+      pickNextUdiscImportCourse(
+        [{
+          id: 26,
+          name: "Englewood Park",
+          mapped: 0,
+          udisc_url: "https://udisc.com/courses/englewood-park-abcd",
+          lat: 35.953,
+          lng: -77.829,
+        }],
+        [{ course_id: 26, status: "no_url", attempts: 3 }],
+      )?.id,
+    ).toBe(26);
+  });
+
+  it("keeps no_url exhausted when still missing a URL", () => {
+    expect(
+      pickNextUdiscImportCourse(
+        [{ id: 26, name: "Englewood Park", mapped: 0, lat: 35.953, lng: -77.829 }],
+        [{ course_id: 26, status: "no_url", attempts: 3 }],
+      ),
+    ).toBeNull();
+  });
 });
 
 describe("knownUdiscUrl", () => {
@@ -101,6 +180,16 @@ describe("knownUdiscUrl", () => {
         [],
       ),
     ).toEqual([{ id: 9, udisc_url: "https://udisc.com/courses/ashe-county-park-wllg" }]);
+  });
+
+  it("attaches the Rocky Mount Wesleyan UDisc URL under both catalog names", () => {
+    expect(knownUdiscUrl({ name: "NC Wesleyan University" })).toBe(
+      "https://udisc.com/courses/north-carolina-wesleyan-university-Xw47",
+    );
+    expect(knownUdiscUrl({ name: "Wesleyan College Disc Golf Course" })).toBe(
+      "https://udisc.com/courses/north-carolina-wesleyan-university-Xw47",
+    );
+    expect(knownUdiscUrl({ name: "Virginia Wesleyan College" })).toBeNull();
   });
 });
 
@@ -181,6 +270,34 @@ describe("mergePositions / isPlaceholderLayout / attachUdiscUrlsFromIndex", () =
     expect(attached).toEqual([
       { id: 1, udisc_url: "https://udisc.com/courses/washington-high-school-ntm5" },
       { id: 3, udisc_url: "https://udisc.com/courses/west-meadowbrook-park-40Aw" },
+    ]);
+  });
+
+  it("inherits a mapped sibling's UDisc URL when names and location line up", () => {
+    const catalog = [
+      {
+        id: 21,
+        name: "Farmington Park DGC",
+        location: "Rocky Mount, NC",
+        lat: 35.946,
+        lng: -77.838,
+        mapped: 1,
+        udisc_url: "https://udisc.com/courses/farmington-park-dgc-KTyd",
+      },
+      {
+        id: 210,
+        name: "Farmington Park Disc Golf Course",
+        location: "Rocky Mount, NC",
+        lat: 35.947,
+        lng: -77.839,
+        mapped: 0,
+      },
+    ];
+    expect(inheritMappedUdiscUrl(catalog[1]!, catalog)).toBe(
+      "https://udisc.com/courses/farmington-park-dgc-KTyd",
+    );
+    expect(attachUdiscUrlsFromIndex(catalog, [])).toEqual([
+      { id: 210, udisc_url: "https://udisc.com/courses/farmington-park-dgc-KTyd" },
     ]);
   });
 });

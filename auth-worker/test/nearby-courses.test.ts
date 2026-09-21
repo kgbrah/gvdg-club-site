@@ -71,6 +71,28 @@ describe("planNearbyCourseImport", () => {
     expect(plan.insert.find((c) => c.name === "Far Virginia")?.miles).toBeGreaterThan(150);
     expect(plan.insert.find((c) => c.name === "Far Virginia")?.miles).toBeLessThan(250);
   });
+
+  it("treats DiscGolfAPI Wesleyan College as the seeded NC Wesleyan campus", () => {
+    const catalog = parseDiscGolfApiCourses({
+      courses: [
+        {
+          name: "Wesleyan College Disc Golf Course",
+          lat: 35.9550285,
+          lon: -77.8131027,
+          locality: "Rocky Mount",
+          region_code: "NC",
+          holes: 18,
+          existence_status: "existing",
+          operational_status: "open",
+        },
+      ],
+    });
+    const plan = planNearbyCourseImport(catalog, [
+      { name: "NC Wesleyan University", location: "Rocky Mount, NC", lat: 35.936, lng: -77.833 },
+    ]);
+    expect(plan.insert).toEqual([]);
+    expect(plan.skipped).toBe(1);
+  });
 });
 
 describe("discGolfApiUrl", () => {

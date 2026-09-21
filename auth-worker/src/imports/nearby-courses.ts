@@ -17,7 +17,7 @@ export const HOME_REGION = "NC";
 export const DISCGOLFAPI_PAGE = 250;
 
 const ALWAYS_DUP_MILES = 0.12;
-const SIMILAR_DUP_MILES = 0.5;
+const SIMILAR_DUP_MILES = 3;
 const NAME_JACCARD = 0.45;
 
 const STOP = new Set([

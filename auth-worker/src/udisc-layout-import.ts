@@ -25,8 +25,11 @@ export const UDISC_LAYOUT_IMPORT_CRON = "*/15 * * * *";
 export const UDISC_IMPORT_MAX_ATTEMPTS = 3;
 export const UDISC_IMPORTS_PER_TICK = 4;
 export const UDISC_IMPORT_PRIORITY = ["Ashe County Park"];
+export const UDISC_INHERIT_MILES = 3;
 export const KNOWN_UDISC_URLS: Record<string, string> = {
   "ashe county park": "https://udisc.com/courses/ashe-county-park-wllg",
+  "nc wesleyan university": "https://udisc.com/courses/north-carolina-wesleyan-university-Xw47",
+  "wesleyan college": "https://udisc.com/courses/north-carolina-wesleyan-university-Xw47",
 };
 const UDISC_FETCH = { maxBytes: 3_000_000, timeoutMs: 20_000 } as const;
 const UDISC_INDEX_PAGES = 20;
@@ -71,6 +74,9 @@ export function pickNextUdiscImportCourse(
   const isDone = (course: ImportCourse) => {
     const row = byId.get(course.id);
     if (!row) return false;
+    if (row.status === "no_url") {
+      return !(normalizeUdiscCourseUrl(course.udisc_url) || knownUdiscUrl(course));
+    }
     if (DONE.has(row.status)) return true;
     return row.status === "failed" && row.attempts >= UDISC_IMPORT_MAX_ATTEMPTS;
   };
@@ -114,17 +120,104 @@ function milesFromClub(course: ImportCourse): number {
   return haversineMiles(CLUB_ORIGIN, { lat, lng });
 }
 
-export function nameTokens(value: string): Set<string> {
-  return new Set(normalizeCourseName(value).split(" ").filter(Boolean));
+function cityKey(location?: string | null): string {
+  return expandMatchName(String(location || "").split(",")[0] || "");
 }
 
-export function tokenJaccard(a: string, b: string): number {
-  const left = nameTokens(a);
-  const right = nameTokens(b);
+function pairMiles(a: ImportCourse, b: ImportCourse): number | null {
+  const latA = Number(a.lat);
+  const lngA = Number(a.lng);
+  const latB = Number(b.lat);
+  const lngB = Number(b.lng);
+  if (![latA, lngA, latB, lngB].every(Number.isFinite)) return null;
+  return haversineMiles({ lat: latA, lng: lngA }, { lat: latB, lng: lngB });
+}
+
+const GENERIC_NAME_TOKENS = new Set([
+  "the", "at", "and", "of", "in", "for",
+  "disc", "golf", "course", "dgc", "park", "community",
+  "college", "university", "high", "school", "elementary", "middle",
+  "rec", "recreation", "campus", "center", "centre", "complex",
+  "carolina",
+]);
+
+export function expandMatchName(value: string): string {
+  let s = normalizeCourseName(value);
+  s = s.replace(/\bnc\b/g, "north carolina");
+  s = s.replace(/\bva\b/g, "virginia");
+  s = s.replace(/\bsc\b/g, "south carolina");
+  s = s.replace(/\bmd\b/g, "maryland");
+  s = s.replace(/\bwv\b/g, "west virginia");
+  s = s.replace(/\buniv\b/g, "university");
+  s = s.replace(/\bcommunity college\b/g, "communitycollege");
+  s = s.replace(/\bcollege\b/g, "university");
+  s = s.replace(/\bcommunitycollege\b/g, "community college");
+  return s.replace(/\s+/g, " ").trim();
+}
+
+export function geoLabel(value: string): string | null {
+  const s = expandMatchName(value);
+  if (/\bnorth carolina\b/.test(s)) return "north carolina";
+  if (/\bsouth carolina\b/.test(s)) return "south carolina";
+  if (/\bwest virginia\b/.test(s)) return "west virginia";
+  if (/\bvirginia\b/.test(s)) return "virginia";
+  if (/\bmaryland\b/.test(s)) return "maryland";
+  if (/\btennessee\b/.test(s)) return "tennessee";
+  if (/\bgeorgia\b/.test(s)) return "georgia";
+  return null;
+}
+
+export function distinctiveTokens(value: string): Set<string> {
+  const out = new Set<string>();
+  for (const part of expandMatchName(value).split(" ").filter(Boolean)) {
+    if (part.length > 2 && !GENERIC_NAME_TOKENS.has(part)) out.add(part);
+  }
+  return out;
+}
+
+function setJaccard(left: Set<string>, right: Set<string>): number {
   if (!left.size || !right.size) return 0;
   let inter = 0;
   for (const token of left) if (right.has(token)) inter += 1;
   return inter / (left.size + right.size - inter);
+}
+
+export function nameTokens(value: string): Set<string> {
+  return new Set(expandMatchName(value).split(" ").filter(Boolean));
+}
+
+export function tokenJaccard(a: string, b: string): number {
+  return setJaccard(nameTokens(a), nameTokens(b));
+}
+
+export function scoreUdiscUrl(
+  course: { name: string; location?: string | null },
+  url: string,
+): number {
+  const slug = udiscSlugName(url);
+  if (!slug) return 0;
+  const locGeo = geoLabel(course.location || "");
+  const slugGeo = geoLabel(slug);
+  if (locGeo && slugGeo && locGeo !== slugGeo) return 0;
+  const distinctName = distinctiveTokens(course.name);
+  const distinctSlug = distinctiveTokens(slug);
+  if (!distinctName.size) return 0;
+  let shared = 0;
+  for (const token of distinctName) if (distinctSlug.has(token)) shared += 1;
+  if (!shared) return 0;
+  const expandedName = expandMatchName(course.name);
+  const expandedSlug = expandMatchName(slug);
+  const exact = expandedName === expandedSlug ? 1 : 0;
+  const nameScore = Math.max(exact, tokenJaccard(expandedName, expandedSlug), setJaccard(distinctName, distinctSlug));
+  const loc = course.location ? tokenJaccard(course.location, slug) * 0.2 : 0;
+  return nameScore + loc;
+}
+
+export function urlMatchesCourse(
+  course: { name: string; location?: string | null },
+  url: string,
+): boolean {
+  return scoreUdiscUrl(course, url) >= 0.5;
 }
 
 export function pickUdiscSearchMatch(
@@ -132,13 +225,7 @@ export function pickUdiscSearchMatch(
   urls: string[],
 ): string | null {
   const scored = urls
-    .map((url) => {
-      const slug = udiscSlugName(url);
-      const exact = normalizeCourseName(slug) === normalizeCourseName(course.name) ? 1 : 0;
-      const nameScore = Math.max(exact, tokenJaccard(course.name, slug));
-      const loc = course.location ? tokenJaccard(course.location, slug) * 0.15 : 0;
-      return { url, score: nameScore + loc };
-    })
+    .map((url) => ({ url, score: scoreUdiscUrl(course, url) }))
     .filter((row) => row.score >= 0.5)
     .sort((a, b) => b.score - a.score || a.url.localeCompare(b.url));
   const top = scored[0];
@@ -148,6 +235,35 @@ export function pickUdiscSearchMatch(
   return top.url;
 }
 
+export function inheritMappedUdiscUrl(
+  course: ImportCourse,
+  catalog: ImportCourse[],
+): string | null {
+  const want = distinctiveTokens(course.name);
+  if (!want.size) return null;
+  const city = cityKey(course.location);
+  let best: { url: string; score: number } | null = null;
+  for (const other of catalog) {
+    if (other.id === course.id) continue;
+    const url = normalizeUdiscCourseUrl(other.udisc_url);
+    if (!url || !isMapped(other)) continue;
+    const otherTokens = distinctiveTokens(other.name);
+    let shared = 0;
+    for (const token of want) if (otherTokens.has(token)) shared += 1;
+    if (!shared) continue;
+    const sameCity = Boolean(city && city === cityKey(other.location));
+    const miles = pairMiles(course, other);
+    const near = miles != null && miles <= UDISC_INHERIT_MILES;
+    if (!sameCity && !near) continue;
+    const locGeo = geoLabel(course.location || "");
+    const otherGeo = geoLabel(other.location || "");
+    if (locGeo && otherGeo && locGeo !== otherGeo) continue;
+    const score = shared + (sameCity ? 0.5 : 0) + (near ? 0.3 : 0);
+    if (!best || score > best.score) best = { url, score };
+  }
+  return best?.url ?? null;
+}
+
 export function attachUdiscUrlsFromIndex(
   courses: ImportCourse[],
   urls: string[],
@@ -155,10 +271,12 @@ export function attachUdiscUrlsFromIndex(
   const attached: { id: number; udisc_url: string }[] = [];
   const taken = new Set<string>();
   for (const course of courses) {
-    if (normalizeUdiscCourseUrl(course.udisc_url)) continue;
+    const existing = normalizeUdiscCourseUrl(course.udisc_url);
+    if (existing && (isMapped(course) || urlMatchesCourse(course, existing))) continue;
     const known = knownUdiscUrl(course);
-    const match = known || pickUdiscSearchMatch(course, urls.filter((url) => !taken.has(url)));
-    if (!match) continue;
+    const inherited = inheritMappedUdiscUrl(course, courses);
+    const match = known || inherited || pickUdiscSearchMatch(course, urls.filter((url) => !taken.has(url)));
+    if (!match || match === existing) continue;
     taken.add(match);
     attached.push({ id: course.id, udisc_url: match });
   }

@@ -105,7 +105,7 @@ Cloudflare Worker  auth-worker/src/index.ts   (default export { fetch, scheduled
   ├─ R2  PHOTOS      tee-sign images
   └─ AI  + OpenRouter/Gemini  Crotts assistant + tee-sign OCR
   scheduled()  cron "17 8 * * *"  → daily ratings recompute (never on the request path)
-               cron "*/15 * * * *" → one UDisc layout import (existing importer, unmapped courses only)
+               cron "*/15 * * * *" → UDisc layout import (similar names + city, unmapped only)
 ```
 
 ### The split router
