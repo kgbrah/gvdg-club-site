@@ -10,6 +10,8 @@ import { roundRatingForScoreWithWeather, solveSsa, type Propagator, type RatingM
 import { clearRoundRatingsForCasualRound, clearRoundRatingsForEvent, createRoundRating, findRatingAnchor, getLayoutRatingBaseline, upsertLayoutRatingBaseline, upsertPlayerRatingFromRounds } from "./rating-store.js";
 import { isOpenPlayId } from "./authz.js";
 import { mergePartnerPlayInputs, partnersForStanding, withPlayBreakdown } from "./play-stats.js";
+import { ingestScorecardMarks } from "./db-hole-shot-marks.js";
+import { shotRoundKey } from "./hole-shot-marks.js";
 import { ratingWeatherFromJson } from "./weather.js";
 
 export type FinalizeLiveEventInput = {
@@ -85,6 +87,7 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
     await input.persist();
     input.broadcast();
     await persistRatingsBestEffort(input.env, meta, standings); // ratings never gate the finalize
+    void persistHeatmapMarksBestEffort(input.env, meta, standings);
     return j({ status: "final", standings, forced });
   }
   try {
@@ -118,6 +121,7 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
   await input.persist();
   input.broadcast();
   await persistRatingsBestEffort(input.env, meta, standings); // ratings never gate the finalize
+  void persistHeatmapMarksBestEffort(input.env, meta, standings);
   return j({ status: "final", standings, forced });
 }
 
@@ -185,6 +189,28 @@ function casualRoundId(value: unknown): number | null {
   if (typeof value !== "object" || value === null || !("id" in value)) return null;
   const id = value.id;
   return typeof id === "number" ? id : null;
+}
+
+async function persistHeatmapMarksBestEffort(
+  env: LiveEnv,
+  meta: LiveMeta,
+  standings: FinalLiveStanding[],
+): Promise<void> {
+  const layoutId = Number(meta.layoutId);
+  if (!Number.isInteger(layoutId) || layoutId <= 0) return;
+  const roundCode = shotRoundKey(meta.roundCode, meta.eventId);
+  try {
+    for (const standing of standings) {
+      await ingestScorecardMarks(env.DB, {
+        layoutId,
+        roundCode,
+        memberId: standing.memberId || "",
+        scorecard: standing.holes,
+      });
+    }
+  } catch {
+    /* heatmap ingest never blocks finalize */
+  }
 }
 
 /** Write round_ratings for a just-finalized round. BEST-EFFORT: any failure is logged, never thrown, so

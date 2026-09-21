@@ -280,6 +280,7 @@ function WatchHoles(props) {
       hole: selected,
       key: "map",
       large: true,
+      layoutId: props.layoutId,
       players: mapPlayers,
       scoreFlight,
       throwGroups: replay

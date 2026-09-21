@@ -725,6 +725,7 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
       : null,
     dormie: isMatchDormie(state),
     hole,
+    layoutId: state.layoutId || (state.snap && state.snap.layoutId) || null,
     holeGrid,
     holeMeta: "Par " + hole.par + (hole.distance_ft ? " · " + hole.distance_ft + " ft" : "") + (hole.overridden ? " (today)" : "") + ctpMeta,
     matchStatus: isMatchplayScoring(state) ? matchStatusText(state) : "",

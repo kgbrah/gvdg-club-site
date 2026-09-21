@@ -11,4 +11,5 @@ export * from "./db-results.js";
 export * from "./db-export.js";
 export * from "./db-tee-signs.js";
 export * from "./db-course-map-marks.js";
+export * from "./db-hole-shot-marks.js";
 export * from "./db-udisc-layout-imports.js";

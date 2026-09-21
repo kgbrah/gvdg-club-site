@@ -15,6 +15,8 @@ import { normalizeMapMarkKind } from "./course-map-marks.js";
 import { sanitizeDiscColor } from "./disc-color-routes.js";
 import { sanitizeProfilePhoto } from "./profile-photo.js";
 import { parseThrowsBody } from "./play-stats.js";
+import { replacePlayerHoleMarks } from "./db-hole-shot-marks.js";
+import { shotRoundKey } from "./hole-shot-marks.js";
 import { updateLivePairs } from "./live-pairs.js";
 import { mineData, publicSnapshot } from "./live-snapshot.js";
 import { attestationForCard, canEnterScorecard, cardKey, findPlayer, invalidScoreTargetsResponse, isCardLocked, issuesForCard, scoreTargetForBody, scorecardIssues, scoringState, targetAnchor } from "./live-state.js";
@@ -574,6 +576,7 @@ export class LiveEventDO {
     if (discColor) player.discColor = discColor;
     await this.persist();
     this.broadcast();
+    void persistLiveThrows(this.env, this.meta, player.memberId, parsed.hole, parsed.throws);
     return j({ ok: true, hole: parsed.hole, throws: parsed.throws.length });
   }
 
@@ -594,5 +597,27 @@ export class LiveEventDO {
   }
   private broadcast(): void {
     this.sendAll({ type: "snapshot", ...this.snapshot() });
+  }
+}
+
+async function persistLiveThrows(
+  env: LiveEnv,
+  meta: LiveMeta,
+  memberId: string | null | undefined,
+  hole: number,
+  throws: unknown,
+): Promise<void> {
+  const layoutId = Number(meta.layoutId);
+  if (!Number.isInteger(layoutId) || layoutId <= 0) return;
+  try {
+    await replacePlayerHoleMarks(env.DB, {
+      layoutId,
+      hole,
+      roundCode: shotRoundKey(meta.roundCode, meta.eventId),
+      memberId: memberId || "",
+      throws,
+    });
+  } catch {
+    /* heatmap ingest never blocks scoring */
   }
 }

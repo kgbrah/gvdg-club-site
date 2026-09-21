@@ -417,6 +417,7 @@ function HoleMedia(props) {
           compact: true,
           focus: props.mapFocus,
           hole: props.hole,
+          layoutId: props.layoutId,
           hud: h(RangeHud, {
             gpsStatus: props.gpsStatus,
             hud: props.rangeHud,

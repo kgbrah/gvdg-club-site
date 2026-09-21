@@ -341,6 +341,7 @@ test('Events event detail is rendered by the public React bundle', () => {
   assert.match(app, /import \{ HoleMap \} from "\.\.\/shared\/hole-map\.js"/);
   assert.match(app, /compact: true/);
   assert.match(html, /\.hole-map-satellite/);
+  assert.match(html, /\.hole-map-heat \{/);
   assert.match(html, /\.hole-map-compact/);
   assert.match(app, /function PlayerRoster/);
   assert.match(app, /EventFieldRoster/);

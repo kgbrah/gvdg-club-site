@@ -297,7 +297,7 @@ function TeeSigns({ apiBase, teeSigns }) {
       if (hole.par != null) bits.push(`Par ${hole.par}`);
       if (hole.distance_ft != null) bits.push(`${hole.distance_ft} ft`);
       return h("div", { className, key: String(hole.hole) }, [
-        h(HoleMap, { compact: true, hole, key: "map" }),
+        h(HoleMap, { compact: true, hole, key: "map", layoutId: layout && (layout.id || layout.layout_id) }),
         hole.signId != null
           ? h("img", {
             alt: `Tee sign, hole ${hole.hole}`,

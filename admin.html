@@ -153,7 +153,12 @@
         .hole-map-card { padding: 0.55rem; }
         .hole-map-frame { position: relative; overflow: hidden; border-radius: 10px; border: 1px solid var(--border-color); aspect-ratio: 16 / 9; background: var(--bg-tertiary); }
         .hole-map-satellite { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
-        .hole-map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; background: transparent; }
+        .hole-map-heat,
+        .hole-map-heat-you { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+        .hole-map-heat { z-index: 1; mix-blend-mode: screen; opacity: 0.92; }
+        .hole-map-heat-you { z-index: 2; }
+        .hole-map-heat-you-dot { fill: none; stroke: var(--primary); stroke-width: 2.2; }
+        .hole-map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; background: transparent; z-index: 3; }
         .hole-map-fairway-shadow { fill: none; stroke: black; stroke-width: 6; stroke-linecap: round; opacity: 0.45; }
         .hole-map-fairway { fill: none; stroke: white; stroke-width: 3; stroke-dasharray: 7 6; stroke-linecap: round; }
         .hole-map-tee-pad {
@@ -200,6 +205,20 @@
         .hole-map-player-label { fill: white; stroke: none; font: 700 10px Archivo, sans-serif; text-anchor: middle; }
         .hole-map-compact .hole-map-player-label { font-size: 8px; }
         .hole-map-wind { color: var(--accent); }
+        .hole-map-focus {
+            position: absolute; top: 0.4rem; left: 0.4rem; z-index: 5;
+            display: flex; gap: 0.22rem; pointer-events: auto;
+        }
+        .hole-map-focus-btn {
+            min-height: 32px; min-width: 2.4rem; padding: 0 0.5rem;
+            border-radius: 999px; border: 1px solid var(--border-color);
+            background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+            color: var(--text-primary); font: 800 0.68rem Archivo, sans-serif;
+            letter-spacing: 0.02em; cursor: pointer;
+        }
+        .hole-map-focus-btn.active {
+            background: var(--primary-strong); color: var(--light); border-color: var(--primary-strong);
+        }
         .hole-map-caption { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 0.4rem; font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
         .hole-map-credit { margin-top: 0.2rem; font-size: 0.62rem; color: var(--text-muted); }
         .hole-map-compact { padding: 0; }

@@ -84,7 +84,9 @@ test('admin scoring tee-sign strip overlays satellite hole maps', () => {
   assert.match(strip, /import \{ HoleMap \} from "\.\.\/shared\/hole-map\.js"/);
   assert.match(strip, /compact: true/);
   assert.match(strip, /playerLocations/);
+  assert.match(strip, /layoutId: layout && \(layout.id \|\| layout.layout_id\)/);
   assert.match(html, /\.hole-map-satellite/);
+  assert.match(html, /\.hole-map-heat \{/);
   assert.match(html, /\.hole-map-compact/);
   assert.match(html, /\.ts-strip-card \{ flex: 0 0 auto; width: 180px;/);
 });

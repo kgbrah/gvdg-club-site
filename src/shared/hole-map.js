@@ -2,6 +2,7 @@ import React from "react";
 
 import { flightArc, flightPoint, holeMapLabel, HOLE_MAP_COMPACT_SIZE, HOLE_MAP_SIZE, HOLE_MAP_WATCH_SIZE, latLngFromMapPoint, playerMarksOnMap, playerPhotoSrc, projectHoleMap, projectMapPoint, SATELLITE_CREDIT, scoreChipAnchor, throwSegments } from "./hole-map-model.js";
 import { discColorPattern } from "./disc-color.js";
+import { HEATMAP_MIN_SAMPLES, HeatmapLayer, useHoleHeatmap } from "./hole-heatmap.js";
 import { safeExternalUrl } from "./safe-url.js";
 import { udiscDeepLink } from "./udisc-export.js";
 
@@ -24,21 +25,40 @@ function SatelliteLayer({ url }) {
 }
 
 function MapFocusChips(props) {
-  if (typeof props.onFocus !== "function") return null;
-  return h("div", { "aria-label": "Map zoom", className: "hole-map-focus", role: "group" }, [
-    { id: "hole", label: "Hole" },
-    { id: "c2", label: "C2" },
-    { id: "c1", label: "C1" },
-  ].map((item) => h("button", {
-    "aria-pressed": props.focus === item.id ? "true" : "false",
-    className: "hole-map-focus-btn" + (props.focus === item.id ? " active" : ""),
-    key: item.id,
-    type: "button",
-    onClick: (event) => {
-      event.stopPropagation();
-      props.onFocus(item.id);
-    },
-  }, item.label)));
+  const zoom = typeof props.onFocus === "function";
+  const heat = typeof props.onHeat === "function";
+  if (!zoom && !heat) return null;
+  const items = zoom
+    ? [
+      { id: "hole", label: "Hole" },
+      { id: "c2", label: "C2" },
+      { id: "c1", label: "C1" },
+    ]
+    : [];
+  return h("div", { "aria-label": "Map overlay", className: "hole-map-focus", role: "group" }, [
+    ...items.map((item) => h("button", {
+      "aria-pressed": props.focus === item.id ? "true" : "false",
+      className: "hole-map-focus-btn" + (props.focus === item.id ? " active" : ""),
+      key: item.id,
+      type: "button",
+      onClick: (event) => {
+        event.stopPropagation();
+        props.onFocus(item.id);
+      },
+    }, item.label)),
+    heat
+      ? h("button", {
+        "aria-pressed": props.heat ? "true" : "false",
+        className: "hole-map-focus-btn" + (props.heat ? " active" : ""),
+        key: "heat",
+        type: "button",
+        onClick: (event) => {
+          event.stopPropagation();
+          props.onHeat();
+        },
+      }, "Heat")
+      : null,
+  ]);
 }
 
 function MapLieChip(props) {
@@ -462,6 +482,12 @@ export function HoleMap(props) {
     windFromDeg: props.windFromDeg,
   });
   const [flight, setFlight] = React.useState(null);
+  const [heatOn, setHeatOn] = React.useState(true);
+  const heatmap = useHoleHeatmap(props.layoutId, hole && hole.hole);
+  const heatSamples = heatmap && Array.isArray(heatmap.lies) ? heatmap.lies.length : 0;
+  const youSamples = heatmap && Array.isArray(heatmap.you) ? heatmap.you.length : 0;
+  const heatAvailable = heatSamples >= HEATMAP_MIN_SAMPLES || youSamples > 0;
+  const showHeat = heatOn && heatAvailable;
   const throwCountRef = React.useRef(null);
   const scoreFlightRef = React.useRef(Number(props.scoreFlight) || 0);
   const holeKey = hole && hole.hole;
@@ -549,6 +575,7 @@ export function HoleMap(props) {
   }, [
     h("div", { className: "hole-map-frame", key: "frame" }, [
       h(SatelliteLayer, { key: map.satelliteUrl || "satellite", url: map.satelliteUrl }),
+      h(HeatmapLayer, { enabled: showHeat, key: "heat", map, payload: heatmap }),
       h(
         "svg",
         {
@@ -656,7 +683,13 @@ export function HoleMap(props) {
         ],
       ),
       h(ScoreChips, { compact, height: map.height, key: "chips", marks: players, width: map.width }),
-      h(MapFocusChips, { focus: map.focus, key: "focus", onFocus: props.onFocus }),
+      h(MapFocusChips, {
+        focus: map.focus,
+        heat: showHeat,
+        key: "focus",
+        onFocus: props.onFocus,
+        onHeat: heatAvailable ? () => setHeatOn((value) => !value) : undefined,
+      }),
       h(MapLieChip, {
         key: "lie-chip",
         surveyed: props.surveyed,

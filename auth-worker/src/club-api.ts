@@ -5,6 +5,7 @@ import { handleClubLive } from "./club-live-routes.js";
 import { handleCasualRounds } from "./club-rounds-routes.js";
 import { handleCourseConditions } from "./course-conditions-routes.js";
 import { handleEventChat } from "./event-chat-routes.js";
+import { handleHoleHeatmap } from "./hole-shot-marks-routes.js";
 import { handleClubPublic } from "./club-public-routes.js";
 import { handleClubRegistration } from "./club-registration-routes.js";
 import { handleClubShop } from "./club-shop-routes.js";
@@ -17,6 +18,9 @@ export async function clubApi(request: Request, env: Env, origin: string | null,
 
   const chatRoute = await handleEventChat(request, env, origin, method, seg);
   if (chatRoute) return chatRoute;
+
+  const heatmapRoute = await handleHoleHeatmap(request, env, origin, method, seg);
+  if (heatmapRoute) return heatmapRoute;
 
   const publicRoute = await handleClubPublic(request, env, origin, pathname, method, seg);
   if (publicRoute) return publicRoute;

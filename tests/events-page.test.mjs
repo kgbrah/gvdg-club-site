@@ -332,8 +332,9 @@ test('public Events event detail fetches in React', () => {
   assert.match(app, /function EventExtras/);
   assert.match(app, /function TeeSigns/);
   assert.match(app, /import \{ HoleMap \} from "\.\.\/shared\/hole-map\.js"/);
-  assert.match(app, /h\(HoleMap, \{ compact: true, hole, key: "map" \}\)/);
+  assert.match(app, /h\(HoleMap, \{ compact: true, hole, key: "map", layoutId: layout && \(layout.id \|\| layout.layout_id\) \}\)/);
   assert.match(source, /\.hole-map-satellite/);
+  assert.match(source, /\.hole-map-heat \{/);
   assert.match(source, /\.player-rating/);
   assert.match(app, /function PlayerRoster/);
   assert.match(app, /EventFieldRoster/);

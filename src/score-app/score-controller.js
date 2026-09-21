@@ -867,6 +867,7 @@ export function startScoreApp(options) {
             S.cardAttestation = d.cardAttestation || { agreedIndexes: [], neededIndexes: [], complete: false };
             S.roundConfig = d.roundConfig || null; S.scoreTargets = Array.isArray(d.scoreTargets) ? d.scoreTargets : []; S.scoreTargetError = d.scoreTargetError || null;
             S.courseName = d.courseName || null; S.layoutName = d.layoutName || null; S.udiscCourseId = d.udiscCourseId || null;
+            S.layoutId = d.layoutId || null;
             S.weather = d.weather || null;
             S.playerLocations = Array.isArray(d.playerLocations) ? d.playerLocations : [];
             S.scorerIndex = d.playerIndex;
@@ -1144,6 +1145,7 @@ export function startScoreApp(options) {
                 isMatchplay: isMatchplayScoring(S),
                 keepScoreHref: liveScoreHref({ eventId: EVENT_ID, roundCode: ROUND_CODE, guestToken: GUEST_TOKEN }),
                 layoutName: S.layoutName,
+                layoutId: S.layoutId || snap.layoutId || null,
                 onCopyLink: shareWatchLink,
                 pots,
                 relClass: relClass,
@@ -1179,6 +1181,7 @@ export function startScoreApp(options) {
             S.courseName = d.courseName || null;
             S.layoutName = d.layoutName || null;
             S.udiscCourseId = d.udiscCourseId || null;
+            S.layoutId = d.layoutId || null;
             S.weather = d.weather || null;
             S.playerLocations = Array.isArray(d.playerLocations) ? d.playerLocations : [];
             S.lastRev = d.rev == null ? -1 : d.rev;

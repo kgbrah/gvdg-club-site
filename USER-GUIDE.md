@@ -191,7 +191,7 @@ The **score app** (tap **Keep score** on the public site, **Play** on the member
 1. You see **one hole at a time**. The map fills the top of the screen. Scores sit in the **bottom third** so you can tap them with one thumb.
 2. Tap **−** or **+** to change a score, or tap the number itself for a pad (birdie / par / bogey, or 1–10).
 3. Tap the arrow **›** under the scores (right thumb) to go to the next hole, or **‹** to go back. On shotgun start, those arrows follow the holes in play order.
-4. The map stays on. Tap **Tee sign** on the map if you want the picture.
+4. The map stays on. Tap **Tee sign** on the map if you want the picture. If enough marked lies exist for that hole, **Heat** paints where people land — gold for the field, rings for your own saved shots. Tap Heat to hide it; the map size does not change.
 - **Important:** the official score is the one the card **agrees on**. If two people type different numbers, the hole stays blank until they match. One phone on the card is enough. 🤝
 
 ### 🌦️ Check round weather

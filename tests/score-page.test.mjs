@@ -1191,6 +1191,25 @@ test("live scoring lets members mark tee pads and baskets for the club map", () 
   assert.match(html, /\.hole-map-survey-btn/);
 });
 
+test("hole maps overlay a landing-zone heatmap of saved marked lies", () => {
+  const holeMap = readFileSync("src/shared/hole-map.js", "utf8");
+  const heatmap = readFileSync("src/shared/hole-heatmap.js", "utf8");
+  const html = readFileSync("score.html", "utf8");
+  const scorecard = readFileSync("src/score-app/scorecard-view.js", "utf8");
+  const watch = readFileSync("src/score-app/watch-view.js", "utf8");
+  const controller = scoreControllerSource();
+  assert.match(holeMap, /useHoleHeatmap/);
+  assert.match(holeMap, /HeatmapLayer/);
+  assert.match(holeMap, /"Heat"/);
+  assert.match(heatmap, /splatHeatmap/);
+  assert.match(heatmap, /\/layouts\/" \+ encodeURIComponent\(String\(id\)\) \+ "\/heatmap/);
+  assert.match(html, /\.hole-map-heat \{/);
+  assert.match(html, /mix-blend-mode: screen/);
+  assert.match(scorecard, /layoutId: props\.layoutId/);
+  assert.match(watch, /layoutId: props\.layoutId/);
+  assert.match(controller, /layoutId: S\.layoutId \|\| snap\.layoutId \|\| null/);
+});
+
 test("watch follow prefers the most recently marked player on the hole", async () => {
   const {
     watchFollowPlayer,
