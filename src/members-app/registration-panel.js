@@ -4,6 +4,7 @@ import { requestJson } from "./api.js";
 import { useMemberContext } from "./member-context.js";
 import { CasualRoundsSection } from "./registration-casual.js";
 import { EventRegistrationSections } from "./registration-events.js";
+import { PdgaEventsSection } from "./pdga-events-panel.js";
 import { useSessionToken } from "./session-token.js";
 
 const h = React.createElement;
@@ -69,7 +70,8 @@ export function MemberRegistrationPanel() {
   if (!token) return null;
 
   return h("div", { className: "react-registration-panel", "data-react-registration-panel": state.status }, [
-    h("h3", { className: "my-dashboard-title", key: "title" }, "Register for Events"),
+    h(PdgaEventsSection, { key: "pdga" }),
+    h("h3", { className: "my-dashboard-title", key: "title" }, "Club registration"),
     state.status === "loading" ? h("p", { className: "dash-note", key: "loading" }, "Loading registration options...") : null,
     state.status === "error" ? h("p", { className: "dash-note", key: "error" }, "Registration is temporarily unavailable. Please refresh or try again in a minute.") : null,
     state.status !== "error" ? h("div", { key: "content" }, [

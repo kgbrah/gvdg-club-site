@@ -10,6 +10,7 @@ import { readD1OrFallback } from "./d1-retry.js";
 import { publicFieldsByEvent } from "./event-field.js";
 import { COURSE_CATALOG_CACHE_NAME, courseCatalogCacheKey } from "./course-catalog-cache.js";
 import { getUdiscImportState } from "./db-udisc-layout-imports.js";
+import { listNearbyPdgaEvents, PDGA_EVENT_MILES } from "./pdga-events.js";
 
 const CATALOG_CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -74,6 +75,20 @@ export async function handleClubPublic(
       last_run_at: state?.last_run_at ?? null,
       hydrated_at: state?.hydrated_at ?? null,
     }, 200, origin);
+  }
+  if (method === "GET" && pathname === "/pdga-events") {
+    const url = new URL(request.url);
+    const lat = Number(url.searchParams.get("lat"));
+    const lng = Number(url.searchParams.get("lng"));
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      return json({ error: "location_required" }, 400, origin);
+    }
+    try {
+      const events = await listNearbyPdgaEvents(env, { lat, lng });
+      return json({ events, miles: PDGA_EVENT_MILES }, 200, origin, { "Cache-Control": "private, max-age=300" });
+    } catch {
+      return json({ events: [], miles: PDGA_EVENT_MILES }, 200, origin, { "Cache-Control": "no-store" });
+    }
   }
   if (method === "GET" && pathname === "/leagues") return json({ leagues: await db.listLeagues(env.DB) }, 200, origin);
   // Club standings for member dashboards: active leagues (with team + player standings) + any live events.

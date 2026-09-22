@@ -121,11 +121,10 @@ Tap a tab to switch rooms.
 4. Save. If someone else already owns that PDGA number, the site won't let you take it (that's on purpose).
 
 ### ✍️ Sign up for a game (register)
-1. Go to the **Events** tab (or the "Register for Events" part).
-2. Find the game you want. Tap **Register**.
-3. Pick your **division** (your skill group, like MA1 or MA40).
-4. If you want, add extras: **CTP** (closest-to-the-pin contest) or **ace pot** (a money pot for hole-in-ones).
-5. Tap to finish. Now you're signed up! To un-sign-up, tap **Withdraw**.
+1. Go to the **Events** tab.
+2. **PDGA events** lists every upcoming sanctioned event within 100 miles, closest to you first. Tap **Register** to open that event on Disc Golf Scene. Allow location so the miles are from where you are; otherwise the list is centered on Greenville.
+3. **Club registration** is the club's own events. Tap **Register**, pick your **division**, and add CTP or ace pot if you want.
+4. Tap to finish. To un-sign-up from a club event, tap **Withdraw**.
 
 ### 💳 Pay for a game
 If you owe an entry fee, **Home** shows a **Pay** job.
