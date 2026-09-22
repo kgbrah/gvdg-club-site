@@ -82,6 +82,13 @@ function civilToday(now: number): number {
   return year * 10000 + month * 100 + day;
 }
 
+function tierLabel(value: string): string {
+  const text = value.replace(/\s+/g, " ").trim();
+  if (!text || text.length > 48 || !/tier|flex|league/i.test(text)) return "";
+  if (/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/.test(text) && !/tier/i.test(text)) return "";
+  return text;
+}
+
 function eventDay(date: string): number | null {
   const match = date.match(/\b([A-Za-z]{3})\s+(\d{1,2})(?:-\d{1,2})?,\s+(\d{4})\b/);
   if (!match) return null;
@@ -104,7 +111,8 @@ export function parseDiscGolfSceneSearch(html: string, now = Date.now()): Omit<P
     const bolds = [...chunk.matchAll(/<b>([^<]+)<\/b>/gi)].map((match) => decodeText(match[1] || "")).filter(Boolean);
     const place = bolds.find((value) => /,\s*[A-Z]{2}\b/.test(value)) || "";
     const course = bolds.find((value) => value !== place) || "";
-    const tier = decodeText(chunk.match(/list-tier[\s\S]*?<br\s*\/?>\s*([^<]+)/i)?.[1] || "") || info.split("·")[0]?.trim() || "";
+    const badge = decodeText(chunk.match(/list-tier[\s\S]*?<br\s*\/?>\s*([^<]+)/i)?.[1] || "");
+    const tier = tierLabel(badge) || tierLabel(info.split("·")[0] || "") || "";
     const dated = info.match(/\b[A-Za-z]{3}\s+\d{1,2}(?:-\d{1,2})?,\s+\d{4}\b/)?.[0] || info;
     const day = eventDay(dated);
     if (day != null && day < today) continue;
@@ -186,16 +194,18 @@ export function placePdgaEvents(
     })
     .filter((event) => event.miles == null || event.miles <= PDGA_EVENT_MILES)
     .sort((a, b) => {
-      if (a.miles == null && b.miles == null) return a.date.localeCompare(b.date) || a.name.localeCompare(b.name);
+      if (a.miles == null && b.miles == null) {
+        return (eventDay(a.date) ?? Number.MAX_SAFE_INTEGER) - (eventDay(b.date) ?? Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name);
+      }
       if (a.miles == null) return 1;
       if (b.miles == null) return -1;
       if (a.miles !== b.miles) return a.miles - b.miles;
-      return a.date.localeCompare(b.date) || a.name.localeCompare(b.name);
+      return (eventDay(a.date) ?? Number.MAX_SAFE_INTEGER) - (eventDay(b.date) ?? Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name);
     });
 }
 
 function cacheKey(lat: number, lng: number): string {
-  return `${lat.toFixed(1)}:${lng.toFixed(1)}`;
+  return `v2:${lat.toFixed(1)}:${lng.toFixed(1)}`;
 }
 
 export async function listNearbyPdgaEvents(

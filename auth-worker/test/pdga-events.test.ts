@@ -69,6 +69,11 @@ describe("PDGA events within 100 miles", () => {
     expect(placed.map((event) => event.name)).toEqual(["GVDG Fall Flex #1", "Raleigh Open"]);
     expect(placed[0]!.miles).toBeLessThan(placed[1]!.miles!);
     expect(placed[0]!.url).toContain("discgolfscene.com/tournaments/");
+    const sameCourse = placePdgaEvents([
+      { name: "Hangover", date: "Jan 1, 2027", tier: "", course: "West Meadowbrook Park", place: "Greenville, NC", url: "https://www.discgolfscene.com/tournaments/Hangover" },
+      { name: "Fall Flex", date: "Sep 25, 2026", tier: "C-tier", course: "West Meadowbrook Park", place: "Greenville, NC", url: "https://www.discgolfscene.com/tournaments/Fall_Flex" },
+    ], COURSES, origin);
+    expect(sameCourse.map((event) => event.name)).toEqual(["Fall Flex", "Hangover"]);
   });
 
   it("searches DiscGolfScene for a 100-mile box around the player", () => {
