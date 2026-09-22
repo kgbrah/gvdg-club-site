@@ -278,15 +278,44 @@ export function udiscSearchUrl(query: string): string {
 }
 
 export function parseUdiscCourseUrls(html: string): string[] {
+  return parseUdiscDirectoryHits(html).map((hit) => hit.url);
+}
+
+export interface UdiscDirectoryHit {
+  url: string;
+  name: string;
+  place: string;
+}
+
+const UDISC_DIRECTORY_CARD = /href="(?:https:\/\/(?:www\.)?udisc\.com)?\/courses\/([a-z0-9]+(?:-[a-z0-9]+)*-[A-Za-z0-9]{4})"[\s\S]{0,4000}?<h3[^>]*>([^<]+)<\/h3>[\s\S]{0,500}?<p class="text-sm text-subtle">([^<]+)<\/p>/gi;
+
+export function parseUdiscDirectoryHits(html: string): UdiscDirectoryHit[] {
   const seen = new Set<string>();
-  const out: string[] = [];
+  const out: UdiscDirectoryHit[] = [];
+  for (const match of html.matchAll(UDISC_DIRECTORY_CARD)) {
+    const url = normalizeUdiscCourseUrl(`https://udisc.com/courses/${match[1]}`);
+    const name = decodeDirectoryText(match[2] || "");
+    const place = decodeDirectoryText(match[3] || "");
+    if (!url || !name || seen.has(url)) continue;
+    seen.add(url);
+    out.push({ url, name, place });
+  }
+  if (out.length) return out;
   for (const match of html.matchAll(UDISC_COURSE_HREF)) {
     const url = normalizeUdiscCourseUrl(`https://udisc.com/courses/${match[1]}`);
     if (!url || seen.has(url)) continue;
     seen.add(url);
-    out.push(url);
+    out.push({ url, name: "", place: "" });
   }
   return out;
+}
+
+function decodeDirectoryText(value: string): string {
+  return value
+    .replace(/&/gi, "&")
+    .replace(/&middot;/gi, "·")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function udiscSlugName(url: string): string {

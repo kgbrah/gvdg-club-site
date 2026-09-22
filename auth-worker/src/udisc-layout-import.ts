@@ -8,14 +8,14 @@ import {
   upsertUdiscImport,
   type UdiscImportRow,
 } from "./db-udisc-layout-imports.js";
-import { ImportError, parseUdiscCourseUrls, parseUdiscLayouts, safeFetch, udiscIndexUrl, udiscNcIndexUrl } from "./imports.js";
+import { ImportError, parseUdiscCourseUrls, parseUdiscDirectoryHits, parseUdiscLayouts, safeFetch, udiscIndexUrl, udiscNcIndexUrl } from "./imports.js";
 import {
   CLUB_ORIGIN,
   DAY_TRIP_MILES,
   defaultLayoutName as nearbyDefaultLayoutName,
   normalizeCourseName,
 } from "./imports/nearby-courses.js";
-import { normalizeUdiscCourseUrl, udiscSlugName, type UdiscLayout } from "./imports/udisc.js";
+import { normalizeUdiscCourseUrl, udiscSlugName, type UdiscDirectoryHit, type UdiscLayout } from "./imports/udisc.js";
 import { haversineMiles } from "./distance.js";
 import { enrichHoles, type LayoutHole } from "./layouts.js";
 import { layoutHasSatelliteMap, parseScorableHoles, type PositionInput } from "./db-courses.js";
@@ -26,10 +26,14 @@ export const UDISC_IMPORT_MAX_ATTEMPTS = 3;
 export const UDISC_IMPORTS_PER_TICK = 4;
 export const UDISC_IMPORT_PRIORITY = ["Ashe County Park"];
 export const UDISC_INHERIT_MILES = 3;
+export const UDISC_LOCAL_MILES = 8;
+export const UDISC_LOCAL_SEARCHES_PER_TICK = 4;
+export const UDISC_LOCAL_MISS = "no_local_match";
 export const KNOWN_UDISC_URLS: Record<string, string> = {
   "ashe county park": "https://udisc.com/courses/ashe-county-park-wllg",
   "nc wesleyan university": "https://udisc.com/courses/north-carolina-wesleyan-university-Xw47",
   "wesleyan college": "https://udisc.com/courses/north-carolina-wesleyan-university-Xw47",
+  "sunrise united methodist church": "https://udisc.com/courses/sunrise-disc-golf-course-9eiL",
 };
 const UDISC_FETCH = { maxBytes: 3_000_000, timeoutMs: 20_000 } as const;
 const UDISC_INDEX_PAGES = 20;
@@ -54,6 +58,7 @@ export interface ImportAttempt {
   course_id: number;
   status: string;
   attempts: number;
+  error?: string | null;
 }
 
 const DONE = new Set(["imported", "skipped", "no_url", "no_layouts"]);
@@ -283,6 +288,91 @@ export function attachUdiscUrlsFromIndex(
   return attached;
 }
 
+export function isNorthCarolinaCourse(course: { location?: string | null }): boolean {
+  const location = String(course.location || "").trim();
+  return /(?:^|,\s*)NC$/i.test(location) || /\bnorth carolina\b/i.test(location);
+}
+
+function isDeferredVenue(name: string): boolean {
+  return /\b(school|elementary|middle|college|university|church|apartment|ymca|chevrolet)\b/i.test(name);
+}
+
+export function localSearchRank(course: ImportCourse): number {
+  const nc = isNorthCarolinaCourse(course) ? 0 : 2;
+  const park = /\bpark\b/i.test(course.name) && !isDeferredVenue(course.name);
+  if (park) return nc;
+  if (isDeferredVenue(course.name)) return nc + 1.5;
+  return nc + 0.5;
+}
+
+export function pickLocalSearchCourses(
+  courses: ImportCourse[],
+  imports: ImportAttempt[],
+): ImportCourse[] {
+  const byId = new Map(imports.map((row) => [row.course_id, row]));
+  return courses
+    .filter((course) => {
+      if (isMapped(course)) return false;
+      if (normalizeUdiscCourseUrl(course.udisc_url) || knownUdiscUrl(course)) return false;
+      const row = byId.get(course.id);
+      if (row?.error === UDISC_LOCAL_MISS) return false;
+      if (!row) return true;
+      return row.status === "no_url";
+    })
+    .sort((a, b) => {
+      const rank = localSearchRank(a) - localSearchRank(b);
+      if (rank !== 0) return rank;
+      const miles = milesFromClub(a) - milesFromClub(b);
+      if (miles !== 0) return miles;
+      return a.name.localeCompare(b.name);
+    });
+}
+
+function directoryNameScore(courseName: string, hitName: string): number {
+  const left = distinctiveTokens(courseName);
+  const right = distinctiveTokens(hitName);
+  if (!left.size || !right.size) return 0;
+  let shared = 0;
+  for (const token of left) if (right.has(token)) shared += 1;
+  if (!shared) return 0;
+  const exact = expandMatchName(courseName) === expandMatchName(hitName) ? 1 : 0;
+  return Math.max(exact, tokenJaccard(courseName, hitName), setJaccard(left, right));
+}
+
+export function scoreDirectoryHit(
+  course: { name: string; location?: string | null },
+  hit: UdiscDirectoryHit,
+): number {
+  const placeGeo = geoLabel(hit.place);
+  const locGeo = geoLabel(course.location || "");
+  if (locGeo && placeGeo && locGeo !== placeGeo) return 0;
+  const city = cityKey(course.location);
+  const placeCity = cityKey(hit.place);
+  if (city && placeCity && city !== placeCity && !directoryNameScore(course.name, hit.name || udiscSlugName(hit.url))) return 0;
+  const named = Math.max(directoryNameScore(course.name, hit.name), hit.url ? scoreUdiscUrl(course, hit.url) : 0);
+  if (!named) return 0;
+  const sameCity = Boolean(city && placeCity && city === placeCity);
+  const sharedLong = sameCity && [...distinctiveTokens(course.name)].some((token) => token.length >= 5 && distinctiveTokens(hit.name || udiscSlugName(hit.url)).has(token));
+  const nameScore = sharedLong ? Math.max(named, 0.55) : named;
+  if (nameScore < 0.5) return 0;
+  return nameScore + (sameCity ? 0.2 : 0);
+}
+
+export function pickLocalDirectoryMatch(
+  course: { name: string; location?: string | null },
+  hits: UdiscDirectoryHit[],
+): string | null {
+  const scored = hits
+    .map((hit) => ({ url: hit.url, score: scoreDirectoryHit(course, hit) }))
+    .filter((row) => row.url && row.score >= 0.5)
+    .sort((a, b) => b.score - a.score || a.url.localeCompare(b.url));
+  const top = scored[0];
+  if (!top) return null;
+  const second = scored[1];
+  if (second && top.score - second.score < 0.1 && top.score < 0.99) return null;
+  return top.url;
+}
+
 export function isPlaceholderLayout(layout: { name?: unknown; holes?: unknown }): boolean {
   if (layoutHasSatelliteMap(layout.holes)) return false;
   if (String(layout.name ?? "") === nearbyDefaultLayoutName()) return true;
@@ -394,20 +484,41 @@ export async function runUdiscLayoutImportTick(env: Env): Promise<UdiscLayoutImp
     return finish(env, now, { action: "failed", remaining: unmappedCount(courses), error: error instanceof Error ? error.message : String(error) });
   }
 
-  const missingUrl = courses.some((course) => !isMapped(course) && !normalizeUdiscCourseUrl(course.udisc_url));
+  const missingUrl = courses.some((course) => !isMapped(course) && !normalizeUdiscCourseUrl(course.udisc_url) && !knownUdiscUrl(course));
   let indexUrls: string[] = [];
   let attached = 0;
-  if (!state?.hydrated_at || missingUrl) {
+  let searchedLocal = 0;
+  if (!state?.hydrated_at) {
     indexUrls = await fetchUdiscIndexUrls();
-    const rows = attachUdiscUrlsFromIndex(courses, indexUrls);
-    for (const row of rows) {
-      await db.updateCourse(env.DB, row.id, { udisc_url: row.udisc_url });
+    attached += await persistAttachedUrls(env, attachUdiscUrlsFromIndex(courses, indexUrls));
+    if (attached) courses = (await db.listCourses(env.DB)) as unknown as ImportCourse[];
+    await markUdiscImportHydrated(env.DB, now);
+  } else if (missingUrl) {
+    attached += await persistAttachedUrls(env, attachUdiscUrlsFromIndex(courses, []));
+    const targets = pickLocalSearchCourses(courses, imports).slice(0, UDISC_LOCAL_SEARCHES_PER_TICK);
+    for (const course of targets) {
+      const match = await searchNearbyUdisc(course);
+      searchedLocal += 1;
+      if (match === "fetch_failed") {
+        searchedLocal -= 1;
+        continue;
+      }
+      if (match) {
+        await db.updateCourse(env.DB, course.id, { udisc_url: match });
+        course.udisc_url = match;
+        attached += 1;
+      } else {
+        await upsertUdiscImport(env.DB, {
+          course_id: course.id,
+          status: "no_url",
+          attempts: UDISC_IMPORT_MAX_ATTEMPTS,
+          attempted_at: now,
+          finished_at: now,
+          error: UDISC_LOCAL_MISS,
+        });
+      }
     }
-    attached = rows.length;
-    if (rows.length) {
-      courses = (await db.listCourses(env.DB)) as unknown as ImportCourse[];
-    }
-    if (!state?.hydrated_at) await markUdiscImportHydrated(env.DB, now);
+    if (attached) courses = (await db.listCourses(env.DB)) as unknown as ImportCourse[];
   }
 
   let last: UdiscLayoutImportTick | null = null;
@@ -423,9 +534,10 @@ export async function runUdiscLayoutImportTick(env: Env): Promise<UdiscLayoutImp
 
   if (!last) {
     return finish(env, now, {
-      action: attached ? "hydrated" : "done",
+      action: attached ? "hydrated" : searchedLocal ? "skipped" : "done",
       remaining: unmappedCount(courses),
       attached: attached || undefined,
+      error: searchedLocal && !attached ? UDISC_LOCAL_MISS : undefined,
     });
   }
   if (attached) last.attached = attached;
@@ -603,6 +715,27 @@ async function finish(env: Env, now: number, tick: UdiscLayoutImportTick): Promi
     try { await bustCourseCatalogCache(); } catch { /* cache bust is best-effort */ }
   }
   return tick;
+}
+
+async function persistAttachedUrls(env: Env, rows: { id: number; udisc_url: string }[]): Promise<number> {
+  for (const row of rows) {
+    await db.updateCourse(env.DB, row.id, { udisc_url: row.udisc_url });
+  }
+  return rows.length;
+}
+
+async function searchNearbyUdisc(course: ImportCourse): Promise<string | null | "fetch_failed"> {
+  const lat = Number(course.lat);
+  const lng = Number(course.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  let html: string;
+  try {
+    html = await safeFetch(udiscIndexUrl({ lat, lng }, UDISC_LOCAL_MILES, 1), ["udisc.com"], UDISC_FETCH);
+  } catch {
+    return "fetch_failed";
+  }
+  const hits = parseUdiscDirectoryHits(html);
+  return pickLocalDirectoryMatch(course, hits);
 }
 
 async function fetchUdiscIndexUrls(): Promise<string[]> {

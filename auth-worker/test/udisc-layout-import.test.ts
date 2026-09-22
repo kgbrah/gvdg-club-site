@@ -6,13 +6,15 @@ import {
   isUdiscLayoutCron,
   knownUdiscUrl,
   mergePositions,
+  pickLocalDirectoryMatch,
+  pickLocalSearchCourses,
   pickNextUdiscImportCourse,
   pickUdiscSearchMatch,
   planUdiscLayoutApply,
   UDISC_LAYOUT_IMPORT_CRON,
 } from "../src/udisc-layout-import.js";
 import { COURSE_CATALOG_CACHE_NAME, bustCourseCatalogCache } from "../src/course-catalog-cache.js";
-import { normalizeUdiscCourseUrl, parseUdiscCourseUrls, udiscIndexUrl, udiscNcIndexUrl, udiscSlugName } from "../src/imports/udisc.js";
+import { normalizeUdiscCourseUrl, parseUdiscCourseUrls, parseUdiscDirectoryHits, udiscIndexUrl, udiscNcIndexUrl, udiscSlugName } from "../src/imports/udisc.js";
 
 describe("isUdiscLayoutCron", () => {
   it("matches the 15-minute trigger and ignores the ratings cron", () => {
@@ -190,6 +192,65 @@ describe("knownUdiscUrl", () => {
       "https://udisc.com/courses/north-carolina-wesleyan-university-Xw47",
     );
     expect(knownUdiscUrl({ name: "Virginia Wesleyan College" })).toBeNull();
+    expect(knownUdiscUrl({ name: "Sunrise United Methodist Church" })).toBe(
+      "https://udisc.com/courses/sunrise-disc-golf-course-9eiL",
+    );
+  });
+});
+
+describe("local UDisc directory search", () => {
+  const card = (slug: string, name: string, place: string) =>
+    `<a href="/courses/${slug}"><h3>${name}</h3><p class="text-sm text-subtle">${place}</p></a>`;
+
+  it("reads the course name and city off a directory card", () => {
+    const hits = parseUdiscDirectoryHits([
+      card("waynesville-miS2", "Waynesville", "Waynesville, North Carolina"),
+      card("haywood-community-college-mG4h", "Haywood Community College", "Clyde, North Carolina"),
+      card("hank-anderson-disc-golf-course-o0pi", "Hank Anderson Disc Golf Course", "Carrboro, North Carolina"),
+    ].join(""));
+    expect(hits.map((hit) => hit.name)).toEqual([
+      "Waynesville",
+      "Haywood Community College",
+      "Hank Anderson Disc Golf Course",
+    ]);
+  });
+
+  it("pairs a leftover with the nearby UDisc name, not a different city course", () => {
+    const hits = parseUdiscDirectoryHits([
+      card("waynesville-miS2", "Waynesville", "Waynesville, North Carolina"),
+      card("haywood-community-college-mG4h", "Haywood Community College", "Clyde, North Carolina"),
+      card("hank-anderson-disc-golf-course-o0pi", "Hank Anderson Disc Golf Course", "Carrboro, North Carolina"),
+      card("sunset-park-dgc-Z1wS", "Sunset Park DGC", "Rocky Mount, North Carolina"),
+      card("sunrise-disc-golf-course-9eiL", "Sunrise Disc Golf Course", "Lewisville, North Carolina"),
+    ].join(""));
+    expect(pickLocalDirectoryMatch({ name: "Waynesville DGC", location: "Waynesville, NC" }, hits)).toBe(
+      "https://udisc.com/courses/waynesville-miS2",
+    );
+    expect(pickLocalDirectoryMatch({ name: "Anderson Park Disc Golf", location: "Carrboro, NC" }, hits)).toBe(
+      "https://udisc.com/courses/hank-anderson-disc-golf-course-o0pi",
+    );
+    expect(pickLocalDirectoryMatch({ name: "Englewood Park", location: "Rocky Mount, NC" }, hits)).toBeNull();
+    expect(pickLocalDirectoryMatch({ name: "Sunrise United Methodist Church", location: "Lewisville, NC" }, hits)).toBe(
+      "https://udisc.com/courses/sunrise-disc-golf-course-9eiL",
+    );
+  });
+
+  it("searches North Carolina parks before schools and out-of-state leftovers", () => {
+    const courses = [
+      { id: 1, name: "Bedford YMCA", location: "Bedford, VA", lat: 37.34, lng: -79.56, mapped: 0 },
+      { id: 2, name: "Crest High School", location: "Shelby, NC", lat: 35.27, lng: -81.61, mapped: 0 },
+      { id: 3, name: "Englewood Park", location: "Rocky Mount, NC", lat: 35.95, lng: -77.83, mapped: 0 },
+      { id: 4, name: "Waynesville DGC", location: "Waynesville, NC", lat: 35.51, lng: -82.98, mapped: 0 },
+      { id: 5, name: "Already Local", location: "Goldsboro, NC", lat: 35.37, lng: -77.96, mapped: 0 },
+    ];
+    const next = pickLocalSearchCourses(courses, [
+      { course_id: 1, status: "no_url", attempts: 3, error: "no_udisc_url" },
+      { course_id: 2, status: "no_url", attempts: 3, error: "no_udisc_url" },
+      { course_id: 3, status: "no_url", attempts: 3, error: "no_udisc_url" },
+      { course_id: 4, status: "no_url", attempts: 3, error: "no_udisc_url" },
+      { course_id: 5, status: "no_url", attempts: 3, error: "no_local_match" },
+    ]);
+    expect(next.map((course) => course.id)).toEqual([3, 4, 2, 1]);
   });
 });
 

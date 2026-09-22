@@ -6,6 +6,7 @@ export {
   normalizeUdiscCourseUrl,
   parseUdiscCourse,
   parseUdiscCourseUrls,
+  parseUdiscDirectoryHits,
   parseUdiscLayout,
   parseUdiscLayouts,
   udiscSearchUrl,
