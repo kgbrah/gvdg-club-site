@@ -21,9 +21,10 @@ enabled = true
 head_sampling_rate = 0.01
 persist = true
 
-# Daily ratings recompute (08:17 UTC) + one UDisc layout import every 15 minutes.
+# Daily ratings recompute (08:17 UTC) + one UDisc layout import every 15 minutes
+# + an hourly PDGA event refresh (minute 7) for the player dashboard.
 [triggers]
-crons = ["17 8 * * *", "*/15 * * * *"]
+crons = ["17 8 * * *", "*/15 * * * *", "7 * * * *"]
 
 [[kv_namespaces]]
 binding = "ROSTER"
@@ -114,7 +115,7 @@ name = "gvdg-member-auth-staging"
 enabled = true
 
 [env.staging.triggers]
-crons = ["17 8 * * *", "*/15 * * * *"]
+crons = ["17 8 * * *", "*/15 * * * *", "7 * * * *"]
 
 # Workers KV — RESTORED 2026-07-01. The account-wide KV data-plane fault (2026-06-29, where Workers
 # read/wrote an isolated empty store) has cleared; verified with a cross-plane read/write test before
@@ -195,7 +196,7 @@ name = "gvdg-member-auth-staging"
 enabled = true
 
 [env.gvdgclub.triggers]
-crons = ["17 8 * * *", "*/15 * * * *"]
+crons = ["17 8 * * *", "*/15 * * * *", "7 * * * *"]
 
 # Workers KV — RESTORED 2026-07-01 (see the [env.staging] note). Same namespaces as staging: both envs
 # share the one gvdg-staging D1 + roster, so they read the same KV.

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   discGolfSceneSearchUrl,
+  isPdgaEventCron,
   locatePdgaEvent,
+  newPdgaEventNames,
   parseDiscGolfSceneSearch,
   placePdgaEvents,
 } from "../src/pdga-events.js";
@@ -81,5 +83,16 @@ describe("PDGA events within 100 miles", () => {
     expect(url.hostname).toBe("www.discgolfscene.com");
     expect(url.searchParams.get("filter[location][distance]")).toBe("100");
     expect(url.searchParams.get("filter[location][latitude]")).toBe("35.6100");
+  });
+
+  it("treats only brand-new DiscGolfScene urls as added", () => {
+    expect(isPdgaEventCron("7 * * * *")).toBe(true);
+    expect(isPdgaEventCron("*/15 * * * *")).toBe(false);
+    const previous = [{ url: "https://www.discgolfscene.com/tournaments/Fall_Flex" }];
+    expect(newPdgaEventNames([], [{ url: "https://www.discgolfscene.com/tournaments/Fall_Flex", name: "Fall Flex" }])).toEqual([]);
+    expect(newPdgaEventNames(previous, [
+      { url: "https://www.discgolfscene.com/tournaments/Fall_Flex", name: "Fall Flex" },
+      { url: "https://www.discgolfscene.com/tournaments/New_One", name: "New One" },
+    ])).toEqual(["New One"]);
   });
 });

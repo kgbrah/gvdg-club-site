@@ -5,6 +5,8 @@ import { safeFetch } from "./imports.js";
 import { D1KV } from "./d1kv.js";
 
 export const PDGA_EVENT_MILES = 100;
+export const PDGA_EVENT_CRON = "7 * * * *";
+const CLUB_ORIGIN = { lat: 35.6127, lng: -77.3664 } as const;
 const CACHE_TTL_SEC = 3600;
 const CLUB_TIME_ZONE = "America/New_York";
 
@@ -208,6 +210,29 @@ function cacheKey(lat: number, lng: number): string {
   return `v2:${lat.toFixed(1)}:${lng.toFixed(1)}`;
 }
 
+export function isPdgaEventCron(cron: string): boolean {
+  return cron.trim() === PDGA_EVENT_CRON;
+}
+
+export function newPdgaEventNames(previous: { url: string }[], next: { url: string; name: string }[]): string[] {
+  if (!previous.length) return [];
+  const seen = new Set(previous.map((event) => event.url));
+  return next.filter((event) => !seen.has(event.url)).map((event) => event.name);
+}
+
+async function fetchPlacedPdgaEvents(
+  env: Env,
+  origin: { lat: number; lng: number },
+  now: number,
+): Promise<PdgaEvent[]> {
+  const html = await safeFetch(discGolfSceneSearchUrl(origin.lat, origin.lng), ["discgolfscene.com"], {
+    maxBytes: 2_000_000,
+    timeoutMs: 12000,
+  });
+  const courses = (await db.listCourses(env.DB).catch(() => [])) as PdgaEventCourse[];
+  return placePdgaEvents(parseDiscGolfSceneSearch(html, now), courses, origin);
+}
+
 export async function listNearbyPdgaEvents(
   env: Env,
   origin: { lat: number; lng: number },
@@ -221,16 +246,33 @@ export async function listNearbyPdgaEvents(
   } catch {
     /* fresh fetch */
   }
-  const html = await safeFetch(discGolfSceneSearchUrl(origin.lat, origin.lng), ["discgolfscene.com"], {
-    maxBytes: 2_000_000,
-    timeoutMs: 12000,
-  });
-  const courses = (await db.listCourses(env.DB).catch(() => [])) as PdgaEventCourse[];
-  const events = placePdgaEvents(parseDiscGolfSceneSearch(html, now), courses, origin);
+  const events = await fetchPlacedPdgaEvents(env, origin, now);
   try {
     await cache.put(key, JSON.stringify(events), { expirationTtl: CACHE_TTL_SEC });
   } catch {
     /* cache is best-effort */
   }
   return events;
+}
+
+export async function refreshClubPdgaEvents(
+  env: Env,
+  now = Date.now(),
+): Promise<{ total: number; added: string[] }> {
+  const cache = new D1KV(env.DB, "pdgaevents");
+  const key = cacheKey(CLUB_ORIGIN.lat, CLUB_ORIGIN.lng);
+  let previous: PdgaEvent[] = [];
+  try {
+    const hit = await cache.get(key);
+    if (hit) previous = JSON.parse(hit) as PdgaEvent[];
+  } catch {
+    previous = [];
+  }
+  const events = await fetchPlacedPdgaEvents(env, CLUB_ORIGIN, now);
+  try {
+    await cache.put(key, JSON.stringify(events), { expirationTtl: CACHE_TTL_SEC });
+  } catch {
+    /* the live request path can still fetch */
+  }
+  return { total: events.length, added: newPdgaEventNames(previous, events) };
 }

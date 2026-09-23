@@ -28,6 +28,7 @@ export type { Env } from "./env.js";
 export { LiveEventDO } from "./live.js";
 
 import { runRatingsRecompute } from "./ratings-recompute.js";
+import { isPdgaEventCron, refreshClubPdgaEvents } from "./pdga-events.js";
 import { isUdiscLayoutCron, runUdiscLayoutImportTick } from "./udisc-layout-import.js";
 
 /**
@@ -89,7 +90,8 @@ export default {
       return json({ error: "server_error" }, 500, origin);
     }
   },
-  // Daily ratings recompute (08:17 UTC) and the 15-minute UDisc layout importer.
+  // Daily ratings recompute (08:17 UTC), the 15-minute UDisc layout importer,
+  // and an hourly PDGA event refresh for the player dashboard.
   // Cron only — never reachable from the public fetch path.
   async scheduled(controller: ScheduledController, rawEnv: RawEnv, ctx: ExecutionContext): Promise<void> {
     const env = withKvFallback(rawEnv);
@@ -101,11 +103,20 @@ export default {
             console.log(JSON.stringify({ message: "udisc_layout_import_tick", cron: controller.cron, ...result }));
             return;
           }
+          if (isPdgaEventCron(controller.cron)) {
+            const result = await refreshClubPdgaEvents(env);
+            console.log(JSON.stringify({ message: "pdga_events_refresh", cron: controller.cron, ...result }));
+            return;
+          }
           const result = await runRatingsRecompute(env);
           console.log(JSON.stringify({ message: "ratings_recompute_complete", cron: controller.cron, ...result }));
         } catch (error) {
           console.error(JSON.stringify({
-            message: isUdiscLayoutCron(controller.cron) ? "udisc_layout_import_failed" : "ratings_recompute_failed",
+            message: isUdiscLayoutCron(controller.cron)
+              ? "udisc_layout_import_failed"
+              : isPdgaEventCron(controller.cron)
+                ? "pdga_events_refresh_failed"
+                : "ratings_recompute_failed",
             cron: controller.cron,
             error: error instanceof Error ? error.stack : String(error),
           }));
