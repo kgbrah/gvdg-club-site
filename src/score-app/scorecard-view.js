@@ -34,6 +34,26 @@ function HoleStatChips(props) {
 }
 
 const LIVE_STATS_PEEK_IDS = ["fir", "c1r", "c2r", "birdie"];
+const PHONE_SCORE_QUERY = "(max-width: 760px)";
+
+function usePhoneScoreLayout() {
+  const [phone, setPhone] = React.useState(() => (
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia(PHONE_SCORE_QUERY).matches
+      : false
+  ));
+  React.useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+    const media = window.matchMedia(PHONE_SCORE_QUERY);
+    function sync() {
+      setPhone(media.matches);
+    }
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+  return phone;
+}
 
 function liveStatSample(mine) {
   if (!mine || !mine.att) return "—";
@@ -76,8 +96,10 @@ function LiveMixBar(props) {
 
 function LiveRoundStats(props) {
   const solo = props.solo === true;
+  const phone = usePhoneScoreLayout();
+  const collapsible = phone || !solo;
   const [open, setOpen] = React.useState(false);
-  const expanded = solo || open;
+  const expanded = collapsible ? open : true;
   const storage = typeof sessionStorage === "undefined" ? null : sessionStorage;
   const throwsByHole = readAllThrows(storage, props.roundCode, props.holes);
   if (props.currentHole != null) throwsByHole[props.currentHole] = Array.isArray(props.throws) ? props.throws : [];
@@ -106,14 +128,13 @@ function LiveRoundStats(props) {
         String(holeCount),
       ]),
     ]),
-    solo ? null : h("span", { className: "live-round-stats-toggle", key: "toggle" }, [
+    collapsible ? h("span", { className: "live-round-stats-toggle", key: "toggle" }, [
       h("span", { key: "label" }, expanded ? "Minimize" : "Expand"),
       icon(expanded ? ChevronUp : ChevronDown),
-    ]),
+    ]) : null,
   ];
-  const head = solo
-    ? h("div", { className: "live-round-stats-head", key: "head" }, headChildren)
-    : h("button", {
+  const head = collapsible
+    ? h("button", {
       "aria-controls": "live-round-stats-body",
       "aria-expanded": expanded ? "true" : "false",
       "aria-label": expanded ? "Minimize live stats" : "Expand live stats",
@@ -121,11 +142,12 @@ function LiveRoundStats(props) {
       key: "head",
       type: "button",
       onClick: () => setOpen((value) => !value),
-    }, headChildren);
+    }, headChildren)
+    : h("div", { className: "live-round-stats-head", key: "head" }, headChildren);
   return h("section", {
     "aria-label": "Live round stats",
     "aria-live": "polite",
-    className: "live-round-stats" + (solo ? "" : " compact") + (expanded ? " open" : ""),
+    className: "live-round-stats" + (collapsible ? " compact" : "") + (expanded ? " open" : ""),
     key: "live-stats",
   }, [
     head,

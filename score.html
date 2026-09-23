@@ -702,6 +702,13 @@
         .live-round-stats.compact:not(.open) .live-stats-body { display: none; }
         .live-stat-tile.peek { padding: 0.08rem 0.06rem 0.1rem; min-height: 0; }
         .live-stat-tile.peek b { font-size: 0.78rem; }
+        @media (max-width: 760px) {
+            .live-round-stats.compact.open .live-stats-body {
+                max-height: 11rem; overflow: auto; -webkit-overflow-scrolling: touch;
+            }
+            .live-stats-grid { grid-auto-rows: auto; flex: 0 0 auto; }
+            .live-stat-tile, .live-stats-mix-item { overflow: hidden; min-height: 1.7rem; }
+        }
         .live-stats-hint {
             margin: 0; color: var(--text-muted); font-size: 0.52rem; line-height: 1.2; font-weight: 600;
             flex: 0 0 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;

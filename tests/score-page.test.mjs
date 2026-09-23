@@ -861,6 +861,9 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(html, /\.score-glove-layout:not\(\.solo\) \.live-round-stats/);
   assert.match(html, /\.live-round-stats\.compact:not\(\.open\)/);
   assert.match(html, /\.live-round-stats-toggle/);
+  assert.match(html, /@media \(max-width: 760px\)/);
+  assert.match(scorecard, /PHONE_SCORE_QUERY = "\(max-width: 760px\)"/);
+  assert.match(scorecard, /const collapsible = phone \|\| !solo/);
   assert.match(html, /\.score-glove-stage \.hole-map-lie-actions/);
   assert.match(html, /\.score-glove-stage \.hole-range-hud \{/);
   assert.match(html, /\.live-stats-mix-legend \{/);
