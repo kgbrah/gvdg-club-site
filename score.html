@@ -447,7 +447,10 @@
             background: var(--bg-tertiary); color: var(--text-primary); font: 800 1.1rem Archivo, sans-serif; cursor: pointer;
         }
         .score-pad-key.current { border-color: var(--primary); background: var(--primary-strong); color: var(--light); }
-        body.score-glove .wrap { height: 100dvh; max-height: 100dvh; overflow: hidden; }
+        body.score-glove .wrap {
+            height: 100dvh; max-height: 100dvh; overflow: hidden;
+            padding-bottom: max(0px, calc(var(--score-nav-bottom, 0px) - var(--safe-bottom)));
+        }
         body.score-glove .topbar {
             min-height: calc(48px + var(--safe-top));
             padding: calc(0.32rem + var(--safe-top)) 0.5rem 0.32rem;
@@ -595,10 +598,16 @@
         .score-glove-stage .hole-range-hud span { font-size: 0.54rem; margin-top: 0.04rem; }
         .score-glove-stage .hole-range-hud-len,
         .score-glove-stage .hole-range-hud-gps { font-size: 0.52rem; }
-        .score-glove-stage .hole-map-lie-actions { z-index: 4; right: 0.32rem; bottom: 0.32rem; }
+        .score-glove-stage .hole-map-lie-actions {
+            z-index: 4; left: 6.1rem; right: 0.28rem; bottom: 0.28rem;
+            max-width: none; flex-wrap: nowrap; justify-content: flex-end;
+        }
         .score-glove-stage .hole-map-lie-btn,
         .score-glove-stage .hole-map-lie-undo,
-        .score-glove-stage .hole-map-survey-btn { min-height: 32px; }
+        .score-glove-stage .hole-map-survey-btn {
+            min-height: 32px; min-width: 0; padding: 0 0.4rem;
+            font-size: 0.62rem; white-space: nowrap;
+        }
         .live-round-stats {
             flex: 1 1 auto; min-height: 0; overflow: hidden;
             margin: 0.18rem 0 0.04rem; padding: 0.18rem 0.36rem 0.2rem;

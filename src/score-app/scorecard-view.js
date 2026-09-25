@@ -36,6 +36,41 @@ function HoleStatChips(props) {
 const LIVE_STATS_PEEK_IDS = ["fir", "c1r", "c2r", "birdie"];
 const PHONE_SCORE_QUERY = "(max-width: 760px)";
 
+export function visibleBottomOverlap(innerHeight, offsetTop, viewportHeight) {
+  const inner = Number(innerHeight);
+  const top = Number(offsetTop);
+  const height = Number(viewportHeight);
+  if (!Number.isFinite(inner) || !Number.isFinite(top) || !Number.isFinite(height)) return 0;
+  return Math.max(0, Math.round(inner - top - height));
+}
+
+function useVisibleBottomInset() {
+  React.useEffect(() => {
+    const root = document.documentElement;
+    function apply() {
+      const viewport = window.visualViewport;
+      const overlap = viewport
+        ? visibleBottomOverlap(window.innerHeight, viewport.offsetTop, viewport.height)
+        : 0;
+      root.style.setProperty("--score-nav-bottom", overlap + "px");
+    }
+    apply();
+    window.addEventListener("resize", apply);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", apply);
+      window.visualViewport.addEventListener("scroll", apply);
+    }
+    return () => {
+      root.style.removeProperty("--score-nav-bottom");
+      window.removeEventListener("resize", apply);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener("resize", apply);
+        window.visualViewport.removeEventListener("scroll", apply);
+      }
+    };
+  }, []);
+}
+
 function usePhoneScoreLayout() {
   const [phone, setPhone] = React.useState(() => (
     typeof window !== "undefined" && typeof window.matchMedia === "function"
@@ -948,6 +983,7 @@ function ConfirmScoresSheet(props) {
 }
 
 export function ScorecardView(props) {
+  useVisibleBottomInset();
   const [padRow, setPadRow] = React.useState(null);
   const [measure, setMeasure] = React.useState(null);
   const [throws, setThrows] = React.useState([]);

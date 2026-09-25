@@ -872,6 +872,11 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(html, /grid-template-columns: repeat\(6, minmax\(0, 1fr\)\)/);
   assert.match(html, /display-mode: browser/);
   assert.match(html, /height: 100svh/);
+  assert.match(html, /--score-nav-bottom/);
+  assert.match(html, /max\(0px, calc\(var\(--score-nav-bottom, 0px\) - var\(--safe-bottom\)\)\)/);
+  assert.match(html, /\.score-glove-stage \.hole-map-lie-actions \{[^}]*left: 6\.1rem/s);
+  assert.match(scorecard, /function visibleBottomOverlap/);
+  assert.match(scorecard, /useVisibleBottomInset/);
   assert.match(html, /\.score-glove-scores \{/);
   assert.match(html, /\.holegrid \{ display: grid; grid-template-columns: repeat\(6, minmax\(0, 1fr\)\)/);
   assert.match(html, /\.weather-strip-compact \{/);
