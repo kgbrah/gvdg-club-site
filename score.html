@@ -463,7 +463,7 @@
         }
         .score-glove-layout { flex: 1; min-height: 0; display: flex; flex-direction: column; }
         .score-glove-stage {
-            flex: 1 1 auto; min-height: 0; position: relative;
+            flex: 1 1 auto; min-height: 0; position: relative; overflow: hidden;
             display: flex; flex-direction: column; padding: 0.4rem 0.55rem 0;
         }
         .score-glove-stage .weather-strip-compact { margin: 0 0 0.25rem; padding: 0.28rem 0.5rem; flex: 0 0 auto; }
@@ -590,7 +590,26 @@
         }
         .score-glove-layout:not(.solo):has(.live-round-stats.open) .score-glove-stage .hole-media,
         .score-glove-layout:not(.solo):has(.live-round-stats.open) .score-glove-stage .hole-map-frame {
-            max-height: min(22dvh, 11rem);
+            flex: 0 0 auto; height: min(20dvh, 9rem); min-height: 0;
+            max-height: min(20dvh, 9rem); aspect-ratio: auto;
+        }
+        .score-glove-layout:not(.solo) .score-glove-stage .hole-media {
+            flex: 1 1 auto; min-height: 7.5rem; max-height: none;
+        }
+        .score-glove-layout:not(.solo) .score-glove-stage .hole-media-map-wrap,
+        .score-glove-layout:not(.solo) .score-glove-stage .hole-map-card,
+        .score-glove-layout:not(.solo) .score-glove-stage .hole-map-compact {
+            flex: 1 1 auto; min-height: 0; height: 100%;
+        }
+        .score-glove-layout:not(.solo) .score-glove-stage .hole-map-frame {
+            flex: 1 1 auto; width: 100%; height: 100%; min-height: 0;
+            max-height: none; aspect-ratio: auto;
+        }
+        .score-glove-layout:not(.solo):has(.live-round-stats.open) .live-round-stats {
+            flex: 1 1 auto; min-height: 0; overflow: hidden;
+        }
+        .score-glove-layout:not(.solo):has(.live-round-stats.open) .live-stats-body {
+            max-height: none; min-height: 0; overflow: auto;
         }
         .score-glove-stage .hole-range-hud {
             z-index: 4; left: 0.32rem; bottom: 0.32rem;
@@ -735,12 +754,6 @@
         .score-glove-layout.players-3 .score-glove-dock,
         .score-glove-layout.players-4 .score-glove-dock {
             max-height: min(52dvh, 24rem);
-        }
-        .score-glove-layout.players-3 .score-glove-stage .hole-media,
-        .score-glove-layout.players-3 .score-glove-stage .hole-map-frame,
-        .score-glove-layout.players-4 .score-glove-stage .hole-media,
-        .score-glove-layout.players-4 .score-glove-stage .hole-map-frame {
-            max-height: min(18dvh, 8.5rem);
         }
         .score-glove-scores {
             flex: 0 1 auto; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch;
