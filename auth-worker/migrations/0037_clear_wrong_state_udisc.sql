@@ -20,7 +20,7 @@ WHERE id IN (
       (c.name = 'Natural Bridge State Park' AND c.udisc_course_id = '49238' AND cl.name = 'Red Disc & Target Set')
       OR (c.name = 'James Island County Park' AND c.udisc_course_id = '6322' AND cl.name = 'Portage Open 2024')
     )
-    AND NOT EXISTS (SELECT 1 FROM rounds r WHERE r.layout_id = cl.id)
+    AND NOT EXISTS (SELECT 1 FROM events ev WHERE ev.layout_id = cl.id)
     AND NOT EXISTS (SELECT 1 FROM round_ratings rr WHERE rr.layout_id = cl.id)
     AND NOT EXISTS (SELECT 1 FROM casual_round_requests q WHERE q.layout_id = cl.id)
     AND NOT EXISTS (SELECT 1 FROM casual_rounds cr WHERE cr.layout_id = cl.id)
