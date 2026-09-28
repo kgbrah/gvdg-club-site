@@ -12,9 +12,10 @@ import {
   pickUdiscSearchMatch,
   planUdiscLayoutApply,
   UDISC_LAYOUT_IMPORT_CRON,
+  UDISC_LOCAL_MISS,
 } from "../src/udisc-layout-import.js";
 import { COURSE_CATALOG_CACHE_NAME, bustCourseCatalogCache } from "../src/course-catalog-cache.js";
-import { normalizeUdiscCourseUrl, parseUdiscCourseUrls, parseUdiscDirectoryHits, udiscIndexUrl, udiscNcIndexUrl, udiscSlugName } from "../src/imports/udisc.js";
+import { normalizeUdiscCourseUrl, parseUdiscCourseSearch, parseUdiscCourseUrls, parseUdiscDirectoryHits, udiscCourseSearchUrl, udiscIndexUrl, udiscNcIndexUrl, udiscSlugName } from "../src/imports/udisc.js";
 
 describe("isUdiscLayoutCron", () => {
   it("matches the 15-minute trigger and ignores the ratings cron", () => {
@@ -196,6 +197,29 @@ describe("knownUdiscUrl", () => {
       "https://udisc.com/courses/sunrise-disc-golf-course-9eiL",
     );
   });
+
+  it("pins Kittrell Rocky Ford and Runaway Rocks, and leaves the Danbury Rocky Ford alone", () => {
+    expect(knownUdiscUrl({ name: "Rocky Ford", location: "Franklinton, NC" })).toBe(
+      "https://udisc.com/courses/rocky-ford-FdSt",
+    );
+    expect(knownUdiscUrl({ name: "Rocky Ford", location: "Kittrell, NC" })).toBe(
+      "https://udisc.com/courses/rocky-ford-FdSt",
+    );
+    expect(knownUdiscUrl({ name: "Rocky Ford", location: "Danbury, NC" })).toBeNull();
+    expect(knownUdiscUrl({ name: "Rocky Ford" })).toBeNull();
+    expect(knownUdiscUrl({ name: "Runaway Rocks", location: "Kittrell, NC" })).toBe(
+      "https://udisc.com/courses/runaway-rocks-08Hj",
+    );
+  });
+
+  it("retries a no_url miss once the known private-course URL applies", () => {
+    expect(
+      pickNextUdiscImportCourse(
+        [{ id: 46, name: "Rocky Ford", location: "Franklinton, NC", mapped: 0, lat: 36.22, lng: -78.39 }],
+        [{ course_id: 46, status: "no_url", attempts: 3, error: "no_local_match" }],
+      )?.id,
+    ).toBe(46);
+  });
 });
 
 describe("local UDisc directory search", () => {
@@ -248,9 +272,44 @@ describe("local UDisc directory search", () => {
       { course_id: 2, status: "no_url", attempts: 3, error: "no_udisc_url" },
       { course_id: 3, status: "no_url", attempts: 3, error: "no_udisc_url" },
       { course_id: 4, status: "no_url", attempts: 3, error: "no_udisc_url" },
-      { course_id: 5, status: "no_url", attempts: 3, error: "no_local_match" },
+      { course_id: 5, status: "no_url", attempts: 3, error: UDISC_LOCAL_MISS },
     ]);
     expect(next.map((course) => course.id)).toEqual([3, 4, 2, 1]);
+  });
+
+  it("gives a pre-search private miss another pass", () => {
+    const next = pickLocalSearchCourses(
+      [{ id: 46, name: "Rocky Ford", location: "Danbury, NC", lat: 36.4, lng: -80.2, mapped: 0 }],
+      [{ course_id: 46, status: "no_url", attempts: 3, error: "no_local_match" }],
+    );
+    expect(next.map((course) => course.id)).toEqual([46]);
+  });
+});
+
+describe("private UDisc course search", () => {
+  it("builds a search that includes courses hidden from the public directory", () => {
+    const url = new URL(udiscCourseSearchUrl("Rocky Ford"));
+    expect(url.pathname).toBe("/api/courses/search");
+    expect(url.searchParams.get("includeGenerallyUnavailableCourses")).toBe("true");
+    expect(url.searchParams.get("term")).toBe("Rocky Ford");
+  });
+
+  it("turns a search payload into directory hits, including the Kittrell and Danbury twins", () => {
+    const hits = parseUdiscCourseSearch([
+      { name: "Rocky Ford", shortId: "FdSt", locationText: "Kittrell, North Carolina" },
+      { name: "Rocky Ford", shortId: "gerz", locationText: "Danbury, North Carolina" },
+      { name: "Runaway Rocks", shortId: "08Hj", locationText: "Louisburg, North Carolina" },
+      { name: "Broken", shortId: "no", locationText: "Nowhere" },
+    ]);
+    expect(hits.map((hit) => hit.url)).toEqual([
+      "https://udisc.com/courses/rocky-ford-FdSt",
+      "https://udisc.com/courses/rocky-ford-gerz",
+      "https://udisc.com/courses/runaway-rocks-08Hj",
+    ]);
+    expect(pickLocalDirectoryMatch({ name: "Rocky Ford", location: "Franklinton, NC" }, hits)).toBeNull();
+    expect(pickLocalDirectoryMatch({ name: "Runaway Rocks", location: "Kittrell, NC" }, hits)).toBe(
+      "https://udisc.com/courses/runaway-rocks-08Hj",
+    );
   });
 });
 

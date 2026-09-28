@@ -8,7 +8,7 @@ import {
   upsertUdiscImport,
   type UdiscImportRow,
 } from "./db-udisc-layout-imports.js";
-import { ImportError, parseUdiscCourseUrls, parseUdiscDirectoryHits, parseUdiscLayouts, safeFetch, udiscIndexUrl, udiscNcIndexUrl } from "./imports.js";
+import { ImportError, parseUdiscCourseSearch, parseUdiscCourseUrls, parseUdiscDirectoryHits, parseUdiscLayouts, safeFetch, udiscCourseSearchUrl, udiscIndexUrl, udiscNcIndexUrl } from "./imports.js";
 import {
   CLUB_ORIGIN,
   DAY_TRIP_MILES,
@@ -28,12 +28,17 @@ export const UDISC_IMPORT_PRIORITY = ["Ashe County Park"];
 export const UDISC_INHERIT_MILES = 3;
 export const UDISC_LOCAL_MILES = 8;
 export const UDISC_LOCAL_SEARCHES_PER_TICK = 4;
-export const UDISC_LOCAL_MISS = "no_local_match";
+/** Terminal miss after both the public directory and the private-course search. Rows still
+ *  marked `no_local_match` predate that search and get one more pass. */
+export const UDISC_LOCAL_MISS = "no_udisc_search";
+const ROCKY_FORD_UDISC_URL = "https://udisc.com/courses/rocky-ford-FdSt";
+const RUNAWAY_ROCKS_UDISC_URL = "https://udisc.com/courses/runaway-rocks-08Hj";
 export const KNOWN_UDISC_URLS: Record<string, string> = {
   "ashe county park": "https://udisc.com/courses/ashe-county-park-wllg",
   "nc wesleyan university": "https://udisc.com/courses/north-carolina-wesleyan-university-Xw47",
   "wesleyan college": "https://udisc.com/courses/north-carolina-wesleyan-university-Xw47",
   "sunrise united methodist church": "https://udisc.com/courses/sunrise-disc-golf-course-9eiL",
+  "runaway rocks": RUNAWAY_ROCKS_UDISC_URL,
 };
 const UDISC_FETCH = { maxBytes: 3_000_000, timeoutMs: 20_000 } as const;
 const UDISC_INDEX_PAGES = 20;
@@ -107,8 +112,14 @@ export function pickNextUdiscImportCourse(
   return pending[0] ?? null;
 }
 
-export function knownUdiscUrl(course: { name?: string | null }): string | null {
+export function knownUdiscUrl(course: { name?: string | null; location?: string | null }): string | null {
   const key = normalizeCourseName(String(course.name || ""));
+  // A second Rocky Ford exists in Danbury, NC. Only the Kittrell / Franklinton property
+  // (UDisc lists the town as Kittrell; the catalog seed said Franklinton) gets this URL.
+  if (key === "rocky ford") {
+    const place = expandMatchName(String(course.location || ""));
+    return /\b(kittrell|franklinton)\b/.test(place) ? ROCKY_FORD_UDISC_URL : null;
+  }
   return KNOWN_UDISC_URLS[key] ?? null;
 }
 
@@ -236,7 +247,8 @@ export function pickUdiscSearchMatch(
   const top = scored[0];
   if (!top) return null;
   const second = scored[1];
-  if (second && top.score - second.score < 0.1 && top.score < 0.99) return null;
+  // An exact-name tie (two Rocky Fords) stays unresolved. A near-exact top may beat a weaker second.
+  if (second && top.score - second.score < 0.1 && (top.score < 0.99 || second.score >= 0.99)) return null;
   return top.url;
 }
 
@@ -369,7 +381,8 @@ export function pickLocalDirectoryMatch(
   const top = scored[0];
   if (!top) return null;
   const second = scored[1];
-  if (second && top.score - second.score < 0.1 && top.score < 0.99) return null;
+  // An exact-name tie (two Rocky Fords) stays unresolved. A near-exact top may beat a weaker second.
+  if (second && top.score - second.score < 0.1 && (top.score < 0.99 || second.score >= 0.99)) return null;
   return top.url;
 }
 
@@ -725,6 +738,15 @@ async function persistAttachedUrls(env: Env, rows: { id: number; udisc_url: stri
 }
 
 async function searchNearbyUdisc(course: ImportCourse): Promise<string | null | "fetch_failed"> {
+  const fromBox = await searchUdiscDirectoryBox(course);
+  if (typeof fromBox === "string" && fromBox !== "fetch_failed") return fromBox;
+  const fromApi = await searchUdiscCourseApi(course);
+  if (typeof fromApi === "string" && fromApi !== "fetch_failed") return fromApi;
+  if (fromBox === "fetch_failed" && fromApi === "fetch_failed") return "fetch_failed";
+  return null;
+}
+
+async function searchUdiscDirectoryBox(course: ImportCourse): Promise<string | null | "fetch_failed"> {
   const lat = Number(course.lat);
   const lng = Number(course.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
@@ -734,8 +756,23 @@ async function searchNearbyUdisc(course: ImportCourse): Promise<string | null | 
   } catch {
     return "fetch_failed";
   }
-  const hits = parseUdiscDirectoryHits(html);
-  return pickLocalDirectoryMatch(course, hits);
+  return pickLocalDirectoryMatch(course, parseUdiscDirectoryHits(html));
+}
+
+async function searchUdiscCourseApi(course: ImportCourse): Promise<string | null | "fetch_failed"> {
+  const term = String(course.name || "").trim();
+  if (!term) return null;
+  let text: string;
+  try {
+    text = await safeFetch(udiscCourseSearchUrl(term), ["udisc.com"], UDISC_FETCH);
+  } catch {
+    return "fetch_failed";
+  }
+  try {
+    return pickLocalDirectoryMatch(course, parseUdiscCourseSearch(JSON.parse(text)));
+  } catch {
+    return null;
+  }
 }
 
 async function fetchUdiscIndexUrls(): Promise<string[]> {

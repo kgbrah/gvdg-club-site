@@ -325,6 +325,37 @@ export function udiscSlugName(url: string): string {
   return slug.replace(/-[A-Za-z0-9]{4}$/, "").replace(/-/g, " ");
 }
 
+/** UDisc autocomplete. `includeGenerallyUnavailableCourses` is required: private courses
+ *  such as Rocky Ford are omitted from the public directory HTML the importer scrapes. */
+export function udiscCourseSearchUrl(term: string): string {
+  const params = new URLSearchParams({
+    includeGenerallyUnavailableCourses: "true",
+    term: term.trim(),
+    limit: "8",
+  });
+  return `https://udisc.com/api/courses/search?${params}`;
+}
+
+export function parseUdiscCourseSearch(body: unknown): UdiscDirectoryHit[] {
+  if (!Array.isArray(body)) return [];
+  const out: UdiscDirectoryHit[] = [];
+  const seen = new Set<string>();
+  for (const row of body) {
+    if (!row || typeof row !== "object") continue;
+    const record = row as { name?: unknown; shortId?: unknown; locationText?: unknown };
+    const name = typeof record.name === "string" ? record.name.trim() : "";
+    const shortId = typeof record.shortId === "string" ? record.shortId.trim() : "";
+    const place = typeof record.locationText === "string" ? record.locationText.trim() : "";
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    if (!name || !/^[A-Za-z0-9]{4}$/.test(shortId) || !slug) continue;
+    const url = normalizeUdiscCourseUrl(`https://udisc.com/courses/${slug}-${shortId}`);
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    out.push({ url, name, place });
+  }
+  return out;
+}
+
 export function udiscIndexUrl(origin: { lat: number; lng: number }, miles: number, page = 1): string {
   const latDelta = miles / 69;
   const cos = Math.cos((origin.lat * Math.PI) / 180);
