@@ -565,11 +565,13 @@
             width: 100%; min-height: 36px; font-size: 0.78rem; padding: 0 0.55rem;
         }
         .score-glove-stage .holegrid {
-            flex: 0 0 auto; min-height: 0; margin: 0.22rem 0 0.12rem;
-            align-content: start; overflow: hidden; gap: 4px;
+            display: flex; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
+            -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity;
+            flex: 0 0 auto; min-height: 0; margin: 0.22rem 0 0.12rem; gap: 4px;
         }
         .score-glove-stage .holegrid button {
-            min-height: 0; padding: 0.18rem 0.08rem; gap: 0;
+            flex: 0 0 2.75rem; scroll-snap-align: center;
+            min-height: 2.6rem; padding: 0.12rem 0.08rem; gap: 0;
         }
         .score-glove-stage .holegrid-num { font-size: 0.52rem; }
         .score-glove-stage .holegrid-score { font-size: 0.92rem; }
@@ -729,6 +731,17 @@
             background: var(--bg-secondary); border-top: 1px solid var(--border-color);
             box-shadow: 0 -10px 28px var(--shadow);
         }
+        .score-glove-layout.players-2 .score-glove-dock,
+        .score-glove-layout.players-3 .score-glove-dock,
+        .score-glove-layout.players-4 .score-glove-dock {
+            max-height: min(52dvh, 24rem);
+        }
+        .score-glove-layout.players-3 .score-glove-stage .hole-media,
+        .score-glove-layout.players-3 .score-glove-stage .hole-map-frame,
+        .score-glove-layout.players-4 .score-glove-stage .hole-media,
+        .score-glove-layout.players-4 .score-glove-stage .hole-map-frame {
+            max-height: min(18dvh, 8.5rem);
+        }
         .score-glove-scores {
             flex: 0 1 auto; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch;
         }
@@ -747,32 +760,9 @@
             margin: 0; padding: 0.05rem 0 0.05rem; box-shadow: none; border: 0;
             background: transparent; border-radius: 0;
         }
-        .score-player-rail {
-            display: flex; gap: 0.28rem; margin: 0 0 0.12rem; overflow-x: auto;
-        }
-        .score-player-chip {
-            flex: 1 1 0; min-width: 0; min-height: 44px; padding: 0.16rem 0.28rem 0.18rem;
-            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.02rem;
-            border: 1px solid var(--border-color); border-radius: 10px;
-            background: var(--bg-tertiary); color: var(--text-primary); cursor: pointer;
-        }
-        .score-player-chip-name {
-            display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-            font-size: 0.52rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
-            color: var(--text-muted);
-        }
-        .score-player-chip b {
-            font-family: 'Bebas Neue', sans-serif; font-size: 1.15rem; line-height: 1; font-weight: 400;
-        }
-        .score-player-chip.under b { color: var(--under); }
-        .score-player-chip.over b { color: var(--over); }
-        .score-player-chip.active {
-            border-color: var(--primary); background: var(--primary-strong); color: var(--light);
-        }
-        .score-player-chip.active .score-player-chip-name,
-        .score-player-chip.active b { color: var(--light); }
-        .score-glove-dock .prow { padding: 0.22rem 0; gap: 0.4rem; }
+        .score-glove-dock .prow { padding: 0.1rem 0; gap: 0.4rem; }
         .score-glove-dock .prow .pname { font-size: 0.92rem; }
+        .score-glove-dock .stepper button { width: 44px; height: 44px; font-size: 1.35rem; }
         .score-glove-dock .totbar { margin-top: 0.12rem; padding-top: 0.18rem; }
         .score-glove-dock .totbar .v { font-size: 1.05rem; }
         .score-glove-dock .ctp-claim { margin: 0.35rem 0 0; padding: 0.5rem; }

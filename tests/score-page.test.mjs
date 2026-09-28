@@ -720,8 +720,10 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /score-glove-layout/);
   assert.match(scorecard, /players-/);
   assert.match(scorecard, /function LiveRoundStats\(props\)/);
-  assert.match(scorecard, /function ScorePlayerRail\(props\)/);
-  assert.match(scorecard, /collapsed-others/);
+  assert.match(scorecard, /rows\.map\(\(row\) => h\(ScoreRow/);
+  assert.doesNotMatch(scorecard, /function ScorePlayerRail/);
+  assert.doesNotMatch(scorecard, /collapsed-others/);
+  assert.match(scorecard, /scrollIntoView/);
   assert.match(scorecard, /liveRoundStatsFromCard/);
   assert.match(scorecard, /readAllThrows/);
   assert.match(scorecard, /Live stats/);
@@ -854,8 +856,10 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(html, /\.confirm-score-row \{/);
   assert.match(html, /flex: 0 1 auto; max-height: min\(38dvh, 20rem\)/);
   assert.match(html, /\.score-glove-layout\.solo \.score-glove-stage \.hole-map-frame \{/);
-  assert.match(html, /\.score-player-rail \{/);
-  assert.match(html, /\.score-player-chip \{/);
+  assert.match(html, /\.score-glove-stage \.holegrid \{[^}]*overflow-x: auto/s);
+  assert.match(html, /\.score-glove-layout\.players-4 \.score-glove-dock/);
+  assert.doesNotMatch(html, /\.score-player-rail \{/);
+  assert.match(html, /\.score-glove-dock \.stepper button \{ width: 44px/);
   assert.match(html, /\.live-round-stats \{/);
   assert.match(html, /overflow: hidden;/);
   assert.match(html, /\.score-glove-layout:not\(\.solo\) \.live-round-stats/);
