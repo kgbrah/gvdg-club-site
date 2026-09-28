@@ -33,12 +33,21 @@ export const UDISC_LOCAL_SEARCHES_PER_TICK = 4;
 export const UDISC_LOCAL_MISS = "no_udisc_search";
 const ROCKY_FORD_UDISC_URL = "https://udisc.com/courses/rocky-ford-FdSt";
 const RUNAWAY_ROCKS_UDISC_URL = "https://udisc.com/courses/runaway-rocks-08Hj";
+const BALLYKNOCK_UDISC_URL = "https://udisc.com/courses/ballyknock-5F4u";
+const CHESTER_GREEN_UDISC_URL = "https://udisc.com/courses/chester-state-park-green-urME";
+const CHESTER_BURGUNDY_UDISC_URL = "https://udisc.com/courses/chester-state-park-burgundy-U9Vw";
+const JEFFERSON_ELEMENTARY_UDISC_URL = "https://udisc.com/courses/jefferson-elementary-school-y3f7";
 export const KNOWN_UDISC_URLS: Record<string, string> = {
   "ashe county park": "https://udisc.com/courses/ashe-county-park-wllg",
   "nc wesleyan university": "https://udisc.com/courses/north-carolina-wesleyan-university-Xw47",
   "wesleyan college": "https://udisc.com/courses/north-carolina-wesleyan-university-Xw47",
   "sunrise united methodist church": "https://udisc.com/courses/sunrise-disc-golf-course-9eiL",
   "runaway rocks": RUNAWAY_ROCKS_UDISC_URL,
+  ballyknock: BALLYKNOCK_UDISC_URL,
+  "hazel grove at wilderness presidential resort": "https://udisc.com/courses/hazel-grove-at-wpr-3QAd",
+  "virginia wesleyan college": "https://udisc.com/courses/virginia-wesleyan-m1If",
+  "york preparatory academy": "https://udisc.com/courses/york-preparatory-academy-OBiK",
+  "shaw air force base": "https://udisc.com/courses/shaw-afb-disc-golf-course-nDUf",
 };
 const UDISC_FETCH = { maxBytes: 3_000_000, timeoutMs: 20_000 } as const;
 const UDISC_INDEX_PAGES = 20;
@@ -120,6 +129,17 @@ export function knownUdiscUrl(course: { name?: string | null; location?: string 
     const place = expandMatchName(String(course.location || ""));
     return /\b(kittrell|franklinton)\b/.test(place) ? ROCKY_FORD_UDISC_URL : null;
   }
+  // UDisc lists Chester as two courses, Green and Burgundy. Only the Chester, SC rows get those pages.
+  if (key === "chester state park" || key === "chester state park burgundy") {
+    const place = expandMatchName(String(course.location || ""));
+    if (!/\bchester\b/.test(place) || !/\bsouth carolina\b/.test(place)) return null;
+    return key === "chester state park burgundy" ? CHESTER_BURGUNDY_UDISC_URL : CHESTER_GREEN_UDISC_URL;
+  }
+  // The same school name exists in Rigby, Idaho. Only York, SC gets this page.
+  if (key === "jefferson elementary school") {
+    const place = expandMatchName(String(course.location || ""));
+    return /\byork\b/.test(place) && /\bsouth carolina\b/.test(place) ? JEFFERSON_ELEMENTARY_UDISC_URL : null;
+  }
   return KNOWN_UDISC_URLS[key] ?? null;
 }
 
@@ -164,6 +184,7 @@ export function expandMatchName(value: string): string {
   s = s.replace(/\bsc\b/g, "south carolina");
   s = s.replace(/\bmd\b/g, "maryland");
   s = s.replace(/\bwv\b/g, "west virginia");
+  s = s.replace(/\bafb\b/g, "air force base");
   s = s.replace(/\buniv\b/g, "university");
   s = s.replace(/\bcommunity college\b/g, "communitycollege");
   s = s.replace(/\bcollege\b/g, "university");
@@ -181,6 +202,36 @@ export function geoLabel(value: string): string | null {
   if (/\btennessee\b/.test(s)) return "tennessee";
   if (/\bgeorgia\b/.test(s)) return "georgia";
   return null;
+}
+
+// Trailing region of a "City, State" place. Longer names win, so West Virginia is not Virginia
+// and a North Carolina town named Washington stays North Carolina. Used to reject an exact-name
+// hit in another state (Higher Ground in Croswell, Michigan).
+const STATE_ABBREV: Record<string, string> = {
+  al: "alabama", ak: "alaska", az: "arizona", ar: "arkansas", ca: "california", co: "colorado",
+  ct: "connecticut", de: "delaware", dc: "district of columbia", fl: "florida", ga: "georgia",
+  hi: "hawaii", id: "idaho", il: "illinois", in: "indiana", ia: "iowa", ks: "kansas",
+  ky: "kentucky", la: "louisiana", me: "maine", md: "maryland", ma: "massachusetts",
+  mi: "michigan", mn: "minnesota", ms: "mississippi", mo: "missouri", mt: "montana",
+  ne: "nebraska", nv: "nevada", nh: "new hampshire", nj: "new jersey", nm: "new mexico",
+  ny: "new york", nc: "north carolina", nd: "north dakota", oh: "ohio", ok: "oklahoma",
+  or: "oregon", pa: "pennsylvania", ri: "rhode island", sc: "south carolina", sd: "south dakota",
+  tn: "tennessee", tx: "texas", ut: "utah", vt: "vermont", va: "virginia", wa: "washington",
+  wv: "west virginia", wi: "wisconsin", wy: "wyoming",
+};
+const STATE_PHRASES = [...new Set(Object.values(STATE_ABBREV))].sort((a, b) => b.length - a.length);
+
+function matchStatePhrase(value: string): string | null {
+  for (const phrase of STATE_PHRASES) {
+    if (new RegExp(`\\b${phrase}\\b`).test(value)) return phrase;
+  }
+  return null;
+}
+
+export function placeState(value: string): string | null {
+  const expanded = expandMatchName(value);
+  const tail = expanded.split(",").map((part) => part.trim()).filter(Boolean).at(-1) ?? "";
+  return STATE_ABBREV[tail] ?? matchStatePhrase(tail) ?? geoLabel(expanded);
 }
 
 export function distinctiveTokens(value: string): Set<string> {
@@ -355,8 +406,8 @@ export function scoreDirectoryHit(
   course: { name: string; location?: string | null },
   hit: UdiscDirectoryHit,
 ): number {
-  const placeGeo = geoLabel(hit.place);
-  const locGeo = geoLabel(course.location || "");
+  const placeGeo = placeState(hit.place);
+  const locGeo = placeState(course.location || "");
   if (locGeo && placeGeo && locGeo !== placeGeo) return 0;
   const city = cityKey(course.location);
   const placeCity = cityKey(hit.place);

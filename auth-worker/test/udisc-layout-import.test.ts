@@ -185,14 +185,16 @@ describe("knownUdiscUrl", () => {
     ).toEqual([{ id: 9, udisc_url: "https://udisc.com/courses/ashe-county-park-wllg" }]);
   });
 
-  it("attaches the Rocky Mount Wesleyan UDisc URL under both catalog names", () => {
+  it("attaches each Wesleyan campus to its own UDisc page", () => {
     expect(knownUdiscUrl({ name: "NC Wesleyan University" })).toBe(
       "https://udisc.com/courses/north-carolina-wesleyan-university-Xw47",
     );
     expect(knownUdiscUrl({ name: "Wesleyan College Disc Golf Course" })).toBe(
       "https://udisc.com/courses/north-carolina-wesleyan-university-Xw47",
     );
-    expect(knownUdiscUrl({ name: "Virginia Wesleyan College" })).toBeNull();
+    expect(knownUdiscUrl({ name: "Virginia Wesleyan College" })).toBe(
+      "https://udisc.com/courses/virginia-wesleyan-m1If",
+    );
     expect(knownUdiscUrl({ name: "Sunrise United Methodist Church" })).toBe(
       "https://udisc.com/courses/sunrise-disc-golf-course-9eiL",
     );
@@ -210,6 +212,33 @@ describe("knownUdiscUrl", () => {
     expect(knownUdiscUrl({ name: "Runaway Rocks", location: "Kittrell, NC" })).toBe(
       "https://udisc.com/courses/runaway-rocks-08Hj",
     );
+  });
+
+  it("pins the UDisc pages that name search cannot safely choose", () => {
+    expect(knownUdiscUrl({ name: "Ballyknock", location: "Sugar Grove, WV" })).toBe(
+      "https://udisc.com/courses/ballyknock-5F4u",
+    );
+    expect(knownUdiscUrl({ name: "Hazel Grove at Wilderness Presidential Resort", location: "Spotsylvania, VA" })).toBe(
+      "https://udisc.com/courses/hazel-grove-at-wpr-3QAd",
+    );
+    expect(knownUdiscUrl({ name: "York Preparatory Academy", location: "Rock Hill, SC" })).toBe(
+      "https://udisc.com/courses/york-preparatory-academy-OBiK",
+    );
+    expect(knownUdiscUrl({ name: "Shaw Air Force Base", location: "Shaw AFB, SC" })).toBe(
+      "https://udisc.com/courses/shaw-afb-disc-golf-course-nDUf",
+    );
+    expect(knownUdiscUrl({ name: "Chester State Park", location: "Chester, SC" })).toBe(
+      "https://udisc.com/courses/chester-state-park-green-urME",
+    );
+    expect(knownUdiscUrl({ name: "Chester State Park - Burgundy", location: "Chester, SC" })).toBe(
+      "https://udisc.com/courses/chester-state-park-burgundy-U9Vw",
+    );
+    expect(knownUdiscUrl({ name: "Chester State Park" })).toBeNull();
+    expect(knownUdiscUrl({ name: "Jefferson Elementary School", location: "York, SC" })).toBe(
+      "https://udisc.com/courses/jefferson-elementary-school-y3f7",
+    );
+    expect(knownUdiscUrl({ name: "Jefferson Elementary School", location: "Rigby, ID" })).toBeNull();
+    expect(knownUdiscUrl({ name: "Jefferson Elementary School" })).toBeNull();
   });
 
   it("retries a no_url miss once the known private-course URL applies", () => {
@@ -309,6 +338,51 @@ describe("private UDisc course search", () => {
     expect(pickLocalDirectoryMatch({ name: "Rocky Ford", location: "Franklinton, NC" }, hits)).toBeNull();
     expect(pickLocalDirectoryMatch({ name: "Runaway Rocks", location: "Kittrell, NC" }, hits)).toBe(
       "https://udisc.com/courses/runaway-rocks-08Hj",
+    );
+  });
+
+  it("does not attach Fuquay-Varina Higher Ground to the Michigan course", () => {
+    const hits = parseUdiscCourseSearch([
+      { name: "Higher Ground", shortId: "qWA1", locationText: "Croswell, Michigan" },
+    ]);
+    expect(pickLocalDirectoryMatch({ name: "Higher Ground", location: "Fuquay Varina, NC" }, hits)).toBeNull();
+  });
+
+  it("picks the York school and leaves the Idaho and Virginia namesakes", () => {
+    const hits = parseUdiscCourseSearch([
+      { name: "Jefferson Elementary School", shortId: "y3f7", locationText: "York, South Carolina" },
+      { name: "Jefferson Elementary", shortId: "3E2U", locationText: "Rigby, Idaho" },
+      { name: "Thomas Jefferson Elementary", shortId: "1X0f", locationText: "Forest, Virginia" },
+    ]);
+    expect(pickLocalDirectoryMatch({ name: "Jefferson Elementary School", location: "York, SC" }, hits)).toBe(
+      "https://udisc.com/courses/jefferson-elementary-school-y3f7",
+    );
+  });
+
+  it("leaves the two Chester State Park pages tied until a known URL picks Green", () => {
+    const hits = parseUdiscCourseSearch([
+      { name: "Chester State Park- Green", shortId: "urME", locationText: "Chester, South Carolina" },
+      { name: "Chester State Park- Burgundy", shortId: "U9Vw", locationText: "Chester, South Carolina" },
+    ]);
+    expect(pickLocalDirectoryMatch({ name: "Chester State Park", location: "Chester, SC" }, hits)).toBeNull();
+  });
+
+  it("matches Shaw Air Force Base to the Shaw AFB page, not another base", () => {
+    const hits = parseUdiscCourseSearch([
+      { name: "Shaw AFB Disc Golf Course", shortId: "nDUf", locationText: "Shaw Air Force Base, South Carolina" },
+      { name: "Keesler Air Force Base", shortId: "W28b", locationText: "Biloxi, Mississippi" },
+    ]);
+    expect(pickLocalDirectoryMatch({ name: "Shaw Air Force Base", location: "Shaw AFB, SC" }, hits)).toBe(
+      "https://udisc.com/courses/shaw-afb-disc-golf-course-nDUf",
+    );
+  });
+
+  it("accepts Ballyknock in Brandywine for the Sugar Grove catalog row", () => {
+    const hits = parseUdiscCourseSearch([
+      { name: "Ballyknock", shortId: "5F4u", locationText: "Brandywine, West Virginia" },
+    ]);
+    expect(pickLocalDirectoryMatch({ name: "Ballyknock", location: "Sugar Grove, WV" }, hits)).toBe(
+      "https://udisc.com/courses/ballyknock-5F4u",
     );
   });
 });
