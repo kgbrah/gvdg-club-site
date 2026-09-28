@@ -220,6 +220,12 @@ const STATE_ABBREV: Record<string, string> = {
   wv: "west virginia", wi: "wisconsin", wy: "wyoming",
 };
 const STATE_PHRASES = [...new Set(Object.values(STATE_ABBREV))].sort((a, b) => b.length - a.length);
+const FOREIGN_TAILS = new Set([
+  "canada", "australia", "norway", "sweden", "finland", "germany", "france", "japan",
+  "mexico", "spain", "estonia", "ireland", "scotland", "england", "iceland", "denmark",
+  "netherlands", "belgium", "austria", "switzerland", "italy", "poland", "portugal",
+  "brazil", "argentina", "united kingdom", "new zealand", "south africa", "czech republic",
+]);
 
 function matchStatePhrase(value: string): string | null {
   for (const phrase of STATE_PHRASES) {
@@ -228,10 +234,16 @@ function matchStatePhrase(value: string): string | null {
   return null;
 }
 
+const OUTSIDE_US_ABBREV = new Set(["on", "bc", "qc", "ab", "mb", "sk", "ns", "nl", "pe", "nb", "nt", "yt", "nu"]);
+
 export function placeState(value: string): string | null {
-  const expanded = expandMatchName(value);
-  const tail = expanded.split(",").map((part) => part.trim()).filter(Boolean).at(-1) ?? "";
-  return STATE_ABBREV[tail] ?? matchStatePhrase(tail) ?? geoLabel(expanded);
+  // Split on commas before expandMatchName, which turns punctuation into spaces.
+  const parts = String(value || "").split(",").map((part) => expandMatchName(part)).filter(Boolean);
+  const tail = parts.at(-1) ?? "";
+  const abbreviated = STATE_ABBREV[tail] ?? matchStatePhrase(tail);
+  if (abbreviated) return abbreviated;
+  if (parts.some((part) => FOREIGN_TAILS.has(part) || OUTSIDE_US_ABBREV.has(part))) return "outside-us";
+  return geoLabel(parts.join(" "));
 }
 
 export function distinctiveTokens(value: string): Set<string> {

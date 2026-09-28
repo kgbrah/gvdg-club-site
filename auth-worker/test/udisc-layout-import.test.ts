@@ -341,6 +341,27 @@ describe("private UDisc course search", () => {
     );
   });
 
+  it("does not attach a Carolina course to a same-name page in another state or country", () => {
+    expect(
+      pickLocalDirectoryMatch({ name: "Natural Bridge State Park", location: "Natural Bridge, VA" }, [
+        {
+          url: "https://udisc.com/courses/natural-bridge-koa-journey-4jXd",
+          name: "Natural Bridge KOA Journey",
+          place: "Natural Bridge, New York",
+        },
+      ]),
+    ).toBeNull();
+    expect(
+      pickLocalDirectoryMatch({ name: "James Island County Park", location: "Charleston, SC" }, [
+        {
+          url: "https://udisc.com/courses/island-park-vTSC",
+          name: "Island Park",
+          place: "Portage la Prairie, Manitoba, Canada",
+        },
+      ]),
+    ).toBeNull();
+  });
+
   it("does not attach Fuquay-Varina Higher Ground to the Michigan course", () => {
     const hits = parseUdiscCourseSearch([
       { name: "Higher Ground", shortId: "qWA1", locationText: "Croswell, Michigan" },
