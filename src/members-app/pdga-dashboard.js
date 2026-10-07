@@ -205,7 +205,7 @@ export function PdgaDashboard({ pdgaNo, state, children, compact = false }) {
 
   if (status === "missing") {
     return dashboardShell("missing", [
-      h("div", { className: "react-pdga-status", key: "status" }, `We couldn't find live data for PDGA #${pdgaNo} yet. Check back after the next sync.`),
+      h("div", { className: "react-pdga-status", key: "status" }, `PDGA did not return a rating for #${pdgaNo}. Refresh in a few minutes.`),
       ...extras,
     ]);
   }

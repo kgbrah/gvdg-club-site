@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parsePlayerPage, parseDetailRounds, fetchPdgaStats, isFreshPdgaCache } from "../src/pdga.js";
+import { parsePlayerPage, parseDetailRounds, parseMemberOverview, parseRatingDetail, fetchPdgaStats, isFreshPdgaCache } from "../src/pdga.js";
 
 // Fixtures mirror the real pdga.com markup (verified against player #273070).
 const PLAYER_HTML = `
@@ -34,6 +34,35 @@ const DETAILS_WITH_ASCENDING_ROUNDS_HTML = `
 </table>`;
 
 describe("pdga.com parsers", () => {
+  it("reads the public member API when player HTML is challenged", async () => {
+    const overview = {
+      member: { firstName: "Kevin", lastName: "Gray", pdgaNum: 273070 },
+      currentRating: { rating: 890, effectiveDate: "2026-07-14T00:00:00+00:00" },
+    };
+    const detail = [
+      { tournId: 104547, division: "MA2", round: 2, score: 66, rating: 909, tournament: { officialName: "Yard Gnomes Open presented by Play it Again Sports", startDate: "2026-07-11T00:00:00+00:00" } },
+      { tournId: 104547, division: "MA2", round: 1, score: 67, rating: 818, tournament: { officialName: "Yard Gnomes Open presented by Play it Again Sports", startDate: "2026-07-11T00:00:00+00:00" } },
+      { tournId: 104398, division: "MA2", round: 1, score: 75, rating: 836, tournament: { officialName: "GVDG Monthly", startDate: "2026-05-31T00:00:00+00:00" } },
+    ];
+    const stub: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/overview")) return new Response(JSON.stringify(overview), { status: 200, headers: { "content-type": "application/json" } });
+      if (url.endsWith("/rating-detail")) return new Response(JSON.stringify(detail), { status: 200, headers: { "content-type": "application/json" } });
+      if (url.includes("live_results_fetch_round")) return new Response(JSON.stringify({ data: { scores: [] } }), { status: 200 });
+      return new Response("Just a moment...", { status: 403 });
+    };
+    const stats = await fetchPdgaStats("273070", stub);
+    expect(parseMemberOverview(overview)).toEqual({ name: "Kevin Gray", official_rating: 890, rating_date: "14-Jul-2026" });
+    expect(parseRatingDetail(detail)[0]?.rounds.map((round) => round.rating)).toEqual([909, 818]);
+    expect(stats.name).toBe("Kevin Gray");
+    expect(stats.official_rating).toBe(890);
+    expect(stats.rating_date).toBe("14-Jul-2026");
+    expect(stats.events[0]).toMatchObject({ tournament: "Yard Gnomes Open presented by Play it Again Sports", date: "11-Jul-2026", division: "MA2" });
+    expect(stats.live_rating).toBe(854);
+    expect(stats.peak_rating).toBe(909);
+    expect(stats.events_count).toBe(2);
+  });
+
   it("parses name + official rating + date from the player page", () => {
     const p = parsePlayerPage(PLAYER_HTML);
     expect(p).toEqual({ name: "Kevin Gray", official_rating: 891, rating_date: "09-Jun-2026" });

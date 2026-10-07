@@ -49,7 +49,7 @@ function HomeHero({ context, pdgaState }) {
       h("h1", { key: "name" }, context.name || "Member"),
       meta ? h("p", { key: "meta" }, meta) : null,
       pdgaState.status === "empty" ? h("p", { key: "pdga-empty" }, "No PDGA # is linked yet.") : null,
-      pdgaState.status === "missing" ? h("p", { key: "pdga-missing" }, "PDGA stats have not synced yet.") : null,
+      pdgaState.status === "missing" ? h("p", { key: "pdga-missing" }, "PDGA ratings are unavailable right now.") : null,
       pdgaState.status === "error" ? h("p", { key: "pdga-error" }, "Could not load PDGA stats.") : null,
     ]),
     h("div", {
