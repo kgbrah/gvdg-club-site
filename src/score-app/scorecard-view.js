@@ -33,7 +33,8 @@ function HoleStatChips(props) {
   ));
 }
 
-const LIVE_STATS_PEEK_IDS = ["fir", "c1r", "c2r", "birdie"];
+const LIVE_STATS_PEEK_IDS = ["eagle", "birdieMix", "parMix", "bogey", "double"];
+const LIVE_STATS_PEEK_LABELS = { double: "Bogey+" };
 const PHONE_SCORE_QUERY = "(max-width: 760px)";
 
 export function visibleBottomOverlap(innerHeight, offsetTop, viewportHeight) {
@@ -95,6 +96,17 @@ function liveStatSample(mine) {
   return mine.hit + "/" + mine.att;
 }
 
+function LivePeekTile(row) {
+  const count = row.mine && Number.isFinite(row.mine.hit) ? row.mine.hit : 0;
+  return h("div", {
+    className: "live-stat-tile peek" + (row.tone ? " tone-" + row.tone : ""),
+    key: row.id,
+  }, [
+    h("span", { className: "live-stats-k", key: "k" }, LIVE_STATS_PEEK_LABELS[row.id] || row.short || row.label),
+    h("b", { key: "v" }, String(count)),
+  ]);
+}
+
 function LiveStatTile(row, compact) {
   return h("div", {
     className: "live-stat-tile" + (row.tone ? " tone-" + row.tone : "") + (compact ? " peek" : ""),
@@ -151,7 +163,7 @@ function LiveRoundStats(props) {
   const hint = thru
     ? (hasThrows ? null : "Mark lies for fairways, C1, and putting")
     : "Score holes and mark lies — mix, FIR, C1, and putting fill in live.";
-  const peek = LIVE_STATS_PEEK_IDS.map((id) => view.throwStats.find((row) => row.id === id)).filter(Boolean);
+  const peek = LIVE_STATS_PEEK_IDS.map((id) => view.mix.find((row) => row.id === id)).filter(Boolean);
   const headChildren = [
     h("div", { className: "live-round-stats-copy", key: "copy" }, [
       h("div", { className: "live-round-stats-title", key: "title" }, "Live stats"),
@@ -186,7 +198,7 @@ function LiveRoundStats(props) {
     key: "live-stats",
   }, [
     head,
-    h("div", { className: "live-stats-peek", key: "peek" }, peek.map((row) => LiveStatTile(row, true))),
+    h("div", { className: "live-stats-peek", key: "peek" }, peek.map((row) => LivePeekTile(row))),
     h("div", { className: "live-stats-body", id: "live-round-stats-body", key: "body" }, [
       h("div", { className: "live-stats-mix-wrap", key: "mix" }, [
         h(LiveMixBar, { key: "bar", rows: view.mix }),

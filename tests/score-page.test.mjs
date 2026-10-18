@@ -730,7 +730,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /liveRoundStatsFromCard/);
   assert.match(scorecard, /readAllThrows/);
   assert.match(scorecard, /Live stats/);
-  assert.match(scorecard, /LIVE_STATS_PEEK_IDS/);
+  assert.match(scorecard, /LIVE_STATS_PEEK_IDS = \["eagle", "birdieMix", "parMix", "bogey", "double"\]/);
   assert.match(scorecard, /aria-expanded/);
   assert.match(scorecard, /Minimize live stats/);
   assert.match(scorecard, /Expand live stats/);
