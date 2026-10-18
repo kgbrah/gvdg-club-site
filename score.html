@@ -960,6 +960,28 @@
         table.lb td.pos { font-weight: 700; color: var(--text-muted); width: 1.6rem; }
         table.lb td.name { font-weight: 700; }
         table.lb td.tp.under { color: var(--under); } table.lb td.tp.over { color: var(--over); }
+        .lb-name-btn {
+            appearance: none; -webkit-appearance: none; background: transparent; border: 0; padding: 0;
+            font: inherit; font-weight: 700; color: inherit; text-align: left; cursor: pointer;
+        }
+        .lb-name-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+        table.lb tr.lb-card-row td { padding-top: 0; }
+        .lb-scorecard { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
+        .lb-hole {
+            min-height: 2.35rem; border-radius: 8px; border: 1px solid var(--border-color);
+            background: var(--bg-secondary); color: var(--text-secondary);
+            display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.05;
+        }
+        .lb-hole-num { font-size: 0.52rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+        .lb-hole-score { font-size: 0.85rem; font-weight: 800; color: var(--text-primary); }
+        .lb-hole-rel { font-size: 0.46rem; font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase; color: var(--text-muted); }
+        .lb-hole.under { background: color-mix(in srgb, var(--under) 16%, var(--bg-secondary)); border-color: var(--under); }
+        .lb-hole.under .lb-hole-score, .lb-hole.under .lb-hole-rel { color: var(--under); }
+        .lb-hole.over { background: color-mix(in srgb, var(--team-red) 16%, var(--bg-secondary)); border-color: var(--team-red); }
+        .lb-hole.over .lb-hole-score, .lb-hole.over .lb-hole-rel { color: var(--team-red); }
+        .lb-hole.even { background: color-mix(in srgb, var(--accent) 18%, var(--bg-secondary)); border-color: var(--accent); }
+        .lb-hole.even .lb-hole-score, .lb-hole.even .lb-hole-rel { color: var(--accent); }
+        .lb-card-empty { margin: 0.2rem 0 0.45rem; }
         .finalize-card { margin-top: 1rem; padding: 0.8rem; border-radius: 12px; border: 1px solid var(--border-color); background: var(--bg-primary); }
         .finalize-card.ready { border-color: var(--under); }
         .finalize-head { font-weight: 700; margin-bottom: 0.2rem; color: var(--over); }
@@ -1014,6 +1036,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=182"></script>
+    <script type="module" src="score-app/score-app.js?v=183"></script>
 </body>
 </html>

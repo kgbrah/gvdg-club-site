@@ -363,6 +363,7 @@ export function WatchView(props) {
         relClass: props.relClass,
         relText: props.relText,
         standings,
+        startExpanded: true,
       }),
     ]),
     h("div", { className: "watch-actions", key: "actions" }, [

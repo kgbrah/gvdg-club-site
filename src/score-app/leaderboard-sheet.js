@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { displayMatchStatus } from "../shared/match-status.js";
 import { UDiscExportDetails } from "../shared/udisc-export.js";
 import { useAccessibleDialog } from "../shared/a11y.js";
+import { strokeLabel } from "./score-view-model.js";
 
 const h = React.createElement;
 
@@ -17,7 +18,43 @@ function standingName(standing) {
   return standing.name + (extra ? " · " + extra : "");
 }
 
-export function LeaderboardTable({ isDoubles, isMatchplay, relClass, relText, standings }) {
+function standingKey(standing, index) {
+  return String(standing.targetId || standing.name || index);
+}
+
+function StandingScorecard({ scorecard }) {
+  const holes = Array.isArray(scorecard) ? scorecard : [];
+  if (!holes.length) return h("p", { className: "muted lb-card-empty" }, "No holes on this card yet.");
+  return h("div", { className: "lb-scorecard" }, holes.map((hole) => {
+    const scored = typeof hole.strokes === "number";
+    const rel = scored ? strokeLabel(hole.strokes, hole.par) : null;
+    const tone = rel ? rel.className : "";
+    return h("div", {
+      className: "lb-hole" + (tone ? " " + tone : ""),
+      key: hole.hole,
+    }, [
+      h("span", { className: "lb-hole-num", key: "n" }, String(hole.hole)),
+      h("b", { className: "lb-hole-score", key: "s" }, scored ? String(hole.strokes) : "·"),
+      rel ? h("span", { className: "lb-hole-rel", key: "r" }, rel.text) : null,
+    ]);
+  }));
+}
+
+export function LeaderboardTable({ isDoubles, isMatchplay, relClass, relText, standings, startExpanded }) {
+  const [toggled, setToggled] = React.useState(() => new Set());
+  function isOpen(id, hasCard) {
+    if (!hasCard) return false;
+    const touched = toggled.has(id);
+    return startExpanded ? !touched : touched;
+  }
+  function toggle(id) {
+    setToggled((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
   if (!standings.length) return h("p", { className: "muted" }, "No scores in yet.");
   const resultHead = isMatchplay ? "Match" : "To par";
   return h("table", { className: "lb" }, [
@@ -27,16 +64,30 @@ export function LeaderboardTable({ isDoubles, isMatchplay, relClass, relText, st
       h("th", { key: "thru" }, "Thru"),
       h("th", { key: "result" }, resultHead),
     ])),
-    h("tbody", { key: "body" }, standings.map((standing, index) =>
-      h("tr", { key: standing.targetId || standing.name || index }, [
-        h("td", { className: "pos", key: "pos" }, String(index + 1)),
-        h("td", { className: "name", key: "name" }, standingName(standing)),
-        h("td", { key: "thru" }, String(standing.thru || 0)),
-        isMatchplay
-          ? h("td", { key: "match" }, displayMatchStatus(standing.match))
-          : h("td", { className: "tp " + relClass(standing.toPar || 0), key: "toPar" }, standing.thru ? relText(standing.toPar || 0) : "E"),
-      ]),
-    )),
+    h("tbody", { key: "body" }, standings.map((standing, index) => {
+      const id = standingKey(standing, index);
+      const hasCard = Array.isArray(standing.scorecard) && standing.scorecard.length > 0;
+      const open = isOpen(id, hasCard);
+      return h(React.Fragment, { key: id }, [
+        h("tr", { key: "row" }, [
+          h("td", { className: "pos", key: "pos" }, String(index + 1)),
+          h("td", { className: "name", key: "name" }, hasCard
+            ? h("button", {
+              "aria-expanded": open ? "true" : "false",
+              "aria-controls": "lb-card-" + id,
+              className: "lb-name-btn",
+              type: "button",
+              onClick: () => toggle(id),
+            }, standingName(standing))
+            : standingName(standing)),
+          h("td", { key: "thru" }, String(standing.thru || 0)),
+          isMatchplay
+            ? h("td", { key: "match" }, displayMatchStatus(standing.match))
+            : h("td", { className: "tp " + relClass(standing.toPar || 0), key: "toPar" }, standing.thru ? relText(standing.toPar || 0) : "E"),
+        ]),
+        open ? h("tr", { className: "lb-card-row", key: "card" }, h("td", { colSpan: 4, id: "lb-card-" + id }, h(StandingScorecard, { scorecard: standing.scorecard }))) : null,
+      ]);
+    })),
   ]);
 }
 

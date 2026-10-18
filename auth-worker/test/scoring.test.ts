@@ -142,6 +142,14 @@ describe("config-aware live standings", () => {
     expect(live.map(({ name, thru, total, toPar }) => ({ name, thru, total, toPar }))).toEqual(
       legacy.map(({ name, thru, total, toPar }) => ({ name, thru, total, toPar })),
     );
+    expect(live[0]?.scorecard).toEqual([
+      { hole: 1, par: 3, strokes: 3 },
+      { hole: 2, par: 3, strokes: 3 },
+    ]);
+    expect(live[1]?.scorecard).toEqual([
+      { hole: 1, par: 3, strokes: 4 },
+      { hole: 2, par: 3, strokes: 3 },
+    ]);
     expect(finalized.map(({ name, place, total, toPar }) => ({ name, place, total, toPar }))).toEqual([
       { name: "Bo", place: 1, total: 6, toPar: 0 },
       { name: "Ann", place: 2, total: 7, toPar: 1 },

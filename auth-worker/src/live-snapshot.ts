@@ -60,6 +60,7 @@ export function publicSnapshot(
         targetType: standing.targetType,
         playerIndexes: standing.playerIndexes,
         members: standing.members,
+        scorecard: standing.scorecard,
         scoringGroup: standing.scoringGroup ?? null,
         match: standing.match ?? null,
       }));
@@ -130,6 +131,7 @@ export function mineData(
         targetType: standing.targetType,
         playerIndexes: standing.playerIndexes,
         members: standing.members,
+        scorecard: standing.scorecard,
         scoringGroup: standing.scoringGroup ?? null,
         match: standing.match ?? null,
       }));

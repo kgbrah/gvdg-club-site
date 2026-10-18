@@ -10,6 +10,12 @@ export interface ScoringGroup {
   readonly members: readonly string[];
 }
 
+export interface LiveHoleScore {
+  readonly hole: number;
+  readonly par: number;
+  readonly strokes: number | null;
+}
+
 export interface LiveStanding extends Standing {
   readonly targetId: string;
   readonly targetType: ScoreTarget["type"];
@@ -18,6 +24,7 @@ export interface LiveStanding extends Standing {
   readonly members: readonly string[];
   readonly scoringGroup?: ScoringGroup;
   readonly match?: MatchStatus;
+  readonly scorecard: readonly LiveHoleScore[];
 }
 
 export interface FinalLiveStanding extends FinalStanding {
@@ -168,6 +175,10 @@ function targetStrokeRow(
     scoringGroup: group,
     breakdown: countScores(pars, strokes),
     holes: played,
+    scorecard: holes.map((hole) => {
+      const score = scoreForTarget(players, target, hole.hole);
+      return { hole: hole.hole, par: hole.par, strokes: score == null ? null : score };
+    }),
   };
 }
 
@@ -241,6 +252,7 @@ function toLiveStanding(row: TargetStrokeRow): LiveStanding {
     playerIndexes: row.playerIndexes,
     memberIds: row.memberIds,
     members: row.members,
+    scorecard: row.scorecard,
   };
   if (row.scoringGroup != null && row.match != null) return { ...base, scoringGroup: row.scoringGroup, match: row.match };
   if (row.scoringGroup != null) return { ...base, scoringGroup: row.scoringGroup };
