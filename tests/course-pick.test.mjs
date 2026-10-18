@@ -3,11 +3,15 @@ import test from "node:test";
 import {
   courseHasMap,
   courseSub,
+  coursesForPickScreen,
   filterCoursesForPick,
   googleMapsDirectionsUrl,
   layoutHasMap,
   milesFromOrigin,
+  readLastCourse,
+  rememberLastCourse,
   sortLayoutsForPick,
+  teeSignCaptureHref,
 } from "../src/score-app/course-pick.js";
 
 const ORIGIN = { lat: 35.6127, lng: -77.3664 };
@@ -103,4 +107,27 @@ test("googleMapsDirectionsUrl uses GPS when present and name otherwise", () => {
   const named = googleMapsDirectionsUrl({ name: "Ayden Park", location: "Ayden, NC" });
   assert.match(named, /destination=Ayden\+Park%2C\+Ayden%2C\+NC/);
   assert.equal(googleMapsDirectionsUrl({}), "");
+});
+
+test("coursesForPickScreen keeps the idle list to nearby mapped courses and pins the last one", () => {
+  const nearMapped = course({ id: 4, name: "Near Mapped", lat: 35.63, lng: -77.32, mapped: 1 });
+  const farMapped = course({ id: 2, name: "Far Mapped", lat: 36.8, lng: -78.9, mapped: 1 });
+  const nearBare = course({ id: 3, name: "Near Bare", lat: 35.62, lng: -77.37, mapped: 0 });
+  const idle = coursesForPickScreen([farMapped, nearBare, nearMapped], "", "25", ORIGIN).map((row) => row.name);
+  assert.deepEqual(idle, ["Near Mapped"]);
+  const pinned = coursesForPickScreen([farMapped, nearBare, nearMapped], "", "25", ORIGIN, { lastCourseId: 3 }).map((row) => row.name);
+  assert.deepEqual(pinned, ["Near Bare", "Near Mapped"]);
+  const searched = coursesForPickScreen([farMapped, nearBare, nearMapped], "far", "all", ORIGIN).map((row) => row.name);
+  assert.deepEqual(searched, ["Far Mapped"]);
+});
+
+test("last course and tee-sign links round-trip", () => {
+  const store = new Map();
+  const storage = {
+    getItem: (key) => (store.has(key) ? store.get(key) : null),
+    setItem: (key, value) => store.set(key, value),
+  };
+  rememberLastCourse({ id: 12, name: "NC Wesleyan" }, storage);
+  assert.deepEqual(readLastCourse(storage), { id: 12, name: "NC Wesleyan" });
+  assert.equal(teeSignCaptureHref({ id: 12, name: "NC Wesleyan" }), "gvdg-members.html?course=12#tee");
 });

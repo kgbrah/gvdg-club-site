@@ -1,6 +1,6 @@
 import React from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Eye, Ruler, Settings2, Share2, UserPlus, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Link2, Ruler, Settings2, Share2, UserPlus, X } from "lucide-react";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { HoleMap } from "../shared/hole-map.js";
 import { addThrow, currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, lastThrow, lastThrowHud, nextTeeHud, HOLE_MAP_COMPACT_SIZE, readAllThrows, readThrows, resolveMapFocus, undoThrow, withSelfLocation, writeThrows } from "../shared/hole-map-model.js";
@@ -208,6 +208,12 @@ function LiveRoundStats(props) {
 
 function RoundTools(props) {
   const showManage = Boolean(props.show);
+  const [copied, setCopied] = React.useState(false);
+  function copyWatch() {
+    if (typeof props.onWatchShare === "function") props.onWatchShare();
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  }
   return h("div", { className: "score-glove-tools", key: "round-tools" }, [
     h(
       "button",
@@ -222,9 +228,16 @@ function RoundTools(props) {
       [icon(Share2), h("span", { key: "label" }, "Share")],
     ),
     props.onWatchShare
-      ? h("button", { className: "score-glove-tool", key: "watch", type: "button", onClick: props.onWatchShare }, [
-        icon(Eye),
-        h("span", { key: "label" }, "Watch"),
+      ? h("button", {
+        "aria-label": "Copy watch link",
+        className: "score-glove-tool" + (copied ? " active" : ""),
+        key: "watch",
+        title: "Copy watch link",
+        type: "button",
+        onClick: copyWatch,
+      }, [
+        icon(Link2),
+        h("span", { key: "label" }, copied ? "Copied" : "Copy link"),
       ])
       : null,
     showManage

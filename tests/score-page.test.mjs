@@ -163,7 +163,9 @@ test('casual round course pick searches and sorts mapped courses first', () => {
   assert.match(setup, /COURSE_RANGE_DEFAULT/);
   assert.match(setup, /id: "courseRadius"/);
   assert.match(setup, /useDeviceOrigin/);
-  assert.match(setup, /courseSub\(course, origin\)/);
+  assert.match(setup, /courseSub\(course, sortOrigin\)/);
+  assert.match(setup, /coursesForPickScreen/);
+  assert.match(setup, /Add a map/);
   assert.match(setup, /maps first, then nearest/);
   assert.match(setup, /course-map-badge/);
   assert.match(setup, /course-directions/);
@@ -858,7 +860,8 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(html, /\.score-glove-layout\.solo \.score-glove-stage \.hole-map-frame \{/);
   assert.match(html, /\.score-glove-stage \.holegrid \{[^}]*overflow-x: auto/s);
   assert.match(html, /\.score-glove-layout:not\(\.solo\) \.score-glove-stage \.hole-media \{[^}]*flex: 1 1 auto/s);
-  assert.match(html, /:has\(\.live-round-stats\.open\) \.score-glove-stage \.hole-map-frame \{[^}]*max-height: min\(20dvh, 9rem\)/s);
+  assert.match(html, /\.live-round-stats\.compact\.open \.live-stats-body \{[^}]*position: fixed/s);
+  assert.doesNotMatch(html, /:has\(\.live-round-stats\.open\) \.score-glove-stage \.hole-map-frame \{[^}]*max-height: min\(20dvh, 9rem\)/s);
   assert.doesNotMatch(html, /\.score-player-rail \{/);
   assert.match(html, /\.score-glove-dock \.stepper button \{ width: 44px/);
   assert.match(html, /\.live-round-stats \{/);

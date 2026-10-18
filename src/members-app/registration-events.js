@@ -122,7 +122,10 @@ function OpenEventForm({ event, token, onReload }) {
 export function EventRegistrationCard({ event, registration, token, paymentsConfig, onReload }) {
   const addons = registration ? parseObject(registration.addons) : {};
   const owed = registration ? clientOwed(event, addons) : 0;
-  return h("div", { className: `register-card${event.status === "live" ? " live" : ""}` }, [
+  return h("div", {
+    className: `register-card${event.status === "live" ? " live" : ""}`,
+    "data-event-state": registration && event.status !== "cancelled" ? "in" : "register",
+  }, [
     h("div", { className: "register-head", key: "head" }, [
       h("span", { className: "register-name", key: "name" }, event.name || "Event"),
       h(EventBadge, { status: event.status, key: "badge" }),
@@ -136,7 +139,7 @@ export function EventRegistrationCard({ event, registration, token, paymentsConf
       ? h("div", { className: "register-status cancelled", key: "status" }, `This event was cancelled${registration.division ? ` - you were in ${registration.division}` : ""}`)
       : null,
     registration && event.status !== "cancelled"
-      ? h("div", { className: "register-status", key: "registered" }, `Registered${registration.division ? ` - ${registration.division}` : ""}${registration.checked_in ? " - checked in" : ""}`)
+      ? h("div", { className: "register-status", "data-event-state": "in", key: "registered" }, `You're in${registration.division ? ` · ${registration.division}` : ""}${registration.checked_in ? " · checked in" : ""}`)
       : null,
     registration?.paid_entry ? h("div", { className: "register-status", key: "paid" }, "Paid") : null,
     registration && !registration.paid_entry && owed > 0

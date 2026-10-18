@@ -30,7 +30,7 @@ function readPlayerOrigin() {
 function EventCard({ event }) {
   const miles = typeof event.miles === "number" ? `${event.miles.toFixed(1)} mi` : "";
   const where = [event.course, event.place].filter(Boolean).join(" · ");
-  return h("article", { className: "register-card pdga-event-card" }, [
+  return h("article", { className: "register-card pdga-event-card", "data-event-state": "register" }, [
     h("div", { className: "register-head", key: "head" }, [
       h("span", { className: "register-name", key: "name" }, event.name),
       miles ? h("span", { className: "pdga-event-miles", key: "miles" }, miles) : null,
@@ -93,7 +93,7 @@ export function PdgaEventsSection() {
     : "PDGA events within 100 miles of Greenville. Allow location to sort from where you are.";
 
   return h("section", { className: "pdga-events", "data-pdga-events": state.status }, [
-    h("h3", { className: "my-dashboard-title", key: "title" }, "PDGA events"),
+    h("h3", { className: "my-dashboard-title", key: "title" }, "Nearby PDGA"),
     h("p", { className: "dash-note", key: "note" }, note),
     state.status === "loading" ? h("p", { className: "dash-note", key: "loading" }, "Finding nearby PDGA events...") : null,
     state.status === "error" ? h("p", { className: "dash-note", key: "error" }, "PDGA events are temporarily unavailable.") : null,

@@ -147,7 +147,7 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.doesNotMatch(html, /\.dtab-off/);
   assert.doesNotMatch(html, /members-react-(shell|overview|ratings|registration|board|tee-signs|club)-ready/);
   assertNoLegacyMemberFallbacks(html);
-  assert.match(html, /<script type="module" src="members-app\/members-app\.js"><\/script>/);
+  assert.match(html, /<script type="module" src="members-app\/members-app\.js\?v=180"><\/script>/);
   assert.doesNotMatch(html, /matchplay-colors\.js/);
   assert.match(app, /createRoot\(pageChromeMount\)\.render\(h\(MemberPageChrome\)\)/);
   assert.match(app, /createRoot\(authMount\)\.render/);

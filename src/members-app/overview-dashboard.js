@@ -6,7 +6,7 @@ import { selectDashboardTab } from "./dashboard-shell.js";
 import { dollars, formatEventDay, formatToPar } from "./format.js";
 import { HomeJobs } from "./home-jobs.js";
 import { useMemberContext } from "./member-context.js";
-import { usePdgaStats } from "./pdga-dashboard.js";
+import { usePdgaStats, pdgaEventTitle } from "./pdga-dashboard.js";
 import { PlayStatsPanel } from "./play-stats-panel.js";
 import { useRegistrationData } from "./registration-panel.js";
 import { eventMeta, pickUpNext } from "./registration-utils.js";
@@ -66,7 +66,7 @@ function HomeHero({ context, pdgaState }) {
 function UpNextCard({ events, registrations }) {
   const { event, registration } = pickUpNext(events, registrations);
   if (!event) {
-    return h("section", { className: "player-card", "data-react-home-next": "empty" }, [
+    return h("section", { className: "player-story-block", "data-react-home-next": "empty" }, [
       h("h3", { key: "title" }, "Up next"),
       h("p", { className: "player-card-meta", key: "empty" }, "Nothing on your schedule right now."),
       h("button", {
@@ -82,10 +82,10 @@ function UpNextCard({ events, registrations }) {
   const fee = event.entry_fee_cents ? dollars(event.entry_fee_cents) : null;
   const meta = [when, eventMeta(event), fee].filter(Boolean).join(" · ");
   const live = event.status === "live";
-  const chip = live ? "Live" : registration ? "Registered" : "Open";
-  const actionLabel = live && registration ? "Open scorecard" : registration ? "You're registered" : "Register";
+  const chip = live ? "Live" : registration ? "You're in" : "Open";
+  const actionLabel = live && registration ? "Open scorecard" : registration ? "You're in" : "Register";
 
-  return h("section", { className: "player-card", "data-react-home-next": registration ? "registered" : "ready" }, [
+  return h("div", { className: "player-story-block", "data-react-home-next": registration ? "registered" : "ready" }, [
     h("h3", { key: "title" }, "Up next"),
     h("div", { className: "player-event-name", key: "name" }, event.name || "Club event"),
     meta ? h("div", { className: "player-card-meta", key: "meta" }, meta) : null,
@@ -129,7 +129,7 @@ function LastRoundCard({ token }) {
   }, [token]);
 
   const row = state.row;
-  return h("section", { className: "player-card", "data-react-home-last-round": state.status }, [
+  return h("div", { className: "player-story-block", "data-react-home-last-round": state.status }, [
     h("h3", { key: "title" }, "Last club round"),
     row
       ? h("a", {
@@ -150,13 +150,51 @@ function LastRoundCard({ token }) {
   ]);
 }
 
+function RatingMove({ stats, status }) {
+  if (status !== "ready" || stats?.official_rating == null) return null;
+  const official = stats.official_rating;
+  const previous = stats.previous_rating;
+  let move = stats.rating_date ? `As of ${stats.rating_date}` : "Official rating";
+  let tone = "";
+  if (previous != null && previous !== official) {
+    const delta = official - previous;
+    tone = delta > 0 ? "up" : "down";
+    move = `${delta > 0 ? "Up" : "Down"} ${Math.abs(delta)} from ${previous}`;
+  }
+  return h("div", { className: "player-story-block", key: "rating" }, [
+    h("h3", { key: "title" }, "Rating"),
+    h("div", { className: "player-story-rating", key: "row" }, [
+      h("b", { key: "n" }, String(official)),
+      h("span", { className: `player-story-move ${tone}`.trim(), key: "move" }, move),
+    ]),
+  ]);
+}
+
+function PdgaHistory({ stats }) {
+  const events = Array.isArray(stats?.events) ? stats.events : [];
+  if (!events.length) return null;
+  return h("details", { className: "dash-collapse player-story-history", key: "history" }, [
+    h("summary", { className: "dash-collapse-summary", key: "summary" }, `PDGA events (${events.length})`),
+    h("div", { className: "player-story-events", key: "list" }, events.slice(0, 6).map((event, index) =>
+      h("div", { className: "player-list-row", key: `${event.tournament || "event"}-${event.epoch || index}` }, [
+        h("div", { key: "copy" }, [
+          h("div", { className: "player-event-name", key: "name" }, pdgaEventTitle(event.tournament) || "Event"),
+          h("div", { className: "player-card-meta", key: "meta" }, [event.date, event.division].filter(Boolean).join(" · ")),
+        ]),
+        h("div", { className: "player-score", key: "score" }, [
+          h("b", { key: "r" }, event.rounds?.[0]?.rating != null ? String(event.rounds[0].rating) : "—"),
+          h("span", { key: "l" }, "Rating"),
+        ]),
+      ]),
+    )),
+  ]);
+}
+
 export function MemberOverviewDashboard() {
   const context = useMemberContext();
   const token = storageGet(TOKEN_KEY);
   const pdgaState = usePdgaStats(context.pdgaNo);
   const registration = useRegistrationData();
-  const official = pdgaState.stats?.official_rating;
-  const peak = pdgaState.stats?.peak_rating;
 
   if (!token) return null;
 
@@ -170,16 +208,13 @@ export function MemberOverviewDashboard() {
       onReload: registration.reload,
       key: "jobs",
     }),
-    h("div", { className: "player-row-cards", key: "stats" }, [
-      h(WalletPanel, { token, compact: true, key: "wallet" }),
-      h("div", { className: "player-stat", key: "official" }, [
-        h("div", { className: "player-stat-k", key: "k" }, "Official"),
-        h("div", { className: "player-stat-v", key: "v" }, official != null ? String(official) : "—"),
-        h("div", { className: "player-stat-s", key: "s" }, peak != null ? `Peak ${peak}` : "PDGA official"),
-      ]),
+    h(WalletPanel, { token, compact: true, key: "wallet" }),
+    h("section", { className: "player-card player-story", "data-react-home-story": "ready", key: "story" }, [
+      h(RatingMove, { stats: pdgaState.stats, status: pdgaState.status }),
+      h(LastRoundCard, { token }),
+      h(UpNextCard, { events: registration.state.events, registrations: registration.state.registrations }),
+      h(PdgaHistory, { stats: pdgaState.stats }),
     ]),
-    h(UpNextCard, { events: registration.state.events, registrations: registration.state.registrations, key: "next" }),
     h(PlayStatsPanel, { compact: true, key: "play-stats", pdgaStats: pdgaState.stats }),
-    h(LastRoundCard, { token, key: "last" }),
   ]);
 }

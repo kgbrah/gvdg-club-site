@@ -1,14 +1,19 @@
 import React from "react";
 import { ArrowLeft, ChevronRight, LogOut, Navigation, PlayCircle, Search } from "lucide-react";
 import {
+  BROWSE_MAPPED_LIMIT,
+  CLUB_ORIGIN,
   COURSE_RANGE_DEFAULT,
   COURSE_RANGES,
   courseHasMap,
   courseSub,
+  coursesForPickScreen,
   filterCoursesForPick,
   googleMapsDirectionsUrl,
   layoutHasMap,
+  readLastCourse,
   sortLayoutsForPick,
+  teeSignCaptureHref,
 } from "./course-pick.js";
 import { safeExternalUrl } from "../shared/safe-url.js";
 
@@ -32,14 +37,18 @@ function BackButton({ onBack }) {
   );
 }
 
-function MapBadge() {
-  return h("span", { className: "course-map-badge", key: "map" }, "Mapped");
+function MapBadge({ mapped }) {
+  return h("span", {
+    className: mapped ? "course-map-badge" : "course-map-badge missing",
+    key: "map",
+  }, mapped ? "Mapped" : "No map");
 }
 
-function CourseMeta({ text, mapped }) {
+function CourseMeta({ text, mapped, lastPlayed }) {
   return h("div", { className: "sub-row", key: "meta" }, [
     text ? h("div", { className: "sub", key: "sub" }, text) : null,
-    mapped ? h(MapBadge) : null,
+    lastPlayed ? h("span", { className: "course-map-badge last", key: "last" }, "Last played") : null,
+    h(MapBadge, { mapped }),
   ]);
 }
 
@@ -152,9 +161,25 @@ function useDeviceOrigin() {
 function CoursePickView({ courses, onBack, onSelect }) {
   const [query, setQuery] = React.useState("");
   const [range, setRange] = React.useState(COURSE_RANGE_DEFAULT);
+  const [rangeTouched, setRangeTouched] = React.useState(false);
   const origin = useDeviceOrigin();
-  const filtered = filterCoursesForPick(courses, query, range, origin);
+  const lastPlayed = React.useMemo(() => readLastCourse(), []);
+  const browsing = !query.trim();
+  const sortOrigin = origin || CLUB_ORIGIN;
+  const filtered = coursesForPickScreen(courses, query, range, sortOrigin, {
+    lastCourseId: browsing ? lastPlayed && lastPlayed.id : null,
+  });
   const mappedCount = filtered.filter(courseHasMap).length;
+  const hidden = browsing && range !== "all" && filterCoursesForPick(courses, "", range, sortOrigin).length > filtered.length;
+
+  function onQuery(value) {
+    setQuery(value);
+    if (!rangeTouched) setRange(value.trim() ? "all" : COURSE_RANGE_DEFAULT);
+  }
+
+  const count = browsing
+    ? `${filtered.length} nearby mapped course${filtered.length === 1 ? "" : "s"}${origin ? "" : " near the club"} · maps first, then nearest`
+    : `${filtered.length} course${filtered.length === 1 ? "" : "s"}${mappedCount ? ` · ${mappedCount} mapped` : ""} · maps first, then nearest`;
 
   return h("div", { className: "stack" }, [
     h(BackButton, { onBack, key: "back" }),
@@ -167,10 +192,15 @@ function CoursePickView({ courses, onBack, onSelect }) {
         id: "courseSearch",
         key: "input",
         value: query,
-        placeholder: "Name or city",
-        onChange: (event) => setQuery(event.target.value),
+        placeholder: "Name or city — search every course",
+        autoFocus: true,
+        enterKeyHint: "search",
+        onChange: (event) => onQuery(event.target.value),
       }),
     ]),
+    h("p", { className: "muted", key: "hint" }, browsing
+      ? `Closest mapped courses${hidden ? `, up to ${BROWSE_MAPPED_LIMIT}` : ""}. Type a name to search the full list.`
+      : "Search covers every course. Narrow it with the radius if you want."),
     h("div", { className: "course-range", key: "range" }, [
       h("label", { className: "lbl", htmlFor: "courseRadius", key: "radiusLabel" }, "Search radius"),
       h(
@@ -181,23 +211,22 @@ function CoursePickView({ courses, onBack, onSelect }) {
           key: "radius",
           value: range,
           "aria-label": "Search radius",
-          onChange: (event) => setRange(event.target.value),
+          onChange: (event) => {
+            setRangeTouched(true);
+            setRange(event.target.value);
+          },
         },
         COURSE_RANGES.map((option) =>
           h("option", { key: option.value, value: option.value }, option.label),
         ),
       ),
     ]),
-    h(
-      "p",
-      { className: "muted", key: "count" },
-      filtered.length
-        ? `${filtered.length} course${filtered.length === 1 ? "" : "s"}${mappedCount ? ` · ${mappedCount} mapped` : ""}${origin ? " · maps first, then nearest" : " · maps first"}`
-        : "No courses match that search.",
-    ),
+    h("p", { className: "muted", key: "count" }, filtered.length ? count : "No courses match that search."),
     filtered.length
-      ? filtered.map((course) =>
-          h(
+      ? filtered.map((course) => {
+          const mapped = courseHasMap(course);
+          const last = lastPlayed && String(lastPlayed.id) === String(course.id);
+          return h(
             "div",
             { className: "tap-row", key: course.id || course.name },
             [
@@ -207,15 +236,27 @@ function CoursePickView({ courses, onBack, onSelect }) {
                 [
                   h("div", { className: "grow", key: "content" }, [
                     h("div", { className: "title", key: "title" }, course.name),
-                    h(CourseMeta, { text: courseSub(course, origin), mapped: courseHasMap(course), key: "meta" }),
+                    h(CourseMeta, { text: courseSub(course, sortOrigin), mapped, lastPlayed: last, key: "meta" }),
                   ]),
                   h("div", { className: "chev", key: "chev" }, icon(ChevronRight)),
                 ],
               ),
-              h(DirectionsLink, { course, origin, key: "dir" }),
+              mapped
+                ? null
+                : h(
+                    "a",
+                    {
+                      className: "course-map-capture",
+                      href: teeSignCaptureHref(course),
+                      key: "capture",
+                      onClick: (event) => event.stopPropagation(),
+                    },
+                    "Add a map",
+                  ),
+              h(DirectionsLink, { course, origin: sortOrigin, key: "dir" }),
             ],
-          ),
-        )
+          );
+        })
       : null,
     h("p", { className: "muted", key: "attr" }, "Course list includes DiscGolfAPI data."),
   ]);
@@ -223,9 +264,20 @@ function CoursePickView({ courses, onBack, onSelect }) {
 
 function LayoutPickView({ course, layouts, onBack, onSelect }) {
   const sorted = sortLayoutsForPick(layouts);
+  const mapped = sorted.some(layoutHasMap);
   return h("div", { className: "stack" }, [
     h(BackButton, { onBack, key: "back" }),
     h("h2", { className: "section", key: "title" }, course.name),
+    mapped
+      ? null
+      : h("div", { className: "card stack", key: "unmapped" }, [
+          h("p", { className: "muted", key: "copy" }, "This course has no hole map yet. You can still start a round, or photograph a tee sign so the next card has a map."),
+          h(
+            "a",
+            { className: "btn secondary", href: teeSignCaptureHref(course), key: "capture" },
+            "Capture a tee sign",
+          ),
+        ]),
     sorted.length
       ? sorted.map((layout) =>
           h(

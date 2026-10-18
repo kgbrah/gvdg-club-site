@@ -7,7 +7,9 @@ export const COURSE_RANGES = [
   { value: "100", label: "Within 100 miles", miles: 100 },
   { value: "250", label: "Within 250 miles", miles: 250 },
 ];
-export const COURSE_RANGE_DEFAULT = "all";
+export const COURSE_RANGE_DEFAULT = "25";
+export const BROWSE_MAPPED_LIMIT = 12;
+export const LAST_COURSE_KEY = "gvdg.lastCourse";
 
 function courseCoord(value) {
   const n = Number(value);
@@ -124,6 +126,50 @@ export function googleMapsDirectionsUrl(course, origin) {
   const fromLng = origin && courseCoord(origin.lng);
   if (fromLat != null && fromLng != null) url.searchParams.set("origin", `${fromLat},${fromLng}`);
   return url.href;
+}
+
+export function rememberLastCourse(course, storage) {
+  const store = storage || (typeof localStorage === "undefined" ? null : localStorage);
+  if (!store || !course || course.id == null) return;
+  try {
+    store.setItem(LAST_COURSE_KEY, JSON.stringify({ id: course.id, name: String(course.name || "") }));
+  } catch {
+    /* private mode */
+  }
+}
+
+export function readLastCourse(storage) {
+  const store = storage || (typeof localStorage === "undefined" ? null : localStorage);
+  if (!store) return null;
+  try {
+    const raw = JSON.parse(store.getItem(LAST_COURSE_KEY) || "null");
+    if (!raw || raw.id == null) return null;
+    return { id: raw.id, name: String(raw.name || "") };
+  } catch {
+    return null;
+  }
+}
+
+export function teeSignCaptureHref(course) {
+  const id = course && course.id != null ? String(course.id) : "";
+  return id ? `gvdg-members.html?course=${encodeURIComponent(id)}#tee` : "gvdg-members.html#tee";
+}
+
+/** Idle list is the nearest mapped courses. Typing, or choosing All, opens the catalog. */
+export function coursesForPickScreen(courses, query, range, origin, options = {}) {
+  const browsing = !String(query || "").trim();
+  const rows = filterCoursesForPick(courses, query, range, origin);
+  let visible = rows;
+  if (browsing && range !== "all") {
+    const mapped = rows.filter((course) => courseHasMap(course));
+    visible = (mapped.length ? mapped : rows).slice(0, BROWSE_MAPPED_LIMIT);
+    const lastId = options.lastCourseId;
+    if (lastId != null) {
+      const last = (Array.isArray(courses) ? courses : []).find((course) => String(course.id) === String(lastId));
+      if (last) visible = [last, ...visible.filter((course) => String(course.id) !== String(last.id))];
+    }
+  }
+  return visible;
 }
 
 export function sortLayoutsForPick(layouts) {

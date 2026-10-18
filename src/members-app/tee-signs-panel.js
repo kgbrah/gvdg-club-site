@@ -14,6 +14,15 @@ import {
 
 const h = React.createElement;
 
+function requestedCourseId() {
+  if (typeof window === "undefined") return "";
+  try {
+    return new URLSearchParams(window.location.search).get("course") || "";
+  } catch {
+    return "";
+  }
+}
+
 function courseName(courses, courseId) {
   const match = courses.find((course) => String(course.id) === String(courseId));
   return match?.name || `Course #${courseId}`;
@@ -95,12 +104,17 @@ export function MemberTeeSignsPanel() {
       requestJson("/my-tee-signs", { signal: controller.signal, token }).catch(() => ({ teeSigns: [] })),
     ]).then(([courseData, signData]) => {
       const courses = Array.isArray(courseData.courses) ? courseData.courses : [];
+      const requested = requestedCourseId();
       setState({
         status: "ready",
         courses,
         signs: Array.isArray(signData.teeSigns) ? signData.teeSigns : [],
       });
-      setSelectedCourse((current) => current || String(courses[0]?.id || ""));
+      setSelectedCourse((current) => {
+        if (current && courses.some((course) => String(course.id) === current)) return current;
+        if (requested && courses.some((course) => String(course.id) === requested)) return requested;
+        return String(courses[0]?.id || "");
+      });
     }).catch((error) => {
       if (error.name !== "AbortError") {
         setState({ status: "error", courses: [], signs: [] });

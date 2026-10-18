@@ -38,6 +38,7 @@ describe("pdga.com parsers", () => {
     const overview = {
       member: { firstName: "Kevin", lastName: "Gray", pdgaNum: 273070 },
       currentRating: { rating: 890, effectiveDate: "2026-07-14T00:00:00+00:00" },
+      previousRating: { rating: 891, effectiveDate: "2026-06-09T00:00:00+00:00" },
     };
     const detail = [
       { tournId: 104547, division: "MA2", round: 2, score: 66, rating: 909, tournament: { officialName: "Yard Gnomes Open presented by Play it Again Sports", startDate: "2026-07-11T00:00:00+00:00" } },
@@ -52,11 +53,12 @@ describe("pdga.com parsers", () => {
       return new Response("Just a moment...", { status: 403 });
     };
     const stats = await fetchPdgaStats("273070", stub);
-    expect(parseMemberOverview(overview)).toEqual({ name: "Kevin Gray", official_rating: 890, rating_date: "14-Jul-2026" });
+    expect(parseMemberOverview(overview)).toEqual({ name: "Kevin Gray", official_rating: 890, rating_date: "14-Jul-2026", previous_rating: 891, previous_rating_date: "09-Jun-2026" });
     expect(parseRatingDetail(detail)[0]?.rounds.map((round) => round.rating)).toEqual([909, 818]);
     expect(stats.name).toBe("Kevin Gray");
     expect(stats.official_rating).toBe(890);
     expect(stats.rating_date).toBe("14-Jul-2026");
+    expect(stats.previous_rating).toBe(891);
     expect(stats.events[0]).toMatchObject({ tournament: "Yard Gnomes Open presented by Play it Again Sports", date: "11-Jul-2026", division: "MA2" });
     expect(stats.live_rating).toBe(854);
     expect(stats.peak_rating).toBe(909);
@@ -174,7 +176,7 @@ describe("pdga.com parsers", () => {
     const stats = await fetchPdgaStats("273070", stub);
     expect(stats.events_count).toBe(25);
     expect(stats.events).toHaveLength(25);
-    expect(stats.stats_version).toBe(2);
+    expect(stats.stats_version).toBe(3);
   });
 
   it("includes hole-by-hole mix from earlier seasons, not only the current year", async () => {
@@ -250,7 +252,7 @@ describe("pdga cache freshness", () => {
     events_count: 2,
     events: [{ tournament: "A" }, { tournament: "B" }],
     play_rounds: [],
-    stats_version: 2,
+    stats_version: 3,
   };
 
   it("keeps a current full payload", () => {

@@ -42,8 +42,13 @@ export function selectDashboardTab(tabValue, options = {}) {
   emitDashboardState("gvdg:dashboard-tab-selected", tab, { scroll: options.scroll !== false });
 }
 
+function hashTab() {
+  const hash = String(window.location.hash || "").replace(/^#/, "").split(/[/?]/)[0].toLowerCase();
+  return DASH_TABS.has(hash) ? hash : null;
+}
+
 export function openMemberDashboard(detail = {}) {
-  selectDashboardTab("overview");
+  selectDashboardTab(hashTab() || "overview");
   emitDashboardState("gvdg:member-dashboard-ready", selectedDashTab, detail);
 }
 

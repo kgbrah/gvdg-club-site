@@ -655,6 +655,15 @@
                 }
                 .player-event-name { font-weight: 800; color: var(--text-primary); }
                 .player-card-meta { color: var(--text-muted); font-size: 0.8rem; margin-top: 0.15rem; line-height: 1.4; }
+                .player-story { display: grid; gap: 0.85rem; }
+                .player-story-block + .player-story-block { border-top: 1px solid var(--border-color); padding-top: 0.8rem; }
+                .player-story-rating { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; }
+                .player-story-rating b { font-family: 'Bebas Neue', sans-serif; font-size: 2.4rem; line-height: 0.85; color: var(--secondary-text); font-weight: 400; }
+                .player-story-move { color: var(--text-muted); font-size: 0.85rem; font-weight: 800; text-align: right; }
+                .player-story-move.up { color: var(--under); }
+                .player-story-move.down { color: var(--over); }
+                .player-story-events { display: grid; gap: 0.55rem; margin-top: 0.65rem; }
+                .player-story .player-btn { margin-top: 0.55rem; }
                 .event-schedule { display: grid; gap: 0.22rem; margin-top: 0.55rem; }
                 .event-schedule-row {
                     display: grid; grid-template-columns: auto minmax(0, 1fr);
@@ -1108,6 +1117,6 @@
 
     <div id="membersReactDialogsApp"></div>
     <div id="crottsReactApp"></div>
-    <script type="module" src="members-app/members-app.js"></script>
+    <script type="module" src="members-app/members-app.js?v=180"></script>
 </body>
 </html>

@@ -20,7 +20,7 @@ import {
     startingHoleForState,
     udiscExportData,
 } from "./score-view-model.js";
-import { resolveApiBase } from "../shared/api-base.js";
+import { rememberLastCourse } from "./course-pick.js";
 import { clearMemberSession, readMemberToken, writeMemberSession } from "../shared/member-session.js";
 import { createWakeLock } from "../shared/wake-lock.js";
 import { isTransientMineFailure, mineCacheKey, readMineCache, writeMineCache } from "./score-session-cache.js";
@@ -983,7 +983,11 @@ export function startScoreApp(options) {
             renderLoading();
             const liveScoringConfig = config || defaultLiveScoringConfig();
             const r = await api('/rounds', { method: 'POST', body: { course_id: course.id, layout_id: layout.id, liveScoringConfig: { groupFormat: liveScoringConfig.groupFormat, scoringStyle: liveScoringConfig.scoringStyle } } });
-            if (r.ok && r.data && r.data.code) { location.search = '?round=' + r.data.code; return; }
+            if (r.ok && r.data && r.data.code) {
+                rememberLastCourse(course);
+                location.search = '?round=' + r.data.code;
+                return;
+            }
             if (r.status === 401) { renderOpenPlay(function () { createRound(course, layout, liveScoringConfig); }); return; }
             renderMessage('Could not start round', (r.data && r.data.error === 'no_layout_holes') ? 'That layout has no holes/pars yet.' : 'Please try again.', false);
         }

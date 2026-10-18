@@ -69,9 +69,9 @@ export function MemberRegistrationPanel() {
 
   if (!token) return null;
 
-  return h("div", { className: "react-registration-panel", "data-react-registration-panel": state.status }, [
-    h(PdgaEventsSection, { key: "pdga" }),
-    h("h3", { className: "my-dashboard-title", key: "title" }, "Club registration"),
+  return h("div", { className: "react-registration-panel events-timeline", "data-react-registration-panel": state.status }, [
+    h("h3", { className: "my-dashboard-title", key: "title" }, "Events"),
+    h("p", { className: "dash-note", key: "note" }, "Club events you're in come first. Nearby PDGA events follow, closest to you."),
     state.status === "loading" ? h("p", { className: "dash-note", key: "loading" }, "Loading registration options...") : null,
     state.status === "error" ? h("p", { className: "dash-note", key: "error" }, "Registration is temporarily unavailable. Please refresh or try again in a minute.") : null,
     state.status !== "error" ? h("div", { key: "content" }, [
@@ -83,6 +83,7 @@ export function MemberRegistrationPanel() {
         onReload: reload,
         key: "events",
       }),
+      h(PdgaEventsSection, { key: "pdga" }),
       h(CasualRoundsSection, {
         token,
         requests: state.casualRequests,
@@ -90,6 +91,6 @@ export function MemberRegistrationPanel() {
         onReload: reload,
         key: "casual",
       }),
-    ]) : null,
+    ]) : h(PdgaEventsSection, { key: "pdga" }),
   ]);
 }

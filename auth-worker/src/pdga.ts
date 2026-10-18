@@ -29,6 +29,8 @@ export interface PdgaStats {
   name: string | null;
   official_rating: number | null;
   rating_date: string | null;
+  previous_rating: number | null;
+  previous_rating_date: string | null;
   live_rating: number | null;
   peak_rating: number | null;
   events_count: number;
@@ -42,7 +44,7 @@ const UA = "Mozilla/5.0 (compatible; GVDGClubBot/1.0; +https://gvdgclub.com)";
 const PDGA_API = "https://www.pdga.com/api/v1";
 const PDGA_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 const CACHE_TTL_MS = 15 * 60 * 1000;
-const PDGA_STATS_VERSION = 2;
+const PDGA_STATS_VERSION = 3;
 const RECENT_ROUNDS = 8; // "live" rating = mean of the most recent N round ratings (recent-form estimate)
 const MAX_HOLE_ROUNDS = 80; // newest-first hole mix; keeps worker subrequests bounded
 const STAGING_QA_PDGA = "90000001";
@@ -76,6 +78,8 @@ const STAGING_QA_STATS: PdgaStats = {
   name: "GVDG QA Dashboard",
   official_rating: 935,
   rating_date: "2026-07-01",
+  previous_rating: 928,
+  previous_rating_date: "2026-06-01",
   live_rating: 941,
   peak_rating: 958,
   events_count: 3,
@@ -204,7 +208,7 @@ function roundKey(round: PdgaRound): string {
 }
 
 function emptyPdgaStats(pdga: string): PdgaStats {
-  return { pdga, name: null, official_rating: null, rating_date: null, live_rating: null, peak_rating: null, events_count: 0, events: [], play: emptyPlayTotals(), play_rounds: [], stats_version: PDGA_STATS_VERSION };
+  return { pdga, name: null, official_rating: null, rating_date: null, previous_rating: null, previous_rating_date: null, live_rating: null, peak_rating: null, events_count: 0, events: [], play: emptyPlayTotals(), play_rounds: [], stats_version: PDGA_STATS_VERSION };
 }
 
 function fallbackPdgaStats(pdga: string): PdgaStats | null {
@@ -310,19 +314,36 @@ export function pdgaDisplayDate(iso: string): { date: string; epoch: number } {
   };
 }
 
-/** Name + current official rating from `/feat/members/<n>/overview`. */
-export function parseMemberOverview(json: unknown): { name: string | null; official_rating: number | null; rating_date: string | null } {
+type PdgaPlayer = {
+  name: string | null;
+  official_rating: number | null;
+  rating_date: string | null;
+  previous_rating: number | null;
+  previous_rating_date: string | null;
+};
+
+function emptyPlayer(): PdgaPlayer {
+  return { name: null, official_rating: null, rating_date: null, previous_rating: null, previous_rating_date: null };
+}
+
+/** Name + current and previous official ratings from `/feat/members/<n>/overview`. */
+export function parseMemberOverview(json: unknown): PdgaPlayer {
   const root = json && typeof json === "object" ? json as Record<string, unknown> : {};
   const member = root.member && typeof root.member === "object" ? root.member as Record<string, unknown> : {};
   const current = root.currentRating && typeof root.currentRating === "object" ? root.currentRating as Record<string, unknown> : {};
+  const previous = root.previousRating && typeof root.previousRating === "object" ? root.previousRating as Record<string, unknown> : {};
   const first = typeof member.firstName === "string" ? member.firstName.trim() : "";
   const last = typeof member.lastName === "string" ? member.lastName.trim() : "";
   const rating = finiteNumber(current.rating);
   const dated = pdgaDisplayDate(typeof current.effectiveDate === "string" ? current.effectiveDate : "");
+  const previousRating = finiteNumber(previous.rating);
+  const previousDated = pdgaDisplayDate(typeof previous.effectiveDate === "string" ? previous.effectiveDate : "");
   return {
     name: [first, last].filter(Boolean).join(" ") || null,
     official_rating: rating == null ? null : Math.round(rating),
     rating_date: dated.date || null,
+    previous_rating: previousRating == null ? null : Math.round(previousRating),
+    previous_rating_date: previousDated.date || null,
   };
 }
 
@@ -369,7 +390,7 @@ async function readJson(doFetch: typeof fetch, url: string, headers: Record<stri
 
 async function assemblePdgaStats(
   pdga: string,
-  player: { name: string | null; official_rating: number | null; rating_date: string | null },
+  player: PdgaPlayer,
   events: readonly PdgaEvent[],
   doFetch: typeof fetch,
   headers: Record<string, string>,
@@ -383,6 +404,8 @@ async function assemblePdgaStats(
     name: player.name,
     official_rating: player.official_rating,
     rating_date: player.rating_date,
+    previous_rating: player.previous_rating,
+    previous_rating_date: player.previous_rating_date,
     live_rating: recent.length ? Math.round(recent.reduce((sum, rating) => sum + rating, 0) / recent.length) : null,
     peak_rating: ratings.length ? ratings.reduce((max, rating) => Math.max(max, rating), 0) : null,
     events_count: events.length,
@@ -401,7 +424,7 @@ export async function fetchPdgaStats(pdga: string, doFetch: typeof fetch = fetch
     readJson(doFetch, `${base}/rating-detail`, jsonHeaders),
   ]);
   if (overview || detail) {
-    const player = overview ? parseMemberOverview(overview) : { name: null, official_rating: null, rating_date: null };
+    const player = overview ? parseMemberOverview(overview) : emptyPlayer();
     const events = detail ? parseRatingDetail(detail) : [];
     if (player.official_rating != null || events.length) return assemblePdgaStats(pdga, player, events, doFetch, jsonHeaders);
   }
@@ -410,7 +433,7 @@ export async function fetchPdgaStats(pdga: string, doFetch: typeof fetch = fetch
   const page = `https://www.pdga.com/player/${pdga}`;
   const [pRes, dRes] = await Promise.all([doFetch(page, { headers }), doFetch(`${page}/details`, { headers })]);
   const [playerHtml, detailHtml] = await Promise.all([pRes.ok ? pRes.text() : Promise.resolve(""), dRes.ok ? dRes.text() : Promise.resolve("")]);
-  const player = parsePlayerPage(playerHtml);
+  const player = { ...emptyPlayer(), ...parsePlayerPage(playerHtml) };
   const detailEvents = parseDetailRounds(detailHtml);
   const recentResults = await Promise.allSettled(recentEventRefs(playerHtml, detailHtml).map(async (event) => {
     const response = await doFetch(`https://www.pdga.com/tour/event/${event.id}`, { headers });
