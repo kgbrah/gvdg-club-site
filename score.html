@@ -723,9 +723,9 @@
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .live-stats-peek {
-            display: none; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.1rem;
+            display: none;
         }
-        .live-round-stats.compact:not(.open) .live-stats-peek { display: grid; }
+        .live-round-stats.compact:not(.open) .live-stats-peek { display: block; }
         .live-round-stats.compact:not(.open) .live-stats-body { display: none; }
         .live-round-stats.compact.open .live-stats-body {
             position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
@@ -1014,6 +1014,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=181"></script>
+    <script type="module" src="score-app/score-app.js?v=182"></script>
 </body>
 </html>
