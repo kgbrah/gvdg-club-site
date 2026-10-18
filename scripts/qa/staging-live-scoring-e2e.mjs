@@ -212,7 +212,7 @@ async function runBrowserQa({ siteUrl, apiBase, token, member, course, layout })
     await page.goto(`${siteUrl}/score.html`, { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: /Start a casual round/ }).click();
     await page.locator("#courseSearch").fill(String(course.name || course.id));
-    await page.locator("button.tap-row").filter({ hasText: String(course.name || course.id) }).first().click();
+    await page.locator("button.tap-row-main").filter({ hasText: String(course.name || course.id) }).first().click();
     await page.locator("button.tap-row").filter({ hasText: String(layout.name || "Layout") }).first().click();
     await page.locator("[data-group-format='singles']").click();
     await page.locator("[data-scoring-style='stroke']").click();
