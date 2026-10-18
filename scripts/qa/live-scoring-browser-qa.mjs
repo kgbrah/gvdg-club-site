@@ -331,6 +331,7 @@ async function runCasualRoundQa(browser, origin) {
 
   await page.goto(`${origin}/score.html`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /Start a casual round/ }).click();
+  await page.locator("#courseSearch").fill("ECU North");
   await page.getByRole("button", { name: /ECU North Rec Complex/ }).click();
   await page.getByRole("button", { name: /Pee Dee/ }).click();
   await page.locator("[data-group-format='singles']").click();
