@@ -215,6 +215,7 @@ test('createRound sends explicit live scoring config defaults and selections', (
   assert.match(setup, /onCreate\(selected\)/);
   assert.match(legacy, /const liveScoringConfig = config \|\| defaultLiveScoringConfig\(\);/);
   assert.match(legacy, /body: \{ course_id: course\.id, layout_id: layout\.id, liveScoringConfig: \{ groupFormat: liveScoringConfig\.groupFormat, scoringStyle: liveScoringConfig\.scoringStyle \} \}/);
+  assert.match(readFileSync('src/score-app/score-controller.js', 'utf8'), /import \{ resolveApiBase \} from "\.\.\/shared\/api-base\.js"/);
 });
 
 test('score setup screens are React-owned without legacy DOM fallbacks', () => {

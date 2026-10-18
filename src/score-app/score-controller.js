@@ -21,6 +21,7 @@ import {
     udiscExportData,
 } from "./score-view-model.js";
 import { rememberLastCourse } from "./course-pick.js";
+import { resolveApiBase } from "../shared/api-base.js";
 import { clearMemberSession, readMemberToken, writeMemberSession } from "../shared/member-session.js";
 import { createWakeLock } from "../shared/wake-lock.js";
 import { isTransientMineFailure, mineCacheKey, readMineCache, writeMineCache } from "./score-session-cache.js";
