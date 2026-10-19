@@ -1,6 +1,8 @@
-# Greenville Disc Golf Club — Website & Member Platform
+# GVDG — club site, member home, and live scoring
 
-The official website and member platform for the **Greenville Disc Golf Club** (Greenville, North Carolina).
+The app behind [gvdgclub.com](https://gvdgclub.com) for the **Greenville Disc Golf Club** (Greenville, North Carolina).
+
+It is the public club site, a signed-in player dashboard, and a phone scorecard other people can watch. A round is a satellite hole map, a live scoring mix, and a leaderboard that opens into each player's holes. Members see their PDGA rating and what's next. Anyone can start a casual card or follow one that is already going.
 
 It is two things in one repository, deployed together:
 
@@ -49,30 +51,36 @@ The frontend picks its API base automatically through `src/shared/api-base.js`: 
 
 ### Public (no login required)
 - **Home page** (`index.html`) — club identity, upcoming tournaments (auto-loaded from a published Google Sheet CSV and Disc Golf Scene), a course browser with a details modal (UDisc, directions, course-preview video), membership call-to-action, and contact info.
-- **Events hub** (`events.html`) — live / upcoming / past events, event detail pages (roster, multi-course / multi-layout venue summaries, live-scoring banner, results, CTPs, ace pots), leagues & standings.
+- **Keep score** from the home page and nav. Park players start or join a casual card with a name. No club login.
+- **Events hub** (`events.html`) — live / upcoming / past events, event detail pages (roster, multi-course / multi-layout venue summaries, live-scoring banner, results, CTPs, ace pots), leagues & standings. The member Events tab also lists PDGA events within 100 miles, closest first, with Disc Golf Scene registration links.
 - **Ryder Cup** (`ryder-cup.html`) — Red vs. Blue team match-play standings and weekly results.
 - **Blog** (`gvdg-blog.html`) and **Results archive** (`archive.html`).
 - **Crotts** — a floating AI assistant (named after club officer Max Crotts) available on public pages, grounded in the club's live calendar and courses.
-- **Live leaderboards** — anyone can watch a round's leaderboard update in real time over WebSocket.
+- **Watch a round** — a public link follows the card live. No join, no login.
 
 ### Members (PDGA # or UDisc username + PIN)
 - **Login** with PDGA number **or** UDisc username + a 4-digit PIN; **forced PIN change** on first login; optional **passkeys / WebAuthn** for passwordless login afterward.
 - **Member dashboard** (`gvdg-members.html`) with tabs: **Overview**, **Events** (register), **Board** (message board), **Tee Signs**, **Club**.
+- **Home story** — rating move since the last PDGA update, the last club round, and what is coming up, in one block.
 - **Player profile** — add/confirm PDGA #, UDisc handle, and a profile photo (auto-pulled from PDGA or uploaded).
-- **Ratings & stats** — a personal rating estimate plus tournament history.
-- **Event registration** — register/withdraw, choose a division, add CTP / ace-pot entries, check in.
+- **PDGA ratings & stats** — official rating, rating history, events, and hole stats, synced from PDGA. A separate club rating uses the PDGA scratch-score engine and recomputes on a daily cron.
+- **Event registration** — register/withdraw, choose a division, add CTP / ace-pot entries, check in. Club rounds you are already in sit above open club events.
 - **Payments** — pay entry fees via **PayPal** (when enabled) or a manual "pay at the event" flow; spend **store credit** from the member wallet.
 - **Message board** — members-only posts with threaded replies.
-- **Tee signs** — submit a photo of a course tee sign; OCR suggests hole data for an admin to confirm.
+- **Tee signs** — submit a photo of a course tee sign; OCR suggests hole data for an admin to confirm. Unmapped courses in the picker deep-link here.
 - **Pro shop** (`pro-shop.html`) — browse products, buy with PayPal or store credit; a **member wallet** (append-only store-credit ledger).
 
 ### Live scoring (`score.html`)
-- **Public Keep score** on the club home and nav — park players start or join a casual card with a name, no club login.
-- **UDisc-style live scoring** for **events** and **casual rounds**, on one or many scorecards.
-- **Any cardmate keeps score**; members may only score **their own card**; admins can score anyone.
+- **Phone scorecard.** The satellite map is the hero: tee, basket, marked lies, and the disc in flight. Weather sits on the card. The map grows into leftover space instead of leaving a blank well.
+- **One-row live stats.** Ace, eagle, birdie, par, bogey, and double-plus fill a bar as holes are scored. Expand for fairway, circle, and putting. On a phone the extra stats open as a sheet so they do not cover the map.
+- **Hole rail.** All 18 holes sit on one sideways-scrolling row. Group cards stack every player (room for four) instead of hiding them on a rail.
+- **Leaderboard.** Tap a name to open that player's hole card. Tap a hole to jump the scorer's map to it. On the watch page every card starts open, and a hole tap follows that player.
+- **Playing rating.** Once the layout has a scratch score, the stats strip shows what this round is playing like, and how far that is from the player's official PDGA rating when the account has a PDGA number.
+- **Share card.** When the card locks, one image carries the hole scores, to-par, and the scoring mix. Watch links copy in one tap.
+- **Course pick.** GPS, nearest mapped layouts first, search across the North Carolina catalog and nearby courses, directions, and a path to photograph a tee sign when a course is still unmapped. A Worker cron fills unmapped layouts from UDisc.
+- **Casual rounds and event cards**, one card or many. **Any cardmate keeps score**; members may only score **their own card**; admins can score anyone.
 - **Consensus scoring** — a hole's official score is set only when the active scorers agree; disagreement blanks the hole and blocks finishing until resolved.
-- **Singles, doubles, and match-play** formats; **Ryder-Cup-style match-play** coloring of holes/rounds by winning team.
-- Real-time leaderboard, share links, add guests, manage the card, and finalize the round.
+- **Singles, doubles, and match play**, including Ryder Cup coloring. Add guests, manage the card, and finish the round from the phone.
 
 ### Admin / club operations (`admin.html`, 16 tabs)
 **Events**, **New Event** (including multiple course/layout assignments), **Import** (Disc Golf Scene / CSV / UDisc), **Registration** (fees, divisions, CTPs, ace pots, team & starting-hole assignment, roster & check-in), **Live Scoring**, **Courses**, **Layouts** (with a "SAFARI" hole builder + distance estimation), **Tee Signs** (review/approve OCR suggestions), **Leagues**, **Fundraisers**, **Meetings** (minutes), **Pro Shop** (products), **Orders**, **Wallets** (credit members), **Members** (create members, issue/reset PINs, **promote/demote admins**), and **Data archive** (export).
@@ -83,7 +91,7 @@ The frontend picks its API base automatically through `src/shared/api-base.js`: 
 - **Weather** — Open-Meteo, with National Weather Service observations as fallback when the free quota trips (feeds both the app and the rating engine).
 - **Email** — Resend (order/registration notifications), best-effort.
 - **PayPal** — Orders v2 auto-capture + `paypal.me` fallback.
-- **Ratings** — two distinct systems: a simple dashboard estimate and a full PDGA-SSA engine recomputed by a daily cron.
+- **Ratings** — PDGA official stats on the member dashboard, a live "playing" rating during a round when the layout has a scratch score, and a full PDGA-SSA engine recomputed by a daily cron.
 
 ---
 
