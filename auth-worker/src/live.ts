@@ -18,6 +18,7 @@ import { parseThrowsBody } from "./play-stats.js";
 import { replacePlayerHoleMarks } from "./db-hole-shot-marks.js";
 import { shotRoundKey } from "./hole-shot-marks.js";
 import { updateLivePairs } from "./live-pairs.js";
+import { getLayoutRatingBaseline } from "./rating-store.js";
 import { mineData, publicSnapshot } from "./live-snapshot.js";
 import { attestationForCard, canEnterScorecard, cardKey, findPlayer, invalidScoreTargetsResponse, isCardLocked, issuesForCard, scoreTargetForBody, scorecardIssues, scoringState, targetAnchor } from "./live-state.js";
 import { j, type CtpVoteBody, type LiveEnv, type LiveMeta, type LiveState, type OverrideBody, type PairAssignmentBody, type RemoveBody, type ScoreBody, type StartBody, type WeatherBody } from "./live-types.js";
@@ -36,6 +37,9 @@ export class LiveEventDO {
   private players: PlayerState[] = [];
   private liveCtps: LiveCtpStore = {};
   private locations = new Map<number, LivePlayerLocation>();
+  private ratingBaseline: { ssa: number; ppt: number } | null = null;
+  private ratingBaselineToken = 0;
+  private warmedLayoutId: number | null | undefined = undefined;
 
   constructor(state: LiveState, env: LiveEnv) {
     this.state = state;
@@ -50,6 +54,7 @@ export class LiveEventDO {
     this.locations = locationsFromRecord(await this.state.storage.get("locations"));
     normalizeScorecards(this.players, this.meta?.holes ?? []);
     this.loaded = true;
+    if (this.warmedLayoutId === undefined) this.warmRatingBaseline();
   }
   private async persist(): Promise<void> {
     if (this.meta) this.meta.rev = (this.meta.rev ?? 0) + 1; // one bump per mutation (persist is the mutation marker)
@@ -143,7 +148,7 @@ export class LiveEventDO {
   }
 
   private snapshot() {
-    return publicSnapshot(this.meta, this.players, this.liveCtps, this.locations);
+    return publicSnapshot(this.meta, this.players, this.liveCtps, this.locations, this.ratingBaseline);
   }
 
   private async start(b: StartBody): Promise<Response> {
@@ -179,6 +184,9 @@ export class LiveEventDO {
     // blocking the start response on an Open-Meteo fetch. The alarm populates + broadcasts weather a moment
     // later, and then reschedules itself every 5 min for the life of the round.
     if (this.meta?.weather) await this.state.storage.setAlarm(Date.now());
+    this.ratingBaseline = null;
+    this.warmedLayoutId = undefined;
+    this.warmRatingBaseline();
     this.broadcast();
     return j(this.snapshot());
   }
@@ -253,7 +261,7 @@ export class LiveEventDO {
 
   private mine(authMember: string | null): Response {
     if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
-    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations));
+    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations, this.ratingBaseline));
   }
 
   /** Casual round: the authenticated caller joins (added once, on the single card "c0"). No-op if already in. */
@@ -288,7 +296,7 @@ export class LiveEventDO {
       await this.persist();
       this.broadcast();
     }
-    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations));
+    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations, this.ratingBaseline));
   }
 
   /** Add a non-member guest to the caller's card (the caller must already be on the round). A pair label
@@ -304,7 +312,7 @@ export class LiveEventDO {
     this.players.push({ memberId: null, name: nm.slice(0, 60), division: null, team: normalizePairLabel(team), startingHole: null, cardId: me.cardId ?? "c0", scores: {}, scorecards: {}, ctpEligible: this.meta.ctpBuyInRequired !== true });
     await this.persist();
     this.broadcast();
-    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations));
+    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations, this.ratingBaseline));
   }
 
   /** Remove a player from the card — a casual-round player who registered by accident, had to leave
@@ -343,7 +351,7 @@ export class LiveEventDO {
     else purgeScoreTargetScorerVotes(this.players, idx, this.meta.holes, scoring.targets); // drop this player's votes on cardmates + re-derive consensus, so a leaver can't pin a hole in permanent conflict
     await this.persist();
     this.broadcast();
-    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations));
+    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations, this.ratingBaseline));
   }
 
   private async updatePairs(b: PairAssignmentBody, authMember: string | null, authAdmin: boolean): Promise<Response> {
@@ -358,7 +366,7 @@ export class LiveEventDO {
       await this.persist();
       this.broadcast();
     }
-    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations));
+    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations, this.ratingBaseline));
   }
 
   // Round-scoped single-use override of a hole's par/distance. Admin-gated at the Worker. The layout
@@ -578,6 +586,25 @@ export class LiveEventDO {
     this.broadcast();
     void persistLiveThrows(this.env, this.meta, player.memberId, parsed.hole, parsed.throws);
     return j({ ok: true, hole: parsed.hole, throws: parsed.throws.length });
+  }
+
+  private warmRatingBaseline(): void {
+    const layoutId = this.meta?.layoutId ?? null;
+    const token = ++this.ratingBaselineToken;
+    this.warmedLayoutId = layoutId;
+    if (layoutId == null) {
+      this.ratingBaseline = null;
+      return;
+    }
+    void getLayoutRatingBaseline(this.env.DB, layoutId).then((row) => {
+      if (token !== this.ratingBaselineToken) return;
+      const next = row ? { ssa: row.ssa, ppt: row.ppt } : null;
+      const changed = next?.ssa !== this.ratingBaseline?.ssa || next?.ppt !== this.ratingBaseline?.ppt;
+      this.ratingBaseline = next;
+      if (changed && next && this.meta?.status === "live") this.broadcast();
+    }).catch(() => {
+      if (token === this.ratingBaselineToken) this.warmedLayoutId = undefined;
+    });
   }
 
   private handleWs(_request: Request): Response {

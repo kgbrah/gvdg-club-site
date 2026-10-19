@@ -726,6 +726,17 @@
             display: none;
         }
         .live-round-stats.compact:not(.open) .live-stats-peek { display: block; }
+        .live-stats-rating {
+            display: flex; align-items: baseline; gap: 0.4rem;
+            padding: 0 0.15rem 0.2rem;
+        }
+        .live-stats-rating b {
+            font-family: "Bebas Neue", sans-serif; font-size: 1.2rem; letter-spacing: 0.04em; line-height: 1;
+            color: var(--text-primary);
+        }
+        .live-stats-rating-delta { font-size: 0.68rem; font-weight: 800; color: var(--text-muted); }
+        .live-stats-rating-delta.up { color: var(--under); }
+        .live-stats-rating-delta.down { color: var(--over); }
         .live-round-stats.compact:not(.open) .live-stats-body { display: none; }
         .live-round-stats.compact.open .live-stats-body {
             position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
@@ -972,6 +983,11 @@
             background: var(--bg-secondary); color: var(--text-secondary);
             display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.05;
         }
+        button.lb-hole {
+            appearance: none; -webkit-appearance: none; width: 100%; margin: 0; padding: 0;
+            font: inherit; cursor: pointer;
+        }
+        button.lb-hole:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
         .lb-hole-num { font-size: 0.52rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
         .lb-hole-score { font-size: 0.85rem; font-weight: 800; color: var(--text-primary); }
         .lb-hole-rel { font-size: 0.46rem; font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase; color: var(--text-muted); }
@@ -1036,6 +1052,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=183"></script>
+    <script type="module" src="score-app/score-app.js?v=184"></script>
 </body>
 </html>

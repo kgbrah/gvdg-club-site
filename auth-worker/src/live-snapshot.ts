@@ -44,6 +44,7 @@ export function publicSnapshot(
   players: PlayerState[],
   liveCtps: LiveCtpStore = {},
   locations: ReadonlyMap<number, LivePlayerLocation> = EMPTY_LOCATIONS,
+  ratingBaseline: { ssa: number; ppt: number } | null = null,
 ) {
   const holes = resolvedHoles(meta);
   const scoring = scoringState(meta, players);
@@ -104,6 +105,9 @@ export function publicSnapshot(
     standings,
     liveCtps: publicLiveCtps(liveCtps, players),
     playerLocations: meta?.status === "live" ? publicPlayerLocations(players, locations, Date.now(), holes) : [],
+    ratingBaseline: ratingBaseline && Number.isFinite(ratingBaseline.ssa) && Number.isFinite(ratingBaseline.ppt)
+      ? { ssa: ratingBaseline.ssa, ppt: ratingBaseline.ppt }
+      : null,
     lockedCardIds: Array.isArray(meta?.lockedCardIds) ? meta.lockedCardIds : [],
     cardAttestations: meta?.cardAttestations && typeof meta.cardAttestations === "object" ? meta.cardAttestations : {},
     updatedAt: meta?.startedAt ?? null,
@@ -116,6 +120,7 @@ export function mineData(
   authMember: string | null,
   liveCtps: LiveCtpStore = {},
   locations: ReadonlyMap<number, LivePlayerLocation> = EMPTY_LOCATIONS,
+  ratingBaseline: { ssa: number; ppt: number } | null = null,
 ): Record<string, unknown> {
   const holes = resolvedHoles(meta);
   const scoring = scoringState(meta, players);
@@ -165,6 +170,9 @@ export function mineData(
     standings,
     liveCtps: [] as ReturnType<typeof cardLiveCtps>,
     playerLocations,
+    ratingBaseline: ratingBaseline && Number.isFinite(ratingBaseline.ssa) && Number.isFinite(ratingBaseline.ppt)
+      ? { ssa: ratingBaseline.ssa, ppt: ratingBaseline.ppt }
+      : null,
     lockedCardIds: Array.isArray(meta?.lockedCardIds) ? meta.lockedCardIds : [],
     cardAttestations: meta?.cardAttestations && typeof meta.cardAttestations === "object" ? meta.cardAttestations : {},
     cardAttestation: { agreedIndexes: [] as number[], neededIndexes: [] as number[], complete: false },

@@ -638,6 +638,9 @@ test('player leaderboard renders matchplay and pair labels without primary to-pa
   assert.match(source, /displayMatchStatus\(standing\.match\)/);
   assert.match(source, /className: "lb-scorecard"/);
   assert.match(source, /aria-expanded/);
+  assert.match(source, /aria-label": "Hole "/);
+  assert.match(readFileSync('src/score-app/score-controller.js', 'utf8'), /onHole: function \(holeNumber\)/);
+  assert.match(readFileSync('src/score-app/watch-view.js', 'utf8'), /onHole: focusHole/);
   assert.match(readFileSync('src/score-app/watch-view.js', 'utf8'), /startExpanded: true/);
   assert.match(readFileSync('src/score-app/score-controller.js', 'utf8'), /Pair changes are blocked after scoring starts/);
 });

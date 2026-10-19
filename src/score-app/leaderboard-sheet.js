@@ -22,25 +22,32 @@ function standingKey(standing, index) {
   return String(standing.targetId || standing.name || index);
 }
 
-function StandingScorecard({ scorecard }) {
+function StandingScorecard({ onHole, scorecard, standing }) {
   const holes = Array.isArray(scorecard) ? scorecard : [];
   if (!holes.length) return h("p", { className: "muted lb-card-empty" }, "No holes on this card yet.");
   return h("div", { className: "lb-scorecard" }, holes.map((hole) => {
     const scored = typeof hole.strokes === "number";
     const rel = scored ? strokeLabel(hole.strokes, hole.par) : null;
     const tone = rel ? rel.className : "";
-    return h("div", {
-      className: "lb-hole" + (tone ? " " + tone : ""),
-      key: hole.hole,
-    }, [
+    const body = [
       h("span", { className: "lb-hole-num", key: "n" }, String(hole.hole)),
       h("b", { className: "lb-hole-score", key: "s" }, scored ? String(hole.strokes) : "·"),
       rel ? h("span", { className: "lb-hole-rel", key: "r" }, rel.text) : null,
-    ]);
+    ];
+    if (typeof onHole !== "function") {
+      return h("div", { className: "lb-hole" + (tone ? " " + tone : ""), key: hole.hole }, body);
+    }
+    return h("button", {
+      "aria-label": "Hole " + hole.hole,
+      className: "lb-hole" + (tone ? " " + tone : ""),
+      key: hole.hole,
+      type: "button",
+      onClick: () => onHole(hole.hole, standing),
+    }, body);
   }));
 }
 
-export function LeaderboardTable({ isDoubles, isMatchplay, relClass, relText, standings, startExpanded }) {
+export function LeaderboardTable({ isDoubles, isMatchplay, onHole, relClass, relText, standings, startExpanded }) {
   const [toggled, setToggled] = React.useState(() => new Set());
   function isOpen(id, hasCard) {
     if (!hasCard) return false;
@@ -85,22 +92,20 @@ export function LeaderboardTable({ isDoubles, isMatchplay, relClass, relText, st
             ? h("td", { key: "match" }, displayMatchStatus(standing.match))
             : h("td", { className: "tp " + relClass(standing.toPar || 0), key: "toPar" }, standing.thru ? relText(standing.toPar || 0) : "E"),
         ]),
-        open ? h("tr", { className: "lb-card-row", key: "card" }, h("td", { colSpan: 4, id: "lb-card-" + id }, h(StandingScorecard, { scorecard: standing.scorecard }))) : null,
+        open ? h("tr", { className: "lb-card-row", key: "card" }, h("td", { colSpan: 4, id: "lb-card-" + id }, h(StandingScorecard, { onHole, scorecard: standing.scorecard, standing }))) : null,
       ]);
     })),
   ]);
 }
 
-function FinalizePanel({ blockers, cardLocked, mode, onFinalize, status }) {
-  if (status === "final") {
-    return h("div", { className: "finalize-card ready" },
-      h("p", { className: "finalize-head" }, "Round finished - scores are locked."),
-    );
-  }
-  if (cardLocked) {
-    return h("div", { className: "finalize-card ready" },
-      h("p", { className: "finalize-head" }, "Card submitted — scores locked"),
-    );
+function FinalizePanel({ blockers, cardLocked, mode, onFinalize, onShare, status }) {
+  if (status === "final" || cardLocked) {
+    return h("div", { className: "finalize-card ready" }, [
+      h("p", { className: "finalize-head", key: "head" }, status === "final" ? "Round finished - scores are locked." : "Card submitted — scores locked"),
+      typeof onShare === "function"
+        ? h("button", { className: "btn finish-round-btn", key: "share", type: "button", onClick: onShare }, "Share card")
+        : null,
+    ]);
   }
   if (!blockers.ready || (mode !== "round" && mode !== "event")) return null;
   return h("div", { className: "finalize-card ready" }, [
@@ -141,6 +146,7 @@ function LeaderboardSheet(props) {
           isDoubles: props.isDoubles,
           isMatchplay: props.isMatchplay,
           key: "table",
+          onHole: props.onHole,
           relClass: props.relClass,
           relText: props.relText,
           standings: props.standings,
@@ -154,6 +160,7 @@ function LeaderboardSheet(props) {
           key: "finalize",
           mode: props.mode,
           onFinalize: props.onFinalize,
+          onShare: props.onShare,
           status: props.status,
         }),
         h("button", { className: "btn secondary sheet-close", key: "close", type: "button", onClick: props.onClose }, "Close"),

@@ -141,6 +141,18 @@ function WatchHoles(props) {
     if (followLive) setIndex(liveIndex);
   }, [followLive, liveIndex]);
   const safeIndex = holes.length ? Math.min(Math.max(0, index), holes.length - 1) : 0;
+  React.useEffect(() => {
+    const focus = props.focus;
+    if (!focus || focus.hole == null) return;
+    const next = holes.findIndex((hole) => hole && hole.hole === focus.hole);
+    if (next >= 0) {
+      setFollowLive(false);
+      setIndex(next);
+      setStep(0);
+      setPlaying(false);
+    }
+    if (focus.playerIndex != null) setPinned(focus.playerIndex);
+  }, [props.focus && props.focus.token]);
   const selected = holes[safeIndex] || null;
   const replayRoster = replay ? watchReplayPlayers(props.scorePlayers) : [];
   const [pinned, setPinned] = React.useState(replay && replayRoster[0] ? replayRoster[0].index : null);
@@ -331,6 +343,17 @@ function WatchHoles(props) {
 
 export function WatchView(props) {
   const standings = Array.isArray(props.standings) ? props.standings : [];
+  const [focus, setFocus] = React.useState(null);
+  function focusHole(holeNumber, standing) {
+    const indexes = standing && Array.isArray(standing.playerIndexes) ? standing.playerIndexes : [];
+    setFocus({
+      hole: holeNumber,
+      playerIndex: indexes.length ? indexes[0] : null,
+      token: Date.now(),
+    });
+    const map = typeof document !== "undefined" ? document.querySelector(".watch-holes") : null;
+    if (map && typeof map.scrollIntoView === "function") map.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
   return h("div", { className: "watch-view", "data-react-live-watch": props.status || "live" }, [
     h("div", { className: "watch-banner", key: "banner" }, [
       h("span", { className: "live-dot" + (props.status === "final" ? " is-final" : ""), key: "dot" }),
@@ -342,6 +365,7 @@ export function WatchView(props) {
       : null,
     h(WatchHoles, {
       activeHoleIndex: props.activeHoleIndex,
+      focus,
       holes: props.holes,
       isMatchplay: props.isMatchplay,
       key: "holes",
@@ -364,6 +388,7 @@ export function WatchView(props) {
         relText: props.relText,
         standings,
         startExpanded: true,
+        onHole: focusHole,
       }),
     ]),
     h("div", { className: "watch-actions", key: "actions" }, [

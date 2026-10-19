@@ -251,7 +251,11 @@ export function startScoreApp(options) {
             const locationsChanged = Object.prototype.hasOwnProperty.call(snap, 'playerLocations')
                 ? applyPlayerLocations(snap.playerLocations)
                 : false;
-            return weatherChanged || locationsChanged;
+            const baseline = snap && snap.ratingBaseline;
+            const baselineChanged = Boolean(baseline && Number.isFinite(baseline.ssa) && Number.isFinite(baseline.ppt)
+                && (!S.ratingBaseline || S.ratingBaseline.ssa !== baseline.ssa || S.ratingBaseline.ppt !== baseline.ppt));
+            if (baselineChanged) S.ratingBaseline = { ssa: baseline.ssa, ppt: baseline.ppt };
+            return weatherChanged || locationsChanged || baselineChanged;
         }
 
         // ---------- offline score queue ----------
@@ -784,6 +788,14 @@ export function startScoreApp(options) {
                 relText: relText,
                 standings: (S.snap && S.snap.standings) || [],
                 status: S.status,
+                onHole: function (holeNumber) {
+                    const index = (S.holes || []).findIndex(function (hole) { return hole && hole.hole === holeNumber; });
+                    if (index < 0) return;
+                    S.holeIdx = index;
+                    closeLeaderboard();
+                    renderHole();
+                },
+                onShare: shareRound,
             });
         }
         function openFinishConfirm() {
@@ -892,9 +904,23 @@ export function startScoreApp(options) {
             startPotsPolling();
             if (!offline) startLiveLocation();
             flushQueue();
+            loadPlayingAnchor();
             void wakeLock.start();
             if (offline) toast('Offline — showing last saved card. Scores sync when reconnected.');
             else persistMineCache();
+        }
+        let ratingAnchorStarted = false;
+        async function loadPlayingAnchor() {
+            if (ratingAnchorStarted || WATCH || !memberToken()) return;
+            ratingAnchorStarted = true;
+            const me = await api('/me');
+            const pdga = me.ok && me.data ? me.data.pdgaNo : null;
+            if (!pdga) return;
+            const stats = await api('/pdga-stats?pdga=' + encodeURIComponent(String(pdga)), { auth: false, guest: false });
+            const rating = stats.ok && stats.data ? Number(stats.data.official_rating) : NaN;
+            if (!Number.isFinite(rating) || rating <= 0) return;
+            S.officialRating = rating;
+            renderHole();
         }
         async function loadMine() {
             let r = await api(LIVE + '/mine');

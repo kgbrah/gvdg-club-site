@@ -55,6 +55,9 @@ test("buildShareCard totals the card and drops (you)", () => {
   assert.equal(model.players[0].total, 9);
   assert.equal(model.players[0].toPar, 0);
   assert.equal(model.players[0].thru, 3);
+  assert.equal(model.players[0].mix.birdies, 1);
+  assert.equal(model.players[0].mix.pars, 1);
+  assert.equal(model.players[0].mix.bogeys, 1);
   assert.equal(model.players[0].scores[0], 2);
   assert.equal(model.players[1].label, "Milo Chen");
   assert.equal(model.players[1].total, 6);

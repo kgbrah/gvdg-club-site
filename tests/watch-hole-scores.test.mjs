@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  playingRoundRating,
   strokeLabel,
   scoreForPlayerIndexes,
   watchHoleScoreChips,
@@ -16,6 +17,12 @@ import {
   watchReplayVisibleThrows,
   watchStrokeHoleChips,
 } from "../src/score-app/score-view-model.js";
+
+test("playingRoundRating prorates the layout scratch score", () => {
+  assert.equal(playingRoundRating({ holeCount: 18, thru: 0, strokes: 0, ssa: 54, ppt: 10 }), null);
+  assert.equal(playingRoundRating({ holeCount: 18, thru: 9, strokes: 27, ssa: 54, ppt: 10 }), 1000);
+  assert.equal(playingRoundRating({ holeCount: 18, thru: 18, strokes: 50, ssa: 54, ppt: 10 }), 1040);
+});
 
 test("strokeLabel names hole results from strokes vs par", () => {
   assert.deepEqual(strokeLabel(1, 3), { text: "ace", className: "under", delta: -2, strokes: 1 });

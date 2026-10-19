@@ -23,6 +23,32 @@ const ROW_H = 64;
 const BANK_GAP = 32;
 const FOOTER_H = 96;
 const MIN_HEIGHT = 1350;
+const MIX_H = 72;
+
+const MIX_KEYS = [
+  ["aces", "Ace"],
+  ["eagles", "Eagle"],
+  ["birdies", "Birdie"],
+  ["pars", "Par"],
+  ["bogeys", "Bogey"],
+  ["doubles", "Dbl+"],
+];
+
+function scoreMix(scores, pars) {
+  const mix = { aces: 0, eagles: 0, birdies: 0, pars: 0, bogeys: 0, doubles: 0 };
+  scores.forEach((strokes, index) => {
+    if (typeof strokes !== "number") return;
+    const par = typeof pars[index] === "number" ? pars[index] : 0;
+    const delta = strokes - par;
+    if (strokes === 1) mix.aces += 1;
+    else if (delta <= -2) mix.eagles += 1;
+    else if (delta === -1) mix.birdies += 1;
+    else if (delta === 0) mix.pars += 1;
+    else if (delta === 1) mix.bogeys += 1;
+    else mix.doubles += 1;
+  });
+  return mix;
+}
 
 function displayName(label) {
   return String(label || "").replace(/\s+\(you\)$/i, "").trim() || "Player";
@@ -52,6 +78,7 @@ export function buildShareCard(state, options = {}) {
   const rows = scoreRows(state || {});
   const players = rows.map((row) => {
     const scores = holes.map((hole) => strokesForRow(state, row, hole.hole, scorerIndex));
+    const pars = holes.map((hole) => hole.par);
     let total = 0;
     let toPar = 0;
     let thru = 0;
@@ -59,10 +86,11 @@ export function buildShareCard(state, options = {}) {
       if (typeof strokes !== "number") return;
       thru += 1;
       total += strokes;
-      toPar += strokes - (typeof holes[index].par === "number" ? holes[index].par : 0);
+      toPar += strokes - (typeof pars[index] === "number" ? pars[index] : 0);
     });
     return {
       label: displayName(row.label),
+      mix: scoreMix(scores, pars),
       scores,
       thru,
       total: thru ? total : null,
@@ -110,7 +138,9 @@ export function shareCardSize(model) {
   const holes = (model && model.holes) || [];
   const players = Math.max(1, ((model && model.players) || []).length);
   const banks = Math.max(1, Math.ceil(holes.length / 9) || 1);
-  const height = HEADER_H + banks * (BANK_HEAD + players * ROW_H) + Math.max(0, banks - 1) * BANK_GAP + FOOTER_H;
+  const mixCount = ((model && model.players) || []).filter((player) => player && player.thru && player.mix).length;
+  const mixBand = mixCount ? 16 + mixCount * MIX_H : 0;
+  const height = HEADER_H + banks * (BANK_HEAD + players * ROW_H) + Math.max(0, banks - 1) * BANK_GAP + mixBand + FOOTER_H;
   return { width: SHARE_CARD_WIDTH, height: Math.max(MIN_HEIGHT, height) };
 }
 
@@ -258,6 +288,24 @@ export function drawShareCard(ctx, model, size) {
       y += ROW_H;
     });
   });
+
+  const mixed = players.filter((player) => player && player.thru && player.mix);
+  if (mixed.length) {
+    y += 18;
+    mixed.forEach((player) => {
+      const result = player.toPar == null ? "" : relText(player.toPar);
+      ctx.fillStyle = LIGHT;
+      ctx.font = "800 26px Archivo, system-ui, sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText(ellipsize(ctx, player.label + (result ? "   " + result : ""), width - PAD * 2), PAD, y + 28);
+      ctx.fillStyle = MUTED;
+      ctx.font = "700 20px Archivo, system-ui, sans-serif";
+      const bits = MIX_KEYS.map(([key, label]) => label + " " + player.mix[key]).join("   ");
+      ctx.fillText(ellipsize(ctx, bits, width - PAD * 2), PAD, y + 56);
+      y += MIX_H;
+    });
+  }
 
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";

@@ -3,6 +3,17 @@ import { displayMatchStatus } from "../shared/match-status.js";
 import { playGroupLabel, playStyleLabel } from "../shared/play-stats.js";
 import { remainingFt } from "../shared/hole-map-model.js";
 
+export function playingRoundRating({ holeCount, thru, strokes, ssa, ppt }) {
+  const holes = Number(holeCount);
+  const played = Number(thru);
+  const total = Number(strokes);
+  const scratch = Number(ssa);
+  const perThrow = Number(ppt);
+  if (!holes || played < 1 || !Number.isFinite(total) || !Number.isFinite(scratch) || !Number.isFinite(perThrow)) return null;
+  const expected = scratch * (played / holes);
+  return Math.round(1000 + (expected - total) * perThrow);
+}
+
 export function relClass(delta) {
   return delta < 0 ? "under" : delta > 0 ? "over" : "even";
 }
@@ -712,6 +723,19 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
   const locked = Boolean(state.cardLocked) || state.status === "final";
   const startHole = startingHoleForState(state);
   const playPos = playOrderPosition(state.holes, state.holeIdx, startHole);
+  const scoredHoles = holeGrid.filter((row) => typeof row.score === "number");
+  const baseline = state.ratingBaseline;
+  const playingRating = isMatchplayScoring(state) ? null : playingRoundRating({
+    holeCount: holeGrid.length,
+    thru: scoredHoles.length,
+    strokes: scoredHoles.reduce((sum, row) => sum + row.score, 0),
+    ssa: baseline && baseline.ssa,
+    ppt: baseline && baseline.ppt,
+  });
+  const official = Number(state.officialRating);
+  const playingDelta = playingRating != null && Number.isFinite(official) && official > 0
+    ? playingRating - official
+    : null;
 
   return {
     atEnd: playPos.pos >= playPos.order.length - 1,
@@ -751,6 +775,8 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
     yourTurn: yourTurnHint({ ...state, scorerIndex }),
     finish: buildFinishView(state, mode, blockers, locked, scorerIndex),
     formatLabel: roundFormatLabel(state),
+    playingDelta,
+    playingRating,
     holes: Array.isArray(state.holes) ? state.holes : [],
     solo: rowViews.length === 1,
   };

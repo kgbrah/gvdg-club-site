@@ -141,6 +141,18 @@ function LiveMixBar(props) {
   ));
 }
 
+function PlayingRating(props) {
+  if (props.rating == null) return null;
+  const delta = props.delta;
+  const tone = delta == null ? "" : delta > 0 ? " up" : delta < 0 ? " down" : "";
+  const deltaText = delta == null ? null : delta > 0 ? "+" + delta : String(delta);
+  return h("div", { className: "live-stats-rating" }, [
+    h("span", { className: "live-stats-k", key: "k" }, "Playing"),
+    h("b", { key: "v" }, String(props.rating)),
+    deltaText != null ? h("span", { className: "live-stats-rating-delta" + tone, key: "d" }, deltaText) : null,
+  ]);
+}
+
 function LiveRoundStats(props) {
   const solo = props.solo === true;
   const phone = usePhoneScoreLayout();
@@ -197,6 +209,7 @@ function LiveRoundStats(props) {
     key: "live-stats",
   }, [
     head,
+    h(PlayingRating, { delta: props.playingDelta, key: "rating", rating: props.playingRating }),
     h("div", { className: "live-stats-peek", key: "peek" }, [
       h(LiveMixBar, { key: "bar", rows: view.mix }),
       h(LiveMixLegend, { key: "legend", rows: view.mix }),
@@ -842,9 +855,15 @@ function FinishCard(props) {
   const finish = props.finish;
   if (!finish) return null;
   if (finish.locked) {
-    return h("div", { className: "finalize-card ready", key: "finish" },
-      h("p", { className: "finalize-head" }, finish.status === "final" ? "Round finished — scores are locked" : "Card submitted — scores locked"),
-    );
+    return h("div", { className: "finalize-card ready", key: "finish" }, [
+      h("p", { className: "finalize-head", key: "head" }, finish.status === "final" ? "Round finished — scores are locked" : "Card submitted — scores locked"),
+      h("button", {
+        className: "btn finish-round-btn",
+        key: "share",
+        type: "button",
+        onClick: props.onShare,
+      }, "Share card"),
+    ]);
   }
   return null;
 }
@@ -1112,6 +1131,8 @@ export function ScorecardView(props) {
           formatLabel: props.formatLabel,
           holeGrid: props.holeGrid,
           holes: props.holes,
+          playingDelta: props.playingDelta,
+          playingRating: props.playingRating,
           roundCode: props.roundCode,
           solo,
           throws,
@@ -1131,7 +1152,7 @@ export function ScorecardView(props) {
         h("div", { className: "score-glove-scores", key: "scores" }, [
           h(ScorecardBox, { ...props, onOpenPad: setPadRow, onScore }),
           h(CtpClaim, { ctpClaim: props.ctpClaim, onCtpVote: props.onCtpVote }),
-          h(FinishCard, { finish: props.finish, onOpenFinish: props.onOpenFinish }),
+          h(FinishCard, { finish: props.finish, onOpenFinish: props.onOpenFinish, onShare: props.onShare }),
         ]),
         h(FinishDockBar, { finish: props.finish, onJump: props.onJumpHole, onOpenFinish: props.onOpenFinish }),
         h(HoleHeader, props),
