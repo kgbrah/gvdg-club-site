@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v180";
+const CACHE = "gvdg-club-v181";
 const OFFLINE_PAGE = "gvdg-members.html";
 const ASSETS = [
   "tokens.css",
@@ -50,7 +50,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE && key !== "gvdg-maps-v1").map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE && key !== "gvdg-maps-v2").map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
@@ -63,15 +63,22 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
   if (req.method === "GET" && url.hostname.endsWith("arcgisonline.com") && url.pathname.includes("/World_Imagery/")) {
-    event.respondWith(
-      caches.open("gvdg-maps-v1").then((cache) => cache.match(req).then((cached) => {
-        if (cached) return cached;
-        return fetch(req).then((res) => {
-          if (res && (res.ok || res.type === "opaque")) cache.put(req, res.clone()).catch(() => {});
+    event.respondWith((async () => {
+      const cache = await caches.open("gvdg-maps-v2");
+      const cached = await cache.match(req);
+      try {
+        // Image tags are no-cors, so a failed Esri response is opaque and used to get pinned forever.
+        const res = await fetch(req.url, { mode: "cors", credentials: "omit", cache: "no-store" });
+        const type = res.headers.get("content-type") || "";
+        if (res.ok && type.startsWith("image/")) {
+          cache.put(req, res.clone()).catch(() => {});
           return res;
-        });
-      }))
-    );
+        }
+        return cached || res;
+      } catch {
+        return cached || Response.error();
+      }
+    })());
     return;
   }
   if (req.method !== "GET" || url.origin !== self.location.origin) return;

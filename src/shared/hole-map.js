@@ -9,9 +9,13 @@ import { udiscDeepLink } from "./udisc-export.js";
 const h = React.createElement;
 
 function SatelliteLayer({ url }) {
-  const [failed, setFailed] = React.useState(false);
   const href = safeExternalUrl(url);
-  if (!href || failed) return null;
+  const [attempt, setAttempt] = React.useState(0);
+  React.useEffect(() => {
+    setAttempt(0);
+  }, [href]);
+  if (!href || attempt > 2) return null;
+  const src = attempt ? href + (href.includes("?") ? "&" : "?") + "retry=" + attempt : href;
   return h("img", {
     alt: "",
     className: "hole-map-satellite",
@@ -19,8 +23,8 @@ function SatelliteLayer({ url }) {
     draggable: false,
     fetchPriority: "high",
     loading: "eager",
-    onError: () => setFailed(true),
-    src: href,
+    onError: () => setAttempt((current) => current + 1),
+    src,
   });
 }
 
