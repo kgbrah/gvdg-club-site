@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { publicCasualRound, recentPlayRounds, relClass } from "../src/members-app/play-page-model.js";
+import { latestHomeRound, publicCasualRound, recentPlayRounds, relClass } from "../src/members-app/play-page-model.js";
 
 test("recentPlayRounds keeps the newest unique casual cards", () => {
   const rows = recentPlayRounds([
@@ -17,6 +17,30 @@ test("recentPlayRounds keeps the newest unique casual cards", () => {
   assert.equal(rows[0].href, "score.html?round=JQEU74&watch=1");
   assert.equal(rows[0].toPar, -3);
   assert.equal(rows[1].code, "OLD1");
+});
+
+test("latestHomeRound prefers a newer casual card and keeps its mix", () => {
+  const casual = latestHomeRound(
+    [{ event_id: 4, event_name: "League", event_date: "2026-09-01", to_par: 1, place: 3 }],
+    [{
+      round_code: "SATURDAY",
+      course_name: "Ayden Park",
+      layout_name: "Main",
+      finalized_at: "2026-09-18T12:00:00Z",
+      to_par: -2,
+      breakdown: JSON.stringify({ birdies: 4, pars: 10, bogeys: 3, doubles_plus: 1 }),
+    }],
+  );
+  assert.equal(casual.kind, "casual");
+  assert.equal(casual.title, "Ayden Park");
+  assert.equal(casual.href, "score.html?round=SATURDAY&watch=1");
+  assert.equal(casual.mix, "4 birdies · 10 pars · 3 bogeys · 1 dbl+");
+  const event = latestHomeRound(
+    [{ event_id: 4, event_name: "League", event_date: "2026-10-01", to_par: 1, place: 3 }],
+    [{ round_code: "OLD", course_name: "West", finalized_at: "2026-09-01T12:00:00Z", to_par: 4 }],
+  );
+  assert.equal(event.kind, "event");
+  assert.equal(event.href, "events.html#event/4");
 });
 
 test("publicCasualRound skips empty codes and paints relative colors", () => {

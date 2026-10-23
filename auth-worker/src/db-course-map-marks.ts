@@ -100,9 +100,15 @@ export async function saveCourseMapConsensus(db: D1Like, row: MapConsensus, layo
     .run();
 }
 
-export async function recomputeCourseMapConsensus(db: D1Like, layoutId: number, hole: number, kind: MapMarkKind): Promise<MapConsensus> {
+export async function recomputeCourseMapConsensus(
+  db: D1Like,
+  layoutId: number,
+  hole: number,
+  kind: MapMarkKind,
+  options?: { unmapped?: boolean },
+): Promise<MapConsensus> {
   const samples = await listCourseMapMarks(db, layoutId, hole, kind);
-  const consensus = computeMapConsensus(hole, kind, samples);
+  const consensus = computeMapConsensus(hole, kind, samples, options);
   if (samples.length) await saveCourseMapConsensus(db, consensus, layoutId);
   return consensus;
 }

@@ -23,8 +23,28 @@ const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // unambiguous (no 0/O/1/I
 function genCode(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => CODE_CHARS[b % CODE_CHARS.length]).join("");
 }
+
+/** Blank means "make one". A typed code must be 4–12 letters or numbers after stripping spaces. */
+export function normalizeRoundCode(value: unknown): { code: string } | { error: "invalid_code" } | null {
+  if (value == null || String(value).trim() === "") return null;
+  const code = String(value).toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!/^[A-Z0-9]{4,12}$/.test(code)) return { error: "invalid_code" };
+  return { code };
+}
 function roundStub(env: Env, code: string): DurableObjectStub {
   return env.LIVE.get(env.LIVE.idFromName("round:" + code));
+}
+
+async function roundCodeTaken(env: Env, code: string): Promise<boolean> {
+  const archived = await db.listCasualRoundResults(env.DB, code);
+  if (archived) return true;
+  try {
+    const live = await roundStub(env, code).fetch("https://do/snapshot");
+    const snap = await live.json().catch(() => ({})) as { status?: string };
+    return snap.status === "live" || snap.status === "final";
+  } catch {
+    return true;
+  }
 }
 async function proxy(stub: DurableObjectStub, path: string, init: RequestInit | undefined, origin: string | null): Promise<Response> {
   const r = await stub.fetch("https://do" + path, init);
@@ -64,10 +84,21 @@ export async function handleCasualRounds(
     }
     const holes = await db.layoutHolesWithCrowdMap(env.DB, layoutId);
     if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin);
+    const requested = normalizeRoundCode(b.code ?? b.round_code);
+    if (requested && "error" in requested) return json({ error: "invalid_code" }, 400, origin);
+    let code = requested && "code" in requested ? requested.code : "";
+    if (code) {
+      if (await roundCodeTaken(env, code)) return json({ error: "code_taken" }, 409, origin);
+    } else {
+      for (let attempt = 0; attempt < 5 && !code; attempt += 1) {
+        const candidate = genCode();
+        if (!(await roundCodeTaken(env, candidate))) code = candidate;
+      }
+      if (!code) return json({ error: "start_failed" }, 503, origin);
+    }
     const layout = (await db.getLayout(env.DB, layoutId)) as { name?: string | null; course_id?: number | null } | null;
     const course = layout?.course_id != null ? ((await db.getCourse(env.DB, layout.course_id)) as { name?: string | null; udisc_course_id?: string | null; lat?: number | null; lng?: number | null } | null) : null;
     const weatherLocation = weatherLocationForCourse(course, layout); // null unless the course has coords
-    const code = genCode();
     const pairLabel = asStr(b.pairLabel, 40) ?? asStr(b.pair_label, 40) ?? asStr(b.team, 40);
     const initialPlayer = { memberId: actor.sub, name: actor.name, ...(pairLabel ? { team: pairLabel } : {}) };
     const seeded = await withMemberPhotos(env.ROSTER, [initialPlayer]);

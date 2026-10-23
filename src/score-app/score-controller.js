@@ -996,26 +996,36 @@ export function startScoreApp(options) {
         function defaultLiveScoringConfig() {
             return { groupFormat: 'singles', scoringStyle: 'stroke' };
         }
-        function renderSetupPick(course, layout) {
+        function renderSetupPick(course, layout, notice) {
             renderSetupFlow({
                 view: 'setupPick',
                 course: course,
                 layout: layout,
                 defaultConfig: defaultLiveScoringConfig(),
+                notice: notice || '',
                 onBack: function () { renderLayoutPick(course); },
                 onCreate: function (selected) { createRound(course, layout, selected); }
             });
         }
         async function createRound(course, layout, config) {
-            renderLoading();
             const liveScoringConfig = config || defaultLiveScoringConfig();
-            const r = await api('/rounds', { method: 'POST', body: { course_id: course.id, layout_id: layout.id, liveScoringConfig: { groupFormat: liveScoringConfig.groupFormat, scoringStyle: liveScoringConfig.scoringStyle } } });
+            const requested = cleanRoundCode(liveScoringConfig.code);
+            if (String(liveScoringConfig.code || '').trim() && (requested.length < 4 || requested.length > 12)) {
+                renderSetupPick(course, layout, 'Use 4–12 letters or numbers.');
+                return;
+            }
+            renderLoading();
+            const body = { course_id: course.id, layout_id: layout.id, liveScoringConfig: { groupFormat: liveScoringConfig.groupFormat, scoringStyle: liveScoringConfig.scoringStyle } };
+            if (requested) body.code = requested;
+            const r = await api('/rounds', { method: 'POST', body: body });
             if (r.ok && r.data && r.data.code) {
                 rememberLastCourse(course);
                 location.search = '?round=' + r.data.code;
                 return;
             }
             if (r.status === 401) { renderOpenPlay(function () { createRound(course, layout, liveScoringConfig); }); return; }
+            if (r.data && r.data.error === 'code_taken') { renderSetupPick(course, layout, 'That code is already in use. Pick another.'); return; }
+            if (r.data && r.data.error === 'invalid_code') { renderSetupPick(course, layout, 'Use 4–12 letters or numbers.'); return; }
             renderMessage('Could not start round', (r.data && r.data.error === 'no_layout_holes') ? 'That layout has no holes/pars yet.' : 'Please try again.', false);
         }
         async function addGuestPrompt() {

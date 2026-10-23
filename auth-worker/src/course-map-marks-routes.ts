@@ -95,7 +95,8 @@ export async function submitLiveMapMark(options: {
     member_id: memberId,
     round_code: options.roundCode ?? null,
   });
-  const consensus = await db.recomputeCourseMapConsensus(env.DB, layoutId, parsed.hole, parsed.kind);
+  const unmapped = !holeAnchor(hole, parsed.kind);
+  const consensus = await db.recomputeCourseMapConsensus(env.DB, layoutId, parsed.hole, parsed.kind, { unmapped });
   if (consensus.published) {
     await overlay({ hole: parsed.hole, kind: parsed.kind, lat: consensus.lat, lng: consensus.lng });
   }

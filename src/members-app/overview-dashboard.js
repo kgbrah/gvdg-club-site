@@ -10,6 +10,7 @@ import { usePdgaStats, pdgaEventTitle } from "./pdga-dashboard.js";
 import { PlayStatsPanel } from "./play-stats-panel.js";
 import { useRegistrationData } from "./registration-panel.js";
 import { eventMeta, pickUpNext } from "./registration-utils.js";
+import { latestHomeRound } from "./play-page-model.js";
 import { EventScheduleFacts } from "../shared/event-schedule.js";
 import { EventFieldRoster } from "../shared/event-field-roster.js";
 
@@ -19,12 +20,6 @@ function initials(name) {
   const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return "G";
   return parts.slice(0, 2).map((part) => part[0]).join("").toUpperCase();
-}
-
-function latestResult(results) {
-  return (Array.isArray(results) ? results : []).slice().sort((left, right) =>
-    String(right.event_date || "").localeCompare(String(left.event_date || "")),
-  )[0] || null;
 }
 
 function HomeHero({ context, pdgaState }) {
@@ -121,7 +116,10 @@ function LastRoundCard({ token }) {
     const controller = new AbortController();
     setState({ status: "loading", row: null });
     requestJson("/my-results?all=1", { token, signal: controller.signal })
-      .then((payload) => setState({ status: "ready", row: latestResult(payload?.results) }))
+      .then((payload) => setState({
+        status: "ready",
+        row: latestHomeRound(payload?.results, payload?.casual),
+      }))
       .catch((error) => {
         if (error.name !== "AbortError") setState({ status: "ready", row: null });
       });
@@ -129,24 +127,32 @@ function LastRoundCard({ token }) {
   }, [token]);
 
   const row = state.row;
+  const meta = row
+    ? [
+      formatEventDay(row.when),
+      row.kind === "casual" ? "Casual" : (row.place != null ? "Competitive" : null),
+      row.layout || null,
+    ].filter(Boolean).join(" · ")
+    : "";
   return h("div", { className: "player-story-block", "data-react-home-last-round": state.status }, [
-    h("h3", { key: "title" }, "Last club round"),
+    h("h3", { key: "title" }, "Last round"),
     row
       ? h("a", {
         className: "player-list-row",
-        href: row.event_id != null ? `events.html#event/${encodeURIComponent(row.event_id)}` : "events.html",
+        href: row.href,
         key: "row",
       }, [
         h("div", { key: "copy" }, [
-          h("div", { className: "player-event-name", key: "name" }, row.event_name || "Club event"),
-          h("div", { className: "player-card-meta", key: "meta" }, [formatEventDay(row.event_date), row.place != null ? "Competitive" : null].filter(Boolean).join(" · ")),
+          h("div", { className: "player-event-name", key: "name" }, row.title || "Round"),
+          meta ? h("div", { className: "player-card-meta", key: "meta" }, meta) : null,
+          row.mix ? h("div", { className: "player-card-meta", key: "mix" }, row.mix) : null,
         ]),
         h("div", { className: "player-score", key: "score" }, [
-          h("b", { key: "par" }, row.to_par != null ? formatToPar(row.to_par) : row.total != null ? String(row.total) : "—"),
-          h("span", { key: "place" }, row.place != null ? `#${row.place}` : "Finish"),
+          h("b", { key: "par" }, row.toPar != null ? formatToPar(row.toPar) : row.total != null ? String(row.total) : "—"),
+          h("span", { key: "place" }, row.place != null ? `#${row.place}` : "Card"),
         ]),
       ])
-      : h("p", { className: "player-card-meta", key: "empty" }, state.status === "loading" ? "Loading last round..." : "No finalized club round yet."),
+      : h("p", { className: "player-card-meta", key: "empty" }, state.status === "loading" ? "Loading last round..." : "No finished round yet."),
   ]);
 }
 

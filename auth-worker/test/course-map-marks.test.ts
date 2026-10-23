@@ -58,6 +58,15 @@ describe("computeMapConsensus", () => {
     expect(published.lat).toBeCloseTo(35.61201, 4);
   });
 
+  it("publishes the first mark when the hole has no tee or basket yet", () => {
+    const one = computeMapConsensus(2, "tee", [{ member_id: "m_a", lat: 35.49, lng: -77.42 }], { unmapped: true });
+    expect(one.published).toBe(true);
+    expect(one.members).toBe(1);
+    expect(one.lat).toBeCloseTo(35.49, 4);
+    const stillPrivate = computeMapConsensus(2, "tee", [{ member_id: "m_a", lat: 35.49, lng: -77.42 }]);
+    expect(stillPrivate.published).toBe(false);
+  });
+
   it("drops a far outlier so two tight marks cannot publish", () => {
     const clustered = [
       { member_id: "m_a", lat: 35.61201, lng: -77.36601 },

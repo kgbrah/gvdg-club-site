@@ -88,6 +88,11 @@ describe("casual archive snapshot", () => {
     expect(snapshot?.players[0]).toMatchObject({ name: "Jane", scores: { 1: 3, 2: 4 } });
     expect(snapshot?.players[0]?.throws?.[1]).toEqual([{ lat: 35.6, lng: -77.37, n: 1 }]);
     expect(snapshot?.standings[0]).toMatchObject({ name: "Jane", total: 7, toPar: 0, thru: 2 });
+    expect(snapshot?.standings[0]?.scorecard).toEqual([
+      { hole: 1, par: 3, strokes: 3 },
+      { hole: 2, par: 4, strokes: 4 },
+    ]);
+    expect(snapshot).toMatchObject({ layoutId: 5, courseId: 3, roundCode: "AB23CD" });
   });
 
   it("returns null when the round was never finalized", async () => {

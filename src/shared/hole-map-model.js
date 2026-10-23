@@ -400,6 +400,63 @@ export function satelliteImageUrl(bounds, width, height) {
   return SATELLITE_EXPORT + "?" + params.toString();
 }
 
+const SATELLITE_TILE = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/";
+const TILE_PX = 256;
+
+function worldX(lng, zoom) {
+  return ((lng + 180) / 360) * 2 ** zoom;
+}
+
+function worldY(lat, zoom) {
+  const rad = lat * Math.PI / 180;
+  const merc = Math.log(Math.tan(Math.PI / 4 + rad / 2));
+  return ((1 - merc / Math.PI) / 2) * 2 ** zoom;
+}
+
+/** Slippy-map tiles covering the same bounds as the export image, in percent of the map frame. */
+export function satelliteTileLayers(bounds, width, height) {
+  if (!bounds) return [];
+  const spanLng = bounds.maxLng - bounds.minLng;
+  const spanLat = bounds.maxLat - bounds.minLat;
+  if (!(spanLng > 0) || !(spanLat > 0)) return [];
+  const frameW = Math.max(1, Number(width) || 640);
+  const frameH = Math.max(1, Number(height) || 360);
+  let zoom = 13;
+  for (let z = 19; z >= 12; z -= 1) {
+    const px = (worldX(bounds.maxLng, z) - worldX(bounds.minLng, z)) * TILE_PX;
+    zoom = z;
+    if (px >= frameW * 0.85) break;
+  }
+  const x0 = worldX(bounds.minLng, zoom) * TILE_PX;
+  const y0 = worldY(bounds.maxLat, zoom) * TILE_PX;
+  const x1 = worldX(bounds.maxLng, zoom) * TILE_PX;
+  const y1 = worldY(bounds.minLat, zoom) * TILE_PX;
+  const scaleX = frameW / Math.max(x1 - x0, 1);
+  const scaleY = frameH / Math.max(y1 - y0, 1);
+  const col0 = Math.floor(worldX(bounds.minLng, zoom));
+  const col1 = Math.floor(worldX(bounds.maxLng, zoom));
+  const row0 = Math.floor(worldY(bounds.maxLat, zoom));
+  const row1 = Math.floor(worldY(bounds.minLat, zoom));
+  const tiles = [];
+  for (let row = row0; row <= row1; row += 1) {
+    for (let col = col0; col <= col1; col += 1) {
+      if (tiles.length >= 16) return tiles;
+      const left = ((col * TILE_PX - x0) * scaleX / frameW) * 100;
+      const top = ((row * TILE_PX - y0) * scaleY / frameH) * 100;
+      const tileW = (TILE_PX * scaleX / frameW) * 100;
+      const tileH = (TILE_PX * scaleY / frameH) * 100;
+      tiles.push({
+        url: SATELLITE_TILE + zoom + "/" + row + "/" + col,
+        left: Number(left.toFixed(3)),
+        top: Number(top.toFixed(3)),
+        width: Number(tileW.toFixed(3)),
+        height: Number(tileH.toFixed(3)),
+      });
+    }
+  }
+  return tiles;
+}
+
 function mapXy(bounds, width, height, lng, lat) {
   const spanLng = Math.max(bounds.maxLng - bounds.minLng, 1e-7);
   const spanLat = Math.max(bounds.maxLat - bounds.minLat, 1e-7);

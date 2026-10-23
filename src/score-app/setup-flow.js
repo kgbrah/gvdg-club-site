@@ -105,7 +105,7 @@ function HomeView({ onStart, onJoin, onInvalidCode, onSignOut, onSignIn, onWatch
         value: joinCode,
         placeholder: "e.g. K7M2QX",
         autoCapitalize: "characters",
-        maxLength: 8,
+        maxLength: 12,
         onChange: (event) => setJoinCode(event.target.value),
         onKeyDown: (event) => {
           if (event.key === "Enter") submitJoin();
@@ -325,8 +325,9 @@ const OPTION_GROUPS = [
   },
 ];
 
-function SetupPickView({ layout, defaultConfig, onBack, onCreate }) {
+function SetupPickView({ layout, defaultConfig, notice, onBack, onCreate }) {
   const [selected, setSelected] = React.useState(defaultConfig);
+  const [code, setCode] = React.useState("");
 
   return h("div", { className: "stack" }, [
     h(BackButton, { onBack, key: "back" }),
@@ -366,13 +367,28 @@ function SetupPickView({ layout, defaultConfig, onBack, onCreate }) {
         ),
       ]),
     ),
+    h("div", { className: "card stack", key: "code" }, [
+      h("label", { className: "lbl", htmlFor: "roundCode", key: "label" }, "Share code"),
+      h("input", {
+        autoCapitalize: "characters",
+        className: "field",
+        id: "roundCode",
+        key: "input",
+        maxLength: 12,
+        placeholder: "Optional, like SATURDAY",
+        value: code,
+        onChange: (event) => setCode(event.target.value),
+      }),
+      h("p", { className: "muted", key: "hint" }, "Leave it blank and we'll make one. 4–12 letters or numbers."),
+      notice ? h("p", { className: "muted", key: "notice", role: "alert" }, notice) : null,
+    ]),
     h(
       "button",
       {
         className: "btn",
         type: "button",
         "data-create-round": "casual",
-        onClick: () => onCreate(selected),
+        onClick: () => onCreate({ ...selected, code }),
         key: "create",
       },
       "Start round",

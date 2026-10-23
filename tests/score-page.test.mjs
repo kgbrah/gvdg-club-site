@@ -135,7 +135,7 @@ test('score app imports the controller without a score-legacy shim', () => {
 test('casual round flow shows setup after layout selection', () => {
   const setup = scoreSetupSource();
   const legacy = scoreControllerSetupSource();
-  assert.match(legacy, /function renderSetupPick\(course, layout\)/);
+  assert.match(legacy, /function renderSetupPick\(course, layout, notice\)/);
   assert.match(legacy, /onSelect: function \(layout\) \{ renderSetupPick\(course, layout\); \}/);
   assert.match(legacy, /renderSetupFlow\(\{\s*view: 'setupPick'/);
   assert.doesNotMatch(legacy, /data-score-setup', 'casual-format'/);
@@ -212,9 +212,10 @@ test('createRound sends explicit live scoring config defaults and selections', (
   const legacy = scoreControllerSetupSource();
   assert.match(legacy, /return \{ groupFormat: 'singles', scoringStyle: 'stroke' \};/);
   assert.match(setup, /setSelected\(\(current\) => \(\{ \.\.\.current, \[group\.key\]: option\.value \}\)\)/);
-  assert.match(setup, /onCreate\(selected\)/);
+  assert.match(setup, /onCreate\(\{ \.\.\.selected, code \}\)/);
+  assert.match(setup, /htmlFor: "roundCode"/);
   assert.match(legacy, /const liveScoringConfig = config \|\| defaultLiveScoringConfig\(\);/);
-  assert.match(legacy, /body: \{ course_id: course\.id, layout_id: layout\.id, liveScoringConfig: \{ groupFormat: liveScoringConfig\.groupFormat, scoringStyle: liveScoringConfig\.scoringStyle \} \}/);
+  assert.match(legacy, /if \(requested\) body\.code = requested;/);
   assert.match(readFileSync('src/score-app/score-controller.js', 'utf8'), /import \{ resolveApiBase \} from "\.\.\/shared\/api-base\.js"/);
 });
 

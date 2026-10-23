@@ -22,6 +22,7 @@ import {
   watchReplayVisibleThrows,
   watchScoreSignature,
   watchStrokeHoleChips,
+  scoreMixRows,
 } from "./score-view-model.js";
 
 const h = React.createElement;
@@ -89,6 +90,25 @@ function WatchMatchCards({ cards }) {
         ? h(WatchHoleChips, { chips: card.chips, key: "chips" })
         : h("p", { className: "muted", key: "empty" }, "No score this hole yet"),
     ]),
+  ));
+}
+
+function WatchMix({ holes, player }) {
+  const rows = scoreMixRows(holes, player && player.scores);
+  if (!rows.length) return null;
+  const label = rows.map((row) => row.label + " " + row.mine.hit).join(", ");
+  return h("div", {
+    "aria-label": label,
+    className: "live-stats-mix watch-mix",
+    key: "mix",
+    role: "img",
+  }, rows.map((row) =>
+    h("span", {
+      className: "live-stats-mix-seg tone-" + row.tone,
+      key: row.id,
+      style: { flexGrow: row.mine.hit },
+      title: row.label + " " + row.mine.hit,
+    }),
   ));
 }
 
@@ -307,6 +327,7 @@ function WatchHoles(props) {
       udiscCourseId: props.udiscCourseId,
       windFromDeg: props.windFromDeg,
     }),
+    h(WatchMix, { holes, key: "mix", player: follow }),
     h(WatchFollowBar, {
       follow,
       key: "follow",

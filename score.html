@@ -291,7 +291,9 @@
         .your-turn-hint { margin: 0 0 0.75rem; padding: 0.65rem 0.8rem; border-radius: 12px; border: 1px solid var(--accent); background: var(--bg-secondary); color: var(--text-primary); font-size: 0.88rem; font-weight: 700; }
         .hole-map-card { padding: 0.55rem; }
         .hole-map-frame { position: relative; overflow: hidden; border-radius: 10px; border: 1px solid var(--border-color); aspect-ratio: 16 / 9; background: var(--bg-tertiary); }
-        .hole-map-satellite { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+        .hole-map-satellite { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; z-index: 1; }
+        .hole-map-satellite-tiles { position: absolute; inset: 0; overflow: hidden; }
+        .hole-map-satellite-tile { position: absolute; display: block; max-width: none; }
         .hole-map-heat,
         .hole-map-heat-you { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
         .hole-map-heat { z-index: 1; mix-blend-mode: screen; opacity: 0.92; }
@@ -1052,6 +1054,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=185"></script>
+    <script type="module" src="score-app/score-app.js?v=186"></script>
 </body>
 </html>

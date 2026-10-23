@@ -1,6 +1,6 @@
 import React from "react";
 
-import { flightArc, flightPoint, holeMapLabel, HOLE_MAP_COMPACT_SIZE, HOLE_MAP_SIZE, HOLE_MAP_WATCH_SIZE, latLngFromMapPoint, playerMarksOnMap, playerPhotoSrc, projectHoleMap, projectMapPoint, SATELLITE_CREDIT, scoreChipAnchor, throwSegments } from "./hole-map-model.js";
+import { flightArc, flightPoint, holeMapLabel, HOLE_MAP_COMPACT_SIZE, HOLE_MAP_SIZE, HOLE_MAP_WATCH_SIZE, latLngFromMapPoint, playerMarksOnMap, playerPhotoSrc, projectHoleMap, projectMapPoint, SATELLITE_CREDIT, satelliteTileLayers, scoreChipAnchor, throwSegments } from "./hole-map-model.js";
 import { discColorPattern } from "./disc-color.js";
 import { HEATMAP_MIN_SAMPLES, HeatmapLayer, useHoleHeatmap } from "./hole-heatmap.js";
 import { safeExternalUrl } from "./safe-url.js";
@@ -8,24 +8,48 @@ import { udiscDeepLink } from "./udisc-export.js";
 
 const h = React.createElement;
 
-function SatelliteLayer({ url }) {
+function SatelliteLayer({ url, bounds, width, height }) {
   const href = safeExternalUrl(url);
   const [attempt, setAttempt] = React.useState(0);
   React.useEffect(() => {
     setAttempt(0);
   }, [href]);
-  if (!href || attempt > 2) return null;
-  const src = attempt ? href + (href.includes("?") ? "&" : "?") + "retry=" + attempt : href;
-  return h("img", {
-    alt: "",
-    className: "hole-map-satellite",
-    decoding: "async",
-    draggable: false,
-    fetchPriority: "high",
-    loading: "eager",
-    onError: () => setAttempt((current) => current + 1),
-    src,
-  });
+  const tiles = !href || attempt > 0 ? satelliteTileLayers(bounds, width, height) : [];
+  const showPhoto = Boolean(href) && attempt <= 2;
+  if (!showPhoto && !tiles.length) return null;
+  return h(React.Fragment, null, [
+    tiles.length
+      ? h("div", { className: "hole-map-satellite-tiles", key: "tiles" }, tiles.map((tile) =>
+        h("img", {
+          alt: "",
+          className: "hole-map-satellite-tile",
+          decoding: "async",
+          draggable: false,
+          key: tile.url,
+          src: tile.url,
+          style: {
+            left: tile.left + "%",
+            top: tile.top + "%",
+            width: tile.width + "%",
+            height: tile.height + "%",
+          },
+        }),
+      ))
+      : null,
+    showPhoto
+      ? h("img", {
+        alt: "",
+        className: "hole-map-satellite",
+        decoding: "async",
+        draggable: false,
+        fetchPriority: "high",
+        key: "photo",
+        loading: "eager",
+        onError: () => setAttempt((current) => current + 1),
+        src: attempt ? href + (href.includes("?") ? "&" : "?") + "retry=" + attempt : href,
+      })
+      : null,
+  ]);
 }
 
 function MapFocusChips(props) {
@@ -578,7 +602,13 @@ export function HoleMap(props) {
       : ("card hole-map-card" + (large ? " hole-map-watch" : "")),
   }, [
     h("div", { className: "hole-map-frame", key: "frame" }, [
-      h(SatelliteLayer, { key: map.satelliteUrl || "satellite", url: map.satelliteUrl }),
+      h(SatelliteLayer, {
+        bounds: map.bounds,
+        height: map.height,
+        key: map.satelliteUrl || "satellite",
+        url: map.satelliteUrl,
+        width: map.width,
+      }),
       h(HeatmapLayer, { enabled: showHeat, key: "heat", map, payload: heatmap }),
       h(
         "svg",

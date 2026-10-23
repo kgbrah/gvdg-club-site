@@ -92,7 +92,7 @@ export async function buildCasualArchiveSnapshot(database: D1Like, roundCode: st
   const results = Array.isArray(data.results) ? (data.results as Record<string, unknown>[]) : [];
   const layoutId = asInt(round.layout_id);
   const courseId = asInt(round.course_id);
-  const layoutHoles = layoutId != null ? await db.getLayoutHoles(database, layoutId) : [];
+  const layoutHoles = layoutId != null ? await db.layoutHolesWithCrowdMap(database, layoutId) : [];
   const storedHoles = parseHoles(round.holes);
   const holes = layoutHoles.length ? layoutHoles : storedHoles;
   const course = courseId != null
@@ -132,6 +132,7 @@ export async function buildCasualArchiveSnapshot(database: D1Like, roundCode: st
       targetType: "player",
       playerIndexes: [index],
       members: [String(row.name || "Player")],
+      scorecard: scorecard.map((hole) => ({ hole: hole.hole, par: hole.par, strokes: hole.strokes })),
       scoringGroup: parseJson(row.scoring_group),
       match: parseJson(row.match_result),
     };
@@ -141,6 +142,9 @@ export async function buildCasualArchiveSnapshot(database: D1Like, roundCode: st
     status: "final",
     rev: 0,
     eventId: null,
+    courseId,
+    layoutId,
+    roundCode,
     roundConfig: roundConfigFrom(round.scoring_config),
     scoreTargets: players.map((player) => ({
       type: "player",

@@ -16,12 +16,21 @@ import {
   watchReplayStepCount,
   watchReplayVisibleThrows,
   watchStrokeHoleChips,
+  scoreMixRows,
 } from "../src/score-app/score-view-model.js";
 
 test("playingRoundRating prorates the layout scratch score", () => {
   assert.equal(playingRoundRating({ holeCount: 18, thru: 0, strokes: 0, ssa: 54, ppt: 10 }), null);
   assert.equal(playingRoundRating({ holeCount: 18, thru: 9, strokes: 27, ssa: 54, ppt: 10 }), 1000);
   assert.equal(playingRoundRating({ holeCount: 18, thru: 18, strokes: 50, ssa: 54, ppt: 10 }), 1040);
+});
+
+test("scoreMixRows counts the followed player's card", () => {
+  const rows = scoreMixRows(
+    [{ hole: 1, par: 3 }, { hole: 2, par: 3 }, { hole: 3, par: 4 }],
+    { 1: 2, 2: 3, 3: 6 },
+  );
+  assert.deepEqual(rows.map((row) => [row.id, row.mine.hit]), [["birdie", 1], ["par", 1], ["double", 1]]);
 });
 
 test("strokeLabel names hole results from strokes vs par", () => {

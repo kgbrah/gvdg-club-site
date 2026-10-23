@@ -936,3 +936,37 @@ export function finishRoundHint(blockers, mode, locked) {
   }
   return "";
 }
+
+export function scoreMixRows(holes, scores) {
+  const counts = { ace: 0, eagle: 0, birdie: 0, par: 0, bogey: 0, double: 0 };
+  const source = scores || {};
+  for (const hole of Array.isArray(holes) ? holes : []) {
+    if (!hole) continue;
+    const raw = Object.prototype.hasOwnProperty.call(source, hole.hole)
+      ? source[hole.hole]
+      : source[String(hole.hole)];
+    const strokes = raw == null || raw === "" ? null : Number(raw);
+    const par = Number(hole.par);
+    if (strokes == null || !Number.isFinite(strokes) || !Number.isFinite(par)) continue;
+    const delta = strokes - par;
+    if (strokes === 1) counts.ace += 1;
+    else if (delta <= -2) counts.eagle += 1;
+    else if (delta === -1) counts.birdie += 1;
+    else if (delta === 0) counts.par += 1;
+    else if (delta === 1) counts.bogey += 1;
+    else counts.double += 1;
+  }
+  return [
+    ["ace", "Ace", "ace"],
+    ["eagle", "Eagle", "eagle"],
+    ["birdie", "Birdie", "birdie"],
+    ["par", "Par", "par"],
+    ["bogey", "Bogey", "bogey"],
+    ["double", "Dbl+", "double"],
+  ].filter(([id]) => counts[id] > 0).map(([id, label, tone]) => ({
+    id,
+    label,
+    tone,
+    mine: { hit: counts[id] },
+  }));
+}

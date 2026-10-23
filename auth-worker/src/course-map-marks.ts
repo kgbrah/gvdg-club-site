@@ -104,6 +104,7 @@ export function computeMapConsensus(
   hole: number,
   kind: MapMarkKind,
   samples: readonly MapMarkSample[],
+  options?: { unmapped?: boolean },
 ): MapConsensus {
   const usable = samples.filter((row) => mapMarkAccuracyOk(row.accuracy_m ?? null));
   const byMember = new Map<string, MapMarkSample>();
@@ -129,7 +130,8 @@ export function computeMapConsensus(
     lng: median(unique.map((row) => row.lng))!,
   };
   const clustered = unique.filter((row) => haversineMeters(row, firstMedian) <= MAP_MARK_OUTLIER_M);
-  if (clustered.length < MAP_MARK_PUBLISH_MEMBERS) {
+  const minMembers = options?.unmapped ? 1 : MAP_MARK_PUBLISH_MEMBERS;
+  if (clustered.length < minMembers) {
     return unpublished(clustered.length, firstMedian);
   }
   const lat = median(clustered.map((row) => row.lat))!;
