@@ -1,12 +1,15 @@
 import React from "react";
 
 import { requestJson } from "./api.js";
+import { currentDashboardTab } from "./dashboard-router.js";
 
 const h = React.createElement;
 const CLUB_ORIGIN = { lat: 35.6127, lng: -77.3664 };
 
-function eventsTabActive() {
-  return document.body.dataset.memberDashboardTab === "events";
+function eventsTabActive(event) {
+  const tab = event?.detail?.tab || currentDashboardTab();
+  if (tab === "events") return true;
+  return document.body?.dataset?.memberDashboardTab === "events";
 }
 
 function readPlayerOrigin() {
@@ -52,8 +55,8 @@ export function PdgaEventsSection() {
   const [state, setState] = React.useState({ status: "idle", events: [], source: "club" });
 
   React.useEffect(() => {
-    function sync() {
-      setActive(eventsTabActive());
+    function sync(event) {
+      setActive(eventsTabActive(event));
     }
     window.addEventListener("gvdg:dashboard-tab-selected", sync);
     window.addEventListener("gvdg:member-dashboard-ready", sync);
@@ -67,18 +70,34 @@ export function PdgaEventsSection() {
     if (!active) return undefined;
     const controller = new AbortController();
     let cancelled = false;
-    setState((current) => ({ ...current, status: "loading" }));
-    readPlayerOrigin().then((origin) => {
-      const point = origin || { ...CLUB_ORIGIN, source: "club" };
-      const source = origin ? "player" : "club";
-      const query = `/pdga-events?lat=${encodeURIComponent(point.lat)}&lng=${encodeURIComponent(point.lng)}`;
-      return requestJson(query, { signal: controller.signal }).then((data) => ({ data, source }));
-    }).then(({ data, source }) => {
+    setState((current) => ({ ...current, status: current.events.length ? current.status : "loading" }));
+    const apply = (data, source) => {
       if (cancelled) return;
       const events = Array.isArray(data?.events) ? data.events : [];
       setState({ status: events.length ? "ready" : "empty", events, source });
+    };
+    const load = (point, source) => requestJson(
+      `/pdga-events?lat=${encodeURIComponent(point.lat)}&lng=${encodeURIComponent(point.lng)}`,
+      { signal: controller.signal },
+    ).then((data) => ({ data, source }));
+    let sawPlayer = false;
+    load(CLUB_ORIGIN, "club").then(({ data, source }) => {
+      if (!sawPlayer) apply(data, source);
     }).catch((error) => {
-      if (!cancelled && error?.name !== "AbortError") setState({ status: "error", events: [], source: "club" });
+      if (!cancelled && !sawPlayer && error?.name !== "AbortError") {
+        setState({ status: "error", events: [], source: "club" });
+      }
+    });
+    readPlayerOrigin().then((origin) => {
+      if (cancelled || !origin) return null;
+      return load(origin, "player").then(({ data, source }) => {
+        sawPlayer = true;
+        apply(data, source);
+      });
+    }).catch((error) => {
+      if (!cancelled && !sawPlayer && error?.name !== "AbortError") {
+        setState((current) => current.events.length ? current : { status: "error", events: [], source: "club" });
+      }
     });
     return () => {
       cancelled = true;

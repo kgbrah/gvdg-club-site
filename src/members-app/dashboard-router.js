@@ -36,6 +36,10 @@ function emitDashboardState(eventName, tab, extra = {}) {
   window.dispatchEvent(new CustomEvent(eventName, { detail: dashboardDetail(tab, extra) }));
 }
 
+export function currentDashboardTab() {
+  return selectedDashTab;
+}
+
 export function selectDashboardTab(tabValue, options = {}) {
   const tab = safeTab(tabValue);
   selectedDashTab = tab;
