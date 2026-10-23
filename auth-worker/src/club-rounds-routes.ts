@@ -92,7 +92,8 @@ export async function handleCasualRounds(
     } else {
       for (let attempt = 0; attempt < 5 && !code; attempt += 1) {
         const candidate = genCode();
-        if (!(await roundCodeTaken(env, candidate))) code = candidate;
+        const archived = await db.listCasualRoundResults(env.DB, candidate);
+        if (!archived) code = candidate;
       }
       if (!code) return json({ error: "start_failed" }, 503, origin);
     }
