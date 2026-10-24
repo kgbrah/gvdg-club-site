@@ -196,18 +196,14 @@ export function placePdgaEvents(
     })
     .filter((event) => event.miles == null || event.miles <= PDGA_EVENT_MILES)
     .sort((a, b) => {
-      if (a.miles == null && b.miles == null) {
-        return (eventDay(a.date) ?? Number.MAX_SAFE_INTEGER) - (eventDay(b.date) ?? Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name);
-      }
-      if (a.miles == null) return 1;
-      if (b.miles == null) return -1;
-      if (a.miles !== b.miles) return a.miles - b.miles;
-      return (eventDay(a.date) ?? Number.MAX_SAFE_INTEGER) - (eventDay(b.date) ?? Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name);
+      const dayA = eventDay(a.date) ?? Number.MAX_SAFE_INTEGER;
+      const dayB = eventDay(b.date) ?? Number.MAX_SAFE_INTEGER;
+      return dayA - dayB || a.name.localeCompare(b.name);
     });
 }
 
 function cacheKey(lat: number, lng: number): string {
-  return `v2:${lat.toFixed(1)}:${lng.toFixed(1)}`;
+  return `v3:${lat.toFixed(1)}:${lng.toFixed(1)}`;
 }
 
 export function isPdgaEventCron(cron: string): boolean {

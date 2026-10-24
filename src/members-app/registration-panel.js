@@ -71,7 +71,7 @@ export function MemberRegistrationPanel() {
 
   return h("div", { className: "react-registration-panel events-timeline", "data-react-registration-panel": state.status }, [
     h("h3", { className: "my-dashboard-title", key: "title" }, "Events"),
-    h("p", { className: "dash-note", key: "note" }, "Club events you're in come first. Nearby PDGA events follow, closest to you."),
+    h("p", { className: "dash-note", key: "note" }, "Club events you're in come first. Nearby PDGA events follow, soonest first."),
     state.status === "loading" ? h("p", { className: "dash-note", key: "loading" }, "Loading registration options...") : null,
     state.status === "error" ? h("p", { className: "dash-note", key: "error" }, "Registration is temporarily unavailable. Please refresh or try again in a minute.") : null,
     state.status !== "error" ? h("div", { key: "content" }, [

@@ -108,8 +108,8 @@ export function PdgaEventsSection() {
   if (!active && state.status === "idle") return null;
 
   const note = state.source === "player"
-    ? "PDGA events within 100 miles, closest to you first."
-    : "PDGA events within 100 miles of Greenville. Allow location to sort from where you are.";
+    ? "PDGA events within 100 miles, soonest first."
+    : "PDGA events within 100 miles of Greenville, soonest first. Allow location to use where you are.";
 
   return h("section", { className: "pdga-events", "data-pdga-events": state.status }, [
     h("h3", { className: "my-dashboard-title", key: "title" }, "Nearby PDGA"),

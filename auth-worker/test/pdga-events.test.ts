@@ -61,7 +61,7 @@ describe("PDGA events within 100 miles", () => {
     });
   });
 
-  it("places an event on its course and sorts closest to the player first", () => {
+  it("places an event on its course and lists the soonest date first", () => {
     const origin = { lat: 35.63, lng: -77.37 };
     expect(locatePdgaEvent({ course: "West Meadowbrook Park", place: "Greenville, NC" }, COURSES)).toEqual({
       lat: 35.6264,
@@ -71,6 +71,12 @@ describe("PDGA events within 100 miles", () => {
     expect(placed.map((event) => event.name)).toEqual(["GVDG Fall Flex #1", "Raleigh Open"]);
     expect(placed[0]!.miles).toBeLessThan(placed[1]!.miles!);
     expect(placed[0]!.url).toContain("discgolfscene.com/tournaments/");
+    const fartherButSooner = placePdgaEvents([
+      { name: "Late Home", date: "Oct 10, 2026", tier: "C-tier", course: "West Meadowbrook Park", place: "Greenville, NC", url: "https://www.discgolfscene.com/tournaments/Late_Home" },
+      { name: "Early Away", date: "Oct 1, 2026", tier: "B-tier", course: "Kentwood", place: "Raleigh, NC", url: "https://www.discgolfscene.com/tournaments/Early_Away" },
+    ], COURSES, origin);
+    expect(fartherButSooner.map((event) => event.name)).toEqual(["Early Away", "Late Home"]);
+    expect(fartherButSooner[0]!.miles).toBeGreaterThan(fartherButSooner[1]!.miles!);
     const sameCourse = placePdgaEvents([
       { name: "Hangover", date: "Jan 1, 2027", tier: "", course: "West Meadowbrook Park", place: "Greenville, NC", url: "https://www.discgolfscene.com/tournaments/Hangover" },
       { name: "Fall Flex", date: "Sep 25, 2026", tier: "C-tier", course: "West Meadowbrook Park", place: "Greenville, NC", url: "https://www.discgolfscene.com/tournaments/Fall_Flex" },
