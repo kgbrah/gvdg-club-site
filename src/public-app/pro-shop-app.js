@@ -250,7 +250,7 @@ function Filters({ filters, onChange, products }) {
 }
 
 function ProductGrid({ onAdd, products, status }) {
-  if (status === "loading") {
+  if (status === "loading" && !products.length) {
     return h("div", { className: "product-grid" }, note("Loading shop products..."));
   }
   if (status === "error") {

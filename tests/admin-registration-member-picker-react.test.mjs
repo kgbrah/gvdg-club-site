@@ -70,8 +70,8 @@ test('admin registration member picker adds club members as registrations from r
 
   assert.match(picker, /export function availableClubMembers/);
   assert.match(picker, /export function AdminRegistrationMemberPicker/);
-  assert.match(picker, /availableClubMembers\(membersState.members, registrations, "", manualPlayers\)/);
-  assert.match(picker, /availableClubMembers\(membersState.members, registrations, query, manualPlayers\)/);
+  assert.match(picker, /availableClubMembers\(rosterMembers\.members, registrations, "", manualPlayers\)/);
+  assert.match(picker, /availableClubMembers\(rosterMembers\.members, registrations, query, manualPlayers\)/);
   assert.match(picker, /unregisteredIds.has\(id\)/);
   assert.match(picker, /eventStatus === "live"/);
   assert.match(picker, /Once live scoring starts/);

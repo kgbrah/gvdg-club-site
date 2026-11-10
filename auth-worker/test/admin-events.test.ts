@@ -406,13 +406,33 @@ describe("admin event management", () => {
       liveScoringConfig: { groupFormat: "singles", scoringStyle: "custom" },
     }, adminJwt, state);
     const badPlayFormat = await call("/admin/events/12/config", "PUT", {
-      play_format: "teams",
+      play_format: "relay",
     }, adminJwt, state);
 
     expect(badGroup.status).toBe(400);
     expect(badStyle.status).toBe(400);
     expect(badPlayFormat.status).toBe(400);
     expect(state.eventConfigBinds).toBeUndefined();
+  });
+
+  it("saves a teams play format and the team list without pairing cards", async () => {
+    const state: Parameters<typeof db>[0] = {
+      existingEvent: { id: 12, format: "stroke" },
+      existingEventConfig: { event_id: 12, play_format: "singles", live_scoring_config: null },
+    };
+    const res = await call("/admin/events/12/config", "PUT", {
+      registration_open: true,
+      play_format: "teams",
+      divisions: ["MA1", " MA1 ", ""],
+      teams: ["Red", " Blue ", "red", "Gold"],
+      liveScoringConfig: { groupFormat: "singles", scoringStyle: "stroke", handicap: false },
+    }, await token("m_admin"), state);
+
+    expect(res.status).toBe(200);
+    expect(state.eventConfigBinds?.[6]).toBe("teams");
+    expect(JSON.parse(String(state.eventConfigBinds?.[5]))).toEqual(["MA1"]);
+    expect(JSON.parse(String(state.eventConfigBinds?.[9]))).toEqual(["Red", "Blue", "Gold"]);
+    expect(JSON.parse(String(state.eventConfigBinds?.[8]))).toMatchObject({ groupFormat: "singles", scoringStyle: "stroke" });
   });
 });
 

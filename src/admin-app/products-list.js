@@ -1,6 +1,7 @@
 import React from "react";
 
 import { adminConfirm } from "./admin-dialogs.js";
+import { useSettledWhileLoading } from "../shared/settled-state.js";
 
 const h = React.createElement;
 
@@ -206,15 +207,17 @@ export function AdminProductsList() {
     return () => window.removeEventListener("gvdg:admin-products-list", update);
   }, []);
 
-  if (state.status === "loading") {
+  const view = useSettledWhileLoading(state, state.inventoryStatus);
+
+  if (view.status === "loading") {
     return h("p", { className: "al-note", "data-react-admin-products-list": "loading", role: "status" }, "Loading...");
   }
 
-  if (!state.products.length) {
-    return h("p", { className: "al-note", "data-react-admin-products-list": "empty", role: "status" }, state.inventoryStatus === "inactive" ? "No archived products." : "No products yet.");
+  if (!view.products.length) {
+    return h("p", { className: "al-note", "data-react-admin-products-list": "empty", role: "status" }, view.inventoryStatus === "inactive" ? "No archived products." : "No products yet.");
   }
 
-  return h("div", { className: "shop-admin-list shop-counter", "data-react-admin-products-list": "ready" }, state.products.map((product, index) => (
+  return h("div", { className: "shop-admin-list shop-counter", "data-react-admin-products-list": "ready" }, view.products.map((product, index) => (
     h(ProductRow, {
       key: product.id || `${product.name}-${index}`,
       product,

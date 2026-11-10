@@ -9,7 +9,7 @@ import { request } from "./api.js";
 import { dollars, formatEventDay } from "./format.js";
 import { memberAlert, memberConfirm } from "./member-dialogs.js";
 import { PayPalButtons, WalletPayButton } from "./registration-payments.js";
-import { clientOwed, eventFromRegistration, eventMeta, isDoublesRegistration, parseArray, parseObject, sortRegistrations } from "./registration-utils.js";
+import { clientOwed, eventFromRegistration, eventMeta, isDoublesRegistration, isTeamRegistration, parseArray, parseObject, sortRegistrations } from "./registration-utils.js";
 
 const h = React.createElement;
 
@@ -78,28 +78,55 @@ function RegisteredEventActions({ event, registration, token, onReload }) {
 
 function OpenEventForm({ event, token, onReload }) {
   const divisions = parseArray(event.divisions);
+  const teams = parseArray(event.teams);
+  const teamEvent = isTeamRegistration(event);
   const [division, setDivision] = React.useState(divisions[0] || "");
   const [team, setTeam] = React.useState("");
   const [addons, setAddons] = React.useState({ ctp: false, ace: false });
 
   async function submit(eventSubmit) {
     eventSubmit.preventDefault();
+    if (teamEvent && teams.length && !team) {
+      await memberAlert({ message: "Please pick a team.", title: "Registration failed" });
+      return;
+    }
     const body = {
       division: division || null,
       addons,
     };
+    if (teamEvent && teams.length) body.team = team;
     if (isDoublesRegistration(event)) body.team = team.trim();
     const response = await request(`/events/${encodeURIComponent(event.id)}/register`, { method: "POST", token, body });
     if (response.ok) onReload();
-    else await memberAlert({
-      message: "Registration could not be completed.",
-      title: "Registration failed",
-    });
+    else {
+      const payload = await response.json().catch(() => ({}));
+      await memberAlert({
+        message: payload.error === "invalid_team"
+          ? "Please pick a team."
+          : payload.error === "invalid_division"
+            ? "Please pick a division."
+            : "Registration could not be completed.",
+        title: "Registration failed",
+      });
+    }
   }
 
   return h("form", { className: "register-form", onSubmit: submit }, [
-    divisions.length ? h("select", { value: division, onChange: (change) => setDivision(change.target.value), key: "division" },
-      divisions.map((name) => h("option", { value: name, key: name }, name))) : null,
+    divisions.length ? h("select", {
+      "aria-label": "Division",
+      value: division,
+      onChange: (change) => setDivision(change.target.value),
+      key: "division",
+    }, divisions.map((name) => h("option", { value: name, key: name }, name))) : null,
+    teamEvent && teams.length ? h("select", {
+      "aria-label": "Team",
+      value: team,
+      onChange: (change) => setTeam(change.target.value),
+      key: "team",
+    }, [
+      h("option", { value: "", key: "empty" }, "Select team"),
+      ...teams.map((name) => h("option", { value: name, key: name }, name)),
+    ]) : null,
     isDoublesRegistration(event) ? h("input", {
       type: "text",
       placeholder: "Pair label or partner",

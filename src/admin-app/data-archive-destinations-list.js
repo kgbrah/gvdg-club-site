@@ -2,6 +2,7 @@ import React from "react";
 
 import { adminConfirm } from "./admin-dialogs.js";
 import { useDataArchiveDestinationsState } from "./data-archive-destinations-store.js";
+import { useSettledWhileLoading } from "../shared/settled-state.js";
 
 const h = React.createElement;
 
@@ -100,20 +101,21 @@ function DestinationRow({ destination }) {
 
 export function AdminDataArchiveDestinationsList() {
   const state = useDataArchiveDestinationsState();
+  const view = useSettledWhileLoading(state);
 
-  if (state.status === "idle" || state.status === "loading") {
+  if (view.status === "idle" || view.status === "loading") {
     return h("p", { className: "al-note", "data-react-admin-data-archive-destinations": "loading", role: "status" }, "Loading...");
   }
 
-  if (state.status === "error") {
+  if (view.status === "error") {
     return h("p", { className: "al-note err", "data-react-admin-data-archive-destinations": "error", role: "alert" }, "Unable to load destinations.");
   }
 
-  if (!state.destinations.length) {
+  if (!view.destinations.length) {
     return h("p", { className: "al-note", "data-react-admin-data-archive-destinations": "empty", role: "status" }, "No destinations yet. Add one above to send archived snapshots.");
   }
 
-  return h("div", { "data-react-admin-data-archive-destinations": "ready" }, state.destinations.map((destination, index) => (
+  return h("div", { "data-react-admin-data-archive-destinations": "ready" }, view.destinations.map((destination, index) => (
     h(DestinationRow, {
       destination,
       key: destination.id || `${destination.label}-${index}`,

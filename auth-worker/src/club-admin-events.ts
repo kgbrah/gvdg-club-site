@@ -5,7 +5,7 @@ import { EVENT_FORMATS, EVENT_STATUSES, EVENT_TYPES } from "./db.js";
 import { assignShotgun, assignTeams } from "./assign.js";
 import { getMember } from "./roster.js";
 import { json, readJson } from "./http.js";
-import { asInt, asIsoTimestamp, asStr, inSet, jsonStringArray, validEventCoursesInput, validEventInput } from "./input.js";
+import { asInt, asIsoTimestamp, asStr, inSet, namedStringArray, validEventCoursesInput, validEventInput } from "./input.js";
 import { AdminLiveConfigError, adminLiveScoringConfigJson } from "./admin-live-config.js";
 import { isLiveFormatError, normalizeLiveScoringConfig } from "./live-format.js";
 import { inlineLayout } from "./admin-event-layout.js";
@@ -170,9 +170,10 @@ export async function handleAdminEvents(
   }
   if (seg[3] === "config" && id != null && method === "PUT") {
     const b = (await readJson(request)) ?? {};
-    const divs = jsonStringArray(b.divisions, 40);
-    const fmt = b.play_format == null ? null : (inSet(["singles", "doubles"], b.play_format) ? (b.play_format as string) : undefined);
+    const divs = namedStringArray(b.divisions, 40, 40);
+    const fmt = b.play_format == null ? null : (inSet(["singles", "doubles", "teams"], b.play_format) ? (b.play_format as string) : undefined);
     if (fmt === undefined) return json({ error: "invalid_config" }, 400, origin);
+    const teams = Object.prototype.hasOwnProperty.call(b, "teams") ? namedStringArray(b.teams, 24, 40) : null;
     let liveScoringConfig: string;
     try {
       liveScoringConfig = await adminLiveScoringConfigJson({ env, eventId: id, body: b, playFormat: fmt });
@@ -182,7 +183,7 @@ export async function handleAdminEvents(
     }
     const row = await db.upsertEventConfig(env.DB, id, {
       registration_open: b.registration_open ? 1 : 0, entry_fee_cents: asInt(b.entry_fee_cents), ctp_fee_cents: asInt(b.ctp_fee_cents),
-      ace_fee_cents: asInt(b.ace_fee_cents), divisions: divs, play_format: fmt, live_scoring_config: liveScoringConfig, notes: asStr(b.notes, 2000),
+      ace_fee_cents: asInt(b.ace_fee_cents), divisions: divs, teams, play_format: fmt, live_scoring_config: liveScoringConfig, notes: asStr(b.notes, 2000),
     });
     return json({ config: row }, 200, origin);
   }

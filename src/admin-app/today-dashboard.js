@@ -2,6 +2,7 @@ import React from "react";
 
 import { currentAdminOrdersBadgeCount } from "./admin-shell-state.js";
 import { counterHandoff, deskSummary, handoffLabel, holdDeskOrder } from "./desk-model.js";
+import { useSettledWhileLoading } from "../shared/settled-state.js";
 import { repeatSavePayload } from "./event-form.js";
 import {
   bucketAdminEvents,
@@ -158,16 +159,18 @@ export function AdminTodayDashboard() {
     };
   }, []);
 
-  if (state.status === "loading") {
+  const view = useSettledWhileLoading(state);
+
+  if (view.status === "loading") {
     return h("p", { className: "dash-note", "data-react-admin-today": "loading", role: "status" }, "Loading…");
   }
 
-  const next = pickTodayEvent(state.events);
-  const { live, upcoming, past } = bucketAdminEvents(state.events);
+  const next = pickTodayEvent(view.events);
+  const { live, upcoming, past } = bucketAdminEvents(view.events);
   const rest = [...live, ...upcoming].filter((event) => event.id !== next?.id).slice(0, 4);
   const fieldNote = next ? `${live.length + upcoming.length} on the books` : "Nothing scheduled";
   const deskEvent = next && (next.status === "live" || next.status === "scheduled") ? next : null;
-  const offer = next && next.status === "live" ? null : nextWeekOffer(state.events.map((event) => event.source), clubToday());
+  const offer = next && next.status === "live" ? null : nextWeekOffer(view.events.map((event) => event.source), clubToday());
   const handoff = counterHandoff(orderRows);
   const when = next ? formatAdminEventWhen(next) : "";
   const place = next ? formatAdminEventPlace(next) : "";

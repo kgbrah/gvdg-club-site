@@ -1,5 +1,7 @@
 import React from "react";
 
+import { useSettledWhileLoading } from "../shared/settled-state.js";
+
 import { AdminScoringLeaderboard, AdminScoringOverride, AdminScoringScorecard } from "./scoring-scorecard.js";
 import { AdminScoringTeeSigns } from "./scoring-tee-signs.js";
 import { eventConfig, isPutting, layoutLabel, normalizeConfig, playableEvents } from "./scoring-model.js";
@@ -256,8 +258,10 @@ export function AdminScoringPanel() {
     };
   }, []);
 
+  const eventsView = useSettledWhileLoading(eventsState);
+
   return h("div", { className: "admin-scoring-card", "data-react-admin-scoring": state.status }, [
-    h("div", { className: "admin-scoring-card-block", key: "events" }, h(EventSelector, { eventsState, selectedId: state.eventId })),
+    h("div", { className: "admin-scoring-card-block", key: "events" }, h(EventSelector, { eventsState: eventsView, selectedId: state.eventId })),
     state.status === "loading" ? h("p", { className: "al-note", key: "loading", role: "status" }, "Loading live scoring...") : null,
     state.status === "error" ? h("p", { className: "al-note err", key: "error", role: "alert" }, state.message || "Unable to load live scoring.") : null,
     state.status === "start" ? h("div", { className: "admin-scoring-card-block", key: `start-${state.eventId}` }, h(StartControls, { state })) : null,

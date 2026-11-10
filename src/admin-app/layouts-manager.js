@@ -145,7 +145,7 @@ export function AdminLayoutsManager() {
       ]),
     ]),
     selected ? h("div", { id: "alBody", key: "body", style: { marginTop: "1rem" } }, [
-      loading ? h("div", { className: "al-note", key: "loading", role: "status" }, "Loading layouts...") : null,
+      loading && !(Array.isArray(layoutsState.layouts) && layoutsState.layouts.length) ? h("div", { className: "al-note", key: "loading", role: "status" }, "Loading layouts...") : null,
       h(AdminLayoutUdiscImport, { courseId: selectedCourseId, key: "udisc", onApply: applyUdiscLayout }),
       h(AdminLayoutPositionPool, { courseId: selectedCourseId, key: "pool", pool: layoutsState.positions }),
       h(AdminLayoutBuilder, {

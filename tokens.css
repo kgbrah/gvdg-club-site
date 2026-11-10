@@ -409,3 +409,13 @@ body.player-theme-page header .nav-more-menu {
 .udisc-export-section {
   margin-top: 1rem;
 }
+
+/* Keep the caret from jumping the page when the keyboard opens, on every screen. */
+html {
+  scroll-padding-top: 4.5rem;
+  scroll-padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+}
+input, select, textarea {
+  scroll-margin-top: 4.75rem;
+  scroll-margin-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
+}

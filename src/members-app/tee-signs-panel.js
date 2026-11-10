@@ -76,7 +76,7 @@ function TeeSignCard({ row, courses, token }) {
 }
 
 function TeeSignList({ signs, courses, token, status }) {
-  if (status === "loading") return h("div", { className: "dash-note" }, "Loading tee signs...");
+  if (status === "loading" && !signs.length) return h("div", { className: "dash-note" }, "Loading tee signs...");
   if (!signs.length) {
     return h("div", { className: "dash-note" }, "No tee signs captured yet. Pick a course and hole above to add your first one.");
   }

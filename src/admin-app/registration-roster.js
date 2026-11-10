@@ -1,5 +1,6 @@
 import React from "react";
 import { ManualPlayerRow, RegistrationRow } from "./registration-roster-rows.js";
+import { configuredNames, useAdminRegistrationControlsState } from "./registration-controls.js";
 
 const h = React.createElement;
 
@@ -53,7 +54,7 @@ function normalizeRosterState(state) {
   };
 }
 
-function RosterList({ state }) {
+function RosterList({ divisions, state, teams }) {
   const rows = state.registrations.concat(state.manualPlayers);
 
   return h("div", {
@@ -61,8 +62,10 @@ function RosterList({ state }) {
     "data-react-admin-registration-roster": "ready",
   }, rows.length ? [
     ...state.registrations.map((registration, index) => h(RegistrationRow, {
+      divisions,
       key: registration.id || `registration-${index}`,
       registration,
+      teams,
     })),
     ...state.manualPlayers.map((player, index) => h(ManualPlayerRow, {
       key: player.id || `manual-${index}`,
@@ -73,6 +76,9 @@ function RosterList({ state }) {
 
 export function AdminRegistrationRoster() {
   const [state, setState] = React.useState(() => normalizeRosterState(EMPTY_ROSTER_STATE));
+  const controls = useAdminRegistrationControlsState();
+  const divisions = configuredNames(controls.config && controls.config.divisions);
+  const teams = configuredNames(controls.config && controls.config.teams);
 
   React.useEffect(() => {
     function update(event) {
@@ -106,6 +112,6 @@ export function AdminRegistrationRoster() {
 
   return h(React.Fragment, null, [
     title,
-    h(RosterList, { key: "list", state }),
+    h(RosterList, { divisions, key: "list", state, teams }),
   ]);
 }

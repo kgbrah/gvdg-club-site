@@ -1,6 +1,7 @@
 import React from "react";
 
 import { adminConfirm } from "./admin-dialogs.js";
+import { useSettledWhileLoading } from "../shared/settled-state.js";
 
 const h = React.createElement;
 
@@ -209,19 +210,21 @@ export function AdminRegistrationCtpsList() {
     return () => window.removeEventListener("gvdg:admin-registration-ctps-list", update);
   }, []);
 
-  if (state.status === "loading") {
+  const view = useSettledWhileLoading(state);
+
+  if (view.status === "loading") {
     return h("p", { className: "al-note", "data-react-admin-registration-ctps": "loading", role: "status" }, "Loading...");
   }
 
-  if (state.status === "error") {
+  if (view.status === "error") {
     return h("p", { className: "al-note err", "data-react-admin-registration-ctps": "error", role: "alert" }, "Unable to load CTPs.");
   }
 
-  if (!state.ctps.length) {
+  if (!view.ctps.length) {
     return h("p", { className: "al-note", "data-react-admin-registration-ctps": "empty", role: "status" }, "No CTPs yet.");
   }
 
-  return h("div", { "data-react-admin-registration-ctps": "ready" }, state.ctps.map((ctp, index) => (
+  return h("div", { "data-react-admin-registration-ctps": "ready" }, view.ctps.map((ctp, index) => (
     h(CtpRow, { ctp, key: ctp.id || `${ctp.hole}-${index}` })
   )));
 }
@@ -237,19 +240,21 @@ export function AdminRegistrationCreditsList() {
     return () => window.removeEventListener("gvdg:admin-registration-credits-list", update);
   }, []);
 
-  if (state.status === "loading") {
+  const view = useSettledWhileLoading(state);
+
+  if (view.status === "loading") {
     return h("p", { className: "al-note", "data-react-admin-registration-credits": "loading", role: "status" }, "Loading...");
   }
 
-  if (state.status === "error") {
+  if (view.status === "error") {
     return h("p", { className: "al-note err", "data-react-admin-registration-credits": "error", role: "alert" }, "Unable to load store credit payouts.");
   }
 
-  if (!state.payouts.length) {
+  if (!view.payouts.length) {
     return h("p", { className: "al-note", "data-react-admin-registration-credits": "empty", role: "status" }, "No store credit payouts yet.");
   }
 
-  return h("div", { className: "wallet-ledger", "data-react-admin-registration-credits": "ready" }, state.payouts.map((transaction, index) => (
+  return h("div", { className: "wallet-ledger", "data-react-admin-registration-credits": "ready" }, view.payouts.map((transaction, index) => (
     h(WalletTransactionRow, {
       index,
       key: `${transaction.memberId || transaction.memberName || "member"}-${transaction.createdAt || index}-${transaction.amountCents}`,
@@ -269,15 +274,17 @@ export function AdminRegistrationAcePot() {
     return () => window.removeEventListener("gvdg:admin-registration-ace-pot", update);
   }, []);
 
-  if (state.status === "loading") {
+  const view = useSettledWhileLoading(state);
+
+  if (view.status === "loading") {
     return h("p", { className: "al-note", "data-react-admin-registration-ace-pot": "loading", role: "status" }, "Loading...");
   }
 
-  if (state.status === "error") {
+  if (view.status === "error") {
     return h("p", { className: "al-note err", "data-react-admin-registration-ace-pot": "error", role: "alert" }, "Unable to load ace pot.");
   }
 
-  const pot = state.acePot;
+  const pot = view.acePot;
   if (!pot) {
     return h("p", { className: "al-note", "data-react-admin-registration-ace-pot": "empty", role: "status" }, "No ace pot data.");
   }

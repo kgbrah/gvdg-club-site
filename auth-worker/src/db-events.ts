@@ -288,6 +288,7 @@ export interface EventConfigPatch {
   ctp_fee_cents?: number | null;
   ace_fee_cents?: number | null;
   divisions?: string | null;
+  teams?: string | null;
   play_format?: string | null;
   live_scoring_config?: string | null;
   notes?: string | null;
@@ -314,13 +315,14 @@ export async function getEventConfig(db: D1Like, eventId: number) {
 export async function upsertEventConfig(db: D1Like, eventId: number, c: EventConfigPatch) {
   return db
     .prepare(
-      `INSERT INTO event_config (event_id, registration_open, entry_fee_cents, ctp_fee_cents, ace_fee_cents, divisions, play_format, notes, live_scoring_config)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO event_config (event_id, registration_open, entry_fee_cents, ctp_fee_cents, ace_fee_cents, divisions, play_format, notes, live_scoring_config, teams)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(event_id) DO UPDATE SET registration_open=excluded.registration_open, entry_fee_cents=excluded.entry_fee_cents,
          ctp_fee_cents=excluded.ctp_fee_cents, ace_fee_cents=excluded.ace_fee_cents, divisions=excluded.divisions,
-         play_format=excluded.play_format, notes=excluded.notes, live_scoring_config=excluded.live_scoring_config RETURNING *`,
+         play_format=excluded.play_format, notes=excluded.notes, live_scoring_config=excluded.live_scoring_config,
+         teams=COALESCE(excluded.teams, event_config.teams) RETURNING *`,
     )
-    .bind(eventId, c.registration_open ?? 0, c.entry_fee_cents ?? null, c.ctp_fee_cents ?? null, c.ace_fee_cents ?? null, c.divisions ?? null, c.play_format ?? null, c.notes ?? null, c.live_scoring_config ?? null)
+    .bind(eventId, c.registration_open ?? 0, c.entry_fee_cents ?? null, c.ctp_fee_cents ?? null, c.ace_fee_cents ?? null, c.divisions ?? null, c.play_format ?? null, c.notes ?? null, c.live_scoring_config ?? null, c.teams ?? null)
     .first();
 }
 
@@ -331,7 +333,7 @@ export async function listOpenRegistrationEvents(db: D1Like) {
         `SELECT e.id, e.name, e.status, e.date, e.type, e.format AS event_format, e.course_id, e.layout_id,
            e.starts_at, e.registration_deadline, e.checkin_deadline,
            co.name AS course_name, l.name AS layout_name, l.total_par,
-           c.entry_fee_cents, c.ctp_fee_cents, c.ace_fee_cents, c.divisions, c.play_format, c.live_scoring_config
+           c.entry_fee_cents, c.ctp_fee_cents, c.ace_fee_cents, c.divisions, c.teams, c.play_format, c.live_scoring_config
          FROM events e JOIN event_config c ON c.event_id = e.id
          LEFT JOIN courses co ON co.id = e.course_id
          LEFT JOIN course_layouts l ON l.id = e.layout_id

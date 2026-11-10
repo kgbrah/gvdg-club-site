@@ -58,6 +58,10 @@ export function isDoublesRegistration(event) {
   return registrationLiveConfig(event).groupFormat === "doubles";
 }
 
+export function isTeamRegistration(event) {
+  return String(event && event.play_format || "").toLowerCase() === "teams";
+}
+
 export function clientOwed(event, addons) {
   let total = event.entry_fee_cents || 0;
   if (addons?.ctp && event.ctp_fee_cents) total += event.ctp_fee_cents;

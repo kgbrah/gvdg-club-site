@@ -1,5 +1,7 @@
 import React from "react";
 
+import { useSettledWhileLoading } from "../shared/settled-state.js";
+
 const h = React.createElement;
 
 const EMPTY_STATE = { status: "idle", candidates: [] };
@@ -66,11 +68,13 @@ export function AdminImportCandidatesList() {
     return () => window.removeEventListener("gvdg:admin-import-candidate-create-result", updateAction);
   }, []);
 
-  if (state.status === "idle") return null;
-  if (state.status === "loading") {
+  const view = useSettledWhileLoading(state);
+
+  if (view.status === "idle") return null;
+  if (view.status === "loading") {
     return h("p", { className: "dash-note", "data-react-admin-import-candidates": "loading", role: "status" }, "Loading candidates...");
   }
-  if (!state.candidates.length) {
+  if (!view.candidates.length) {
     return h("p", { className: "dash-note", "data-react-admin-import-candidates": "empty", role: "status" }, "No candidates found.");
   }
 
@@ -85,7 +89,7 @@ export function AdminImportCandidatesList() {
     return current ? current[1] : "idle";
   }
 
-  return h("div", { "data-react-admin-import-candidates": "ready" }, state.candidates.map((candidate) => {
+  return h("div", { "data-react-admin-import-candidates": "ready" }, view.candidates.map((candidate) => {
     const status = actionState(candidate);
     const busy = status === "creating";
     return h("div", { className: "admin-cand", key: candidate.key }, [

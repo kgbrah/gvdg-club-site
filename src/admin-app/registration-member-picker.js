@@ -1,6 +1,8 @@
 import React from "react";
 
 import { playersMatch } from "../shared/player-identity.js";
+import { useSettledWhileLoading } from "../shared/settled-state.js";
+import { configuredNames, useAdminRegistrationControlsState } from "./registration-controls.js";
 
 const h = React.createElement;
 
@@ -69,6 +71,8 @@ export function AdminRegistrationMemberPicker({ eventStatus }) {
   const [query, setQuery] = React.useState("");
   const [selected, setSelected] = React.useState(() => new Set());
   const [division, setDivision] = React.useState("");
+  const [team, setTeam] = React.useState("");
+  const [error, setError] = React.useState("");
   const [ctp, setCtp] = React.useState(false);
   const [ace, setAce] = React.useState(false);
   const [paidEntry, setPaidEntry] = React.useState(false);
@@ -109,8 +113,13 @@ export function AdminRegistrationMemberPicker({ eventStatus }) {
     return () => window.removeEventListener("gvdg:admin-registration-members-add-result", update);
   }, [pendingRequest]);
 
-  const unregistered = availableClubMembers(membersState.members, registrations, "", manualPlayers);
-  const available = availableClubMembers(membersState.members, registrations, query, manualPlayers);
+  const rosterMembers = useSettledWhileLoading(membersState);
+  const controls = useAdminRegistrationControlsState();
+  const divisions = configuredNames(controls.config && controls.config.divisions);
+  const teams = configuredNames(controls.config && controls.config.teams);
+  const teamEvent = String(controls.config && controls.config.play_format || "").toLowerCase() === "teams";
+  const unregistered = availableClubMembers(rosterMembers.members, registrations, "", manualPlayers);
+  const available = availableClubMembers(rosterMembers.members, registrations, query, manualPlayers);
   const unregisteredIds = new Set(unregistered.map((member) => member.memberId));
   const selectedIds = [...selected].filter((id) => unregisteredIds.has(id));
   const busy = Boolean(pendingRequest);
@@ -136,23 +145,29 @@ export function AdminRegistrationMemberPicker({ eventStatus }) {
   function submit(event) {
     event.preventDefault();
     if (busy) return;
+    if (teamEvent && teams.length && !team.trim()) {
+      setError("Pick a team before adding these players.");
+      return;
+    }
     const id = requestId();
     setPendingRequest(id);
+    setError("");
     dispatchRequest("gvdg:admin-registration-members-add-request", {
       body: {
         addons: { ctp, ace },
         division: division.trim() || null,
         member_ids: selectedIds,
         paid_entry: paidEntry,
+        team: team.trim() || null,
       },
       requestId: id,
-      valid: selectedIds.length > 0,
+      valid: selectedIds.length > 0 && (!(teamEvent && teams.length) || Boolean(team.trim())),
     });
   }
 
-  const listBody = membersState.status === "loading"
+  const listBody = rosterMembers.status === "loading"
     ? h("p", { className: "al-note rg-member-empty", key: "loading", role: "status" }, "Loading club members...")
-    : membersState.status === "error"
+    : rosterMembers.status === "error"
       ? h("p", { className: "al-note err rg-member-empty", key: "error", role: "alert" }, "Unable to load club members.")
       : available.length
         ? available.map((member) => h("label", {
@@ -175,7 +190,7 @@ export function AdminRegistrationMemberPicker({ eventStatus }) {
 
   return h("div", {
     className: "al-section",
-    "data-react-admin-registration-member-picker": membersState.status,
+    "data-react-admin-registration-member-picker": rosterMembers.status,
     style: { marginTop: "1rem" },
   }, [
     h("h4", { className: "al-h", key: "title" }, "Add club members"),
@@ -186,7 +201,7 @@ export function AdminRegistrationMemberPicker({ eventStatus }) {
       h("input", {
         "aria-label": "Search club members",
         className: "rg-member-search",
-        disabled: busy || membersState.status === "loading",
+        disabled: busy || rosterMembers.status === "loading",
         id: "rgMemberSearch",
         key: "query",
         onChange: (event) => setQuery(event.target.value),
@@ -211,15 +226,32 @@ export function AdminRegistrationMemberPicker({ eventStatus }) {
     ]),
     h("div", { className: "rg-member-list", key: "list" }, listBody),
     h("form", { className: "al-row", key: "form", onSubmit: submit }, [
-      h("input", {
+      h(divisions.length ? "select" : "input", {
         disabled: busy,
         id: "rgMemberDivision",
         key: "division",
-        maxLength: 40,
+        maxLength: divisions.length ? undefined : 40,
         onChange: (event) => setDivision(event.target.value),
         placeholder: "division (optional)",
         value: division,
-      }),
+      }, divisions.length ? [
+        h("option", { key: "empty", value: "" }, "division (optional)"),
+        ...(division && !divisions.includes(division) ? [h("option", { key: division, value: division }, division)] : []),
+        ...divisions.map((name) => h("option", { key: name, value: name }, name)),
+      ] : null),
+      teamEvent ? h(teams.length ? "select" : "input", {
+        disabled: busy,
+        id: "rgMemberTeam",
+        key: "team",
+        maxLength: teams.length ? undefined : 40,
+        onChange: (event) => setTeam(event.target.value),
+        placeholder: teams.length ? "Team" : "Add teams in settings",
+        value: team,
+      }, teams.length ? [
+        h("option", { key: "empty", value: "" }, "Team"),
+        ...(team && !teams.includes(team) ? [h("option", { key: team, value: team }, team)] : []),
+        ...teams.map((name) => h("option", { key: name, value: name }, name)),
+      ] : null) : null,
       h("label", { className: "register-addon", htmlFor: "rgMemberAddonCtp", key: "ctp" }, [
         h("input", {
           checked: ctp,
@@ -258,5 +290,6 @@ export function AdminRegistrationMemberPicker({ eventStatus }) {
         type: "submit",
       }, busy ? "Adding..." : (selectedIds.length ? `Add selected (${selectedIds.length})` : "Add selected")),
     ]),
+    error ? h("p", { className: "al-note err", key: "error", role: "alert" }, error) : null,
   ]);
 }

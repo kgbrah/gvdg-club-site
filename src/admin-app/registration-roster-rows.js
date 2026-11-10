@@ -18,7 +18,48 @@ function PaidChip({ paid }) {
   }, paid ? "Paid" : "Unpaid");
 }
 
-export function RegistrationRow({ registration }) {
+function ChoiceOrText({ ariaLabel, names, onCommit, placeholder, setValue, value }) {
+  const current = String(value || "");
+  if (names && names.length) {
+    const options = [];
+    const seen = new Set();
+    if (current && !names.includes(current)) {
+      options.push(current);
+      seen.add(current);
+    }
+    for (const name of names) {
+      const text = String(name || "").trim();
+      if (!text || seen.has(text)) continue;
+      seen.add(text);
+      options.push(text);
+    }
+    return h("select", {
+      "aria-label": ariaLabel,
+      onChange: (event) => {
+        setValue(event.target.value);
+        onCommit(event.target.value);
+      },
+      value: current,
+    }, [
+      h("option", { key: "empty", value: "" }, placeholder || "Select"),
+      ...options.map((name) => h("option", { key: name, value: name }, name)),
+    ]);
+  }
+  return h("input", {
+    "aria-label": ariaLabel,
+    maxLength: 40,
+    onBlur: () => onCommit(current),
+    onChange: (event) => setValue(event.target.value),
+    onKeyDown: (event) => {
+      if (event.key === "Enter") event.currentTarget.blur();
+    },
+    placeholder,
+    type: "text",
+    value: current,
+  });
+}
+
+export function RegistrationRow({ divisions = [], registration, teams = [] }) {
   const [division, setDivision] = React.useState(registration.division);
   const [team, setTeam] = React.useState(registration.team);
   const [startingHole, setStartingHole] = React.useState(registration.startingHole);
@@ -111,27 +152,23 @@ export function RegistrationRow({ registration }) {
       h("div", { className: "admin-roster-fields", key: "fields" }, [
         h("label", { key: "division" }, [
           "Division",
-          h("input", {
-            "aria-label": `Division for ${registration.name}`,
-            maxLength: 40,
-            onBlur: () => patchText("division", division, registration.division),
-            onChange: (event) => setDivision(event.target.value),
-            onKeyDown: submitOnEnter,
+          h(ChoiceOrText, {
+            ariaLabel: `Division for ${registration.name}`,
+            names: divisions,
+            onCommit: (next) => patchText("division", next, registration.division),
             placeholder: "division",
-            type: "text",
+            setValue: setDivision,
             value: division,
           }),
         ]),
         h("label", { key: "team" }, [
           "Team",
-          h("input", {
-            "aria-label": `Team for ${registration.name}`,
-            maxLength: 40,
-            onBlur: () => patchText("team", team, registration.team),
-            onChange: (event) => setTeam(event.target.value),
-            onKeyDown: submitOnEnter,
-            placeholder: "pair/team",
-            type: "text",
+          h(ChoiceOrText, {
+            ariaLabel: `Team for ${registration.name}`,
+            names: teams,
+            onCommit: (next) => patchText("team", next, registration.team),
+            placeholder: teams.length ? "No team" : "pair/team",
+            setValue: setTeam,
             value: team,
           }),
         ]),

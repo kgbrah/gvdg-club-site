@@ -1,6 +1,7 @@
 import React from "react";
 
 import { adminJson } from "./admin-api.js";
+import { useSettledWhileLoading } from "../shared/settled-state.js";
 import { currentAdminActiveTab, currentAdminAuthGateState } from "./admin-shell-state.js";
 
 const h = React.createElement;
@@ -115,19 +116,21 @@ export function AdminWalletRecentList() {
     return () => controller.abort();
   }, [shouldLoad, refreshCount]);
 
-  if (state.status === "idle" || state.status === "loading") {
+  const view = useSettledWhileLoading(state);
+
+  if (view.status === "idle" || view.status === "loading") {
     return h("p", { className: "al-note", "data-react-admin-wallet-recent": "loading", role: "status" }, "Loading...");
   }
 
-  if (state.status === "error") {
+  if (view.status === "error") {
     return h("p", { className: "al-note", "data-react-admin-wallet-recent": "error", role: "alert" }, "Wallet activity could not load.");
   }
 
-  if (!state.transactions.length) {
+  if (!view.transactions.length) {
     return h("p", { className: "al-note", "data-react-admin-wallet-recent": "empty", role: "status" }, "No wallet activity yet.");
   }
 
-  return h("div", { className: "wallet-ledger", "data-react-admin-wallet-recent": "ready" }, state.transactions.map((transaction, index) => (
+  return h("div", { className: "wallet-ledger", "data-react-admin-wallet-recent": "ready" }, view.transactions.map((transaction, index) => (
     h(WalletTransactionRow, {
       index,
       key: `${transaction.memberId || transaction.memberName || "member"}-${transaction.createdAt || index}-${transaction.amountCents}`,

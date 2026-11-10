@@ -9,6 +9,7 @@ import {
   normalizeAdminEvent,
 } from "./admin-events-model.js";
 import { clubToday, statusLabel, typeLabel } from "../shared/events-model.js";
+import { useSettledWhileLoading } from "../shared/settled-state.js";
 
 const h = React.createElement;
 
@@ -176,7 +177,9 @@ export function AdminEventsList() {
     };
   }, []);
 
-  if (state.status === "loading") {
+  const view = useSettledWhileLoading(state);
+
+  if (view.status === "loading") {
     return h("p", {
       className: "dash-note",
       "data-react-admin-events-list": "loading",
@@ -184,7 +187,7 @@ export function AdminEventsList() {
     }, "Loading…");
   }
 
-  if (!state.events.length && !fundraisers.length && !meetings.length) {
+  if (!view.events.length && !fundraisers.length && !meetings.length) {
     return h("div", { "data-react-admin-events-list": "empty" }, [
       h("p", { className: "dash-note", key: "empty", role: "status" }, "No events yet — create or import one."),
       h("button", {
@@ -199,7 +202,7 @@ export function AdminEventsList() {
     ]);
   }
 
-  const buckets = bucketAdminEvents(calendarEntries(state.events, { fundraisers, meetings }, clubToday()));
+  const buckets = bucketAdminEvents(calendarEntries(view.events, { fundraisers, meetings }, clubToday()));
   const timed = filter === "live"
     ? buckets.live
     : filter === "past"

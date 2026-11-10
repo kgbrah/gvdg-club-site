@@ -169,13 +169,22 @@ export async function handleClubRegistration(
   if (seg[2] === "register" && method === "POST") {
     const status = await db.getEventStatus(env.DB, eid);
     if (status !== "scheduled" && status !== "live") return json({ error: "registration_closed" }, 403, origin);
-    const cfg = (await db.getEventConfig(env.DB, eid)) as { registration_open?: number; divisions?: string } | null;
+    const cfg = (await db.getEventConfig(env.DB, eid)) as { registration_open?: number; divisions?: string; teams?: string | null; play_format?: string | null } | null;
     if (!cfg || cfg.registration_open !== 1) return json({ error: "registration_closed" }, 403, origin);
     const b = (await readJson(request)) ?? {};
     const division = asStr(b.division, 60);
     let divs: string[] = [];
     try { divs = JSON.parse(cfg.divisions || "[]"); } catch { divs = []; }
+    if (!Array.isArray(divs)) divs = [];
     if (division && divs.length && !divs.includes(division)) return json({ error: "invalid_division" }, 400, origin);
+    let teamNames: string[] = [];
+    try { teamNames = JSON.parse(cfg.teams || "[]"); } catch { teamNames = []; }
+    if (!Array.isArray(teamNames)) teamNames = [];
+    teamNames = teamNames.filter((item) => typeof item === "string");
+    const team = asStr(b.team, 40);
+    if (cfg.play_format === "teams" && teamNames.length && (!team || !teamNames.includes(team))) {
+      return json({ error: "invalid_team" }, 400, origin);
+    }
 
     // Resolve who is registering: a signed-in member, or a guest (name required; gets a token to manage it).
     let memberId: string, name: string, email: string | null = null, guestToken: string | null = null;
@@ -205,7 +214,7 @@ export async function handleClubRegistration(
       const sched = (await db.getEventSchedule(env.DB, eid)) as { registration_deadline?: string | null } | null;
       if (deadlinePassed(sched?.registration_deadline)) return json({ error: "registration_closed" }, 403, origin);
     }
-    const row = await db.registerForEvent(env.DB, { event_id: eid, member_id: memberId, name, division, team: asStr(b.team, 40), addons, email });
+    const row = await db.registerForEvent(env.DB, { event_id: eid, member_id: memberId, name, division, team, addons, email });
     // Email a guest (who gave an address) a confirmation + manage/cancel link so they can withdraw from
     // any device. Members manage via their account; this is a no-op unless RESEND_API_KEY is configured.
     if (guestToken && email) {

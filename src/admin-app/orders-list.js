@@ -1,6 +1,7 @@
 import React from "react";
 
 import { adminConfirm } from "./admin-dialogs.js";
+import { useSettledWhileLoading } from "../shared/settled-state.js";
 
 const h = React.createElement;
 
@@ -228,19 +229,21 @@ export function AdminOrdersList() {
     return () => window.removeEventListener("gvdg:admin-orders-list", update);
   }, []);
 
-  if (state.status === "loading") {
+  const view = useSettledWhileLoading(state, state.filterStatus);
+
+  if (view.status === "loading") {
     return h("p", { className: "al-note", "data-react-admin-orders-list": "loading", role: "status" }, "Loading...");
   }
 
-  if (state.status === "error") {
+  if (view.status === "error") {
     return h("p", { className: "al-note err", "data-react-admin-orders-list": "error", role: "alert" }, "Unable to load orders.");
   }
 
-  if (!state.orders.length) {
-    return h("p", { className: "al-note", "data-react-admin-orders-list": "empty", role: "status" }, state.filterStatus ? "No orders with that status." : "No orders yet.");
+  if (!view.orders.length) {
+    return h("p", { className: "al-note", "data-react-admin-orders-list": "empty", role: "status" }, view.filterStatus ? "No orders with that status." : "No orders yet.");
   }
 
-  return h("div", { className: "orders-list", "data-react-admin-orders-list": "ready" }, state.orders.map((order, index) => (
+  return h("div", { className: "orders-list", "data-react-admin-orders-list": "ready" }, view.orders.map((order, index) => (
     h(OrderCard, { key: order.id || `${order.memberName}-${index}`, order })
   )));
 }

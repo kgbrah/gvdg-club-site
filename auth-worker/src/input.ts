@@ -92,6 +92,24 @@ export const isUniqueViolation = (e: unknown): boolean => /UNIQUE constraint fai
 export const jsonStringArray = (v: unknown, max: number): string | null =>
   Array.isArray(v) ? JSON.stringify(v.filter((x) => typeof x === "string").slice(0, max)) : null;
 
+// Trimmed, de-duplicated names for division and team menus. null when the
+// client did not send an array, so callers can leave the stored list alone.
+export function namedStringArray(v: unknown, maxItems = 40, maxLen = 40): string | null {
+  if (!Array.isArray(v)) return null;
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const item of v) {
+    const name = asStr(item, maxLen);
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    names.push(name);
+    if (names.length >= maxItems) break;
+  }
+  return JSON.stringify(names);
+}
+
 const validLat = (n: number | null): number | null => (n != null && n >= -90 && n <= 90 ? n : null);
 const validLng = (n: number | null): number | null => (n != null && n >= -180 && n <= 180 ? n : null);
 const hasField = (body: Record<string, unknown>, field: string): boolean => Object.prototype.hasOwnProperty.call(body, field);

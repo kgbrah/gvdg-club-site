@@ -1,6 +1,7 @@
 import React from "react";
 
 import { adminConfirm } from "./admin-dialogs.js";
+import { useSettledWhileLoading } from "../shared/settled-state.js";
 
 const h = React.createElement;
 
@@ -210,13 +211,15 @@ export function AdminMembershipApplications() {
     return () => window.removeEventListener("gvdg:admin-membership-applications", update);
   }, []);
 
-  if (state.status === "loading") {
+  const view = useSettledWhileLoading(state);
+
+  if (view.status === "loading") {
     return h("p", { className: "al-note", "data-react-admin-membership-applications": "loading", role: "status" }, "Loading...");
   }
-  if (!state.applications.length) {
+  if (!view.applications.length) {
     return h("p", { className: "al-note", "data-react-admin-membership-applications": "empty", role: "status" }, "No pending applications.");
   }
-  return h("div", { "data-react-admin-membership-applications": "ready" }, state.applications.map((row) =>
+  return h("div", { "data-react-admin-membership-applications": "ready" }, view.applications.map((row) =>
     h("div", { className: "admin-evrow", "data-admin-application-id": row.id, key: row.id }, [
       h("span", { className: "ev-name", key: "name" }, `${row.name} - ${[row.pdgaNo && `PDGA# ${row.pdgaNo}`, row.udisc].filter(Boolean).join(" - ") || row.id}`),
       h("button", {
@@ -246,19 +249,21 @@ export function AdminMembersList() {
     return () => window.removeEventListener("gvdg:admin-members-list", update);
   }, []);
 
-  if (state.status === "loading") {
+  const view = useSettledWhileLoading(state);
+
+  if (view.status === "loading") {
     return h("p", { className: "al-note", "data-react-admin-members-list": "loading", role: "status" }, "Loading...");
   }
 
-  if (!state.members.length) {
+  if (!view.members.length) {
     return h("p", { className: "al-note", "data-react-admin-members-list": "empty", role: "status" }, "No members yet.");
   }
 
-  const adminCount = state.members.filter((member) => member.isAdmin).length;
-  return h("div", { "data-react-admin-members-list": "ready" }, state.members.map((member, index) => (
+  const adminCount = view.members.filter((member) => member.isAdmin).length;
+  return h("div", { "data-react-admin-members-list": "ready" }, view.members.map((member, index) => (
     h(AdminMemberRow, {
       adminCount,
-      currentMemberId: state.currentMemberId,
+      currentMemberId: view.currentMemberId,
       key: member.memberId || member.identifier || `${member.name}-${index}`,
       member,
     })

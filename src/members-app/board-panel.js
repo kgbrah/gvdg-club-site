@@ -148,8 +148,8 @@ export function MemberBoardPanel() {
       }),
       h("button", { type: "submit", className: "passkey-btn", key: "button" }, "Post"),
     ]),
-    h("div", { className: `board-status${status.tone ? ` ${status.tone}` : ""}`, role: "status", "aria-live": "polite", key: "status" }, status.message || (state.status === "loading" ? "Loading board..." : "")),
-    h("div", { className: "board-feed", key: "feed" }, state.status === "loading"
+    h("div", { className: `board-status${status.tone ? ` ${status.tone}` : ""}`, role: "status", "aria-live": "polite", key: "status" }, status.message || (state.status === "loading" && !state.posts.length ? "Loading board..." : "")),
+    h("div", { className: "board-feed", key: "feed" }, state.status === "loading" && !state.posts.length
       ? h("p", { className: "dash-note" }, "Loading board...")
       : state.status === "error"
         ? h("p", { className: "dash-note" }, "Board posts are temporarily unavailable.")

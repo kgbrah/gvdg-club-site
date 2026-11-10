@@ -71,15 +71,34 @@ function normalizeControlsState(state) {
   };
 }
 
-function divisionsText(value) {
-  if (Array.isArray(value)) return value.map(String).join(", ");
-  if (typeof value !== "string") return "";
+export function configuredNames(value) {
+  if (Array.isArray(value)) return cleanNames(value);
+  if (typeof value !== "string" || !value.trim()) return [];
   try {
     const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.map(String).join(", ") : value;
+    if (Array.isArray(parsed)) return cleanNames(parsed);
   } catch (error) {
-    return value;
+    // A legacy comma list is still a valid division field.
   }
+  return cleanNames(value.split(","));
+}
+
+function cleanNames(values) {
+  const names = [];
+  const seen = new Set();
+  for (const item of values) {
+    const name = String(item || "").trim().slice(0, 40);
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    names.push(name);
+  }
+  return names;
+}
+
+function addName(list, raw) {
+  return cleanNames([...(Array.isArray(list) ? list : []), raw]);
 }
 
 function dollarsFromCents(value) {
@@ -98,10 +117,11 @@ function formFromConfig(config) {
   return {
     aceFee: dollarsFromCents(cfg.ace_fee_cents),
     ctpFee: dollarsFromCents(cfg.ctp_fee_cents),
-    divisions: divisionsText(cfg.divisions),
+    divisions: configuredNames(cfg.divisions),
     entryFee: dollarsFromCents(cfg.entry_fee_cents),
     playFormat: normalizeText(cfg.play_format),
     registrationOpen: Boolean(cfg.registration_open),
+    teams: configuredNames(cfg.teams),
   };
 }
 
@@ -134,7 +154,7 @@ function EventSelector({ state }) {
   return h("div", { "data-react-admin-registration-controls": state.status }, [
     h("label", { htmlFor: "rgEvent", key: "label" }, "Event"),
     h("select", {
-      disabled: state.status === "loading",
+      disabled: state.status === "loading" && !state.events.length,
       id: "rgEvent",
       key: "select",
       onChange: (event) => dispatchRequest("gvdg:admin-registration-event-select-request", { eventId: event.target.value || null }),
@@ -143,9 +163,49 @@ function EventSelector({ state }) {
       h("option", { key: "empty", value: "" }, "- select an event -"),
       ...state.events.map((event) => h("option", { key: event.id, value: event.id }, event.label)),
     ]),
-    state.status === "loading" ? h("p", { className: "al-note", key: "loading", role: "status" }, "Loading registration events...") : null,
+    state.status === "loading" && !state.events.length ? h("p", { className: "al-note", key: "loading", role: "status" }, "Loading registration events...") : null,
     state.status === "error" ? h("p", { className: "al-note err", key: "error", role: "alert" }, "Unable to load registration events.") : null,
     state.notice ? h("p", { className: "al-note", key: "notice", role: "status" }, state.notice) : null,
+  ]);
+}
+
+function NameListEditor({ addId, disabled, hint, label, names, onChange, placeholder }) {
+  const [draft, setDraft] = React.useState("");
+
+  function add(event) {
+    event.preventDefault();
+    const next = addName(names, draft);
+    if (next.length !== names.length) onChange(next);
+    setDraft("");
+  }
+
+  return h("div", { className: "al-name-list", key: addId }, [
+    h("span", { className: "al-name-label", key: "label" }, label),
+    hint ? h("span", { className: "al-note", key: "hint" }, hint) : null,
+    names.length ? h("div", { className: "al-name-chips", key: "chips" }, names.map((name) => h("button", {
+      "aria-label": `Remove ${name}`,
+      className: "al-name-chip",
+      disabled,
+      key: name,
+      onClick: () => onChange(names.filter((item) => item !== name)),
+      type: "button",
+    }, name))) : null,
+    h("div", { className: "al-row", key: "add" }, [
+      h("input", {
+        disabled,
+        id: addId,
+        maxLength: 40,
+        onChange: (event) => setDraft(event.target.value),
+        onKeyDown: (event) => {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          add(event);
+        },
+        placeholder,
+        value: draft,
+      }),
+      h("button", { className: "admin-btn secondary", disabled: disabled || !draft.trim(), onClick: add, type: "button" }, "Add"),
+    ]),
   ]);
 }
 
@@ -154,6 +214,9 @@ function SettingsForm({ state }) {
   const [pendingRequest, setPendingRequest] = React.useState("");
 
   React.useEffect(() => {
+    const active = typeof document !== "undefined" ? document.activeElement : null;
+    const editing = active && active.closest && active.closest("[data-react-admin-registration-settings]") && active.matches("input, textarea, select");
+    if (editing) return;
     setForm(formFromConfig(state.config));
     setPendingRequest("");
   }, [state.selectedEventId, state.config]);
@@ -182,7 +245,8 @@ function SettingsForm({ state }) {
       body: {
         ace_fee_cents: dollarsToCents(form.aceFee),
         ctp_fee_cents: dollarsToCents(form.ctpFee),
-        divisions: form.divisions.split(",").map((item) => item.trim()).filter(Boolean),
+        divisions: form.divisions,
+        teams: form.teams,
         entry_fee_cents: dollarsToCents(form.entryFee),
         liveScoringConfig: {
           groupFormat: form.playFormat === "doubles" ? "doubles" : "singles",
@@ -221,10 +285,28 @@ function SettingsForm({ state }) {
         h("label", { key: "ace" }, ["Ace $", h("input", { disabled, id: "rgAce", min: "0", onChange: (event) => setField("aceFee", event.target.value), size: 5, step: "1", type: "number", value: form.aceFee })]),
         h("select", { disabled, id: "rgFormat", key: "format", onChange: (event) => setField("playFormat", event.target.value), value: form.playFormat }, FORMATS.map(([value, label]) => h("option", { key: value || "empty", value }, label))),
       ]),
-      h("div", { className: "al-row", key: "divisions", style: { marginTop: "0.5rem" } }, h("label", null, [
-        "Divisions (comma-separated)",
-        h("input", { disabled, id: "rgDivisions", maxLength: 400, onChange: (event) => setField("divisions", event.target.value), placeholder: "MA1, MA40, FA1, Rec", size: 40, value: form.divisions }),
-      ])),
+      h("div", { key: "menus" }, [
+        h(NameListEditor, {
+          addId: "rgDivisions",
+          disabled,
+          hint: "Players and the roster pick from this menu.",
+          key: "divisions",
+          label: "Divisions",
+          names: form.divisions,
+          onChange: (names) => setField("divisions", names),
+          placeholder: "Add a division",
+        }),
+        form.playFormat === "teams" ? h(NameListEditor, {
+          addId: "rgTeams",
+          disabled,
+          hint: "Add every team, save, then assign players on the roster.",
+          key: "teams",
+          label: "Teams",
+          names: form.teams,
+          onChange: (names) => setField("teams", names),
+          placeholder: "Add a team",
+        }) : null,
+      ]),
       h("button", { className: "admin-btn", disabled: busy, key: "submit", style: { marginTop: "0.5rem" }, type: "submit" }, busy ? "Saving..." : "Save settings"),
     ]),
   ]);

@@ -1,5 +1,7 @@
 import React from "react";
 
+import { useSettledWhileLoading } from "../shared/settled-state.js";
+
 import { adminConfirm } from "./admin-dialogs.js";
 import { readMemberToken } from "../shared/member-session.js";
 
@@ -299,8 +301,10 @@ export function AdminTeeSignReviewList() {
     return () => window.removeEventListener("gvdg:admin-tee-sign-review", update);
   }, []);
 
-  if (state.status === "loading") return h("div", { className: "ts-review-list", "data-react-admin-tee-sign-review": "loading", role: "status" }, "Loading...");
-  if (state.status === "error") return h("div", { className: "ts-review-empty", "data-react-admin-tee-sign-review": "error", role: "alert" }, "Could not load tee signs.");
-  if (!state.signs.length) return h("div", { className: "ts-review-empty", "data-react-admin-tee-sign-review": "empty", role: "status" }, "No tee signs in this queue.");
-  return h("div", { className: "ts-review-list", "data-react-admin-tee-sign-review": "ready" }, state.signs.map((sign) => h(TeeSignReviewCard, { key: sign.key, sign, state })));
+  const view = useSettledWhileLoading(state, state.queueStatus);
+
+  if (view.status === "loading") return h("div", { className: "ts-review-list", "data-react-admin-tee-sign-review": "loading", role: "status" }, "Loading...");
+  if (view.status === "error") return h("div", { className: "ts-review-empty", "data-react-admin-tee-sign-review": "error", role: "alert" }, "Could not load tee signs.");
+  if (!view.signs.length) return h("div", { className: "ts-review-empty", "data-react-admin-tee-sign-review": "empty", role: "status" }, "No tee signs in this queue.");
+  return h("div", { className: "ts-review-list", "data-react-admin-tee-sign-review": "ready" }, view.signs.map((sign) => h(TeeSignReviewCard, { key: sign.key, sign, state: view })));
 }

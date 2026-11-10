@@ -1,6 +1,6 @@
 import React from "react";
 
-import { useAdminRegistrationControlsState } from "./registration-controls.js";
+import { configuredNames, useAdminRegistrationControlsState } from "./registration-controls.js";
 
 const h = React.createElement;
 
@@ -20,12 +20,41 @@ function dispatchRequest(detail) {
   window.dispatchEvent(new CustomEvent("gvdg:admin-registration-manual-player-add-request", { detail }));
 }
 
+function nameControl({ disabled, id, names, onChange, placeholder, value }) {
+  if (names.length) {
+    const options = value && !names.includes(value) ? [value, ...names] : names;
+    return h("select", {
+      disabled,
+      id,
+      key: id,
+      onChange: (event) => onChange(event.target.value),
+      value,
+    }, [
+      h("option", { key: "empty", value: "" }, placeholder),
+      ...options.map((name) => h("option", { key: name, value: name }, name)),
+    ]);
+  }
+  return h("input", {
+    disabled,
+    id,
+    key: id,
+    maxLength: 40,
+    onChange: (event) => onChange(event.target.value),
+    placeholder,
+    value,
+  });
+}
+
 export function AdminRegistrationManualPlayerForm() {
   const [form, setForm] = React.useState(EMPTY_FORM);
   const [pendingRequest, setPendingRequest] = React.useState("");
   const [error, setError] = React.useState("");
   const controls = useAdminRegistrationControlsState();
-  const doubles = String(controls.config && controls.config.play_format || "").toLowerCase() === "doubles";
+  const playFormat = String(controls.config && controls.config.play_format || "").toLowerCase();
+  const doubles = playFormat === "doubles";
+  const teamEvent = playFormat === "teams";
+  const divisions = configuredNames(controls.config && controls.config.divisions);
+  const teams = configuredNames(controls.config && controls.config.teams);
 
   React.useEffect(() => {
     function update(event) {
@@ -54,6 +83,10 @@ export function AdminRegistrationManualPlayerForm() {
       setError("Doubles needs a pair label (same label on both teammates).");
       return;
     }
+    if (teamEvent && teams.length && !form.team.trim()) {
+      setError("Pick a team for this player.");
+      return;
+    }
     const id = requestId();
     setPendingRequest(id);
     setError("");
@@ -66,7 +99,7 @@ export function AdminRegistrationManualPlayerForm() {
         team: form.team.trim() || null,
       },
       requestId: id,
-      valid: Boolean(form.name.trim()) && (!doubles || Boolean(form.team.trim())),
+      valid: Boolean(form.name.trim()) && (!doubles || Boolean(form.team.trim())) && (!(teamEvent && teams.length) || Boolean(form.team.trim())),
     });
   }
 
@@ -103,26 +136,28 @@ export function AdminRegistrationManualPlayerForm() {
         placeholder: "PDGA #",
         value: form.pdgaNo,
       }),
-      h("input", {
+      nameControl({
+        disabled: busy,
         id: "rgPlayerDivision",
-        key: "division",
-        maxLength: 40,
-        onChange: (event) => setField("division", event.target.value),
+        names: divisions,
+        onChange: (value) => setField("division", value),
         placeholder: "division",
         value: form.division,
       }),
-      h("input", {
+      nameControl({
+        disabled: busy,
         id: "rgPlayerTeam",
-        key: "team",
-        maxLength: 40,
-        onChange: (event) => setField("team", event.target.value),
-        placeholder: doubles ? "pair label (e.g. KG/TJ)" : "team",
+        names: teamEvent ? teams : [],
+        onChange: (value) => setField("team", value),
+        placeholder: doubles ? "pair label (e.g. KG/TJ)" : (teamEvent && !teams.length ? "Add teams in settings" : "team"),
         value: form.team,
       }),
       h("button", { className: "admin-btn secondary", disabled: busy, key: "submit", type: "submit" }, busy ? "Adding..." : "Add player"),
     ]),
     h("p", { className: "al-note", key: "note", style: { marginTop: "0.4rem" }, role: error ? "alert" : undefined }, error || (doubles
       ? "For doubles, use the same pair label on both teammates before starting live scoring."
-      : "Added players appear under Registered players above and play alongside registrants.")),
+      : teamEvent
+        ? "Add the teams in registration settings, then pick one here. Each player still keeps their own score."
+        : "Added players appear under Registered players above and play alongside registrants.")),
   ]);
 }

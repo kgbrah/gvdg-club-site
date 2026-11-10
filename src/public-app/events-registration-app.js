@@ -4,7 +4,7 @@ import { CalendarDays, CheckCircle2 } from "lucide-react";
 import { formatLabel, isPastClubCalendarEvent, normalizeEvent } from "../shared/events-model.js";
 import { EventScheduleFacts } from "../shared/event-schedule.js";
 import { EventFieldRoster } from "../shared/event-field-roster.js";
-import { clientOwed, isDoublesRegistration, parseArray, parseObject } from "../members-app/registration-utils.js";
+import { clientOwed, isDoublesRegistration, isTeamRegistration, parseArray, parseObject } from "../members-app/registration-utils.js";
 import { publicApiBase } from "./public-api.js";
 import { clearMemberSession, readMemberToken } from "../shared/member-session.js";
 
@@ -93,6 +93,7 @@ function registrationError(response, error) {
   if (error.error === "registration_closed") return "Registration is closed for this event.";
   if (error.error === "rate_limited") return "Too many sign-ups from your network. Please try again in a minute.";
   if (error.error === "invalid_division") return "Please pick a valid division.";
+  if (error.error === "invalid_team") return "Please pick a team.";
   return "Registration could not be completed.";
 }
 
@@ -172,6 +173,7 @@ function RegisteredCardActions({ api, event, guestReg, myReg, onRefresh, token }
 
 function RegisterForm({ api, event, onRefresh, onSessionExpired, token }) {
   const divisions = React.useMemo(() => parseArray(event.divisions), [event.divisions]);
+  const teams = React.useMemo(() => parseArray(event.teams), [event.teams]);
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [division, setDivision] = React.useState(() => divisions[0] || "");
@@ -182,10 +184,12 @@ function RegisterForm({ api, event, onRefresh, onSessionExpired, token }) {
   const [error, setError] = React.useState("");
   const nameRef = React.useRef(null);
   const doubles = isDoublesRegistration(event);
+  const teamEvent = isTeamRegistration(event);
 
   React.useEffect(() => {
     setDivision(divisions[0] || "");
-  }, [divisions]);
+    setTeam("");
+  }, [event.id]);
 
   async function submit() {
     const body = {
@@ -195,7 +199,12 @@ function RegisterForm({ api, event, onRefresh, onSessionExpired, token }) {
         ace: Boolean(ace && event.ace_fee_cents),
       },
     };
+    if (teamEvent && teams.length && !team) {
+      setError("Please pick a team.");
+      return;
+    }
     if (doubles) body.team = team.trim();
+    else if (teamEvent && teams.length) body.team = team;
     if (!token) {
       const trimmedName = name.trim();
       if (!trimmedName) {
@@ -262,11 +271,22 @@ function RegisterForm({ api, event, onRefresh, onSessionExpired, token }) {
       value: email,
     }) : null,
     divisions.length ? h("select", {
+      "aria-label": "Division",
       className: "reg-input",
       key: "division",
       onChange: (event) => setDivision(event.target.value),
       value: division,
     }, divisions.map((item) => h("option", { key: item, value: item }, item))) : null,
+    teamEvent && teams.length ? h("select", {
+      "aria-label": "Team",
+      className: "reg-input",
+      key: "team-menu",
+      onChange: (event) => setTeam(event.target.value),
+      value: team,
+    }, [
+      h("option", { key: "empty", value: "" }, "Select team"),
+      ...teams.map((item) => h("option", { key: item, value: item }, item)),
+    ]) : null,
     doubles ? h("input", {
       className: "reg-input",
       "data-register-pair": "team",
