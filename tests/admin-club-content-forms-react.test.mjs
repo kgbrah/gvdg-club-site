@@ -59,6 +59,7 @@ test('admin club content add forms are rendered by React from request events', (
   assert.match(forms, /gvdg:admin-meeting-create-result/);
   assert.match(forms, /Singles stroke play/);
   assert.match(forms, /Doubles stroke play/);
+  assert.match(forms, /Putting league/);
   assert.match(forms, /Handicap enabled/);
   assert.match(forms, /\$\{format\}-handicap/);
   assert.match(forms, /id: "adminLeagueForm"/);

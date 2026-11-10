@@ -35,8 +35,14 @@ function normalizeLeague(league) {
   };
 }
 
+function leagueFormatLabel(format) {
+  if (format === "putting") return "Putting league";
+  return format;
+}
+
 function leagueText(league) {
-  return `${league.name}${league.season ? ` · ${league.season}` : ""}${league.format ? ` · ${league.format}` : ""}`;
+  const format = leagueFormatLabel(league.format);
+  return `${league.name}${league.season ? ` · ${league.season}` : ""}${format ? ` · ${format}` : ""}`;
 }
 
 function normalizeFundraiser(fundraiser) {

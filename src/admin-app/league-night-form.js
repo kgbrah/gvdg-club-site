@@ -62,6 +62,7 @@ function formField({ children, id, label }) {
 
 function splitNightFormat(value) {
   const text = String(value || "");
+  if (text === "putting" || text.endsWith("-putting")) return { group: "singles", scoring: "putting" };
   return {
     group: text.startsWith("doubles") ? "doubles" : "singles",
     scoring: text.endsWith("stroke") ? "stroke" : "matchplay",
@@ -71,6 +72,7 @@ function splitNightFormat(value) {
 function nightFormatFromLeague(format) {
   const text = String(format || "").toLowerCase();
   if (!text) return null;
+  if (text.includes("putt")) return { format: "putting", handicap: false };
   const doubles = text.includes("double");
   const stroke = text.includes("stroke");
   const match = text.includes("match");
@@ -147,7 +149,7 @@ export function AdminLeagueNightForm() {
           next.handicap = applied.handicap;
         }
       }
-      if (field === "format" && String(value).endsWith("matchplay")) next.handicap = false;
+      if (field === "format" && !String(value).endsWith("stroke")) next.handicap = false;
       return next;
     });
   }
@@ -159,6 +161,8 @@ export function AdminLeagueNightForm() {
     setBusy(true);
     setResult(null);
     const night = splitNightFormat(form.format);
+    const putting = night.scoring === "putting";
+    const needsLayout = form.start && !putting;
     dispatchRequest("gvdg:admin-league-night-request", {
       requestId,
       body: {
@@ -167,15 +171,15 @@ export function AdminLeagueNightForm() {
         format: night.group,
         scoringStyle: night.scoring,
         handicap: night.scoring === "stroke" && form.handicap === true,
-        course_id: form.courseId ? Number(form.courseId) : null,
-        layout_id: form.layoutId ? Number(form.layoutId) : null,
+        course_id: putting || !form.courseId ? null : Number(form.courseId),
+        layout_id: putting || !form.layoutId ? null : Number(form.layoutId),
         start: form.start,
         matchesText: form.matchesText,
       },
       leagueId: form.leagueId,
-      valid: Boolean(form.leagueId && form.weekLabel.trim() && form.matchesText.trim() && (!form.start || form.layoutId)),
+      valid: Boolean(form.leagueId && form.weekLabel.trim() && form.matchesText.trim() && (!needsLayout || form.layoutId)),
     });
-    if (!form.leagueId || !form.weekLabel.trim() || !form.matchesText.trim() || (form.start && !form.layoutId)) setBusy(false);
+    if (!form.leagueId || !form.weekLabel.trim() || !form.matchesText.trim() || (needsLayout && !form.layoutId)) setBusy(false);
   }
 
   const night = splitNightFormat(form.format);
@@ -191,7 +195,9 @@ export function AdminLeagueNightForm() {
     onSubmit: submit,
   }, [
     h("h3", { className: "roster-title", key: "title" }, "Start a league night"),
-    h("p", { className: "al-note", key: "note" }, "Build the night's matches, start live cards, and finished results roll into standings. One Red vs Blue line per match."),
+    h("p", { className: "al-note", key: "note" }, night.scoring === "putting"
+      ? "Putting league night. No course. One player vs player line per card. Most makes wins."
+      : "Build the night's matches, start live cards, and finished results roll into standings. One Red vs Blue line per match."),
     formField({
       id: "lnLeague",
       label: "League",
@@ -218,6 +224,7 @@ export function AdminLeagueNightForm() {
         h("option", { key: "doubles-stroke", value: "doubles-stroke" }, "Doubles stroke play"),
         h("option", { key: "singles-matchplay", value: "singles-matchplay" }, "Singles matchplay"),
         h("option", { key: "doubles-matchplay", value: "doubles-matchplay" }, "Doubles matchplay"),
+        h("option", { key: "putting", value: "putting" }, "Putting league"),
       ]),
     }),
     h("label", { key: "handicap", style: { display: "flex", gap: "0.5rem", alignItems: "center" } }, [
@@ -248,7 +255,7 @@ export function AdminLeagueNightForm() {
     }),
     formField({
       id: "lnMatches",
-      label: stroke ? "Cards (one Red vs Blue line each)" : "Matches (one Red vs Blue line each)",
+      label: night.scoring === "putting" ? "Cards (one player vs player line each)" : stroke ? "Cards (one Red vs Blue line each)" : "Matches (one Red vs Blue line each)",
       children: h("textarea", { id: "lnMatches", key: "input", onChange: (event) => updateField("matchesText", event.target.value), placeholder, required: true, rows: 8, value: form.matchesText }),
     }),
     h("label", { key: "start", style: { display: "flex", gap: "0.5rem", alignItems: "center" } }, [

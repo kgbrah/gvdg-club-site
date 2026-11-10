@@ -158,6 +158,7 @@ export function AdminLeagueForm() {
         h("option", { key: "doubles-stroke", value: "doubles-stroke" }, "Doubles stroke play"),
         h("option", { key: "singles-matchplay", value: "singles-matchplay" }, "Singles matchplay"),
         h("option", { key: "doubles-matchplay", value: "doubles-matchplay" }, "Doubles matchplay"),
+        h("option", { key: "putting", value: "putting" }, "Putting league"),
       ]),
     }),
     h("label", { key: "handicap", style: { display: "flex", gap: "0.5rem", alignItems: "center" } }, [

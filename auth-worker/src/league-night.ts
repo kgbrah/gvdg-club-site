@@ -1,6 +1,7 @@
 import type { Env } from "./env.js";
 import * as db from "./db.js";
 import { startLiveEvent } from "./club-live-routes.js";
+import { DEFAULT_PUTTING_STATIONS } from "./live-format.js";
 import { json, readJson } from "./http.js";
 import { asInt, asStr } from "./input.js";
 
@@ -18,7 +19,7 @@ export type LeagueNightPlan = {
   readonly weekLabel: string;
   readonly date: string | null;
   readonly format: "singles" | "doubles";
-  readonly scoringStyle: "stroke" | "matchplay";
+  readonly scoringStyle: "stroke" | "matchplay" | "putting";
   readonly handicap: boolean;
   readonly courseId: number | null;
   readonly layoutId: number | null;
@@ -69,15 +70,17 @@ export function parseMatchLine(line: string, num: number, format: "singles" | "d
 export function parseLeagueNightPlan(body: Record<string, unknown>): LeagueNightPlan | LeagueNightPlanError {
   const weekLabel = asStr(body.weekLabel, 40) ?? asStr(body.week_label, 40);
   if (!weekLabel) return { error: "invalid_night", message: "Week label is required (for example Week 7)." };
-  const format = body.format === "doubles" ? "doubles" : body.format === "singles" ? "singles" : null;
+  const scoringStyle = nightScoringStyle(body);
+  const format = scoringStyle === "putting"
+    ? "singles"
+    : body.format === "doubles" ? "doubles" : body.format === "singles" ? "singles" : null;
   if (!format) return { error: "invalid_night", message: "Format must be singles or doubles." };
-  const scoringStyle = body.scoringStyle === "stroke" || body.scoring_style === "stroke" ? "stroke" : "matchplay";
   const handicap = scoringStyle === "stroke" && (body.handicap === true || body.handicap === "true" || body.handicap === 1);
   const date = asStr(body.date, 40);
-  const courseId = body.course_id == null || body.course_id === "" ? null : asInt(body.course_id);
-  const layoutId = body.layout_id == null || body.layout_id === "" ? null : asInt(body.layout_id);
+  const courseId = scoringStyle === "putting" || body.course_id == null || body.course_id === "" ? null : asInt(body.course_id);
+  const layoutId = scoringStyle === "putting" || body.layout_id == null || body.layout_id === "" ? null : asInt(body.layout_id);
   const start = body.start === true;
-  if (start && layoutId == null) return { error: "invalid_night", message: "Pick a layout before starting live cards." };
+  if (start && scoringStyle !== "putting" && layoutId == null) return { error: "invalid_night", message: "Pick a layout before starting live cards." };
   let matches: LeagueNightMatch[];
   if (Array.isArray(body.matches)) {
     const parsed = parseMatchObjects(body.matches, format);
@@ -108,13 +111,15 @@ export async function handleAdminLeagueNight(
   const body = (await readJson(request)) ?? {};
   const plan = parseLeagueNightPlan(body);
   if ("error" in plan) return json(plan, 400, origin);
-  if (plan.start && plan.layoutId != null) {
+  if (plan.start && plan.scoringStyle !== "putting" && plan.layoutId != null) {
     const holes = await db.getLayoutHoles(env.DB, plan.layoutId);
     if (!holes.length) return json({ error: "no_layout_holes", message: "That layout has no holes/pars yet." }, 400, origin);
   }
 
   const leagueName = String((league as { name?: unknown }).name || "League");
-  const live = { groupFormat: plan.format, scoringStyle: plan.scoringStyle, handicap: plan.handicap };
+  const live = plan.scoringStyle === "putting"
+    ? { groupFormat: "singles" as const, scoringStyle: "putting" as const, handicap: false, putting: { stations: [...DEFAULT_PUTTING_STATIONS] } }
+    : { groupFormat: plan.format, scoringStyle: plan.scoringStyle, handicap: plan.handicap };
   const liveConfig = JSON.stringify(live);
   const created: Array<Record<string, unknown>> = [];
 
@@ -166,6 +171,12 @@ export async function handleAdminLeagueNight(
   }
 
   return json({ night: { weekLabel: plan.weekLabel, format: plan.format, scoringStyle: plan.scoringStyle, handicap: plan.handicap, date: plan.date, events: created } }, 201, origin);
+}
+
+function nightScoringStyle(body: Record<string, unknown>): "stroke" | "matchplay" | "putting" {
+  const raw = body.scoringStyle ?? body.scoring_style;
+  if (raw === "stroke" || raw === "matchplay" || raw === "putting") return raw;
+  return "matchplay";
 }
 
 function parseMatchObjects(raw: unknown[], format: "singles" | "doubles"): LeagueNightMatch[] | LeagueNightPlanError {

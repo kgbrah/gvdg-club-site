@@ -59,4 +59,24 @@ describe("parseLeagueNightPlan", () => {
     if ("error" in plan) throw new Error("expected a plan");
     expect(matchEventName("Ryder Cup", plan, plan.matches[0]!)).toBe("Ryder Cup Week 7 #1 - Jackie vs Jesus");
   });
+
+  it("starts a putting night without a course layout", () => {
+    const plan = parseLeagueNightPlan({
+      weekLabel: "Week 1",
+      format: "doubles",
+      scoringStyle: "putting",
+      start: true,
+      layout_id: 13,
+      matchesText: "Jackie vs Jesus",
+    });
+    expect(plan).toMatchObject({
+      weekLabel: "Week 1",
+      format: "singles",
+      scoringStyle: "putting",
+      handicap: false,
+      courseId: null,
+      layoutId: null,
+      start: true,
+    });
+  });
 });
