@@ -55,8 +55,8 @@ test('admin start defaults preserve saved and legacy format fields separately', 
   assert.doesNotMatch(source, /function scNormalizeConfig\(raw, fallbackPlayFormat, fallbackEventFormat\)/);
   assert.match(source, /normalizeScoringConfig\(config \|\| null, null, null\)/);
   assert.match(source, /normalizeScoringConfig\(event && \(event\.liveScoringConfig \|\| event\.live_scoring_config \|\| event\.live_scoring_config_json \|\| null\), event && event\.play_format, event && event\.format\)/);
-  assert.match(model, /groupFormat: fallbackPlayFormat === "doubles" \? "doubles" : "singles"/);
-  assert.match(model, /scoringStyle: fallbackEventFormat === "matchplay" \? "matchplay" : "stroke"/);
+  assert.match(model, /fallbackPlayFormat === "doubles" \? "doubles" : "singles"/);
+  assert.match(model, /fallbackEventFormat === "matchplay" \? "matchplay" : fallbackEventFormat === "putting" \? "putting" : "stroke"/);
   assert.match(source, /scEventConfig\(event\)/);
   assert.match(source, /event && event\.play_format, event && event\.format/);
   assert.match(model, /playFormat: text\(source\.play_format\)/);
@@ -72,7 +72,7 @@ test('admin live grid uses pair target rows and target-id score posts', () => {
   assert.match(model, /export function scoreRows\(snapshot\)/);
   assert.match(model, /target\?\.type === "pair"/);
   assert.match(html, /body\.targetId = row\.targetId/);
-  assert.match(scorecard, /isMatchplay\(snap\) \? "Match" : "To Par"/);
+  assert.match(scorecard, /isMatchplay\(snap\) \? "Match" : putting \? "Makes" : "To Par"/);
   assert.match(model, /target\.members\) \? target\.members\.join\(" \/ "\)/);
   assert.match(scorecard, /data-react-admin-scoring-grid/);
   assert.match(scorecard, /data-react-admin-scoring-board/);

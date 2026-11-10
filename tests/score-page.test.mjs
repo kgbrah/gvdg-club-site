@@ -639,7 +639,7 @@ test('shotgun hole pager follows play order instead of layout index', async () =
 
 test('player leaderboard renders matchplay and pair labels without primary to-par ranking', () => {
   const source = scoreLeaderboardSource();
-  assert.match(source, /const resultHead = isMatchplay \? "Match" : handicapped \? "Net" : "To par"/);
+  assert.match(source, /const resultHead = isMatchplay \? "Match" : isPutting \? "Makes" : handicapped \? "Net" : "To par"/);
   assert.match(source, /Club handicap\. Net is your start plus this round\./);
   assert.match(readFileSync('src/score-app/score-controller.js', 'utf8'), /\/layouts\/' \+ id \+ '\/handicaps'/);
   assert.match(readFileSync('src/score-app/score-controller.js', 'utf8'), /decorateStandings/);
@@ -648,7 +648,7 @@ test('player leaderboard renders matchplay and pair labels without primary to-pa
   assert.match(source, /displayMatchStatus\(standing\.match\)/);
   assert.match(source, /className: "lb-scorecard"/);
   assert.match(source, /aria-expanded/);
-  assert.match(source, /aria-label": "Hole "/);
+  assert.match(source, /"aria-label": isPutting \? \(hole\.distance_ft \? hole\.distance_ft \+ " ft" : "Station " \+ hole\.hole\) : "Hole " \+ hole\.hole/);
   assert.match(readFileSync('src/score-app/score-controller.js', 'utf8'), /onHole: function \(holeNumber\)/);
   assert.match(readFileSync('src/score-app/watch-view.js', 'utf8'), /onHole: focusHole/);
   assert.match(readFileSync('src/score-app/watch-view.js', 'utf8'), /startExpanded: true/);
