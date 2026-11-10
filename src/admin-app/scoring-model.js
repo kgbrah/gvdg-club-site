@@ -8,13 +8,41 @@ function text(value, fallback = "") {
   return typeof value === "string" ? value : fallback;
 }
 
+export function defaultPuttingStations() {
+  return [
+    { distanceFt: 15, putts: 5 },
+    { distanceFt: 20, putts: 5 },
+    { distanceFt: 25, putts: 5 },
+    { distanceFt: 30, putts: 5 },
+    { distanceFt: 33, putts: 5 },
+  ];
+}
+
+function puttingStation(value) {
+  const source = objectOrEmpty(value);
+  const distance = Number(source.distanceFt);
+  const putts = Number(source.putts);
+  if (!Number.isInteger(distance) || distance < 8 || distance > 80) return null;
+  if (!Number.isInteger(putts) || putts < 1 || putts > 10) return null;
+  return { distanceFt: distance, putts };
+}
+
+export function puttingStationsFrom(raw) {
+  const list = objectOrEmpty(objectOrEmpty(raw).putting).stations;
+  const stations = (Array.isArray(list) ? list : []).map(puttingStation).filter(Boolean).slice(0, 12);
+  return stations.length ? stations : defaultPuttingStations();
+}
+
 export function normalizeConfig(raw, fallbackPlayFormat = null, fallbackEventFormat = null) {
   if (raw && typeof raw === "object") {
-    return {
-      groupFormat: fallbackPlayFormat === "doubles" || raw.groupFormat === "doubles" ? "doubles" : "singles",
-      scoringStyle: raw.scoringStyle === "matchplay" ? "matchplay" : "stroke",
-      handicap: raw.scoringStyle !== "matchplay" && raw.handicap === true,
+    const scoringStyle = raw.scoringStyle === "matchplay" ? "matchplay" : raw.scoringStyle === "putting" ? "putting" : "stroke";
+    const config = {
+      groupFormat: scoringStyle === "putting" ? "singles" : (fallbackPlayFormat === "doubles" || raw.groupFormat === "doubles" ? "doubles" : "singles"),
+      scoringStyle,
+      handicap: scoringStyle === "stroke" && raw.handicap === true,
     };
+    if (scoringStyle === "putting") config.putting = { stations: puttingStationsFrom(raw) };
+    return config;
   }
   if (typeof raw === "string" && raw.trim()) {
     try {
@@ -23,11 +51,14 @@ export function normalizeConfig(raw, fallbackPlayFormat = null, fallbackEventFor
       return normalizeConfig(null, fallbackPlayFormat, fallbackEventFormat);
     }
   }
-  return {
-    groupFormat: fallbackPlayFormat === "doubles" ? "doubles" : "singles",
-    scoringStyle: fallbackEventFormat === "matchplay" ? "matchplay" : "stroke",
+  const scoringStyle = fallbackEventFormat === "matchplay" ? "matchplay" : fallbackEventFormat === "putting" ? "putting" : "stroke";
+  const config = {
+    groupFormat: scoringStyle === "putting" ? "singles" : (fallbackPlayFormat === "doubles" ? "doubles" : "singles"),
+    scoringStyle,
     handicap: false,
   };
+  if (scoringStyle === "putting") config.putting = { stations: defaultPuttingStations() };
+  return config;
 }
 
 export function normalizeEvent(event) {
@@ -73,6 +104,10 @@ export function isDoubles(snapshot) {
 
 export function isMatchplay(snapshot) {
   return objectOrEmpty(snapshot).roundConfig?.scoringStyle === "matchplay";
+}
+
+export function isPutting(snapshot) {
+  return objectOrEmpty(snapshot).roundConfig?.scoringStyle === "putting";
 }
 
 export function playerByIndex(snapshot, index) {

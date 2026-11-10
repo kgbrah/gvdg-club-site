@@ -32,8 +32,9 @@ function startLine(standing) {
     "Start " + formatStart(standing.handicapStart) + (standing.provisional ? " · provisional" : ""));
 }
 
-function resultCell(standing, isMatchplay, handicapped, relClass, relText) {
+function resultCell(standing, isMatchplay, isPutting, handicapped, relClass, relText) {
   if (isMatchplay) return h("td", { key: "match" }, displayMatchStatus(standing.match));
+  if (isPutting) return h("td", { key: "makes" }, standing.thru ? String(standing.total) : "-");
   if (!handicapped) {
     return h("td", { className: "tp " + relClass(standing.toPar || 0), key: "toPar" }, standing.thru ? relText(standing.toPar || 0) : "E");
   }
@@ -50,12 +51,12 @@ function resultCell(standing, isMatchplay, handicapped, relClass, relText) {
   ]);
 }
 
-function StandingScorecard({ onHole, scorecard, standing }) {
+function StandingScorecard({ isPutting, onHole, scorecard, standing }) {
   const holes = Array.isArray(scorecard) ? scorecard : [];
   if (!holes.length) return h("p", { className: "muted lb-card-empty" }, "No holes on this card yet.");
   return h("div", { className: "lb-scorecard" }, holes.map((hole) => {
     const scored = typeof hole.strokes === "number";
-    const rel = scored ? strokeLabel(hole.strokes, hole.par) : null;
+    const rel = !isPutting && scored ? strokeLabel(hole.strokes, hole.par) : null;
     const tone = rel ? rel.className : "";
     const body = [
       h("span", { className: "lb-hole-num", key: "n" }, String(hole.hole)),
@@ -66,7 +67,7 @@ function StandingScorecard({ onHole, scorecard, standing }) {
       return h("div", { className: "lb-hole" + (tone ? " " + tone : ""), key: hole.hole }, body);
     }
     return h("button", {
-      "aria-label": "Hole " + hole.hole,
+      "aria-label": isPutting ? (hole.distance_ft ? hole.distance_ft + " ft" : "Station " + hole.hole) : "Hole " + hole.hole,
       className: "lb-hole" + (tone ? " " + tone : ""),
       key: hole.hole,
       type: "button",
@@ -75,7 +76,7 @@ function StandingScorecard({ onHole, scorecard, standing }) {
   }));
 }
 
-export function LeaderboardTable({ isDoubles, isMatchplay, onHole, relClass, relText, standings, startExpanded }) {
+export function LeaderboardTable({ isDoubles, isMatchplay, isPutting, onHole, relClass, relText, standings, startExpanded }) {
   const [toggled, setToggled] = React.useState(() => new Set());
   function isOpen(id, hasCard) {
     if (!hasCard) return false;
@@ -92,7 +93,7 @@ export function LeaderboardTable({ isDoubles, isMatchplay, onHole, relClass, rel
   }
   if (!standings.length) return h("p", { className: "muted" }, "No scores in yet.");
   const handicapped = !isMatchplay && handicapOn(standings);
-  const resultHead = isMatchplay ? "Match" : handicapped ? "Net" : "To par";
+  const resultHead = isMatchplay ? "Match" : isPutting ? "Makes" : handicapped ? "Net" : "To par";
   return h("div", { className: "lb-wrap" }, [
     handicapped
       ? h("p", { className: "muted lb-handicap-note", key: "note" }, "Club handicap. Net is your start plus this round.")
@@ -123,9 +124,9 @@ export function LeaderboardTable({ isDoubles, isMatchplay, onHole, relClass, rel
           h("td", { className: "pos", key: "pos" }, String(index + 1)),
           h("td", { className: "name", key: "name" }, [label, startLine(standing)]),
           h("td", { key: "thru" }, String(standing.thru || 0)),
-          resultCell(standing, isMatchplay, handicapped, relClass, relText),
+          resultCell(standing, isMatchplay, isPutting, handicapped, relClass, relText),
         ]),
-        open ? h("tr", { className: "lb-card-row", key: "card" }, h("td", { colSpan: 4, id: "lb-card-" + id }, h(StandingScorecard, { onHole, scorecard: standing.scorecard, standing }))) : null,
+        open ? h("tr", { className: "lb-card-row", key: "card" }, h("td", { colSpan: 4, id: "lb-card-" + id }, h(StandingScorecard, { isPutting, onHole, scorecard: standing.scorecard, standing }))) : null,
       ]);
     })),
     ]),
@@ -179,6 +180,7 @@ function LeaderboardSheet(props) {
         h(LeaderboardTable, {
           isDoubles: props.isDoubles,
           isMatchplay: props.isMatchplay,
+          isPutting: props.isPutting,
           key: "table",
           onHole: props.onHole,
           relClass: props.relClass,

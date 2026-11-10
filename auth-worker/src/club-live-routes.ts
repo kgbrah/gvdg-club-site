@@ -6,7 +6,7 @@ import { withMemberPhotos } from "./profile-photo.js";
 import { json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { asInt, asStr } from "./input.js";
-import { isLiveFormatError, normalizeLiveScoringConfigFromLegacy, type LiveScoringConfig } from "./live-format.js";
+import { holesForPutting, isLiveFormatError, normalizeLiveScoringConfigFromLegacy, type LiveScoringConfig } from "./live-format.js";
 import { scoringState } from "./live-state.js";
 import { ctpEligibleForStart, parseCtpAddon, registrationPaidEntry } from "./live-ctp.js";
 import { assignCards, type PlayerState } from "./scoring.js";
@@ -62,11 +62,6 @@ export async function startLiveEvent(
   const stub = env.LIVE.get(env.LIVE.idFromName("event:" + eid));
   const ev = (await db.getEvent(env.DB, eid)) as (Record<string, unknown> & { layout_id?: number | null; players?: Record<string, unknown>[] }) | null;
   if (!ev) return json({ error: "not_found" }, 404, origin);
-  const holes = await liveHolesWithPins(env, ev.layout_id);
-  if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin);
-  const evLayout = ev.layout_id != null ? ((await db.getLayout(env.DB, ev.layout_id)) as { name?: string | null; course_id?: number | null } | null) : null;
-  const evCourse = evLayout?.course_id != null ? ((await db.getCourse(env.DB, evLayout.course_id)) as { name?: string | null; lat?: number | null; lng?: number | null } | null) : null;
-  const weatherLocation = weatherLocationForCourse(evCourse, evLayout); // null unless the course has coords
   const eventConfig = (await db.getEventConfig(env.DB, eid)) as { live_scoring_config?: unknown; play_format?: unknown; ctp_fee_cents?: number | null } | null;
   let liveScoringConfig: LiveScoringConfig;
   try {
@@ -80,6 +75,13 @@ export async function startLiveEvent(
     if (isLiveFormatError(error)) return json({ error: "invalid_live_scoring_config" }, 400, origin);
     throw error;
   }
+  const holes = liveScoringConfig.scoringStyle === "putting"
+    ? holesForPutting(liveScoringConfig)
+    : await liveHolesWithPins(env, ev.layout_id);
+  if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin);
+  const evLayout = ev.layout_id != null ? ((await db.getLayout(env.DB, ev.layout_id)) as { name?: string | null; course_id?: number | null } | null) : null;
+  const evCourse = evLayout?.course_id != null ? ((await db.getCourse(env.DB, evLayout.course_id)) as { name?: string | null; lat?: number | null; lng?: number | null } | null) : null;
+  const weatherLocation = weatherLocationForCourse(evCourse, evLayout); // null unless the course has coords
   const regs = (await db.listRegistrations(env.DB, eid)) as {
     member_id?: string;
     name?: string;

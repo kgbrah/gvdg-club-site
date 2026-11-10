@@ -202,7 +202,11 @@ export class LiveEventDO {
     // JSON null withdraws the vote (hole goes unstarted if nobody else scored it). Narrow with
     // !== null: a `!clear &&` boolean does not narrow `number | null` for the 1–30 range check.
     const strokes = b.strokes === null ? null : Number(b.strokes);
-    if (strokes !== null && (!Number.isInteger(strokes) || strokes < 1 || strokes > 30)) return j({ error: "bad_strokes" }, 400);
+    const holePar = this.meta.holes.find((candidate) => candidate.hole === hole)?.par;
+    const putting = this.meta.roundConfig?.scoringStyle === "putting";
+    const minStrokes = putting ? 0 : 1;
+    const maxStrokes = putting ? Math.min(10, holePar ?? 5) : 30;
+    if (strokes !== null && (!Number.isInteger(strokes) || strokes < minStrokes || strokes > maxStrokes)) return j({ error: "bad_strokes" }, 400);
     const scoring = scoringState(this.meta, this.players);
     if (scoring.globalError) return invalidScoreTargetsResponse(scoring.globalError); // whole round unscorable (bad config)
     const target = scoreTargetForBody(b, this.players, scoring.targets);

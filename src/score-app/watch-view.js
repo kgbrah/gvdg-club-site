@@ -413,6 +413,7 @@ export function WatchView(props) {
       h(LeaderboardTable, {
         isDoubles: props.isDoubles,
         isMatchplay: props.isMatchplay,
+        isPutting: props.isPutting,
         key: "table",
         relClass: props.relClass,
         relText: props.relText,

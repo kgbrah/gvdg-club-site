@@ -2,6 +2,7 @@ import React from "react";
 
 import { clubToday, clubWallClockToIso, isoToClubWallClock } from "../shared/events-model.js";
 import { applyEventVoice, VoiceFill } from "./voice-fill.js";
+import { defaultPuttingStations } from "./scoring-model.js";
 import {
   calendarDaysBetween,
   minusWallMinutes,
@@ -98,6 +99,7 @@ function formatFromEvent(source) {
   const live = parsedLiveConfig(source);
   const stored = typeof source.format === "string" ? source.format : "";
   if (!stored && live.scoringStyle == null && source.play_format == null) return { format: "", handicap: false };
+  if (stored === "putting" || live.scoringStyle === "putting") return { format: "putting", handicap: false };
   const doubles = source.play_format === "doubles" || stored === "doubles" || live.groupFormat === "doubles";
   const scoring = stored === "stroke" || (stored !== "matchplay" && stored !== "doubles" && live.scoringStyle === "stroke")
     ? "stroke"
@@ -174,13 +176,14 @@ function eventPayload(form, courseRows, quickLayout) {
     return { body: {}, message: "Primary course required before adding more courses", valid: false };
   }
   const chosen = String(form.format || "");
-  const doubles = chosen.startsWith("doubles");
-  const scoring = chosen.endsWith("stroke") ? "stroke" : chosen.endsWith("matchplay") ? "matchplay" : null;
+  const putting = chosen === "putting";
+  const doubles = !putting && chosen.startsWith("doubles");
+  const scoring = putting ? "putting" : chosen.endsWith("stroke") ? "stroke" : chosen.endsWith("matchplay") ? "matchplay" : null;
   const body = {
     checkin_deadline: toIso(form.checkinDeadline),
     course_id: primaryRow.courseId ? Number(primaryRow.courseId) : null,
     date: form.date || null,
-    format: scoring,
+    format: scoring === "putting" ? "putting" : scoring,
     league_id: form.leagueId ? Number(form.leagueId) : null,
     name: form.name.trim(),
     notes: form.notes.trim() || null,
@@ -195,6 +198,7 @@ function eventPayload(form, courseRows, quickLayout) {
       groupFormat: body.play_format,
       scoringStyle: scoring,
       handicap: scoring === "stroke" && form.handicap === true,
+      ...(scoring === "putting" ? { putting: { stations: defaultPuttingStations() } } : {}),
     };
   }
   if (!body.name) return { body, message: "Name required", valid: false };
@@ -542,6 +546,7 @@ export function AdminEventForm() {
         option("doubles-stroke", "Doubles stroke play"),
         option("singles-matchplay", "Singles matchplay"),
         option("doubles-matchplay", "Doubles matchplay"),
+        option("putting", "Putting league"),
       ]) }),
       h("label", { key: "handicap", style: { display: "flex", gap: "0.5rem", alignItems: "center" } }, [
         h("input", {

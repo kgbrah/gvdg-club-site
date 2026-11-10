@@ -39,9 +39,10 @@ function scoringConfigFromBody(body: Record<string, unknown>): { playFormat: "si
   const rawLive = hasField(body, "liveScoringConfig") ? body.liveScoringConfig : body.live_scoring_config;
   try {
     const normalized = rawLive == null
-      ? normalizeLiveScoringConfig({ groupFormat: playFormat, scoringStyle: body.format === "matchplay" ? "matchplay" : "stroke", handicap: false })
+      ? normalizeLiveScoringConfig({ groupFormat: playFormat, scoringStyle: body.format === "matchplay" ? "matchplay" : body.format === "putting" ? "putting" : "stroke", handicap: false })
       : normalizeLiveScoringConfig(rawLive);
-    return { playFormat, live: JSON.stringify({ ...normalized, groupFormat: playFormat }) };
+    const groupFormat = normalized.scoringStyle === "putting" ? "singles" : playFormat;
+    return { playFormat: groupFormat, live: JSON.stringify({ ...normalized, groupFormat }) };
   } catch (error) {
     if (isLiveFormatError(error)) return "invalid";
     throw error;

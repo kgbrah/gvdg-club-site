@@ -201,7 +201,7 @@ export function computeRoundStandings(input: {
   readonly config: LiveScoringConfig;
   readonly targets: readonly ScoreTarget[];
 }): LiveStanding[] {
-  if (input.config.scoringStyle === "stroke") return computeLiveStandings(input);
+  if (input.config.scoringStyle !== "matchplay") return computeLiveStandings(input);
   return targetCardGroups(input.players, input.targets).flatMap((targets) => computeLiveStandings({ ...input, targets }));
 }
 
@@ -211,7 +211,7 @@ export function finalizeRoundStandings(input: {
   readonly config: LiveScoringConfig;
   readonly targets: readonly ScoreTarget[];
 }): FinalLiveStanding[] {
-  if (input.config.scoringStyle === "stroke") return finalizeLiveStandings(input);
+  if (input.config.scoringStyle !== "matchplay") return finalizeLiveStandings(input);
   return targetCardGroups(input.players, input.targets).flatMap((targets) => finalizeLiveStandings({ ...input, targets }));
 }
 

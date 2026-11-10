@@ -2,7 +2,7 @@ import React from "react";
 
 import { AdminScoringLeaderboard, AdminScoringOverride, AdminScoringScorecard } from "./scoring-scorecard.js";
 import { AdminScoringTeeSigns } from "./scoring-tee-signs.js";
-import { eventConfig, layoutLabel, normalizeConfig, playableEvents } from "./scoring-model.js";
+import { eventConfig, isPutting, layoutLabel, normalizeConfig, playableEvents } from "./scoring-model.js";
 
 const h = React.createElement;
 const EMPTY_EVENTS_STATE = { events: [], status: "loading" };
@@ -41,6 +41,55 @@ function FormatButtons({ label, name, onChange, options, value }) {
       onClick: () => onChange(option.value),
       type: "button",
     }, option.label))),
+  ]);
+}
+
+function PuttingStations({ onChange, stations }) {
+  function update(index, patch) {
+    onChange(stations.map((station, stationIndex) => stationIndex === index ? { ...station, ...patch } : station));
+  }
+  return h("div", { className: "sc-start-field", key: "stations" }, [
+    h("span", { key: "label" }, "Putting stations"),
+    ...stations.map((station, index) => h("div", { className: "al-row", key: `${station.distanceFt}-${index}` }, [
+      h("label", { key: "distance" }, [
+        "Distance",
+        h("input", {
+          inputMode: "numeric",
+          key: "input",
+          max: "80",
+          min: "8",
+          onChange: (event) => update(index, { distanceFt: Number(event.target.value) }),
+          type: "number",
+          value: station.distanceFt,
+        }),
+        "ft",
+      ]),
+      h("label", { key: "putts" }, [
+        "Putts",
+        h("input", {
+          inputMode: "numeric",
+          key: "input",
+          max: "10",
+          min: "1",
+          onChange: (event) => update(index, { putts: Number(event.target.value) }),
+          type: "number",
+          value: station.putts,
+        }),
+      ]),
+      stations.length > 1 ? h("button", {
+        className: "admin-btn secondary",
+        key: "remove",
+        onClick: () => onChange(stations.filter((_, stationIndex) => stationIndex !== index)),
+        type: "button",
+      }, "Remove") : null,
+    ])),
+    stations.length < 12 ? h("button", {
+      className: "admin-btn secondary",
+      key: "add",
+      onClick: () => onChange(stations.concat([{ distanceFt: 35, putts: stations[0]?.putts || 5 }])),
+      type: "button",
+    }, "Add station") : null,
+    h("p", { className: "al-note", key: "note" }, "Each player throws that many putts from each distance. Most makes wins. No course layout needed."),
   ]);
 }
 
@@ -122,18 +171,27 @@ function StartControls({ state }) {
         key: "style",
         label: "Scoring",
         name: "scScoringStyle",
-        onChange: (value) => updateConfig(value === "matchplay" ? { scoringStyle: value, handicap: false } : { scoringStyle: value }),
-        options: [{ label: "Stroke play", value: "stroke" }, { label: "Match play", value: "matchplay" }],
+        onChange: (value) => updateConfig(value === "matchplay"
+          ? { scoringStyle: value, handicap: false }
+          : value === "putting"
+            ? { scoringStyle: "putting", groupFormat: "singles", handicap: false, putting: config.putting || { stations: normalizeConfig({ scoringStyle: "putting" }).putting.stations } }
+            : { scoringStyle: value }),
+        options: [{ label: "Stroke play", value: "stroke" }, { label: "Match play", value: "matchplay" }, { label: "Putting", value: "putting" }],
         value: config.scoringStyle,
       }),
       h(FormatButtons, {
         key: "handicap",
         label: "Handicap",
         name: "scHandicap",
-        onChange: (value) => updateConfig({ handicap: value === "on" && config.scoringStyle !== "matchplay" }),
+        onChange: (value) => updateConfig({ handicap: value === "on" && config.scoringStyle === "stroke" }),
         options: [{ label: "Off", value: "off" }, { label: "On", value: "on" }],
-        value: config.scoringStyle !== "matchplay" && config.handicap === true ? "on" : "off",
+        value: config.scoringStyle === "stroke" && config.handicap === true ? "on" : "off",
       }),
+      config.scoringStyle === "putting" ? h(PuttingStations, {
+        key: "stations",
+        onChange: (stations) => updateConfig({ putting: { stations } }),
+        stations: config.putting?.stations || [],
+      }) : null,
       h("button", { className: "admin-btn", disabled: pending, id: "scStartBtn", key: "start", onClick: start, type: "button" }, pending ? "Starting..." : "Start live scoring"),
       h("button", {
         className: "admin-btn secondary",
@@ -157,7 +215,7 @@ function LiveControls({ state }) {
   return h("div", { "data-react-admin-scoring-live": snap.status || "ready", id: "scLive", style: { marginTop: "1rem" } }, [
     h("h4", { className: "al-h", key: "score-title" }, [
       "Scorecard ",
-      h("span", { className: "al-note", key: "note" }, "(enter strokes - saves and pushes live instantly)"),
+      h("span", { className: "al-note", key: "note" }, isPutting(snap) ? "(enter makes - saves and pushes live instantly)" : "(enter strokes - saves and pushes live instantly)"),
     ]),
     h(AdminScoringScorecard, { key: "grid", snapshot: snap }),
     h(AdminScoringOverride, { canOverride: state.canOverride === true, key: "override", snapshot: snap }),

@@ -483,8 +483,11 @@ export function playRowGroup(row: PlayRow | null | undefined): "singles" | "doub
   return String(row?.groupFormat || row?.group_format || "").toLowerCase() === "doubles" ? "doubles" : "singles";
 }
 
-export function playRowStyle(row: PlayRow | null | undefined): "stroke" | "matchplay" {
-  return String(row?.scoringStyle || row?.scoring_style || "").toLowerCase() === "matchplay" ? "matchplay" : "stroke";
+export function playRowStyle(row: PlayRow | null | undefined): "stroke" | "matchplay" | "putting" {
+  const style = String(row?.scoringStyle || row?.scoring_style || "").toLowerCase();
+  if (style === "matchplay") return "matchplay";
+  if (style === "putting") return "putting";
+  return "stroke";
 }
 
 export function playViewKey(group: string | null | undefined, style: string | null | undefined): string {
@@ -526,6 +529,7 @@ export function playStatsKindPayload(rows: readonly PlayRow[], memberId: string 
   for (const group of PLAY_GROUPS) {
     for (const style of PLAY_STYLES) {
       const filtered = rows.filter((row) => (
+        playRowStyle(row) !== "putting" &&
         (group === "all" || playRowGroup(row) === group) &&
         (style === "all" || playRowStyle(row) === style)
       ));

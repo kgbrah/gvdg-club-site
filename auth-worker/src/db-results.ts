@@ -199,6 +199,8 @@ export async function listSeasonPlayRows(db: D1Like, year: number) {
                   WHEN r.match_result IS NOT NULL AND TRIM(r.match_result) != '' AND r.match_result != 'null' THEN 'matchplay'
                   WHEN json_extract(ec.live_scoring_config, '$.scoringStyle') = 'matchplay' THEN 'matchplay'
                   WHEN e.format = 'matchplay' THEN 'matchplay'
+                  WHEN json_extract(ec.live_scoring_config, '$.scoringStyle') = 'putting' THEN 'putting'
+                  WHEN e.format = 'putting' THEN 'putting'
                   ELSE 'stroke'
                 END AS scoring_style
          FROM results r JOIN events e ON e.id = r.event_id
@@ -223,6 +225,7 @@ export async function listSeasonPlayRows(db: D1Like, year: number) {
                 CASE
                   WHEN cr.match_result IS NOT NULL AND TRIM(cr.match_result) != '' AND cr.match_result != 'null' THEN 'matchplay'
                   WHEN json_extract(r.scoring_config, '$.scoringStyle') = 'matchplay' THEN 'matchplay'
+                  WHEN json_extract(r.scoring_config, '$.scoringStyle') = 'putting' THEN 'putting'
                   ELSE 'stroke'
                 END AS scoring_style
          FROM casual_results cr JOIN casual_rounds r ON r.id = cr.casual_round_id
@@ -253,7 +256,7 @@ export async function listLayoutHandicapRounds(db: D1Like, layoutId: number, cut
              AND cr.place IS NOT NULL
              AND cr.to_par IS NOT NULL
              AND (cr.match_result IS NULL OR TRIM(cr.match_result) = '' OR cr.match_result = 'null')
-             AND (json_extract(r.scoring_config, '$.scoringStyle') IS NULL OR json_extract(r.scoring_config, '$.scoringStyle') != 'matchplay')
+             AND (json_extract(r.scoring_config, '$.scoringStyle') IS NULL OR (json_extract(r.scoring_config, '$.scoringStyle') != 'matchplay' AND json_extract(r.scoring_config, '$.scoringStyle') != 'putting'))
              AND (json_extract(r.scoring_config, '$.groupFormat') IS NULL OR json_extract(r.scoring_config, '$.groupFormat') != 'doubles')
              AND (json_extract(cr.scoring_group, '$.targetType') IS NULL OR json_extract(cr.scoring_group, '$.targetType') != 'pair')
              AND COALESCE(r.finalized_at, cr.created_at) >= ?
@@ -269,7 +272,7 @@ export async function listLayoutHandicapRounds(db: D1Like, layoutId: number, cut
              AND res.place IS NOT NULL
              AND res.to_par IS NOT NULL
              AND (res.match_result IS NULL OR TRIM(res.match_result) = '' OR res.match_result = 'null')
-             AND (e.format IS NULL OR e.format = '' OR (e.format != 'matchplay' AND e.format != 'doubles'))
+             AND (e.format IS NULL OR e.format = '' OR (e.format != 'matchplay' AND e.format != 'doubles' AND e.format != 'putting'))
              AND (json_extract(res.scoring_group, '$.targetType') IS NULL OR json_extract(res.scoring_group, '$.targetType') != 'pair')
              AND COALESCE(e.date, res.created_at) >= ?
          )`,

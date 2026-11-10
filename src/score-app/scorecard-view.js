@@ -8,7 +8,7 @@ import { preloadRoundMaps } from "../shared/satellite-preload.js";
 import { formatPct, holePlayStats, holeStatChips, liveRoundStatsFromCard } from "../shared/play-stats.js";
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
-import { nextHoleScore, relClass, relText, strokeLabel } from "./score-view-model.js";
+import { nextHoleScore, nextPuttingScore, relClass, relText, strokeLabel } from "./score-view-model.js";
 import { RoundHighlights, ThrowFilm } from "./throw-film.js";
 import { RoundTalk } from "./round-talk.js";
 
@@ -338,7 +338,7 @@ function HoleHeader(props) {
       icon(ChevronLeft),
     ),
     h("div", { key: "mid", className: "hole-head-mid" }, [
-      h("div", { className: "hnum", key: "number" }, `Hole ${props.hole.hole}`),
+      h("div", { className: "hnum", key: "number" }, props.putting ? (props.hole.distance_ft ? `${props.hole.distance_ft} ft` : `Station ${props.hole.hole}`) : `Hole ${props.hole.hole}`),
       h("div", { className: "hpar", key: "par" }, props.holeMeta),
       props.ctpBadge ? h("div", { className: "ctp-badge", key: "ctp" }, props.ctpBadge) : null,
       props.matchStatus ? h("div", { className: "pmeta", key: "match" }, props.matchStatus) : null,
@@ -652,8 +652,20 @@ function ScorecardOwner(props) {
   ]);
 }
 
-function padChoices(par) {
+function padChoices(par, putting) {
   const holePar = typeof par === "number" ? par : 3;
+  if (putting) {
+    const max = holePar > 0 ? holePar : 5;
+    const numbers = [];
+    for (let value = 0; value <= max; value += 1) numbers.push(value);
+    return {
+      shortcuts: [
+        { label: "None", value: 0 },
+        { label: "All", value: max },
+      ],
+      numbers,
+    };
+  }
   return {
     shortcuts: [
       { label: "Birdie", value: Math.max(1, holePar - 1) },
@@ -673,11 +685,12 @@ function ScorePad(props) {
   });
   const hole = props.hole;
   const row = props.row;
-  const choices = padChoices(hole.par);
+  const choices = padChoices(hole.par, props.putting);
   function pick(value) {
     props.onScore(row.source, hole.hole, value);
     props.onClose();
   }
+  const station = hole.distance_ft ? hole.distance_ft + " ft" : "Station " + hole.hole;
   return createPortal(
     h(
       "div",
@@ -697,8 +710,8 @@ function ScorePad(props) {
         ref: dialog.panelRef,
       }, [
         h("div", { className: "grab", key: "grab" }),
-        h("h2", { className: "section", id: "score-pad-title", key: "title" }, row.label + " · Hole " + hole.hole),
-        h("p", { className: "muted", key: "par" }, "Par " + hole.par),
+        h("h2", { className: "section", id: "score-pad-title", key: "title" }, props.putting ? row.label + " · " + station : row.label + " · Hole " + hole.hole),
+        h("p", { className: "muted", key: "par" }, props.putting ? hole.par + " putts · count the makes" : "Par " + hole.par),
         h("div", { className: "score-pad-shortcuts", key: "shortcuts" }, choices.shortcuts.map((item) =>
           h("button", {
             className: "btn" + (row.currentScore === item.value ? "" : " secondary"),
@@ -720,7 +733,7 @@ function ScorePad(props) {
           key: "clear",
           type: "button",
           onClick: () => pick(null),
-        }, "Clear hole"),
+        }, props.putting ? "Clear station" : "Clear hole"),
         h("button", {
           className: "btn ghost sheet-close",
           key: "close",
@@ -736,8 +749,8 @@ function ScorePad(props) {
 function ScoreRow(props) {
   const row = props.row;
   const current = row.currentScore;
-  const nextMinus = nextHoleScore(current, props.hole.par, "minus");
-  const nextPlus = nextHoleScore(current, props.hole.par, "plus");
+  const nextMinus = props.putting ? nextPuttingScore(current, props.hole.par, "minus") : nextHoleScore(current, props.hole.par, "minus");
+  const nextPlus = props.putting ? nextPuttingScore(current, props.hole.par, "plus") : nextHoleScore(current, props.hole.par, "plus");
   const classes = ["prow"];
   if (row.conflictText) classes.push("conflict");
   if (row.honors) classes.push("honors");
@@ -847,7 +860,10 @@ function HoleGrid(props) {
         hole.ctp ? "ctp" : "",
         rel ? rel.className : "",
       ].filter(Boolean).join(" ");
-      const label = rel
+      const station = hole.distanceFt ? `${hole.distanceFt} ft` : `Station ${hole.hole}`;
+      const label = props.putting
+        ? (hole.score != null ? `${station}, ${hole.score} makes` : station)
+        : rel
         ? `Hole ${hole.hole}, ${rel.text} ${hole.score}`
         : hole.score != null
           ? `Hole ${hole.hole}, ${hole.score}`
@@ -863,7 +879,7 @@ function HoleGrid(props) {
           onClick: () => props.onJump && props.onJump(hole.index),
         },
         [
-          h("span", { className: "holegrid-num", key: "num" }, String(hole.hole)),
+          h("span", { className: "holegrid-num", key: "num" }, props.putting && hole.distanceFt ? String(hole.distanceFt) : String(hole.hole)),
           hole.score != null
             ? h("b", { className: "holegrid-score", key: "score" }, String(hole.score))
             : h("span", { className: "holegrid-empty", key: "empty" }, "·"),
@@ -915,6 +931,7 @@ function ScorecardBox(props) {
       hole: props.hole,
       key: row.key,
       locked: props.finish && props.finish.locked,
+      putting: props.putting,
       row,
       onOpenPad: props.onOpenPad,
       onScore: props.onScore,
@@ -1178,7 +1195,7 @@ export function ScorecardView(props) {
       h("div", { className: "score-glove-stage", key: "stage" }, [
         props.showWeather ? h(WeatherStrip, { compact: true, key: "weather", title: "Round weather", weather: props.weather }) : null,
         props.yourTurn ? h("p", { className: "your-turn-hint", key: "turn" }, props.yourTurn) : null,
-        h(HoleMedia, {
+        props.putting ? null : h(HoleMedia, {
           ...props,
           gpsFix: gps.fix,
           gpsStatus: gps.status,
@@ -1211,15 +1228,15 @@ export function ScorecardView(props) {
           solo,
           throws,
         }),
-        h(RoundTools, {
+        props.putting ? null : h(RoundTools, {
           ...props,
           measureLabel,
           measuring,
           onMeasure,
         }),
-        h(RoundHighlights, { canStar: true, key: "clips" }),
-        h(HoleGrid, { holes: props.holeGrid, onJump: props.onJumpHole }),
-        h(HoleStatChips, { chips: holeStatChips(holePlayStats(props.hole, throws, ((props.holeGrid || []).find((hole) => hole.current) || {}).score)) }),
+        props.putting ? null : h(RoundHighlights, { canStar: true, key: "clips" }),
+        h(HoleGrid, { holes: props.holeGrid, onJump: props.onJumpHole, putting: props.putting }),
+        props.putting ? null : h(HoleStatChips, { chips: holeStatChips(holePlayStats(props.hole, throws, ((props.holeGrid || []).find((hole) => hole.current) || {}).score)) }),
         props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,
         props.potsAceHint ? h("p", { className: "pots-ace-hint", key: "ace-hint" }, props.potsAceHint) : null,
       ]),
@@ -1244,6 +1261,7 @@ export function ScorecardView(props) {
       ? h(ScorePad, {
         hole: props.hole,
         key: "pad",
+        putting: props.putting,
         row: padRow,
         onClose: () => setPadRow(null),
         onScore,

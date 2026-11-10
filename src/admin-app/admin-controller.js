@@ -465,7 +465,11 @@ export function startAdminController() {
             const row = detail && detail.row || {};
             const hole = Number(detail && detail.hole);
             const strokes = parseInt(detail && detail.value, 10);
-            if (!(strokes >= 1 && strokes <= 30)) { adminMsg('Strokes must be 1–30', false); return; }
+            const putting = scSnap && scSnap.roundConfig && scSnap.roundConfig.scoringStyle === 'putting';
+            const holeMeta = putting && Array.isArray(scSnap.holes) ? scSnap.holes.find((candidate) => candidate && candidate.hole === hole) : null;
+            const max = putting && holeMeta && Number.isInteger(holeMeta.par) ? holeMeta.par : 30;
+            const min = putting ? 0 : 1;
+            if (!(strokes >= min && strokes <= max)) { adminMsg(putting ? 'Makes must be 0–' + max : 'Strokes must be 1–30', false); return; }
             const body = { hole, strokes };
             if (row.targetId) body.targetId = row.targetId;
             else body.index = row.index;

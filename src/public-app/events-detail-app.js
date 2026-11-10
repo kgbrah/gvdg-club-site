@@ -192,11 +192,12 @@ function fmtBreakdown(raw) {
   return parts.join(" · ");
 }
 
-function FinalResults({ course, data }) {
+function FinalResults({ course, data, event }) {
   const results = Array.isArray(data.finalResults) ? data.finalResults : [];
   const loaded = data.finalResultsLoaded === true;
   const matchplay = results.some((result) => parseMatchResult(result && result.match_result));
-  const columns = matchplay ? ["Pos", "Player", "Match", "Scoring"] : ["Pos", "Player", "Total", "To Par", "Scoring"];
+  const putting = event && event.format === "putting";
+  const columns = matchplay ? ["Pos", "Player", "Match", "Scoring"] : putting ? ["Pos", "Player", "Makes"] : ["Pos", "Player", "Total", "To Par", "Scoring"];
   const udiscCourseId = course && course.udisc_course_id;
   const addable = results.filter((result) => result && result.scorecard);
   const canExportToUdisc = Boolean(udiscDeepLink(udiscCourseId) && addable.length);
@@ -224,15 +225,15 @@ function FinalResults({ course, data }) {
               matchplay
                 ? h("td", { className: "lb-match", key: "match" }, match ? displayMatchStatus(match) : "-")
                 : h("td", { key: "total" }, result && result.total != null ? String(result.total) : "-"),
-              matchplay ? null : h("td", {
+              matchplay || putting ? null : h("td", {
                 className: `lb-topar${toPar < 0 ? " under" : toPar > 0 ? " over" : ""}`,
                 key: "to-par",
               }, result && result.to_par != null ? fmtToPar(result.to_par) : "-"),
-              h("td", { className: "res-chips", key: "breakdown" }, fmtBreakdown(result && result.breakdown)),
+              putting ? null : h("td", { className: "res-chips", key: "breakdown" }, fmtBreakdown(result && result.breakdown)),
             ]);
           })),
         ])),
-    canExportToUdisc
+    canExportToUdisc && !putting
       ? h("div", { className: "udisc-export-section", key: "udisc" }, [
         h("h4", { className: "roster-title", key: "title" }, "Add your round to UDisc"),
         addable.map((result, index) => h(UDiscExportDetails, {
@@ -347,7 +348,7 @@ export function EventsEventDetailApp() {
         event.status ? h(Badge, { className: `status-badge ${statusClass}`, key: "status", text: statusLabel(event.status) }) : null,
       ]),
       event.status === "live" ? h(LivePanel, { data, key: "live" }) : null,
-      event.status === "final" ? h(FinalResults, { course, data, key: "final" }) : null,
+      event.status === "final" ? h(FinalResults, { course, data, event, key: "final" }) : null,
       h(DetailFacts, { course, courseSummary: data.courseSummary, event, key: "facts" }),
       event.notes ? h("div", { className: "detail-notes", key: "notes" }, String(event.notes)) : null,
       h(PlayerRoster, { event, key: "players" }),

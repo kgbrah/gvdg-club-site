@@ -21,5 +21,5 @@ export interface D1Like {
 
 export const EVENT_TYPES = ["tournament", "league_round", "fundraiser", "meeting"] as const;
 export const EVENT_STATUSES = ["scheduled", "live", "final", "cancelled"] as const;
-export const EVENT_FORMATS = ["stroke", "matchplay", "doubles"] as const;
+export const EVENT_FORMATS = ["stroke", "matchplay", "doubles", "putting"] as const;
 export type EventType = (typeof EVENT_TYPES)[number];

@@ -419,11 +419,33 @@ describe("live scoring format helpers", () => {
       scoringStyle: "stroke",
       handicap: true,
     });
-    expect(normalizeLiveScoringConfig({ groupFormat: "singles", scoringStyle: "matchplay", handicap: true })).toEqual({
+    expect(normalizeLiveScoringConfig({ groupFormat: "doubles", scoringStyle: "putting", handicap: true, putting: { stations: [{ distanceFt: 18, putts: 4 }, { distanceFt: 3, putts: 5 }] } })).toEqual({
       groupFormat: "singles",
-      scoringStyle: "matchplay",
+      scoringStyle: "putting",
       handicap: false,
+      putting: { stations: [{ distanceFt: 18, putts: 4 }] },
     });
+  });
+
+  it("ranks a putting league by makes, highest first, and leaves partials unplaced", () => {
+    const holes = [
+      { hole: 1, par: 5 },
+      { hole: 2, par: 5 },
+    ];
+    const players: PlayerState[] = [
+      { memberId: "a", name: "Ann", scores: { 1: 3, 2: 4 } },
+      { memberId: "b", name: "Bo", scores: { 1: 5, 2: 5 } },
+      { memberId: "c", name: "Cy", scores: { 1: 0 } },
+    ];
+    const config = { groupFormat: "singles" as const, scoringStyle: "putting" as const };
+    const targets = scoreTargetsForPlayers(players, config);
+    const live = computeLiveStandings({ holes, players, config, targets });
+    expect(live.map((row) => row.name)).toEqual(["Bo", "Ann", "Cy"]);
+    expect(live.find((row) => row.name === "Ann")?.total).toBe(7);
+    const finalized = finalizeLiveStandings({ holes, players, config, targets });
+    expect(finalized.find((row) => row.name === "Bo")).toMatchObject({ place: 1, total: 10 });
+    expect(finalized.find((row) => row.name === "Cy")?.place).toBeNull();
+    expect(finalized.find((row) => row.name === "Ann")?.breakdown).toMatchObject({ birdies: 0, pars: 0 });
   });
 
   it("returns one singles score target per active player", () => {

@@ -1,6 +1,6 @@
 import React from "react";
 
-import { conflictForRow, conflictTitle, isDoubles, isMatchplay, rowTotal, scoreForRow, scoreRows, toPar } from "./scoring-model.js";
+import { conflictForRow, conflictTitle, isDoubles, isMatchplay, isPutting, rowTotal, scoreForRow, scoreRows, toPar } from "./scoring-model.js";
 import { displayMatchStatus } from "../shared/match-status.js";
 import { fieldActiveHoleIndex } from "../score-app/score-view-model.js";
 
@@ -10,7 +10,7 @@ function dispatchRequest(name, detail) {
   window.dispatchEvent(new CustomEvent(name, { detail }));
 }
 
-function ScoreInput({ hole, row, score }) {
+function ScoreInput({ hole, max = 30, min = 1, row, score }) {
   const [value, setValue] = React.useState(score == null ? "" : String(score));
   const focused = React.useRef(false);
 
@@ -25,8 +25,8 @@ function ScoreInput({ hole, row, score }) {
 
   return h("input", {
     className: "sc-score-input",
-    max: "30",
-    min: "1",
+    max: String(max),
+    min: String(min),
     onBlur: () => {
       focused.current = false;
       commit();
@@ -69,6 +69,7 @@ export function AdminScoringScorecard({ snapshot }) {
     setHoleIndex((current) => clampHoleIndex(current, holes.length));
   }, [holes.length]);
 
+  const putting = isPutting(snap);
   const table = h("div", { className: "sc-scorecard-desktop", key: "desktop", style: { overflowX: "auto" } }, h("table", {
     className: "al-holes",
     "data-react-admin-scoring-grid": "ready",
@@ -76,7 +77,7 @@ export function AdminScoringScorecard({ snapshot }) {
   }, [
     h("thead", { key: "head" }, h("tr", null, [
       ...rowHead.map((label) => h("th", { key: label }, label)),
-      ...holes.map((hole) => h("th", { className: hole.overridden ? "th-temp" : undefined, key: hole.hole }, `H${hole.hole} (${hole.par})${hole.overridden ? " temp" : ""}`)),
+      ...holes.map((hole) => h("th", { className: hole.overridden ? "th-temp" : undefined, key: hole.hole }, putting ? `${hole.distance_ft || hole.hole} ft` : `H${hole.hole} (${hole.par})${hole.overridden ? " temp" : ""}`)),
       h("th", { key: "total" }, "Tot"),
     ])),
     h("tbody", { key: "body" }, rows.map((row) => {
@@ -88,7 +89,7 @@ export function AdminScoringScorecard({ snapshot }) {
         ...holes.map((hole) => {
           const conflict = conflictForRow(snap, row, hole.hole);
           return h("td", { className: conflict ? "sc-conflict" : undefined, key: hole.hole }, [
-            h(ScoreInput, { hole: hole.hole, key: "score", row, score: scoreForRow(snap, row, hole.hole) }),
+            h(ScoreInput, { hole: hole.hole, key: "score", max: putting ? hole.par : 30, min: putting ? 0 : 1, row, score: scoreForRow(snap, row, hole.hole) }),
             conflict ? h("span", {
               "aria-label": conflictTitle(conflict),
               className: "sc-conflict-flag",
@@ -119,8 +120,8 @@ export function AdminScoringScorecard({ snapshot }) {
         type: "button",
       }, "Prev"),
       h("div", { "aria-live": "polite", className: "sc-hole-pager-label", key: "label" }, [
-        h("strong", { key: "hole" }, `Hole ${hole.hole}`),
-        h("span", { key: "meta" }, `Par ${hole.par}${hole.overridden ? " · temp" : ""} · ${holeIndex + 1} of ${holes.length}`),
+        h("strong", { key: "hole" }, putting ? `${hole.distance_ft || hole.hole} ft` : `Hole ${hole.hole}`),
+        h("span", { key: "meta" }, putting ? `${hole.par} putts · ${holeIndex + 1} of ${holes.length}` : `Par ${hole.par}${hole.overridden ? " · temp" : ""} · ${holeIndex + 1} of ${holes.length}`),
       ]),
       h("button", {
         "aria-label": "Next hole",
@@ -145,7 +146,7 @@ export function AdminScoringScorecard({ snapshot }) {
           h("span", { className: "lb-name", key: "name" }, row.label),
           meta ? h("span", { className: "sc-hole-pager-meta", key: "meta" }, meta) : null,
         ]),
-        h(ScoreInput, { hole: hole.hole, key: "score", row, score: scoreForRow(snap, row, hole.hole) }),
+        h(ScoreInput, { hole: hole.hole, key: "score", max: putting ? hole.par : 30, min: putting ? 0 : 1, row, score: scoreForRow(snap, row, hole.hole) }),
         conflict ? h("span", {
           "aria-label": conflictTitle(conflict),
           className: "sc-conflict-flag",
@@ -163,7 +164,8 @@ export function AdminScoringLeaderboard({ snapshot }) {
   const snap = snapshot || {};
   const standings = Array.isArray(snap.standings) ? snap.standings : [];
   const errors = Array.isArray(snap.scoreTargetErrors) ? snap.scoreTargetErrors : [];
-  const finalHead = isMatchplay(snap) ? "Match" : "To Par";
+  const putting = isPutting(snap);
+  const finalHead = isMatchplay(snap) ? "Match" : putting ? "Makes" : "To Par";
 
   return h("div", { className: "al-note", "data-react-admin-scoring-board": standings.length ? "ready" : "empty", id: "scBoard" }, [
     errors.length ? h("div", {
@@ -178,7 +180,7 @@ export function AdminScoringLeaderboard({ snapshot }) {
         h("td", { className: "lb-name", key: "name" }, `${standing.name || "Player"}${standing.scoringGroup && standing.scoringGroup.label && standing.scoringGroup.label !== standing.name ? ` · ${standing.scoringGroup.label}` : ""}${Array.isArray(standing.members) && standing.members.length && standing.targetType === "pair" ? ` - ${standing.members.join(" / ")}` : ""}`),
         h("td", { key: "thru" }, standing.thru ? String(standing.thru) : "N/A"),
         h("td", { key: "total" }, standing.thru ? String(standing.total) : "N/A"),
-        h("td", { key: "final" }, isMatchplay(snap) ? displayMatchStatus(standing.match) : standing.thru ? toPar(standing.toPar) : "N/A"),
+        h("td", { key: "final" }, isMatchplay(snap) ? displayMatchStatus(standing.match) : putting ? (standing.thru ? String(standing.total) : "N/A") : standing.thru ? toPar(standing.toPar) : "N/A"),
       ]))),
     ])) : h("div", { key: "empty", role: "status" }, "No scores yet."),
   ]);

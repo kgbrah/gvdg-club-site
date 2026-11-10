@@ -32,6 +32,7 @@ const FORMAT_LABELS = {
   doubles: 'Doubles',
   singles: 'Singles',
   teams: 'Teams',
+  putting: 'Putting',
 };
 
 export function typeLabel(type) {

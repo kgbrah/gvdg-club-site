@@ -38,10 +38,25 @@ export function isMatchplayScoring(state) {
   return Boolean(state.roundConfig && state.roundConfig.scoringStyle === "matchplay");
 }
 
+export function isPuttingScoring(state) {
+  return Boolean(state && state.roundConfig && state.roundConfig.scoringStyle === "putting");
+}
+
 export function roundFormatLabel(state) {
   const group = isDoublesScoring(state) ? "doubles" : "singles";
-  const style = isMatchplayScoring(state) ? "matchplay" : "stroke";
+  const style = isPuttingScoring(state) ? "putting" : isMatchplayScoring(state) ? "matchplay" : "stroke";
   return playGroupLabel(group) + " · " + playStyleLabel(style);
+}
+
+export function nextPuttingScore(current, putts, direction) {
+  const max = typeof putts === "number" && putts > 0 ? putts : 5;
+  if (direction === "plus") {
+    if (current == null) return 1;
+    return Math.min(max, current + 1);
+  }
+  if (current == null) return 0;
+  if (current <= 0) return null;
+  return current - 1;
 }
 
 export function nextHoleScore(current, par, direction) {
@@ -635,7 +650,7 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
       key: rowData.targetId || rowData.index,
       label: rowData.label,
       meta: rowData.meta,
-      relative: delta == null ? null : { className: relClass(delta), text: relText(delta) },
+      relative: isPuttingScoring(state) || delta == null ? null : { className: relClass(delta), text: relText(delta) },
       source: rowData,
       teePosition: order + 1,
     };
@@ -655,14 +670,17 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
         toPar += strokes - currentHole.par;
       }
     });
-    const resultLabel = isMatchplayScoring(state) ? "Match" : "To par";
-    const resultValue = isMatchplayScoring(state)
+    const putting = isPuttingScoring(state);
+    const resultLabel = putting ? "Makes" : isMatchplayScoring(state) ? "Match" : "To par";
+    const resultValue = putting
+      ? (thru ? String(total) : "-")
+      : isMatchplayScoring(state)
       ? (matchStatusText(state).replace(/^Match: /, "") || "AS")
       : thru ? relText(toPar) : "E";
     totals = [
-      { label: "Thru", value: String(thru) + "/" + state.holes.length },
-      { label: "Total", value: total ? String(total) : "-" },
-      { label: resultLabel, value: resultValue },
+      { label: putting ? "Stations" : "Thru", value: String(thru) + "/" + state.holes.length },
+      { label: putting ? "Makes" : "Total", value: putting ? (thru ? String(total) : "-") : (total ? String(total) : "-") },
+      ...(putting ? [] : [{ label: resultLabel, value: resultValue }]),
     ];
   }
 
@@ -675,7 +693,7 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
   const holeScores = (state.cardmates || []).map((player) => player && player.scores ? player.scores[hole.hole] : null);
   const holeGrid = (state.holes || []).map((currentHole, index) => {
     const score = mine ? strokesForRow(state, mine, currentHole.hole, scorerIndex) : null;
-    const relative = score == null ? null : strokeLabel(score, currentHole.par);
+    const relative = score == null || isPuttingScoring(state) ? null : strokeLabel(score, currentHole.par);
     return {
       conflict: holeHasConflict(state, currentHole.hole),
       ctp: pots.holeNumbers.indexOf(currentHole.hole) >= 0,
@@ -684,6 +702,7 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
       hole: currentHole.hole,
       index,
       par: currentHole.par,
+      distanceFt: currentHole.distance_ft,
       relative,
       score,
     };
@@ -728,7 +747,7 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
   const playPos = playOrderPosition(state.holes, state.holeIdx, startHole);
   const scoredHoles = holeGrid.filter((row) => typeof row.score === "number");
   const baseline = state.ratingBaseline;
-  const playingRating = isMatchplayScoring(state) ? null : playingRoundRating({
+  const playingRating = isMatchplayScoring(state) || isPuttingScoring(state) ? null : playingRoundRating({
     holeCount: holeGrid.length,
     thru: scoredHoles.length,
     strokes: scoredHoles.reduce((sum, row) => sum + row.score, 0),
@@ -754,7 +773,10 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
     hole,
     layoutId: state.layoutId || (state.snap && state.snap.layoutId) || null,
     holeGrid,
-    holeMeta: "Par " + hole.par + (hole.distance_ft ? " · " + hole.distance_ft + " ft" : "") + (hole.overridden ? " (today)" : "") + ctpMeta,
+    holeMeta: isPuttingScoring(state)
+      ? ((hole.distance_ft ? hole.distance_ft + " ft · " : "") + hole.par + " putts")
+      : "Par " + hole.par + (hole.distance_ft ? " · " + hole.distance_ft + " ft" : "") + (hole.overridden ? " (today)" : "") + ctpMeta,
+    putting: isPuttingScoring(state),
     matchStatus: isMatchplayScoring(state) ? matchStatusText(state) : "",
     nextHole: nextPlayHole(state.holes, state.holeIdx, startHole),
     pots,

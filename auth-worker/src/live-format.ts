@@ -1,10 +1,20 @@
 export type LiveGroupFormat = "singles" | "doubles";
-export type LiveScoringStyle = "stroke" | "matchplay";
+export type LiveScoringStyle = "stroke" | "matchplay" | "putting";
+
+export type PuttingStation = {
+  readonly distanceFt: number;
+  readonly putts: number;
+};
+
+export type PuttingConfig = {
+  readonly stations: readonly PuttingStation[];
+};
 
 export type LiveScoringConfig = {
   readonly groupFormat: LiveGroupFormat;
   readonly scoringStyle: LiveScoringStyle;
   readonly handicap?: boolean;
+  readonly putting?: PuttingConfig;
 };
 
 export type ScoreTarget =
@@ -48,6 +58,26 @@ const DEFAULT_LIVE_SCORING_CONFIG = {
   handicap: false,
 } satisfies LiveScoringConfig;
 
+export const DEFAULT_PUTTING_STATIONS: readonly PuttingStation[] = [
+  { distanceFt: 15, putts: 5 },
+  { distanceFt: 20, putts: 5 },
+  { distanceFt: 25, putts: 5 },
+  { distanceFt: 30, putts: 5 },
+  { distanceFt: 33, putts: 5 },
+];
+
+export function holesForPutting(config: LiveScoringConfig): { hole: number; par: number; distance_ft: number; tee_sign_id: null; tee: null; target: null }[] {
+  const stations = config.putting?.stations?.length ? config.putting.stations : DEFAULT_PUTTING_STATIONS;
+  return stations.map((station, index) => ({
+    hole: index + 1,
+    par: station.putts,
+    distance_ft: station.distanceFt,
+    tee_sign_id: null,
+    tee: null,
+    target: null,
+  }));
+}
+
 function parseHandicap(value: unknown, scoringStyle: LiveScoringStyle): boolean {
   return scoringStyle === "stroke" && value === true;
 }
@@ -64,11 +94,13 @@ export function normalizeLiveScoringConfig(value: unknown): LiveScoringConfig {
     throw new LiveFormatError("invalid_group_format", "live scoring config must be an object");
   }
   const scoringStyle = parseScoringStyle(value["scoringStyle"]);
-  return {
-    groupFormat: parseGroupFormat(value["groupFormat"]),
+  const config: LiveScoringConfig = {
+    groupFormat: scoringStyle === "putting" ? "singles" : parseGroupFormat(value["groupFormat"]),
     scoringStyle,
     handicap: parseHandicap(value["handicap"], scoringStyle),
   };
+  if (scoringStyle === "putting") return { ...config, putting: parsePutting(value["putting"]) };
+  return config;
 }
 
 export function normalizeStoredLiveScoringConfig(value: unknown): LiveScoringConfig | null {
@@ -96,13 +128,21 @@ export function normalizeLiveScoringConfigFromLegacy(value: {
   const explicit = normalizeStoredLiveScoringConfig(value.liveScoringConfig ?? value.live_scoring_config);
   const scoringStyle = explicit
     ? explicit.scoringStyle
-    : (value.event_format === "matchplay" || value.format === "matchplay" ? "matchplay" : "stroke");
+    : (value.event_format === "matchplay" || value.format === "matchplay"
+      ? "matchplay"
+      : value.event_format === "putting" || value.format === "putting"
+        ? "putting"
+        : "stroke");
   // Registration play_format=doubles used to leave a stale stored singles config in place.
   // Doubles pairing is the landmine for Ryder dubs; prefer it over a leftover singles groupFormat.
-  const groupFormat = value.play_format === "doubles"
-    ? "doubles"
-    : (explicit ? explicit.groupFormat : "singles");
-  return { groupFormat, scoringStyle, handicap: scoringStyle === "stroke" && explicit?.handicap === true };
+  const groupFormat = scoringStyle === "putting"
+    ? "singles"
+    : value.play_format === "doubles"
+      ? "doubles"
+      : (explicit ? explicit.groupFormat : "singles");
+  const config: LiveScoringConfig = { groupFormat, scoringStyle, handicap: scoringStyle === "stroke" && explicit?.handicap === true };
+  if (scoringStyle !== "putting") return config;
+  return { ...config, putting: explicit?.putting ?? { stations: DEFAULT_PUTTING_STATIONS } };
 }
 
 export function isLiveFormatError(error: unknown): error is LiveFormatError {
@@ -169,6 +209,7 @@ export function validateCardTargetsForScoring(targets: readonly ScoreTarget[], c
   const config = normalizeLiveScoringConfig(configValue);
   switch (config.scoringStyle) {
     case "stroke":
+    case "putting":
       return;
     case "matchplay":
       if (targets.length !== 2) {
@@ -238,8 +279,23 @@ function parseGroupFormat(value: unknown): LiveGroupFormat {
 
 function parseScoringStyle(value: unknown): LiveScoringStyle {
   if (value == null) return DEFAULT_LIVE_SCORING_CONFIG.scoringStyle;
-  if (value === "stroke" || value === "matchplay") return value;
+  if (value === "stroke" || value === "matchplay" || value === "putting") return value;
   throw new LiveFormatError("invalid_scoring_style", "unsupported live scoring scoringStyle");
+}
+
+function parsePutting(value: unknown): PuttingConfig {
+  const list = isRecord(value) && Array.isArray(value["stations"]) ? value["stations"] : [];
+  const stations = list.map(parsePuttingStation).filter((station): station is PuttingStation => station != null).slice(0, 12);
+  return { stations: stations.length ? stations : [...DEFAULT_PUTTING_STATIONS] };
+}
+
+function parsePuttingStation(value: unknown): PuttingStation | null {
+  if (!isRecord(value)) return null;
+  const distance = Number(value["distanceFt"] ?? value["distance_ft"]);
+  const putts = Number(value["putts"]);
+  if (!Number.isInteger(distance) || distance < 8 || distance > 80) return null;
+  if (!Number.isInteger(putts) || putts < 1 || putts > 10) return null;
+  return { distanceFt: distance, putts };
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

@@ -63,6 +63,8 @@ export function computeLiveStandings(input: LiveScoringInput): LiveStanding[] {
   switch (input.config.scoringStyle) {
     case "stroke":
       return strokeTargetRows(input).map(toLiveStanding);
+    case "putting":
+      return puttingTargetRows(input).map(toLiveStanding);
     case "matchplay":
       return matchplayTargetRows(input).map(toLiveStanding);
     default:
@@ -75,11 +77,28 @@ export function finalizeLiveStandings(input: LiveScoringInput): FinalLiveStandin
   switch (input.config.scoringStyle) {
     case "stroke":
       return rankedStrokeTargets(input).flatMap((row) => expandFinalTargetRow(input.players, row));
+    case "putting":
+      return rankedPuttingTargets(input).flatMap((row) => expandFinalTargetRow(input.players, row));
     case "matchplay":
       return rankedMatchplayTargets(input).flatMap((row) => expandFinalTargetRow(input.players, row));
     default:
       return assertNever(input.config.scoringStyle);
   }
+}
+
+function puttingTargetRows(input: LiveScoringInput): TargetStrokeRow[] {
+  const rows = input.targets.map((target) => targetStrokeRow(input.holes, input.players, target, input.config.scoringStyle));
+  rows.sort((a, b) => b.total - a.total || b.thru - a.thru || a.name.localeCompare(b.name));
+  return rows;
+}
+
+function rankedPuttingTargets(input: LiveScoringInput): RankedTargetRow[] {
+  const holeCount = input.holes.length;
+  const rows = puttingTargetRows(input);
+  const finishers = rows.filter((row) => completed(row, holeCount));
+  const dnf = rows.filter((row) => !completed(row, holeCount));
+  dnf.sort((a, b) => b.thru - a.thru || b.total - a.total || a.name.localeCompare(b.name));
+  return [...rankTargetsByTotal(finishers), ...dnf.map((row) => ({ ...row, place: null }))];
 }
 
 function strokeTargetRows(input: LiveScoringInput): TargetStrokeRow[] {
@@ -173,7 +192,9 @@ function targetStrokeRow(
     memberIds: target.memberIds,
     members: group?.members ?? target.playerIndexes.map((index) => playerAt(players, index).name),
     scoringGroup: group,
-    breakdown: countScores(pars, strokes),
+    breakdown: scoringStyle === "putting"
+      ? { aces: 0, eagles: 0, birdies: 0, pars: 0, bogeys: 0, doubles_plus: 0 }
+      : countScores(pars, strokes),
     holes: played,
     scorecard: holes.map((hole) => {
       const score = scoreForTarget(players, target, hole.hole);
@@ -266,6 +287,19 @@ function withMatch(row: TargetStrokeRow, match: MatchStatus): TargetStrokeRow {
 
 function completed(row: TargetStrokeRow, holeCount: number): boolean {
   return holeCount > 0 && row.thru === holeCount;
+}
+
+function rankTargetsByTotal(rows: readonly TargetStrokeRow[]): RankedTargetRow[] {
+  let place = 0;
+  let prevKey = "";
+  return rows.map((row, index) => {
+    const key = String(row.total);
+    if (key !== prevKey) {
+      place = index + 1;
+      prevKey = key;
+    }
+    return { ...row, place };
+  });
 }
 
 function rankTargets(rows: readonly TargetStrokeRow[]): RankedTargetRow[] {

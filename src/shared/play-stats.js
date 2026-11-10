@@ -422,7 +422,10 @@ export function playRowGroup(row) {
 }
 
 export function playRowStyle(row) {
-  return String(row && (row.scoringStyle || row.scoring_style) || "").toLowerCase() === "matchplay" ? "matchplay" : "stroke";
+  const style = String(row && (row.scoringStyle || row.scoring_style) || "").toLowerCase();
+  if (style === "matchplay") return "matchplay";
+  if (style === "putting") return "putting";
+  return "stroke";
 }
 
 export function playGroupLabel(group) {
@@ -434,6 +437,7 @@ export function playGroupLabel(group) {
 export function playStyleLabel(style) {
   if (style === "matchplay") return "Match play";
   if (style === "stroke") return "Stroke";
+  if (style === "putting") return "Putting";
   return "All";
 }
 
