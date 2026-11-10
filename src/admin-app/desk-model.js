@@ -1,3 +1,12 @@
+export function holdDeskOrder(players, previousIds) {
+  const list = Array.isArray(players) ? players : [];
+  const previous = Array.isArray(previousIds) ? previousIds : [];
+  const ids = list.map((player) => String(player && (player.id != null ? player.id : player.name) || ""));
+  const samePeople = previous.length === ids.length && previous.every((id) => ids.includes(String(id)));
+  if (!samePeople) return deskLine(list).map((player) => String(player && (player.id != null ? player.id : player.name) || ""));
+  return previous;
+}
+
 export function deskLine(players) {
   const list = Array.isArray(players) ? players : [];
   const rank = (player) => (!player || player.paid ? 1 : 0) + (!player || player.checkedIn ? 1 : 0);

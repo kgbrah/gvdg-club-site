@@ -56,7 +56,7 @@ test('admin registration member picker adds club members as registrations from r
   assert.match(rgAddMembers, /if \(!rgEventId\) \{[\s\S]*?Select an event first[\s\S]*?gvdg:admin-registration-members-add-result[\s\S]*?ok: false, requestId[\s\S]*?return;/);
   assert.match(rgAddMembers, /adminApi\('\/admin\/events\/' \+ rgEventId \+ '\/registrations', \{ method: 'POST', body \}\)/);
   assert.match(rgAddMembers, /gvdg:admin-registration-members-add-result/);
-  assert.match(rgAddMembers, /rgLoadRoster\(\)/);
+  assert.match(rgAddMembers, /rgLoadRoster\(\{ quiet: true \}\)/);
   assert.doesNotMatch(rgAddMembers, /\/admin\/events\/' \+ rgEventId \+ '\/players'/);
   assert.ok(initAdmin);
   assert.match(initAdmin, /gvdg:admin-registration-members-add-request/);

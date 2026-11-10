@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { counterHandoff, deskSummary, handoffLabel, usualPriceDollars } from "../src/admin-app/desk-model.js";
+import { counterHandoff, deskSummary, handoffLabel, holdDeskOrder, usualPriceDollars } from "../src/admin-app/desk-model.js";
 import { nextWeekOffer } from "../src/admin-app/repeat-draft.js";
 
 test("the morning line puts people who owe first and knows when everyone is here", () => {
@@ -14,6 +14,14 @@ test("the morning line puts people who owe first and knows when everyone is here
   assert.equal(summary.ready, false);
   assert.equal(summary.owe, 1);
   assert.equal(deskSummary([{ name: "Ava", checkedIn: true, paid: true }]).ready, true);
+  const players = [
+    { id: 1, name: "Ava", checkedIn: true, paid: true },
+    { id: 2, name: "Ben", checkedIn: false, paid: false },
+  ];
+  const first = holdDeskOrder(players, []);
+  assert.deepEqual(first, ["2", "1"]);
+  const stayed = holdDeskOrder(players.map((player) => ({ ...player, checkedIn: true, paid: true })), first);
+  assert.equal(stayed, first);
 });
 
 test("the counter hands off a ready order and remembers the usual price", () => {

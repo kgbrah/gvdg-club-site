@@ -978,13 +978,15 @@ export function startAdminController() {
             if (r.ok) setAdminRegistrationControlsState({ configStatus: 'ready', config: body });
             window.dispatchEvent(new CustomEvent('gvdg:admin-registration-config-save-result', { detail: { ok: r.ok, requestId } }));
         }
-        async function rgLoadRoster() {
-            setAdminRegistrationRosterState({ status: 'loading', registrations: [], manualPlayers: [] });
+        async function rgLoadRoster(options) {
+            const quiet = Boolean(options && options.quiet);
+            if (!quiet) setAdminRegistrationRosterState({ status: 'loading', registrations: [], manualPlayers: [] });
             let regs = [];
             let ok = true;
             try { const r = await adminApi('/admin/events/' + rgEventId + '/registrations'); if (!r.ok) throw new Error('registrations_failed'); regs = (await r.json()).registrations || []; } catch (e) { ok = false; }
             let manual = [];
             try { const r = await api('/events/' + rgEventId); if (!r.ok) throw new Error('event_failed'); manual = ((await r.json()).event || {}).players || []; } catch (e) { ok = false; }
+            if (!ok && quiet) return;
             const memberOptions = regs.filter((rg) => rg.member_id).map((rg) => ({ value: rg.member_id, label: rg.name || rg.member_id }));
             setAdminRegistrationMemberOptionsState({ status: ok ? 'ready' : 'error', options: memberOptions });
             setAdminRegistrationRosterState({ status: ok ? 'ready' : 'error', registrations: regs, manualPlayers: manual });
@@ -1047,7 +1049,7 @@ export function startAdminController() {
             if (r.ok) {
                 adminMsg('Player added', true);
                 window.dispatchEvent(new CustomEvent('gvdg:admin-registration-manual-player-add-result', { detail: { ok: true, requestId } }));
-                rgLoadRoster();
+                rgLoadRoster({ quiet: true });
             } else {
                 const e = await r.json().catch(() => ({}));
                 adminMsg(rgRosterMutationError(e, r.status, 'Add player failed'), false);
@@ -1085,7 +1087,7 @@ export function startAdminController() {
                 if (skipped) msg += ' (' + skipped + ' skipped)';
                 adminMsg(msg, added > 0);
                 window.dispatchEvent(new CustomEvent('gvdg:admin-registration-members-add-result', { detail: { ok: true, requestId, added, skipped } }));
-                rgLoadRoster();
+                rgLoadRoster({ quiet: true });
             } else {
                 const e = await r.json().catch(() => ({}));
                 adminMsg(rgRosterMutationError(e, r.status, 'Add members failed'), false);
@@ -1101,13 +1103,13 @@ export function startAdminController() {
         }
         async function rgRemoveManualPlayer(player) {
             const r = await adminApi('/admin/events/' + rgEventId + '/players/' + player.id, { method: 'DELETE' });
-            if (r.ok) { adminMsg('Player removed', true); rgLoadRoster(); return; }
+            if (r.ok) { adminMsg('Player removed', true); rgLoadRoster({ quiet: true }); return; }
             const e = await r.json().catch(() => ({}));
             adminMsg(rgRosterMutationError(e, r.status, 'Remove failed'), false);
         }
         async function rgRemoveRegistration(registration) {
             const r = await adminApi('/admin/events/' + rgEventId + '/registrations/' + registration.id, { method: 'DELETE' });
-            if (r.ok) { adminMsg('Player removed', true); rgLoadRoster(); return; }
+            if (r.ok) { adminMsg('Player removed', true); rgLoadRoster({ quiet: true }); return; }
             const e = await r.json().catch(() => ({}));
             adminMsg(rgRosterMutationError(e, r.status, 'Remove failed'), false);
         }
@@ -1115,7 +1117,7 @@ export function startAdminController() {
             const amount = dollarsToCents(amountValue);
             if (amount == null || amount <= 0) { adminMsg('Enter a store credit amount', false); return; }
             const r = await adminApi('/admin/events/' + rgEventId + '/store-credit', { method: 'POST', body: { member_id: memberId, member_name: name || null, amount_cents: amount, note: 'Event payout: ' + rgSelectedEventLabel() } });
-            if (r.ok) { const d = await r.json(); adminMsg('Awarded ' + dollarsFromCents(amount) + ' to ' + (name || memberId) + '. Balance: ' + dollarsFromCents(d.balance_cents || 0), true); rgLoadRoster(); rgLoadCredits(); }
+            if (r.ok) { const d = await r.json(); adminMsg('Awarded ' + dollarsFromCents(amount) + ' to ' + (name || memberId) + '. Balance: ' + dollarsFromCents(d.balance_cents || 0), true); rgLoadRoster({ quiet: true }); rgLoadCredits(); }
             else adminMsg(await rgStoreCreditError(r, 'Store credit award failed'), false);
         }
         async function rgStoreCreditError(r, fallback) {
@@ -1126,14 +1128,14 @@ export function startAdminController() {
         }
         async function rgPatch(rid, patch) {
             const r = await adminApi('/admin/events/' + rgEventId + '/registrations/' + rid, { method: 'PATCH', body: patch });
-            adminMsg(r.ok ? 'Updated' : 'Update failed', r.ok);
-            if (r.ok) rgLoadRoster();
+            if (!r.ok) adminMsg('Update failed', false);
+            rgLoadRoster({ quiet: true });
         }
         // Assignment (shotgun cards by starting hole), random.
         async function rgAssign(kind, body) {
             const r = await adminApi('/admin/events/' + rgEventId + '/' + kind, { method: 'POST', body });
             adminMsg(r.ok ? 'Assigned' : 'Assign failed (' + r.status + ')', r.ok);
-            if (r.ok) rgLoadRoster();
+            if (r.ok) rgLoadRoster({ quiet: true });
             return r.ok;
         }
         async function rgAssignFromReact(detail) {
@@ -1479,7 +1481,7 @@ export function startAdminController() {
                 const patch = detail.settle ? { checked_in: true, paid_entry: true } : { checked_in: false };
                 const r = await adminApi('/admin/events/' + eventId + '/registrations/' + registrationId, { method: 'PATCH', body: patch });
                 if (!r.ok) adminMsg('Check-in failed', false);
-                if (r.ok && Number(rgEventId) === eventId) rgLoadRoster();
+                if (r.ok && Number(rgEventId) === eventId) rgLoadRoster({ quiet: true });
                 await adminLoadDesk(eventId, true);
             });
             window.addEventListener('gvdg:admin-registration-config-save-request', async (event) => {

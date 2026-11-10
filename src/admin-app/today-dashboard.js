@@ -1,7 +1,7 @@
 import React from "react";
 
 import { currentAdminOrdersBadgeCount } from "./admin-shell-state.js";
-import { counterHandoff, deskSummary, handoffLabel } from "./desk-model.js";
+import { counterHandoff, deskSummary, handoffLabel, holdDeskOrder } from "./desk-model.js";
 import { repeatSavePayload } from "./event-form.js";
 import {
   bucketAdminEvents,
@@ -45,6 +45,7 @@ function DeskLine({ onTap, player }) {
 
 function MorningDesk({ event }) {
   const [desk, setDesk] = React.useState(EMPTY_DESK);
+  const order = React.useRef([]);
   const eventId = event && event.id ? String(event.id) : "";
 
   React.useEffect(() => {
@@ -70,6 +71,10 @@ function MorningDesk({ event }) {
   if (desk.status === "error") {
     return h("button", { className: "admin-btn", key: "score", onClick: () => requestTab("scoring", { eventId }), type: "button" }, "Start scoring");
   }
+  const nextOrder = holdDeskOrder(desk.players, order.current);
+  if (nextOrder !== order.current) order.current = nextOrder;
+  const byId = new Map(desk.players.map((player) => [String(player.id != null ? player.id : player.name), player]));
+  const line = order.current.map((id) => byId.get(id)).filter(Boolean);
   const summary = deskSummary(desk.players);
   const canStart = summary.ready || !summary.line.length;
   function tap(player, settle) {
@@ -81,7 +86,7 @@ function MorningDesk({ event }) {
   }
   return h("div", { className: "admin-desk", key: "desk" }, [
     h("p", { className: "admin-pane-kicker", key: "count" }, !summary.line.length ? "No one on the list yet." : summary.ready ? "Everyone is here." : `${summary.here} here${summary.owe ? ` · ${summary.owe} still owe` : ""}`),
-    ...summary.line.map((player) => h(DeskLine, { key: player.id || player.name, onTap: tap, player })),
+    ...line.map((player) => h(DeskLine, { key: player.id || player.name, onTap: tap, player })),
     canStart && event.status !== "live" ? h("button", {
       className: "admin-btn",
       key: "score",

@@ -18,7 +18,7 @@ test('admin registration manual player form is rendered by React from request ev
   assert.match(rgAddManualPlayer, /const body = detail\.body \|\| \{\}/);
   assert.match(rgAddManualPlayer, /adminApi\('\/admin\/events\/' \+ rgEventId \+ '\/players', \{ method: 'POST', body \}\)/);
   assert.match(rgAddManualPlayer, /gvdg:admin-registration-manual-player-add-result/);
-  assert.match(rgAddManualPlayer, /rgLoadRoster\(\)/);
+  assert.match(rgAddManualPlayer, /rgLoadRoster\(\{ quiet: true \}\)/);
   assert.doesNotMatch(rgAddManualPlayer, /\$\('rgPlayerName'\)|\$\('rgPlayerMember'\)|\$\('rgPlayerPdga'\)|\$\('rgPlayerDivision'\)|\$\('rgPlayerTeam'\)|\.value = ''/);
   assert.ok(initAdmin);
   assert.match(initAdmin, /gvdg:admin-registration-manual-player-add-request/);

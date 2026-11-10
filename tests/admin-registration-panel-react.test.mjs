@@ -10,7 +10,7 @@ test('admin registration panel owns selector, settings, assignments, CTP add, an
   const actions = readFileSync('src/admin-app/registration-actions.js', 'utf8');
   const rgLoadEvents = html.match(/async function rgLoadEvents\(\) \{[\s\S]*?\n        \}/)?.[0];
   const rgSelectEvent = html.match(/async function rgSelectEventFromReact\(detail\) \{[\s\S]*?\n        \}/)?.[0];
-  const rgLoadRoster = html.match(/async function rgLoadRoster\(\) \{[\s\S]*?\n        \}/)?.[0];
+  const rgLoadRoster = html.match(/async function rgLoadRoster\(options\) \{[\s\S]*?\n        \}/)?.[0];
   const rgLoadAcePot = html.match(/async function rgLoadAcePot\(\) \{[\s\S]*?\n        \}/)?.[0];
   const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 

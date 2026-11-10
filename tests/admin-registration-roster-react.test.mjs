@@ -10,7 +10,7 @@ test('admin registration roster is rendered by React from direct loader events',
   const roster = readFileSync('src/admin-app/registration-roster.js', 'utf8');
   const rows = readFileSync('src/admin-app/registration-roster-rows.js', 'utf8');
   const rosterSurface = manualForm + roster + rows;
-  const rgLoadRoster = html.match(/async function rgLoadRoster\(\) \{[\s\S]*?\n        \}/)?.[0];
+  const rgLoadRoster = html.match(/async function rgLoadRoster\(options\) \{[\s\S]*?\n        \}/)?.[0];
   const rgRemoveManualPlayer = html.match(/async function rgRemoveManualPlayer\(player\) \{[\s\S]*?\n        \}/)?.[0];
   const rgRemoveRegistration = html.match(/async function rgRemoveRegistration\(registration\) \{[\s\S]*?\n        \}/)?.[0];
   const rgAwardCredit = html.match(/async function rgAwardCredit\(memberId, name, amountValue\) \{[\s\S]*?\n        \}/)?.[0];
@@ -38,7 +38,7 @@ test('admin registration roster is rendered by React from direct loader events',
   assert.doesNotMatch(rgRemoveRegistration, /confirm\(/);
   assert.ok(rgAwardCredit);
   assert.match(rgAwardCredit, /dollarsToCents\(amountValue\)/);
-  assert.match(rgAwardCredit, /rgLoadRoster\(\); rgLoadCredits\(\)/);
+  assert.match(rgAwardCredit, /rgLoadRoster\(\{ quiet: true \}\); rgLoadCredits\(\)/);
   assert.doesNotMatch(rgAwardCredit, /input\.value|memberInput|amountInput/);
   assert.ok(initAdmin);
   assert.match(initAdmin, /gvdg:admin-registration-roster-patch-request/);

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=overlays-content">
     <title>Admin | Greenville Disc Golf Club</title>
     <meta name="theme-color" content="#1A1A2E">
     <meta name="mobile-web-app-capable" content="yes">
@@ -529,6 +529,24 @@
         }
         .admin-msg { font-size: 0.9rem; margin-bottom: 0.75rem; min-height: 1.2em; }
         .admin-msg.ok { color: var(--green); } .admin-msg.err { color: var(--over); }
+        @media (max-width: 768px) {
+            html { scroll-padding-top: 4.75rem; scroll-padding-bottom: calc(6.75rem + env(safe-area-inset-bottom)); }
+            .admin-page input, .admin-page select, .admin-page textarea { scroll-margin-top: 5.25rem; scroll-margin-bottom: calc(7rem + env(safe-area-inset-bottom)); }
+            #adminMessageReactApp .admin-msg { min-height: 0; margin: 0; }
+            #adminMessageReactApp .admin-msg:not(:empty) {
+                position: fixed;
+                left: 0.9rem;
+                right: 0.9rem;
+                bottom: calc(5.35rem + env(safe-area-inset-bottom));
+                z-index: 10045;
+                margin: 0;
+                padding: 0.55rem 0.75rem;
+                border-radius: 10px;
+                background: var(--bg-secondary);
+                border: 1px solid var(--border-color);
+                box-shadow: 0 8px 24px var(--card-shadow);
+            }
+        }
         .admin-dialog-overlay { position: fixed; inset: 0; z-index: 11000; display: grid; place-items: center; padding: 1rem; background: rgba(15, 15, 30, 0.68); }
         .admin-dialog { width: min(100%, 28rem); border: 2px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); padding: 1.25rem; }
         .admin-dialog.danger { border-color: var(--over); }

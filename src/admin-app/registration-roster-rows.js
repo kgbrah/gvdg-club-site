@@ -27,12 +27,14 @@ export function RegistrationRow({ registration }) {
   const [amountValue, setAmountValue] = React.useState("");
 
   React.useEffect(() => {
+    const active = typeof document !== "undefined" ? document.activeElement : null;
+    const editing = active && active.closest && active.closest(`[data-admin-registration-id="${registration.id}"]`) && active.matches("input, textarea, select");
+    if (editing) return;
     setDivision(registration.division);
     setTeam(registration.team);
     setStartingHole(registration.startingHole);
     setCheckedIn(registration.checkedIn);
     setPaidEntry(registration.paidEntry);
-    setAmountValue("");
   }, [registration.id, registration.division, registration.team, registration.startingHole, registration.checkedIn, registration.paidEntry]);
 
   function patchText(field, value, previous) {
