@@ -711,7 +711,7 @@ function ScorePad(props) {
       }, [
         h("div", { className: "grab", key: "grab" }),
         h("h2", { className: "section", id: "score-pad-title", key: "title" }, props.putting ? row.label + " · " + station : row.label + " · Hole " + hole.hole),
-        h("p", { className: "muted", key: "par" }, props.putting ? hole.par + " putts · count the makes" : "Par " + hole.par),
+        h("p", { className: "muted", key: "par" }, props.putting ? hole.par + " putts · count the makes" + (Number(hole.points) > 1 ? " · " + hole.points + " pts each" : "") : "Par " + hole.par),
         h("div", { className: "score-pad-shortcuts", key: "shortcuts" }, choices.shortcuts.map((item) =>
           h("button", {
             className: "btn" + (row.currentScore === item.value ? "" : " secondary"),

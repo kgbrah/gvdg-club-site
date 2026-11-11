@@ -32,7 +32,7 @@ export interface LiveMeta {
   courseName?: string | null;
   layoutName?: string | null;
   udiscCourseId?: string | null;
-  holes: { hole: number; par: number; distance_ft?: number | null; tee_sign_id?: number | null; tee?: { label?: string | null; lat?: number | null; lng?: number | null } | null; target?: { label?: string | null; lat?: number | null; lng?: number | null } | null }[];
+  holes: { hole: number; par: number; distance_ft?: number | null; points?: number; tee_sign_id?: number | null; tee?: { label?: string | null; lat?: number | null; lng?: number | null } | null; target?: { label?: string | null; lat?: number | null; lng?: number | null } | null }[];
   status: "live" | "final";
   startedAt: string;
   weather?: WeatherState | null;
@@ -57,7 +57,7 @@ export interface StartBody {
   courseName?: string | null;
   layoutName?: string | null;
   udiscCourseId?: string | null;
-  holes: { hole: number; par: number; distance_ft?: number | null; tee_sign_id?: number | null; tee?: { label?: string | null; lat?: number | null; lng?: number | null } | null; target?: { label?: string | null; lat?: number | null; lng?: number | null } | null }[];
+  holes: { hole: number; par: number; distance_ft?: number | null; points?: number; tee_sign_id?: number | null; tee?: { label?: string | null; lat?: number | null; lng?: number | null } | null; target?: { label?: string | null; lat?: number | null; lng?: number | null } | null }[];
   liveScoringConfig?: LiveScoringConfig;
   players: { memberId?: string | null; name: string; division?: string | null; team?: string | null; pairLabel?: string | null; startingHole?: number | null; cardId?: string | null; ctpEligible?: boolean; photo?: string | null }[];
   startedAt?: string;
@@ -110,6 +110,7 @@ export type ResolvedHole = {
   readonly hole: number;
   readonly par: number;
   readonly distance_ft: number | null;
+  readonly points?: number;
   readonly tee_sign_id: number | null;
   readonly tee: { label: string | null; lat: number | null; lng: number | null } | null;
   readonly target: { label: string | null; lat: number | null; lng: number | null } | null;

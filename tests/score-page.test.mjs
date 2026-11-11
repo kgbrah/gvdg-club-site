@@ -639,7 +639,7 @@ test('shotgun hole pager follows play order instead of layout index', async () =
 
 test('player leaderboard renders matchplay and pair labels without primary to-par ranking', () => {
   const source = scoreLeaderboardSource();
-  assert.match(source, /const resultHead = isMatchplay \? "Match" : isPutting \? "Makes" : handicapped \? "Net" : "To par"/);
+  assert.match(source, /const resultHead = isMatchplay \? "Match" : isPutting \? \(puttingPoints \? "Points" : "Makes"\) : handicapped \? "Net" : "To par"/);
   assert.match(source, /Club handicap\. Net is your start plus this round\./);
   assert.match(readFileSync('src/score-app/score-controller.js', 'utf8'), /\/layouts\/' \+ id \+ '\/handicaps'/);
   assert.match(readFileSync('src/score-app/score-controller.js', 'utf8'), /decorateStandings/);

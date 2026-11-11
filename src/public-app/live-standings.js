@@ -37,13 +37,17 @@ export function LiveStandings({ snapshot }) {
 
   const config = snapshot.roundConfig || {};
   const matchplay = config.scoringStyle === "matchplay";
+  const putting = config.scoringStyle === "putting";
+  const puttingPoints = putting && standings.some((standing) => Array.isArray(standing.scorecard) && standing.scorecard.some((hole) => Number(hole && hole.points) > 1));
   const doubles = config.groupFormat === "doubles";
-  const hasDivision = !matchplay && standings.some((standing) => standing && standing.division);
+  const hasDivision = !matchplay && !putting && standings.some((standing) => standing && standing.division);
   const columns = matchplay
     ? ["Pos", doubles ? "Team" : "Player", "Thru", "Match"]
-    : hasDivision
-      ? ["Pos", "Player", "Div", "Thru", "Total", "To Par"]
-      : ["Pos", "Player", "Thru", "Total", "To Par"];
+    : putting
+      ? ["Pos", "Player", "Thru", puttingPoints ? "Points" : "Makes"]
+      : hasDivision
+        ? ["Pos", "Player", "Div", "Thru", "Total", "To Par"]
+        : ["Pos", "Player", "Thru", "Total", "To Par"];
 
   return h("div", { className: "lb-wrap", "data-react-live-standings": "ready" }, h("table", { className: `lb-table${matchplay ? " live-matchplay" : ""}` }, [
     h("thead", { key: "head" }, h("tr", null, columns.map((label) => h("th", { key: label }, label)))),
@@ -68,6 +72,12 @@ export function LiveStandings({ snapshot }) {
         return h("tr", { key: `${name}|${index}` }, base.concat([
           h("td", { key: "thru" }, standing && standing.thru ? String(standing.thru) : "-"),
           h("td", { className: "lb-match", key: "match" }, displayMatchStatus(standing && standing.match)),
+        ]));
+      }
+      if (putting) {
+        return h("tr", { key: `${name}|${index}` }, base.concat([
+          h("td", { key: "thru" }, standing && standing.thru ? String(standing.thru) : "-"),
+          h("td", { key: "total" }, standing && standing.total != null && standing.thru ? String(standing.total) : "-"),
         ]));
       }
       return h("tr", { key: `${name}|${index}` }, base.concat([

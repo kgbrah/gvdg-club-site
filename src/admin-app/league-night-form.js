@@ -1,5 +1,8 @@
 import React from "react";
 
+import { PuttingStations } from "./scoring-panel.js";
+import { defaultPuttingStations } from "./scoring-model.js";
+
 const h = React.createElement;
 
 const EMPTY_FORM = {
@@ -11,6 +14,7 @@ const EMPTY_FORM = {
   leagueId: "",
   matchesText: "",
   start: true,
+  stations: defaultPuttingStations(),
   weekLabel: "",
 };
 
@@ -175,6 +179,7 @@ export function AdminLeagueNightForm() {
         layout_id: putting || !form.layoutId ? null : Number(form.layoutId),
         start: form.start,
         matchesText: form.matchesText,
+        ...(putting ? { putting: { stations: form.stations } } : {}),
       },
       leagueId: form.leagueId,
       valid: Boolean(form.leagueId && form.weekLabel.trim() && form.matchesText.trim() && (!needsLayout || form.layoutId)),
@@ -196,7 +201,7 @@ export function AdminLeagueNightForm() {
   }, [
     h("h3", { className: "roster-title", key: "title" }, "Start a league night"),
     h("p", { className: "al-note", key: "note" }, night.scoring === "putting"
-      ? "Putting league night. No course. One player vs player line per card. Most makes wins."
+      ? "Putting league night. No course. One player vs player line per card. Set points per make, or leave them at 1 so most makes wins."
       : "Build the night's matches, start live cards, and finished results roll into standings. One Red vs Blue line per match."),
     formField({
       id: "lnLeague",
@@ -227,6 +232,11 @@ export function AdminLeagueNightForm() {
         h("option", { key: "putting", value: "putting" }, "Putting league"),
       ]),
     }),
+    night.scoring === "putting" ? h(PuttingStations, {
+      key: "stations",
+      onChange: (stations) => updateField("stations", stations),
+      stations: Array.isArray(form.stations) && form.stations.length ? form.stations : defaultPuttingStations(),
+    }) : null,
     h("label", { key: "handicap", style: { display: "flex", gap: "0.5rem", alignItems: "center" } }, [
       h("input", {
         checked: stroke && form.handicap === true,

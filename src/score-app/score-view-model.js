@@ -671,6 +671,17 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
       }
     });
     const putting = isPuttingScoring(state);
+    const weighted = putting && (state.holes || []).some((currentHole) => Number(currentHole.points) > 1);
+    let pointsTotal = 0;
+    if (weighted) {
+      (state.holes || []).forEach((currentHole) => {
+        const strokes = strokesForRow(state, mine, currentHole.hole, scorerIndex);
+        if (typeof strokes !== "number") return;
+        const weight = Number(currentHole.points);
+        const points = Number.isInteger(weight) && weight > 1 ? weight : 1;
+        pointsTotal += strokes * points;
+      });
+    }
     const resultLabel = putting ? "Makes" : isMatchplayScoring(state) ? "Match" : "To par";
     const resultValue = putting
       ? (thru ? String(total) : "-")
@@ -680,6 +691,7 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
     totals = [
       { label: putting ? "Stations" : "Thru", value: String(thru) + "/" + state.holes.length },
       { label: putting ? "Makes" : "Total", value: putting ? (thru ? String(total) : "-") : (total ? String(total) : "-") },
+      ...(putting && weighted ? [{ label: "Points", value: thru ? String(pointsTotal) : "-" }] : []),
       ...(putting ? [] : [{ label: resultLabel, value: resultValue }]),
     ];
   }
@@ -774,7 +786,7 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
     layoutId: state.layoutId || (state.snap && state.snap.layoutId) || null,
     holeGrid,
     holeMeta: isPuttingScoring(state)
-      ? ((hole.distance_ft ? hole.distance_ft + " ft · " : "") + hole.par + " putts")
+      ? ((hole.distance_ft ? hole.distance_ft + " ft · " : "") + hole.par + " putts" + (Number(hole.points) > 1 ? " · " + hole.points + " pts each" : ""))
       : "Par " + hole.par + (hole.distance_ft ? " · " + hole.distance_ft + " ft" : "") + (hole.overridden ? " (today)" : "") + ctpMeta,
     putting: isPuttingScoring(state),
     matchStatus: isMatchplayScoring(state) ? matchStatusText(state) : "",

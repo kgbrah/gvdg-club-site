@@ -4,6 +4,8 @@ export type LiveScoringStyle = "stroke" | "matchplay" | "putting";
 export type PuttingStation = {
   readonly distanceFt: number;
   readonly putts: number;
+  /** Points awarded for each make at this station. 1 keeps "most makes wins". */
+  readonly points: number;
 };
 
 export type PuttingConfig = {
@@ -59,19 +61,28 @@ const DEFAULT_LIVE_SCORING_CONFIG = {
 } satisfies LiveScoringConfig;
 
 export const DEFAULT_PUTTING_STATIONS: readonly PuttingStation[] = [
-  { distanceFt: 15, putts: 5 },
-  { distanceFt: 20, putts: 5 },
-  { distanceFt: 25, putts: 5 },
-  { distanceFt: 30, putts: 5 },
-  { distanceFt: 33, putts: 5 },
+  { distanceFt: 15, putts: 5, points: 1 },
+  { distanceFt: 20, putts: 5, points: 1 },
+  { distanceFt: 25, putts: 5, points: 1 },
+  { distanceFt: 30, putts: 5, points: 1 },
+  { distanceFt: 33, putts: 5, points: 1 },
 ];
 
-export function holesForPutting(config: LiveScoringConfig): { hole: number; par: number; distance_ft: number; tee_sign_id: null; tee: null; target: null }[] {
+/** Missing or blank points are 1. Out-of-range values are not a station (caller drops them). */
+export function puttingStationPoints(value: unknown): number | null {
+  if (value == null || value === "") return 1;
+  const points = Number(value);
+  if (!Number.isInteger(points) || points < 1 || points > 20) return null;
+  return points;
+}
+
+export function holesForPutting(config: LiveScoringConfig): { hole: number; par: number; distance_ft: number; points?: number; tee_sign_id: null; tee: null; target: null }[] {
   const stations = config.putting?.stations?.length ? config.putting.stations : DEFAULT_PUTTING_STATIONS;
   return stations.map((station, index) => ({
     hole: index + 1,
     par: station.putts,
     distance_ft: station.distanceFt,
+    ...(station.points > 1 ? { points: station.points } : {}),
     tee_sign_id: null,
     tee: null,
     target: null,
@@ -293,9 +304,11 @@ function parsePuttingStation(value: unknown): PuttingStation | null {
   if (!isRecord(value)) return null;
   const distance = Number(value["distanceFt"] ?? value["distance_ft"]);
   const putts = Number(value["putts"]);
+  const points = puttingStationPoints(value["points"]);
   if (!Number.isInteger(distance) || distance < 8 || distance > 80) return null;
   if (!Number.isInteger(putts) || putts < 1 || putts > 10) return null;
-  return { distanceFt: distance, putts };
+  if (points == null) return null;
+  return { distanceFt: distance, putts, points };
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

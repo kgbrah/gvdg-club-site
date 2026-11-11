@@ -77,6 +77,33 @@ describe("parseLeagueNightPlan", () => {
       courseId: null,
       layoutId: null,
       start: true,
+      putting: {
+        stations: [
+          { distanceFt: 15, putts: 5, points: 1 },
+          { distanceFt: 20, putts: 5, points: 1 },
+          { distanceFt: 25, putts: 5, points: 1 },
+          { distanceFt: 30, putts: 5, points: 1 },
+          { distanceFt: 33, putts: 5, points: 1 },
+        ],
+      },
+    });
+  });
+
+  it("keeps custom putting station points on a league night", () => {
+    const plan = parseLeagueNightPlan({
+      weekLabel: "Week 2",
+      scoringStyle: "putting",
+      matchesText: "Jackie vs Jesus",
+      putting: { stations: [{ distanceFt: 20, putts: 5, points: 1 }, { distanceFt: 33, putts: 3, points: 4 }, { distanceFt: 40, putts: 5, points: 0 }] },
+    });
+    expect(plan).toMatchObject({
+      scoringStyle: "putting",
+      putting: {
+        stations: [
+          { distanceFt: 20, putts: 5, points: 1 },
+          { distanceFt: 33, putts: 3, points: 4 },
+        ],
+      },
     });
   });
 });

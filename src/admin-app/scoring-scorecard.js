@@ -1,6 +1,6 @@
 import React from "react";
 
-import { conflictForRow, conflictTitle, isDoubles, isMatchplay, isPutting, rowTotal, scoreForRow, scoreRows, toPar } from "./scoring-model.js";
+import { conflictForRow, conflictTitle, holeMakePoints, isDoubles, isMatchplay, isPutting, puttingWeighted, rowPoints, rowTotal, scoreForRow, scoreRows, toPar } from "./scoring-model.js";
 import { displayMatchStatus } from "../shared/match-status.js";
 import { fieldActiveHoleIndex } from "../score-app/score-view-model.js";
 
@@ -70,6 +70,7 @@ export function AdminScoringScorecard({ snapshot }) {
   }, [holes.length]);
 
   const putting = isPutting(snap);
+  const weighted = putting && puttingWeighted(holes);
   const table = h("div", { className: "sc-scorecard-desktop", key: "desktop", style: { overflowX: "auto" } }, h("table", {
     className: "al-holes",
     "data-react-admin-scoring-grid": "ready",
@@ -77,8 +78,9 @@ export function AdminScoringScorecard({ snapshot }) {
   }, [
     h("thead", { key: "head" }, h("tr", null, [
       ...rowHead.map((label) => h("th", { key: label }, label)),
-      ...holes.map((hole) => h("th", { className: hole.overridden ? "th-temp" : undefined, key: hole.hole }, putting ? `${hole.distance_ft || hole.hole} ft` : `H${hole.hole} (${hole.par})${hole.overridden ? " temp" : ""}`)),
-      h("th", { key: "total" }, "Tot"),
+      ...holes.map((hole) => h("th", { className: hole.overridden ? "th-temp" : undefined, key: hole.hole }, putting ? `${hole.distance_ft || hole.hole} ft${holeMakePoints(hole) > 1 ? ` · ${hole.points} pts` : ""}` : `H${hole.hole} (${hole.par})${hole.overridden ? " temp" : ""}`)),
+      h("th", { key: "total" }, weighted ? "Makes" : "Tot"),
+      weighted ? h("th", { key: "points" }, "Pts") : null,
     ])),
     h("tbody", { key: "body" }, rows.map((row) => {
       const key = row.targetId || `player:${row.index}`;
@@ -99,6 +101,7 @@ export function AdminScoringScorecard({ snapshot }) {
           ]);
         }),
         h("td", { key: "total" }, rowTotal(snap, row) || "N/A"),
+        weighted ? h("td", { key: "points" }, rowPoints(snap, row) || "N/A") : null,
       ]);
     })),
   ]));
@@ -121,7 +124,7 @@ export function AdminScoringScorecard({ snapshot }) {
       }, "Prev"),
       h("div", { "aria-live": "polite", className: "sc-hole-pager-label", key: "label" }, [
         h("strong", { key: "hole" }, putting ? `${hole.distance_ft || hole.hole} ft` : `Hole ${hole.hole}`),
-        h("span", { key: "meta" }, putting ? `${hole.par} putts · ${holeIndex + 1} of ${holes.length}` : `Par ${hole.par}${hole.overridden ? " · temp" : ""} · ${holeIndex + 1} of ${holes.length}`),
+        h("span", { key: "meta" }, putting ? `${hole.par} putts${holeMakePoints(hole) > 1 ? ` · ${hole.points} pts each` : ""} · ${holeIndex + 1} of ${holes.length}` : `Par ${hole.par}${hole.overridden ? " · temp" : ""} · ${holeIndex + 1} of ${holes.length}`),
       ]),
       h("button", {
         "aria-label": "Next hole",
@@ -136,7 +139,8 @@ export function AdminScoringScorecard({ snapshot }) {
       const key = row.targetId || `player:${row.index}`;
       const conflict = conflictForRow(snap, row, hole.hole);
       const total = rowTotal(snap, row);
-      const meta = [row.meta, total ? `Tot ${total}` : null].filter(Boolean).join(" · ");
+      const points = weighted ? rowPoints(snap, row) : 0;
+      const meta = [row.meta, total ? (weighted ? `Makes ${total}` : `Tot ${total}`) : null, weighted && points ? `Pts ${points}` : null].filter(Boolean).join(" · ");
       return h("div", {
         className: conflict ? "sc-hole-pager-row sc-conflict" : "sc-hole-pager-row",
         "data-row-key": key,
@@ -165,7 +169,9 @@ export function AdminScoringLeaderboard({ snapshot }) {
   const standings = Array.isArray(snap.standings) ? snap.standings : [];
   const errors = Array.isArray(snap.scoreTargetErrors) ? snap.scoreTargetErrors : [];
   const putting = isPutting(snap);
-  const finalHead = isMatchplay(snap) ? "Match" : putting ? "Makes" : "To Par";
+  const weighted = putting && standings.some((standing) => Array.isArray(standing.scorecard) && standing.scorecard.some((hole) => Number(hole && hole.points) > 1));
+  const finalHead = isMatchplay(snap) ? "Match" : putting ? (weighted ? "Points" : "Makes") : "To Par";
+  const totalHead = putting && weighted ? "Makes" : "Total";
 
   return h("div", { className: "al-note", "data-react-admin-scoring-board": standings.length ? "ready" : "empty", id: "scBoard" }, [
     errors.length ? h("div", {
@@ -174,14 +180,19 @@ export function AdminScoringLeaderboard({ snapshot }) {
       style: { color: "var(--over)", fontWeight: "600", marginBottom: ".5rem" },
     }, `Attention: ${errors.map((error) => error?.message || "A card has an invalid pair").join(" - ")} - the pair can rejoin or the team can withdraw; otherwise admin-force finalize to close the round.`) : null,
     standings.length ? h("div", { key: "table", style: { overflowX: "auto" } }, h("table", { className: "al-holes" }, [
-      h("thead", { key: "head" }, h("tr", null, ["Pos", isDoubles(snap) ? "Pair" : "Player", "Thru", "Total", finalHead].map((label) => h("th", { key: label }, label)))),
-      h("tbody", { key: "body" }, standings.map((standing, index) => h("tr", { key: standing.name || index }, [
-        h("td", { key: "pos" }, String(index + 1)),
-        h("td", { className: "lb-name", key: "name" }, `${standing.name || "Player"}${standing.scoringGroup && standing.scoringGroup.label && standing.scoringGroup.label !== standing.name ? ` · ${standing.scoringGroup.label}` : ""}${Array.isArray(standing.members) && standing.members.length && standing.targetType === "pair" ? ` - ${standing.members.join(" / ")}` : ""}`),
-        h("td", { key: "thru" }, standing.thru ? String(standing.thru) : "N/A"),
-        h("td", { key: "total" }, standing.thru ? String(standing.total) : "N/A"),
-        h("td", { key: "final" }, isMatchplay(snap) ? displayMatchStatus(standing.match) : putting ? (standing.thru ? String(standing.total) : "N/A") : standing.thru ? toPar(standing.toPar) : "N/A"),
-      ]))),
+      h("thead", { key: "head" }, h("tr", null, ["Pos", isDoubles(snap) ? "Pair" : "Player", "Thru", totalHead, finalHead].map((label) => h("th", { key: label }, label)))),
+      h("tbody", { key: "body" }, standings.map((standing, index) => {
+        const makes = Array.isArray(standing.scorecard)
+          ? standing.scorecard.reduce((sum, hole) => sum + (typeof hole?.strokes === "number" ? hole.strokes : 0), 0)
+          : standing.total;
+        return h("tr", { key: standing.name || index }, [
+          h("td", { key: "pos" }, String(index + 1)),
+          h("td", { className: "lb-name", key: "name" }, `${standing.name || "Player"}${standing.scoringGroup && standing.scoringGroup.label && standing.scoringGroup.label !== standing.name ? ` · ${standing.scoringGroup.label}` : ""}${Array.isArray(standing.members) && standing.members.length && standing.targetType === "pair" ? ` - ${standing.members.join(" / ")}` : ""}`),
+          h("td", { key: "thru" }, standing.thru ? String(standing.thru) : "N/A"),
+          h("td", { key: "total" }, standing.thru ? String(putting && weighted ? makes : standing.total) : "N/A"),
+          h("td", { key: "final" }, isMatchplay(snap) ? displayMatchStatus(standing.match) : putting ? (standing.thru ? String(standing.total) : "N/A") : standing.thru ? toPar(standing.toPar) : "N/A"),
+        ]);
+      })),
     ])) : h("div", { key: "empty", role: "status" }, "No scores yet."),
   ]);
 }

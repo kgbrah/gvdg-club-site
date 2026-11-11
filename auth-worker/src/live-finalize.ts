@@ -147,7 +147,12 @@ function finalizeMixedStandings(holes: { hole: number; par: number }[], players:
 }
 
 async function persistCasualResults(env: LiveEnv, meta: LiveMeta, players: PlayerState[], standings: FinalLiveStanding[]): Promise<void> {
-  const holes = resolvedHoles(meta).map((hole) => ({ hole: hole.hole, par: hole.par, distance_ft: hole.distance_ft }));
+  const holes = resolvedHoles(meta).map((hole) => ({
+    hole: hole.hole,
+    par: hole.par,
+    distance_ft: hole.distance_ft,
+    ...(hole.points != null && hole.points > 1 ? { points: hole.points } : {}),
+  }));
   const config = roundConfig(meta);
   if (!meta.roundCode) throw new Error("casual_round_code_missing");
   await db.clearCasualRound(env.DB, meta.roundCode);

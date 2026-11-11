@@ -1,7 +1,7 @@
 import type { Env } from "./env.js";
 import * as db from "./db.js";
 import { startLiveEvent } from "./club-live-routes.js";
-import { DEFAULT_PUTTING_STATIONS } from "./live-format.js";
+import { DEFAULT_PUTTING_STATIONS, normalizeLiveScoringConfig, type PuttingStation } from "./live-format.js";
 import { json, readJson } from "./http.js";
 import { asInt, asStr } from "./input.js";
 
@@ -25,6 +25,7 @@ export type LeagueNightPlan = {
   readonly layoutId: number | null;
   readonly start: boolean;
   readonly matches: readonly LeagueNightMatch[];
+  readonly putting: { readonly stations: readonly PuttingStation[] } | null;
 };
 
 export type LeagueNightPlanError = {
@@ -92,7 +93,11 @@ export function parseLeagueNightPlan(body: Record<string, unknown>): LeagueNight
     if ("error" in parsed) return parsed;
     matches = parsed;
   }
-  return { weekLabel, date, format, scoringStyle, handicap, courseId, layoutId, start, matches };
+  const putting = scoringStyle === "putting"
+    ? (normalizeLiveScoringConfig({ scoringStyle: "putting", putting: body.putting }).putting
+      ?? { stations: [...DEFAULT_PUTTING_STATIONS] })
+    : null;
+  return { weekLabel, date, format, scoringStyle, handicap, courseId, layoutId, start, matches, putting };
 }
 
 export function matchEventName(leagueName: string, plan: LeagueNightPlan, match: LeagueNightMatch): string {
@@ -118,7 +123,7 @@ export async function handleAdminLeagueNight(
 
   const leagueName = String((league as { name?: unknown }).name || "League");
   const live = plan.scoringStyle === "putting"
-    ? { groupFormat: "singles" as const, scoringStyle: "putting" as const, handicap: false, putting: { stations: [...DEFAULT_PUTTING_STATIONS] } }
+    ? { groupFormat: "singles" as const, scoringStyle: "putting" as const, handicap: false, putting: plan.putting ?? { stations: [...DEFAULT_PUTTING_STATIONS] } }
     : { groupFormat: plan.format, scoringStyle: plan.scoringStyle, handicap: plan.handicap };
   const liveConfig = JSON.stringify(live);
   const created: Array<Record<string, unknown>> = [];

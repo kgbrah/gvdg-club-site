@@ -1,5 +1,5 @@
 import { countScores, type Breakdown } from "./score-breakdown.js";
-import { normalizePairLabel, validateCardTargetsForScoring, type LiveScoringConfig, type LiveScoringStyle, type ScoreTarget } from "./live-format.js";
+import { normalizePairLabel, puttingStationPoints, validateCardTargetsForScoring, type LiveScoringConfig, type LiveScoringStyle, type ScoreTarget } from "./live-format.js";
 import { finalMatchResult, matchOutcomeOrder, matchPlace, summarizeMatchplay, type MatchStatus } from "./matchplay-scoring.js";
 import type { FinalStanding, PlayerState, Standing } from "./scoring.js";
 
@@ -14,6 +14,8 @@ export interface LiveHoleScore {
   readonly hole: number;
   readonly par: number;
   readonly strokes: number | null;
+  /** Present only when a make is worth more than 1 point. */
+  readonly points?: number;
 }
 
 export interface LiveStanding extends Standing {
@@ -33,7 +35,7 @@ export interface FinalLiveStanding extends FinalStanding {
 }
 
 export type LiveScoringInput = {
-  readonly holes: readonly { readonly hole: number; readonly par: number }[];
+  readonly holes: readonly { readonly hole: number; readonly par: number; readonly points?: number }[];
   readonly players: readonly PlayerState[];
   readonly config: LiveScoringConfig;
   readonly targets: readonly ScoreTarget[];
@@ -41,7 +43,7 @@ export type LiveScoringInput = {
 
 type TargetStrokeRow = LiveStanding & {
   readonly breakdown: Breakdown;
-  readonly holes: { hole: number; par: number; strokes: number }[];
+  readonly holes: { hole: number; par: number; strokes: number; points?: number }[];
 };
 
 type RankedTargetRow = TargetStrokeRow & {
@@ -155,14 +157,14 @@ function matchplaySummary(input: LiveScoringInput): { readonly rows: readonly [T
 }
 
 function targetStrokeRow(
-  holes: readonly { readonly hole: number; readonly par: number }[],
+  holes: readonly { readonly hole: number; readonly par: number; readonly points?: number }[],
   players: readonly PlayerState[],
   target: ScoreTarget,
   scoringStyle?: LiveScoringStyle,
 ): TargetStrokeRow {
   const pars: number[] = [];
   const strokes: number[] = [];
-  const played: { hole: number; par: number; strokes: number }[] = [];
+  const played: { hole: number; par: number; strokes: number; points?: number }[] = [];
   let thru = 0;
   let total = 0;
   let toPar = 0;
@@ -170,11 +172,12 @@ function targetStrokeRow(
   for (const hole of holes) {
     const score = scoreForTarget(players, target, hole.hole);
     if (score == null) continue;
+    const points = scoringStyle === "putting" ? (puttingStationPoints(hole.points) ?? 1) : 1;
     pars.push(hole.par);
     strokes.push(score);
-    played.push({ hole: hole.hole, par: hole.par, strokes: score });
+    played.push(points > 1 ? { hole: hole.hole, par: hole.par, strokes: score, points } : { hole: hole.hole, par: hole.par, strokes: score });
     thru++;
-    total += score;
+    total += score * points;
     toPar += score - hole.par;
   }
 
@@ -198,7 +201,9 @@ function targetStrokeRow(
     holes: played,
     scorecard: holes.map((hole) => {
       const score = scoreForTarget(players, target, hole.hole);
-      return { hole: hole.hole, par: hole.par, strokes: score == null ? null : score };
+      const points = scoringStyle === "putting" ? (puttingStationPoints(hole.points) ?? 1) : 1;
+      const entry: LiveHoleScore = { hole: hole.hole, par: hole.par, strokes: score == null ? null : score };
+      return points > 1 ? { ...entry, points } : entry;
     }),
   };
 }

@@ -93,7 +93,8 @@ export function LeaderboardTable({ isDoubles, isMatchplay, isPutting, onHole, re
   }
   if (!standings.length) return h("p", { className: "muted" }, "No scores in yet.");
   const handicapped = !isMatchplay && handicapOn(standings);
-  const resultHead = isMatchplay ? "Match" : isPutting ? "Makes" : handicapped ? "Net" : "To par";
+  const puttingPoints = isPutting && standings.some((standing) => Array.isArray(standing.scorecard) && standing.scorecard.some((hole) => Number(hole && hole.points) > 1));
+  const resultHead = isMatchplay ? "Match" : isPutting ? (puttingPoints ? "Points" : "Makes") : handicapped ? "Net" : "To par";
   return h("div", { className: "lb-wrap" }, [
     handicapped
       ? h("p", { className: "muted lb-handicap-note", key: "note" }, "Club handicap. Net is your start plus this round.")

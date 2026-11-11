@@ -72,7 +72,7 @@ test('admin live grid uses pair target rows and target-id score posts', () => {
   assert.match(model, /export function scoreRows\(snapshot\)/);
   assert.match(model, /target\?\.type === "pair"/);
   assert.match(html, /body\.targetId = row\.targetId/);
-  assert.match(scorecard, /isMatchplay\(snap\) \? "Match" : putting \? "Makes" : "To Par"/);
+  assert.match(scorecard, /const finalHead = isMatchplay\(snap\) \? "Match" : putting \? \(weighted \? "Points" : "Makes"\) : "To Par"/);
   assert.match(model, /target\.members\) \? target\.members\.join\(" \/ "\)/);
   assert.match(scorecard, /data-react-admin-scoring-grid/);
   assert.match(scorecard, /data-react-admin-scoring-board/);

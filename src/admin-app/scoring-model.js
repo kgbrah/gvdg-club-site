@@ -10,11 +10,11 @@ function text(value, fallback = "") {
 
 export function defaultPuttingStations() {
   return [
-    { distanceFt: 15, putts: 5 },
-    { distanceFt: 20, putts: 5 },
-    { distanceFt: 25, putts: 5 },
-    { distanceFt: 30, putts: 5 },
-    { distanceFt: 33, putts: 5 },
+    { distanceFt: 15, putts: 5, points: 1 },
+    { distanceFt: 20, putts: 5, points: 1 },
+    { distanceFt: 25, putts: 5, points: 1 },
+    { distanceFt: 30, putts: 5, points: 1 },
+    { distanceFt: 33, putts: 5, points: 1 },
   ];
 }
 
@@ -22,9 +22,11 @@ function puttingStation(value) {
   const source = objectOrEmpty(value);
   const distance = Number(source.distanceFt);
   const putts = Number(source.putts);
+  const points = source.points == null || source.points === "" ? 1 : Number(source.points);
   if (!Number.isInteger(distance) || distance < 8 || distance > 80) return null;
   if (!Number.isInteger(putts) || putts < 1 || putts > 10) return null;
-  return { distanceFt: distance, putts };
+  if (!Number.isInteger(points) || points < 1 || points > 20) return null;
+  return { distanceFt: distance, putts, points };
 }
 
 export function puttingStationsFrom(raw) {
@@ -149,11 +151,28 @@ export function scoreForRow(snapshot, row, hole) {
   return value == null ? null : value;
 }
 
+export function holeMakePoints(hole) {
+  const points = Number(hole && hole.points);
+  return Number.isInteger(points) && points > 1 && points <= 20 ? points : 1;
+}
+
+export function puttingWeighted(holes) {
+  return (Array.isArray(holes) ? holes : []).some((hole) => holeMakePoints(hole) > 1);
+}
+
 export function rowTotal(snapshot, row) {
   const holes = Array.isArray(snapshot?.holes) ? snapshot.holes : [];
   return holes.reduce((total, hole) => {
     const score = scoreForRow(snapshot, row, hole.hole);
     return score == null ? total : total + score;
+  }, 0);
+}
+
+export function rowPoints(snapshot, row) {
+  const holes = Array.isArray(snapshot?.holes) ? snapshot.holes : [];
+  return holes.reduce((total, hole) => {
+    const score = scoreForRow(snapshot, row, hole.hole);
+    return score == null ? total : total + score * holeMakePoints(hole);
   }, 0);
 }
 

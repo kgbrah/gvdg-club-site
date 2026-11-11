@@ -1,6 +1,6 @@
 import { holeMarker } from "./db-courses.js";
 import { scorecardConsensusIssues } from "./live-consensus.js";
-import { isLiveFormatError, normalizeLiveScoringConfig, scoreTargetsForPlayersSafe, validateCardTargetsForScoring, type LiveScoringConfig, type ScoreTarget } from "./live-format.js";
+import { isLiveFormatError, normalizeLiveScoringConfig, puttingStationPoints, scoreTargetsForPlayersSafe, validateCardTargetsForScoring, type LiveScoringConfig, type ScoreTarget } from "./live-format.js";
 import { computeLiveStandings, finalizeLiveStandings, type FinalLiveStanding, type LiveStanding, type PlayerState } from "./scoring.js";
 import { j, type CardScoringError, type LiveMeta, type PublicScoreTarget, type ResolvedHole, type ScoreBody, type ScoringState } from "./live-types.js";
 
@@ -12,10 +12,12 @@ export function resolvedHoles(meta: LiveMeta | null): ResolvedHole[] {
   const overrides = meta?.overrides ?? {};
   return (meta?.holes ?? []).map((hole) => {
     const override = overrides[String(hole.hole)];
+    const points = puttingStationPoints(hole.points);
     return {
       hole: hole.hole,
       par: override?.par ?? hole.par,
       distance_ft: override?.distance_ft ?? hole.distance_ft ?? null,
+      ...(points != null && points > 1 ? { points } : {}),
       tee_sign_id: hole.tee_sign_id ?? null,
       tee: holeMarker(hole.tee),
       target: holeMarker(hole.target),
@@ -196,7 +198,7 @@ export function attestationForCard(
 }
 
 export function computeRoundStandings(input: {
-  readonly holes: readonly { readonly hole: number; readonly par: number }[];
+  readonly holes: readonly { readonly hole: number; readonly par: number; readonly points?: number }[];
   readonly players: readonly PlayerState[];
   readonly config: LiveScoringConfig;
   readonly targets: readonly ScoreTarget[];
@@ -206,7 +208,7 @@ export function computeRoundStandings(input: {
 }
 
 export function finalizeRoundStandings(input: {
-  readonly holes: readonly { readonly hole: number; readonly par: number }[];
+  readonly holes: readonly { readonly hole: number; readonly par: number; readonly points?: number }[];
   readonly players: readonly PlayerState[];
   readonly config: LiveScoringConfig;
   readonly targets: readonly ScoreTarget[];

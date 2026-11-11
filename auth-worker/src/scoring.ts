@@ -77,7 +77,7 @@ export interface FinalStanding extends Standing {
   breakdown: Breakdown;
   /** The holes this player actually scored, in layout order — persisted as the result's scorecard so
    *  a player can later open the right UDisc course and tap these in (UDisc has no import API). */
-  holes: { hole: number; par: number; strokes: number }[];
+  holes: { hole: number; par: number; strokes: number; points?: number }[];
 }
 
 /** Final results for an event: only players who completed every hole are ranked (ties share a place,

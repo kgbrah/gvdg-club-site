@@ -176,6 +176,13 @@ function LivePanel({ data }) {
   ]);
 }
 
+function scorecardUsesPoints(results) {
+  return results.some((result) => {
+    const card = parseJson(result && result.scorecard, []);
+    return Array.isArray(card) && card.some((hole) => Number(hole && hole.points) > 1);
+  });
+}
+
 function fmtBreakdown(raw) {
   const breakdown = parseJson(raw, {}) || {};
   const parts = [];
@@ -197,7 +204,8 @@ function FinalResults({ course, data, event }) {
   const loaded = data.finalResultsLoaded === true;
   const matchplay = results.some((result) => parseMatchResult(result && result.match_result));
   const putting = event && event.format === "putting";
-  const columns = matchplay ? ["Pos", "Player", "Match", "Scoring"] : putting ? ["Pos", "Player", "Makes"] : ["Pos", "Player", "Total", "To Par", "Scoring"];
+  const weighted = putting && scorecardUsesPoints(results);
+  const columns = matchplay ? ["Pos", "Player", "Match", "Scoring"] : putting ? ["Pos", "Player", weighted ? "Points" : "Makes"] : ["Pos", "Player", "Total", "To Par", "Scoring"];
   const udiscCourseId = course && course.udisc_course_id;
   const addable = results.filter((result) => result && result.scorecard);
   const canExportToUdisc = Boolean(udiscDeepLink(udiscCourseId) && addable.length);

@@ -46,10 +46,11 @@ function FormatButtons({ label, name, onChange, options, value }) {
   ]);
 }
 
-function PuttingStations({ onChange, stations }) {
+export function PuttingStations({ onChange, stations }) {
   function update(index, patch) {
     onChange(stations.map((station, stationIndex) => stationIndex === index ? { ...station, ...patch } : station));
   }
+  const weighted = stations.some((station) => Number(station.points) > 1);
   return h("div", { className: "sc-start-field", key: "stations" }, [
     h("span", { key: "label" }, "Putting stations"),
     ...stations.map((station, index) => h("div", { className: "al-row", key: `${station.distanceFt}-${index}` }, [
@@ -78,6 +79,21 @@ function PuttingStations({ onChange, stations }) {
           value: station.putts,
         }),
       ]),
+      h("label", { key: "points" }, [
+        "Points",
+        h("input", {
+          inputMode: "numeric",
+          key: "input",
+          max: "20",
+          min: "1",
+          onChange: (event) => {
+            const points = Number(event.target.value);
+            if (Number.isInteger(points) && points >= 1 && points <= 20) update(index, { points });
+          },
+          type: "number",
+          value: station.points || 1,
+        }),
+      ]),
       stations.length > 1 ? h("button", {
         className: "admin-btn secondary",
         key: "remove",
@@ -88,10 +104,12 @@ function PuttingStations({ onChange, stations }) {
     stations.length < 12 ? h("button", {
       className: "admin-btn secondary",
       key: "add",
-      onClick: () => onChange(stations.concat([{ distanceFt: 35, putts: stations[0]?.putts || 5 }])),
+      onClick: () => onChange(stations.concat([{ distanceFt: 35, putts: stations[0]?.putts || 5, points: 1 }])),
       type: "button",
     }, "Add station") : null,
-    h("p", { className: "al-note", key: "note" }, "Each player throws that many putts from each distance. Most makes wins. No course layout needed."),
+    h("p", { className: "al-note", key: "note" }, weighted
+      ? "Players still enter makes. Each make is worth that station's points, and the highest point total wins."
+      : "Each player throws that many putts from each distance. Leave points at 1 to rank by makes. Most makes wins. No course layout needed."),
   ]);
 }
 
