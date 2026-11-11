@@ -55,7 +55,7 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(themeChrome, /localStorage\.getItem\("theme"\)/);
   assert.match(themeChrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app admin-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v229"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v230"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
@@ -471,6 +471,8 @@ test('Pro Shop body storefront is rendered by the public React bundle', () => {
   assert.match(app, /\/shop\/pay\/create-order/);
   assert.match(app, /\/shop\/pay\/capture/);
   assert.match(app, /\/payments\/config/);
+  assert.match(app, /SITE_DONATE_URL/);
+  assert.match(app, /Pay with PayPal/);
   assert.match(app, /window\.paypal\.Buttons/);
   assert.match(app, /document\.createElement\("script"\)/);
   assert.match(app, /data-paypal-button-host/);

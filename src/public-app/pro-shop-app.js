@@ -2,6 +2,7 @@ import React from "react";
 
 import { resolveApiBase } from "../shared/api-base.js";
 import { readMemberToken } from "../shared/member-session.js";
+import { SITE_DONATE_URL } from "../shared/site-nav.js";
 
 const h = React.createElement;
 
@@ -551,7 +552,8 @@ export function ProShopApp() {
       const body = await response.json().catch(() => ({}));
       if (response.status === 201 && body.amount_cents != null) {
         notify("Opening PayPal... complete your payment to @greenvillediscgolf to finish the order.", "success");
-        window.location.href = "https://www.paypal.com/paypalme/greenvillediscgolf/" + (body.amount_cents / 100).toFixed(2);
+        const dollars = (body.amount_cents / 100).toFixed(2);
+        window.location.href = String(SITE_DONATE_URL).replace(/\/+$/, "") + "/" + dollars;
       } else if (body.error === "insufficient_stock" || body.error === "product_unavailable") {
         notify("An item is no longer available. Refreshing the shop.", "error");
         await loadProducts();
@@ -706,7 +708,7 @@ export function ProShopApp() {
             }, checkoutPending ? "Submitting..." : "Spend store credit")
           : null,
         signedIn && hasCart ? h("div", { className: "payment-divider", key: "divider", style: { display: "flex" } }, "or") : null,
-        !signedIn && hasCart && sdkEnabled
+        !signedIn && hasCart
           ? h("div", { className: "paypal-fields", key: "guest" }, [
               h("input", {
                 id: "ppName",
@@ -729,9 +731,13 @@ export function ProShopApp() {
             ])
           : null,
         !sdkEnabled && hasCart
-          ? h("p", { className: "shop-status", key: "payments-off" }, signedIn
-            ? "PayPal checkout is off. Store credit still works."
-            : "Online checkout is off.")
+          ? h("button", {
+              className: "shop-btn secondary",
+              disabled: !hasCart || paypalPending,
+              key: "paypal-redirect",
+              onClick: payWithPaypal,
+              type: "button",
+            }, paypalPending ? "Opening..." : "Pay with PayPal")
           : null,
         sdkEnabled && hasCart
           ? h(PayPalButtons, {
