@@ -675,7 +675,7 @@ function ScorecardOwner(props) {
         onChange: (event) => props.onScorerChange(Number(event.target.value)),
       },
       props.choices.map((choice) =>
-        h("option", { key: choice.index, value: String(choice.index) }, choice.name + (choice.isMe ? " (you)" : "")),
+        h("option", { key: choice.index, value: String(choice.index) }, choice.name),
       ),
     ),
   ]);
@@ -1036,8 +1036,12 @@ function ConfirmScoresSheet(props) {
     label: "Confirm scores",
   });
   if (!open) return null;
+  const putting = props.putting === true;
   const review = finish.review || { holes: [], rows: [], voters: [], waiting: [] };
   const grid = Array.isArray(props.holeGrid) ? props.holeGrid : [];
+  const copy = putting
+    ? "Anyone on this card can confirm. Matching makes on each station are enough."
+    : FINISH_COPY;
   return createPortal(
     h(
       "div",
@@ -1059,22 +1063,46 @@ function ConfirmScoresSheet(props) {
       }, [
         h("div", { className: "grab", key: "grab" }),
         h("h2", { className: "section", id: "score-confirm-title", key: "title" }, "Confirm scores"),
-        h("p", { className: "muted", key: "copy" }, FINISH_COPY),
+        h("p", { className: "muted", key: "copy" }, copy),
+        putting
+          ? h("div", { className: "confirm-score-head", key: "head" }, [
+            h("span", { key: "name" }, "Player"),
+            h("span", { key: "makes" }, "Makes"),
+            h("span", { key: "points" }, "Points"),
+          ])
+          : null,
         h("div", { className: "confirm-score-rows", key: "rows" }, review.rows.map((row) =>
-          h("div", { className: "confirm-score-row", key: row.key }, [
-            h("span", { className: "name", key: "name" }, row.label),
-            h("span", { className: "tot", key: "tot" }, String(row.total || "—")),
-            h("span", { className: "tp " + relClass(row.toPar || 0), key: "par" }, relText(row.toPar || 0)),
-          ]),
+          h("div", { className: "confirm-score-row", key: row.key }, putting
+            ? [
+              h("span", { className: "name", key: "name" }, row.label),
+              h("span", { className: "tot", key: "makes" }, row.makesLabel || "—"),
+              h("span", { className: "pts", key: "points" }, row.pointsLabel || "—"),
+            ]
+            : [
+              h("span", { className: "name", key: "name" }, row.label),
+              h("span", { className: "tot", key: "tot" }, String(row.total || "—")),
+              h("span", { className: "tp " + relClass(row.toPar || 0), key: "par" }, relText(row.toPar || 0)),
+            ]),
         )),
         grid.length
-          ? h("div", { className: "confirm-holegrid holegrid", key: "grid" }, grid.map((hole) => {
-            const rel = hole.relative;
+          ? h("div", { className: "confirm-holegrid holegrid" + (putting ? " is-putting" : ""), key: "grid" }, grid.map((hole) => {
+            const rel = putting ? null : hole.relative;
             const classes = [
               hole.conflict ? "conflict" : "",
               rel ? rel.className : "",
             ].filter(Boolean).join(" ");
+            const distance = Number(hole.distanceFt != null ? hole.distanceFt : hole.distance_ft);
+            const hasDistance = Number.isFinite(distance) && distance > 0;
+            const station = hasDistance ? String(distance) : String(hole.hole);
+            const stationName = hasDistance ? distance + " ft" : "Station " + hole.hole;
+            const attempts = Number(hole.par);
+            const scoreText = hole.score == null
+              ? null
+              : (putting && Number.isFinite(attempts) && attempts > 0 ? hole.score + "/" + attempts : String(hole.score));
             return h("button", {
+              "aria-label": putting
+                ? (scoreText ? stationName + ", " + scoreText : stationName)
+                : "Hole " + hole.hole,
               className: classes,
               key: hole.hole,
               type: "button",
@@ -1083,9 +1111,9 @@ function ConfirmScoresSheet(props) {
                 if (props.onJump) props.onJump(hole.index);
               },
             }, [
-              h("span", { className: "holegrid-num", key: "num" }, String(hole.hole)),
-              hole.score != null
-                ? h("b", { className: "holegrid-score", key: "score" }, String(hole.score))
+              h("span", { className: "holegrid-num", key: "num" }, putting ? station : String(hole.hole)),
+              scoreText
+                ? h("b", { className: "holegrid-score", key: "score" }, scoreText)
                 : h("span", { className: "holegrid-empty", key: "empty" }, "·"),
             ]);
           }))
@@ -1288,6 +1316,7 @@ export function ScorecardView(props) {
       onAgree: props.onAgreeFinish,
       onCloseFinish: props.onCloseFinish,
       onJump: props.onJumpHole,
+      putting: props.putting,
     }),
     padRow
       ? h(ScorePad, {
@@ -1369,7 +1398,7 @@ export function SoloScorecardPreview() {
     currentScore,
     honors: false,
     key: 0,
-    label: "Kevin Gray (you)",
+    label: "Kevin Gray",
     meta: "",
     relative: delta == null ? null : { className: relClass(delta), text: relText(delta) },
     source: { playerIndexes: [0] },

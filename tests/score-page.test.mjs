@@ -981,17 +981,17 @@ test('PDGA tee order puts the previous-hole winner first and keeps ties stable',
 
   const listed = scoreRows({ ...base, holeIdx: 0 });
   const firstTee = applyTeeOrder(base, listed, 0, 0);
-  assert.deepEqual(firstTee.rows.map((row) => row.label), ['Kevin (you)', 'Aaron', 'Tyler']);
+  assert.deepEqual(firstTee.rows.map((row) => row.label), ['Kevin', 'Aaron', 'Tyler']);
   assert.equal(firstTee.honorsReady, false);
   assert.equal(firstTee.hint, 'Tee order: Kevin · then Aaron, Tyler');
 
   const hole2 = applyTeeOrder(base, listed, 1, 0);
-  assert.deepEqual(hole2.rows.map((row) => row.label), ['Aaron', 'Kevin (you)', 'Tyler']);
+  assert.deepEqual(hole2.rows.map((row) => row.label), ['Aaron', 'Kevin', 'Tyler']);
   assert.equal(hole2.honorsReady, true);
   assert.equal(hole2.hint, 'Honors: Aaron · then Kevin, Tyler');
 
   const hole3 = applyTeeOrder(base, listed, 2, 0);
-  assert.deepEqual(hole3.rows.map((row) => row.label), ['Tyler', 'Aaron', 'Kevin (you)']);
+  assert.deepEqual(hole3.rows.map((row) => row.label), ['Tyler', 'Aaron', 'Kevin']);
   assert.equal(hole3.hint, 'Honors: Tyler · then Aaron, Kevin');
 
   const waiting = applyTeeOrder({
@@ -1002,7 +1002,7 @@ test('PDGA tee order puts the previous-hole winner first and keeps ties stable',
       { index: 2, name: 'Tyler', scores: { 1: 3 } },
     ],
   }, listed, 2, 0);
-  assert.deepEqual(waiting.rows.map((row) => row.label), ['Aaron', 'Kevin (you)', 'Tyler']);
+  assert.deepEqual(waiting.rows.map((row) => row.label), ['Aaron', 'Kevin', 'Tyler']);
   assert.equal(waiting.honorsReady, false);
   assert.equal(waiting.hint, 'Tee order after hole 2 scores');
 
@@ -1016,7 +1016,7 @@ test('PDGA tee order puts the previous-hole winner first and keeps ties stable',
   assert.equal(view.rows[0].label, 'Aaron');
   assert.equal(view.rows[0].honors, true);
   assert.equal(view.rows[0].teePosition, 1);
-  assert.equal(view.rows[1].label, 'Kevin (you)');
+  assert.equal(view.rows[1].label, 'Kevin');
   assert.equal(view.teeOrderHint, 'Honors: Aaron · then Kevin, Tyler');
 
   const doubles = applyTeeOrder({

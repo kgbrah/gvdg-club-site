@@ -450,7 +450,7 @@ export function scoreRows(state) {
     return cardmates.map((player) => ({
       type: "player",
       index: player.index,
-      label: player.name + (player.isMe ? " (you)" : ""),
+      label: player.name,
       meta: player.division || "",
       playerIndexes: [player.index],
     }));
@@ -795,7 +795,7 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
       : cardmates.filter((player) => !votedIndexes.has(player.index)).map((player) => player.name);
     const nominees = cardmates.filter((player) => ctpNomineeEligible(player, live || ctp)).map((player) => ({
       index: player.index,
-      label: player.name + (player.isMe ? " (you)" : ""),
+      label: player.name,
     }));
     return {
       id: live ? live.id : ctp.id,
@@ -894,12 +894,21 @@ function locateHole(state, holeNumber) {
   return { hole: holeNumber, index: index >= 0 ? index : 0 };
 }
 
+function placeLabel(state, holeNumber) {
+  if (!isPuttingScoring(state)) return "Hole " + holeNumber;
+  const holes = Array.isArray(state.holes) ? state.holes : [];
+  const hole = holes.find((row) => row && Number(row.hole) === Number(holeNumber));
+  const distance = Number(hole && hole.distance_ft);
+  if (Number.isFinite(distance) && distance > 0) return distance + " ft";
+  return "Station " + holeNumber;
+}
+
 function skippedUnscoredHoles(state, blockers) {
   return (blockers.missing || [])
     .filter((row) => row && Number.isFinite(Number(row.hole)) && holeIsBehindCurrent(state, Number(row.hole)))
     .map((row) => {
       const hole = Number(row.hole);
-      return { ...locateHole(state, hole), kind: "missing", text: "Hole " + hole + " needs a score" };
+      return { ...locateHole(state, hole), kind: "missing", text: placeLabel(state, hole) + " needs a score" };
     });
 }
 
@@ -907,7 +916,7 @@ function finishBlocker(state, blockers) {
   const conflict = (blockers.conflicts || [])[0];
   if (conflict && Number.isFinite(Number(conflict.hole))) {
     const values = Array.isArray(conflict.values) ? conflict.values.join(" vs ") : "";
-    return { ...locateHole(state, Number(conflict.hole)), kind: "conflict", text: "Hole " + conflict.hole + (values ? ": " + values : "") };
+    return { ...locateHole(state, Number(conflict.hole)), kind: "conflict", text: placeLabel(state, conflict.hole) + (values ? ": " + values : "") };
   }
   return skippedUnscoredHoles(state, blockers)[0] || null;
 }
@@ -935,14 +944,27 @@ function buildFinishView(state, mode, blockers, locked, scorerIndex) {
 export function cardReview(state, scorerIndex, agreedIndexes) {
   const holes = Array.isArray(state.holes) ? state.holes : [];
   const agreed = Array.isArray(agreedIndexes) ? agreedIndexes : [];
+  const putting = isPuttingScoring(state);
   const rows = scoreRows(state).map((row) => {
     const scores = holes.map((hole) => strokesForRow(state, row, hole.hole, scorerIndex));
     let total = 0;
     let toPar = 0;
+    let attempts = 0;
+    let points = 0;
+    let scored = 0;
     scores.forEach((strokes, index) => {
       if (typeof strokes !== "number") return;
+      scored += 1;
       total += strokes;
-      toPar += strokes - (holes[index] && holes[index].par);
+      const hole = holes[index];
+      const par = hole && Number(hole.par);
+      toPar += strokes - (hole && hole.par);
+      if (putting && Number.isFinite(par) && par > 0) attempts += par;
+      if (putting) {
+        const weight = Number(hole && hole.points);
+        const each = Number.isInteger(weight) && weight > 0 ? weight : 1;
+        points += strokes * each;
+      }
     });
     return {
       key: row.targetId || row.index,
@@ -950,18 +972,20 @@ export function cardReview(state, scorerIndex, agreedIndexes) {
       scores,
       total,
       toPar,
+      makesLabel: putting ? (scored ? total + "/" + attempts : "—") : null,
+      pointsLabel: putting ? (scored ? String(points) : "—") : null,
     };
   });
   const voters = (state.cardmates || []).filter(Boolean).map((player) => ({
     index: player.index,
-    label: player.name + (player.isMe ? " (you)" : ""),
+    label: player.name,
     agreed: agreed.indexOf(player.index) >= 0,
   }));
   return {
     holes: holes.map((hole) => hole.hole),
     rows,
     voters,
-    waiting: voters.filter((voter) => !voter.agreed).map((voter) => String(voter.label).replace(/ \(you\)$/, "")),
+    waiting: voters.filter((voter) => !voter.agreed).map((voter) => voter.label),
   };
 }
 
@@ -1005,11 +1029,11 @@ export function finalizeBlockers(state) {
   const missing = state.missing || [];
   const lines = [];
   conflicts.forEach((conflict) => {
-    lines.push("Hole " + conflict.hole + " — " + (conflict.playerName || conflict.label || "a target") + ": scores disagree (" + (Array.isArray(conflict.values) ? conflict.values.join(" vs ") : "?") + ")");
+    lines.push(placeLabel(state, conflict.hole) + " — " + (conflict.playerName || conflict.label || "a target") + ": scores disagree (" + (Array.isArray(conflict.values) ? conflict.values.join(" vs ") : "?") + ")");
   });
   const shown = missing.slice(0, 4);
   shown.forEach((row) => {
-    lines.push("Hole " + row.hole + " — " + (row.playerName || row.label || "a target") + ": no confirmed score yet");
+    lines.push(placeLabel(state, row.hole) + " — " + (row.playerName || row.label || "a target") + ": no confirmed score yet");
   });
   if (missing.length > shown.length) lines.push("…and " + (missing.length - shown.length) + " more holes without a score");
   return { conflicts, missing, ready: conflicts.length === 0 && missing.length === 0, lines };

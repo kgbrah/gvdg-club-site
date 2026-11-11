@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { defaultPuttingStations, normalizeConfig } from "../src/admin-app/scoring-model.js";
-import { buildScorecardViewState, nextPuttingScore, puttingScorecardMakes, puttingStationRows } from "../src/score-app/score-view-model.js";
+import { buildScorecardViewState, cardReview, nextPuttingScore, puttingScorecardMakes, puttingStationRows } from "../src/score-app/score-view-model.js";
 
 test("putting league defaults to five stations and forces singles", () => {
   const config = normalizeConfig({ groupFormat: "doubles", scoringStyle: "putting", handicap: true });
@@ -89,4 +89,28 @@ test("putting live stats are station makes, attempts, and station score", () => 
     { hole: 3, par: 5, strokes: null },
   ]), 6);
   assert.equal(puttingScorecardMakes([]), null);
+});
+
+test("putting confirm totals makes over attempts and points, not to par", () => {
+  const review = cardReview({
+    holes: [
+      { hole: 1, par: 5, distance_ft: 15, points: 1 },
+      { hole: 2, par: 5, distance_ft: 20, points: 2 },
+      { hole: 3, par: 5, distance_ft: 25, points: 3 },
+      { hole: 4, par: 5, distance_ft: 30, points: 4 },
+      { hole: 5, par: 5, distance_ft: 33, points: 5 },
+      { hole: 6, par: 2, distance_ft: 50, points: 10 },
+    ],
+    cardmates: [
+      { index: 0, name: "Kevin Gray", isMe: true, scores: { 1: 4, 2: 4, 3: 3, 4: 3, 5: 3, 6: 1 } },
+      { index: 1, name: "Steveo", scores: { 1: 4, 2: 4, 3: 3, 4: 3, 5: 3, 6: 1 } },
+    ],
+    roundConfig: { groupFormat: "singles", scoringStyle: "putting" },
+    scoreTargets: [],
+  }, 0, []);
+  assert.equal(review.rows[0].label, "Kevin Gray");
+  assert.equal(review.rows[0].makesLabel, "18/27");
+  assert.equal(review.rows[0].pointsLabel, "58");
+  assert.equal(review.rows[1].label, "Steveo");
+  assert.equal(review.rows[1].pointsLabel, "58");
 });

@@ -7,7 +7,7 @@ import { useAccessibleDialog } from "../shared/a11y.js";
 const h = React.createElement;
 
 function playerLabel(player) {
-  return player.name + (player.isMe ? " (you)" : "");
+  return player.name;
 }
 
 function PairEditor({ players, onSavePairs }) {

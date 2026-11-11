@@ -1130,16 +1130,27 @@
         .score-glove-finish-dismiss:active { transform: scale(0.98); }
         .confirm-scores-sheet { max-height: 88vh; }
         .confirm-score-rows { display: grid; gap: 0.4rem; margin: 0.75rem 0; }
+        .confirm-score-head,
         .confirm-score-row {
-            display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+            display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 0.75rem;
+        }
+        .confirm-score-head {
+            padding: 0 0.7rem; color: var(--text-muted);
+            font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+        }
+        .confirm-score-row {
             padding: 0.55rem 0.7rem; border-radius: 12px;
             background: var(--bg-primary); border: 1px solid var(--border-color); font-weight: 700;
         }
-        .confirm-score-row .tot { font-variant-numeric: tabular-nums; }
+        .confirm-score-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .confirm-score-row .tot,
+        .confirm-score-row .pts,
+        .confirm-score-head span:not(:first-child) { min-width: 3.4rem; text-align: right; font-variant-numeric: tabular-nums; }
         .confirm-score-row .tp.under { color: var(--under); }
         .confirm-score-row .tp.over { color: var(--team-red); }
         .confirm-score-row .tp.even { color: var(--accent); }
-        .confirm-holegrid { margin: 0 0 0.85rem; }
+        .confirm-holegrid { margin: 0.35rem 0 0.85rem; }
+        .confirm-holegrid.is-putting .holegrid-score { font-size: 0.78rem; }
         .manage-pairs { margin: 0.75rem 0; }
         .manage-pair-field { display: grid; gap: 0.35rem; }
         .manage-player-row { justify-content: space-between; }
@@ -1166,6 +1177,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=218"></script>
+    <script type="module" src="score-app/score-app.js?v=219"></script>
 </body>
 </html>

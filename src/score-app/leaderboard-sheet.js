@@ -163,7 +163,7 @@ export function LeaderboardTable({ clipApi, clipHoles, clips, isDoubles, isMatch
   ]);
 }
 
-function FinalizePanel({ blockers, cardLocked, mode, onFinalize, onShare, status }) {
+function FinalizePanel({ blockers, cardLocked, isPutting, mode, onFinalize, onShare, status }) {
   if (status === "final" || cardLocked) {
     return h("div", { className: "finalize-card ready" }, [
       h("p", { className: "finalize-head", key: "head" }, status === "final" ? "Round finished - scores are locked." : "Card submitted — scores locked"),
@@ -174,8 +174,10 @@ function FinalizePanel({ blockers, cardLocked, mode, onFinalize, onShare, status
   }
   if (!blockers.ready || (mode !== "round" && mode !== "event")) return null;
   return h("div", { className: "finalize-card ready" }, [
-    h("p", { className: "finalize-head", key: "head" }, "All holes scored — finish this card"),
-    h("p", { className: "muted finish-round-hint", key: "hint" }, "Anyone on this card can confirm. Matching scores on each hole are enough."),
+    h("p", { className: "finalize-head", key: "head" }, isPutting ? "All stations scored — finish this card" : "All holes scored — finish this card"),
+    h("p", { className: "muted finish-round-hint", key: "hint" }, isPutting
+      ? "Anyone on this card can confirm. Matching makes on each station are enough."
+      : "Anyone on this card can confirm. Matching scores on each hole are enough."),
     h("button", { className: "btn finish-round-btn", key: "finish", type: "button", onClick: onFinalize }, "Finish card"),
   ]);
 }
@@ -223,6 +225,7 @@ function LeaderboardSheet(props) {
         h(FinalizePanel, {
           blockers: props.blockers,
           cardLocked: props.cardLocked,
+          isPutting: props.isPutting,
           key: "finalize",
           mode: props.mode,
           onFinalize: props.onFinalize,
