@@ -289,9 +289,11 @@
         tr.al-row-verified .al-par, tr.al-row-verified .al-manual { opacity: 0.6; }
         .al-poolitem { display: inline-flex; align-items: center; gap: 0.35rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 999px; padding: 0.2rem 0.6rem; margin: 0.15rem; font-size: 0.78rem; }
         .al-poolitem button { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.9rem; line-height: 1; }
-        .sc-start-grid { display: grid; grid-template-columns: minmax(12rem, 1.4fr) minmax(7rem, 0.7fr) minmax(9rem, 0.85fr) auto auto; gap: 0.6rem; align-items: end; }
-        .sc-start-field { display: grid; gap: 0.2rem; min-width: 0; color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; }
-        .sc-start-field select { width: 100%; min-width: 0; padding: 0.45rem 0.55rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-size: 0.9rem; }
+        .sc-start-grid { display: grid; grid-template-columns: 1fr; gap: 0.85rem; align-items: stretch; }
+        .sc-start-field { display: grid; gap: 0.35rem; min-width: 0; color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; }
+        .sc-start-field select { width: 100%; min-width: 0; min-height: 44px; padding: 0.45rem 0.55rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); font-size: 16px; }
+        .sc-start-actions { display: grid; gap: 0.5rem; }
+        .sc-start-actions .admin-btn { width: 100%; }
         .putt-stations { display: grid; gap: 0.55rem; grid-column: 1 / -1; min-width: 0; }
         .putt-stations-title { color: var(--text-primary); font-size: 0.95rem; font-weight: 700; }
         .putt-station-list { display: grid; gap: 0.55rem; }
@@ -308,8 +310,8 @@
         }
         .sc-start-check { display: inline-flex; align-items: center; gap: 0.35rem; margin-bottom: 0.45rem; white-space: nowrap; }
         .sc-start-grid #scStartBtn { white-space: nowrap; }
-        .fmt-btns { display: inline-flex; gap: 0.4rem; flex-wrap: wrap; }
-        .fmt-btn { padding: 0.45rem 0.7rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); font: inherit; font-size: 0.9rem; cursor: pointer; }
+        .fmt-btns { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0.4rem; }
+        .fmt-btn { min-height: 44px; padding: 0.45rem 0.35rem; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-secondary); color: var(--text-primary); font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; text-align: center; }
         .fmt-btn[aria-pressed="true"] { border-color: var(--primary); background: var(--bg-tertiary); box-shadow: inset 0 0 0 1px var(--primary); font-weight: 700; }
         .admin-scoring-card {
             border: 1px solid var(--border-color);
@@ -487,10 +489,7 @@
             .admin-form { max-width: none; }
             .al-row > span { max-width: 100%; min-width: 0; }
             .al-row input:not([type="checkbox"]), .al-row select { max-width: 100%; }
-            .sc-start-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-            .sc-start-field:first-child, .sc-start-check, .sc-start-grid #scStartBtn { grid-column: 1 / -1; }
-            .sc-start-check { margin-bottom: 0; white-space: normal; }
-            .sc-start-grid #scStartBtn { width: 100%; }
+            .sc-start-grid { grid-template-columns: 1fr; }
             .shop-admin-heading { align-items: stretch; }
             .shop-admin-toolbar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
             .shop-admin-toolbar select { width: 100%; min-width: 0; }

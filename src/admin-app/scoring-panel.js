@@ -228,28 +228,22 @@ function StartControls({ state }) {
     setPending(true);
     dispatchRequest("gvdg:admin-scoring-start-request", {
       eventId: state.eventId,
-      layoutId,
+      layoutId: config.scoringStyle === "putting" ? "" : layoutId,
       liveScoringConfig,
     });
   }
 
+  const putting = config.scoringStyle === "putting";
+  const stroke = config.scoringStyle === "stroke";
   return h("div", { "data-react-admin-scoring-start": "ready", id: "scStart", style: { marginTop: "1rem" } }, [
     h("div", { className: "sc-start-grid", key: "grid" }, [
-      h("label", { className: "sc-start-field", htmlFor: "scLayout", key: "layout" }, [
+      putting ? null : h("label", { className: "sc-start-field", htmlFor: "scLayout", key: "layout" }, [
         h("span", { key: "label" }, "Layout"),
         h("select", { id: "scLayout", key: "select", onChange: (event) => setLayoutId(event.target.value), value: layoutId }, [
           h("option", { key: "none", value: "" }, "event's current layout"),
           ...state.layouts.map((layout) => h("option", { key: String(layout.id), value: String(layout.id) }, layoutLabel(layout))),
         ]),
       ]),
-      h(FormatButtons, {
-        key: "group",
-        label: "Group",
-        name: "scGroupFormat",
-        onChange: (value) => updateConfig({ groupFormat: value }),
-        options: [{ label: "Singles", value: "singles" }, { label: "Doubles", value: "doubles" }],
-        value: config.groupFormat,
-      }),
       h(FormatButtons, {
         key: "style",
         label: "Scoring",
@@ -262,33 +256,47 @@ function StartControls({ state }) {
         options: [{ label: "Stroke play", value: "stroke" }, { label: "Match play", value: "matchplay" }, { label: "Putting", value: "putting" }],
         value: config.scoringStyle,
       }),
-      h(FormatButtons, {
+      putting ? null : h(FormatButtons, {
+        key: "group",
+        label: "Group",
+        name: "scGroupFormat",
+        onChange: (value) => updateConfig({ groupFormat: value }),
+        options: [{ label: "Singles", value: "singles" }, { label: "Doubles", value: "doubles" }],
+        value: config.groupFormat,
+      }),
+      stroke ? h(FormatButtons, {
         key: "handicap",
         label: "Handicap",
         name: "scHandicap",
-        onChange: (value) => updateConfig({ handicap: value === "on" && config.scoringStyle === "stroke" }),
+        onChange: (value) => updateConfig({ handicap: value === "on" }),
         options: [{ label: "Off", value: "off" }, { label: "On", value: "on" }],
-        value: config.scoringStyle === "stroke" && config.handicap === true ? "on" : "off",
-      }),
-      config.scoringStyle === "putting" ? h(PuttingStations, {
+        value: config.handicap === true ? "on" : "off",
+      }) : null,
+      putting ? h(PuttingStations, {
         key: "stations",
         onChange: (stations) => updateConfig({ putting: { stations } }),
         stations: config.putting?.stations || [],
       }) : null,
-      h("button", { className: "admin-btn", disabled: pending, id: "scStartBtn", key: "start", onClick: start, type: "button" }, pending ? "Starting..." : "Start live scoring"),
-      h("button", {
-        className: "admin-btn secondary",
-        id: "scAddPlayersBtn",
-        key: "roster",
-        onClick: () => {
-          dispatchRequest("gvdg:admin-tab-request", { tab: "registration" });
-          dispatchRequest("gvdg:admin-registration-event-select-request", { eventId: state.eventId });
-        },
-        type: "button",
-      }, "Add players"),
+      h("div", { className: "sc-start-actions", key: "actions" }, [
+        h("button", { className: "admin-btn", disabled: pending, id: "scStartBtn", key: "start", onClick: start, type: "button" }, pending ? "Starting..." : "Start live scoring"),
+        h("button", {
+          className: "admin-btn secondary",
+          id: "scAddPlayersBtn",
+          key: "roster",
+          onClick: () => {
+            dispatchRequest("gvdg:admin-tab-request", { tab: "registration" });
+            dispatchRequest("gvdg:admin-registration-event-select-request", { eventId: state.eventId });
+          },
+          type: "button",
+        }, "Add players"),
+      ]),
     ]),
     h("p", { className: "al-note", id: "scStartValidation", key: "validation", role: validation ? "status" : undefined }, validation),
-    h("p", { className: "al-note", key: "note" }, "Handicap ranks stroke play by each player's start plus this round. Leave it off to score the round as shot. An event still needs a layout with pars, and doubles match play needs pair labels in Registration."),
+    h("p", { className: "al-note", key: "note" }, putting
+      ? "Putting does not use a course, groups, or handicap. Players enter makes at each station."
+      : stroke
+        ? "Handicap ranks by each player's start plus this round. Leave it off to score the round as shot. The layout still needs pars."
+        : "Match play needs exactly two score targets per card. Doubles needs pair labels in Registration."),
   ]);
 }
 
