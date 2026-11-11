@@ -1266,7 +1266,7 @@ export function ScorecardView(props) {
           measuring,
           onMeasure,
         }),
-        h(RoundHighlights, { canStar: true, key: "clips", putting: props.putting === true }),
+        h(RoundHighlights, { canStar: true, holes: props.holeGrid, key: "clips", putting: props.putting === true }),
         h(HoleGrid, { holes: props.holeGrid, onJump: props.onJumpHole, putting: props.putting }),
         props.putting ? null : h(HoleStatChips, { chips: holeStatChips(holePlayStats(props.hole, throws, ((props.holeGrid || []).find((hole) => hole.current) || {}).score)) }),
         props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,

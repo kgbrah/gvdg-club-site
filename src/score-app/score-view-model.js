@@ -225,6 +225,24 @@ export function watchStrokeHoleChips({ hole, par, players, scoreTargets }) {
   return chips;
 }
 
+/** Putting station chip: makes out of attempts. Not a birdie. */
+export function watchPuttingStationChips({ hole, par, players, scoreTargets }) {
+  const chips = [];
+  const attempts = Number(par);
+  scoreTargetsOrPlayers(scoreTargets, players).forEach((target) => {
+    const score = scoreForPlayerIndexes(players, target.playerIndexes, hole);
+    if (typeof score !== "number") return;
+    chips.push({
+      key: target.id || String((target.playerIndexes || [])[0]),
+      name: targetName(target),
+      strokes: Number.isFinite(attempts) && attempts > 0 ? score + "/" + attempts : String(score),
+      label: "",
+      className: "",
+    });
+  });
+  return chips;
+}
+
 export function watchHoleThrows(player, hole) {
   if (!player || player.throws == null) return [];
   const rows = player.throws[hole] || player.throws[String(hole)];

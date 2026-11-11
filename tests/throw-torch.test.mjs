@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { setTrackTorch, torchConstraints, trackSupportsTorch } from "../src/score-app/throw-film.js";
+import { clipsForStanding, setTrackTorch, torchConstraints, trackSupportsTorch } from "../src/score-app/throw-film.js";
 
 test("the light is switched without restarting the picture size", async () => {
   let applied = null;
@@ -24,4 +24,15 @@ test("the front camera is not offered a light", () => {
     getCapabilities: () => ({ torch: true }),
     getSettings: () => ({ facingMode: "environment" }),
   }), true);
+});
+
+test("a player's clips stay with that name on the leaderboard", () => {
+  const clips = [
+    { id: 1, mediaPath: "/events/1/live/clips/1/media", playerName: "Kevin Gray", playerIndex: 0, hole: 2 },
+    { id: 2, mediaPath: "/events/1/live/clips/2/media", playerName: "Steveo", playerIndex: 1, hole: 6 },
+  ];
+  const kevin = clipsForStanding(clips, { name: "Kevin Gray", playerIndexes: [0] });
+  assert.equal(kevin.length, 1);
+  assert.equal(kevin[0].id, 1);
+  assert.equal(clipsForStanding(clips, { name: "Aaron Renaud", playerIndexes: [2] }).length, 0);
 });

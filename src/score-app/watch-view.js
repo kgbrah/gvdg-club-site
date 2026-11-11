@@ -22,9 +22,10 @@ import {
   watchReplayVisibleThrows,
   watchScoreSignature,
   watchStrokeHoleChips,
+  watchPuttingStationChips,
   scoreMixRows,
 } from "./score-view-model.js";
-import { RoundHighlights } from "./throw-film.js";
+import { RoundHighlights, useThrowClips } from "./throw-film.js";
 import { RoundTalk } from "./round-talk.js";
 
 const h = React.createElement;
@@ -66,15 +67,15 @@ function WatchHoleChips({ chips }) {
       key: chip.key,
     }, [
       h("span", { key: "name" }, chip.name),
-      h("span", { className: "rel " + chip.className, key: "score" }, chip.strokes + " " + chip.label),
+      h("span", { className: "rel " + (chip.className || ""), key: "score" }, chip.label ? chip.strokes + " " + chip.label : chip.strokes),
     ]),
   ));
 }
 
-function WatchStrokeStrip({ chips }) {
+function WatchStrokeStrip({ chips, label }) {
   if (!chips || !chips.length) return null;
   return h("div", { className: "card watch-stroke-strip", key: "stroke" }, [
-    h("span", { className: "muted", key: "label" }, "Thru this hole"),
+    h("span", { className: "muted", key: "label" }, label || "Thru this hole"),
     h(WatchHoleChips, { chips, key: "chips" }),
   ]);
 }
@@ -236,13 +237,15 @@ function WatchHoles(props) {
     return () => clearTimeout(id);
   }, [replay, playing, safeStep, stepMax, safeIndex, holes.length, plan && plan.hole, plan && plan.throwCount, plan && plan.strokes]);
   React.useEffect(() => {
+    if (props.isPutting) return undefined;
     preloadRoundMaps(holes, {
       activeIndex: safeIndex,
       all: true,
       ahead: 2,
       size: HOLE_MAP_WATCH_SIZE,
     });
-  }, [holes, safeIndex]);
+    return undefined;
+  }, [holes, props.isPutting, safeIndex]);
   if (!selected) return null;
   const mapPlayers = props.isMatchplay
     ? props.players
@@ -253,14 +256,22 @@ function WatchHoles(props) {
       players: props.scorePlayers,
       scoreTargets: props.scoreTargets,
     });
+  const putting = props.isPutting === true;
   const strokeChips = props.isMatchplay
     ? []
-    : watchStrokeHoleChips({
-      hole: selected.hole,
-      par: selected.par,
-      players: props.scorePlayers,
-      scoreTargets: props.scoreTargets,
-    });
+    : putting
+      ? watchPuttingStationChips({
+        hole: selected.hole,
+        par: selected.par,
+        players: props.scorePlayers,
+        scoreTargets: props.scoreTargets,
+      })
+      : watchStrokeHoleChips({
+        hole: selected.hole,
+        par: selected.par,
+        players: props.scorePlayers,
+        scoreTargets: props.scoreTargets,
+      });
   const matchCards = props.isMatchplay
     ? watchMatchCards({
       hole: selected.hole,
@@ -271,9 +282,11 @@ function WatchHoles(props) {
     })
     : [];
 
-  const bits = [`Hole ${selected.hole}`];
-  if (selected.par != null) bits.push(`Par ${selected.par}`);
-  if (selected.distance_ft != null) bits.push(`${selected.distance_ft} ft`);
+  const bits = putting
+    ? [selected.distance_ft ? selected.distance_ft + " ft" : "Station " + selected.hole, selected.par != null ? selected.par + " putts" : ""].filter(Boolean)
+    : [`Hole ${selected.hole}`];
+  if (!putting && selected.par != null) bits.push(`Par ${selected.par}`);
+  if (!putting && selected.distance_ft != null) bits.push(`${selected.distance_ft} ft`);
 
   function goHole(nextIndex) {
     if (!holes.length) return;
@@ -297,7 +310,7 @@ function WatchHoles(props) {
   }
 
   return h("div", { className: "watch-holes", key: "holes" }, [
-    replay
+    replay && !putting
       ? h(WatchReplayBar, {
         caption: watchReplayCaption(plan, safeStep),
         key: "replay",
@@ -309,7 +322,7 @@ function WatchHoles(props) {
         onNextHole: () => goHole(safeIndex + 1),
       })
       : h("p", { className: "watch-hole-meta", key: "meta" }, bits.join(" · ")),
-    h(HoleMap, {
+    putting ? null : h(HoleMap, {
       discColor: follow && follow.discColor,
       hole: selected,
       key: "map",
@@ -329,8 +342,8 @@ function WatchHoles(props) {
       udiscCourseId: props.udiscCourseId,
       windFromDeg: props.windFromDeg,
     }),
-    h(WatchMix, { holes, key: "mix", player: follow }),
-    h(WatchFollowBar, {
+    putting ? null : h(WatchMix, { holes, key: "mix", player: follow }),
+    putting ? null : h(WatchFollowBar, {
       follow,
       key: "follow",
       options: followOptions,
@@ -341,11 +354,13 @@ function WatchHoles(props) {
       },
     }),
     h("div", { className: "card", key: "picker" }, [
-      h("h2", { className: "section", key: "title" }, replay ? "Holes" : "Hole maps"),
-      replay ? h("p", { className: "watch-hole-meta", key: "meta" }, bits.join(" · ")) : null,
-      h("div", { className: "holegrid", key: "grid" }, holes.map((hole, holeIndex) =>
-        h("button", {
-          "aria-label": `Hole ${hole.hole}`,
+      h("h2", { className: "section", key: "title" }, putting ? "Stations" : replay ? "Holes" : "Hole maps"),
+      replay && !putting ? h("p", { className: "watch-hole-meta", key: "meta" }, bits.join(" · ")) : null,
+      h("div", { className: "holegrid", key: "grid" }, holes.map((hole, holeIndex) => {
+        const distance = Number(hole && hole.distance_ft);
+        const stationLabel = Number.isFinite(distance) && distance > 0 ? String(distance) : String(hole.hole);
+        return h("button", {
+          "aria-label": putting ? (Number.isFinite(distance) && distance > 0 ? distance + " ft" : "Station " + hole.hole) : `Hole ${hole.hole}`,
           "aria-pressed": holeIndex === safeIndex,
           className: holeIndex === safeIndex ? "cur" : "",
           key: hole.hole,
@@ -356,16 +371,17 @@ function WatchHoles(props) {
             setStep(0);
             setPlaying(false);
           },
-        }, String(hole.hole)),
-      )),
+        }, putting ? stationLabel : String(hole.hole));
+      })),
     ]),
-    props.isMatchplay ? h(WatchMatchCards, { cards: matchCards, key: "matches" }) : h(WatchStrokeStrip, { chips: strokeChips, key: "stroke" }),
-    h(WatchTeeSign, { key: "sign", teeSign: selected.teeSign }),
+    props.isMatchplay ? h(WatchMatchCards, { cards: matchCards, key: "matches" }) : h(WatchStrokeStrip, { chips: strokeChips, key: "stroke", label: putting ? "This station" : "Thru this hole" }),
+    putting ? null : h(WatchTeeSign, { key: "sign", teeSign: selected.teeSign }),
   ]);
 }
 
 export function WatchView(props) {
   const standings = Array.isArray(props.standings) ? props.standings : [];
+  const film = useThrowClips({ refresh: props.status !== "final" });
   const [focus, setFocus] = React.useState(null);
   function focusHole(holeNumber, standing) {
     const indexes = standing && Array.isArray(standing.playerIndexes) ? standing.playerIndexes : [];
@@ -386,7 +402,7 @@ export function WatchView(props) {
     props.courseName || props.layoutName
       ? h("p", { className: "muted watch-meta", key: "meta" }, [props.courseName, props.layoutName].filter(Boolean).join(" · "))
       : null,
-    h(RoundHighlights, { key: "highlights", live: props.status !== "final", putting: props.isPutting === true }),
+    h(RoundHighlights, { holes: props.holes, key: "highlights", live: props.status !== "final", putting: props.isPutting === true }),
     h(RoundTalk, {
       key: "talk",
       live: props.status !== "final",
@@ -398,6 +414,7 @@ export function WatchView(props) {
       focus,
       holes: props.holes,
       isMatchplay: props.isMatchplay,
+      isPutting: props.isPutting,
       key: "holes",
       players: props.playerLocations,
       scorePlayers: props.players,
@@ -411,6 +428,9 @@ export function WatchView(props) {
     h("div", { className: "card", key: "board" }, [
       h("h2", { className: "section", key: "title" }, [icon(Trophy), props.status === "final" ? " Final leaderboard" : " Live leaderboard"]),
       h(LeaderboardTable, {
+        clipApi: film.api,
+        clipHoles: props.holes,
+        clips: film.clips,
         isDoubles: props.isDoubles,
         isMatchplay: props.isMatchplay,
         isPutting: props.isPutting,

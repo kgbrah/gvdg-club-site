@@ -652,7 +652,10 @@ test('player leaderboard renders matchplay and pair labels without primary to-pa
   assert.match(source, /displayMatchStatus\(standing\.match\)/);
   assert.match(source, /className: "lb-scorecard"/);
   assert.match(source, /aria-expanded/);
-  assert.match(source, /"aria-label": isPutting \? \(hole\.distance_ft \? hole\.distance_ft \+ " ft" : "Station " \+ hole\.hole\) : "Hole " \+ hole\.hole/);
+  assert.match(source, /"aria-label": isPutting \? \(station === String\(hole\.hole\) \? "Station " \+ hole\.hole : station \+ " ft"\) : "Hole " \+ hole\.hole/);
+  assert.match(source, /hole\.strokes \+ "\/" \+ attempts/);
+  assert.match(source, /clipsForStanding\(clips, standing\)/);
+  assert.match(source, /HighlightClipList/);
   assert.match(readFileSync('src/score-app/score-controller.js', 'utf8'), /onHole: function \(holeNumber\)/);
   assert.match(readFileSync('src/score-app/watch-view.js', 'utf8'), /onHole: focusHole/);
   assert.match(readFileSync('src/score-app/watch-view.js', 'utf8'), /startExpanded: true/);

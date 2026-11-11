@@ -5,6 +5,7 @@ import { displayMatchStatus } from "../shared/match-status.js";
 import { UDiscExportDetails } from "../shared/udisc-export.js";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { relText as formatStart, puttingScorecardMakes, strokeLabel } from "./score-view-model.js";
+import { clipsForStanding, HighlightClipList } from "./throw-film.js";
 
 const h = React.createElement;
 
@@ -57,23 +58,31 @@ function resultCell(standing, isMatchplay, isPutting, handicapped, relClass, rel
   ]);
 }
 
-function StandingScorecard({ isPutting, onHole, scorecard, standing }) {
-  const holes = Array.isArray(scorecard) ? scorecard : [];
-  if (!holes.length) return h("p", { className: "muted lb-card-empty" }, "No holes on this card yet.");
-  return h("div", { className: "lb-scorecard" }, holes.map((hole) => {
+function StandingScorecard({ holes, isPutting, onHole, scorecard, standing }) {
+  const card = Array.isArray(scorecard) ? scorecard : [];
+  const layout = Array.isArray(holes) ? holes : [];
+  if (!card.length) return h("p", { className: "muted lb-card-empty" }, "No holes on this card yet.");
+  return h("div", { className: "lb-scorecard" }, card.map((hole) => {
     const scored = typeof hole.strokes === "number";
     const rel = !isPutting && scored ? strokeLabel(hole.strokes, hole.par) : null;
     const tone = rel ? rel.className : "";
+    const layoutHole = layout.find((row) => row && Number(row.hole) === Number(hole.hole));
+    const distance = Number(hole.distance_ft != null ? hole.distance_ft : layoutHole && (layoutHole.distance_ft != null ? layoutHole.distance_ft : layoutHole.distanceFt));
+    const station = Number.isFinite(distance) && distance > 0 ? String(distance) : String(hole.hole);
+    const attempts = Number(hole.par);
+    const scoreText = !scored
+      ? "·"
+      : (isPutting && Number.isFinite(attempts) && attempts > 0 ? hole.strokes + "/" + attempts : String(hole.strokes));
     const body = [
-      h("span", { className: "lb-hole-num", key: "n" }, String(hole.hole)),
-      h("b", { className: "lb-hole-score", key: "s" }, scored ? String(hole.strokes) : "·"),
+      h("span", { className: "lb-hole-num", key: "n" }, isPutting ? station : String(hole.hole)),
+      h("b", { className: "lb-hole-score", key: "s" }, scoreText),
       rel ? h("span", { className: "lb-hole-rel", key: "r" }, rel.text) : null,
     ];
     if (typeof onHole !== "function") {
       return h("div", { className: "lb-hole" + (tone ? " " + tone : ""), key: hole.hole }, body);
     }
     return h("button", {
-      "aria-label": isPutting ? (hole.distance_ft ? hole.distance_ft + " ft" : "Station " + hole.hole) : "Hole " + hole.hole,
+      "aria-label": isPutting ? (station === String(hole.hole) ? "Station " + hole.hole : station + " ft") : "Hole " + hole.hole,
       className: "lb-hole" + (tone ? " " + tone : ""),
       key: hole.hole,
       type: "button",
@@ -82,7 +91,7 @@ function StandingScorecard({ isPutting, onHole, scorecard, standing }) {
   }));
 }
 
-export function LeaderboardTable({ isDoubles, isMatchplay, isPutting, onHole, relClass, relText, standings, startExpanded }) {
+export function LeaderboardTable({ clipApi, clipHoles, clips, isDoubles, isMatchplay, isPutting, onHole, relClass, relText, standings, startExpanded }) {
   const [toggled, setToggled] = React.useState(() => new Set());
   function isOpen(id, hasCard) {
     if (!hasCard) return false;
@@ -120,8 +129,9 @@ export function LeaderboardTable({ isDoubles, isMatchplay, isPutting, onHole, re
     h("tbody", { key: "body" }, standings.map((standing, index) => {
       const id = standingKey(standing, index);
       const hasCard = Array.isArray(standing.scorecard) && standing.scorecard.length > 0;
-      const open = isOpen(id, hasCard);
-      const label = hasCard
+      const playerClips = clipsForStanding(clips, standing);
+      const open = isOpen(id, hasCard || playerClips.length > 0);
+      const label = hasCard || playerClips.length
         ? h("button", {
           "aria-expanded": open ? "true" : "false",
           "aria-controls": "lb-card-" + id,
@@ -129,7 +139,12 @@ export function LeaderboardTable({ isDoubles, isMatchplay, isPutting, onHole, re
           key: "label",
           type: "button",
           onClick: () => toggle(id),
-        }, standingName(standing))
+        }, [
+          standingName(standing),
+          playerClips.length
+            ? h("span", { className: "lb-clip-count", key: "clips" }, playerClips.length === 1 ? "1 clip" : playerClips.length + " clips")
+            : null,
+        ])
         : h("span", { className: "lb-name-text", key: "label" }, standingName(standing));
       return h(React.Fragment, { key: id }, [
         h("tr", { key: "row" }, [
@@ -138,7 +153,10 @@ export function LeaderboardTable({ isDoubles, isMatchplay, isPutting, onHole, re
           h("td", { key: "thru" }, String(standing.thru || 0)),
           resultCell(standing, isMatchplay, isPutting, handicapped, relClass, relText),
         ]),
-        open ? h("tr", { className: "lb-card-row", key: "card" }, h("td", { colSpan: isPutting ? 5 : 4, id: "lb-card-" + id }, h(StandingScorecard, { isPutting, onHole, scorecard: standing.scorecard, standing }))) : null,
+        open ? h("tr", { className: "lb-card-row", key: "card" }, h("td", { colSpan: isPutting ? 5 : 4, id: "lb-card-" + id }, [
+          hasCard ? h(StandingScorecard, { holes: clipHoles, isPutting, key: "card", onHole, scorecard: standing.scorecard, standing }) : null,
+          h(HighlightClipList, { api: clipApi, clips: playerClips, holes: clipHoles, key: "clips", putting: isPutting }),
+        ])) : null,
       ]);
     })),
     ]),

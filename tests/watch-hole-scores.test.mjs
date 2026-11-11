@@ -16,6 +16,7 @@ import {
   watchReplayStepCount,
   watchReplayVisibleThrows,
   watchStrokeHoleChips,
+  watchPuttingStationChips,
   scoreMixRows,
 } from "../src/score-app/score-view-model.js";
 
@@ -101,6 +102,25 @@ test("scoreForPlayerIndexes reads a pair's shared hole score", () => {
   ];
   assert.equal(scoreForPlayerIndexes(players, [0, 1], 1), 4);
   assert.equal(scoreForPlayerIndexes(players, [0], 1), null);
+});
+
+test("watchPuttingStationChips count makes, not birdies", () => {
+  const chips = watchPuttingStationChips({
+    hole: 1,
+    par: 5,
+    players: [
+      { index: 0, name: "Kevin Gray", scores: { 1: 4 } },
+      { index: 1, name: "Steveo", scores: { 1: 4 } },
+    ],
+    scoreTargets: [
+      { id: "player:0", label: "Kevin Gray", playerIndexes: [0] },
+      { id: "player:1", label: "Steveo", playerIndexes: [1] },
+    ],
+  });
+  assert.equal(chips.length, 2);
+  assert.equal(chips[0].strokes, "4/5");
+  assert.equal(chips[0].label, "");
+  assert.equal(chips[0].className, "");
 });
 
 test("watchStrokeHoleChips list every scored player or pair on the selected hole", () => {
@@ -257,6 +277,12 @@ test("watch view uses overlay chips for stroke and match cards for matchplay", (
   assert.match(watch, /function WatchMatchCards/);
   assert.match(watch, /watchHoleScoreChips/);
   assert.match(watch, /watchStrokeHoleChips/);
+  assert.match(watch, /watchPuttingStationChips/);
+  assert.match(watch, /putting \? "Stations" : replay \? "Holes" : "Hole maps"/);
+  assert.match(watch, /putting \? "This station" : "Thru this hole"/);
+  assert.match(watch, /putting \? null : h\(HoleMap/);
+  assert.match(watch, /useThrowClips/);
+  assert.match(watch, /clipApi: film\.api/);
   assert.match(watch, /watchMatchCards/);
   assert.match(watch, /props\.isMatchplay \? h\(WatchMatchCards/);
   assert.match(map, /function ScoreChips/);

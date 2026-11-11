@@ -107,6 +107,59 @@ function momentLabel(moment) {
   return "Highlight";
 }
 
+function clipStationLabel(clip, holes, putting) {
+  if (!putting) return "Hole " + clip.hole;
+  const hole = (Array.isArray(holes) ? holes : []).find((row) => row && Number(row.hole) === Number(clip.hole));
+  const distance = hole ? Number(hole.distance_ft != null ? hole.distance_ft : hole.distanceFt) : NaN;
+  if (Number.isFinite(distance) && distance > 0) return distance + " ft";
+  return "Station " + clip.hole;
+}
+
+function clipCaption(clip, holes, putting) {
+  const place = clipStationLabel(clip, holes, putting);
+  if (!clip.highlight) return place;
+  if (putting) return "Highlight · " + place;
+  return momentLabel(clip.moment) + " · " + place;
+}
+
+export function clipsForStanding(clips, standing) {
+  const names = new Set();
+  function add(value) {
+    const name = String(value || "").trim().toLowerCase().replace(/\s+\(you\)$/i, "");
+    if (name) names.add(name);
+  }
+  add(standing && standing.name);
+  add(standing && standing.label);
+  const members = standing && Array.isArray(standing.members) ? standing.members : [];
+  members.forEach(add);
+  const indexes = new Set((standing && Array.isArray(standing.playerIndexes) ? standing.playerIndexes : []).map((index) => Number(index)));
+  return (Array.isArray(clips) ? clips : []).filter((clip) => {
+    if (!clip || !clip.mediaPath) return false;
+    if (clip.playerIndex != null && indexes.size && indexes.has(Number(clip.playerIndex))) return true;
+    const name = String(clip.playerName || "").trim().toLowerCase();
+    return Boolean(name) && names.has(name);
+  });
+}
+
+export function HighlightClipList(props) {
+  const clips = Array.isArray(props.clips) ? props.clips : [];
+  if (!clips.length || !props.api) return null;
+  const putting = props.putting === true;
+  const holes = Array.isArray(props.holes) ? props.holes : [];
+  return h("div", { className: "throw-highlights-row lb-clips" }, clips.map((clip) => {
+    return h("figure", { className: "throw-highlight", key: clip.id }, [
+      h("video", appleVideoAttrs({
+        controls: true,
+        key: "video",
+        onLoadedMetadata: markClipFrame,
+        preload: "metadata",
+        src: props.api + clip.mediaPath,
+      })),
+      h("figcaption", { key: "cap" }, clipCaption(clip, holes, putting)),
+    ]);
+  }));
+}
+
 function filmPlaceLabel(hole, putting) {
   if (!putting) return "Hole " + (hole && hole.hole) + " throw";
   const distance = Number(hole && (hole.distance_ft != null ? hole.distance_ft : hole.distanceFt));
@@ -123,7 +176,6 @@ export function RoundHighlights(props) {
   const canStar = props.canStar === true;
   const putting = props.putting === true;
   const videosLabel = putting ? "Putt videos" : "Throw videos";
-  const placeLabel = putting ? "Station " : "Hole ";
   const countLabel = rows.length === 1 ? "1 clip" : rows.length + " clips";
   async function toggle(clip) {
     const { path, token } = withGuest(clip.mediaPath.replace(/\/media$/, "/highlight"));
@@ -172,9 +224,8 @@ export function RoundHighlights(props) {
           src: api + clip.mediaPath,
         })),
         h("figcaption", { key: "cap" }, [
-          clip.highlight ? momentLabel(clip.moment) + " · " : "",
-          clip.playerName,
-          " · " + placeLabel + clip.hole,
+          clipCaption(clip, props.holes, putting),
+          clip.playerName ? " · " + clip.playerName : "",
         ]),
         canStar ? h("button", {
           className: "throw-highlight-star",
