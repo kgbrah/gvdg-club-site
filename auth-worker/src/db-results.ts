@@ -140,7 +140,7 @@ export function createCasualResultStmt(db: D1Like, r: CasualResultInput): D1Stat
 }
 
 export async function listCasualRoundResults(db: D1Like, roundCode: string) {
-  const round = (await db.prepare("SELECT * FROM casual_rounds WHERE round_code = ? ORDER BY id DESC LIMIT 1").bind(roundCode).first()) as { id?: number } | null;
+  const round = (await db.prepare("SELECT * FROM casual_rounds WHERE round_code = ? COLLATE NOCASE ORDER BY id DESC LIMIT 1").bind(roundCode).first()) as { id?: number } | null;
   if (!round?.id) return null;
   const results = (await db.prepare("SELECT * FROM casual_results WHERE casual_round_id = ? ORDER BY place IS NULL, place, total").bind(round.id).all()).results;
   return { round, results };

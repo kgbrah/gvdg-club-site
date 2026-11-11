@@ -18,9 +18,12 @@ function dbWith(round: Record<string, unknown> | null, results: Record<string, u
 }
 
 describe("casual archive snapshot", () => {
-  it("uses the live or final DO snapshot and archives the rest", () => {
+  it("keeps a live card and a final card that still has holes", () => {
     expect(shouldUseCasualArchive({ status: "live" })).toBe(false);
-    expect(shouldUseCasualArchive({ status: "final" })).toBe(false);
+    expect(shouldUseCasualArchive({ status: "live", holes: [] })).toBe(false);
+    expect(shouldUseCasualArchive({ status: "final", holes: [{ hole: 1 }] })).toBe(false);
+    expect(shouldUseCasualArchive({ status: "final" })).toBe(true);
+    expect(shouldUseCasualArchive({ status: "final", holes: [] })).toBe(true);
     expect(shouldUseCasualArchive({ status: "none" })).toBe(true);
     expect(shouldUseCasualArchive({})).toBe(true);
     expect(shouldUseCasualArchive(null)).toBe(true);

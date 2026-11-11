@@ -37,6 +37,45 @@ function roundStub(env: Env, code: string): DurableObjectStub {
   return env.LIVE.get(env.LIVE.idFromName("round:" + code));
 }
 
+function asSnapshotRecord(snapshot: unknown): Record<string, unknown> {
+  return snapshot && typeof snapshot === "object" && !Array.isArray(snapshot) ? snapshot as Record<string, unknown> : {};
+}
+
+async function readDoSnapshot(stub: DurableObjectStub): Promise<{ status: number; snapshot: unknown }> {
+  try {
+    const live = await stub.fetch("https://do/snapshot");
+    const snapshot = await live.json().catch(() => ({}));
+    return { status: live.status, snapshot };
+  } catch {
+    return { status: 502, snapshot: {} };
+  }
+}
+
+async function overlayOrRaw(env: Env, snapshot: Record<string, unknown>): Promise<Record<string, unknown>> {
+  try {
+    return await overlayLiveSnapshot(env, snapshot);
+  } catch {
+    return snapshot;
+  }
+}
+
+/** Prefer a real live/final DO card. Otherwise rebuild the public replay from durable casual results. */
+async function casualWatchSnapshot(env: Env, stub: DurableObjectStub, code: string): Promise<{ body: Record<string, unknown>; status: number }> {
+  const live = await readDoSnapshot(stub);
+  const raw = asSnapshotRecord(live.snapshot);
+  if (shouldUseCasualArchive(raw)) {
+    try {
+      const archived = await buildCasualArchiveSnapshot(env.DB, code);
+      if (archived) return { body: await overlayOrRaw(env, archived as Record<string, unknown>), status: 200 };
+    } catch {
+      // Durable results missed; fall through to whatever the DO returned.
+    }
+  }
+  const body = await overlayOrRaw(env, raw);
+  const status = String(body.status || "");
+  return { body, status: status === "live" || status === "final" ? 200 : live.status };
+}
+
 async function roundCodeTaken(env: Env, code: string): Promise<boolean> {
   const archived = await db.listCasualRoundResults(env.DB, code);
   if (archived) return true;
@@ -119,15 +158,12 @@ export async function handleCasualRounds(
   const sub = seg[2];
 
   // Public reads: snapshot + WebSocket (memberIds redacted, identified by index).
-  // After the DO is evicted, a finished casual round still has D1 results — serve those as a final snapshot
-  // so Play/Season history links keep working.
+  // After the DO is evicted — or it only has a hollow "final" — a finished casual round still has D1
+  // results. Serve those so Play history Replay links keep working. Overlay failures must not 500
+  // a snapshot the client can already render.
   if (method === "GET" && sub === "live" && !seg[3]) {
-    const live = await stub.fetch("https://do/snapshot");
-    const snapshot = await live.json().catch(() => ({}));
-    if (!shouldUseCasualArchive(snapshot)) return json(await overlayLiveSnapshot(env, snapshot as Record<string, unknown>), live.status, origin);
-    const archived = await buildCasualArchiveSnapshot(env.DB, code);
-    if (archived) return json(await overlayLiveSnapshot(env, archived as Record<string, unknown>), 200, origin);
-    return json(await overlayLiveSnapshot(env, snapshot as Record<string, unknown>), live.status, origin);
+    const watched = await casualWatchSnapshot(env, stub, code);
+    return json(watched.body, watched.status, origin);
   }
   if (sub === "live" && seg[3] === "ws") return stub.fetch(request);
 

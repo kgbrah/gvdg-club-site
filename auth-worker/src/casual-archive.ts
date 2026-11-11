@@ -4,8 +4,13 @@ import { normalizeLiveScoringConfig } from "./live-format.js";
 
 export function shouldUseCasualArchive(snapshot: unknown): boolean {
   if (!snapshot || typeof snapshot !== "object") return true;
-  const status = String((snapshot as { status?: unknown }).status || "");
-  return status !== "live" && status !== "final";
+  const row = snapshot as { status?: unknown; holes?: unknown };
+  const status = String(row.status || "");
+  // An in-progress round stays on the DO even before the first hole is stored.
+  // A finished card with no holes is the evicted/hollow snapshot — rebuild it from D1.
+  if (status === "live") return false;
+  if (status === "final") return !Array.isArray(row.holes) || row.holes.length === 0;
+  return true;
 }
 
 function parseJson(raw: unknown): unknown {

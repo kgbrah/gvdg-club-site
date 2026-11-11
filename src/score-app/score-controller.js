@@ -31,6 +31,7 @@ import { isTransientMineFailure, mineCacheKey, readMineCache, writeMineCache } f
 import { readOpenPlayName, readOpenPlayToken, writeOpenPlaySession } from "./open-play-session.js";
 import { buildLivePots, withLiveCtpLeaders } from "../shared/live-pots-model.js";
 import { isLiveWatchRequest, liveRoundCodeFromSearch, liveScoreHref, liveWatchHref } from "../shared/live-watch.js";
+import { casualReplaySnapshot, watchableLiveSnapshot } from "../shared/casual-replay.js";
 import { holeWinners, winnerColor } from "../shared/matchplay-colors.js";
 import { GPS_WATCH_OPTIONS, gpsErrorPolicy } from "../shared/hole-map-model.js";
 import { notifyScoreAuthChanged } from "../shared/player-theme-session.js";
@@ -1444,9 +1445,14 @@ export function startScoreApp(options) {
         }
         async function loadWatch() {
             const r = await api(LIVE, { auth: false, guest: false });
-            if (!r.ok || !r.data) { renderMessage('Couldn’t load live scores', 'Check the link and try again.', true); return; }
-            const d = r.data;
-            if (d.status !== 'live' && d.status !== 'final') {
+            let d = r.ok && r.data ? r.data : null;
+            if (ROUND_CODE && !watchableLiveSnapshot(d)) {
+                const archived = await api('/rounds/' + ROUND_CODE + '/results', { auth: false, guest: false });
+                const built = casualReplaySnapshot(archived.ok ? archived.data : null);
+                if (built) d = built;
+            }
+            if (!d || (d.status !== 'live' && d.status !== 'final')) {
+                if (!d && (!r.ok || r.data == null)) { renderMessage('Couldn’t load live scores', 'Check the link and try again.', true); return; }
                 renderMessage('This round is not live', 'Ask for a live watch link, or open the event page.', true);
                 return;
             }

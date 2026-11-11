@@ -1116,8 +1116,10 @@
                 .member-dialog-btn.primary.danger { background: var(--primary-strong); border-color: var(--primary-strong); }
                 @media (max-width: 420px) { .member-dialog-actions { flex-direction: column; } .member-dialog-btn { width: 100%; } }
                 .passkey-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin: 0; }
-                .passkey-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; background: transparent; border: 1px solid var(--secondary-text); color: var(--secondary-text); padding: 0.55rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; text-decoration: none; transition: background 0.15s ease, color 0.15s ease; }
-                .passkey-btn:hover { background: var(--secondary); color: #fff; }
+                .passkey-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; background: transparent; border: 1px solid var(--secondary-text); color: var(--secondary-text); padding: 0.55rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; text-decoration: none; touch-action: manipulation; transition: background 0.15s ease, color 0.15s ease; }
+                @media (hover: hover) {
+                    .passkey-btn:hover { background: var(--secondary); color: white; }
+                }
                 .passkey-btn:disabled { opacity: 0.6; cursor: default; }
                 .passkey-status { font-size: 0.85rem; color: var(--text-muted); }
                 .login-divider { display: flex; align-items: center; text-align: center; color: var(--text-muted); font-size: 0.8rem; margin: 0.75rem 0; }
