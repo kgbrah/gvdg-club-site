@@ -292,6 +292,20 @@
         .sc-start-grid { display: grid; grid-template-columns: minmax(12rem, 1.4fr) minmax(7rem, 0.7fr) minmax(9rem, 0.85fr) auto auto; gap: 0.6rem; align-items: end; }
         .sc-start-field { display: grid; gap: 0.2rem; min-width: 0; color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; }
         .sc-start-field select { width: 100%; min-width: 0; padding: 0.45rem 0.55rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-size: 0.9rem; }
+        .putt-stations { display: grid; gap: 0.55rem; grid-column: 1 / -1; min-width: 0; }
+        .putt-stations-title { color: var(--text-primary); font-size: 0.95rem; font-weight: 700; }
+        .putt-station-list { display: grid; gap: 0.55rem; }
+        .putt-station { display: grid; gap: 0.55rem; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-primary); padding: 0.7rem 0.75rem; }
+        .putt-station-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+        .putt-station-head strong { color: var(--text-primary); font-size: 0.95rem; }
+        .putt-remove { background: transparent; border: 1px solid var(--border-color); color: var(--text-muted); border-radius: 999px; min-height: 36px; padding: 0.15rem 0.75rem; font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
+        .putt-station-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.45rem; }
+        .admin-form label.putt-field, .putt-field { display: grid; gap: 0.25rem; margin: 0; min-width: 0; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+        .admin-form .putt-field select, .admin-form .putt-field input, .putt-field select, .putt-field input { width: 100%; min-width: 0; min-height: 44px; padding: 0.45rem 0.5rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); font-size: 16px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+        .putt-add { justify-self: start; width: auto; }
+        @media (max-width: 420px) {
+            .putt-station-grid { grid-template-columns: 1fr; }
+        }
         .sc-start-check { display: inline-flex; align-items: center; gap: 0.35rem; margin-bottom: 0.45rem; white-space: nowrap; }
         .sc-start-grid #scStartBtn { white-space: nowrap; }
         .fmt-btns { display: inline-flex; gap: 0.4rem; flex-wrap: wrap; }

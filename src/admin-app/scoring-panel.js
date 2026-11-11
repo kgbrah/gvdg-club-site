@@ -46,70 +46,133 @@ function FormatButtons({ label, name, onChange, options, value }) {
   ]);
 }
 
+const PUTT_DISTANCES = [8, 10, 12, 15, 18, 20, 25, 30, 33, 35, 40, 45, 50, 60, 66, 80];
+const PUTT_COUNTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const PUTT_POINTS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20];
+
+function presetLabel(option, suffix) {
+  if (suffix === "pt") return option === 1 ? "1 pt" : `${option} pts`;
+  if (suffix === "putt") return option === 1 ? "1 putt" : `${option} putts`;
+  return suffix ? `${option} ${suffix}` : String(option);
+}
+
+function PresetOrCustom({ label, max, min, onChange, options, suffix, value }) {
+  const numeric = Number(value);
+  const listed = Number.isInteger(numeric) && options.includes(numeric);
+  const [custom, setCustom] = React.useState(!listed);
+  const [draft, setDraft] = React.useState(Number.isInteger(numeric) ? String(numeric) : "");
+
+  React.useEffect(() => {
+    if (!(Number.isInteger(numeric) && options.includes(numeric))) setCustom(true);
+    setDraft(Number.isInteger(numeric) ? String(numeric) : "");
+  }, [numeric, options]);
+
+  function commitDraft(nextDraft) {
+    const next = Number(nextDraft);
+    if (Number.isInteger(next) && next >= min && next <= max) onChange(next);
+  }
+
+  return h("label", { className: "putt-field" }, [
+    h("span", { key: "label" }, label),
+    h("select", {
+      "aria-label": label,
+      key: "select",
+      onChange: (event) => {
+        if (event.target.value === "custom") {
+          setCustom(true);
+          setDraft(Number.isInteger(numeric) ? String(numeric) : "");
+          return;
+        }
+        setCustom(false);
+        onChange(Number(event.target.value));
+      },
+      value: custom ? "custom" : String(numeric),
+    }, [
+      ...options.map((option) => h("option", { key: option, value: String(option) }, presetLabel(option, suffix))),
+      h("option", { key: "custom", value: "custom" }, "Custom"),
+    ]),
+    custom ? h("input", {
+      "aria-label": `${label} custom`,
+      inputMode: "numeric",
+      key: "custom",
+      max: String(max),
+      min: String(min),
+      onBlur: () => {
+        const next = Number(draft);
+        if (!(Number.isInteger(next) && next >= min && next <= max)) {
+          setDraft(Number.isInteger(numeric) ? String(numeric) : "");
+        }
+      },
+      onChange: (event) => {
+        setDraft(event.target.value);
+        commitDraft(event.target.value);
+      },
+      placeholder: `${min}-${max}`,
+      type: "number",
+      value: draft,
+    }) : null,
+  ]);
+}
+
 export function PuttingStations({ onChange, stations }) {
   function update(index, patch) {
     onChange(stations.map((station, stationIndex) => stationIndex === index ? { ...station, ...patch } : station));
   }
   const weighted = stations.some((station) => Number(station.points) > 1);
-  return h("div", { className: "sc-start-field", key: "stations" }, [
-    h("span", { key: "label" }, "Putting stations"),
-    ...stations.map((station, index) => h("div", { className: "al-row", key: `${station.distanceFt}-${index}` }, [
-      h("label", { key: "distance" }, [
-        "Distance",
-        h("input", {
-          inputMode: "numeric",
-          key: "input",
-          max: "80",
-          min: "8",
-          onChange: (event) => update(index, { distanceFt: Number(event.target.value) }),
-          type: "number",
+  return h("div", { className: "putt-stations", key: "stations" }, [
+    h("span", { className: "putt-stations-title", key: "label" }, "Putting stations"),
+    h("div", { className: "putt-station-list", key: "list" }, stations.map((station, index) => h("div", { className: "putt-station", key: `station-${index}` }, [
+      h("div", { className: "putt-station-head", key: "head" }, [
+        h("strong", { key: "title" }, `Station ${index + 1}`),
+        stations.length > 1 ? h("button", {
+          className: "putt-remove",
+          key: "remove",
+          onClick: () => onChange(stations.filter((_, stationIndex) => stationIndex !== index)),
+          type: "button",
+        }, "Remove") : null,
+      ]),
+      h("div", { className: "putt-station-grid", key: "grid" }, [
+        h(PresetOrCustom, {
+          key: "distance",
+          label: "Distance",
+          max: 80,
+          min: 8,
+          onChange: (distanceFt) => update(index, { distanceFt }),
+          options: PUTT_DISTANCES,
+          suffix: "ft",
           value: station.distanceFt,
         }),
-        "ft",
-      ]),
-      h("label", { key: "putts" }, [
-        "Putts",
-        h("input", {
-          inputMode: "numeric",
-          key: "input",
-          max: "10",
-          min: "1",
-          onChange: (event) => update(index, { putts: Number(event.target.value) }),
-          type: "number",
+        h(PresetOrCustom, {
+          key: "putts",
+          label: "Putts",
+          max: 10,
+          min: 1,
+          onChange: (putts) => update(index, { putts }),
+          options: PUTT_COUNTS,
+          suffix: "putt",
           value: station.putts,
         }),
-      ]),
-      h("label", { key: "points" }, [
-        "Points",
-        h("input", {
-          inputMode: "numeric",
-          key: "input",
-          max: "20",
-          min: "1",
-          onChange: (event) => {
-            const points = Number(event.target.value);
-            if (Number.isInteger(points) && points >= 1 && points <= 20) update(index, { points });
-          },
-          type: "number",
+        h(PresetOrCustom, {
+          key: "points",
+          label: "Points",
+          max: 20,
+          min: 1,
+          onChange: (points) => update(index, { points }),
+          options: PUTT_POINTS,
+          suffix: "pt",
           value: station.points || 1,
         }),
       ]),
-      stations.length > 1 ? h("button", {
-        className: "admin-btn secondary",
-        key: "remove",
-        onClick: () => onChange(stations.filter((_, stationIndex) => stationIndex !== index)),
-        type: "button",
-      }, "Remove") : null,
-    ])),
+    ]))),
     stations.length < 12 ? h("button", {
-      className: "admin-btn secondary",
+      className: "admin-btn secondary putt-add",
       key: "add",
       onClick: () => onChange(stations.concat([{ distanceFt: 35, putts: stations[0]?.putts || 5, points: 1 }])),
       type: "button",
     }, "Add station") : null,
     h("p", { className: "al-note", key: "note" }, weighted
       ? "Players still enter makes. Each make is worth that station's points, and the highest point total wins."
-      : "Each player throws that many putts from each distance. Leave points at 1 to rank by makes. Most makes wins. No course layout needed."),
+      : "Pick a distance, putt count, and points per make. Choose Custom for a value that is not in the list. Leave points at 1 to rank by makes."),
   ]);
 }
 

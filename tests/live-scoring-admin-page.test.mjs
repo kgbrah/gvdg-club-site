@@ -22,6 +22,10 @@ test('admin live start area sends normalized scoring config', () => {
   assert.match(panel, /name: "scScoringStyle"/);
   // Format selectors are BUTTON toggles (not dropdowns) — preserve this UI.
   assert.match(panel, /className: "fmt-btn"/);
+  assert.match(panel, /className: "putt-stations"/);
+  assert.match(panel, /value: "custom"/);
+  assert.match(panel, /"Custom"/);
+  assert.match(html, /\.putt-stations \{[^}]*grid-column: 1 \/ -1/);
   assert.match(panel, /\{ label: "Singles", value: "singles" \}/);
   assert.match(panel, /\{ label: "Doubles", value: "doubles" \}/);
   assert.match(panel, /\{ label: "Stroke play", value: "stroke" \}/);
