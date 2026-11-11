@@ -8,7 +8,7 @@
 import { holeMarker } from "./db-courses.js";
 import { normalizeScorecards, playerScorerId, purgeScorerVotes, purgeScoreTargetScorerVotes, recordScoreTargetVote } from "./live-consensus.js";
 import { canCastCtpVote, dropLiveCtp, recordCtpVote, type LiveCtpStore } from "./live-ctp.js";
-import { isLiveFormatError, normalizeLiveScoringConfig, normalizePairLabel, type LiveScoringConfig } from "./live-format.js";
+import { isLiveFormatError, normalizeLiveScoringConfig, normalizePairLabel, puttingStationPoints, type LiveScoringConfig } from "./live-format.js";
 import { finalizeLiveEvent } from "./live-finalize.js";
 import { isLoggedInMemberId, locationMoved, locationOnCourse, locationsFromRecord, locationsToRecord, parseLocationBody, type LivePlayerLocation } from "./live-locations.js";
 import { normalizeMapMarkKind } from "./course-map-marks.js";
@@ -154,7 +154,18 @@ export class LiveEventDO {
   private async start(b: StartBody): Promise<Response> {
     const holes = (Array.isArray(b.holes) ? b.holes : [])
       .filter((h) => h && typeof h.hole === "number" && typeof h.par === "number")
-      .map((h) => ({ hole: h.hole, par: h.par, distance_ft: h.distance_ft ?? null, tee_sign_id: h.tee_sign_id ?? null, tee: holeMarker(h.tee), target: holeMarker(h.target) }));
+      .map((h) => {
+        const points = puttingStationPoints(h.points);
+        return {
+          hole: h.hole,
+          par: h.par,
+          distance_ft: h.distance_ft ?? null,
+          ...(points != null && points > 1 ? { points } : {}),
+          tee_sign_id: h.tee_sign_id ?? null,
+          tee: holeMarker(h.tee),
+          target: holeMarker(h.target),
+        };
+      });
     if (holes.length === 0 || (!b.eventId && !b.casual)) return j({ error: "invalid_start" }, 400);
     let roundConfig: LiveScoringConfig;
     try {

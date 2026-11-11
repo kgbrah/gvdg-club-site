@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { normalizeLiveScoringConfig, scoreTargetsForPlayers, validateCardTargetsForScoring, normalizePairLabel } from "../src/live-format.js";
+import { resolvedHoles } from "../src/live-state.js";
 import {
   assignCards,
   countScores,
@@ -473,6 +474,30 @@ describe("live scoring format helpers", () => {
       { hole: 1, par: 5, strokes: 5 },
       { hole: 2, par: 5, strokes: 0, points: 3 },
     ]);
+  });
+
+  it("reads putting points from the station list when the stored holes dropped them", () => {
+    const holes = resolvedHoles({
+      eventId: 1,
+      holes: [
+        { hole: 1, par: 5, distance_ft: 15 },
+        { hole: 2, par: 2, distance_ft: 50 },
+      ],
+      status: "live",
+      startedAt: "",
+      roundConfig: {
+        groupFormat: "singles",
+        scoringStyle: "putting",
+        handicap: false,
+        putting: {
+          stations: [
+            { distanceFt: 15, putts: 5, points: 2 },
+            { distanceFt: 50, putts: 2, points: 4 },
+          ],
+        },
+      },
+    });
+    expect(holes.map((hole) => hole.points ?? 1)).toEqual([2, 4]);
   });
 
   it("returns one singles score target per active player", () => {

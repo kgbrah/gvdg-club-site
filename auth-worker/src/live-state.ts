@@ -10,9 +10,12 @@ export function canEnterScorecard(player: PlayerState, authMember: string | null
 
 export function resolvedHoles(meta: LiveMeta | null): ResolvedHole[] {
   const overrides = meta?.overrides ?? {};
+  const stations = meta?.roundConfig?.scoringStyle === "putting" ? meta.roundConfig.putting?.stations : undefined;
   return (meta?.holes ?? []).map((hole) => {
     const override = overrides[String(hole.hole)];
-    const points = puttingStationPoints(hole.points);
+    const station = stations?.[hole.hole - 1];
+    const rawPoints = hole.points != null ? hole.points : station?.points;
+    const points = puttingStationPoints(rawPoints);
     return {
       hole: hole.hole,
       par: override?.par ?? hole.par,
