@@ -1258,13 +1258,15 @@ export function ScorecardView(props) {
           solo,
           throws,
         }),
-        props.putting ? null : h(RoundTools, {
+        props.putting ? h("div", { className: "score-glove-tools", key: "round-tools" }, [
+          h(ThrowFilm, { hole: props.hole, key: "film", putting: true, rows: props.rows }),
+        ]) : h(RoundTools, {
           ...props,
           measureLabel,
           measuring,
           onMeasure,
         }),
-        props.putting ? null : h(RoundHighlights, { canStar: true, key: "clips" }),
+        h(RoundHighlights, { canStar: true, key: "clips", putting: props.putting === true }),
         h(HoleGrid, { holes: props.holeGrid, onJump: props.onJumpHole, putting: props.putting }),
         props.putting ? null : h(HoleStatChips, { chips: holeStatChips(holePlayStats(props.hole, throws, ((props.holeGrid || []).find((hole) => hole.current) || {}).score)) }),
         props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,

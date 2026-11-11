@@ -386,7 +386,7 @@ export function WatchView(props) {
     props.courseName || props.layoutName
       ? h("p", { className: "muted watch-meta", key: "meta" }, [props.courseName, props.layoutName].filter(Boolean).join(" · "))
       : null,
-    h(RoundHighlights, { key: "highlights", live: props.status !== "final" }),
+    h(RoundHighlights, { key: "highlights", live: props.status !== "final", putting: props.isPutting === true }),
     h(RoundTalk, {
       key: "talk",
       live: props.status !== "final",

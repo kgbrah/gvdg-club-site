@@ -24,6 +24,12 @@ test("a cardmate can film a throw and star a highlight", () => {
   assert.match(film, /"Discard"/);
   assert.match(card, /ThrowFilm/);
   assert.match(card, /canStar: true/);
+  assert.match(card, /putting: true, rows: props\.rows/);
+  assert.match(card, /putting: props\.putting === true/);
+  assert.doesNotMatch(card, /props\.putting \? null : h\(RoundHighlights/);
+  assert.match(film, /Film a putt/);
+  assert.match(film, /Putt videos/);
+  assert.match(film, /ft putt/);
   assert.match(film, /aria-expanded/);
   assert.match(film, /stays with this round/);
   assert.match(film, /CLIP_POLL_MS/);

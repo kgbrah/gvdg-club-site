@@ -107,6 +107,13 @@ function momentLabel(moment) {
   return "Highlight";
 }
 
+function filmPlaceLabel(hole, putting) {
+  if (!putting) return "Hole " + (hole && hole.hole) + " throw";
+  const distance = Number(hole && (hole.distance_ft != null ? hole.distance_ft : hole.distanceFt));
+  if (Number.isFinite(distance) && distance > 0) return distance + " ft putt";
+  return "Station " + (hole && hole.hole) + " putt";
+}
+
 export function RoundHighlights(props) {
   const { api, clips } = useThrowClips({ refresh: props.live !== false });
   const landscape = usePhoneLandscape();
@@ -114,6 +121,9 @@ export function RoundHighlights(props) {
   const rows = clips.filter((clip) => clip && clip.mediaPath);
   if (!rows.length) return null;
   const canStar = props.canStar === true;
+  const putting = props.putting === true;
+  const videosLabel = putting ? "Putt videos" : "Throw videos";
+  const placeLabel = putting ? "Station " : "Hole ";
   const countLabel = rows.length === 1 ? "1 clip" : rows.length + " clips";
   async function toggle(clip) {
     const { path, token } = withGuest(clip.mediaPath.replace(/\/media$/, "/highlight"));
@@ -131,14 +141,14 @@ export function RoundHighlights(props) {
     h("button", {
       "aria-controls": "throw-videos-body",
       "aria-expanded": open ? "true" : "false",
-      "aria-label": open ? "Minimize throw videos" : "Expand throw videos",
+      "aria-label": (open ? "Minimize " : "Expand ") + videosLabel.toLowerCase(),
       className: "throw-highlights-head",
       key: "head",
       type: "button",
       onClick: () => setOpen((value) => !value),
     }, [
       h("span", { className: "throw-highlights-copy", key: "copy" }, [
-        h("span", { className: "throw-highlights-title", key: "title" }, "Throw videos"),
+        h("span", { className: "throw-highlights-title", key: "title" }, videosLabel),
         h("span", { className: "throw-highlights-meta", key: "meta" }, countLabel + " · stays with this round"),
       ]),
       h("span", { className: "throw-highlights-toggle", key: "toggle" }, [
@@ -164,7 +174,7 @@ export function RoundHighlights(props) {
         h("figcaption", { key: "cap" }, [
           clip.highlight ? momentLabel(clip.moment) + " · " : "",
           clip.playerName,
-          " · Hole " + clip.hole,
+          " · " + placeLabel + clip.hole,
         ]),
         canStar ? h("button", {
           className: "throw-highlight-star",
@@ -359,13 +369,15 @@ export function ThrowFilm(props) {
   const rows = Array.isArray(props.rows) ? props.rows : [];
   const hole = props.hole && props.hole.hole;
   const par = props.hole && props.hole.par;
+  const putting = props.putting === true;
   if (!scope || !rows.length || !hole) return null;
+  const filmLabel = putting ? "Film a putt" : "Film a throw";
   return h(React.Fragment, null, [
     h("button", {
-      "aria-label": "Film a throw",
+      "aria-label": filmLabel,
       className: "score-glove-tool",
       key: "film",
-      title: "Film a throw",
+      title: filmLabel,
       type: "button",
       onClick: () => setOpen(true),
     }, [icon(Video), h("span", { key: "label" }, "Film")]),
@@ -375,6 +387,8 @@ export function ThrowFilm(props) {
       key: "sheet",
       listPath: scope.listPath,
       par,
+      placeLabel: filmPlaceLabel(props.hole, putting),
+      putting,
       rows,
       onClose: () => setOpen(false),
     }) : null,
@@ -386,7 +400,7 @@ function ThrowFilmSheet(props) {
     open: true,
     onClose: props.onClose,
     labelledBy: "throw-film-title",
-    label: "Film a throw",
+    label: props.putting ? "Film a putt" : "Film a throw",
   });
   const rows = props.rows;
   const landscape = usePhoneLandscape();
@@ -395,7 +409,7 @@ function ThrowFilmSheet(props) {
     return String((me || rows[0]).key);
   });
   const player = rows.find((row) => String(row.key) === playerKey) || rows[0];
-  const moment = suggestedMoment(player.currentScore, props.par);
+  const moment = props.putting ? null : suggestedMoment(player.currentScore, props.par);
   const [highlight, setHighlight] = React.useState(Boolean(moment));
   const [phase, setPhase] = React.useState("idle");
   const [error, setError] = React.useState("");
@@ -414,8 +428,9 @@ function ThrowFilmSheet(props) {
   const openingRef = React.useRef(null);
 
   React.useEffect(() => {
+    if (props.putting) return;
     setHighlight(Boolean(suggestedMoment(player.currentScore, props.par)));
-  }, [player.key, player.currentScore, props.par]);
+  }, [player.key, player.currentScore, props.par, props.putting]);
 
   React.useEffect(() => () => {
     window.clearInterval(timerRef.current);
@@ -546,7 +561,7 @@ function ThrowFilmSheet(props) {
       }, 250);
     } catch (error) {
       const denied = error && (error.name === "NotAllowedError" || error.name === "PermissionDeniedError");
-      setError(denied ? "Camera permission is needed to film the throw." : "The camera didn't open. Try again.");
+      setError(denied ? "Camera permission is needed to film the " + (props.putting ? "putt" : "throw") + "." : "The camera didn't open. Try again.");
     }
   }
 
@@ -619,7 +634,9 @@ function ThrowFilmSheet(props) {
     }
   }
 
-  const title = moment === "ace"
+  const title = props.putting
+    ? "Film the putt. Star it if it's a highlight."
+    : moment === "ace"
     ? "That's an ace. Save it as a highlight?"
     : moment === "birdie"
       ? "Birdie. Star it as a highlight?"
@@ -631,7 +648,7 @@ function ThrowFilmSheet(props) {
     ref: dialog.overlayRef,
     role: "presentation",
   }, h("div", {
-    "aria-label": "Film a throw",
+    "aria-label": props.putting ? "Film a putt" : "Film a throw",
     "aria-labelledby": "throw-film-title",
     "aria-modal": dialog.isolated ? "true" : undefined,
     className: "sheet throw-film-sheet " + (landscape ? "is-landscape" : "is-portrait"),
@@ -641,7 +658,7 @@ function ThrowFilmSheet(props) {
   }, [
     h("div", { className: "grab", key: "grab" }),
     h("div", { className: "throw-film-head", key: "head" }, [
-      h("h2", { className: "section", id: "throw-film-title", key: "title" }, "Hole " + props.hole + " throw"),
+      h("h2", { className: "section", id: "throw-film-title", key: "title" }, props.placeLabel || ("Hole " + props.hole + " throw")),
       h("button", {
         "aria-label": "Close",
         className: "iconbtn",
