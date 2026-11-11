@@ -260,13 +260,13 @@
             .weather-wind { grid-column: 1 / -1; justify-content: flex-start; width: 100%; }
         }
         .lb-wrap { margin: 0.25rem 0 1.25rem; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        .lb-table { width: 100%; min-width: 520px; border-collapse: collapse; font-size: 0.95rem; }
-        @media (min-width: 620px) { .lb-table { min-width: 0; } }
+        .lb-table { width: 100%; min-width: 0; border-collapse: collapse; font-size: 0.95rem; }
+        .lb-table th, .lb-table td { vertical-align: top; }
         .lb-table th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); padding: 0.4rem 0.6rem; border-bottom: 2px solid var(--border-color); }
         .lb-table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary); }
         .lb-table tbody tr:first-child td { font-weight: 700; color: var(--text-primary); }
-        .lb-pos { width: 2.5rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-        .lb-name { font-weight: 600; color: var(--text-primary); }
+        .lb-pos { width: 2.5rem; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .lb-name { font-weight: 600; color: var(--text-primary); white-space: normal; line-height: 1.25; overflow-wrap: anywhere; }
         .lb-table.live-matchplay { min-width: 0; table-layout: fixed; }
         .lb-table.live-matchplay th:nth-child(1),
         .lb-table.live-matchplay td:nth-child(1) { width: 2.4rem; }

@@ -100,14 +100,37 @@ function PreviousResultCard({ item }) {
   ]);
 }
 
+function hashOpensPreviousResults() {
+  return (window.location.hash || "") === "#previousResultsSection";
+}
+
 export function EventsPreviousResultsApp() {
   const results = useEventsPreviousResults();
-  const [expanded, setExpanded] = React.useState(false);
+  const [expanded, setExpanded] = React.useState(hashOpensPreviousResults);
   const [visible, setVisible] = React.useState(PREVIOUS_RESULTS_INITIAL);
 
   React.useEffect(() => {
     setVisible((current) => Math.min(Math.max(current, PREVIOUS_RESULTS_INITIAL), Math.max(results.length, PREVIOUS_RESULTS_INITIAL)));
     if (!results.length) setExpanded(false);
+  }, [results.length]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    function reveal() {
+      if (cancelled || !hashOpensPreviousResults() || !results.length) return;
+      setExpanded(true);
+      const node = document.getElementById("previousResultsSection");
+      if (!node || node.getClientRects().length === 0) return;
+      node.scrollIntoView({ block: "start" });
+    }
+    reveal();
+    const timers = [0, 50, 300, 800].map((delay) => window.setTimeout(reveal, delay));
+    window.addEventListener("hashchange", reveal);
+    return () => {
+      cancelled = true;
+      timers.forEach((id) => window.clearTimeout(id));
+      window.removeEventListener("hashchange", reveal);
+    };
   }, [results.length]);
 
   if (!results.length) return null;

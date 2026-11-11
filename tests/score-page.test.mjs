@@ -485,6 +485,8 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
   }), 'Card is waiting on you — hole 1');
   assert.deepEqual(udiscExportData(state), { courseId: '123', scorecard: [{ hole: 1, par: 3, strokes: 2 }] });
   assert.equal(finalizeBlockers(state).ready, false);
+  assert.equal(finalizeBlockers({ conflicts: [], missing: [], holes: [] }).ready, false);
+  assert.equal(finalizeBlockers({ conflicts: [], missing: [], holes: [{ hole: 1 }] }).ready, true);
   assert.match(finishRoundHint(finalizeBlockers(state), 'round'), /disagreeing scores/);
   assert.match(finishRoundHint({ ready: true, conflicts: [], missing: [], lines: [] }, 'round'), /Anyone on this card can finish/);
   assert.match(finishRoundHint({ ready: true, conflicts: [], missing: [], lines: [] }, 'event'), /Anyone on this card can submit/);

@@ -101,7 +101,7 @@ test('yearless homepage sheet dates stay in this year so old league nights drop 
   assert.deepEqual(upcoming, ['Sep 20 2026', 'Oct 5 2026']);
 });
 
-test('feedDateInfo prefers an explicit-year calendar date over a last-updated epoch', () => {
+test('feedDateInfo uses the sheet calendar date, not a rolled-forward epoch', () => {
   const now = new Date('2026-09-12T12:00:00Z');
   const teeSign = feedDateInfo({ date: '2026-06-01', epoch: now.getTime() }, now);
   assert.equal(teeSign.isPast, true);
@@ -110,12 +110,18 @@ test('feedDateInfo prefers an explicit-year calendar date over a last-updated ep
   assert.equal(teeSign.dateObj.getDate(), 1);
 
   const meeting = feedDateInfo({ date: '5/14', epoch: Date.UTC(2027, 4, 14) }, now);
-  assert.equal(meeting.isPast, false);
-  assert.equal(meeting.dateObj.getUTCFullYear(), 2027);
-  assert.equal(meeting.dateObj.getUTCMonth(), 4);
+  assert.equal(meeting.isPast, true);
+  assert.equal(meeting.dateObj.getFullYear(), 2026);
+  assert.equal(meeting.dateObj.getMonth(), 4);
+  assert.equal(meeting.dateObj.getDate(), 14);
 
-  const undated = feedDateInfo({ date: '9/13', epoch: Date.UTC(2026, 8, 13) }, now);
-  assert.equal(undated.isPast, false);
-  assert.equal(undated.dateObj.getUTCMonth(), 8);
-  assert.equal(undated.dateObj.getUTCDate(), 13);
+  const upcoming = feedDateInfo({ date: '9/13', epoch: Date.UTC(2027, 8, 13) }, now);
+  assert.equal(upcoming.isPast, false);
+  assert.equal(upcoming.dateObj.getFullYear(), 2026);
+  assert.equal(upcoming.dateObj.getMonth(), 8);
+  assert.equal(upcoming.dateObj.getDate(), 13);
+
+  const epochOnly = feedDateInfo({ date: '', epoch: Date.UTC(2026, 11, 12) }, now);
+  assert.equal(epochOnly.isPast, false);
+  assert.equal(epochOnly.dateObj.getUTCMonth(), 11);
 });

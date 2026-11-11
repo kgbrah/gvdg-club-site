@@ -931,7 +931,7 @@ function buildFinishView(state, mode, blockers, locked, scorerIndex) {
     locked,
     ready: blockers.ready,
     status: state.status,
-    canFinish: canMode && blockers.ready && !locked,
+    canFinish: canMode && state.status === "live" && blockers.ready && !locked,
     confirmOpen: Boolean(state.finishConfirmOpen) && !locked,
     review,
     waiting: review.waiting,
@@ -1036,7 +1036,8 @@ export function finalizeBlockers(state) {
     lines.push(placeLabel(state, row.hole) + " — " + (row.playerName || row.label || "a target") + ": no confirmed score yet");
   });
   if (missing.length > shown.length) lines.push("…and " + (missing.length - shown.length) + " more holes without a score");
-  return { conflicts, missing, ready: conflicts.length === 0 && missing.length === 0, lines };
+  const holeCount = Array.isArray(state.holes) ? state.holes.filter(Boolean).length : 0;
+  return { conflicts, missing, ready: holeCount > 0 && conflicts.length === 0 && missing.length === 0, lines };
 }
 
 export function finishRoundHint(blockers, mode, locked) {

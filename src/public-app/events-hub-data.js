@@ -195,6 +195,36 @@ function previousResultTime(item) {
   return item?.dateObj && !Number.isNaN(item.dateObj.getTime()) ? item.dateObj.getTime() : 0;
 }
 
+const PREVIOUS_RESULT_DUP_MS = 36 * 60 * 60 * 1000;
+
+function previousResultHref(item) {
+  return String(item && item.href || "");
+}
+
+function keepPreviousResult(current, incoming) {
+  const incomingEvent = previousResultHref(incoming).startsWith("#event/");
+  const currentEvent = previousResultHref(current).startsWith("#event/");
+  if (incomingEvent && !currentEvent) return incoming;
+  return current;
+}
+
+function dedupePreviousResults(items) {
+  const kept = [];
+  for (const item of items || []) {
+    const name = namesKey(item && item.name);
+    const time = previousResultTime(item);
+    const matchIndex = kept.findIndex((current) => {
+      if (!name || namesKey(current && current.name) !== name) return false;
+      const currentTime = previousResultTime(current);
+      if (!time || !currentTime) return false;
+      return Math.abs(time - currentTime) < PREVIOUS_RESULT_DUP_MS;
+    });
+    if (matchIndex < 0) kept.push(item);
+    else kept[matchIndex] = keepPreviousResult(kept[matchIndex], item);
+  }
+  return kept;
+}
+
 function eventHubItem(raw, courseIndex) {
   const event = normalizeEvent(raw);
   return {
@@ -279,11 +309,11 @@ function publishLoadedHub(feed, events, courseIndex) {
   const { active: activeEvents, archived: archivedEvents } = splitClubEventsByDate(events || []);
   const { live, upcoming } = bucketEvents(activeEvents);
   const previousLive = new Map((state.hub.live || []).map((event) => [String(event.id), event.liveSnapshot]));
-  const previousResults = [
+  const previousResults = dedupePreviousResults([
     ...archivedEvents.map((event) => previousResultFromEvent(event, courseIndex)),
     ...feedArchived.map((item) => previousResultFromFeed(item, "Event")),
     ...feedClubArchived.map((item) => previousResultFromFeed(item, "Club Event")),
-  ].sort((a, b) => previousResultTime(b) - previousResultTime(a));
+  ]).sort((a, b) => previousResultTime(b) - previousResultTime(a));
 
   state.hub = {
     feedClub: feedClub.map((item) => feedHubItem(item, events || [])),

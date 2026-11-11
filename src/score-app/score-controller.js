@@ -879,7 +879,7 @@ export function startScoreApp(options) {
                 onThrows: postThrows,
                 onMapMark: memberToken() && S.status !== 'final' ? postMapMark : null,
                 onCtpVote: EVENT_ID && !WATCH ? postCtpVote : null,
-                onOpenFinish: openFinishConfirm,
+                onOpenFinish: WATCH ? null : openFinishConfirm,
                 onCloseFinish: closeFinishConfirm,
                 onAgreeFinish: agreeFinish,
                 onScorerChange: function (index) { S.scorerIndex = index; renderHole(); },
@@ -944,7 +944,7 @@ export function startScoreApp(options) {
                 isPutting: isPuttingScoring(S),
                 mode: MODE,
                 onClose: closeLeaderboard,
-                onFinalize: openFinishConfirm,
+                onFinalize: WATCH ? null : openFinishConfirm,
                 relClass: relClass,
                 relText: relText,
                 standings: boardStandings((S.snap && S.snap.standings) || []),
@@ -960,6 +960,7 @@ export function startScoreApp(options) {
             });
         }
         function openFinishConfirm() {
+            if (WATCH) return;
             if (!finalizeBlockers(S).ready && !S.cardLocked) { toast('Finish the remaining holes first'); return; }
             S.finishConfirmOpen = true;
             closeLeaderboard();

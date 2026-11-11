@@ -73,6 +73,8 @@ test('public Events previous results include load more and show less controls', 
   assert.match(app, /Show less/);
   assert.match(app, /setVisible\(PREVIOUS_RESULTS_INITIAL\)/);
   assert.match(source, /previousResultTime\(b\) - previousResultTime\(a\)/);
+  assert.match(source, /function dedupePreviousResults/);
+  assert.match(app, /#previousResultsSection/);
 });
 
 test('public Events club content fetches fundraisers and meetings in React', () => {

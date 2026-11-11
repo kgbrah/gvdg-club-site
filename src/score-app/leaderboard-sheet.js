@@ -172,6 +172,7 @@ function FinalizePanel({ blockers, cardLocked, isPutting, mode, onFinalize, onSh
         : null,
     ]);
   }
+  if (status !== "live" || typeof onFinalize !== "function") return null;
   if (!blockers.ready || (mode !== "round" && mode !== "event")) return null;
   return h("div", { className: "finalize-card ready" }, [
     h("p", { className: "finalize-head", key: "head" }, isPutting ? "All stations scored — finish this card" : "All holes scored — finish this card"),

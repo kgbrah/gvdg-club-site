@@ -706,7 +706,7 @@ export function ProShopApp() {
             }, checkoutPending ? "Submitting..." : "Spend store credit")
           : null,
         signedIn && hasCart ? h("div", { className: "payment-divider", key: "divider", style: { display: "flex" } }, "or") : null,
-        !signedIn && hasCart
+        !signedIn && hasCart && sdkEnabled
           ? h("div", { className: "paypal-fields", key: "guest" }, [
               h("input", {
                 id: "ppName",
@@ -729,13 +729,9 @@ export function ProShopApp() {
             ])
           : null,
         !sdkEnabled && hasCart
-          ? h("button", {
-              className: "shop-btn secondary",
-              disabled: !hasCart || paypalPending,
-              key: "paypal-redirect",
-              onClick: payWithPaypal,
-              type: "button",
-            }, paypalPending ? "Opening..." : "Pay with PayPal")
+          ? h("p", { className: "shop-status", key: "payments-off" }, signedIn
+            ? "PayPal checkout is off. Store credit still works."
+            : "Online checkout is off.")
           : null,
         sdkEnabled && hasCart
           ? h(PayPalButtons, {

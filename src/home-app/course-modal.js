@@ -36,27 +36,26 @@ function courseFromCard(card) {
 
 function CourseAction({ href, iconClassName, iconNode, title, subtitle }) {
   const enabled = Boolean(href);
-  const onClick = enabled ? undefined : (event) => event.preventDefault();
-  return h(
-    "a",
-    {
-      className: "course-modal-btn" + (enabled ? "" : " disabled"),
-      href: enabled ? href : "#",
-      target: enabled ? "_blank" : undefined,
-      rel: enabled ? "noopener noreferrer" : undefined,
-      "aria-disabled": enabled ? undefined : "true",
-      tabIndex: enabled ? undefined : -1,
-      onClick,
-    },
-    [
-      h("div", { className: `course-modal-btn-icon ${iconClassName}`, key: "icon" }, iconNode),
-      h("div", { className: "course-modal-btn-text", key: "text" }, [
-        h("div", { className: "course-modal-btn-title", key: "title" }, title),
-        h("div", { className: "course-modal-btn-subtitle", key: "subtitle" }, subtitle),
-      ]),
-      icon(ChevronRight, { className: "course-modal-btn-arrow", key: "arrow", size: 18 }),
-    ],
-  );
+  const body = [
+    h("div", { className: `course-modal-btn-icon ${iconClassName}`, key: "icon" }, iconNode),
+    h("div", { className: "course-modal-btn-text", key: "text" }, [
+      h("div", { className: "course-modal-btn-title", key: "title" }, title),
+      h("div", { className: "course-modal-btn-subtitle", key: "subtitle" }, subtitle),
+    ]),
+    icon(ChevronRight, { className: "course-modal-btn-arrow", key: "arrow", size: 18 }),
+  ];
+  if (!enabled) {
+    return h("div", {
+      className: "course-modal-btn disabled",
+      "aria-disabled": "true",
+    }, body);
+  }
+  return h("a", {
+    className: "course-modal-btn",
+    href,
+    target: "_blank",
+    rel: "noopener noreferrer",
+  }, body);
 }
 
 export function CourseModal() {

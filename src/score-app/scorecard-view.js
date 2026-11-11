@@ -992,7 +992,7 @@ function FinishDockBar(props) {
   const finish = props.finish;
   const [dismissed, setDismissed] = React.useState({});
   if (!finish || finish.locked) return null;
-  if (finish.canFinish) {
+  if (finish.canFinish && typeof props.onOpenFinish === "function") {
     return h("div", { className: "score-glove-finish", key: "finish-bar" }, h("button", {
       className: "btn finish-round-btn",
       type: "button",
