@@ -8,7 +8,7 @@ import { preloadRoundMaps } from "../shared/satellite-preload.js";
 import { formatPct, holePlayStats, holeStatChips, liveRoundStatsFromCard } from "../shared/play-stats.js";
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
-import { nextHoleScore, nextPuttingScore, relClass, relText, strokeLabel } from "./score-view-model.js";
+import { nextHoleScore, nextPuttingScore, puttingStationRows, relClass, relText, strokeLabel } from "./score-view-model.js";
 import { RoundHighlights, ThrowFilm } from "./throw-film.js";
 import { RoundTalk } from "./round-talk.js";
 
@@ -155,16 +155,37 @@ function PlayingRating(props) {
   ]);
 }
 
+function LivePuttingStations(props) {
+  const stations = Array.isArray(props.stations) ? props.stations : [];
+  if (!stations.length) return null;
+  return h("div", { className: "live-stats-stations" }, stations.map((station) => {
+    const made = station.made == null ? "—" : String(station.made);
+    const attempts = station.attempts == null ? "—" : String(station.attempts);
+    const score = station.stationScore == null ? "—" : String(station.stationScore) + " pts";
+    return h("div", {
+      className: "live-stats-mix-item live-stats-station",
+      key: station.hole,
+      title: station.label + " " + made + "/" + attempts + ", " + score,
+    }, [
+      h("span", { className: "live-stats-k", key: "k" }, station.label),
+      h("b", { key: "v" }, made + "/" + attempts),
+      h("small", { key: "s" }, score),
+    ]);
+  }));
+}
+
 function LiveRoundStats(props) {
   const solo = props.solo === true;
   const phone = usePhoneScoreLayout();
   const collapsible = phone || !solo;
   const [open, setOpen] = React.useState(false);
   const expanded = collapsible ? open : true;
+  const putting = props.putting === true;
+  const stations = putting ? puttingStationRows(props.holes, props.holeGrid) : [];
   const storage = typeof sessionStorage === "undefined" ? null : sessionStorage;
-  const throwsByHole = readAllThrows(storage, props.roundCode, props.holes);
-  if (props.currentHole != null) throwsByHole[props.currentHole] = Array.isArray(props.throws) ? props.throws : [];
-  const view = liveRoundStatsFromCard({
+  const throwsByHole = putting ? {} : readAllThrows(storage, props.roundCode, props.holes);
+  if (!putting && props.currentHole != null) throwsByHole[props.currentHole] = Array.isArray(props.throws) ? props.throws : [];
+  const view = putting ? null : liveRoundStatsFromCard({
     holeGrid: props.holeGrid,
     holes: props.holes,
     throwsByHole,
@@ -172,11 +193,15 @@ function LiveRoundStats(props) {
   const holeCount = Array.isArray(props.holes) && props.holes.length
     ? props.holes.length
     : (Array.isArray(props.holeGrid) ? props.holeGrid.length : 0);
-  const thru = view.totals.holes;
-  const hasThrows = view.throwStats.some((row) => row.mine && row.mine.att);
-  const hint = thru
-    ? (hasThrows ? null : "Mark lies for fairways, C1, and putting")
-    : "Score holes and mark lies — mix, FIR, C1, and putting fill in live.";
+  const thru = putting
+    ? stations.filter((station) => station.made != null).length
+    : view.totals.holes;
+  const hasThrows = !putting && view.throwStats.some((row) => row.mine && row.mine.att);
+  const hint = putting
+    ? null
+    : thru
+      ? (hasThrows ? null : "Mark lies for fairways, C1, and putting")
+      : "Score holes and mark lies — mix, FIR, C1, and putting fill in live.";
   const headChildren = [
     h("div", { className: "live-round-stats-copy", key: "copy" }, [
       h("div", { className: "live-round-stats-title", key: "title" }, "Live stats"),
@@ -211,19 +236,23 @@ function LiveRoundStats(props) {
     key: "live-stats",
   }, [
     head,
-    h(PlayingRating, { delta: props.playingDelta, key: "rating", rating: props.playingRating }),
-    h("div", { className: "live-stats-peek", key: "peek" }, [
-      h(LiveMixBar, { key: "bar", rows: view.mix }),
-      h(LiveMixLegend, { key: "legend", rows: view.mix }),
-    ]),
-    h("div", { className: "live-stats-body", id: "live-round-stats-body", key: "body" }, [
-      h("div", { className: "live-stats-mix-wrap", key: "mix" }, [
+    putting ? null : h(PlayingRating, { delta: props.playingDelta, key: "rating", rating: props.playingRating }),
+    h("div", { className: "live-stats-peek", key: "peek" }, putting
+      ? h(LivePuttingStations, { stations })
+      : [
         h(LiveMixBar, { key: "bar", rows: view.mix }),
         h(LiveMixLegend, { key: "legend", rows: view.mix }),
       ]),
-      h("div", { className: "live-stats-grid", key: "grid" }, view.throwStats.map((row) => LiveStatTile(row, false))),
-      hint ? h("p", { className: "live-stats-hint", key: "hint" }, hint) : null,
-    ]),
+    h("div", { className: "live-stats-body", id: "live-round-stats-body", key: "body" }, putting
+      ? h(LivePuttingStations, { stations })
+      : [
+        h("div", { className: "live-stats-mix-wrap", key: "mix" }, [
+          h(LiveMixBar, { key: "bar", rows: view.mix }),
+          h(LiveMixLegend, { key: "legend", rows: view.mix }),
+        ]),
+        h("div", { className: "live-stats-grid", key: "grid" }, view.throwStats.map((row) => LiveStatTile(row, false))),
+        hint ? h("p", { className: "live-stats-hint", key: "hint" }, hint) : null,
+      ]),
   ]);
 }
 
@@ -1224,6 +1253,7 @@ export function ScorecardView(props) {
           holes: props.holes,
           playingDelta: props.playingDelta,
           playingRating: props.playingRating,
+          putting: props.putting,
           roundCode: props.roundCode,
           solo,
           throws,

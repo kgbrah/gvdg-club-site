@@ -59,6 +59,47 @@ export function nextPuttingScore(current, putts, direction) {
   return current - 1;
 }
 
+/** Makes on a putting scorecard. Unscored holes are skipped. Null when nothing is entered. */
+export function puttingScorecardMakes(scorecard) {
+  const holes = Array.isArray(scorecard) ? scorecard : [];
+  let makes = 0;
+  let scored = false;
+  for (const hole of holes) {
+    if (!hole || typeof hole.strokes !== "number") continue;
+    scored = true;
+    makes += hole.strokes;
+  }
+  return scored ? makes : null;
+}
+
+/** One live-stats chip per putting station: makes/attempts and makes × points. */
+export function puttingStationRows(holes, holeGrid) {
+  const grid = new Map();
+  for (const row of Array.isArray(holeGrid) ? holeGrid : []) {
+    if (row && row.hole != null) grid.set(row.hole, row);
+  }
+  const source = Array.isArray(holes) && holes.length ? holes : (Array.isArray(holeGrid) ? holeGrid : []);
+  return source.filter((hole) => hole && hole.hole != null).map((hole) => {
+    const card = grid.get(hole.hole) || {};
+    const attempts = Number(card.par != null ? card.par : hole.par);
+    const rawScore = card.score != null ? card.score : hole.score;
+    const made = Number.isInteger(rawScore) ? rawScore : null;
+    const weight = Number(hole.points != null ? hole.points : card.points);
+    const pointsEach = Number.isInteger(weight) && weight > 0 ? weight : 1;
+    const distance = Number(card.distanceFt != null ? card.distanceFt : (hole.distance_ft != null ? hole.distance_ft : hole.distanceFt));
+    const distanceFt = Number.isFinite(distance) && distance > 0 ? distance : null;
+    return {
+      attempts: Number.isFinite(attempts) ? attempts : null,
+      distanceFt,
+      hole: hole.hole,
+      label: distanceFt != null ? distanceFt + " ft" : "St " + hole.hole,
+      made,
+      pointsEach,
+      stationScore: made == null ? null : made * pointsEach,
+    };
+  });
+}
+
 export function nextHoleScore(current, par, direction) {
   const holePar = typeof par === "number" ? par : 3;
   if (direction === "plus") {

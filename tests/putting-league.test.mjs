@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { defaultPuttingStations, normalizeConfig } from "../src/admin-app/scoring-model.js";
-import { buildScorecardViewState, nextPuttingScore } from "../src/score-app/score-view-model.js";
+import { buildScorecardViewState, nextPuttingScore, puttingScorecardMakes, puttingStationRows } from "../src/score-app/score-view-model.js";
 
 test("putting league defaults to five stations and forces singles", () => {
   const config = normalizeConfig({ groupFormat: "doubles", scoringStyle: "putting", handicap: true });
@@ -63,4 +63,30 @@ test("a weighted putting card shows makes and points", () => {
     ["Makes", "6"],
     ["Points", "10"],
   ]);
+});
+
+test("putting live stats are station makes, attempts, and station score", () => {
+  const rows = puttingStationRows(
+    [
+      { hole: 1, par: 5, distance_ft: 15, points: 1 },
+      { hole: 2, par: 5, distance_ft: 33, points: 3 },
+      { hole: 3, par: 5, distance_ft: 20 },
+    ],
+    [
+      { hole: 1, par: 5, distanceFt: 15, score: 4 },
+      { hole: 2, par: 5, distanceFt: 33, score: 2 },
+      { hole: 3, par: 5, distanceFt: 20, score: null },
+    ],
+  );
+  assert.deepEqual(rows, [
+    { attempts: 5, distanceFt: 15, hole: 1, label: "15 ft", made: 4, pointsEach: 1, stationScore: 4 },
+    { attempts: 5, distanceFt: 33, hole: 2, label: "33 ft", made: 2, pointsEach: 3, stationScore: 6 },
+    { attempts: 5, distanceFt: 20, hole: 3, label: "20 ft", made: null, pointsEach: 1, stationScore: null },
+  ]);
+  assert.equal(puttingScorecardMakes([
+    { hole: 1, par: 5, strokes: 4 },
+    { hole: 2, par: 5, strokes: 2, points: 3 },
+    { hole: 3, par: 5, strokes: null },
+  ]), 6);
+  assert.equal(puttingScorecardMakes([]), null);
 });

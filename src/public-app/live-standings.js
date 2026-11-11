@@ -20,6 +20,18 @@ function standingTeamLabel(standing) {
   return label && label !== cellText(standing && standing.name, "") ? label : "";
 }
 
+function puttingScorecardMakes(scorecard) {
+  const holes = Array.isArray(scorecard) ? scorecard : [];
+  let makes = 0;
+  let scored = false;
+  for (const hole of holes) {
+    if (!hole || typeof hole.strokes !== "number") continue;
+    scored = true;
+    makes += hole.strokes;
+  }
+  return scored ? makes : null;
+}
+
 function safeWinnerClass(value) {
   const key = String(value || "").toLowerCase();
   return key === "red" || key === "blue" || key === "tie" ? key : "";
@@ -38,13 +50,12 @@ export function LiveStandings({ snapshot }) {
   const config = snapshot.roundConfig || {};
   const matchplay = config.scoringStyle === "matchplay";
   const putting = config.scoringStyle === "putting";
-  const puttingPoints = putting && standings.some((standing) => Array.isArray(standing.scorecard) && standing.scorecard.some((hole) => Number(hole && hole.points) > 1));
   const doubles = config.groupFormat === "doubles";
   const hasDivision = !matchplay && !putting && standings.some((standing) => standing && standing.division);
   const columns = matchplay
     ? ["Pos", doubles ? "Team" : "Player", "Thru", "Match"]
     : putting
-      ? ["Pos", "Player", "Thru", puttingPoints ? "Points" : "Makes"]
+      ? ["Pos", "Player", "Thru", "Makes", "Points"]
       : hasDivision
         ? ["Pos", "Player", "Div", "Thru", "Total", "To Par"]
         : ["Pos", "Player", "Thru", "Total", "To Par"];
@@ -75,9 +86,11 @@ export function LiveStandings({ snapshot }) {
         ]));
       }
       if (putting) {
+        const makes = puttingScorecardMakes(standing && standing.scorecard);
         return h("tr", { key: `${name}|${index}` }, base.concat([
           h("td", { key: "thru" }, standing && standing.thru ? String(standing.thru) : "-"),
-          h("td", { key: "total" }, standing && standing.total != null && standing.thru ? String(standing.total) : "-"),
+          h("td", { key: "makes" }, standing && standing.thru && makes != null ? String(makes) : "-"),
+          h("td", { key: "points" }, standing && standing.total != null && standing.thru ? String(standing.total) : "-"),
         ]));
       }
       return h("tr", { key: `${name}|${index}` }, base.concat([

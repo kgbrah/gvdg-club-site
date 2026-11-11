@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { displayMatchStatus } from "../shared/match-status.js";
 import { UDiscExportDetails } from "../shared/udisc-export.js";
 import { useAccessibleDialog } from "../shared/a11y.js";
-import { relText as formatStart, strokeLabel } from "./score-view-model.js";
+import { relText as formatStart, puttingScorecardMakes, strokeLabel } from "./score-view-model.js";
 
 const h = React.createElement;
 
@@ -34,7 +34,13 @@ function startLine(standing) {
 
 function resultCell(standing, isMatchplay, isPutting, handicapped, relClass, relText) {
   if (isMatchplay) return h("td", { key: "match" }, displayMatchStatus(standing.match));
-  if (isPutting) return h("td", { key: "makes" }, standing.thru ? String(standing.total) : "-");
+  if (isPutting) {
+    const makes = puttingScorecardMakes(standing.scorecard);
+    return [
+      h("td", { key: "makes" }, standing.thru && makes != null ? String(makes) : "-"),
+      h("td", { key: "points" }, standing.thru ? String(standing.total) : "-"),
+    ];
+  }
   if (!handicapped) {
     return h("td", { className: "tp " + relClass(standing.toPar || 0), key: "toPar" }, standing.thru ? relText(standing.toPar || 0) : "E");
   }
@@ -93,19 +99,24 @@ export function LeaderboardTable({ isDoubles, isMatchplay, isPutting, onHole, re
   }
   if (!standings.length) return h("p", { className: "muted" }, "No scores in yet.");
   const handicapped = !isMatchplay && handicapOn(standings);
-  const puttingPoints = isPutting && standings.some((standing) => Array.isArray(standing.scorecard) && standing.scorecard.some((hole) => Number(hole && hole.points) > 1));
-  const resultHead = isMatchplay ? "Match" : isPutting ? (puttingPoints ? "Points" : "Makes") : handicapped ? "Net" : "To par";
+  const resultHead = isMatchplay ? "Match" : isPutting ? "Points" : handicapped ? "Net" : "To par";
+  const columns = [
+    h("th", { key: "rank" }, ""),
+    h("th", { key: "name" }, isDoubles ? "Pair" : "Player"),
+    h("th", { key: "thru" }, "Thru"),
+  ];
+  if (isPutting) {
+    columns.push(h("th", { key: "makes" }, "Makes"));
+    columns.push(h("th", { key: "points" }, "Points"));
+  } else {
+    columns.push(h("th", { key: "result" }, resultHead));
+  }
   return h("div", { className: "lb-wrap" }, [
     handicapped
       ? h("p", { className: "muted lb-handicap-note", key: "note" }, "Club handicap. Net is your start plus this round.")
       : null,
     h("table", { className: "lb", key: "table" }, [
-    h("thead", { key: "head" }, h("tr", null, [
-      h("th", { key: "rank" }, ""),
-      h("th", { key: "name" }, isDoubles ? "Pair" : "Player"),
-      h("th", { key: "thru" }, "Thru"),
-      h("th", { key: "result" }, resultHead),
-    ])),
+    h("thead", { key: "head" }, h("tr", null, columns)),
     h("tbody", { key: "body" }, standings.map((standing, index) => {
       const id = standingKey(standing, index);
       const hasCard = Array.isArray(standing.scorecard) && standing.scorecard.length > 0;
@@ -127,7 +138,7 @@ export function LeaderboardTable({ isDoubles, isMatchplay, isPutting, onHole, re
           h("td", { key: "thru" }, String(standing.thru || 0)),
           resultCell(standing, isMatchplay, isPutting, handicapped, relClass, relText),
         ]),
-        open ? h("tr", { className: "lb-card-row", key: "card" }, h("td", { colSpan: 4, id: "lb-card-" + id }, h(StandingScorecard, { isPutting, onHole, scorecard: standing.scorecard, standing }))) : null,
+        open ? h("tr", { className: "lb-card-row", key: "card" }, h("td", { colSpan: isPutting ? 5 : 4, id: "lb-card-" + id }, h(StandingScorecard, { isPutting, onHole, scorecard: standing.scorecard, standing }))) : null,
       ]);
     })),
     ]),

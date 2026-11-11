@@ -639,7 +639,11 @@ test('shotgun hole pager follows play order instead of layout index', async () =
 
 test('player leaderboard renders matchplay and pair labels without primary to-par ranking', () => {
   const source = scoreLeaderboardSource();
-  assert.match(source, /const resultHead = isMatchplay \? "Match" : isPutting \? \(puttingPoints \? "Points" : "Makes"\) : handicapped \? "Net" : "To par"/);
+  assert.match(source, /const resultHead = isMatchplay \? "Match" : isPutting \? "Points" : handicapped \? "Net" : "To par"/);
+  assert.match(source, /h\("th", \{ key: "makes" \}, "Makes"\)/);
+  assert.match(source, /h\("th", \{ key: "points" \}, "Points"\)/);
+  assert.match(source, /puttingScorecardMakes\(standing\.scorecard\)/);
+  assert.match(source, /colSpan: isPutting \? 5 : 4/);
   assert.match(source, /Club handicap\. Net is your start plus this round\./);
   assert.match(readFileSync('src/score-app/score-controller.js', 'utf8'), /\/layouts\/' \+ id \+ '\/handicaps'/);
   assert.match(readFileSync('src/score-app/score-controller.js', 'utf8'), /decorateStandings/);
@@ -739,6 +743,9 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /score-glove-layout/);
   assert.match(scorecard, /players-/);
   assert.match(scorecard, /function LiveRoundStats\(props\)/);
+  assert.match(scorecard, /function LivePuttingStations\(props\)/);
+  assert.match(scorecard, /puttingStationRows/);
+  assert.match(scorecard, /putting: props\.putting/);
   assert.match(scorecard, /rows\.map\(\(row\) => h\(ScoreRow/);
   assert.doesNotMatch(scorecard, /function ScorePlayerRail/);
   assert.doesNotMatch(scorecard, /collapsed-others/);
