@@ -2,6 +2,7 @@ import type { Env } from "./env.js";
 import { adminGate } from "./authz.js";
 import { json } from "./http.js";
 import { asInt } from "./input.js";
+import { handleAdminBagTags } from "./bag-tag-routes.js";
 import { handleAdminCourses } from "./club-admin-courses.js";
 import { handleAdminEvents } from "./club-admin-events.js";
 import { handleAdminFundraisers, handleAdminLeagues, handleAdminMeetings } from "./club-admin-content.js";
@@ -31,6 +32,7 @@ export async function handleClubAdmin(
   let response: Response | null = null;
 
   if (sub === "courses") response = await handleAdminCourses(request, env, origin, method, seg, adminId, id);
+  else if (sub === "bag-tags") response = await handleAdminBagTags(request, env, origin, method, seg, adminId);
   else if (sub === "events") response = await handleAdminEvents(request, env, origin, method, seg, adminId, id);
   else if (sub === "leagues" && method === "POST" && seg[3] === "nights" && id != null) response = await handleAdminLeagueNight(request, env, origin, adminId, id);
   else if (sub === "leagues") response = await handleAdminLeagues(request, env, origin, method, adminId, id);

@@ -12,6 +12,7 @@ import { EventsClubFeedApp, EventsLiveNowApp, EventsScheduleFeedApp, EventsUpcom
 import { installEventsHubController } from "./events-hub-data.js";
 import { EventsLastUpdatedApp } from "./events-last-updated-app.js";
 import { EventsLeagueDetailApp } from "./events-league-detail-app.js";
+import { EventsBagTagsApp } from "./events-bag-tags-app.js";
 import { EventsLeaguesApp } from "./events-leagues-app.js";
 import { EventsRegistrationApp } from "./events-registration-app.js";
 import { EventsStatusApp } from "./events-status-app.js";
@@ -35,6 +36,7 @@ const eventsClubFeedMount = document.getElementById("clubEventsSection");
 const eventsRegistrationMount = document.getElementById("registerSection");
 const eventsPreviousResultsMount = document.getElementById("previousResultsSection");
 const eventsLeaguesMount = document.getElementById("leaguesSection");
+const eventsBagTagsMount = document.getElementById("bagTagsSection");
 const eventsLeagueDetailMount = document.getElementById("leagueDetailSection");
 const eventsEventDetailMount = document.getElementById("detail");
 const eventsFundraisersMount = document.getElementById("fundraisersSection");
@@ -91,6 +93,10 @@ if (eventsPreviousResultsMount) {
 
 if (eventsLeaguesMount) {
   createRoot(eventsLeaguesMount).render(h(EventsLeaguesApp));
+}
+
+if (eventsBagTagsMount) {
+  createRoot(eventsBagTagsMount).render(h(EventsBagTagsApp));
 }
 
 if (eventsLeagueDetailMount) {

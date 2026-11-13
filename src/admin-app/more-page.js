@@ -12,6 +12,7 @@ const MORE_LINKS = [
   { tab: "layouts", label: "Layouts" },
   { tab: "tee-signs", label: "Tee signs" },
   { tab: "leagues-mgmt", label: "League seasons" },
+  { tab: "bag-tags", label: "Bag tags" },
   { tab: "fundraisers", label: "Campaigns" },
   { tab: "meetings", label: "Minutes" },
   { tab: "members", label: "Members" },

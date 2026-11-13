@@ -14,6 +14,7 @@ import { latestHomeRound } from "./play-page-model.js";
 import { EventScheduleFacts } from "../shared/event-schedule.js";
 import { EventFieldRoster } from "../shared/event-field-roster.js";
 import { AddToCalendarButton } from "../shared/add-to-calendar.js";
+import { BagTagPanel } from "./bag-tag-panel.js";
 import { calendarEventFromClub, calendarEventFromPdga } from "../shared/event-calendar.js";
 
 const h = React.createElement;
@@ -254,6 +255,7 @@ export function MemberOverviewDashboard() {
 
   return h("div", { className: "react-overview-dashboard player-home", "data-react-overview-dashboard": "ready" }, [
     h(HomeHero, { context, pdgaState, key: "hero" }),
+    h(BagTagPanel, { key: "bag-tags", token }),
     h(LiveScoringPanel, { token, compact: true, key: "live-scoring" }),
     h(HomeJobs, {
       events: registration.state.events,

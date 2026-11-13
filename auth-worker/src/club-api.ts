@@ -1,4 +1,5 @@
 import type { Env } from "./env.js";
+import { handleBagTags } from "./bag-tag-routes.js";
 import { handleClubAdmin } from "./club-admin-routes.js";
 import { handleCasualRoundRequests } from "./club-casual-round-requests-routes.js";
 import { handleClubLive } from "./club-live-routes.js";
@@ -21,6 +22,9 @@ export async function clubApi(request: Request, env: Env, origin: string | null,
 
   const heatmapRoute = await handleHoleHeatmap(request, env, origin, method, seg);
   if (heatmapRoute) return heatmapRoute;
+
+  const bagTagRoute = await handleBagTags(request, env, origin, method, seg);
+  if (bagTagRoute) return bagTagRoute;
 
   const publicRoute = await handleClubPublic(request, env, origin, pathname, method, seg);
   if (publicRoute) return publicRoute;

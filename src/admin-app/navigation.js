@@ -44,6 +44,7 @@ export const ADMIN_NAV_GROUPS = [
       { tab: "layouts", label: "Layouts" },
       { tab: "tee-signs", label: "Tee Signs" },
       { tab: "leagues-mgmt", label: "League seasons" },
+      { tab: "bag-tags", label: "Bag tags" },
       { tab: "fundraisers", label: "Campaigns" },
       { tab: "meetings", label: "Minutes" },
       { tab: "members", label: "Members" },
@@ -85,7 +86,7 @@ export const ADMIN_DOCK = [
     label: "More",
     tab: "more",
     Icon: MoreHorizontal,
-    tabs: ["more", "courses", "layouts", "tee-signs", "leagues-mgmt", "fundraisers", "meetings", "members", "data-archive"],
+    tabs: ["more", "courses", "layouts", "tee-signs", "leagues-mgmt", "bag-tags", "fundraisers", "meetings", "members", "data-archive"],
   },
 ];
 

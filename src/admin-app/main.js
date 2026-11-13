@@ -7,6 +7,7 @@ import { AdminAuthGate } from "./auth-gate.js";
 import { AdminFundraiserForm, AdminLeagueForm, AdminMeetingForm } from "./club-content-forms.js";
 import { AdminLeagueNightForm } from "./league-night-form.js";
 import { AdminFundraisersList, AdminLeaguesList, AdminMeetingsList } from "./club-content-lists.js";
+import { AdminBagTagsPanel } from "./bag-tags-panel.js";
 import { AdminCourseForm } from "./course-form.js";
 import { AdminCoursesList } from "./courses-list.js";
 import { AdminDataArchiveDestinationForm } from "./data-archive-destination-form.js";
@@ -147,6 +148,11 @@ if (leagueNightFormMount) {
 const leaguesListMount = document.getElementById("adminLeaguesListReactApp");
 if (leaguesListMount) {
   flushSync(() => createRoot(leaguesListMount).render(h(AdminLeaguesList)));
+}
+
+const bagTagsMount = document.getElementById("adminBagTagsReactApp");
+if (bagTagsMount) {
+  flushSync(() => createRoot(bagTagsMount).render(h(AdminBagTagsPanel)));
 }
 
 const fundraiserFormMount = document.getElementById("adminFundraiserFormReactApp");
