@@ -157,6 +157,7 @@ test('casual round course pick searches and sorts mapped courses first', () => {
   assert.match(setup, /function CoursePickView/);
   assert.match(setup, /filterCoursesForPick/);
   assert.match(setup, /id: "courseSearch"/);
+  assert.doesNotMatch(setup, /autoFocus:\s*true/);
   assert.match(pick, /Within 10 miles/);
   assert.match(pick, /Within 250 miles/);
   assert.match(pick, /All courses/);
@@ -174,6 +175,8 @@ test('casual round course pick searches and sorts mapped courses first', () => {
   assert.match(setup, /CourseMeta/);
   assert.match(setup, /Course list includes DiscGolfAPI data/);
   assert.match(html, /\.course-search/);
+  assert.match(html, /\.course-range select\.field/);
+  assert.match(html, /appearance:\s*none/);
   assert.match(html, /\.course-range/);
   assert.match(html, /\.course-map-badge/);
   assert.match(html, /\.course-directions/);

@@ -32,6 +32,7 @@ async function sqliteDb() {
   const db = new DatabaseSync(":memory:");
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(readFileSync(new URL("../migrations/0042_bag_tags.sql", import.meta.url), "utf8"));
+  db.exec(readFileSync(new URL("../migrations/0043_bag_tag_requests.sql", import.meta.url), "utf8"));
   return {
     prepare(sql: string) {
       let bound: unknown[] = [];
@@ -268,5 +269,47 @@ describe("bag tag routes", () => {
       [1, "Ace"],
       [9, "Two"],
     ]);
+  });
+
+  it("lets a member request a tag without assigning one, then clears it on assign", async () => {
+    const db = await sqliteDb();
+    const admin = await token("m_admin");
+    const five = await token("m_five");
+    const ace = await token("m_ace");
+
+    expect((await call(db, "/bag-tags/request", "POST")).status).toBe(401);
+    expect((await call(db, "/bag-tags/request", "POST", five, {})).data.error).toBe("no_series");
+
+    const created = await call(db, "/admin/bag-tags/series", "POST", admin, { name: "Club bag tags" });
+    const seriesId = created.data.series.id as number;
+    const asked = await call(db, "/bag-tags/request", "POST", five, {});
+    expect(asked.status).toBe(201);
+    expect(typeof asked.data.request.createdAt).toBe("string");
+    const again = await call(db, "/bag-tags/request", "POST", five, {});
+    expect(again.status).toBe(200);
+    expect(again.data.request.createdAt).toBe(asked.data.request.createdAt);
+
+    const mine = await call(db, "/bag-tags/mine", "GET", five);
+    expect(mine.data.mine).toBeNull();
+    expect(mine.data.request.createdAt).toBe(asked.data.request.createdAt);
+    const pub = await call(db, "/bag-tags");
+    expect(pub.data.requests).toBeUndefined();
+    expect(JSON.stringify(pub.data)).not.toContain("m_five");
+
+    const waiting = await call(db, "/admin/bag-tags", "GET", admin);
+    expect(waiting.data.requests).toEqual([
+      { memberId: "m_five", name: "Five", createdAt: asked.data.request.createdAt },
+    ]);
+
+    await call(db, "/admin/bag-tags/assign", "POST", admin, { seriesId, memberId: "m_ace", tagNumber: 1 });
+    expect((await call(db, "/bag-tags/request", "POST", ace, {})).data.error).toBe("already_holding");
+
+    const given = await call(db, "/admin/bag-tags/assign", "POST", admin, { seriesId, memberId: "m_five", tagNumber: 2 });
+    expect(given.status).toBe(200);
+    const after = await call(db, "/admin/bag-tags", "GET", admin);
+    expect(after.data.requests).toEqual([]);
+    const held = await call(db, "/bag-tags/mine", "GET", five);
+    expect(held.data.mine.tagNumber).toBe(2);
+    expect(held.data.request).toBeNull();
   });
 });

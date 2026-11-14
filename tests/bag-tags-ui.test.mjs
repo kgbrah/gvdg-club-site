@@ -18,10 +18,15 @@ test("bag tags show on the events hub, member home, and admin club tools", () =>
   assert.match(board, /Lower number is better/);
   assert.match(members, /BagTagPanel/);
   assert.match(panel, /\/bag-tags\/challenges/);
+  assert.match(panel, /\/bag-tags\/request/);
+  assert.match(panel, /Request a tag/);
+  assert.match(panel, /Request sent\. An admin will hand you the next number\./);
+  assert.doesNotMatch(panel, /Ask an admin for a tag/);
   assert.match(panel, /must_challenge_better_tag/);
   assert.match(admin, /body\[data-admin-tab="bag-tags"\] #apane-bag-tags/);
   assert.match(admin, /id="adminBagTagsReactApp"/);
   assert.match(nav, /tab: "bag-tags", label: "Bag tags"/);
   assert.match(adminPanel, /Settle this card/);
   assert.match(adminPanel, /Next new player is #/);
+  assert.match(adminPanel, /Give #\$\{nextTag\}/);
 });

@@ -231,7 +231,6 @@ function CoursePickView({ courses, onBack, onSelect }) {
         key: "input",
         value: query,
         placeholder: "Name or city — search every course",
-        autoFocus: true,
         enterKeyHint: "search",
         onChange: (event) => onQuery(event.target.value),
       }),

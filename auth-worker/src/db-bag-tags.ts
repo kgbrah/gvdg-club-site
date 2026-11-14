@@ -197,6 +197,13 @@ export async function claimChallenge(db: D1Like, id: number, status: "settled" |
   return row != null;
 }
 
+export interface BagRequestRow {
+  series_id: number;
+  member_id: string;
+  member_name: string;
+  created_at: string;
+}
+
 export async function pendingChallenges(db: D1Like, seriesId: number, memberId?: string): Promise<BagChallengeRow[]> {
   if (memberId) {
     const rows = await db.prepare(
@@ -210,4 +217,40 @@ export async function pendingChallenges(db: D1Like, seriesId: number, memberId?:
     "SELECT * FROM bag_tag_challenges WHERE series_id = ? AND status = 'pending' ORDER BY id DESC",
   ).bind(seriesId).all<BagChallengeRow>();
   return rows.results;
+}
+
+export async function requestByMember(db: D1Like, seriesId: number, memberId: string): Promise<BagRequestRow | null> {
+  return db.prepare(
+    "SELECT series_id, member_id, member_name, created_at FROM bag_tag_requests WHERE series_id = ? AND member_id = ?",
+  ).bind(seriesId, memberId).first<BagRequestRow>();
+}
+
+export async function listRequests(db: D1Like, seriesId: number): Promise<BagRequestRow[]> {
+  const rows = await db.prepare(
+    "SELECT series_id, member_id, member_name, created_at FROM bag_tag_requests WHERE series_id = ? ORDER BY created_at, member_id",
+  ).bind(seriesId).all<BagRequestRow>();
+  return rows.results;
+}
+
+/** Inserts a request, or returns the one already waiting. Does not assign a number. */
+export async function askForTag(
+  db: D1Like,
+  input: { seriesId: number; memberId: string; memberName: string },
+): Promise<{ row: BagRequestRow; created: boolean }> {
+  const inserted = await db.prepare(
+    `INSERT INTO bag_tag_requests (series_id, member_id, member_name)
+     VALUES (?, ?, ?)
+     ON CONFLICT(series_id, member_id) DO NOTHING
+     RETURNING series_id, member_id, member_name, created_at`,
+  ).bind(input.seriesId, input.memberId, input.memberName).first<BagRequestRow>();
+  if (inserted) return { row: inserted, created: true };
+  const existing = await requestByMember(db, input.seriesId, input.memberId);
+  if (!existing) throw new Error("bag tag request missing after conflict");
+  return { row: existing, created: false };
+}
+
+export async function clearRequest(db: D1Like, seriesId: number, memberId: string): Promise<void> {
+  await db.prepare(
+    "DELETE FROM bag_tag_requests WHERE series_id = ? AND member_id = ?",
+  ).bind(seriesId, memberId).run();
 }

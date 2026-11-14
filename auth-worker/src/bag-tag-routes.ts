@@ -34,6 +34,10 @@ function publicMove(row: tags.BagMoveRow) {
   return { id: row.id, kind: row.kind, summary: row.summary, createdAt: row.created_at };
 }
 
+function publicRequest(row: tags.BagRequestRow) {
+  return { memberId: row.member_id, name: row.member_name, createdAt: row.created_at };
+}
+
 function publicChallenge(row: tags.BagChallengeRow) {
   return {
     id: row.id,
@@ -134,11 +138,33 @@ export async function handleBagTags(
     const pending = current.series
       ? await tags.pendingChallenges(env.DB, current.series.id, member.memberId)
       : [];
+    const waitingRow = current.series
+      ? await tags.requestByMember(env.DB, current.series.id, member.memberId)
+      : null;
     return json({
       ...current,
       mine,
+      request: waitingRow ? { createdAt: waitingRow.created_at } : null,
       challenges: pending.map(publicChallenge),
     }, 200, origin);
+  }
+
+  if (method === "POST" && seg[1] === "request" && seg.length === 2) {
+    const series = await tags.activeSeries(env.DB);
+    if (!series) return json({ error: "no_series" }, 404, origin);
+    const holding = await tags.holderByMember(env.DB, series.id, member.memberId);
+    if (holding) return json({ error: "already_holding" }, 409, origin);
+    const waiting = await tags.requestByMember(env.DB, series.id, member.memberId);
+    if (waiting) return json({ request: { createdAt: waiting.created_at } }, 200, origin);
+    if (await kvRateLimited(env, "bagreq:" + member.memberId, 6, 3600)) {
+      return json({ error: "request_limited" }, 429, origin);
+    }
+    const asked = await tags.askForTag(env.DB, {
+      seriesId: series.id,
+      memberId: member.memberId,
+      memberName: member.name.trim() || member.memberId,
+    });
+    return json({ request: { createdAt: asked.row.created_at } }, asked.created ? 201 : 200, origin);
   }
 
   if (method === "POST" && seg[1] === "challenges" && seg.length === 2) {
@@ -216,7 +242,12 @@ export async function handleAdminBagTags(
   if (method === "GET" && seg.length === 2) {
     const current = await board(env, true);
     const pending = current.series ? await tags.pendingChallenges(env.DB, current.series.id) : [];
-    return json({ ...current, challenges: pending.map(publicChallenge) }, 200, origin);
+    const requests = current.series ? await tags.listRequests(env.DB, current.series.id) : [];
+    return json({
+      ...current,
+      challenges: pending.map(publicChallenge),
+      requests: requests.map(publicRequest),
+    }, 200, origin);
   }
 
   if (method === "POST" && seg[2] === "series" && seg.length === 3) {
@@ -242,8 +273,12 @@ export async function handleAdminBagTags(
     const taken = await tags.holderByTag(env.DB, seriesId, tagNumber);
     if (taken && taken.member_id !== memberId) return json({ error: "tag_taken" }, 409, origin);
     const current = await tags.holderByMember(env.DB, seriesId, memberId);
-    if (current && current.tag_number === tagNumber) return json({ ok: true }, 200, origin);
+    if (current && current.tag_number === tagNumber) {
+      await tags.clearRequest(env.DB, seriesId, memberId);
+      return json({ ok: true }, 200, origin);
+    }
     await tags.giveTag(env.DB, { seriesId, tagNumber, memberId, memberName: member.name });
+    await tags.clearRequest(env.DB, seriesId, memberId);
     await tags.recordMove(env.DB, {
       seriesId,
       kind: "assign",

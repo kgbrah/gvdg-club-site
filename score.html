@@ -180,6 +180,20 @@
             border-radius: 12px; background: var(--bg-primary); color: var(--text-primary); font-size: 1rem; font-family: 'Archivo';
         }
         input.field:focus { outline: none; border-color: var(--primary); }
+        .course-range select.field {
+            width: 100%; min-height: 50px; padding: 0 2.4rem 0 0.9rem;
+            border: 1.5px solid var(--border-color); border-radius: 12px;
+            background-color: var(--bg-primary); color: var(--text-primary);
+            font-size: 1rem; font-family: 'Archivo', sans-serif; cursor: pointer;
+            appearance: none; -webkit-appearance: none;
+            background-image:
+                linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+                linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+            background-position: calc(100% - 1.15rem) 55%, calc(100% - 0.78rem) 55%;
+            background-size: 0.42rem 0.42rem, 0.42rem 0.42rem;
+            background-repeat: no-repeat;
+        }
+        .course-range select.field:focus { outline: none; border-color: var(--primary); }
         label.lbl { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); display: block; margin: 0 0 0.3rem 0.2rem; }
         .stack > label.lbl { margin-top: 0.8rem; }
         .pill { display: inline-block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 0.2rem 0.5rem; border-radius: 999px; background: var(--bg-tertiary); color: var(--text-secondary); }
@@ -1182,6 +1196,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=223"></script>
+    <script type="module" src="score-app/score-app.js?v=224"></script>
 </body>
 </html>

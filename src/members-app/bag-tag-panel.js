@@ -12,6 +12,8 @@ const ERRORS = {
   stale_tags: "The tags changed. Issue the challenge again.",
   rate_limited: "Too many challenges. Try again later.",
   no_series: "The club has not started a bag tag series.",
+  already_holding: "You already have a tag.",
+  request_limited: "Too many requests. Try again later.",
 };
 
 async function send(path, token, method, body) {
@@ -94,11 +96,37 @@ export function BagTagPanel({ token }) {
     }
   }
 
+  async function requestTag() {
+    setBusy(true);
+    setMessage("");
+    try {
+      await send("/bag-tags/request", token, "POST", {});
+      await load();
+    } catch (error) {
+      setMessage(error.message || "Could not request a tag.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const requested = Boolean(board.request && board.request.createdAt);
+
   return h("section", { className: "player-story-block", "data-react-bag-tags": "ready" }, [
     h("h3", { key: "title" }, mine ? `Bag tag #${mine.tagNumber}` : "Bag tags"),
     h("p", { className: "player-card-meta", key: "note" }, mine
       ? "Lower number is better. Challenge someone above you, or wait for a card settle."
-      : `${board.series.name} is active. Ask an admin for a tag.`),
+      : requested
+        ? "Request sent. An admin will hand you the next number."
+        : `${board.series.name} is active.`),
+    !mine && !requested
+      ? h("button", {
+        className: "player-btn primary",
+        disabled: busy,
+        key: "request",
+        onClick: requestTag,
+        type: "button",
+      }, "Request a tag")
+      : null,
     incoming.map((challenge) => h("div", { key: challenge.id }, [
       h("p", { className: "player-card-meta", key: "text" },
         `${challenge.challengerName} called out your #${challenge.defenderTag}. They shot ${challenge.challengerScore}, you shot ${challenge.defenderScore}.`),

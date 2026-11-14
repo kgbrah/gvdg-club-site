@@ -77,6 +77,7 @@ export function AdminBagTagsPanel() {
 
   const holders = board && Array.isArray(board.holders) ? board.holders : [];
   const challenges = board && Array.isArray(board.challenges) ? board.challenges : [];
+  const requests = board && Array.isArray(board.requests) ? board.requests : [];
   const series = board && board.series;
   const nextTag = holders.reduce((max, holder) => Math.max(max, Number(holder.tagNumber) || 0), 0) + 1;
   const tagValue = assign.tagNumber === "" ? String(nextTag) : assign.tagNumber;
@@ -145,6 +146,25 @@ export function AdminBagTagsPanel() {
         })]),
         h("p", { className: "al-note", key: "next" }, `Next new player is #${nextTag}. Type a free number to fill a gap.`),
         h("button", { className: "admin-btn", disabled: busy, key: "submit", type: "submit" }, "Assign tag"),
+      ])
+      : null,
+    series && requests.length
+      ? h("div", { key: "requests" }, [
+        h("h3", { className: "al-h", key: "head" }, "Tag requests"),
+        ...requests.map((request) => h("div", { className: "sc-hole-pager-row", key: request.memberId }, [
+          h("div", { key: "who" }, request.name || request.memberId),
+          h("button", {
+            className: "admin-btn",
+            disabled: busy || nextTag > 500,
+            key: "give",
+            onClick: () => run(() => adminSend("/admin/bag-tags/assign", "POST", {
+              memberId: request.memberId,
+              seriesId: series.id,
+              tagNumber: nextTag,
+            })),
+            type: "button",
+          }, `Give #${nextTag}`),
+        ])),
       ])
       : null,
     holders.length

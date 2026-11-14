@@ -208,7 +208,7 @@ export function WalletPanel({ token, compact = false }) {
   if (!token || state.status === "error" || !state.wallet) return null;
   if (compact) {
     return h("a", {
-      className: "player-stat react-wallet-panel",
+      className: "player-stat player-wallet-compact react-wallet-panel",
       href: "pro-shop.html",
       "data-react-wallet": state.status,
     }, [

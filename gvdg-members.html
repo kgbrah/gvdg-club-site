@@ -614,6 +614,14 @@
                 .player-stat-k { color: var(--text-muted); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
                 .player-stat-v { font-family: 'Bebas Neue', sans-serif; font-size: 1.7rem; line-height: 1; margin-top: 0.2rem; color: var(--text-primary); }
                 .player-stat-s { color: var(--text-muted); font-size: 0.75rem; margin-top: 0.2rem; }
+                a.player-stat.player-wallet-compact {
+                    display: flex; align-items: center; gap: 0.7rem;
+                    margin: 0 0 0.7rem; padding: 0.62rem 0.85rem;
+                }
+                a.player-stat.player-wallet-compact .player-stat-k { flex: 0 0 auto; }
+                a.player-stat.player-wallet-compact .player-stat-v,
+                a.player-stat.player-wallet-compact .player-stat-s { margin-top: 0; }
+                a.player-stat.player-wallet-compact .player-stat-s { margin-left: auto; }
                 .play-stats-panel { margin-bottom: 0.75rem; }
                 .play-stats-split { display: grid; grid-template-columns: 1fr; gap: 0.85rem; margin-bottom: 0.75rem; }
                 .play-stats-split .play-stats-panel { margin-bottom: 0; }
