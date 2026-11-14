@@ -1,6 +1,5 @@
 import React from "react";
 
-import { currentAdminOrdersBadgeCount } from "./admin-shell-state.js";
 import { counterHandoff, deskSummary, handoffLabel, holdDeskOrder } from "./desk-model.js";
 import { useSettledWhileLoading } from "../shared/settled-state.js";
 import { repeatSavePayload } from "./event-form.js";
@@ -14,6 +13,7 @@ import {
 import { nextWeekOffer } from "./repeat-draft.js";
 import { clubToday } from "../shared/events-model.js";
 import { AdminPushCard } from "./admin-push.js";
+import { useAdminNeeds } from "./admin-needs.js";
 
 const h = React.createElement;
 const EMPTY_STATE = { status: "loading", events: [] };
@@ -119,11 +119,31 @@ function HandoffCard({ order }) {
   ]);
 }
 
+function NeedsYou() {
+  const { items, ready } = useAdminNeeds();
+  if (!ready && !items.length) return null;
+  return h("section", { className: "admin-needs" }, [
+    h("h3", { className: "admin-pane-kicker", key: "title" }, "Needs you"),
+    items.length
+      ? h("div", { className: "admin-needs-list", key: "list" }, items.map((item) => h("button", {
+        className: "admin-needs-row",
+        key: item.id,
+        onClick: () => requestTab(item.tab),
+        type: "button",
+      }, [
+        h("span", { className: "admin-needs-copy", key: "copy" }, [
+          h("strong", { key: "label" }, item.label),
+          h("span", { key: "detail" }, item.detail),
+        ]),
+        h("span", { className: "orders-badge", key: "count" }, String(item.count)),
+      ])))
+      : h("p", { className: "dash-note", key: "clear" }, "All clear."),
+  ]);
+}
+
 export function AdminTodayDashboard() {
   const [state, setState] = React.useState(EMPTY_STATE);
-  const [orders, setOrders] = React.useState(() => currentAdminOrdersBadgeCount());
   const [orderRows, setOrderRows] = React.useState([]);
-  const [shelf, setShelf] = React.useState(null);
 
   React.useEffect(() => {
     function updateEvents(event) {
@@ -133,30 +153,16 @@ export function AdminTodayDashboard() {
         events: Array.isArray(detail.events) ? detail.events.map(normalizeAdminEvent) : [],
       });
     }
-    function updateOrders(event) {
-      setOrders(Number(event.detail?.count) || currentAdminOrdersBadgeCount());
-    }
     function updateOrderRows(event) {
       const detail = event.detail && typeof event.detail === "object" ? event.detail : {};
       if (detail.status === "loading") return;
       setOrderRows(Array.isArray(detail.orders) ? detail.orders : []);
     }
-    function updateShelf(event) {
-      const count = Number(event.detail && event.detail.count);
-      setShelf({
-        count: Number.isFinite(count) ? count : 0,
-        name: event.detail && event.detail.name ? String(event.detail.name) : "",
-      });
-    }
     window.addEventListener("gvdg:admin-events-list", updateEvents);
-    window.addEventListener("gvdg:admin-orders-badge", updateOrders);
     window.addEventListener("gvdg:admin-orders-list", updateOrderRows);
-    window.addEventListener("gvdg:admin-shelf", updateShelf);
     return () => {
       window.removeEventListener("gvdg:admin-events-list", updateEvents);
-      window.removeEventListener("gvdg:admin-orders-badge", updateOrders);
       window.removeEventListener("gvdg:admin-orders-list", updateOrderRows);
-      window.removeEventListener("gvdg:admin-shelf", updateShelf);
     };
   }, []);
 
@@ -166,14 +172,14 @@ export function AdminTodayDashboard() {
     return h("div", { "data-react-admin-today": "loading" }, [
       h("h2", { className: "admin-pane-heading", key: "title" }, "Today"),
       h(AdminPushCard, { key: "alerts" }),
+      h(NeedsYou, { key: "needs" }),
       h("p", { className: "dash-note", key: "loading", role: "status" }, "Loading…"),
     ]);
   }
 
   const next = pickTodayEvent(view.events);
-  const { live, upcoming, past } = bucketAdminEvents(view.events);
+  const { live, upcoming } = bucketAdminEvents(view.events);
   const rest = [...live, ...upcoming].filter((event) => event.id !== next?.id).slice(0, 4);
-  const fieldNote = next ? `${live.length + upcoming.length} on the books` : "Nothing scheduled";
   const deskEvent = next && (next.status === "live" || next.status === "scheduled") ? next : null;
   const offer = next && next.status === "live" ? null : nextWeekOffer(view.events.map((event) => event.source), clubToday());
   const handoff = counterHandoff(orderRows);
@@ -183,6 +189,7 @@ export function AdminTodayDashboard() {
   return h("div", { "data-react-admin-today": next ? "ready" : "empty" }, [
     h("h2", { className: "admin-pane-heading", key: "title" }, "Today"),
     h(AdminPushCard, { key: "alerts" }),
+    h(NeedsYou, { key: "needs" }),
     next
       ? h("div", { className: "admin-today-card", "data-admin-event-id": next.id, key: "next" }, [
         statusChip(next.status === "live" ? "live" : "scheduled"),
@@ -205,7 +212,7 @@ export function AdminTodayDashboard() {
           }, "Roster"),
         ]),
       ].filter(Boolean))
-      : h("p", { className: "dash-note", key: "empty" }, past.length ? "Nothing on the card right now." : "Nothing on the card right now."),
+      : null,
     offer ? h("button", {
       className: "admin-btn",
       key: "next-week",
@@ -216,32 +223,6 @@ export function AdminTodayDashboard() {
       type: "button",
     }, offer.label) : null,
     h(HandoffCard, { key: "handoff", order: handoff }),
-    h("div", { className: "admin-today-tiles", key: "tiles" }, [
-      h("button", {
-        className: "admin-today-tile",
-        key: "events",
-        onClick: () => requestTab("events"),
-        type: "button",
-      }, [h("strong", { key: "v" }, fieldNote), h("span", { key: "k" }, "Events")]),
-      h("button", {
-        className: "admin-today-tile",
-        key: "score",
-        onClick: () => requestTab("scoring", next?.id ? { eventId: next.id } : {}),
-        type: "button",
-      }, [h("strong", { key: "v" }, next?.status === "live" ? "Live" : "Idle"), h("span", { key: "k" }, "Scoring")]),
-      h("button", {
-        className: "admin-today-tile",
-        key: "orders",
-        onClick: () => requestTab("orders"),
-        type: "button",
-      }, [h("strong", { key: "v" }, orders ? `${orders} to hand off` : "None waiting"), h("span", { key: "k" }, "Shop orders")]),
-      h("button", {
-        className: "admin-today-tile",
-        key: "shelf",
-        onClick: () => requestTab("shop"),
-        type: "button",
-      }, [h("strong", { key: "v" }, shelf == null ? "…" : shelf.count ? `${shelf.count} low` : "Stocked"), h("span", { key: "k" }, shelf && shelf.count === 1 && shelf.name ? shelf.name : "Shelf")]),
-    ]),
     rest.length ? h("h3", { className: "admin-pane-kicker", key: "week-title" }, "Up next") : null,
     ...rest.map((event) => h("button", {
       className: "admin-evrow admin-event-card",

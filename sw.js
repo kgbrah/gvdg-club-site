@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v240";
+const CACHE = "gvdg-club-v244";
 const OFFLINE_PAGE = "gvdg-members.html";
 const ASSETS = [
   "tokens.css",
@@ -89,6 +89,10 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   if (req.method !== "GET" || url.origin !== self.location.origin) return;
+
+  // A notification image fetch has no window. Answer it from the cache and
+  // Brave draws its own lion instead of the club mark.
+  if (!event.clientId && (url.pathname === "/img/icons/app-icon-192.png" || url.pathname === "/img/icons/notification-badge.png")) return;
 
   if (req.mode === "navigate" || req.destination === "document") {
     event.respondWith(
@@ -186,11 +190,14 @@ async function openAdmin(target) {
 
 self.addEventListener("push", (event) => {
   const note = readPush(event);
+  const icon = new URL("/img/icons/app-icon-192.png", self.location.origin).href;
+  const badge = new URL("/img/icons/notification-badge.png", self.location.origin).href;
   event.waitUntil(self.registration.showNotification(note.title, {
     body: note.body,
     tag: note.tag,
     data: { url: note.url },
-    icon: "img/icons/app-icon-192.png",
+    icon,
+    badge,
   }));
 });
 

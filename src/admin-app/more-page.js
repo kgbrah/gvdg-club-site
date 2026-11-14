@@ -4,8 +4,11 @@ import { CrottsHelpLink } from "../shared/crotts-widget.js";
 import { clearMemberSession, readMemberToken } from "../shared/member-session.js";
 import { themeRoot } from "../shared/player-theme-chrome.js";
 import { paintPlayerTheme } from "../shared/player-theme-session.js";
+import { AdminNeedsBadge } from "./admin-needs.js";
 
 const h = React.createElement;
+
+const NEEDS_TABS = new Set(["bag-tags", "members", "tee-signs"]);
 
 const MORE_LINKS = [
   { tab: "courses", label: "Courses" },
@@ -67,7 +70,13 @@ export function AdminMorePage() {
       key: item.tab,
       onClick: () => requestTab(item.tab),
       type: "button",
-    }, [item.label, h("span", { "aria-hidden": "true", key: "chev" }, "›")]))),
+    }, [
+      h("span", { className: "admin-more-label", key: "label" }, [
+        item.label,
+        NEEDS_TABS.has(item.tab) ? h(AdminNeedsBadge, { key: "badge", tab: item.tab }) : null,
+      ]),
+      h("span", { "aria-hidden": "true", key: "chev" }, "›"),
+    ]))),
     h(AccountLinks, { key: "account" }),
   ]);
 }

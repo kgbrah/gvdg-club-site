@@ -258,6 +258,7 @@ test('score auth screens are React-owned without legacy DOM fallbacks', () => {
   assert.match(controller, /openPlayAvailable: MODE !== 'event'/);
   assert.match(controller, /function startOpenPlay\(/);
   assert.match(controller, /if \(COURSE_QUERY\) \{ renderCourseMap\(COURSE_QUERY\); return; \}/);
+  assert.match(controller, /params.get\('start'\) === '1'/);
   assert.match(controller, /readOpenPlayToken/);
   assert.doesNotMatch(controller, /casual\s+rounds are members-only/);
   assert.match(auth, /KeyRound/);

@@ -439,7 +439,7 @@ export function MemberPlayPage() {
   return h("div", { className: "react-play-page player-play", "data-react-play-page": token ? "ready" : "guest" }, [
     h("a", {
       className: "player-keep-score",
-      href: "score.html",
+      href: "score.html?start=1",
       key: "start",
     }, [
       h("div", { key: "copy" }, [
