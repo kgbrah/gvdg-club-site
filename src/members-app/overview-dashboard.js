@@ -199,6 +199,7 @@ function LastRoundCard({ token }) {
         h("div", { className: "player-score", key: "score" }, [
           h("b", { key: "par" }, row.toPar != null ? formatToPar(row.toPar) : row.total != null ? String(row.total) : "—"),
           h("span", { key: "place" }, row.place != null ? `#${row.place}` : "Card"),
+          row.rating != null ? h("span", { className: "round-rating", key: "rating", "aria-label": `Round rating ${row.rating}` }, String(row.rating)) : null,
         ]),
       ])
       : h("p", { className: "player-card-meta", key: "empty" }, state.status === "loading" ? "Loading last round..." : "No finished round yet."),

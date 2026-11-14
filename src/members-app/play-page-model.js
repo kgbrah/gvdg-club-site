@@ -9,6 +9,16 @@ function numberOrNull(value) {
   return null;
 }
 
+export function roundRatingOf(row) {
+  if (!row || row.stroke === false) return null;
+  const match = row.match_result;
+  if (match != null && String(match).trim() && String(match).trim() !== "null") return null;
+  const stored = numberOrNull(row.round_rating);
+  if (stored != null) return Math.round(stored);
+  const rating = numberOrNull(row.rating);
+  return rating == null ? null : Math.round(rating);
+}
+
 export function relClass(delta) {
   if (delta == null) return "";
   return delta < 0 ? "under" : delta > 0 ? "over" : "even";
@@ -49,6 +59,7 @@ export function publicCasualRound(row) {
     total: numberOrNull(row.total),
     toPar: numberOrNull(row.to_par),
     place: numberOrNull(row.place),
+    rating: roundRatingOf(row),
     href: liveWatchHref({ roundCode: code }),
     mix: mixSummary(row),
     sort: Date.parse(row.finalized_at || row.created_at || "") || 0,
@@ -102,6 +113,7 @@ export function latestHomeRound(results, casual) {
       toPar: play.toPar,
       total: play.total,
       place: play.place,
+      rating: play.rating,
       mix: play.mix,
     };
   }
@@ -116,6 +128,7 @@ export function latestHomeRound(results, casual) {
     toPar: numberOrNull(event.to_par),
     total: numberOrNull(event.total),
     place: numberOrNull(event.place),
+    rating: roundRatingOf(event),
     mix: "",
   };
 }

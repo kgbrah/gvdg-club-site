@@ -62,9 +62,12 @@ export async function listMemberResults(db: D1Like, memberId: string, opts: { li
   const offset = typeof rawOffset === "number" && Number.isInteger(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
   let sql =
     `SELECT r.*, e.name AS event_name, e.date AS event_date, e.type AS event_type,
-                c.udisc_course_id AS udisc_course_id, c.udisc_url AS udisc_url
+                c.udisc_course_id AS udisc_course_id, c.udisc_url AS udisc_url,
+                rr.round_rating AS round_rating
          FROM results r JOIN events e ON e.id = r.event_id
          LEFT JOIN courses c ON c.id = e.course_id
+         LEFT JOIN round_ratings rr
+           ON rr.event_id = r.event_id AND rr.member_id = r.member_id AND rr.stream = 'competition'
          WHERE r.member_id = ?
          ORDER BY COALESCE(e.date, r.created_at) DESC, r.created_at DESC, r.id DESC`;
   if (limit != null) {
@@ -154,6 +157,7 @@ export async function listMemberCasualResults(db: D1Like, memberId: string, opts
   let sql =
     `SELECT cr.*, r.round_code, r.course_name, r.layout_name, r.layout_id, r.finalized_at, r.holes AS round_holes,
                 c.udisc_course_id AS udisc_course_id,
+                rr.round_rating AS round_rating,
                 CASE
                   WHEN cr.match_result IS NOT NULL AND TRIM(cr.match_result) != '' AND cr.match_result != 'null' THEN 0
                   WHEN json_extract(r.scoring_config, '$.scoringStyle') = 'matchplay' THEN 0
@@ -163,6 +167,8 @@ export async function listMemberCasualResults(db: D1Like, memberId: string, opts
                 END AS stroke_singles
          FROM casual_results cr JOIN casual_rounds r ON r.id = cr.casual_round_id
          LEFT JOIN courses c ON c.id = r.course_id
+         LEFT JOIN round_ratings rr
+           ON rr.casual_round_code = r.round_code AND rr.member_id = cr.member_id AND rr.stream = 'casual'
          WHERE cr.member_id = ?
          ORDER BY r.finalized_at DESC, cr.created_at DESC, cr.id DESC`;
   if (limit != null) {

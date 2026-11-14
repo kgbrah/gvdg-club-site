@@ -86,6 +86,7 @@ function RecentRoundCard({ item }) {
           h("span", { key: "par" }, score),
         ])
         : null,
+      item.rating != null ? h("div", { className: "round-rating", key: "rating", "aria-label": `Round rating ${item.rating}` }, String(item.rating)) : null,
     ]),
     h("a", { className: "passkey-btn", href: item.href, key: "link" }, "Replay"),
   ]);

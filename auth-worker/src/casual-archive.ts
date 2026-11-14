@@ -189,9 +189,15 @@ export function publicMemberCasualResult(row: Record<string, unknown>) {
     total: row.total ?? null,
     to_par: row.to_par ?? null,
     place: row.place ?? null,
+    rating: storedRoundRating(row.round_rating),
     udisc_course_id: row.udisc_course_id ?? null,
     scorecard: row.scorecard ?? null,
     breakdown: row.breakdown ?? null,
     stroke: row.stroke_singles == null ? true : Number(row.stroke_singles) === 1,
   };
+}
+
+function storedRoundRating(value: unknown): number | null {
+  const n = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : NaN;
+  return Number.isFinite(n) ? Math.round(n) : null;
 }

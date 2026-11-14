@@ -49,11 +49,16 @@ describe("casual archive snapshot", () => {
       total: 56,
       to_par: 2,
       place: null,
+      rating: null,
       udisc_course_id: null,
       scorecard: null,
       breakdown: null,
       stroke: true,
     });
+    const rated = publicMemberCasualResult({ round_code: "JQEU74", round_rating: "948.4", member_id: "m_jane" });
+    expect(rated).toMatchObject({ round_code: "JQEU74", rating: 948 });
+    expect(rated).not.toHaveProperty("member_id");
+    expect(rated).not.toHaveProperty("round_rating");
   });
 
   it("rebuilds a final watch snapshot from durable results and layout geometry", async () => {

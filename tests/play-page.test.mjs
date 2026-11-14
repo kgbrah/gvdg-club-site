@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { formatUdiscWhen, latestHomeRound, publicCasualRound, recentPlayRounds, relClass } from "../src/members-app/play-page-model.js";
+import { formatUdiscWhen, latestHomeRound, publicCasualRound, recentPlayRounds, relClass, roundRatingOf } from "../src/members-app/play-page-model.js";
 
 test("recentPlayRounds keeps the newest unique casual cards", () => {
   const rows = recentPlayRounds([
@@ -41,6 +41,36 @@ test("latestHomeRound prefers a newer casual card and keeps its mix", () => {
   );
   assert.equal(event.kind, "event");
   assert.equal(event.href, "events.html#event/4");
+});
+
+test("round ratings ride on casual cards, event results, and not on doubles or match play", () => {
+  assert.equal(roundRatingOf({ round_rating: 948.2, rating: 900 }), 948);
+  assert.equal(roundRatingOf({ rating: "910" }), 910);
+  assert.equal(roundRatingOf({ stroke: false, round_rating: 999 }), null);
+  assert.equal(roundRatingOf({ match_result: "{\"result\":\"win\"}", rating: 880 }), null);
+  assert.equal(roundRatingOf({}), null);
+  const casual = publicCasualRound({
+    round_code: "SATURDAY",
+    course_name: "Farmville DiscGolfPark",
+    to_par: 0,
+    place: 1,
+    rating: 948,
+  });
+  assert.equal(casual.rating, 948);
+  const home = latestHomeRound(
+    [{ event_id: 4, event_name: "League", event_date: "2026-10-02", to_par: 1, place: 3, round_rating: 932, rating: 900 }],
+    [{ round_code: "OLD", course_name: "West", finalized_at: "2026-09-01T12:00:00Z", to_par: 4, rating: 870 }],
+  );
+  assert.equal(home.kind, "event");
+  assert.equal(home.rating, 932);
+  const overview = readFileSync("src/members-app/overview-dashboard.js", "utf8");
+  const play = readFileSync("src/members-app/play-page.js", "utf8");
+  const season = readFileSync("src/members-app/season-page.js", "utf8");
+  const html = readFileSync("gvdg-members.html", "utf8");
+  assert.match(overview, /Round rating/);
+  assert.match(play, /Round rating/);
+  assert.match(season, /roundRatingOf/);
+  assert.match(html, /\.round-rating/);
 });
 
 test("publicCasualRound skips empty codes and paints relative colors", () => {

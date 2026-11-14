@@ -12,7 +12,7 @@ import { PdgaDashboard, usePdgaStats } from "./pdga-dashboard.js";
 import { PlayStatsPanel } from "./play-stats-panel.js";
 import { buildSeasonPage } from "./season-page-model.js";
 import { liveWatchHref } from "../shared/live-watch.js";
-import { relClass } from "./play-page-model.js";
+import { relClass, roundRatingOf } from "./play-page-model.js";
 
 const h = React.createElement;
 
@@ -70,6 +70,7 @@ function ResultRow({ row }) {
     : (row.event_name || "Club event");
   const when = formatEventDay(row.event_date || row.finalized_at);
   const score = row.to_par != null ? formatToPar(row.to_par) : row.total != null ? String(row.total) : "-";
+  const rating = roundRatingOf(row);
   const href = casual
     ? liveWatchHref({ roundCode: row.round_code })
     : (row.event_id != null ? liveWatchHref({ eventId: row.event_id }) : "events.html");
@@ -84,6 +85,7 @@ function ResultRow({ row }) {
     h("div", { className: "season-result-score", key: "score" }, [
       h("div", { className: "season-result-place", key: "place" }, row.place != null ? `#${row.place}` : "—"),
       h("div", { className: "season-result-par " + relClass(row.to_par), key: "par" }, score),
+      rating != null ? h("div", { className: "round-rating", key: "rating", "aria-label": `Round rating ${rating}` }, String(rating)) : null,
     ]),
   ]);
 }

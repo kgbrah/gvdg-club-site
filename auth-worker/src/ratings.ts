@@ -140,13 +140,16 @@ async function competitiveRows(
   const rawOffset = opts.offset;
   const offset = typeof rawOffset === "number" && Number.isInteger(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
   let sql =
-    `SELECT r.id, r.event_id, r.member_id, r.name, r.place, r.total, r.to_par, r.rating, r.breakdown, r.scorecard,
+    `SELECT r.id, r.event_id, r.member_id, r.name, r.place, r.total, r.to_par,
+            COALESCE(rr.round_rating, r.rating) AS rating, r.breakdown, r.scorecard,
             r.created_at, r.scoring_group, r.match_result, e.name AS event_name, e.date AS event_date,
             e.type AS event_type, c.name AS course_name, c.udisc_course_id AS udisc_course_id, l.name AS layout_name
      FROM results r
      JOIN events e ON e.id = r.event_id
      LEFT JOIN courses c ON c.id = e.course_id
      LEFT JOIN course_layouts l ON l.id = e.layout_id
+     LEFT JOIN round_ratings rr
+       ON rr.event_id = r.event_id AND rr.member_id = r.member_id AND rr.stream = 'competition'
      WHERE r.member_id = ?
      ORDER BY COALESCE(e.date, r.created_at) DESC, r.created_at DESC, r.id DESC`;
   if (limit != null) {
@@ -171,10 +174,12 @@ async function casualRows(
   const offset = typeof rawOffset === "number" && Number.isInteger(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
   let sql =
     `SELECT cr.*, r.round_code, r.course_name, r.layout_name, r.layout_id, r.finalized_at,
-            c.udisc_course_id AS udisc_course_id
+            c.udisc_course_id AS udisc_course_id, rr.round_rating AS rating
      FROM casual_results cr
      JOIN casual_rounds r ON r.id = cr.casual_round_id
      LEFT JOIN courses c ON c.id = r.course_id
+     LEFT JOIN round_ratings rr
+       ON rr.casual_round_code = r.round_code AND rr.member_id = cr.member_id AND rr.stream = 'casual'
      WHERE cr.member_id = ?
      ORDER BY r.finalized_at DESC, cr.created_at DESC, cr.id DESC`;
   if (limit != null) {
