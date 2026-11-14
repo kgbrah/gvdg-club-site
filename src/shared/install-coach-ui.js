@@ -1,6 +1,7 @@
 import React from "react";
 
 import {
+  inAppHost,
   installCoachCopy,
   installCoachMode,
   isStandaloneDisplay,
@@ -48,7 +49,11 @@ export function InstallCoachBanner() {
   }, [state.mode]);
 
   if (state.mode === "hidden") return null;
-  const copy = installCoachCopy(state.mode);
+  const copy = installCoachCopy(
+    state.mode,
+    typeof location !== "undefined" ? location.href : "",
+    inAppHost(),
+  );
 
   function dismiss() {
     writeInstallCoachDismissed(localStorage);
@@ -65,6 +70,9 @@ export function InstallCoachBanner() {
       h("p", { key: "body" }, copy.body),
     ]),
     h("div", { className: "install-coach-actions", key: "actions" }, [
+      state.mode === "chrome" && copy.href
+        ? h("a", { className: "install-coach-btn", href: copy.href, key: "open" }, copy.action)
+        : null,
       state.mode === "prompt"
         ? h("button", { className: "install-coach-btn", key: "install", type: "button", onClick: install }, copy.action)
         : null,
