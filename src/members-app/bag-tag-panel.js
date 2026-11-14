@@ -111,22 +111,27 @@ export function BagTagPanel({ token }) {
 
   const requested = Boolean(board.request && board.request.createdAt);
 
-  return h("section", { className: "player-story-block", "data-react-bag-tags": "ready" }, [
-    h("h3", { key: "title" }, mine ? `Bag tag #${mine.tagNumber}` : "Bag tags"),
-    h("p", { className: "player-card-meta", key: "note" }, mine
-      ? "Lower number is better. Challenge someone above you, or wait for a card settle."
-      : requested
-        ? "Request sent. An admin will hand you the next number."
-        : `${board.series.name} is active.`),
-    !mine && !requested
-      ? h("button", {
-        className: "player-btn primary",
-        disabled: busy,
-        key: "request",
-        onClick: requestTag,
-        type: "button",
-      }, "Request a tag")
-      : null,
+  return h("section", { className: "bag-tag-home", "data-react-bag-tags": "ready" }, [
+    h("div", { className: "bag-tag-home-row", key: "head" }, [
+      h("div", { key: "copy" }, [
+        h("h3", { key: "title" }, mine ? `Bag tag #${mine.tagNumber}` : "Bag tags"),
+        h("p", { className: "player-card-meta", key: "note" }, mine
+          ? "Lower number is better. Challenge someone above you, or wait for a card settle."
+          : requested
+            ? "Request sent. An admin will hand you the next number."
+            : `${board.series.name} is active.`),
+      ]),
+      !mine && !requested
+        ? h("button", {
+          className: "player-job-link",
+          disabled: busy,
+          key: "request",
+          onClick: requestTag,
+          type: "button",
+          "aria-label": "Request a tag",
+        }, "Request")
+        : null,
+    ]),
     incoming.map((challenge) => h("div", { key: challenge.id }, [
       h("p", { className: "player-card-meta", key: "text" },
         `${challenge.challengerName} called out your #${challenge.defenderTag}. They shot ${challenge.challengerScore}, you shot ${challenge.defenderScore}.`),

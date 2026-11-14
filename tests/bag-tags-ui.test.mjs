@@ -19,7 +19,10 @@ test("bag tags show on the events hub, member home, and admin club tools", () =>
   assert.match(members, /BagTagPanel/);
   assert.match(panel, /\/bag-tags\/challenges/);
   assert.match(panel, /\/bag-tags\/request/);
-  assert.match(panel, /Request a tag/);
+  assert.match(panel, /bag-tag-home/);
+  assert.match(panel, /player-job-link/);
+  assert.match(panel, /"aria-label": "Request a tag"/);
+  assert.doesNotMatch(panel, /className: "player-btn primary"[\s\S]{0,160}Request a tag/);
   assert.match(panel, /Request sent\. An admin will hand you the next number\./);
   assert.doesNotMatch(panel, /Ask an admin for a tag/);
   assert.match(panel, /must_challenge_better_tag/);
