@@ -6,6 +6,7 @@ import { requireMember } from "./authz.js";
 import { corsHeaders, json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { asInt } from "./input.js";
+import { notifyAdmins } from "./admin-push.js";
 
 const TEE_SIGN_UPLOAD_BODY_BYTES = 4_300_000;
 
@@ -38,6 +39,12 @@ export async function handleTeeSignUpload(request: Request, env: Env, origin: st
     throw e;
   }
   const signId = (row as { id: number }).id;
+  notifyAdmins(ctx, env, {
+    title: "Tee sign to review",
+    body: `Hole ${hole} is waiting for review.`,
+    url: "/admin.html?tab=tee-signs",
+    tag: `tee-sign:${signId}`,
+  });
   const p = (async () => {
     try {
       const v = await extractTeeSign(env, img.bytes, img.contentType);

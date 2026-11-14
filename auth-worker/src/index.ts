@@ -86,7 +86,7 @@ export default {
       if (pathname === "/my-tee-signs" && method === "GET") return await handleMyTeeSigns(request, env, origin);
       if (pathname === "/pdga-stats" && method === "GET") return await handlePdgaStats(request, env, origin);
       if (pathname === "/club-feed" && method === "GET") return await handleClubFeed(env, origin);
-      if (pathname === "/membership/apply" && method === "POST") return await handleMembershipApply(request, env, origin);
+      if (pathname === "/membership/apply" && method === "POST") return await handleMembershipApply(request, env, origin, ctx);
 
       const club = await clubApi(request, env, origin, pathname, method, ctx);
       if (club) return club;

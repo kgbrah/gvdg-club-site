@@ -3,6 +3,7 @@ import { adminGate } from "./authz.js";
 import { json } from "./http.js";
 import { asInt } from "./input.js";
 import { handleAdminBagTags } from "./bag-tag-routes.js";
+import { handleAdminPush } from "./admin-push.js";
 import { handleAdminCourses } from "./club-admin-courses.js";
 import { handleAdminEvents } from "./club-admin-events.js";
 import { handleAdminFundraisers, handleAdminLeagues, handleAdminMeetings } from "./club-admin-content.js";
@@ -45,6 +46,7 @@ export async function handleClubAdmin(
   else if (sub === "tee-signs") response = await handleAdminTeeSigns(request, env, origin, method, seg, adminId, id);
   else if (sub === "voice-fill" && method === "POST") response = await handleAdminVoiceFill(request, env, origin, adminId);
   else if (sub === "export") response = await handleAdminExport(request, env, origin, method, seg, adminId);
+  else if (sub === "push") response = await handleAdminPush(request, env, origin, method, seg, adminId);
 
   return response ?? json({ error: "not_found" }, 404, origin);
 }

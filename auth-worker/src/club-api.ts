@@ -23,7 +23,7 @@ export async function clubApi(request: Request, env: Env, origin: string | null,
   const heatmapRoute = await handleHoleHeatmap(request, env, origin, method, seg);
   if (heatmapRoute) return heatmapRoute;
 
-  const bagTagRoute = await handleBagTags(request, env, origin, method, seg);
+  const bagTagRoute = await handleBagTags(request, env, origin, method, seg, ctx);
   if (bagTagRoute) return bagTagRoute;
 
   const publicRoute = await handleClubPublic(request, env, origin, pathname, method, seg);

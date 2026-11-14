@@ -13,6 +13,7 @@ import {
 } from "./admin-events-model.js";
 import { nextWeekOffer } from "./repeat-draft.js";
 import { clubToday } from "../shared/events-model.js";
+import { AdminPushCard } from "./admin-push.js";
 
 const h = React.createElement;
 const EMPTY_STATE = { status: "loading", events: [] };
@@ -162,7 +163,11 @@ export function AdminTodayDashboard() {
   const view = useSettledWhileLoading(state);
 
   if (view.status === "loading") {
-    return h("p", { className: "dash-note", "data-react-admin-today": "loading", role: "status" }, "Loading…");
+    return h("div", { "data-react-admin-today": "loading" }, [
+      h("h2", { className: "admin-pane-heading", key: "title" }, "Today"),
+      h(AdminPushCard, { key: "alerts" }),
+      h("p", { className: "dash-note", key: "loading", role: "status" }, "Loading…"),
+    ]);
   }
 
   const next = pickTodayEvent(view.events);
@@ -177,6 +182,7 @@ export function AdminTodayDashboard() {
 
   return h("div", { "data-react-admin-today": next ? "ready" : "empty" }, [
     h("h2", { className: "admin-pane-heading", key: "title" }, "Today"),
+    h(AdminPushCard, { key: "alerts" }),
     next
       ? h("div", { className: "admin-today-card", "data-admin-event-id": next.id, key: "next" }, [
         statusChip(next.status === "live" ? "live" : "scheduled"),

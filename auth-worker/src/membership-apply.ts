@@ -4,6 +4,7 @@ import { asStr } from "./input.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { hashPin } from "./crypto.js";
 import { createMember, resolveMember, type KVListLike } from "./roster.js";
+import { notifyAdmins } from "./admin-push.js";
 
 const PDGA_RE = /^\d{1,12}$/;
 const UDISC_RE = /^[A-Za-z0-9._-]{1,50}$/;
@@ -76,7 +77,7 @@ export async function listApplications(kv: KVListLike): Promise<PublicApplicatio
   return out;
 }
 
-export async function handleMembershipApply(request: Request, env: Env, origin: string | null): Promise<Response> {
+export async function handleMembershipApply(request: Request, env: Env, origin: string | null, ctx?: ExecutionContext): Promise<Response> {
   if (await kvRateLimited(env, "membership-apply:" + clientIp(request), APPLY_LIMIT, APPLY_WINDOW_SEC)) {
     return json({ error: "rate_limited" }, 429, origin);
   }
@@ -106,6 +107,12 @@ export async function handleMembershipApply(request: Request, env: Env, origin: 
     createdAt: new Date().toISOString(),
   };
   await writeApplication(kv, row);
+  notifyAdmins(ctx, env, {
+    title: "Membership application",
+    body: `${name} applied to join.`,
+    url: "/admin.html?tab=members",
+    tag: `membership:${row.id}`,
+  });
   return json({ application: pub(row) }, 201, origin);
 }
 

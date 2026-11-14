@@ -1581,6 +1581,10 @@ export function startAdminController() {
             });
             refreshOrdersBadge();                          // show the new-order count on load
             setInterval(refreshOrdersBadge, 60000);        // and keep it current while the page is open
+            const alertTab = new URLSearchParams(window.location.search).get("tab");
+            if (alertTab === "today" || alertTab === "orders" || alertTab === "bag-tags" || alertTab === "members" || alertTab === "tee-signs") {
+                adminSwitch(alertTab).catch(() => {});
+            }
             adminLoadEvents();
             adminLoadCourses();
             adminLoadLeagues();

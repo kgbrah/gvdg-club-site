@@ -72,6 +72,10 @@ test('shared service worker caches app install assets and member fallback', () =
   const cacheVersion = sw.match(/const CACHE = "gvdg-club-v(\d+)"/);
   assert.ok(cacheVersion, 'service worker cache version is present');
   assert.ok(Number(cacheVersion[1]) >= 102, 'Rebuilt player-record bundles require v102 or newer');
+  assert.match(sw, /addEventListener\("push"/);
+  assert.match(sw, /addEventListener\("notificationclick"/);
+  assert.match(sw, /function adminNotificationUrl/);
+  assert.match(sw, /\/admin\.html/);
   assert.match(sw, /const OFFLINE_PAGE = "gvdg-members\.html"/);
   assert.match(sw, /const STATIC_DESTINATIONS = new Set/);
   assert.match(sw, /if \(!staticAsset\(req, url\)\) return/);

@@ -6,6 +6,7 @@ import { kvRateLimited } from "./kv-rate-limit.js";
 import { getMember } from "./roster.js";
 import { settleBagTags, settleSummary, type TagPlayer } from "./bag-tags.js";
 import * as tags from "./db-bag-tags.js";
+import { notifyAdmins } from "./admin-push.js";
 
 function scoreOf(value: unknown): number | null {
   if (typeof value === "number" && Number.isInteger(value) && value >= -99 && value <= 400) return value;
@@ -123,6 +124,7 @@ export async function handleBagTags(
   origin: string | null,
   method: string,
   seg: string[],
+  ctx?: ExecutionContext,
 ): Promise<Response | null> {
   if (seg[0] !== "bag-tags") return null;
 
@@ -164,6 +166,14 @@ export async function handleBagTags(
       memberId: member.memberId,
       memberName: member.name.trim() || member.memberId,
     });
+    if (asked.created) {
+      notifyAdmins(ctx, env, {
+        title: "Bag tag request",
+        body: `${asked.row.member_name} asked for a bag tag.`,
+        url: "/admin.html?tab=bag-tags",
+        tag: `bag-tag:${member.memberId}`,
+      });
+    }
     return json({ request: { createdAt: asked.row.created_at } }, asked.created ? 201 : 200, origin);
   }
 
@@ -198,6 +208,14 @@ export async function handleBagTags(
       challengerScore,
       defenderScore,
     });
+    if (created) {
+      notifyAdmins(ctx, env, {
+        title: "Bag tag challenge",
+        body: `${created.challenger_name} challenged ${created.defender_name}.`,
+        url: "/admin.html?tab=bag-tags",
+        tag: `bag-challenge:${created.id}`,
+      });
+    }
     return json({ challenge: created ? publicChallenge(created) : null }, 201, origin);
   }
 

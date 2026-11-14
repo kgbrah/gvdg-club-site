@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v238";
+const CACHE = "gvdg-club-v239";
 const OFFLINE_PAGE = "gvdg-members.html";
 const ASSETS = [
   "tokens.css",
@@ -131,4 +131,58 @@ self.addEventListener("fetch", (event) => {
         .catch(() => (req.destination === "image" ? caches.match("img/logo.png") : Response.error()));
     })
   );
+});
+
+function adminNotificationUrl(raw) {
+  if (typeof raw !== "string" || !raw.startsWith("/admin.html") || raw.startsWith("//") || raw.includes("\\") || raw.includes("://")) {
+    return new URL("/admin.html", self.location.origin).href;
+  }
+  return new URL(raw, self.location.origin).href;
+}
+
+function readPush(event) {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = {};
+  }
+  if (!data || typeof data !== "object") data = {};
+  return {
+    title: typeof data.title === "string" && data.title.trim() ? data.title.trim().slice(0, 80) : "GVDG admin",
+    body: typeof data.body === "string" ? data.body.slice(0, 180) : "",
+    tag: typeof data.tag === "string" && data.tag.trim() ? data.tag.trim().slice(0, 80) : "gvdg-admin",
+    url: typeof data.url === "string" ? data.url : "/admin.html",
+  };
+}
+
+async function openAdmin(target) {
+  const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  for (const client of all) {
+    let url;
+    try { url = new URL(client.url); } catch { continue; }
+    if (url.origin !== self.location.origin || !url.pathname.endsWith("/admin.html")) continue;
+    if (typeof client.navigate === "function") {
+      const next = await client.navigate(target);
+      if (next && typeof next.focus === "function") return next.focus();
+    }
+    if (typeof client.focus === "function") return client.focus();
+  }
+  if (self.clients.openWindow) return self.clients.openWindow(target);
+}
+
+self.addEventListener("push", (event) => {
+  const note = readPush(event);
+  event.waitUntil(self.registration.showNotification(note.title, {
+    body: note.body,
+    tag: note.tag,
+    data: { url: note.url },
+    icon: "img/icons/app-icon-192.png",
+  }));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = adminNotificationUrl(event.notification.data && event.notification.data.url);
+  event.waitUntil(openAdmin(target));
 });

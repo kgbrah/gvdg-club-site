@@ -15,6 +15,7 @@ jobs:
       HAS_CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
       HAS_QA_TOKEN: ${{ secrets.GVDG_STAGING_QA_TOKEN != '' }}
       HAS_QA_LOGIN: ${{ secrets.GVDG_STAGING_QA_IDENTIFIER != '' && secrets.GVDG_STAGING_QA_PIN != '' }}
+      HAS_VAPID: ${{ secrets.VAPID_PUBLIC_KEY != '' && secrets.VAPID_PRIVATE_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -86,6 +87,21 @@ jobs:
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      - name: Upload admin push keys
+        if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_CF_ACCOUNT == 'true' && env.HAS_VAPID == 'true' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: auth-worker
+          environment: gvdgclub
+          secrets: |
+            VAPID_PUBLIC_KEY
+            VAPID_PRIVATE_KEY
+          command: secret list --env gvdgclub
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
       - name: Install Playwright Chromium
         if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_CF_ACCOUNT == 'true' && (env.HAS_QA_TOKEN == 'true' || env.HAS_QA_LOGIN == 'true') }}
         run: npx playwright install --with-deps chromium
