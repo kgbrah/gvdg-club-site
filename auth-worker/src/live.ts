@@ -5,6 +5,7 @@
 // Auth is enforced by the Worker BEFORE forwarding here (start/score/finalize are admin-gated; the
 // snapshot + ws reads are public). The DO trusts requests it receives.
 
+import { cardHasScoredHole, type JoinRequest } from "./live-join.js";
 import { holeMarker } from "./db-courses.js";
 import { normalizeScorecards, playerScorerId, purgeScorerVotes, purgeScoreTargetScorerVotes, recordScoreTargetVote } from "./live-consensus.js";
 import { canCastCtpVote, dropLiveCtp, recordCtpVote, type LiveCtpStore } from "./live-ctp.js";
@@ -136,6 +137,8 @@ export class LiveEventDO {
     if (action === "map-overlay") return this.overlayMap(body as { hole?: unknown; kind?: unknown; lat?: unknown; lng?: unknown }, authMember);
     if (action === "throws") return this.saveThrows(body, authMember, authAdmin);
     if (action === "join") return this.join(authMember, (body as { name?: string; photo?: unknown }).name, (body as { photo?: unknown }).photo);
+    if (action === "approve-join") return this.approveJoin(body as { id?: unknown }, authMember);
+    if (action === "decline-join") return this.declineJoin(body as { id?: unknown }, authMember);
     if (action === "guest") return this.addGuest(authMember, (body as { name?: string; team?: string }).name, (body as { team?: string }).team); // add a non-member to my card (+ pair label for doubles)
     if (action === "remove") return this.removePlayer(body as RemoveBody, authMember, authAdmin); // drop a player (accidental/left/no-show)
     if (action === "pairs") return this.updatePairs(body as PairAssignmentBody, authMember, authAdmin);
@@ -279,38 +282,117 @@ export class LiveEventDO {
     return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations, this.ratingBaseline));
   }
 
-  /** Casual round: the authenticated caller joins (added once, on the single card "c0"). No-op if already in. */
+  /** Casual round: the authenticated caller joins (added once, on the single card "c0"). No-op if already in.
+   *  After the card has a scored hole, a new player waits until someone already on the card approves. */
   private async join(authMember: string | null, name?: string, photoRaw?: unknown): Promise<Response> {
     if (!this.meta || this.meta.status !== "live") return j({ error: "round_not_live" }, 409);
     if (!authMember) return j({ error: "unauthorized" }, 401);
     const photo = sanitizeProfilePhoto(photoRaw);
-    const existing = this.players.find((p) => p.memberId === authMember);
-    if (existing) {
-      // Already a player: no-op — unless they were removed (accidental/left), in which case rejoining
-      // reactivates the same slot (index stays stable) with a fresh, empty card.
-      let changed = false;
+    const displayName = String(name || "Player").slice(0, 60);
+    const existing = this.players.find((player) => player.memberId === authMember);
+    if (existing && !existing.removed) {
       if (photo && existing.photo !== photo) {
         existing.photo = photo;
-        changed = true;
-      }
-      if (existing.removed) {
-        existing.removed = false;
-        existing.name = String(name || existing.name).slice(0, 60);
-        existing.scores = {};
-        existing.scorecards = {};
-        existing.scoredBy = {};
-        changed = true;
-      }
-      if (changed) {
         await this.persist();
         this.broadcast();
       }
-    } else {
-      const cardId = this.meta.casual ? "c0" : (this.players[0]?.cardId ?? "c0");
-      this.players.push({ memberId: authMember, name: String(name || "Player").slice(0, 60), division: null, startingHole: null, cardId, scores: {}, scorecards: {}, ctpEligible: this.meta.ctpBuyInRequired !== true, photo });
+      return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations, this.ratingBaseline));
+    }
+    const cardId = existing?.cardId ?? (this.meta.casual ? "c0" : (this.players.find((player) => !player.removed)?.cardId ?? this.players[0]?.cardId ?? "c0"));
+    const activeOnCard = this.players.some((player) => !player.removed && (player.cardId ?? null) === (cardId ?? null));
+    if (this.meta.casual && activeOnCard && cardHasScoredHole(this.players, cardId ?? null)) {
+      return this.holdJoin({ memberId: authMember, name: displayName, photo, cardId: cardId ?? "c0" });
+    }
+    this.admitPlayer({ memberId: authMember, name: displayName, photo, cardId: cardId ?? "c0", existing });
+    await this.persist();
+    this.broadcast();
+    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations, this.ratingBaseline));
+  }
+
+  private async holdJoin(input: { memberId: string; name: string; photo: string | null; cardId: string }): Promise<Response> {
+    if (!this.meta) return j({ error: "round_not_live" }, 409);
+    const requests = this.meta.joinRequests ?? [];
+    let request = requests.find((row) => row.memberId === input.memberId);
+    if (!request) {
+      if (requests.filter((row) => row.cardId === input.cardId).length >= 12) return j({ error: "join_full" }, 429);
+      request = { id: crypto.randomUUID(), memberId: input.memberId, name: input.name, photo: input.photo, cardId: input.cardId };
+      this.meta.joinRequests = [...requests, request];
+      await this.persist();
+      this.broadcast();
+    } else if (request.name !== input.name || (input.photo && request.photo !== input.photo)) {
+      request.name = input.name;
+      if (input.photo) request.photo = input.photo;
       await this.persist();
       this.broadcast();
     }
+    return j({ error: "join_pending", pendingJoin: { id: request.id, name: request.name, cardId: request.cardId } }, 202);
+  }
+
+  private admitPlayer(input: { memberId: string; name: string; photo: string | null; cardId: string; existing?: PlayerState }): void {
+    const existing = input.existing;
+    if (existing) {
+      if (input.photo && existing.photo !== input.photo) existing.photo = input.photo;
+      if (existing.removed) {
+        existing.removed = false;
+        existing.name = input.name;
+        existing.scores = {};
+        existing.scorecards = {};
+        existing.scoredBy = {};
+      }
+      return;
+    }
+    this.players.push({
+      memberId: input.memberId,
+      name: input.name,
+      division: null,
+      startingHole: null,
+      cardId: input.cardId,
+      scores: {},
+      scorecards: {},
+      ctpEligible: this.meta?.ctpBuyInRequired !== true,
+      photo: input.photo,
+    });
+  }
+
+  private joinActor(authMember: string | null, id: string): { request: JoinRequest } | Response {
+    if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
+    if (!id) return j({ error: "not_found" }, 404);
+    const me = authMember ? this.players.find((player) => player.memberId === authMember && !player.removed) : undefined;
+    if (!me) return j({ error: "not_on_card" }, 403);
+    const request = (this.meta.joinRequests || []).find((row) => row.id === id);
+    if (!request) return j({ error: "not_found" }, 404);
+    if ((request.cardId ?? null) !== (me.cardId ?? null)) return j({ error: "wrong_card" }, 403);
+    return { request };
+  }
+
+  private async approveJoin(body: { id?: unknown }, authMember: string | null): Promise<Response> {
+    const id = typeof body.id === "string" ? body.id : "";
+    const actor = this.joinActor(authMember, id);
+    if (actor instanceof Response) return actor;
+    if (!this.meta) return j({ error: "not_live" }, 409);
+    if (isCardLocked(this.meta.lockedCardIds, actor.request.cardId)) return j({ error: "card_locked" }, 409);
+    const existing = this.players.find((player) => player.memberId === actor.request.memberId);
+    this.admitPlayer({
+      memberId: actor.request.memberId,
+      name: actor.request.name,
+      photo: actor.request.photo,
+      cardId: actor.request.cardId,
+      existing,
+    });
+    this.meta.joinRequests = (this.meta.joinRequests || []).filter((row) => row.id !== actor.request.id);
+    await this.persist();
+    this.broadcast();
+    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations, this.ratingBaseline));
+  }
+
+  private async declineJoin(body: { id?: unknown }, authMember: string | null): Promise<Response> {
+    const id = typeof body.id === "string" ? body.id : "";
+    const actor = this.joinActor(authMember, id);
+    if (actor instanceof Response) return actor;
+    if (!this.meta) return j({ error: "not_live" }, 409);
+    this.meta.joinRequests = (this.meta.joinRequests || []).filter((row) => row.id !== actor.request.id);
+    await this.persist();
+    this.broadcast();
     return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations, this.ratingBaseline));
   }
 

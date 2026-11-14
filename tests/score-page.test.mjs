@@ -1223,6 +1223,9 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.match(watchBoot, /\/rounds\/' \+ ROUND_CODE \+ '\/results'/);
   assert.match(watchBoot, /casualReplaySnapshot/);
   assert.doesNotMatch(watchBoot, /\/join/);
+  assert.doesNotMatch(watch, /keepScoreHref|Keep score/);
+  assert.match(controller, /join-approve/);
+  assert.match(controller, /Waiting on the card/);
 });
 
 test("live scoring lets members mark tee pads and baskets for the club map", () => {

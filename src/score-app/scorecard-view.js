@@ -24,6 +24,18 @@ function icon(Icon) {
   });
 }
 
+function JoinRequestBanner(props) {
+  const rows = Array.isArray(props.requests) ? props.requests.filter((request) => request && request.id) : [];
+  if (!rows.length || typeof props.onApprove !== "function") return null;
+  return h("div", { className: "card join-requests", "data-join-requests": "true", key: "join-requests" }, rows.map((request) => h("div", { className: "join-request", key: request.id }, [
+    h("p", { key: "name" }, request.name + " wants to join this card."),
+    h("button", { className: "btn", key: "yes", type: "button", onClick: () => props.onApprove(request.id) }, "Approve"),
+    typeof props.onDecline === "function"
+      ? h("button", { className: "btn secondary", key: "no", type: "button", onClick: () => props.onDecline(request.id) }, "Not now")
+      : null,
+  ])));
+}
+
 function HoleStatChips(props) {
   const chips = Array.isArray(props.chips) ? props.chips : [];
   if (!chips.length) return null;
@@ -1250,6 +1262,7 @@ export function ScorecardView(props) {
       key: "glove",
     }, [
       h("div", { className: "score-glove-stage", key: "stage" }, [
+        h(JoinRequestBanner, { key: "joins", onApprove: props.onApproveJoin, onDecline: props.onDeclineJoin, requests: props.joinRequests }),
         props.showWeather ? h(WeatherStrip, { compact: true, key: "weather", title: "Round weather", weather: props.weather }) : null,
         props.yourTurn ? h("p", { className: "your-turn-hint", key: "turn" }, props.yourTurn) : null,
         props.putting ? null : h(HoleMedia, {

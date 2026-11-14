@@ -1,3 +1,4 @@
+import type { JoinRequest } from "./live-join.js";
 import type * as db from "./db.js";
 import type { LiveScoringConfig, ScoreTarget } from "./live-format.js";
 import type { WeatherLocation, WeatherState } from "./weather.js";
@@ -45,6 +46,8 @@ export interface LiveMeta {
   lockedCardIds?: string[];
   /** Per-card player indexes who have agreed the scorecard is correct. */
   cardAttestations?: Record<string, number[]>;
+  /** Casual joins waiting on a cardmate after scoring has started. */
+  joinRequests?: JoinRequest[];
 }
 
 export interface StartBody {

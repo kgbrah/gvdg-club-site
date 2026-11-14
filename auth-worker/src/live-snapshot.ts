@@ -1,5 +1,6 @@
 import type { ScoreConflict } from "./live-consensus.js";
 import { cardLiveCtps, publicLiveCtps, type LiveCtpStore } from "./live-ctp.js";
+import { publicJoinRequests } from "./live-join.js";
 import { publicPlayerLocations, type LivePlayerLocation } from "./live-locations.js";
 import type { PlayerState } from "./scoring.js";
 import { attestationForCard, canEnterScorecard, computeRoundStandings, healthyTargets, isCardLocked, publicScoreTargets, resolvedHoles, scorecardIssues, scoringState } from "./live-state.js";
@@ -117,6 +118,7 @@ export function publicSnapshot(
       : null,
     lockedCardIds: Array.isArray(meta?.lockedCardIds) ? meta.lockedCardIds : [],
     cardAttestations: meta?.cardAttestations && typeof meta.cardAttestations === "object" ? meta.cardAttestations : {},
+    joinRequests: meta?.status === "live" ? publicJoinRequests(meta.joinRequests) : [],
     updatedAt: meta?.startedAt ?? null,
   };
 }
@@ -146,6 +148,11 @@ export function mineData(
     scoring.globalError ??
     (iAmBroken ? (scoring.cardErrors.find((e) => e.playerIndexes.includes(meIdx)) ?? scoring.cardErrors.find((e) => e.cardId === myCard) ?? scoring.error) : null);
   const playerLocations = meta?.status === "live" ? publicPlayerLocations(players, locations, Date.now(), holes) : [];
+  const pending = authMember ? (meta?.joinRequests || []).find((request) => request.memberId === authMember) : undefined;
+  const pendingJoin = pending && meIdx < 0 ? { id: pending.id, name: pending.name, cardId: pending.cardId } : null;
+  const joinRequests = publicJoinRequests(
+    (meta?.status === "live" ? meta.joinRequests : [])?.filter((request) => (request.cardId ?? null) === myCard),
+  );
   const base = {
     eventId: meta?.eventId ?? 0,
     courseId: meta?.courseId ?? null,
@@ -171,6 +178,8 @@ export function mineData(
     cardAttestations: meta?.cardAttestations && typeof meta.cardAttestations === "object" ? meta.cardAttestations : {},
     cardAttestation: { agreedIndexes: [] as number[], neededIndexes: [] as number[], complete: false },
     cardLocked: false,
+    joinRequests,
+    pendingJoin,
   };
   if (meIdx < 0) return { ...base, cardId: null, playerIndex: null, cardmates: [], conflicts: [], missing: [] };
   const me = players[meIdx];

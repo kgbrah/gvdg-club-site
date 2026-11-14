@@ -30,7 +30,7 @@ import { createWakeLock } from "../shared/wake-lock.js";
 import { isTransientMineFailure, mineCacheKey, readMineCache, writeMineCache } from "./score-session-cache.js";
 import { readOpenPlayName, readOpenPlayToken, writeOpenPlaySession } from "./open-play-session.js";
 import { buildLivePots, withLiveCtpLeaders } from "../shared/live-pots-model.js";
-import { isLiveWatchRequest, liveRoundCodeFromSearch, liveScoreHref, liveWatchHref } from "../shared/live-watch.js";
+import { isLiveWatchRequest, liveRoundCodeFromSearch, liveWatchHref } from "../shared/live-watch.js";
 import { casualReplaySnapshot, watchableLiveSnapshot } from "../shared/casual-replay.js";
 import { holeWinners, winnerColor } from "../shared/matchplay-colors.js";
 import { GPS_WATCH_OPTIONS, gpsErrorPolicy } from "../shared/hole-map-model.js";
@@ -67,7 +67,7 @@ export function startScoreApp(options) {
         const scoreBody = options && options.body;
         const scoreShell = options && options.shell;
         const POTS_REFRESH_MS = 30 * 1000;
-        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, roundConfig: null, scoreTargets: [], scoreTargetError: null, weather: null, pots: null, playerLocations: [], cardLocked: false, cardAttestation: { agreedIndexes: [], neededIndexes: [], complete: false }, finishConfirmOpen: false, handicaps: null, handicapLayoutId: null, handicapLoading: false, handicapTicket: 0 };
+        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], joinRequests: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, roundConfig: null, scoreTargets: [], scoreTargetError: null, weather: null, pots: null, playerLocations: [], cardLocked: false, cardAttestation: { agreedIndexes: [], neededIndexes: [], complete: false }, finishConfirmOpen: false, handicaps: null, handicapLayoutId: null, handicapLoading: false, handicapTicket: 0 };
         let potsTimer = null;
         let locWatchId = null;
         let locRetryTimer = null;
@@ -625,6 +625,11 @@ export function startScoreApp(options) {
             const snapMine = snap.players.reduce((indexes, p) => { if ((p.cardId ?? null) === S.cardId) indexes.push(p.index); return indexes; }, []).sort((a, b) => a - b);
             const haveMine = S.cardmates.map((c) => c.index).sort((a, b) => a - b);
             if (snapMine.join(',') !== haveMine.join(',')) { loadMine(); return; }
+            if (Array.isArray(snap.joinRequests)) {
+                S.joinRequests = snap.joinRequests.filter(function (request) {
+                    return request && (request.cardId ?? null) === (S.cardId ?? null);
+                });
+            }
             S.cardmates.forEach((cm) => {
                 const sp = byIndex.get(cm.index); if (!sp) return;
                 cm.scores = cm.scores || {};
@@ -886,6 +891,9 @@ export function startScoreApp(options) {
                 onShare: shareRound,
                 onShareCode: ROUND_CODE ? shareJoinCode : null,
                 onWatchShare: !ROUND_CODE && EVENT_ID ? shareWatchLink : null,
+                joinRequests: S.joinRequests || [],
+                onApproveJoin: answerJoinRequest,
+                onDeclineJoin: declineJoinRequest,
             });
         }
 
@@ -1038,6 +1046,8 @@ export function startScoreApp(options) {
             S.status = d.status || null;
             assignHoles(Array.isArray(d.holes) ? d.holes : [], d);
             S.cardId = d.cardId; S.myIndex = d.playerIndex; S.cardmates = d.cardmates;
+            S.joinRequests = Array.isArray(d.joinRequests) ? d.joinRequests : [];
+            stopJoinPoll();
             S.cardLocked = d.cardLocked === true || (Array.isArray(d.lockedCardIds) && d.lockedCardIds.indexOf(String(d.cardId ?? 'c0')) >= 0);
             S.cardAttestation = d.cardAttestation || { agreedIndexes: [], neededIndexes: [], complete: false };
             S.roundConfig = d.roundConfig || null; S.scoreTargets = Array.isArray(d.scoreTargets) ? d.scoreTargets : []; S.scoreTargetError = d.scoreTargetError || null;
@@ -1091,8 +1101,31 @@ export function startScoreApp(options) {
         async function loadMine() {
             let r = await api(LIVE + '/mine');
             // Casual round: if we're not on it yet, join with the code, then re-load our card.
+            // Once a hole is scored, the card has to approve the join before we are added.
             if (MODE === 'round' && r.ok && r.data && r.data.cardId == null && r.data.status === 'live') {
+                if (r.data.pendingJoin) {
+                    S.snap = r.data;
+                    S.status = r.data.status;
+                    renderJoinWait('waiting');
+                    startJoinPoll();
+                    return;
+                }
                 const jr = await api('/rounds/' + ROUND_CODE + '/join', { method: 'POST', body: {} });
+                if (jr.ok && jr.data && jr.data.pendingJoin) {
+                    S.snap = r.data;
+                    S.status = r.data.status;
+                    renderJoinWait('waiting');
+                    startJoinPoll();
+                    return;
+                }
+                if (!jr.ok) {
+                    renderMessage(
+                        'Could not join this card',
+                        jr.data && jr.data.error === 'join_full' ? 'Too many people are already waiting on this card.' : 'Check the code and try again.',
+                        true,
+                    );
+                    return;
+                }
                 if (jr.ok) r = await api(LIVE + '/mine');
             }
             if (r.status === 401) { if (MODE === 'round') renderOpenPlay(); else renderLogin('Please sign in to keep score.'); return; }
@@ -1112,6 +1145,63 @@ export function startScoreApp(options) {
             }
             writeMineCache(currentMineKey(), d);
             applyMinePayload(d);
+        }
+        let joinPoll = null;
+        function stopJoinPoll() {
+            if (!joinPoll) return;
+            clearInterval(joinPoll);
+            joinPoll = null;
+        }
+        function renderJoinWait(kind) {
+            renderStatusView({
+                action: kind === 'declined' ? { label: 'Ask again', onClick: requestJoinAgain } : null,
+                mode: 'message',
+                onLeaderboard: openLeaderboard,
+                sub: kind === 'declined'
+                    ? 'Ask again if you still want on this card.'
+                    : 'A hole is already scored. Someone on the card has to approve you before you are added.',
+                title: kind === 'declined' ? 'The card said no' : 'Waiting on the card',
+            });
+        }
+        function startJoinPoll() {
+            if (joinPoll) return;
+            joinPoll = setInterval(function () { pollJoin(); }, 3000);
+        }
+        async function pollJoin() {
+            const next = await api(LIVE + '/mine');
+            if (!next.ok || !next.data || next.data.status !== 'live') return;
+            if (next.data.cardId != null) {
+                stopJoinPoll();
+                applyMinePayload(next.data);
+                return;
+            }
+            if (!next.data.pendingJoin) {
+                stopJoinPoll();
+                S.snap = next.data;
+                renderJoinWait('declined');
+            }
+        }
+        async function requestJoinAgain() {
+            const jr = await api('/rounds/' + ROUND_CODE + '/join', { method: 'POST', body: {} });
+            if (jr.ok && jr.data && jr.data.pendingJoin) {
+                renderJoinWait('waiting');
+                startJoinPoll();
+                return;
+            }
+            if (jr.ok) {
+                const next = await api(LIVE + '/mine');
+                if (next.ok && next.data && next.data.cardId != null) applyMinePayload(next.data);
+            }
+        }
+        async function answerJoinRequest(id) {
+            const response = await api('/rounds/' + ROUND_CODE + '/join-approve', { method: 'POST', body: { id: id } });
+            if (response.ok && response.data && Array.isArray(response.data.cardmates)) applyMinePayload(response.data);
+            else toast('Could not add them to the card.');
+        }
+        async function declineJoinRequest(id) {
+            const response = await api('/rounds/' + ROUND_CODE + '/join-decline', { method: 'POST', body: { id: id } });
+            if (response.ok && response.data && Array.isArray(response.data.cardmates)) applyMinePayload(response.data);
+            else toast('Could not update that request.');
         }
 
         // ---- casual round: home, course/layout pickers, create, add guest ----
@@ -1421,7 +1511,6 @@ export function startScoreApp(options) {
                 isDoubles: isDoublesScoring(S),
                 isMatchplay: isMatchplayScoring(S),
                 isPutting: isPuttingScoring(S),
-                keepScoreHref: liveScoreHref({ eventId: EVENT_ID, roundCode: ROUND_CODE, guestToken: GUEST_TOKEN }),
                 layoutName: S.layoutName,
                 layoutId: S.layoutId || snap.layoutId || null,
                 onCopyLink: shareWatchLink,

@@ -21,6 +21,9 @@ function MessageView(props) {
   return h("div", { className: "card center stack" }, [
     h("h2", { className: "section", key: "title" }, props.title),
     props.sub ? h("p", { className: "muted", key: "sub" }, props.sub) : null,
+    props.action
+      ? h("button", { className: "btn", key: "action", type: "button", onClick: props.action.onClick }, props.action.label)
+      : null,
     props.withRetry
       ? h("button", { className: "btn", key: "retry", type: "button", onClick: props.onRetry }, [icon(RotateCw), "Try again"])
       : null,

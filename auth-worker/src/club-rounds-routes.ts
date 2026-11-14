@@ -222,6 +222,14 @@ export async function handleCasualRounds(
     const member = actor.kind === "member" ? await getMember(env.ROSTER, actor.sub) : null;
     return proxy(stub, "/join", { method: "POST", headers: hdr, body: JSON.stringify({ name: actor.name, photo: member?.photo ?? null }) }, origin);
   }
+  if (method === "POST" && (sub === "join-approve" || sub === "join-decline")) {
+    if (await kvRateLimited(env, "round-join-approve:" + actor.sub, 30, 60)) return json({ error: "rate_limited" }, 429, origin);
+    const b = (await readJson(request)) ?? {};
+    const id = asStr(b.id, 80);
+    if (!id) return json({ error: "not_found" }, 404, origin);
+    const path = sub === "join-approve" ? "/approve-join" : "/decline-join";
+    return proxy(stub, path, { method: "POST", headers: hdr, body: JSON.stringify({ id }) }, origin);
+  }
   if (method === "POST" && sub === "guest") {
     if (await kvRateLimited(env, "round-guest:" + actor.sub, 30, 60)) return json({ error: "rate_limited" }, 429, origin); // cap walk-on spam → DO/snapshot bloat
     const b = (await readJson(request)) ?? {};

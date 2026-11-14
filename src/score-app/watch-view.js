@@ -449,11 +449,6 @@ export function WatchView(props) {
           "Copy watch link",
         ])
         : null,
-      props.status === "final"
-        ? null
-        : (props.keepScoreHref
-          ? h("a", { className: "btn", href: props.keepScoreHref, key: "score" }, "Keep score")
-          : null),
     ].filter(Boolean)),
     props.showWeather ? h(WeatherStrip, { key: "weather", title: "Round weather", weather: props.weather }) : null,
   ]);

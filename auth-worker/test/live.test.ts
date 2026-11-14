@@ -1386,6 +1386,40 @@ describe("LiveEventDO casual rounds (self-organizing cards)", () => {
     expect(mine.cardmates.map((c) => c.name).sort()).toEqual(["Bee", "Creator"]);
   });
 
+  it("holds a join after a hole is scored until someone on the card approves", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await startCasual(live, "m_a");
+    expect((await act(live, "score", "m_a", { index: 0, hole: 1, strokes: 3 })).status).toBe(200);
+    const waiting = await act(live, "join", "m_b", { name: "Bee" });
+    expect(waiting.status).toBe(202);
+    const pending = (await waiting.json()) as { error: string; pendingJoin: { id: string; name: string } };
+    expect(pending.error).toBe("join_pending");
+    expect(pending.pendingJoin.name).toBe("Bee");
+    const before = (await (await live.fetch(new Request("https://do/"))).json()) as { players: { name: string }[]; joinRequests: { id: string; name: string }[] };
+    expect(before.players.map((player) => player.name)).toEqual(["Creator"]);
+    expect(before.joinRequests.map((request) => request.name)).toEqual(["Bee"]);
+    expect((await act(live, "approve-join", "m_b", { id: pending.pendingJoin.id })).status).toBe(403);
+    expect((await act(live, "approve-join", "stranger", { id: pending.pendingJoin.id })).status).toBe(403);
+    const approved = await act(live, "approve-join", "m_a", { id: pending.pendingJoin.id });
+    expect(approved.status).toBe(200);
+    const mine = (await approved.json()) as { cardmates: { name: string }[]; joinRequests: unknown[] };
+    expect(mine.cardmates.map((player) => player.name).sort()).toEqual(["Bee", "Creator"]);
+    expect(mine.joinRequests).toEqual([]);
+  });
+
+  it("a card can turn down a late join, and the player can ask again", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await startCasual(live, "m_a");
+    await act(live, "score", "m_a", { index: 0, hole: 1, strokes: 3 });
+    const first = (await (await act(live, "join", "m_b", { name: "Bee" })).json()) as { pendingJoin: { id: string } };
+    expect((await act(live, "decline-join", "m_a", { id: first.pendingJoin.id })).status).toBe(200);
+    const mine = (await (await live.fetch(new Request("https://do/mine", { headers: { "X-Auth-Member": "m_b" } }))).json()) as { cardId: string | null; pendingJoin: unknown };
+    expect(mine.cardId).toBeNull();
+    expect(mine.pendingJoin).toBeNull();
+    const again = await act(live, "join", "m_b", { name: "Bee" });
+    expect(again.status).toBe(202);
+  });
+
   it("anyone on the round may score any cardmate; a stranger cannot", async () => {
     const live = new LiveEventDO(new FakeState({}), { DB: db });
     await startCasual(live, "m_a");
