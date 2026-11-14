@@ -187,20 +187,39 @@
 
   checkPublishedBuild();
 
+  function installedDisplay() {
+    try {
+      return window.matchMedia('(display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui), (display-mode: window-controls-overlay)').matches
+        || navigator.standalone === true;
+    } catch (err) {
+      return navigator.standalone === true;
+    }
+  }
+
+  function tellInstalledApp() {
+    if (!installedDisplay() || !navigator.serviceWorker.controller) return;
+    navigator.serviceWorker.controller.postMessage({ type: 'APP_WINDOW' });
+  }
+
   if (!('serviceWorker' in navigator) || (location.protocol !== 'https:' && !local)) return;
 
   window.addEventListener('load', function () {
     navigator.serviceWorker.register('sw.js', { scope: './', updateViaCache: 'none' }).then(function (registration) {
       watchRegistration(registration);
+      navigator.serviceWorker.ready.then(tellInstalledApp).catch(function () {});
       function ping() {
         registration.update().catch(function () {});
       }
       ping();
       document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState === 'visible') ping();
+        if (document.visibilityState === 'visible') {
+          ping();
+          tellInstalledApp();
+        }
       });
       window.addEventListener('pageshow', function (event) {
         if (event.persisted) ping();
+        tellInstalledApp();
       });
       window.setInterval(ping, 5 * 60 * 1000);
     }).catch(function () {});

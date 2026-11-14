@@ -7,6 +7,8 @@ test("admin today can turn on push alerts and open the right tab", () => {
   const card = readFileSync("src/admin-app/admin-push.js", "utf8");
   const controller = readFileSync("src/admin-app/admin-controller.js", "utf8");
   const sw = readFileSync("sw.js", "utf8");
+  const manifest = JSON.parse(readFileSync("site.webmanifest", "utf8"));
+  const pwa = readFileSync("pwa.js", "utf8");
   assert.match(today, /AdminPushCard/);
   assert.match(card, /Turn on alerts/);
   assert.match(card, /Alerts are on for this phone/);
@@ -16,7 +18,13 @@ test("admin today can turn on push alerts and open the right tab", () => {
   assert.match(controller, /alertTab === "bag-tags"/);
   assert.match(controller, /alertTab === "members"/);
   assert.match(controller, /alertTab === "tee-signs"/);
-  assert.match(sw, /const CACHE = "gvdg-club-v239"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v240"/);
   assert.match(sw, /addEventListener\("push"/);
   assert.match(sw, /addEventListener\("notificationclick"/);
+  assert.match(sw, /APP_WINDOW/);
+  assert.match(sw, /appClients/);
+  assert.match(sw, /A Chrome tab must not catch the tap/);
+  assert.equal(manifest.launch_handler.client_mode, "navigate-existing");
+  assert.match(pwa, /type: 'APP_WINDOW'/);
+  assert.match(pwa, /display-mode: standalone/);
 });

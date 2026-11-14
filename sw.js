@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v239";
+const CACHE = "gvdg-club-v240";
 const OFFLINE_PAGE = "gvdg-members.html";
 const ASSETS = [
   "tokens.css",
@@ -57,8 +57,13 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+const appClients = new Set();
+
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
+  if (event.data && event.data.type === "APP_WINDOW" && event.source && event.source.id) {
+    appClients.add(event.source.id);
+  }
 });
 
 self.addEventListener("fetch", (event) => {
@@ -158,13 +163,21 @@ function readPush(event) {
 
 async function openAdmin(target) {
   const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  const alive = new Set(all.map((client) => client.id));
+  for (const id of appClients) if (!alive.has(id)) appClients.delete(id);
+  // Only reuse the installed app. A Chrome tab must not catch the tap.
   for (const client of all) {
+    if (!appClients.has(client.id)) continue;
     let url;
     try { url = new URL(client.url); } catch { continue; }
-    if (url.origin !== self.location.origin || !url.pathname.endsWith("/admin.html")) continue;
-    if (typeof client.navigate === "function") {
-      const next = await client.navigate(target);
-      if (next && typeof next.focus === "function") return next.focus();
+    if (url.origin !== self.location.origin) continue;
+    try {
+      if (typeof client.navigate === "function") {
+        const next = await client.navigate(target);
+        if (next && typeof next.focus === "function") return next.focus();
+      }
+    } catch {
+      /* open a fresh app window below */
     }
     if (typeof client.focus === "function") return client.focus();
   }
