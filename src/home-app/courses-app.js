@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronLeft, ChevronRight, Disc3, MapPin } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, Disc3, MapPin } from "lucide-react";
 
 import { resolveApiBase } from "../shared/api-base.js";
 import {
@@ -18,21 +18,6 @@ const COURSE_SLIDES = [
     subtitle: "5 Courses in Greenville, NC",
     courses: [
       {
-        course: "ECU North Rec Complex",
-        name: "ECU North Rec Complex",
-        location: "Greenville, NC",
-        udisc: "https://udisc.com/courses/ecu-north-recreational-complex-HbME",
-        coords: "35.631092,-77.319923",
-        image: "https://d22ksth68ujgu2.cloudfront.net/b7fd828f4c6bf4fe89cd95a2d07e4cfc_m_IMG_6470.jpg",
-        imageAlt: "ECU North Recreational Complex",
-        difficultyClass: "difficulty-intermediate",
-        difficulty: "Moderate - Hard",
-        holes: "23",
-        rating: "4.4",
-        time: "~2 hrs",
-        description: "Well-maintained course with manicured fairways and great signage.",
-      },
-      {
         course: "West Meadowbrook Park",
         name: "West Meadowbrook Park",
         location: "Greenville, NC",
@@ -47,6 +32,21 @@ const COURSE_SLIDES = [
         time: "~1 hr",
         description: "Five layouts available! Great mix of open and wooded shots.",
         startHere: true,
+      },
+      {
+        course: "ECU North Rec Complex",
+        name: "ECU North Rec Complex",
+        location: "Greenville, NC",
+        udisc: "https://udisc.com/courses/ecu-north-recreational-complex-HbME",
+        coords: "35.631092,-77.319923",
+        image: "https://d22ksth68ujgu2.cloudfront.net/b7fd828f4c6bf4fe89cd95a2d07e4cfc_m_IMG_6470.jpg",
+        imageAlt: "ECU North Recreational Complex",
+        difficultyClass: "difficulty-intermediate",
+        difficulty: "Moderate - Hard",
+        holes: "23",
+        rating: "4.4",
+        time: "~2 hrs",
+        description: "Well-maintained course with manicured fairways and great signage.",
       },
       {
         course: "Covenant Church",
@@ -443,7 +443,9 @@ function CourseCard({ course, condition }) {
       className: "course-card",
       role: "button",
       tabIndex: 0,
-      "aria-label": `${course.name}, ${visibleLocation}${conditionLabel}. Open course options.`,
+      "aria-label": `${course.name}, ${visibleLocation}${conditionLabel}. Course details.`,
+      "aria-haspopup": "dialog",
+      "data-recommended": course.startHere ? "true" : undefined,
       "data-course": course.course,
       "data-location": course.location,
       "data-udisc": safeExternalUrl(course.udisc || ""),
@@ -456,7 +458,7 @@ function CourseCard({ course, condition }) {
       h("div", { className: "course-content", key: "content" }, [
         h("div", { className: "course-header", key: "header" }, [
           h("div", { key: "name-wrap" }, [
-            course.startHere ? h("div", { key: "start" }, h("span", { className: "course-start" }, "Start here")) : null,
+            course.startHere ? h("div", { key: "start" }, h("span", { className: "course-start" }, "First round? Start here")) : null,
             h("h3", { className: "course-name", key: "name" }, course.name),
           ]),
           h("span", { className: `difficulty-badge ${course.difficultyClass}`, key: "difficulty" }, course.difficulty),
@@ -471,6 +473,10 @@ function CourseCard({ course, condition }) {
           h(InfoItem, { label: "Time", value: course.time, key: "time" }),
         ]),
         h("p", { className: "course-description", key: "description" }, course.description),
+        h("span", { className: "course-details-cue", key: "details" }, [
+          h("span", { key: "label" }, "Course details"),
+          icon(ArrowRight, { key: "arrow", size: 18 }),
+        ]),
       ]),
     ],
   );
@@ -581,7 +587,7 @@ export function HomeCoursesApp() {
   return h("div", { "data-react-home-courses": "ready" }, [
     h("div", { className: "courses-lead", key: "lead" }, [
       h("h2", { key: "title" }, "Where to play"),
-      h("p", { key: "copy" }, "New in town? Start at West Meadowbrook. Five layouts, open and wooded, right in Greenville."),
+      h("p", { key: "copy" }, "New to disc golf or Greenville? Start at West Meadowbrook. Five layouts with a mix of open and wooded holes."),
     ]),
     h("div", {
       className: "courses-carousel-container",

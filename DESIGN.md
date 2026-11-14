@@ -4,6 +4,14 @@
 
 Greenville Disc Golf Club should feel local, energetic, outdoors-focused, and easy to scan on a phone before or after a round. The signature is a high-contrast orange and blue sport palette over light/dark surfaces with forest imagery, condensed display headings, and compact event cards.
 
+### Homepage presentation
+
+- `homepage-polish.css` and `home-polish-sections.css` refine the homepage after its legacy inline rules. The body explicitly uses Archivo, the hero starts with course photography, and calm token-based surfaces replace the illustrated page wallpaper.
+- Reading order is hero → courses → upcoming events → area tournaments → About/board → membership → contact. Existing anchor IDs and feed behavior stay intact.
+- West Meadowbrook appears first with a “First round? Start here” badge. Every full-card course action includes a visible “Course details” cue and opens the existing dialog; no nested interactive controls are added.
+- Membership uses an ordered two-step list: pay $15 annual dues via PayPal, then create a member login. Already-paid visitors can start with step two; the homepage does not claim to verify payment.
+- Mobile/tablet navigation collapses at 1024px; phone cards and membership steps stack. Desktop course slides have an explicit width to keep all cards within the carousel.
+
 ## 2. Color
 
 ### Palette

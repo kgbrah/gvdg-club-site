@@ -73,20 +73,31 @@ export function HomeMembershipSection() {
     h("p", { className: "membership-subtitle", key: "subtitle" }, "Join our growing community and enjoy exclusive benefits"),
     h("div", { className: "membership-perks", key: "perks" }, MEMBERSHIP_PERKS.map((perk, index) => h(PerkCard, { index, perk, key: perk.title }))),
     h("div", { className: "price", key: "price" }, "$15 / Year"),
-    h("div", { className: "membership-actions", key: "actions" }, [
-      h("a", {
-        className: "cta-button",
-        href: membershipUrl,
-        key: "cta",
-        rel: "noopener noreferrer",
-        target: "_blank",
-      }, "Join for $15 a year"),
+    h("ol", { className: "membership-steps", "aria-label": "How to join the club", key: "steps" }, [
+      h("li", { className: "membership-step", key: "dues" }, [
+        h("span", { className: "membership-step-label", key: "number", "aria-hidden": "true" }, "Step 1"),
+        h("h3", { className: "membership-step-title", key: "title" }, "Pay $15 dues"),
+        h("p", { className: "membership-step-description", key: "description" }, "Pay your annual club dues through PayPal. Opens in a new tab."),
+        h("a", {
+          className: "cta-button membership-step-action",
+          href: membershipUrl,
+          key: "cta",
+          rel: "noopener noreferrer",
+          target: "_blank",
+        }, "Pay $15 dues"),
+      ]),
+      h("li", { className: "membership-step", key: "login" }, [
+        h("span", { className: "membership-step-label", key: "number", "aria-hidden": "true" }, "Step 2"),
+        h("h3", { className: "membership-step-title", key: "title" }, "Create member login"),
+        h("p", { className: "membership-step-description", key: "description" }, "Set up your account to use the club app after paying your dues."),
+        h("a", {
+          className: "cta-button membership-step-action membership-step-secondary",
+          href: "gvdg-members.html#apply",
+          key: "cta",
+        }, "Create member login"),
+      ]),
     ]),
-    h("p", { className: "membership-next", key: "next" }, [
-      "PayPal takes the dues. Then ",
-      h("a", { href: "gvdg-members.html#apply", key: "login" }, "create your app login"),
-      ".",
-    ]),
+    h("p", { className: "membership-next", key: "next" }, "Already paid your dues? Go straight to step 2 to create your member login."),
   ]);
 }
 

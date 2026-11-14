@@ -77,7 +77,7 @@ function StatCard({ stat, index }) {
 }
 
 export function HomeHeroSection() {
-  const [current, setCurrent] = React.useState(0);
+  const [current, setCurrent] = React.useState(1);
   const [paused, setPaused] = React.useState(false);
   const swipeHandlers = useSwipe((step) => setCurrent((slide) => nextCircularIndex(slide, step, HERO_SLIDES)));
 
@@ -130,7 +130,11 @@ export function HomeHeroSection() {
       }))),
     h("div", { className: "hero-content", key: "content" }, [
       h("p", { className: "hero-kicker", key: "kicker" }, "Eastern North Carolina · since 2004"),
-      h("h1", { className: "hero-title", key: "title" }, "Greenville Disc Golf Club"),
+      h("h1", { className: "hero-title", key: "title", "aria-label": "Greenville Disc Golf Club" }, [
+        h("span", { className: "hero-title-line", key: "city" }, "Greenville"),
+        " ",
+        h("span", { className: "hero-title-line", key: "club" }, "Disc Golf Club"),
+      ]),
       h("p", { className: "hero-subtitle", key: "subtitle" }, "Five courses in town. Weekly doubles. A card for your first putt or a rated round."),
       h("div", { className: "hero-actions", key: "cta" }, [
         h("a", { className: "cta-button", href: "#courses", key: "courses" }, "Where we play"),
