@@ -44,7 +44,8 @@ test("today command center links each queue and keeps the scoring card", () => {
 
   assert.match(today, /Needs you/);
   assert.match(today, /All clear/);
-  assert.match(today, /admin-today-tile on/);
+  assert.doesNotMatch(today, /Nothing on the card right now/);
+  assert.doesNotMatch(today, /admin-today-tiles/);
   assert.match(today, /Start scoring/);
   assert.match(today, /Open scoring/);
   assert.match(nav, /AdminNeedsBadge/);
