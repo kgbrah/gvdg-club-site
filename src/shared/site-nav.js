@@ -17,7 +17,7 @@ export const SITE_NAV_MORE = [
   { label: "Ryder Cup", href: "ryder-cup.html", page: "ryder-cup" },
   { label: "Blog", href: "gvdg-blog.html", page: "gvdg-blog" },
 ];
-export const SITE_DONATE_URL = "https://www.paypal.com/paypalme/greenvillediscgolf";
+export const SITE_DONATE_URL = "https://paypal.me/greenvillediscgolf";
 
 export function siteCurrentPage() {
   const path = String(window.location.pathname || "").toLowerCase();
