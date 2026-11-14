@@ -389,8 +389,17 @@
         .admin-today-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.75rem; }
         .admin-today-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.45rem; margin-bottom: 0.85rem; }
         .admin-today-tile { display: grid; gap: 0.2rem; text-align: left; border: 1px solid var(--border-color); border-radius: 14px; background: var(--bg-secondary); color: var(--text-primary); padding: 0.65rem 0.6rem; cursor: pointer; }
+        .admin-today-tile.on { border-color: var(--primary-strong); }
         .admin-today-tile strong { font-size: 0.95rem; white-space: nowrap; }
         .admin-today-tile span { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+        .admin-needs { display: grid; gap: 0.45rem; margin: 0.2rem 0 0.85rem; }
+        .admin-needs .admin-pane-kicker { margin-top: 0.35rem; }
+        .admin-needs-list { display: grid; gap: 0.45rem; }
+        .admin-needs-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; width: 100%; min-height: 48px; padding: 0.7rem 0.85rem; border: 1px solid var(--primary-strong); border-radius: 12px; background: var(--bg-secondary); color: var(--text-primary); font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+        .admin-needs-copy { display: grid; gap: 0.12rem; min-width: 0; }
+        .admin-needs-copy strong { font-size: 0.95rem; overflow-wrap: anywhere; }
+        .admin-needs-copy span { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: none; letter-spacing: 0; }
+        .admin-more-label { display: inline-flex; align-items: center; gap: 0.45rem; min-width: 0; }
         .admin-event-card { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0.45rem; align-items: center; }
         .admin-event-card-main { display: grid; gap: 0.15rem; text-align: left; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; padding: 0; }
         .admin-event-meta { display: block; color: var(--text-muted); font-size: 0.78rem; font-weight: 600; }
@@ -476,10 +485,12 @@
                 padding: 0.35rem 0.25rem calc(0.45rem + env(safe-area-inset-bottom));
             }
             .admin-dock-item {
+                position: relative;
                 display: flex; flex-direction: column; align-items: center; gap: 0.12rem;
                 background: none; border: 0; color: var(--text-muted); font: inherit; font-size: 0.72rem; font-weight: 700;
                 min-height: 44px; cursor: pointer;
             }
+            .admin-dock-item .orders-badge { position: absolute; top: 0; left: calc(50% + 0.2rem); pointer-events: none; }
             .admin-dock-item.on { color: var(--primary-strong); }
             main { padding-top: 4.25rem; padding-left: 0.9rem; padding-right: 0.9rem; padding-bottom: 6.5rem; }
             .admin-panel { padding: 0.35rem 0 0; border: none; border-radius: 0; background: transparent; margin-bottom: 0; }

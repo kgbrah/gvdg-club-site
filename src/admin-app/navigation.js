@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { CalendarDays, House, MoreHorizontal, ShoppingBag, Timer } from "lucide-react";
 
 import { currentAdminActiveTab } from "./admin-shell-state.js";
+import { AdminNeedsBadge } from "./admin-needs.js";
 import { AdminOrdersBadge } from "./orders-badge.js";
 
 const h = React.createElement;
@@ -98,6 +99,9 @@ function tabLabel(item) {
   if (item.badge === "orders") {
     return [item.label, " ", h(AdminOrdersBadge, { key: "badge" })];
   }
+  if (item.tab === "today" || item.tab === "bag-tags" || item.tab === "members" || item.tab === "tee-signs" || item.tab === "shop") {
+    return [item.label, " ", h(AdminNeedsBadge, { key: "needs", tab: item.tab })];
+  }
   return item.label;
 }
 
@@ -125,7 +129,9 @@ function AdminDock({ activeId }) {
     }, [
       h(item.Icon, { "aria-hidden": true, key: "icon", size: 20, strokeWidth: 2.3 }),
       item.label,
+      item.id === "today" ? h(AdminNeedsBadge, { key: "needs", tab: "today" }) : null,
       item.id === "shop" ? h(AdminOrdersBadge, { key: "badge" }) : null,
+      item.id === "more" ? h(AdminNeedsBadge, { key: "needs", tab: "more" }) : null,
     ]);
   }));
 }

@@ -67,6 +67,7 @@ export function AdminBagTagsPanel() {
     setMessage("");
     try {
       await action();
+      window.dispatchEvent(new CustomEvent("gvdg:admin-needs-refresh"));
       await load();
     } catch (error) {
       setMessage(error.message || "Could not update bag tags.");

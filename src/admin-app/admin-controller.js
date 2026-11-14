@@ -1,5 +1,6 @@
 import { adminConfirm, adminShowPin } from "./admin-dialogs.js";
 import { publishAdminActiveTab, publishAdminAuthGateState, publishAdminMessageState, publishAdminOrdersBadgeCount } from "./admin-shell-state.js";
+import { publishAdminNeeds } from "./admin-needs.js";
 import { installCourseLayoutsController } from "./course-layouts-controller.js";
 import { installDataArchiveController } from "./data-archive-controller.js";
 import { installImportController } from "./import-controller.js";
@@ -87,7 +88,7 @@ export function startAdminController() {
             if (tab === 'create') { adminLoadCourses(); adminLoadLeagues(); }
             if (tab === 'today' || tab === 'events') adminLoadEvents();
             if (tab === 'events') { adminLoadFundraisers(); adminLoadMeetings(); }
-            if (tab === 'today') { adminLoadShelf(); adminLoadOrders(); }
+            if (tab === 'today') { adminLoadShelf(); adminLoadOrders(); refreshAdminNeeds(); }
             if (tab === 'scoring') {
                 await scLoadEvents();
                 if (eventId) await scSelectEventFromReact({ eventId });
@@ -711,6 +712,7 @@ export function startAdminController() {
             let applications = [];
             try { const r = await adminApi('/admin/members/applications'); if (r.ok) applications = (await r.json()).applications || []; } catch (e) {}
             window.dispatchEvent(new CustomEvent('gvdg:admin-membership-applications', { detail: { status: 'ready', applications } }));
+            window.dispatchEvent(new CustomEvent('gvdg:admin-needs-refresh'));
         }
         async function adminCreateMemberFromReact(detail) {
             const body = detail.body || {};
@@ -798,7 +800,7 @@ export function startAdminController() {
             }
             adminMsg(r.ok ? 'Product added' : 'Add product failed (' + r.status + ')', r.ok);
             window.dispatchEvent(new CustomEvent('gvdg:admin-product-create-result', { detail: { ok: r.ok, requestId } }));
-            if (r.ok) adminLoadProducts();
+            if (r.ok) { adminLoadProducts(); adminLoadShelf(); }
         }
         // ---- Pro shop orders: status, tracking, and the new-order badge ----
         function setOrdersBadge(n) {
@@ -856,6 +858,25 @@ export function startAdminController() {
                 if (!r.ok) return;
                 setOrdersBadge((await r.json()).unfulfilled || 0);
             } catch (e) { setOrdersBadge(0); }
+        }
+
+        let adminNeedsRequest = 0;
+        async function refreshAdminNeeds() {
+            const request = ++adminNeedsRequest;
+            const next = { bagRequests: 0, bagChallenges: 0, applications: 0, teeSigns: 0 };
+            const [tags, applications, signs] = await Promise.all([
+                adminApi('/admin/bag-tags').then(async (r) => r.ok ? r.json() : null).catch(() => null),
+                adminApi('/admin/members/applications').then(async (r) => r.ok ? r.json() : null).catch(() => null),
+                adminApi('/admin/tee-signs?status=candidate').then(async (r) => r.ok ? r.json() : null).catch(() => null),
+            ]);
+            if (request !== adminNeedsRequest) return;
+            if (tags) {
+                next.bagRequests = Array.isArray(tags.requests) ? tags.requests.length : 0;
+                next.bagChallenges = Array.isArray(tags.challenges) ? tags.challenges.length : 0;
+            }
+            if (applications) next.applications = Array.isArray(applications.applications) ? applications.applications.length : 0;
+            if (signs) next.teeSigns = Array.isArray(signs.teeSigns) ? signs.teeSigns.length : 0;
+            publishAdminNeeds(next);
         }
 
         async function adminPostWalletAdjustmentFromReact(detail) {
@@ -1394,14 +1415,14 @@ export function startAdminController() {
                 if (!product || product.id == null) return;
                 const r = await adminApi('/admin/shop/products/' + product.id, { method: 'PATCH', body: { price_cents: dollarsToCents(detail.priceValue), stock_qty: parseInt(detail.stockValue, 10) || 0, active: detail.active === true } });
                 adminMsg(r.ok ? 'Product updated' : 'Product update failed', r.ok);
-                if (r.ok) adminLoadProducts();
+                if (r.ok) { adminLoadProducts(); adminLoadShelf(); }
             });
             window.addEventListener('gvdg:admin-product-delete-request', async (event) => {
                 const product = event.detail && event.detail.product;
                 if (!product || product.id == null) return;
                 const r = await adminApi('/admin/shop/products/' + product.id, { method: 'DELETE' });
                 adminMsg(r.ok ? 'Product permanently deleted' : 'Delete failed', r.ok);
-                if (r.ok) adminLoadProducts();
+                if (r.ok) { adminLoadProducts(); adminLoadShelf(); }
             });
             window.addEventListener('gvdg:admin-product-photo-ready', (event) => {
                 const sizeKb = event.detail && Number(event.detail.sizeKb);
@@ -1579,8 +1600,13 @@ export function startAdminController() {
             window.addEventListener('gvdg:admin-scoring-cancel-request', async () => {
                 await scCancel();
             });
+            window.addEventListener('gvdg:admin-needs-refresh', () => { refreshAdminNeeds(); });
             refreshOrdersBadge();                          // show the new-order count on load
+            refreshAdminNeeds();
+            adminLoadShelf();
             setInterval(refreshOrdersBadge, 60000);        // and keep it current while the page is open
+            setInterval(refreshAdminNeeds, 60000);
+            setInterval(adminLoadShelf, 60000);
             const alertTab = new URLSearchParams(window.location.search).get("tab");
             if (alertTab === "today" || alertTab === "orders" || alertTab === "bag-tags" || alertTab === "members" || alertTab === "tee-signs") {
                 adminSwitch(alertTab).catch(() => {});

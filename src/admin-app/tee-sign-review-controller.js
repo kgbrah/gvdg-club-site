@@ -56,6 +56,7 @@ export function installTeeSignReviewController({ adminApi, adminMsg, api, authBa
 
   function finishTeeSignReviewAction(requestId, ok) {
     if (requestId) dispatchAdminEvent('gvdg:admin-tee-sign-review-action-result', { requestId, ok });
+    if (ok) dispatchAdminEvent('gvdg:admin-needs-refresh');
   }
 
   async function tsApproveFromReact(detail) {

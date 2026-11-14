@@ -14,6 +14,7 @@ import {
 import { nextWeekOffer } from "./repeat-draft.js";
 import { clubToday } from "../shared/events-model.js";
 import { AdminPushCard } from "./admin-push.js";
+import { useAdminNeeds } from "./admin-needs.js";
 
 const h = React.createElement;
 const EMPTY_STATE = { status: "loading", events: [] };
@@ -119,6 +120,28 @@ function HandoffCard({ order }) {
   ]);
 }
 
+function NeedsYou() {
+  const { items, ready } = useAdminNeeds();
+  if (!ready && !items.length) return null;
+  return h("section", { className: "admin-needs" }, [
+    h("h3", { className: "admin-pane-kicker", key: "title" }, "Needs you"),
+    items.length
+      ? h("div", { className: "admin-needs-list", key: "list" }, items.map((item) => h("button", {
+        className: "admin-needs-row",
+        key: item.id,
+        onClick: () => requestTab(item.tab),
+        type: "button",
+      }, [
+        h("span", { className: "admin-needs-copy", key: "copy" }, [
+          h("strong", { key: "label" }, item.label),
+          h("span", { key: "detail" }, item.detail),
+        ]),
+        h("span", { className: "orders-badge", key: "count" }, String(item.count)),
+      ])))
+      : h("p", { className: "dash-note", key: "clear" }, "All clear."),
+  ]);
+}
+
 export function AdminTodayDashboard() {
   const [state, setState] = React.useState(EMPTY_STATE);
   const [orders, setOrders] = React.useState(() => currentAdminOrdersBadgeCount());
@@ -166,6 +189,7 @@ export function AdminTodayDashboard() {
     return h("div", { "data-react-admin-today": "loading" }, [
       h("h2", { className: "admin-pane-heading", key: "title" }, "Today"),
       h(AdminPushCard, { key: "alerts" }),
+      h(NeedsYou, { key: "needs" }),
       h("p", { className: "dash-note", key: "loading", role: "status" }, "Loading…"),
     ]);
   }
@@ -183,6 +207,7 @@ export function AdminTodayDashboard() {
   return h("div", { "data-react-admin-today": next ? "ready" : "empty" }, [
     h("h2", { className: "admin-pane-heading", key: "title" }, "Today"),
     h(AdminPushCard, { key: "alerts" }),
+    h(NeedsYou, { key: "needs" }),
     next
       ? h("div", { className: "admin-today-card", "data-admin-event-id": next.id, key: "next" }, [
         statusChip(next.status === "live" ? "live" : "scheduled"),
@@ -230,13 +255,13 @@ export function AdminTodayDashboard() {
         type: "button",
       }, [h("strong", { key: "v" }, next?.status === "live" ? "Live" : "Idle"), h("span", { key: "k" }, "Scoring")]),
       h("button", {
-        className: "admin-today-tile",
+        className: orders ? "admin-today-tile on" : "admin-today-tile",
         key: "orders",
         onClick: () => requestTab("orders"),
         type: "button",
       }, [h("strong", { key: "v" }, orders ? `${orders} to hand off` : "None waiting"), h("span", { key: "k" }, "Shop orders")]),
       h("button", {
-        className: "admin-today-tile",
+        className: shelf && shelf.count ? "admin-today-tile on" : "admin-today-tile",
         key: "shelf",
         onClick: () => requestTab("shop"),
         type: "button",
