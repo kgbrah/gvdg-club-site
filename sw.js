@@ -1,7 +1,9 @@
-const CACHE = "gvdg-club-v235";
+const CACHE = "gvdg-club-v236";
 const OFFLINE_PAGE = "gvdg-members.html";
 const ASSETS = [
   "tokens.css",
+  "homepage-polish.css",
+  "home-polish-sections.css",
   "site.webmanifest",
   "pwa.js",
   "admin-app/admin-app.js",

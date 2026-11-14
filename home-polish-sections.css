@@ -1,0 +1,344 @@
+/* Homepage sections: calm surfaces and consistent spacing. */
+#about,
+#courses,
+#events,
+#area-tournaments,
+#membership,
+#contact {
+  width: calc(100% - 48px);
+  max-width: 1200px;
+  margin: 32px auto;
+  padding: 32px;
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  box-shadow: none;
+  scroll-margin-top: 0;
+}
+
+#about,
+#courses,
+#events,
+#area-tournaments,
+#contact {
+  background: var(--bg-secondary);
+}
+
+#about .section-title,
+#events .section-title,
+#contact .section-title,
+#area-tournaments .section-title {
+  margin-bottom: 24px;
+  text-align: left;
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 400;
+  letter-spacing: 0.035em;
+}
+
+#about .about-content {
+  grid-template-columns: 1.1fr 1fr;
+  gap: 48px;
+  align-items: start;
+}
+
+#about .about-text {
+  max-width: 60ch;
+  line-height: 1.75;
+}
+
+#about .about-text p { margin-bottom: 16px; }
+#about .about-text p:last-child { margin-bottom: 0; }
+#about .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+
+#about .stat-card {
+  min-height: 112px;
+  padding: 20px;
+  text-align: left;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  color: var(--text-primary);
+  cursor: default;
+}
+
+#about .stat-card:hover,
+#about .stat-card:active { transform: none; box-shadow: none; }
+#about .stat-number { color: var(--secondary-text); font-size: 2.75rem; margin-bottom: 6px; }
+#about .stat-label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; color: var(--text-tertiary); }
+
+#about .board-slide-header {
+  text-align: left;
+  border-top: 1px solid var(--border-color);
+  margin: 32px 0 20px;
+  padding-top: 24px;
+}
+
+#about .board-slide-title { color: var(--text-primary); font-size: 1.75rem; margin-bottom: 4px; }
+#about .board-slide-subtitle { font-size: 0.875rem; font-weight: 400; }
+#about .board-members-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+
+#about .board-member-card {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 12px;
+  row-gap: 2px;
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  text-align: left;
+}
+
+#about .board-member-card:hover { transform: none; box-shadow: none; }
+#about .board-member-icon,
+#about .board-member-card.founder .board-member-icon {
+  grid-row: 1 / 3;
+  width: 40px;
+  height: 40px;
+  background: var(--bg-primary);
+  color: var(--secondary-text);
+  font-size: 1.25rem;
+}
+#about .board-member-name { font-size: 1.3rem; line-height: 1.15; }
+#about .board-member-role { padding: 0; background: none; color: var(--text-muted); font-size: 0.65rem; letter-spacing: 0.06em; }
+
+#courses .courses-lead { max-width: none; margin: 0 0 28px; text-align: left; }
+#courses .courses-lead h2 { font-size: clamp(2rem, 4vw, 2.75rem); font-weight: 400; }
+#courses .courses-lead p { max-width: 64ch; font-size: 0.95rem; }
+#courses .slide-header-nav { justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+#courses .slide-header-nav .slide-header { flex: 1; text-align: left; }
+#courses .slide-title { font-size: 1.65rem; color: var(--text-primary); margin-bottom: 2px; }
+#courses .slide-subtitle { font-size: 0.8rem; font-weight: 400; }
+#courses .slide-nav-arrow { color: var(--secondary-text); border: 1px solid var(--border-color); border-radius: 10px; }
+#courses .slide-nav-arrow:hover:not(:disabled) { background: var(--secondary); color: white; transform: none; }
+#courses .courses-carousel-container { border-radius: 0; }
+#courses .carousel-slide-courses { width: 100%; max-width: 100%; flex-basis: 100%; }
+#courses .courses-grid { gap: 20px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+#courses .course-card {
+  min-width: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+#courses .course-card:hover { transform: translateY(-3px); border-color: var(--secondary-text); box-shadow: 0 6px 18px var(--card-shadow); }
+#courses .course-card:focus-visible { outline: 3px solid var(--secondary-text); outline-offset: -3px; box-shadow: none; }
+#courses .course-image { height: 176px; background: var(--secondary); }
+#courses .course-content { padding: 20px; }
+#courses .course-header { flex-direction: column; gap: 8px; margin-bottom: 10px; }
+#courses .course-name { font-size: 1.5rem; line-height: 1.15; }
+#courses .difficulty-badge { padding: 4px 8px; font-size: 0.62rem; border-radius: 4px; letter-spacing: 0.035em; }
+#courses .difficulty-beginner { background: var(--green); }
+#courses .difficulty-intermediate { background: var(--accent); }
+#courses .difficulty-advanced { background: var(--primary-strong); }
+#courses .course-location { margin-bottom: 0; font-size: 0.8rem; }
+#courses .course-info { margin: 16px 0; padding: 12px 4px; gap: 8px; border-radius: 8px; }
+#courses .info-label { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.06em; }
+#courses .info-value { color: var(--secondary-text); font-size: 1.25rem; }
+#courses .course-description { font-size: 0.85rem; line-height: 1.65; }
+#courses .course-start { border-radius: 4px; margin-bottom: 8px; }
+#courses .courses-carousel-nav { margin-top: 24px; }
+#courses .carousel-btn { border-radius: 10px; width: 44px; height: 44px; background: var(--secondary); }
+
+#events .event-list { gap: 12px; }
+#events .event-item {
+  gap: 20px;
+  padding: 20px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  cursor: default;
+}
+#events .event-item.has-link { cursor: pointer; }
+#events .event-item:hover,
+#events .event-item:active { transform: none; box-shadow: none; border-left-width: 1px; }
+#events .event-item.has-link:hover { border-color: var(--secondary-text); background: var(--bg-primary); }
+#events .event-date {
+  width: 64px;
+  min-width: 64px;
+  height: 70px;
+  border-radius: 8px;
+  background: var(--secondary);
+}
+#events .event-item:hover .event-date { transform: none; }
+#events .event-month { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; }
+#events .event-title { font-size: 1.45rem; line-height: 1.2; margin-bottom: 6px; }
+#events .event-description { font-size: 0.9rem; line-height: 1.6; }
+#events .event-date.tbd { background: var(--accent); color: var(--dark); }
+#events .events-footer a { color: var(--secondary-text); text-underline-offset: 4px; }
+#events .no-events { border: 1px solid var(--border-color); border-radius: 10px; }
+
+#area-tournaments .container { max-width: none; padding: 0; }
+#area-tournaments .section-title { margin-bottom: 8px; }
+#area-tournaments .section-subtitle { text-align: left; margin-bottom: 24px; font-size: 0.95rem; }
+#area-tournaments .tournament-list { gap: 10px; }
+#area-tournaments .tournament-item {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+  padding: 16px 20px;
+  gap: 20px;
+  box-shadow: none;
+}
+#area-tournaments .tournament-item:hover { transform: none; background: var(--bg-primary); border-color: var(--secondary-text); box-shadow: none; }
+#area-tournaments .tournament-date { width: 56px; padding: 10px 4px; background: var(--primary-strong); }
+#area-tournaments .tournament-date .day { font-family: 'Bebas Neue', sans-serif; font-size: 1.65rem; font-weight: 400; }
+#area-tournaments .tournament-name { font-family: 'Archivo', system-ui, sans-serif; font-size: 0.95rem; font-weight: 700; white-space: normal; overflow: visible; line-height: 1.4; }
+#area-tournaments .tournament-meta { flex-wrap: wrap; gap: 6px 10px; font-size: 0.8rem; }
+#area-tournaments .tournament-location { font-size: inherit; }
+#area-tournaments .tournament-tier { background: var(--bg-primary); color: var(--secondary-text); font-size: 0.65rem; }
+#events .toggle-btn,
+#area-tournaments .toggle-btn { border: 1px solid var(--border-color); color: var(--secondary-text); border-radius: 8px; min-height: 44px; }
+#events .toggle-btn:hover,
+#area-tournaments .toggle-btn:hover { background: var(--secondary); border-color: var(--secondary); color: white; }
+
+#membership { background: var(--dark); padding: 48px 32px; border: 0; }
+#membership::before { background: linear-gradient(125deg, transparent 35%, var(--secondary)); opacity: 0.35; }
+#membership .section-title { color: white; font-size: clamp(2.25rem, 5vw, 3rem); margin-bottom: 12px; font-weight: 400; }
+#membership .membership-subtitle { margin: 0; font-size: 1rem; color: var(--light); }
+#membership .membership-perks { max-width: none; gap: 24px; margin: 32px 0; }
+#membership .perk { min-height: 0; background: none; backdrop-filter: none; border: none; border-radius: 0; padding: 16px 12px; cursor: default; }
+#membership .perk:hover,
+#membership .perk:active { background: none; transform: none; }
+#membership .perk-icon { color: var(--accent); font-size: 1.75rem; margin-bottom: 12px; }
+#membership .perk:hover .perk-icon { transform: none; }
+#membership .perk-title { font-size: 1.3rem; margin-bottom: 6px; }
+#membership .perk p { max-width: 22ch; margin: 0 auto; font-size: 0.85rem; line-height: 1.6; }
+#membership .price { font-size: 3rem; margin: 16px 0 20px; animation: none; text-shadow: none; }
+#membership .membership-next { margin-top: 16px; font-size: 0.85rem; }
+#membership .membership-steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+#membership .membership-step {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+#membership .membership-step-label { color: var(--accent); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+#membership .membership-step-title { margin: 8px 0; color: white; font-family: 'Bebas Neue', sans-serif; font-size: 1.65rem; font-weight: 400; letter-spacing: 0.03em; }
+#membership .membership-step-description { margin: 0 0 20px; color: var(--light); font-size: 0.875rem; line-height: 1.6; }
+#membership .membership-step-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
+  margin-top: auto;
+  padding: 12px 16px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 0.875rem;
+  letter-spacing: 0.02em;
+  box-shadow: none;
+}
+#membership .membership-step-action:hover { transform: none; box-shadow: none; }
+#membership .membership-step-secondary { background: transparent; border-color: rgba(255, 255, 255, 0.6); color: white; }
+#membership .membership-step-secondary:hover { background: rgba(255, 255, 255, 0.12); border-color: white; }
+#membership .membership-step-action:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+
+#contact .contact-info { max-width: none; gap: 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#contact .contact-box { padding: 24px 20px; border: 1px solid var(--border-color); border-radius: 10px; box-shadow: none; text-align: left; min-height: 160px; cursor: default; }
+#contact .contact-box:hover,
+#contact .contact-box:active { transform: none; box-shadow: none; }
+#contact .contact-icon { color: var(--secondary-text); font-size: 1.5rem; margin-bottom: 16px; }
+#contact .contact-icon svg { margin-left: 0; }
+#contact .contact-box:hover .contact-icon { transform: none; }
+#contact .contact-label { font-size: 1.35rem; margin-bottom: 6px; }
+#contact .contact-detail { font-size: 0.85rem; overflow-wrap: anywhere; }
+#contact .contact-detail a { color: var(--secondary-text); text-underline-offset: 4px; }
+
+#homeReactFooterApp footer,
+[data-theme="dark"] #homeReactFooterApp footer { background: var(--dark); border-top: 1px solid var(--border-color); padding: 32px 24px; font-size: 0.8rem; }
+#homeReactFooterApp footer p { max-width: none; color: var(--light); opacity: 0.75; }
+#homeReactFooterApp .footer-links { gap: 24px; margin-bottom: 12px; }
+#homeReactFooterApp .footer-links a { font-size: 0.85rem; font-weight: 600; }
+
+@media (max-width: 1000px) and (min-width: 769px) {
+  #courses .courses-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #about .about-content { gap: 24px; }
+  #about .board-members-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #contact .contact-info { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 768px) {
+  #about,
+  #courses,
+  #events,
+  #area-tournaments,
+  #membership,
+  #contact {
+    width: calc(100% - 24px);
+    margin: 16px auto;
+    padding: 24px 20px;
+    border-radius: 12px;
+    scroll-margin-top: 0;
+  }
+  #about .section-title,
+  #events .section-title,
+  #contact .section-title,
+  #area-tournaments .section-title { font-size: 2rem; text-align: left; margin-bottom: 20px; }
+  #about .about-content { grid-template-columns: 1fr; gap: 24px; }
+  #about .about-text { font-size: 0.95rem; }
+  #about .stat-card { min-height: 104px; padding: 16px; }
+  #about .stat-number { font-size: 2.5rem; }
+  #about .board-members-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  #about .board-member-card { grid-template-columns: 1fr; padding: 14px 12px; gap: 5px; }
+  #about .board-member-icon { display: none; }
+  #about .board-member-name { font-size: 1.2rem; }
+  #about .board-member-role { font-size: 0.6rem; }
+  #about .board-slide-header { margin-top: 24px; }
+  #courses .courses-lead { margin-bottom: 24px; }
+  #courses .courses-lead h2 { font-size: 2rem; text-align: left; margin-bottom: 8px; }
+  #courses .courses-lead p { font-size: 0.9rem; }
+  #courses .slide-header-nav { gap: 10px; }
+  #courses .slide-nav-arrow { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+  #courses .slide-title { font-size: 1.4rem; }
+  #courses .slide-subtitle { font-size: 0.72rem; }
+  #courses .course-image { height: 184px; }
+  #courses .course-content { padding: 18px; }
+  #courses .course-name { font-size: 1.5rem; }
+  #courses .course-description { font-size: 0.88rem; }
+  #events .event-item { flex-direction: row; gap: 12px; padding: 16px 12px; }
+  #events .event-date { width: 48px; min-width: 48px; height: 60px; flex-direction: column; gap: 0; }
+  #events .event-day { font-size: 1.8rem; }
+  #events .event-month { font-size: 0.6rem; }
+  #events .event-title { font-size: 1.25rem; overflow-wrap: anywhere; }
+  #events .event-description { font-size: 0.85rem; }
+  #events .no-events { padding: 24px 16px; }
+  #area-tournaments .section-title { margin-bottom: 8px; }
+  #area-tournaments .section-subtitle { font-size: 0.85rem; }
+  #area-tournaments .tournament-item { padding: 14px 12px; gap: 12px; }
+  #area-tournaments .tournament-date { width: 44px; }
+  #area-tournaments .tournament-name { font-size: 0.85rem; }
+  #area-tournaments .tournament-meta { font-size: 0.72rem; }
+  #area-tournaments .tournament-location { flex-wrap: wrap; }
+  #membership { padding: 32px 20px; }
+  #membership .section-title { font-size: 2.3rem; }
+  #membership .membership-subtitle { font-size: 0.9rem; }
+  #membership .membership-perks { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 12px; margin: 28px 0; }
+  #membership .perk { padding: 0; }
+  #membership .perk-title { font-size: 1.15rem; }
+  #membership .perk p { font-size: 0.78rem; }
+  #membership .price { font-size: 2.75rem; }
+  #membership .membership-steps { grid-template-columns: 1fr; gap: 12px; }
+  #membership .membership-step { padding: 20px; }
+  #contact .contact-info { grid-template-columns: 1fr; gap: 12px; }
+  #contact .contact-box { min-height: 0; padding: 20px; }
+  #contact .contact-icon { margin-bottom: 10px; }
+  #homeReactFooterApp footer { padding: 24px 64px calc(88px + env(safe-area-inset-bottom)); }
+  #homeReactFooterApp .footer-links { gap: 8px 20px; }
+}

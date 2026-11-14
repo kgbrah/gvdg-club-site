@@ -15,7 +15,7 @@ test('homepage feeds are rendered by the home React bundle', () => {
   assert.match(html, /id="homeReactTournamentsApp"/);
   assert.match(html, /<div id="homeReactEventsApp"><\/div>/);
   assert.match(html, /<div id="homeReactTournamentsApp"><\/div>/);
-  assert.match(html, /<script type="module" src="home-app\/home-app\.js\?v=182"><\/script>/);
+  assert.match(html, /<script type="module" src="home-app\/home-app\.js\?v=183"><\/script>/);
   assert.doesNotMatch(html, /<script type="module" src="home-feeds\.js"><\/script>/);
   assert.doesNotMatch(html, /<div id="homeReactEventsApp"><div class="event-list">/);
   assert.doesNotMatch(html, /<div id="homeReactTournamentsApp"><div class="tournament-list">/);
@@ -109,8 +109,8 @@ test('home React bundle owns membership contact and footer sections', () => {
   assert.match(main, /createRoot\(footerMount\)\.render\(h\(HomeFooter\)\)/);
   assert.match(community, /export function HomeMembershipSection/);
   assert.match(community, /gvdg-members\.html#apply/);
-  assert.match(community, /Join for \$15 a year/);
-  assert.match(community, /create your app login/);
+  assert.match(community, /Pay \$15 dues/);
+  assert.match(community, /Create member login/);
   assert.match(community, /export function HomeContactSection/);
   assert.match(community, /export function HomeFooter/);
   assert.match(community, /data-react-home-membership/);
