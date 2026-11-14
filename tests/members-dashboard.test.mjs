@@ -183,7 +183,8 @@ test('overview dashboard is a compact home and keeps registration on Events', ()
   assert.doesNotMatch(more, /href: "score.html"/);
   assert.match(more, /WalletPanel/);
   assert.match(activity, /player-wallet-compact/);
-  assert.match(activity, /selectDashboardTab\("play"\)/);
+  assert.match(activity, /href: "score.html\?start=1"/);
+  assert.doesNotMatch(activity, /Start \/ join a casual round/);
   assert.match(html, /a\.player-stat\.player-wallet-compact/);
   assert.match(activity, /variant === "play"/);
   assert.match(activity, /href: live\.href/);

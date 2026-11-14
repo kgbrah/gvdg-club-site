@@ -1577,6 +1577,11 @@ export function startScoreApp(options) {
             }
             if (MODE === 'home') {
                 if (COURSE_QUERY) { renderCourseMap(COURSE_QUERY); return; }
+                if (params.get('start') === '1') {
+                    history.replaceState(null, '', 'score.html');
+                    startCasualSetup();
+                    return;
+                }
                 renderHome();
                 return;
             }

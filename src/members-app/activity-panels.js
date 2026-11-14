@@ -2,7 +2,6 @@ import React from "react";
 
 import { RECENT_ROUNDS_KEY, localStorageGet, requestJson } from "./api.js";
 import { dollars, formatEventDay, formatToPar } from "./format.js";
-import { selectDashboardTab } from "./dashboard-shell.js";
 import { applyOfficialRyderTally } from "../public-app/ryder-board-merge.js";
 import { displayMatchStatus } from "../shared/match-status.js";
 import { fetchMergedRyderData } from "../shared/ryder-cup-data.js";
@@ -132,27 +131,20 @@ export function LiveScoringPanel({ token, compact = false, variant = "home" }) {
           ]),
           h("span", { className: "player-keep-score-go", key: "go" }, "Rejoin"),
         ])
-        : h("button", {
+        : h("a", {
           className: "player-keep-score",
-          type: "button",
+          href: "score.html?start=1",
           key: "cta",
-          onClick: () => selectDashboardTab("play"),
         }, [
           h("div", { key: "copy" }, [
             h("h2", { key: "title" }, "Keep score"),
-            h("p", { key: "meta" }, "No live card. Start a casual round or join one."),
+            h("p", { key: "meta" }, "No live card. Start a casual round."),
           ]),
-          h("span", { className: "player-keep-score-go", key: "go" }, "Play"),
+          h("span", { className: "player-keep-score-go", key: "go" }, "Start"),
         ]),
       extras.length
         ? h("div", { className: "live-round-list", key: "extras" }, extras.map((item) => h(LiveRoundCard, { item, key: `${item.kind}-${item.href}` })))
         : null,
-      h("button", {
-        className: "player-btn",
-        type: "button",
-        key: "join",
-        onClick: () => selectDashboardTab("play"),
-      }, "Start / join a casual round"),
     ]);
   }
   return h("details", { className: "club-board react-live-scoring dash-collapse", "data-react-live-scoring": state.status }, [
@@ -160,11 +152,6 @@ export function LiveScoringPanel({ token, compact = false, variant = "home" }) {
     h("div", { className: "live-round-list", key: "list" }, count
       ? state.items.map((item) => h(LiveRoundCard, { item, key: `${item.kind}-${item.href}` }))
       : h("p", { className: "dash-note" }, "No active scorecards right now.")),
-    h("div", { className: "live-round-actions", key: "actions" }, h("button", {
-      className: "passkey-btn",
-      type: "button",
-      onClick: () => selectDashboardTab("play"),
-    }, "Start / join a casual round")),
   ]);
 }
 
