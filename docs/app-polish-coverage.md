@@ -10,8 +10,8 @@ Each lane records the actual states and interactions checked. A successful build
 
 | Surface | Inventory | Owner | Current state |
 | --- | --- | --- | --- |
-| Reviewed member Home | Continue round, progress checklist, account rows, course conditions, history, rating | Sol stats / root | Approved; PR95 release checks running |
-| Reviewed Practice and My bag | Putting, fieldwork, disc inventory, forms, export and removal | Sol stats / root | Revised; 320/390/1280 interactions verified; PR95 |
+| Reviewed member Home | Continue round, progress checklist, account rows, course conditions, history, rating | Sol stats / root | Live in PR95; deployment 43669165687 and both post-deploy checks passed |
+| Reviewed Practice and My bag | Putting, fieldwork, disc inventory, forms, export and removal | Sol stats / root | Live in PR95; 320/390/1280 interactions verified |
 | Remaining member app | All 21 MEMBER_DESTINATIONS, auth/profile/passkeys, help/install, nested forms and dialogs | Sol stats | Active in member-surfaces worktree |
 | Admin | All 24 ADMIN_DESTINATIONS, event workspace, reports, moderation, nested forms and dialogs | Sol recovery | Active in admin-polish worktree |
 | Scorecard and round lifecycle | See scorecard matrix below | Sol watch | Highest-priority active lane |

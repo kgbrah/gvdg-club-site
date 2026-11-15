@@ -37,6 +37,7 @@ jobs:
           node scripts/qa/members-dashboard-browser-qa.mjs
           node scripts/qa/practice-browser-qa.mjs
           node scripts/qa/shot-ledger-browser-qa.mjs
+          node scripts/qa/phone-activity-browser-qa.mjs
           node scripts/qa/member-visual-polish-qa.mjs
           node scripts/qa/offline-round-browser-qa.mjs
           node scripts/qa/offline-service-worker-browser-qa.mjs

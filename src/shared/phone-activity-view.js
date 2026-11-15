@@ -13,9 +13,9 @@ function failure(result) {
   }
 }
 
-export function PhoneActivityPairing({ api, roundCode, eventId, showArchive = false }) {
+export function PhoneActivityPairing({ api, ownerId, roundCode, eventId, showArchive = false }) {
   const roundKey = roundCode ? "round:" + roundCode : eventId ? "event:" + eventId : null;
-  return h(ActivitySettings, { key: roundKey || "member", api, roundKey, showArchive });
+  return h(ActivitySettings, { key: `${ownerId || "member"}:${roundKey || "archive"}`, api, roundKey, showArchive });
 }
 
 function ActivitySettings({ api, roundKey, showArchive }) {
@@ -27,12 +27,17 @@ function ActivitySettings({ api, roundKey, showArchive }) {
   const [before, setBefore] = React.useState(null);
   const [message, setMessage] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const [loadError, setLoadError] = React.useState("");
+  const actionPending = React.useRef(false);
   const [removeTrack, setRemoveTrack] = React.useState(null);
   const [version, refresh] = React.useReducer((value) => value + 1, 0);
 
   React.useEffect(() => {
     if (!open) return undefined;
     let current = true;
+    setLoading(true);
+    setLoadError("");
     async function read() {
       try {
         const [devicePage, trackPage] = await Promise.all([
@@ -41,22 +46,24 @@ function ActivitySettings({ api, roundKey, showArchive }) {
         ]);
         if (!current) return;
         if (devicePage.ok) setDevices(devicePage.data.devices || []);
-        else setMessage(failure(devicePage));
+        else { setDevices([]); setLoadError(failure(devicePage)); }
         if (trackPage?.ok) { setTracks(trackPage.data.tracks || []); setBefore(trackPage.data.before); }
-        else if (trackPage) setMessage(failure(trackPage));
-      } catch { if (current) setMessage(failure()); }
+        else if (trackPage) { setTracks([]); setBefore(null); setLoadError(failure(trackPage)); }
+      } catch { if (current) { setDevices([]); setTracks([]); setBefore(null); setLoadError(failure()); } }
+      finally { if (current) setLoading(false); }
     }
     void read();
     return () => { current = false; };
   }, [open, api, showArchive, version]);
 
   async function action(work) {
-    if (busy) return;
+    if (actionPending.current) return;
+    actionPending.current = true;
     setBusy(true);
     setMessage("");
     try { await work(); }
     catch { setMessage(failure()); }
-    finally { setBusy(false); }
+    finally { actionPending.current = false; setBusy(false); }
   }
 
   async function approve(event) {
@@ -69,7 +76,7 @@ function ActivitySettings({ api, roundKey, showArchive }) {
   }
 
   async function revoke(deviceId) {
-    const result = await api("/activity/pairings/" + deviceId, { method: "DELETE", guest: false });
+    const result = await api("/activity/pairings/" + encodeURIComponent(deviceId), { method: "DELETE", guest: false });
     if (!result.ok) { setMessage(failure(result)); return; }
     setMessage("Phone access removed.");
     refresh();
@@ -94,10 +101,10 @@ function ActivitySettings({ api, roundKey, showArchive }) {
     refresh();
   }
 
-  return h("details", { className: "watch-pairing", onToggle: (event) => setOpen(event.currentTarget.open) },
-    h("summary", null, showArchive ? "Phone activity and private routes" : "Pair phone activity"),
-    open && h("div", { className: "watch-pairing-body stack" },
-      h("p", null, "Open your GVDG activity test app to get a code. Pairing lasts 30 days and can be removed here."),
+  return h("details", { className: "watch-pairing phone-activity", onToggle: (event) => setOpen(event.currentTarget.open) },
+    h("summary", null, showArchive ? "Phone activity · preview" : "Pair phone activity · preview"),
+    open && h("div", { className: "watch-pairing-body phone-activity-body" },
+      h("p", null, "Requires a GVDG activity test app. App-store releases are not available yet. Pairing lasts 30 days and can be removed here."),
       h("p", null, (roundKey ? "This app can read basket positions on this scorecard and upload routes to your account." : "This app can upload routes to your account.")
         + " Location is recorded after you start an activity. The app asks before uploading it."),
       h("form", { onSubmit: (event) => { event.preventDefault(); void action(() => approve(event)); } },
@@ -105,19 +112,24 @@ function ActivitySettings({ api, roundKey, showArchive }) {
         h("input", { className: "field", id, value: code, autoComplete: "off", autoCapitalize: "characters", spellCheck: false,
           "aria-describedby": id + "-notice", maxLength: 12, required: true, onChange: (event) => setCode(event.target.value.toUpperCase()) }),
         h("button", { className: "btn", type: "submit", disabled: busy || code.replace(/[\s-]/g, "").length !== 8 }, "Pair phone")),
-      h("p", { role: "status", id: id + "-notice" }, message),
-      devices.length > 0 && h("ul", null, devices.map((device) => {
+      h("p", { className: "phone-activity-status", role: "status", id: id + "-notice" }, message),
+      loading && h("p", { role: "status" }, "Loading your connected phones and routes…"),
+      loadError && h("div", { className: "phone-activity-status", role: "alert" },
+        h("p", null, loadError),
+        h("button", { className: "btn secondary", type: "button", disabled: loading, onClick: refresh }, "Try loading again")),
+      !loading && !loadError && !devices.length && h("p", null, "No phones paired yet."),
+      devices.length > 0 && h("ul", { className: "phone-activity-list" }, devices.map((device) => {
         const label = (device.platform === "ios" ? "iPhone" : "Android") + " paired " + new Date(device.approvedAt).toLocaleString();
-        return h("li", { key: device.deviceId }, h("span", null, label),
+        return h("li", { key: device.deviceId, className: "phone-activity-item" }, h("span", null, label),
           h("button", { className: "btn secondary", type: "button", disabled: busy, "aria-label": "Remove " + label,
             onClick: () => { void action(() => revoke(device.deviceId)); } }, "Remove phone"));
       })),
-      showArchive && h("section", { className: "stack" },
+      showArchive && h("section", { className: "phone-activity-section" },
         h("h3", null, "Uploaded routes"),
-        !tracks.length && h("p", null, "No activity routes have been uploaded."),
+        !loading && !loadError && !tracks.length && h("p", null, "No activity routes have been uploaded."),
         tracks.map((track) => {
           const label = new Date(track.startedAt).toLocaleString();
-          return h("div", { key: track.id, className: "stack" },
+          return h("div", { key: track.id, className: "phone-activity-item phone-activity-route" },
             h("p", null, label + " · " + Math.round(track.distanceM) + " m recorded"),
             h("button", { className: "btn secondary", type: "button", "aria-label": "Download route recorded " + label,
               disabled: busy, onClick: () => { void action(() => download(track)); } }, "Download route"),
@@ -125,13 +137,13 @@ function ActivitySettings({ api, roundKey, showArchive }) {
               ? h(React.Fragment, null, h("p", null, "Remove this route from your club account?"),
                 h("button", { className: "btn danger", type: "button", disabled: busy,
                   onClick: () => { void action(() => remove(track)); } }, "Confirm remove route"),
-                h("button", { className: "btn secondary", type: "button", onClick: () => setRemoveTrack(null) }, "Keep route"))
+                h("button", { className: "btn secondary", type: "button", disabled: busy, onClick: () => setRemoveTrack(null) }, "Keep route"))
               : h("button", { className: "btn secondary", type: "button", disabled: busy,
                 onClick: () => setRemoveTrack(track.id) }, "Remove route"));
         }),
         before && h("button", { className: "btn secondary", type: "button", disabled: busy, onClick: () => {
           void action(async () => {
-            const result = await api("/activity/tracks?before=" + before, { guest: false });
+            const result = await api("/activity/tracks?before=" + encodeURIComponent(before), { guest: false });
             if (result.ok) { setTracks((rows) => [...rows, ...result.data.tracks]); setBefore(result.data.before); }
             else setMessage(failure(result));
           });
