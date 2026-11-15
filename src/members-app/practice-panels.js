@@ -167,7 +167,9 @@ function discActions(row, workspace, onEdit, setError) {
     formButton(record.archived ? "Restore" : "Archive", {
       key: "archive", disabled: Boolean(row.draftState), onClick: () => change({ archived: !record.archived, inBag: false }),
     }),
-    record.archived ? formButton("Delete disc", { key: "delete", disabled: Boolean(row.draftState), onClick: () => { void remove(); } }) : null,
+    record.archived ? formButton("Delete disc", {
+      className: "member-record-delete", key: "delete", disabled: Boolean(row.draftState), onClick: () => { void remove(); },
+    }) : null,
   ]);
 }
 
@@ -190,8 +192,10 @@ export function MemberBagPage({ workspace }) {
     discActions(row, workspace, setEditor, setError),
   ])));
   return h("div", { className: "react-play-page player-play member-practice", "data-member-bag": "ready" }, [
-    formButton("Add disc", { className: "dashboard-action primary", key: "add", onClick: () => setEditor({}) }),
-    h(MoreLink, { tab: "practice", label: "Log a practice session", key: "practice" }),
+    h("div", { className: "member-practice-toolbar", key: "toolbar" }, [
+      formButton("Add disc", { className: "dashboard-action primary", key: "add", onClick: () => setEditor({}) }),
+      h(MoreLink, { tab: "practice", label: "Log a practice session", key: "practice" }),
+    ]),
     h(SyncStatus, { workspace, key: "sync" }),
     editor ? h(DiscForm, {
       initial: editor.record ? editor : null, key: editor.id || "new",
@@ -421,7 +425,7 @@ function PracticeHistory({ kind, workspace }) {
             record.stations.map((station) => station.distance + " " + station.unit + " " + station.makes + "/" + station.attempts).join(" · ")) : null,
         ]),
         formButton("Delete", {
-          key: "remove", "aria-label": "Delete " + (kind === "throw" ? "measured throw" : "putting session") + " from " + record.date,
+          className: "member-record-delete", key: "remove", "aria-label": "Delete " + (kind === "throw" ? "measured throw" : "putting session") + " from " + record.date,
           disabled: Boolean(row.draftState), onClick: () => { void remove(row); },
         }),
       ]);
@@ -439,7 +443,7 @@ export function MemberPracticePage({ workspace }) {
   const putting = kind === "putting";
   const select = (mode) => { setEditing(false); setKind(mode); };
   return h("div", { className: "react-play-page player-play member-practice", "data-member-practice": "ready" }, [
-    h("div", { className: "dashboard-actions", "aria-label": "Practice type", key: "types" }, [
+    h("div", { className: "member-practice-tabs", role: "group", "aria-label": "Practice type", key: "types" }, [
       formButton("Putting", { key: "putting", "aria-pressed": putting, onClick: () => select("putting") }),
       formButton("Fieldwork", { key: "fieldwork", "aria-pressed": !putting, onClick: () => select("throw") }),
       h(MoreLink, { tab: "my-bag", key: "bag" }),

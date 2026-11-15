@@ -419,3 +419,21 @@ input, select, textarea {
   scroll-margin-top: 4.75rem;
   scroll-margin-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
 }
+
+/* Member dashboard chrome and the scorecard action. */
+body[data-member-shell="members"] {
+  --member-chrome-bg: #131D25;
+  --member-chrome-line: #364149;
+  --member-chrome-hover: #27333A;
+  --member-chrome-ink: #EAF0F0;
+  --member-chrome-focus: #BDDEC1;
+  --member-round-bg: #102923;
+  --member-round-edge: #10292380;
+  --member-round-scrim: #102923EE;
+  --member-round-hover: #8BAD99;
+  --member-round-ink: #F1F5EE;
+  --member-round-subtle: #DEEDDC;
+  --member-round-live: #C3E88F;
+  --member-round-cta: #D9EDCA;
+  --member-round-cta-ink: #13302A;
+}

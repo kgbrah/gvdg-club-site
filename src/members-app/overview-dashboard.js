@@ -1,9 +1,9 @@
 import React from "react";
+import { ChevronRight, ShieldCheck } from "lucide-react";
 
 import { TOKEN_KEY, requestJson, storageGet } from "./api.js";
 import { LiveScoringPanel, WalletPanel } from "./activity-panels.js";
 import { FirstUseGuide } from "./first-use-guide.js";
-import { MoreLink } from "./more-page.js";
 import { selectDashboardTab } from "./dashboard-shell.js";
 import { dollars, formatEventDay, formatToPar } from "./format.js";
 import { HomeJobs } from "./home-jobs.js";
@@ -33,7 +33,7 @@ function HomeHero({ context, pdgaState }) {
   const division = Array.isArray(stats?.events) ? stats.events[0]?.division : null;
   const photo = context.photo || stats?.photo || null;
   const meta = [
-    context.pdgaNo ? `PDGA #${context.pdgaNo}` : null,
+    context.pdgaNo ? `PDGA #${context.pdgaNo}` : null,
     division || null,
   ].filter(Boolean).join(" · ");
 
@@ -46,7 +46,7 @@ function HomeHero({ context, pdgaState }) {
       ? h("img", { className: "player-avatar", src: photo, alt: "", key: "avatar" })
       : h("div", { className: "player-avatar player-avatar-fallback", key: "avatar" }, initials(context.name)),
     h("div", { className: "player-who", key: "who" }, [
-      h("h1", { key: "name" }, context.name || "Member"),
+      h("h2", { key: "name" }, context.name || "Member"),
       meta ? h("p", { key: "meta" }, meta) : null,
       pdgaState.status === "empty" ? h("p", { key: "pdga-empty" }, "No PDGA # is linked yet.") : null,
       pdgaState.status === "missing" ? h("p", { key: "pdga-missing" }, "PDGA ratings are unavailable right now.") : null,
@@ -156,7 +156,7 @@ function NextPdgaCard() {
   ]);
 }
 
-function LastRoundCard({ token }) {
+function LastRoundCard({ token, onCasualHistory }) {
   const [state, setState] = React.useState({ status: "idle", row: null });
 
   React.useEffect(() => {
@@ -167,15 +167,16 @@ function LastRoundCard({ token }) {
     const controller = new AbortController();
     setState({ status: "loading", row: null });
     requestJson("/my-results?all=1", { token, signal: controller.signal })
-      .then((payload) => setState({
-        status: "ready",
-        row: latestHomeRound(payload?.results, payload?.casual),
-      }))
+      .then((payload) => {
+        if (controller.signal.aborted) return;
+        onCasualHistory(Array.isArray(payload?.casual) && payload.casual.length > 0);
+        setState({ status: "ready", row: latestHomeRound(payload?.results, payload?.casual) });
+      })
       .catch((error) => {
         if (error.name !== "AbortError") setState({ status: "ready", row: null });
       });
     return () => controller.abort();
-  }, [token]);
+  }, [token, onCasualHistory]);
 
   const row = state.row;
   const meta = row
@@ -254,12 +255,37 @@ export function MemberOverviewDashboard() {
   const pdgaState = usePdgaStats(context.pdgaNo);
   const registration = useRegistrationData();
 
+  const [activeRound, setActiveRound] = React.useState(false);
+  const [playedCasual, setPlayedCasual] = React.useState(false);
+  const accountHeading = React.useRef(null);
   if (!token) return null;
 
   return h("div", { className: "react-overview-dashboard player-home", "data-react-overview-dashboard": "ready" }, [
     h(HomeHero, { context, pdgaState, key: "hero" }),
-    h(LiveScoringPanel, { token, compact: true, key: "live-scoring" }),
-    h(FirstUseGuide, { key: "first-use" }),
+    h("div", { className: "member-home-feature", key: "feature" }, [
+      h("div", { className: "member-home-play", key: "play" }, [
+        h(LiveScoringPanel, { token, compact: true, onCasualActive: setActiveRound, key: "live-scoring" }),
+        h(FirstUseGuide, { playedCasual: playedCasual || activeRound, key: "first-use",
+          onDismiss: () => accountHeading.current?.focus({ preventScroll: true }),
+        }),
+      ]),
+      h("section", { className: "member-home-services", "aria-label": "Your club account", key: "account" }, [
+        h("h2", { key: "heading", ref: accountHeading, tabIndex: -1 }, "Your club account"),
+        h(WalletPanel, { token, compact: true, key: "wallet" }),
+        h("button", {
+          className: "member-account-row member-account-link", type: "button", key: "membership",
+          onClick: () => selectDashboardTab("account"),
+        }, [
+          h(ShieldCheck, { className: "member-account-icon", size: 20, "aria-hidden": true, key: "icon" }),
+          h("span", { className: "member-account-copy", key: "copy" }, [
+            h("strong", { key: "label" }, "Membership and profile"),
+            h("small", { key: "hint" }, "Profile, sign-in and settings"),
+          ]),
+          h(ChevronRight, { className: "member-account-chevron", size: 18, "aria-hidden": true, key: "arrow" }),
+        ]),
+        h(BagTagPanel, { key: "bag-tags", token, compact: true }),
+      ]),
+    ]),
     h(HomeJobs, {
       events: registration.state.events,
       registrations: registration.state.registrations,
@@ -267,12 +293,9 @@ export function MemberOverviewDashboard() {
       onReload: registration.reload,
       key: "jobs",
     }),
-    h(WalletPanel, { token, compact: true, key: "wallet" }),
-    h(MoreLink, { tab: "account", label: "Membership and profile", key: "membership" }),
-    h(BagTagPanel, { key: "bag-tags", token }),
     h("section", { className: "player-card player-story", "data-react-home-story": "ready", key: "story" }, [
       h(RatingMove, { stats: pdgaState.stats, status: pdgaState.status, key: "rating" }),
-      h(LastRoundCard, { token, key: "recent" }),
+      h(LastRoundCard, { token, onCasualHistory: setPlayedCasual, key: "recent" }),
       h(UpNextCard, { events: registration.state.events, registrations: registration.state.registrations, key: "up-next" }),
       h(NextPdgaCard, { key: "next-pdga" }),
       h(PdgaHistory, { stats: pdgaState.stats, key: "history" }),

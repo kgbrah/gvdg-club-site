@@ -181,12 +181,11 @@ test('overview dashboard is a compact home and keeps registration on Events', ()
   assert.match(registry, /Tee signs/);
   assert.doesNotMatch(more, /href: "score.html"/);
   assert.match(more, /WalletPanel/);
-  assert.match(activity, /player-wallet-compact/);
-  assert.match(activity, /href: "score.html\?start=1"/);
+  assert.match(activity, /member-account-row member-account-link react-wallet-panel/);
+  assert.match(activity, /href: live\?\.href \|\| "score\.html\?start=1"/);
   assert.doesNotMatch(activity, /Start \/ join a casual round/);
-  assert.match(html, /a\.player-stat\.player-wallet-compact/);
+  assert.match(html, /\.member-account-row/);
   assert.match(activity, /variant === "play"/);
-  assert.match(activity, /href: live\.href/);
   assert.match(activity, /event_entry/);
   assert.match(registry, /entry\("overview", "Home"/);
   assert.match(registry, /entry\("play", "Play"/);
