@@ -346,6 +346,7 @@
         body[data-admin-tab="create"] #apane-create,
         body[data-admin-tab="import"] #apane-import,
         body[data-admin-tab="courses"] #apane-courses,
+        body[data-admin-tab="course-health"] #apane-course-health,
         body[data-admin-tab="layouts"] #apane-layouts,
         body[data-admin-tab="tee-signs"] #apane-tee-signs,
         body[data-admin-tab="scoring"] #apane-scoring,
@@ -693,6 +694,20 @@
         .app-tool-results li > *, .app-tool-results p { display: block; width: 100%; padding: .6rem; min-height: 44px; text-align: left; color: var(--text-primary); background: transparent; border: 0; border-radius: .3rem; font: inherit; text-decoration: none; }
         .app-tool-results li > *:hover, .app-tool-results li > *:focus-visible { background: var(--bg-tertiary); outline: 2px solid var(--primary); outline-offset: -2px; }
         .admin-context-title, #admin-applications-heading, #admin-bag-requests, #admin-bag-challenges { scroll-margin-top: 7rem; }
+        .course-operator { display: grid; gap: 1rem; min-width: 0; }
+        .course-operator-section { display: grid; gap: .8rem; min-width: 0; }
+        .course-operator-fields, .course-operator-metrics { display: grid; gap: .75rem; align-items: end; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10.75rem), 1fr)); }
+        .course-operator label { display: grid; gap: .3rem; min-width: 0; }
+        .course-operator label input, .course-operator label select, .course-operator label textarea { box-sizing: border-box; width: 100%; min-height: 2.4rem; }
+        .course-operator-metrics { align-items: stretch; margin: 0; }
+        .course-operator-metrics > div, .course-operator-detail { min-width: 0; padding: .75rem; border: 1px solid var(--primary); border-radius: .55rem; overflow-wrap: anywhere; }
+        .course-operator-metrics dt { color: var(--text-muted); font-size: .88rem; }
+        .course-operator-metrics dd { margin: .2rem 0 0; font-size: 1.2rem; font-weight: 700; }
+        .course-operator-detail summary { cursor: pointer; font-weight: 700; }
+        .course-operator-detail ul { margin: .5rem 0 0; padding-left: 1.25rem; }
+        .course-operator-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+        .course-operator-editor fieldset { display: grid; gap: .75rem; padding: .65rem 0 0; margin: 0; border: 0; min-width: 0; }
+        .course-operator-task-copy { white-space: pre-wrap; overflow-wrap: anywhere; }
         body[data-admin-panel="visible"] > main > .page-title,
         body[data-admin-panel="visible"] > main > .page-subtitle { display: none; }
         #adminNavigationReactApp .app-tool-finder {
@@ -741,6 +756,9 @@
             </div>
             <div class="admin-pane" id="apane-layouts">
                 <div id="adminLayoutsReactApp"></div>
+            </div>
+            <div class="admin-pane" id="apane-course-health">
+                <div id="adminCourseHealthReactApp"></div>
             </div>
             <div class="admin-pane" id="apane-tee-signs">
                 <div id="adminTeeSignReviewControlsReactApp"></div>

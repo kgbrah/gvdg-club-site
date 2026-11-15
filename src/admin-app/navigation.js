@@ -109,7 +109,7 @@ function Workspace({ route, title, group, events, courses }) {
       route.tab === "check-in" && event ? h(MorningDesk, { event, key: event.id }) : null,
     ]) : null,
     showCourse ? h("section", { className: "admin-context", "aria-label": "Selected course", key: "course" }, [
-      route.tab === "layouts" ? h("p", { className: "admin-context-caption", key: "course-label" }, selectedCourse?.name || "Select a course below")
+      route.tab === "course-health" ? null : route.tab === "layouts" ? h("p", { className: "admin-context-caption", key: "course-label" }, selectedCourse?.name || "Select a course below")
         : h("label", { className: "admin-context-caption", key: "course-label" }, [
         "Course",
         h("select", {
