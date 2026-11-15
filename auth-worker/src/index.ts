@@ -31,6 +31,7 @@ import { runRatingsRecompute } from "./ratings-recompute.js";
 import { isPdgaEventCron, refreshClubPdgaEvents } from "./pdga-events.js";
 import { isUdiscLayoutCron, runUdiscLayoutImportTick } from "./udisc-layout-import.js";
 import { handleUdiscHistory } from "./udisc-history-routes.js";
+import { handleMyPlayHistory, handleMyPlayExport } from "./play-history-routes.js";
 
 /**
  * STOPGAP: when no Workers KV namespace is bound (deployed dev/staging while this account's KV data
@@ -69,6 +70,8 @@ export default {
         return await handleUdiscHistory(request, env, origin, method, Number(udiscHistoryId[1]));
       }
       if (pathname === "/play-stats" && method === "GET") return await handlePlayStats(request, env, origin);
+      if (pathname === "/my-play-history" && method === "GET") return await handleMyPlayHistory(request, env, origin);
+      if (pathname === "/my-play-export" && method === "GET") return await handleMyPlayExport(request, env, origin);
       if (pathname === "/my-ratings" && method === "GET") return await handleMyRatings(request, env, origin);
       if (pathname === "/my-live-rounds" && method === "GET") return await handleMyLiveRounds(request, env, origin);
       if (pathname === "/board" || pathname.startsWith("/board/")) return await handleBoard(request, env, origin);
