@@ -196,7 +196,7 @@ try {
       } else {
         assert.equal(await portal.count(), 0);
       }
-      const typography = await account.locator(".player-more-item, .player-logout-btn, .member-admin-copy strong").evaluateAll((rows) => rows.map((row) => {
+      const typography = await account.locator(".player-more-item, .member-link-copy strong, .player-logout-btn, .member-admin-copy strong").evaluateAll((rows) => rows.map((row) => {
         const style = getComputedStyle(row);
         return [style.fontFamily, style.fontSize, style.fontWeight, style.lineHeight];
       }));
