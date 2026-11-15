@@ -160,7 +160,7 @@ test('public Events route visibility is controlled by React state and body attri
   const eventsState = readFileSync('src/public-app/events-state.js', 'utf8');
   const hubData = eventsHubDataSource();
 
-  assert.match(source, /<body data-api-base="" data-page="events" data-events-view="status">/);
+  assert.match(source, /<body[^>]*data-api-base="" data-page="events" data-events-view="status"/);
   assert.match(source, /id="eventsViewControllerReactApp"/);
   assert.match(source, /\.events-route \{ display: none; \}/);
   assert.match(source, /body\[data-events-view="status"\] #status/);

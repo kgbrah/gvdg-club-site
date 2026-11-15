@@ -74,7 +74,7 @@ export function EventsStatusApp() {
         },
         type: "button",
       }, [
-        icon(RefreshCcw, 15),
+        h(RefreshCcw, { "aria-hidden": "true", key: "icon", size: 15, strokeWidth: 2.3 }),
         h("span", { key: "text" }, "Retry"),
       ])
       : null,

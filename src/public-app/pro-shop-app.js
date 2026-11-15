@@ -1,4 +1,5 @@
 import React from "react";
+import { Disc3, Package } from "lucide-react";
 
 import { resolveApiBase } from "../shared/api-base.js";
 import { readMemberToken } from "../shared/member-session.js";
@@ -150,7 +151,7 @@ function MyOrders({ orders }) {
 
 function WalletPanel({ wallet }) {
   const signedOut = wallet.status === "signed-out";
-  const balance = wallet.status === "ready" ? money(wallet.balanceCents) : signedOut ? "Sign in" : "Loading";
+  const balance = wallet.status === "ready" ? money(wallet.balanceCents) : signedOut ? "Sign in" : wallet.status === "error" ? "Unavailable" : "Loading";
   return h("aside", { className: "wallet-panel" }, [
     h("div", { className: "wallet-label", key: "label" }, "Store credit"),
     h("div", { className: "wallet-balance", key: "balance" }, balance),
@@ -164,19 +165,19 @@ function WalletPanel({ wallet }) {
 }
 
 function ProductVisual({ product }) {
-  if (product.image_url) {
+  const [failedUrl, setFailedUrl] = React.useState(null);
+  const url = product.image_url;
+  if (url && failedUrl !== url) {
     return h("img", {
       alt: product.name || "Product image",
       className: "product-img",
       loading: "lazy",
-      src: product.image_url,
+      onError: () => setFailedUrl(url),
+      src: url,
     });
   }
-  return h("div", {
-    "aria-label": "No product image available",
-    className: "product-fallback",
-    role: "img",
-  }, (product.brand || product.name || "?").slice(0, 1).toUpperCase());
+  return h("div", { "aria-hidden": "true", className: "product-fallback" },
+    h(product.product_type === "disc" ? Disc3 : Package, { size: 44, strokeWidth: 1.45 }));
 }
 
 function ProductCard({ onAdd, product }) {
@@ -209,57 +210,70 @@ function ProductCard({ onAdd, product }) {
   ]);
 }
 
-function Filters({ filters, onChange, products }) {
-  function select(id, value, values, labeler = (item) => item) {
-    return h("select", {
-      id,
-      onChange: (event) => onChange(id, event.target.value),
-      value,
-    }, [
-      h("option", { key: "all", value: "" }, id === "typeFilter" ? "All types" : id === "weightFilter" ? "All weights" : id === "colorFilter" ? "All colors" : "All brands"),
-      ...values.map((item) => h("option", { key: item, value: item }, labeler(item))),
-    ]);
-  }
+const SHOP_FILTER_FIELDS = [
+  ["brandFilter", "Brand", "brand"],
+  ["colorFilter", "Color", "color"],
+  ["weightFilter", "Weight", "weight_g", (value) => value + "g"],
+  ["typeFilter", "Type", "product_type", typeLabel],
+];
 
-  return h("div", { "aria-label": "Shop filters", className: "filters" }, [
-    h("input", {
-      id: "shopSearch",
-      key: "search",
-      onChange: (event) => onChange("shopSearch", event.target.value),
-      placeholder: "Search shop",
-      type: "search",
-      value: filters.shopSearch,
-    }),
-    h(React.Fragment, { key: "brand" }, select("brandFilter", filters.brandFilter, uniqueValues(products, "brand"))),
-    h(React.Fragment, { key: "color" }, select("colorFilter", filters.colorFilter, uniqueValues(products, "color"))),
-    h(React.Fragment, { key: "weight" }, select("weightFilter", filters.weightFilter, uniqueValues(products, "weight_g"), (value) => value + "g")),
-    h(React.Fragment, { key: "type" }, select("typeFilter", filters.typeFilter, uniqueValues(products, "product_type"), typeLabel)),
-    h("select", {
-      id: "sortSelect",
-      key: "sort",
-      onChange: (event) => onChange("sortSelect", event.target.value),
-      value: filters.sortSelect,
-    }, [
-      h("option", { key: "brand", value: "brand" }, "Sort by brand"),
-      h("option", { key: "color", value: "color" }, "Sort by color"),
-      h("option", { key: "weight", value: "weight" }, "Sort by weight"),
-      h("option", { key: "type", value: "type" }, "Sort by type"),
-      h("option", { key: "price_asc", value: "price_asc" }, "Price low to high"),
-      h("option", { key: "price_desc", value: "price_desc" }, "Price high to low"),
+function Filters({ filters, onChange, onReset, products }) {
+  const active = SHOP_FILTER_FIELDS.filter(([id]) => filters[id]).length;
+  return h("div", { "aria-label": "Shop filters", className: "filters shop-filters" }, [
+    h("div", { className: "shop-search-row", key: "search-row" }, [
+      h("label", { className: "public-sr-only", htmlFor: "shopSearch", key: "search-label" }, "Search shop"),
+      h("input", {
+        id: "shopSearch",
+        key: "search",
+        onChange: (event) => onChange("shopSearch", event.target.value),
+        placeholder: "Search shop",
+        type: "search",
+        value: filters.shopSearch,
+      }),
+      h("label", { className: "public-sr-only", htmlFor: "sortSelect", key: "sort-label" }, "Sort products"),
+      h("select", {
+        id: "sortSelect",
+        key: "sort",
+        onChange: (event) => onChange("sortSelect", event.target.value),
+        value: filters.sortSelect,
+      }, [
+        h("option", { key: "brand", value: "brand" }, "Sort by brand"),
+        h("option", { key: "color", value: "color" }, "Sort by color"),
+        h("option", { key: "weight", value: "weight" }, "Sort by weight"),
+        h("option", { key: "type", value: "type" }, "Sort by type"),
+        h("option", { key: "price_asc", value: "price_asc" }, "Price low to high"),
+        h("option", { key: "price_desc", value: "price_desc" }, "Price high to low"),
+      ]),
+    ]),
+    h("details", { className: "shop-filter-details", key: "details" }, [
+      h("summary", { key: "summary" }, active ? `Filters (${active} selected)` : "More filters"),
+      h("div", { className: "shop-filter-fields", key: "fields" }, SHOP_FILTER_FIELDS.map(([id, label, field, format = (value) => value]) =>
+        h("div", { key: id }, [
+          h("label", { htmlFor: id, key: "label" }, label),
+          h("select", { id, key: "select", onChange: (event) => onChange(id, event.target.value), value: filters[id] }, [
+            h("option", { key: "all", value: "" }, "Any"),
+            ...uniqueValues(products, field).map((value) => h("option", { key: value, value }, format(value))),
+          ]),
+        ]))),
+      active ? h("button", { className: "shop-filter-reset", key: "reset", onClick: onReset, type: "button" }, "Clear filters") : null,
     ]),
   ]);
 }
 
-function ProductGrid({ onAdd, products, status }) {
+function ProductGrid({ catalogSize, onAdd, onRetry, products, status }) {
   if (status === "loading" && !products.length) {
-    return h("div", { className: "product-grid" }, note("Loading shop products..."));
+    return h("p", { className: "public-state", role: "status" }, "Loading shop products…");
   }
   if (status === "error") {
-    return h("div", { className: "product-grid" }, note("The shop could not load. Please try again."));
+    return h("div", { className: "public-state", role: "status" }, [
+      h("p", { key: "message" }, "The shop could not load."),
+      h("button", { className: "shop-filter-reset", key: "retry", onClick: onRetry, type: "button" }, "Try again"),
+    ]);
   }
   return h("div", { className: "product-grid" }, products.length
     ? products.map((product) => h(ProductCard, { key: product.id, onAdd, product }))
-    : note("No products match those filters."));
+    : h("p", { className: "public-state", role: "status" }, catalogSize
+      ? "No products match those filters." : "No products are currently in stock."));
 }
 
 function CartRow({ onChange, product, quantity }) {
@@ -382,7 +396,9 @@ export function ProShopApp() {
     setProductsStatus("loading");
     try {
       const response = await api("/shop/products?sort=brand");
-      const body = response.ok ? await response.json().catch(() => ({})) : {};
+      if (!response.ok) throw new Error("product_load_failed");
+      const body = await response.json();
+      if (!Array.isArray(body.products)) throw new Error("product_load_failed");
       const nextProducts = (body.products || []).filter(isActiveProduct);
       productsRef.current = nextProducts;
       setProducts(nextProducts);
@@ -390,9 +406,8 @@ export function ProShopApp() {
       pruneCart("One or more cart items are no longer available.");
     } catch {
       setProductsStatus("error");
-      notify("Could not load the shop. Please try again.", "error");
     }
-  }, [api, notify, pruneCart]);
+  }, [api, pruneCart]);
 
   const loadWallet = React.useCallback(async () => {
     if (!token) {
@@ -469,6 +484,7 @@ export function ProShopApp() {
 
   const cartTotal = React.useMemo(() => cartEntries.reduce((total, entry) =>
     total + Number(entry.product.price_cents || 0) * entry.quantity, 0), [cartEntries]);
+  const cartCount = cartEntries.reduce((total, entry) => total + entry.quantity, 0);
   const hasCart = cart.size > 0;
   const signedIn = !!token;
   const sdkEnabled = !!(paymentsConfig && paymentsConfig.enabled);
@@ -483,6 +499,12 @@ export function ProShopApp() {
 
   function updateFilter(id, value) {
     setFilters((current) => ({ ...current, [id]: value }));
+  }
+
+  function resetFilters() {
+    setFilters((current) => ({
+      ...current, brandFilter: "", colorFilter: "", typeFilter: "", weightFilter: "",
+    }));
   }
 
   function addToCart(productId) {
@@ -681,10 +703,22 @@ export function ProShopApp() {
     h(MyOrders, { key: "orders", orders: wallet.orders }),
     h("div", { className: "shop-shell", key: "shell" }, [
       h("section", { key: "products" }, [
-        h(Filters, { filters, key: "filters", onChange: updateFilter, products }),
-        h(ProductGrid, { key: "grid", onAdd: addToCart, products: filteredProducts, status: productsStatus }),
+        h("div", { className: "shop-catalog-bar", key: "bar" }, [
+          h("h2", { key: "title" }, "Discs & gear"),
+          h("a", { className: "shop-cart-link", href: "#shop-cart", key: "cart" },
+            cartCount ? `Cart (${cartCount})` : "Cart"),
+        ]),
+        h(Filters, { filters, key: "filters", onChange: updateFilter, onReset: resetFilters, products }),
+        h(ProductGrid, {
+          catalogSize: products.filter(isPurchasableProduct).length,
+          key: "grid",
+          onAdd: addToCart,
+          onRetry: loadProducts,
+          products: filteredProducts,
+          status: productsStatus,
+        }),
       ]),
-      h("aside", { className: "cart", key: "cart" }, [
+      h("aside", { className: "cart", id: "shop-cart", key: "cart", tabIndex: -1 }, [
         h("h2", { key: "title" }, "Cart"),
         h("div", { className: "cart-list", key: "list" }, cartEntries.length
           ? cartEntries.map(({ product, quantity }) => h(CartRow, {
@@ -710,21 +744,22 @@ export function ProShopApp() {
         signedIn && hasCart ? h("div", { className: "payment-divider", key: "divider", style: { display: "flex" } }, "or") : null,
         !signedIn && hasCart
           ? h("div", { className: "paypal-fields", key: "guest" }, [
+              h("label", { htmlFor: "ppName", key: "name-label" }, "Your name"),
               h("input", {
+                autoComplete: "name",
                 id: "ppName",
                 key: "name",
                 maxLength: 80,
                 onChange: (event) => setGuest((current) => ({ ...current, name: event.target.value })),
-                placeholder: "Your name",
                 type: "text",
                 value: guest.name,
               }),
+              h("label", { htmlFor: "ppContact", key: "contact-label" }, "Email or phone"),
               h("input", {
                 id: "ppContact",
                 key: "contact",
                 maxLength: 120,
                 onChange: (event) => setGuest((current) => ({ ...current, contact: event.target.value })),
-                placeholder: "Email or phone (so we can reach you)",
                 type: "text",
                 value: guest.contact,
               }),

@@ -289,7 +289,7 @@ export function EventsLeagueDetailApp() {
     h("button", { className: "back-link", key: "back", onClick: backToHub, type: "button" }, "\u2190 All events"),
     h("article", { className: "detail-card", key: "card", "data-react-events-league-detail": "true" }, [
       h("div", { className: "detail-head", key: "head" }, [
-        h("h2", { className: "detail-title", key: "title" }, league.name),
+        h("h1", { className: "detail-title", key: "title" }, league.name),
         meta ? h("span", { className: "badge type-badge", key: "meta" }, meta) : null,
       ]),
       data.league && data.league.description

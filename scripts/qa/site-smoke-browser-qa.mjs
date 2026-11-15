@@ -81,7 +81,7 @@ const pages = [
   {
     name: "events-status",
     path: "/events.html",
-    text: ["Events & Club Events", "Leagues & Standings"],
+    text: ["Club events", "Leagues & Standings"],
   },
   {
     name: "events-detail",
@@ -119,7 +119,7 @@ const pages = [
     text: ["Ryder Cup"],
   },
   { name: "scoring-app", path: "/scoring-app.html", text: ["Your game.", "GVDG vs UDisc Pro.", "Watch live."] },
-  { name: "archive-redirect", path: "/archive.html", text: ["Events & Club Events"], redirect: "/events.html#previousResultsSection" },
+  { name: "archive-redirect", path: "/archive.html", text: ["Club events"], redirect: "/events.html#previousResultsSection" },
   { name: "design-chooser", path: "/design.html", text: ["Direction 01", "Direction 02"] },
   { name: "design-field", path: "/design-field.html", text: ["Where to play", "One card for the year."] },
   { name: "design-night", path: "/design-night.html", text: ["Where to play", "One card for the year."] },
@@ -165,7 +165,7 @@ function apiResponse(url) {
   if (pathName === "/club-feed") return json({ events: [], clubEvents: [] });
   if (pathName === "/fundraisers") return json({ fundraisers: [] });
   if (pathName === "/leagues") return json({ leagues: [league] });
-  if (pathName === "/leagues/4") return json(league);
+  if (pathName === "/leagues/4") return json({ ...league, league });
   if (pathName === "/meetings") return json({ meetings: [] });
   if (pathName === "/payments/config") return json({ enabled: false });
   if (pathName === "/shop/products") {

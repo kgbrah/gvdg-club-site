@@ -409,12 +409,12 @@ test('Events registration is rendered by the public React bundle', () => {
 
 test('Blog body coming-soon page is rendered by the public React bundle', () => {
   const html = readFileSync('gvdg-blog.html', 'utf8');
-  const body = html.slice(html.indexOf('<body>'));
+  const body = html.slice(html.indexOf('<body'));
   const main = readFileSync('src/public-app/main.js', 'utf8');
   const app = readFileSync('src/public-app/blog-app.js', 'utf8');
 
   assert.match(html, /id="blogReactApp"/);
-  assert.match(html, /<body data-page="gvdg-blog">/);
+  assert.match(html, /<body[^>]*data-page="gvdg-blog"/);
   assert.doesNotMatch(body, /<section class="page-hero"|<section class="construction-section"|class="disc-icon"|class="progress-fill"|class="back-btn"/);
   assert.doesNotMatch(html, /🥏/);
   assert.match(main, /import \{ BlogApp \} from "\.\/blog-app\.js"/);

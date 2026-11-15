@@ -55,9 +55,10 @@ export function useRevealOnce({ delay = 0, rootMargin = "0px 0px -50px 0px", thr
 export function useAnimatedCount(target, visible, duration = 2000) {
   const [value, setValue] = React.useState(0);
   const started = React.useRef(false);
+  const reduceMotion = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   React.useEffect(() => {
-    if (!visible || started.current) return undefined;
+    if (reduceMotion || !visible || started.current) return undefined;
     started.current = true;
     const start = performance.now();
     let frameId = 0;
@@ -69,7 +70,7 @@ export function useAnimatedCount(target, visible, duration = 2000) {
     }
     frameId = window.requestAnimationFrame(update);
     return () => window.cancelAnimationFrame(frameId);
-  }, [duration, target, visible]);
+  }, [duration, reduceMotion, target, visible]);
 
-  return value;
+  return reduceMotion ? target : value;
 }
