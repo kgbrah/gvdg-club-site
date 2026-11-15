@@ -147,6 +147,19 @@ export interface LeagueStanding {
 const placePoints = (place: number | null): number =>
   place == null ? 0 : place === 1 ? 10 : place === 2 ? 7 : place === 3 ? 5 : place === 4 ? 3 : place <= 10 ? 1 : 0;
 
+function udiscPoints(breakdown: string | null | undefined): { points: number; roundsKept: number | null; minimum: number | null } | null {
+  if (!breakdown) return null;
+  try {
+    const parsed = JSON.parse(breakdown) as { udisc_points?: unknown; udisc_rounds_kept?: unknown; udisc_minimum_points?: unknown };
+    if (typeof parsed?.udisc_points !== "number" || !Number.isFinite(parsed.udisc_points)) return null;
+    const roundsKept = typeof parsed.udisc_rounds_kept === "number" && parsed.udisc_rounds_kept > 0 ? parsed.udisc_rounds_kept : null;
+    const minimum = typeof parsed.udisc_minimum_points === "number" && parsed.udisc_minimum_points > 0 ? parsed.udisc_minimum_points : null;
+    return { points: parsed.udisc_points, roundsKept, minimum };
+  } catch {
+    return null;
+  }
+}
+
 function parseOutcome(matchResult: string | null | undefined): string | null {
   if (!matchResult) return null;
   try {
@@ -163,11 +176,12 @@ const matchplayPoints = (o: string | null): number => (isWinOutcome(o) ? 2 : isT
 
 /** Aggregate a league's per-event result rows into a per-PLAYER season standings table. Matchplay rounds
  *  (a stored match_result) score 2/1/0 by outcome; stroke rounds keep place-points + cumulative to-par.
- *  Members keyed by member_id; guests grouped by name, including nicknames / spelling variants of the
- *  same person. Name-only rows attach to a member when that match is unique. See computeTeamStandings
- *  for the Red/Blue view. */
+ *  UDisc imports store their own season points on the result (`breakdown.udisc_points`) and, when set,
+ *  only the best `udisc_rounds_kept` scores count. Members keyed by member_id; guests grouped by name,
+ *  including nicknames / spelling variants of the same person. Name-only rows attach to a member when
+ *  that match is unique. See computeTeamStandings for the Red/Blue view. */
 export function computeLeagueStandings(
-  rows: { member_id: string | null; name: string; place: number | null; to_par: number | null; match_result?: string | null }[],
+  rows: { member_id: string | null; name: string; place: number | null; to_par: number | null; match_result?: string | null; breakdown?: string | null }[],
 ): LeagueStanding[] {
   const clustered = clusterPlayerNames(rows.map((row) => row.name));
   const memberNames = new Map<string, string[]>();
@@ -190,6 +204,7 @@ export function computeLeagueStandings(
   }
 
   const map = new Map<string, LeagueStanding>();
+  const udisc = new Map<string, { points: number[]; roundsKept: number | null; minimum: number | null }>();
   for (const r of rows) {
     const memberId = r.member_id || memberForName(r.name);
     const key = memberId ? "id:" + memberId : "name:" + (clustered.get(r.name) || r.name);
@@ -202,6 +217,14 @@ export function computeLeagueStandings(
     if (!s.member_id && memberId) s.member_id = memberId;
     s.events++;
     const outcome = parseOutcome(r.match_result);
+    const imported = outcome ? null : udiscPoints(r.breakdown);
+    if (imported) {
+      const bag = udisc.get(key) ?? { points: [], roundsKept: imported.roundsKept, minimum: imported.minimum };
+      bag.points.push(imported.points);
+      if (imported.roundsKept != null) bag.roundsKept = imported.roundsKept;
+      if (imported.minimum != null) bag.minimum = imported.minimum;
+      udisc.set(key, bag);
+    }
     if (outcome) {
       // matchplay: points + wins come from the match outcome; to_par/podiums don't apply.
       s.points += matchplayPoints(outcome);
@@ -210,9 +233,17 @@ export function computeLeagueStandings(
       if (r.place === 1) s.wins++;
       if (r.place != null && r.place <= 3) s.podiums++;
       if (r.to_par != null) s.total_to_par += r.to_par;
-      s.points += placePoints(r.place);
+      if (!imported) s.points += placePoints(r.place);
     }
     if (r.place != null && (s.best_place == null || r.place < s.best_place)) s.best_place = r.place;
+  }
+  for (const [key, bag] of udisc) {
+    const standing = map.get(key);
+    if (!standing) continue;
+    const kept = [...bag.points].sort((a, b) => b - a);
+    const counted = bag.roundsKept != null && bag.roundsKept > 0 ? kept.slice(0, bag.roundsKept) : kept;
+    standing.points = counted.reduce((sum, value) => sum + value, 0);
+    if (bag.minimum != null && standing.points < bag.minimum) map.delete(key);
   }
   return [...map.values()].sort(
     (a, b) => b.points - a.points || b.wins - a.wins || a.total_to_par - b.total_to_par || a.name.localeCompare(b.name),

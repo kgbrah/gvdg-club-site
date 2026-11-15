@@ -126,7 +126,7 @@ export function AdminImportControls() {
         onClick: requestUdiscImport,
         type: "button",
       }, busyUdisc ? "Importing..." : "Import from UDisc"),
-      h("p", { className: "dash-note", key: "hint" }, "Create the league first, then its events, so the rounds stay attached."),
+      h("p", { className: "dash-note", key: "hint" }, "A league link also loads past scores and the current season standings. Save those onto the league page from the list below."),
     ]),
   ]);
 }

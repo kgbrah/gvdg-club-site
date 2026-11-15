@@ -1,6 +1,6 @@
 import type { Env } from "./env.js";
 import * as db from "./db.js";
-import { safeFetch, normalizeDgs, normalizeCsvEvents, parseCsvRows, parseUdiscLayouts, ImportError, mergeUdiscCalendars, normalizeUdiscEventsUrl, parseUdiscCalendar, udiscImportCandidates, udiscSchedulePageUrl } from "./imports.js";
+import { safeFetch, normalizeDgs, normalizeCsvEvents, parseCsvRows, parseUdiscLayouts, ImportError, mergeUdiscCalendars, normalizeUdiscEventsUrl, parseUdiscCalendar, udiscSchedulePageUrl, parseUdiscStandings } from "./imports.js";
 import {
   DAY_TRIP_MILES,
   DISCGOLFAPI_ATTRIBUTION,
@@ -18,11 +18,14 @@ import { json, readJson } from "./http.js";
 import { asStr } from "./input.js";
 import { runUdiscLayoutImportTick } from "./udisc-layout-import.js";
 import { bustCourseCatalogCache } from "./course-catalog-cache.js";
+import { saveUdiscLeague } from "./udisc-league-save.js";
+import type { UdiscImportCandidate } from "./imports/udisc-events.js";
+import type { UdiscStandings } from "./imports/udisc-standings.js";
 
 const DEFAULT_DGS_FEED = "https://raw.githubusercontent.com/mostlysober252/GVDG-DGS-Scraper-2.0/main/tournaments.json";
 const IMPORT_BODY_BYTES = 600_000;
 
-export async function handleAdminImport(request: Request, env: Env, origin: string | null): Promise<Response> {
+export async function handleAdminImport(request: Request, env: Env, origin: string | null, adminId = "admin"): Promise<Response> {
   const kind = new URL(request.url).pathname.split("/").filter(Boolean)[2];
   const b = (await readJson(request, IMPORT_BODY_BYTES)) ?? {};
   try {
@@ -40,29 +43,30 @@ export async function handleAdminImport(request: Request, env: Env, origin: stri
       if (!csvText) return json({ error: "invalid_request" }, 400, origin);
       return json({ source: "csv", candidates: normalizeCsvEvents(parseCsvRows(csvText)) }, 200, origin);
     }
-    if (kind === "udisc-events") {
+    if (kind === "udisc-events" || kind === "udisc-league") {
       const target = normalizeUdiscEventsUrl(asStr(b.url, 500));
       if (!target) return json({ error: "invalid_request" }, 400, origin);
-      const pages = [parseUdiscCalendar(await fetchUdiscHtml(target.fetchUrl), target.fetchUrl)];
-      const total = pages[0]?.resultsCount ?? pages[0]?.events.length ?? 0;
-      if (target.scheduleUrl && total > pages[0]!.events.length) {
-        for (let page = 2; page <= 3; page += 1) {
-          if (mergeUdiscCalendars(pages).events.length >= total) break;
-          try {
-            const next = parseUdiscCalendar(await fetchUdiscHtml(udiscSchedulePageUrl(target.scheduleUrl, page)), target.scheduleUrl);
-            pages.push(next);
-            if (!next.events.length) break;
-          } catch (error) {
-            if (!(error instanceof ImportError)) throw error;
-            break;
-          }
+      const loaded = await loadUdiscLeague(target);
+      if (kind === "udisc-league") {
+        if (!b.save) return json({ error: "invalid_request" }, 400, origin);
+        try {
+          return json({ source: "udisc", ...(await saveUdiscLeague(env, adminId, loaded)) }, 200, origin);
+        } catch (error) {
+          if (error instanceof Error && error.message === "league_required") return json({ error: "invalid_request" }, 400, origin);
+          throw error;
         }
       }
-      const calendar = mergeUdiscCalendars(pages);
+      const withCounts = loaded.events.map((event) => {
+        const scored = loaded.standings?.events.find((item) => item.externalUrl && item.externalUrl === event.external_url);
+        return scored ? { ...event, result_count: scored.results.length } : event;
+      });
       return json({
         source: "udisc",
-        candidates: udiscImportCandidates(calendar),
-        truncated: calendar.resultsCount != null && calendar.events.length < calendar.resultsCount,
+        candidates: loaded.league ? [loaded.league, ...withCounts] : withCounts,
+        truncated: loaded.truncated,
+        standings: loaded.standings?.standings || [],
+        rounds_kept: loaded.standings?.roundsKept ?? null,
+        result_events: loaded.standings?.events.length || 0,
       }, 200, origin);
     }
     if (kind === "udisc") {
@@ -90,6 +94,45 @@ export async function handleAdminImport(request: Request, env: Env, origin: stri
 
 async function fetchUdiscHtml(url: string): Promise<string> {
   return safeFetch(url, ["udisc.com"], { maxBytes: 3_000_000, timeoutMs: 12_000 });
+}
+
+async function loadUdiscLeague(target: { kind: "league" | "event"; fetchUrl: string; scheduleUrl: string | null }): Promise<{
+  league: UdiscImportCandidate | null;
+  events: UdiscImportCandidate[];
+  standings: UdiscStandings | null;
+  truncated: boolean;
+}> {
+  const pages = [parseUdiscCalendar(await fetchUdiscHtml(target.fetchUrl), target.fetchUrl)];
+  const total = pages[0]?.resultsCount ?? pages[0]?.events.length ?? 0;
+  if (target.scheduleUrl && total > pages[0]!.events.length) {
+    for (let page = 2; page <= 3; page += 1) {
+      if (mergeUdiscCalendars(pages).events.length >= total) break;
+      try {
+        const next = parseUdiscCalendar(await fetchUdiscHtml(udiscSchedulePageUrl(target.scheduleUrl, page)), target.scheduleUrl);
+        pages.push(next);
+        if (!next.events.length) break;
+      } catch (error) {
+        if (!(error instanceof ImportError)) throw error;
+        break;
+      }
+    }
+  }
+  const calendar = mergeUdiscCalendars(pages);
+  let standings: UdiscStandings | null = null;
+  const shortId = calendar.league?.udisc_short_id;
+  if (shortId) {
+    try {
+      standings = parseUdiscStandings(await fetchUdiscHtml(`https://udisc.com/leagues/${encodeURIComponent(shortId)}/standings`));
+    } catch (error) {
+      if (!(error instanceof ImportError)) throw error;
+    }
+  }
+  return {
+    league: calendar.league,
+    events: calendar.events,
+    standings,
+    truncated: calendar.resultsCount != null && calendar.events.length < calendar.resultsCount,
+  };
 }
 
 async function importNearbyCourses(env: Env, body: Record<string, unknown>): Promise<{

@@ -39,7 +39,7 @@ export async function handleClubAdmin(
   else if (sub === "leagues") response = await handleAdminLeagues(request, env, origin, method, adminId, id);
   else if (sub === "fundraisers") response = await handleAdminFundraisers(request, env, origin, method, adminId, id);
   else if (sub === "meetings") response = await handleAdminMeetings(request, env, origin, method, adminId, id);
-  else if (sub === "import" && method === "POST") response = await handleAdminImport(request, env, origin);
+  else if (sub === "import" && method === "POST") response = await handleAdminImport(request, env, origin, adminId);
   else if (sub === "layouts") response = await handleAdminLayouts(request, env, origin, method, id);
   else if (sub === "members") response = await handleAdminMembers(request, env, origin, method, seg, adminId);
   else if (sub === "shop" || sub === "wallets" || sub === "orders") response = await handleAdminShop(request, env, origin, method, seg, adminId);

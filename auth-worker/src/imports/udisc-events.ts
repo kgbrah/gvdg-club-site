@@ -10,6 +10,8 @@ export interface UdiscImportCandidate extends EventCandidate {
   description?: string | null;
   league_name?: string | null;
   notes?: string | null;
+  udisc_short_id?: string | null;
+  result_count?: number | null;
 }
 
 export interface UdiscCalendar {
@@ -86,8 +88,12 @@ function eventSlug(name: string): string {
 
 function eventUrl(name: string, shortId: string | null, fallback: string): string {
   if (!shortId) return fallback;
+  return udiscPublicEventUrl(name, shortId) || fallback;
+}
+
+export function udiscPublicEventUrl(name: string, shortId: string): string | null {
   const slug = eventSlug(name);
-  return slug ? `https://udisc.com/events/${slug}-${shortId}` : fallback;
+  return slug ? `https://udisc.com/events/${slug}-${shortId}` : null;
 }
 
 function leagueUrl(league: Record<string, unknown>): string | null {
@@ -137,6 +143,7 @@ function leagueCandidate(league: Record<string, unknown>, events: UdiscImportCan
     season,
     description: about ? `${about}\n${url}` : url,
     venue: null,
+    udisc_short_id: text(league.shortId, 20),
   };
 }
 

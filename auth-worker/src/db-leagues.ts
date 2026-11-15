@@ -68,7 +68,7 @@ export async function leagueResultRows(db: D1Like, leagueId: number) {
   return (
     await db
       .prepare(
-        "SELECT r.event_id, r.member_id, r.name, r.place, r.to_par, r.match_result, r.scoring_group FROM results r JOIN events e ON e.id = r.event_id WHERE e.league_id = ? AND e.status = 'final'",
+        "SELECT r.event_id, r.member_id, r.name, r.place, r.to_par, r.match_result, r.scoring_group, r.breakdown FROM results r JOIN events e ON e.id = r.event_id WHERE e.league_id = ? AND e.status = 'final'",
       )
       .bind(leagueId)
       .all()

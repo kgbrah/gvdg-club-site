@@ -29,6 +29,7 @@ export {
   type UdiscCalendar,
   type UdiscImportCandidate,
 } from "./imports/udisc-events.js";
+export { parseUdiscStandings, udiscStandingsFromLoader, type UdiscPastEvent, type UdiscStandings, type UdiscStandingRow } from "./imports/udisc-standings.js";
 export {
   CLUB_ORIGIN,
   DAY_TRIP_MILES,

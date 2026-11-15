@@ -7,7 +7,7 @@ test('admin import candidates are rendered by React from direct import result ev
   const importController = readFileSync('src/admin-app/import-controller.js', 'utf8');
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const candidates = readFileSync('src/admin-app/import-candidates-list.js', 'utf8');
-  const showImportCandidates = importController.match(/function showImportCandidates\(candidates\) \{[\s\S]*?\n\}/)?.[0];
+  const showImportCandidates = importController.match(/function showImportCandidates\(candidates, extra\) \{[\s\S]*?\n\}/)?.[0];
   const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminImportCandidatesReactApp"/);
@@ -17,7 +17,8 @@ test('admin import candidates are rendered by React from direct import result ev
   assert.doesNotMatch(html, /⬇ Import from DiscGolfScene feed/);
   assert.doesNotMatch(html, /function setAdminImportCandidatesState|publishAdminState\('importCandidates'/);
   assert.ok(showImportCandidates);
-  assert.match(showImportCandidates, /dispatchAdminEvent\('gvdg:admin-import-candidates', \{ status: 'ready', candidates: Array\.isArray\(candidates\) \? candidates : \[\] \}\)/);
+  assert.match(showImportCandidates, /status: 'ready'/);
+  assert.match(showImportCandidates, /candidates: Array\.isArray\(candidates\) \? candidates : \[\]/);
   assert.doesNotMatch(showImportCandidates, /importCandidates|textContent|appendChild|replaceChildren|createElement|elx\(|addEventListener|classList/);
   assert.match(importController, /gvdg:admin-import-candidates', \{ status: 'loading', candidates: \[\] \}/);
   assert.ok(initAdmin);
