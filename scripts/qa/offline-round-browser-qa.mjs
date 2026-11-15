@@ -200,8 +200,22 @@ try {
   const gps = button("Tap for GPS");
   if (await gps.count()) await gps.click();
   await page.locator(".hole-range-hud-len").waitFor();
+  const localId = new URL(page.url()).searchParams.get("offline");
+  assert.ok(localId, "The round has a persistent local ID");
+  const markedLie = [{ lat: 35.0002, lng: -82, n: 1 }];
+  async function expectSavedLie() {
+    const lieActions = page.locator(".hole-map-lie-actions");
+    await lieActions.getByRole("button", { name: "Mark lie", exact: true, pressed: true }).waitFor();
+    await lieActions.getByRole("button", { name: "Undo", exact: true }).waitFor();
+    const saved = await page.evaluate(async (id) => {
+      const { offlineRoundStore } = await import("/src/score-app/offline-round-store.js");
+      return (await offlineRoundStore.get(id))?.marks[1];
+    }, localId);
+    assert.deepEqual(saved, markedLie);
+  }
+  assert.equal(await button("Mark lie").getAttribute("aria-pressed"), "false");
   await button("Mark lie").click();
-  await button("Lie 2").waitFor();
+  await expectSavedLie();
   await shots(1);
   await button("Add putt").click();
   await page.getByLabel("Outcome", { exact: true }).selectOption("made");
@@ -210,8 +224,6 @@ try {
   await button("Save shot").click();
   await text("Putt · Made · 18 ft to basket").waitFor();
   await page.keyboard.press("Escape");
-  const localUrl = new URL(page.url());
-  const localId = localUrl.searchParams.get("offline");
   await page.evaluate(async ({ localId, clipId }) => {
     const { createClipStore } = await import("/src/score-app/clip-recovery.js");
     const store = createClipStore(indexedDB);
@@ -222,7 +234,7 @@ try {
   await page.reload({ waitUntil: "domcontentloaded" });
   await text("You can still score this hole.").waitFor();
   await button("Previous hole").click();
-  await button("Lie 2").waitFor();
+  await expectSavedLie();
   await shots(1);
   await text("Putt · Made · 18 ft to basket").waitFor();
   await page.screenshot({ path: join(screenshots, "offline-shots-phone.png") });
@@ -254,7 +266,7 @@ try {
   assert.equal(mobile.writes[0].source.holes[0].target.label, "Saved basket");
   assert.equal(mobile.writes[0].shots[1][0].puttDistanceFt, 18);
   assert.deepEqual(mobile.writes[0].scores["player:0"], { 1: 2, 2: 8 });
-  assert.deepEqual(mobile.writes[0].marks[1], [{ lat: 35.0002, lng: -82, n: 1 }]);
+  assert.deepEqual(mobile.writes[0].marks[1], markedLie);
   assert.deepEqual(mobile.errors, []);
   await mobile.context.close();
 
