@@ -36,6 +36,8 @@ import { casualReplaySnapshot, watchableLiveSnapshot } from "../shared/casual-re
 import { holeWinners, winnerColor } from "../shared/matchplay-colors.js";
 import { GPS_WATCH_OPTIONS, gpsErrorPolicy } from "../shared/hole-map-model.js";
 import { createRoundJournal, drainRoundJournal, resetJournalRetries, roundRecoveryScope } from "./round-recovery.js";
+import { parseShotRows, shotPoint } from "../shared/shot-ledger.js";
+import { shotLedgerState, statsFromShotLedgers } from "./shot-ledger-model.js";
 import { notifyScoreAuthChanged } from "../shared/player-theme-session.js";
 import {
     buildShareCard,
@@ -357,6 +359,7 @@ export function startScoreApp(options) {
             recoveryWake = null;
             recovery = null;
             S.lastSavedLie = null;
+            S.shotLedgers = {};
             if (S.ws) { const ws = S.ws; S.ws = null; ws.close(); }
             clearTimeout(S.wsTimer);
             S.wsTimer = null;
@@ -410,11 +413,13 @@ export function startScoreApp(options) {
                     : perform();
                 if (!added) return;
             } catch {
-                toast(kind === 'score' ? 'Score not saved. Free space on this phone and try again.' : 'Lie not saved. Free space on this phone and try again.');
-                return;
+                const editLabel = kind === 'score' ? 'Score' : kind === 'shots' ? 'Shot' : 'Lie';
+                toast(editLabel + ' not saved. Free space on this phone and try again.');
+                return false;
             }
             renderHole();
             void flushRecovery();
+            return true;
         }
         function scheduleRecovery(context, at) {
             if (!at || !isCurrentRecovery(context)) return;
@@ -444,13 +449,18 @@ export function startScoreApp(options) {
                     if (!isCurrentRecovery(context)) return null;
                     const { roundId, cardId, actorIndex } = context.scope;
                     const body = { ...item.body, recovery: { roundId, cardId, actorIndex, order: item.order, stream: item.stream, previous: item.previous } };
-                    return api(LIVE + '/' + item.kind, { method: 'POST', body, credential: context.credential, timeout: 12000 });
+                    const action = item.kind === 'shots' ? 'throws' : item.kind;
+                    return api(LIVE + '/' + action, { method: 'POST', body, credential: context.credential, timeout: 12000 });
                 }, {
                     active: () => isCurrentRecovery(context) && !finishing,
                     online: () => navigator.onLine,
                     onResult: (item, state, result) => {
                         if (!isCurrentRecovery(context)) return;
                         readRecovery(context);
+                        if (item.kind === 'shots' && result.data?.ledger) {
+                            mergeShotLedgerCell(item.body.scorerIndex, item.body.hole, result.data.ledger);
+                            persistMineCache();
+                        }
                         if (state === 'saved') {
                             if (item.kind === 'throws') S.lastSavedLie = { hole: item.body.hole, scorerIndex: item.body.scorerIndex };
                             const snap = item.kind === 'score' ? result.data : result.data && result.data.snapshot;
@@ -553,6 +563,44 @@ export function startScoreApp(options) {
                 const discColor = document.documentElement?.getAttribute('data-disc-color');
                 const body = { hole, throws, scorerIndex, ...(discColor ? { discColor } : {}) };
                 return { body, previous };
+            });
+        }
+        function mergeShotLedgerCell(scorerIndex, hole, ledger) {
+            const ledgers = S.shotLedgers || (S.shotLedgers = {});
+            const book = ledgers[scorerIndex] || (ledgers[scorerIndex] = {});
+            if (ledger.version >= (book[hole]?.version ?? 0)) book[hole] = ledger;
+        }
+        function mergePrivateShotLedgers(ledgers) {
+            for (const [scorer, book] of Object.entries(ledgers || {})) {
+                for (const [hole, ledger] of Object.entries(book)) mergeShotLedgerCell(scorer, hole, ledger);
+            }
+        }
+        async function refreshShotLedgers() {
+            const context = recovery;
+            if (!isCurrentRecovery(context) || !navigator.onLine) return;
+            const result = await api(LIVE + '/mine', { credential: context.credential, timeout: 12000 });
+            if (!isCurrentRecovery(context) || !result.ok || result.data?.recoveryRoundId !== context.scope.roundId ||
+                result.data?.playerIndex !== context.scope.actorIndex || result.data?.cardId !== context.scope.cardId) return;
+            mergePrivateShotLedgers(result.data.shotLedgers);
+            persistMineCache();
+            renderHole();
+        }
+        async function postShots(hole, scorerIndex, model, next) {
+            const rows = parseShotRows(next);
+            if (!rows) { toast('Check the shot details and try again'); return false; }
+            return enqueueRecovery('shots', () => {
+                if (scorerIndex !== currentScorerIndex() || !S.holes.some((row) => row.hole === hole.hole)) return null;
+                const current = shotLedgerState(S, scorerIndex, hole);
+                if (!current || current.revision !== model.revision || current.target.id !== model.target.id ||
+                    current.target.binding !== model.target.binding) {
+                    toast('These shots changed. Review the current ledger before saving.');
+                    return null;
+                }
+                return {
+                    body: { hole: hole.hole, scorerIndex, ledger: { targetId: model.target.id, binding: model.target.binding, rows,
+                        geometry: { tee: shotPoint(model.geometry.tee), target: shotPoint(model.geometry.target) } } },
+                    previous: model.revision,
+                };
             });
         }
         function patchHoleMarker(hole, kind, point) {
@@ -968,6 +1016,9 @@ export function startScoreApp(options) {
                 scorerIndex: scorerIndex,
                 teeSign: liveTeeSignView(h),
             });
+            const shotLedger = !scorecardState.putting && scorerIndex === S.myIndex ? shotLedgerState(S, scorerIndex, h) : null;
+            const shotStats = !scorecardState.putting ? statsFromShotLedgers(S, S.myIndex, throwsByScorer(S, S.myIndex)) : null;
+            const ledgerScore = scorecardState.rows.find((row) => row.source.playerIndexes.includes(scorerIndex));
             renderScoreBody('scorecard', {
                 ...scorecardState,
                 watchApi: !WATCH && (memberToken() || (ROUND_CODE && readOpenPlayToken())) ? api : null,
@@ -987,6 +1038,12 @@ export function startScoreApp(options) {
                 onRetryRecovery: () => { void flushRecovery('manual'); },
                 onDiscardRecovery: discardRecovery,
                 onThrows: !finishing && !S.cardLocked && S.status === 'live' ? postThrows : null,
+                shotLedger,
+                shotStats,
+                ledgerScore: ledgerScore?.conflictText ? null : ledgerScore?.currentScore ?? null,
+                onRefreshShots: refreshShotLedgers,
+                onSaveShots: shotLedger && recovery && !finishing && !S.cardLocked && S.status === 'live'
+                    ? (model, rows) => postShots(h, scorerIndex, model, rows) : null,
                 onMapMark: memberToken() && S.status !== 'final' ? postMapMark : null,
                 onCtpVote: EVENT_ID && !WATCH ? postCtpVote : null,
                 onOpenFinish: WATCH ? null : openFinishConfirm,
@@ -1183,6 +1240,7 @@ export function startScoreApp(options) {
                 roundConfig: S.roundConfig,
                 scoreTargetError: S.scoreTargetError,
                 scoreTargets: S.scoreTargets,
+                shotLedgers: S.shotLedgers,
                 status: S.status,
                 udiscCourseId: S.udiscCourseId,
                 weather: S.weather,
@@ -1199,6 +1257,7 @@ export function startScoreApp(options) {
             S.status = d.status || null;
             assignHoles(Array.isArray(d.holes) ? d.holes : [], d);
             S.cardId = d.cardId; S.myIndex = d.playerIndex; S.cardmates = d.cardmates;
+            mergePrivateShotLedgers(d.shotLedgers);
             S.joinRequests = Array.isArray(d.joinRequests) ? d.joinRequests : [];
             stopJoinPoll();
             S.cardLocked = d.cardLocked === true || (Array.isArray(d.lockedCardIds) && d.lockedCardIds.indexOf(String(d.cardId ?? 'c0')) >= 0);

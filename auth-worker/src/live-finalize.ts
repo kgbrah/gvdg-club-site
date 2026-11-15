@@ -12,11 +12,13 @@ import { mergePartnerPlayInputs, partnersForStanding, withPlayBreakdown } from "
 import { ingestScorecardMarks } from "./db-hole-shot-marks.js";
 import { shotRoundKey } from "./hole-shot-marks.js";
 import { ratingWeatherFromJson } from "./weather.js";
+import { archiveShotLedgerStmt, finalizedShotLedger, type ArchivedShotLedger, type ShotLedgerViews } from "./shot-ledgers.js";
 
 export type FinalizeLiveEventInput = {
   readonly meta: LiveMeta | null;
   readonly players: PlayerState[];
   readonly liveCtps?: LiveCtpStore;
+  readonly shotLedgers?: ShotLedgerViews;
   readonly env: LiveEnv;
   readonly authMember: string | null;
   readonly authAdmin: boolean;
@@ -66,11 +68,14 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
     forced = incomplete;
     standings = finalizeRoundStandings({ holes, players: input.players, config: scoring.config, targets: scoring.targets });
   }
+  const shotArchives = new Map<string, Record<number, ArchivedShotLedger>>();
   standings = standings.map((standing) => {
     const merged = mergePartnerPlayInputs(partnersForStanding(standing, input.players));
+    const explicit = input.shotLedgers && finalizedShotLedger(input.shotLedgers, input.players, standing, meta, holes, merged.throws);
+    if (explicit && standing.memberId) shotArchives.set(standing.memberId, explicit.archive);
     return {
       ...standing,
-      breakdown: withPlayBreakdown(standing.breakdown, merged, holes),
+      breakdown: explicit ? { ...standing.breakdown, ...explicit.stats } : withPlayBreakdown(standing.breakdown, merged, holes),
       holes: attachThrowsToScorecard(standing.holes, merged.throws),
     };
   });
@@ -92,7 +97,7 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
   if (meta.casual || !meta.eventId) {
     if (meta.casual && meta.roundCode) {
       try {
-        await persistCasualResults(input.env, meta, standings, scorecardForArchive);
+        await persistCasualResults(input.env, meta, standings, scorecardForArchive, shotArchives);
       } catch (error) {
         meta.status = "live";
         throw error;
@@ -123,6 +128,7 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
           match_result: metadataJson(standing.matchResult),
         }),
       ),
+      ...Array.from(shotArchives, ([memberId, archive]) => archiveShotLedgerStmt(input.env.DB, archive, memberId, { eventId: meta.eventId })),
       ...ctpAwardWinners(input.liveCtps ?? {}, input.players).map((winner) =>
         db.setCtpWinnerIfEmptyStmt(input.env.DB, winner.ctpId, meta.eventId, winner.memberId, winner.name),
       ),
@@ -180,6 +186,7 @@ async function persistCasualResults(
   meta: LiveMeta,
   standings: FinalLiveStanding[],
   scorecardForArchive: (standing: FinalLiveStanding) => string | null,
+  shotArchives: ReadonlyMap<string, Record<number, ArchivedShotLedger>>,
 ): Promise<void> {
   const holes = resolvedHoles(meta).map((hole) => ({
     hole: hole.hole,
@@ -207,7 +214,7 @@ async function persistCasualResults(
   // The round row must be inserted first (its id keys the results), then all result rows land atomically.
   await db.runBatch(
     env.DB,
-    standings.map((standing) =>
+    [...standings.map((standing) =>
       db.createCasualResultStmt(env.DB, {
         casual_round_id: roundId,
         member_id: standing.memberId,
@@ -221,7 +228,7 @@ async function persistCasualResults(
         scoring_group: metadataJson(standing.scoringGroup),
         match_result: metadataJson(standing.matchResult),
       }),
-    ),
+    ), ...Array.from(shotArchives, ([memberId, archive]) => archiveShotLedgerStmt(env.DB, archive, memberId, { casualRoundId: roundId }))],
   );
 }
 

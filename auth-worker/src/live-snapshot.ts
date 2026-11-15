@@ -8,6 +8,7 @@ import type { LiveMeta } from "./live-types.js";
 import type { LiveStanding } from "./live-scoring.js";
 import { liveRecoveryId } from "./live-recovery.js";
 import { handicapKey } from "./handicap.js";
+import type { ShotLedgerViews } from "./shot-ledgers.js";
 
 const EMPTY_LOCATIONS: ReadonlyMap<number, LivePlayerLocation> = new Map();
 
@@ -132,6 +133,7 @@ export function mineData(
   liveCtps: LiveCtpStore = {},
   locations: ReadonlyMap<number, LivePlayerLocation> = EMPTY_LOCATIONS,
   ratingBaseline: { ssa: number; ppt: number } | null = null,
+  shotLedgers: ShotLedgerViews = {},
 ): Record<string, unknown> {
   const holes = resolvedHoles(meta);
   const scoring = scoringState(meta, players);
@@ -213,6 +215,8 @@ export function mineData(
     rev: meta?.rev ?? 0,
     playerIndex: meIdx,
     cardmates,
+    shotLedgers: Object.fromEntries(cardmates.filter((row) => row.canEnterScorecard && shotLedgers[row.index])
+      .map((row) => [row.index, shotLedgers[row.index]])),
     cardLocked: isCardLocked(meta?.lockedCardIds, cardId),
     cardAttestation: attestationForCard(meta?.cardAttestations, players, cardId),
     conflicts: issues.conflicts.filter((conflict: ScoreConflict) => conflict.cardId === cardId),

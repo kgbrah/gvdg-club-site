@@ -100,7 +100,7 @@ function StatCard({ compact, row, showLeaders = true, showRank = true }) {
   return h("div", { className: "play-stat-card" + (compact ? " compact" : "") + (row.tone ? " tone-" + row.tone : "") }, [
     h("div", { className: "play-stat-k", key: "k" }, row.label),
     h("div", { className: "play-stat-v", key: "v" }, pct),
-    h("div", { className: "play-stat-s", key: "s" }, [showRank ? rankText(row) : null, sample, row.group === "throw" && sample ? "Estimated" : null].filter(Boolean).join(" · ")),
+    h("div", { className: "play-stat-s", key: "s" }, [showRank ? rankText(row) : null, sample].filter(Boolean).join(" · ")),
     showLeaders && !compact && row.leaders && row.leaders.length
       ? h("ol", { className: "play-stat-leaders", key: "leaders" }, row.leaders.slice(0, 3).map((leader) =>
         h("li", { key: leader.memberId || leader.name }, [
@@ -202,7 +202,7 @@ export function PlayStatsKindBlock({
           : emptyCopy)
         : null,
     hasShotSample && !compact ? h("p", { className: "player-card-meta", key: "estimate-note" },
-      "Shot percentages are estimates from marked lies; older saved rounds may use the original estimate rules. ", SHOT_STAT_DEFINITIONS.putting) : null,
+      "Shot percentages include recorded shots and estimates from matching marked lies. Older rounds may use earlier estimate rules. ", SHOT_STAT_DEFINITIONS.putting) : null,
   ]);
 }
 

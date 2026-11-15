@@ -19,6 +19,7 @@ import { sanitizeProfilePhoto } from "./profile-photo.js";
 import { parseThrowsBody } from "./play-stats.js";
 import { replacePlayerHoleMarks } from "./db-hole-shot-marks.js";
 import { shotRoundKey } from "./hole-shot-marks.js";
+import { hasShotLedgerEdit, readShotLedgers, saveShotLedger } from "./shot-ledgers.js";
 import { updateLivePairs } from "./live-pairs.js";
 import { getLayoutRatingBaseline } from "./rating-store.js";
 import { checkLiveRecovery, liveRecoveryId, matchesLiveRecoveryScope, recordLiveRecovery } from "./live-recovery.js";
@@ -316,9 +317,12 @@ export class LiveEventDO {
     return watch ? j({ sequence: watch.op.sequence }) : j(this.snapshot());
   }
 
-  private mine(authMember: string | null): Response {
+  private async mine(authMember: string | null): Promise<Response> {
     if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
-    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations, this.ratingBaseline));
+    const meta = this.meta;
+    const ledgers = await readShotLedgers(this.state.storage, meta, this.players, authMember);
+    if (this.meta !== meta || meta.status !== "live") return j({ error: "not_live" }, 409);
+    return j(mineData(meta, this.players, authMember, this.liveCtps, this.locations, this.ratingBaseline, ledgers));
   }
 
   /** Casual round: the authenticated caller joins (added once, on the single card "c0"). No-op if already in.
@@ -547,11 +551,15 @@ export class LiveEventDO {
   }
 
   private async finalize(authMember: string | null, authAdmin: boolean, force = false): Promise<Response> {
+    const meta = this.meta;
+    const ledgers = meta?.status === "live" ? await readShotLedgers(this.state.storage, meta, this.players) : {};
+    if (this.meta !== meta) return j({ error: "recovery_scope_changed" }, 409);
     this.locations = new Map();
     return finalizeLiveEvent({
       meta: this.meta,
       players: this.players,
       liveCtps: this.liveCtps,
+      shotLedgers: ledgers,
       env: this.env,
       authMember,
       authAdmin,
@@ -703,6 +711,13 @@ export class LiveEventDO {
   }
 
   private async saveThrows(body: unknown, authMember: string | null, authAdmin: boolean): Promise<Response> {
+    if (hasShotLedgerEdit(body)) {
+      return saveShotLedger(body, authMember, {
+        getRound: () => ({ meta: this.meta, players: this.players }),
+        storage: this.state.storage,
+        persist: (entries) => this.persist(entries),
+      });
+    }
     if (!this.meta) return j({ error: "not_live" }, 409);
     const parsed = parseThrowsBody(body);
     if (!parsed) return j({ error: "bad_throws" }, 400);

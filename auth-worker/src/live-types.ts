@@ -38,6 +38,8 @@ export interface LiveMeta {
   status: "live" | "final";
   startedAt: string;
   recoveryRoundId?: string;
+  /** Private shot books live outside the public players value. This index keeps archive reads bounded. */
+  shotLedgerScorers?: number[];
   weather?: WeatherState | null;
   roundConfig?: LiveScoringConfig;
   rev?: number;
