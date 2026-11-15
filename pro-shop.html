@@ -40,8 +40,7 @@
         .menu-toggle { display: none; border: none; background: transparent; font-size: 1.5rem; }
         main { width: min(1200px, 100%); margin: 0 auto; padding: 118px 1.5rem 4rem; flex: 1; }
         .shop-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 1.25rem; align-items: end; margin: 1rem 0 1.25rem; }
-        .page-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(2.4rem, 7vw, 4.2rem); letter-spacing: 0.05em; line-height: 1; color: var(--text-primary); text-shadow: 0 1px 3px rgba(255,255,255,0.55); }
-        [data-theme="dark"] .page-title { text-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+        .page-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(2.4rem, 7vw, 4.2rem); letter-spacing: 0.05em; line-height: 1; color: var(--text-primary); }
         .page-subtitle { color: var(--text-secondary); max-width: 56ch; line-height: 1.5; margin-top: 0.35rem; }
         .wallet-panel { background: var(--bg-secondary); border: 2px solid var(--border-color); border-radius: 10px; padding: 1rem; box-shadow: 0 8px 28px var(--card-shadow); }
         .wallet-label { color: var(--text-muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
@@ -64,16 +63,16 @@
         .filters { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem; margin-bottom: 1rem; display: grid; grid-template-columns: minmax(180px, 1fr) repeat(4, minmax(120px, 160px)); gap: 0.75rem; }
         .filters input, .filters select { width: 100%; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary); padding: 0.65rem 0.75rem; font: inherit; }
         .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; }
-        .product-card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; box-shadow: 0 6px 24px var(--card-shadow); transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; display: flex; flex-direction: column; }
-        .product-card:hover { transform: translateY(-3px); border-color: var(--primary); box-shadow: 0 10px 30px var(--card-shadow-hover); }
+        .product-card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+        .product-card:hover { border-color: var(--primary); }
         .product-img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: var(--bg-tertiary); border-bottom: 1px solid var(--border-color); }
         .product-fallback { width: 100%; aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--secondary), var(--green)); color: white; font-family: 'Bebas Neue', sans-serif; font-size: 3rem; letter-spacing: 0.05em; }
         .product-body { padding: 0.9rem 1rem 1rem; display: flex; flex-direction: column; gap: 0.45rem; flex: 1; }
-        .product-name { font-weight: 800; color: var(--text-primary); line-height: 1.2; }
+        .product-name { font-weight: 800; color: var(--text-primary); line-height: 1.2; overflow-wrap: normal; word-break: normal; hyphens: none; }
         .product-meta { color: var(--text-muted); font-size: 0.8rem; line-height: 1.35; }
         .product-bottom { margin-top: auto; display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding-top: 0.5rem; }
         .product-price { font-family: 'Bebas Neue', sans-serif; color: var(--secondary-text); font-size: 1.6rem; letter-spacing: 0.03em; }
-        .shop-btn { border: none; border-radius: 8px; background: var(--primary-strong); color: #fff; font-weight: 800; padding: 0.6rem 0.8rem; cursor: pointer; min-height: 40px; }
+        .shop-btn { border: none; border-radius: 8px; background: var(--primary-strong); color: #fff; font-weight: 800; padding: 0.6rem 0.8rem; cursor: pointer; min-height: 44px; white-space: nowrap; hyphens: none; }
         .shop-btn.secondary { background: transparent; border: 1px solid var(--secondary-text); color: var(--secondary-text); }
         .shop-btn:disabled { opacity: 0.55; cursor: default; }
         .cart { position: sticky; top: 96px; background: var(--bg-secondary); border: 2px solid var(--border-color); border-radius: 10px; padding: 1rem; box-shadow: 0 8px 28px var(--card-shadow); }

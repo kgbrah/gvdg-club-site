@@ -14,7 +14,7 @@ const EMPTY_STATE = {
 };
 
 const FORMATS = [
-  ["", "format..."],
+  ["", "format…"],
   ["singles", "Singles"],
   ["doubles", "Doubles"],
   ["teams", "Teams"],
@@ -163,7 +163,7 @@ function EventSelector({ state }) {
       h("option", { key: "empty", value: "" }, "- select an event -"),
       ...state.events.map((event) => h("option", { key: event.id, value: event.id }, event.label)),
     ]),
-    state.status === "loading" && !state.events.length ? h("p", { className: "al-note", key: "loading", role: "status" }, "Loading registration events...") : null,
+    state.status === "loading" && !state.events.length ? h("p", { className: "al-note", key: "loading", role: "status" }, "Loading registration events…") : null,
     state.status === "error" ? h("p", { className: "al-note err", key: "error", role: "alert" }, "Unable to load registration events.") : null,
     state.notice ? h("p", { className: "al-note", key: "notice", role: "status" }, state.notice) : null,
   ]);
@@ -272,7 +272,7 @@ function SettingsForm({ state }) {
 
   return h("div", { className: "al-section", "data-react-admin-registration-settings": state.configStatus }, [
     h("h4", { className: "al-h", key: "title" }, "Registration settings"),
-    state.configStatus === "loading" ? h("p", { className: "al-note", key: "loading", role: "status" }, "Loading registration settings...") : null,
+    state.configStatus === "loading" ? h("p", { className: "al-note", key: "loading", role: "status" }, "Loading registration settings…") : null,
     state.configStatus === "error" ? h("p", { className: "al-note err", key: "error", role: "alert" }, "Unable to load saved settings.") : null,
     h("form", { key: "form", onSubmit: submit }, [
       h("label", { className: "register-addon", htmlFor: "rgOpen", key: "open" }, [
@@ -314,7 +314,7 @@ function SettingsForm({ state }) {
           placeholder: "Add a team",
         }) : null,
       ]),
-      h("button", { className: "admin-btn", disabled: busy, key: "submit", style: { marginTop: "0.5rem" }, type: "submit" }, busy ? "Saving..." : "Save settings"),
+      h("button", { className: "admin-btn", disabled: busy, key: "submit", style: { marginTop: "0.5rem" }, type: "submit" }, busy ? "Saving…" : "Save settings"),
     ]),
   ]);
 }

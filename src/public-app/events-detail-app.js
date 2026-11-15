@@ -6,6 +6,7 @@ import {
   formatLabel,
   statusLabel,
   typeLabel,
+  displayEventTitle,
 } from "../shared/events-model.js";
 import { WeatherStrip } from "../score-app/weather-strip.js";
 import { HoleMap } from "../shared/hole-map.js";
@@ -153,10 +154,12 @@ function LivePanel({ data }) {
       h("span", { key: "label" }, "Live scoring in progress"),
       h("span", { className: "lb-conn", key: "connection" }, data.liveConnection || "Connecting"),
     ]),
-    h("a", { className: "btn-watch-live", href: liveWatchHref({ eventId: data.event && data.event.id }), key: "watch" }, "Watch live"),
-    canScore
-      ? h("a", { className: "btn-keep-score", href: keepScoreHref(data), key: "score" }, "Keep score for my card")
-      : null,
+    h("div", { className: "event-actions", key: "actions" }, [
+      h("a", { className: "btn-watch-live", href: liveWatchHref({ eventId: data.event && data.event.id }), key: "watch" }, "Watch live"),
+      canScore
+        ? h("a", { className: "btn-keep-score", href: keepScoreHref(data), key: "score" }, "Keep score for my card")
+        : null,
+    ]),
     snapshot && snapshot.weather
       ? h("div", { className: "live-weather", key: "weather" }, h(WeatherStrip, { title: "Round weather", weather: snapshot.weather }))
       : null,
@@ -213,7 +216,7 @@ function FinalResults({ course, data, event }) {
   return h("section", { "data-react-events-final-results": "true" }, [
     h("h3", { className: "roster-title", key: "title" }, "Final results"),
     !loaded
-      ? h("p", { className: "lb-empty", key: "loading" }, "Loading results...")
+      ? h("p", { className: "lb-empty", key: "loading" }, "Loading results.")
       : !results.length
         ? h("p", { className: "lb-empty", key: "empty" }, "Results not posted yet.")
         : h("div", { className: "lb-wrap", key: "table" }, h("table", { className: "lb-table" }, [
@@ -366,7 +369,7 @@ export function EventsEventDetailApp() {
     h(BackButton, { key: "back" }),
     h("article", { className: "detail-card", key: "card", "data-react-events-event-detail": "true" }, [
       h("div", { className: "detail-head", key: "head" }, [
-        h("h1", { className: "detail-title", key: "title" }, event.name || "Event"),
+        h("h1", { className: "detail-title", key: "title" }, displayEventTitle(event.name || "Event")),
         event.type ? h(Badge, { className: `type-badge ${typeClass}`, key: "type", text: typeLabel(event.type) }) : null,
         event.status ? h(Badge, { className: `status-badge ${statusClass}`, key: "status", text: statusLabel(event.status) }) : null,
       ]),

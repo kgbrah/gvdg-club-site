@@ -244,7 +244,7 @@ export function DashboardThemeBuilder() {
   async function ingestFile(file) {
     if (!file) return;
     setBusy(true);
-    setStatus("Reading wallpaper...");
+    setStatus("Reading wallpaper…");
     try {
       const wallpaper = await resizeImageFile(file, 960);
       if (!wallpaper || wallpaper.length > MAX_WALLPAPER_CHARS) {
@@ -524,7 +524,7 @@ export function DashboardThemeBuilder() {
             onClick: extract,
             "data-theme-extract": "1",
             key: "extract",
-          }, busy ? "Working..." : "Extract"),
+          }, busy ? "Working…" : "Extract"),
           h("button", {
             type: "button",
             className: "board-link",

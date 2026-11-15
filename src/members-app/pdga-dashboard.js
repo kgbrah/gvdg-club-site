@@ -198,7 +198,7 @@ export function PdgaDashboard({ pdgaNo, state, children, compact = false }) {
 
   if (status === "loading") {
     return dashboardShell("loading", [
-      h("div", { className: "react-pdga-status", key: "status" }, "Loading your stats..."),
+      h("div", { className: "react-pdga-status", key: "status" }, "Loading your stats…"),
       ...extras,
     ]);
   }

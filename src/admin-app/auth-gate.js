@@ -22,7 +22,7 @@ function gateIcon() {
 function LoadingState() {
   return h("div", { className: "status-box", role: "status", "data-react-admin-auth-gate": "loading" }, [
     h("div", { className: "spinner", key: "spinner" }),
-    h("div", { key: "message" }, "Checking your session..."),
+    h("div", { key: "message" }, "Checking your session…"),
   ]);
 }
 

@@ -26,7 +26,7 @@ const COURSE_SLIDES = [
         image: "https://d22ksth68ujgu2.cloudfront.net/a280319675d856e30869b9bca4eaee00_m_40698704_Unknown.jpg",
         imageAlt: "West Meadowbrook Park",
         difficultyClass: "difficulty-beginner",
-        difficulty: "Easy - Hard",
+        difficulty: "Easy – Hard",
         holes: "18",
         rating: "4.3",
         time: "~1 hr",
@@ -42,7 +42,7 @@ const COURSE_SLIDES = [
         image: "https://d22ksth68ujgu2.cloudfront.net/b7fd828f4c6bf4fe89cd95a2d07e4cfc_m_IMG_6470.jpg",
         imageAlt: "ECU North Recreational Complex",
         difficultyClass: "difficulty-intermediate",
-        difficulty: "Moderate - Hard",
+        difficulty: "Moderate – Hard",
         holes: "23",
         rating: "4.4",
         time: "~2 hrs",
@@ -139,7 +139,7 @@ const COURSE_SLIDES = [
         image: "https://d22ksth68ujgu2.cloudfront.net/ce27baa0cd58600da35e54beb76128c1_m_IMG_2170.jpg",
         imageAlt: "Barnet Park",
         difficultyClass: "difficulty-advanced",
-        difficulty: "Moderate - Very Hard",
+        difficulty: "Moderate – Very Hard",
         holes: "18",
         rating: "4.1",
         time: "~1.5 hrs",
@@ -223,7 +223,7 @@ const COURSE_SLIDES = [
         image: "https://d22ksth68ujgu2.cloudfront.net/20348b2697a1d34ef46a457ea19fb677_m_IMG_2080.jpg",
         imageAlt: "Glenburnie Park",
         difficultyClass: "difficulty-advanced",
-        difficulty: "Moderate - Hard",
+        difficulty: "Moderate – Hard",
         holes: "18",
         rating: "4.6",
         time: "~2 hrs",
@@ -239,7 +239,7 @@ const COURSE_SLIDES = [
         image: "https://d22ksth68ujgu2.cloudfront.net/1d99b20a6b23ab7bd5fc96edb0272862_m_IMG_0370.jpg",
         imageAlt: "Creekside Park",
         difficultyClass: "difficulty-advanced",
-        difficulty: "Moderate - Hard",
+        difficulty: "Moderate – Hard",
         holes: "18",
         rating: "4.3",
         time: "~2 hrs",
@@ -255,7 +255,7 @@ const COURSE_SLIDES = [
         image: "https://d22ksth68ujgu2.cloudfront.net/e3547497c0aae8f215a1680d4080f1f0_m_IMG_5628.jpg",
         imageAlt: "Sunset Park DGC",
         difficultyClass: "difficulty-advanced",
-        difficulty: "Moderate - Hard",
+        difficulty: "Moderate – Hard",
         holes: "18",
         rating: "4.1",
         time: "~2 hrs",
@@ -301,7 +301,7 @@ const COURSE_SLIDES = [
         udisc: "https://udisc.com/courses/eagles-apex-at-west-craven-park-9saH",
         coords: "35.232019,-77.132066",
         difficultyClass: "difficulty-advanced",
-        difficulty: "Moderate - Very Hard",
+        difficulty: "Moderate – Very Hard",
         holes: "18",
         rating: "4.0",
         time: "~2 hrs",
@@ -357,7 +357,7 @@ const COURSE_SLIDES = [
         udisc: "https://udisc.com/courses/northeast-creek-park-UIAe",
         coords: "34.747051,-77.358165",
         difficultyClass: "difficulty-advanced",
-        difficulty: "Moderate - Hard",
+        difficulty: "Moderate – Hard",
         holes: "18",
         rating: "4.4",
         time: "~2 hrs",
@@ -437,7 +437,7 @@ function InfoItem({ label, value }) {
 }
 
 function CourseCard({ course, condition }) {
-  const visibleLocation = course.distance ? `${course.location} - ${course.distance}` : course.location;
+  const visibleLocation = course.distance ? `${course.location} – ${course.distance}` : course.location;
   const conditionLabel = condition ? `, ${condition.label}${condition.when ? " " + condition.when : ""}` : "";
   return h(
     "div",

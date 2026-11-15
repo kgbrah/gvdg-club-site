@@ -33,7 +33,7 @@ export function BlogApp() {
           h("a", { className: "back-btn", href: "events.html", key: "events" }, "Browse events"),
           h("a", { className: "blog-home-link", href: "index.html", key: "back" }, [
             h(MoveLeft, { "aria-hidden": "true", key: "icon", size: 18, strokeWidth: 2.5 }),
-            h("span", { key: "text" }, "Back to Home"),
+            h("span", { key: "text" }, "Back to home"),
           ]),
         ]),
       ])),

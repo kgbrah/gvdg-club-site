@@ -3,6 +3,7 @@ import React from "react";
 import { requestJson } from "./api.js";
 import { selectDashboardTab } from "./dashboard-shell.js";
 import { formatEventDay } from "./format.js";
+import { displayEventTitle } from "../shared/events-model.js";
 
 const h = React.createElement;
 const DAY = 24 * 60 * 60 * 1000;
@@ -65,17 +66,20 @@ export function BagTagLeagueOrder({ compact = false }) {
         h("span", { className: "member-account-action", key: "open" }, "Tag order"),
       ]);
     }
-    return h("div", { className: "dash-standings-card", key: id || league.name }, [
-      h("h4", { className: "dash-subtitle", key: "name" }, league.name || "Bag tags"),
-      h("p", { className: "dash-note", key: "note" }, "Current order from the last finished round."),
-      h("table", { className: "lb-table", key: "table" }, [
-        h("thead", { key: "head" }, h("tr", null, ["Tag", "Player"].map((label) => h("th", { key: label }, label)))),
-        h("tbody", { key: "body" }, tags.slice(0, 20).map((row) => h("tr", { key: `${row.current_place}-${row.name}` }, [
-          h("td", { key: "tag" }, `#${row.current_place}`),
-          h("td", { key: "name" }, row.name || "Player"),
-        ]))),
+    return h("section", { className: "member-list", key: id || league.name }, [
+      h("div", { className: "member-list-rows", key: "rows" }, [
+        h("div", { className: "member-list-row", key: "head" }, [
+          h("div", { className: "member-list-copy", key: "copy" }, [
+            h("h3", { className: "member-list-name", key: "name" }, league.name || "Bag tags"),
+            h("p", { className: "member-list-meta", key: "note" }, "Current order"),
+          ]),
+          h("a", { className: "member-list-action", href: `events.html#league/${encodeURIComponent(id)}`, key: "link" }, "Open league"),
+        ]),
+        ...tags.slice(0, 20).map((row) => h("div", { className: "member-list-row", key: `${row.current_place}-${row.name}` }, [
+          h("span", { className: "member-list-date", key: "tag" }, `#${row.current_place}`),
+          h("h3", { className: "member-list-name", key: "name" }, row.name || "Player"),
+        ])),
       ]),
-      h("a", { className: "standings-link", href: `events.html#league/${encodeURIComponent(id)}`, key: "link" }, "Open league"),
     ]);
   }));
 }
@@ -117,14 +121,14 @@ function ScheduleEvent({ event }) {
   let action = null;
   if (openHere) {
     action = h("button", {
-      className: "passkey-btn",
+      className: "member-list-action passkey-btn",
       key: "signup",
       onClick: () => selectDashboardTab("events", { eventId: event.id }),
       type: "button",
     }, "Sign up");
   } else if (external && canSignUp(event)) {
     action = h("a", {
-      className: "passkey-btn",
+      className: "member-list-action passkey-btn",
       href: external,
       key: "signup",
       rel: "noopener noreferrer",
@@ -132,21 +136,19 @@ function ScheduleEvent({ event }) {
     }, "Sign up");
   } else if (event.status === "final") {
     action = h("a", {
-      className: "passkey-btn",
+      className: "member-list-action passkey-btn",
       href: `events.html#event/${encodeURIComponent(event.id)}`,
       key: "results",
     }, "Results");
   }
-  return h("article", { className: `register-card${event.status === "live" ? " live" : ""}` }, [
-    h("div", { className: "register-head", key: "head" }, [
-      h("div", { key: "heading" }, [
-        event.date ? h("p", { className: "register-date", key: "date" }, formatEventDay(event.date)) : null,
-        h("h3", { className: "register-name", key: "name" }, event.name || "Round"),
-      ]),
-      event.status === "live" ? h("span", { className: "register-live-badge", key: "badge" }, "LIVE NOW") : null,
-      event.status === "final" ? h("span", { className: "register-final-badge", key: "badge" }, "Final") : null,
+  const status = event.status === "live" ? "Live" : event.status === "final" ? "Final" : "";
+  return h("article", { className: "member-list-row" }, [
+    h("time", { className: "member-list-date", dateTime: event.date || undefined, key: "date" }, event.date ? formatEventDay(event.date) : "Date to be set"),
+    h("div", { className: "member-list-copy", key: "copy" }, [
+      h("h3", { className: "member-list-name register-name", key: "name" }, displayEventTitle(event.name || "Round")),
+      status ? h("p", { className: "member-list-meta", key: "status" }, status) : null,
     ]),
-    action ? h("div", { className: "register-actions", key: "actions" }, action) : null,
+    action,
   ]);
 }
 
@@ -165,15 +167,15 @@ export function LeagueSchedule() {
       active = false;
     };
   }, []);
-  if (rows == null) return h("p", { className: "dash-note" }, "Loading league schedule...");
+  if (rows == null) return h("p", { className: "dash-note" }, "Loading league schedule…");
   const leagues = scheduleLeagues(rows);
   if (!leagues.length) {
     return h("p", { className: "dash-note", "data-react-league-schedule": "empty" }, "No current leagues.");
   }
   return h("section", { className: "member-events-sections", "data-react-league-schedule": "ready" }, leagues.map((league) =>
-    h("section", { className: "member-event-section", key: league.id, "aria-label": league.name }, [
+    h("section", { className: "member-list", key: league.id, "aria-label": league.name }, [
       h("h2", { className: "register-subhead", key: "title" }, [league.name, league.season].filter(Boolean).join(" · ")),
-      h("div", { className: "member-event-list", key: "events" }, league.events.map((event) =>
+      h("div", { className: "member-list-rows", key: "events" }, league.events.map((event) =>
         h(ScheduleEvent, { event, key: event.id }))),
     ])));
 }

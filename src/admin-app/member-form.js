@@ -114,6 +114,6 @@ export function AdminMemberForm() {
         " Make admin",
       ]),
     ]),
-    h("button", { className: "admin-btn", disabled: busy, key: "submit", type: "submit" }, busy ? "Creating..." : "Create & issue temp PIN"),
+    h("button", { className: "admin-btn", disabled: busy, key: "submit", type: "submit" }, busy ? "Creating…" : "Create & issue temp PIN"),
   ]);
 }

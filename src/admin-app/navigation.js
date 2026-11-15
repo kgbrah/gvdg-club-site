@@ -114,7 +114,7 @@ function Workspace({ route, title, group, events, courses }) {
           ...courses.map((course) => h("option", { value: String(course.id), key: course.id }, course.name)),
         ]),
       ]),
-      h(SectionLinks, { items: courseTools, route, label: "Course workspace", key: "course-links" }),
+      h(SectionLinks, { items: courseTools, route, label: "Course workspace", layout: "admin-tool-grid", key: "course-links" }),
     ]) : null,
     route.tab === "wallets" && route.eventId ? h("button", {
       className: "admin-chip", type: "button", key: "event-back", onClick: () => requestAdminTab("registration", { eventId: route.eventId }),

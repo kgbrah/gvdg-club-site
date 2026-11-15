@@ -16,7 +16,7 @@ function icon(Icon, size = 34) {
 }
 
 function defaultStatus() {
-  return { message: "Loading...", retry: null, tone: "loading" };
+  return { message: "Loading…", retry: null, tone: "loading" };
 }
 
 function publishedStatus() {

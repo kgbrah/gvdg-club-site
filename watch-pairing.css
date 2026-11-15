@@ -1,7 +1,15 @@
 .watch-pairing > summary {
   cursor: pointer;
-  font-weight: 650;
+  min-height: 44px;
+  align-content: center;
+  font: 800 1.03rem/1.2 Archivo, system-ui, sans-serif;
+  letter-spacing: -.02em;
   padding-block: 0.6rem;
+}
+
+.watch-pairing-body input,
+.watch-pairing-body button {
+  min-height: 44px;
 }
 
 .watch-pairing-body {
@@ -43,12 +51,23 @@
 }
 
 .watch-pairing-body li {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.45rem;
-  margin-block: 0.4rem;
+  gap: .55rem .7rem;
+  min-height: 3.53rem;
+  margin: 0;
+  padding: .7rem 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.watch-pairing-body li :is(span, strong) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .round-quick-tools { justify-content: flex-start; flex-wrap: wrap; }

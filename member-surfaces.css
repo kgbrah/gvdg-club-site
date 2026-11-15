@@ -21,28 +21,68 @@
 #members .member-subpage > :is(.player-card, .dash-collapse, .wallet-panel, .member-link-section) { margin: 0; }
 #members :is(.member-subpage, .member-install, .members-react-club-panel, .react-board-panel, .react-tee-signs-panel) h2,
 #members :is(.member-result-list, .member-link-section) h2,
-#members :is(.course-conditions-title, .meeting-minutes-title, .members-chart-title, .react-board-panel .my-dashboard-title, .react-tee-signs-panel .my-dashboard-title) {
+#members :is(
+  .course-conditions-title,
+  .meeting-minutes-title,
+  .members-chart-title,
+  .my-dashboard-title,
+  .doubles-league-title,
+  .register-subhead,
+  .dash-subtitle,
+  .meeting-minutes-section-title
+) {
   margin: 0;
   color: var(--text-primary);
   font: 800 clamp(1.03rem, 2.7vw, 1.3rem)/1.2 Archivo, system-ui, sans-serif;
-  letter-spacing: -.023em;
+  letter-spacing: -.02em;
   text-transform: none;
   text-align: left;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+#members .member-page-heading .player-app-title,
+body .login-gate .login-title,
+body .member-dialog-title {
+  font-family: "Bebas Neue", sans-serif;
+  font-weight: 400;
+  letter-spacing: .04em;
+  text-transform: none;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 #members :is(.member-subpage, .react-board-panel, .react-tee-signs-panel) :is(.player-card-meta, .dash-note, .board-note, .tee-capture-note, .register-fee, .register-date, .live-round-meta) {
   color: var(--member-muted);
   line-height: 1.45;
 }
-#members :is(.member-subactions, .member-subpage .dashboard-actions) {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
+#members :is(.member-subactions, .member-subpage .dashboard-actions, .member-action-grid) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
   gap: .45rem;
-  justify-content: flex-start;
+  justify-content: stretch;
   margin: 0;
 }
-#members :is(.member-subactions, .member-subpage .dashboard-actions) > .dashboard-action,
+#members :is(.member-subactions, .member-subpage .dashboard-actions, .member-action-grid):has(> :nth-child(3):last-child) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+#members :is(.member-subactions, .member-subpage .dashboard-actions, .member-action-grid) > :only-child {
+  grid-column: 1 / -1;
+}
+#members :is(.member-subactions, .member-subpage .dashboard-actions, .member-action-grid):has(> p) {
+  grid-template-columns: minmax(0, 1fr);
+}
+#members :is(.member-subactions, .member-subpage .dashboard-actions, .member-action-grid):has(> p) > :is(.dashboard-action, button, a) {
+  grid-column: auto;
+  width: auto;
+  justify-self: start;
+}
+#members :is(.member-subactions, .member-subpage .dashboard-actions) > .dashboard-action {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  justify-self: stretch;
+  text-align: center;
+}
 #members .member-subpage > .dashboard-action {
   width: auto;
   justify-self: start;
@@ -116,7 +156,11 @@
   color: var(--text-primary);
   border-color: var(--member-line);
 }
-#members .member-join .player-play-actions { display: flex; flex-wrap: wrap; }
+#members .member-join .player-play-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .45rem;
+}
 #members .member-join .player-btn { width: auto; min-width: 5.2rem; }
 #members .member-course-search summary { cursor: pointer; font-weight: 750; list-style-position: inside; }
 #members .member-course-search summary svg { vertical-align: -.2em; margin-inline: .25rem .36rem; }
@@ -148,7 +192,13 @@
   align-items: center;
 }
 #members .member-play-surface .live-round-card > div { min-width: 0; }
-#members .member-play-surface .live-round-title { overflow-wrap: anywhere; }
+#members .member-play-surface .live-round-title {
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 #members .member-play-surface .live-round-badge {
   color: var(--member-muted);
   background: var(--member-paper);
@@ -289,7 +339,14 @@
 #members .member-link-row:disabled { opacity: .58; cursor: progress; }
 #members .member-link-row:not(:disabled):hover { background: var(--member-hover); }
 #members :is(.member-link-icon, .member-link-arrow) { flex-shrink: 0; color: var(--member-muted); }
-#members .member-link-copy { display: grid; gap: .18rem; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+#members .member-link-copy { display: grid; gap: .18rem; flex: 1 1 auto; min-width: 0; overflow-wrap: normal; word-break: normal; }
+#members .member-link-copy strong {
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 #members .member-link-copy strong { font-size: .9rem; font-weight: 760; }
 #members .member-link-copy small { color: var(--member-muted); font-size: .76rem; line-height: 1.25; }
 #members .member-settings-profile { display: flex; align-items: center; gap: .75rem; margin: .12rem 0 .65rem; }
@@ -380,7 +437,7 @@ body .profile-photo-row:has(#photoInput:focus-visible) label {
 }
 #members .member-appearance :is(.dash-theme-toggle button, .dash-theme-pills button, .dash-theme-preset, .disc-color-swatch, .theme-toggle) { min-height: 44px; }
 #members .member-appearance :is(.dash-theme-swatch, .dash-theme-drop):focus-within { outline: 2px solid var(--text-primary); outline-offset: 2px; }
-#members .member-appearance .dash-theme-swatch-role { overflow-wrap: anywhere; }
+#members .member-appearance .dash-theme-swatch-role { overflow-wrap: normal; word-break: normal; }
 #members .member-appearance .dash-theme-apply { min-height: 44px; }
 #members .member-appearance .dash-theme-slider input { min-height: 28px; }
 
@@ -416,9 +473,14 @@ body .login-gate .login-card {
 body .login-gate :is(.login-title, .community-shared-profile .section-title) {
   margin: 0 0 .35rem;
   color: var(--text-primary);
-  font: 800 clamp(1.45rem, 5vw, 2.05rem)/1.15 Archivo, system-ui, sans-serif;
-  letter-spacing: -.04em;
+  font-family: "Bebas Neue", sans-serif;
+  font-size: clamp(2rem, 6vw, 2.6rem);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: .04em;
   text-align: left;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 body .login-gate .login-icon { display: inline-flex; margin: 0 0 .62rem; color: var(--text-secondary); }
 body .login-gate .login-icon svg { width: 1.75rem; height: 1.75rem; }
@@ -461,9 +523,279 @@ body #crottsReactApp :is(button,textarea,a):focus-visible { outline: 2px solid c
 }
 @media (max-width: 360px) {
   body[data-member-shell="auth"] .member-app-header .logo-wordmark { display: none; }
-  #members .member-play-surface .live-round-card { grid-template-columns: 1fr; }
+  #members .member-play-surface .live-round-card { grid-template-columns: minmax(0, 1fr) auto; }
   #members .member-inline-search { grid-template-columns: 1fr; }
   #members .member-inline-search .dashboard-action { justify-self: start; width: auto; }
   #members .member-appearance .dash-theme-palette { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   #members .member-wallet-page .wallet-panel { grid-template-columns: 1fr; }
 }
+
+/* Shared club rows: account, bag tags, and league schedule. */
+#members :is(.member-account-row, .member-link-row, .bag-tag-home-row, .member-list-row) {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: .55rem .7rem;
+  width: 100%;
+  min-height: 3.53rem;
+  margin: 0;
+  padding: .7rem .82rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  text-decoration: none;
+  font: 750 .9rem/1.25 Archivo, system-ui, sans-serif;
+}
+#members :is(.member-link-list, .member-list-rows, .member-home-services) {
+  border-radius: var(--member-radius);
+}
+#members .member-list { display: grid; gap: .45rem; min-width: 0; }
+#members .member-list-rows,
+#members .bag-tag-home:not(.member-home-tags) {
+  border: 1px solid var(--member-line);
+  border-radius: var(--member-radius);
+  background: var(--member-panel);
+  overflow: hidden;
+}
+#members .member-list-row + .member-list-row,
+#members .bag-tag-home:not(.member-home-tags) > .member-list-row + * { border-top: 1px solid var(--member-line); }
+#members :is(.member-list-copy, .member-account-copy, .member-link-copy) {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: grid;
+  gap: .12rem;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+#members :is(.member-list-name, .member-account-copy strong, .member-link-copy strong, .member-person, .player-who h2, .player-event-name, .register-name, .live-round-title, .player-name-cell, .champion-name, .member-name, .player-modal-name, .board-author, .handicap-where, .udisc-history-title, .play-stat-leaders span, .member-search-matches strong, .player-condition-name) {
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  max-width: 100%;
+}
+#members :is(.member-list-name, .member-account-copy strong, .member-link-copy strong, .bag-tag-home h3) {
+  color: var(--text-primary);
+  font: 750 .9rem/1.2 Archivo, system-ui, sans-serif;
+  letter-spacing: -.014em;
+  text-transform: none;
+}
+#members :is(.member-list-meta, .member-account-copy small, .member-link-copy small, .bag-tag-home .player-card-meta) {
+  margin: 0;
+  color: var(--text-muted);
+  font: 500 .75rem/1.26 Archivo, system-ui, sans-serif;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+#members :is(.member-list-date, .member-account-value, .register-date, .player-score b, .round-rating, .recent-round-score, .handicap-row b, .udisc-history-score, .udisc-stat b, .udisc-hole-row b, .play-stat-v, .player-stat-v, .play-score-legend-item b, .dash-tile-num, .player-rating-pill b, .club-rating-number, .club-rating-score-main, .season-result-par, .wallet-balance, .wallet-amount, .doubles-quick-stat-val, .members-stat-number, .player-modal-stat-val, .player-story-rating b, .dash-event-ratings, .pdga-event-miles, .lb-table :is(td, th), .doubles-table :is(td, th)) {
+  font-family: Archivo, system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+#members .member-list-date {
+  flex: 0 0 auto;
+  min-width: 4.5rem;
+  color: var(--member-muted);
+  font: 650 .78rem/1.2 Archivo, system-ui, sans-serif;
+}
+#members .doubles-table .player-name-cell,
+#members .lb-table td:first-child {
+  font-family: Archivo, system-ui, sans-serif;
+  font-weight: 750;
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: nowrap;
+}
+#members :is(.member-account-action, .member-list-action, .player-home .player-job-link) {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 2.75rem;
+  margin: 0;
+  padding: .24rem .7rem;
+  border: 1px solid var(--member-line);
+  border-radius: .55rem;
+  background: var(--member-hover);
+  color: var(--text-primary);
+  font: 750 .78rem/1.2 Archivo, system-ui, sans-serif;
+  text-transform: none;
+  letter-spacing: 0;
+  text-decoration: none;
+  white-space: nowrap;
+}
+#members :is(.member-action-grid, .dashboard-actions, .player-actions, .player-play-actions, .register-actions, .live-round-actions, .bag-disc-voice-actions, .udisc-history-picks, .member-practice-toolbar, .play-stats-kind, .doubles-tabs, .ts-guess) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .45rem;
+  align-items: stretch;
+  margin-top: .45rem;
+}
+#members :is(.member-action-grid, .dashboard-actions, .player-actions, .player-play-actions, .register-actions, .live-round-actions, .bag-disc-voice-actions, .udisc-history-picks, .member-practice-toolbar, .play-stats-kind, .doubles-tabs):has(> :nth-child(3):last-child) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+#members :is(.member-action-grid, .member-subactions, .dashboard-actions, .player-actions, .register-actions, .player-chip-row):has(> :only-child) {
+  grid-template-columns: minmax(0, max-content);
+}
+#members :is(.member-action-grid, .dashboard-actions, .player-actions, .player-play-actions, .register-actions, .live-round-actions, .bag-disc-voice-actions, .udisc-history-picks, .member-practice-toolbar, .play-stats-kind, .doubles-tabs) > :is(a, button, .player-btn, .dashboard-action, .passkey-btn, .doubles-tab, .player-more-item) {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  justify-content: center;
+}
+#members .udisc-history-picks .player-btn {
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+#members .member-person {
+  display: block;
+  overflow: hidden;
+  max-width: 100%;
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+#members :is(button, .player-btn, .dashboard-action, .passkey-btn, .player-chip, .doubles-tab, .season-pill, .play-stats-kind button, .members-filter-btn, .dash-tab, .bag-disc-button, .player-job-link, .member-list-action, .member-account-action, .live-round-badge, .ts-badge, .register-live-badge, .register-subhead) {
+  font-family: Archivo, system-ui, sans-serif;
+  text-transform: none;
+  letter-spacing: 0;
+}
+#members .dash-note { overflow-wrap: normal; word-break: normal; }
+#members .member-section-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .5rem .85rem;
+}
+#members .member-section-heading > .dashboard-action { width: auto; justify-self: end; }
+#members .live-round-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+#members .live-round-card .passkey-btn {
+  width: auto;
+  margin: 0;
+  justify-self: end;
+  white-space: nowrap;
+}
+#members .passkey-row:has(> :only-child) { grid-template-columns: minmax(0, max-content); }
+#members .passkey-row:has(> :only-child) > .passkey-btn { width: auto; }
+#members .dashboard-action,
+#members .player-btn { width: auto; }
+#members :is(.member-name, .champion-name, .board-author, .welcome-text strong, .player-condition-name) {
+  font-family: Archivo, system-ui, sans-serif;
+  font-weight: 750;
+  letter-spacing: 0;
+  text-transform: none;
+}
+#members .register-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .35rem .7rem;
+}
+#members .register-head > :first-child { min-width: 0; }
+#members .player-list-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+#members .player-condition-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .55rem .7rem;
+}
+#members .player-condition-row > :first-child { min-width: 0; }
+#members .handicap-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+#members .handicap-row > :first-child { min-width: 0; }
+
+#members :is(.member-action-grid, .dashboard-actions, .player-actions, .register-actions, .udisc-history-picks, .member-practice-toolbar, .bag-disc-voice-actions, .members-controls):has(> :nth-child(odd):last-child):not(:has(> :only-child)):not(:has(> :nth-child(3):last-child)) > :last-child {
+  grid-column: 1 / -1;
+}
+#members .season-selector,
+#members .player-chip-row {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  align-items: center;
+  overflow-x: auto;
+  gap: .45rem;
+  margin-top: .45rem;
+}
+#members :is(.season-pill, .doubles-tab, .members-filter-btn, .play-stats-kind button, .dash-theme-toggle button, .udisc-history-side .player-btn, .doubles-sort-btn, .club-rating-load-btn) {
+  min-height: 44px;
+  white-space: nowrap;
+}
+#members .player-chip { white-space: nowrap; }
+#members .members-filter-btn { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#members .member-practice-tabs > :is(.dashboard-action, .player-more-item) { white-space: nowrap; }
+#members .members-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: .45rem;
+}
+#members .members-controls .members-search { grid-column: 1 / -1; min-height: 44px; }
+#members :is(.dash-standings-card, .doubles-table-wrap) {
+  max-width: 100%;
+  overflow-x: auto;
+}
+#members :is(.lb-table, .doubles-table) {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+}
+#members :is(.lb-table, .doubles-table) :is(th, td) {
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: nowrap;
+}
+#members :is(.lb-table, .doubles-table) :is(th, td).member-num,
+#members .doubles-table :is(th, td):not(:nth-child(2)) {
+  width: 1%;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+#members :is(.lb-table, .doubles-table) :is(.player-name-cell),
+#members .doubles-table :is(th, td):nth-child(2) {
+  width: auto;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+#members :is(.doubles-table thead th, .lb-table th, .doubles-quick-stat-label, .register-subhead, .player-season-row:first-child, .bag-tag-home h3, .play-stats-kind button) {
+  text-transform: none;
+  letter-spacing: 0;
+}
+#members :is(.members-stat-card, .member-card, .champion-card, .dashboard-action, .meeting-minutes-item):hover {
+  transform: none;
+  box-shadow: none;
+}
+#members :is(.champion-card, .dash-standings-card, .doubles-league-container, .doubles-quick-stat, .doubles-table-wrap) {
+  background: var(--member-panel);
+  color: var(--text-primary);
+  border: 1px solid var(--member-line);
+  border-radius: var(--member-radius);
+}
+#members .champion-card { background-image: none; }
+#members :is(.doubles-league-title, .my-dashboard-title, .register-subhead, .members-chart-title, .meeting-minutes-title, .course-conditions-title, .dash-subtitle) {
+  margin-bottom: .7rem;
+}
+
+

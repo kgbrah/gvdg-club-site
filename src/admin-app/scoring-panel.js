@@ -187,7 +187,7 @@ function EventSelector({ eventsState, selectedId }) {
       onChange: (event) => dispatchRequest("gvdg:admin-scoring-select-event-request", { eventId: event.target.value }),
       value: selectedId,
     }, [
-      h("option", { key: "none", value: "" }, eventsState.status === "loading" ? "Loading events..." : "select a scheduled or live event"),
+      h("option", { key: "none", value: "" }, eventsState.status === "loading" ? "Loading events…" : "select a scheduled or live event"),
       ...events.map((event) => h("option", { key: event.id, value: event.id }, `${event.name} [${event.status}]${event.date ? ` - ${event.date}` : ""}`)),
     ]),
   ]);
@@ -278,7 +278,7 @@ function StartControls({ state }) {
         stations: config.putting?.stations || [],
       }) : null,
       h("div", { className: "sc-start-actions", key: "actions" }, [
-        h("button", { className: "admin-btn", disabled: pending, id: "scStartBtn", key: "start", onClick: start, type: "button" }, pending ? "Starting..." : "Start live scoring"),
+        h("button", { className: "admin-btn", disabled: pending, id: "scStartBtn", key: "start", onClick: start, type: "button" }, pending ? "Starting…" : "Start live scoring"),
         h("button", {
           className: "admin-btn secondary",
           id: "scAddPlayersBtn",
@@ -350,7 +350,7 @@ export function AdminScoringPanel() {
 
   return h("div", { className: "admin-scoring-card", "data-react-admin-scoring": state.status }, [
     h("div", { className: "admin-scoring-card-block", key: "events" }, h(EventSelector, { eventsState: eventsView, selectedId: state.eventId })),
-    state.status === "loading" ? h("p", { className: "al-note", key: "loading", role: "status" }, "Loading live scoring...") : null,
+    state.status === "loading" ? h("p", { className: "al-note", key: "loading", role: "status" }, "Loading live scoring…") : null,
     state.status === "error" ? h("p", { className: "al-note err", key: "error", role: "alert" }, state.message || "Unable to load live scoring.") : null,
     state.status === "start" ? h("div", { className: "admin-scoring-card-block", key: `start-${state.eventId}` }, h(StartControls, { state })) : null,
     state.status === "live" || state.status === "final" ? h(LiveControls, { key: `live-${state.eventId}`, state }) : null,

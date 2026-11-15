@@ -97,7 +97,7 @@ export function MemberDirectoryPanel({ data }) {
     setDisplayCount(PAGE_SIZE);
   }, [filter, searchTerm]);
 
-  if (!data) return h("div", { className: "dash-note", "data-react-member-directory": "loading" }, "Loading member directory...");
+  if (!data) return h("div", { className: "dash-note", "data-react-member-directory": "loading" }, "Loading member directory…");
 
   const visible = filtered.slice(0, displayCount);
   const remaining = Math.max(0, filtered.length - displayCount);
@@ -109,7 +109,7 @@ export function MemberDirectoryPanel({ data }) {
       h("input", {
         type: "search",
         className: "members-search",
-        placeholder: "Search members by name or PDGA #...",
+        placeholder: "Search members by name or PDGA #…",
         "aria-label": "Search members by name or PDGA number",
         value: searchTerm,
         onChange: (event) => setSearchTerm(event.target.value),

@@ -116,7 +116,7 @@ export function LiveScoringPanel({ token, compact = false, variant = "home", onC
       h("h3", { key: "title" }, "Your cards"),
       count
         ? h("div", { className: "live-round-list", key: "list" }, state.items.map((item) => h(LiveRoundCard, { item, key: `${item.kind}-${item.href}` })))
-        : h("p", { className: "player-card-meta", key: "empty" }, state.status === "loading" ? "Looking for a live card..." : "No live card yet."),
+        : h("p", { className: "player-card-meta", key: "empty" }, state.status === "loading" ? "Looking for a live card…" : "No live card yet."),
     ]);
   }
   if (compact) {
@@ -145,7 +145,7 @@ export function LiveScoringPanel({ token, compact = false, variant = "home", onC
     h("summary", { className: "my-dashboard-title dash-collapse-summary", key: "title" }, count ? `Live Scoring (${count})` : "Live Scoring"),
     h("div", { className: "live-round-list", key: "list" }, count
       ? state.items.map((item) => h(LiveRoundCard, { item, key: `${item.kind}-${item.href}` }))
-      : h("p", { className: "dash-note" }, "No active scorecards right now.")),
+      : h("p", { className: "dash-note" }, "No live cards.")),
   ]);
 }
 
@@ -220,8 +220,23 @@ export function WalletPanel({ token, compact = false }) {
     h("a", { className: "dashboard-action primary", href: "pro-shop.html", key: "shop" }, "Shop with credit"),
     h("div", { className: "wallet-ledger", key: "ledger" }, transactions.length
       ? transactions.map((transaction, index) => h(WalletLine, { transaction, key: transaction.id || index }))
-      : h("div", { className: "wallet-empty" }, "Event payouts and shop purchases will appear here.")),
+      : h("div", { className: "wallet-empty" }, "No store credit activity yet.")),
   ]);
+}
+
+function standingsHead(labels, nameIndex) {
+  return h("tr", null, labels.map((label, index) => h("th", {
+    className: index === nameIndex ? "player-name-cell" : "member-num",
+    key: label,
+  }, label)));
+}
+
+function nameCell(key, value) {
+  return h("td", { className: "player-name-cell", key }, value);
+}
+
+function numCell(key, value) {
+  return h("td", { className: "member-num", key }, value);
 }
 
 function LeagueCard({ item }) {
@@ -232,7 +247,7 @@ function LeagueCard({ item }) {
   const teams = Array.isArray(item.teamStandings) ? item.teamStandings : [];
   const players = Array.isArray(item.standings) ? item.standings : [];
   const note = !official ? null
-    : pending ? "Loading official tally..."
+    : pending ? "Loading official tally…"
     : failed ? [
       "Couldn't load the official sheet tally. ",
       h("a", { className: "standings-link", href: "ryder-cup.html", key: "link" }, "Open scoreboard"),
@@ -245,25 +260,25 @@ function LeagueCard({ item }) {
     h("h4", { className: "dash-subtitle", key: "title" }, `${league.name || "League"}${league.season ? ` - ${league.season}` : ""} - ${official ? "Official tally" : "Standings"}`),
     note ? h("p", { className: "dash-note", key: "note" }, note) : null,
     teams.length ? h("table", { className: "lb-table", key: "teams" }, [
-      h("thead", { key: "head" }, h("tr", null, ["Team", "Pts", "W", "T", "L"].map((label) => h("th", { key: label }, label)))),
+      h("thead", { key: "head" }, standingsHead(["Team", "Pts", "W", "T", "L"], 0)),
       h("tbody", { key: "body" }, teams.map((team) => h("tr", { key: team.teamName || team.team }, [
-        h("td", { key: "name" }, team.teamName || team.team || "Team"),
-        h("td", { key: "points" }, String(team.points)),
-        h("td", { key: "wins" }, String(team.wins)),
-        h("td", { key: "ties" }, String(team.ties)),
-        h("td", { key: "losses" }, String(team.losses)),
+        nameCell("name", team.teamName || team.team || "Team"),
+        numCell("points", String(team.points)),
+        numCell("wins", String(team.wins)),
+        numCell("ties", String(team.ties)),
+        numCell("losses", String(team.losses)),
       ]))),
     ]) : null,
     players.length ? h("details", { key: "players" }, [
       h("summary", { className: "standings-summary", key: "summary" }, players.some((player) => player.current_place != null) ? `Tag order (${players.length})` : `Player records (${players.length})`),
       h("table", { className: "lb-table", key: "table" }, [
-        h("thead", { key: "head" }, h("tr", null, (players.some((player) => player.current_place != null) ? ["Tag", "Player", "Played", "Wins"] : ["Pos", "Player", "Pts", "Played", "Wins"]).map((label) => h("th", { key: label }, label)))),
+        h("thead", { key: "head" }, standingsHead(players.some((player) => player.current_place != null) ? ["Tag", "Player", "Played", "Wins"] : ["Pos", "Player", "Pts", "Played", "Wins"], 1)),
         h("tbody", { key: "body" }, players.map((player, index) => h("tr", { key: `${player.name || "player"}-${index}` }, [
-          h("td", { key: "pos" }, player.current_place != null ? String(player.current_place) : String(index + 1)),
-          h("td", { key: "name" }, player.name != null ? String(player.name) : "Player"),
-          player.current_place != null ? null : h("td", { key: "points" }, String(player.points)),
-          h("td", { key: "events" }, String(player.events)),
-          h("td", { key: "wins" }, String(player.wins)),
+          numCell("pos", player.current_place != null ? String(player.current_place) : String(index + 1)),
+          nameCell("name", player.name != null ? String(player.name) : "Player"),
+          player.current_place != null ? null : numCell("points", String(player.points)),
+          numCell("events", String(player.events)),
+          numCell("wins", String(player.wins)),
         ]))),
       ]),
     ]) : null,
@@ -310,17 +325,17 @@ function LiveEventStandings({ event }) {
       h("a", { href: `events.html#event/${encodeURIComponent(event.id)}`, className: "standings-link", key: "link" }, "Open"),
     ]),
     standings.length ? h("table", { className: "lb-table", key: "table" }, [
-      h("thead", { key: "head" }, h("tr", null, headings.map((label) => h("th", { key: label }, label)))),
+      h("thead", { key: "head" }, standingsHead(headings, 1)),
       h("tbody", { key: "body" }, standings.map((standing, index) => h("tr", { key: `${standing.name || "player"}-${index}` }, [
-        h("td", { key: "pos" }, String(index + 1)),
-        h("td", { key: "name" }, standingNameWithTeam(standing)),
-        h("td", { key: "thru" }, standing.thru ? String(standing.thru) : "-"),
+        numCell("pos", String(index + 1)),
+        nameCell("name", standingNameWithTeam(standing)),
+        numCell("thru", standing.thru ? String(standing.thru) : "-"),
         matchplay
-          ? h("td", { key: "match" }, displayMatchStatus(standing.match))
-          : h("td", { key: "total" }, standing.total != null && standing.thru ? String(standing.total) : "-"),
-        matchplay ? null : h("td", { key: "par" }, standing.thru ? formatToPar(standing.toPar) : "-"),
+          ? numCell("match", displayMatchStatus(standing.match))
+          : numCell("total", standing.total != null && standing.thru ? String(standing.total) : "-"),
+        matchplay ? null : numCell("par", standing.thru ? formatToPar(standing.toPar) : "-"),
       ]))),
-    ]) : h("div", { className: "dash-note", key: "empty" }, "Waiting for the first scores..."),
+    ]) : h("div", { className: "dash-note", key: "empty" }, "Nothing here yet."),
   ]);
 }
 

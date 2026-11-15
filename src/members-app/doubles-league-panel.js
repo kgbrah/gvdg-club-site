@@ -231,7 +231,7 @@ function AllTimePanel({ leaderboard, onPlayerSelect }) {
     h("input", {
       type: "search",
       className: "doubles-search-bar",
-      placeholder: "Search player name...",
+      placeholder: "Search player name…",
       "aria-label": "Search doubles players",
       value: searchTerm,
       onChange: (event) => setSearchTerm(event.target.value),

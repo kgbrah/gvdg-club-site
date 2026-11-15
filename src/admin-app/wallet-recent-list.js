@@ -119,7 +119,7 @@ export function AdminWalletRecentList() {
   const view = useSettledWhileLoading(state);
 
   if (view.status === "idle" || view.status === "loading") {
-    return h("p", { className: "al-note", "data-react-admin-wallet-recent": "loading", role: "status" }, "Loading...");
+    return h("p", { className: "al-note", "data-react-admin-wallet-recent": "loading", role: "status" }, "Loading…");
   }
 
   if (view.status === "error") {

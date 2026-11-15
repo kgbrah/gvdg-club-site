@@ -79,7 +79,7 @@ function HomePayJob({ events, registrations, token, onReload }) {
         ? `${first.event.name || "Club event"} + ${extra} more`
         : first.event.name || "Club event"),
     ]),
-    h("span", { className: "player-keep-score-go", key: "go" }, busy ? "Paying..." : canWallet ? "Pay" : "Due"),
+    h("span", { className: "player-keep-score-go", key: "go" }, busy ? "Paying…" : canWallet ? "Pay" : "Due"),
   ]);
 }
 
@@ -125,7 +125,7 @@ function HomeConditionsCard() {
           key: "pill",
         }, report.label),
       ])))
-      : h("p", { className: "player-card-meta", key: "empty" }, state.status === "loading" ? "Checking courses..." : "No reports in the last 48 hours."),
+      : h("p", { className: "player-card-meta", key: "empty" }, state.status === "loading" ? "Checking courses…" : "No reports in the last 48 hours."),
   ]);
 }
 

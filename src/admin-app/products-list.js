@@ -210,7 +210,7 @@ export function AdminProductsList() {
   const view = useSettledWhileLoading(state, state.inventoryStatus);
 
   if (view.status === "loading") {
-    return h("p", { className: "al-note", "data-react-admin-products-list": "loading", role: "status" }, "Loading...");
+    return h("p", { className: "al-note", "data-react-admin-products-list": "loading", role: "status" }, "Loading…");
   }
 
   if (!view.products.length) {

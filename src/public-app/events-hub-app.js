@@ -5,6 +5,7 @@ import { useEventsHub } from "./events-hub-data.js";
 import { EventScheduleFacts } from "../shared/event-schedule.js";
 import { EventFieldRoster } from "../shared/event-field-roster.js";
 import { liveWatchHref } from "../shared/live-watch.js";
+import { displayEventTitle } from "../shared/events-model.js";
 import { LiveStandings } from "./live-standings.js";
 
 const h = React.createElement;
@@ -81,7 +82,7 @@ function EventCard({ event }) {
 
   return h(tag, { className: `event-card${live ? " live" : ""}`, href: tag === "a" ? href : undefined }, [
     h("div", { className: "event-card-top", key: "top" }, [
-      h("h3", { className: "event-name", key: "name" }, event && event.name ? String(event.name) : "Event"),
+      h("h3", { className: "event-name", key: "name" }, event && event.name ? displayEventTitle(event.name) : "Event"),
       event && event.typeLabel ? h(Badge, {
         className: `type-badge ${typeClass}`,
         key: "type",
@@ -100,12 +101,12 @@ function EventCard({ event }) {
       className: `status-badge ${statusClass}`,
       text: String(event.statusLabel),
     })) : null,
-    watchHref
-      ? h("a", { className: "btn-watch-live", href: watchHref, key: "watch" }, "Watch live")
-      : null,
     live ? h(LiveStandings, { key: "standings", snapshot: event && event.liveSnapshot }) : null,
-    watchHref && href
-      ? h("a", { className: "event-cta", href, key: "details" }, "Event details")
+    watchHref
+      ? h("div", { className: "event-actions", key: "actions" }, [
+        h("a", { className: "btn-watch-live", href: watchHref, key: "watch" }, "Watch live"),
+        href ? h("a", { className: "event-cta", href, key: "details" }, "Event details") : null,
+      ])
       : null,
   ]);
 }

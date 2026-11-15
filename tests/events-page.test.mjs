@@ -140,7 +140,7 @@ test('public Events status messages publish to React', () => {
 
   assert.match(source, /id="status"/);
   assert.doesNotMatch(source, /function publishStatus\(status\)|new CustomEvent\('gvdg:events-status'|showStatus\(message, isError, onRetry\)/);
-  assert.match(hubData, /publishEventsStatus\(\{ message: "Loading\.\.\."/);
+  assert.match(hubData, /publishEventsStatus\(\{ message: "Loading…"/);
   assert.match(hubData, /tone: "error"/);
   assert.doesNotMatch(source, /statusEl\.className|statusEl\.replaceChildren|statusEl\.appendChild|document\.createElement|addEventListener|empty-icon', '🥏'/);
   assert.match(main, /import \{ EventsStatusApp \} from "\.\/events-status-app\.js"/);
@@ -305,7 +305,7 @@ test('public Events event detail fetches in React', () => {
   assert.match(dataApp, /export function useEventsEventDetail/);
   assert.match(dataApp, /EVENTS_ROUTE_REQUEST_EVENT/);
   assert.match(dataApp, /fetchPublicJson\(api, `\/events\/\$\{encodeURIComponent\(routeId\)\}`\)/);
-  assert.match(dataApp, /publishEventsStatus\(\{ message: "Loading event\.\.\."/);
+  assert.match(dataApp, /publishEventsStatus\(\{ message: "Loading event…"/);
   assert.match(dataApp, /publishEventsView\("detail"\)/);
   assert.match(dataApp, /publishEventsLastUpdated\(null\)/);
   assert.match(dataApp, /function mountLiveLeaderboard/);
@@ -398,7 +398,7 @@ test('Ryder Cup upcoming cards open the event, previous results keep the league 
   assert.match(eventsSource, /function ryderCupEventHash\(event\)/);
   assert.match(eventsSource, /function eventHubItem\(raw, courseIndex\) \{[\s\S]*href: `#event\/\$\{encodeURIComponent\(event\.id\)\}`/);
   assert.match(eventsSource, /stripFeedDecor/);
-  assert.match(eventsSource, /League \/ Results/);
+  assert.match(eventsSource, /League results/);
   assert.match(homeSource, /const RYDER_CUP_LEAGUE_URL = "events\.html#league\/4"/);
   assert.match(ryderSource, /events\.html#league\/4/);
 });

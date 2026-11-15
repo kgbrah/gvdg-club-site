@@ -84,7 +84,7 @@ export function MemberRegistrationPanel({ eventId } = {}) {
       h(MoreLink, { tab: "leagues", className: "dashboard-action", key: "league" }),
       h(MoreLink, { tab: "results", className: "dashboard-action", key: "results" }),
     ]),
-    state.status === "loading" && !state.events.length && !state.registrations.length ? h("p", { className: "dash-note", key: "loading" }, "Loading registration options...") : null,
+    state.status === "loading" && !state.events.length && !state.registrations.length ? h("p", { className: "dash-note", key: "loading" }, "Loading registration options…") : null,
     state.status === "error" ? h("p", { className: "dash-note", key: "error" }, "Registration is temporarily unavailable. Please refresh or try again in a minute.") : null,
     state.status !== "error" ? h("div", { className: "member-events-sections", key: "content" }, [
       h(EventRegistrationSections, {

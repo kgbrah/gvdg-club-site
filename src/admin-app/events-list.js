@@ -5,6 +5,7 @@ import { adminConfirm } from "./admin-dialogs.js";
 import {
   bucketAdminEvents,
   calendarEntries,
+  displayEventTitle,
   formatAdminEventPlace,
   formatAdminEventWhen,
   normalizeAdminEvent,
@@ -104,7 +105,7 @@ function AdminEventRow({ event }) {
       },
       type: "button",
     }, [
-      h("span", { className: "ev-name", key: "name" }, event.name),
+      h("span", { className: "ev-name", key: "name" }, displayEventTitle(event.name)),
       h("span", { className: "admin-event-meta", key: "type" }, event.kind === "campaign" ? "Campaign" : event.kind === "minutes" ? "Meeting minutes" : typeLabel(event.type)),
       when ? h("span", { className: "admin-event-meta", key: "when" }, when) : null,
       place ? h("span", { className: "admin-event-meta", key: "place" }, place) : null,

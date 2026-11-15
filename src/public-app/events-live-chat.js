@@ -30,7 +30,7 @@ function storageSet(key, value) {
 
 function postErrorMessage(status) {
   if (status === 409) return "Chat opens when this event goes live.";
-  if (status === 429) return "Easy, champ. Give it a second.";
+  if (status === 429) return "Please wait a moment and try again.";
   if (status === 413) return "Keep it under 280 characters.";
   if (status === 400) return "Need a name and a message.";
   return "Couldn't send that.";
@@ -129,12 +129,12 @@ export function EventLiveChat({ apiBase, eventId, memberName, memberToken }) {
   return h("section", { className: "live-chat", "data-react-live-chat": "ready" }, [
     h("div", { className: "live-chat-head", key: "head" }, [
       h("h3", { className: "live-chat-title", key: "title" }, "Live chat"),
-      h("p", { className: "live-chat-note", key: "note" }, "Cheer loud. Talk trash. Don't be a jerk to juniors."),
+      h("p", { className: "live-chat-note", key: "note" }, "Keep it friendly, especially around juniors."),
     ]),
     h("div", { className: "live-chat-list", key: "list", ref: scroller },
       messages.length
         ? messages.map((message) => h(ChatRow, { key: message.id || message.createdAt + message.body, message }))
-        : h("p", { className: "live-chat-empty" }, "Be the first to chirp. Parked it? Let 'em hear it."),
+        : h("p", { className: "live-chat-empty" }, "No messages yet."),
     ),
     h("form", { className: "live-chat-form", key: "form", onSubmit }, [
       signedIn
@@ -152,11 +152,11 @@ export function EventLiveChat({ apiBase, eventId, memberName, memberToken }) {
         key: "draft",
         maxLength: EVENT_CHAT_BODY_MAX,
         onChange: (event) => setDraft(event.target.value),
-        placeholder: "Nice birdie. Or don't.",
+        placeholder: "Your message",
         rows: 2,
         value: draft,
       }),
-      h("button", { className: "live-chat-send", disabled: busy, key: "send", type: "submit" }, busy ? "Sending..." : "Send"),
+      h("button", { className: "live-chat-send", disabled: busy, key: "send", type: "submit" }, busy ? "Sending…" : "Send"),
       status ? h("div", { className: "live-chat-status", key: "status" }, status) : null,
     ]),
   ]);

@@ -113,6 +113,6 @@ export function AdminWalletAdjustmentForm() {
         value: form.note,
       }),
     ]),
-    h("button", { className: "admin-btn", disabled: busy, key: "submit", type: "submit" }, busy ? "Posting..." : "Post wallet adjustment"),
+    h("button", { className: "admin-btn", disabled: busy, key: "submit", type: "submit" }, busy ? "Posting…" : "Post wallet adjustment"),
   ]);
 }

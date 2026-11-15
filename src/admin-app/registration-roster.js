@@ -99,7 +99,7 @@ export function AdminRegistrationRoster() {
   if (state.status === "loading") {
     return h(React.Fragment, null, [
       title,
-      h("p", { className: "al-note", "data-react-admin-registration-roster": "loading", key: "state", role: "status" }, "Loading registered players..."),
+      h("p", { className: "al-note", "data-react-admin-registration-roster": "loading", key: "state", role: "status" }, "Loading registered players…"),
     ]);
   }
 

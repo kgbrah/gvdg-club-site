@@ -38,7 +38,7 @@ function ReplyBox({ onSubmit }) {
       onSubmit(text, () => setText(""));
     },
   }, [
-    h("textarea", { rows: 2, maxLength: 4000, placeholder: "Write a reply...", value: text, onChange: (event) => setText(event.target.value), key: "input" }),
+    h("textarea", { rows: 2, maxLength: 4000, placeholder: "Write a reply…", value: text, onChange: (event) => setText(event.target.value), key: "input" }),
     h("button", { type: "submit", className: "passkey-btn", key: "button" }, "Reply"),
   ]);
 }
@@ -97,7 +97,7 @@ export function MemberBoardPanel() {
   async function submitPost(body, parentId, clear) {
     const trimmed = String(body || "").trim();
     if (!trimmed || !token) return;
-    setStatus({ message: parentId ? "Saving reply..." : "Saving post...", tone: "" });
+    setStatus({ message: parentId ? "Saving reply…" : "Saving post…", tone: "" });
     const response = await request("/board", { method: "POST", token, body: { body: trimmed, parent_id: parentId || null } }).catch(() => null);
     if (response?.ok) {
       clear();
@@ -141,20 +141,20 @@ export function MemberBoardPanel() {
       h("textarea", {
         rows: 3,
         maxLength: 4000,
-        placeholder: "Share something with the club... (markdown: **bold**, - bullets, https links)",
+        placeholder: "Share something with the club… (markdown: **bold**, - bullets, https links)",
         value: text,
         onChange: (event) => setText(event.target.value),
         key: "input",
       }),
       h("button", { type: "submit", className: "passkey-btn", key: "button" }, "Post"),
     ]),
-    h("div", { className: `board-status${status.tone ? ` ${status.tone}` : ""}`, role: "status", "aria-live": "polite", key: "status" }, status.message || (state.status === "loading" && !state.posts.length ? "Loading board..." : "")),
+    h("div", { className: `board-status${status.tone ? ` ${status.tone}` : ""}`, role: "status", "aria-live": "polite", key: "status" }, status.message || (state.status === "loading" && !state.posts.length ? "Loading board…" : "")),
     h("div", { className: "board-feed", key: "feed" }, state.status === "loading" && !state.posts.length
-      ? h("p", { className: "dash-note" }, "Loading board...")
+      ? h("p", { className: "dash-note" }, "Loading board…")
       : state.status === "error"
         ? h("p", { className: "dash-note" }, "Board posts are temporarily unavailable.")
         : state.posts.length
           ? state.posts.map((post) => h(BoardPost, { post, authors: state.authors, canDelete, onDelete: deletePost, onReply: submitPost, key: post.id }))
-        : h("p", { className: "dash-note" }, "No posts yet - start the conversation!")),
+        : h("p", { className: "dash-note" }, "No posts yet.")),
   ]);
 }

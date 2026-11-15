@@ -475,7 +475,7 @@ test('admin members list is rendered by React from direct loader events', () => 
   assert.match(memberForm, /id: "amUdisc"/);
   assert.match(memberForm, /id: "amAdmin"/);
   assert.match(memberForm, /className: "admin-member-form-admin-toggle"/);
-  assert.match(memberForm, /busy \? "Creating\.\.\." : "Create & issue temp PIN"/);
+  assert.match(memberForm, /busy \? "Creating…" : "Create & issue temp PIN"/);
   assert.doesNotMatch(memberForm, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️|🏆|⚠|⏱|—/);
   assert.match(membersList, /export function AdminMembersList/);
   assert.match(membersList, /gvdg:admin-members-list/);
@@ -530,7 +530,7 @@ test('admin wallet recent list is fetched by React after admin auth and wallet t
   assert.match(walletForm, /id: "waAmount"/);
   assert.match(walletForm, /id: "waNote"/);
   assert.match(walletForm, /className: "admin-wallet-form-wide"/);
-  assert.match(walletForm, /busy \? "Posting\.\.\." : "Post wallet adjustment"/);
+  assert.match(walletForm, /busy \? "Posting…" : "Post wallet adjustment"/);
   assert.doesNotMatch(walletForm, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️|🏆|⚠|⏱|—/);
   assert.match(walletRecent, /export function AdminWalletRecentList/);
   assert.match(walletRecent, /import \{ adminJson \} from "\.\/admin-api\.js"/);
@@ -859,7 +859,7 @@ test('admin data archive destination list is fetched by React after admin auth a
   assert.match(destinationForm, /id: "dxEndpointActive"/);
   assert.match(destinationForm, /hasAuthToken === true \|\| destination\.has_auth_token === true/);
   assert.match(destinationForm, /form\.hasAuthToken \? "Leave blank to keep existing token" : "Add a token \(optional\)"/);
-  assert.match(destinationForm, /busy \? "Saving\.\.\." : form\.id \? "Save destination" : "Add destination"/);
+  assert.match(destinationForm, /busy \? "Saving…" : form\.id \? "Save destination" : "Add destination"/);
   assert.match(destinationForm, /className: "register-addon admin-data-archive-destination-toggle"/);
   assert.match(destinationForm, /className: "admin-form-actions"/);
   assert.match(html, /\.admin-data-archive-destination-form \{ scroll-margin-top: 5\.5rem; \}/);

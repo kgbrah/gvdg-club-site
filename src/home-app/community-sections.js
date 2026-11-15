@@ -83,7 +83,7 @@ export function HomeMembershipSection() {
           key: "cta",
           rel: "noopener noreferrer",
           target: "_blank",
-        }, "Pay $15 dues"),
+        }, "Pay with PayPal"),
       ]),
       h("li", { className: "membership-step", key: "login" }, [
         h("span", { className: "membership-step-label", key: "number", "aria-hidden": "true" }, "Step 2"),
@@ -93,7 +93,7 @@ export function HomeMembershipSection() {
           className: "cta-button membership-step-action membership-step-secondary",
           href: "gvdg-members.html#apply",
           key: "cta",
-        }, "Create member login"),
+        }, "Set up login"),
       ]),
     ]),
     h("p", { className: "membership-next", key: "next" }, "Already paid your dues? Go straight to step 2 to create your member login."),

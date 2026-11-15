@@ -264,7 +264,7 @@ function TeeSignReviewCard({ state, sign }) {
       }))),
       h("div", { className: "ts-review-actions", key: "actions" }, [
         h("button", { className: "admin-btn secondary", disabled: busy, key: "add", onClick: () => setRows((current) => [...current, rowFromSeed({ suggestedLayoutName: "Main", par: 3 }, current.length)]), type: "button" }, "+ Row"),
-        sign.status === "rejected" ? null : h("button", { className: "admin-btn", disabled: busy, key: "approve", onClick: () => request("gvdg:admin-tee-sign-review-approve-request", { rows: rowsPayload(rows) }), type: "button" }, pending ? "Working..." : sign.status === "official" ? "Apply rows" : "Approve"),
+        sign.status === "rejected" ? null : h("button", { className: "admin-btn", disabled: busy, key: "approve", onClick: () => request("gvdg:admin-tee-sign-review-approve-request", { rows: rowsPayload(rows) }), type: "button" }, pending ? "Working…" : sign.status === "official" ? "Apply rows" : "Approve"),
         sign.status === "rejected" ? null : h("button", { className: "admin-btn secondary", disabled: busy, key: "extract", onClick: () => request("gvdg:admin-tee-sign-review-extract-request"), type: "button" }, "Re-run vision"),
         sign.status === "rejected" ? null : h("button", { className: "admin-btn danger", disabled: busy, key: "reject", onClick: rejectSign, type: "button" }, "Reject"),
         h("button", { className: "admin-btn danger", disabled: busy, key: "delete", onClick: deleteSign, type: "button" }, "Delete"),
@@ -303,7 +303,7 @@ export function AdminTeeSignReviewList() {
 
   const view = useSettledWhileLoading(state, state.queueStatus);
 
-  if (view.status === "loading") return h("div", { className: "ts-review-list", "data-react-admin-tee-sign-review": "loading", role: "status" }, "Loading...");
+  if (view.status === "loading") return h("div", { className: "ts-review-list", "data-react-admin-tee-sign-review": "loading", role: "status" }, "Loading…");
   if (view.status === "error") return h("div", { className: "ts-review-empty", "data-react-admin-tee-sign-review": "error", role: "alert" }, "Could not load tee signs.");
   if (!view.signs.length) return h("div", { className: "ts-review-empty", "data-react-admin-tee-sign-review": "empty", role: "status" }, "No tee signs in this queue.");
   return h("div", { className: "ts-review-list", "data-react-admin-tee-sign-review": "ready" }, view.signs.map((sign) => h(TeeSignReviewCard, { key: sign.key, sign, state: view })));

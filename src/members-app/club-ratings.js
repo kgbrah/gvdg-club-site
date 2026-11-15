@@ -200,7 +200,7 @@ function RatingPanel({ kind, title, group, onLoadMore }) {
       ? h("div", { className: "club-rating-actions", key: "actions" }, h(
         "button",
         { type: "button", className: "club-rating-load-btn", disabled: group.loading, onClick: onLoadMore },
-        group.loading ? "Loading..." : `Load more ${kind} rounds`,
+        group.loading ? "Loading…" : `Load more ${kind} rounds`,
       ))
       : null,
   ]);

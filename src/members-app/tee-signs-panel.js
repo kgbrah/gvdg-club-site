@@ -76,9 +76,9 @@ function TeeSignCard({ row, courses, token }) {
 }
 
 function TeeSignList({ signs, courses, token, status }) {
-  if (status === "loading" && !signs.length) return h("div", { className: "dash-note" }, "Loading tee signs...");
+  if (status === "loading" && !signs.length) return h("div", { className: "dash-note" }, "Loading tee signs…");
   if (!signs.length) {
-    return h("div", { className: "dash-note" }, "No tee signs captured yet. Pick a course and hole above to add your first one.");
+    return h("div", { className: "dash-note" }, "No tee signs yet.");
   }
   return h(React.Fragment, null, signs.map((row) => h(TeeSignCard, { row, courses, token, key: row.id })));
 }
@@ -131,7 +131,7 @@ export function MemberTeeSignsPanel({ routeCourseId } = {}) {
   async function onFileChange(event) {
     const file = event.target.files?.[0];
     if (!file) return;
-    setMessage({ text: "Preparing photo...", tone: "" });
+    setMessage({ text: "Preparing photo…", tone: "" });
     const dataUrl = await resizeImageFile(file, 1024);
     if (!dataUrl) {
       setPending(null);
@@ -155,7 +155,7 @@ export function MemberTeeSignsPanel({ routeCourseId } = {}) {
       setMessage({ text: "Pick a course and hole first.", tone: "error" });
       return;
     }
-    setMessage({ text: "Uploading tee sign...", tone: "" });
+    setMessage({ text: "Uploading tee sign…", tone: "" });
     const response = await request("/tee-signs", { method: "POST", token, body: { courseId, hole, image: pending.image } }).catch(() => null);
     if (response?.status === 201) {
       setPending(null);

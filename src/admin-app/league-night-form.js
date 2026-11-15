@@ -259,7 +259,7 @@ export function AdminLeagueNightForm() {
       id: "lnLayout",
       label: "Layout",
       children: h("select", { id: "lnLayout", key: "input", onChange: (event) => updateField("layoutId", event.target.value), value: form.layoutId }, [
-        h("option", { key: "blank", value: "" }, layoutsState.status === "loading" ? "Loading layouts..." : "Select layout"),
+        h("option", { key: "blank", value: "" }, layoutsState.status === "loading" ? "Loading layouts…" : "Select layout"),
         ...(layoutsState.layouts || []).map((layout) => h("option", { key: String(layout.id), value: String(layout.id) }, layout.name || "Layout")),
       ]),
     }),
@@ -272,7 +272,7 @@ export function AdminLeagueNightForm() {
       h("input", { checked: form.start, key: "box", onChange: (event) => updateField("start", event.target.checked), type: "checkbox" }),
       "Start live cards now",
     ]),
-    h("button", { className: "admin-btn", disabled: busy, key: "submit", type: "submit" }, busy ? "Building night..." : "Build matches and start cards"),
+    h("button", { className: "admin-btn", disabled: busy, key: "submit", type: "submit" }, busy ? "Building night…" : "Build matches and start cards"),
     result && Array.isArray(result.events)
       ? h("div", { className: "player-list", key: "result" }, result.events.map((event) =>
           h("a", {

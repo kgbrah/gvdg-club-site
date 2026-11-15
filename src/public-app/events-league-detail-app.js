@@ -61,7 +61,7 @@ function useEventsLeagueDetail() {
       publishEventsView("status");
       publishEventsLastUpdated(null);
       publishEventsStatus({
-        message: "Loading league...",
+        message: "Loading league…",
         retry: null,
         tone: "loading",
       });
@@ -233,7 +233,7 @@ function PlayerStandingsTable({ isMatch, standings }) {
           ]);
         })),
       ]))
-      : h("p", { className: "lb-empty", key: "empty" }, "No finalized rounds yet - standings appear once rounds are scored."),
+      : h("p", { className: "lb-empty", key: "empty" }, "Standings appear once rounds are scored."),
   ]);
 }
 

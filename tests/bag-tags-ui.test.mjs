@@ -15,7 +15,7 @@ test("bag tags show on the events hub, member home, and admin club tools", () =>
   assert.match(events, /body\[data-events-view="hub"\] #bagTagsSection/);
   assert.match(events, /id="bagTagsSection"/);
   assert.match(publicMain, /EventsBagTagsApp/);
-  assert.match(board, /Lower number is better/);
+  assert.match(board, /[Ll]ower number is better/);
   assert.match(members, /BagTagPanel/);
   assert.match(panel, /\/bag-tags\/challenges/);
   assert.match(panel, /\/bag-tags\/request/);

@@ -40,7 +40,7 @@ function loading(className, spinnerClassName, text) {
 
 function ToggleButton({ expanded, label, onClick }) {
   return h("button", { className: "toggle-btn" + (expanded ? " expanded" : ""), type: "button", onClick }, [
-    h("span", { className: "toggle-text", key: "text" }, expanded ? "Show Less" : label),
+    h("span", { className: "toggle-text", key: "text" }, expanded ? "Show less" : label),
     icon(ChevronDown, { className: "toggle-icon", key: "icon", size: 20 }),
   ]);
 }
@@ -134,15 +134,11 @@ export function HomeEventsFeed() {
   }, []);
 
   if (state.status === "loading") {
-    return h("div", { "data-react-home-events": "loading" }, h("div", { className: "event-list" }, loading("event-loading", "spinner", "Loading events...")));
+    return h("div", { "data-react-home-events": "loading" }, h("div", { className: "event-list" }, loading("event-loading", "spinner", "Loading events.")));
   }
   if (state.status === "empty" || state.status === "error") {
-    const title = state.status === "empty" ? "No Upcoming Events" : "Events Loading...";
-    const body = state.status === "empty" ? "Check back soon for new events!" : "Please check back shortly.";
-    return h("div", { "data-react-home-events": state.status }, h("div", { className: "event-list" }, h("div", { className: "no-events" }, [
-      h("h3", { key: "title" }, title),
-      h("p", { key: "body" }, body),
-    ])));
+    const message = state.status === "empty" ? "No upcoming events." : "Events could not be loaded.";
+    return h("div", { "data-react-home-events": state.status }, h("div", { className: "event-list" }, h("div", { className: "no-events" }, h("p", null, message))));
   }
 
   const showToggle = state.events.length > VISIBLE_LIMIT;
@@ -151,7 +147,7 @@ export function HomeEventsFeed() {
       state.events.map((event, index) => h(EventItem, { event, index, visible: expanded || index < VISIBLE_LIMIT, key: `${event.title}-${event.date}-${index}` }))),
     showToggle
       ? h("div", { className: "event-toggle", key: "toggle" },
-          h(ToggleButton, { expanded, label: `Show All ${state.events.length} Events`, onClick: () => setExpanded((current) => !current) }))
+          h(ToggleButton, { expanded, label: `Show all ${state.events.length} events`, onClick: () => setExpanded((current) => !current) }))
       : null,
   ]);
 }
@@ -185,11 +181,11 @@ export function AreaTournamentsFeed() {
   }, []);
 
   if (state.status === "loading") {
-    return h("div", { "data-react-home-tournaments": "loading" }, h("div", { className: "tournament-list" }, loading("tournament-loading", "loading-spinner", "Loading tournaments...")));
+    return h("div", { "data-react-home-tournaments": "loading" }, h("div", { className: "tournament-list" }, loading("tournament-loading", "loading-spinner", "Loading tournaments.")));
   }
 
   if (state.status === "empty" || state.status === "error") {
-    const message = state.status === "empty" ? "No upcoming tournaments found." : "Unable to load tournaments.";
+    const message = state.status === "empty" ? "No upcoming tournaments." : "Tournaments could not be loaded.";
     return h("div", { "data-react-home-tournaments": state.status }, h("div", { className: "tournament-list" }, h("div", { className: "no-tournaments" }, h("p", null, message))));
   }
 
@@ -199,7 +195,7 @@ export function AreaTournamentsFeed() {
       state.tournaments.map((tournament, index) => h(TournamentItem, { tournament, index, visible: expanded || index < VISIBLE_LIMIT, key: `${tournament.name}-${tournament.date}-${index}` }))),
     showToggle
       ? h("div", { className: "tournament-toggle", key: "toggle" },
-          h(ToggleButton, { expanded, label: `Show All ${state.tournaments.length} Tournaments`, onClick: () => setExpanded((current) => !current) }))
+          h(ToggleButton, { expanded, label: `Show all ${state.tournaments.length} tournaments`, onClick: () => setExpanded((current) => !current) }))
       : null,
     h("div", { className: "tournament-footer", key: "footer" },
       h("a", { className: "view-all-link", href: DISC_GOLF_SCENE_URL, target: "_blank", rel: "noopener" }, [

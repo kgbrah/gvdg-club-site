@@ -19,27 +19,39 @@
   display: flex;
   align-items: center;
   gap: .5rem;
-  font: 750 1.05rem/1.3 Archivo, system-ui, sans-serif;
+  font: 800 1.03rem/1.2 Archivo, system-ui, sans-serif;
+  letter-spacing: -.02em;
+  text-transform: none;
 }
 
 .personal-archive-panel h2 svg {
   flex: none;
 }
 
-.personal-archive-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+.personal-archive-actions,
+.personal-archive-confirm {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
   gap: .4rem;
 }
+
+.personal-archive-actions:has(> :nth-child(3):last-child),
+.personal-archive-confirm:has(> :nth-child(3):last-child) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.personal-archive-confirm > p { grid-column: 1 / -1; margin: 0; }
 
 .personal-archive-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: .35rem;
-  min-block-size: 2.5rem;
+  width: 100%;
+  min-block-size: 2.75rem;
   max-inline-size: 100%;
+  margin: 0;
   padding: .4rem .7rem;
   border: 1px solid var(--border-color);
   border-radius: .65rem;
@@ -47,6 +59,8 @@
   color: var(--text-primary);
   font: 650 .83rem/1.25 Archivo, system-ui, sans-serif;
   text-align: center;
+  text-transform: none;
+  letter-spacing: 0;
   cursor: pointer;
 }
 
@@ -72,7 +86,8 @@
 .personal-archive-panel summary {
   padding-block: .6rem;
   cursor: pointer;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .personal-archive-library > summary { font-weight: 700; }
@@ -100,7 +115,17 @@
   padding: 0 .65rem;
   border: 1px solid var(--border-color);
   border-radius: .65rem;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.personal-archive-entry summary strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .personal-archive-entry summary .player-card-meta { display: block; }
@@ -130,11 +155,17 @@
 }
 
 .personal-archive-table :is(th, td) {
-  padding: .35rem .5rem;
+  padding: .55rem .6rem;
   border-block-end: 1px solid var(--border-color);
   text-align: start;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
 }
+.personal-archive-table :is(th, td):not(:first-child) { width: 1%; }
+.personal-archive-table :is(th, td):first-child { width: auto; }
 
 .personal-archive-table tr:last-child td { border-block-end: none; }
 .personal-archive-stations { padding-inline-start: 1.3rem; }
-.personal-archive-confirm .personal-archive-button { margin: .2rem .3rem 0 0; }
+.personal-archive-confirm .personal-archive-button { margin: 0; }

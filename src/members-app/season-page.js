@@ -157,7 +157,7 @@ export function MemberSeasonPage({ resultsOnly = false } = {}) {
       h("h2", { className: "dash-subtitle", key: "title" }, "Club results"),
       page.results.length
         ? page.results.map((row, index) => h(ResultRow, { row, key: row.id || `${row.event_id}-${index}` }))
-        : h("p", { className: "dash-note", key: "empty" }, "No finalized club or casual rounds this season yet."),
+        : h("p", { className: "dash-note", key: "empty" }, "No rounds this season yet."),
     ]) : null;
   if (resultsOnly) return results || h("p", { className: "dash-note", role: "status" }, "Loading event results…");
 
@@ -166,7 +166,7 @@ export function MemberSeasonPage({ resultsOnly = false } = {}) {
       h("h2", { className: "my-dashboard-title", key: "title" }, page ? `${page.year} Season` : "Your season"),
       h(MoreLink, { tab: "imports", label: "Import UDisc history", className: "dashboard-action", key: "imports" }),
     ]),
-    state.status === "loading" ? h("p", { className: "dash-note", key: "loading" }, "Loading your season...") : null,
+    state.status === "loading" ? h("p", { className: "dash-note", key: "loading" }, "Loading your season…") : null,
     state.status === "error" ? h("p", { className: "dash-note", key: "error" }, "Could not load every season number. Showing what we have.") : null,
     page ? h("div", { className: "doubles-quick-stats", key: "stats" }, [
       h(StatTile, { label: "Event rounds", value: String(page.rounds), key: "rounds" }),

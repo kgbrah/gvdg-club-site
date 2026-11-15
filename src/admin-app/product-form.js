@@ -361,10 +361,10 @@ export function AdminProductForm() {
     ]),
     h("div", { className: "admin-product-form-wide", key: "image" }, [
       h("label", { htmlFor: "psImage", key: "label" }, "Image"),
-      h(hInput, { id: "psImage", key: "url", maxLength: 2000, onChange: (event) => updateImageUrl(event.target.value), placeholder: "https://... paste an image URL", type: "url", value: form.imageUrl }),
+      h(hInput, { id: "psImage", key: "url", maxLength: 2000, onChange: (event) => updateImageUrl(event.target.value), placeholder: "https://… paste an image URL", type: "url", value: form.imageUrl }),
       h("div", { className: "admin-product-image-input", key: "file-row" }, [
         h(hInput, { accept: "image/*", id: "psImageFile", key: "file", onChange: updateFile, ref: fileRef, type: "file" }),
-        h("span", { className: "al-note", key: "note" }, "...or take a photo / upload from your device"),
+        h("span", { className: "al-note", key: "note" }, "…or take a photo / upload from your device"),
       ]),
       form.uploadedImageUrl ? h("figure", {
         className: "admin-product-image-preview",
@@ -384,6 +384,6 @@ export function AdminProductForm() {
       h("label", { htmlFor: "psDescription", key: "label" }, "Description"),
       h("textarea", { id: "psDescription", key: "input", maxLength: 1000, onChange: (event) => updateField("description", event.target.value), rows: 3, value: form.description }),
     ]),
-    h("button", { className: "admin-btn", disabled: busy, key: "submit", type: "submit" }, busy ? "Adding..." : "Add product"),
+    h("button", { className: "admin-btn", disabled: busy, key: "submit", type: "submit" }, busy ? "Adding…" : "Add product"),
   ]);
 }

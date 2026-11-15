@@ -78,7 +78,7 @@ export function installTeeSignReviewController({ adminApi, adminMsg, api, authBa
 
   async function tsExtractFromReact(detail) {
     const sign = detail.sign || {};
-    adminMsg('Re-running tee-sign vision...', true);
+    adminMsg('Re-running tee-sign vision…', true);
     const r = await adminApi('/admin/tee-signs/' + sign.id + '/extract', { method: 'POST', body: {} });
     adminMsg(r.ok ? 'Vision extraction refreshed' : 'Vision refresh failed (' + r.status + ')', r.ok);
     finishTeeSignReviewAction(detail.requestId, r.ok);

@@ -232,7 +232,7 @@ export function AdminOrdersList() {
   const view = useSettledWhileLoading(state, state.filterStatus);
 
   if (view.status === "loading") {
-    return h("p", { className: "al-note", "data-react-admin-orders-list": "loading", role: "status" }, "Loading...");
+    return h("p", { className: "al-note", "data-react-admin-orders-list": "loading", role: "status" }, "Loading…");
   }
 
   if (view.status === "error") {

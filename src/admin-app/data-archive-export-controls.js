@@ -175,7 +175,7 @@ export function AdminDataArchiveExportControls() {
         key: "submit",
         onClick: submit,
         type: "button",
-      }, busy ? "Running..." : "Run export"),
+      }, busy ? "Running…" : "Run export"),
     ]),
   ]);
 }

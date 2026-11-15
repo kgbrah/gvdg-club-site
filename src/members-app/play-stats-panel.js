@@ -184,7 +184,7 @@ export function PlayStatsKindBlock({
       value: selected,
       onChange: onKind,
     }) : null,
-    showStatus && status === "loading" ? h("p", { className: "player-card-meta", key: "loading" }, "Loading club stats...") : null,
+    showStatus && status === "loading" ? h("p", { className: "player-card-meta", key: "loading" }, "Loading club stats…") : null,
     showStatus && status === "error" ? h("p", { className: "player-card-meta", key: "error" }, "Could not load club scoring stats.") : null,
     hasSample
       ? h("div", { className: "play-score-mix-wrap", key: "mix" }, [
@@ -228,7 +228,7 @@ export function PlayStatsGrid({ compact = false, kind, onKind, state, group, onG
       h(ChipToggle, { key: "group", label: "Group format", options: PLAY_GROUPS, labels: playGroupLabel, value: group || "all", onChange: onGroup }),
       h(ChipToggle, { key: "style", label: "Scoring style", options: PLAY_STYLES, labels: playStyleLabel, value: style || "all", onChange: onStyle }),
     ]),
-    status === "loading" ? h("p", { className: "player-card-meta play-stats-split-status", key: "loading" }, "Loading club stats...") : null,
+    status === "loading" ? h("p", { className: "player-card-meta play-stats-split-status", key: "loading" }, "Loading club stats…") : null,
     status === "error" ? h("p", { className: "player-card-meta play-stats-split-status", key: "error" }, "Could not load club scoring stats.") : null,
     ...kinds.map((id) => h(PlayStatsKindBlock, {
       compact: false,

@@ -155,13 +155,13 @@
         .members-stat-card:nth-child(2) { background: var(--green); }
         .members-stat-card:nth-child(3) { background: var(--primary-strong); }
         .members-stat-card:nth-child(4) { background: #5a4a78; }
-        .members-stat-card:hover { transform: translateY(-2px); }
+        .members-stat-card:hover { transform: none; }
         .members-stat-icon { font-size: 1.8rem; margin-bottom: 0.5rem; }
         .members-stat-number { font-family: 'Bebas Neue', sans-serif; font-size: clamp(2rem, 5vw, 2.8rem); line-height: 1; margin-bottom: 0.25rem; }
         .members-stat-label { font-size: clamp(0.75rem, 2vw, 0.9rem); opacity: 0.95; text-transform: uppercase; letter-spacing: 0.05em; }
 
         .members-chart-container { background: var(--bg-primary); border-radius: 8px; padding: 1.25rem; margin-bottom: 2rem; border: 1px solid var(--border-color); }
-        .members-chart-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; color: var(--primary); margin-bottom: 1rem; text-align: center; }
+        .members-chart-title { font: 800 clamp(1.03rem, 2.7vw, 1.3rem)/1.2 Archivo, system-ui, sans-serif; color: var(--text-primary); margin-bottom: 1rem; text-align: left; letter-spacing: -.02em; text-transform: none; }
         .members-chart { display: flex; align-items: flex-end; justify-content: space-between; height: 140px; gap: 3px; padding: 0 0.5rem; }
         .members-chart-bar { flex: 1; min-width: 0; background: var(--secondary); border-radius: 3px 3px 0 0; transition: opacity 0.15s ease; cursor: pointer; position: relative; }
         .members-chart-bar:hover { opacity: 0.85; }
@@ -173,10 +173,10 @@
 
         /* Meeting Minutes */
         .meeting-minutes-container { background: var(--bg-primary); border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem; border: 1px solid var(--border-color); }
-        .meeting-minutes-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; color: var(--primary); margin-bottom: 1rem; text-align: center; }
+        .meeting-minutes-title { font: 800 clamp(1.03rem, 2.7vw, 1.3rem)/1.2 Archivo, system-ui, sans-serif; color: var(--text-primary); margin-bottom: 1rem; text-align: left; letter-spacing: -.02em; text-transform: none; }
         .meeting-minutes-list { display: flex; flex-direction: column; gap: 0.75rem; }
-        .meeting-minutes-item { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; transition: box-shadow 0.15s ease; }
-        .meeting-minutes-item:hover { box-shadow: 0 2px 8px var(--card-shadow-hover); }
+        .meeting-minutes-item { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; }
+        .meeting-minutes-item:hover { box-shadow: none; }
         .meeting-minutes-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.25rem; cursor: pointer; gap: 1rem; }
         .meeting-minutes-info { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
         .meeting-minutes-date { font-weight: 700; color: var(--text-primary); font-size: 1rem; }
@@ -198,10 +198,10 @@
         .meeting-minutes-action-items li { position: relative; padding-left: 1.5rem; margin-bottom: 0.4rem; color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; }
         .meeting-minutes-action-items li::before { content: counter(action-item) "."; counter-increment: action-item; position: absolute; left: 0; color: var(--primary); font-weight: 600; }
         .meeting-minutes-download { display: inline-flex; align-items: center; gap: 0.5rem; margin-top: 1rem; padding: 0.5rem 1rem; background: var(--secondary); color: white; text-decoration: none; border-radius: 6px; font-size: 0.85rem; font-weight: 600; transition: background 0.15s ease; }
-        .meeting-minutes-download:hover { background: #003d6b; }
+        .meeting-minutes-download:hover { background: color-mix(in srgb, var(--secondary) 82%, black); }
 
         .course-conditions-panel { background: var(--bg-primary); border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem; border: 1px solid var(--border-color); }
-        .course-conditions-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; color: var(--primary); margin-bottom: 0.35rem; text-align: center; }
+        .course-conditions-title { font: 800 clamp(1.03rem, 2.7vw, 1.3rem)/1.2 Archivo, system-ui, sans-serif; color: var(--text-primary); margin-bottom: 0.35rem; text-align: left; letter-spacing: -.02em; text-transform: none; }
         .course-conditions-note { color: var(--text-muted); font-size: 0.9rem; line-height: 1.5; text-align: center; margin: 0 0 1rem; }
         .course-conditions-list { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 1rem; }
         .course-conditions-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; flex-wrap: wrap; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem 1rem; }
@@ -224,10 +224,10 @@
         .members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.25rem; }
         @media (max-width: 640px) { .members-grid { grid-template-columns: 1fr; } }
 
-        .member-card { background: var(--green); border-radius: 10px; padding: 1.25rem; color: white; transition: transform 0.15s ease; position: relative; overflow: hidden; }
-        .member-card:hover { transform: translateY(-3px); }
+        .member-card { background: var(--green); border-radius: 10px; padding: 1.25rem; color: white; position: relative; overflow: hidden; }
+        .member-card:hover { transform: none; }
         .member-card.founding { background: var(--secondary); border-left: 4px solid var(--primary); }
-        .member-card.founding:hover { transform: translateY(-3px); }
+        .member-card.founding:hover { transform: none; }
         .member-card.special-badge::before { content: attr(data-badge); position: absolute; top: 12px; right: -32px; background: var(--accent); color: var(--dark); padding: 0.25rem 2.5rem; font-size: 0.6rem; font-weight: 700; transform: rotate(45deg); text-transform: uppercase; }
         .member-avatar { width: 48px; height: 48px; border-radius: 50%; background: rgba(255, 255, 255, 0.2); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; margin-bottom: 0.875rem; font-weight: 700; font-family: 'Bebas Neue', sans-serif; }
         .member-name { font-family: 'Bebas Neue', sans-serif; font-size: 1.35rem; margin-bottom: 0.35rem; }
@@ -263,11 +263,12 @@
         }
 
         .doubles-league-title {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 1.4rem;
-            color: var(--primary);
-            margin-bottom: 1.25rem;
-            text-align: center;
+            margin: 0 0 1rem;
+            color: var(--text-primary);
+            font: 800 clamp(1.03rem, 2.7vw, 1.3rem)/1.2 Archivo, system-ui, sans-serif;
+            letter-spacing: -.02em;
+            text-align: left;
+            text-transform: none;
         }
 
         .doubles-tabs {
@@ -294,25 +295,26 @@
         @media (max-width: 640px) { .champions-banner { grid-template-columns: 1fr; } }
 
         .champion-card {
-            background: linear-gradient(135deg, var(--secondary) 0%, #003d6b 100%);
-            border-radius: 8px; padding: 1rem 1.25rem; color: white;
-            position: relative; overflow: hidden; transition: transform 0.15s ease;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 14px; padding: 1rem 1.25rem; color: var(--text-primary);
+            position: relative; overflow: hidden;
         }
-        .champion-card:hover { transform: translateY(-2px); }
+        .champion-card:hover { transform: none; }
         .champion-trophy { position: absolute; top: 0.65rem; right: 0.75rem; opacity: 0.35; }
         .champion-season { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.85; margin-bottom: 0.25rem; }
         .champion-name { font-family: 'Bebas Neue', sans-serif; font-size: 1.3rem; letter-spacing: 0.02em; }
         .champion-points { font-size: 0.8rem; opacity: 0.9; margin-top: 0.15rem; }
 
-        .doubles-table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border-color); max-width: 100%; min-width: 0; width: 100%; -webkit-overflow-scrolling: touch; }
-        .doubles-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; min-width: 700px; }
+        .doubles-table-wrap { overflow-x: auto; border-radius: 14px; border: 1px solid var(--border-color); max-width: 100%; min-width: 0; width: 100%; -webkit-overflow-scrolling: touch; background: var(--bg-secondary); }
+        .doubles-table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: 0.88rem; }
         .doubles-table thead th {
             background: var(--secondary); color: white; padding: 0.7rem 0.75rem;
             text-align: left; font-weight: 700; font-size: 0.78rem;
-            text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap;
+            letter-spacing: 0; white-space: nowrap; text-transform: none;
             cursor: pointer; user-select: none; position: relative;
         }
-        .doubles-table thead th:hover { background: #003d6b; }
+        .doubles-table thead th:hover { background: color-mix(in srgb, var(--secondary) 82%, black); }
         .doubles-sort-btn { width: 100%; display: inline-flex; align-items: center; gap: 0.2rem; background: transparent; border: 0; color: inherit; font: inherit; text-align: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; padding: 0; }
         .doubles-table thead th .sort-arrow { margin-left: 0.25rem; font-size: 0.65rem; opacity: 0.5; }
         .doubles-table thead th.sorted .sort-arrow { opacity: 1; }
@@ -327,7 +329,8 @@
         .doubles-table .rank-cell.gold { color: #D4A017; }
         .doubles-table .rank-cell.silver { color: #8A8A8A; }
         .doubles-table .rank-cell.bronze { color: #CD7F32; }
-        .doubles-table .player-name-cell { font-weight: 700; color: var(--text-primary); white-space: nowrap; }
+        .doubles-table .player-name-cell { font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow-wrap: normal; word-break: normal; width: auto; }
+        .doubles-table :is(th, td):not(:nth-child(2)) { width: 1%; white-space: nowrap; font-variant-numeric: tabular-nums; }
         .doubles-table .player-name-cell .trophy-icon { margin-left: 0.35rem; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 0.1rem; vertical-align: middle; }
         .doubles-table .highlight-cell { font-weight: 700; color: var(--secondary-text); }
         .doubles-table .win-badge { display: inline-block; background: var(--accent); color: var(--dark); padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.7rem; font-weight: 700; }
@@ -343,7 +346,7 @@
 
         .doubles-load-more-wrap { text-align: center; margin-top: 1rem; }
         .doubles-load-btn { background: var(--secondary); color: white; padding: 0.6rem 1.75rem; border-radius: 6px; font-weight: 600; font-size: 0.88rem; border: none; cursor: pointer; transition: background 0.15s ease; }
-        .doubles-load-btn:hover { background: #003d6d; }
+        .doubles-load-btn:hover { background: color-mix(in srgb, var(--secondary) 82%, black); }
         .doubles-showing-count { text-align: center; margin-top: 0.75rem; color: var(--text-muted); font-size: 0.85rem; }
 
         .player-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 2000; align-items: center; justify-content: center; padding: 1rem; }
@@ -360,7 +363,7 @@
         .player-modal-stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-top: 0.15rem; }
         .player-modal-seasons-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; color: var(--primary); margin-bottom: 0.75rem; }
         .player-season-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 0.5rem; padding: 0.6rem 0; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; color: var(--text-secondary); }
-        .player-season-row:first-child { font-weight: 700; color: var(--text-primary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+        .player-season-row:first-child { font-weight: 700; color: var(--text-primary); font-size: 0.75rem; letter-spacing: 0; text-transform: none; }
         .player-season-row .placement-1 { color: #D4A017; font-weight: 700; }
         .player-season-row .placement-2 { color: #8A8A8A; font-weight: 700; }
         .player-season-row .placement-3 { color: #CD7F32; font-weight: 700; }
@@ -374,7 +377,7 @@
         @media (min-width: 768px) { .doubles-quick-stats { grid-template-columns: repeat(4, 1fr); } }
         .doubles-quick-stat { background: var(--bg-secondary); border-radius: 8px; padding: 1rem; text-align: center; border: 1px solid var(--border-color); }
         .doubles-quick-stat-val { font-family: 'Bebas Neue', sans-serif; font-size: clamp(1.6rem, 4vw, 2.2rem); line-height: 1; color: var(--primary); }
-        .doubles-quick-stat-label { font-size: clamp(0.7rem, 1.8vw, 0.8rem); text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-top: 0.3rem; }
+        .doubles-quick-stat-label { font-size: clamp(0.7rem, 1.8vw, 0.8rem); letter-spacing: 0; text-transform: none; color: var(--text-muted); margin-top: 0.3rem; }
 
         .doubles-table tbody tr.clickable-row { cursor: pointer; }
     </style>
@@ -465,8 +468,9 @@
                 .bag-tag-home { margin: 0 0 0.85rem; }
                 .bag-tag-home-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
                 .bag-tag-home h3 {
-                    margin: 0; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.06em;
-                    text-transform: uppercase; color: var(--text-muted);
+                    margin: 0; color: var(--text-primary);
+                    font: 750 .9rem/1.2 Archivo, system-ui, sans-serif;
+                    letter-spacing: -.014em; text-transform: none;
                 }
                 .bag-tag-home .player-card-meta { margin: 0.12rem 0 0; }
                 .bag-tag-home .player-job-link { margin: 0; }
@@ -530,7 +534,7 @@
                 }
                 .udisc-history-title { font-weight: 700; line-height: 1.25; }
                 .udisc-history-side { display: grid; justify-items: end; gap: 0.35rem; }
-                .udisc-history-side .player-btn { width: auto; margin-top: 0; min-height: 36px; padding: 0.35rem 0.7rem; }
+                .udisc-history-side .player-btn { width: auto; margin-top: 0; min-height: 44px; padding: 0.35rem 0.7rem; }
                 .udisc-history-score {
                     display: flex; align-items: baseline; gap: 0.35rem;
                     font-family: 'Bebas Neue', sans-serif; font-size: 1.35rem; letter-spacing: 0.03em; line-height: 1;
@@ -614,10 +618,10 @@
                 }
                 .play-stats-kind { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.2rem 0 0.65rem; }
                 .play-stats-kind button {
-                    min-height: 36px; padding: 0 0.8rem; border-radius: 999px;
+                    min-height: 44px; padding: 0 0.8rem; border-radius: 999px;
                     border: 1px solid var(--border-color); background: var(--bg-tertiary);
-                    color: var(--text-secondary); font: 800 0.68rem Archivo, sans-serif;
-                    letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer;
+                    color: var(--text-secondary); font: 700 0.78rem/1.2 Archivo, sans-serif;
+                    letter-spacing: 0; text-transform: none; white-space: nowrap; cursor: pointer;
                 }
                 .play-stats-kind button.active {
                     background: var(--primary-strong); color: var(--light); border-color: var(--primary-strong);
@@ -719,7 +723,7 @@
                     gap: 0.45rem; align-items: baseline; font-size: 0.8rem; line-height: 1.35;
                 }
                 .event-schedule-row dt { color: var(--text-muted); font-weight: 700; }
-                .event-schedule-row dd { margin: 0; color: var(--text-primary); font-weight: 700; overflow-wrap: anywhere; }
+                .event-schedule-row dd { margin: 0; color: var(--text-primary); font-weight: 700; overflow-wrap: normal; word-break: normal; }
                 .register-card .event-schedule { margin-top: 0.4rem; margin-bottom: 0.35rem; }
                 .player-chip-row { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.55rem; }
                 .player-chip {
@@ -793,18 +797,18 @@
                 .community-form, .community-field { display: grid; gap: .5rem; min-width: 0; }
                 .community-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr)); gap: .6rem; }
                 .community-list { list-style: none; padding: 0; }
-                .community-list > li { padding: .65rem 0; border-bottom: 1px solid var(--border-color); overflow-wrap: anywhere; }
+                .community-list > li { padding: .65rem 0; border-bottom: 1px solid var(--border-color); overflow-wrap: normal; word-break: normal; }
                 .community-amenities > li { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: .35rem .8rem; }
                 .community-amenities > li > * + * { margin-top: 0; }
                 .community-list > li.player-card { padding: .75rem; margin-bottom: .45rem; }
                 .community-list > li > * + * { margin-top: .3rem; }
                 .community-list li a { color: var(--secondary-text); font-weight: 700; display: inline-block; padding: .35rem; }
-                .community-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+                .community-body { white-space: pre-wrap; overflow-wrap: normal; word-break: normal; }
                 .community-week { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
                 .community-week progress { flex: 1; min-width: 5rem; max-width: 18rem; accent-color: var(--green); }
                 .member-community .form-input { min-height: 44px; font-size: 1rem; }
                 .member-community summary { cursor: pointer; font-weight: 700; padding-block: .45rem; }
-                .community-shared-profile .section-title { overflow-wrap: anywhere; }
+                .community-shared-profile .section-title { overflow-wrap: normal; word-break: normal; }
                 .community-shared-profile .dashboard-action { margin-top: 1.1rem; }
                 .member-practice { gap: .8rem; min-width: 0; }
                 .member-practice > .dashboard-action.primary { justify-self: start; }
@@ -823,7 +827,7 @@
                 }
                 .member-practice-trend { display: grid; gap: .2rem; border-top: 1px solid var(--border-color); padding-block: .45rem; font-size: .9rem; }
                 .member-practice summary { cursor: pointer; padding-block: .45rem; font-weight: 700; }
-                .member-practice-export { overflow-wrap: anywhere; }
+                .member-practice-export { overflow-wrap: normal; word-break: normal; }
                 .member-appearance-toggle { display: flex; align-items: center; gap: .55rem; }
                 .member-appearance-toggle .theme-toggle { color: var(--text-primary); border-color: var(--border-color); }
                 .member-first-use { margin-bottom: .75rem; color: var(--text-secondary); }
@@ -882,7 +886,7 @@
                 }
                 @media (min-width: 641px) { .welcome-subtext::before { content: " "; } }
                 .my-dashboard { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.5rem; margin-bottom: 2rem; }
-                .my-dashboard-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; color: var(--primary); margin-bottom: 1rem; letter-spacing: 0.03em; }
+                .my-dashboard-title { font: 800 clamp(1.03rem, 2.7vw, 1.3rem)/1.2 Archivo, system-ui, sans-serif; color: var(--text-primary); margin-bottom: 1rem; letter-spacing: -.02em; text-transform: none; }
                 .dash-note { color: var(--text-muted); font-size: 0.95rem; padding: 0.5rem 0; }
                 .dash-rating-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
                 @media (min-width: 680px) { .dash-rating-row { grid-template-columns: repeat(4, 1fr); } }
@@ -893,7 +897,7 @@
                 .dash-tile-num { font-family: 'Bebas Neue', sans-serif; font-size: 2.4rem; line-height: 1; }
                 .dash-tile-delta { font-size: 0.8rem; opacity: 0.9; margin-top: 0.2rem; }
                 .dash-tile-label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.95; margin-top: 0.35rem; }
-                .dash-subtitle { font-weight: 700; color: var(--secondary-text); margin: 0.5rem 0 0.75rem; font-size: 1rem; }
+                .dash-subtitle { font: 800 1.03rem/1.2 Archivo, system-ui, sans-serif; color: var(--text-primary); margin: 0.5rem 0 0.75rem; letter-spacing: -.02em; text-transform: none; }
                 .dash-collapse { margin: 0.25rem 0 1rem; }
                 .dash-collapse-summary { cursor: pointer; }
                 .react-registration-panel .dash-collapse { margin-top: 1rem; }
@@ -941,7 +945,7 @@
                 .dash-theme-wallpaper { width: 100%; height: 13rem; object-fit: cover; display: block; }
                 .dash-theme-file { position: absolute; width: 0.1px; height: 0.1px; opacity: 0; overflow: hidden; }
                 .dash-theme-toggle { display: inline-flex; border: 1px solid var(--border-color); border-radius: 999px; overflow: hidden; background: var(--bg-secondary); }
-                .dash-theme-toggle button { border: 0; background: transparent; color: var(--text-muted); font: inherit; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 0.4rem 0.8rem; min-height: 36px; }
+                .dash-theme-toggle button { border: 0; background: transparent; color: var(--text-muted); font: inherit; font-size: 0.78rem; font-weight: 700; letter-spacing: 0; text-transform: none; padding: 0.4rem 0.8rem; min-height: 44px; white-space: nowrap; }
                 .dash-theme-toggle button.is-active { background: var(--primary-strong); color: white; }
                 .dash-theme-field { display: grid; gap: 0.28rem; color: var(--text-muted); font-size: 0.76rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
                 .dash-theme-actions { display: flex; flex-wrap: wrap; gap: 0.7rem; align-items: center; }
@@ -1000,22 +1004,24 @@
                 }
                 .disc-color-label { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; text-align: center; line-height: 1.15; color: var(--text-muted); }
                 .active-standings { margin: 0.25rem 0 1rem; }
-                .dash-standings-card { background: var(--bg-tertiary, rgba(127,127,127,0.06)); border: 1px solid var(--border-color, rgba(127,127,127,0.25)); border-radius: 10px; padding: 0.7rem 0.9rem; margin-bottom: 0.75rem; }
+                .dash-standings-card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 14px; padding: 0.7rem 0.9rem; margin-bottom: 0.75rem; overflow-x: auto; max-width: 100%; }
                 .dash-standings-card .dash-subtitle { margin-top: 0; }
-                .dash-standings-card .lb-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-                .dash-standings-card .lb-table th { text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.4px; color: var(--secondary-text); padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--border-color, rgba(127,127,127,0.25)); }
-                .dash-standings-card .lb-table td { padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--border-color, rgba(127,127,127,0.12)); }
+                .dash-standings-card .lb-table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+                .dash-standings-card .lb-table th { text-align: left; font-size: 0.7rem; letter-spacing: 0; text-transform: none; color: var(--text-muted); padding: 0.45rem 0.55rem; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
+                .dash-standings-card .lb-table td { padding: 0.55rem; border-bottom: 1px solid var(--border-color); white-space: nowrap; overflow-wrap: normal; word-break: normal; }
+                .dash-standings-card .lb-table :is(th, td).member-num { width: 1%; font-variant-numeric: tabular-nums; white-space: nowrap; }
+                .dash-standings-card .lb-table :is(th, td).player-name-cell { width: auto; overflow: visible; text-overflow: clip; }
                 .dash-event { display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-flow: row; min-width: 0; padding: 0.7rem 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); margin-bottom: 0.5rem; }
                 .dash-event-year { margin: 0.15rem 0 0.7rem; }
-                .dash-event-year-summary { cursor: pointer; color: var(--text-muted); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+                .dash-event-year-summary { cursor: pointer; color: var(--text-muted); font-size: 0.78rem; font-weight: 700; letter-spacing: 0; text-transform: none; }
                 .dash-event-year-list { margin-top: 0.45rem; }
                 .dash-event-main { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; min-width: 0; width: 100%; row-gap: 0.55rem; }
                 .dash-event-copy { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; row-gap: 0.12rem; }
-                .dash-event-name { font-weight: 600; color: var(--text-primary); line-height: 1.25; overflow-wrap: anywhere; text-wrap: pretty; }
+                .dash-event-name { font-weight: 600; color: var(--text-primary); line-height: 1.25; overflow-wrap: normal; word-break: normal; text-wrap: pretty; }
                 .dash-event-date { font-size: 0.8rem; color: var(--text-muted); line-height: 1.35; margin-top: 0.15rem; }
                 .dash-event-rating-row { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 0.24rem; width: 100%; min-width: 0; padding-top: 0.5rem; border-top: 1px solid var(--border-color); }
                 .dash-event-rating-label { color: var(--text-muted); font-size: 0.68rem; font-weight: 700; line-height: 1; text-transform: uppercase; letter-spacing: 0.05em; }
-                .dash-event-ratings { display: inline-flex; align-items: center; justify-self: start; max-width: 100%; min-height: 1.65rem; padding: 0.16rem 0.48rem 0.1rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-tertiary); font-family: 'Bebas Neue', sans-serif; font-size: 1.32rem; line-height: 1; letter-spacing: 0.03em; font-variant-numeric: tabular-nums; color: var(--secondary-text); overflow-wrap: anywhere; white-space: normal; }
+                .dash-event-ratings { display: inline-flex; align-items: center; justify-self: start; max-width: 100%; min-height: 1.65rem; padding: 0.16rem 0.48rem 0.1rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-tertiary); font-family: 'Bebas Neue', sans-serif; font-size: 1.32rem; line-height: 1; letter-spacing: 0.03em; font-variant-numeric: tabular-nums; color: var(--secondary-text); overflow-wrap: normal; word-break: normal; white-space: normal; }
                 .season-result { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; text-decoration: none; color: inherit; }
                 .season-result-score { text-align: right; }
                 .season-result-place { font-weight: 800; color: var(--text-primary); }
@@ -1049,7 +1055,7 @@
                 .club-rating-list { display: grid; gap: 0.6rem; margin-top: 0.75rem; }
                 .club-rating-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.75rem; align-items: center; padding-top: 0.6rem; border-top: 1px solid var(--border-color); }
                 .club-rating-row:first-child { padding-top: 0; border-top: 0; }
-                .club-rating-title { font-weight: 700; color: var(--text-primary); line-height: 1.25; overflow-wrap: anywhere; }
+                .club-rating-title { font-weight: 700; color: var(--text-primary); line-height: 1.25; overflow-wrap: normal; word-break: normal; }
                 .club-rating-meta { color: var(--text-muted); font-size: 0.78rem; margin-top: 0.18rem; line-height: 1.35; }
                 .club-rating-score { min-width: 4.5rem; text-align: right; }
                 .club-rating-score-main { font-family: 'Bebas Neue', sans-serif; color: var(--secondary-text); font-size: 1.45rem; line-height: 1; }
@@ -1071,13 +1077,13 @@
                 .club-rating-load-btn:hover { border-color: var(--secondary); color: var(--secondary-text); }
                 .club-rating-load-btn:disabled { opacity: 0.6; cursor: default; }
                 .dashboard-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 0; }
-                .dashboard-action { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.55rem 0.85rem; background: var(--bg-secondary); color: var(--text-primary); text-decoration: none; font-size: 0.85rem; font-weight: 700; transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease; }
-                .dashboard-action:hover { border-color: var(--secondary); color: var(--secondary-text); transform: translateY(-1px); }
+                .dashboard-action { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.55rem 0.85rem; background: var(--bg-secondary); color: var(--text-primary); text-decoration: none; font-size: 0.85rem; font-weight: 700; transition: border-color 0.15s ease, color 0.15s ease; }
+                .dashboard-action:hover { border-color: var(--secondary); color: var(--secondary-text); transform: none; }
                 .dashboard-action.primary { background: var(--green); border-color: var(--green); color: #fff; }
                 .dashboard-utility-panel { display: grid; gap: 0.85rem; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border-color); }
                 .live-round-list { display: grid; gap: 0.7rem; margin-top: 0.35rem; }
                 .live-round-card { display: grid; grid-template-columns: 1fr auto; gap: 0.85rem; align-items: center; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.8rem 0.9rem; background: var(--bg-secondary); }
-                .live-round-title { font-weight: 800; color: var(--text-primary); line-height: 1.25; overflow-wrap: anywhere; }
+                .live-round-title { font-weight: 800; color: var(--text-primary); line-height: 1.25; overflow-wrap: normal; word-break: normal; }
                 .live-round-meta { color: var(--text-muted); font-size: 0.82rem; margin-top: 0.2rem; line-height: 1.4; }
                 .live-round-badge { display: inline-flex; align-items: center; min-height: 1.35rem; padding: 0.12rem 0.45rem; border-radius: 999px; background: rgba(45, 80, 22, 0.12); color: var(--green); font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.3rem; }
                 .live-round-actions { display: flex; gap: 0.55rem; flex-wrap: wrap; margin-top: 0.85rem; }
@@ -1086,7 +1092,7 @@
                 .install-coach-copy strong { display: block; font-size: 0.95rem; }
                 .install-coach-copy p { margin: 0.25rem 0 0; color: var(--text-muted); font-size: 0.86rem; line-height: 1.4; }
                 .install-coach-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-                .install-coach-btn, .install-coach-dismiss { min-height: 40px; border-radius: 8px; padding: 0.4rem 0.85rem; font-weight: 700; cursor: pointer; }
+                .install-coach-btn, .install-coach-dismiss { min-height: 44px; border-radius: 8px; padding: 0.4rem 0.85rem; font-weight: 700; cursor: pointer; }
                 .install-coach-btn { border: 1px solid var(--green); background: var(--green); color: var(--bg-secondary); }
                 a.install-coach-btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
                 .install-coach-hint { margin: 0; color: var(--text-muted); font-size: 0.78rem; line-height: 1.35; }
@@ -1100,7 +1106,7 @@
                 .wallet-line { display: grid; grid-template-columns: 1fr auto; gap: 0.75rem; align-items: baseline; font-size: 0.9rem; color: var(--text-secondary); }
                 .wallet-line-main { min-width: 0; }
                 .wallet-source { font-weight: 700; color: var(--text-primary); }
-                .wallet-note { color: var(--text-muted); font-size: 0.82rem; overflow-wrap: anywhere; }
+                .wallet-note { color: var(--text-muted); font-size: 0.82rem; overflow-wrap: normal; word-break: normal; }
                 .wallet-amount { font-weight: 800; font-variant-numeric: tabular-nums; }
                 .wallet-amount.credit { color: var(--green); }
                 .wallet-amount.debit { color: var(--primary); }
@@ -1126,7 +1132,7 @@
                 .register-final-badge { background: var(--text-muted); color: var(--bg-primary); }
                 .register-cancelled-badge { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
                 .register-status.cancelled { color: var(--primary); }
-                .register-subhead { color: var(--secondary-text); font-size: 0.78rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; margin: 1rem 0 0.35rem; }
+                .register-subhead { color: var(--text-primary); font: 800 1.03rem/1.2 Archivo, system-ui, sans-serif; letter-spacing: -.02em; text-transform: none; margin: 1rem 0 0.35rem; }
                 .register-subhead:first-child { margin-top: 0; }
                 .casual-register-card .register-actions { margin-top: 0.75rem; }
                 .casual-register-players { color: var(--text-secondary); font-size: 0.85rem; line-height: 1.45; margin-top: 0.35rem; }
@@ -1186,13 +1192,13 @@
                 .member-dialog.danger { border-color: var(--primary); }
                 .member-dialog-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem; line-height: 1.1; color: var(--text-primary); letter-spacing: 0.03em; }
                 .member-dialog-message { margin: 0.45rem 0 0; color: var(--text-secondary); line-height: 1.5; }
-                .member-dialog-actions { display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 1.1rem; }
-                .member-dialog-btn { min-height: 44px; border-radius: 8px; padding: 0 1rem; border: 1px solid var(--border-color); font: inherit; font-weight: 700; cursor: pointer; }
+                .member-dialog-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; justify-content: stretch; margin-top: 1.1rem; }
+                .member-dialog-actions > :only-child { grid-column: 1 / -1; }
+                .member-dialog-btn { width: 100%; min-height: 44px; border-radius: 8px; padding: 0 1rem; border: 1px solid var(--border-color); font: 700 0.9rem/1.2 Archivo, system-ui, sans-serif; letter-spacing: 0; text-transform: none; cursor: pointer; }
                 .member-dialog-btn.secondary { background: var(--bg-secondary); color: var(--text-primary); }
                 .member-dialog-btn.primary { background: var(--secondary); border-color: var(--secondary); color: white; }
                 .member-dialog-btn.primary.danger { background: var(--primary-strong); border-color: var(--primary-strong); }
-                @media (max-width: 420px) { .member-dialog-actions { flex-direction: column; } .member-dialog-btn { width: 100%; } }
-                .passkey-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin: 0; }
+                .passkey-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; align-items: stretch; margin: 0; }
                 .passkey-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; background: transparent; border: 1px solid var(--secondary-text); color: var(--secondary-text); padding: 0.55rem 1rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; text-decoration: none; touch-action: manipulation; transition: background 0.15s ease, color 0.15s ease; }
                 @media (hover: hover) {
                     .passkey-btn:hover { background: var(--secondary); color: white; }
@@ -1217,7 +1223,7 @@
                     .dash-tile-label { font-size: 0.72rem; }
                     .dashboard-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; }
                     .dashboard-action { width: 100%; }
-                    .passkey-row { display: grid; grid-template-columns: 1fr; }
+                    .passkey-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
                     .passkey-row .passkey-btn { width: 100%; }
                 }
                 .profile-photo-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
@@ -1302,7 +1308,7 @@
                 .member-page-heading .player-app-title {
                     font: 800 clamp(1.75rem, 4.25vw, 2.55rem)/1.03 Archivo, system-ui, sans-serif;
                     letter-spacing: -.045em;
-                    overflow-wrap: anywhere;
+                    overflow-wrap: normal; word-break: normal;
                 }
                 .member-page-heading .member-parent-link { color: var(--text-primary); }
                 .member-page-heading.member-home-heading {
@@ -1336,7 +1342,7 @@
                     text-decoration: none;
                 }
                 .member-admin-banner:hover { background: var(--member-chrome-hover); }
-                .member-admin-copy { display: grid; gap: .15rem; overflow-wrap: anywhere; }
+                .member-admin-copy { display: grid; gap: .15rem; overflow-wrap: normal; word-break: normal; }
                 .member-admin-copy strong { font-weight: inherit; }
                 .member-admin-copy small { font-size: .8rem; font-weight: 500; }
                 .player-app-nav {
@@ -1427,7 +1433,7 @@
                     color: var(--text-primary);
                     font: 800 clamp(1rem, 3.5vw, 1.25rem)/1.15 Archivo, system-ui, sans-serif;
                     letter-spacing: -.025em;
-                    overflow-wrap: anywhere;
+                    overflow-wrap: normal; word-break: normal;
                 }
                 .player-who p {
                     margin: .18rem 0 0;
@@ -1471,7 +1477,7 @@
                     font: 850 clamp(1.45rem, 5.8vw, 2.2rem)/1.06 Archivo, system-ui, sans-serif;
                     letter-spacing: -.045em;
                 }
-                .member-round-hero p { font-size: .9rem; line-height: 1.35; margin-top: .32rem; color: var(--member-round-ink); opacity: 1; overflow-wrap: anywhere; }
+                .member-round-hero p { font-size: .9rem; line-height: 1.35; margin-top: .32rem; color: var(--member-round-ink); opacity: 1; overflow-wrap: normal; word-break: normal; }
                 .member-round-status {
                     display: flex;
                     align-items: center;
@@ -1570,10 +1576,10 @@
                     background: transparent;
                     display: flex;
                     align-items: center;
-                    gap: .55rem;
+                    gap: .55rem .7rem;
                     min-height: 3.53rem;
                     width: 100%;
-                    padding: .55rem .82rem;
+                    padding: .7rem .82rem;
                     text-align: left;
                     font-family: inherit;
                 }
@@ -1583,15 +1589,16 @@
                 .member-account-link:hover { background: var(--member-hover); }
                 .member-account-icon { flex-shrink: 0; color: var(--member-muted); }
                 .member-account-chevron { margin-left: auto; flex-shrink: 0; color: var(--member-muted); }
-                .member-account-copy { min-width: 0; flex: 1 1 auto; display: grid; gap: .12rem; overflow-wrap: anywhere; }
+                .member-account-copy { min-width: 0; flex: 1 1 auto; display: grid; gap: .12rem; overflow-wrap: normal; word-break: normal; }
                 .member-account-copy strong, .member-home-tags h3 {
                     color: var(--text-primary);
-                    font: 750 .86rem/1.18 Archivo, system-ui, sans-serif;
+                    font: 750 .9rem/1.2 Archivo, system-ui, sans-serif;
                     letter-spacing: -.014em;
                     text-transform: none;
                 }
-                .member-account-copy small, #members .member-home-tags .member-account-copy .player-card-meta {
-                    color: var(--member-muted);
+                .member-account-copy small, #members .member-home-tags .member-account-copy .player-card-meta,
+                #members .member-list-meta {
+                    color: var(--text-muted);
                     font-size: .75rem;
                     line-height: 1.26;
                     margin: 0;
@@ -1702,7 +1709,7 @@
                     padding: .35rem .5rem;
                     border-radius: .42rem;
                     cursor: pointer;
-                    overflow-wrap: anywhere;
+                    overflow-wrap: normal; word-break: normal;
                 }
                 .bag-disc-options li:is(:hover, [aria-selected="true"]) { background: var(--member-hover); }
                 .bag-disc-options .bag-disc-custom { border-top: 1px solid var(--member-line); }
@@ -1730,7 +1737,7 @@
                 }
                 .bag-disc-voice-details div { padding: .3rem .45rem; border: 1px solid var(--member-line); border-radius: .45rem; }
                 .bag-disc-voice-details dt { color: var(--member-muted); font-size: .78rem; }
-                .bag-disc-voice-details dd { margin: 0; overflow-wrap: anywhere; font-weight: 650; }
+                .bag-disc-voice-details dd { margin: 0; overflow-wrap: normal; word-break: normal; font-weight: 650; }
                 .bag-disc-voice-actions { display: flex; flex-wrap: wrap; gap: .35rem; }
                 .bag-disc-button {
                     display: inline-flex;
@@ -1787,7 +1794,13 @@
                 .member-practice .member-practice-field { color: var(--text-primary); font-size: .87rem; font-weight: 650; }
                 .member-practice :is(input,select,textarea).form-input { border-color: var(--member-line); background: var(--member-paper); }
                 .member-practice :is(.dashboard-actions, .member-practice-toolbar) {
-                    display: flex; flex-wrap: wrap; align-items: center; gap: .46rem;
+                    display: grid;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    align-items: stretch;
+                    gap: .46rem;
+                }
+                #members .member-practice :is(.dashboard-actions, .member-practice-toolbar):has(> :nth-child(3):last-child) {
+                    grid-template-columns: repeat(3, minmax(0, 1fr));
                 }
                 .member-practice .dashboard-action, .member-practice-toolbar > .player-more-item { width: auto; justify-self: start; }
                 #members .member-practice-toolbar > .player-more-item {
@@ -1805,7 +1818,7 @@
                     gap: .75rem;
                     align-items: center;
                 }
-                .member-practice .member-practice-history li > :first-child { overflow-wrap: anywhere; }
+                .member-practice .member-practice-history li > :first-child { overflow-wrap: normal; word-break: normal; }
                 .member-record-delete {
                     min-height: 44px;
                     padding: .35rem .4rem;

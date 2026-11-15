@@ -235,7 +235,7 @@ export function useEventsEventDetail() {
     async function loadEventDetail() {
       publishEventsView("status");
       publishEventsLastUpdated(null);
-      publishEventsStatus({ message: "Loading event...", retry: null, tone: "loading" });
+      publishEventsStatus({ message: "Loading event…", retry: null, tone: "loading" });
 
       try {
         const courseData = await loadCourseData(api);

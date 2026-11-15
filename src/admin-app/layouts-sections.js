@@ -68,11 +68,11 @@ export function AdminLayoutUdiscImport({ courseId, onApply }) {
         key: "url",
         maxLength: 1000,
         onChange: (event) => setUrl(event.target.value),
-        placeholder: "https://udisc.com/courses/...",
+        placeholder: "https://udisc.com/courses/…",
         type: "url",
         value: url,
       }),
-      h("button", { className: "admin-btn secondary", disabled: busy, id: "alUdiscBtn", key: "fetch", onClick: fetchLayouts, type: "button" }, busy ? "Working..." : "Fetch"),
+      h("button", { className: "admin-btn secondary", disabled: busy, id: "alUdiscBtn", key: "fetch", onClick: fetchLayouts, type: "button" }, busy ? "Working…" : "Fetch"),
     ]),
     h("div", { className: "al-note", id: "alUdiscResult", key: "result", role: result.message ? "status" : undefined }, [
       result.message ? h("div", { key: "message" }, result.message) : null,
@@ -152,7 +152,7 @@ export function AdminLayoutPositionPool({ courseId, pool }) {
       h("input", { id: "alPosLabel", key: "label", maxLength: 80, onChange: (event) => updateField("label", event.target.value), placeholder: "Label e.g. Hole 5 (Blue)", value: form.label }),
       h("input", { id: "alPosLat", inputMode: "decimal", key: "lat", onChange: (event) => updateField("lat", event.target.value), placeholder: "lat", size: 8, value: form.lat }),
       h("input", { id: "alPosLng", inputMode: "decimal", key: "lng", onChange: (event) => updateField("lng", event.target.value), placeholder: "lng", size: 8, value: form.lng }),
-      h("button", { className: "admin-btn secondary", disabled: busy, id: "alPosAddBtn", key: "add", onClick: addPosition, type: "button" }, busy ? "Adding..." : "Add"),
+      h("button", { className: "admin-btn secondary", disabled: busy, id: "alPosAddBtn", key: "add", onClick: addPosition, type: "button" }, busy ? "Adding…" : "Add"),
     ]),
   ]);
 }

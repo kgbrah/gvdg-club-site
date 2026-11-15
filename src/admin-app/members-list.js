@@ -225,7 +225,7 @@ export function AdminMembershipApplications() {
   const view = useSettledWhileLoading(state);
 
   if (view.status === "loading") {
-    return h("p", { className: "al-note", "data-react-admin-membership-applications": "loading", role: "status" }, "Loading...");
+    return h("p", { className: "al-note", "data-react-admin-membership-applications": "loading", role: "status" }, "Loading…");
   }
   if (!view.applications.length) {
     return h("p", { className: "al-note", "data-react-admin-membership-applications": "empty", role: "status" }, "No pending applications.");
@@ -240,7 +240,7 @@ export function AdminMembershipApplications() {
         onClick: () => dispatchRequest("gvdg:admin-membership-approve-request", { id: row.id, name: row.name }),
       }, "Approve"),
       h("button", {
-        className: "admin-btn",
+        className: "admin-btn danger",
         key: "reject",
         type: "button",
         onClick: () => dispatchRequest("gvdg:admin-membership-reject-request", { id: row.id, name: row.name }),
@@ -263,7 +263,7 @@ export function AdminMembersList() {
   const view = useSettledWhileLoading(state);
 
   if (view.status === "loading") {
-    return h("p", { className: "al-note", "data-react-admin-members-list": "loading", role: "status" }, "Loading...");
+    return h("p", { className: "al-note", "data-react-admin-members-list": "loading", role: "status" }, "Loading…");
   }
 
   if (!view.members.length) {

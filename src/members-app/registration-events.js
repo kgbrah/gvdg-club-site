@@ -14,7 +14,7 @@ import { clientOwed, eventFromRegistration, eventMeta, isDoublesRegistration, is
 const h = React.createElement;
 
 function EventBadge({ status }) {
-  if (status === "live") return h("span", { className: "register-live-badge" }, "LIVE NOW");
+  if (status === "live") return h("span", { className: "register-live-badge" }, "Live");
   if (status === "final") return h("span", { className: "register-final-badge" }, "Final");
   if (status === "cancelled") return h("span", { className: "register-cancelled-badge" }, "Cancelled");
   return null;

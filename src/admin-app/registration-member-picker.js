@@ -166,7 +166,7 @@ export function AdminRegistrationMemberPicker({ eventStatus }) {
   }
 
   const listBody = rosterMembers.status === "loading"
-    ? h("p", { className: "al-note rg-member-empty", key: "loading", role: "status" }, "Loading club members...")
+    ? h("p", { className: "al-note rg-member-empty", key: "loading", role: "status" }, "Loading club members…")
     : rosterMembers.status === "error"
       ? h("p", { className: "al-note err rg-member-empty", key: "error", role: "alert" }, "Unable to load club members.")
       : available.length
@@ -293,7 +293,7 @@ export function AdminRegistrationMemberPicker({ eventStatus }) {
         id: "rgMemberAddBtn",
         key: "submit",
         type: "submit",
-      }, busy ? "Adding..." : (selectedIds.length ? `Add selected (${selectedIds.length})` : "Add selected")),
+      }, busy ? "Adding…" : (selectedIds.length ? `Add selected (${selectedIds.length})` : "Add selected")),
     ]),
     error ? h("p", { className: "al-note err", key: "error", role: "alert" }, error) : null,
   ]);

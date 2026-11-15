@@ -20,7 +20,7 @@ function StatusBox({ onRetry, status }) {
     error ? null : h("div", { className: "spinner", key: "spinner" }),
     h("div", { key: "message" }, error
       ? "We couldn't load the official Ryder Cup board right now. Please try again."
-      : "Loading the latest results..."),
+      : "Loading the latest results."),
     error
       ? h("button", { className: "retry-btn", key: "retry", onClick: onRetry, type: "button" }, "Retry")
       : null,
@@ -37,7 +37,9 @@ function TeamPanel({ side, team, teamLabel, teamPoints }) {
     team.players.length
       ? h("details", { className: "ryder-roster", key: "roster" }, [
           h("summary", { key: "summary" }, "Roster (" + team.players.length + ")"),
-          h("div", { className: "roster", key: "players" }, team.players.join(ROSTER_SEPARATOR)),
+          h("div", { className: "roster", key: "players" }, team.players.map((name, index) =>
+            h("span", { className: "roster-name", key: name + "-" + index },
+              index < team.players.length - 1 ? name + ROSTER_SEPARATOR.trimEnd() : name))),
         ])
       : null,
   ]);
@@ -189,7 +191,7 @@ export function RyderCupApp() {
       ? h("p", { className: "last-updated", key: "updated" },
           "Last updated " + state.lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))
       : null,
-    h("div", { key: "back", style: { textAlign: "center" } },
+    h("div", { key: "back" },
       h("a", { className: "back-link", href: "index.html" }, "\u2190 Back to home")),
   ]);
 }

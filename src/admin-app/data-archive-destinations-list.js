@@ -104,7 +104,7 @@ export function AdminDataArchiveDestinationsList() {
   const view = useSettledWhileLoading(state);
 
   if (view.status === "idle" || view.status === "loading") {
-    return h("p", { className: "al-note", "data-react-admin-data-archive-destinations": "loading", role: "status" }, "Loading...");
+    return h("p", { className: "al-note", "data-react-admin-data-archive-destinations": "loading", role: "status" }, "Loading…");
   }
 
   if (view.status === "error") {

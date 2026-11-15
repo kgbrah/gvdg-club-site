@@ -36,7 +36,7 @@ test('admin member creation form is rendered by React from request events', () =
   assert.match(memberForm, /id: "amUdisc"/);
   assert.match(memberForm, /id: "amAdmin"/);
   assert.match(memberForm, /className: "admin-member-form-admin-toggle"/);
-  assert.match(memberForm, /busy \? "Creating\.\.\." : "Create & issue temp PIN"/);
+  assert.match(memberForm, /busy \? "Creating…" : "Create & issue temp PIN"/);
   assert.doesNotMatch(memberForm, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️|🏆|⚠|⏱|—/);
   assert.match(membersList, /export function AdminMemberTempPin/);
 });

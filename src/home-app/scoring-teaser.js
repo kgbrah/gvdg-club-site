@@ -20,7 +20,7 @@ const FEATURES = [
     icon: Video,
   },
   {
-    title: "Watch Live",
+    title: "Watch live",
     description: "Share scores, hole maps, marked shots, and saved clips. No spectator login.",
     icon: Radio,
   },

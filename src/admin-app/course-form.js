@@ -147,7 +147,7 @@ export function AdminCourseForm() {
           value: form.udiscCourseId,
         }),
       }),
-      h("button", { className: "admin-btn", disabled: busy, key: "submit", type: "submit" }, busy ? "Adding..." : "Add course"),
+      h("button", { className: "admin-btn", disabled: busy, key: "submit", type: "submit" }, busy ? "Adding…" : "Add course"),
     ]),
     h("p", { className: "dash-note", key: "nearbyNote" }, "Import every listed North Carolina course, plus nearby courses within 250 miles of Greenville. Existing club courses stay put. New ones get a par-3 default layout so a card can start right away."),
     h("button", {
@@ -157,6 +157,6 @@ export function AdminCourseForm() {
       key: "nearby",
       onClick: importNearby,
       type: "button",
-    }, nearbyBusy ? "Importing NC courses..." : "Import every NC course"),
+    }, nearbyBusy ? "Importing NC courses…" : "Import every NC course"),
   ]);
 }

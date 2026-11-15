@@ -252,8 +252,8 @@ export function MemberCommunityPage({ token }) {
       note(error),
       state.contacts.length ? h("ul", { className: "community-list", key: "items" }, state.contacts.map((contact) => h("li", { key: contact.key }, [
         contact.relation === "friend" && contact.displayName !== "Member"
-          ? h("a", { href: sharedProfileHref(contact.key), key: "name" }, contact.displayName)
-          : h("strong", { key: "name" }, contact.displayName),
+          ? h("a", { className: "member-person", href: sharedProfileHref(contact.key), key: "name" }, contact.displayName)
+          : h("strong", { className: "member-person", key: "name" }, contact.displayName),
         h("p", { className: "player-card-meta", key: "status" }, contact.relation === "friend" ? "Friend" : contact.relation === "incoming" ? "Incoming request" : "Request sent"),
         h("div", { className: "dashboard-actions", key: "actions" }, [
           contact.relation === "incoming" ? connectionAction("Accept", "accept", pending, (operation) => update(contact.key, operation)) : null,
@@ -264,8 +264,10 @@ export function MemberCommunityPage({ token }) {
       state.blocked.length ? h("details", { key: "blocks" }, [
         h("summary", { key: "label" }, "Blocked members"),
         h("ul", { className: "community-list", key: "list" }, state.blocked.map(({ key, displayName }) => h("li", { key }, [
-          h("span", { key: "name" }, displayName),
-          connectionAction("Unblock", "unblock", pending, (operation) => update(key, operation)),
+          h("span", { className: "member-person", key: "name" }, displayName),
+          h("div", { className: "member-action-grid", key: "unblock" }, [
+            connectionAction("Unblock", "unblock", pending, (operation) => update(key, operation)),
+          ]),
         ]))),
       ]) : null,
     ]),
@@ -280,7 +282,7 @@ export function MemberCommunityPage({ token }) {
         h("p", { className: "dash-note", role: "alert", key: "error" }, "The directory couldn’t load."),
         action("Try again", { onClick: reload, key: "retry" }),
       ]) : page.profiles.length ? h("ul", { className: "community-list", key: "profiles" }, page.profiles.map((item) => h("li", { key: item.key }, [
-        h("a", { href: sharedProfileHref(item.key), key: "profile" }, item.displayName),
+        h("a", { className: "member-person", href: sharedProfileHref(item.key), key: "profile" }, item.displayName),
         h("div", { className: "dashboard-actions", key: "actions" }, [
           !relations.has(item.key) && state.profile.audience !== "private" ?
             connectionAction("Send friend request", "request", pending, (operation) => update(item.key, operation)) : null,

@@ -56,7 +56,7 @@ function CourseTrafficCard() {
             trafficHoleLine(row) ? h("div", { className: "player-card-meta", key: "holes" }, trafficHoleLine(row)) : null,
           ]),
         ])))
-        : h("p", { className: "player-card-meta", key: "empty" }, "No cards on a course right now."),
+        : h("p", { className: "player-card-meta", key: "empty" }, "No cards on a course."),
   ]);
 }
 
@@ -274,7 +274,7 @@ function UdiscStatsCard({ status, stats }) {
         h(UdiscHoleLines, { key: "easy", title: "Easiest holes", rows: stats.easiest }),
       ])
       : h("p", { className: "player-card-meta", key: "empty" },
-        status === "loading" ? "Checking imported rounds..." : "Import a scorecard export and the scoring shows up here."),
+        status === "loading" ? "Checking imported rounds…" : "Import a scorecard export and the scoring shows up here."),
   ]);
 }
 
@@ -439,7 +439,7 @@ export function UdiscHistory({ token }) {
     h("h3", { key: "title" }, "UDisc history"),
     h("p", { className: "player-card-meta", key: "copy" }, "From UDisc, open You, then Rounds, then Export to CSV. Imported rounds stay here and do not change your club handicap."),
     h("label", { className: "player-btn primary udisc-import-btn", key: "import" }, [
-      busy ? "Working..." : "Import CSV",
+      busy ? "Working…" : "Import CSV",
       h("input", {
         accept: ".csv,text/csv",
         disabled: busy,
@@ -472,7 +472,7 @@ export function UdiscHistory({ token }) {
         }, "Remove all"),
       ])
       : h("p", { className: "player-card-meta", key: "empty" },
-        state.status === "loading" ? "Checking imported rounds..." : "No UDisc rounds imported yet."),
+        state.status === "loading" ? "Checking imported rounds…" : "No UDisc rounds imported yet."),
     ]),
   ]);
 }
@@ -506,7 +506,7 @@ function PlayHistory({ token }) {
         ? h("div", { className: "handicap-list", key: "list" }, state.handicaps.map((item) =>
           h(HandicapRow, { item, key: item.layoutId })))
         : h("p", { className: "player-card-meta", key: "empty" },
-          state.status === "loading" ? "Checking finished rounds..." : "Finish a stroke round and your start shows up here."),
+          state.status === "loading" ? "Checking finished rounds…" : "No handicap yet."),
     ]),
     h("section", { className: "player-card", "data-react-play-recent": state.status, key: "recent" }, [
       h("h3", { key: "title" }, "Recent rounds"),
@@ -514,7 +514,7 @@ function PlayHistory({ token }) {
         ? h("div", { className: "live-round-list", key: "list" }, state.items.map((item) =>
           h(RecentRoundCard, { item, key: item.code })))
         : h("p", { className: "player-card-meta", key: "empty" },
-          state.status === "loading" ? "Looking up finished cards..." : "Finish a card and it lands here."),
+          state.status === "loading" ? "Looking up finished cards…" : "No finished rounds yet."),
     ]),
   ]);
 }

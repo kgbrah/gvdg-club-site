@@ -13,7 +13,7 @@ function showImportCandidates(candidates, extra) {
 export async function adminDgsImportFromReact(detail, { adminApi, adminMsg }) {
   const requestId = detail.requestId;
   if (!requestId) return;
-  adminMsg('Importing from DiscGolfScene...', true);
+  adminMsg('Importing from DiscGolfScene…', true);
   dispatchAdminEvent('gvdg:admin-import-candidates', { status: 'loading', candidates: [] });
   let r;
   try {

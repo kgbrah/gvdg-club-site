@@ -226,7 +226,7 @@ export function AdminDataArchiveDestinationForm() {
         id: "dxEndpointSave",
         key: "save",
         type: "submit",
-      }, busy ? "Saving..." : form.id ? "Save destination" : "Add destination"),
+      }, busy ? "Saving…" : form.id ? "Save destination" : "Add destination"),
       form.id ? h("button", {
         className: "admin-btn secondary",
         disabled: busy,

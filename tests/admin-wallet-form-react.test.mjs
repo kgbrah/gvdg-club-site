@@ -35,7 +35,7 @@ test('admin wallet adjustment form is rendered by React from request events', ()
   assert.match(walletForm, /id: "waAmount"/);
   assert.match(walletForm, /id: "waNote"/);
   assert.match(walletForm, /className: "admin-wallet-form-wide"/);
-  assert.match(walletForm, /busy \? "Posting\.\.\." : "Post wallet adjustment"/);
+  assert.match(walletForm, /busy \? "Posting…" : "Post wallet adjustment"/);
   assert.doesNotMatch(walletForm, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️|🏆|⚠|⏱|—/);
   assert.match(walletRecent, /export function AdminWalletRecentList/);
   assert.match(walletRecent, /adminJson\("\/admin\/wallets\/recent"/);

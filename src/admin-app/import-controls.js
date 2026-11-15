@@ -88,7 +88,7 @@ export function AdminImportControls() {
       key: "dgs",
       onClick: requestDgsImport,
       type: "button",
-    }, busyDgs ? "Importing..." : "Import from DiscGolfScene feed"),
+    }, busyDgs ? "Importing…" : "Import from DiscGolfScene feed"),
     h("div", { className: "admin-import-csv", key: "csv" }, [
       h("label", { htmlFor: "csvImportText", key: "label" }, "Paste CSV (header: name,date,type,format)"),
       h("textarea", {
@@ -106,7 +106,7 @@ export function AdminImportControls() {
         key: "button",
         onClick: requestCsvImport,
         type: "button",
-      }, busyCsv ? "Previewing..." : "Preview CSV"),
+      }, busyCsv ? "Previewing…" : "Preview CSV"),
     ]),
     h("div", { className: "admin-import-csv", key: "udisc" }, [
       h("label", { htmlFor: "udiscImportUrl", key: "label" }, "UDisc league or event link"),
@@ -125,7 +125,7 @@ export function AdminImportControls() {
         key: "button",
         onClick: requestUdiscImport,
         type: "button",
-      }, busyUdisc ? "Importing..." : "Import from UDisc"),
+      }, busyUdisc ? "Importing…" : "Import from UDisc"),
       h("p", { className: "dash-note", key: "hint" }, "A league link also loads past scores and the current season standings. Save those onto the league page from the list below."),
     ]),
   ]);

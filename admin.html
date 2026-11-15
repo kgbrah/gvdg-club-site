@@ -396,7 +396,7 @@
         .admin-needs-list { display: grid; gap: 0.45rem; }
         .admin-needs-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; width: 100%; min-height: 48px; padding: 0.7rem 0.85rem; border: 1px solid var(--primary-strong); border-radius: 12px; background: var(--bg-secondary); color: var(--text-primary); font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
         .admin-needs-copy { display: grid; gap: 0.12rem; min-width: 0; }
-        .admin-needs-copy strong { font-size: 0.95rem; overflow-wrap: anywhere; }
+        .admin-needs-copy strong { font-size: 0.95rem; overflow-wrap: normal; word-break: normal; }
         .admin-needs-copy span { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: none; letter-spacing: 0; }
         .admin-more-label { display: inline-flex; align-items: center; gap: 0.45rem; min-width: 0; }
         .admin-event-card { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0.45rem; align-items: center; }
@@ -422,7 +422,7 @@
         .admin-roster-identity .lb-name { font-size: 1.05rem; font-weight: 700; color: var(--text-primary); }
         .admin-roster-meta { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); }
         .admin-roster-actions { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; }
-        .admin-roster-chip { display: inline-flex; align-items: center; min-height: 28px; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+        .admin-roster-chip { display: inline-flex; align-items: center; min-height: 28px; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.78rem; font-weight: 700; letter-spacing: 0; text-transform: none; }
         .admin-roster-chip.paid { color: var(--under); background: color-mix(in srgb, var(--under) 16%, transparent); }
         .admin-roster-chip.unpaid { color: var(--text-muted); background: var(--bg-tertiary); }
         .admin-roster-chip.walk-on { color: var(--secondary-text); background: color-mix(in srgb, var(--secondary) 16%, transparent); }
@@ -432,7 +432,7 @@
         .admin-roster-details > summary { cursor: pointer; font-size: 0.78rem; font-weight: 700; color: var(--secondary-text); min-height: 44px; display: flex; align-items: center; list-style: none; }
         .admin-roster-details > summary::-webkit-details-marker { display: none; }
         .admin-roster-fields { display: grid; gap: 0.55rem; margin-top: 0.35rem; }
-        .admin-roster-fields label { display: grid; gap: 0.2rem; font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+        .admin-roster-fields label { display: grid; gap: 0.2rem; font-size: 0.78rem; font-weight: 700; color: var(--text-secondary); text-transform: none; letter-spacing: 0; }
         .admin-roster-fields input:not([type="checkbox"]), .admin-roster-fields select { width: 100%; min-height: 44px; padding: 0.5rem 0.65rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary); font-size: 16px; }
         .admin-roster-toggle { display: flex; align-items: center; gap: 0.5rem; min-height: 44px; font-size: 0.9rem; text-transform: none; letter-spacing: 0; color: var(--text-primary); font-weight: 600; }
         .admin-roster-fields .admin-roster-toggle { display: flex; }
@@ -582,7 +582,7 @@
         .admin-dialog-message { color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5; margin-bottom: 1rem; }
         .admin-dialog-pin { font: 800 2rem/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: 0.28em; text-align: center; margin: 0.2rem 0 0.85rem; color: var(--text-primary); user-select: all; }
         .admin-dialog-actions { display: flex; justify-content: flex-end; gap: 0.6rem; flex-wrap: wrap; }
-        .admin-dialog-btn { min-height: 42px; padding: 0.6rem 1rem; }
+        .admin-dialog-btn { min-height: 44px; padding: 0.6rem 1rem; }
         .admin-dialog-btn.danger-strong { background: var(--over); border: 1px solid var(--over); color: #fff; }
         @media (max-width: 520px) {
             .admin-dialog-actions { display: grid; grid-template-columns: 1fr; }
@@ -679,7 +679,7 @@
             background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: .8rem;
             padding: .7rem; display: grid; gap: .5rem;
         }
-        .admin-context-caption { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+        .admin-context-caption { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin: 0; font-weight: 700; overflow-wrap: normal; word-break: normal; }
         .admin-context-caption select { max-width: min(100%, 24rem); min-height: 44px; font: inherit; color: var(--text-primary); background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: .4rem; }
         .admin-appearance-toggle { display: flex; align-items: center; gap: .6rem; color: var(--text-primary); }
         .admin-appearance-toggle .theme-toggle { color: var(--text-primary); border-color: var(--border-color); }

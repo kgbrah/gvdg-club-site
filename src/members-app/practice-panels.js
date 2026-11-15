@@ -282,7 +282,7 @@ export function MemberBagPage({ workspace }) {
     }) : null,
     workspace.data.discs.length > 5 ? field("Find in my bag", { name: "search", type: "search", value: query, onChange: (event) => setQuery(event.target.value) }) : null,
     formError(error),
-    active.length ? group(active) : h("p", { className: "dash-note", key: "empty" }, term ? "No matching discs." : "Add your first disc to log fieldwork."),
+    active.length ? group(active) : h("p", { className: "dash-note", key: "empty" }, term ? "No matching discs." : "No discs in your bag yet."),
     archived.length ? h("details", { className: "player-card", key: "archived" }, [
       h("summary", { key: "label" }, "Archived discs (" + archived.length + ")"), group(archived),
     ]) : null,

@@ -96,7 +96,7 @@ function MarkdownBody({ children }) {
 function ShareRow({ title, url }) {
   const [copied, setCopied] = React.useState("idle");
   const encodedUrl = encodeURIComponent(url);
-  const encodedTitle = encodeURIComponent(`Support ${title} - Greenville Disc Golf Club`);
+  const encodedTitle = encodeURIComponent(`Support ${title} – Greenville Disc Golf Club`);
   const copyLabel = copied === "ok" ? "Copied" : copied === "err" ? "Copy failed" : "Copy link";
 
   React.useEffect(() => {

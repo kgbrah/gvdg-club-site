@@ -163,6 +163,20 @@ export function isPastClubCalendarEvent(event, now = new Date()) {
   return day < clubToday(now);
 }
 
+// A UDisc import sometimes stores "League - League Nov 8th". Show that once.
+export function displayEventTitle(name) {
+  const title = String(name || "").trim();
+  const parts = title.split(/\s+[–—-]\s+/);
+  if (parts.length < 2) return title;
+  const first = parts[0].trim();
+  const rest = parts.slice(1).join(" – ").trim();
+  if (!first || !rest) return title;
+  const lead = first.toLowerCase();
+  const tail = rest.toLowerCase();
+  if (tail === lead || tail.startsWith(`${lead} `)) return rest;
+  return title;
+}
+
 // Format a date for display. Tolerates ISO strings, Date objects and nulls.
 // A bare YYYY-MM-DD is a club calendar day: pin it to noon UTC of that civil
 // date, then render in Eastern so it never shifts a day backward. A full

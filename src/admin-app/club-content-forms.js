@@ -171,7 +171,7 @@ export function AdminLeagueForm() {
       }),
       stroke ? "Handicap enabled" : "Handicap enabled (stroke play only)",
     ]),
-    h("button", { className: "admin-btn", disabled: busy, key: "submit", type: "submit" }, busy ? "Adding..." : "Add league"),
+    h("button", { className: "admin-btn", disabled: busy, key: "submit", type: "submit" }, busy ? "Adding…" : "Add league"),
   ]);
 }
 
@@ -210,7 +210,7 @@ export function AdminFundraiserForm() {
       label: "Description (markdown)",
       children: h("textarea", { id: "frBody", key: "input", onChange: (event) => updateField("body", event.target.value), rows: 4, value: form.body }),
     }),
-    h("button", { className: "admin-btn", disabled: busy, key: "submit", type: "submit" }, busy ? "Adding..." : "Add fundraiser"),
+    h("button", { className: "admin-btn", disabled: busy, key: "submit", type: "submit" }, busy ? "Adding…" : "Add fundraiser"),
   ]);
 }
 
@@ -250,6 +250,6 @@ export function AdminMeetingForm() {
       label: "Action items (one per line)",
       children: h("textarea", { id: "mtActions", key: "input", onChange: (event) => updateField("actionItems", event.target.value), rows: 3, value: form.actionItems }),
     }),
-    h("button", { className: "admin-btn", disabled: busy, key: "submit", type: "submit" }, busy ? "Adding..." : "Add meeting"),
+    h("button", { className: "admin-btn", disabled: busy, key: "submit", type: "submit" }, busy ? "Adding…" : "Add meeting"),
   ]);
 }

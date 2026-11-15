@@ -77,7 +77,7 @@
         /* ---- Page body ---- */
         main { flex: 1; width: 100%; padding-top: 110px; max-width: 1200px; margin: 0 auto; padding-left: 1.5rem; padding-right: 1.5rem; padding-bottom: 4rem; }
         .page-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(2.4rem, 7vw, 4rem); text-align: center; letter-spacing: 0.05em; color: var(--text-primary); margin: 1rem 0 0.25rem; }
-        .page-subtitle { text-align: center; color: rgba(255, 255, 255, 0.94); font-size: 1rem; margin-bottom: 2rem; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45); }
+        .page-subtitle { text-align: center; color: rgba(255, 255, 255, 0.94); font-size: 1rem; margin-bottom: 2rem; }
 
         /* ---- Event sections ---- */
         .events-route { display: none; }
@@ -105,7 +105,7 @@
         .events-section-count { color: var(--text-muted); font-size: 0.85rem; font-weight: 600; }
         .previous-results-panel { margin: 0 0 2rem; }
         .previous-results-toggle { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 1rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 14px; padding: 1rem 1.15rem; box-shadow: 0 4px 18px var(--card-shadow); cursor: pointer; text-align: left; font: inherit; transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease; }
-        .previous-results-toggle:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: 0 8px 24px var(--card-shadow-hover); }
+        .previous-results-toggle:hover { border-color: var(--primary); }
         .previous-results-toggle:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
         .previous-results-title { display: flex; flex-direction: column; gap: 0.15rem; }
         .previous-results-title strong { font-family: 'Bebas Neue', sans-serif; font-size: 1.45rem; letter-spacing: 0.04em; font-weight: 400; }
@@ -124,7 +124,7 @@
         @media (max-width: 560px) { .events-grid { grid-template-columns: 1fr; } }
 
         .event-card { background: var(--bg-secondary); border-radius: 15px; overflow: hidden; border: 2px solid var(--border-color); transition: all 0.3s ease; cursor: pointer; text-align: left; width: 100%; font: inherit; color: inherit; text-decoration: none; display: flex; flex-direction: column; padding: 1.4rem; gap: 0.7rem; box-shadow: 0 6px 24px var(--card-shadow); }
-        .event-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px var(--card-shadow-hover); border-color: var(--primary); }
+        .event-card:hover { border-color: var(--primary); }
         .event-card:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
         .event-card.live { border-color: var(--primary); box-shadow: 0 8px 30px rgba(255, 107, 53, 0.25); }
         .event-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
@@ -138,7 +138,7 @@
             gap: 0.45rem; align-items: baseline; font-size: 0.82rem; line-height: 1.3;
         }
         .event-schedule-row dt { color: var(--text-muted); font-weight: 700; }
-        .event-schedule-row dd { margin: 0; color: var(--text-secondary); font-weight: 600; overflow-wrap: anywhere; }
+        .event-schedule-row dd { margin: 0; color: var(--text-secondary); font-weight: 600; overflow-wrap: normal; word-break: normal; }
         /* External "register" CTA on schedule-feed (linked) cards */
         .event-cta { margin-top: auto; font-weight: 800; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--primary); }
         .event-cta-icon { display: inline-flex; margin-left: 0.35rem; vertical-align: -0.125em; }
@@ -199,7 +199,7 @@
         .detail-fact { background: var(--bg-tertiary); border-radius: 12px; padding: 1rem; }
         [data-theme="dark"] .detail-fact { background: var(--bg-primary); }
         .detail-fact .label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.35rem; }
-        .detail-fact .value { font-size: 1rem; color: var(--text-secondary); font-weight: 600; word-break: break-word; }
+        .detail-fact .value { font-size: 1rem; color: var(--text-secondary); font-weight: 600; overflow-wrap: normal; word-break: normal; }
         .detail-fact .value a { color: var(--primary); text-decoration: none; }
         .detail-fact .value a:hover { text-decoration: underline; }
         .detail-notes { background: var(--bg-tertiary); border-left: 4px solid var(--accent); border-radius: 8px; padding: 1rem 1.25rem; margin: 1.25rem 0; color: var(--text-secondary); line-height: 1.6; white-space: pre-wrap; }
@@ -217,7 +217,7 @@
         .live-chat-meta { display: flex; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.2rem; }
         .live-chat-author { font-weight: 800; color: var(--text-primary); font-size: 0.82rem; }
         .live-chat-when { color: var(--text-muted); font-size: 0.72rem; white-space: nowrap; }
-        .live-chat-body { color: var(--text-secondary); font-size: 0.92rem; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
+        .live-chat-body { color: var(--text-secondary); font-size: 0.92rem; line-height: 1.4; white-space: pre-wrap; overflow-wrap: normal; word-break: normal; }
         .live-chat-form { display: grid; gap: 0.5rem; }
         .live-chat-as { font-size: 0.78rem; font-weight: 700; color: var(--text-muted); }
         .live-chat-input { width: 100%; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-primary); color: var(--text-primary); font: inherit; padding: 0.55rem 0.7rem; }
@@ -265,9 +265,9 @@
         .lb-table tbody tr:first-child td { font-weight: 700; color: var(--text-primary); }
         .lb-pos { color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
         .lb-table :is(th, td):not(.lb-name) { width: 1%; }
-        .lb-name { font-weight: 600; color: var(--text-primary); white-space: nowrap; line-height: 1.25; overflow-wrap: normal; word-break: normal; }
+        .lb-name { font-weight: 600; color: var(--text-primary); white-space: nowrap; line-height: 1.25; overflow-wrap: normal; word-break: normal; hyphens: none; }
         .lb-table.live-matchplay { min-width: 100%; table-layout: auto; }
-        .lb-table.live-matchplay .lb-name { white-space: nowrap; line-height: 1.25; overflow-wrap: normal; word-break: normal; }
+        .lb-table.live-matchplay .lb-name { white-space: nowrap; line-height: 1.25; overflow-wrap: normal; word-break: normal; hyphens: none; }
         .lb-table.live-matchplay .lb-members { display: block; margin-top: 0.12rem; color: var(--text-muted); font-size: 0.78rem; font-weight: 600; }
         .lb-table.live-matchplay .lb-match { line-height: 1.2; }
         .lb-topar { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
@@ -279,7 +279,7 @@
         #leaguesSection { margin-bottom: 1.5rem; }
         .leagues-grid { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); margin-top: 0.75rem; }
         .league-card { text-align: left; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; cursor: pointer; display: flex; flex-direction: column; gap: 0.25rem; transition: border-color .15s, transform .15s; font: inherit; }
-        .league-card:hover { border-color: var(--secondary); transform: translateY(-2px); }
+        .league-card:hover { border-color: var(--secondary); }
         .league-name { font-weight: 700; color: var(--text-primary); }
         .league-meta { font-size: 0.8rem; color: var(--text-muted); }
         .team-dot { display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 999px; margin-right: 0.35rem; vertical-align: middle; background: var(--text-muted); }
@@ -315,7 +315,7 @@
         .player-list { display: grid; gap: 0.5rem; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
         .player-row { background: var(--bg-tertiary); border-radius: 10px; padding: 0.65rem 0.85rem; display: flex; align-items: baseline; gap: 0.5rem; border: 1px solid var(--border-color); }
         [data-theme="dark"] .player-row { background: var(--bg-primary); }
-        .player-name { font-weight: 600; color: var(--text-secondary); }
+        .player-name { font-weight: 600; color: var(--text-secondary); overflow-wrap: normal; word-break: normal; hyphens: none; }
         .player-pdga { font-size: 0.78rem; color: var(--text-muted); }
         .player-rating { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; color: var(--text-primary); }
         .player-team { margin-left: auto; font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
@@ -335,7 +335,7 @@
         .status-message { margin-bottom: 0.75rem; font-weight: 700; }
         .retry-btn svg { margin-right: 0.35rem; vertical-align: -0.15em; }
         .retry-btn { margin-top: 1rem; background: var(--primary-strong); color: white; border: none; padding: 0.75rem 1.75rem; min-height: 44px; border-radius: 50px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer; transition: all 0.3s ease; }
-        .retry-btn:hover { background: #ff7f4d; transform: translateY(-2px); }
+        .retry-btn:hover { background: var(--primary); }
         .last-updated { text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-top: 1.5rem; }
         .back-link { display: inline-block; margin-top: 0.5rem; color: var(--secondary); text-decoration: none; font-size: 0.95rem; background: none; border: none; cursor: pointer; font: inherit; }
         .back-link:hover { color: var(--primary); }

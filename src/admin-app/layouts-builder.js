@@ -127,7 +127,7 @@ export function AdminLayoutBuilder({ editingId, name, onNameChange, onReset, onR
     ])),
     h("div", { className: "al-row", key: "actions" }, [
       h("button", { className: "admin-btn secondary", id: "alAddHole", key: "add", onClick: () => onRowsChange([...rows, newHoleRow(rows.length)]), type: "button" }, "+ Add hole"),
-      h("button", { className: "admin-btn", disabled: pending, id: "alSaveLayout", key: "save", onClick: save, type: "button" }, pending ? "Saving..." : editingId ? "Update layout" : "Save layout"),
+      h("button", { className: "admin-btn", disabled: pending, id: "alSaveLayout", key: "save", onClick: save, type: "button" }, pending ? "Saving…" : editingId ? "Update layout" : "Save layout"),
       editingId ? h("button", { className: "admin-btn secondary", id: "alResetLayout", key: "reset", onClick: onReset, type: "button" }, "New (clear)") : null,
     ]),
   ]);

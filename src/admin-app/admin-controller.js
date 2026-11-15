@@ -282,7 +282,7 @@ export function startAdminController() {
         async function adminImportNearbyCoursesFromReact(detail) {
             const requestId = detail.requestId;
             if (!requestId) return;
-            adminMsg('Importing nearby courses...', true);
+            adminMsg('Importing nearby courses…', true);
             let r;
             try {
                 r = await adminApi('/admin/import/nearby-courses', { method: 'POST', body: {} });

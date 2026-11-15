@@ -10,7 +10,7 @@
   margin: 32px auto;
   padding: 32px;
   border: 1px solid var(--border-color);
-  border-radius: 16px;
+  border-radius: 14px;
   box-shadow: none;
   scroll-margin-top: 0;
 }
@@ -55,7 +55,7 @@
   text-align: left;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
-  border-radius: 10px;
+  border-radius: 14px;
   color: var(--text-primary);
   cursor: default;
 }
@@ -84,7 +84,7 @@
   row-gap: 2px;
   padding: 16px;
   border: 1px solid var(--border-color);
-  border-radius: 10px;
+  border-radius: 14px;
   color: var(--text-primary);
   background: var(--bg-secondary);
   text-align: left;
@@ -101,6 +101,21 @@
   font-size: 1.25rem;
 }
 #about .board-member-name { font-size: 1.3rem; line-height: 1.15; }
+#about .board-member-name,
+#events .event-title,
+#courses .course-name,
+#area-tournaments .tournament-name {
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+#about .stat-number,
+#courses .info-value,
+#area-tournaments .tournament-date .day,
+#events .event-day,
+#membership .price {
+  font-variant-numeric: tabular-nums;
+}
 #about .board-member-role { padding: 0; background: none; color: var(--text-muted); font-size: 0.65rem; letter-spacing: 0.06em; }
 
 #courses .courses-lead { max-width: none; margin: 0 0 28px; text-align: left; }
@@ -120,11 +135,17 @@
   min-width: 0;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 12px;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  border-radius: 14px;
+  transition: border-color 0.2s ease;
 }
-#courses .course-card:hover { transform: translateY(-3px); border-color: var(--secondary-text); box-shadow: 0 6px 18px var(--card-shadow); }
+#courses .course-card:hover { transform: none; border-color: var(--secondary-text); box-shadow: none; }
 #courses .course-card:focus-visible { outline: 3px solid var(--secondary-text); outline-offset: -3px; box-shadow: none; }
+#courses .carousel-btn:hover,
+.course-modal-btn:hover,
+.tournament-feed-link:hover,
+.tournament-card:hover,
+header .theme-toggle:hover,
+header .logo:hover .logo-image { transform: none; }
 #courses .course-image { height: 176px; background: var(--secondary); }
 #courses .course-content { padding: 20px; }
 #courses .course-header { flex-direction: column; gap: 8px; margin-bottom: 10px; }
@@ -148,7 +169,7 @@
   padding: 20px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 10px;
+  border-radius: 14px;
   cursor: default;
 }
 #events .event-item.has-link { cursor: pointer; }
@@ -168,7 +189,7 @@
 #events .event-description { font-size: 0.9rem; line-height: 1.6; }
 #events .event-date.tbd { background: var(--accent); color: var(--dark); }
 #events .events-footer a { color: var(--secondary-text); text-underline-offset: 4px; }
-#events .no-events { border: 1px solid var(--border-color); border-radius: 10px; }
+#events .no-events { border: 1px solid var(--border-color); border-radius: 14px; }
 
 #area-tournaments .container { max-width: none; padding: 0; }
 #area-tournaments .section-title { margin-bottom: 8px; }
@@ -224,7 +245,7 @@
   min-width: 0;
   padding: 24px;
   border: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: 12px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.04);
 }
 #membership .membership-step-label { color: var(--accent); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
@@ -242,7 +263,7 @@
   border-radius: 8px;
   text-align: center;
   font-size: 0.875rem;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
   box-shadow: none;
 }
 #membership .membership-step-action:hover { transform: none; box-shadow: none; }
@@ -251,14 +272,14 @@
 #membership .membership-step-action:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
 
 #contact .contact-info { max-width: none; gap: 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-#contact .contact-box { padding: 24px 20px; border: 1px solid var(--border-color); border-radius: 10px; box-shadow: none; text-align: left; min-height: 160px; cursor: default; }
+#contact .contact-box { padding: 24px 20px; border: 1px solid var(--border-color); border-radius: 14px; box-shadow: none; text-align: left; min-height: 160px; cursor: default; }
 #contact .contact-box:hover,
 #contact .contact-box:active { transform: none; box-shadow: none; }
 #contact .contact-icon { color: var(--secondary-text); font-size: 1.5rem; margin-bottom: 16px; }
 #contact .contact-icon svg { margin-left: 0; }
 #contact .contact-box:hover .contact-icon { transform: none; }
 #contact .contact-label { font-size: 1.35rem; margin-bottom: 6px; }
-#contact .contact-detail { font-size: 0.85rem; overflow-wrap: anywhere; }
+#contact .contact-detail { font-size: 0.85rem; overflow-wrap: normal; word-break: normal; hyphens: none; }
 #contact .contact-detail a { color: var(--secondary-text); text-underline-offset: 4px; }
 
 #homeReactFooterApp footer,
@@ -283,8 +304,8 @@
   #contact {
     width: calc(100% - 24px);
     margin: 16px auto;
-    padding: 24px 20px;
-    border-radius: 12px;
+    padding: 16px;
+    border-radius: 14px;
     scroll-margin-top: 0;
   }
   #about .section-title,
@@ -316,7 +337,7 @@
   #events .event-date { width: 48px; min-width: 48px; height: 60px; flex-direction: column; gap: 0; }
   #events .event-day { font-size: 1.8rem; }
   #events .event-month { font-size: 0.6rem; }
-  #events .event-title { font-size: 1.25rem; overflow-wrap: anywhere; }
+  #events .event-title { font-size: 1.25rem; overflow-wrap: normal; word-break: normal; hyphens: none; }
   #events .event-description { font-size: 0.85rem; }
   #events .no-events { padding: 24px 16px; }
   #area-tournaments .section-title { margin-bottom: 8px; }

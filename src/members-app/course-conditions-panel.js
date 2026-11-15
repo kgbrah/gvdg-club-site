@@ -155,11 +155,11 @@ export function CourseConditionsPanel() {
           onChange: (event) => setNote(event.target.value),
         }),
       ]),
-      h("button", { type: "submit", className: "passkey-btn", disabled: busy || !token, key: "submit" }, busy ? "Posting..." : "Post condition"),
+      h("button", { type: "submit", className: "passkey-btn", disabled: busy || !token, key: "submit" }, busy ? "Posting…" : "Post condition"),
       message.text ? h("div", { className: "casual-status " + (message.tone === "error" ? "error" : ""), key: "status" }, message.text) : null,
     ]),
     reports.length
       ? h("div", { className: "course-conditions-list", key: "list" }, reports.map((report) => h(ReportRow, { report, key: report.id || report.courseName })))
-      : h("p", { className: "dash-note", key: "empty" }, "No member reports yet. Be the first after you play."),
+      : h("p", { className: "dash-note", key: "empty" }, "No course reports yet."),
   ]);
 }

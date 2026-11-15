@@ -119,9 +119,9 @@ export function PdgaEventsSection() {
   return h("section", { className: "pdga-events", "data-pdga-events": state.status }, [
     h("h3", { className: "my-dashboard-title", key: "title" }, "Nearby PDGA"),
     h("p", { className: "dash-note", key: "note" }, note),
-    state.status === "loading" ? h("p", { className: "dash-note", key: "loading" }, "Finding nearby PDGA events...") : null,
+    state.status === "loading" ? h("p", { className: "dash-note", key: "loading" }, "Finding nearby PDGA events…") : null,
     state.status === "error" ? h("p", { className: "dash-note", key: "error" }, "PDGA events are temporarily unavailable.") : null,
-    state.status === "empty" ? h("p", { className: "dash-note", key: "empty" }, "No upcoming PDGA events within 100 miles.") : null,
+    state.status === "empty" ? h("p", { className: "dash-note", key: "empty" }, "No PDGA events in range.") : null,
     state.status === "ready"
       ? h("div", { key: "list" }, state.events.map((event) => h(EventCard, { event, key: event.url })))
       : null,

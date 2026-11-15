@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   bucketAdminEvents,
   calendarEntries,
+  displayEventTitle,
   formatAdminEventWhen,
   normalizeAdminEvent,
   pickTodayEvent,
@@ -28,6 +29,13 @@ test("admin event buckets put live first and keep scheduled upcoming", () => {
   const todaysRound = normalizeAdminEvent({ id: 5, name: "Today's round", status: "scheduled", date: today });
   assert.equal(pickTodayEvent([laterSameStatus, todaysRound]).id, "5");
   assert.match(formatAdminEventWhen(live), /[A-Z][a-z]{2}/);
+});
+
+test("a repeated league prefix is shown once", () => {
+  assert.equal(displayEventTitle("Sunday Baggers - Sunday Baggers Nov 8th"), "Sunday Baggers Nov 8th");
+  assert.equal(displayEventTitle("Sunday Baggers – Sunday Baggers"), "Sunday Baggers");
+  assert.equal(displayEventTitle("Farm Open"), "Farm Open");
+  assert.equal(displayEventTitle("Red - Blue"), "Red - Blue");
 });
 
 test("the calendar keeps campaigns and minutes beside rounds", () => {

@@ -1,7 +1,7 @@
 import React from "react";
 import { CalendarDays, CheckCircle2 } from "lucide-react";
 
-import { formatLabel, isPastClubCalendarEvent, normalizeEvent } from "../shared/events-model.js";
+import { displayEventTitle, formatLabel, isPastClubCalendarEvent, normalizeEvent } from "../shared/events-model.js";
 import { EventScheduleFacts } from "../shared/event-schedule.js";
 import { EventFieldRoster } from "../shared/event-field-roster.js";
 import { clientOwed, isDoublesRegistration, isTeamRegistration, parseArray, parseObject } from "../members-app/registration-utils.js";
@@ -149,7 +149,7 @@ function RegisteredCardActions({ api, event, guestReg, myReg, onRefresh, token }
           key: "confirm",
           onClick: withdraw,
           type: "button",
-        }, busy ? "Withdrawing..." : "Confirm withdraw"),
+        }, busy ? "Withdrawing…" : "Confirm withdraw"),
         h("button", {
           className: "reg-btn tertiary",
           disabled: busy,
@@ -325,7 +325,7 @@ function RegisterForm({ api, event, onRefresh, onSessionExpired, token }) {
       key: "submit",
       onClick: submit,
       type: "button",
-    }, busy ? "Registering..." : "Register"),
+    }, busy ? "Registering…" : "Register"),
   ]);
 }
 
@@ -339,7 +339,7 @@ function RegistrationCard({ api, event, guestReg, myReg, onRefresh, onSessionExp
 
   return h("article", { className: "event-card register-card", "data-react-events-registration-card": "true" }, [
     h("div", { className: "event-card-top", key: "top" },
-      h("h3", { className: "event-name" }, event.name || "Event")),
+      h("h3", { className: "event-name" }, displayEventTitle(event.name || "Event"))),
     h(EventMeta, { event, key: "meta" }),
     h("div", { className: "register-fee", key: "fee" },
       `${event.entry_fee_cents ? `${dollars(event.entry_fee_cents)} entry` : "Free entry"}${event.play_format ? ` - ${formatLabel(event.play_format)}` : ""}`),
@@ -407,7 +407,7 @@ export function EventsRegistrationApp() {
   return h("section", { "data-react-events-registration": "true" }, [
     h("div", { className: "events-group-head", key: "head" }, [
       h("h2", { className: "events-section-title", key: "title" }, "Currently Registering"),
-      h("p", { className: "events-group-sub", key: "sub" }, "Sign up for upcoming club events - members or guests"),
+      h("p", { className: "events-group-sub", key: "sub" }, "Sign up for upcoming club events – members or guests"),
     ]),
     h("div", { className: "events-grid", key: "grid" }, events.map((event, index) => {
       const id = event && event.id;

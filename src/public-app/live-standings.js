@@ -39,12 +39,12 @@ function safeWinnerClass(value) {
 
 export function LiveStandings({ snapshot }) {
   if (!snapshot) {
-    return h("div", { className: "lb-wrap" }, h("p", { className: "lb-empty" }, "Loading live scores..."));
+    return h("div", { className: "lb-wrap" }, h("p", { className: "lb-empty" }, "Loading live scores."));
   }
 
   const standings = Array.isArray(snapshot.standings) ? snapshot.standings : [];
   if (!standings.length) {
-    return h("div", { className: "lb-wrap" }, h("p", { className: "lb-empty" }, "Waiting for the first scores..."));
+    return h("div", { className: "lb-wrap" }, h("p", { className: "lb-empty" }, "Waiting for the first scores."));
   }
 
   const config = snapshot.roundConfig || {};

@@ -69,12 +69,14 @@ function UpNextCard({ events, registrations }) {
     return h("section", { className: "player-story-block", "data-react-home-next": "empty" }, [
       h("h3", { key: "title" }, "Up next"),
       h("p", { className: "player-card-meta", key: "empty" }, "Nothing on your schedule right now."),
-      h("button", {
-        type: "button",
-        className: "player-btn primary",
-        onClick: () => selectDashboardTab("events"),
-        key: "events",
-      }, "See events"),
+      h("div", { className: "member-action-grid", key: "actions" }, [
+        h("button", {
+          type: "button",
+          className: "player-btn primary",
+          onClick: () => selectDashboardTab("events"),
+          key: "events",
+        }, "See events"),
+      ]),
     ]);
   }
 
@@ -83,7 +85,7 @@ function UpNextCard({ events, registrations }) {
   const meta = [when, eventMeta(event), fee].filter(Boolean).join(" · ");
   const live = event.status === "live";
   const chip = live ? "Live" : registration ? "You're in" : "Open";
-  const actionLabel = live && registration ? "Open scorecard" : registration ? "You're in" : "Register";
+  const actionLabel = live && registration ? "Open scorecard" : registration ? "View event" : "Register";
 
   return h("div", { className: "player-story-block", "data-react-home-next": registration ? "registered" : "ready" }, [
     h("h3", { key: "title" }, "Up next"),
@@ -95,19 +97,21 @@ function UpNextCard({ events, registrations }) {
       h("span", { className: `player-chip${live ? " live" : ""}`, key: "status" }, chip),
       event.play_format === "doubles" ? h("span", { className: "player-chip", key: "format" }, "Doubles") : null,
     ].filter(Boolean)),
-    h("button", {
-      type: "button",
-      className: "player-btn primary",
-      onClick: () => {
-        if (live && registration) {
-          window.location.href = `score.html?event=${encodeURIComponent(event.id)}`;
-          return;
-        }
-        selectDashboardTab("events", { eventId: event.id });
-      },
-      key: "register",
-    }, actionLabel),
-    h(AddToCalendarButton, { className: "player-btn", item: calendarEventFromClub(event), key: "cal" }),
+    h("div", { className: "member-action-grid", key: "actions" }, [
+      h("button", {
+        type: "button",
+        className: "player-btn primary",
+        onClick: () => {
+          if (live && registration) {
+            window.location.href = `score.html?event=${encodeURIComponent(event.id)}`;
+            return;
+          }
+          selectDashboardTab("events", { eventId: event.id });
+        },
+        key: "register",
+      }, actionLabel),
+      h(AddToCalendarButton, { className: "player-btn", item: calendarEventFromClub(event), key: "cal" }),
+    ]),
   ]);
 }
 
@@ -137,7 +141,7 @@ function NextPdgaCard() {
     h("h3", { key: "title" }, "Next PDGA"),
     h("div", { className: "player-event-name", key: "name" }, event.name),
     meta ? h("div", { className: "player-card-meta", key: "meta" }, meta) : null,
-    h("div", { className: "player-actions", key: "actions" }, [
+    h("div", { className: "member-action-grid", key: "actions" }, [
       h("a", {
         className: "player-btn primary",
         href: event.url,
@@ -194,7 +198,7 @@ function LastRoundCard({ token, onCasualHistory }) {
         href: row.href,
         key: "row",
       }, [
-        h("div", { key: "copy" }, [
+        h("div", { className: "member-list-copy", key: "copy" }, [
           h("div", { className: "player-event-name", key: "name" }, row.title || "Round"),
           meta ? h("div", { className: "player-card-meta", key: "meta" }, meta) : null,
           row.mix ? h("div", { className: "player-card-meta", key: "mix" }, row.mix) : null,
@@ -205,7 +209,7 @@ function LastRoundCard({ token, onCasualHistory }) {
           row.rating != null ? h("span", { className: "round-rating", key: "rating", "aria-label": `Round rating ${row.rating}` }, String(row.rating)) : null,
         ]),
       ])
-      : h("p", { className: "player-card-meta", key: "empty" }, state.status === "loading" ? "Loading last round..." : "No finished round yet."),
+      : h("p", { className: "player-card-meta", key: "empty" }, state.status === "loading" ? "Loading last round…" : "No finished round yet."),
   ]);
 }
 
@@ -236,7 +240,7 @@ function PdgaHistory({ stats }) {
     h("summary", { className: "dash-collapse-summary", key: "summary" }, `PDGA events (${events.length})`),
     h("div", { className: "player-story-events", key: "list" }, events.slice(0, 6).map((event, index) =>
       h("div", { className: "player-list-row", key: `${event.tournament || "event"}-${event.epoch || index}` }, [
-        h("div", { key: "copy" }, [
+        h("div", { className: "member-list-copy", key: "copy" }, [
           h("div", { className: "player-event-name", key: "name" }, pdgaEventTitle(event.tournament) || "Event"),
           h("div", { className: "player-card-meta", key: "meta" }, [event.date, event.division].filter(Boolean).join(" · ")),
         ]),

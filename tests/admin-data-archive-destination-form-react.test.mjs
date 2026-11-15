@@ -43,7 +43,7 @@ test('admin data archive destination form is rendered by React from request even
   assert.match(destinationForm, /id: "dxEndpointUrl"/);
   assert.match(destinationForm, /id: "dxAuthTokenClear"/);
   assert.match(destinationForm, /id: "dxEndpointActive"/);
-  assert.match(destinationForm, /busy \? "Saving\.\.\." : form\.id \? "Save destination" : "Add destination"/);
+  assert.match(destinationForm, /busy \? "Saving…" : form\.id \? "Save destination" : "Add destination"/);
   assert.match(destinationForm, /className: "register-addon admin-data-archive-destination-toggle"/);
   assert.match(html, /\.admin-data-archive-destination-form \{ scroll-margin-top: 5\.5rem; \}/);
   assert.match(html, /\.admin-form \.admin-data-archive-destination-toggle \{/);

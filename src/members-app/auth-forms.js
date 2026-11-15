@@ -83,7 +83,7 @@ export function LoginForm({ active, supportsPasskeys, state, onValuesChange }) {
       value: pin,
       onChange: (event) => onValuesChange("login", { pin: event.target.value }),
     })),
-    h("button", { type: "submit", className: "login-btn", disabled: busy, "data-react-auth-action": "login", key: "login" }, loginBusy ? "Please wait..." : "Log In"),
+    h("button", { type: "submit", className: "login-btn", disabled: busy, "data-react-auth-action": "login", key: "login" }, loginBusy ? "Please wait…" : "Log In"),
     h(ErrorMessage, { form: "login", state, key: "error" }),
     supportsPasskeys ? h("div", { className: "login-divider", key: "divider" }, h("span", null, "or")) : null,
     supportsPasskeys
@@ -94,7 +94,7 @@ export function LoginForm({ active, supportsPasskeys, state, onValuesChange }) {
         "data-react-auth-action": "passkey",
         onClick: () => request("gvdg:member-passkey-login-requested"),
         key: "passkey",
-      }, passkeyBusy ? "Please wait..." : h(IconLabel, { icon: h(KeyRound, { size: 17, strokeWidth: 2.2, key: "icon" }), text: "Log in with a passkey" }))
+      }, passkeyBusy ? "Please wait…" : h(IconLabel, { icon: h(KeyRound, { size: 17, strokeWidth: 2.2, key: "icon" }), text: "Log in with a passkey" }))
       : null,
     h("button", {
       type: "button",
@@ -173,7 +173,7 @@ export function ApplyForm({ active, state, onValuesChange }) {
       value: confirmPin,
       onChange: (event) => onValuesChange("apply", { confirmPin: event.target.value }),
     })),
-    h("button", { type: "submit", className: "login-btn", disabled: busy, "data-react-auth-action": "apply", key: "submit" }, busy ? "Sending..." : "Submit application"),
+    h("button", { type: "submit", className: "login-btn", disabled: busy, "data-react-auth-action": "apply", key: "submit" }, busy ? "Sending…" : "Submit application"),
     h(ErrorMessage, { form: "apply", state, key: "error" }),
     h("button", {
       type: "button",
@@ -229,7 +229,7 @@ export function PinChangeForm({ active, state, onValuesChange }) {
       value: confirmPin,
       onChange: (event) => onValuesChange("pin", { confirmPin: event.target.value }),
     })),
-    h("button", { type: "submit", className: "login-btn", disabled: Boolean(state.busyAction), "data-react-auth-action": "pin", key: "save" }, state.busyAction === "pin" ? "Please wait..." : "Save PIN & Continue"),
+    h("button", { type: "submit", className: "login-btn", disabled: Boolean(state.busyAction), "data-react-auth-action": "pin", key: "save" }, state.busyAction === "pin" ? "Please wait…" : "Save PIN & Continue"),
     h(ErrorMessage, { form: "pin", state, key: "error" }),
   ]);
 }
@@ -291,7 +291,7 @@ export function ProfileForm({ active, state, onValuesChange }) {
       value: udisc,
       onChange: (event) => onValuesChange("profile", { udisc: event.target.value }),
     })),
-    h("button", { type: "submit", className: "login-btn", disabled: Boolean(state.busyAction), "data-react-auth-action": "profile-save", key: "save" }, state.busyAction === "save" ? "Please wait..." : "Save & Continue"),
+    h("button", { type: "submit", className: "login-btn", disabled: Boolean(state.busyAction), "data-react-auth-action": "profile-save", key: "save" }, state.busyAction === "save" ? "Please wait…" : "Save & Continue"),
     h("button", {
       type: "button",
       className: "login-btn login-btn-secondary",

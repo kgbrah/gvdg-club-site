@@ -102,7 +102,7 @@ export function AdminImportCandidatesList() {
 
   if (view.status === "idle") return null;
   if (view.status === "loading") {
-    return h("p", { className: "dash-note", "data-react-admin-import-candidates": "loading", role: "status" }, "Loading candidates...");
+    return h("p", { className: "dash-note", "data-react-admin-import-candidates": "loading", role: "status" }, "Loading candidates…");
   }
   if (!view.candidates.length && !view.standings.length) {
     return h("p", { className: "dash-note", "data-react-admin-import-candidates": "empty", role: "status" }, "No candidates found.");
@@ -143,7 +143,7 @@ export function AdminImportCandidatesList() {
         id: "udiscSaveResultsBtn",
         onClick: requestSave,
         type: "button",
-      }, saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : saveState === "failed" ? "Save failed" : "Save results and standings"),
+      }, saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : saveState === "failed" ? "Save failed" : "Save results and standings"),
     ])
     : view.sourceUrl
       ? h("div", { className: "admin-cand", key: "save-only" }, [
@@ -154,7 +154,7 @@ export function AdminImportCandidatesList() {
           id: "udiscSaveResultsBtn",
           onClick: requestSave,
           type: "button",
-        }, saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : saveState === "failed" ? "Save failed" : "Save league and rounds"),
+        }, saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : saveState === "failed" ? "Save failed" : "Save league and rounds"),
       ])
       : null;
 
@@ -171,7 +171,7 @@ export function AdminImportCandidatesList() {
         key: "create",
         onClick: () => requestCreate(candidate),
         type: "button",
-      }, busy ? "Creating..." : status === "created" ? "Created" : status === "failed" ? "Failed" : "Create"),
+      }, busy ? "Creating…" : status === "created" ? "Created" : status === "failed" ? "Failed" : "Create"),
     ]);
   }),
   ]);

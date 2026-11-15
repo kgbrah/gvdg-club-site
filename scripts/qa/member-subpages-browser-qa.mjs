@@ -496,7 +496,7 @@ async function verifyStates() {
       await view.screen("course-discovery-" + state);
       if (state !== "loading") {
         await view.go("board");
-        await view.page.getByText(state === "error" ? "Board posts are temporarily unavailable." : "No posts yet - start the conversation!").waitFor();
+        await view.page.getByText(state === "error" ? "Board posts are temporarily unavailable." : "No posts yet.").waitFor();
         await view.screen("board-" + state);
       }
       assert.deepEqual(view.errors, []);

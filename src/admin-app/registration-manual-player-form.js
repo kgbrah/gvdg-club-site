@@ -152,7 +152,7 @@ export function AdminRegistrationManualPlayerForm() {
         placeholder: doubles ? "pair label (e.g. KG/TJ)" : (teamEvent && !teams.length ? "Add teams in settings" : "team"),
         value: form.team,
       }),
-      h("button", { className: "admin-btn secondary", disabled: busy, key: "submit", type: "submit" }, busy ? "Adding..." : "Add player"),
+      h("button", { className: "admin-btn secondary", disabled: busy, key: "submit", type: "submit" }, busy ? "Adding…" : "Add player"),
     ]),
     h("p", { className: "al-note", key: "note", style: { marginTop: "0.4rem" }, role: error ? "alert" : undefined }, error || (doubles
       ? "For doubles, use the same pair label on both teammates before starting live scoring."

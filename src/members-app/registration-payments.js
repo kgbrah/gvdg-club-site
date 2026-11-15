@@ -102,7 +102,7 @@ export function WalletPayButton({ eventId, eventName, owed, token, onReload }) {
     "data-react-wallet-pay": busy ? "busy" : covers ? "due" : wallet.status === "ready" ? "short" : wallet.status,
   }, [
     wallet.status === "loading"
-      ? h("p", { className: "register-fee", key: "loading" }, "Checking store credit...")
+      ? h("p", { className: "register-fee", key: "loading" }, "Checking store credit…")
       : covers
         ? h("button", {
           type: "button",
@@ -110,7 +110,7 @@ export function WalletPayButton({ eventId, eventName, owed, token, onReload }) {
           disabled: busy,
           key: "pay",
           onClick: pay,
-        }, busy ? "Paying..." : `Pay ${dollars(owed)} with store credit`)
+        }, busy ? "Paying…" : `Pay ${dollars(owed)} with store credit`)
         : h("p", { className: "register-fee", key: "short" },
           `Store credit ${dollars(balance)} — need ${dollars(Math.max(0, owed - balance))} more to pay from the wallet.`),
   ]);

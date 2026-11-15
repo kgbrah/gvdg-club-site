@@ -77,7 +77,7 @@ function CasualRoundForm({ token, onReload }) {
       return;
     }
     setPosting(true);
-    setStatus({ message: "Posting...", error: false });
+    setStatus({ message: "Posting…", error: false });
     const response = await request("/casual-rounds", {
       method: "POST",
       token,
@@ -126,7 +126,7 @@ function CasualRoundForm({ token, onReload }) {
       h("span", { key: "label" }, "Notes"),
       h("textarea", { className: "form-input casual-notes", key: "control", maxLength: 800, rows: 2, placeholder: "Optional", value: notes, onChange: (change) => setNotes(change.target.value) }),
     ]),
-    h("button", { type: "submit", className: "passkey-btn", disabled: posting || unavailable, key: "submit" }, posting ? "Posting..." : "Post casual round"),
+    h("button", { type: "submit", className: "passkey-btn", disabled: posting || unavailable, key: "submit" }, posting ? "Posting…" : "Post casual round"),
     h("div", { className: `casual-status${status.error ? " error" : ""}`, role: "status", key: "status" }, statusMessage),
   ]);
 }

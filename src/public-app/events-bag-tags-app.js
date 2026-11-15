@@ -35,10 +35,10 @@ export function EventsBagTagsApp() {
 
   return h("section", { className: "events-section", "data-react-events-bag-tags": "true" }, [
     h("div", { className: "events-section-head", key: "head" }, [
-      h("h2", { className: "events-section-title", key: "title" }, "Bag tags"),
+      h("h2", { className: "events-section-title", key: "title" }, title || "Bag tags"),
       h("span", { className: "events-section-count", key: "count" }, String(holders.length)),
     ]),
-    h("p", { className: "events-group-sub", key: "note" }, `${title}. Lower number is better. #1 is the ace.`),
+    h("p", { className: "events-group-sub", key: "note" }, "A lower number is better."),
     holders.length
       ? h("div", { className: "lb-wrap", key: "table" }, h("table", { className: "lb-table" }, [
         h("thead", { key: "head" }, h("tr", null, ["Tag", "Player", "Held"].map((label) => h("th", { key: label }, label)))),

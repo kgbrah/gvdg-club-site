@@ -481,7 +481,7 @@ export function AdminEventForm() {
           onChange: (event) => primary ? selectPrimaryLayout(event.target.value) : selectAdditionalLayout(row.key, event.target.value),
           value: primary ? layoutChoice : row.layoutId,
         }, [
-          option("", rowLayoutsState.status === "loading" ? "Loading layouts..." : "- no layout yet -"),
+          option("", rowLayoutsState.status === "loading" ? "Loading layouts…" : "- no layout yet -"),
           ...rowLayoutOptions,
           primary && row.courseId ? option("__new__", "Create basic layout") : null,
         ]),
@@ -574,7 +574,7 @@ export function AdminEventForm() {
       formField({ id: "aeLeague", label: "League (for league rounds)", children: h("select", { id: "aeLeague", key: "input", onChange: (event) => updateField("leagueId", event.target.value), value: form.leagueId }, [option("", "-"), ...leagues.map((league) => option(league.id, league.label))]) }),
       formField({ id: "aeNotes", label: "Notes", children: h("textarea", { id: "aeNotes", key: "input", maxLength: 5000, onChange: (event) => updateField("notes", event.target.value), rows: 3, value: form.notes }) }),
       h("div", { className: "admin-form-actions", key: "actions" }, [
-        h("button", { className: "admin-btn", disabled: busy, id: "aeSubmitBtn", key: "submit", type: "submit" }, busy ? (editingEvent ? "Updating..." : "Creating...") : (editingEvent ? "Update event" : "Create event")),
+        h("button", { className: "admin-btn", disabled: busy, id: "aeSubmitBtn", key: "submit", type: "submit" }, busy ? (editingEvent ? "Updating…" : "Creating…") : (editingEvent ? "Update event" : "Create event")),
         editingEvent ? h("button", { className: "admin-btn secondary", id: "aeCancelEdit", key: "cancel", onClick: () => dispatchRequest("gvdg:admin-event-edit-cancel-request"), type: "button" }, "Cancel edit") : null,
       ]),
     ]),

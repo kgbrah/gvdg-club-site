@@ -1,10 +1,13 @@
 import {
   clubToday,
+  displayEventTitle,
   eventClubCalendarDay,
   formatClubClock,
   formatEventDate,
   isPastClubCalendarEvent,
 } from "../shared/events-model.js";
+
+export { displayEventTitle };
 
 export function normalizeAdminEvent(event) {
   const source = event && typeof event === "object" ? event : {};

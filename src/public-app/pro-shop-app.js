@@ -128,7 +128,7 @@ function OrderCard({ order }) {
       }, ORDER_LABELS[order.status] || order.status || "Order received"),
     ]),
     h("div", { className: "my-order-meta", key: "meta" },
-      (order.created_at ? String(order.created_at).split(" ")[0] + " - " : "") + money(order.total_cents)),
+      (order.created_at ? String(order.created_at).split(" ")[0] + " – " : "") + money(order.total_cents)),
     ...(Array.isArray(order.items) ? order.items : []).map((item, index) =>
       h("div", { className: "my-order-item", key: `${item.name_snapshot || "item"}-${index}` },
         (item.quantity || 1) + " x " + item.name_snapshot)),
@@ -192,7 +192,7 @@ function ProductCard({ onAdd, product }) {
         product.color,
         product.weight_g != null ? product.weight_g + "g" : "",
         stockQty(product) + " in stock",
-      ].filter(Boolean).join(" - ")),
+      ].filter(Boolean).join(" · ")),
       product.description
         ? h("div", { className: "product-meta", key: "description" }, product.description)
         : null,
@@ -573,7 +573,7 @@ export function ProShopApp() {
       });
       const body = await response.json().catch(() => ({}));
       if (response.status === 201 && body.amount_cents != null) {
-        notify("Opening PayPal... complete your payment to @greenvillediscgolf to finish the order.", "success");
+        notify("Opening PayPal… complete your payment to @greenvillediscgolf to finish the order.", "success");
         const dollars = (body.amount_cents / 100).toFixed(2);
         window.location.href = String(SITE_DONATE_URL).replace(/\/+$/, "") + "/" + dollars;
       } else if (body.error === "insufficient_stock" || body.error === "product_unavailable") {
@@ -739,7 +739,7 @@ export function ProShopApp() {
               key: "checkout",
               onClick: checkout,
               type: "button",
-            }, checkoutPending ? "Submitting..." : "Spend store credit")
+            }, checkoutPending ? "Submitting…" : "Spend store credit")
           : null,
         signedIn && hasCart ? h("div", { className: "payment-divider", key: "divider", style: { display: "flex" } }, "or") : null,
         !signedIn && hasCart
@@ -772,7 +772,7 @@ export function ProShopApp() {
               key: "paypal-redirect",
               onClick: payWithPaypal,
               type: "button",
-            }, paypalPending ? "Opening..." : "Pay with PayPal")
+            }, paypalPending ? "Opening…" : "Pay with PayPal")
           : null,
         sdkEnabled && hasCart
           ? h(PayPalButtons, {

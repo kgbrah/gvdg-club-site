@@ -213,7 +213,7 @@ export function AdminRegistrationCtpsList() {
   const view = useSettledWhileLoading(state);
 
   if (view.status === "loading") {
-    return h("p", { className: "al-note", "data-react-admin-registration-ctps": "loading", role: "status" }, "Loading...");
+    return h("p", { className: "al-note", "data-react-admin-registration-ctps": "loading", role: "status" }, "Loading…");
   }
 
   if (view.status === "error") {
@@ -243,7 +243,7 @@ export function AdminRegistrationCreditsList() {
   const view = useSettledWhileLoading(state);
 
   if (view.status === "loading") {
-    return h("p", { className: "al-note", "data-react-admin-registration-credits": "loading", role: "status" }, "Loading...");
+    return h("p", { className: "al-note", "data-react-admin-registration-credits": "loading", role: "status" }, "Loading…");
   }
 
   if (view.status === "error") {
@@ -277,7 +277,7 @@ export function AdminRegistrationAcePot() {
   const view = useSettledWhileLoading(state);
 
   if (view.status === "loading") {
-    return h("p", { className: "al-note", "data-react-admin-registration-ace-pot": "loading", role: "status" }, "Loading...");
+    return h("p", { className: "al-note", "data-react-admin-registration-ace-pot": "loading", role: "status" }, "Loading…");
   }
 
   if (view.status === "error") {

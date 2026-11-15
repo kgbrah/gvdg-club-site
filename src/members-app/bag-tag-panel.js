@@ -114,11 +114,11 @@ export function BagTagPanel({ token, compact = false }) {
   const requested = Boolean(board.request && board.request.createdAt);
 
   return h("section", { className: "bag-tag-home" + (compact ? " member-home-tags" : ""), "data-react-bag-tags": "ready" }, [
-    h("div", { className: "bag-tag-home-row" + (compact ? " member-account-row" : ""), key: "head" }, [
+    h("div", { className: "bag-tag-home-row member-list-row" + (compact ? " member-account-row" : ""), key: "head" }, [
       compact ? h(Tag, { className: "member-account-icon", size: 20, "aria-hidden": true, key: "icon" }) : null,
-      h("div", { className: compact ? "member-account-copy" : undefined, key: "copy" }, [
-        h("h3", { key: "title" }, mine ? `Bag tag #${mine.tagNumber}` : "Bag tags"),
-        h("p", { className: "player-card-meta", key: "note" }, mine
+      h("div", { className: compact ? "member-account-copy" : "member-list-copy", key: "copy" }, [
+        h("h3", { className: compact ? undefined : "member-list-name", key: "title" }, mine ? `Bag tag #${mine.tagNumber}` : "Bag tags"),
+        h("p", { className: "player-card-meta" + (compact ? "" : " member-list-meta"), key: "note" }, mine
           ? (compact ? "Club tag series" : "Lower number is better. Challenge someone above you, or wait for a card settle.")
           : requested
             ? (compact ? "Request sent" : "Request sent. An admin will hand you the next number.")
@@ -126,7 +126,7 @@ export function BagTagPanel({ token, compact = false }) {
       ]),
       !mine && !requested
         ? h("button", {
-          className: compact ? "member-account-action" : "player-job-link",
+          className: compact ? "member-account-action member-list-action" : "player-job-link member-list-action",
           disabled: busy,
           key: "request",
           onClick: requestTag,
@@ -139,7 +139,7 @@ export function BagTagPanel({ token, compact = false }) {
     incoming.map((challenge) => h("div", { className: compact ? "member-tag-detail" : undefined, key: challenge.id }, [
       h("p", { className: "player-card-meta", key: "text" },
         `${challenge.challengerName} called out your #${challenge.defenderTag}. They shot ${challenge.challengerScore}, you shot ${challenge.defenderScore}.`),
-      h("div", { className: "player-chip-row", key: "actions" }, [
+      h("div", { className: "member-action-grid", key: "actions" }, [
         h("button", {
           className: "player-btn primary",
           disabled: busy,
@@ -191,7 +191,9 @@ export function BagTagPanel({ token, compact = false }) {
             value: scores.theirs,
           }),
         ]),
-        h("button", { className: "player-btn primary", disabled: busy, key: "send", type: "submit" }, "Send challenge"),
+        h("div", { className: "member-action-grid", key: "send-row" }, [
+          h("button", { className: "player-btn primary", disabled: busy, key: "send", type: "submit" }, "Send challenge"),
+        ]),
       ])
       : null,
     message ? h("p", { role: "status", className: "player-card-meta" + (compact ? " member-tag-detail" : ""), key: "message" }, message) : null,

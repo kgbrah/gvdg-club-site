@@ -81,7 +81,7 @@ export function installCourseLayoutsController({ api, adminApi, adminMsg }) {
       finishCourseLayoutsAction(detail.requestId, false, { message: 'Paste a UDisc course URL', layouts: [] });
       return;
     }
-    adminMsg('Fetching from UDisc...', true);
+    adminMsg('Fetching from UDisc…', true);
     const r = await adminApi('/admin/import/udisc', { method: 'POST', body: { url } });
     if (!r.ok) {
       adminMsg('UDisc import failed (' + r.status + ')', false);

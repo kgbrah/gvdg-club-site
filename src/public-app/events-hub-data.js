@@ -161,7 +161,7 @@ function previousResultFromFeed(item, category) {
   const leagueTarget = ryderCupFeedHash(item);
   const externalHref = leagueTarget ? "" : sanitizeUrl(item?.url);
   return {
-    cta: leagueTarget ? "League / Results" : (externalHref ? "Results / Details" : ""),
+    cta: leagueTarget ? "League results" : (externalHref ? "Results" : ""),
     dateObj: info.dateObj,
     dateText: feedResultDateText(item),
     detail: stripFeedDecor(item?.detail || ""),
@@ -177,7 +177,7 @@ function previousResultFromEvent(raw, courseIndex) {
   const leagueTarget = ryderCupEventHash(event);
   const courseName = eventCourseSummary(courseIndex, event);
   return {
-    cta: leagueTarget ? "League / Results" : "View results",
+    cta: leagueTarget ? "League results" : "View results",
     dateObj: eventDateForSort(event),
     dateText: formatEventDate(event.date || event.starts_at),
     detail: [courseName, statusLabel(event.status)].filter(Boolean).join(" · "),
@@ -259,7 +259,7 @@ function feedHubItem(item, clubEvents) {
   const externalHref = leagueTarget || clubHref ? "" : sanitizeUrl(item?.url);
   const past = Boolean(matched && (matched.status === "final" || matched.status === "cancelled"));
   return {
-    cta: leagueTarget ? "League / Results" : clubHref ? (past ? "View results" : "Event details") : (externalHref ? "Register / Details" : ""),
+    cta: leagueTarget ? "League results" : clubHref ? (past ? "View results" : "Event details") : (externalHref ? "Register" : ""),
     dateText: feedDateText(item),
     detail: stripFeedDecor(item?.detail || ""),
     external: Boolean(externalHref),
@@ -341,7 +341,7 @@ async function loadHub({ quiet = false } = {}) {
   const api = publicApiBase();
   if (!quiet) {
     publishEventsView("status");
-    publishEventsStatus({ message: "Loading...", retry: null, tone: "loading" });
+    publishEventsStatus({ message: "Loading…", retry: null, tone: "loading" });
   }
   try {
     const courseData = await loadCourseData(api);
