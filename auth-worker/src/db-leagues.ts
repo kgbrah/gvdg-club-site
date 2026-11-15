@@ -32,6 +32,15 @@ export async function updateLeague(
 }
 
 export async function deleteLeague(db: D1Like, id: number) {
+  const attached = (await db.prepare("SELECT id, source, status FROM events WHERE league_id = ?").bind(id).all()).results as { id?: number; source?: string | null; status?: string | null }[];
+  if (attached.some((event) => event.status === "live")) throw new Error("league_live");
+  const imported = attached.filter((event) => event.source === "udisc" && event.id != null).map((event) => Number(event.id));
+  if (imported.length) {
+    const marks = imported.map(() => "?").join(", ");
+    await db.prepare(`UPDATE layout_ssa SET source_event_id = NULL WHERE source_event_id IN (${marks})`).bind(...imported).run();
+    await db.prepare(`DELETE FROM events WHERE id IN (${marks})`).bind(...imported).run();
+  }
+  await db.prepare("UPDATE events SET league_id = NULL, updated_at = datetime('now') WHERE league_id = ?").bind(id).run();
   await db.prepare("DELETE FROM leagues WHERE id = ?").bind(id).run();
 }
 

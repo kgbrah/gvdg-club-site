@@ -1446,8 +1446,13 @@ export function startAdminController() {
                 const league = event.detail && event.detail.league;
                 if (!league || league.id == null) return;
                 const r = await adminApi('/admin/leagues/' + league.id, { method: 'DELETE' });
-                adminMsg(r.ok ? 'Deleted league' : 'Delete failed', r.ok);
-                if (r.ok) adminLoadLeagues();
+                const body = r.ok ? {} : await r.json().catch(() => ({}));
+                const message = r.ok ? 'Deleted league' : body.error === 'league_live' ? 'Finish the live round before deleting this league' : body.error === 'protected' ? 'The Ryder Cup league stays. Delete the imported one instead.' : 'Delete failed';
+                adminMsg(message, r.ok);
+                if (r.ok) {
+                    adminLoadLeagues();
+                    adminLoadEvents();
+                }
             });
             window.addEventListener('gvdg:admin-fundraiser-status-request', async (event) => {
                 const detail = event.detail || {};

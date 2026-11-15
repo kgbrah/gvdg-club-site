@@ -2,6 +2,7 @@ import type { Env } from "./env.js";
 import * as db from "./db.js";
 import { json, readJson } from "./http.js";
 import { asInt, asStr, jsonStringArray } from "./input.js";
+import { RYDER_CUP_LEAGUE_ID } from "./ryder-board.js";
 
 export async function handleAdminLeagues(
   request: Request,
@@ -28,7 +29,13 @@ export async function handleAdminLeagues(
     return row ? json({ league: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
   }
   if (method === "DELETE" && id != null) {
-    await db.deleteLeague(env.DB, id);
+    if (id === RYDER_CUP_LEAGUE_ID) return json({ error: "protected" }, 409, origin);
+    try {
+      await db.deleteLeague(env.DB, id);
+    } catch (error) {
+      if (error instanceof Error && error.message === "league_live") return json({ error: "league_live" }, 409, origin);
+      return json({ error: "delete_failed" }, 409, origin);
+    }
     return json({ ok: true }, 200, origin);
   }
   return null;
