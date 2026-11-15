@@ -101,6 +101,7 @@ async function openPage(path, width, { mode = "light", scale = 1, isAdmin = fals
   async function finishOpen() {
     await help.waitFor();
     await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Crotts assistant");
+    await page.waitForFunction(() => document.querySelector("#crotts-panel")?.getAttribute("aria-modal") === "true");
     assert.equal(await help.getAttribute("aria-modal"), "true");
     assert.equal(await page.locator(".crotts-overlay").evaluate((overlay) => overlay.parentElement === document.body), true);
     assert.equal(await page.evaluate(() => document.body.style.overflow), "hidden");
