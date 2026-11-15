@@ -423,16 +423,28 @@ body .overlay > .score-dialog { width: min(100%, 27rem); border-radius: var(--sc
   border-right: 2px solid;
   transform: rotate(45deg);
 }
-.round-tools-sheet > .score-glove-tools { display: flex; flex-wrap: wrap; gap: .35rem; margin-block: .75rem; }
-.round-tools-sheet .score-glove-tools .score-glove-tool {
-  justify-content: flex-start;
-  min-height: 44px;
-  min-width: 44px;
+.round-tools-sheet > .score-glove-tools {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: .35rem;
-  padding: .31rem .59rem;
+  margin-block: .75rem;
+}
+.round-tools-sheet > .score-glove-tools > .score-glove-tool { grid-column: span 3; }
+.round-tools-sheet > .score-glove-tools:not(:has(> .score-glove-tool:nth-child(5))) > .score-glove-tool { grid-column: span 6; }
+.round-tools-sheet > .score-glove-tools:has(> .score-glove-tool:nth-child(5)):not(:has(> .score-glove-tool:nth-child(7))) > .score-glove-tool { grid-column: span 4; }
+.round-tools-sheet > .score-glove-tools:has(> .score-glove-tool:nth-child(5)):not(:has(> .score-glove-tool:nth-child(6))) > .score-glove-tool:nth-child(n + 4) { grid-column: span 6; }
+.round-tools-sheet > .score-glove-tools:has(> .score-glove-tool:nth-child(7)):not(:has(> .score-glove-tool:nth-child(8))) > .score-glove-tool:nth-child(n + 5) { grid-column: span 4; }
+.round-tools-sheet .score-glove-tools .score-glove-tool {
+  justify-content: center;
+  text-align: center;
+  white-space: normal;
+  min-height: 44px;
+  min-width: 0;
+  gap: .28rem;
+  padding: .31rem .35rem;
   border-color: var(--score-line);
   border-radius: 9px;
-  font: 720 .8rem/1.2 var(--score-font);
+  font: 720 .74rem/1.15 var(--score-font);
 }
 .round-tools-sheet .score-glove-tools .round-talk-bubble { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
 .round-tools-sheet .watch-pairing {

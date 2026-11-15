@@ -922,6 +922,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   const polish = readFileSync('score-polish.css', 'utf8');
   assert.match(polish, /\.score-glove-stage \.score-outcomes \{[^}]*grid-template-columns/s);
   assert.match(polish, /\.score-glove-stage \.holegrid \{[^}]*flex-wrap: nowrap[^}]*overflow-x: auto/s);
+  assert.match(polish, /\.round-tools-sheet > \.score-glove-tools:has\(> \.score-glove-tool:nth-child\(7\)\)/);
   assert.match(polish, /\.score-bottom-layout.*\.hole-map-frame \{[^}]*flex: 1 1 0/s);
   assert.match(scorecard, /new ResizeObserver\(measure\)/);
   assert.match(holeMap, /["]hole-map-frame["], key: "frame"[\s\S]*"hole-map-options"[\s\S]*"hole-map-actions"/);
