@@ -84,6 +84,7 @@ async function fixture() {
   insertAnchor.run(ALPHA, "2026-08-01T00:00:00.000Z", "2026-08-01T00:00:00.000Z", 1250);
 
   let failAt = -1;
+  let beforeNextBatch: (() => void) | null = null;
   const db = {
     prepare(query: string) {
       let values: unknown[] = [];
@@ -96,15 +97,20 @@ async function fixture() {
         async first() { return sqlite.prepare(query).get(...values) ?? null; },
         async all() { return { results: sqlite.prepare(query).all(...values), success: true }; },
         async run() { return exec(); },
-        exec,
+        exec, query,
       };
       return statement;
     },
-    async batch(statements: (D1StatementLike & { exec(): unknown })[]) {
+    async batch(statements: (D1StatementLike & { exec(): unknown; query: string })[]) {
+      const concurrent = beforeNextBatch;
+      beforeNextBatch = null;
+      concurrent?.();
       sqlite.exec("BEGIN");
+      let writeIndex = -1;
       try {
-        const results = statements.map((statement, index) => {
-          if (index === failAt) {
+        const results = statements.map((statement) => {
+          if (/^INSERT INTO round_ratings|^UPDATE results SET rating/.test(statement.query)) writeIndex += 1;
+          if (writeIndex >= 0 && writeIndex === failAt) {
             failAt = -1;
             throw new Error("Simulated transaction failure");
           }
@@ -118,7 +124,8 @@ async function fixture() {
       }
     },
   } as unknown as D1Like;
-  return { db, sqlite, failAtStatement: (index: number) => { failAt = index; } };
+  return { db, sqlite, failAtStatement: (index: number) => { failAt = index; },
+    duringNextRating: (write: () => void) => { beforeNextBatch = write; } };
 }
 
 describe("versioned, transactional rating repair", () => {
@@ -140,6 +147,45 @@ describe("versioned, transactional rating repair", () => {
         { member_id: GAMMA, anchor_count: 2, rating_method: "provisional" },
       ]);
     expect(sqlite.prepare("SELECT COUNT(*) AS count FROM layout_rating_baselines").get()?.count).toBe(1);
+  });
+
+  it("aborts the whole transaction when a nonrepresentative field row changes and leaves checkpoints untouched", async () => {
+    const { db, sqlite, duringNextRating } = await fixture();
+    const checkpoint = { stream: "competition", after_id: 27, checked_at: "2026-08-01" };
+    sqlite.exec(`
+      INSERT INTO rating_repair_checkpoints (stream, after_id, checked_at) VALUES ('competition',27,'2026-08-01');
+      INSERT INTO round_ratings (member_id, player_name, stream, event_id, round_date, total, to_par, round_rating, rating_method)
+        VALUES ('m_alpha','First','competition',1,'2026-06-10',9,0,945,'provisional');
+    `);
+    duringNextRating(() => {
+      sqlite.prepare("UPDATE results SET total=11, to_par=2, scorecard=? WHERE event_id=1 AND member_id=?")
+        .run(card(OLD, 11), BETA);
+    });
+    await expect(repairRatingSource(db, "competition", 1)).rejects.toThrow("CHECK constraint failed");
+    expect(sqlite.prepare("SELECT member_id, round_rating FROM round_ratings").all()).toEqual([{ member_id: ALPHA, round_rating: 945 }]);
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM layout_rating_baselines").get()?.count).toBe(0);
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM results WHERE rating IS NOT NULL").get()?.count).toBe(0);
+    expect(sqlite.prepare("SELECT * FROM rating_repair_checkpoints").all()).toEqual([checkpoint]);
+
+    await queueRatingRepair(db, "competition", 1);
+    await expect(repairRatingSource(db, "competition", 1)).resolves.toMatchObject({ rows: 3, layoutBaselines: 1 });
+    expect(sqlite.prepare("SELECT total FROM round_ratings WHERE event_id=1 AND member_id=?").get(BETA)).toEqual({ total: 11 });
+    expect(sqlite.prepare("SELECT * FROM rating_repair_checkpoints").all()).toEqual([checkpoint]);
+  });
+
+  it("rejects changing scoring configuration, prior anchors, and the selected layout baseline", async () => {
+    const { db, sqlite, duringNextRating } = await fixture();
+    duringNextRating(() => { sqlite.exec("UPDATE events SET format='doubles' WHERE id=1"); });
+    await expect(repairRatingSource(db, "competition", 1)).rejects.toThrow("CHECK constraint failed");
+    sqlite.exec("UPDATE events SET format='stroke' WHERE id=1");
+    duringNextRating(() => { sqlite.exec("UPDATE rating_anchor_snapshots SET rating=990 WHERE member_id='m_beta'"); });
+    await expect(repairRatingSource(db, "competition", 1)).rejects.toThrow("CHECK constraint failed");
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM round_ratings").get()?.count).toBe(0);
+    await repairRatingSource(db, "competition", 1);
+    duringNextRating(() => { sqlite.exec("UPDATE layout_rating_baselines SET ssa=ssa+1 WHERE event_id=1"); });
+    await expect(repairRatingSource(db, "casual", 1)).rejects.toThrow("CHECK constraint failed");
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM round_ratings WHERE casual_round_code='OLDPIN'").get()?.count).toBe(0);
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM rating_repair_checkpoints").get()?.count).toBe(0);
   });
 
   it("uses archived pins and a prior published baseline and never lends it to a new or earlier layout", async () => {

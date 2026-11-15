@@ -2,7 +2,7 @@ import type { D1Like } from "./db-types.js";
 import { roundRatingForScoreWithWeather, type RatingMethod, type RatingStream } from "./rating-engine.js";
 import { readArchivedRatingHoles, ratingGeometrySnapshot, ratingLayoutRevision, ratingNumber, ratingRecord, ratingTimestamp } from "./rating-layout.js";
 import { calibrateRatingField } from "./ratings-recompute-core.js";
-import { getRevisionRatingBaseline, priorRatingAnchors, writeRatingBatch, type RatingBaselineInput, type RoundRatingInput } from "./rating-store.js";
+import { getRevisionRatingBaseline, priorRatingAnchors, ratingReadGuards, writeRatingBatch, type RatingBaselineInput, type RoundRatingInput } from "./rating-store.js";
 
 export const MAX_RATING_ROUND_RESULTS = 240;
 
@@ -121,9 +121,11 @@ function computeRating(row: Eligible, context: GroupContext | null, anchors: num
 }
 
 export async function repairRatingSource(db: D1Like, stream: RatingStream, sourceId: number, currentGust: number | null = null) {
-  const result = await db.prepare(ROUND_ROWS[stream]).bind(sourceId, MAX_RATING_ROUND_RESULTS + 1).all();
+  const args = [sourceId, MAX_RATING_ROUND_RESULTS + 1];
+  const result = await db.prepare(ROUND_ROWS[stream]).bind(...args).all();
   if (!result.success) throw new Error("Rating source read failed");
   if (result.results.length > MAX_RATING_ROUND_RESULTS) throw new Error("Rating source exceeds round size limit");
+  const guards = ratingReadGuards(db, ROUND_ROWS[stream], args, result.results);
   const candidates = (await Promise.all(result.results.map((row) => eligibleInput(row, stream, currentGust)))).filter((row): row is Eligible => row != null);
   const occurrences = new Map<string, number>();
   for (const row of candidates) occurrences.set(row.memberId, (occurrences.get(row.memberId) ?? 0) + 1);
@@ -143,7 +145,7 @@ export async function repairRatingSource(db: D1Like, stream: RatingStream, sourc
     const earliest = group.reduce((date, row) => row.roundDate < date ? row.roundDate : date, group[0]!.roundDate);
     const sample = group[0]!;
     if (stream === "casual") {
-      const baseline = await getRevisionRatingBaseline(db, sample.layoutRevision, earliest);
+      const baseline = await getRevisionRatingBaseline(db, sample.layoutRevision, earliest, guards);
       const reason = baseline ? null : sample.layoutRevision ? RATING_EVIDENCE.baseline : RATING_EVIDENCE.layout;
       waiting ||= reason === RATING_EVIDENCE.baseline;
       const context: GroupContext | null = baseline ? {
@@ -153,7 +155,7 @@ export async function repairRatingSource(db: D1Like, stream: RatingStream, sourc
       continue;
     }
 
-    const anchors = await priorRatingAnchors(db, group.map((row) => row.memberId), earliest);
+    const anchors = await priorRatingAnchors(db, group.map((row) => row.memberId), earliest, guards);
     const { solved, anchorCount } = calibrateRatingField(group, anchors);
     const context: GroupContext | null = solved ? {
       ...solved, count: solved.propagatorCount, anchors: anchorCount, method: solved.status, baselineEventId: null,
@@ -168,6 +170,6 @@ export async function repairRatingSource(db: D1Like, stream: RatingStream, sourc
         playedAt: earliest, availableAt: last.availableAt });
     }
   }
-  await writeRatingBatch(db, ratings, baselines);
+  await writeRatingBatch(db, ratings, baselines, guards);
   return { rows: ratings.length, layoutBaselines: baselines.length, waiting };
 }

@@ -44,17 +44,43 @@ export type RatingBaselineInput = LayoutRatingBaseline & {
   sourceScorecard: string;
 };
 
-export async function getRevisionRatingBaseline(db: D1Like, revision: string | null, before: string): Promise<LayoutRatingBaseline | null> {
+export async function getRevisionRatingBaseline(db: D1Like, revision: string | null, before: string, guards?: D1StatementLike[]): Promise<LayoutRatingBaseline | null> {
   if (!revision) return null;
-  const row = await db.prepare(
-    `SELECT event_id, ssa, ppt, propagator_count, available_at FROM layout_rating_baselines
+  const sql = `SELECT event_id, ssa, ppt, propagator_count, available_at FROM layout_rating_baselines
        WHERE layout_revision = ? AND available_at < ? AND played_at < ?
-       ORDER BY played_at DESC, available_at DESC, event_id DESC LIMIT 1`,
-  ).bind(revision, before, before).first<{
+       ORDER BY played_at DESC, available_at DESC, event_id DESC LIMIT 1`;
+  const args = [revision, before, before];
+  const result = await db.prepare(sql).bind(...args).all<{
     event_id: number; ssa: number; ppt: number; propagator_count: number; available_at: string;
   }>();
+  if (!result.success) throw new Error("Historical layout baseline unavailable");
+  if (guards) guards.push(...ratingReadGuards(db, sql, args, result.results));
+  const row = result.results[0];
   if (!row || !(row.ssa > 0) || !(row.ppt > 0)) return null;
   return { ssa: row.ssa, ppt: row.ppt, propagatorCount: row.propagator_count, eventId: row.event_id, availableAt: row.available_at };
+}
+
+export function ratingReadGuards(db: D1Like, sql: string, args: readonly unknown[], rows: readonly object[]): D1StatementLike[] {
+  // D1 batches run in one transaction. This assertion inserts no row when the read still
+  // matches. On a mismatch the deliberately invalid stream violates the checkpoint table's
+  // CHECK constraint and aborts the whole batch before any rating, mirror or baseline write.
+  const assertion = `INSERT INTO rating_repair_checkpoints (stream, after_id, checked_at)
+    SELECT 'rating-source-changed', 0, datetime('now') WHERE `;
+  const checks = [db.prepare(assertion + `((SELECT COUNT(*) FROM (${sql})) != ?)`).bind(...args, rows.length)];
+  if (!rows.length) return checks;
+  const columns = Object.keys(rows[0]!);
+  if (!columns.length || columns.some((column) => !/^[a-z_][a-z0-9_]*$/.test(column))) throw new Error("Unexpected rating source columns");
+  const expected = columns.map((column) => `json_extract(value, '$.${column}')`).join(", ");
+  // Every source row has a unique selected key (result id, rating id, or member id).
+  // Chunk the expected data so large scorecards don't create one giant bound value.
+  for (let offset = 0; offset < rows.length; offset += 24) {
+    const batch = rows.slice(offset, offset + 24);
+    checks.push(db.prepare(assertion + `EXISTS (
+      SELECT ${expected} FROM json_each(?)
+      EXCEPT SELECT ${columns.join(", ")} FROM (${sql})
+    )`).bind(JSON.stringify(batch), ...args));
+  }
+  return checks;
 }
 
 export async function getLayoutRatingBaseline(db: D1Like, layoutId: number | null, holes?: readonly unknown[], startedAt?: string): Promise<LayoutRatingBaseline | null> {
@@ -109,7 +135,7 @@ function baselineStatement(db: D1Like, row: RatingBaselineInput): D1StatementLik
 }
 
 // No clear-before-create. Old values and baseline rows survive a failed batch.
-export async function writeRatingBatch(db: D1Like, rows: readonly RoundRatingInput[], baselines: readonly RatingBaselineInput[]): Promise<void> {
+export async function writeRatingBatch(db: D1Like, rows: readonly RoundRatingInput[], baselines: readonly RatingBaselineInput[], guards: readonly D1StatementLike[]): Promise<void> {
   const statements = rows.flatMap((row) => {
     const writes = [roundRatingStatement(db, row)];
     if (row.stream === "competition" && row.roundRating != null) {
@@ -121,7 +147,7 @@ export async function writeRatingBatch(db: D1Like, rows: readonly RoundRatingInp
   statements.push(...baselines.map((row) => baselineStatement(db, row)));
   if (!statements.length) return;
   if (!db.batch) throw new Error("Rating persistence requires a transactional batch");
-  const results = await db.batch(statements);
+  const results = await db.batch([...guards, ...statements]);
   if (results.some((entry) => !entry.success)) throw new Error("Rating batch failed");
 }
 
@@ -135,31 +161,32 @@ export async function queueRatingRepair(db: D1Like, stream: RatingStream, source
 }
 
 type AnchorRow = { member_id: string; rating: number };
-type PriorRow = { member_id: string; round_rating: number; round_date: string };
+type PriorRow = { id: number; member_id: string; round_rating: number; round_date: string };
 
-export async function priorRatingAnchors(db: D1Like, ids: readonly string[], before: string): Promise<Map<string, number>> {
+export async function priorRatingAnchors(db: D1Like, ids: readonly string[], before: string, guards: D1StatementLike[]): Promise<Map<string, number>> {
   const anchors = new Map<string, number>();
   const since = new Date(Date.parse(before) - (365 * 24 * 60 * 60 * 1000)).toISOString();
   for (let offset = 0; offset < ids.length; offset += 75) {
     const group = ids.slice(offset, offset + 75);
     const slots = group.map(() => "?").join(", ");
-    const [official, local] = await Promise.all([
-      db.prepare(
-        `SELECT member_id, rating FROM (
+    const officialSql = `SELECT member_id, rating FROM (
            SELECT member_id, rating, ROW_NUMBER() OVER (PARTITION BY member_id ORDER BY effective_at DESC, observed_at DESC) AS rank
            FROM rating_anchor_snapshots
            WHERE member_id IN (${slots}) AND observed_at < ? AND effective_at < ? AND effective_at >= ?
-         ) WHERE rank = 1`,
-      ).bind(...group, before, before, since).all<AnchorRow>(),
-      db.prepare(
-        `SELECT rr.member_id, rr.round_rating, rr.round_date FROM round_ratings rr
+         ) WHERE rank = 1`;
+    const localSql = `SELECT rr.id, rr.member_id, rr.round_rating, rr.round_date FROM round_ratings rr
          JOIN results res ON res.id = rr.source_result_id AND res.member_id = rr.member_id
          WHERE rr.member_id IN (${slots}) AND rr.stream = 'competition' AND rr.rating_method = 'stable'
          AND rr.layout_revision IS NOT NULL AND rr.round_date < ? AND rr.round_date >= ?
-         AND strftime('%Y-%m-%dT%H:%M:%fZ', res.created_at) < ?`,
-      ).bind(...group, before, since, before).all<PriorRow>(),
+         AND strftime('%Y-%m-%dT%H:%M:%fZ', res.created_at) < ?`;
+    const officialArgs = [...group, before, before, since];
+    const localArgs = [...group, before, since, before];
+    const [official, local] = await Promise.all([
+      db.prepare(officialSql).bind(...officialArgs).all<AnchorRow>(),
+      db.prepare(localSql).bind(...localArgs).all<PriorRow>(),
     ]);
     if (!official.success || !local.success) throw new Error("Historical rating anchors unavailable");
+    guards.push(...ratingReadGuards(db, officialSql, officialArgs, official.results), ...ratingReadGuards(db, localSql, localArgs, local.results));
     for (const row of official.results) if (row.rating >= 700) anchors.set(row.member_id, row.rating);
     const byMember = new Map<string, PriorRow[]>();
     for (const row of local.results) {
