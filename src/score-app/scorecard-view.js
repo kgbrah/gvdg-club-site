@@ -600,7 +600,7 @@ function useDeviceFix() {
 function RangeHud(props) {
   if (!props.hud) return null;
   const circleClass = props.hud.circle === "C1" ? " in-c1" : props.hud.circle === "C2" ? " in-c2" : "";
-  const holeFt = props.hud.mode !== "hole" && Number.isFinite(props.hud.holeFt) ? props.hud.holeFt : null;
+  const hasReading = props.hud.mode !== "hole";
   const prompt = gpsHudPrompt(props.gpsStatus, props.hud && props.hud.mode);
   const clickable = Boolean(prompt && props.onEnableGps);
   const nextTee = props.nextTee;
@@ -614,11 +614,8 @@ function RangeHud(props) {
     type: clickable ? "button" : undefined,
     onClick: clickable ? props.onEnableGps : undefined,
   }, [
-    h("strong", { key: "ft" }, props.hud.ft + " ft"),
-    h("span", { key: "cap" }, props.hud.caption),
-    holeFt != null
-      ? h("em", { className: "hole-range-hud-len", key: "len" }, holeFt + " ft hole")
-      : null,
+    hasReading ? h("strong", { key: "ft" }, props.hud.ft + " ft") : null,
+    hasReading ? h("span", { key: "cap" }, props.hud.caption) : null,
     nextTee
       ? h("em", { className: "hole-range-hud-next", key: "next" }, nextTee.ft + " ft next tee")
       : null,

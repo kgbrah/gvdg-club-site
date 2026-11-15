@@ -854,8 +854,8 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(holeMap, /props\.hud/);
   assert.match(html, /score-glove-tools \.scorecard-owner/);
   assert.match(scorecard, /function RangeHud/);
-  assert.match(scorecard, /hole-range-hud-len/);
-  assert.match(scorecard, /hud\.holeFt/);
+  assert.doesNotMatch(scorecard, /hole-range-hud-len|hud\.holeFt/);
+  assert.match(scorecard, /hole-range-hud-throw/);
   assert.match(holeMap, /function ThrowMark/);
   assert.match(holeMap, /function FlyingDisc/);
   assert.match(holeMap, /large \? 13\.7/);
@@ -903,7 +903,6 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(html, /\.hole-map-c1 \{/);
   assert.match(html, /\.hole-map-c2 \{/);
   assert.match(html, /\.hole-range-hud \{/);
-  assert.match(html, /\.hole-range-hud-len \{/);
   assert.match(html, /\.score-glove-tool\.active \{/);
   assert.match(html, /\.round-tools \{/);
   assert.match(html, /grid-template-columns: repeat\(auto-fit, minmax\(0, 1fr\)\)/);

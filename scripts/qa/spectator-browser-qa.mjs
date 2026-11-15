@@ -162,13 +162,16 @@ try {
       return Array.from(new Uint8Array(await new Blob(chunks).arrayBuffer()));
     }));
     await owner.getByRole("button", { name: "Back to round", exact: true }).click();
-    await owner.getByRole("button", { name: "Expand throw videos" }).click();
-    await owner.getByRole("button", { name: "Load Avery Brooks · Birdie · Hole 1" }).click();
-    await owner.getByText("Couldn’t load this clip.", { exact: false }).waitFor();
-    await owner.getByRole("button", { name: "Load Avery Brooks · Birdie · Hole 1" }).click();
-    await owner.waitForFunction(() => document.querySelector(".throw-highlights video")?.readyState >= 1);
-    await owner.getByRole("button", { name: "Share with round viewers" }).click();
-    await owner.getByText("Clip shared with round viewers.").waitFor();
+    await owner.getByRole("button", { name: "Round tools", exact: true }).click();
+    await owner.getByRole("dialog", { name: "Round tools" }).getByRole("button", { name: "Round details" }).click();
+    const details = owner.getByRole("dialog", { name: "Round details" });
+    await details.getByRole("button", { name: "Expand throw videos" }).click();
+    await details.getByRole("button", { name: "Load Avery Brooks · Birdie · Hole 1" }).click();
+    await details.getByText("Couldn’t load this clip.", { exact: false }).waitFor();
+    await details.getByRole("button", { name: "Load Avery Brooks · Birdie · Hole 1" }).click();
+    await owner.waitForFunction(() => document.querySelector(".round-details .throw-highlights video")?.readyState >= 1);
+    await details.getByRole("button", { name: "Share with round viewers" }).click();
+    await details.getByText("Clip shared with round viewers.").waitFor();
 
     const spectatorContext = await browser.newContext({ ...options, serviceWorkers: "block" });
     const viewer = await pageFor(spectatorContext, errors, ws);

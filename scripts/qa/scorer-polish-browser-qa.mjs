@@ -188,9 +188,10 @@ const teeSign = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 390" r
   </svg>`;
 
 async function makePage({ width, height, scheme = "light", scale = 1, group = "singles", locked = false, complete = false,
-  playerCount, dashboardTheme, weather = sampleWeather, scoringStyle = group === "doubles" ? "matchplay" : "stroke" } = {}) {
+  playerCount, dashboardTheme, weather = sampleWeather, gps = true, scoringStyle = group === "doubles" ? "matchplay" : "stroke" } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, colorScheme: scheme === "light" ? "light" : "dark",
-    permissions: ["geolocation", "camera", "microphone"], geolocation: { latitude: sampleLie.lat, longitude: sampleLie.lng, accuracy: 4 },
+    permissions: gps ? ["geolocation", "camera", "microphone"] : ["camera", "microphone"],
+    geolocation: gps ? { latitude: sampleLie.lat, longitude: sampleLie.lng, accuracy: 4 } : undefined,
     serviceWorkers: "block" });
   const page = await context.newPage();
   page.setDefaultTimeout(18000);
@@ -589,6 +590,14 @@ if (serve) {
       assert.equal(geometry.mapDims.width, geometry.mapDims.photoWidth);
       assert.equal(geometry.mapDims.height, geometry.mapDims.photoHeight);
       assert.equal(geometry.mapDims.objectFit, "contain");
+      const hud = frame.locator(".hole-range-hud");
+      assert.match(await hud.innerText(), /137 ft\s+to basket\s+125 ft throw 1/i);
+      assert.doesNotMatch(await hud.innerText(), /326 ft/);
+      assert.match(await preview.page.getByRole("navigation", { name: "Hole navigation" }).innerText(), /326 ft/);
+      const hudRect = await hud.boundingBox();
+      const markRect = await frame.getByRole("button", { name: "Mark lie" }).boundingBox();
+      assert.ok(hudRect.width <= hudRect.height * 1.7, "Distance badge hugs the readable values");
+      assert.ok(hudRect.x + hudRect.width < markRect.x, "Distance badge stays clear of Mark lie");
       for (const label of ["Hole", "C2", "C1", "Heat", "Tee sign", "Mark lie", "Undo"]) {
         assert.ok(geometry.onMap.some((button) => button.label === label && button.width >= 44 && button.height >= 44 && button.within && button.tappable),
           `${label} must be fully inside the map with a 44px hit target. ${JSON.stringify(geometry.onMap)}`);
@@ -761,6 +770,16 @@ if (serve) {
       await preview.noOverflow();
       await preview.context.close();
     }
+    const noFix = await makePage({ width: 320, height: 568, scale: 1.25, playerCount: 4, gps: false });
+    await noFix.go("?round=" + code);
+    await noFix.ready();
+    await noFix.button("Next hole").click();
+    await noFix.page.getByRole("heading", { name: "Hole 5" }).waitFor();
+    const enableGps = noFix.page.getByRole("button", { name: /GPS/ });
+    const gpsRect = await enableGps.boundingBox();
+    assert.ok(gpsRect && gpsRect.width >= 44 && gpsRect.height >= 44, "GPS badge has a full tap target");
+    assert.doesNotMatch(await enableGps.innerText(), /\d+ ft/, "The GPS badge omits the footer's hole length");
+    await noFix.context.close();
     console.log("Bottom-dock scorer previews with sample weather and aerial imagery " + out);
   } finally {
     await browser.close();

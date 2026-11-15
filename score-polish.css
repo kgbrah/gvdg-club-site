@@ -661,19 +661,19 @@ body.score-glove.player-theme-page:has(.score-bottom-layout) #scoreRoot .topbar 
 .score-bottom-layout :is(.hole-map-focus-btn.active, .hole-map-lie-btn) { color: var(--member-round-cta-ink); }
 .score-bottom-layout .hole-map-actions .hole-range-hud {
   position: static;
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  column-gap: .25rem;
-  min-width: 0;
-  max-width: 100%;
-  padding: .23rem .36rem;
-  border-radius: .4rem;
+  display: grid;
+  align-content: center;
+  inline-size: max-content;
+  min-inline-size: 0;
+  max-inline-size: 8rem;
+  gap: .1rem;
+  padding: .32rem .43rem;
+  border-radius: .65rem;
   background: var(--bg-secondary);
 }
-.score-bottom-layout .hole-map-actions .hole-range-hud-btn { min-height: 44px; min-width: 44px; align-content: center; }
-.score-bottom-layout .hole-map-actions .hole-range-hud strong { font-size: .99rem; white-space: nowrap; }
-.score-bottom-layout .hole-map-actions .hole-range-hud :is(span, em) { margin: 0; font-size: .58rem; }
+.score-bottom-layout .hole-map-actions .hole-range-hud-btn { min-height: 44px; min-inline-size: 44px; }
+.score-bottom-layout .hole-map-actions .hole-range-hud strong { font-size: 1.1rem; white-space: nowrap; }
+.score-bottom-layout .hole-map-actions .hole-range-hud :is(span, em) { margin: 0; font-size: .59rem; }
 .score-bottom-layout .score-glove-stage .hole-map-credit-overlay {
   display: block;
   position: absolute;
