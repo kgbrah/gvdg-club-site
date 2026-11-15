@@ -37,6 +37,15 @@ test("spoken bag details recognize a catalog combo, decimal and word-number weig
   assert.deepEqual(parseSpokenDisc("brand Moonworks, model Owl X, plastic Soft Blend, weight 166.4 grams", catalog, {}), {
     brand: "Moonworks", model: "Owl X", plastic: "Soft Blend", weightGrams: "166.4",
   });
+  assert.deepEqual(parseSpokenDisc("brand North Plastic Labs; model Owl X; plastic Soft Weight Blend; weight 167 grams", catalog, {}), {
+    brand: "North Plastic Labs", model: "Owl X", plastic: "Soft Weight Blend", weightGrams: "167",
+  });
+  assert.deepEqual(parseSpokenDisc("brand North Plastic Labs, model Owl X, plastic Soft Blend, weight 167 grams", catalog, {}), {
+    brand: "North Plastic Labs", model: "Owl X", plastic: "Soft Blend", weightGrams: "167",
+  });
+  assert.deepEqual(parseSpokenDisc("brand North Plastic Labs model Owl X, plastic Soft Blend, weight 167 grams", catalog, {}), {
+    brand: "North Plastic Labs", model: "Owl X", plastic: "Soft Blend", weightGrams: "167",
+  });
   assert.equal(parseSpokenDisc("North Flight Starling V2 Cloud Flex 170g", catalog, {}).plastic, "Cloud Flex");
   assert.equal(parseSpokenDisc("Innova Champion Tee Bird 168.5", catalog, {}).weightGrams, "168.5");
 });
@@ -48,7 +57,8 @@ test("voice does not fill the wrong manufacturer, model or out-of-range weight",
     parseSpokenDisc("Innova Star Destroyer 175 grams", catalog, {})), { weightGrams: "175" });
   assert.equal(parseSpokenDisc("MVP Envy Electron", catalog, {}).model, "");
   assert.equal(parseSpokenDisc("Axiom Hex Electron", catalog, {}).plastic, "");
-  for (const text of ["Mako 3", "you heard a disc", "two hundred fifty grams", "39 g", "-175 g", "175.23 g"]) {
+  for (const text of ["Mako 3", "you heard a disc", "two hundred fifty grams", "39 g", "-175 g", "175.23 g",
+    "Innova Destroyer minus one seventy five grams", "Innova Destroyer negative 175 grams"]) {
     assert.equal(parseSpokenDisc(text, catalog, {}).weightGrams, "", text);
   }
 });

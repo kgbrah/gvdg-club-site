@@ -110,6 +110,7 @@ async function bagEntryContext(width, voiceSupported) {
   const page = await context.newPage();
   await page.addInitScript(({ owner, wide, large, voiceSupported }) => {
     localStorage.setItem("gvdg_member_token", owner);
+    sessionStorage.setItem("gvdg_member_token", owner);
     localStorage.setItem("theme", wide ? "light" : "dark");
     if (large) document.addEventListener("DOMContentLoaded", () => { document.documentElement.style.fontSize = "20px"; }, { once: true });
     const mock = { starts: 0, stops: 0, aborts: 0, active: null };
@@ -222,8 +223,9 @@ async function checkBagEntry(width, voiceSupported) {
     await capture("listening");
     await page.getByRole("button", { name: "Stop listening" }).click();
     await page.getByText("Finishing voice recognition…", { exact: true }).waitFor();
-    await page.evaluate(() => window.bagVoiceMock.finish("Innova Star Destroyer, 175 grams"));
+    await page.evaluate(() => window.bagVoiceMock.finish("brand North Plastic Labs, model Owl X, plastic Soft Blend, weight 167 grams"));
     await transcript.waitFor();
+    await page.locator(".bag-disc-voice-details").getByText("North Plastic Labs", { exact: true }).waitFor();
     await transcript.fill("Innova Star Destroyer, 174.5 grams");
     await capture("voice-review");
     await page.getByRole("button", { name: "Fill empty fields" }).click();
@@ -263,6 +265,30 @@ async function checkBagEntry(width, voiceSupported) {
       });
       assert.equal(await transcript.count(), 0);
       assert((await page.evaluate(() => window.bagVoiceMock.aborts)) >= 4, "Errors, cancellation and record/owner changes abort speech");
+
+      const sibling = await context.newPage();
+      await sibling.goto(origin + "/img/logo.png");
+      const editor = page.locator(".bag-disc-form");
+      for (const change of ["remove", "replace", "clear"]) {
+        await sibling.evaluate((token) => localStorage.setItem("gvdg_member_token", token), owner);
+        await page.evaluate((token) => sessionStorage.setItem("gvdg_member_token", token), owner);
+        await page.getByRole("button", { name: "Add disc", exact: true }).click();
+        await start.click();
+        await page.getByText("Listening…", { exact: true }).waitFor();
+        const aborts = await page.evaluate(() => window.bagVoiceMock.aborts);
+        await sibling.evaluate((action) => {
+          if (action === "replace") localStorage.setItem("gvdg_member_token", "qa-two");
+          else if (action === "clear") localStorage.clear();
+          else localStorage.removeItem("gvdg_member_token");
+        }, change);
+        await editor.waitFor({ state: "detached" });
+        await page.evaluate(() => window.bagVoiceMock.finish("Axiom Envy 170 grams"));
+        assert.equal(await transcript.count(), 0);
+        assert.equal(await page.evaluate(() => window.bagVoiceMock.aborts), aborts + 1);
+        assert.equal(await page.evaluate(() => sessionStorage.getItem("gvdg_member_token")), null);
+        assert.equal(await sibling.evaluate(() => localStorage.getItem("gvdg_member_token")), change === "replace" ? "qa-two" : null);
+      }
+      await sibling.close();
       assert.equal(db(owner).size, 2);
     }
     assert.deepEqual(errors, []);

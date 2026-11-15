@@ -136,19 +136,20 @@ function validWeight(number) {
 
 function findWeight(text, explicitWeight, modelKnown) {
   if (explicitWeight) return validWeight(grams(explicitWeight));
+  const negativeBefore = (match) => /\b(?:minus|negative)\s*$/i.test(text.slice(0, match.index));
   const numeric = text.match(/(?:^|\s)(-?\d+(?:\.\d+)?)\s*(?:grams?|g)\b/i);
-  if (numeric) return validWeight(grams(numeric[1]));
+  if (numeric) return negativeBefore(numeric) ? "" : validWeight(grams(numeric[1]));
   const beforeUnits = text.split(/\bgrams?\b/i);
   if (beforeUnits.length < 2) {
     const lastNumber = modelKnown && text.match(/(?:^|\s)(-?\d+(?:\.\d+)?)\s*[.!?]?$/);
-    return lastNumber ? validWeight(grams(lastNumber[1])) : "";
+    return lastNumber && !negativeBefore(lastNumber) ? validWeight(grams(lastNumber[1])) : "";
   }
   const words = spokenWords(beforeUnits[0]).split(" ");
   // Start with the longest supported phrase so “one hundred seventy five”
   // never falls through to the shorter and unrelated “seventy five”.
   for (let length = Math.min(words.length, 8); length > 0; length--) {
     const value = grams(words.slice(-length).join(" "));
-    if (value != null) return validWeight(value);
+    if (value != null) return ["minus", "negative"].includes(words.at(-length - 1)) ? "" : validWeight(value);
   }
   return "";
 }
@@ -156,10 +157,23 @@ function findWeight(text, explicitWeight, modelKnown) {
 function namedFields(text) {
   const content = text.replace(/^\s*(?:add (?:a |the )?(?:disc\s*)?)?/i, "");
   if (!/^(?:brand|model|plastic|weight)\b/i.test(content)) return {};
+  const clauses = content.split(/[,;]/).map((clause) => clause.trim()).filter(Boolean);
+  const fieldsFound = clauses.length > 1
+    ? clauses.map((clause) => clause.match(/^(brand|model|plastic|weight)(?:\s*:\s*|\s+)(.+)$/i)).filter(Boolean)
+    : content.matchAll(/\b(brand|model|plastic|weight)(?:\s*:\s*|\s+)([^,;]+?)(?=\s+(?:brand|model|plastic|weight)\b|[,;]|$)/gi);
   const fields = {};
-  for (const [, key, value] of content.matchAll(/\b(brand|model|plastic|weight)(?:\s*:\s*|\s+)([^,;]+?)(?=\s+(?:brand|model|plastic|weight)\b|[,;]|$)/gi)) {
+  for (const [, key, value] of fieldsFound) {
     const cleaned = value.trim().replace(/[.!?]+$/, "");
     if (cleaned.length <= 80) fields[key.toLowerCase()] = cleaned;
+  }
+  // Recognition can leave Brand and Model together before the first comma.
+  // Keep clause values whole when they already include a separate Model field.
+  if (clauses.length > 1 && fields.brand && !fields.model) {
+    const identity = fields.brand.match(/^(.+?)\s+model(?:\s*:\s*|\s+)(.+)$/i);
+    if (identity) {
+      fields.brand = identity[1].trim();
+      fields.model = identity[2].trim();
+    }
   }
   return fields;
 }

@@ -115,13 +115,23 @@ function ExportPractice({ workspace }) {
   ]);
 }
 
-function DiscForm({ initial, onSave, onClose, savedDiscs, sessionToken }) {
+function bagSessionToken() {
+  try {
+    // The member shell migrates legacy sessions before this page renders. A
+    // lookup here must never copy a retired tab's token back into local storage.
+    return window.localStorage.getItem(TOKEN_KEY) || "";
+  } catch {
+    return readMemberToken({ persistent: null });
+  }
+}
+
+function DiscForm({ initial, onSave, onClose, savedDiscs, scope }) {
   const [form, setForm] = React.useState(() => initial ? { ...initial.record, weightGrams: initial.record.weightGrams ?? "" } : EMPTY_DISC);
   const [error, setError] = React.useState("");
   const notesId = React.useId();
   const catalog = discCatalog(savedDiscs);
   const { brands, models, plastics } = discChoices(catalog, form.brand, form.model);
-  const isCurrentSession = () => Boolean(sessionToken) && readMemberToken() === sessionToken;
+  const isCurrentSession = () => scope.active && bagSessionToken() === scope.token;
 
   function submit(event) {
     event.preventDefault();
@@ -207,19 +217,39 @@ function discActions(row, workspace, onEdit, setError) {
 
 export function MemberBagPage({ workspace }) {
   const [editor, setEditor] = React.useState(null);
+  const editorScope = React.useRef(null);
   const [error, setError] = React.useState("");
   const [query, setQuery] = React.useState("");
-  const sessionToken = readMemberToken();
+  const closeEditor = React.useCallback(() => {
+    if (editorScope.current) editorScope.current.active = false;
+    editorScope.current = null;
+    setEditor(null);
+  }, []);
   React.useEffect(() => {
     function clearPriorEditor(event) {
       if (event.key !== null && event.key !== TOKEN_KEY) return;
-      const token = readMemberToken();
-      setEditor((current) => current?.sessionToken === token ? current : null);
+      const scope = editorScope.current;
+      if (!scope || event.newValue === scope.token) return;
+      // Retire the guard synchronously, before any queued recognition result
+      // or render can treat the old editor as current.
+      scope.active = false;
+      try {
+        if (window.sessionStorage.getItem(TOKEN_KEY) === scope.token) window.sessionStorage.removeItem(TOKEN_KEY);
+      } catch { /* Local credential checks still guard the editor. */ }
+      closeEditor();
     }
-    window.addEventListener("storage", clearPriorEditor);
-    return () => window.removeEventListener("storage", clearPriorEditor);
-  }, []);
-  const openEditor = (initial) => setEditor({ initial, sessionToken });
+    window.addEventListener("storage", clearPriorEditor, true);
+    return () => window.removeEventListener("storage", clearPriorEditor, true);
+  }, [closeEditor]);
+  function openEditor(initial) {
+    const token = bagSessionToken();
+    if (!token) return;
+    if (editor?.scope.active && editor.scope.token === token && editor.initial?.id === initial?.id) return;
+    if (editorScope.current) editorScope.current.active = false;
+    const scope = { token, active: true };
+    editorScope.current = scope;
+    setEditor({ initial, scope });
+  }
   const term = query.trim().toLowerCase();
   const records = workspace.data.discs.filter(({ record }) => [record.brand, record.model, record.plastic].join(" ").toLowerCase().includes(term))
     .sort((a, b) => Number(b.record.inBag) - Number(a.record.inBag) || DiscLabel(a.record).localeCompare(DiscLabel(b.record)));
@@ -240,15 +270,15 @@ export function MemberBagPage({ workspace }) {
       h(MoreLink, { tab: "practice", label: "Log a practice session", key: "practice" }),
     ]),
     h(SyncStatus, { workspace, key: "sync" }),
-    editor?.sessionToken && editor.sessionToken === sessionToken ? h(DiscForm, {
+    editor?.scope.active && editor.scope.token === bagSessionToken() ? h(DiscForm, {
       initial: editor.initial, key: editor.initial?.id || "new",
-      savedDiscs: workspace.data.discs, sessionToken,
+      savedDiscs: workspace.data.discs, scope: editor.scope,
       onSave: (record, original) => {
         const failure = editRecord(workspace, "disc", record, original);
-        if (!failure) setEditor(null);
+        if (!failure) closeEditor();
         return failure;
       },
-      onClose: () => setEditor(null),
+      onClose: closeEditor,
     }) : null,
     workspace.data.discs.length > 5 ? field("Find in my bag", { name: "search", type: "search", value: query, onChange: (event) => setQuery(event.target.value) }) : null,
     formError(error),
