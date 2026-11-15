@@ -1,6 +1,6 @@
 # Member Home — revised visual design
 
-Working-interface screenshots with sample member data. **Not deployed.** This revision responds to the oversized onboarding buttons and inconsistent account controls in the previous Home screen.
+Working-interface screenshots with sample member data. **Approved direction; release verification in progress.** This revision responds to the oversized onboarding buttons and inconsistent account controls in the previous Home screen.
 
 - Compact, theme-aware surfaces and a clear Continue round action.
 - Wallet, membership and bag tags in an aligned account section.
@@ -22,3 +22,13 @@ Working-interface screenshots with sample member data. **Not deployed.** This re
 ## Desktop
 
 ![Desktop Home with a persistent sidebar and balanced feature columns](home-refined-desktop.png)
+
+## Small phone with enlarged text
+
+![Home at 320 pixels with enlarged text](home-refined-large-text.png)
+
+## Practice and My bag
+
+![Refined Practice navigation](practice-refined-mobile.png)
+
+![Refined personal bag](bag-refined-mobile.png)

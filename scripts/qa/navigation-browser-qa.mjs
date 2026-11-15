@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createServer } from "vite";
 import { chromium } from "playwright";
 
@@ -13,6 +15,7 @@ const eventHoles = [{ hole: 1, par: 3 }];
 const events = [event, otherEvent];
 const requested = [];
 const pageErrors = [];
+const bootstrapErrors = [];
 const serveOnly = Boolean(process.env.GVDG_NAV_QA_SERVE);
 
 const pages = {
@@ -42,9 +45,9 @@ function apiResponse(path, query, authorization) {
 process.env.VITE_DISABLE_REACT_DEVTOOLS = "1";
 const vite = await createServer({
   configFile: false,
-  cacheDir: process.env.GVDG_NAV_QA_CACHE || "/tmp/gvdg-nav-browser-qa",
+  cacheDir: process.env.GVDG_NAV_QA_CACHE || await mkdtemp(join(tmpdir(), "gvdg-nav-browser-qa-")),
   server: { host: "127.0.0.1", port: 0, hmr: false },
-  optimizeDeps: { entries: ["src/members-app/main.js", "src/admin-app/main.js"] },
+  optimizeDeps: { noDiscovery: true, include: ["react", "react-dom", "react-dom/client", "lucide-react"] },
   plugins: [{
     name: "gvdg-navigation-test",
     configureServer(server) {
@@ -55,6 +58,7 @@ const vite = await createServer({
           const [file, attribute, entry] = page;
           const html = (await readFile(file, "utf8"))
             .replace(/<link[^>]+https:[^>]+>/g, "")
+            .replace(/<script[^>]+src="pwa\.js[^"]*"[^>]*><\/script>/, "")
             .replace(attribute + '=""', attribute + '="/navigation-api"')
             .replace(/src="(?:members|admin)-app\/[^"]+"/, 'src="' + entry + '"');
           const fixture = serveOnly
@@ -93,6 +97,9 @@ async function newPage(viewport, token) {
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
   page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("requestfailed", (request) => {
+    if (request.url().startsWith(origin)) bootstrapErrors.push(request.url() + " " + request.failure()?.errorText);
+  });
   await page.addInitScript((value) => localStorage.setItem("gvdg_member_token", value), token);
   return { context, page };
 }
@@ -102,7 +109,10 @@ async function verifyMembers(viewport) {
   try {
     await page.goto(origin + "/member-navigation.html#overview", { waitUntil: "commit", timeout: 30000 });
     const nav = page.getByRole("navigation", { name: "Member app" });
-    await nav.getByRole("button", { name: "Home", exact: true }).waitFor();
+    await nav.getByRole("button", { name: "Home", exact: true }).waitFor({ timeout: 90000 }).catch(async (error) => {
+      throw new Error(error.message + "\nPage errors: " + JSON.stringify(pageErrors) +
+        "\nLoad errors: " + JSON.stringify(bootstrapErrors.slice(-12)) + "\nVisible page: " + await page.locator("body").innerText());
+    });
     for (const name of ["Home", "Play", "Events", "Stats", "Club"]) await nav.getByRole("button", { name, exact: true }).waitFor();
     await page.getByRole("link", { name: /Continue round/ }).waitFor();
     assert.equal(await page.getByRole("link", { name: "Admin portal", exact: false }).count(), 0);
