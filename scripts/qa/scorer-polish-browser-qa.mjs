@@ -191,7 +191,7 @@ async function makePage({ width, height, scheme = "light", scale = 1, group = "s
   playerCount, dashboardTheme, weather = sampleWeather, gps = true, scoringStyle = group === "doubles" ? "matchplay" : "stroke" } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, colorScheme: scheme === "light" ? "light" : "dark",
     permissions: gps ? ["geolocation", "camera", "microphone"] : ["camera", "microphone"],
-    geolocation: gps ? { latitude: sampleLie.lat, longitude: sampleLie.lng, accuracy: 4 } : undefined,
+    geolocation: gps ? { latitude: gps.lat ?? sampleLie.lat, longitude: gps.lng ?? sampleLie.lng, accuracy: 4 } : undefined,
     serviceWorkers: "block" });
   const page = await context.newPage();
   page.setDefaultTimeout(18000);
@@ -770,15 +770,70 @@ if (serve) {
       await preview.noOverflow();
       await preview.context.close();
     }
-    const noFix = await makePage({ width: 320, height: 568, scale: 1.25, playerCount: 4, gps: false });
-    await noFix.go("?round=" + code);
-    await noFix.ready();
+    async function stageConflict(fixture) {
+      await fixture.go("?round=" + code);
+      await fixture.ready();
+      await fixture.offlineMode(true);
+      await fixture.button("Increase Taylor Morgan on hole 4").click();
+      const sync = fixture.page.getByRole("region", { name: "Card sync" });
+      await sync.getByText("1 change awaiting sync", { exact: true }).waitFor();
+      fixture.editElsewhere(0, 4, 7);
+      await fixture.offlineMode(false);
+      await sync.getByText("1 change needs attention", { exact: true }).waitFor();
+    }
+    async function checkShortMap(page) {
+      const frame = page.locator(".score-glove-stage .hole-map-frame");
+      assert.ok(await frame.evaluate((element) => [...element.querySelectorAll("button")].every((button) => {
+        const { x, y, width, height } = button.getBoundingClientRect();
+        return width >= 44 && height >= 44
+          && button.contains(document.elementFromPoint(x + width / 2, y + height / 2));
+      })), "Short-map controls are reachable with touch");
+      assert.ok(await frame.evaluate((element) => {
+        const badge = element.querySelector(".hole-range-hud").getBoundingClientRect();
+        return [...element.querySelectorAll(".hole-map-options button")].every((button) => {
+          const range = document.createRange();
+          range.selectNodeContents(button);
+          const text = range.getBoundingClientRect();
+          return badge.right <= text.left || badge.left >= text.right || badge.top >= text.bottom;
+        });
+      }), "Distance badge does not paint over the map control labels");
+    }
+    const nearBasket = await makePage({ width: 320, height: 540, scale: 1.25, playerCount: 4,
+      gps: { lat: holes[3].target.lat - .00002, lng: holes[3].target.lng } });
+    await stageConflict(nearBasket);
+    await nearBasket.page.locator(".hole-range-hud.in-c1 .hole-range-hud-next").getByText(/next tee/).waitFor();
+    await nearBasket.page.locator(".hole-range-hud-throw").getByText(/throw 1/).waitFor();
+    await checkShortMap(nearBasket.page);
+    await nearBasket.context.close();
+
+    const noFix = await makePage({ width: 320, height: 540, scale: 1.25, playerCount: 4, gps: false });
+    await stageConflict(noFix);
+    const nav = noFix.page.getByRole("navigation", { name: "Hole navigation" });
     await noFix.button("Next hole").click();
-    await noFix.page.getByRole("heading", { name: "Hole 5" }).waitFor();
+    await nav.getByRole("heading", { name: "Hole 5" }).waitFor();
     const enableGps = noFix.page.getByRole("button", { name: /GPS/ });
     const gpsRect = await enableGps.boundingBox();
     assert.ok(gpsRect && gpsRect.width >= 44 && gpsRect.height >= 44, "GPS badge has a full tap target");
     assert.doesNotMatch(await enableGps.innerText(), /\d+ ft/, "The GPS badge omits the footer's hole length");
+    await checkShortMap(noFix.page);
+
+    const scores = noFix.page.getByRole("region", { name: "Player scores" });
+    const missing = noFix.button("Hole 4 needs a score");
+    await scores.getByRole("button", { name: "Hole 4 needs a score" }).waitFor();
+    assert.equal(await missing.count(), 1, "There is one finish reminder");
+    await noFix.page.setViewportSize({ width: 320, height: 568 });
+    await noFix.page.locator(".score-glove-dock > .score-glove-finish").waitFor();
+    await noFix.page.setViewportSize({ width: 320, height: 540 });
+    await scores.getByRole("button", { name: "Hole 4 needs a score" }).waitFor();
+    await missing.click();
+    await nav.getByRole("heading", { name: "Hole 4" }).waitFor();
+    assert.equal(await scores.evaluate((region) => region.scrollTop === 0 && document.activeElement === region), true);
+    await noFix.button("Next hole").click();
+    await scores.getByRole("button", { name: "Dismiss" }).click();
+    await missing.waitFor({ state: "hidden" });
+    await noFix.page.setViewportSize({ width: 320, height: 568 });
+    await nav.getByRole("heading", { name: "Hole 5" }).waitFor();
+    assert.equal(await missing.count(), 0, "Resizing does not restore a dismissed reminder");
     await noFix.context.close();
     console.log("Bottom-dock scorer previews with sample weather and aerial imagery " + out);
   } finally {

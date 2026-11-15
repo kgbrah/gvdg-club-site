@@ -88,6 +88,20 @@ function useVisibleBottomInset() {
   }, []);
 }
 
+const SHORT_SCORE_DOCK = "(orientation: portrait) and (max-height: 560px)";
+
+function useShortScoreDock() {
+  const [short, setShort] = React.useState(() => window.matchMedia(SHORT_SCORE_DOCK).matches);
+  React.useEffect(() => {
+    const query = window.matchMedia(SHORT_SCORE_DOCK);
+    function update() { setShort(query.matches); }
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  return short;
+}
+
 function liveStatSample(mine) {
   if (!mine || !mine.att) return "—";
   return mine.hit + "/" + mine.att;
@@ -1087,7 +1101,6 @@ function FinishCard(props) {
 
 function FinishDockBar(props) {
   const finish = props.finish;
-  const [dismissed, setDismissed] = React.useState({});
   if (!finish || finish.locked) return null;
   if (finish.canFinish && typeof props.onOpenFinish === "function") {
     return h("div", { className: "score-glove-finish", key: "finish-bar" }, h("button", {
@@ -1099,7 +1112,7 @@ function FinishDockBar(props) {
   let blocker = finish.blocker;
   if (blocker && blocker.kind === "missing") {
     const skipped = Array.isArray(finish.skipped) && finish.skipped.length ? finish.skipped : [blocker];
-    blocker = skipped.find((row) => row && !dismissed[row.hole]) || null;
+    blocker = skipped.find((row) => row && !props.dismissed[row.hole]) || null;
   }
   if (!blocker) return null;
   const jump = h("button", {
@@ -1118,7 +1131,7 @@ function FinishDockBar(props) {
       className: "score-glove-finish-dismiss",
       key: "dismiss",
       type: "button",
-      onClick: () => setDismissed((prev) => ({ ...prev, [blocker.hole]: true })),
+      onClick: () => props.onDismiss(blocker.hole),
     }, icon(X)),
   ]);
 }
@@ -1296,6 +1309,8 @@ function RecoveryStatus(props) {
 
 export function ScorecardView(props) {
   useVisibleBottomInset();
+  const shortDock = useShortScoreDock();
+  const [dismissedFinishHoles, setDismissedFinishHoles] = React.useState({});
   const clipDrafts = useClipRecovery(props.clipRecovery);
   const scoreRegionRef = React.useRef(null);
   const [padRow, setPadRow] = React.useState(null);
@@ -1489,6 +1504,20 @@ export function ScorecardView(props) {
     enableGps: gps.enableGps, shotMeasurement: measure?.b ? remainingFt(measure.a, measure.b) : null, wrist, roundDetails,
     onMeasure, onToggleLock, onWrist: () => setWrist(true),
   });
+  const finishDock = h(FinishDockBar, {
+    key: "finish-dock",
+    finish: props.finish,
+    dismissed: dismissedFinishHoles,
+    onOpenFinish: props.onOpenFinish,
+    onJump: (index) => {
+      if (shortDock && scoreRegionRef.current) {
+        scoreRegionRef.current.scrollTop = 0;
+        scoreRegionRef.current.focus({ preventScroll: true });
+      }
+      props.onJumpHole?.(index);
+    },
+    onDismiss: (hole) => setDismissedFinishHoles((previous) => ({ ...previous, [hole]: true })),
+  });
   const dock = h("div", { className: "score-glove-dock", key: "dock" }, [
     tools,
     h("div", {
@@ -1498,8 +1527,9 @@ export function ScorecardView(props) {
       h(ScorecardBox, { ...props, key: "scorecard", onOpenPad: setPadRow, onScore }),
       h(CtpClaim, { key: "ctp", ctpClaim: props.ctpClaim, onCtpVote: props.onCtpVote }),
       h(FinishCard, { key: "finish", finish: props.finish, onOpenFinish: props.onOpenFinish, onShare: props.onShare }),
+      shortDock ? finishDock : null,
     ]),
-    h(FinishDockBar, { key: "finish-dock", finish: props.finish, onJump: props.onJumpHole, onOpenFinish: props.onOpenFinish }),
+    shortDock ? null : finishDock,
     holeHeader,
   ]);
   const layoutClass = "score-glove-layout" + (solo ? " solo" : "") + " players-" + playerBand;

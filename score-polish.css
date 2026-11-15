@@ -824,6 +824,12 @@ body.score-glove.player-theme-page .score-bottom-layout .score-glove-dock { back
   .score-bottom-layout.score-glove-layout { --score-tray-limit: clamp(44px, calc(100dvh - 472px), 22dvh); }
 }
 
+@media (orientation: portrait) and (max-height: 560px) {
+  .score-bottom-layout .hole-map-actions .hole-range-hud { gap: .05rem; padding-block: .19rem; }
+  .score-bottom-layout .hole-map-actions .hole-range-hud strong { line-height: 1.03; }
+  .score-bottom-layout .hole-map-actions .hole-range-hud :is(span, em) { line-height: 1.05; }
+}
+
 @media (min-width: 900px), (orientation: landscape) and (min-width: 600px) and (max-height: 620px) {
   .score-bottom-layout.score-glove-layout {
     grid-template: "course dock" minmax(0, 1fr) / minmax(0, 1.4fr) minmax(16rem, 1fr);
