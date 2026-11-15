@@ -190,8 +190,15 @@ export function startAdminController() {
         async function adminLoadEvents() {
             window.dispatchEvent(new CustomEvent('gvdg:admin-events-list', { detail: { status: 'loading', events: [] } }));
             let events = [];
-            try { const r = await api('/events'); if (r.ok) events = (await r.json()).events || []; } catch (e) {}
-            window.dispatchEvent(new CustomEvent('gvdg:admin-events-list', { detail: { status: 'ready', events } }));
+            let status = 'error';
+            try {
+                const r = await api('/events');
+                if (r.ok) {
+                    events = (await r.json()).events || [];
+                    status = 'ready';
+                }
+            } catch (e) {}
+            window.dispatchEvent(new CustomEvent('gvdg:admin-events-list', { detail: { status, events } }));
         }
 
         function aeResetForm() {
@@ -753,7 +760,7 @@ export function startAdminController() {
             adminShowPin({
                 title: 'Temporary PIN for ' + name,
                 pin: pin,
-                message: 'Copy it before you close this. It is shown once, and their old PIN no longer works.',
+                message: 'Give this PIN to the member. They will set a new one when they sign in. Their old PIN no longer works.',
             });
         }
         let adminMembersQuietRefresh = false;

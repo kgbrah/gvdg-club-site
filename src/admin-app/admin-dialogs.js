@@ -63,7 +63,7 @@ export function adminShowPin(options) {
 
 export function AdminDialogs() {
   const [dialog, setDialog] = React.useState(activeDialog);
-  const [copied, setCopied] = React.useState(false);
+  const [copyState, setCopyState] = React.useState("");
   const titleId = dialog ? `adminDialogTitle-${dialog.id}` : "adminDialogTitle";
   const bodyId = dialog ? `adminDialogBody-${dialog.id}` : "adminDialogBody";
   const a11y = useAccessibleDialog({
@@ -81,7 +81,7 @@ export function AdminDialogs() {
   }, []);
 
   React.useEffect(() => {
-    setCopied(false);
+    setCopyState("");
   }, [dialog && dialog.id]);
 
   if (!dialog) return null;
@@ -89,13 +89,11 @@ export function AdminDialogs() {
 
   async function copyPin() {
     try {
-      if (navigator.clipboard && navigator.clipboard.writeText && dialog.pin) {
-        await navigator.clipboard.writeText(dialog.pin);
-      }
+      await navigator.clipboard.writeText(dialog.pin);
+      setCopyState("copied");
     } catch {
-      /* the PIN stays on screen either way */
+      setCopyState("failed");
     }
-    setCopied(true);
   }
 
   return createPortal(
@@ -116,8 +114,9 @@ export function AdminDialogs() {
       h("h2", { className: "admin-dialog-title", id: titleId, key: "title" }, dialog.title),
       dialog.pin ? h("div", { className: "admin-dialog-pin", key: "pin" }, dialog.pin) : null,
       h("p", { className: "admin-dialog-message", id: bodyId, key: "message" }, dialog.message),
+      copyState === "failed" ? h("p", { className: "al-note", key: "copy-error", role: "status" }, "Select the PIN and copy it manually.") : null,
       h("div", { className: "admin-dialog-actions", key: "actions" }, [
-        dialog.pin ? h("button", { className: "admin-btn secondary admin-dialog-btn", key: "copy", onClick: () => { void copyPin(); }, type: "button" }, copied ? "Copied" : "Copy PIN") : null,
+        dialog.pin ? h("button", { className: "admin-btn secondary admin-dialog-btn", key: "copy", onClick: () => { void copyPin(); }, type: "button" }, copyState === "copied" ? "Copied" : "Copy PIN") : null,
         dialog.acknowledge ? null : h("button", { className: "admin-btn secondary admin-dialog-btn", key: "cancel", onClick: () => settle(false), type: "button" }, dialog.cancelText),
         h("button", { className: confirmClass, key: "confirm", onClick: () => settle(true), type: "button" }, dialog.confirmText),
       ]),

@@ -114,7 +114,7 @@ export function AdminLayoutBuilder({ editingId, name, onNameChange, onReset, onR
         value: name,
       }),
     }),
-    h("div", { key: "table", style: { overflowX: "auto" } }, h("table", { className: "al-holes" }, [
+    h("div", { className: "admin-table-scroll", key: "table", role: "region", "aria-label": "Layout hole table", tabIndex: 0 }, h("table", { className: "al-holes" }, [
       h("thead", { key: "head" }, h("tr", null, ["#", "Par", "Tee", "Target", "Manual ft", "Est.", ""].map((label) => h("th", { key: label }, label)))),
       h("tbody", { id: "alHoles", key: "body" }, rows.map((row, index) => h(BuilderRow, {
         index,

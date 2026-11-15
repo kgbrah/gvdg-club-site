@@ -1,0 +1,397 @@
+import assert from "node:assert/strict";
+import { mkdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { chromium } from "playwright";
+import { createServer } from "vite";
+import { ADMIN_DESTINATIONS, appHref } from "../../src/shared/app-navigation.js";
+
+const photos = process.env.GVDG_ADMIN_SCREENSHOTS;
+const fontDir = process.env.GVDG_ADMIN_FONT_DIR;
+if (photos) await mkdir(photos, { recursive: true });
+const token = "qa-admin";
+const date = new Date().toISOString().slice(0, 10);
+const course = { id: 7, name: "River Park", location: "Greenville, NC", udisc_course_id: "23" };
+const events = [
+  { id: 42, name: "River Park Open", status: "live", type: "tournament", course_id: 7, course_name: course.name, layout_id: 9, date },
+  { id: 41, name: "Autumn Doubles", status: "scheduled", type: "league", course_id: 7, layout_id: 9, date: "2099-11-21" },
+  { id: 40, name: "October Club Championship", status: "final", type: "tournament", course_id: 7, layout_id: 9, date: "2025-10-21" },
+];
+const people = [
+  { memberId: "m_taylor", name: "Taylor Morgan", pdgaNo: "123456", isAdmin: true },
+  { memberId: "m_jordan", name: "Jordan Reyes", pdgaNo: "234567" },
+  { memberId: "m_avery", name: "Avery Brooks", pdgaNo: "345678" },
+];
+const holes = Array.from({ length: 18 }, (_, index) => ({ hole: index + 1, par: 3, distance_ft: 315 + index * 12 }));
+const layouts = [{ id: 9, course_id: 7, name: "Blue tees", holes }];
+const registration = { id: 5, member_id: "m_jordan", name: "Jordan Reyes", division: "MA2", starting_hole: 1, checked_in: false, payment_status: "paid", status: "confirmed" };
+const application = { id: "application-one", name: "Cameron Taylor", pdgaNo: "456789", createdAt: date, status: "pending" };
+const order = { id: 6, member_id: "m_jordan", member_name: "Jordan Reyes", status: "submitted", delivery_method: "pickup", items: [{ name_snapshot: "River fairway driver", quantity: 1, price_cents: 1800 }], total_cents: 1800, created_at: date };
+const tee = { id: 3, course_id: 7, hole_number: 2, status: "candidate", created_at: date, suggestedRows: [{ layoutId: 9, tee: "Blue", target: "A", distance_ft: 317, par: 3 }] };
+const review = { id: 3, courseId: 7, courseName: course.name, rating: 5, text: "Clear tee signs and a shaded practice basket.", updatedAt: date, reportCount: 0, revision: 1, state: "pending" };
+const task = { id: 2, status: "open", priority: "normal", title: "Replace hole 7 tee sign", details: "Install an updated layout card.", revision: 1, dueDate: date, updatedAt: date };
+const eventPlayers = people.map(({ name }, index) => ({ name, index, cardId: "c0", startingHole: 1, scores: { 1: index + 2 }, scorecards: {} }));
+const standings = eventPlayers.map(({ name, index, scores }) => ({
+  name, index, targetId: "p" + index, playerIndex: index, playerIndexes: [index], total: scores[1], toPar: scores[1] - 3, thru: 1, division: "MA2",
+  scorecard: [{ hole: 1, par: 3, strokes: scores[1] }],
+}));
+const courseHealth = {
+  course, window: { from: date, to: date },
+  participation: { completedRounds: 12, completedPlayerEntries: 48, uniqueIdentifiedPlayers: 36, completedCompetitionRecords: 8, completedCasualCards: 4, guestEntries: 9 },
+  health: { holes: 18, mappedHoles: 16, approvedPars: 15, staleApprovals: 2, approvalsReviewedInWindow: 3, pendingTeeSigns: 1, staleAfterDays: 120, layouts: [] },
+  participationDefinition: "Counts completed GVDG records in the selected dates.", coverageDefinition: "Counts approved layout holes.",
+};
+
+const probes = {
+  today: ".admin-today-feature",
+  events: ".admin-event-card-main",
+  create: "#adminCreateForm",
+  import: "[data-react-admin-import-controls] textarea",
+  "leagues-mgmt": "[data-react-admin-league-night-form]",
+  registration: "[data-react-admin-registration-settings='ready']",
+  "check-in": ".admin-context .admin-desk-line",
+  scoring: "[data-react-admin-scoring-live='live']",
+  results: "[data-react-admin-scoring-live='final']",
+  members: "[data-react-admin-members-list='ready']",
+  applications: "[data-react-admin-membership-applications='ready']",
+  shop: "[data-react-admin-products-list='ready']",
+  orders: "[data-react-admin-orders-list='ready']",
+  wallets: "[data-react-admin-wallet-recent='ready']",
+  fundraisers: "[data-react-admin-fundraiser-form]",
+  more: "[data-react-admin-more]",
+  courses: "[data-react-admin-course-form]",
+  "course-health": ".course-operator-detail",
+  layouts: "[data-react-admin-layout-builder]",
+  "tee-signs": ".ts-review-card",
+  "bag-tags": "#admin-bag-requests",
+  meetings: "[data-react-admin-meeting-form]",
+  "data-archive": "[data-react-admin-data-archive-export-controls]",
+  "review-queue": ".admin-community-review",
+};
+assert.deepEqual(Object.keys(probes).sort(), ADMIN_DESTINATIONS.map((item) => item.key).sort());
+
+const requested = [];
+let fixtureMode = "";
+let orderStatus = "submitted";
+let checkedIn = false;
+let reviewPending = true;
+const errors = [];
+const warnings = [];
+function fixture(path, method, query, authorization, body) {
+  if (path === "/me") return { sub: "m_taylor", name: people[0].name, pdgaNo: "123456", isAdmin: authorization === "Bearer " + token };
+  if (path === "/events") return { events: fixtureMode === "empty" ? [] : events };
+  if (path === "/courses") return { courses: [course] };
+  if (/^\/events\/\d+$/.test(path)) return { event: events.find((event) => path.endsWith("/" + event.id)) };
+  if (path.endsWith("/live")) return { status: path.includes("/40/") ? "final" : "live", holes, players: eventPlayers, standings, conflicts: [], missing: [], courseName: course.name, rev: 1 };
+  if (path.endsWith("/registration")) return { config: { play_format: "singles", entry_fee_cents: 2500, registration_open: true, divisions: ["MA1", "MA2"] } };
+  if (path.endsWith("/registrations")) return { registrations: [{ ...registration, checked_in: checkedIn, paid_entry: checkedIn }] };
+  if (path === "/admin/events/42/registrations/5" && method === "PATCH") {
+    checkedIn = body.checked_in;
+    return { ok: true };
+  }
+  if (path === "/admin/import/csv" && method === "POST") return { candidates: [{ name: "Preview Spring Open", date: "2099-04-01", type: "tournament", format: "stroke" }] };
+  if (path.endsWith("/ctps")) return { ctps: [{ id: 1, hole: 5, division: "MA2", amount_cents: 800 }] };
+  if (path.endsWith("/ace-pot")) return { ace_pot: { total_cents: 2800 } };
+  if (path.endsWith("/layouts")) return { layouts };
+  if (path.endsWith("/positions")) return { positions: [{ id: 1, label: "Blue 1 tee", kind: "tee", lat: 35.631, lng: -77.319 }] };
+  if (path === "/admin/members" && method === "POST") return { member: { memberId: "m_new", name: body.name, pdgaNo: body.pdgaNo }, tempPin: "6831" };
+  if (path === "/admin/members") return { members: people };
+  if (path === "/admin/members/applications") return { applications: [application] };
+  if (path === "/admin/orders") return { unfulfilled: 1, orders: !query.get("status") || query.get("status") === orderStatus ? [{ ...order, status: orderStatus }] : [] };
+  if (path === "/admin/orders/6" && method === "PATCH") { orderStatus = body.status; return { ok: true }; }
+  if (path === "/admin/shop/products") return { products: [{ id: 13, name: "River fairway driver", category: "disc", price_cents: 1800, stock: 9, active: 1, description: "A straight fairway driver." }] };
+  if (path === "/admin/wallets/recent") return { transactions: [{ id: 4, member_id: "m_jordan", member_name: "Jordan Reyes", amount_cents: 1250, note: "Club payout", created_at: date }] };
+  if (path === "/admin/wallets/credit") return { balance_cents: 1750 };
+  if (path === "/admin/tee-signs") return { teeSigns: query.get("status") === "candidate" ? [tee] : [] };
+  if (path.endsWith("/tee-signs")) return { signs: [], teeSigns: [] };
+  if (path === "/admin/course-health") return { courses: [course] };
+  if (path === "/admin/course-health/7") return courseHealth;
+  if (path === "/admin/course-health/7/tasks") return { tasks: [task] };
+  if (path === "/admin/community/reviews") return { queue: reviewPending ? [review] : [], more: false };
+  if (path === "/admin/community/reviews/3" && method === "PUT") { reviewPending = false; return { ok: true }; }
+  if (path === "/community/courses") return { courses: [{ ...course, difficulty: "beginner", amenities: {}, notes: "", revision: 1 }] };
+  if (path === "/admin/export" && method === "POST") return { mode: "download", exportData: { exportedAt: date, counts: { events: 3 } } };
+  if (path === "/admin/export/endpoints") return { destinations: [{ id: 1, name: "Club archive", url: "https://archive.invalid/upload", is_active: true }] };
+  if (path === "/admin/bag-tags") return { series: { id: 1, name: "Club bag tags", season: "2026" }, requests: [{ id: 1, memberId: "m_avery", name: "Avery Brooks" }], challenges: [], holders: [] };
+  if (path === "/leagues") return { leagues: [{ id: 1, name: "Wednesday Doubles", season: "2026" }] };
+  if (path === "/fundraisers") return { fundraisers: fixtureMode === "empty" ? [] : [{ id: 1, title: "Course bench fund", status: "active" }] };
+  if (path === "/meetings") return { meetings: fixtureMode === "empty" ? [] : [{ id: 1, title: "November minutes", date }] };
+  return { ok: true };
+}
+
+process.env.VITE_DISABLE_REACT_DEVTOOLS = "1";
+const vite = await createServer({
+  configFile: false, cacheDir: "/tmp/gvdg-admin-visual-qa",
+  server: { host: "127.0.0.1", port: 0, hmr: false },
+  optimizeDeps: { entries: ["src/admin-app/main.js"] },
+  plugins: [{ name: "admin-polish-fixture", configureServer(server) {
+    server.middlewares.use(async (req, res, next) => {
+      const url = new URL(req.url, "http://localhost");
+      if (fontDir && url.pathname === "/qa-archivo.woff2") {
+        res.setHeader("Content-Type", "font/woff2");
+        res.end(await readFile(join(fontDir, "archivo.woff2")));
+      } else if (url.pathname === "/admin-preview.html") {
+        const html = (await readFile("admin.html", "utf8")).replace(/<link[^>]+https:[^>]+>/g, "")
+          .replace('data-auth-base=""', 'data-auth-base="' + "http://" + req.headers.host + '/admin-fixture"')
+          .replace(/src="admin-app\/[^"]+"/, 'src="/src/admin-app/main.js"')
+          .replace("</head>", fontDir ? '<style>@font-face{font-family:Archivo;src:url(/qa-archivo.woff2) format("woff2");font-style:normal;font-weight:100 900;font-display:swap}</style></head>' : "</head>");
+        res.setHeader("Content-Type", "text/html");
+        res.end(await server.transformIndexHtml(req.url, html));
+      } else if (url.pathname.startsWith("/admin-fixture/")) {
+        const path = url.pathname.slice("/admin-fixture".length);
+        const chunks = [];
+        for await (const chunk of req) chunks.push(chunk);
+        const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : null;
+        requested.push({ path, method: req.method, body });
+        res.setHeader("Content-Type", "application/json");
+        if (fixtureMode === "loading" && path === "/events") await new Promise((resolve) => setTimeout(resolve, 1_500));
+        if (fixtureMode === "error" && ["/events", "/admin/orders"].includes(path)) {
+          res.writeHead(503);
+          res.end("{}");
+        } else res.end(JSON.stringify(fixture(path, req.method, url.searchParams, req.headers.authorization, body)));
+      } else next();
+    });
+  }}],
+});
+
+await vite.listen();
+const origin = vite.resolvedUrls.local[0].replace(/\/$/, "");
+const browser = await chromium.launch({
+  ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
+  ...(process.env.GVDG_QA_NO_SANDBOX ? { args: ["--no-sandbox"] } : {}),
+});
+
+const variants = [
+  { name: "390", width: 390, height: 844, dark: false },
+  { name: "320-large-dark", width: 320, height: 780, dark: true, large: true },
+  { name: "1280", width: 1280, height: 920, dark: false },
+];
+
+async function newPage(variant, who = token) {
+  const context = await browser.newContext({ viewport: { width: variant.width, height: variant.height },
+    isMobile: variant.width < 500, hasTouch: variant.width < 500, deviceScaleFactor: 1,
+    permissions: ["clipboard-read", "clipboard-write"], serviceWorkers: "block" });
+  await context.route(/^https?:/, (route) => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+  const page = await context.newPage();
+  page.setDefaultTimeout(12_000);
+  page.on("pageerror", (err) => errors.push(err.message));
+  page.on("console", (message) => {
+    if (message.type() === "error" && message.text().includes("unique") && message.text().includes("key")) warnings.push(message.text());
+  });
+  await page.routeWebSocket("**/admin-fixture/**", (socket) => { socket.onMessage(() => {}); });
+  await page.addInitScript(({ who, dark, large }) => {
+    if (who) localStorage.setItem("gvdg_member_token", who);
+    localStorage.setItem("theme", dark ? "dark" : "light");
+    if (large) window.addEventListener("DOMContentLoaded", () => { document.documentElement.style.fontSize = "125%"; });
+  }, { who, dark: variant.dark, large: variant.large });
+  return { page, context };
+}
+
+function contextFor(item) {
+  if (item.context === "course") return { courseId: 7, ...(item.key === "tee-signs" ? { filter: "candidate" } : {}) };
+  if (item.context === "event") return { eventId: item.key === "results" ? 40 : 42 };
+  return {};
+}
+
+async function route(page, key) {
+  const item = ADMIN_DESTINATIONS.find((entry) => entry.key === key);
+  const hash = appHref("admin", key, contextFor(item));
+  await page.evaluate((value) => { location.hash = value; }, hash);
+  await page.getByRole("heading", { name: item.label, level: 1, exact: true }).waitFor();
+  const pane = page.locator("#apane-" + (item.pane || key));
+  await (key === "check-in" ? page : pane).locator(probes[key]).first().waitFor();
+  return pane;
+}
+
+async function fit(page, label) {
+  const over = await page.evaluate(() => ({
+    width: document.documentElement.clientWidth,
+    page: document.documentElement.scrollWidth,
+    focused: document.activeElement?.tagName,
+  }));
+  assert.ok(over.page <= over.width + 1, label + " overflows viewport: " + JSON.stringify(over));
+}
+
+async function shot(page, name) {
+  if (photos) await page.screenshot({ path: join(photos, name + ".png"), animations: "disabled", timeout: 20_000 });
+}
+
+async function verifyRoutes(variant) {
+  const { page, context } = await newPage(variant);
+  orderStatus = "submitted";
+  reviewPending = true;
+  checkedIn = false;
+  try {
+    await page.goto(origin + "/admin-preview.html#today", { waitUntil: "commit", timeout: 60_000 });
+    await page.getByRole("heading", { name: "Today", level: 1 }).waitFor({ timeout: 60_000 });
+    for (const item of ADMIN_DESTINATIONS) {
+      try {
+        const activePane = await route(page, item.key);
+        if (item.key === "scoring" || item.key === "results") {
+          const score = activePane.getByRole("spinbutton", { name: /Taylor Morgan · Hole \d+/ }).filter({ visible: true }).first();
+          await score.waitFor();
+          assert.equal(await score.isEditable(), item.key === "scoring");
+        }
+        await fit(page, variant.name + " " + item.key);
+        if (variant.name === "390" || ["today", "check-in", "scoring", "layouts", "more"].includes(item.key)) {
+          await page.evaluate(() => window.scrollTo(0, 0));
+          await shot(page, item.key + "-" + variant.name);
+        }
+      } catch (error) {
+        await shot(page, "failure-" + item.key + "-" + variant.name);
+        throw new Error(variant.name + " route " + item.key, { cause: error });
+      }
+    }
+
+    let pane = await route(page, "events");
+    await pane.getByRole("button", { name: "More actions for River Park Open" }).click();
+    await pane.getByRole("button", { name: "Delete", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Delete event" });
+    await dialog.waitFor();
+    await fit(page, variant.name + " confirmation");
+    await shot(page, "event-confirm-" + variant.name);
+    await page.keyboard.press("Escape");
+    await dialog.waitFor({ state: "hidden" });
+
+    pane = await route(page, "import");
+    await pane.locator("#csvImportText").fill("name,date,type,format\nPreview Spring Open,2099-04-01,tournament,stroke");
+    await pane.getByRole("button", { name: "Preview CSV" }).click();
+    await pane.getByText(/Preview Spring Open/).waitFor();
+    await fit(page, variant.name + " import candidates");
+
+    await route(page, "check-in");
+    const checkIn = page.getByRole("region", { name: "Selected event" });
+    const checkInSaved = page.waitForResponse((response) => response.url().endsWith("/registrations/5") && response.request().method() === "PATCH");
+    await checkIn.getByRole("button", { name: /Jordan Reyes/ }).click();
+    assert.equal((await checkInSaved).status(), 200);
+    await checkIn.getByText("Here", { exact: true }).waitFor();
+
+    pane = await route(page, "registration");
+    const fees = pane.getByLabel("Entry fee ($)", { exact: true });
+    await fees.fill("30");
+    const saved = page.waitForResponse((response) => response.url().endsWith("/config") && response.request().method() === "PUT");
+    await pane.getByRole("button", { name: "Save settings" }).click();
+    assert.equal((await saved).status(), 200);
+    assert.ok(requested.some((call) => call.path === "/admin/events/42/config" && call.body?.entry_fee_cents === 3000));
+    await shot(page, "registration-fees-" + variant.name);
+
+    pane = await route(page, "members");
+    await pane.getByText("Add a member", { exact: true }).click();
+    const memberForm = pane.locator("#adminMemberForm");
+    await memberForm.getByLabel("Name", { exact: true }).fill("New QA Member");
+    await memberForm.getByLabel("PDGA #", { exact: true }).fill("123123");
+    await memberForm.getByRole("button", { name: "Create & issue temp PIN" }).click();
+    const pin = page.getByRole("dialog", { name: "Temporary PIN for New QA Member" });
+    await pin.getByText("6831", { exact: true }).waitFor();
+    await shot(page, "temporary-pin-" + variant.name);
+    await pin.getByRole("button", { name: "Copy PIN" }).click();
+    await pin.getByRole("button", { name: "Copied" }).waitFor();
+    await pin.getByRole("button", { name: "Done" }).click();
+
+    pane = await route(page, "layouts");
+    const table = pane.getByRole("region", { name: "Layout hole table" });
+    await table.focus();
+    assert.ok(await table.evaluate((node) => node.clientWidth <= document.documentElement.clientWidth));
+    if (variant.width < 500) {
+      assert.ok(await table.evaluate((node) => node.scrollWidth > node.clientWidth), "Layout table should scroll independently");
+      await table.evaluate((node) => { node.scrollLeft = 100; });
+      assert.ok(await table.evaluate((node) => node.scrollLeft > 0));
+    }
+
+    pane = await route(page, "course-health");
+    await pane.getByText("New task", { exact: true }).click();
+    const taskForm = pane.getByRole("form", { name: "New maintenance task" });
+    await taskForm.waitFor();
+    await taskForm.getByRole("textbox", { name: "Title" }).fill("Replace bridge board");
+    await fit(page, variant.name + " maintenance form");
+    await shot(page, "maintenance-form-" + variant.name);
+    const taskSaved = page.waitForResponse((response) => response.url().endsWith("/tasks") && response.request().method() === "POST");
+    await taskForm.getByRole("button", { name: "Add task" }).click();
+    assert.equal((await taskSaved).status(), 200);
+    await pane.getByText("Task added.", { exact: true }).waitFor();
+
+    pane = await route(page, "tee-signs");
+    await pane.getByRole("button", { name: "Reject", exact: true }).click();
+    await page.getByRole("dialog", { name: "Reject tee sign" }).getByRole("button", { name: "Cancel" }).click();
+
+    pane = await route(page, "review-queue");
+    await pane.getByRole("button", { name: "Publish review" }).click();
+    await pane.getByText("No reviews waiting.").waitFor();
+    assert.ok(requested.some((call) => call.path === "/admin/community/reviews/3" && call.body?.action === "approve"));
+
+    pane = await route(page, "orders");
+    const orderCard = pane.locator("[data-admin-order-id='6']");
+    await orderCard.getByLabel("Status", { exact: true }).selectOption("ready");
+    const orderSaved = page.waitForResponse((response) => response.url().endsWith("/admin/orders/6") && response.request().method() === "PATCH");
+    await orderCard.getByRole("button", { name: "Save", exact: true }).click();
+    assert.equal((await orderSaved).status(), 200);
+
+    pane = await route(page, "wallets");
+    await pane.getByLabel("Member", { exact: true }).fill("234567");
+    await pane.getByLabel("Adjustment ($)").fill("5");
+    const walletSaved = page.waitForResponse((response) => response.url().endsWith("/admin/wallets/credit"));
+    await pane.getByRole("button", { name: "Post wallet adjustment" }).click();
+    assert.equal((await walletSaved).status(), 200);
+    assert.ok(requested.some((call) => call.path === "/admin/wallets/credit" && call.body?.amount_cents === 500));
+
+    pane = await route(page, "data-archive");
+    const exported = page.waitForResponse((response) => response.url().endsWith("/admin/export") && response.request().method() === "POST");
+    await pane.getByRole("button", { name: "Run export", exact: true }).click();
+    assert.equal((await exported).status(), 200);
+    await pane.getByText(/Download ready/).waitFor();
+    await fit(page, variant.name + " archive result");
+    await shot(page, "archive-export-" + variant.name);
+
+    await route(page, "today");
+    const nav = page.getByRole("navigation", { name: "Admin navigation" }).filter({ visible: true });
+    await page.locator(".admin-today-feature").getByRole("button", { name: "Live scoring" }).click();
+    await page.locator("#apane-scoring [data-react-admin-scoring-live='live']").waitFor();
+    assert.match(new URL(page.url()).hash, /#scoring\?event=42/);
+    await nav.getByRole("button", { name: "Tools", exact: true }).click();
+    const tools = page.locator("#apane-more");
+    await tools.getByText("Light or dark mode").waitFor();
+    const finder = page.getByRole("searchbox", { name: "Find a tool" });
+    await finder.fill("course health");
+    await finder.press("Enter");
+    await page.getByRole("heading", { name: "Course health", level: 1 }).waitFor();
+    await page.goBack();
+    await page.getByRole("heading", { name: "Tools", level: 1 }).waitFor();
+    assert.equal(await page.locator("html").getAttribute("data-theme") === "dark", variant.dark);
+    await tools.getByRole("button", { name: variant.dark ? "Switch to light mode" : "Switch to dark mode" }).click();
+    await page.waitForFunction((dark) => (document.documentElement.getAttribute("data-theme") === "dark") === dark, !variant.dark);
+    await page.getByRole("navigation", { name: "Admin header" }).getByRole("link", { name: "Help" }).click();
+    const help = page.getByRole("dialog", { name: "Crotts assistant" });
+    await help.waitFor();
+    await fit(page, variant.name + " Help");
+    await help.getByRole("button", { name: "Close Crotts assistant" }).click();
+    console.log(variant.name + " verified " + ADMIN_DESTINATIONS.length + " destinations, route interactions and contained scrolling");
+  } finally { await context.close(); }
+}
+
+try {
+  for (const variant of variants) await verifyRoutes(variant);
+  for (const mode of ["error", "empty", "loading"]) {
+    fixtureMode = mode;
+    const { page, context } = await newPage(variants[0]);
+    await page.goto(origin + "/admin-preview.html#events", { waitUntil: "commit", timeout: 60_000 });
+    const marker = page.locator('[data-react-admin-events-list="' + mode + '"]');
+    await marker.waitFor();
+    await fit(page, "Events " + mode);
+    await shot(page, "events-" + mode + "-390");
+    await context.close();
+  }
+  fixtureMode = "";
+  for (const [who, name] of [["qa-member", "non-admin"], ["", "signed-out"]]) {
+    const { page, context } = await newPage(variants[0], who);
+    await page.goto(origin + "/admin-preview.html#orders", { waitUntil: "commit", timeout: 60_000 });
+    await page.locator('[data-react-admin-auth-gate="gate"]').waitFor();
+    assert.equal(await page.getByRole("searchbox", { name: "Find a tool" }).count(), 0);
+    assert.equal(await page.locator("body").getAttribute("data-admin-panel"), "hidden");
+    await shot(page, "gate-" + name + "-390");
+    await context.close();
+  }
+  assert.deepEqual(errors, []);
+  assert.deepEqual(warnings.filter((warning) => !warning.includes("CrottsWidget")), [], "Admin renders without missing React keys");
+} finally {
+  await browser.close();
+  await vite.close();
+}

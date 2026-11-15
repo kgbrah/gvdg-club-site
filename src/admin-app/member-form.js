@@ -103,7 +103,7 @@ export function AdminMemberForm() {
       }),
     ]),
     h("div", { className: "admin-member-form-admin-toggle", key: "admin" }, [
-      h("label", { htmlFor: "amAdmin" }, [
+      h("label", { htmlFor: "amAdmin", key: "label" }, [
         h("input", {
           checked: form.isAdmin,
           id: "amAdmin",

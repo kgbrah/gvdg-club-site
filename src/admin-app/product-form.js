@@ -295,7 +295,7 @@ export function AdminProductForm() {
   }
 
   return h("form", {
-    className: "admin-form",
+    className: "admin-form admin-surface",
     "data-react-admin-product-form": "ready",
     id: "adminProductForm",
     onSubmit: submit,

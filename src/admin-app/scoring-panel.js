@@ -304,10 +304,9 @@ function LiveControls({ state }) {
   const snap = state.snap || {};
   const submitted = Array.isArray(snap.lockedCardIds) ? snap.lockedCardIds.length : 0;
   return h("div", { "data-react-admin-scoring-live": snap.status || "ready", id: "scLive", style: { marginTop: "1rem" } }, [
-    h("h4", { className: "al-h", key: "score-title" }, [
-      "Scorecard ",
-      h("span", { className: "al-note", key: "note" }, isPutting(snap) ? "(enter makes - saves and pushes live instantly)" : "(enter strokes - saves and pushes live instantly)"),
-    ]),
+    h("h2", { className: "al-h", key: "score-title" }, "Scorecard"),
+    snap.status === "live" ? h("p", { className: "al-note", key: "score-note" },
+      isPutting(snap) ? "Putt counts save as you enter them." : "Scores save as you enter them.") : null,
     h(AdminScoringScorecard, { key: "grid", snapshot: snap }),
     h(AdminScoringOverride, { canOverride: state.canOverride === true, key: "override", snapshot: snap }),
     h("h4", { className: "al-h", key: "tee-title", style: { marginTop: "1rem" } }, [

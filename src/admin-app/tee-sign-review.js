@@ -166,7 +166,7 @@ function TeeSignReviewRow({ layouts, onChange, onRemove, row }) {
   const newLayoutDisabled = row.layoutId !== "__new__";
   const field = (name, label, control) => h("div", { key: name }, [
     h("label", { htmlFor: `ts-${name}-${row.key}`, key: "label" }, label),
-    control,
+    React.cloneElement(control, { key: "field" }),
   ]);
   const update = (patch) => onChange({ ...row, ...patch });
 
@@ -186,7 +186,7 @@ function TeeSignReviewRow({ layouts, onChange, onRemove, row }) {
     field("tee", "Tee", h("input", { className: "ts-tee", id: `ts-tee-${row.key}`, maxLength: 80, onChange: (event) => update({ tee: event.target.value }), placeholder: "Tee", value: row.tee })),
     field("target", "Target", h("input", { className: "ts-target", id: `ts-target-${row.key}`, maxLength: 80, onChange: (event) => update({ target: event.target.value }), placeholder: "Target", value: row.target })),
     field("color", "Color", h("input", { className: "ts-color", id: `ts-color-${row.key}`, maxLength: 24, onChange: (event) => update({ color: event.target.value }), placeholder: "Color", value: row.color })),
-    h("button", { className: "admin-btn danger", onClick: onRemove, type: "button" }, "Remove"),
+    h("button", { className: "admin-btn danger", key: "remove", onClick: onRemove, type: "button" }, "Remove"),
   ]);
 }
 

@@ -142,6 +142,7 @@ export function VoiceFill(props) {
 
   const listening = phase === "listening";
   const label = phase === "sending" ? "Filling…" : listening ? "Listening… tap to stop" : "Fill by voice";
+  const hint = props.form === "event" ? "Say the event name, date, and course." : "Say the item name, price, and stock.";
   return h("div", { className: "admin-voice" + (listening ? " is-listening" : ""), "data-admin-voice": props.form }, [
     h("button", {
       className: "admin-btn secondary",
@@ -150,6 +151,6 @@ export function VoiceFill(props) {
       onClick: listening ? stop : () => { void start(); },
       type: "button",
     }, label),
-    h("p", { className: "admin-voice-note", key: "note" }, note || "Say the blanks. Price, stock, time, and format stay blank unless you say them."),
+    h("p", { className: "admin-voice-note", key: "note" }, note || hint),
   ]);
 }

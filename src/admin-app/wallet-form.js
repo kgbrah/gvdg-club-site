@@ -73,7 +73,7 @@ export function AdminWalletAdjustmentForm() {
   }
 
   return h("form", {
-    className: "admin-form",
+    className: "admin-form admin-surface",
     "data-react-admin-wallet-form": "ready",
     id: "adminWalletForm",
     onSubmit: submit,

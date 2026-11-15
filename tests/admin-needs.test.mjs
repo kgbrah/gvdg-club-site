@@ -49,9 +49,9 @@ test("today command center links each queue and keeps the scoring card", () => {
   assert.match(today, /Start scoring/);
   assert.match(today, /Live scoring/);
   assert.match(nav, /AdminNeedsBadge/);
-  assert.match(nav, /requestAdminTab\("applications"\)/);
+  assert.match(readFileSync("src/admin-app/today-dashboard.js", "utf8"), /requestTab\("applications"\)/);
   assert.match(more, /NEEDS_TABS\.has\(item.key\)/);
-  assert.match(nav, /requestAdminTab\("orders", \{ filter: "new" \}\)/);
+  assert.match(readFileSync("src/admin-app/today-dashboard.js", "utf8"), /requestTab\("orders", \{ filter: "new" \}\)/);
   assert.match(more, /AdminNeedsBadge/);
   assert.match(controller, /async function refreshAdminNeeds\(\)/);
   assert.match(controller, /\/admin\/bag-tags/);

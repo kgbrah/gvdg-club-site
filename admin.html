@@ -723,6 +723,7 @@
             .admin-header-link { padding-inline: .45rem; }
         }
 </style>
+    <link rel="stylesheet" href="admin-polish.css">
 </head>
 <body class="admin-page" data-auth-base="" data-admin-panel="hidden" data-admin-tab="today">
     <div id="adminReactPageChromeApp"></div>
@@ -811,7 +812,10 @@
                 <div id="adminOrdersListReactApp"></div>
             </div>
             <div class="admin-pane" id="apane-members">
-                <div id="adminMemberFormReactApp"></div>
+                <details class="admin-surface admin-details">
+                    <summary>Add a member</summary>
+                    <div id="adminMemberFormReactApp"></div>
+                </details>
                 <div id="adminMemberTempPinReactApp"></div>
                 <div class="al-section" style="margin-top:1rem;">
                     <h4 class="al-h" id="admin-applications-heading" tabindex="-1">Member applications</h4>

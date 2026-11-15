@@ -55,7 +55,7 @@ export function AdminImportControls() {
     if (!valid) setBusyCsv(false);
   }
 
-  return h("div", { "data-react-admin-import-controls": "ready" }, [
+  return h("div", { className: "admin-surface admin-import-editor", "data-react-admin-import-controls": "ready" }, [
     h("p", { className: "dash-note", key: "note" }, [
       "Import candidates appear below; click ",
       h("em", { key: "em" }, "Create"),

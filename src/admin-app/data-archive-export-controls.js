@@ -36,7 +36,7 @@ function exportPayload(form) {
 }
 
 function checkboxField({ checked, id, label, onChange }) {
-  return h("label", { className: "register-addon", htmlFor: id }, [
+  return h("label", { className: "register-addon", htmlFor: id, key: id }, [
     h("input", { checked, id, key: "input", onChange, type: "checkbox" }),
     ` ${label}`,
   ]);
@@ -172,6 +172,7 @@ export function AdminDataArchiveExportControls() {
         className: "admin-btn",
         disabled: busy,
         id: "dxRunExport",
+        key: "submit",
         onClick: submit,
         type: "button",
       }, busy ? "Running..." : "Run export"),

@@ -134,7 +134,7 @@ export function AdminLeagueForm() {
   }
 
   return h("form", {
-    className: "admin-form",
+    className: "admin-form admin-surface",
     "data-react-admin-league-form": "ready",
     id: "adminLeagueForm",
     onSubmit: submit,
@@ -184,7 +184,7 @@ export function AdminFundraiserForm() {
   }
 
   return h("form", {
-    className: "admin-form",
+    className: "admin-form admin-surface",
     "data-react-admin-fundraiser-form": "ready",
     id: "adminFundraiserForm",
     onSubmit: submit,
@@ -223,7 +223,7 @@ export function AdminMeetingForm() {
   }
 
   return h("form", {
-    className: "admin-form",
+    className: "admin-form admin-surface",
     "data-react-admin-meeting-form": "ready",
     id: "adminMeetingForm",
     onSubmit: submit,

@@ -11,7 +11,9 @@ export function AdminPageChrome() {
       h("strong", { key: "admin" }, "Admin"),
     ]),
     h("div", { className: "admin-header-actions", key: "actions" }, [
-      h("a", { className: "admin-header-link", href: "gvdg-members.html", key: "members" }, "Member app"),
+      h("a", { className: "admin-header-link admin-header-members", href: "gvdg-members.html", key: "members", "aria-label": "Member app" },
+        h("span", { className: "admin-header-full" }, "Member app"),
+        h("span", { className: "admin-header-short" }, "Members")),
       h(CrottsHelpLink, { className: "admin-header-link", key: "help" }, "Help"),
     ]),
   ]));

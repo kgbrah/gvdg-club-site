@@ -90,7 +90,7 @@ export function AdminCourseForm() {
     dispatchRequest("gvdg:admin-nearby-courses-import-request", { requestId });
   }
 
-  return h("div", { "data-react-admin-course-block": "ready" }, [
+  return h("div", { className: "admin-surface", "data-react-admin-course-block": "ready" }, [
     h("form", {
       className: "admin-form",
       "data-react-admin-course-form": "ready",

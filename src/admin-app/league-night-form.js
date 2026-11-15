@@ -195,7 +195,7 @@ export function AdminLeagueNightForm() {
   const stroke = night.scoring === "stroke";
 
   return h("form", {
-    className: "admin-form",
+    className: "admin-form admin-surface",
     "data-react-admin-league-night-form": "ready",
     onSubmit: submit,
   }, [
