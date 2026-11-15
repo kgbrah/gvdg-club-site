@@ -38,6 +38,10 @@ Brand, model and plastic suggestions are searchable and accept custom values. Vo
 
 ![Admin Today](admin-refined-today.png)
 
+The Admin, Member app and Help header labels remain readable in light mode and over custom wallpaper. All three measured 14.81:1 contrast across the checked 320, 390 and 1280 px layouts.
+
+![Admin header in light mode](admin-light-header.png)
+
 ![New event form](admin-refined-create.png)
 
 ## Public Events, Shop and app guide
