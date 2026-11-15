@@ -45,11 +45,31 @@ const thePack = {
   ]},
 };
 
+const contexts = new Set();
+const routeFailures = [];
+
+async function closeContext(context) {
+  await context.unrouteAll({ behavior: "wait" });
+  await context.close();
+  contexts.delete(context);
+}
+
+async function serveRoute(route, reply) {
+  try {
+    await reply();
+  } catch (error) {
+    routeFailures.push(new Error("Fixture request failed for " + route.request().url(), { cause: error }));
+    // End the browser request as well so the test can report the original error.
+    await route.abort("failed").catch(() => {});
+  }
+}
+
 async function session(viewport) {
   const context = await browser.newContext({ viewport, serviceWorkers: "block", permissions: ["geolocation"],
     geolocation: { latitude: 35.0002, longitude: -82, accuracy: 5 } });
-  contexts.push(context);
+  contexts.add(context);
   const cached = new Map();
+  const upstreamRequests = new Set();
   let offline = false;
   const canonicalKey = (value) => {
     const url = new URL(value);
@@ -57,19 +77,30 @@ async function session(viewport) {
   };
   // Serve the source entry and cached module graph while the Chromium network is disabled.
   // Production's service worker serves the generated bundle and uses the same document URL.
-  await context.route(site + "/**", async (route) => {
+  await context.route(site + "/**", (route) => {
     const key = canonicalKey(route.request().url());
     if (offline) {
       const file = cached.get(key);
-      return file ? route.fulfill(file) : route.abort("internetdisconnected");
+      return serveRoute(route, () => file ? route.fulfill(file) : route.abort("internetdisconnected"));
     }
-    const response = await route.fetch();
-    const body = await response.body();
-    const headers = response.headers();
-    delete headers["content-encoding"];
-    const file = { status: response.status(), headers, body };
-    if (response.ok()) cached.set(key, file);
-    return route.fulfill(file);
+    const pending = serveRoute(route, async () => {
+      // Playwright retries only ECONNRESET here. A repeated reset or any other
+      // transport failure must still fail the fixture, never use cached data.
+      const response = await route.fetch({ maxRetries: route.request().method() === "GET" ? 1 : 0 });
+      try {
+        const body = await response.body();
+        const headers = response.headers();
+        delete headers["content-encoding"];
+        delete headers["content-length"];
+        const file = { status: response.status(), headers, body };
+        if (response.ok()) cached.set(key, file);
+        await route.fulfill(file);
+      } finally {
+        await response.dispose();
+      }
+    });
+    upstreamRequests.add(pending);
+    return pending.finally(() => upstreamRequests.delete(pending));
   });
   const page = await context.newPage();
   const errors = [];
@@ -79,7 +110,7 @@ async function session(viewport) {
   const writes = [];
   const clips = [];
   let lostAck = true;
-  await context.route("http://127.0.0.1:8788/**", async (route) => {
+  await context.route("http://127.0.0.1:8788/**", (route) => serveRoute(route, async () => {
     if (offline) return route.abort("internetdisconnected");
     const req = route.request();
     const path = new URL(req.url());
@@ -115,8 +146,14 @@ async function session(viewport) {
       return value ? reply({ ...value.receipt, round: value.round, clips }) : reply({ error: "not_found" }, 404);
     }
     return reply({});
-  });
-  async function setOffline(value) { offline = value; await context.setOffline(value); }
+  }));
+  async function setOffline(value) {
+    offline = value;
+    // Finish online requests already warming the cache before flipping the
+    // browser's network. New requests take only the cache or abort path.
+    if (value) await Promise.all(upstreamRequests);
+    await context.setOffline(value);
+  }
   async function as(memberToken) {
     await page.evaluate((value) => {
       if (value) localStorage.setItem("gvdg_member_token", value);
@@ -161,7 +198,7 @@ function controls(page) {
   return { button, text, score, shots, finish };
 }
 
-const contexts = [];
+const failures = [];
 try {
   const mobile = await session({ width: 390, height: 844 });
   const { page } = mobile;
@@ -268,7 +305,7 @@ try {
   assert.deepEqual(mobile.writes[0].scores["player:0"], { 1: 2, 2: 8 });
   assert.deepEqual(mobile.writes[0].marks[1], markedLie);
   assert.deepEqual(mobile.errors, []);
-  await mobile.context.close();
+  await closeContext(mobile.context);
 
   const desktop = await session({ width: 1280, height: 900 });
   const wide = desktop.page;
@@ -302,12 +339,19 @@ try {
   assert.equal(desktop.writes[0].startedAs, "device");
   assert.deepEqual(desktop.writes[0].scores, { "pair:team 1": { 1: 2, 2: 2 }, "pair:team 2": { 1: 3, 2: 2 } });
   assert.deepEqual(desktop.errors, []);
-  await desktop.context.close();
-  console.log("Offline mobile reload, account checks, shots and clip sync, lost ack, and desktop doubles link verified.");
-  console.log("Screenshots: " + screenshots);
+  await closeContext(desktop.context);
+} catch (error) {
+  failures.push(error);
 } finally {
-  for (const context of contexts) await context.unrouteAll({ behavior: "ignoreErrors" }).catch(() => {});
-  await browser.close();
-  await server.close();
-  await rm(cacheDir, { recursive: true, force: true });
+  for (const result of await Promise.allSettled([...contexts].map(closeContext))) {
+    if (result.status === "rejected") failures.push(result.reason);
+  }
+  await browser.close().catch((error) => failures.push(error));
+  await server.close().catch((error) => failures.push(error));
+  await rm(cacheDir, { recursive: true, force: true }).catch((error) => failures.push(error));
 }
+failures.push(...routeFailures);
+if (failures.length === 1) throw failures[0];
+if (failures.length) throw new AggregateError(failures, "Offline browser QA failed");
+console.log("Offline mobile reload, account checks, shots and clip sync, lost ack, and desktop doubles link verified.");
+console.log("Screenshots: " + screenshots);
