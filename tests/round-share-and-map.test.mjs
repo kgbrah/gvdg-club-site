@@ -7,8 +7,8 @@ test("a live round can be shared by code and an unmapped hole can be pinned", ()
   const controller = readFileSync("src/score-app/score-controller.js", "utf8");
   const home = readFileSync("src/members-app/overview-dashboard.js", "utf8");
   assert.match(view, /Invite to score/);
-  assert.match(view, /Tee is here/);
-  assert.match(view, /Basket is here/);
+  assert.match(view, /Use Round tools to mark the tee or pin/);
+  assert.match(view, /"aria-label": "Survey this hole"[\s\S]*"Mark tee"[\s\S]*"Mark pin"/);
   assert.match(view, /Sign in to drop the tee and basket/);
   assert.match(controller, /function shareJoinCode\(\)/);
   assert.match(controller, /Join my card — code /);

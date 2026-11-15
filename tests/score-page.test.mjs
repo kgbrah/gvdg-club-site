@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
+import { scoreNameParts } from '../src/score-app/scorecard-view.js';
 
 function scoreSetupSource() {
   const source = readFileSync('src/score-app/setup-flow.js', 'utf8');
@@ -750,7 +751,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /function ScoreRow\(props\)/);
   assert.match(scorecard, /nextHoleScore/);
   assert.match(scorecard, /Clear \$\{row\.label\} on hole/);
-  assert.match(scorecard, /tee-order-hint/);
+  assert.match(scorecard, /className: "round-tools-tee-order"[\s\S]*"summary", null, "Tee order"/);
   assert.doesNotMatch(scorecard, /honors-chip/);
   assert.doesNotMatch(scorecard, /Throws first/);
   assert.match(scorecard, /function FinishCard\(props\)/);
@@ -1356,4 +1357,13 @@ test('score weather strip is React-owned without legacy DOM replacement', () => 
   assert.doesNotMatch(controller, /querySelector\('\.weather-strip'\)/);
   assert.doesNotMatch(controller, /replaceWith\(fresh\)/);
   assert.doesNotMatch(controller, /GVDGWeather\.buildWeatherStrip\(document/);
+});
+
+test('compact score names preserve mononyms and team labels and keep common surname particles and suffixes together', () => {
+  assert.deepEqual(scoreNameParts('Taylor Morgan', { type: 'player' }), { given: 'Taylor', surname: 'Morgan' });
+  assert.deepEqual(scoreNameParts('Ana María de la Cruz'), { given: 'Ana María', surname: 'de la Cruz' });
+  assert.deepEqual(scoreNameParts('Avery van der Meer Jr.'), { given: 'Avery', surname: 'van der Meer Jr.' });
+  assert.equal(scoreNameParts('Solo'), null);
+  assert.equal(scoreNameParts('Northern Lights', { type: 'pair', playerIndexes: [0, 1] }), null);
+  assert.equal(scoreNameParts('Northern Lights', { playerIndexes: [0, 1] }), null);
 });

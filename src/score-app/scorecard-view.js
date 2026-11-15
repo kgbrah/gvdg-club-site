@@ -424,7 +424,7 @@ function RoundTools(props) {
   return h(React.Fragment, null,
     h("div", { className: "score-glove-tools round-quick-tools" },
       h(ThrowFilm, { hole: props.hole, offline: props.offline, putting: props.putting, recovery: props.clipDrafts, rows: props.rows, offlineRows: props.clipRows }),
-      props.bottomDock && (props.roundSharingApi || props.onWatchShare) && h("button", {
+      (props.roundSharingApi || props.onWatchShare) && h("button", {
         type: "button", className: "score-glove-tool", "aria-label": "Share watch link",
         "aria-haspopup": props.roundSharingApi ? "dialog" : undefined, onClick: openSharing,
       }, icon(Eye), h("span", null, "Watch link")),
@@ -433,8 +433,7 @@ function RoundTools(props) {
         "aria-label": props.measureLabel || "Measure", "aria-pressed": Boolean(props.measuring), onClick: props.onMeasure,
       }, icon(Ruler), h("span", null, props.measureLabel || "Measure")),
       h("button", { type: "button", className: "score-glove-tool", "aria-label": "Round tools", "aria-haspopup": "dialog", onClick: () => setOpen(true) },
-        icon(Settings2), h("span", null, props.bottomDock ? "Tools" : "Round tools")),
-      !props.bottomDock && h(ScorecardOwner, { ...props, compact: true, key: "owner" }),
+        icon(Settings2), h("span", null, "Tools")),
     ),
     open && createPortal(h("div", { className: "overlay", "data-a11y-overlay": "true", role: "presentation", ref: dialog.overlayRef },
       h("section", {
@@ -456,11 +455,11 @@ function RoundTools(props) {
                 icon(ClipboardList), "Full scorecard"),
               props.shotLedger && h("button", { type: "button", ref: ledgerButton, className: "btn secondary", onClick: openLedger },
                 icon(ListChecks), "Shot details")),
-            props.bottomDock && h(ScorecardOwner, props),
-            props.bottomDock && (props.onMarkTee || props.onMarkPin) && h("div", { className: "round-tools-direct", role: "group", "aria-label": "Survey this hole" },
+            h(ScorecardOwner, props),
+            (props.onMarkTee || props.onMarkPin) && h("div", { className: "round-tools-direct", role: "group", "aria-label": "Survey this hole" },
               props.onMarkTee && h("button", { type: "button", className: "btn secondary", onClick: closeThen(props.onMarkTee) }, "Mark tee"),
               props.onMarkPin && h("button", { type: "button", className: "btn secondary", onClick: closeThen(props.onMarkPin) }, "Mark pin")),
-            props.bottomDock && props.teeOrderHint && h("details", { className: "round-tools-tee-order" },
+            props.teeOrderHint && h("details", { className: "round-tools-tee-order" },
               h("summary", null, "Tee order"), h("p", null, props.teeOrderHint)),
             h(RoundToolActions, {
               ...props,
@@ -478,7 +477,7 @@ function RoundTools(props) {
 }
 
 function HoleHeader(props) {
-  return h("div", { className: "hole-head", key: "head" }, [
+  return h("nav", { className: "hole-head", "aria-label": "Hole navigation" }, [
     h(
       "button",
       {
@@ -492,19 +491,10 @@ function HoleHeader(props) {
       icon(ChevronLeft),
     ),
     h("div", { key: "mid", className: "hole-head-mid" }, [
-      h(props.bottomDock ? "h2" : "div", { className: "hnum", key: "number" }, props.putting ? (props.hole.distance_ft ? `${props.hole.distance_ft} ft` : `Station ${props.hole.hole}`) : `Hole ${props.hole.hole}`),
+      h("h2", { className: "hnum", key: "number" }, props.putting ? (props.hole.distance_ft ? `${props.hole.distance_ft} ft` : `Station ${props.hole.hole}`) : `Hole ${props.hole.hole}`),
       h("div", { className: "hpar", key: "par" }, props.holeMeta),
       props.ctpBadge ? h("div", { className: "ctp-badge", key: "ctp" }, props.ctpBadge) : null,
       props.matchStatus ? h("div", { className: "pmeta", key: "match" }, props.matchStatus) : null,
-      !props.bottomDock && props.roundCode && typeof props.onShareCode === "function"
-        ? h("button", {
-          className: "round-code-chip",
-          key: "code",
-          type: "button",
-          onClick: props.onShareCode,
-        }, `Code ${props.roundCode}`)
-        : null,
-      props.teeOrderHint && !props.bottomDock ? h("div", { className: "tee-order-hint", key: "tee" }, props.teeOrderHint) : null,
       props.dormie ? h("div", { className: "dormie-badge", key: "dormie" }, "DORMIE - win or halve this hole to close it") : null,
     ]),
     h(
@@ -679,14 +669,6 @@ function RangeHud(props) {
   ]);
 }
 
-function markerSaved(hole, kind, surveyed) {
-  const marker = hole && (kind === "tee" ? hole.tee : hole.target);
-  const lat = Number(marker && marker.lat);
-  const lng = Number(marker && marker.lng);
-  if (Number.isFinite(lat) && Number.isFinite(lng)) return true;
-  return Boolean(surveyed && surveyed[kind]);
-}
-
 function pointReady(point) {
   return finiteCoord(point && point.lat) != null && finiteCoord(point && point.lng) != null;
 }
@@ -704,26 +686,6 @@ function HoleMedia(props) {
   const style = props.teeSign && props.teeSign.highlightColor
     ? { boxShadow: `0 0 0 3px ${props.teeSign.highlightColor}` }
     : undefined;
-  const surveyBtns = canSurvey && !props.bottomDock
-    ? h("div", { className: "hole-map-lie-actions hole-map-survey-empty", key: "survey" }, [
-      typeof props.onMarkTee === "function"
-        ? h("button", {
-          className: "hole-map-survey-btn" + (markerSaved(props.hole, "tee", props.surveyed) ? " active" : ""),
-          key: "tee",
-          type: "button",
-          onClick: props.onMarkTee,
-        }, markerSaved(props.hole, "tee", props.surveyed) ? "Tee saved" : "Tee is here")
-        : null,
-      typeof props.onMarkPin === "function"
-        ? h("button", {
-          className: "hole-map-survey-btn" + (markerSaved(props.hole, "target", props.surveyed) ? " active" : ""),
-          key: "pin",
-          type: "button",
-          onClick: props.onMarkPin,
-        }, markerSaved(props.hole, "target", props.surveyed) ? "Basket saved" : "Basket is here")
-        : null,
-    ])
-    : null;
   const signButton = hasSign && h("button", {
     "aria-expanded": signOpen,
     className: "hole-media-chip" + (signOpen ? " open" : ""),
@@ -731,22 +693,21 @@ function HoleMedia(props) {
     type: "button",
     onClick: () => {
       setSignOpen(!signOpen);
-      if (!signOpen && props.bottomDock) requestAnimationFrame(() => signRef.current?.scrollIntoView({ block: "nearest" }));
+      if (!signOpen) requestAnimationFrame(() => signRef.current?.scrollIntoView({ block: "nearest" }));
     },
   }, signOpen ? "Hide tee sign" : "Tee sign");
 
   return h("div", {
     className: "hole-media", key: "media",
-    style: props.bottomDock ? { "--score-map-ratio": `480 / ${mapHeight}` } : undefined,
+    style: { "--score-map-ratio": `480 / ${mapHeight}` },
   }, [
     hasMap
       ? h("div", { className: "hole-media-map-wrap", key: "map-wrap" }, [
         h(HoleMap, {
           compact: true,
-          size: props.bottomDock ? { width: 480, height: mapHeight } : undefined,
-          controlsOutside: props.bottomDock,
-          controlAccessory: props.bottomDock ? signButton : null,
-          showMarkLabel: props.bottomDock,
+          size: { width: 480, height: mapHeight },
+          controlsOutside: true,
+          controlAccessory: signButton,
           focus: props.mapFocus,
           hole: props.hole,
           layoutId: props.layoutId,
@@ -763,15 +724,12 @@ function HoleMedia(props) {
           measureFrom: props.measureFrom,
           measureTo: props.measureTo,
           players: withSelfLocation(props.playerLocations, props.gpsFix, props.selfMark),
-          surveyed: props.surveyed,
           throws: props.throws,
           windFromDeg: props.windFromDeg,
           scoreFlight: props.scoreFlight,
           onFocus: props.onMapFocus,
           onMapPoint: props.onMapPoint,
           onMarkLie: props.onMarkLie,
-          onMarkPin: props.bottomDock ? null : props.onMarkPin,
-          onMarkTee: props.bottomDock ? null : props.onMarkTee,
           onUndoThrow: props.onUndoThrow,
         }),
       ])
@@ -779,17 +737,14 @@ function HoleMedia(props) {
         style: props.offline ? { height: "auto", minHeight: 0, padding: ".55rem", rowGap: ".35rem" } : undefined }, [
         h("span", { key: "copy" }, "No map for this hole yet"),
         props.offline ? h("span", { className: "hole-media-empty-hint", key: "hint" }, "You can still score this hole.")
-          : canSurvey && props.bottomDock
-          ? h("span", { className: "hole-media-empty-hint", key: "hint" }, "Use Round tools to mark the tee or pin.")
           : canSurvey
-          ? h("span", { className: "hole-media-empty-hint", key: "hint" }, props.gpsStatus === "watching" ? "Getting your location…" : "Stand on it, then tap once.")
+          ? h("span", { className: "hole-media-empty-hint", key: "hint" }, "Use Round tools to mark the tee or pin.")
           : h("span", { className: "hole-media-empty-hint", key: "hint" }, "Sign in to drop the tee and basket."),
-        surveyBtns,
         props.offline && typeof props.onThrows === "function" && h("div", { className: "hole-map-lie-actions", key: "offline-lies" },
           h("button", { className: "btn secondary small", type: "button", onClick: props.onMarkLie }, "Mark lie"),
           props.throws.length > 0 && h("button", { className: "btn secondary small", type: "button", onClick: props.onUndoThrow }, "Undo mark")),
       ]),
-    (!props.bottomDock || !hasMap) && signButton,
+    !hasMap && signButton,
     signOpen && hasSign
       ? h("div", { className: "card tee-sign-card", key: "tee-sign", style, ref: signRef }, [
         h("img", {
@@ -926,6 +881,31 @@ function ScorePad(props) {
   );
 }
 
+const SURNAME_PARTICLES = new Set(["al", "bin", "da", "de", "del", "della", "den", "der", "di", "du", "la", "le", "ter", "van", "von"]);
+
+export function scoreNameParts(label, source) {
+  if (source?.type === "pair" || source?.playerIndexes?.length > 1) return null;
+  if (typeof label !== "string") return null;
+  const words = label.trim().split(/\s+/);
+  if (words.length < 2) return null;
+
+  let surname = words.length - 1;
+  if (surname > 1 && /^(?:jr|sr|ii|iii|iv|v)\.?$/i.test(words[surname])) surname -= 1;
+  while (surname > 1 && SURNAME_PARTICLES.has(words[surname - 1].toLowerCase())) surname -= 1;
+  return { given: words.slice(0, surname).join(" "), surname: words.slice(surname).join(" ") };
+}
+
+function ScorePlayerName({ row }) {
+  const parts = scoreNameParts(row.label, row.source);
+  return h("div", { className: "pname", title: row.label }, parts ? [
+    h("span", { className: "score-name-full", key: "full" }, row.label),
+    h("span", { className: "score-name-compact", "aria-hidden": "true", key: "compact" }, [
+      h("span", { className: "score-name-given", key: "given" }, parts.given),
+      h("strong", { className: "score-name-surname", key: "surname" }, parts.surname),
+    ]),
+  ] : row.label);
+}
+
 function ScoreRow(props) {
   const row = props.row;
   const current = row.currentScore;
@@ -944,7 +924,7 @@ function ScoreRow(props) {
       ? h("div", { "aria-label": teeLabel, className: "tee-pos", key: "tee" }, String(row.teePosition))
       : null,
     h("div", { className: "pinfo", key: "info" }, [
-      h("div", { className: "pname", key: "name" }, row.label),
+      h(ScorePlayerName, { row, key: "name" }),
       row.meta ? h("div", { className: "pmeta", key: "meta" }, row.meta) : null,
       row.conflictText ? h("div", { className: "pmeta conflict-text", key: "conflict" }, row.conflictText) : null,
       row.conflictValues && row.conflictValues.length
@@ -1322,7 +1302,6 @@ export function ScorecardView(props) {
   const [measure, setMeasure] = React.useState(null);
   const holeNumber = props.hole && props.hole.hole;
   const throws = props.throwsByHole?.[holeNumber] || [];
-  const [surveyed, setSurveyed] = React.useState({});
   const [pinnedFocus, setPinnedFocus] = React.useState(null);
   const [scoreFlight, setScoreFlight] = React.useState(0);
   const gps = useDeviceFix();
@@ -1397,7 +1376,6 @@ export function ScorecardView(props) {
     setMeasure(null);
     setPinnedFocus(null);
     setPadRow(null);
-    setSurveyed({});
   }, [holeNumber, props.scorerIndex, props.clipRecovery?.scopeKey]);
 
   function persistThrows(edit) {
@@ -1462,7 +1440,6 @@ export function ScorecardView(props) {
     }
     if (typeof props.onMapMark === "function") {
       props.onMapMark(kind, holeNumber, gps.fix);
-      setSurveyed((current) => ({ ...current, [kind === "tee" ? "tee" : "target"]: true }));
     }
   }
   function onScore(source, hole, strokes, step) {
@@ -1474,27 +1451,24 @@ export function ScorecardView(props) {
   const statsRows = props.shotStats?.throws[holeNumber] ?? throws;
   const solo = props.solo === true || (Array.isArray(props.rows) && props.rows.length === 1);
   const playerBand = Math.min(Math.max(Array.isArray(props.rows) ? props.rows.length : 1, 1), 4);
-  const bottomDock = globalThis.document?.body?.dataset.scoreLayout === "bottom";
-  const holeHeader = h(HoleHeader, { ...props, bottomDock, key: "active-hole" });
+  const holeHeader = h(HoleHeader, { ...props, key: "active-hole" });
   const onMarkPin = typeof props.onMapMark === "function" ? () => onMapMark("target") : null;
   const onMarkTee = typeof props.onMapMark === "function" ? () => onMapMark("tee") : null;
   const status = [
     props.offlineStatus,
-    h(RecoveryStatus, { ...props, quietSaved: bottomDock, key: "recovery" }),
+    h(RecoveryStatus, { ...props, key: "recovery" }),
     h(JoinRequestBanner, { key: "joins", onApprove: props.onApproveJoin, onDecline: props.onDeclineJoin, requests: props.joinRequests }),
   ];
-  const weather = bottomDock || props.showWeather
-    ? h(WeatherStrip, { compact: true, key: "weather", scorecard: bottomDock, title: "Round weather", weather: props.weather })
-    : null;
+  const weather = h(WeatherStrip, { compact: true, key: "weather", scorecard: true, title: "Round weather", weather: props.weather });
   const turn = props.yourTurn ? h("p", { className: "your-turn-hint", key: "turn" }, props.yourTurn) : null;
   const tools = h(RoundTools, {
-    ...props, bottomDock, onMarkPin, onMarkTee, key: "round-tools", clipDrafts, measureLabel, measuring, rangeLockOn, getShotFix: gps.getShotFix,
+    ...props, onMarkPin, onMarkTee, key: "round-tools", clipDrafts, measureLabel, measuring, rangeLockOn, getShotFix: gps.getShotFix,
     enableGps: gps.enableGps, shotMeasurement: measure?.b ? remainingFt(measure.a, measure.b) : null, wrist,
     onMeasure, onToggleLock, onWrist: () => setWrist(true),
   });
   const map = props.putting ? null : h(HoleMedia, {
-    ...props, solo, bottomDock, key: "hole-media", gpsFix: gps.fix, gpsStatus: gps.status, lastThrow: lastThrowLine, lie, mapFocus,
-    measureFrom: measure && measure.a, measureTo, nextTee, rangeHud: hud, scoreFlight, surveyed, throws,
+    ...props, solo, key: "hole-media", gpsFix: gps.fix, gpsStatus: gps.status, lastThrow: lastThrowLine, lie, mapFocus,
+    measureFrom: measure && measure.a, measureTo, nextTee, rangeHud: hud, scoreFlight, throws,
     onEnableGps: gps.enableGps, onMapFocus, onMapPoint, onMarkLie,
     onMarkPin, onMarkTee,
     onUndoThrow,
@@ -1502,7 +1476,7 @@ export function ScorecardView(props) {
   const holeGrid = h(HoleGrid, { key: "holes", holes: props.holeGrid, onJump: props.onJumpHole, putting: props.putting });
   const roundStats = [
     h(LiveRoundStats, {
-      key: "live-stats", summaryOnly: bottomDock && playerBand >= 3, formatLabel: props.formatLabel, holeGrid: props.holeGrid, holes: props.shotStats?.holes ?? props.holes,
+      key: "live-stats", summaryOnly: playerBand >= 3, formatLabel: props.formatLabel, holeGrid: props.holeGrid, holes: props.shotStats?.holes ?? props.holes,
       playingDelta: props.playingDelta, playingRating: props.playingRating, putting: props.putting, solo,
       throwsByHole: props.shotStats?.throws ?? props.throwsByHole,
     }),
@@ -1512,23 +1486,22 @@ export function ScorecardView(props) {
     props.potsAceHint ? h("p", { className: "pots-ace-hint", key: "ace-hint" }, props.potsAceHint) : null,
   ];
   const dock = h("div", { className: "score-glove-dock", key: "dock" }, [
-    bottomDock ? tools : null,
+    tools,
     h("div", {
       className: "score-glove-scores", key: "scores",
-      role: bottomDock ? "region" : undefined, "aria-label": bottomDock ? "Player scores" : undefined,
-      tabIndex: bottomDock ? 0 : undefined,
+      role: "region", "aria-label": "Player scores", tabIndex: 0,
     }, [
       h(ScorecardBox, { ...props, key: "scorecard", onOpenPad: setPadRow, onScore }),
       h(CtpClaim, { key: "ctp", ctpClaim: props.ctpClaim, onCtpVote: props.onCtpVote }),
       h(FinishCard, { key: "finish", finish: props.finish, onOpenFinish: props.onOpenFinish, onShare: props.onShare }),
     ]),
     h(FinishDockBar, { key: "finish-dock", finish: props.finish, onJump: props.onJumpHole, onOpenFinish: props.onOpenFinish }),
-    bottomDock ? holeHeader : null,
+    holeHeader,
   ]);
   const layoutClass = "score-glove-layout" + (solo ? " solo" : "") + " players-" + playerBand;
   return h(React.Fragment, null, [
     wrist ? props.offlineStatus : null,
-    wrist ? h(RecoveryStatus, { ...props, quietSaved: bottomDock, key: "wrist-recovery" }) : null,
+    wrist ? h(RecoveryStatus, { ...props, key: "wrist-recovery" }) : null,
     wrist ? h(WristScore, {
       atEnd: props.atEnd,
       atStart: props.atStart,
@@ -1548,16 +1521,12 @@ export function ScorecardView(props) {
       onPrevious: props.onPrevious,
       onScore,
       onToggleLock,
-    }) : bottomDock ? h("div", { className: layoutClass + " score-bottom-layout", key: "glove" }, [
+    }) : h("div", { className: layoutClass + " score-bottom-layout", key: "glove" }, [
       h("div", { className: "score-bottom-course", key: "course" }, [
         weather,
         h("div", { className: "score-glove-stage", key: "stage", role: "region", "aria-label": "Map and round details", tabIndex: 0 },
           [...status, turn, map, ...roundStats, holeGrid]),
       ]),
-      dock,
-    ]) : h("div", { className: layoutClass, key: "glove" }, [
-      holeHeader,
-      h("div", { className: "score-glove-stage", key: "stage" }, [...status, weather, turn, tools, map, holeGrid, ...roundStats]),
       dock,
     ]),
     h(ConfirmScoresSheet, {

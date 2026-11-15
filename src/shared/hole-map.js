@@ -131,7 +131,7 @@ function MapLieChip(props) {
           event.stopPropagation();
           props.onMarkLie();
         },
-      }, count && !props.showMarkLabel ? "Lie " + (count + 1) : "Mark lie")
+      }, count && !props.controlsOutside ? "Lie " + (count + 1) : "Mark lie")
       : null,
     count && typeof props.onUndoThrow === "function"
       ? h("button", {
@@ -606,7 +606,7 @@ export function HoleMap(props) {
   });
   const lieControls = h(MapLieChip, {
     key: "lie-chip",
-    showMarkLabel: props.showMarkLabel,
+    controlsOutside: props.controlsOutside,
     surveyed: props.surveyed,
     throws,
     loose: map.loose,
@@ -615,6 +615,10 @@ export function HoleMap(props) {
     onMarkTee: props.onMarkTee,
     onUndoThrow: props.onUndoThrow,
   });
+  const credit = h("div", {
+    className: "hole-map-credit" + (props.controlsOutside ? " hole-map-credit-overlay" : ""),
+    key: "credit",
+  }, SATELLITE_CREDIT);
   return h("div", {
     className: compact
       ? "hole-map-card hole-map-compact"
@@ -748,6 +752,7 @@ export function HoleMap(props) {
       props.controlsOutside ? null : focusControls,
       props.controlsOutside ? null : lieControls,
       props.controlsOutside ? null : props.hud,
+      props.controlsOutside && !props.schematic ? credit : null,
     ]),
     props.controlsOutside && h("div", { className: "hole-map-actions", key: "actions" }, [props.hud, lieControls]),
     h("div", { className: "hole-map-caption", key: "caption" }, [
@@ -755,7 +760,7 @@ export function HoleMap(props) {
       h("span", { key: "dist" }, map.distanceFt ? `${map.distanceFt} ft` : (map.loose ? "Around you" : "Map")),
       h("span", { key: "basket" }, map.basket ? map.basket.label : ""),
     ]),
-    h("div", { className: "hole-map-credit", key: "credit" }, SATELLITE_CREDIT),
+    !props.controlsOutside ? credit : null,
     udiscHref
       ? h("a", {
         className: "hole-map-udisc",

@@ -35,13 +35,11 @@ const server = createServer(async (request, response) => {
     if (serve && path === "/score.html") {
       const session = previewSession(request, response);
       const theme = url.searchParams.get("appearance");
-      const layout = url.searchParams.get("layout");
       const players = Number(url.searchParams.get("players"));
       if (sampleCourse && (players === 1 || players === 4)) session.players = roster("singles", players);
       if (theme === "light" || theme === "dark" || theme === "ocean" || theme === "blue") session.appearance = theme;
       response.setHeader("Content-Type", "text/html");
       const seeded = html.replace('data-api-base=""', 'data-api-base="' + site + '/qa-api"')
-        .replace("<body", layout === "bottom" ? '<body data-score-layout="bottom"' : "<body")
         .replace("</head>", '<script>localStorage.setItem("gvdg_member_token", "qa-scorer-visual");localStorage.setItem("theme",' +
           JSON.stringify(session.appearance === "light" ? "light" : "dark") + ');</script></head>');
       return response.end(seeded);
@@ -188,7 +186,7 @@ const teeSign = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 390" r
   </svg>`;
 
 async function makePage({ width, height, scheme = "light", scale = 1, group = "singles", locked = false, complete = false,
-  bottomDock, playerCount, weather = sampleWeather } = {}) {
+  playerCount, weather = sampleWeather, scoringStyle = group === "doubles" ? "matchplay" : "stroke" } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, colorScheme: scheme === "light" ? "light" : "dark",
     permissions: ["geolocation", "camera", "microphone"], geolocation: { latitude: sampleLie.lat, longitude: sampleLie.lng, accuracy: 4 },
     serviceWorkers: "block" });
@@ -198,7 +196,10 @@ async function makePage({ width, height, scheme = "light", scale = 1, group = "s
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   const players = roster(group, playerCount);
-  if (complete) for (const player of players) for (const { hole } of holes) {
+  const playedHoles = scoringStyle === "putting" ? holes.map((hole, index) => ({
+    ...hole, par: 5, distance_ft: 18 + 2 * index, points: index >= 3 ? 2 : 1,
+  })) : holes;
+  if (complete) for (const player of players) for (const { hole } of playedHoles) {
     player.scores[hole] = 3;
     player.scorecards[hole] = { "player:0": 3 };
   }
@@ -222,15 +223,15 @@ async function makePage({ width, height, scheme = "light", scale = 1, group = "s
   function snapshot() {
     const standings = scoreTargets.map((target) => {
       const row = players[target.playerIndexes[0]];
-      const scorecard = Object.entries(row.scores).map(([hole, strokes]) => ({ hole: Number(hole), strokes, par: 3 }));
+      const scorecard = Object.entries(row.scores).map(([hole, strokes]) => ({ hole: Number(hole), strokes, par: playedHoles[Number(hole) - 1]?.par ?? 3 }));
       return { name: target.label, targetId: target.id, playerIndexes: target.playerIndexes, targetType: target.type, thru: scorecard.length,
-        total: scorecard.reduce((sum, value) => sum + value.strokes, 0), toPar: scorecard.reduce((sum, value) => sum + value.strokes - 3, 0), scorecard,
-        ...(group === "doubles" ? { match: { status: target.id.endsWith("1") ? "1 UP" : "1 DN", outcome: target.id.endsWith("1") ? "leading" : "trailing" } } : {}) };
+        total: scorecard.reduce((sum, value) => sum + value.strokes, 0), toPar: scorecard.reduce((sum, value) => sum + value.strokes - value.par, 0), scorecard,
+        ...(scoringStyle === "matchplay" ? { match: { status: target.id.endsWith("1") ? "1 UP" : "1 DN", outcome: target.id.endsWith("1") ? "leading" : "trailing" } } : {}) };
     });
     return { status: finished ? "final" : "live", cardLocked: finished, roundCode: code, courseId: course.id, layoutId: layout.id,
-      courseName: course.name, layoutName: layout.name, recoveryRoundId: roundId, rev, holes, scoreTargets, standings,
+      courseName: course.name, layoutName: layout.name, recoveryRoundId: roundId, rev, holes: playedHoles, scoreTargets, standings,
       cardId: "c0", playerIndex: 0, players, cardmates: players, shotLedgers, conflicts: [], missing: [],
-      roundConfig: { groupFormat: group, scoringStyle: group === "doubles" ? "matchplay" : "stroke" }, startingHole: 4, weather };
+      roundConfig: { groupFormat: group, scoringStyle }, startingHole: 4, weather };
   }
   await context.routeWebSocket("ws://127.0.0.1:8788/**", () => {});
   await context.route(/^https?:\/\//, async (route) => {
@@ -307,16 +308,15 @@ async function makePage({ width, height, scheme = "light", scale = 1, group = "s
     if (path === "/rounds") return reply({ code });
     return reply({ rounds: [], events: [], rows: [] });
   });
-  await page.addInitScript(({ scheme, scale, bottomDock }) => {
+  await page.addInitScript(({ scheme, scale }) => {
     localStorage.setItem("gvdg_member_token", localStorage.getItem("qa-scorer-actor") || "qa-scorer-visual");
     localStorage.setItem("gvdg_member_name", "Taylor Morgan");
     localStorage.setItem("theme", scheme === "light" ? "light" : "dark");
     Object.defineProperty(navigator, "onLine", { get: () => localStorage.getItem("qa-offline") !== "yes" });
     document.addEventListener("DOMContentLoaded", () => {
       if (scale !== 1) document.documentElement.style.fontSize = 16 * scale + "px";
-      if (bottomDock) document.body.dataset.scoreLayout = "bottom";
     });
-  }, { scheme, scale, bottomDock });
+  }, { scheme, scale });
   const button = (label) => page.getByRole("button", { name: label, exact: true });
   const go = (query = "") => page.goto(site + "/score.html" + query, { waitUntil: "domcontentloaded" });
   async function ready() {
@@ -423,7 +423,7 @@ if (serve) {
       [1, 390, 844, "blue"], [4, 390, 844, "blue"], [1, 390, 844], [4, 390, 844],
       [4, 320, 720, "dark", 1.25], [4, 844, 390, "blue"], [4, 1280, 900, "ocean", 1],
     ]) {
-      const preview = await makePage({ width, height, scheme, scale, bottomDock: true, playerCount });
+      const preview = await makePage({ width, height, scheme, scale, playerCount });
       await preview.go("?round=" + code);
       await preview.ready();
       const weather = preview.page.getByRole("region", { name: "Round weather" });
@@ -469,6 +469,8 @@ if (serve) {
       }
       assert.equal(geometry.weatherAboveMap, true);
       assert.equal(geometry.mapObstructions, 0);
+      assert.match(await stage.locator(".hole-map-frame .hole-map-credit").innerText(), /Imagery: Esri, Maxar, Earthstar Geographics/);
+      assert.equal(await stage.locator(".hole-map-card > .hole-map-credit").count(), 0);
       assert.equal(await stage.getByRole("button", { name: "Mark tee", exact: true }).count(), 0);
       assert.equal(await stage.getByRole("button", { name: "Mark pin", exact: true }).count(), 0);
       for (const target of [preview.page.locator(".round-quick-tools button").first(), ...[
@@ -479,6 +481,11 @@ if (serve) {
       }
       await preview.screenshot(file);
       if (width === 320) {
+        assert.equal(geometry.scoreButtons.filter(({ visible }) => visible).length, playerCount, "All four scorers fit in the narrow tray");
+        const name = preview.page.locator(".prow .pname").first();
+        assert.equal(await name.locator(".score-name-given").innerText(), "Taylor");
+        assert.equal(await name.locator(".score-name-surname").innerText(), "Morgan");
+        assert.equal(await name.getAttribute("title"), "Taylor Morgan");
         const finalPlayer = preview.button("Increase Morgan Lee on hole 4");
         const initialNav = await preview.button("Next hole").boundingBox();
         await finalPlayer.click();
@@ -574,8 +581,9 @@ if (serve) {
   await phone.screenshot("round-setup-phone");
   await phone.page.locator("[data-create-round='casual']").click();
   await phone.ready();
-  assert.equal(await phone.page.locator(".score-glove-layout > .hole-head .hnum").textContent(), "Hole 4");
-  assert.equal(await phone.page.locator(".hole-head").evaluate((heading) => heading.nextElementSibling?.classList.contains("score-glove-stage")), true);
+  const holeFooter = phone.page.getByRole("navigation", { name: "Hole navigation" });
+  assert.equal(await holeFooter.getByRole("heading").textContent(), "Hole 4");
+  assert.equal(await holeFooter.evaluate((heading) => Boolean(heading.closest(".score-glove-dock"))), true);
   assert.equal(await phone.button("Finish card").count(), 0, "No finish action on an incomplete card with missing entries omitted");
   await phone.screenshot("scorecard-phone-light");
   await phone.button("Round tools").click();
@@ -688,13 +696,19 @@ if (serve) {
   });
   assert.equal(geometry.y, 0, "hole strip must not vertically scroll the document");
   assert.equal(geometry.headerTop, 0);
-  assert.ok(geometry.holeTop >= geometry.headerBottom && geometry.nextBottom < 720, "header must not cover hole navigation");
+  assert.ok(geometry.holeTop >= geometry.headerBottom && geometry.nextBottom <= 720 && geometry.nextBottom >= 660, "hole navigation remains at the bottom");
+  assert.equal(await narrow.page.locator(".prow .score-name-compact").count(), 0, "Doubles team labels stay whole");
+  await narrow.button("Increase Team 1 on hole 4").click();
+  await narrow.page.waitForFunction(() => !document.querySelector('[aria-label="Card sync"]')?.textContent.includes("awaiting sync"));
+  assert.equal(narrow.data[0].scores[4], 3);
+  assert.equal(narrow.data[1].scores[4], 3);
+  assert.match(await narrow.page.locator(".hole-head .pmeta").textContent(), /Match:/);
   await narrow.screenshot("scorecard-320-large-dark");
   await narrow.button("Next hole").click();
   assert.equal(await narrow.page.locator(".hnum").textContent(), "Hole 5");
   await narrow.button("Previous hole").click();
   assert.equal(await narrow.page.locator(".hnum").textContent(), "Hole 4");
-  for (const name of ["Round tools", "Next hole", "Increase Team 1 on hole 4", "Enter score for Team 2 on hole 4", "Lie 2"]) {
+  for (const name of ["Round tools", "Next hole", "Increase Team 1 on hole 4", "Enter score for Team 2 on hole 4", "Mark lie"]) {
     const found = narrow.button(name);
     if (await found.count()) {
       const size = await found.boundingBox();
@@ -708,6 +722,25 @@ if (serve) {
   await narrow.screenshot("shot-editor-320-large-dark");
   await narrow.noOverflow();
   await narrow.context.close();
+
+  const putting = await makePage({ width: 390, height: 600, playerCount: 4, scoringStyle: "putting" });
+  await putting.go("?round=" + code);
+  await putting.ready();
+  await putting.page.getByRole("region", { name: "Round weather" }).getByText(/Wind WNW 8 mph/).waitFor();
+  assert.equal(await putting.page.locator(".hole-map-frame").count(), 0);
+  const makes = putting.button("Enter score for Taylor Morgan on hole 4");
+  await makes.click();
+  await putting.page.getByRole("dialog").getByRole("button", { name: "2", exact: true }).click();
+  await makes.locator(".n").getByText("2", { exact: true }).waitFor();
+  const puttNav = await putting.button("Next hole").boundingBox();
+  assert.ok(puttNav.y + puttNav.height <= 600 && puttNav.y + puttNav.height >= 550);
+  await putting.button("Next hole").click();
+  await putting.page.getByRole("navigation", { name: "Hole navigation" }).getByRole("heading", { name: "26 ft" }).waitFor();
+  await putting.button("Previous hole").click();
+  await makes.locator(".n").getByText("2", { exact: true }).waitFor();
+  await putting.screenshot("putting-short-phone");
+  await putting.noOverflow();
+  await putting.context.close();
 
   const desktop = await makePage({ width: 1280, height: 900, scheme: "ocean", group: "doubles" });
   await desktop.go("?round=" + code);
