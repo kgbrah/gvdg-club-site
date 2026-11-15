@@ -12,6 +12,7 @@ import { nextHoleScore, nextPuttingScore, puttingStationRows, relClass, relText,
 import { RoundHighlights, ThrowFilm, useClipRecovery } from "./throw-film.js";
 import { RoundTalk } from "./round-talk.js";
 import { WristScore } from "./wrist-score.js";
+import { WatchSharingDetails } from "./round-sharing.js";
 import { WatchPairing } from "./watch-pairing.js";
 import { ShotLedgerPanel } from "./shot-ledger-view.js";
 import { closeRangeLock, postRangeLock, rangeLockChanged, rangeLockNote, readRangeLockEnabled, writeRangeLockEnabled } from "../shared/range-lock.js";
@@ -299,10 +300,10 @@ function RoundToolActions(props) {
     ),
     props.onShareCode
       ? h("button", {
-        "aria-label": "Share round code",
+        "aria-label": "Invite to score",
         className: "score-glove-tool" + (copied ? " active" : ""),
         key: "invite",
-        title: "Share round code",
+        title: "Invite to score",
         type: "button",
         onClick: () => {
           props.onShareCode();
@@ -438,9 +439,10 @@ function RoundTools(props) {
             measured: props.shotMeasurement }),
           h("button", { type: "button", className: "btn secondary", onClick: backFromLedger }, "Back to round tools"))
           : h(React.Fragment, null,
-            h("p", { className: "muted" }, "Your hole and saved changes stay in place when you close this menu."),
-            props.onFullScorecard && h("button", { type: "button", className: "btn secondary", onClick: closeThen(props.onFullScorecard) }, "Full scorecard"),
-            props.shotLedger && h("button", { type: "button", ref: ledgerButton, className: "btn secondary", onClick: openLedger }, "Shot details"),
+            props.roundSharingApi && h(WatchSharingDetails, { api: props.roundSharingApi, onCopyWatch: props.onCopyWatch }),
+            h("div", { className: "round-tools-direct" },
+              props.onFullScorecard && h("button", { type: "button", className: "btn secondary", onClick: closeThen(props.onFullScorecard) }, "Full scorecard"),
+              props.shotLedger && h("button", { type: "button", ref: ledgerButton, className: "btn secondary", onClick: openLedger }, "Shot details")),
             h(RoundToolActions, {
               ...props,
               onMeasure: closeThen(props.onMeasure), onWrist: closeThen(props.onWrist),
@@ -1515,7 +1517,7 @@ export function ScorecardView(props) {
           onToggleLock,
           onWrist: () => setWrist(true),
         }),
-        !props.offline && h(RoundHighlights, { canStar: true, holes: props.holeGrid, key: "clips", putting: props.putting === true }),
+        !props.offline && h(RoundHighlights, { canStar: true, generation: props.clipGeneration, holes: props.holeGrid, key: "clips", putting: props.putting === true }),
         h(HoleGrid, { holes: props.holeGrid, onJump: props.onJumpHole, putting: props.putting }),
         props.putting ? null : h(HoleStatChips, { chips: holeStatChips(holePlayStats(statsHole, statsRows, ((props.holeGrid || []).find((hole) => hole.current) || {}).score)) }),
         props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,

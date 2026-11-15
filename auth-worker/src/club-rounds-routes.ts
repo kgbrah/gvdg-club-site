@@ -2,7 +2,7 @@
 // course layout and gets a short code; cardmates join with the code, anyone on the round can add
 // walk-on guests, and everyone on it keeps score on one shared card. Reuses the LiveEventDO (keyed
 // "round:<code>") and its scoring/leaderboard. Round control + scoring bind writes to the
-// Worker-injected identity (member JWT or open-play JWT); the snapshot + WebSocket are public reads.
+// Worker-injected identity (member JWT or open-play JWT). The creator manages spectator access.
 // Casual finalize does not write D1 event results.
 
 import type { Env } from "./env.js";
@@ -20,6 +20,7 @@ import { buildCasualArchiveSnapshot, shouldUseCasualArchive } from "./casual-arc
 import { liveHolesWithPins, overlayLiveSnapshot, submitLiveMapMark } from "./course-map-marks-routes.js";
 import { cardFromMine, handleThrowClips } from "./throw-clip-routes.js";
 import { handleRoundMessages } from "./round-message-routes.js";
+import { archivedRoundActor, readRoundSharing, resolveWatchRound, roundViewerAccess, socketRequest, spectatorScorecard, spectatorSnapshot, watchKey } from "./spectator-access.js";
 import { dropLiveRound, noteLiveRound } from "./course-traffic.js";
 
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // unambiguous (no 0/O/1/I/L)
@@ -52,6 +53,12 @@ async function readDoSnapshot(stub: DurableObjectStub): Promise<{ status: number
   }
 }
 
+async function isOnLiveCard(stub: DurableObjectStub, actor: string): Promise<boolean> {
+  const response = await stub.fetch("https://do/mine", { headers: { "X-Auth-Member": actor } }).catch(() => null);
+  const data = response?.ok ? asSnapshotRecord(await response.json().catch(() => null)) : {};
+  return data.cardId != null && Number.isInteger(data.playerIndex);
+}
+
 async function overlayOrRaw(env: Env, snapshot: Record<string, unknown>): Promise<Record<string, unknown>> {
   try {
     return await overlayLiveSnapshot(env, snapshot);
@@ -78,6 +85,7 @@ async function casualWatchSnapshot(env: Env, stub: DurableObjectStub, code: stri
 }
 
 async function roundCodeTaken(env: Env, code: string): Promise<boolean> {
+  if (await readRoundSharing(env.DB, code)) return true;
   const archived = await db.listCasualRoundResults(env.DB, code);
   if (archived) return true;
   try {
@@ -100,7 +108,17 @@ export async function handleCasualRounds(
   method: string,
   seg: string[],
 ): Promise<Response | null> {
-  if (seg[0] !== "rounds") return null;
+  const linked = seg[0] === "watch-round";
+  if (linked) {
+    const view = seg[1];
+    if (method !== "GET" || (view && !["ws", "clips", "messages", "results"].includes(view))) {
+      return json({ error: "not_found" }, 404, origin);
+    }
+    const key = view === "ws" ? socketRequest(request).key : watchKey(request);
+    const code = await resolveWatchRound(env.DB, key);
+    if (!code) return json({ error: "not_found" }, 404, origin);
+    seg = view === "results" ? ["rounds", code, "results"] : ["rounds", code, "live", ...seg.slice(1)];
+  } else if (seg[0] !== "rounds") return null;
 
   if (method === "POST" && seg[1] === "open-play" && seg.length === 2) {
     return mintOpenPlaySession(request, env, origin);
@@ -134,8 +152,7 @@ export async function handleCasualRounds(
     } else {
       for (let attempt = 0; attempt < 5 && !code; attempt += 1) {
         const candidate = genCode();
-        const archived = await db.listCasualRoundResults(env.DB, candidate);
-        if (!archived) code = candidate;
+        if (!(await roundCodeTaken(env, candidate))) code = candidate;
       }
       if (!code) return json({ error: "start_failed" }, 503, origin);
     }
@@ -149,6 +166,7 @@ export async function handleCasualRounds(
       method: "POST",
       body: JSON.stringify({ casual: true, roundCode: code, courseId: layout?.course_id ?? null, layoutId, createdBy: actor.sub, courseName: course?.name ?? null, layoutName: layout?.name ?? null, udiscCourseId: course?.udisc_course_id ?? null, weatherLocation, holes, players: seeded, liveScoringConfig, startedAt: new Date().toISOString() }),
     });
+    if (r.status === 409) return json({ error: "code_taken" }, 409, origin);
     if (r.status !== 200) return json({ error: "start_failed" }, 502, origin);
     await noteLiveRound(env, {
       key: "round:" + code,
@@ -167,51 +185,65 @@ export async function handleCasualRounds(
   const stub = roundStub(env, code);
   const sub = seg[2];
 
-  // Public reads: snapshot + WebSocket (memberIds redacted, identified by index).
-  // After the DO is evicted — or it only has a hollow "final" — a finished casual round still has D1
-  // results. Serve those so Play history Replay links keep working. Overlay failures must not 500
-  // a snapshot the client can already render.
-  if (method === "GET" && sub === "live" && !seg[3]) {
-    const watched = await casualWatchSnapshot(env, stub, code);
-    return json(watched.body, watched.status, origin);
+  async function viewer(actor: string | null) {
+    const key = watchKey(request);
+    const access = await roundViewerAccess(env.DB, code, key);
+    if (access.allowed || !actor || key !== null) return { ...access, publicMedia: access.allowed };
+    const onCard = await isOnLiveCard(stub, actor) || (await archivedRoundActor(env.DB, code, actor)).onCard;
+    return { ...access, allowed: onCard, publicMedia: false };
   }
-  if (sub === "live" && seg[3] === "ws") return stub.fetch(request);
+
+  if (method === "GET" && sub === "live" && !seg[3]) {
+    const actor = await requireRoundActor(request, env);
+    const access = await viewer(actor?.sub ?? null);
+    if (!access.allowed) return json({ error: "not_found" }, 404, origin);
+    const watched = await casualWatchSnapshot(env, stub, code);
+    return json({ ...spectatorSnapshot(watched.body, access.includeMarked, watchKey(request) !== null), viewerAudience: access.visibility, observedAt: watched.body.observedAt ?? Date.now() }, watched.status, origin);
+  }
+  if (method === "GET" && sub === "live" && seg[3] === "ws") {
+    const { identity, headers, expiry } = socketRequest(request);
+    const actor = await requireRoundActor(identity, env);
+    if (actor) {
+      headers.set("X-Auth-Member", actor.sub);
+      if (expiry !== null) headers.set("X-Auth-Expires", String(expiry));
+    }
+    headers.set("X-Round-Code", code);
+    return stub.fetch("https://do/ws", { headers });
+  }
 
   if (sub === "live" && seg[3] === "clips" && method === "GET") {
+    const actor = await requireRoundActor(request, env);
+    const access = await viewer(actor?.sub ?? null);
     return handleThrowClips({
       request, env, origin, method, scope: "round", scopeKey: code, tail: seg.slice(4),
-      authMember: null, card: null,
+      authMember: actor?.sub ?? null, card: null, roundAccess: access.allowed, publicMedia: access.publicMedia, linked: linked || watchKey(request) !== null,
     });
   }
 
   if (sub === "live" && seg[3] === "messages") {
+    const actor = await requireRoundActor(request, env);
+    const access = await viewer(actor?.sub ?? null);
+    if (!access.allowed || (method === "POST" && watchKey(request) !== null)) return json({ error: "not_found" }, 404, origin);
     const snapRes = await stub.fetch("https://do/snapshot");
     const snap = await snapRes.json().catch(() => ({})) as { status?: string };
-    const live = snap?.status === "live";
-    let onCard = false;
-    let serverName = "";
-    if (method === "POST") {
-      const actor = await requireRoundActor(request, env);
-      if (actor) {
-        serverName = actor.name;
-        const mineRes = await stub.fetch("https://do/mine", { headers: { "X-Auth-Member": actor.sub } });
-        onCard = mineRes.status === 200;
-      }
-    }
+    const onCard = method === "POST" && actor ? await isOnLiveCard(stub, actor.sub) : false;
     return handleRoundMessages({
-      request, env, origin, method, scope: "round", scopeKey: code, live, onCard, serverName,
+      request, env, origin, method, scope: "round", scopeKey: code, live: snap.status === "live",
+      onCard, serverName: actor?.name ?? "",
     });
   }
 
-  // Public read: durable finalized results (survives the DO's eviction; casual finalize persists to D1).
-  // Redact internal ids (member_id / created_by) the same way the live snapshot does — names are enough for
-  // a public leaderboard, and we never expose member ids to an unauthenticated reader who has the code.
   if (method === "GET" && sub === "results") {
+    const actor = await requireRoundActor(request, env);
+    const access = await viewer(actor?.sub ?? null);
+    if (!access.allowed) return json({ error: "not_found" }, 404, origin);
     const data = await db.listCasualRoundResults(env.DB, code);
     if (!data) return json({ error: "not_found" }, 404, origin);
     const { created_by: _cb, ...round } = data.round as Record<string, unknown>;
-    const results = (data.results as Record<string, unknown>[]).map(({ member_id: _m, ...rest }) => rest);
-    return json({ round, results }, 200, origin);
+    const results = (data.results as Record<string, unknown>[]).map(({ member_id: _m, ...rest }) => ({
+      ...rest, scorecard: spectatorScorecard(rest.scorecard, access.includeMarked),
+    }));
+    return json({ round: watchKey(request) !== null ? { ...round, round_code: null } : round, results }, 200, origin);
   }
 
   if (method === "POST" && sub === "cancel") {
@@ -277,6 +309,11 @@ export async function handleCasualRounds(
     const response = await proxy(stub, "/finalize", { method: "POST", headers: { ...hdr, "X-Auth-Admin": String(admin) }, body: JSON.stringify({ force }) }, origin);
     if (response.status === 200) await dropLiveRound(env, "round:" + code);
     return response;
+  }
+  if (sub === "live" && seg[3] === "sharing" && (method === "GET" || method === "PUT")) {
+    if (method === "PUT" && await kvRateLimited(env, "round-sharing:" + actor.sub, 20, 60)) return json({ error: "rate_limited" }, 429, origin);
+    const body = method === "PUT" ? JSON.stringify((await readJson(request, 1024)) ?? {}) : undefined;
+    return proxy(stub, "/sharing", { method, headers: { ...hdr, "X-Round-Code": code }, body }, origin);
   }
   if (sub === "live" && method === "GET" && seg[3] === "mine") {
     const r = await stub.fetch("https://do/mine", { headers: hdr });

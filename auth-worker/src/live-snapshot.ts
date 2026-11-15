@@ -122,7 +122,7 @@ export function publicSnapshot(
     lockedCardIds: Array.isArray(meta?.lockedCardIds) ? meta.lockedCardIds : [],
     cardAttestations: meta?.cardAttestations && typeof meta.cardAttestations === "object" ? meta.cardAttestations : {},
     joinRequests: meta?.status === "live" ? publicJoinRequests(meta.joinRequests) : [],
-    updatedAt: meta?.startedAt ?? null,
+    updatedAt: meta?.updatedAt ?? meta?.startedAt ?? null,
   };
 }
 

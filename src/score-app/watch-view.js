@@ -1,6 +1,8 @@
 import React from "react";
 import { ChevronLeft, ChevronRight, Copy, Pause, Play, Trophy } from "lucide-react";
 
+import { WatchSharingDetails } from "./round-sharing.js";
+import { spectatorUpdateAge } from "./spectator-transport.js";
 import { HoleMap } from "../shared/hole-map.js";
 import { HOLE_MAP_WATCH_SIZE } from "../shared/hole-map-model.js";
 import { preloadRoundMaps } from "../shared/satellite-preload.js";
@@ -321,7 +323,41 @@ function WatchHoles(props) {
         onNextThrow: () => goThrow(1),
         onNextHole: () => goHole(safeIndex + 1),
       })
-      : h("p", { className: "watch-hole-meta", key: "meta" }, bits.join(" · ")),
+      : h("div", { className: "watch-hole-heading", key: "meta" }, [
+        h("p", { className: "watch-hole-meta", key: "selected" }, bits.join(" · ")),
+        h("button", { type: "button", className: "btn secondary", key: "follow-live", "aria-pressed": followLive, onClick: () => setFollowLive((previous) => !previous) }, "Follow live"),
+      ]),
+    replay && !putting ? h("p", { className: "watch-hole-meta", key: "replay-hole" }, bits.join(" · ")) : null,
+    h("div", { className: "watch-pick-hole", key: "picker" }, [
+
+      h("div", { className: "holegrid", key: "grid", role: "group", "aria-label": putting ? "Stations" : "Pick a hole" }, holes.map((hole, holeIndex) => {
+        const distance = Number(hole && hole.distance_ft);
+        const stationLabel = Number.isFinite(distance) && distance > 0 ? String(distance) : String(hole.hole);
+        return h("button", {
+          "aria-label": putting ? (Number.isFinite(distance) && distance > 0 ? distance + " ft" : "Station " + hole.hole) : `Hole ${hole.hole}`,
+          "aria-pressed": holeIndex === safeIndex,
+          className: holeIndex === safeIndex ? "cur" : "",
+          key: hole.hole,
+          type: "button",
+          onClick: () => {
+            setFollowLive(!replay && holeIndex === liveIndex);
+            setIndex(holeIndex);
+            setStep(0);
+            setPlaying(false);
+          },
+        }, putting ? stationLabel : String(hole.hole));
+      })),
+    ]),
+    putting ? null : h(WatchFollowBar, {
+      follow,
+      key: "follow",
+      options: followOptions,
+      pinned,
+      onPin: (value) => {
+        setPinned(value);
+        setStep(0);
+      },
+    }),
     putting ? null : h(HoleMap, {
       discColor: follow && follow.discColor,
       hole: selected,
@@ -343,45 +379,38 @@ function WatchHoles(props) {
       windFromDeg: props.windFromDeg,
     }),
     putting ? null : h(WatchMix, { holes, key: "mix", player: follow }),
-    putting ? null : h(WatchFollowBar, {
-      follow,
-      key: "follow",
-      options: followOptions,
-      pinned,
-      onPin: (value) => {
-        setPinned(value);
-        setStep(0);
-      },
-    }),
-    h("div", { className: "card", key: "picker" }, [
-      h("h2", { className: "section", key: "title" }, putting ? "Stations" : replay ? "Holes" : "Hole maps"),
-      replay && !putting ? h("p", { className: "watch-hole-meta", key: "meta" }, bits.join(" · ")) : null,
-      h("div", { className: "holegrid", key: "grid" }, holes.map((hole, holeIndex) => {
-        const distance = Number(hole && hole.distance_ft);
-        const stationLabel = Number.isFinite(distance) && distance > 0 ? String(distance) : String(hole.hole);
-        return h("button", {
-          "aria-label": putting ? (Number.isFinite(distance) && distance > 0 ? distance + " ft" : "Station " + hole.hole) : `Hole ${hole.hole}`,
-          "aria-pressed": holeIndex === safeIndex,
-          className: holeIndex === safeIndex ? "cur" : "",
-          key: hole.hole,
-          type: "button",
-          onClick: () => {
-            setFollowLive(!replay && holeIndex === liveIndex);
-            setIndex(holeIndex);
-            setStep(0);
-            setPlaying(false);
-          },
-        }, putting ? stationLabel : String(hole.hole));
-      })),
-    ]),
     props.isMatchplay ? h(WatchMatchCards, { cards: matchCards, key: "matches" }) : h(WatchStrokeStrip, { chips: strokeChips, key: "stroke", label: putting ? "This station" : "Thru this hole" }),
     putting ? null : h(WatchTeeSign, { key: "sign", teeSign: selected.teeSign }),
   ]);
 }
 
+function WatchConnection({ phase, updatedAt, receivedAt, onReconnect }) {
+  const [now, setNow] = React.useState(Date.now);
+  React.useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 5_000);
+    return () => clearInterval(timer);
+  }, []);
+  const age = spectatorUpdateAge(updatedAt || receivedAt, now);
+  const labels = { connecting: "Connecting", live: "Live", reconnecting: "Reconnecting", stale: "Updates paused", final: "Final", unavailable: "Unavailable" };
+  return h(React.Fragment, null, [
+    h("div", { className: "watch-banner", key: "banner" }, [
+      h("span", { className: "lb-conn", key: "connection", role: "status", "data-phase": phase }, [
+        h("span", { "aria-hidden": "true", className: "live-dot" + (phase === "live" ? "" : " is-final"), key: "dot" }),
+        labels[phase] || labels.connecting,
+      ]),
+      age ? h("span", { className: "muted watch-meta", key: "age" }, "Last update " + age) : null,
+    ]),
+    phase === "unavailable" ? h("p", { className: "muted watch-meta", key: "denied" }, "The round is unavailable with this link. Ask the round creator for a current watch link.") : null,
+    (phase === "stale" || phase === "reconnecting" || phase === "unavailable") ? h("div", { className: "watch-actions", key: "retry" },
+      h("button", { className: "btn secondary", type: "button", onClick: onReconnect }, "Try again")) : null,
+  ]);
+}
+
 export function WatchView(props) {
   const standings = Array.isArray(props.standings) ? props.standings : [];
-  const film = useThrowClips({ refresh: props.status !== "final" });
+  const [manageClips, setManageClips] = React.useState(false);
+  const showingPrivate = props.canManageClips && manageClips;
+  const film = useThrowClips({ spectator: !showingPrivate, enabled: props.hasSnapshot, generation: props.generation });
   const [focus, setFocus] = React.useState(null);
   function focusHole(holeNumber, standing) {
     const indexes = standing && Array.isArray(standing.playerIndexes) ? standing.playerIndexes : [];
@@ -394,62 +423,44 @@ export function WatchView(props) {
     if (map && typeof map.scrollIntoView === "function") map.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   return h("div", { className: "watch-view", "data-react-live-watch": props.status || "live" }, [
-    h("div", { className: "watch-banner", key: "banner" }, [
-      h("span", { className: "live-dot" + (props.status === "final" ? " is-final" : ""), key: "dot" }),
-      h("span", { key: "label" }, props.status === "final" ? "Replay round" : "Watching live"),
-      h("span", { className: "lb-conn", key: "connection" }, props.connection || "Live"),
+    h("div", { className: "watch-overview", key: "overview" }, [
+      h(WatchConnection, { phase: props.connection, receivedAt: props.receivedAt, updatedAt: props.updatedAt, onReconnect: props.onReconnect, key: "connection" }),
+      props.onCopyLink ? h("button", { className: "btn secondary watch-copy", key: "copy", type: "button", onClick: props.onCopyLink }, [
+        icon(Copy), "Copy watch link",
+      ]) : null,
     ]),
-    props.courseName || props.layoutName
-      ? h("p", { className: "muted watch-meta", key: "meta" }, [props.courseName, props.layoutName].filter(Boolean).join(" · "))
-      : null,
-    h(RoundHighlights, { holes: props.holes, key: "highlights", live: props.status !== "final", putting: props.isPutting === true }),
-    h(RoundTalk, {
-      key: "talk",
-      live: props.status !== "final",
-      players: standings.map((standing) => standing && (standing.name || standing.label)).filter(Boolean),
-      viewer: "watch",
-    }),
-    h(WatchHoles, {
-      activeHoleIndex: props.activeHoleIndex,
-      focus,
-      holes: props.holes,
-      isMatchplay: props.isMatchplay,
-      isPutting: props.isPutting,
-      key: "holes",
-      players: props.playerLocations,
-      scorePlayers: props.players,
-      scoreTargets: props.scoreTargets,
-      standings,
-      status: props.status,
-      udiscCourseId: props.udiscCourseId,
-      windFromDeg: props.windFromDeg,
-    }),
-    props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,
-    h("div", { className: "card", key: "board" }, [
-      h("h2", { className: "section", key: "title" }, [icon(Trophy), props.status === "final" ? " Final leaderboard" : " Live leaderboard"]),
-      h(LeaderboardTable, {
-        clipApi: film.api,
-        clipHoles: props.holes,
-        clips: film.clips,
-        isDoubles: props.isDoubles,
-        isMatchplay: props.isMatchplay,
-        isPutting: props.isPutting,
-        key: "table",
-        relClass: props.relClass,
-        relText: props.relText,
-        standings,
-        startExpanded: true,
-        onHole: focusHole,
+    !props.hasSnapshot ? null : h("div", { className: "watch-layout", key: props.generation || "snapshot" }, [
+      h("div", { className: "watch-media", key: "media" }, [
+        props.canManageClips ? h("button", { className: "btn secondary watch-manage-clips", "aria-pressed": Boolean(showingPrivate), key: "clips", type: "button", onClick: () => setManageClips((value) => !value) },
+          showingPrivate ? "Hide my private clips" : "Manage my clips") : null,
+        h(RoundHighlights, { holes: props.holes, key: "highlights", film, canStar: Boolean(showingPrivate), putting: props.isPutting === true }),
+        showingPrivate && !film.clips.some((clip) => clip.canManage) ? h("p", { className: "muted watch-meta", key: "nothing" }, "Your uploaded clips will appear here.") : null,
+        h(RoundTalk, {
+          key: "talk",
+          live: props.status !== "final",
+          players: standings.map((standing) => standing && (standing.name || standing.label)).filter(Boolean),
+          viewer: "watch",
+        }),
+      ]),
+      h(WatchHoles, {
+        activeHoleIndex: props.activeHoleIndex, focus, holes: props.holes, isMatchplay: props.isMatchplay,
+        isPutting: props.isPutting, key: "holes", players: props.playerLocations, scorePlayers: props.players,
+        scoreTargets: props.scoreTargets, standings, status: props.status, udiscCourseId: props.udiscCourseId,
+        windFromDeg: props.windFromDeg,
       }),
+      h("div", { className: "watch-results", key: "results" }, [
+        props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,
+        h("div", { className: "card watch-leaderboard", key: "board" }, [
+          h("h2", { className: "section", key: "title" }, [icon(Trophy), props.status === "final" ? " Final leaderboard" : " Live leaderboard"]),
+          h(LeaderboardTable, {
+            clipApi: film.api, clipHoles: props.holes, clipGeneration: props.generation, clips: film.clips,
+            isDoubles: props.isDoubles, isMatchplay: props.isMatchplay, isPutting: props.isPutting, key: "table",
+            relClass: props.relClass, relText: props.relText, standings, onHole: focusHole,
+          }),
+        ]),
+        props.roundSharingApi ? h(WatchSharingDetails, { api: props.roundSharingApi, key: "sharing", onCopyWatch: props.onOwnerCopyWatch }) : null,
+        props.showWeather ? h(WeatherStrip, { key: "weather", title: "Round weather", weather: props.weather }) : null,
+      ]),
     ]),
-    h("div", { className: "watch-actions", key: "actions" }, [
-      props.onCopyLink
-        ? h("button", { className: "btn secondary", key: "copy", type: "button", onClick: props.onCopyLink }, [
-          icon(Copy),
-          "Copy watch link",
-        ])
-        : null,
-    ].filter(Boolean)),
-    props.showWeather ? h(WeatherStrip, { key: "weather", title: "Round weather", weather: props.weather }) : null,
   ]);
 }

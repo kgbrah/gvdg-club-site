@@ -54,7 +54,7 @@ function memoryDb() {
         },
         async run() {
           if (text.startsWith("INSERT")) {
-            const [scope, scopeKey, hole, playerName, playerIndex, filmedBy, r2Key, contentType, bytes, highlight, moment, clientId] = stmt.binds;
+            const [scope, scopeKey, hole, playerName, playerIndex, filmedBy, r2Key, contentType, bytes, highlight, moment, clientId, roundGeneration] = stmt.binds;
             if (clientId && rows.some((row) => row.scope === scope && row.scope_key === scopeKey && row.filmed_by === filmedBy && row.client_id === clientId)) {
               return { success: true, results: [], meta: { changes: 0 } };
             }
@@ -62,7 +62,7 @@ function memoryDb() {
             rows.push({
               id, scope, scope_key: scopeKey, hole, player_name: playerName, player_index: playerIndex,
               filmed_by: filmedBy, r2_key: r2Key, content_type: contentType, bytes, highlight, moment,
-              created_at: "2026-11-02", client_id: clientId,
+              created_at: "2026-11-02", client_id: clientId, visibility: "private", round_generation: roundGeneration,
             });
             return { success: true, results: [], meta: { last_row_id: id, changes: 1 } };
           }
@@ -177,7 +177,7 @@ describe("throw clip rules", () => {
       scope: "round",
       scopeKey: "ABCD",
       tail: [],
-      authMember: null,
+      authMember: "m_jane",
       card: null,
     });
     const body = await list.json() as { clips: { playerName: string; mediaPath: string; filmed_by?: string }[] };
@@ -213,7 +213,7 @@ describe("throw clip rules", () => {
       scope: "round",
       scopeKey: "ABCD",
       tail: [String(saved.id), "media"],
-      authMember: null,
+      authMember: "m_jane",
       card: null,
     });
     expect(media.status).toBe(206);

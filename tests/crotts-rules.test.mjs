@@ -20,7 +20,7 @@ test("a cardmate can film a throw and star a highlight", () => {
   const watch = readFileSync("src/score-app/watch-view.js", "utf8");
   assert.match(film, /Round highlight/);
   assert.match(film, /suggestedMoment/);
-  assert.match(film, /Upload to round/);
+  assert.match(film, /Upload private clip/);
   assert.match(film, /"Discard"/);
   assert.match(card, /ThrowFilm/);
   assert.match(card, /canStar: true/);

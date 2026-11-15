@@ -278,7 +278,7 @@ test("watch view uses overlay chips for stroke and match cards for matchplay", (
   assert.match(watch, /watchHoleScoreChips/);
   assert.match(watch, /watchStrokeHoleChips/);
   assert.match(watch, /watchPuttingStationChips/);
-  assert.match(watch, /putting \? "Stations" : replay \? "Holes" : "Hole maps"/);
+  assert.match(watch, /putting \? "Stations" : "Pick a hole"/);
   assert.match(watch, /putting \? "This station" : "Thru this hole"/);
   assert.match(watch, /putting \? null : h\(HoleMap/);
   assert.match(watch, /useThrowClips/);

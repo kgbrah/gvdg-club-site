@@ -23,6 +23,10 @@ type Stored = {
 
 class FakeSocket extends EventTarget {
   readonly sent: string[] = [];
+  private attachment: unknown;
+
+  serializeAttachment(value: unknown) { this.attachment = value; }
+  deserializeAttachment() { return this.attachment; }
 
   accept(): void {
     throw new Error("legacy_accept_used");
@@ -169,6 +173,7 @@ function liveNamespace(state: LiveRouteState) {
     fetch: async (url: string, init?: RequestInit) => {
       const payload = init?.body ? (JSON.parse(String(init.body)) as StartPayload) : {};
       const action = new URL(url).pathname.split("/").filter(Boolean).pop();
+      if (action === "snapshot") return new Response(JSON.stringify({ status: "none" }));
       if (action === "cancel") {
         state.cancellations?.push({
           isAdmin: headerValue(init?.headers, "X-Auth-Admin") === "true",
@@ -1239,6 +1244,7 @@ describe("LiveEventDO card-scoped scoring", () => {
     const live = new LiveEventDO(state, { DB: db });
     await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ casual: true, holes: [{ hole: 1, par: 3 }], players: [{ memberId: "m0", name: "A" }, { memberId: "m1", name: "B" }] }) }));
     const sock = new FakeSocket();
+    sock.serializeAttachment({ actor: "m0" });
     state.acceptWebSocket(sock);
     sock.sent.length = 0;
     const first = (await (await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m0" }, body: JSON.stringify({ index: 1, hole: 1, strokes: 3 }) }))).json()) as SnapshotBody;
@@ -1360,6 +1366,7 @@ describe("LiveEventDO card-scoped scoring", () => {
     const live = new LiveEventDO(state, { DB: db });
     await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ casual: true, holes: [{ hole: 1, par: 3 }], players: [{ memberId: "m0", name: "A" }, { memberId: "m1", name: "B" }] }) }));
     const sock = new FakeSocket();
+    sock.serializeAttachment({ actor: "m0" });
     state.acceptWebSocket(sock);
     sock.sent.length = 0;
 

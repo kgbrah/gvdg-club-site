@@ -658,11 +658,11 @@ test('player leaderboard renders matchplay and pair labels without primary to-pa
   assert.match(source, /aria-expanded/);
   assert.match(source, /"aria-label": isPutting \? \(station === String\(hole\.hole\) \? "Station " \+ hole\.hole : station \+ " ft"\) : "Hole " \+ hole\.hole/);
   assert.match(source, /hole\.strokes \+ "\/" \+ attempts/);
-  assert.match(source, /clipsForStanding\(clips, standing\)/);
+  assert.match(source, /clipsForStanding\(clips, standing, clipGeneration\)/);
   assert.match(source, /HighlightClipList/);
   assert.match(readFileSync('src/score-app/score-controller.js', 'utf8'), /onHole: function \(holeNumber\)/);
   assert.match(readFileSync('src/score-app/watch-view.js', 'utf8'), /onHole: focusHole/);
-  assert.match(readFileSync('src/score-app/watch-view.js', 'utf8'), /startExpanded: true/);
+  assert.match(readFileSync('src/score-app/watch-view.js', 'utf8'), /h\(LeaderboardTable/);
   assert.match(readFileSync('src/score-app/score-controller.js', 'utf8'), /Pair changes are blocked after scoring starts/);
 });
 
@@ -1168,10 +1168,10 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.match(shared, /export function liveWatchHref/);
   assert.match(controller, /const ROUND_CODE = liveRoundCodeFromSearch\(params\)/);
   assert.match(controller, /const WATCH = isLiveWatchRequest\(params\)/);
-  assert.match(controller, /async function loadWatch\(\)/);
-  assert.match(controller, /api\(LIVE, \{ auth: false, guest: false \}\)/);
-  assert.match(controller, /if \(WATCH && \(EVENT_ID \|\| ROUND_CODE\)\)/);
-  assert.match(controller, /if \(WATCH\) return;/);
+  assert.match(controller, /function startWatch\(\)/);
+  assert.match(controller, /const response = await get\(LIVE\)/);
+  assert.match(controller, /if \(WATCH && \(EVENT_ID \|\| ROUND_CODE \|\| WATCH_KEY\)\)/);
+  assert.match(controller, /createSpectatorTransport/);
   assert.match(main, /WatchView/);
   assert.match(watch, /data-react-live-watch/);
   assert.match(watch, /Copy watch link/);
@@ -1186,7 +1186,7 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.match(watch, /scoreFlight/);
   assert.match(watch, /function WatchReplayBar/);
   assert.match(watch, /watchReplayVisibleThrows/);
-  assert.match(watch, /Replay round/);
+  assert.match(watch, /final: "Final"/);
   assert.match(watch, /props\.status === "final"/);
   assert.match(watch, /function WatchFollowBar/);
   assert.match(watch, /function WatchMatchCards/);
@@ -1195,8 +1195,8 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.match(watch, /watchStrokeHoleChips/);
   assert.match(watch, /watchMatchCards/);
   assert.match(controller, /function watchHoleViews\(\)/);
-  assert.match(controller, /holes: watchHoleViews\(\)/);
-  assert.match(controller, /players: Array.isArray\(snap\.players\)/);
+  assert.match(controller, /holes: snap \? watchHoleViews\(\) : \[\]/);
+  assert.match(controller, /players: Array.isArray\(snap\?\.players\)/);
   const html = readFileSync('score.html', 'utf8');
   assert.match(html, /\.hole-map-score-chip/);
   assert.match(html, /\.watch-match-card/);
@@ -1219,7 +1219,7 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   const watchBody = watch.slice(watch.indexOf("export function WatchView"));
   assert.ok(watchBody.indexOf("h(WatchHoles") < watchBody.indexOf("Live leaderboard"));
   assert.ok(watchBody.indexOf("Live leaderboard") < watchBody.indexOf("Round weather"));
-  const watchBoot = controller.slice(controller.indexOf('async function loadWatch'), controller.indexOf('function watchRoundCode'));
+  const watchBoot = controller.slice(controller.indexOf('function startWatch'), controller.indexOf('function watchRoundCode'));
   assert.match(watchBoot, /watchableLiveSnapshot/);
   assert.match(watchBoot, /\/rounds\/' \+ ROUND_CODE \+ '\/results'/);
   assert.match(watchBoot, /casualReplaySnapshot/);
@@ -1261,7 +1261,7 @@ test("hole maps overlay a landing-zone heatmap of saved marked lies", () => {
   assert.match(html, /mix-blend-mode: screen/);
   assert.match(scorecard, /layoutId: props\.layoutId/);
   assert.match(watch, /layoutId: props\.layoutId/);
-  assert.match(controller, /layoutId: S\.layoutId \|\| snap\.layoutId \|\| null/);
+  assert.match(controller, /layoutId: S\.layoutId \|\| snap\?\.layoutId \|\| null/);
 });
 
 test("watch follow prefers the most recently marked player on the hole", async () => {

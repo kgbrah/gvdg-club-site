@@ -560,7 +560,7 @@ function SetupPickView({ layout, defaultConfig, notice, onBack, onCreate }) {
         : h("p", { className: "muted", key: "note" }, "Off by default. Turn it on to rank this card with club handicaps."),
     ]),
     h("div", { className: "card stack", key: "code" }, [
-      h("label", { className: "lbl", htmlFor: "roundCode", key: "label" }, "Share code"),
+      h("label", { className: "lbl", htmlFor: "roundCode", key: "label" }, "Scoring invite code"),
       h("input", {
         autoCapitalize: "characters",
         className: "field",
@@ -571,7 +571,7 @@ function SetupPickView({ layout, defaultConfig, notice, onBack, onCreate }) {
         value: code,
         onChange: (event) => setCode(event.target.value),
       }),
-      h("p", { className: "muted", key: "hint" }, "Leave it blank and we'll make one. 4–12 letters or numbers."),
+      h("p", { className: "muted", key: "hint" }, "Leave it blank and we'll make one. 4–12 letters or numbers. New rounds start as Card only. Use Round tools to share a watch link."),
       notice ? h("p", { className: "muted", key: "notice", role: "alert" }, notice) : null,
     ]),
     h(

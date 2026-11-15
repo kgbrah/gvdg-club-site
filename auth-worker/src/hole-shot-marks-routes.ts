@@ -1,8 +1,8 @@
 import type { Env } from "./env.js";
 import * as db from "./db.js";
-import { bearer, json } from "./http.js";
+import { json } from "./http.js";
+import { requireRoundActor } from "./authz.js";
 import { asInt } from "./input.js";
-import { verifySession } from "./jwt.js";
 import { publicHeatmapPayload } from "./hole-shot-marks.js";
 
 export async function handleHoleHeatmap(
@@ -23,12 +23,7 @@ export async function handleHoleHeatmap(
   } catch {
     /* harvest is best-effort */
   }
-  const rows = await db.listHoleShotMarks(env.DB, layoutId, hole);
-  let memberId: string | null = null;
-  const token = bearer(request);
-  if (token && env.JWT_SECRET) {
-    const claims = await verifySession(token, env.JWT_SECRET);
-    if (claims && !claims.play) memberId = claims.sub;
-  }
+  const memberId = (await requireRoundActor(request, env))?.sub ?? null;
+  const rows = await db.listHoleShotMarks(env.DB, layoutId, hole, memberId);
   return json(publicHeatmapPayload(rows, memberId, hole), 200, origin);
 }

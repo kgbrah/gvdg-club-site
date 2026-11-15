@@ -33,6 +33,8 @@ import { OFFLINE_ID } from "../shared/offline-round.js";
 import { readOpenPlayName, readOpenPlayToken, writeOpenPlaySession } from "./open-play-session.js";
 import { buildLivePots, withLiveCtpLeaders } from "../shared/live-pots-model.js";
 import { isLiveWatchRequest, liveRoundCodeFromSearch, liveWatchHref } from "../shared/live-watch.js";
+import { scorerSocketProtocols, spectatorHeaders, spectatorSocketProtocols, watchKeyFromLocation, watchUrl } from "../shared/spectator-link.js";
+import { createSpectatorTransport } from "./spectator-transport.js";
 import { casualReplaySnapshot, watchableLiveSnapshot } from "../shared/casual-replay.js";
 import { holeWinners, winnerColor } from "../shared/matchplay-colors.js";
 import { GPS_WATCH_OPTIONS, gpsErrorPolicy } from "../shared/hole-map-model.js";
@@ -62,7 +64,8 @@ export function startScoreApp(options) {
         const offlineReturn = MODE === 'home' && OFFLINE_ID.test(params.get('returnToOffline') || '') ? params.get('returnToOffline') : null;
         const COURSE_QUERY = MODE === 'home' ? String(params.get('course') || '').trim() : '';
         const WATCH = isLiveWatchRequest(params);
-        const LIVE = ROUND_CODE ? ('/rounds/' + ROUND_CODE + '/live') : ('/events/' + EVENT_ID + '/live');
+        const WATCH_KEY = WATCH && !EVENT_ID ? watchKeyFromLocation(location) : null;
+        const LIVE = WATCH_KEY ? '/watch-round' : ROUND_CODE ? ('/rounds/' + ROUND_CODE + '/live') : ('/events/' + EVENT_ID + '/live');
         // A guest scores an EVENT via their registration token (URL ?gt= or saved at registration).
         // Casual rounds accept a member session OR an open-play scoring token (no club PIN).
         function guestTokenStored() { try { const a = JSON.parse(localStorage.getItem(GUESTREG_KEY) || '{}'); return (a[EVENT_ID] && a[EVENT_ID].guestToken) || null; } catch (e) { return null; } }
@@ -75,6 +78,8 @@ export function startScoreApp(options) {
         const POTS_REFRESH_MS = 30 * 1000;
         const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], joinRequests: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, roundConfig: null, scoreTargets: [], scoreTargetError: null, weather: null, pots: null, playerLocations: [], cardLocked: false, cardAttestation: { agreedIndexes: [], neededIndexes: [], complete: false }, finishConfirmOpen: false, handicaps: null, handicapLayoutId: null, handicapLoading: false, handicapTicket: 0 };
         let potsTimer = null;
+        let spectator = null;
+        let watchState = { phase: "connecting", snapshot: null };
         let locWatchId = null;
         let locRetryTimer = null;
         let locLastSent = 0;
@@ -131,7 +136,7 @@ export function startScoreApp(options) {
         }
         let pruningRecent = false;
         async function stillOnRecentRound(code) {
-            const live = await api('/rounds/' + code + '/live', { auth: false, guest: false });
+            const live = await api('/rounds/' + code + '/live', { guest: false });
             if (live.neterr) return true;
             if (live.status === 404) return false;
             if (!live.ok || !live.data) return true;
@@ -385,8 +390,11 @@ export function startScoreApp(options) {
                         recoveryActorIndex: scope.actorIndex,
                     });
                     return api(LIVE + '/clips?' + query, {
-                        method: 'POST', credential, raw: true, body: record.blob, timeout: 120000,
-                        headers: { 'Content-Type': record.blob.type || 'application/octet-stream' },
+                        method: 'POST', credential, guest: false, raw: true, body: record.blob, timeout: 120000,
+                        headers: {
+                            'Content-Type': record.blob.type || 'application/octet-stream',
+                            ...(credential.type === 'guest' ? { Authorization: 'Guest ' + credential.token } : {}),
+                        },
                     });
                 };
                 recovery = context;
@@ -519,17 +527,20 @@ export function startScoreApp(options) {
         window.addEventListener('online', function () {
             setOnline(true);
             void flushRecovery('online');
-            if (WATCH || isCurrentRecovery(recovery)) connectWs();
+            if (WATCH) spectator?.resume();
+            else if (isCurrentRecovery(recovery)) connectWs();
         });
-        window.addEventListener('offline', function () { setOnline(false); });
+        window.addEventListener('offline', function () { setOnline(false); spectator?.offline(); });
+        window.addEventListener('pageshow', function () { spectator?.resume(); });
         window.addEventListener('storage', function (event) {
+            if (WATCH && !WATCH_KEY && ROUND_CODE && ['gvdg_member_token', 'gvdg_open_play_token'].includes(event.key)) spectator?.checkIdentity();
             const context = recovery;
             if (!context) return;
             if (!isCurrentRecovery(context)) { void boot(); return; }
             if (context.journal.hasStorageKey(event.key)) { readRecovery(context); renderHole(); void flushRecovery(); }
         });
         document.addEventListener('visibilitychange', function () {
-            if (!document.hidden) void flushRecovery();
+            if (!document.hidden) { spectator?.resume(); void flushRecovery(); }
         });
 
         // ---------- score state access ----------
@@ -733,17 +744,6 @@ export function startScoreApp(options) {
             const snap = S.snap; if (!snap || !Array.isArray(snap.players)) return;
             if (snap.roundConfig) S.roundConfig = snap.roundConfig;
             ensureHandicaps(snap.layoutId || S.layoutId);
-            if (WATCH) {
-                const extrasChanged = applyLiveExtras(snap);
-                if (snap.status === 'final') stopLiveLocation();
-                if (snap.rev != null) { if (snap.rev <= S.lastRev) { if (extrasChanged) renderWatch(); return; } S.lastRev = snap.rev; }
-                if (snap.status) S.status = snap.status;
-                if (Array.isArray(snap.holes) && snap.holes.length) assignHoles(snap.holes, snap);
-                S.roundConfig = snap.roundConfig || S.roundConfig;
-                if (S.pots) S.pots.ctps = withLiveCtpLeaders(S.pots.ctps, snap.liveCtps);
-                renderWatch();
-                return;
-            }
             const extrasChanged = applyLiveExtras(snap);
             if (snap.status === 'final') stopLiveLocation();
             // Drop a stale/out-of-order snapshot (a newer one from another device was already applied).
@@ -792,29 +792,28 @@ export function startScoreApp(options) {
 
         // ---------- WebSocket live sync ----------
         function connectWs() {
-            if (MODE === 'home' || (!WATCH && !isCurrentRecovery(recovery))) return;
+            if (MODE === 'home' || WATCH || !isCurrentRecovery(recovery)) return;
             if (S.ws && (S.ws.readyState === WebSocket.OPEN || S.ws.readyState === WebSocket.CONNECTING)) return;
             let ws;
-            try { ws = new WebSocket(API_BASE.replace(/^http/, 'ws') + LIVE + '/ws'); }
+            try { ws = new WebSocket(API_BASE.replace(/^http/, 'ws') + LIVE + '/ws', scorerSocketProtocols(scoringCredential())); }
             catch (e) { return; }
             S.ws = ws;
             ws.addEventListener('message', function (ev) {
                 let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
                 // Two scorers on the same card disagreed on a hole — alert this card immediately to reconcile.
-                if (msg && msg.type === 'conflict') { if (WATCH) return; if (msg.cardId === S.cardId) { upsertConflict(msg); conflictAlert(msg); renderHole(); } return; }
+                if (msg && msg.type === 'conflict') { if (msg.cardId === S.cardId) { upsertConflict(msg); conflictAlert(msg); renderHole(); } return; }
                 if (msg && msg.type === 'snapshot') {
-                    if (!WATCH) {
-                        if (!isCurrentRecovery(recovery)) return;
-                        if (msg.recoveryRoundId !== recovery.scope.roundId) { void loadMine(); return; }
-                    }
+                    if (!isCurrentRecovery(recovery)) return;
+                    if (msg.recoveryRoundId !== recovery.scope.roundId) { void loadMine(); return; }
                     if (msg.rev != null && msg.rev < S.lastRev) return;
                     S.snap = msg;
                     mergeFromSnap();
                 }
             });
-            ws.addEventListener('close', function () {
+            ws.addEventListener('close', function (event) {
                 if (S.ws !== ws) return;
                 S.ws = null;
+                if (event.code === 4403) { void loadMine(); return; }
                 if (S.wsTimer) return;
                 S.wsTimer = setTimeout(function () { S.wsTimer = null; connectWs(); }, 4000);
             });
@@ -1058,8 +1057,11 @@ export function startScoreApp(options) {
                 finishing,
                 onScorerChange: function (index) { S.scorerIndex = index; renderHole(); },
                 onShare: shareRound,
-                onShareCode: ROUND_CODE ? shareJoinCode : null,
+                onShareCode: ROUND_CODE && S.status === 'live' ? shareJoinCode : null,
                 onWatchShare: !ROUND_CODE && EVENT_ID ? shareWatchLink : null,
+                roundSharingApi: ROUND_CODE && isCurrentRecovery(recovery) ? (options) => api(LIVE + '/sharing', { ...options, timeout: 8000 }) : null,
+                onCopyWatch: shareWatchLink,
+                clipGeneration: recovery?.scope.roundId || null,
                 joinRequests: S.joinRequests || [],
                 onApproveJoin: answerJoinRequest,
                 onDeclineJoin: declineJoinRequest,
@@ -1651,17 +1653,17 @@ export function startScoreApp(options) {
             const url = shareCardUrl();
             const model = buildShareCard(S, {
                 now: new Date(),
-                roundCode: ROUND_CODE,
+                roundCode: "",
                 scorerIndex: currentScorerIndex(),
             });
             const title = model.course && model.course !== "Disc golf"
                 ? ("GVDG · " + model.course)
-                : (ROUND_CODE ? ("GVDG round " + ROUND_CODE) : "GVDG scorecard");
+                : "GVDG scorecard";
             const text = shareCardText(model, url);
             shareRoundPayload(model, { title: title, text: text, url: url });
         }
         function shareCardUrl() {
-            if (ROUND_CODE) return location.origin + location.pathname + "?round=" + ROUND_CODE;
+            if (ROUND_CODE) return "";
             if (EVENT_ID) return location.origin + location.pathname + "?event=" + EVENT_ID + "&watch=1";
             return location.origin + location.pathname;
         }
@@ -1679,29 +1681,30 @@ export function startScoreApp(options) {
                     files: [file],
                     title: payload.title,
                     text: payload.text,
-                    url: payload.url,
+                    ...(payload.url ? { url: payload.url } : {}),
                 }).catch(function () {});
                 return;
             }
             if (file) downloadShareFile(file);
             if (navigator.share) {
-                navigator.share({ title: payload.title, text: payload.text, url: payload.url }).catch(function () {});
+                navigator.share({ title: payload.title, text: payload.text, ...(payload.url ? { url: payload.url } : {}) }).catch(function () {});
                 if (file) toast("Scorecard saved");
                 return;
             }
-            if (navigator.clipboard) {
+            if (navigator.clipboard && payload.url) {
                 navigator.clipboard.writeText(payload.url).then(function () {
                     toast(file ? "Scorecard saved · link copied" : "Link copied");
-                }).catch(function () { toast(ROUND_CODE ? ("Code: " + ROUND_CODE) : payload.url); });
+                }).catch(function () { toast(payload.url); });
                 return;
             }
-            toast(ROUND_CODE ? ("Code: " + ROUND_CODE) : payload.url);
+            if (file) toast("Scorecard saved");
+            else if (payload.url) toast(payload.url);
+            else toast("Couldn’t share this scorecard");
         }
         function shareJoinCode() {
             if (!ROUND_CODE) { shareWatchLink(); return; }
             const join = location.origin + location.pathname + "?round=" + ROUND_CODE;
-            const watch = location.origin + location.pathname + "?round=" + ROUND_CODE + "&watch=1";
-            const text = "Join my card — code " + ROUND_CODE + "\nWatch: " + watch;
+            const text = "Join my card — code " + ROUND_CODE;
             const payload = { title: "GVDG round " + ROUND_CODE, text: text, url: join };
             if (navigator.share) {
                 navigator.share(payload).catch(function () {});
@@ -1717,78 +1720,110 @@ export function startScoreApp(options) {
         function watchHref() {
             return liveWatchHref({ eventId: EVENT_ID, roundCode: ROUND_CODE });
         }
-        function shareWatchLink() {
-            const path = watchHref();
-            if (!path) { toast('Nothing to watch yet'); return; }
-            const url = location.origin + location.pathname.replace(/[^/]+$/, '') + path;
-            if (navigator.clipboard) { navigator.clipboard.writeText(url).then(function () { toast('Watch link copied'); }).catch(function () { toast(url); }); }
-            else toast(url);
+        async function shareWatchLink(key = WATCH_KEY) {
+            const path = typeof key === "string" ? "score.html?watch=1" : watchHref();
+            if (!path) return false;
+            const url = watchUrl(path, location, typeof key === "string" ? key : null);
+            try {
+                await navigator.clipboard.writeText(url);
+                toast('Watch link copied');
+                return true;
+            } catch {
+                await dialogs.prompt({ title: 'Copy watch link', label: 'Watch link', initialValue: url, readOnly: true, confirmText: 'Done' });
+                return true;
+            }
         }
         function renderWatch() {
-            const snap = S.snap || {};
+            const snap = watchState.snapshot;
             const pots = buildLivePots({ acePot: S.pots && S.pots.acePot, ctps: S.pots && S.pots.ctps, roundStatus: S.status });
             setShellHeader({
                 showLeaderboard: false,
-                subtitle: [S.courseName, S.layoutName].filter(Boolean).join(' · ') || 'Live scoring',
-                title: S.status === 'final' ? 'Final' : 'Watch live',
+                subtitle: snap ? [S.courseName, S.layoutName].filter(Boolean).join(' · ') || 'Live scoring' : 'Live scoring',
+                title: snap?.status === 'final' ? 'Final' : 'Watch round',
             });
             renderScoreBody('watch', {
-                connection: S.status === 'final' ? 'Final' : 'Live',
+                connection: watchState.phase,
+                receivedAt: watchState.receivedAt,
+                updatedAt: snap?.updatedAt,
+                hasSnapshot: Boolean(snap),
                 courseName: S.courseName,
-                holes: watchHoleViews(),
+                holes: snap ? watchHoleViews() : [],
                 isDoubles: isDoublesScoring(S),
                 isMatchplay: isMatchplayScoring(S),
                 isPutting: isPuttingScoring(S),
                 layoutName: S.layoutName,
-                layoutId: S.layoutId || snap.layoutId || null,
-                onCopyLink: shareWatchLink,
+                layoutId: S.layoutId || snap?.layoutId || null,
+                onCopyLink: snap && (EVENT_ID || WATCH_KEY || S.watchAudience === "public") ? () => shareWatchLink() : null,
+                onReconnect: () => spectator?.retry(),
                 pots,
                 relClass: relClass,
                 relText: relText,
                 showPots: pots.visible,
                 showWeather: Boolean(S.weather),
-                standings: boardStandings(Array.isArray(snap.standings) ? snap.standings : []),
+                standings: boardStandings(Array.isArray(snap?.standings) ? snap.standings : []),
                 status: S.status,
+                generation: snap?.recoveryRoundId || null,
+                canManageClips: Boolean(snap && !WATCH_KEY && scoringToken()),
+                roundSharingApi: ROUND_CODE && !WATCH_KEY && scoringToken() ? (options) => api(LIVE + '/sharing', { ...options, timeout: 8000 }) : null,
+                onOwnerCopyWatch: shareWatchLink,
                 udiscCourseId: S.udiscCourseId || '',
                 weather: S.weather,
                 windFromDeg: S.weather && S.weather.current ? S.weather.current.windDirectionDeg : null,
-                playerLocations: S.playerLocations || [],
-                players: Array.isArray(snap.players) ? snap.players : [],
-                scoreTargets: Array.isArray(snap.scoreTargets) ? snap.scoreTargets : S.scoreTargets || [],
+                playerLocations: [],
+                players: Array.isArray(snap?.players) ? snap.players : [],
+                scoreTargets: Array.isArray(snap?.scoreTargets) ? snap.scoreTargets : [],
                 activeHoleIndex: fieldActiveHoleIndex({
                     holes: S.holes,
-                    players: Array.isArray(snap.players) ? snap.players : [],
+                    players: Array.isArray(snap?.players) ? snap.players : [],
                 }),
             });
         }
-        async function loadWatch() {
-            const r = await api(LIVE, { auth: false, guest: false });
-            let d = r.ok && r.data ? r.data : null;
-            if (ROUND_CODE && !watchableLiveSnapshot(d)) {
-                const archived = await api('/rounds/' + ROUND_CODE + '/results', { auth: false, guest: false });
-                const built = casualReplaySnapshot(archived.ok ? archived.data : null);
-                if (built) d = built;
+        function startWatch() {
+            if (spectator) { spectator.retry(); return; }
+            function get(path) {
+                return api(path, { auth: !WATCH_KEY && Boolean(ROUND_CODE), guest: false, headers: spectatorHeaders(WATCH_KEY), timeout: 8500 });
             }
-            if (!d || (d.status !== 'live' && d.status !== 'final')) {
-                if (!d && (!r.ok || r.data == null)) { renderMessage('Couldn’t load live scores', 'Check the link and try again.', true); return; }
-                renderMessage('This round is not live', 'Ask for a live watch link, or open the event page.', true);
-                return;
-            }
-            S.snap = d;
-            S.status = d.status || null;
-            assignHoles(Array.isArray(d.holes) ? d.holes : [], d);
-            S.roundConfig = d.roundConfig || null;
-            S.courseName = d.courseName || null;
-            S.layoutName = d.layoutName || null;
-            S.udiscCourseId = d.udiscCourseId || null;
-            S.layoutId = d.layoutId || null;
-            ensureHandicaps(S.layoutId);
-            S.weather = d.weather || null;
-            S.playerLocations = Array.isArray(d.playerLocations) ? d.playerLocations : [];
-            S.lastRev = d.rev == null ? -1 : d.rev;
-            renderWatch();
+            spectator = createSpectatorTransport({
+                fetchSnapshot: async () => {
+                    const response = await get(LIVE);
+                    const data = response.ok ? response.data : null;
+                    if (watchableLiveSnapshot(data)) return { snapshot: data, status: response.status };
+                    if ((ROUND_CODE || WATCH_KEY) && response.ok) {
+                        const results = await get(WATCH_KEY ? '/watch-round/results' : '/rounds/' + ROUND_CODE + '/results');
+                        const replay = casualReplaySnapshot(results.ok ? results.data : null);
+                        return { snapshot: replay, status: results.status };
+                    }
+                    return { status: response.status };
+                },
+                openSocket: () => new WebSocket(API_BASE.replace(/^http/, 'ws') + LIVE + '/ws',
+                    spectatorSocketProtocols(WATCH_KEY, ROUND_CODE ? scoringToken() : null)),
+                onState: (next) => {
+                    const changed = next.snapshot !== watchState.snapshot;
+                    watchState = next;
+                    if (changed && next.snapshot) {
+                        const d = next.snapshot;
+                        S.snap = d;
+                        if (d.viewerAudience) S.watchAudience = d.viewerAudience;
+                        S.status = d.status;
+                        S.courseName = d.courseName || null;
+                        S.layoutName = d.layoutName || null;
+                        S.layoutId = d.layoutId || null;
+                        S.udiscCourseId = d.udiscCourseId || null;
+                        S.roundConfig = d.roundConfig || null;
+                        S.weather = d.weather || null;
+                        assignHoles(Array.isArray(d.holes) ? d.holes : [], d);
+                        ensureHandicaps(S.layoutId);
+                        if (S.pots) S.pots.ctps = withLiveCtpLeaders(S.pots.ctps, d.liveCtps);
+                    } else if (!next.snapshot) {
+                        S.snap = null;
+                        S.watchAudience = null;
+                        S.status = null;
+                    }
+                    renderWatch();
+                },
+            });
+            spectator.start();
             startPotsPolling();
-            if (d.status === 'live') connectWs();
         }
         function watchRoundCode(value) {
             const code = cleanRoundCode(value);
@@ -1799,9 +1834,8 @@ export function startScoreApp(options) {
         async function boot() {
             if (!isCurrentRecovery(recovery)) stopRecovery();
             setOnline(navigator.onLine);
-            if (WATCH && (EVENT_ID || ROUND_CODE)) {
-                renderLoading();
-                await loadWatch();
+            if (WATCH && (EVENT_ID || ROUND_CODE || WATCH_KEY)) {
+                startWatch();
                 return;
             }
             if (MODE === 'home') {

@@ -13,6 +13,7 @@ import { assignCards, type PlayerState } from "./scoring.js";
 import { weatherLocationForCourse } from "./weather.js";
 import { playersMatch } from "./player-identity.js";
 import { liveHolesWithPins, overlayLiveSnapshot, submitLiveMapMark } from "./course-map-marks-routes.js";
+import { socketRequest, spectatorSnapshot } from "./spectator-access.js";
 import { cardFromMine, handleThrowClips } from "./throw-clip-routes.js";
 import { handleRoundMessages } from "./round-message-routes.js";
 import { dropLiveRound, noteLiveRound } from "./course-traffic.js";
@@ -158,7 +159,8 @@ async function scoreIdentity(
     const member = await getMember(env.ROSTER, claims.sub);
     return { authMember: claims.sub, authAdmin: member?.isAdmin === true };
   }
-  const t = asStr(new URL(request.url).searchParams.get("gt") ?? undefined, 64) || (body ? asStr(body.guestToken, 64) : null);
+  const header = request.headers.get("Authorization")?.match(/^Guest ([\w-]{1,64})$/)?.[1];
+  const t = header || asStr(new URL(request.url).searchParams.get("gt") ?? undefined, 64) || (body ? asStr(body.guestToken, 64) : null);
   return { authMember: t ? "g_" + t : null, authAdmin: false };
 }
 
@@ -179,9 +181,19 @@ export async function handleClubLive(
   if (method === "GET" && !sub) {
     const r = await stub.fetch("https://do/snapshot");
     const snapshot = await r.json().catch(() => ({}));
-    return json(await overlayLiveSnapshot(env, snapshot as Record<string, unknown>), r.status, origin);
+    const overlay = await overlayLiveSnapshot(env, snapshot as Record<string, unknown>);
+    return json({ ...spectatorSnapshot(overlay), observedAt: overlay.observedAt ?? Date.now() }, r.status, origin);
   }
-  if (sub === "ws") return stub.fetch(request);
+  if (method === "GET" && sub === "ws") {
+    const { headers, expiry, identity } = socketRequest(request);
+    const id = await scoreIdentity(identity, env, null);
+    if (id.authMember) {
+      headers.set("X-Auth-Member", id.authMember);
+      if (expiry !== null) headers.set("X-Auth-Expires", String(expiry));
+    }
+    if (id.authAdmin) headers.set("X-Auth-Admin", "true");
+    return stub.fetch("https://do/ws", { headers });
+  }
 
   // A player's own card (members via JWT, guests via ?gt= token) — tells the score app which card is theirs.
   if (method === "GET" && sub === "mine") {
@@ -327,13 +339,13 @@ export async function handleClubLive(
 
   if (sub === "clips") {
     const tail = seg.slice(4);
+    const id = await scoreIdentity(request, env, null);
     if (method === "GET") {
       return handleThrowClips({
         request, env, origin, method, scope: "event", scopeKey: String(eid), tail,
-        authMember: null, card: null,
+        authMember: id.authMember, card: null,
       });
     }
-    const id = await scoreIdentity(request, env, null);
     if (!id.authMember) return json({ error: "unauthorized" }, 401, origin);
     const mineRes = await stub.fetch("https://do/mine", { headers: { "X-Auth-Member": id.authMember } });
     const mine = await mineRes.json().catch(() => ({}));

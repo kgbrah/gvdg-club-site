@@ -119,6 +119,7 @@ export interface CasualRoundInput {
   scoring_config?: string | null;
   created_by?: string | null;
   started_at?: string | null;
+  live_generation?: string | null;
 }
 
 export async function clearCasualRound(db: D1Like, roundCode: string) {
@@ -128,9 +129,9 @@ export async function clearCasualRound(db: D1Like, roundCode: string) {
 export async function createCasualRound(db: D1Like, r: CasualRoundInput) {
   return db
     .prepare(
-      "INSERT INTO casual_rounds (round_code, course_id, layout_id, course_name, layout_name, holes, created_by, started_at, scoring_config) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
+      "INSERT INTO casual_rounds (round_code, course_id, layout_id, course_name, layout_name, holes, created_by, started_at, scoring_config, live_generation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
     )
-    .bind(r.round_code, r.course_id ?? null, r.layout_id ?? null, r.course_name ?? null, r.layout_name ?? null, r.holes ?? null, r.created_by ?? null, r.started_at ?? null, r.scoring_config ?? null)
+    .bind(r.round_code, r.course_id ?? null, r.layout_id ?? null, r.course_name ?? null, r.layout_name ?? null, r.holes ?? null, r.created_by ?? null, r.started_at ?? null, r.scoring_config ?? null, r.live_generation ?? null)
     .first();
 }
 
@@ -146,6 +147,7 @@ export interface CasualResultInput {
   scorecard?: string | null;
   scoring_group?: string | null;
   match_result?: string | null;
+  live_player_index?: number | null;
 }
 
 export async function createCasualResult(db: D1Like, r: CasualResultInput) {
@@ -160,9 +162,9 @@ export async function createCasualResult(db: D1Like, r: CasualResultInput) {
 export function createCasualResultStmt(db: D1Like, r: CasualResultInput): D1StatementLike {
   return db
     .prepare(
-      "INSERT INTO casual_results (casual_round_id, member_id, name, division, place, total, to_par, breakdown, scorecard, scoring_group, match_result) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO casual_results (casual_round_id, member_id, name, division, place, total, to_par, breakdown, scorecard, scoring_group, match_result, live_player_index) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
-    .bind(r.casual_round_id, r.member_id ?? null, r.name, r.division ?? null, r.place ?? null, r.total ?? null, r.to_par ?? null, r.breakdown ?? null, r.scorecard ?? null, r.scoring_group ?? null, r.match_result ?? null);
+    .bind(r.casual_round_id, r.member_id ?? null, r.name, r.division ?? null, r.place ?? null, r.total ?? null, r.to_par ?? null, r.breakdown ?? null, r.scorecard ?? null, r.scoring_group ?? null, r.match_result ?? null, r.live_player_index ?? null);
 }
 
 export async function listCasualRoundResults(db: D1Like, roundCode: string) {

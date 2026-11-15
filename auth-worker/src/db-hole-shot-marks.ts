@@ -87,18 +87,19 @@ export async function ingestScorecardMarks(
   return holes.reduce((sum, hole) => sum + hole.throws.length, 0);
 }
 
-export async function listHoleShotMarks(db: D1Like, layoutId: number, hole: number): Promise<ShotMark[]> {
+export async function listHoleShotMarks(db: D1Like, layoutId: number, hole: number, memberId: string | null = null): Promise<ShotMark[]> {
   const rows = (await readD1OrFallback(
     () =>
       db
         .prepare(
-          `SELECT lat, lng, throw_n, member_id
-             FROM hole_shot_marks
-            WHERE layout_id = ? AND hole = ?
-            ORDER BY throw_n, id
+          `SELECT m.lat, m.lng, m.throw_n, m.member_id
+             FROM hole_shot_marks m LEFT JOIN casual_round_sharing s ON s.round_code = m.round_code
+            WHERE m.layout_id = ? AND m.hole = ?
+              AND (s.round_code IS NULL OR (s.visibility = 'public' AND s.include_marked = 1) OR m.member_id = ?)
+            ORDER BY m.throw_n, m.id
             LIMIT 800`,
         )
-        .bind(layoutId, hole)
+        .bind(layoutId, hole, memberId)
         .all(),
     () => ({ results: [], success: true }),
   )).results as Record<string, unknown>[];

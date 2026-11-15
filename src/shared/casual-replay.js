@@ -88,7 +88,11 @@ export function casualReplaySnapshot(payload) {
   if (!round || typeof round !== "object") return null;
   const results = Array.isArray(payload.results) ? payload.results : [];
   const holes = parseHoles(round.holes);
-  const players = results.map((row, index) => {
+  const mappedIndexes = results.flatMap((row) => Number.isInteger(row?.live_player_index) ? [row.live_player_index] : []);
+  let unmappedIndex = Math.max(-1, ...mappedIndexes) + 1;
+  const players = results.map((row) => {
+    const mapped = Number.isInteger(row?.live_player_index);
+    const index = mapped ? row.live_player_index : unmappedIndex++;
     const scorecard = parseScorecard(row && row.scorecard);
     const scores = {};
     const throws = {};
@@ -98,6 +102,7 @@ export function casualReplaySnapshot(payload) {
     }
     return {
       index,
+      clipPlayerIndex: mapped ? index : null,
       cardId: "h1",
       name: String((row && row.name) || "Player"),
       division: row && row.division != null ? String(row.division) : null,
@@ -114,6 +119,8 @@ export function casualReplaySnapshot(payload) {
   return {
     status: "final",
     rev: 0,
+    recoveryRoundId: typeof round.live_generation === "string" ? round.live_generation : null,
+    updatedAt: round.finalized_at ?? round.started_at ?? null,
     eventId: null,
     courseId: asInt(round.course_id),
     layoutId: asInt(round.layout_id),
@@ -128,15 +135,17 @@ export function casualReplaySnapshot(payload) {
       const total = asInt(row && row.total);
       const toPar = asInt(row && row.to_par);
       const name = String((row && row.name) || "Player");
+      const player = players[index];
       return {
         name,
         division: row && row.division != null ? String(row.division) : null,
         thru: scorecard.length || (total != null && holeCount ? holeCount : 0),
         total: total ?? 0,
         toPar: toPar ?? 0,
-        targetId: "p" + index,
+        targetId: "p" + player.index,
         targetType: "player",
-        playerIndexes: [index],
+        playerIndexes: [player.index],
+        clipPlayerIndexes: player.clipPlayerIndex == null ? [] : [player.clipPlayerIndex],
         members: [name],
         scorecard: scorecard.map((hole) => ({ hole: hole.hole, par: hole.par, strokes: hole.strokes })),
       };

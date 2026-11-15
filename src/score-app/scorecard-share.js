@@ -130,8 +130,8 @@ export function shareCardText(model, url) {
   const card = model || {};
   const bits = [card.course, card.layout, card.date].filter(Boolean);
   const lead = bits.length ? bits.join(" · ") : "GVDG round";
-  const code = card.roundCode ? "Join my card — code " + card.roundCode : "Watch live on GVDG";
-  return lead + "\n" + code + (url ? "\n" + url : "");
+  const code = card.roundCode ? "Join my card — code " + card.roundCode : url ? "Watch on GVDG" : "";
+  return [lead, code, url].filter(Boolean).join("\n");
 }
 
 export function shareCardSize(model) {
