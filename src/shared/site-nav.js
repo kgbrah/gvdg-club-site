@@ -14,6 +14,7 @@ export const SITE_NAV_PRIMARY = [
   { label: "Members", href: "gvdg-members.html", page: "gvdg-members" },
 ];
 export const SITE_NAV_MORE = [
+  { label: "Scoring app", href: "scoring-app.html", page: "scoring-app" },
   { label: "Ryder Cup", href: "ryder-cup.html", page: "ryder-cup" },
   { label: "Blog", href: "gvdg-blog.html", page: "gvdg-blog" },
 ];

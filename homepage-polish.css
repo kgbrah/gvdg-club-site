@@ -43,6 +43,47 @@ header .logo .logo-image, header.scrolled .logo .logo-image { height: 44px !impo
 }
 .hero-title-line { display: block; }
 
+#scoring-app-teaser {
+  display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.4fr); gap: 32px; align-items: center;
+  width: calc(100% - 48px); max-width: 1200px; margin: 32px auto; padding: 32px;
+  background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 16px;
+}
+.scoring-teaser-kicker {
+  margin: 0 0 8px; color: var(--secondary-text); font-size: .66rem;
+  font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+}
+#scoring-teaser-title {
+  margin: 0 0 10px; font-family: 'Bebas Neue', sans-serif; font-weight: 400;
+  font-size: clamp(2rem, 3.4vw, 2.75rem); line-height: 1.1; letter-spacing: .035em; text-align: left;
+}
+.scoring-teaser-description { max-width: 48ch; color: var(--text-secondary); font-size: .9rem; line-height: 1.7; }
+.scoring-teaser-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 20px; }
+.scoring-teaser-actions a {
+  display: inline-flex; justify-content: center; align-items: center; gap: 10px;
+  min-height: 46px; padding: 12px 16px; border: 1px solid transparent; border-radius: 8px;
+  font-size: .79rem; font-weight: 700; text-decoration: none;
+}
+.scoring-teaser-actions .scoring-teaser-explore { background: var(--secondary); color: var(--light); }
+.scoring-teaser-explore:hover { background: var(--dark); }
+.scoring-teaser-actions .scoring-teaser-score { border-color: var(--border-color); color: var(--secondary-text); }
+.scoring-teaser-score:hover { background: var(--bg-primary); }
+.scoring-teaser-features {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; list-style: none; margin: 0;
+  padding: 0 0 0 28px; border-left: 1px solid var(--border-color);
+}
+.scoring-teaser-features li { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px; align-items: start; }
+.scoring-teaser-icon {
+  display: flex; align-items: center; justify-content: center; width: 36px; height: 36px;
+  background: var(--bg-primary); color: var(--secondary-text); border-radius: 10px;
+}
+.scoring-teaser-features h3 { margin: 0 0 5px; font-family: inherit; font-size: .91rem; font-weight: 700; line-height: 1.4; }
+.scoring-teaser-features p { color: var(--text-secondary); font-size: .81rem; line-height: 1.65; }
+
+@media (min-width: 769px) and (max-width: 1000px) {
+  #scoring-app-teaser { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .scoring-teaser-features { border-left: 0; border-top: 1px solid var(--border-color); padding: 24px 0 0; }
+}
+
 /* The whole course card opens its existing details dialog. */
 #courses .course-card { display: flex; flex-direction: column; }
 #courses .course-card[data-recommended='true'] { border-color: var(--secondary-text); }
@@ -114,6 +155,10 @@ header .logo .logo-image, header.scrolled .logo .logo-image { height: 44px !impo
   header .menu-toggle { display: flex !important; align-items: center; justify-content: center; padding: 0; }
 }
 @media (max-width: 768px) {
+  #scoring-app-teaser { grid-template-columns: minmax(0, 1fr); gap: 24px; width: calc(100% - 32px); margin: 20px auto; padding: 24px 20px; }
+  .scoring-teaser-features { grid-template-columns: minmax(0, 1fr); border-left: 0; border-top: 1px solid var(--border-color); padding: 22px 0 0; gap: 18px; }
+  .scoring-teaser-actions { gap: 10px; }
+  .scoring-teaser-actions a { flex: 1 1 auto; }
   html { scroll-padding-top: 84px; }
   header, header.scrolled { padding: 8px 20px; }
   header nav { min-height: 52px; gap: 12px !important; }
