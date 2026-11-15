@@ -123,7 +123,11 @@ async function openPage(path, width, { mode = "light", scale = 1, isAdmin = fals
     await help.waitFor({ state: "detached" });
     await page.waitForFunction(() => !document.body.style.overflow);
     assert.equal(await focusSettled(opener), true);
-    assert.equal(await page.evaluate(() => Boolean(document.querySelector("[inert]"))), false);
+    // The dialog isolates body siblings. Inactive carousel slides intentionally
+    // remain inert after Help closes so offscreen course controls stay untabbable.
+    assert.equal(await page.evaluate(() => [...document.body.children].some((node) => node.hasAttribute("inert"))), false);
+    assert.equal(await page.evaluate(() => [...document.querySelectorAll(".carousel-slide-courses[aria-hidden='true']")]
+      .every((node) => node.hasAttribute("inert"))), true);
   }
   async function screenshot(label) { await page.screenshot({ path: join(screenshots, label + ".png"), animations: "disabled" }); }
   return { page, context, requests, errors, help, control, input, title, close, attach, send, remove, focused, finishOpen, verifyClosed, screenshot,

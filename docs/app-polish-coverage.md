@@ -44,6 +44,8 @@ Archive export/reimport and migration0057 are integrated, with browser download/
 
 The user rejected the first scorer visual pass because it looked more crowded and its previews omitted weather and wind speed. The scorecard visual rollout is held. New source mockups must visibly represent weather/wind, retain map and scoring access, reduce competing panels, and receive fresh user approval before deployment. Backend/score-entry/offline correctness fixes remain in the integration draft.
 
+The next previews were also rejected for oversized map controls and moving hole navigation to the top. The explicit requirement is now to retain bottom-anchored scoring and previous/next-hole navigation for one-handed use. Map overlays must be compact; occasional tee/pin adjustments can move into Tools while marked-lie actions remain readily accessible. No top-navigation scorecard concept is approved.
+
 
 ## Shared Help and subsequent member cleanup
 
