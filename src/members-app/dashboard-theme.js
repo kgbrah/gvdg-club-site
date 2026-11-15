@@ -27,7 +27,7 @@ import {
   tokensFromPalette,
   writeStoredTheme,
 } from "../shared/dashboard-theme-model.js";
-import { THEME_EVENT, notifyPlayerThemeChanged } from "../shared/player-theme-session.js";
+import { THEME_EVENT, notifyPlayerThemeChanged, paintPlayerTheme } from "../shared/player-theme-session.js";
 import { themeRoot } from "../shared/player-theme-chrome.js";
 import { ThemeGlassControls } from "./theme-glass-controls.js";
 import { StudioSection, useScrollSafeRange } from "./theme-studio-section.js";
@@ -119,9 +119,14 @@ export function DashboardThemeBuilder() {
     return safe;
   }, []);
 
+  // Leaving Appearance must keep the member's saved theme on the rest of the app. The studio saves every
+  // change as it is made, so the stored theme is the current one (and none after Reset → club default).
+  const savedThemeKey = React.useRef({ token: null, memberId: null });
+  savedThemeKey.current = { token, memberId };
   React.useEffect(() => () => {
-    applyDashboardTheme(null, themeRoot());
-    notifyPlayerThemeChanged(null);
+    const { token: savedToken, memberId: savedMember } = savedThemeKey.current;
+    const saved = savedToken ? readStoredTheme(window.localStorage, savedMember) : null;
+    paintPlayerTheme(saved, themeRoot());
   }, []);
 
   React.useEffect(() => {
