@@ -1,4 +1,5 @@
 import React from "react";
+import { ChevronRight, ShieldCheck } from "lucide-react";
 
 import { destination } from "../shared/app-navigation.js";
 import { ToolFinder } from "../shared/tool-finder.js";
@@ -83,9 +84,25 @@ export function MemberMorePage() {
   ]);
 }
 
+function AdminPortalBanner() {
+  const description = React.useId();
+  return h("a", {
+    "aria-label": "Admin portal", "aria-describedby": description, className: "member-admin-banner",
+    "data-react-admin-portal": "ready", href: "admin.html", id: "adminPortalLink",
+  }, [
+    h(ShieldCheck, { "aria-hidden": true, size: 21, key: "icon" }),
+    h("span", { className: "member-admin-copy", key: "copy" }, [
+      h("strong", { key: "title" }, "Admin portal"),
+      h("small", { id: description, key: "detail" }, "Manage club events and members"),
+    ]),
+    h(ChevronRight, { "aria-hidden": true, size: 18, key: "arrow" }),
+  ]);
+}
+
 export function MemberAccountPage() {
   const context = useMemberContext();
-  return h("div", { className: "react-more-page", "data-react-member-account": "ready" }, [
+  return h("div", { className: "react-more-page member-account-page", "data-react-member-account": "ready" }, [
+    context.isAdmin ? h(AdminPortalBanner, { key: "admin" }) : null,
     h("section", { className: "player-card", "aria-label": "Membership", key: "membership" }, [
       h("h2", { key: "heading" }, context.name || "Club membership"),
       h("p", { className: "player-card-meta", key: "profile" }, context.pdgaNo ? "PDGA #" + context.pdgaNo : "Greenville DGC member"),
@@ -95,7 +112,6 @@ export function MemberAccountPage() {
       ...["wallet", "appearance", "install"].map((tab) => h(MoreLink, { tab, key: tab })),
       h("a", { className: "player-more-item", href: "index.html", key: "website" }, "Club website"),
       h(CrottsHelpLink, { className: "player-more-item", key: "help" }),
-      context.isAdmin ? h("a", { className: "player-more-item", href: "admin.html", key: "admin" }, "Admin portal") : null,
     ]),
     h("button", {
       className: "player-logout-btn", id: "logoutBtn", key: "logout", onClick: requestLogout, type: "button",
