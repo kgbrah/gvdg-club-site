@@ -20,6 +20,7 @@ import {
 } from "../shared/play-stats.js";
 import { selectDashboardTab } from "./dashboard-shell.js";
 import { PersonalPlayHistory } from "./personal-play-history.js";
+import { MetricBar, ScoreDistribution } from "./season-charts.js";
 import { SHOT_STAT_DEFINITIONS } from "../shared/shot-stats-model.js";
 
 const h = React.createElement;
@@ -100,6 +101,7 @@ function StatCard({ compact, row, showLeaders = true, showRank = true }) {
   return h("div", { className: "play-stat-card" + (compact ? " compact" : "") + (row.tone ? " tone-" + row.tone : "") }, [
     h("div", { className: "play-stat-k", key: "k" }, row.label),
     h("div", { className: "play-stat-v", key: "v" }, pct),
+    compact ? null : h(MetricBar, { key: "bar", pct: mine && mine.att ? mine.pct : null }),
     h("div", { className: "play-stat-s", key: "s" }, [showRank ? rankText(row) : null, sample].filter(Boolean).join(" · ")),
     showLeaders && !compact && row.leaders && row.leaders.length
       ? h("ol", { className: "play-stat-leaders", key: "leaders" }, row.leaders.slice(0, 3).map((leader) =>
@@ -191,6 +193,7 @@ export function PlayStatsKindBlock({
         h("div", { className: "play-stat-k", key: "label" }, "Scoring mix"),
         h(MixBar, { key: "bar", rows: mix }),
         h(MixLegend, { key: "legend", rows: mix, showRank: !pdga }),
+        compact ? null : h(ScoreDistribution, { key: "dist", rows: mix, totals: bucket?.mine?.totals }),
       ])
       : null,
     hasSample && cards.length
@@ -221,6 +224,7 @@ export function PlayStatsGrid({ compact = false, kind, onKind, state, group, onG
   }
   return h("div", {
     className: "play-stats-split",
+    id: "stats-scoring",
     "data-play-stats-split": "true",
     "data-react-play-stats": status,
   }, [
@@ -262,7 +266,7 @@ export function PlayStatsPanel({ compact = false, pdgaStats = null }) {
   }, [state.payload, pdgaRows, memberId]);
   const hasPdga = Boolean(context.pdgaNo) || pdgaRows.length > 0 || Number(mergedPayload?.pdga?.mine?.totals?.holes) > 0;
   const kinds = hasPdga ? PLAY_KINDS : PLAY_KINDS.filter((id) => id !== "pdga");
-  return h(React.Fragment, null, compact ? null : h(PersonalPlayHistory), h(PlayStatsGrid, {
+  return h(React.Fragment, null, compact ? null : h("div", { id: "stats-history" }, h(PersonalPlayHistory)), h(PlayStatsGrid, {
     compact,
     kind: kinds.includes(kind) ? kind : "competitive",
     onKind: setKind,

@@ -1,4 +1,5 @@
 import React from "react";
+import { ChevronLeft } from "lucide-react";
 
 import {
   formatClubDateTime,
@@ -16,9 +17,12 @@ import { displayMatchStatus } from "../shared/match-status.js";
 import { TeeSignSvg } from "../shared/tee-sign-svg.js";
 import { UDiscExportDetails, udiscDeepLink } from "../shared/udisc-export.js";
 import { useEventsEventDetail } from "./events-detail-data.js";
+import { EventRegistrationPanel } from "./events-registration-app.js";
 import { EventLiveChat } from "./events-live-chat.js";
 import { EventFieldRoster } from "../shared/event-field-roster.js";
 import { LiveStandings } from "./live-standings.js";
+import { EventCalendarButton, EventShareButton } from "./events-actions.js";
+import { countdownLabel, countdownParts, relativeEventWhen } from "../shared/events-display.js";
 
 const h = React.createElement;
 
@@ -71,7 +75,7 @@ function BackButton() {
     window.location.hash = "";
   }
 
-  return h("button", { className: "back-link", onClick: backToHub, type: "button" }, "\u2190 All events");
+  return h("button", { className: "back-link", onClick: backToHub, type: "button" }, [h(ChevronLeft, { "aria-hidden": "true", className: "back-link-icon", key: "icon", size: 16 }), "All events"]);
 }
 
 function DetailFact({ label, value }) {
@@ -88,6 +92,10 @@ function ExternalLink({ href, text }) {
   return h("a", { href: clean, rel: "noopener noreferrer", target: "_blank" }, text);
 }
 
+function fee(cents) {
+  return `$${((Number(cents) || 0) / 100).toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: Number(cents) % 100 ? 2 : 0 })}`;
+}
+
 function DetailFacts({ course, courseSummary, event }) {
   const udiscHref = course && safeHref(course.udisc_url);
   const courseName = course && course.name ? String(course.name) : "";
@@ -96,8 +104,7 @@ function DetailFacts({ course, courseSummary, event }) {
   const externalHref = safeHref(event.external_url);
 
   return h("div", { className: "detail-facts" }, [
-    h(DetailFact, { key: "date", label: "Date", value: formatEventDate(event.date) }),
-    event.starts_at ? h(DetailFact, { key: "starts", label: "Starts", value: formatClubDateTime(event.starts_at) }) : null,
+    h(DetailFact, { key: "when", label: "When", value: event.starts_at ? formatClubDateTime(event.starts_at) : formatEventDate(event.date) }),
     event.registration_deadline
       ? h(DetailFact, {
         key: "registration",
@@ -112,7 +119,16 @@ function DetailFacts({ course, courseSummary, event }) {
         value: formatClubDateTime(event.checkin_deadline),
       })
       : null,
-    event.format ? h(DetailFact, { key: "format", label: "Format", value: formatLabel(event.format) }) : null,
+    event.format ? h(DetailFact, { key: "format", label: "Format", value: [formatLabel(event.format), event.play_format ? formatLabel(event.play_format) : ""].filter(Boolean).join(" · ") }) : null,
+    Array.isArray(event.divisions) && event.divisions.length
+      ? h(DetailFact, { key: "divisions", label: "Divisions", value: event.divisions.join(" · ") })
+      : null,
+    event.status === "scheduled" || event.status === "live"
+      ? h(DetailFact, { key: "fee", label: "Entry", value: [event.entry_fee_cents ? fee(event.entry_fee_cents) : "Free", event.ctp_fee_cents ? `CTP ${fee(event.ctp_fee_cents)}` : ""].filter(Boolean).join(" + ") })
+      : null,
+    event.status === "scheduled" && Array.isArray(event.field) && event.field.length
+      ? h(DetailFact, { key: "field", label: "Field", value: `${event.field.length} registered` })
+      : null,
     venueText
       ? h(DetailFact, {
         key: "course",
@@ -352,6 +368,23 @@ function TeeSigns({ apiBase, teeSigns }) {
   ]);
 }
 
+function DetailWhen({ course, event }) {
+  const scheduled = event.status === "scheduled";
+  const relative = scheduled ? relativeEventWhen(event) : "";
+  const count = scheduled ? countdownLabel(countdownParts(event)) : "";
+  const calendarEvent = { ...event, course_name: course && course.name ? course.name : "" };
+  const externalHref = safeHref(event.external_url);
+  const line = [relative, count ? `starts in ${count}` : ""].filter(Boolean).join(" \u00b7 ");
+  return h("div", { className: "detail-when" }, [
+    line ? h("p", { className: "detail-when-line", key: "when" }, line) : null,
+    h("div", { className: "detail-actions", key: "actions" }, [
+      scheduled ? h(EventCalendarButton, { event: calendarEvent, key: "ics" }) : null,
+      h(EventShareButton, { event, key: "share" }),
+      externalHref ? h("a", { className: "event-action-btn", href: externalHref, key: "ext", rel: "noopener noreferrer", target: "_blank" }, "Event page") : null,
+    ]),
+  ]);
+}
+
 function PlayerRoster({ event }) {
   const field = Array.isArray(event.field) && event.field.length ? event.field : (Array.isArray(event.players) ? event.players : []);
   return h(EventFieldRoster, { players: field });
@@ -369,14 +402,18 @@ export function EventsEventDetailApp() {
     h(BackButton, { key: "back" }),
     h("article", { className: "detail-card", key: "card", "data-react-events-event-detail": "true" }, [
       h("div", { className: "detail-head", key: "head" }, [
-        h("h1", { className: "detail-title", key: "title" }, displayEventTitle(event.name || "Event")),
         event.type ? h(Badge, { className: `type-badge ${typeClass}`, key: "type", text: typeLabel(event.type) }) : null,
-        event.status ? h(Badge, { className: `status-badge ${statusClass}`, key: "status", text: statusLabel(event.status) }) : null,
+        event.status === "live"
+          ? h("span", { className: "detail-live-pill", key: "status" }, [h("span", { className: "live-dot", key: "dot" }), "Live"])
+          : event.status ? h(Badge, { className: `status-badge ${statusClass}`, key: "status", text: statusLabel(event.status) }) : null,
+        h("h1", { className: "detail-title", key: "title" }, displayEventTitle(event.name || "Event", event.league_name)),
       ]),
+      h(DetailWhen, { course, event, key: "when" }),
       event.status === "live" ? h(LivePanel, { data, key: "live" }) : null,
       event.status === "final" ? h(FinalResults, { course, data, event, key: "final" }) : null,
       h(DetailFacts, { course, courseSummary: data.courseSummary, event, key: "facts" }),
       event.notes ? h("div", { className: "detail-notes", key: "notes" }, String(event.notes)) : null,
+      event.status === "scheduled" ? h(EventRegistrationPanel, { eventId: event.id, key: "register" }) : null,
       h(PlayerRoster, { event, key: "players" }),
       h(EventExtras, { extras: data.extras, key: "extras" }),
       h(TeeSigns, { apiBase: data.apiBase || "", key: "tee-signs", teeSigns: data.teeSigns }),

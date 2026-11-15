@@ -11,11 +11,17 @@ import { formatEventDay, formatToPar } from "./format.js";
 import { useMemberContext } from "./member-context.js";
 import { PdgaDashboard, usePdgaStats } from "./pdga-dashboard.js";
 import { PlayStatsPanel } from "./play-stats-panel.js";
+import { JumpBar, RatingTrend, SkeletonBlocks, downloadCsv, seasonCsv } from "./season-charts.js";
 import { buildSeasonPage } from "./season-page-model.js";
 import { liveWatchHref } from "../shared/live-watch.js";
 import { relClass, roundRatingOf } from "./play-page-model.js";
 
 const h = React.createElement;
+
+const JUMPS = [
+  ["stats-tiles", "Overview"], ["stats-trend", "Trend"], ["stats-history", "History"], ["stats-scoring", "Scoring"],
+  ["stats-leagues", "Leagues"], ["stats-results", "Results"], ["stats-ratings", "Ratings"],
+];
 
 function emptyPayload() {
   return { results: [], casual: [], ratings: null, registrations: [], leagues: [], ryderTally: undefined };
@@ -120,7 +126,7 @@ export function MemberSeasonPage({ resultsOnly = false } = {}) {
   const context = useMemberContext();
   const token = storageGet(TOKEN_KEY);
   const pdgaState = usePdgaStats(context.pdgaNo);
-  const [state, setState] = React.useState({ status: token ? "loading" : "idle", page: null });
+  const [state, setState] = React.useState({ status: token ? "loading" : "idle", page: null, ratings: null });
 
   React.useEffect(() => {
     if (!token) {
@@ -128,11 +134,12 @@ export function MemberSeasonPage({ resultsOnly = false } = {}) {
       return undefined;
     }
     const controller = new AbortController();
-    setState({ status: "loading", page: null });
+    setState({ status: "loading", page: null, ratings: null });
     loadSeasonPayload(token, controller.signal)
       .then((payload) => {
         setState({
           status: "ready",
+          ratings: payload.ratings,
           page: buildSeasonPage({
             ...payload,
             memberName: context.name,
@@ -153,7 +160,7 @@ export function MemberSeasonPage({ resultsOnly = false } = {}) {
   if (!token) return null;
 
   const page = state.page;
-  const results = page ? h("section", { className: "player-card member-result-list", "aria-label": "Club results", key: "results" }, [
+  const results = page ? h("section", { className: "player-card member-result-list", id: resultsOnly ? undefined : "stats-results", "aria-label": "Club results", key: "results" }, [
       h("h2", { className: "dash-subtitle", key: "title" }, "Club results"),
       page.results.length
         ? page.results.map((row, index) => h(ResultRow, { row, key: row.id || `${row.event_id}-${index}` }))
@@ -164,24 +171,35 @@ export function MemberSeasonPage({ resultsOnly = false } = {}) {
   return h("div", { className: "react-season-page member-subpage member-stats", "data-react-season-page": state.status }, [
     h("div", { className: "member-section-heading", key: "top" }, [
       h("h2", { className: "my-dashboard-title", key: "title" }, page ? `${page.year} Season` : "Your season"),
-      h(MoreLink, { tab: "imports", label: "Import UDisc history", className: "dashboard-action", key: "imports" }),
+      h("div", { className: "stats-actions", key: "actions" }, [
+        page && page.results.length ? h("button", {
+          type: "button", className: "dashboard-action", key: "export",
+          onClick: () => downloadCsv(seasonCsv(page.results, roundRatingOf), `gvdg-${page.year}-rounds.csv`),
+        }, "Export rounds (CSV)") : null,
+        h(MoreLink, { tab: "imports", label: "Import UDisc history", className: "dashboard-action", key: "imports" }),
+      ]),
     ]),
     state.status === "loading" ? h("p", { className: "dash-note", key: "loading" }, "Loading your season…") : null,
+    state.status === "loading" ? h(SkeletonBlocks, { heights: [72, 72], label: "Loading season numbers", key: "tile-skel" }) : null,
+    page ? h(JumpBar, { sections: JUMPS, key: "jump" }) : null,
     state.status === "error" ? h("p", { className: "dash-note", key: "error" }, "Could not load every season number. Showing what we have.") : null,
-    page ? h("div", { className: "doubles-quick-stats", key: "stats" }, [
+    page ? h("div", { className: "doubles-quick-stats", id: "stats-tiles", key: "stats" }, [
       h(StatTile, { label: "Event rounds", value: String(page.rounds), key: "rounds" }),
       h(StatTile, { label: "Event avg", value: page.avgToPar == null ? "-" : formatToPar(page.avgToPar), key: "avg" }),
       h(StatTile, { label: "Best finish", value: page.bestFinish == null ? "-" : placeLabel(page.bestFinish), key: "best" }),
-      h(StatTile, { label: "Club rating", value: page.clubRating == null ? "-" : String(page.clubRating), key: "rating" }),
+      h(StatTile, { label: "Avg round rating", value: page.clubRating == null ? "-" : String(page.clubRating), key: "rating" }),
     ]) : null,
+    h(RatingTrend, { ratings: state.ratings, status: state.status, pdgaStats: pdgaState.stats, key: "trend" }),
     h(PlayStatsPanel, { key: "play-stats", pdgaStats: pdgaState.stats }),
-    h(ActiveStandingsPanel, { key: "active-standings" }),
-    page?.standings.length
-      ? h("div", { key: "standings" }, [
-        h("h4", { className: "dash-subtitle", key: "title" }, "Your leagues"),
-        page.standings.map((item, index) => h(StandingCard, { item, key: `${item.leagueId || item.leagueName}-${index}` })),
-      ])
-      : null,
+    h("div", { className: "stats-leagues", id: "stats-leagues", key: "leagues" }, [
+      h(ActiveStandingsPanel, { key: "active-standings" }),
+      page?.standings.length
+        ? h("div", { key: "standings" }, [
+          h("h4", { className: "dash-subtitle", key: "title" }, "Your leagues"),
+          page.standings.map((item, index) => h(StandingCard, { item, key: `${item.leagueId || item.leagueName}-${index}` })),
+        ])
+        : null,
+    ]),
     page ? h("section", { className: "player-card member-result-list", "aria-label": "Coming up", key: "upcoming" }, [
       h("h2", { className: "dash-subtitle", key: "title" }, "Coming up"),
       page.upcoming.length
@@ -195,7 +213,9 @@ export function MemberSeasonPage({ resultsOnly = false } = {}) {
       }, "Register for an event"),
     ]) : null,
     results,
-    h(PdgaDashboard, { pdgaNo: context.pdgaNo, state: pdgaState, key: "pdga" }),
-    h(ClubRatings, { token, key: "ratings" }),
+    h("div", { className: "stats-ratings", id: "stats-ratings", key: "ratings-wrap" }, [
+      h(PdgaDashboard, { pdgaNo: context.pdgaNo, state: pdgaState, key: "pdga" }),
+      h(ClubRatings, { token, key: "ratings" }),
+    ]),
   ]);
 }

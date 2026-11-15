@@ -13,18 +13,24 @@ import {
   MAX_WALLPAPER_CHARS,
   PRESET_THEMES,
   applyDashboardTheme,
+  buildGlassOnlyTheme,
   buildTheme,
   clearStoredTheme,
+  glassIsOn,
   readStoredTheme,
   samplePixels,
   sanitizeAdjustments,
+  sanitizeRemoteTheme,
   sanitizeTheme,
   themeContrast,
+  themeHasPalette,
   tokensFromPalette,
   writeStoredTheme,
 } from "../shared/dashboard-theme-model.js";
 import { THEME_EVENT, notifyPlayerThemeChanged } from "../shared/player-theme-session.js";
 import { themeRoot } from "../shared/player-theme-chrome.js";
+import { ThemeGlassControls } from "./theme-glass-controls.js";
+import { StudioSection, useScrollSafeRange } from "./theme-studio-section.js";
 
 const h = React.createElement;
 
@@ -54,6 +60,7 @@ export async function pixelsFromDataUrl(dataUrl) {
 
 function Slider({ name, value, disabled, onChange }) {
   const limit = ADJUSTMENT_LIMITS[name];
+  const safeTouch = useScrollSafeRange(value, (original) => onChange(name, original));
   return h("label", { className: "dash-theme-slider", key: name }, [
     h("span", { className: "dash-theme-slider-label", key: "label" }, [
       limit.label,
@@ -69,6 +76,7 @@ function Slider({ name, value, disabled, onChange }) {
       "aria-label": limit.label,
       onChange: (event) => onChange(name, Number(event.target.value)),
       onDoubleClick: () => onChange(name, limit.default),
+      ...safeTouch,
       key: "input",
     }),
   ]);
@@ -153,7 +161,7 @@ export function DashboardThemeBuilder() {
         if (!response.ok) return;
         const data = await response.json().catch(() => null);
         if (editedRef.current) return;
-        const remote = sanitizeTheme(data?.theme);
+        const remote = sanitizeRemoteTheme(data?.theme, local?.glass);
         if (remote) {
           writeStoredTheme(window.localStorage, memberId, remote);
           paint(remote);
@@ -220,8 +228,9 @@ export function DashboardThemeBuilder() {
     const nextAdjustments = options.nextAdjustments ?? adjustments;
     const wallpaper = options.wallpaper ?? theme?.wallpaper;
     const preset = options.preset === undefined ? theme?.preset || null : options.preset;
-    const sourcePalette = options.sourcePalette === undefined ? theme?.sourcePalette : options.sourcePalette;
+    const sourcePalette = options.sourcePalette === undefined ? (theme?.glassOnly ? undefined : theme?.sourcePalette) : options.sourcePalette;
     const editedPalette = options.editedPalette === undefined ? null : options.editedPalette;
+    const glass = options.glass ?? theme?.glass;
     const pixels = Object.prototype.hasOwnProperty.call(options, "pixels")
       ? options.pixels
       : null;
@@ -234,6 +243,7 @@ export function DashboardThemeBuilder() {
       sourcePalette: pixels ? undefined : sourcePalette,
       preset: pixels ? null : preset,
       palette: editedPalette,
+      glass,
     });
     if (!next) return null;
     paint(next);
@@ -289,7 +299,7 @@ export function DashboardThemeBuilder() {
 
   async function changeMode(nextMode) {
     setMode(nextMode);
-    if (!theme) return;
+    if (!theme || theme.glassOnly) return;
     setBusy(true);
     try {
       const pixels = paletteEditedRef.current ? null : await wallpaperPixels();
@@ -319,13 +329,33 @@ export function DashboardThemeBuilder() {
   async function changeAdjustment(name, value) {
     const nextAdjustments = { ...adjustments, [name]: value };
     setAdjustments(nextAdjustments);
-    if (!theme) return;
+    if (!theme || theme.glassOnly) return;
     await compose({ nextAdjustments, editedPalette: null });
+  }
+
+  async function changeGlass(glass, { commit = true } = {}) {
+    // Glass on the club default: a glass-only theme (colors and wallpaper stay the club's own).
+    if (!theme || theme.glassOnly) {
+      if (commit && !glassIsOn(glass)) {
+        paint(null);
+        clearStoredTheme(window.localStorage, memberId);
+        await persist(null);
+        return;
+      }
+      const base = buildGlassOnlyTheme(glass, mode);
+      if (!base) return;
+      paint(base);
+      await persist(base, commit);
+      return;
+    }
+    const next = { ...theme, glass };
+    paint(next);
+    await persist(next, commit);
   }
 
   async function resetAdjustments() {
     setAdjustments(DEFAULT_ADJUSTMENTS);
-    if (!theme) return;
+    if (!theme || theme.glassOnly) return;
     await compose({ nextAdjustments: DEFAULT_ADJUSTMENTS, editedPalette: null });
   }
 
@@ -347,7 +377,7 @@ export function DashboardThemeBuilder() {
   }
 
   async function recolor(index, hex) {
-    if (!theme?.palette) return;
+    if (!theme?.palette?.length) return;
     const palette = theme.palette.slice();
     palette[index] = hex;
     setAdjustments(DEFAULT_ADJUSTMENTS);
@@ -387,7 +417,9 @@ export function DashboardThemeBuilder() {
 
   if (!token) return null;
 
-  const contrast = themeContrast(theme);
+  const hasPalette = themeHasPalette(theme);
+  const contrast = hasPalette ? themeContrast(theme) : null;
+  const changedCount = ADJUSTMENT_KEYS.filter((name) => adjustments[name] !== DEFAULT_ADJUSTMENTS[name]).length;
   const presetNames = Object.keys(PRESET_THEMES);
   const canExtract = Boolean(theme?.wallpaper || pixelsRef.current?.length);
 
@@ -419,34 +451,47 @@ export function DashboardThemeBuilder() {
       ]),
       h("div", { className: "dash-theme-body", key: "body" }, [
         h("div", { className: "dash-theme-main", key: "main" }, [
-          h("label", {
-            className: `dash-theme-drop${dragging ? " is-dragging" : ""}${theme?.wallpaper ? " has-wallpaper" : ""}`,
-            htmlFor: "dashboardThemeFile",
-            key: "drop",
-            onDragEnter: (event) => { event.preventDefault(); setDragging(true); },
-            onDragOver: (event) => event.preventDefault(),
-            onDragLeave: () => setDragging(false),
-            onDrop: (event) => {
-              event.preventDefault();
-              setDragging(false);
-              ingestFile(event.dataTransfer?.files?.[0]);
-            },
+          h(StudioSection, {
+            id: "wallpaper",
+            title: "Wallpaper",
+            state: theme?.wallpaper ? "Custom image" : "Club forest",
+            defaultOpen: !theme?.wallpaper,
+            key: "wallpaper",
           }, [
-            theme?.wallpaper
-              ? h("img", { className: "dash-theme-wallpaper", src: theme.wallpaper, alt: "Dashboard wallpaper preview", key: "img" })
-              : h("span", { className: "dash-theme-drop-copy", key: "empty" }, "Drop a wallpaper or choose an image"),
-            h("input", {
-              id: "dashboardThemeFile",
-              className: "dash-theme-file",
-              type: "file",
-              accept: "image/jpeg,image/png,image/webp",
-              disabled: busy,
-              ref: fileRef,
-              onChange: onFile,
-              key: "file",
-            }),
+            h("label", {
+              className: `dash-theme-drop${dragging ? " is-dragging" : ""}${theme?.wallpaper ? " has-wallpaper" : ""}`,
+              htmlFor: "dashboardThemeFile",
+              key: "drop",
+              onDragEnter: (event) => { event.preventDefault(); setDragging(true); },
+              onDragOver: (event) => event.preventDefault(),
+              onDragLeave: () => setDragging(false),
+              onDrop: (event) => {
+                event.preventDefault();
+                setDragging(false);
+                ingestFile(event.dataTransfer?.files?.[0]);
+              },
+            }, [
+              theme?.wallpaper
+                ? h("img", { className: "dash-theme-wallpaper", src: theme.wallpaper, alt: "Dashboard wallpaper preview", key: "img" })
+                : h("span", { className: "dash-theme-drop-copy", key: "empty" }, "Drop a wallpaper or choose an image"),
+              h("input", {
+                id: "dashboardThemeFile",
+                className: "dash-theme-file",
+                type: "file",
+                accept: "image/jpeg,image/png,image/webp",
+                disabled: busy,
+                ref: fileRef,
+                onChange: onFile,
+                key: "file",
+              }),
+            ]),
           ]),
-          theme?.palette?.length
+          h(StudioSection, {
+            id: "colors",
+            title: "Colors",
+            state: hasPalette && theme?.palette?.length ? `${theme.palette.length} colors` : "Club default",
+            key: "colors",
+          }, hasPalette && theme?.palette?.length
             ? h("div", { className: "dash-theme-palette", key: "palette", "aria-label": "Color palette" },
               theme.palette.map((hex, index) => h("label", {
                 className: "dash-theme-swatch",
@@ -463,45 +508,19 @@ export function DashboardThemeBuilder() {
                   key: "color",
                 }),
               ])))
-            : h("p", { className: "dash-theme-empty", key: "empty-palette" }, "Extract to fill the color grid."),
+            : h("p", { className: "dash-theme-empty", key: "empty-palette" }, "Extract to fill the color grid.")),
         ]),
         h("aside", { className: "dash-theme-sidebar", key: "sidebar" }, [
-          EXTRACT_MODE_GROUPS.map((group) => h("div", { className: "dash-theme-mode-group", key: group.id }, [
-            h("span", { className: "dash-theme-field", key: "label" }, group.label),
-            h("div", { className: "dash-theme-pills", key: "pills" }, group.modes.map((name) => h("button", {
-              type: "button",
-              className: extractMode === name ? "is-active" : "",
-              title: canExtract ? EXTRACT_MODE_META[name]?.description : "Drop a wallpaper first to use extraction modes.",
-              disabled: busy || !canExtract,
-              onClick: () => changeExtract(name),
-              key: name,
-            }, EXTRACT_MODE_META[name]?.label || name))),
-          ])),
-          h("div", { className: "dash-theme-adjust", key: "tune" }, [
-            h("span", { className: "dash-theme-field", key: "label" }, "Adjust"),
-            h("div", { className: "dash-theme-sliders", key: "sliders" }, ADJUSTMENT_KEYS.map((name) => h(Slider, {
-              name,
-              value: adjustments[name],
-              disabled: busy || !theme,
-              onChange: changeAdjustment,
-              key: name,
-            }))),
-            h("button", {
-              type: "button",
-              className: "board-link",
-              disabled: busy || !theme,
-              onClick: resetAdjustments,
-              key: "reset-adj",
-            }, "Reset adjustments"),
-          ]),
-          contrast
-            ? h("p", { className: "dash-theme-contrast", key: "contrast" }, `Text contrast ${contrast.ratio.toFixed(1)}:1 ${contrast.grade}`)
-            : null,
-          h("div", { className: "dash-theme-presets", key: "presets" }, [
-            h("span", { className: "dash-theme-field", key: "label" }, "Presets"),
+          h(StudioSection, {
+            id: "presets",
+            title: "Presets",
+            state: hasPalette ? (theme.preset || "Custom") : "Club default",
+            defaultOpen: true,
+            key: "presets",
+          }, [
             h("div", { className: "dash-theme-preset-grid", key: "grid" }, presetNames.map((name) => h("button", {
               type: "button",
-              className: `dash-theme-preset${theme?.preset === name ? " is-active" : ""}`,
+              className: `dash-theme-preset${hasPalette && theme?.preset === name ? " is-active" : ""}`,
               disabled: busy,
               onClick: () => applyPreset(name),
               key: name,
@@ -513,9 +532,50 @@ export function DashboardThemeBuilder() {
               }))),
             ]))),
           ]),
+          h(StudioSection, {
+            id: "generate",
+            title: "Generate",
+            state: hasPalette && canExtract ? (EXTRACT_MODE_META[extractMode]?.label || extractMode) : "From a wallpaper",
+            key: "generate",
+          }, EXTRACT_MODE_GROUPS.map((group) => h("div", { className: "dash-theme-mode-group", key: group.id }, [
+            h("span", { className: "dash-theme-field", key: "label" }, group.label),
+            h("div", { className: "dash-theme-pills", key: "pills" }, group.modes.map((name) => h("button", {
+              type: "button",
+              className: extractMode === name ? "is-active" : "",
+              title: canExtract ? EXTRACT_MODE_META[name]?.description : "Drop a wallpaper first to use extraction modes.",
+              disabled: busy || !canExtract,
+              onClick: () => changeExtract(name),
+              key: name,
+            }, EXTRACT_MODE_META[name]?.label || name))),
+          ]))),
+          h(StudioSection, {
+            id: "adjust",
+            title: "Adjust",
+            state: changedCount ? `${changedCount} changed` : "Default",
+            key: "tune",
+          }, [
+            h("div", { className: "dash-theme-sliders", key: "sliders" }, ADJUSTMENT_KEYS.map((name) => h(Slider, {
+              name,
+              value: adjustments[name],
+              disabled: busy || !hasPalette,
+              onChange: changeAdjustment,
+              key: name,
+            }))),
+            h("button", {
+              type: "button",
+              className: "board-link",
+              disabled: busy || !hasPalette,
+              onClick: resetAdjustments,
+              key: "reset-adj",
+            }, "Reset adjustments"),
+          ]),
+          contrast
+            ? h("p", { className: "dash-theme-contrast", key: "contrast" }, `Text contrast ${contrast.ratio.toFixed(1)}:1 ${contrast.grade}`)
+            : null,
+          h(ThemeGlassControls, { glass: theme?.glass, disabled: busy, onChange: changeGlass, key: "glass" }),
         ]),
       ]),
-      h("footer", { className: "dash-theme-actionbar", key: "bar" }, [
+      h("div", { className: "dash-theme-actionbar", role: "group", "aria-label": "Theme actions", key: "bar" }, [
         h("div", { className: "dash-theme-actions", key: "actions" }, [
           h("button", {
             type: "button",

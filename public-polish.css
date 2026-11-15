@@ -855,3 +855,82 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ==== Event detail: open page, ruled facts, hairline field (scoped to the detail card; the hub is untouched) ==== */
+[data-public-polish="events"] .detail-card[data-react-events-event-detail] { background: none; border: 0; padding: 0; box-shadow: none; margin-bottom: 1rem; }
+[data-public-polish="events"] .detail-card[data-react-events-event-detail] .detail-head { gap: 8px; margin: 0 0 8px; align-items: center; }
+[data-public-polish="events"] .detail-card[data-react-events-event-detail] .detail-head .detail-title { flex-basis: 100%; order: 3; margin: 8px 0 0; font-size: clamp(2.25rem, 8vw, 3.5rem); line-height: 1; }
+.detail-live-pill { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px; border-radius: 999px; background: var(--primary-strong); color: #fff; font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.detail-live-pill .live-dot { background: #fff; width: .5rem; height: .5rem; animation: none; box-shadow: none; }
+.detail-when { margin: 0 0 20px; }
+.detail-when-line { margin: 0 0 14px; color: var(--text-primary); font-size: 1.0625rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.detail-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.event-action-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--border-color); background: transparent; color: var(--text-primary); font: inherit; font-size: .9rem; font-weight: 700; text-decoration: none; cursor: pointer; }
+.event-action-btn:hover { background: var(--bg-tertiary); }
+.event-action-btn svg { flex: none; }
+[data-public-polish="events"] .detail-card[data-react-events-event-detail] .detail-facts { display: grid; gap: 0; margin: 0 0 24px; border-top: 1px solid var(--border-color); grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 720px) { [data-public-polish="events"] .detail-card[data-react-events-event-detail] .detail-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 40px; } }
+[data-public-polish="events"] .detail-card[data-react-events-event-detail] .detail-fact { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; padding: 12px 0; background: none; border-radius: 0; border-bottom: 1px solid var(--border-color); }
+[data-theme="dark"] [data-public-polish="events"] .detail-card[data-react-events-event-detail] .detail-fact { background: none; }
+[data-public-polish="events"] .detail-card[data-react-events-event-detail] .detail-fact .label { margin: 0; color: var(--text-muted); font-size: .75rem; font-weight: 700; letter-spacing: .08em; line-height: 1.6; }
+[data-public-polish="events"] .detail-card[data-react-events-event-detail] .detail-fact .value { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+[data-public-polish="events"] .detail-card[data-react-events-event-detail] .detail-fact .value a { color: var(--primary-strong); }
+[data-theme="dark"] [data-public-polish="events"] .detail-card[data-react-events-event-detail] .detail-fact .value a { color: var(--primary); }
+@media (max-width: 420px) { [data-public-polish="events"] .detail-card[data-react-events-event-detail] .detail-fact { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
+[data-public-polish="events"] .detail-card[data-react-events-event-detail] .detail-notes { background: none; border: 0; border-left: 3px solid var(--accent); border-radius: 0; padding: 4px 0 4px 16px; max-width: 70ch; }
+[data-theme="dark"] [data-public-polish="events"] .detail-card[data-react-events-event-detail] .detail-notes { background: none; }
+[data-public-polish="events"] .detail-card[data-react-events-event-detail] .roster-title { font-size: 1.5rem; margin: 32px 0 12px; }
+[data-public-polish="events"] button.back-link:has(.back-link-icon) { min-height: 44px; display: inline-flex; align-items: center; gap: 4px; }
+.back-link-icon { flex: none; }
+
+/* Register panel (inline on the event page) */
+[data-public-polish="events"] .event-register-panel .roster-title { margin-top: 8px; }
+[data-public-polish="events"] .event-register-panel .register-card { background: none; border: 0; box-shadow: none; padding: 0; display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+[data-public-polish="events"] .event-register-panel .register-fee { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+[data-public-polish="events"] .event-register-panel .meta-icon { display: inline-flex; color: var(--text-muted); }
+[data-public-polish="events"] .event-register-panel .register-status { color: var(--under); font-weight: 700; display: flex; align-items: center; gap: 8px; }
+[data-public-polish="events"] .event-register-panel .event-registration-form > summary { list-style: none; display: flex; align-items: center; justify-content: center; min-height: 48px; border-radius: 12px; background: var(--primary-strong); color: #fff; font-weight: 800; cursor: pointer; }
+[data-public-polish="events"] .event-register-panel .event-registration-form > summary::-webkit-details-marker { display: none; }
+[data-public-polish="events"] .event-register-panel .event-registration-form[open] > summary { margin-bottom: 12px; }
+
+/* Registered field: hairline rows, name left / rating right */
+[data-public-polish="events"] .detail-card[data-react-events-event-detail] .event-field .division-group { margin-bottom: 20px; }
+[data-public-polish="events"] .detail-card[data-react-events-event-detail] .event-field .division-name { color: var(--text-muted); font-size: .72rem; letter-spacing: .1em; margin-bottom: 4px; }
+[data-public-polish="events"] .detail-card[data-react-events-event-detail] .event-field .player-list { display: block; border-top: 1px solid var(--border-color); }
+[data-public-polish="events"] .detail-card[data-react-events-event-detail] .event-field .player-row { background: none; border: 0; border-bottom: 1px solid var(--border-color); border-radius: 0; padding: 12px 0; min-height: 44px; align-items: center; }
+[data-theme="dark"] [data-public-polish="events"] .detail-card[data-react-events-event-detail] .event-field .player-row { background: none; }
+[data-public-polish="events"] .detail-card[data-react-events-event-detail] .event-field .player-name { color: var(--text-primary); }
+[data-public-polish="events"] .detail-card[data-react-events-event-detail] .event-field .player-rating { font-weight: 700; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+/* Live: hairline box with a signal dot */
+[data-public-polish="events"] .detail-card[data-react-events-event-detail] .live-banner { background: none; color: var(--text-primary); border: 1px solid var(--primary-strong); border-radius: 12px; }
+[data-public-polish="events"] .detail-card[data-react-events-event-detail] .live-banner .leaderboard-link { color: var(--primary-strong); }
+[data-theme="dark"] [data-public-polish="events"] .detail-card[data-react-events-event-detail] .live-banner { border-color: var(--primary); }
+[data-theme="dark"] [data-public-polish="events"] .detail-card[data-react-events-event-detail] .live-banner .leaderboard-link { color: var(--primary); }
+
+/* ==== Events hub: bag-tag board (podium, ladder, recent changes, empty state) ==== */
+.bagtag-ladder { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 0; border: 1px solid var(--border-color); border-radius: 14px; background: var(--bg-secondary); overflow: hidden; }
+.bagtag-podium { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 640px) { .bagtag-podium { grid-template-columns: repeat(3, minmax(0, 1fr)); } .bagtag-podium .bagtag-holder { border-bottom: 0; border-right: 1px solid var(--border-color); } .bagtag-podium .bagtag-holder:last-child { border-right: 0; } }
+.bagtag-holder { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 56px; padding: 12px 16px; border-bottom: 1px solid var(--border-color); }
+.bagtag-holder:last-child { border-bottom: 0; }
+.bagtag-number { font-size: 1.25rem; font-weight: 800; line-height: 1; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.bagtag-holder.lead .bagtag-number { color: var(--primary-strong); font-size: 1.75rem; }
+[data-theme="dark"] .bagtag-holder.lead .bagtag-number { color: var(--primary); }
+.bagtag-name { font-weight: 650; color: var(--text-primary); min-width: 0; overflow-wrap: anywhere; }
+.bagtag-since { color: var(--text-muted); font-size: .8125rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 400px) { .bagtag-holder { grid-template-columns: 44px minmax(0, 1fr); } .bagtag-since { grid-column: 2; } }
+.bagtag-empty { padding: 24px 16px; border: 1px dashed var(--border-color); border-radius: 14px; text-align: center; }
+.bagtag-empty-title { font-size: 1.0625rem; font-weight: 700; line-height: 1.3; color: var(--text-primary); margin: 0 0 4px; }
+.bagtag-empty .events-group-sub { margin: 0 auto; }
+.bagtag-changes { margin-top: 4px; }
+.bagtag-changes > summary { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; list-style: none; border: 1px solid var(--border-color); border-radius: 14px; background: var(--bg-secondary); color: var(--text-primary); font-weight: 650; cursor: pointer; }
+.bagtag-changes > summary::-webkit-details-marker { display: none; }
+.bagtag-changes-total { padding: 2px 8px; border-radius: 999px; background: var(--bg-tertiary); color: var(--text-secondary); font-size: .75rem; }
+.bagtag-changes-list { list-style: none; margin: 0; padding: 4px 16px 0; }
+.bagtag-changes-list li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border-color); color: var(--text-secondary); font-size: .9375rem; }
+.bagtag-changes-count { color: var(--text-muted); font-size: .8125rem; white-space: nowrap; }
+[data-public-polish="events"] .event-register-panel .event-registration-form > summary { position: relative; }
+[data-public-polish="events"] .event-register-panel .event-registration-form > summary::after { position: absolute; right: 18px; top: 50%; margin: -7px 0 0; border-color: #fff; }
+[data-public-polish="events"] button.back-link:has(.back-link-icon) { color: var(--secondary-text); }
+[data-public-polish="events"] .detail-card[data-react-events-event-detail] .btn-watch-live { background: var(--primary-strong); border-color: var(--primary-strong); color: #fff; }

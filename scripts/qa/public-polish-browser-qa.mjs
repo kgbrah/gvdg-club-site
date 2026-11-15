@@ -213,9 +213,9 @@ async function checkHome(page, profile) {
   await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Open menu");
   await nav.getByRole("link", { name: "Donate" }).waitFor({ state: "hidden" });
 
-  const pay = page.getByRole("link", { name: "Pay $15 dues" });
+  const pay = page.getByRole("link", { name: "Pay with PayPal" });
   assert.equal(await pay.getAttribute("href"), "https://paypal.me/greenvillediscgolf/15");
-  assert.equal(await page.getByRole("link", { name: "Create member login" }).getAttribute("href"), "gvdg-members.html#apply");
+  assert.equal(await page.getByRole("link", { name: "Set up login" }).getAttribute("href"), "gvdg-members.html#apply");
   const positions = await page.evaluate(() => ["membership", "courses"].map((id) => document.getElementById(id).offsetTop));
   assert(positions[0] < positions[1], "Membership is before Courses");
   assert.equal(await page.locator("#membership .perk").first().evaluate((element) => getComputedStyle(element).opacity), "1");

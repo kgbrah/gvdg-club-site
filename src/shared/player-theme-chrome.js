@@ -65,11 +65,14 @@ export function usePlayerThemeSession() {
     };
   }, []);
 
+  // A glass-only theme leaves the club colors (and the light/dark switch) alone.
+  const paletteTheme = playerTheme && !playerTheme.glassOnly ? playerTheme : null;
+
   React.useEffect(() => {
-    if (playerTheme) {
+    if (paletteTheme) {
       if (playerTheme.mode === "dark") document.documentElement.setAttribute("data-theme", "dark");
       else document.documentElement.removeAttribute("data-theme");
-      paintStatusBar(playerTheme);
+      paintStatusBar(paletteTheme);
       return;
     }
     document.documentElement.setAttribute("data-theme", theme);
@@ -78,12 +81,12 @@ export function usePlayerThemeSession() {
       localStorage.setItem("theme", theme);
     } catch {
     }
-  }, [theme, playerTheme]);
+  }, [theme, playerTheme, paletteTheme]);
 
-  const dark = playerTheme ? playerTheme.mode === "dark" : theme === "dark";
+  const dark = paletteTheme ? playerTheme.mode === "dark" : theme === "dark";
 
   function toggle() {
-    if (playerTheme) {
+    if (paletteTheme) {
       const next = togglePlayerThemeMode(playerTheme, {
         root: themeRoot(),
         memberId: memberIdRef.current,

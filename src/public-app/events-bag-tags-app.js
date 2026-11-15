@@ -1,5 +1,6 @@
 import React from "react";
 
+import { bagTagHolderGroups, collapseBagTagMoves } from "../shared/bag-tag-model.js";
 import { fetchPublicJson, publicApiBase } from "./public-api.js";
 
 const h = React.createElement;
@@ -7,7 +8,18 @@ const h = React.createElement;
 function heldLabel(value) {
   const text = String(value || "");
   const day = text.slice(0, 10);
-  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? `since ${day}` : "";
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!match) return "";
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return `since ${date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}`;
+}
+
+function Holder({ holder, lead = false }) {
+  return h("li", { className: `bagtag-holder${lead ? " lead" : ""}` }, [
+    h("span", { className: "bagtag-number num", key: "tag" }, [h("span", { "aria-hidden": "true", key: "hash" }, "#"), String(holder.tagNumber)]),
+    h("span", { className: "bagtag-name", key: "name" }, holder.name || "Player"),
+    h("span", { className: "bagtag-since", key: "since" }, heldLabel(holder.heldSince)),
+  ]);
 }
 
 export function EventsBagTagsApp() {
@@ -30,28 +42,42 @@ export function EventsBagTagsApp() {
 
   if (!board) return null;
   const holders = Array.isArray(board.holders) ? board.holders : [];
-  const moves = Array.isArray(board.moves) ? board.moves : [];
+  const changes = collapseBagTagMoves(board.moves, 6);
+  const { podium, rest } = bagTagHolderGroups(holders);
   const title = [board.series.name, board.series.season].filter(Boolean).join(" · ");
 
-  return h("section", { className: "events-section", "data-react-events-bag-tags": "true" }, [
+  return h("section", { className: "events-section bagtags", "data-react-events-bag-tags": "true" }, [
     h("div", { className: "events-section-head", key: "head" }, [
       h("h2", { className: "events-section-title", key: "title" }, title || "Bag tags"),
-      h("span", { className: "events-section-count", key: "count" }, String(holders.length)),
+      holders.length
+        ? h("span", { className: "events-section-count", key: "count" }, `${holders.length} holder${holders.length === 1 ? "" : "s"}`)
+        : null,
     ]),
-    h("p", { className: "events-group-sub", key: "note" }, "A lower number is better."),
     holders.length
-      ? h("div", { className: "lb-wrap", key: "table" }, h("table", { className: "lb-table" }, [
-        h("thead", { key: "head" }, h("tr", null, ["Tag", "Player", "Held"].map((label) => h("th", { key: label }, label)))),
-        h("tbody", { key: "body" }, holders.map((holder) => h("tr", { key: holder.tagNumber }, [
-          h("td", { className: "lb-pos", key: "tag" }, `#${holder.tagNumber}`),
-          h("td", { className: "lb-name", key: "name" }, holder.name || "Player"),
-          h("td", { key: "since" }, heldLabel(holder.heldSince)),
-        ]))),
-      ]))
-      : h("p", { className: "events-empty", key: "empty" }, "Tags are not assigned yet."),
-    moves.length
-      ? h("ul", { className: "extras-list", key: "moves" }, moves.slice(0, 8).map((move) =>
-        h("li", { key: move.id }, move.summary)))
+      ? h(React.Fragment, { key: "ladder" }, [
+        h("p", { className: "events-group-sub", key: "note" }, "Win a round against a higher tag and the numbers swap. A lower number is better."),
+        h("ol", { className: "bagtag-ladder bagtag-podium", key: "podium" }, podium.map((holder) =>
+          h(Holder, { holder, key: holder.tagNumber, lead: true }))),
+        rest.length
+          ? h("ol", { className: "bagtag-ladder", key: "rest" }, rest.map((holder) => h(Holder, { holder, key: holder.tagNumber })))
+          : null,
+      ])
+      : h("div", { className: "bagtag-empty", key: "empty" }, [
+        h("p", { className: "bagtag-empty-title", key: "t" }, "Tags are not assigned yet."),
+        h("p", { className: "events-group-sub", key: "s" }, "Once the season opens, the ladder from #1 down lands here."),
+      ]),
+    changes.length
+      ? h("details", { className: "bagtag-changes", key: "moves" }, [
+        h("summary", { key: "summary" }, [
+          h("span", { key: "label" }, "Recent changes"),
+          h("span", { className: "bagtag-changes-total num", key: "count" }, String(changes.length)),
+        ]),
+        h("ul", { className: "bagtag-changes-list", key: "list" }, changes.map((move) =>
+          h("li", { key: move.id }, [
+            h("span", { key: "s" }, move.summary),
+            move.count > 1 ? h("span", { className: "bagtag-changes-count", key: "c" }, `${move.count} updates`) : null,
+          ]))),
+      ])
       : null,
   ]);
 }

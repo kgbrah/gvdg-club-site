@@ -29,6 +29,30 @@ async function send(path, token, method, body) {
   return data;
 }
 
+function TagLadder({ holders, mine }) {
+  const rows = holders.map((holder) => ({ id: holder.memberId, tag: holder.tagNumber, name: holder.name || "Member", you: false }));
+  if (mine && !rows.some((row) => row.id === mine.memberId)) {
+    rows.push({ id: mine.memberId, tag: mine.tagNumber, name: mine.name || "You", you: true });
+  } else if (mine) {
+    for (const row of rows) row.you = row.id === mine.memberId;
+  }
+  rows.sort((a, b) => a.tag - b.tag);
+  if (!rows.length) return null;
+  return h("ol", { className: "tag-ladder", "aria-label": "Bag tag ladder", key: "ladder" }, rows.map((row) => {
+    const reachable = mine && !row.you && row.tag < mine.tagNumber;
+    return h("li", {
+      className: "tag-ladder-row" + (row.you ? " is-you" : "") + (reachable ? " is-reachable" : ""),
+      "aria-current": row.you ? "true" : undefined,
+      key: row.id || row.tag,
+    }, [
+      h("span", { className: "tag-ladder-num", key: "n" }, "#" + row.tag),
+      h("span", { className: "tag-ladder-name", key: "name" }, row.name),
+      row.you ? h("span", { className: "tag-ladder-flag", key: "f" }, "You")
+        : reachable ? h("span", { className: "tag-ladder-flag quiet", key: "f" }, "Can challenge") : null,
+    ]);
+  }));
+}
+
 export function BagTagPanel({ token, compact = false }) {
   const [board, setBoard] = React.useState(null);
   const [defenderId, setDefenderId] = React.useState("");
@@ -135,8 +159,9 @@ export function BagTagPanel({ token, compact = false }) {
         }, busy ? "Requesting…" : "Request tag")
         : null,
     ]),
+    !compact && (holders.length || mine) ? h(TagLadder, { holders, mine, key: "ladder" }) : null,
     h(BagTagLeagueOrder, { compact, key: "imported" }),
-    incoming.map((challenge) => h("div", { className: compact ? "member-tag-detail" : undefined, key: challenge.id }, [
+    incoming.map((challenge) => h("div", { className: "member-tag-detail tag-incoming", key: challenge.id }, [
       h("p", { className: "player-card-meta", key: "text" },
         `${challenge.challengerName} called out your #${challenge.defenderTag}. They shot ${challenge.challengerScore}, you shot ${challenge.defenderScore}.`),
       h("div", { className: "member-action-grid", key: "actions" }, [
@@ -157,7 +182,7 @@ export function BagTagPanel({ token, compact = false }) {
       ]),
     ])),
     mine && targets.length
-      ? h("form", { className: compact ? "member-tag-detail member-tag-form" : undefined, key: "challenge", onSubmit: issue }, [
+      ? h("form", { className: "member-tag-detail member-tag-form tag-challenge-form", key: "challenge", onSubmit: issue }, [
         h("label", { className: "player-card-meta", key: "who" }, [
           "Challenge",
           h("select", {
@@ -196,6 +221,6 @@ export function BagTagPanel({ token, compact = false }) {
         ]),
       ])
       : null,
-    message ? h("p", { role: "status", className: "player-card-meta" + (compact ? " member-tag-detail" : ""), key: "message" }, message) : null,
+    message ? h("p", { role: "status", className: "player-card-meta member-tag-detail", key: "message" }, message) : null,
   ]);
 }

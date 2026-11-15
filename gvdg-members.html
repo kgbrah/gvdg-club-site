@@ -970,6 +970,19 @@
                 .dash-theme-preset-name { font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); }
                 .dash-theme-preset-bar { display: flex; height: 0.7rem; width: 100%; overflow: hidden; border-radius: 999px; }
                 .dash-theme-preset-bar i { flex: 1; display: block; }
+                .dash-theme-section { display: block; border-top: 1px solid var(--border-color); }
+                .dash-theme-main > .dash-theme-section:first-child, .dash-theme-sidebar > .dash-theme-section:first-child { border-top: 0; }
+                .dash-theme-section-summary { display: flex; align-items: center; gap: 0.5rem; min-height: 44px; cursor: pointer; list-style: none; }
+                .dash-theme-section-summary::-webkit-details-marker { display: none; }
+                .dash-theme-section-summary::after { content: ""; flex: 0 0 auto; width: 0.45rem; height: 0.45rem; margin-inline-start: 0.15rem; border: solid var(--text-muted); border-width: 0 2px 2px 0; transform: translateY(-0.12rem) rotate(45deg); }
+                .dash-theme-section[open] > .dash-theme-section-summary::after { transform: translateY(0.1rem) rotate(-135deg); }
+                .dash-theme-section-state { margin-inline-start: auto; color: var(--text-muted); font-size: 0.74rem; font-weight: 600; text-transform: none; letter-spacing: 0; text-align: right; }
+                .dash-theme-section-body { display: grid; gap: 0.5rem; padding-bottom: 0.7rem; }
+                .dash-theme-slider input { min-height: 44px; touch-action: pan-y; }
+                .dash-theme-glass-seg { display: flex; width: 100%; }
+                .dash-theme-glass-seg button { flex: 1 1 0; padding-inline: 0.3rem; }
+                .dash-theme-glass-seg button:disabled:not(.is-active) { opacity: 0.5; }
+                .dash-theme-section .dash-theme-section { border-top: 0; }
                 .dash-theme-actionbar { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; justify-content: space-between; padding: 0.7rem 0.9rem; border-top: 1px solid var(--border-color); background: var(--bg-tertiary); }
                 .dash-theme-apply { margin-left: auto; }
                 .disc-color-pref { margin-bottom: 1.25rem; }

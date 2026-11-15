@@ -3,6 +3,7 @@ import {
   applyDashboardTheme,
   HEX,
   readStoredTheme,
+  sanitizeRemoteTheme,
   sanitizeTheme,
   writeStoredTheme,
 } from "./dashboard-theme-model.js";
@@ -64,7 +65,7 @@ export function paintPlayerTheme(theme, root) {
   if (!root?.style) return theme || null;
   const safe = sanitizeTheme(theme);
   applyDashboardTheme(safe, root);
-  if (safe) root.classList?.add?.("player-theme-page");
+  if (safe && !safe.glassOnly) root.classList?.add?.("player-theme-page");
   syncDocumentTheme(safe);
   notifyPlayerThemeChanged(safe);
   return safe;
@@ -72,7 +73,7 @@ export function paintPlayerTheme(theme, root) {
 
 export function themeWithMode(theme, mode) {
   const safe = sanitizeTheme(theme);
-  if (!safe) return null;
+  if (!safe || safe.glassOnly) return safe;
   const nextMode = mode === "light" || mode === "dark" ? mode : safe.mode;
   if (nextMode === safe.mode) return safe;
   return sanitizeTheme({ ...safe, mode: nextMode });
@@ -97,7 +98,7 @@ export function storedClubMode() {
 }
 
 export function statusBarColor(theme, mode) {
-  const token = theme?.tokens?.["bg-secondary"];
+  const token = theme?.glassOnly ? "" : theme?.tokens?.["bg-secondary"];
   if (HEX.test(String(token || ""))) return token;
   return (theme?.mode || mode) === "dark" ? CLUB_STATUS_COLOR_DARK : CLUB_STATUS_COLOR;
 }
@@ -125,7 +126,7 @@ export function paintStatusBar(theme, mode) {
 
 function syncDocumentTheme(theme) {
   const root = globalThis.document?.documentElement;
-  const mode = theme?.mode === "dark" || theme?.mode === "light" ? theme.mode : null;
+  const mode = !theme?.glassOnly && (theme?.mode === "dark" || theme?.mode === "light") ? theme.mode : null;
   if (root) {
     if (mode === "dark") root.setAttribute("data-theme", "dark");
     else if (mode === "light") root.removeAttribute("data-theme");
@@ -142,14 +143,14 @@ export function notifyPlayerThemeChanged(theme) {
   }
 }
 
-export async function fetchRemotePlayerTheme({ token, signal, requestImpl } = {}) {
+export async function fetchRemotePlayerTheme({ token, signal, requestImpl, localGlass } = {}) {
   if (!token) return undefined;
   const request = requestImpl || defaultThemeRequest;
   const response = await request("/me/dashboard-theme", { token, signal });
   if (!response?.ok) return undefined;
   const data = await response.json().catch(() => null);
   if (!data || !Object.prototype.hasOwnProperty.call(data, "theme")) return undefined;
-  return sanitizeTheme(data.theme);
+  return sanitizeRemoteTheme(data.theme, localGlass);
 }
 
 export async function defaultThemeRequest(path, { token, signal, method = "GET", body } = {}) {
@@ -195,7 +196,7 @@ export async function syncPlayerTheme({
   paintPlayerTheme(local.theme, root);
   onTheme?.(local.theme, local.memberId);
   if (!local.token) return local;
-  const remote = await fetchRemotePlayerTheme({ token: local.token, signal, requestImpl });
+  const remote = await fetchRemotePlayerTheme({ token: local.token, signal, requestImpl, localGlass: local.theme?.glass });
   if (signal?.aborted) return local;
   const currentToken = token ?? readSessionValue(TOKEN_KEY, sessions);
   if (currentToken !== local.token) return local;

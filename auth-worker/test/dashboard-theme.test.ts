@@ -117,4 +117,63 @@ describe("GET/PUT/DELETE /me/dashboard-theme", () => {
     const empty = await worker.fetch(jsonRequest("/me/dashboard-theme", "GET", undefined, auth), env);
     expect(((await empty.json()) as { theme: null }).theme).toBeNull();
   });
+
+  const tokenCache = new WeakMap<object, string>();
+  async function putTheme(extra: Record<string, unknown>) {
+    let token = tokenCache.get(env);
+    if (!token) {
+      token = await authedToken();
+      tokenCache.set(env, token);
+    }
+    const auth = { Authorization: `Bearer ${token}` };
+    const res = await worker.fetch(jsonRequest("/me/dashboard-theme", "PUT", {
+      theme: { mode: "dark", extractMode: "normal", palette: [], tokens: TOKENS, wallpaper: null, ...extra },
+    }, auth), env);
+    return { res, auth };
+  }
+
+  it("accepts glass and round-trips it", async () => {
+    const { res, auth } = await putTheme({ glass: { opacity: 30, blur: 16 } });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { theme: { glass: unknown } }).theme.glass).toEqual({ opacity: 30, blur: 16 });
+    const get = await worker.fetch(jsonRequest("/me/dashboard-theme", "GET", undefined, auth), env);
+    expect(((await get.json()) as { theme: { glass: unknown } }).theme.glass).toEqual({ opacity: 30, blur: 16 });
+  });
+
+  it("clamps and rounds glass values", async () => {
+    const { res } = await putTheme({ glass: { opacity: 999, blur: -5 } });
+    expect(((await res.json()) as { theme: { glass: unknown } }).theme.glass).toEqual({ opacity: 60, blur: 0 });
+    const { res: res2 } = await putTheme({ glass: { opacity: "12.6", blur: 30.4 } });
+    expect(((await res2.json()) as { theme: { glass: unknown } }).theme.glass).toEqual({ opacity: 13, blur: 24 });
+  });
+
+  it("ignores junk glass without rejecting the theme", async () => {
+    for (const glass of ["frosted", 42, null, [], { opacity: "x", blur: {} }]) {
+      const { res } = await putTheme({ glass });
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as { theme: { glass?: unknown } }).theme.glass).toBeUndefined();
+    }
+  });
+
+  it("keeps old themes without glass round-tripping", async () => {
+    const { res, auth } = await putTheme({});
+    expect(res.status).toBe(200);
+    const get = await worker.fetch(jsonRequest("/me/dashboard-theme", "GET", undefined, auth), env);
+    const body = (await get.json()) as { theme: { tokens: { primary: string }; glass?: unknown } };
+    expect(body.theme.tokens.primary).toBe("#ff6b35");
+    expect(body.theme.glass).toBeUndefined();
+  });
+
+  it("round-trips a glass-only theme and drops the flag when a palette is present", async () => {
+    const { res, auth } = await putTheme({ glass: { opacity: 30, blur: 16 }, glassOnly: true });
+    expect(res.status).toBe(200);
+    const get = await worker.fetch(jsonRequest("/me/dashboard-theme", "GET", undefined, auth), env);
+    const body = (await get.json()) as { theme: { glassOnly?: boolean; glass: unknown } };
+    expect(body.theme.glassOnly).toBe(true);
+    expect(body.theme.glass).toEqual({ opacity: 30, blur: 16 });
+    const { res: res2 } = await putTheme({ glassOnly: true, palette: ["#102010", "#ff6b35"] });
+    expect(((await res2.json()) as { theme: { glassOnly?: boolean } }).theme.glassOnly).toBeUndefined();
+    const { res: res3 } = await putTheme({ glassOnly: "yes" });
+    expect(((await res3.json()) as { theme: { glassOnly?: boolean } }).theme.glassOnly).toBeUndefined();
+  });
 });
