@@ -26,9 +26,9 @@ test("bag tags show on the events hub, member home, and admin club tools", () =>
   assert.match(panel, /Request sent\. An admin will hand you the next number\./);
   assert.doesNotMatch(panel, /Ask an admin for a tag/);
   assert.match(panel, /BagTagLeagueOrder/);
-  assert.match(readFileSync("src/members-app/club-leagues.js", "utf8"), /data-react-club-leagues/);
-  assert.match(readFileSync("src/members-app/registration-panel.js", "utf8"), /ClubLeagueCards/);
-  assert.match(readFileSync("src/members-app/dashboard-app.js", "utf8"), /ClubLeagueCards/);
+  assert.match(readFileSync("src/members-app/club-leagues.js", "utf8"), /data-react-league-schedule/);
+  assert.match(readFileSync("src/members-app/club-leagues.js", "utf8"), /Sign up/);
+  assert.match(readFileSync("src/members-app/dashboard-app.js", "utf8"), /LeagueSchedule/);
   assert.match(admin, /body\[data-admin-tab="bag-tags"\] #apane-bag-tags/);
   assert.match(admin, /id="adminBagTagsReactApp"/);
   assert.match(nav, /entry\("bag-tags", "Bag tags", "more"/);

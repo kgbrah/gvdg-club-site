@@ -97,6 +97,10 @@ export async function handleClubPublic(
     }
   }
   if (method === "GET" && pathname === "/leagues") return json({ leagues: await db.listLeagues(env.DB) }, 200, origin);
+  if (method === "GET" && pathname === "/leagues/schedule") {
+    const events = await readD1OrFallback(() => db.listLeagueSchedule(env.DB), () => []);
+    return json({ events }, 200, origin);
+  }
   // Club standings for member dashboards: active leagues (with team + player standings) + any live events.
   if (method === "GET" && pathname === "/leagues/active") {
     const leagues = await readD1OrFallback(

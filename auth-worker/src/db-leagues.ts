@@ -48,6 +48,30 @@ export async function listLeagueEvents(db: D1Like, leagueId: number) {
   return (await db.prepare("SELECT * FROM events WHERE league_id = ? ORDER BY date DESC, id DESC").bind(leagueId).all()).results;
 }
 
+// Every non-cancelled round for a league that still has a round in the last 120 days or ahead.
+export async function listLeagueSchedule(db: D1Like) {
+  return (
+    await db
+      .prepare(
+        `SELECT l.id AS league_id, l.name AS league_name, l.season, l.format AS league_format,
+                e.id, e.name, e.date, e.status, e.external_url, e.starts_at, e.type,
+                COALESCE(c.registration_open, 0) AS registration_open
+         FROM leagues l
+         JOIN events e ON e.league_id = l.id
+         LEFT JOIN event_config c ON c.event_id = e.id
+         WHERE e.status != 'cancelled'
+           AND l.id IN (
+             SELECT DISTINCT league_id FROM events
+             WHERE league_id IS NOT NULL
+               AND status != 'cancelled'
+               AND (date IS NULL AND status IN ('scheduled', 'live') OR date >= date('now', '-120 days'))
+           )
+         ORDER BY l.season DESC, l.name, e.date, e.id`,
+      )
+      .all()
+  ).results;
+}
+
 // Leagues that are "active": they have a currently-live round OR a finalized round within the last 60 days.
 // Drives the club standings shown on member dashboards; auto-appears/disappears as play happens.
 export async function listActiveLeagues(db: D1Like) {

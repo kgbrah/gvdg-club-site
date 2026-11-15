@@ -4,7 +4,6 @@ import { MoreLink } from "./more-page.js";
 import { requestJson } from "./api.js";
 import { useMemberContext } from "./member-context.js";
 import { CasualRoundsSection } from "./registration-casual.js";
-import { ClubLeagueCards } from "./club-leagues.js";
 import { EventRegistrationSections } from "./registration-events.js";
 import { PdgaEventsSection } from "./pdga-events-panel.js";
 import { useSessionToken } from "./session-token.js";
@@ -88,7 +87,6 @@ export function MemberRegistrationPanel({ eventId } = {}) {
     state.status === "loading" && !state.events.length && !state.registrations.length ? h("p", { className: "dash-note", key: "loading" }, "Loading registration options...") : null,
     state.status === "error" ? h("p", { className: "dash-note", key: "error" }, "Registration is temporarily unavailable. Please refresh or try again in a minute.") : null,
     state.status !== "error" ? h("div", { className: "member-events-sections", key: "content" }, [
-      h(ClubLeagueCards, { key: "leagues" }),
       h(EventRegistrationSections, {
         events: state.events,
         registrations: state.registrations,
