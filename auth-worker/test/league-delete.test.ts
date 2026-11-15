@@ -33,10 +33,11 @@ function database() {
       return {
         bind(...bound: unknown[]) { values = bound; return this; },
         async all() { return { results: stmt.all(...values) as Record<string, unknown>[], success: true }; },
+        async first() { return (stmt.get(...values) as Record<string, unknown> | undefined) ?? null; },
         async run() { stmt.run(...values); return { success: true, results: [] }; },
       };
     },
-  } as D1Like;
+  } as unknown as D1Like;
   return { sqlite, db };
 }
 
