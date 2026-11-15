@@ -1,6 +1,6 @@
 import React from "react";
 
-import { statusLabel } from "../shared/events-model.js";
+import { displayEventTitle, formatEventDate, statusLabel } from "../shared/events-model.js";
 import {
   currentEventsRoute,
   EVENTS_ROUTE_REQUEST_EVENT,
@@ -315,9 +315,11 @@ function LeagueRounds({ roundWinners, rounds }) {
         onClick: openEvent,
         type: "button",
       }, [
-        h("span", { className: "player-name", key: "name" }, cellText(event && event.name, "Event")),
-        event && event.date ? h("span", { className: "player-pdga", key: "date" }, String(event.date)) : null,
-        h("span", { className: "player-team", key: "status" }, statusLabel(event && event.status)),
+        h("span", { className: "league-round-copy", key: "copy" }, [
+          h("span", { className: "league-round-name", key: "name" }, displayEventTitle(event && event.name) || "Event"),
+          event && event.date ? h("time", { className: "league-round-date", dateTime: String(event.date), key: "date" }, formatEventDate(event.date)) : null,
+        ]),
+        h("span", { className: "league-round-status", key: "status" }, statusLabel(event && event.status)),
       ]);
     })),
   ]);

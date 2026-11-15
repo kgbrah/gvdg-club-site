@@ -55,7 +55,7 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(themeChrome, /localStorage\.getItem\("theme"\)/);
   assert.match(themeChrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app admin-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v273"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v274"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
@@ -291,6 +291,9 @@ test('Events league detail is rendered by the public React bundle', () => {
   assert.match(app, /function TeamStandingsTable/);
   assert.match(app, /function PlayerStandingsTable/);
   assert.match(app, /function LeagueRounds/);
+  assert.match(app, /displayEventTitle/);
+  assert.match(app, /formatEventDate/);
+  assert.match(app, /league-round-copy/);
   assert.match(app, /className: "lb-wrap"/);
   assert.match(app, /window\.location\.hash = `#event\/\$\{encodeURIComponent\(id\)\}`/);
   assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|📅|📍|🥏|●/);
