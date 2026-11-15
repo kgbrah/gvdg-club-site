@@ -35,6 +35,9 @@ import { handleMyPlayHistory, handleMyPlayExport } from "./play-history-routes.j
 import { handleWatchRoute } from "./watch-routes.js";
 import { handleCourseFavorites } from "./course-favorite-routes.js";
 import { handlePracticeRoute } from "./practice-routes.js";
+import { handleCourseHealth } from "./course-operator-routes.js";
+import { handleCommunityRoute } from "./community-routes.js";
+import { handleOfflineRoundRoute } from "./offline-round-routes.js";
 
 /**
  * STOPGAP: when no Workers KV namespace is bound (deployed dev/staging while this account's KV data
@@ -66,6 +69,13 @@ export default {
       if (watch) return watch;
       const practice = await handlePracticeRoute(request, env, origin, pathname, method);
       if (practice) return practice;
+      const community = await handleCommunityRoute(request, env, origin, pathname, method);
+      if (community) return community;
+      const offline = await handleOfflineRoundRoute(request, env, origin, pathname, method);
+      if (offline) return offline;
+      if (pathname === "/admin/course-health" || pathname.startsWith("/admin/course-health/")) {
+        return await handleCourseHealth(request, env, origin);
+      }
       if (pathname === "/me/course-favorites" || /^\/me\/course-favorites\/\d+$/.test(pathname)) {
         return await handleCourseFavorites(request, env, origin);
       }
