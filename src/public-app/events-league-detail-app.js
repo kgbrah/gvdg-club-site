@@ -14,6 +14,63 @@ import { officialRyderPlayerStandings } from "./ryder-board-merge.js";
 
 const h = React.createElement;
 
+function safeHttpUrl(value) {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+const LAYOUT_DAY = "(?:First|Second|Third|Fourth|Fifth|\\d(?:st|nd|rd|th))\\s+Sunday";
+
+export function leagueAbout(raw) {
+  const urls = [];
+  const flat = String(raw || "").replace(/https?:\/\/[^\s)]+/g, (match) => {
+    const href = safeHttpUrl(match.replace(/[.,)]+$/, ""));
+    if (href) urls.push(href);
+    return " ";
+  }).replace(/\s+/g, " ").trim();
+  const mark = flat.search(new RegExp(`\\b${LAYOUT_DAY}\\b`, "i"));
+  let intro = flat;
+  const layouts = [];
+  if (mark >= 0) {
+    const parts = flat.slice(mark).split(new RegExp(`(${LAYOUT_DAY})\\s*[-–—:]\\s*`, "gi"));
+    for (let i = 1; i + 1 < parts.length; i += 2) {
+      const label = String(parts[i] || "").replace(/\s+/g, " ").trim();
+      const value = String(parts[i + 1] || "").replace(/\s+/g, " ").trim().replace(/[.\s]+$/, "");
+      if (label && value) layouts.push({ label, value });
+    }
+    if (layouts.length) {
+      intro = flat.slice(0, mark).replace(/\s*Set layouts based on the week of the month\.?\s*$/i, "").trim();
+    }
+  }
+  return { intro, layouts, urls: [...new Set(urls)] };
+}
+
+function LeagueAbout({ text }) {
+  const about = leagueAbout(text);
+  if (!about.intro && !about.layouts.length && !about.urls.length) return null;
+  return h("div", { className: "league-about", key: "description" }, [
+    about.intro ? h("p", { key: "intro" }, about.intro) : null,
+    about.layouts.length ? h("div", { className: "league-layouts", key: "layouts" }, [
+      h("p", { className: "league-layouts-label", key: "label" }, "Layouts"),
+      h("dl", { key: "list" }, about.layouts.map((row, index) => h(React.Fragment, { key: index }, [
+        h("dt", null, row.label),
+        h("dd", null, row.value),
+      ]))),
+    ]) : null,
+    about.urls.length ? h("p", { className: "league-about-links", key: "links" }, about.urls.map((href) => h("a", {
+      href,
+      key: href,
+      rel: "noopener noreferrer",
+      target: "_blank",
+    }, href.includes("udisc.com") ? "Open on UDisc" : "League link"))) : null,
+  ]);
+}
+
 function normalizeLeague(raw) {
   const league = raw && typeof raw === "object" ? raw : {};
   return {
@@ -297,7 +354,7 @@ export function EventsLeagueDetailApp() {
         meta ? h("span", { className: "badge type-badge", key: "meta" }, meta) : null,
       ]),
       data.league && data.league.description
-        ? h("div", { className: "detail-notes", key: "description" }, String(data.league.description))
+        ? h(LeagueAbout, { key: "description", text: data.league.description })
         : null,
       isRyder ? h(OfficialRyderTally, { key: "official", tally: ryderTally }) : h(TeamStandingsTable, { key: "teams", teams: teamStandings }),
       h(PlayerStandingsTable, { isMatch, key: "players", standings }),
