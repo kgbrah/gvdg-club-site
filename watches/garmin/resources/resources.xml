@@ -1,0 +1,8 @@
+<resources>
+    <strings>
+        <string id="AppName">GVDG</string>
+    </strings>
+    <drawables>
+        <bitmap id="LauncherIcon" filename="gvdg-icon.png" />
+    </drawables>
+</resources>

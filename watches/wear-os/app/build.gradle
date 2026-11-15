@@ -2,6 +2,8 @@ plugins {
     id 'com.android.application' version '8.9.2'
 }
 
+def releaseSite = providers.gradleProperty('watchProduction').getOrElse('false') == 'true' ? 'greenvillediscgolf.com' : 'gvdgclub.com'
+
 android {
     namespace 'com.gvdgclub.wear'
     compileSdk 35
@@ -25,8 +27,8 @@ android {
             resValue 'string', 'pair_site', 'gvdgclub.com'
         }
         release {
-            buildConfigField 'String', 'API_BASE', '"https://auth.greenvillediscgolf.com"'
-            resValue 'string', 'pair_site', 'greenvillediscgolf.com'
+            buildConfigField 'String', 'API_BASE', '"https://auth.' + releaseSite + '"'
+            resValue 'string', 'pair_site', releaseSite
         }
     }
     compileOptions {

@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="1">
+    <iq:application id="143eded6f8bd44c7a6009ab7b3dbeced" type="watch-app" name="@Strings.AppName"
+        entry="ScoreApp" launcherIcon="@Drawables.LauncherIcon" minSdkVersion="6.0.3">
+        <iq:products>
+            <iq:product id="fr970" />
+            <iq:product id="venu441mm" />
+            <iq:product id="venu445mm" />
+        </iq:products>
+        <iq:permissions>
+            <iq:uses-permission id="Communications" />
+        </iq:permissions>
+        <iq:languages>
+            <iq:language>eng</iq:language>
+        </iq:languages>
+    </iq:application>
+</iq:manifest>

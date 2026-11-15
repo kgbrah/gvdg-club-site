@@ -112,10 +112,10 @@ final class NoRedirects: NSObject, URLSessionTaskDelegate {
 }
 
 struct WatchAPI {
-    #if DEBUG
-    static let phoneSite = "gvdgclub.com"
-    #else
+    #if GVDG_PRODUCTION
     static let phoneSite = "greenvillediscgolf.com"
+    #else
+    static let phoneSite = "gvdgclub.com"
     #endif
 
     private let session = URLSession(configuration: .ephemeral, delegate: NoRedirects(), delegateQueue: nil)

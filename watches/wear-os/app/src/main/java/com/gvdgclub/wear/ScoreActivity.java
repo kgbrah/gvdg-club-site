@@ -37,6 +37,13 @@ public final class ScoreActivity extends Activity {
     private final ExecutorService network = Executors.newSingleThreadExecutor();
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable nextSync = this::sync;
+    private final Runnable rangeTick = new Runnable() {
+        @Override public void run() {
+            if (!active || !rangeEnabled) return;
+            updateRangeReadout();
+            handler.postDelayed(this, 5_000);
+        }
+    };
     private WatchStore journal;
     private WatchStore.State session;
     private ScrollView scroll;
@@ -255,7 +262,8 @@ public final class ScoreActivity extends Activity {
         JSONArray queue = session.queue();
         for (int index = queue.length() - 1; index >= 0; index--) {
             JSONObject operation = queue.optJSONObject(index);
-            if (operation != null && operation.optInt("hole") == hole && operation.optString("targetId").equals(target.optString("id"))) {
+            if (operation != null && operation.optInt("hole") == hole && operation.optString("targetId").equals(target.optString("id")) &&
+                    operation.optString("binding").equals(target.optString("binding"))) {
                 return operation.isNull("strokes") ? null : operation.optInt("strokes");
             }
         }
@@ -336,11 +344,12 @@ public final class ScoreActivity extends Activity {
         addWeighted(navigation, button("Next", length > 1, () -> moveHole(1)));
         content.addView(navigation);
 
-        rangeReadout = label("", 14, GREEN, false);
-        content.addView(rangeReadout);
-        updateRangeReadout();
-        if (!putting && hole.optJSONObject("basket") != null && !rangeEnabled) {
-            content.addView(button("GPS range", true, this::enableLocation));
+        if (!putting) {
+            rangeReadout = label("", 14, GREEN, false);
+            content.addView(rangeReadout);
+            updateRangeReadout();
+            if (rangeEnabled) content.addView(button("Stop GPS", true, this::disableLocation));
+            else if (hole.optJSONObject("basket") != null) content.addView(button("GPS range", true, this::enableLocation));
         }
 
         boolean editable = !card.optBoolean("locked") && session.blocked().isEmpty() && !storageFailed;
@@ -470,6 +479,13 @@ public final class ScoreActivity extends Activity {
                 checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }
 
+    private void disableLocation() {
+        rangeEnabled = false;
+        throwStart = null;
+        stopLocation();
+        render(true);
+    }
+
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
         if (requestCode != LOCATION_PERMISSION) return;
@@ -486,8 +502,12 @@ public final class ScoreActivity extends Activity {
             locationManager.removeUpdates(locationListener);
             for (String provider : locationManager.getProviders(true)) {
                 if (provider.equals(LocationManager.PASSIVE_PROVIDER)) continue;
+                if (provider.equals(LocationManager.GPS_PROVIDER) &&
+                        checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) continue;
                 locationManager.requestLocationUpdates(provider, 4_000, 2, locationListener, Looper.getMainLooper());
             }
+            handler.removeCallbacks(rangeTick);
+            handler.post(rangeTick);
         } catch (SecurityException ignored) {
             rangeEnabled = false;
         }
@@ -495,6 +515,7 @@ public final class ScoreActivity extends Activity {
 
     private void stopLocation() {
         if (locationManager != null) locationManager.removeUpdates(locationListener);
+        handler.removeCallbacks(rangeTick);
         fix = null;
     }
 
@@ -512,7 +533,8 @@ public final class ScoreActivity extends Activity {
             target.setLatitude(basket.optDouble("lat"));
             target.setLongitude(basket.optDouble("lng"));
             rangeReadout.setText(feet(fix.distanceTo(target)) + " ft to basket");
-        } else if (basket != null && rangeEnabled) rangeReadout.setText("Waiting for a GPS fix");
+        } else if (basket != null && rangeEnabled) rangeReadout.setText(
+                locationManager != null && !locationManager.isLocationEnabled() ? "Turn on watch location" : "Waiting for a precise GPS fix");
         else if (!hole.isNull("distanceFt")) rangeReadout.setText(hole.optInt("distanceFt") + " ft listed");
         else rangeReadout.setText("");
     }

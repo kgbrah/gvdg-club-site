@@ -68,6 +68,7 @@ export function readWatchCard(
   return j({
     scope: actor,
     lastSequence,
+    revision: meta.rev ?? 0,
     status: meta.status,
     locked: locked || !targets.length,
     courseName: meta.courseName ?? null,

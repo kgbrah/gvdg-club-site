@@ -41,6 +41,11 @@ final class WatchRange: NSObject, ObservableObject, CLLocationManagerDelegate {
         fix = nil
     }
 
+    func disable() {
+        enabled = false
+        stop()
+    }
+
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         start()
     }
@@ -95,7 +100,7 @@ struct ScorerView: View {
             Text("Connecting will replace the saved edits on this watch with the current card.")
         }
         .confirmationDialog("Clear saved card?", isPresented: $showClear) {
-            Button("Clear card", role: .destructive) { session.clear(); range.stop() }
+            Button("Clear card", role: .destructive) { session.clear(); range.disable() }
         } message: {
             Text(session.journal.queued.isEmpty ? "Pair a new code to score again." : "This removes the scores waiting on this watch.")
         }
@@ -172,6 +177,7 @@ struct ScorerView: View {
                 if let feet = range.feet(to: basket) { Text("\(feet) ft to basket").foregroundStyle(.green).font(.footnote.bold()) }
                 else { Text(range.permissionDenied ? "Allow location in Settings" : "Waiting for a GPS fix").font(.footnote) }
             }
+            Button("Stop GPS") { range.disable() }
         } else {
             if let feet = hole.distanceFt { Text("\(Int(feet.rounded())) ft listed").font(.footnote) }
             if hole.basket != nil { Button("GPS range") { range.enable() } }
