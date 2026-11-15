@@ -716,7 +716,25 @@ body.score-glove.player-theme-page:has(.score-bottom-layout) #scoreRoot .topbar 
   white-space: nowrap;
 }
 .score-outcomes .live-stats-mix-item b { font-size: .86rem; }
-.score-glove-stage .holegrid { flex: none; margin: 0; }
+.score-glove-stage .holegrid {
+  display: flex;
+  flex: none;
+  flex-wrap: nowrap;
+  gap: .28rem;
+  margin: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 0 .15rem;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+}
+.score-glove-stage .holegrid button {
+  flex: 0 0 2.85rem;
+  min-width: 44px;
+  min-height: 46px;
+  scroll-snap-align: center;
+}
 .score-advanced { display: flex; flex-direction: column; gap: .12rem; flex: none; min-width: 0; }
 .score-advanced-bar {
   display: flex;
