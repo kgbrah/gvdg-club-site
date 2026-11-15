@@ -800,7 +800,6 @@ body #crottsReactApp :is(button,textarea,a):focus-visible { outline: 2px solid c
 
 
 
-<<<<<<< HEAD
 /* ===== Course discovery: difficulty + amenity chips, find/reset hierarchy ===== */
 #members .course-chips { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .35rem; }
 #members .course-chip { display: inline-flex; align-items: center; min-height: 1.5rem; padding: 0 .55rem; border-radius: 999px; font-size: .75rem; font-weight: 600; color: var(--text-secondary); background: var(--bg-tertiary); }
@@ -833,7 +832,7 @@ body #crottsReactApp :is(button,textarea,a):focus-visible { outline: 2px solid c
 #members .tag-challenge-form .member-action-grid { margin-top: .25rem; }
 #members .tag-challenge-form .member-action-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
 #members .tag-challenge-form .member-action-grid > :is(button, .player-btn) { width: 100%; }
-=======
+
 /* ===== T3 stats ===== */
 #members .member-stats { --stats-series: var(--primary-strong); min-width: 0; grid-template-columns: minmax(0, 1fr); }
 :root[data-theme="dark"] #members .member-stats { --stats-series: var(--primary); }
@@ -939,4 +938,3 @@ body:has(.stats-jump), #members:has(.stats-jump) { overflow-x: clip; }
 #members .member-stats .club-rating-head { flex-wrap: wrap; }
 #members .member-stats .club-rating-live { flex: 1 1 auto; min-width: 0; }
 /* ===== /T3 stats ===== */
->>>>>>> worktree-agent-a790e7ea3bf9b6206
