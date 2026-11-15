@@ -198,6 +198,8 @@ async function populated(width, mode, large = false) {
 
   // ---- jump bar ----
   const jump = page.locator(".stats-jump");
+  assert.equal(await jump.evaluate((el) => el.scrollLeft), 0, "jump bar starts at scrollLeft 0 " + tag);
+  assert.ok(await jump.getByRole("button", { name: "Overview", exact: true }).evaluate((el) => el.getBoundingClientRect().left >= 0), "Overview chip fully visible " + tag);
   console.log("jump", tag, JSON.stringify(await jump.evaluate((el) => { const r = el.getBoundingClientRect(); const chain = []; for (let n = el; n && chain.length < 8; n = n.parentElement) chain.push(n.tagName + "." + String(n.className).slice(0, 30) + ":" + Math.round(n.getBoundingClientRect().width) + ":" + getComputedStyle(n).display); return [r.left, r.right, r.top, el.scrollWidth, el.clientWidth, innerWidth, chain]; })));
   await jump.getByRole("button", { name: "Results", exact: true }).click({ timeout: 5000 });
   await page.waitForFunction(() => { const t = document.querySelector("#stats-results").getBoundingClientRect().top; return t < 300; }, null, { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(500);
@@ -207,6 +209,7 @@ async function populated(width, mode, large = false) {
   const jumpTop = await jump.evaluate((el) => el.getBoundingClientRect().top);
   assert.ok(jumpTop >= 0 && jumpTop < 140, "jump bar stays sticky, top=" + jumpTop + " " + await jump.evaluate((el) => { const out = []; for (let n = el.parentElement; n; n = n.parentElement) { const c = getComputedStyle(n); if (c.overflow !== "visible" || c.contain !== "none") out.push(n.tagName + "." + n.className + "#" + n.id + ":" + c.overflow + "/" + c.contain); } return out.join(" | "); }));
   await page.evaluate(() => scrollTo(0, 0));
+  await page.waitForFunction(() => document.querySelector(".stats-jump").scrollLeft === 0, null, { timeout: 5000 });
 
   // ---- header collision ----
   const boxes = await page.evaluate(() => {

@@ -186,8 +186,25 @@ export function JumpBar({ sections }) {
     for (const [id] of present) { const node = document.getElementById(id); if (node) observer.observe(node); }
     return () => observer.disconnect();
   }, [present.length]);
+  React.useEffect(() => {
+    const onScroll = () => { if (window.scrollY < 80) setActive(present[0]?.[0]); };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [present.length]);
+  const bar = React.useRef(null);
+  const settled = React.useRef(false);
+  React.useEffect(() => {
+    // Never on first render; afterwards nudge only the bar (not the page) so the active chip is visible.
+    if (!settled.current) { settled.current = true; return; }
+    const node = bar.current;
+    const chip = node?.querySelector("[aria-current='true']");
+    if (!node || !chip) return;
+    const left = chip.offsetLeft - node.offsetLeft;
+    const target = Math.max(0, Math.min(left - (node.clientWidth - chip.offsetWidth) / 2, node.scrollWidth - node.clientWidth));
+    node.scrollTo({ left: target, behavior: "auto" });
+  }, [active]);
   const reduce = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  return h("nav", { className: "stats-jump", "aria-label": "Stats sections" }, present.map(([id, label]) =>
+  return h("nav", { className: "stats-jump", "aria-label": "Stats sections", ref: bar }, present.map(([id, label]) =>
     h("button", {
       type: "button", key: id, "aria-current": active === id ? "true" : undefined,
       onClick: () => { setActive(id); document.getElementById(id)?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" }); },
