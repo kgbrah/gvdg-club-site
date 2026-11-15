@@ -38,6 +38,7 @@ import { handlePracticeRoute } from "./practice-routes.js";
 import { handleCourseHealth } from "./course-operator-routes.js";
 import { handleCommunityRoute } from "./community-routes.js";
 import { handleOfflineRoundRoute } from "./offline-round-routes.js";
+import { handlePhoneActivityRoute } from "./phone-activity-routes.js";
 
 /**
  * STOPGAP: when no Workers KV namespace is bound (deployed dev/staging while this account's KV data
@@ -73,6 +74,8 @@ export default {
       if (community) return community;
       const offline = await handleOfflineRoundRoute(request, env, origin, pathname, method);
       if (offline) return offline;
+      const activity = await handlePhoneActivityRoute(request, env, origin, pathname, method);
+      if (activity) return activity;
       if (pathname === "/admin/course-health" || pathname.startsWith("/admin/course-health/")) {
         return await handleCourseHealth(request, env, origin);
       }
