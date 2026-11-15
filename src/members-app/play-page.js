@@ -1,4 +1,5 @@
 import React from "react";
+import { ArrowRight, ChevronRight, MapPin } from "lucide-react";
 import { MoreLink } from "./more-page.js";
 
 import { TOKEN_KEY, request, requestJson, storageGet } from "./api.js";
@@ -29,7 +30,7 @@ function CourseTrafficCard() {
           setStatus("ready");
         })
         .catch(() => {
-          if (!dead) setStatus("ready");
+          if (!dead) setStatus("error");
         });
     }
     load();
@@ -43,7 +44,9 @@ function CourseTrafficCard() {
     h("h3", { key: "title" }, "Course traffic"),
     h("p", { className: "player-card-meta", key: "copy" }, "Live groups, hole by hole, from cards scoring right now."),
     status === "loading"
-      ? h("p", { className: "player-card-meta", key: "loading" }, "Checking who's out…")
+      ? h("p", { className: "player-card-meta", role: "status", key: "loading" }, "Checking who's out…")
+      : status === "error"
+        ? h("p", { className: "player-card-meta", role: "alert", key: "error" }, "Course traffic couldn’t load. It will refresh automatically.")
       : rows.length
         ? h("div", { className: "live-round-list", key: "list" }, rows.map((row) => h("div", { className: "live-round-card", key: row.courseId || row.name }, [
           h("div", { key: "body" }, [
@@ -60,28 +63,37 @@ function CourseTrafficCard() {
 function CourseSearch() {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
-  const [courses, setCourses] = React.useState(null);
+  const [result, setResult] = React.useState({ courses: null, error: false });
+  const [retry, loadAgain] = React.useReducer((count) => count + 1, 0);
   React.useEffect(() => {
-    if (!open || courses) return undefined;
+    if (!open || result.courses) return undefined;
     const controller = new AbortController();
     requestJson("/courses", { signal: controller.signal }).then((data) => {
-      setCourses(Array.isArray(data?.courses) ? data.courses : []);
-    }).catch((error) => {
-      if (error.name !== "AbortError") setCourses([]);
+      if (!controller.signal.aborted) setResult({ courses: Array.isArray(data?.courses) ? data.courses : [], error: false });
+    }).catch(() => {
+      if (!controller.signal.aborted) setResult({ courses: null, error: true });
     });
     return () => controller.abort();
-  }, [open, courses]);
+  }, [open, result.courses, retry]);
   const term = query.trim().toLowerCase();
-  const matches = term ? (courses || []).filter((row) => [row.name, row.location].join(" ").toLowerCase().includes(term)).slice(0, 8) : [];
-  return h("details", { className: "player-card", onToggle: (event) => setOpen(event.currentTarget.open) }, [
-    h("summary", { key: "summary" }, "Find a course"),
+  const matches = term ? (result.courses || []).filter((row) => [row.name, row.location].join(" ").toLowerCase().includes(term)).slice(0, 8) : [];
+  return h("details", { className: "player-card member-course-search", onToggle: (event) => setOpen(event.currentTarget.open) }, [
+    h("summary", { key: "summary" }, h(MapPin, { size: 18, "aria-hidden": true }), "Find a course"),
     h("label", { className: "player-play-join", key: "search" }, [
-      "Course name or town", h("input", { className: "player-play-code", type: "search", key: "input", value: query, onChange: (event) => setQuery(event.target.value) }),
+      "Course name or town", h("input", { className: "form-input", type: "search", key: "input", value: query, onChange: (event) => setQuery(event.target.value) }),
     ]),
-    matches.length ? h("ul", { key: "matches" }, matches.map((row) => h("li", { key: row.id }, [
-      h("a", { href: "score.html?course=" + encodeURIComponent(row.name), key: "link" }, row.name),
-      row.location ? " · " + row.location : null,
-    ]))) : term ? h("p", { className: "dash-note", role: "status", key: "status" }, courses ? "No matching courses." : "Loading courses…") : null,
+    matches.length ? h("ul", { className: "member-search-matches", key: "matches" }, matches.map((row) => h("li", { key: row.id },
+      h("a", { href: "score.html?course=" + encodeURIComponent(row.name) }, [
+        h("span", { key: "copy" }, h("strong", null, row.name), row.location ? h("small", null, row.location) : null),
+        h(ChevronRight, { size: 17, "aria-hidden": true, key: "chevron" }),
+      ]),
+    ))) : result.error ? h("div", { className: "member-subactions", key: "status" }, [
+      h("p", { className: "dash-note", role: "alert", key: "error" }, "Courses couldn’t load."),
+      h("button", { className: "dashboard-action", type: "button", key: "retry", onClick: () => {
+        setResult({ courses: null, error: false });
+        loadAgain();
+      } }, "Try again"),
+    ]) : term ? h("p", { className: "dash-note", role: "status", key: "status" }, result.courses ? "No matching courses." : "Loading courses…") : null,
   ]);
 }
 
@@ -101,9 +113,9 @@ function PlayJoinCard() {
       : liveScoreHref({ roundCode: round });
   }
 
-  return h("section", { className: "player-card", "data-react-play-join": "ready" }, [
-    h("h3", { key: "title" }, "Join a card"),
-    h("p", { className: "player-card-meta", key: "copy" }, "Type the code from someone already scoring."),
+  return h("section", { className: "player-card member-join", "data-react-play-join": "ready" }, [
+    h("h2", { key: "title" }, "Join or watch"),
+    h("p", { className: "player-card-meta", key: "copy" }, "Enter the round code to join a card. For private rounds, use the shared watch link to watch."),
     h("div", { className: "player-play-join", key: "form" }, [
       h("label", { className: "player-play-label", htmlFor: "playJoinCode", key: "label" }, "Round code"),
       h("input", {
@@ -111,6 +123,8 @@ function PlayJoinCard() {
         autoCorrect: "off",
         className: "player-play-code",
         id: "playJoinCode",
+        "aria-invalid": error ? "true" : undefined,
+        "aria-describedby": error ? "playJoinError" : undefined,
         key: "input",
         maxLength: 8,
         onChange: (event) => {
@@ -124,7 +138,7 @@ function PlayJoinCard() {
         spellCheck: "false",
         value: code,
       }),
-      error ? h("p", { className: "player-card-meta player-play-error", key: "error" }, error) : null,
+      error ? h("p", { className: "player-card-meta player-play-error", id: "playJoinError", role: "alert", key: "error" }, error) : null,
       h("div", { className: "player-play-actions", key: "actions" }, [
         h("button", {
           className: "player-btn primary",
@@ -434,7 +448,7 @@ export function UdiscHistory({ token }) {
         onChange: onFile,
       }),
     ]),
-    error ? h("p", { className: "player-card-meta player-play-error", key: "error" }, error) : null,
+    error ? h("p", { className: "player-card-meta player-play-error", role: "alert", key: "error" }, error) : null,
     message ? h("p", { className: "player-card-meta udisc-history-note", key: "message" }, message) : null,
     players.length
       ? h("div", { className: "udisc-history-picks", key: "picks" }, players.map((name) =>
@@ -507,28 +521,26 @@ function PlayHistory({ token }) {
 
 export function MemberPlayPage() {
   const token = storageGet(TOKEN_KEY);
-  return h("div", { className: "react-play-page player-play", "data-react-play-page": token ? "ready" : "guest" }, [
-    h("a", {
-      className: "player-keep-score",
-      href: "score.html?start=1",
-      key: "start",
-    }, [
-      h("div", { key: "copy" }, [
-        h("h2", { key: "title" }, "Start a round"),
-        h("p", { key: "meta" }, "Casual card. No club login. Share the code with the card."),
+  return h("div", { className: "react-play-page player-play member-subpage member-play-surface", "data-react-play-page": token ? "ready" : "guest" }, [
+    h("div", { className: "member-play-entry", key: "entry" }, [
+      h("a", { className: "player-keep-score member-round-hero", href: "score.html?start=1", key: "start" }, [
+        h("div", { className: "member-round-copy", key: "copy" }, [
+          h("h2", { key: "title" }, "Start a round"),
+          h("p", { key: "meta" }, "Create a casual scorecard and share its code."),
+        ]),
+        h("span", { className: "member-round-arrow", key: "go" }, h(ArrowRight, { size: 23, "aria-hidden": true })),
       ]),
-      h("span", { className: "player-keep-score-go", key: "go" }, "Start"),
+      h(PlayJoinCard, { key: "join" }),
     ]),
-    token ? h("div", { className: "dashboard-actions", key: "practice-tools" }, [
-      h(MoreLink, { tab: "practice", key: "practice" }),
-      h(MoreLink, { tab: "my-bag", key: "bag" }),
-      h(MoreLink, { tab: "course-discovery", key: "discovery" }),
+    token ? h("nav", { className: "member-subactions member-play-tools", "aria-label": "Play tools", key: "practice-tools" }, [
+      h(MoreLink, { tab: "practice", className: "dashboard-action", key: "practice" }),
+      h(MoreLink, { tab: "my-bag", className: "dashboard-action", key: "bag" }),
+      h(MoreLink, { tab: "course-discovery", className: "dashboard-action", key: "discovery" }),
     ]) : null,
-    h(PlayJoinCard, { key: "join" }),
+    token ? h(LiveScoringPanel, { token, variant: "play", key: "live" }) : null,
     h(CourseSearch, { key: "courses" }),
     h(CourseTrafficCard, { key: "traffic" }),
-    token ? h(LiveScoringPanel, { token, variant: "play", key: "live" }) : null,
     token ? h(PlayHistory, { token, key: "history" }) : null,
-    token ? h(MoreLink, { tab: "imports", key: "udisc" }) : null,
+    token ? h(MoreLink, { tab: "imports", className: "dashboard-action", key: "udisc" }) : null,
   ]);
 }

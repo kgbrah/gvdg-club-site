@@ -98,24 +98,19 @@ export function MemberAuthGate() {
     return () => window.removeEventListener(SHELL_EVENT, updateShell);
   }, []);
 
+  const titles = { login: "Members Only", apply: "Join the Club", pin: "Choose a PIN", profile: "Edit profile" };
   return h("div", { className: "login-card", "data-react-auth-gate": mode }, [
-    h(AuthIcon, { key: "icon" }),
-    h("h1", { className: "login-title", key: "title" }, mode === "apply" ? "Join the Club" : "Members Only"),
-    mode === "login"
-      ? h("p", { className: "login-subtitle", key: "subtitle" }, "Anyone can start a round. Club members can sign in below.")
-      : mode === "apply"
-        ? null
-        : h("p", { className: "login-subtitle", key: "subtitle" }, "Log in with your PDGA # or UDisc username and your PIN."),
-    mode === "login"
-      ? h("a", { className: "login-btn login-play", href: "score.html", key: "play" }, "Start a round")
-      : null,
-    mode === "login"
-      ? h("p", { className: "login-subtitle", key: "play-note" }, "No club account. Pick a course and share the code.")
-      : null,
+    h(AuthIcon, { mode, key: "icon" }),
+    h("h1", { className: "login-title", key: "title" }, titles[mode]),
+    mode === "login" ? h("p", { className: "login-subtitle", key: "subtitle" }, "Sign in with the details you registered with the club.") : null,
     h(LoginForm, { active: mode === "login", supportsPasskeys, state: formStates.login, onValuesChange: setFormValues, key: "login" }),
     h(ApplyForm, { active: mode === "apply", state: formStates.apply, onValuesChange: setFormValues, key: "apply" }),
     h(PinChangeForm, { active: mode === "pin", state: formStates.pin, onValuesChange: setFormValues, key: "pin" }),
     h(ProfileForm, { active: mode === "profile", state: formStates.profile, onValuesChange: setFormValues, key: "profile" }),
+    mode === "login" ? h("div", { className: "member-auth-alternate", key: "play" }, [
+      h("p", { className: "login-subtitle", key: "hint" }, "Casual scoring is open to everyone."),
+      h("a", { className: "dashboard-action", href: "score.html", key: "start" }, "Start a round"),
+    ]) : null,
     h("a", { href: "index.html", className: "back-link", key: "back" }, "Back to main site"),
   ]);
 }

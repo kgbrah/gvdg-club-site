@@ -125,7 +125,7 @@ function historySummary(view, token) {
     h("details", { className: "player-card-meta" }, h("summary", null, "How the numbers are calculated"),
       h("p", null, SHOT_STAT_DEFINITIONS.putting), h("p", null, SHOT_STAT_DEFINITIONS.ledger), h("p", null, SHOT_STAT_DEFINITIONS.legacy),
       h("p", null, "Score trends use positive hole scores with known pars. Putting leagues are excluded.")),
-    h("div", { style: { overflowX: "auto" } }, h("table", { style: { width: "100%", textAlign: "left" } },
+    h("div", { className: "member-history-table", style: { overflowX: "auto" } }, h("table", { style: { width: "100%", textAlign: "left" } },
       h("caption", { style: { textAlign: "left", marginBlock: ".5rem" } }, "Recent matching rounds"),
       h("thead", null, h("tr", null, ["Date", "Course / layout", "Holes with scores", "Strokes", "To par"].map((title) => h("th", { key: title, scope: "col" }, title)))),
       h("tbody", null, view.recentRounds.map((round) => h("tr", { key: round.id },
@@ -266,7 +266,7 @@ export function PersonalPlayHistory() {
   const sameSource = [draft.source, draft.group, draft.style].every((value, index) => value === [payload?.filters?.source, payload?.filters?.group, payload?.filters?.style][index]);
   const sameCourse = sameSource && draft.course === payload?.filters?.course;
   const sameLayout = sameCourse && draft.layout === payload?.filters?.layout;
-  return h("section", { className: "player-card", style: { marginBlockEnd: "1rem" }, "aria-label": "Personal play history" },
+  return h("section", { className: "player-card member-history-panel", "aria-label": "Personal play history" },
     h("h3", null, "My play history"),
     h("form", { onSubmit: apply, "aria-label": "Filter my play history" }, h("div", { style: filterStyle },
       selectField("Period", "window", options({ year: "This year", all: "All time", last: "Last N rounds", custom: "Custom dates" }), draft, change),

@@ -128,7 +128,7 @@ export function CourseConditionsPanel() {
       h("label", { className: "casual-field", key: "course" }, [
         "Course",
         h("select", {
-          className: "form-input",
+          className: "form-input", key: "control",
           value: courseId,
           onChange: (event) => setCourseId(event.target.value),
           required: true,
@@ -140,7 +140,7 @@ export function CourseConditionsPanel() {
       h("label", { className: "casual-field", key: "status" }, [
         "Condition",
         h("select", {
-          className: "form-input",
+          className: "form-input", key: "control",
           value: status,
           onChange: (event) => setStatus(event.target.value),
         }, COURSE_CONDITION_STATUSES.map((value) => h("option", { value, key: value }, COURSE_CONDITION_LABELS[value]))),
@@ -148,7 +148,7 @@ export function CourseConditionsPanel() {
       h("label", { className: "casual-field notes", key: "note" }, [
         "Note (optional)",
         h("input", {
-          className: "form-input",
+          className: "form-input", key: "control",
           maxLength: 280,
           placeholder: "Standing water on 12, skip the woods layout, etc.",
           value: note,

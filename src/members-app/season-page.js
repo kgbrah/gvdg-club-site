@@ -153,16 +153,19 @@ export function MemberSeasonPage({ resultsOnly = false } = {}) {
   if (!token) return null;
 
   const page = state.page;
-  const results = page ? h("div", { key: "results" }, [
-      h("h4", { className: "dash-subtitle", key: "title" }, "Club results"),
+  const results = page ? h("section", { className: "player-card member-result-list", "aria-label": "Club results", key: "results" }, [
+      h("h2", { className: "dash-subtitle", key: "title" }, "Club results"),
       page.results.length
         ? page.results.map((row, index) => h(ResultRow, { row, key: row.id || `${row.event_id}-${index}` }))
         : h("p", { className: "dash-note", key: "empty" }, "No finalized club or casual rounds this season yet."),
     ]) : null;
   if (resultsOnly) return results || h("p", { className: "dash-note", role: "status" }, "Loading event results…");
 
-  return h("div", { className: "react-season-page", "data-react-season-page": state.status }, [
-    h("h3", { className: "my-dashboard-title", key: "title" }, page ? `${page.year} Season` : "Your Season"),
+  return h("div", { className: "react-season-page member-subpage member-stats", "data-react-season-page": state.status }, [
+    h("div", { className: "member-section-heading", key: "top" }, [
+      h("h2", { className: "my-dashboard-title", key: "title" }, page ? `${page.year} Season` : "Your season"),
+      h(MoreLink, { tab: "imports", label: "Import UDisc history", className: "dashboard-action", key: "imports" }),
+    ]),
     state.status === "loading" ? h("p", { className: "dash-note", key: "loading" }, "Loading your season...") : null,
     state.status === "error" ? h("p", { className: "dash-note", key: "error" }, "Could not load every season number. Showing what we have.") : null,
     page ? h("div", { className: "doubles-quick-stats", key: "stats" }, [
@@ -172,7 +175,6 @@ export function MemberSeasonPage({ resultsOnly = false } = {}) {
       h(StatTile, { label: "Club rating", value: page.clubRating == null ? "-" : String(page.clubRating), key: "rating" }),
     ]) : null,
     h(PlayStatsPanel, { key: "play-stats", pdgaStats: pdgaState.stats }),
-    h(MoreLink, { tab: "imports", label: "Import UDisc history", key: "imports" }),
     h(ActiveStandingsPanel, { key: "active-standings" }),
     page?.standings.length
       ? h("div", { key: "standings" }, [
@@ -180,8 +182,8 @@ export function MemberSeasonPage({ resultsOnly = false } = {}) {
         page.standings.map((item, index) => h(StandingCard, { item, key: `${item.leagueId || item.leagueName}-${index}` })),
       ])
       : null,
-    page ? h("div", { key: "upcoming" }, [
-      h("h4", { className: "dash-subtitle", key: "title" }, "Coming up"),
+    page ? h("section", { className: "player-card member-result-list", "aria-label": "Coming up", key: "upcoming" }, [
+      h("h2", { className: "dash-subtitle", key: "title" }, "Coming up"),
       page.upcoming.length
         ? page.upcoming.map((row, index) => h(UpcomingRow, { row, key: row.id || `${row.event_id}-${index}` }))
         : h("p", { className: "dash-note", key: "empty" }, "No upcoming registrations."),

@@ -102,28 +102,29 @@ function CasualRoundForm({ token, onReload }) {
 
   return h("form", { className: "casual-form", onSubmit: submit, "data-react-casual-form": "ready" }, [
     h("label", { className: "casual-field", key: "course" }, [
-      h("span", null, "Course"),
-      h("select", { className: "form-input", value: courseId, onChange: (change) => setCourseId(change.target.value) },
+      h("span", { key: "label" }, "Course"),
+      h("select", { className: "form-input", key: "control", value: courseId, onChange: (change) => setCourseId(change.target.value) },
         courses.map((course) => h("option", { value: String(course.id), key: course.id }, course.name || "Course"))),
     ]),
     h("label", { className: "casual-field", key: "layout" }, [
-      h("span", null, "Layout"),
-      h("select", { className: "form-input", value: layoutId, disabled: !layouts.length, onChange: (change) => setLayoutId(change.target.value) },
+      h("span", { key: "label" }, "Layout"),
+      h("select", { className: "form-input", key: "control", value: layoutId, disabled: !layouts.length, onChange: (change) => setLayoutId(change.target.value) },
         layouts.map((layout) => h("option", { value: String(layout.id), key: layout.id }, layout.name || "Layout"))),
     ]),
     h("label", { className: "casual-field time", key: "time" }, [
-      h("span", null, "Time"),
+      h("span", { key: "label" }, "Time"),
       h("input", {
         className: "form-input",
         type: "datetime-local",
+        key: "control",
         min: localDateTimeValue(Date.now() - 5 * 60 * 60 * 1000),
         value: startsAt,
         onChange: (change) => setStartsAt(change.target.value),
       }),
     ]),
     h("label", { className: "casual-field notes", key: "notes" }, [
-      h("span", null, "Notes"),
-      h("textarea", { className: "form-input casual-notes", maxLength: 800, rows: 2, placeholder: "Optional", value: notes, onChange: (change) => setNotes(change.target.value) }),
+      h("span", { key: "label" }, "Notes"),
+      h("textarea", { className: "form-input casual-notes", key: "control", maxLength: 800, rows: 2, placeholder: "Optional", value: notes, onChange: (change) => setNotes(change.target.value) }),
     ]),
     h("button", { type: "submit", className: "passkey-btn", disabled: posting || unavailable, key: "submit" }, posting ? "Posting..." : "Post casual round"),
     h("div", { className: `casual-status${status.error ? " error" : ""}`, role: "status", key: "status" }, statusMessage),

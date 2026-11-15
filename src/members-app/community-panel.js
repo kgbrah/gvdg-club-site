@@ -116,7 +116,7 @@ function ProfileSettings({ initial, save }) {
     } finally { setBusy(false); }
   }
 
-  return h("form", { className: "player-card community-form", onSubmit: submit }, [
+  return h("form", { className: "player-card community-form member-community-profile", onSubmit: submit }, [
     h("h2", { key: "title" }, "Edit community profile"),
     h("label", { className: "community-field", key: "audience" }, [
       "Who can see your profile?",
@@ -151,7 +151,7 @@ function ProfileSettings({ initial, save }) {
 function PrivateProgress({ progress }) {
   const total = progress.totals.club + progress.totals.casual;
   const peak = Math.max(1, ...progress.weekly.map((row) => row.rounds));
-  return h("section", { className: "player-card", "aria-label": "Your progress", key: "progress" }, [
+  return h("section", { className: "player-card member-community-progress", "aria-label": "Your progress", key: "progress" }, [
     h("h2", { key: "title" }, "Your progress"),
     h("p", { key: "total" }, total + " completed rounds · " + progress.totals.club + " club · " + progress.totals.casual + " casual"),
     h("p", { key: "streak" }, progress.streak ? (progress.streakCapped ? "52+" : String(progress.streak))
@@ -179,7 +179,7 @@ export function MemberCommunityPage({ token }) {
   const [error, setError] = React.useState("");
   const [filter, setFilter] = React.useState("");
   const [query, setQuery] = React.useState("");
-  const [page, setPage] = React.useState({ profiles: [], more: false, offset: 0 });
+  const [page, setPage] = React.useState({ profiles: [], more: false, offset: 0, status: "loading" });
   const [pending, setPending] = React.useState(false);
   const [version, reload] = React.useReducer((value) => value + 1, 0);
   const valid = () => token === readMemberToken();
@@ -196,9 +196,10 @@ export function MemberCommunityPage({ token }) {
   React.useEffect(() => {
     const controller = new AbortController();
     const params = new URLSearchParams({ q: query, offset: "0" });
+    setPage((current) => ({ ...current, status: "loading" }));
     communityRequest("/community/directory?" + params, { token, signal: controller.signal })
-      .then((data) => { if (!controller.signal.aborted && valid()) setPage({ ...data, offset: 0 }); })
-      .catch(() => { if (!controller.signal.aborted && valid()) setPage({ profiles: [], more: false, offset: 0 }); });
+      .then((data) => { if (!controller.signal.aborted && valid()) setPage({ ...data, offset: 0, status: "ready" }); })
+      .catch(() => { if (!controller.signal.aborted && valid()) setPage({ profiles: [], more: false, offset: 0, status: "error" }); });
     return () => controller.abort();
   }, [token, query, version]);
 
@@ -214,7 +215,7 @@ export function MemberCommunityPage({ token }) {
     try {
       const params = new URLSearchParams({ q: query, offset: String(page.offset + 25) });
       const result = await communityRequest("/community/directory?" + params, { token });
-      if (valid()) setPage({ profiles: page.profiles.concat(result.profiles), more: result.more, offset: page.offset + 25 });
+      if (valid()) setPage({ profiles: page.profiles.concat(result.profiles), more: result.more, offset: page.offset + 25, status: "ready" });
     } catch { setError("More profiles couldn’t load."); }
     finally { setPending(false); }
   }
@@ -243,10 +244,10 @@ export function MemberCommunityPage({ token }) {
 
   if (!valid() || !state) return h("p", { className: "dash-note", role: "status" }, error || "Loading your community settings…");
   const relations = new Map(state.contacts.map((contact) => [contact.key, contact.relation]));
-  return h("div", { className: "player-play member-community", "data-member-community": "ready" }, [
+  return h("div", { className: "player-play member-community member-subpage member-community-hub", "data-member-community": "ready" }, [
     h(ProfileSettings, { key: "profile", initial: state.profile, save }),
     h(PrivateProgress, { key: "progress", progress: state.progress }),
-    h("section", { className: "player-card", "aria-label": "Friends and requests", key: "friends" }, [
+    h("section", { className: "player-card member-community-friends", "aria-label": "Friends and requests", key: "friends" }, [
       h("h2", { key: "heading" }, "Friends and requests"),
       note(error),
       state.contacts.length ? h("ul", { className: "community-list", key: "items" }, state.contacts.map((contact) => h("li", { key: contact.key }, [
@@ -268,14 +269,17 @@ export function MemberCommunityPage({ token }) {
         ]))),
       ]) : null,
     ]),
-    h("section", { className: "player-card", "aria-label": "Community directory", key: "directory" }, [
+    h("section", { className: "player-card member-community-directory", "aria-label": "Community directory", key: "directory" }, [
       h("h2", { key: "heading" }, "Community directory"),
       note("Find members who have shared a community profile."),
-      h("form", { className: "community-form", role: "search", key: "filter", onSubmit: (event) => { event.preventDefault(); setQuery(filter.trim()); } }, [
+      h("form", { className: "community-form member-inline-search", role: "search", key: "filter", onSubmit: (event) => { event.preventDefault(); setQuery(filter.trim()); } }, [
         field("Find a member", "input", { name: "memberSearch", type: "search", value: filter, maxLength: 60, onChange: (event) => setFilter(event.target.value) }),
         action("Search members", { type: "submit", key: "search" }),
       ]),
-      page.profiles.length ? h("ul", { className: "community-list", key: "profiles" }, page.profiles.map((item) => h("li", { key: item.key }, [
+      page.status === "loading" ? note("Searching the directory…", "loading") : page.status === "error" ? h("div", { className: "member-subactions", key: "directory-error" }, [
+        h("p", { className: "dash-note", role: "alert", key: "error" }, "The directory couldn’t load."),
+        action("Try again", { onClick: reload, key: "retry" }),
+      ]) : page.profiles.length ? h("ul", { className: "community-list", key: "profiles" }, page.profiles.map((item) => h("li", { key: item.key }, [
         h("a", { href: sharedProfileHref(item.key), key: "profile" }, item.displayName),
         h("div", { className: "dashboard-actions", key: "actions" }, [
           !relations.has(item.key) && state.profile.audience !== "private" ?
@@ -284,7 +288,7 @@ export function MemberCommunityPage({ token }) {
         ]),
       ]))) : note("No matching profiles.", "empty"),
       state.profile.audience === "private" ? note("Share a display name in your profile settings before sending requests.", "request-note") : null,
-      page.more ? action("More members", { key: "more", disabled: pending, onClick: () => { void older(); } }) : null,
+      page.status === "ready" && page.more ? action("More members", { key: "more", disabled: pending, onClick: () => { void older(); } }) : null,
     ]),
   ]);
 }

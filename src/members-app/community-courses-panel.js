@@ -1,4 +1,5 @@
 import React from "react";
+import { Bookmark, ChevronRight } from "lucide-react";
 import { selectDashboardTab } from "./dashboard-shell.js";
 import { communityRequest } from "./community-panel.js";
 import { memberConfirm } from "./member-dialogs.js";
@@ -12,8 +13,8 @@ function option(value, label) { return h("option", { value, key: value }, label)
 function action(label, props = {}) { return h("button", { className: "dashboard-action", type: "button", ...props }, label); }
 function status(text, key = "status") { return text ? h("p", { className: "dash-note", role: "status", key }, text) : null; }
 
-function Rating({ course }) {
-  return h("p", { className: "player-card-meta" }, course.reviewCount
+function Rating({ course, as = "p" }) {
+  return h(as, { className: "player-card-meta" }, course.reviewCount
     ? Number(course.averageRating).toFixed(1) + "/5 · " + course.reviewCount + (course.reviewCount === 1 ? " review" : " reviews")
     : "No published reviews");
 }
@@ -23,7 +24,7 @@ function CourseInfo({ course }) {
   return h("section", { className: "player-card", "aria-label": "Course amenities and access" }, [
     h("h2", { key: "name" }, course.name),
     course.location ? h("p", { className: "player-card-meta", key: "town" }, course.location) : null,
-    h(Rating, { course, key: "rating" }),
+    h(Rating, { course, as: "span", key: "rating" }),
     h("p", { key: "difficulty" }, "Difficulty · " + difficulty),
     h("ul", { className: "community-list community-amenities", key: "amenities" }, COURSE_AMENITIES.map(([key, label]) => h("li", { key }, [
       h("span", { key: "label" }, label),
@@ -140,7 +141,7 @@ function CourseReviews({ courseId, token, favorite, toggleFavorite }) {
     });
     if (agreed) await update(reviewRoute, "DELETE", { revision: mine.revision }, "Review removed.");
   };
-  return h("div", { className: "member-community player-play", "data-course-community": courseId }, [
+  return h("div", { className: "member-community player-play member-subpage member-course-details", "data-course-community": courseId }, [
     action("‹ Back to course results", { key: "back", onClick: () => selectDashboardTab("course-discovery") }),
     h(CourseInfo, { course: data.course, key: "course" }),
     action(favorite ? "Remove favorite" : "Save as favorite", { key: "favorite", onClick: () => { void toggleFavorite(courseId); } }),
@@ -193,8 +194,7 @@ export function MemberCourseDiscovery({ courseId, token }) {
       .then((data) => { if (!controller.signal.aborted && valid()) setPage({ ...data, offset: 0, loading: false }); })
       .catch(() => {
         if (controller.signal.aborted || !valid()) return;
-        setPage({ courses: [], more: false, offset: 0, loading: false });
-        setMessage("Courses couldn’t load.");
+        setPage({ courses: [], more: false, offset: 0, loading: false, error: true });
       });
     return () => controller.abort();
   }, [applied, courseId, token, version]);
@@ -229,8 +229,8 @@ export function MemberCourseDiscovery({ courseId, token }) {
     h(CourseReviews, { key: courseId, courseId, token, favorite: favorites.includes(Number(courseId)), toggleFavorite }),
     status(message),
   ]);
-  return h("div", { className: "member-community player-play", "data-member-course-discovery": "ready" }, [
-    h("form", { className: "player-card community-form", role: "search", key: "form", onSubmit: (event) => {
+  return h("div", { className: "member-community player-play member-subpage member-course-discovery", "data-member-course-discovery": "ready" }, [
+    h("form", { className: "player-card community-form member-discovery-filters", role: "search", key: "form", onSubmit: (event) => {
       event.preventDefault();
       setMessage("");
       apply({ ...filter, q: filter.q.trim() });
@@ -262,16 +262,31 @@ export function MemberCourseDiscovery({ courseId, token }) {
       ]),
     ]),
     status(message),
-    page.loading ? status("Loading courses…", "loading") : !page.courses.length ? status("No courses match these filters.", "empty") : null,
-    h("ul", { className: "community-list", key: "courses" }, page.courses.map((course) => h("li", { className: "player-card", key: course.id }, [
-      h("h2", { key: "name" }, course.name),
-      course.location ? status(course.location, "town") : null,
-      h(Rating, { course, key: "rating" }),
-      h("div", { className: "dashboard-actions", key: "actions" }, [
-        action("Course details", { key: "course", "aria-label": "Course details for " + course.name, onClick: () => selectDashboardTab("course-discovery", { courseId: course.id }) }),
-        action(favorites.includes(course.id) ? "Remove favorite" : "Save as favorite", { key: "favorite", disabled: busy, onClick: () => { void toggleFavorite(course.id); } }),
-      ]),
-    ]))),
+    page.loading ? status("Loading courses…", "loading") : page.error ? h("div", { className: "member-subactions", key: "error" }, [
+      h("p", { className: "dash-note", role: "alert", key: "message" }, "Courses couldn’t load."),
+      action("Try again", { onClick: reload, key: "retry" }),
+    ]) : !page.courses.length ? status("No courses match these filters.", "empty") : null,
+    h("ul", { className: "member-course-results member-link-list", key: "courses" }, page.courses.map((course) => {
+      const favorite = favorites.includes(course.id);
+      return h("li", { key: course.id }, [
+        h("button", {
+          className: "member-course-link", type: "button", key: "course", "aria-label": "Course details for " + course.name,
+          onClick: () => selectDashboardTab("course-discovery", { courseId: course.id }),
+        }, [
+          h("span", { className: "member-link-copy", key: "copy" }, [
+            h("strong", { key: "name" }, course.name),
+            course.location ? h("small", { key: "town" }, course.location) : null,
+            h(Rating, { course, as: "span", key: "rating" }),
+          ]),
+          h(ChevronRight, { size: 17, "aria-hidden": true, key: "arrow" }),
+        ]),
+        h("button", {
+          className: "member-course-favorite", key: "favorite", type: "button", disabled: busy,
+          "aria-label": favorite ? "Remove favorite" : "Save as favorite", title: favorite ? "Remove favorite" : "Save as favorite",
+          "aria-pressed": favorite, onClick: () => { void toggleFavorite(course.id); },
+        }, h(Bookmark, { size: 19, fill: favorite ? "currentColor" : "none", "aria-hidden": true })),
+      ]);
+    })),
     page.more ? action("More courses", { key: "more", disabled: busy, onClick: () => { void older(); } }) : null,
   ]);
 }
