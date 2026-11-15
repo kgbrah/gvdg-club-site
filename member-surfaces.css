@@ -799,3 +799,36 @@ body #crottsReactApp :is(button,textarea,a):focus-visible { outline: 2px solid c
 }
 
 
+
+/* ===== Course discovery: difficulty + amenity chips, find/reset hierarchy ===== */
+#members .course-chips { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .35rem; }
+#members .course-chip { display: inline-flex; align-items: center; min-height: 1.5rem; padding: 0 .55rem; border-radius: 999px; font-size: .75rem; font-weight: 600; color: var(--text-secondary); background: var(--bg-tertiary); }
+#members .course-chip.level-beginner { color: var(--under); background: color-mix(in srgb, var(--under) 14%, transparent); }
+#members .course-chip.level-intermediate { color: var(--primary-strong); background: color-mix(in srgb, var(--accent) 26%, transparent); }
+#members .course-chip.level-advanced { color: var(--over); background: var(--over-soft); }
+[data-theme="dark"] #members .course-chip.level-intermediate { color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+#members .member-course-search summary { min-height: 44px; display: flex; align-items: center; }
+#members .member-discovery-filters .dashboard-actions .dashboard-action.primary { background: var(--primary-strong); border-color: var(--primary-strong); color: #fff; }
+#members .member-discovery-filters .dashboard-actions .dashboard-action:not(.primary) { background: transparent; border-color: var(--member-line); color: var(--text-primary); }
+
+/* ===== Bag tags: ladder, incoming callout, challenge form ===== */
+#members .tag-ladder { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--member-line); }
+#members .tag-ladder-row { display: flex; align-items: center; gap: .75rem; min-height: 3rem; padding: .35rem .82rem; }
+#members .tag-ladder-row + .tag-ladder-row { border-top: 1px solid var(--member-line); margin-inline-start: .82rem; padding-inline-start: 0; }
+#members .tag-ladder-num { flex: 0 0 3.25rem; font-size: 1.05rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums lining-nums; color: var(--text-muted); }
+#members .tag-ladder-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; color: var(--text-primary); }
+#members .tag-ladder-flag { flex: 0 0 auto; padding: .15rem .6rem; border-radius: 999px; font-size: .72rem; font-weight: 700; line-height: 1.4; background: color-mix(in srgb, var(--accent) 24%, transparent); color: var(--primary-strong); }
+[data-theme="dark"] #members .tag-ladder-flag { color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+#members .tag-ladder-flag.quiet { background: var(--bg-tertiary); color: var(--text-muted); }
+#members .tag-ladder-row.is-you { background: color-mix(in srgb, var(--accent) 12%, transparent); margin-inline-start: 0; padding-inline-start: .82rem; }
+#members .tag-ladder-row.is-you .tag-ladder-num { color: var(--primary-strong); }
+[data-theme="dark"] #members .tag-ladder-row.is-you .tag-ladder-num { color: var(--accent); }
+#members .tag-ladder-row.is-you + .tag-ladder-row { border-top-color: transparent; }
+#members .tag-incoming { display: grid; gap: .6rem; background: color-mix(in srgb, var(--accent) 10%, transparent); }
+#members .tag-incoming > .player-card-meta { color: var(--text-primary); margin: 0; }
+#members .tag-challenge-form { gap: .7rem; }
+#members .tag-challenge-form > label { color: var(--text-muted); font-size: .75rem; font-weight: 600; }
+#members .tag-challenge-form :is(input, select) { min-height: 44px; }
+#members .tag-challenge-form .member-action-grid { margin-top: .25rem; }
+#members .tag-challenge-form .member-action-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
+#members .tag-challenge-form .member-action-grid > :is(button, .player-btn) { width: 100%; }
