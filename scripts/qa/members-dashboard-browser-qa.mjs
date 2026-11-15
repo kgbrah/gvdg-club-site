@@ -252,7 +252,7 @@ async function captureAuthGate(browser, origin, viewport, slug) {
       detail: { form: "login", busyAction: "login" },
     }));
   });
-  await page.getByRole("button", { name: "Please wait..." }).waitFor({ state: "visible", timeout: 10_000 });
+  await page.getByRole("button", { name: "Please wait…" }).waitFor({ state: "visible", timeout: 10_000 });
   await page.evaluate(() => {
     window.dispatchEvent(new CustomEvent("gvdg:member-auth-form-state", {
       detail: { form: "login", busyAction: "" },

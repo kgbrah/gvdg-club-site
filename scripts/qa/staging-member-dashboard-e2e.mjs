@@ -261,7 +261,7 @@ async function runAuthGateQa(browser, siteUrl) {
       detail: { form: "login", busyAction: "login" },
     }));
   });
-  await page.getByRole("button", { name: "Please wait..." }).waitFor({ state: "visible", timeout: 15_000 });
+  await page.getByRole("button", { name: "Please wait…" }).waitFor({ state: "visible", timeout: 15_000 });
   await page.evaluate(() => {
     window.dispatchEvent(new CustomEvent("gvdg:member-auth-form-state", {
       detail: { form: "login", busyAction: "" },
