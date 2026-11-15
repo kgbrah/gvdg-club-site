@@ -110,7 +110,7 @@ function UpNextCard({ events, registrations }) {
         },
         key: "register",
       }, actionLabel),
-      h(AddToCalendarButton, { className: "player-btn", item: calendarEventFromClub(event), key: "cal" }),
+      h(AddToCalendarButton, { className: "player-btn", item: calendarEventFromClub(event), key: "cal", label: "Calendar" }),
     ]),
   ]);
 }
@@ -149,7 +149,7 @@ function NextPdgaCard() {
         rel: "noopener noreferrer",
         target: "_blank",
       }, "Register"),
-      h(AddToCalendarButton, { className: "player-btn", item: calendarEventFromPdga(event), key: "cal" }),
+      h(AddToCalendarButton, { className: "player-btn", item: calendarEventFromPdga(event), key: "cal", label: "Calendar" }),
       h("button", {
         className: "player-btn",
         key: "all",

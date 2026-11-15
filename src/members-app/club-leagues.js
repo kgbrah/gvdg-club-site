@@ -1,4 +1,5 @@
 import React from "react";
+import { ChevronRight } from "lucide-react";
 
 import { requestJson } from "./api.js";
 import { selectDashboardTab } from "./dashboard-shell.js";
@@ -55,15 +56,17 @@ export function BagTagLeagueOrder({ compact = false }) {
     const leader = tags[0];
     if (compact) {
       return h("a", {
+        "aria-label": `${league.name || "Bag tags"} tag order`,
         className: "member-account-row",
         href: `events.html#league/${encodeURIComponent(id)}`,
         key: id || league.name,
       }, [
+        h("span", { "aria-hidden": "true", className: "member-account-spacer", key: "spacer" }),
         h("span", { className: "member-account-copy", key: "copy" }, [
           h("strong", { key: "name" }, league.name || "Bag tags"),
           h("small", { key: "leader" }, leader ? `#${leader.current_place} ${leader.name}` : "Current tag order"),
         ]),
-        h("span", { className: "member-account-action", key: "open" }, "Tag order"),
+        h(ChevronRight, { "aria-hidden": "true", className: "member-account-chevron", key: "open", size: 18 }),
       ]);
     }
     return h("section", { className: "member-list", key: id || league.name }, [
