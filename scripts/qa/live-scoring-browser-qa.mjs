@@ -419,7 +419,7 @@ async function runAdminEventQa(browser, origin) {
 
   await page.goto(`${origin}/admin.html`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("#adminPanel", { state: "visible" });
-  await page.locator('[data-atab="scoring"]').first().click();
+  await page.locator("#apane-today").getByRole("button", { name: "Live scoring" }).click();
   await page.locator("#scEvent").selectOption("2");
   await page.waitForSelector("#scGrid tbody tr");
   const rowsBefore = await page.locator("#scGrid tbody tr").evaluateAll((rows) => rows.map((row) => row.textContent?.trim() || ""));

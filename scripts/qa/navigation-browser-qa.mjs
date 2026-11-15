@@ -12,6 +12,7 @@ const otherEvent = { id: 41, name: "Forest Open", status: "scheduled", type: "to
 const eventHoles = [{ hole: 1, par: 3 }];
 const events = [event, otherEvent];
 const requested = [];
+const pageErrors = [];
 const serveOnly = Boolean(process.env.GVDG_NAV_QA_SERVE);
 
 const pages = {
@@ -91,7 +92,7 @@ async function newPage(viewport, token) {
     ? route.continue() : route.abort());
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
-  page.on("pageerror", (error) => console.error(error.message));
+  page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.addInitScript((value) => localStorage.setItem("gvdg_member_token", value), token);
   return { context, page };
 }
@@ -183,6 +184,7 @@ try {
   await page.getByText("You don't have admin access.", { exact: false }).waitFor();
   assert.equal(await page.getByRole("searchbox", { name: "Find a tool" }).count(), 0);
   await context.close();
+  assert.deepEqual(pageErrors, [], "Navigation must not produce runtime errors");
   console.log("Navigation passed on desktop and phone, including legacy links, search, permissions and Back.");
 } finally {
   await browser.close();
