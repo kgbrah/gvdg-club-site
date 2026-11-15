@@ -3,7 +3,6 @@ import { CalendarDays, Home, PlayCircle, TrendingUp, Users } from "lucide-react"
 
 import { destination, MEMBER_PRIMARY } from "../shared/app-navigation.js";
 import { currentDashboardTab } from "./dashboard-router.js";
-import { readMemberContext } from "./member-context.js";
 
 const h = React.createElement;
 const ICONS = { overview: Home, play: PlayCircle, events: CalendarDays, season: TrendingUp, more: Users };
@@ -69,14 +68,11 @@ export function MemberDashboardShell() {
         type: "button", "data-dtab": key, key, onClick: () => selectDashboardTab(key),
       }, [h(ICONS[key], { size: 22, strokeWidth: 2.2, "aria-hidden": true, key: "icon" }), item.label]);
     })),
-    h("div", { className: "member-page-heading", key: "heading" }, [
-      current.key !== current.group
+    h("div", { className: "member-page-heading" + (current.key === "overview" ? " member-home-heading" : ""), key: "heading" }, [
+      current.key !== current.group && current.group !== "play"
         ? h("button", { type: "button", className: "member-parent-link", onClick: () => selectDashboardTab(parent.key), key: "parent" }, "‹ " + parent.label)
         : null,
       h("h1", { className: "section-title player-app-title", id: "membersReactDashboardTitle", tabIndex: -1, ref: heading, key: "title" }, current.label),
-      current.key === "overview" && readMemberContext().isAdmin ? h("a", {
-        className: "member-parent-link react-admin-portal-link", "data-react-admin-portal": "ready", href: "admin.html", id: "adminPortalLink", key: "adminPortal",
-      }, "Admin portal") : null,
     ]),
   ]);
 }

@@ -337,7 +337,7 @@ async function captureState(browser, origin, viewport, slug) {
   await page.addInitScript(() => sessionStorage.setItem("gvdg_member_token", "qa-token"));
 
   await page.goto(`${origin}/gvdg-members.html`, { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("#membersReactDashboardShell:not(:empty)", { timeout: 10_000 });
+  await page.waitForSelector("#membersReactDashboardShell:not(:empty)", { state: "attached", timeout: 10_000 });
   await page.waitForSelector("#membersReactOverviewPanel:not(:empty)", { state: "attached", timeout: 10_000 });
   await page.waitForSelector("#membersReactPlayPanel:not(:empty)", { state: "attached", timeout: 10_000 });
   await page.waitForSelector("#membersReactSeasonPanel:not(:empty)", { state: "attached", timeout: 10_000 });
@@ -365,7 +365,9 @@ async function captureState(browser, origin, viewport, slug) {
   await waitForText(page, "[data-react-home-conditions]", "ECU North Rec Complex", "React home conditions");
   await waitForText(page, "[data-react-home-conditions]", "Wet", "React home wet condition");
   await page.waitForSelector('[data-react-member-banner="ready"]', { timeout: 10_000 });
-  await waitForText(page, "[data-react-admin-portal]", "Admin portal", "React admin portal");
+  if (await page.locator("[data-react-admin-portal]").count()) {
+    throw new Error("The Admin portal should not appear on Home.");
+  }
   if (await page.locator("#myDashboard [data-react-registration-panel]").count()) {
     throw new Error("Registration panel should not render on Home.");
   }
@@ -435,7 +437,7 @@ async function captureState(browser, origin, viewport, slug) {
   await expectDashboardPanel(page, "events", "#clubRegister", "Events tab");
   await page.locator('#clubRegister [data-react-registration-panel="ready"]').waitFor({ state: "visible", timeout: 10_000 });
   if (await page.locator("[data-react-admin-portal]").count()) {
-    throw new Error("React admin portal link should only render on the overview tab.");
+    throw new Error("The Admin portal should only appear on Account.");
   }
   const eventsPanel = page.locator("#clubRegister");
   await openCasualRounds(page, "#clubRegister");
@@ -467,6 +469,7 @@ async function captureState(browser, origin, viewport, slug) {
   await expectDashboardPanel(page, "more", "#playerMore", "More tab");
   await page.getByRole("button", { name: "Account", exact: true }).click();
   await page.waitForSelector('[data-react-account-tools="ready"]', { timeout: 10_000 });
+  await waitForText(page, "[data-react-admin-portal]", "Admin portal", "React admin portal on Account");
   await waitForText(page, "[data-react-account-tools]", "Edit profile", "React account tools");
   await page.evaluate(() => {
     window.dispatchEvent(new CustomEvent("gvdg:member-passkey-state", {

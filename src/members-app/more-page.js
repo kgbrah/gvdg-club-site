@@ -109,9 +109,25 @@ export function MemberMorePage() {
   ]);
 }
 
+function AdminPortalBanner() {
+  const description = React.useId();
+  return h("a", {
+    "aria-label": "Admin portal", "aria-describedby": description, className: "member-admin-banner",
+    "data-react-admin-portal": "ready", href: "admin.html", id: "adminPortalLink",
+  }, [
+    h(ShieldCheck, { "aria-hidden": true, size: 21, key: "icon" }),
+    h("span", { className: "member-admin-copy", key: "copy" }, [
+      h("strong", { key: "title" }, "Admin portal"),
+      h("small", { id: description, key: "detail" }, "Manage club events and members"),
+    ]),
+    h(ChevronRight, { "aria-hidden": true, size: 18, key: "arrow" }),
+  ]);
+}
+
 export function MemberAccountPage() {
   const context = useMemberContext();
-  return h("div", { className: "react-more-page member-subpage", "data-react-member-account": "ready" }, [
+  return h("div", { className: "react-more-page member-subpage member-account-page", "data-react-member-account": "ready" }, [
+    context.isAdmin ? h(AdminPortalBanner, { key: "admin" }) : null,
     h("section", { className: "member-link-section", "aria-label": "Membership", key: "membership" }, [
       h("div", { className: "member-settings-profile", key: "profile" }, [
         context.photo ? h("img", { src: context.photo, alt: "", key: "photo" }) : h(UserRound, { size: 25, "aria-hidden": true, key: "icon" }),
@@ -138,7 +154,6 @@ export function MemberAccountPage() {
           h("span", { className: "member-link-copy", key: "copy" }, h("strong", null, "Help")),
           h(ChevronRight, { className: "member-link-arrow", size: 17, "aria-hidden": true, key: "arrow" }),
         ]),
-        context.isAdmin ? h(MemberLinkRow, { title: "Admin portal", icon: ShieldCheck, href: "admin.html", key: "admin" }) : null,
       ]),
     ]),
     h("button", {

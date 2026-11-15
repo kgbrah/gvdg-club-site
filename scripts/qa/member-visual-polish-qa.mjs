@@ -45,7 +45,7 @@ function seed(mode) {
 }
 
 function response(path, query, tagState, request) {
-  if (path === "/me") return member;
+  if (path === "/me") return { ...member, isAdmin: query.admin };
   if (path === "/me/dashboard-theme") return { theme: query.mode === "blue" ? theme : null };
   if (path === "/me/practice") return { owner: member.sub, discs: [disc],
     throws: { items: [measured], next: null }, putting: { items: [putting], next: null },
@@ -109,7 +109,7 @@ const vite = await createServer({
           const ref = request.headers.referer ? new URL(request.headers.referer) : null;
           const mode = ref?.searchParams.get("mode") || "blue";
           res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify(response(path, { mode }, tagState, request)));
+          res.end(JSON.stringify(response(path, { mode, admin: ref?.searchParams.has("admin") === true }, tagState, request)));
         } else next();
       });
     },
@@ -129,15 +129,17 @@ await mkdir(images, { recursive: true });
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 try {
   for (const sample of [
-    { width: 390, height: 844, mode: "blue" },
-    { width: 320, height: 780, mode: "blue", large: true },
+    { width: 390, height: 844, mode: "blue", admin: true },
+    { width: 320, height: 780, mode: "blue", large: true, admin: true },
+    { width: 320, height: 780, mode: "light", large: true },
+    { width: 320, height: 780, mode: "dark", large: true },
     { width: 390, height: 844, mode: "light" },
-    { width: 390, height: 844, mode: "dark" },
-    { width: 1280, height: 900, mode: "blue" },
+    { width: 390, height: 844, mode: "dark", admin: true },
+    { width: 1280, height: 900, mode: "blue", admin: true },
     { width: 1280, height: 900, mode: "light" },
     { width: 1280, height: 900, mode: "dark" },
   ]) {
-    const { width, height, mode, large } = sample;
+    const { width, height, mode, large, admin } = sample;
     const context = await browser.newContext({ viewport: { width, height }, serviceWorkers: "block" });
     await context.route(/^https?:/, (route) => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
     try {
@@ -145,8 +147,11 @@ try {
       page.setDefaultTimeout(60_000);
       const errors = [];
       page.on("pageerror", (error) => errors.push(error.message));
-      await page.goto(origin + pageName + "?mode=" + mode + (large ? "&large" : "") + "#home", { waitUntil: "commit" });
+      await page.goto(origin + pageName + "?mode=" + mode + (large ? "&large" : "") + (admin ? "&admin" : "") + "#home", { waitUntil: "commit" });
       await page.getByRole("heading", { name: title }).waitFor();
+      assert.equal(await page.getByRole("heading", { name: "Home", level: 1, exact: true }).count(), 1);
+      assert.equal(await page.getByRole("navigation", { name: "Member app" }).getByRole("button", { name: "Home", exact: true }).getAttribute("aria-current"), "page");
+      assert.equal(await page.getByRole("link", { name: "Admin portal", exact: true }).count(), 0);
       await page.getByRole("link", { name: /Continue round/ }).waitFor();
       await page.getByRole("link", { name: /Wallet.*\$32.50/ }).waitFor();
       await page.getByRole("button", { name: "Request a tag" }).waitFor();
@@ -155,13 +160,17 @@ try {
       await page.evaluate(() => document.fonts.ready);
       const dimensions = await page.evaluate(() => ({
         profile: getComputedStyle(document.querySelector(".player-home-hero")).display,
+        headerGap: document.querySelector(".player-home-hero").getBoundingClientRect().top - document.querySelector(".member-app-header").getBoundingClientRect().bottom,
+        titleClipped: getComputedStyle(document.querySelector(".member-home-heading")).clipPath === "inset(50%)",
         content: document.querySelector("#members").scrollWidth <= document.querySelector("#members").clientWidth,
         header: document.querySelector(".member-app-header .logo").getBoundingClientRect().right <=
           document.querySelector(".member-header-controls").getBoundingClientRect().left,
         navigation: innerWidth < 900 || document.querySelector(".player-app-nav").getBoundingClientRect().right <
           document.querySelector(".player-home").getBoundingClientRect().left,
       }));
-      assert.deepEqual(dimensions, { profile: "grid", content: true, header: true, navigation: true });
+      const { headerGap, ...flags } = dimensions;
+      assert.deepEqual(flags, { profile: "grid", titleClipped: true, content: true, header: true, navigation: true });
+      assert.ok(headerGap >= 0 && headerGap <= 35, "profile starts close below the app header: " + headerGap);
       const name = mode + "-" + width + (large ? "-large" : "");
       await page.screenshot({ path: join(images, name + ".png"), animations: "disabled" });
       await page.getByText("Getting started", { exact: true }).click();
@@ -176,8 +185,28 @@ try {
       await page.goBack();
       await page.getByRole("button", { name: /Membership and profile/ }).click();
       await page.getByRole("heading", { name: "Account", level: 1 }).waitFor();
+      const account = page.locator("[data-react-member-account]");
+      await account.getByRole("button", { name: "Edit profile", exact: true }).waitFor();
+      const portal = page.getByRole("link", { name: "Admin portal", exact: true });
+      if (admin) {
+        await portal.waitFor();
+        assert.equal(await portal.count(), 1);
+        assert.equal(await portal.getAttribute("href"), "admin.html");
+        assert.equal(await account.locator(":scope > :first-child").getAttribute("data-react-admin-portal"), "ready");
+      } else {
+        assert.equal(await portal.count(), 0);
+      }
+      const typography = await account.locator(".player-more-item, .player-logout-btn, .member-admin-copy strong").evaluateAll((rows) => rows.map((row) => {
+        const style = getComputedStyle(row);
+        return [style.fontFamily, style.fontSize, style.fontWeight, style.lineHeight];
+      }));
+      assert.ok(typography.length >= 7);
+      assert.equal(new Set(typography.map((font) => font.join("|"))).size, 1, "Account controls share font, size, weight and line-height");
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width);
+      if (mode === "blue") assert.ok(await page.evaluate(() => getComputedStyle(document.body).backgroundImage.includes("data:image/jpeg")));
+      await page.screenshot({ path: join(images, name + (admin ? "-admin" : "-member") + "-account.png"), animations: "disabled" });
       assert.deepEqual(errors, []);
-      console.log(name + " screenshot and Home actions verified");
+      console.log(name + " screenshot, Home spacing, and Account access and typography verified");
     } finally { await context.close(); }
   }
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
@@ -209,6 +238,10 @@ try {
     try {
       await practice.goto(origin + pageName + "?mode=blue" + (width === 320 ? "&large" : "") + "#practice", { waitUntil: "commit" });
       const rail = practice.getByRole("group", { name: "Practice type" });
+      await rail.waitFor();
+      assert.equal(await practice.getByRole("button", { name: "‹ Play", exact: true }).count(), 0);
+      assert.equal(await practice.getByRole("navigation", { name: "Member app" })
+        .getByRole("button", { name: "Play", exact: true }).getAttribute("aria-current"), "page");
       const bounds = await Promise.all(["Putting", "Fieldwork", "My bag"].map(async (label) => {
         const button = rail.getByRole("button", { name: label, exact: true });
         await button.waitFor();
