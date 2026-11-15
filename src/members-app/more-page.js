@@ -20,14 +20,15 @@ const PASSKEY_STATE_EVENT = "gvdg:member-passkey-state";
 
 function MemberLinkRow({ title, detail, icon: Icon, tab, href, onClick, ...attributes }) {
   const Arrow = href ? ExternalLink : ChevronRight;
+  const descriptionId = React.useId();
   return h(href ? "a" : "button", {
-    ...attributes, className: "member-link-row",
+    ...attributes, className: "member-link-row", "aria-label": title, "aria-describedby": detail ? descriptionId : undefined,
     ...(href ? { href } : { type: "button", onClick: onClick || (() => selectDashboardTab(tab)) }),
   }, [
     h(Icon, { className: "member-link-icon", size: 19, "aria-hidden": true, key: "icon" }),
     h("span", { className: "member-link-copy", key: "copy" }, [
       h("strong", { key: "title" }, title),
-      detail ? h("small", { key: "detail" }, detail) : null,
+      detail ? h("small", { id: descriptionId, key: "detail" }, detail) : null,
     ]),
     h(Arrow, { className: "member-link-arrow", size: 17, "aria-hidden": true, key: "arrow" }),
   ]);
