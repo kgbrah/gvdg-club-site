@@ -13,7 +13,7 @@ export async function saveUdiscLeague(
 ): Promise<{ league_id: number; events: number; results: number; skipped: number; standings: UdiscStandings["standings"] }> {
   const leagueName = input.league?.name || input.standings?.leagueName || null;
   if (!leagueName) throw new Error("league_required");
-  const existingLeague = await env.DB.prepare("SELECT id FROM leagues WHERE name = ? COLLATE NOCASE LIMIT 1").bind(leagueName).first<{ id: number }>();
+  const existingLeague = await env.DB.prepare("SELECT id, description FROM leagues WHERE name = ? COLLATE NOCASE LIMIT 1").bind(leagueName).first<{ id: number; description: string | null }>();
   const league = existingLeague ?? await db.createLeague(env.DB, {
     name: leagueName,
     season: input.league?.season || input.standings?.seasonStart?.slice(0, 4) || null,
@@ -22,6 +22,11 @@ export async function saveUdiscLeague(
     created_by: adminId,
   }) as { id: number };
   const leagueId = Number(league.id);
+  const sourceUrl = input.league?.external_url || null;
+  if (existingLeague && sourceUrl && !String(existingLeague.description || "").includes(sourceUrl)) {
+    const description = existingLeague.description ? `${existingLeague.description}\n${sourceUrl}` : sourceUrl;
+    await db.updateLeague(env.DB, leagueId, { description });
+  }
   const past = new Map<string, UdiscPastEvent>();
   for (const event of input.standings?.events || []) {
     if (event.externalUrl) past.set(event.externalUrl, event);

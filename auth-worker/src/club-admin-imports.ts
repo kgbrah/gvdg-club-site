@@ -97,7 +97,7 @@ async function fetchUdiscHtml(url: string): Promise<string> {
   return safeFetch(url, ["udisc.com"], { maxBytes: 3_000_000, timeoutMs: 12_000 });
 }
 
-async function loadUdiscLeague(target: { kind: "league" | "event"; fetchUrl: string; scheduleUrl: string | null }): Promise<{
+export async function loadUdiscLeague(target: { kind: "league" | "event"; fetchUrl: string; scheduleUrl: string | null }): Promise<{
   league: UdiscImportCandidate | null;
   events: UdiscImportCandidate[];
   standings: UdiscStandings | null;
