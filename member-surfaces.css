@@ -807,7 +807,6 @@ body #crottsReactApp :is(button,textarea,a):focus-visible { outline: 2px solid c
 #members .course-chip.level-intermediate { color: var(--primary-strong); background: color-mix(in srgb, var(--accent) 26%, transparent); }
 #members .course-chip.level-advanced { color: var(--over); background: var(--over-soft); }
 [data-theme="dark"] #members .course-chip.level-intermediate { color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
-#members .member-course-search summary { min-height: 44px; display: flex; align-items: center; }
 #members .member-discovery-filters .dashboard-actions .dashboard-action.primary { background: var(--primary-strong); border-color: var(--primary-strong); color: #fff; }
 #members .member-discovery-filters .dashboard-actions .dashboard-action:not(.primary) { background: transparent; border-color: var(--member-line); color: var(--text-primary); }
 
