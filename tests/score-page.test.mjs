@@ -488,7 +488,29 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
   assert.deepEqual(udiscExportData(state), { courseId: '123', scorecard: [{ hole: 1, par: 3, strokes: 2 }] });
   assert.equal(finalizeBlockers(state).ready, false);
   assert.equal(finalizeBlockers({ conflicts: [], missing: [], holes: [] }).ready, false);
-  assert.equal(finalizeBlockers({ conflicts: [], missing: [], holes: [{ hole: 1 }] }).ready, true);
+  assert.equal(finalizeBlockers({ conflicts: [], missing: [], holes: [{ hole: 1 }] }).ready, false);
+  const progress = {
+    ...state, conflicts: [], missing: [], holes: [{ hole: 1 }, { hole: 2 }, { hole: 3 }],
+    roundConfig: { groupFormat: "singles", scoringStyle: "matchplay" },
+    cardmates: [{ index: 0, name: "Ava", scores: { 1: 2, 2: 2 } }, { index: 1, name: "Milo", scores: { 1: 3, 2: 3 } }],
+  };
+  assert.equal(finalizeBlockers(progress).ready, true, "a clinched match does not require dead holes");
+  const preClinch = { ...progress, cardmates: progress.cardmates.map((row) => ({ ...row, scores: { 1: row.scores[1] } })) };
+  assert.equal(finalizeBlockers(preClinch).ready, false);
+  const shotgun = { ...progress, holes: [1, 2, 3, 4, 5].map((hole) => ({ hole })), cardmates: progress.cardmates.map((row) => ({
+    ...row, startingHole: 4, scores: { 1: row.scores[1], 4: row.scores[1], 5: row.scores[1] },
+  })) };
+  assert.equal(finalizeBlockers(shotgun).ready, true, "match play may clinch in shotgun order before reaching every numbered hole");
+  const shotgunGap = { ...shotgun, cardmates: shotgun.cardmates.map((row) => ({ ...row, scores: { 1: row.scores[1], 4: row.scores[4] } })) };
+  assert.deepEqual(finalizeBlockers(shotgunGap).missing.map((row) => row.hole), [2, 2, 3, 3, 5, 5], "a missing pre-clinch hole blocks finishing");
+  const incomplete = { ...progress, roundConfig: { groupFormat: "singles", scoringStyle: "stroke" } };
+  assert.equal(finalizeBlockers(incomplete).ready, false);
+  assert.deepEqual(finalizeBlockers(incomplete).missing.map((row) => row.hole), [3, 3]);
+  const completed = { ...incomplete, cardmates: incomplete.cardmates.map((row) => ({ ...row, scores: { ...row.scores, 3: 3 } })) };
+  assert.equal(finalizeBlockers(completed).ready, true);
+  const putting = { ...completed, roundConfig: { groupFormat: "singles", scoringStyle: "putting" },
+    cardmates: completed.cardmates.map((row) => ({ ...row, scores: { ...row.scores, 3: 0 } })) };
+  assert.equal(finalizeBlockers(putting).ready, true, "zero makes is a confirmed putting score");
   assert.match(finishRoundHint(finalizeBlockers(state), 'round'), /disagreeing scores/);
   assert.match(finishRoundHint({ ready: true, conflicts: [], missing: [], lines: [] }, 'round'), /Anyone on this card can finish/);
   assert.match(finishRoundHint({ ready: true, conflicts: [], missing: [], lines: [] }, 'event'), /Anyone on this card can submit/);
@@ -756,7 +778,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /rows\.map\(\(row\) => h\(ScoreRow/);
   assert.doesNotMatch(scorecard, /function ScorePlayerRail/);
   assert.doesNotMatch(scorecard, /collapsed-others/);
-  assert.match(scorecard, /scrollIntoView/);
+  assert.match(scorecard, /root\.scrollLeft/);
   assert.match(scorecard, /liveRoundStatsFromCard/);
   assert.match(scorecard, /props\.throwsByHole/);
   assert.match(scorecard, /Live stats/);

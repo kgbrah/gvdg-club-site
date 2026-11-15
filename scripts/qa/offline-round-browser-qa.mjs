@@ -46,7 +46,8 @@ const thePack = {
 };
 
 async function session(viewport) {
-  const context = await browser.newContext({ viewport, serviceWorkers: "block" });
+  const context = await browser.newContext({ viewport, serviceWorkers: "block", permissions: ["geolocation"],
+    geolocation: { latitude: 35.0002, longitude: -82, accuracy: 5 } });
   contexts.push(context);
   const cached = new Map();
   let offline = false;
@@ -191,6 +192,16 @@ try {
   await text("Device storage is full. Free some space and make your edit again.").waitFor();
   assert.equal(await firstScore.locator(".n").textContent(), "-");
   await score("QA Owner", 1, 2);
+  await button("Increase QA Owner on hole 1").evaluate((control) => {
+    for (let index = 0; index < 5; index++) control.click();
+  });
+  await firstScore.locator(".n").getByText("7", { exact: true }).waitFor();
+  await score("QA Owner", 1, 2);
+  const gps = button("Tap for GPS");
+  if (await gps.count()) await gps.click();
+  await page.locator(".hole-range-hud-len").waitFor();
+  await button("Mark lie").click();
+  await button("Lie 2").waitFor();
   await shots(1);
   await button("Add putt").click();
   await page.getByLabel("Outcome", { exact: true }).selectOption("made");
@@ -211,13 +222,18 @@ try {
   await page.reload({ waitUntil: "domcontentloaded" });
   await text("You can still score this hole.").waitFor();
   await button("Previous hole").click();
+  await button("Lie 2").waitFor();
   await shots(1);
   await text("Putt · Made · 18 ft to basket").waitFor();
   await page.screenshot({ path: join(screenshots, "offline-shots-phone.png") });
   await page.keyboard.press("Escape");
   await button("Next hole").click();
   await score("QA Owner", 2, 3);
+  await button("Increase QA Owner on hole 2").evaluate((control) => {
+    for (let index = 0; index < 5; index++) control.click();
+  });
   await finish();
+  await page.getByText(/QA Owner · 10 strokes/).waitFor();
   await text("Waiting to upload.").waitFor();
   await page.screenshot({ path: join(screenshots, "offline-finished-phone.png") });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 390);
@@ -237,6 +253,8 @@ try {
   assert.equal(mobile.clips.length, 1);
   assert.equal(mobile.writes[0].source.holes[0].target.label, "Saved basket");
   assert.equal(mobile.writes[0].shots[1][0].puttDistanceFt, 18);
+  assert.deepEqual(mobile.writes[0].scores["player:0"], { 1: 2, 2: 8 });
+  assert.deepEqual(mobile.writes[0].marks[1], [{ lat: 35.0002, lng: -82, n: 1 }]);
   assert.deepEqual(mobile.errors, []);
   await mobile.context.close();
 

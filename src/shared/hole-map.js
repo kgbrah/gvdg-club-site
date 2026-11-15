@@ -26,6 +26,7 @@ function SatelliteLayer({ url, bounds, width, height }) {
           decoding: "async",
           draggable: false,
           key: tile.url,
+          onError: (event) => { event.currentTarget.style.visibility = "hidden"; },
           src: tile.url,
           style: {
             left: tile.left + "%",

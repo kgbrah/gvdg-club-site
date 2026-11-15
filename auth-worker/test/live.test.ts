@@ -1877,6 +1877,36 @@ describe("LiveEventDO finish-card", () => {
     expect(admin.status).toBe(200);
   });
 
+  it("locks a shotgun match that clinches in play order with its last holes unplayed", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({
+        eventId: 41,
+        holes: Array.from({ length: 9 }, (_, index) => ({ hole: index + 1, par: 3 })),
+        players: [
+          { memberId: "m_a", name: "A", startingHole: 4 },
+          { memberId: "m_b", name: "B", startingHole: 4 },
+        ],
+        liveScoringConfig: { groupFormat: "singles", scoringStyle: "matchplay" },
+      }),
+    }));
+    for (const hole of [4, 5, 7, 8, 9]) {
+      expect((await act(live, "score", "m_a", { index: 0, hole, strokes: 2 })).status).toBe(200);
+      expect((await act(live, "score", "m_a", { index: 1, hole, strokes: 3 })).status).toBe(200);
+    }
+    const blocked = await act(live, "finish-card", "m_a");
+    expect(blocked.status).toBe(409);
+    await expect(blocked.json()).resolves.toMatchObject({ error: "scorecard_incomplete", missing: expect.arrayContaining([expect.objectContaining({ hole: 6 })]) });
+    await act(live, "score", "m_a", { index: 0, hole: 6, strokes: 2 });
+    await act(live, "score", "m_a", { index: 1, hole: 6, strokes: 3 });
+    const finished = await act(live, "finish-card", "m_a");
+    expect(finished.status).toBe(200);
+    await expect(finished.json()).resolves.toMatchObject({ status: "live", lockedCardIds: ["h4"], missing: [],
+      standings: expect.arrayContaining([expect.objectContaining({ name: "A", match: expect.objectContaining({ lead: 6, holesRemaining: 3 }) })]),
+    });
+  });
+
   it("finalizes a casual round through finish-card", async () => {
     const live = new LiveEventDO(new FakeState({}), { DB: db });
     await live.fetch(new Request("https://do/start", {

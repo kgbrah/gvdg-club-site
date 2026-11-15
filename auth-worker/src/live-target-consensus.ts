@@ -1,3 +1,4 @@
+import { matchPlayStartHole, requiredMatchPlayHoles } from "../../src/shared/match-play-order.js";
 import { normalizeLiveScoringConfig, type LiveScoringConfig, type ScoreTarget } from "./live-format.js";
 import type { ConsensusIssues, MissingScoreConsensus, ScoreConflict, ScoreHole } from "./live-consensus.js";
 import type { PlayerState } from "./scoring.js";
@@ -88,20 +89,13 @@ function requiredHolesByTarget(players: PlayerState[], holes: ScoreHole[], targe
 function matchplayRequiredHoles(players: PlayerState[], holes: ScoreHole[], cardTargets: readonly ScoreTarget[]): ScoreHole[] {
   const [sideA, sideB] = cardTargets;
   if (cardTargets.length !== 2 || !sideA || !sideB) return holes;
-  const anchorA = activeTargetPlayers(players, sideA)[0];
-  const anchorB = activeTargetPlayers(players, sideB)[0];
+  const teamA = activeTargetPlayers(players, sideA);
+  const teamB = activeTargetPlayers(players, sideB);
+  const [anchorA] = teamA;
+  const [anchorB] = teamB;
   if (!anchorA || !anchorB) return holes;
-  let lead = 0;
-  for (let i = 0; i < holes.length; i++) {
-    const hole = holes[i]?.hole;
-    const a = hole == null ? undefined : anchorA.player.scores?.[hole];
-    const b = hole == null ? undefined : anchorB.player.scores?.[hole];
-    if (typeof a !== "number" || typeof b !== "number") return holes; // gap → running score unknown → require all
-    if (a < b) lead++;
-    else if (b < a) lead--;
-    if (Math.abs(lead) > holes.length - (i + 1)) return holes.slice(0, i + 1); // decided → later holes are dead
-  }
-  return holes;
+  const start = matchPlayStartHole(holes, [...teamA, ...teamB].map(({ player }) => player));
+  return requiredMatchPlayHoles(holes, start, (hole) => [anchorA.player.scores?.[hole], anchorB.player.scores?.[hole]]);
 }
 
 function casualTargetMissing(players: PlayerState[], holes: ScoreHole[], targets: readonly ScoreTarget[], requiredHoles: Map<string, ScoreHole[]>): MissingScoreConsensus[] {

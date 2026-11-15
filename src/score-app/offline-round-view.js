@@ -9,6 +9,7 @@ import { ScorecardView } from "./scorecard-view.js";
 import { coursePackDate, useCoursePacks } from "./saved-courses-view.js";
 import { offlineRoundStore } from "./offline-round-store.js";
 import { offlineScorecard } from "./offline-round-score.js";
+import { nextHoleScore } from "./score-view-model.js";
 import { offlineAccount, offlineRequest, openOfflineIdentity, extendOpenArchive, sameOfflineOwner, syncOfflineRound, uploadOfflineClip, offlineClipUrl } from "./offline-round-sync.js";
 import { useClipRecovery } from "./throw-film.js";
 
@@ -425,14 +426,17 @@ function ActiveRound({ round, edit, busy, notice }) {
     const target = targets.find((row) => row.playerIndexes.includes(index));
     return { key: player.id, label: player.name, isMe: index === 0, currentScore: round.scores[target.id]?.[props.hole.hole], source: { index } };
   });
-  function setScore(row, holeNumber, strokes) {
+  function setScore(row, holeNumber, strokes, _scorerIndex, step) {
     if (strokes != null && (!Number.isInteger(strokes) || strokes < 1 || strokes > 30)) return;
     const id = row.targetId || "player:" + row.index;
     if (!targets.some((target) => target.id === id)) return;
     void edit((current) => {
+      if (current.finishedAt) return current;
       const scores = { ...current.scores[id] };
-      if (strokes == null) delete scores[holeNumber];
-      else scores[holeNumber] = strokes;
+      const par = current.source.holes.find((entry) => entry.hole === holeNumber)?.par;
+      const value = step === "plus" || step === "minus" ? nextHoleScore(scores[holeNumber] ?? null, par, step) : strokes;
+      if (value == null) delete scores[holeNumber];
+      else scores[holeNumber] = value;
       return { ...current, scores: { ...current.scores, [id]: scores } };
     });
   }
@@ -462,7 +466,11 @@ function ActiveRound({ round, edit, busy, notice }) {
       onNext: () => jump(hole + 1), onPrevious: () => jump(hole - 1), onJumpHole: jump, onScore: setScore,
       onFullScorecard: () => setReview(true), onOpenFinish: () => setFinish(true), onCloseFinish: () => setFinish(false),
       onAgreeFinish: complete, onSaveShots: saveShots,
-      onThrows: (holeNumber, points) => { void edit((current) => ({ ...current, marks: { ...current.marks, [holeNumber]: points } })); },
+      onThrows: (holeNumber, change) => {
+        void edit((current) => current.finishedAt ? current : ({
+          ...current, marks: { ...current.marks, [holeNumber]: change(current.marks[holeNumber] || []) },
+        }));
+      },
     }));
 }
 
@@ -471,41 +479,68 @@ function LocalRound({ id, connection, onScoring }) {
   const [loading, setLoading] = React.useState(true);
   const [notice, setNotice] = React.useState("");
   const [busy, setBusy] = React.useState(false);
-  const lock = React.useRef(false);
+  const queue = React.useRef({ tail: Promise.resolve(), pending: 0, generation: 0, alive: false });
   const latest = React.useRef(null);
   const { account } = connection;
+  const ownerKey = account ? account.kind + ":" + account.id : "device";
   const allowed = round && (!round.owner || sameOfflineOwner(account, round.owner));
   const scoring = Boolean(allowed && !round.finishedAt);
   const refresh = React.useCallback(async () => {
     try {
       const row = await offlineRoundStore.get(id);
+      if (!queue.current.alive) return;
       latest.current = row;
       setRound(row);
-    } catch (error) { setNotice(storageNotice(error)); }
-    finally { setLoading(false); }
+    } catch (error) { if (queue.current.alive) setNotice(storageNotice(error)); }
+    finally { if (queue.current.alive) setLoading(false); }
   }, [id]);
-  React.useEffect(() => { void refresh(); }, [refresh]);
+  React.useEffect(() => {
+    const currentQueue = queue.current;
+    currentQueue.alive = true;
+    void refresh();
+    return () => { currentQueue.alive = false; currentQueue.generation += 1; };
+  }, [refresh]);
+  React.useEffect(() => {
+    const currentQueue = queue.current;
+    currentQueue.generation += 1;
+    void currentQueue.tail.then(() => { if (currentQueue.alive) return refresh(); });
+  }, [ownerKey, refresh]);
   React.useEffect(() => { onScoring(scoring); return () => onScoring(false); }, [onScoring, scoring]);
   const applied = React.useCallback((row) => { latest.current = row; setRound(row); }, []);
   const retry = useArchiveSync(allowed ? [round] : [], connection, applied, setNotice);
-  async function edit(change, expected) {
-    if (lock.current) {
-      setNotice("A device save is in progress. Try this edit again in a moment.");
-      return false;
-    }
-    if (!latest.current) return false;
-    lock.current = true;
+  function edit(change, expected) {
+    const currentQueue = queue.current;
+    if (!latest.current) return Promise.resolve(false);
+    const generation = currentQueue.generation;
+    const initialOwner = offlineAccount();
+    currentQueue.pending += 1;
     setBusy(true);
     setNotice("");
-    try {
-      const row = await offlineRoundStore.update(id, expected ?? latest.current.revision, offlineAccount(), change);
-      applied(row);
-      return true;
-    } catch (error) {
-      setNotice(storageNotice(error));
-      if (error?.code === "local_round_changed" || error?.code === "offline_round_sealed") await refresh();
-      return false;
-    } finally { lock.current = false; setBusy(false); }
+    const run = currentQueue.tail.then(async () => {
+      if (!currentQueue.alive || generation !== currentQueue.generation || !latest.current) return false;
+      const owner = offlineAccount();
+      if ((initialOwner || owner) && !sameOfflineOwner(initialOwner, owner)) {
+        setNotice(storageNotice({ code: "offline_owner_mismatch" }));
+        currentQueue.generation += 1;
+        return false;
+      }
+      try {
+        const row = await offlineRoundStore.update(id, expected ?? latest.current.revision, owner, change);
+        if (currentQueue.alive && generation === currentQueue.generation) applied(row);
+        return true;
+      } catch (error) {
+        if (!currentQueue.alive || generation !== currentQueue.generation) return false;
+        setNotice(storageNotice(error));
+        currentQueue.generation += 1;
+        if (error?.code === "local_round_changed" || error?.code === "offline_round_sealed") await refresh();
+        return false;
+      }
+    }).finally(() => {
+      currentQueue.pending -= 1;
+      if (currentQueue.alive && !currentQueue.pending) setBusy(false);
+    });
+    currentQueue.tail = run.catch(() => false);
+    return currentQueue.tail;
   }
   if (loading || !allowed) return h("div", { className: "stack" }, h(OfflineHeader, { title: "Offline round" }),
     h("p", { role: "status" }, notice || (loading ? "Reading the round on this device…" : "This round is unavailable on this device under this account.")));
@@ -516,7 +551,7 @@ function LocalRound({ id, connection, onScoring }) {
 export function OfflineRoundView({ route, onScoring }) {
   const connection = useConnection();
   if (route.invalid) return h("div", { className: "stack" }, h(OfflineHeader, { title: "This offline round link is invalid." }));
-  if (route.localId) return h(LocalRound, { id: route.localId, connection, onScoring });
+  if (route.localId) return h(LocalRound, { key: route.localId, id: route.localId, connection, onScoring });
   if (route.archive) return h(RemoteRound, { id: route.archive, connection });
   return h(OfflineHub, { route, connection });
 }

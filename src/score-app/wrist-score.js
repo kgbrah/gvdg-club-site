@@ -23,7 +23,7 @@ function WristRow(props) {
         disabled: Boolean(props.locked),
         key: "minus",
         type: "button",
-        onClick: () => props.onScore(row.source, props.hole.hole, nextMinus),
+        onClick: () => props.onScore(row.source, props.hole.hole, nextMinus, "minus"),
       }, "−"),
       h("button", {
         "aria-label": "Enter score for " + row.label,
@@ -42,7 +42,7 @@ function WristRow(props) {
         disabled: Boolean(props.locked),
         key: "plus",
         type: "button",
-        onClick: () => props.onScore(row.source, props.hole.hole, nextPlus),
+        onClick: () => props.onScore(row.source, props.hole.hole, nextPlus, "plus"),
       }, "+"),
     ]),
   ]);

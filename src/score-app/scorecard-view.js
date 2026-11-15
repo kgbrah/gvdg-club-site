@@ -1,6 +1,6 @@
 import React from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Link2, Lock, Ruler, Settings2, Share2, UserPlus, Watch, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, Link2, ListChecks, Lock, Ruler, Settings2, Share2, UserPlus, Watch, X } from "lucide-react";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { HoleMap } from "../shared/hole-map.js";
 import { addThrow, currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, lastThrow, lastThrowHud, nextTeeHud, HOLE_MAP_COMPACT_SIZE, remainingFt, resolveMapFocus, undoThrow, withSelfLocation } from "../shared/hole-map-model.js";
@@ -440,9 +440,11 @@ function RoundTools(props) {
           h("button", { type: "button", className: "btn secondary", onClick: backFromLedger }, "Back to round tools"))
           : h(React.Fragment, null,
             props.roundSharingApi && h(WatchSharingDetails, { api: props.roundSharingApi, onCopyWatch: props.onCopyWatch }),
-            h("div", { className: "round-tools-direct" },
-              props.onFullScorecard && h("button", { type: "button", className: "btn secondary", onClick: closeThen(props.onFullScorecard) }, "Full scorecard"),
-              props.shotLedger && h("button", { type: "button", ref: ledgerButton, className: "btn secondary", onClick: openLedger }, "Shot details")),
+            (props.onFullScorecard || props.shotLedger) && h("div", { className: "round-tools-direct" },
+              props.onFullScorecard && h("button", { type: "button", className: "btn secondary", onClick: closeThen(props.onFullScorecard) },
+                icon(ClipboardList), "Full scorecard"),
+              props.shotLedger && h("button", { type: "button", ref: ledgerButton, className: "btn secondary", onClick: openLedger },
+                icon(ListChecks), "Shot details")),
             h(RoundToolActions, {
               ...props,
               onMeasure: closeThen(props.onMeasure), onWrist: closeThen(props.onWrist),
@@ -935,7 +937,7 @@ function ScoreRow(props) {
           className: "minus",
           disabled: Boolean(props.locked),
           type: "button",
-          onClick: () => props.onScore(row.source, props.hole.hole, nextMinus),
+          onClick: () => props.onScore(row.source, props.hole.hole, nextMinus, "minus"),
         },
         "-",
       ),
@@ -957,7 +959,7 @@ function ScoreRow(props) {
           className: "plus",
           disabled: Boolean(props.locked),
           type: "button",
-          onClick: () => props.onScore(row.source, props.hole.hole, nextPlus),
+          onClick: () => props.onScore(row.source, props.hole.hole, nextPlus, "plus"),
         },
         "+",
       ),
@@ -987,8 +989,9 @@ function HoleGrid(props) {
     const root = scroller.current;
     if (!root || !current) return;
     const button = root.querySelector(".cur");
-    if (button && typeof button.scrollIntoView === "function") {
-      button.scrollIntoView({ block: "nearest", inline: "center" });
+    if (button && root.scrollWidth > root.clientWidth) {
+      const offset = button.getBoundingClientRect().left - root.getBoundingClientRect().left;
+      root.scrollLeft += offset - (root.clientWidth - button.offsetWidth) / 2;
     }
   }, [current && current.hole]);
   if (!holes.length) return null;
@@ -1430,9 +1433,9 @@ export function ScorecardView(props) {
       setSurveyed((current) => ({ ...current, [kind === "tee" ? "tee" : "target"]: true }));
     }
   }
-  function onScore(source, hole, strokes) {
+  function onScore(source, hole, strokes, step) {
     if (strokes != null) setScoreFlight((value) => value + 1);
-    if (typeof props.onScore === "function") props.onScore(source, hole, strokes, props.scorerIndex);
+    if (typeof props.onScore === "function") props.onScore(source, hole, strokes, props.scorerIndex, step);
   }
   const measureLabel = measure && measure.b ? "Clear" : measure && measure.a ? "Mark" : "Measure";
   const statsHole = props.shotStats?.holes.find((hole) => hole.hole === holeNumber) || props.hole;
@@ -1465,14 +1468,31 @@ export function ScorecardView(props) {
       className: "score-glove-layout" + (solo ? " solo" : "") + " players-" + playerBand,
       key: "glove",
     }, [
+      h(HoleHeader, { ...props, key: "active-hole" }),
       h("div", { className: "score-glove-stage", key: "stage" }, [
         props.offlineStatus,
         h(RecoveryStatus, { ...props, key: "recovery" }),
         h(JoinRequestBanner, { key: "joins", onApprove: props.onApproveJoin, onDecline: props.onDeclineJoin, requests: props.joinRequests }),
         props.showWeather ? h(WeatherStrip, { compact: true, key: "weather", title: "Round weather", weather: props.weather }) : null,
         props.yourTurn ? h("p", { className: "your-turn-hint", key: "turn" }, props.yourTurn) : null,
+        h(RoundTools, {
+          ...props,
+          key: "round-tools",
+          clipDrafts,
+          measureLabel,
+          measuring,
+          rangeLockOn,
+          getShotFix: gps.getShotFix,
+          enableGps: gps.enableGps,
+          shotMeasurement: measure?.b ? remainingFt(measure.a, measure.b) : null,
+          wrist,
+          onMeasure,
+          onToggleLock,
+          onWrist: () => setWrist(true),
+        }),
         props.putting ? null : h(HoleMedia, {
           ...props,
+          key: "hole-media",
           gpsFix: gps.fix,
           gpsStatus: gps.status,
           lastThrow: lastThrowLine,
@@ -1493,7 +1513,9 @@ export function ScorecardView(props) {
           onMarkTee: typeof props.onMapMark === "function" ? () => onMapMark("tee") : null,
           onUndoThrow,
         }),
+        h(HoleGrid, { key: "holes", holes: props.holeGrid, onJump: props.onJumpHole, putting: props.putting }),
         h(LiveRoundStats, {
+          key: "live-stats",
           formatLabel: props.formatLabel,
           holeGrid: props.holeGrid,
           holes: props.shotStats?.holes ?? props.holes,
@@ -1503,37 +1525,22 @@ export function ScorecardView(props) {
           solo,
           throwsByHole: props.shotStats?.throws ?? props.throwsByHole,
         }),
-        h(RoundTools, {
-          ...props,
-          clipDrafts,
-          measureLabel,
-          measuring,
-          rangeLockOn,
-          getShotFix: gps.getShotFix,
-          enableGps: gps.enableGps,
-          shotMeasurement: measure?.b ? remainingFt(measure.a, measure.b) : null,
-          wrist,
-          onMeasure,
-          onToggleLock,
-          onWrist: () => setWrist(true),
-        }),
         !props.offline && h(RoundHighlights, { canStar: true, generation: props.clipGeneration, holes: props.holeGrid, key: "clips", putting: props.putting === true }),
-        h(HoleGrid, { holes: props.holeGrid, onJump: props.onJumpHole, putting: props.putting }),
-        props.putting ? null : h(HoleStatChips, { chips: holeStatChips(holePlayStats(statsHole, statsRows, ((props.holeGrid || []).find((hole) => hole.current) || {}).score)) }),
+        props.putting ? null : h(HoleStatChips, { key: "hole-stats", chips: holeStatChips(holePlayStats(statsHole, statsRows, ((props.holeGrid || []).find((hole) => hole.current) || {}).score)) }),
         props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,
         props.potsAceHint ? h("p", { className: "pots-ace-hint", key: "ace-hint" }, props.potsAceHint) : null,
       ]),
       h("div", { className: "score-glove-dock", key: "dock" }, [
         h("div", { className: "score-glove-scores", key: "scores" }, [
-          h(ScorecardBox, { ...props, onOpenPad: setPadRow, onScore }),
-          h(CtpClaim, { ctpClaim: props.ctpClaim, onCtpVote: props.onCtpVote }),
-          h(FinishCard, { finish: props.finish, onOpenFinish: props.onOpenFinish, onShare: props.onShare }),
+          h(ScorecardBox, { ...props, key: "scorecard", onOpenPad: setPadRow, onScore }),
+          h(CtpClaim, { key: "ctp", ctpClaim: props.ctpClaim, onCtpVote: props.onCtpVote }),
+          h(FinishCard, { key: "finish", finish: props.finish, onOpenFinish: props.onOpenFinish, onShare: props.onShare }),
         ]),
-        h(FinishDockBar, { finish: props.finish, onJump: props.onJumpHole, onOpenFinish: props.onOpenFinish }),
-        h(HoleHeader, props),
+        h(FinishDockBar, { key: "finish-dock", finish: props.finish, onJump: props.onJumpHole, onOpenFinish: props.onOpenFinish }),
       ]),
     ]),
     h(ConfirmScoresSheet, {
+      key: "confirm",
       offline: props.offline,
       finish: props.finish,
       finishing: props.finishing,

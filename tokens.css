@@ -420,8 +420,8 @@ input, select, textarea {
   scroll-margin-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
 }
 
-/* Member dashboard chrome and the scorecard action. */
-body[data-member-shell="members"] {
+/* Member and scorer chrome and the round controls. */
+:root {
   --member-chrome-bg: #131D25;
   --member-chrome-line: #364149;
   --member-chrome-hover: #27333A;

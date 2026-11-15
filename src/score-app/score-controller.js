@@ -12,6 +12,8 @@ import {
     isDoublesScoring,
     isMatchplayScoring,
     isPuttingScoring,
+    nextHoleScore,
+    nextPuttingScore,
     playOrderStep,
     relClass,
     relText,
@@ -20,6 +22,7 @@ import {
     throwsByScorer,
     scorecardChoices,
     startingHoleForState,
+    strokesForRow,
     udiscExportData,
 } from "./score-view-model.js";
 import { layoutHoles, matchCourseByName, rememberLastCourse, sortLayoutsForPick } from "./course-pick.js";
@@ -651,17 +654,23 @@ export function startScoreApp(options) {
                 else toast('Could not save that map mark');
             });
         }
-        function postScore(row, hole, strokes, viewScorer) {
+        function postScore(row, hole, strokes, viewScorer, step) {
             const scorerIndex = currentScorerIndex();
             if (viewScorer !== undefined && viewScorer !== scorerIndex) return;
             if (scorerIndex == null) { toast('Choose a scorecard'); return; }
-            const body = { scorerIndex, hole, strokes };
-            if (row.targetId) body.targetId = row.targetId;
-            else body.index = row.index;
             void enqueueRecovery('score', () => {
                 const key = scorePendingKey(scorerIndex, row.index, hole, row.targetId);
                 const player = S.cardmates.find((mate) => mate.index === row.playerIndexes?.[0]);
                 const previous = S.optimisticScores.has(key) ? S.optimisticScores.get(key) : player?.scorecards?.[hole]?.['player:' + scorerIndex] ?? null;
+                let value = strokes;
+                if (step === "plus" || step === "minus") {
+                    const current = strokesForRow(S, row, hole, scorerIndex);
+                    const par = S.holes.find((entry) => entry.hole === hole)?.par;
+                    value = (isPuttingScoring(S) ? nextPuttingScore : nextHoleScore)(current, par, step);
+                }
+                const body = { scorerIndex, hole, strokes: value };
+                if (row.targetId) body.targetId = row.targetId;
+                else body.index = row.index;
                 return { body, previous };
             });
         }
@@ -1284,10 +1293,9 @@ export function startScoreApp(options) {
             currentScorerIndex();
             setConflicts(d.conflicts);
             setMissing(d.missing);
-            const me = d.cardmates.find((p) => p.isMe);
             if (!sameScope) S.holeIdx = activeHoleIndex({
                 holes: S.holes,
-                startingHole: me && me.startingHole,
+                startingHole: startingHoleForState(S),
                 isHoleComplete: function (hole) { return cardHoleComplete(S, hole, S.scorerIndex); },
             });
             setShellHeader({
