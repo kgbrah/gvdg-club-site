@@ -360,7 +360,7 @@ function RoundToolActions(props) {
         type: "button",
         onClick: props.onWrist,
       },
-      [icon(Watch), h("span", { key: "label" }, "Wrist")],
+      [icon(Watch), h("span", { key: "label" }, "Wrist layout")],
     ),
     h(
       "button",
@@ -373,7 +373,7 @@ function RoundToolActions(props) {
         type: "button",
         onClick: props.onToggleLock,
       },
-      [icon(Lock), h("span", { key: "label" }, props.rangeLockOn ? "Locked" : "Lock")],
+      [icon(Lock), h("span", { key: "label" }, props.rangeLockOn ? "Distance alerts on" : "Distance alerts")],
     ),
     h(RoundTalk, {
       inline: true,
@@ -423,7 +423,7 @@ function RoundTools(props) {
           onAddPlayer: closeThen(props.onAddPlayer), onManagePlayers: closeThen(props.onManagePlayers),
         }),
         props.watchApi && h(WatchPairing, { api: props.watchApi, roundCode: props.roundCode, eventId: props.eventId }),
-        h("p", { className: "muted round-tools-note" }, "Pairing and sharing need a connection. Scores and marked lies show their save status on the card. Distance notifications update while this browser can run; they are not background GPS tracking."),
+        h("p", { className: "muted round-tools-note" }, "Saved scores and lies sync when connected. Watch pairing and sharing need internet. Distance alerts update while this screen stays active."),
         h("button", { type: "button", className: "btn secondary sheet-close", onClick: () => setOpen(false) }, "Back to round"),
       )), document.body),
   );

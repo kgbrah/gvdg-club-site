@@ -56,8 +56,10 @@
 .round-quick-tools .score-glove-tool span,
 .round-tools-sheet .score-glove-tool span { display: inline; }
 .round-tools-sheet { max-height: 85dvh; overflow-y: auto; padding-bottom: calc(1.25rem + env(safe-area-inset-bottom)); }
-.round-tools-sheet .score-glove-tools { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.55rem; margin-block: 1rem; }
-.round-tools-sheet .score-glove-tool { min-height: 56px; white-space: normal; }
+.round-tools-sheet .score-glove-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; margin-block: 1rem; }
+.round-tools-sheet .score-glove-tool { min-height: 56px; white-space: normal; font-size: 0.88rem; padding: 0.5rem; }
+.round-tools-sheet .section { font: 700 1.25rem Archivo, sans-serif; }
+.round-tools-sheet .sheet-close { font: 700 1rem Archivo, sans-serif; }
 .round-tools-sheet .muted { line-height: 1.5; margin-block: 0.7rem; }
 .round-tools-sheet .watch-pairing { margin-block: 1rem; }
 .round-tools-sheet .watch-pairing-body { border-color: var(--border-color); }

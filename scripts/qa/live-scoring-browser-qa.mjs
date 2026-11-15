@@ -340,15 +340,15 @@ async function runCasualRoundQa(browser, origin) {
   await page.locator("[data-create-round='casual']").click();
   await page.waitForURL(/round=QA1234/);
   await page.waitForSelector(".hole-head");
-  await waitForPageText(page, ".weather-strip", "Round weather", "casual weather title");
+  await page.locator('.weather-strip[title="Round weather"]').waitFor();
   await waitForPageText(page, ".weather-strip", "Clear", "casual weather condition");
   await waitForPageText(page, ".weather-wind", "SSE 7 mph", "casual weather wind");
-  await waitForPageText(page, ".weather-strip", qaCourse.name, "casual weather course label");
+  await waitForPageText(page, "#barTitle", qaCourse.name, "casual weather course context");
   await page.locator(".weather-wind").click();
   await page.evaluate(() => {
     window.dispatchEvent(new DeviceOrientationEvent("deviceorientation", { absolute: true, alpha: 90 }));
   });
-  await waitForPageText(page, ".weather-wind", "Phone-relative", "casual weather wind device orientation mode");
+  await page.locator('.weather-wind[data-compass-status="active"]').waitFor();
   const windArrow = await page.locator(".weather-wind-arrow").evaluate((arrow) => ({
     relative: arrow.getAttribute("data-relative"),
     status: arrow.getAttribute("data-compass-status"),
