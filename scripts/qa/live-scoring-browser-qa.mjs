@@ -360,11 +360,13 @@ async function runCasualRoundQa(browser, origin) {
     throw new Error(`Unexpected relative wind arrow state: ${JSON.stringify(windArrow)}`);
   }
 
+  await page.getByRole("button", { name: "Round tools", exact: true }).click();
   await page.getByRole("button", { name: "Add player" }).click();
   await page.getByRole("dialog", { name: "Add player" }).waitFor();
   await page.getByLabel("Player name").fill("Nina Park");
   await page.locator(".score-dialog").getByRole("button", { name: "Add player" }).click();
   await waitForPageText(page, "body", "Nina Park", "added player score row");
+  await page.getByRole("button", { name: "Round tools", exact: true }).click();
   await page.getByRole("button", { name: "Manage" }).click();
   await page.waitForSelector(".sheet");
   const ninaRow = page.locator(".manage-player-row").filter({ hasText: "Nina Park" });

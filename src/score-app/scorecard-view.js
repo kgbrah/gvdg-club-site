@@ -389,7 +389,6 @@ function RoundToolActions(props) {
         h("span", { key: "label" }, "Manage"),
       ])
       : null,
-    h(ScorecardOwner, { ...props, compact: true, key: "owner" }),
   ]);
 }
 
@@ -403,10 +402,11 @@ function RoundTools(props) {
       h(ThrowFilm, { hole: props.hole, putting: props.putting, recovery: props.clipDrafts, rows: props.rows }),
       !props.putting && h("button", {
         type: "button", className: "score-glove-tool" + (props.measuring ? " active" : ""),
-        "aria-pressed": Boolean(props.measuring), onClick: props.onMeasure,
+        "aria-label": props.measureLabel || "Measure", "aria-pressed": Boolean(props.measuring), onClick: props.onMeasure,
       }, icon(Ruler), h("span", null, props.measureLabel || "Measure")),
-      h("button", { type: "button", className: "score-glove-tool", "aria-haspopup": "dialog", onClick: () => setOpen(true) },
+      h("button", { type: "button", className: "score-glove-tool", "aria-label": "Round tools", "aria-haspopup": "dialog", onClick: () => setOpen(true) },
         icon(Settings2), h("span", null, "Round tools")),
+      h(ScorecardOwner, { ...props, compact: true }),
     ),
     open && createPortal(h("div", { className: "overlay", "data-a11y-overlay": "true", role: "presentation", ref: dialog.overlayRef },
       h("section", {
