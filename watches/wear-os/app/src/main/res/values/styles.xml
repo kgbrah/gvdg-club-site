@@ -1,0 +1,8 @@
+<resources>
+    <style name="GVDGTheme" parent="android:style/Theme.DeviceDefault">
+        <item name="android:windowBackground">#0E1712</item>
+        <item name="android:colorAccent">#AFF1AE</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

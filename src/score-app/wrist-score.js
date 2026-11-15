@@ -72,7 +72,7 @@ export function WristScore(props) {
     }, [
       h("strong", { key: "ft" }, feet == null ? "—" : String(feet)),
       h("span", { key: "cap" }, caption),
-      h("em", { key: "lock" }, live ? (props.rangeLockOn ? "On the lock screen" : "Pin to lock screen") : "Tap for GPS"),
+      h("em", { key: "lock" }, live ? (props.rangeLockOn ? "Distance alerts on" : "Send distance alerts") : "Tap for GPS"),
     ]),
     h("div", { className: "wrist-players players-" + Math.min(Math.max(rows.length, 1), 4), key: "players" },
       rows.map((row) => h(WristRow, {
