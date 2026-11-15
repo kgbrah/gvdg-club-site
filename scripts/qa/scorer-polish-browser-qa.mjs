@@ -5,13 +5,15 @@ import { mkdir, readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { chromium } from "playwright";
 import { build } from "vite";
-import { buildTheme } from "../../src/shared/dashboard-theme-model.js";
+import { buildTheme, contrastRatio } from "../../src/shared/dashboard-theme-model.js";
+import { HOLE_MAP_COMPACT_SIZE, projectHoleMap } from "../../src/shared/hole-map-model.js";
 
 const out = process.env.GVDG_SCORER_SCREENSHOTS || "/tmp/gvdg-scorer-polish";
 await mkdir(out, { recursive: true });
 const fontDir = process.env.GVDG_SCORE_FONT_DIR;
 const serve = process.env.GVDG_SCORER_SERVE === "1";
 const bottomPreview = process.env.GVDG_SCORER_BOTTOM === "1";
+const headerPreview = process.env.GVDG_SCORER_HEADER_CONTRAST === "1";
 const sampleCourse = bottomPreview || process.env.GVDG_SCORER_PREVIEW_DATA === "1";
 const compiled = await build({
   configFile: false, mode: "production", logLevel: "silent",
@@ -186,9 +188,10 @@ const teeSign = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 390" r
   </svg>`;
 
 async function makePage({ width, height, scheme = "light", scale = 1, group = "singles", locked = false, complete = false,
-  playerCount, weather = sampleWeather, scoringStyle = group === "doubles" ? "matchplay" : "stroke" } = {}) {
+  playerCount, dashboardTheme, weather = sampleWeather, gps = true, scoringStyle = group === "doubles" ? "matchplay" : "stroke" } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, colorScheme: scheme === "light" ? "light" : "dark",
-    permissions: ["geolocation", "camera", "microphone"], geolocation: { latitude: sampleLie.lat, longitude: sampleLie.lng, accuracy: 4 },
+    permissions: gps ? ["geolocation", "camera", "microphone"] : ["camera", "microphone"],
+    geolocation: gps ? { latitude: gps.lat ?? sampleLie.lat, longitude: gps.lng ?? sampleLie.lng, accuracy: 4 } : undefined,
     serviceWorkers: "block" });
   const page = await context.newPage();
   page.setDefaultTimeout(18000);
@@ -209,7 +212,7 @@ async function makePage({ width, height, scheme = "light", scale = 1, group = "s
     ? { id: "pair:team " + (index + 1), type: "pair", label: "Team " + (index + 1),
       playerIndexes: indexes, members: indexes.map((i) => players[i].name) }
     : { id: "player:" + index, type: "player", label: players[index].name, playerIndexes: indexes, members: [players[index].name] });
-  const theme = scheme === "blue" ? blueTheme : scheme === "ocean" ? customTheme : null;
+  const theme = dashboardTheme ?? (scheme === "blue" ? blueTheme : scheme === "ocean" ? customTheme : null);
   let writes = [];
   let rev = 1;
   let offline = false;
@@ -239,7 +242,7 @@ async function makePage({ width, height, scheme = "light", scale = 1, group = "s
     const url = new URL(request.url());
     if (url.origin === site) return route.continue();
     if (sampleCourse && url.hostname === "server.arcgisonline.com") {
-      return url.searchParams.get("size")?.startsWith("480,") ? route.continue() : route.abort();
+      return url.searchParams.get("size") !== "320,180" ? route.continue() : route.abort();
     }
     if (url.origin !== api) return route.abort();
     const allow = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Authorization,Content-Type",
@@ -412,16 +415,106 @@ async function feedbackMetrics(fixture) {
   }
 }
 
+async function checkHeaderContrast(page, label, custom) {
+  const header = page.locator("#scoreRoot .topbar");
+  const colors = await header.evaluate((root) => {
+    const context = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+    const sample = (value) => {
+      context.clearRect(0, 0, 1, 1);
+      context.fillStyle = value;
+      context.fillRect(0, 0, 1, 1);
+      return [...context.getImageData(0, 0, 1, 1).data];
+    };
+    const background = sample(getComputedStyle(root).backgroundColor);
+    const details = [...root.querySelectorAll("h1, h1 small, .top-link, .iconbtn")].filter((element) => element.getClientRects().length);
+    return {
+      background,
+      themeBackground: sample(getComputedStyle(root).getPropertyValue("--bg-secondary").trim()),
+      details: details.map((element) => {
+        const style = getComputedStyle(element);
+        const button = element.matches(".top-link, .iconbtn");
+        const icon = element.querySelector("svg");
+        return {
+          name: element.getAttribute("aria-label") || (element.tagName === "SMALL" ? "Course and layout" : "Round title"),
+          foreground: sample(icon ? getComputedStyle(icon).stroke : style.color),
+          backdrop: button ? sample(style.backgroundColor) : background,
+          focus: element.matches(":focus-visible") ? sample(style.outlineColor) : null,
+          opacity: Number(style.opacity),
+          minimum: button && !element.querySelector(".top-link-label") ? 3 : 4.5,
+        };
+      }),
+    };
+  });
+  const rgb = ([r, g, b]) => ({ r, g, b });
+  const blend = (upper, lower, opacity = 1) => {
+    const weight = upper[3] / 255 * opacity;
+    return lower.map((channel, index) => Math.round(channel + (upper[index] - channel) * weight));
+  };
+  if (custom) assert.deepEqual(colors.background, colors.themeBackground, label + " keeps the chosen header surface");
+  assert.equal(colors.background[3], 255, label + " uses an opaque header");
+  assert.equal(colors.details.length, 6, label + " has a title, course and four visible actions");
+  for (const item of colors.details) {
+    const background = blend(item.backdrop, colors.background);
+    const ratio = contrastRatio(rgb(blend(item.foreground, background, item.opacity)), rgb(background));
+    assert.ok(ratio >= item.minimum, `${label} / ${item.name} contrast ${ratio.toFixed(2)} below ${item.minimum}:1`);
+    if (item.focus) assert.ok(contrastRatio(rgb(item.focus), rgb(background)) >= 3, label + " / " + item.name + " focus ring contrast");
+  }
+}
+
 if (serve) {
   console.log("Preview scorecard " + site + "/score.html?round=" + code);
   console.log("Preview dark theme " + site + "/score.html?round=" + code + "&appearance=dark");
   await new Promise((stop) => { process.once("SIGINT", stop); process.once("SIGTERM", stop); });
   await new Promise((done) => server.close(done));
+} else if (headerPreview) {
+  const lightTheme = buildTheme({ mode: "light", preset: "Frost",
+    wallpaper: "data:image/jpeg;base64," + (await readFile("img/slide4.jpg")).toString("base64") });
+  try {
+    for (const [width, height, scale] of [[390, 844, 1], [320, 720, 1.25], [1280, 900, 1]]) {
+      for (const [name, scheme, dashboardTheme] of [
+        ["custom-light", "light", lightTheme], ["custom-dark", "dark", blueTheme],
+        ["default-light", "light", null], ["default-dark", "dark", null],
+      ]) {
+        const sample = await makePage({ width, height, scale, scheme, dashboardTheme, playerCount: 1 });
+        await sample.go("?round=" + code);
+        await sample.ready();
+        const label = width + "-" + name;
+        await sample.screenshot("score-header-" + label);
+        await checkHeaderContrast(sample.page, label, dashboardTheme !== null);
+        await sample.page.getByRole("region", { name: "Round weather" }).getByText(/Wind WNW 8 mph/).waitFor();
+        const footer = sample.page.getByRole("navigation", { name: "Hole navigation" });
+        await footer.getByRole("button", { name: "Next hole" }).waitFor();
+        const { y, height: footerHeight } = await footer.boundingBox();
+        assert.ok(y + footerHeight >= height - 60 && y + footerHeight <= height, "Hole navigation stays at the bottom");
+        const help = sample.button("Help");
+        await help.hover();
+        await checkHeaderContrast(sample.page, label + "-hover", dashboardTheme !== null);
+        await sample.page.keyboard.press("Tab");
+        await help.focus();
+        assert.equal(await help.evaluate((element) => element.matches(":focus-visible")), true);
+        await checkHeaderContrast(sample.page, label + "-keyboard-focus", dashboardTheme !== null);
+        if (width === 390 && name === "custom-light") {
+          await sample.button("Switch to dark mode").click();
+          await sample.button("Switch to light mode").waitFor();
+          await checkHeaderContrast(sample.page, label + "-toggled-dark", true);
+          await sample.button("Switch to light mode").click();
+          await sample.button("Switch to dark mode").waitFor();
+          await checkHeaderContrast(sample.page, label + "-toggled-light", true);
+        }
+        await sample.noOverflow();
+        await sample.context.close();
+      }
+    }
+    console.log("Scorecard header contrast passed for 12 layouts and both custom theme toggle directions.");
+  } finally {
+    await browser.close();
+    await new Promise((done) => server.close(done));
+  }
 } else if (bottomPreview) {
   try {
     for (const [playerCount, width, height, scheme, scale] of [
-      [1, 390, 844, "blue"], [4, 390, 844, "blue"], [1, 390, 844], [4, 390, 844],
-      [4, 320, 720, "dark", 1.25], [4, 844, 390, "blue"], [4, 1280, 900, "ocean", 1],
+      [1, 390, 844, "blue"], [4, 390, 844, "blue"], [1, 390, 844, "light"], [4, 390, 844, "light"], [2, 390, 720, "blue"], [3, 320, 844, "dark"],
+      [4, 320, 720, "dark", 1.25], [4, 320, 568, "dark", 1.25], [4, 844, 390, "blue"], [4, 1280, 900, "ocean", 1],
     ]) {
       const preview = await makePage({ width, height, scheme, scale, playerCount });
       await preview.go("?round=" + code);
@@ -430,8 +523,13 @@ if (serve) {
       await weather.getByText("Partly cloudy", { exact: true }).waitFor();
       await weather.getByText("Wind WNW 8 mph", { exact: true }).waitFor();
       await weather.getByText("Gusts 13 mph", { exact: true }).waitFor();
-      const stage = preview.page.getByRole("region", { name: "Map and round details" });
-      await stage.locator(".hole-map-satellite").evaluate((image) => image.decode());
+      const stage = preview.page.locator(".score-glove-stage");
+      const frame = stage.locator(".hole-map-frame");
+      await frame.getByRole("button", { name: "Heat" }).waitFor();
+      await frame.locator(".hole-map-satellite").evaluate((image) => image.decode());
+      const outcomes = stage.getByRole("region", { name: "Scoring outcomes" });
+      assert.deepEqual(await outcomes.locator(".live-stats-k").allTextContents(), ["Ace", "Eagle", "Birdie", "Par", "Bogey", "Double+"]);
+      assert.deepEqual(await outcomes.locator("b").allTextContents(), ["0", "0", "1", "2", "0", "0"]);
       const suffix = scheme ? "-" + scheme : "-light";
       const file = "bottom-scorecard-" + width + "x" + height + "-" + playerCount + "p" + suffix;
       const geometry = await preview.page.evaluate(() => {
@@ -440,6 +538,12 @@ if (serve) {
         const scores = [...document.querySelectorAll(".score-glove-dock .stepper .plus")];
         const scroller = document.querySelector(".score-glove-scores").getBoundingClientRect();
         const frame = document.querySelector(".hole-map-frame");
+        const frameBounds = frame.getBoundingClientRect();
+        const stage = document.querySelector(".score-glove-stage");
+        const tally = document.querySelector(".score-outcomes");
+        const tallyBounds = tally.getBoundingClientRect();
+        const photo = frame.querySelector(".hole-map-satellite");
+        const { width, height } = frame.querySelector("svg[aria-label]").viewBox.baseVal;
         return {
           height: innerHeight, scroll: scrollY, dockTop: rect(".score-glove-dock").top,
           buttons: nav.map((button) => ({
@@ -451,7 +555,18 @@ if (serve) {
             return { visible: top >= scroller.top && bottom <= scroller.bottom, height: button.offsetHeight, width: button.offsetWidth };
           }),
           mapHeight: frame.clientHeight,
-          mapObstructions: frame.querySelectorAll(".hole-map-focus, .hole-map-lie-actions, .hole-range-hud, .hole-media-chip").length,
+          frameWidth: frame.clientWidth,
+          mapDims: { width, height, photoWidth: photo.naturalWidth, photoHeight: photo.naturalHeight, objectFit: getComputedStyle(photo).objectFit },
+          stageFit: stage.scrollHeight <= stage.clientHeight + 1 && !["auto", "scroll"].includes(getComputedStyle(stage).overflowY),
+          mapEndsAtTally: frameBounds.bottom <= tallyBounds.top && tallyBounds.top - frameBounds.bottom < 6,
+          tallyVisible: tallyBounds.top >= 0 && tallyBounds.bottom <= innerHeight
+            && [...tally.querySelectorAll(".live-stats-k")].every((label) => label.clientWidth >= label.scrollWidth),
+          onMap: [...frame.querySelectorAll("button")].map((button) => {
+            const { left, right, top, bottom, width, height } = button.getBoundingClientRect();
+            return { label: button.textContent, width, height,
+              tappable: button.contains(document.elementFromPoint(left + width / 2, top + height / 2)),
+              within: left >= frameBounds.left && right <= frameBounds.right && top >= frameBounds.top && bottom <= frameBounds.bottom };
+          }),
           weatherAboveMap: rect(".scorecard-weather").bottom <= frame.getBoundingClientRect().top,
         };
       });
@@ -462,13 +577,31 @@ if (serve) {
         assert.ok(button.width >= 44 && button.height >= 44);
         assert.ok(button.bottom <= geometry.height && button.bottom >= geometry.height - 60, "Hole navigation stays at the viewport bottom");
       }
-      if (width === 390) {
+      if (width === 390 && height >= 720) {
         assert.ok(geometry.dockTop >= height * .55, "Scores are in the lower half of the phone");
         assert.equal(geometry.scoreButtons.filter((button) => button.visible && button.width >= 44 && button.height >= 44).length, playerCount);
         assert.ok(geometry.mapHeight >= (playerCount === 1 ? 320 : 240));
       }
       assert.equal(geometry.weatherAboveMap, true);
-      assert.equal(geometry.mapObstructions, 0);
+      assert.ok(geometry.stageFit && geometry.mapEndsAtTally && geometry.tallyVisible, JSON.stringify(geometry));
+      assert.ok(geometry.mapHeight >= 130, JSON.stringify(geometry));
+      assert.ok(Math.abs(geometry.mapDims.width - geometry.frameWidth) <= 1);
+      assert.ok(Math.abs(geometry.mapDims.height - geometry.mapHeight) <= 1);
+      assert.equal(geometry.mapDims.width, geometry.mapDims.photoWidth);
+      assert.equal(geometry.mapDims.height, geometry.mapDims.photoHeight);
+      assert.equal(geometry.mapDims.objectFit, "contain");
+      const hud = frame.locator(".hole-range-hud");
+      assert.match(await hud.innerText(), /137 ft\s+to basket\s+125 ft throw 1/i);
+      assert.doesNotMatch(await hud.innerText(), /326 ft/);
+      assert.match(await preview.page.getByRole("navigation", { name: "Hole navigation" }).innerText(), /326 ft/);
+      const hudRect = await hud.boundingBox();
+      const markRect = await frame.getByRole("button", { name: "Mark lie" }).boundingBox();
+      assert.ok(hudRect.width <= hudRect.height * 1.7, "Distance badge hugs the readable values");
+      assert.ok(hudRect.x + hudRect.width < markRect.x, "Distance badge stays clear of Mark lie");
+      for (const label of ["Hole", "C2", "C1", "Heat", "Tee sign", "Mark lie", "Undo"]) {
+        assert.ok(geometry.onMap.some((button) => button.label === label && button.width >= 44 && button.height >= 44 && button.within && button.tappable),
+          `${label} must be fully inside the map with a 44px hit target. ${JSON.stringify(geometry.onMap)}`);
+      }
       assert.match(await stage.locator(".hole-map-frame .hole-map-credit").innerText(), /Imagery: Esri, Maxar, Earthstar Geographics/);
       assert.equal(await stage.locator(".hole-map-card > .hole-map-credit").count(), 0);
       assert.equal(await stage.getByRole("button", { name: "Mark tee", exact: true }).count(), 0);
@@ -480,27 +613,54 @@ if (serve) {
         assert.ok(size && size.height >= 44 && size.width >= 44);
       }
       await preview.screenshot(file);
-      if (width === 320) {
-        assert.equal(geometry.scoreButtons.filter(({ visible }) => visible).length, playerCount, "All four scorers fit in the narrow tray");
+      if (width === 320 && playerCount === 4) {
+        if (height >= 720) assert.equal(geometry.scoreButtons.filter(({ visible }) => visible).length, playerCount, "All four scorers fit in the narrow tray");
+        else assert.ok(geometry.scoreButtons.some(({ visible }) => !visible), "The shortest viewport reserves map space by scrolling the player tray");
         const name = preview.page.locator(".prow .pname").first();
         assert.equal(await name.locator(".score-name-given").innerText(), "Taylor");
         assert.equal(await name.locator(".score-name-surname").innerText(), "Morgan");
         assert.equal(await name.getAttribute("title"), "Taylor Morgan");
         const finalPlayer = preview.button("Increase Morgan Lee on hole 4");
         const initialNav = await preview.button("Next hole").boundingBox();
-        await finalPlayer.click();
+        await finalPlayer.scrollIntoViewIfNeeded();
         const scores = await preview.page.getByRole("region", { name: "Player scores" }).boundingBox();
         const player = await finalPlayer.boundingBox();
-        assert.ok(player.y >= scores.y && player.y + player.height <= scores.y + scores.height, "Final score row can scroll fully into view");
+        assert.ok(player.y >= scores.y - 1 && player.y + player.height <= scores.y + scores.height + 1, "Final score row can scroll fully into view");
+        await finalPlayer.click();
+        await preview.page.locator(".score-entry-card .prow").last().locator(".val .n").getByText("3", { exact: true }).waitFor();
         const mark = preview.button("Mark lie");
-        await mark.scrollIntoViewIfNeeded();
         const stageBounds = await stage.boundingBox();
         const markBounds = await mark.boundingBox();
-        assert.ok(markBounds.y + markBounds.height <= stageBounds.y + stageBounds.height, "Mark lie can scroll fully into view");
+        assert.ok(markBounds.y + markBounds.height <= stageBounds.y + stageBounds.height, "Mark lie is fully visible without a map scroll");
         assert.deepEqual(await preview.button("Next hole").boundingBox(), initialNav);
-        await preview.screenshot(file + "-scrolled");
       }
-      if (width === 390 && playerCount === 4 && !scheme) {
+      if (width === 320 && height === 568) {
+        const sync = preview.page.getByRole("region", { name: "Card sync" });
+        await sync.waitFor({ state: "hidden" });
+        await preview.offlineMode(true);
+        await preview.button("Increase Morgan Lee on hole 4").click();
+        await sync.getByText("1 change awaiting sync", { exact: true }).waitFor();
+        preview.editElsewhere(3, 4, 7);
+        await preview.offlineMode(false);
+        await sync.getByText("1 change needs attention", { exact: true }).waitFor();
+        assert.equal(await frame.evaluate((element) => [...element.querySelectorAll("button")].every((button) => {
+          const { x, y, width, height } = button.getBoundingClientRect();
+          return [.28, .5, .72].every((position) =>
+            button.contains(document.elementFromPoint(x + width / 2, y + height * position)));
+        })), true, "Map controls remain tappable during a sync conflict");
+        assert.deepEqual(await outcomes.locator(".live-stats-k").allTextContents(), ["Ace", "Eagle", "Birdie", "Par", "Bogey", "Double+"]);
+        await frame.locator(".hole-map-satellite").evaluate((image) => image.decode());
+        await preview.screenshot(file + "-conflict");
+        await sync.getByRole("button", { name: "1 change needs attention" }).click();
+        const recovery = preview.page.getByRole("dialog", { name: "Card sync" });
+        await recovery.getByText(/edited on another device/).waitFor();
+        await recovery.getByRole("button", { name: "Retry sync" }).waitFor();
+        await preview.screenshot(file + "-recovery");
+        await recovery.getByRole("button", { name: "Discard change" }).click();
+        await sync.waitFor({ state: "hidden" });
+        await preview.page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Player scores");
+      }
+      if (width === 390 && playerCount === 4 && scheme === "light") {
         await preview.button("Increase Taylor Morgan on hole 4").click();
         await preview.page.locator(".score-entry-card .prow").first().locator(".val .n").getByText("3", { exact: true }).waitFor();
         const score = preview.button("Enter score for Taylor Morgan on hole 4");
@@ -518,18 +678,49 @@ if (serve) {
         await preview.button("Round tools").click();
         const tools = preview.page.getByRole("dialog", { name: "Round tools" });
         for (const label of ["Mark tee", "Mark pin", "Shot details", "Invite to score"]) await tools.getByRole("button", { name: label, exact: true }).waitFor();
-        await preview.page.keyboard.press("Escape");
+        const originalMap = await frame.boundingBox();
+        async function assertMapInPlace() {
+          const current = await frame.boundingBox();
+          for (const side of ["x", "y", "width", "height"]) {
+            assert.ok(Math.abs(current[side] - originalMap[side]) <= 1, "Round details and map controls leave the map in place");
+          }
+        }
+        await tools.getByRole("button", { name: "Round details", exact: true }).click();
+        const details = preview.page.getByRole("dialog", { name: "Round details" });
+        await details.getByRole("region", { name: "Live round stats" }).getByText("Singles · Stroke · Thru 4/18", { exact: true }).waitFor();
+        await details.getByRole("button", { name: /^Hole 6(?:,|$)/ }).click();
+        await preview.page.getByRole("heading", { name: "Hole 6" }).waitFor();
+        await preview.button("Previous hole").click();
+        await preview.button("Previous hole").click();
+        await preview.page.getByRole("heading", { name: "Hole 4" }).waitFor();
         await preview.button("Tee sign").click();
-        await stage.getByAltText("Tee sign for hole 4").waitFor();
-        await preview.button("Hide tee sign").click();
+        await preview.page.getByRole("dialog", { name: "Tee sign · Hole 4" }).getByAltText("Tee sign for hole 4").waitFor();
+        await preview.page.keyboard.press("Escape");
+        assert.equal(await preview.button("Tee sign").evaluate((button) => button === document.activeElement), true);
+        await assertMapInPlace();
+        const focus = frame.getByRole("group", { name: "Map overlay" });
+        for (const label of ["C1", "C2", "Hole"]) {
+          await focus.getByRole("button", { name: label, exact: true }).click();
+          assert.equal(await focus.getByRole("button", { name: label, exact: true }).getAttribute("aria-pressed"), "true");
+        }
+        const heat = focus.getByRole("button", { name: "Heat" });
+        await heat.click();
+        assert.equal(await heat.getAttribute("aria-pressed"), "false");
+        await heat.click();
+        assert.equal(await heat.getAttribute("aria-pressed"), "true");
+        await frame.getByRole("button", { name: "Undo" }).click();
+        await frame.getByRole("button", { name: "Undo" }).waitFor({ state: "detached" });
+        await frame.getByRole("button", { name: "Mark lie" }).click();
+        await frame.getByRole("button", { name: "Undo" }).waitFor();
+        assert.deepEqual(await outcomes.locator("b").allTextContents(), ["0", "0", "1", "3", "0", "0"]);
         await preview.button("Next hole").click();
         await preview.page.getByRole("heading", { name: "Hole 5" }).waitFor();
         await preview.button("Previous hole").click();
         await preview.page.getByRole("heading", { name: "Hole 4" }).waitFor();
         await weather.getByText("Wind WNW 8 mph", { exact: true }).waitFor();
         await stage.evaluate((el) => { el.scrollTop = el.scrollHeight; });
-        const navTop = (await preview.button("Next hole").boundingBox()).y;
-        assert.ok(navTop >= height - 100, "Scrolling the map stage leaves navigation in place");
+        assert.equal(await stage.evaluate((el) => el.scrollTop), 0, "The map stage never scrolls");
+        await assertMapInPlace();
         await preview.button("Round tools").click();
         await preview.button("Add player").click();
         const input = preview.page.getByRole("textbox", { name: "Player name" });
@@ -551,9 +742,99 @@ if (serve) {
           visualViewport.dispatchEvent(new Event("resize"));
         });
       }
+      if (width === 390 && height === 844 && playerCount === 1 && scheme === "blue") {
+        const legacy = projectHoleMap(holes[3], HOLE_MAP_COMPACT_SIZE);
+        await preview.page.evaluate(async (url) => {
+          const cache = await caches.open("gvdg-maps-v2");
+          await cache.put(url, new Response('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"/>', {
+            headers: { "Content-Type": "image/svg+xml" },
+          }));
+        }, legacy.satelliteUrl);
+        await preview.context.route("https://server.arcgisonline.com/**", (route) => route.abort("internetdisconnected"));
+        await preview.page.setViewportSize({ width: 320, height: 720 });
+        const fallback = frame.locator(".hole-map-satellite-backdrop");
+        await fallback.evaluate((image) => image.decode());
+        const placement = await fallback.evaluate((image) => {
+          const fit = image.closest(".hole-map-frame").getBoundingClientRect();
+          const rect = image.getBoundingClientRect();
+          return {
+            fitWidth: fit.width, fitHeight: fit.height, width: rect.width, height: rect.height,
+            offsetX: rect.x - fit.x, offsetY: rect.y - fit.y,
+          };
+        });
+        assert.ok(Math.abs(placement.width / placement.height - 320 / 180) < .02, "The cached aerial retains its source ratio");
+        assert.ok(Math.abs(placement.offsetX - (placement.fitWidth - placement.width) / 2) < 1);
+        assert.ok(Math.abs(placement.offsetY - (placement.fitHeight - placement.height) / 2) < 1);
+        await preview.page.setViewportSize({ width, height });
+      }
       await preview.noOverflow();
       await preview.context.close();
     }
+    async function stageConflict(fixture) {
+      await fixture.go("?round=" + code);
+      await fixture.ready();
+      await fixture.offlineMode(true);
+      await fixture.button("Increase Taylor Morgan on hole 4").click();
+      const sync = fixture.page.getByRole("region", { name: "Card sync" });
+      await sync.getByText("1 change awaiting sync", { exact: true }).waitFor();
+      fixture.editElsewhere(0, 4, 7);
+      await fixture.offlineMode(false);
+      await sync.getByText("1 change needs attention", { exact: true }).waitFor();
+    }
+    async function checkShortMap(page) {
+      const frame = page.locator(".score-glove-stage .hole-map-frame");
+      assert.ok(await frame.evaluate((element) => [...element.querySelectorAll("button")].every((button) => {
+        const { x, y, width, height } = button.getBoundingClientRect();
+        return width >= 44 && height >= 44
+          && button.contains(document.elementFromPoint(x + width / 2, y + height / 2));
+      })), "Short-map controls are reachable with touch");
+      assert.ok(await frame.evaluate((element) => {
+        const badge = element.querySelector(".hole-range-hud").getBoundingClientRect();
+        return [...element.querySelectorAll(".hole-map-options button")].every((button) => {
+          const range = document.createRange();
+          range.selectNodeContents(button);
+          const text = range.getBoundingClientRect();
+          return badge.right <= text.left || badge.left >= text.right || badge.top >= text.bottom;
+        });
+      }), "Distance badge does not paint over the map control labels");
+    }
+    const nearBasket = await makePage({ width: 320, height: 540, scale: 1.25, playerCount: 4,
+      gps: { lat: holes[3].target.lat - .00002, lng: holes[3].target.lng } });
+    await stageConflict(nearBasket);
+    await nearBasket.page.locator(".hole-range-hud.in-c1 .hole-range-hud-next").getByText(/next tee/).waitFor();
+    await nearBasket.page.locator(".hole-range-hud-throw").getByText(/throw 1/).waitFor();
+    await checkShortMap(nearBasket.page);
+    await nearBasket.context.close();
+
+    const noFix = await makePage({ width: 320, height: 540, scale: 1.25, playerCount: 4, gps: false });
+    await stageConflict(noFix);
+    const nav = noFix.page.getByRole("navigation", { name: "Hole navigation" });
+    await noFix.button("Next hole").click();
+    await nav.getByRole("heading", { name: "Hole 5" }).waitFor();
+    const enableGps = noFix.page.getByRole("button", { name: /GPS/ });
+    const gpsRect = await enableGps.boundingBox();
+    assert.ok(gpsRect && gpsRect.width >= 44 && gpsRect.height >= 44, "GPS badge has a full tap target");
+    assert.doesNotMatch(await enableGps.innerText(), /\d+ ft/, "The GPS badge omits the footer's hole length");
+    await checkShortMap(noFix.page);
+
+    const scores = noFix.page.getByRole("region", { name: "Player scores" });
+    const missing = noFix.button("Hole 4 needs a score");
+    await scores.getByRole("button", { name: "Hole 4 needs a score" }).waitFor();
+    assert.equal(await missing.count(), 1, "There is one finish reminder");
+    await noFix.page.setViewportSize({ width: 320, height: 568 });
+    await noFix.page.locator(".score-glove-dock > .score-glove-finish").waitFor();
+    await noFix.page.setViewportSize({ width: 320, height: 540 });
+    await scores.getByRole("button", { name: "Hole 4 needs a score" }).waitFor();
+    await missing.click();
+    await nav.getByRole("heading", { name: "Hole 4" }).waitFor();
+    assert.equal(await scores.evaluate((region) => region.scrollTop === 0 && document.activeElement === region), true);
+    await noFix.button("Next hole").click();
+    await scores.getByRole("button", { name: "Dismiss" }).click();
+    await missing.waitFor({ state: "hidden" });
+    await noFix.page.setViewportSize({ width: 320, height: 568 });
+    await nav.getByRole("heading", { name: "Hole 5" }).waitFor();
+    assert.equal(await missing.count(), 0, "Resizing does not restore a dismissed reminder");
+    await noFix.context.close();
     console.log("Bottom-dock scorer previews with sample weather and aerial imagery " + out);
   } finally {
     await browser.close();
@@ -606,8 +887,11 @@ if (serve) {
   await phone.button("Phone").click();
 
   async function selectFourth() {
-    if (await phone.page.locator(".hole-head .hnum").textContent() !== "Hole 4")
+    if (await phone.page.locator(".hole-head .hnum").textContent() !== "Hole 4") {
+      await phone.button("Round tools").click();
+      await phone.button("Round details").click();
       await phone.page.locator(".holegrid").getByRole("button", { name: /^Hole 4(?:,|$)/ }).click();
+    }
   }
   const score = phone.button("Enter score for Taylor Morgan on hole 4");
   await score.click();
@@ -652,7 +936,7 @@ if (serve) {
   await phone.page.getByText(/edited on another device/).waitFor();
   await phone.screenshot("score-conflict-phone");
   await phone.button("Discard change").click();
-  await phone.page.getByText("1 change needs attention", { exact: true }).waitFor({ state: "hidden" });
+  await phone.page.getByRole("region", { name: "Card sync", exact: true }).waitFor({ state: "hidden" });
   await phone.page.reload({ waitUntil: "domcontentloaded" });
   await phone.ready();
   await selectFourth();
@@ -698,7 +982,10 @@ if (serve) {
   assert.equal(geometry.headerTop, 0);
   assert.ok(geometry.holeTop >= geometry.headerBottom && geometry.nextBottom <= 720 && geometry.nextBottom >= 660, "hole navigation remains at the bottom");
   assert.equal(await narrow.page.locator(".prow .score-name-compact").count(), 0, "Doubles team labels stay whole");
+  const teamScoreSaved = narrow.page.waitForResponse((response) =>
+    response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/live/score") && response.ok());
   await narrow.button("Increase Team 1 on hole 4").click();
+  await teamScoreSaved;
   await narrow.page.waitForFunction(() => !document.querySelector('[aria-label="Card sync"]')?.textContent.includes("awaiting sync"));
   assert.equal(narrow.data[0].scores[4], 3);
   assert.equal(narrow.data[1].scores[4], 3);
@@ -755,6 +1042,11 @@ if (serve) {
   await desktop.screenshot("scorecard-desktop-custom");
   await desktop.button("Round tools").click();
   await desktop.screenshot("round-tools-desktop-custom");
+  await desktop.page.keyboard.press("Escape");
+  await desktop.page.getByRole("dialog", { name: "Round tools" }).waitFor({ state: "hidden" });
+  await desktop.button("Switch to light mode").click();
+  await desktop.button("Switch to dark mode").waitFor();
+  await checkHeaderContrast(desktop.page, "default QA / custom light after a theme toggle", true);
   await desktop.noOverflow();
   await desktop.context.close();
 

@@ -8,6 +8,7 @@ const warmed = new Set();
 export function satelliteUrlForHole(hole, options = {}) {
   const map = projectHoleMap(hole, {
     focus: options.focus,
+    fitViewport: options.fitViewport,
     height: options.height,
     width: options.width,
   });
@@ -24,7 +25,7 @@ export function satelliteUrlsForRound(holes, options = {}) {
   const urls = [];
   const seen = new Set();
   function add(hole, focus) {
-    const url = satelliteUrlForHole(hole, { ...size, focus });
+    const url = satelliteUrlForHole(hole, { ...size, focus, fitViewport: options.fitViewport });
     if (!url || seen.has(url)) return;
     seen.add(url);
     urls.push(url);

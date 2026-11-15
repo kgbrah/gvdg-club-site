@@ -46,6 +46,30 @@ test("projectHoleMap overlays a satellite image on the GPS bounds", () => {
   assert.equal(satelliteImageUrl(null), "");
 });
 
+test("a fitted satellite export, overlay, and pointer use the same bounds after viewport changes", () => {
+  const tee = { lat: 35.6047, lng: -77.5765 };
+  const target = { lat: 35.6053, lng: -77.576 };
+  for (const hole of [{ tee, target }, { tee }]) {
+    for (const { width, height } of [{ width: 292, height: 406 }, { width: 480, height: 170 }]) {
+      for (const focus of ["hole", "c1", "c2"]) {
+        const map = projectLooseHoleMap(hole, { width, height, focus, fitViewport: true });
+        const { minLng, minLat, maxLng, maxLat } = map.bounds;
+        assert.ok(Math.abs((maxLng - minLng) / (maxLat - minLat) - width / height) < 1e-8);
+        const query = new URL(map.satelliteUrl).searchParams;
+        assert.equal(query.get("size"), width + "," + height);
+        query.get("bbox").split(",").map(Number).forEach((coordinate, index) => {
+          assert.ok(Math.abs(coordinate - [minLng, minLat, maxLng, maxLat][index]) <= 5.001e-8);
+        });
+        const anchor = map.basket || map.tee;
+        assert.ok(anchor.x >= 0 && anchor.x <= width && anchor.y >= 0 && anchor.y <= height);
+        const recovered = latLngFromMapPoint(map, anchor.x, anchor.y);
+        assert.ok(Math.abs(recovered.lat - anchor.lat) < 1e-7);
+        assert.ok(Math.abs(recovered.lng - anchor.lng) < 1e-7);
+      }
+    }
+  }
+});
+
 test("projectHoleMap hides identical tee and basket points", () => {
   assert.equal(projectHoleMap({
     tee: { lat: 35, lng: -77 },

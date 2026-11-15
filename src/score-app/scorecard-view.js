@@ -1,6 +1,6 @@
 import React from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, Eye, Link2, ListChecks, Lock, Ruler, Settings2, Share2, UserPlus, Watch, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ClipboardList, Eye, Link2, ListChecks, Lock, Ruler, Settings2, Share2, UserPlus, Watch, X } from "lucide-react";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { HoleMap } from "../shared/hole-map.js";
 import { addThrow, currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, lastThrow, lastThrowHud, nextTeeHud, HOLE_MAP_COMPACT_SIZE, remainingFt, resolveMapFocus, undoThrow, withSelfLocation } from "../shared/hole-map-model.js";
@@ -53,8 +53,6 @@ function HoleStatChips(props) {
   ));
 }
 
-const PHONE_SCORE_QUERY = "(max-width: 760px)";
-
 export function visibleBottomOverlap(innerHeight, offsetTop, viewportHeight) {
   const inner = Number(innerHeight);
   const top = Number(offsetTop);
@@ -90,23 +88,18 @@ function useVisibleBottomInset() {
   }, []);
 }
 
-function useScoreMedia(query = PHONE_SCORE_QUERY) {
-  const [phone, setPhone] = React.useState(() => (
-    typeof window !== "undefined" && typeof window.matchMedia === "function"
-      ? window.matchMedia(query).matches
-      : false
-  ));
+const SHORT_SCORE_DOCK = "(orientation: portrait) and (max-height: 560px)";
+
+function useShortScoreDock() {
+  const [short, setShort] = React.useState(() => window.matchMedia(SHORT_SCORE_DOCK).matches);
   React.useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
-    const media = window.matchMedia(query);
-    function sync() {
-      setPhone(media.matches);
-    }
-    sync();
-    media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
-  }, [query]);
-  return phone;
+    const query = window.matchMedia(SHORT_SCORE_DOCK);
+    function update() { setShort(query.matches); }
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  return short;
 }
 
 function liveStatSample(mine) {
@@ -116,25 +109,29 @@ function liveStatSample(mine) {
 
 function LiveMixLegend(props) {
   const rows = Array.isArray(props.rows) ? props.rows : [];
-  return h("div", { className: "live-stats-mix-legend" }, rows.map((row) =>
+  return h("div", {
+    className: "live-stats-mix-legend" + (props.dashboard ? " score-outcomes" : ""),
+    role: props.dashboard ? "region" : undefined,
+    "aria-label": props.dashboard ? "Scoring outcomes" : undefined,
+  }, rows.map((row) =>
     h("div", {
       className: "live-stats-mix-item" + (row.tone ? " tone-" + row.tone : ""),
       key: row.id,
     }, [
-      h("span", { className: "live-stats-k", key: "k" }, row.short || row.label),
+      h("span", { className: "live-stats-k", key: "k" }, props.dashboard ? row.label : row.short || row.label),
       h("b", { key: "v" }, String(row.mine.hit)),
     ]),
   ));
 }
 
-function LiveStatTile(row, compact) {
+function LiveStatTile(row) {
   return h("div", {
-    className: "live-stat-tile" + (row.tone ? " tone-" + row.tone : "") + (compact ? " peek" : ""),
+    className: "live-stat-tile" + (row.tone ? " tone-" + row.tone : ""),
     key: row.id,
   }, [
     h("span", { className: "live-stats-k", key: "k" }, row.short || row.label),
     h("b", { key: "v" }, row.mine.att ? formatPct(row.mine.pct) : "—"),
-    compact ? null : h("small", { key: "s" }, liveStatSample(row.mine)),
+    h("small", { key: "s" }, liveStatSample(row.mine)),
   ]);
 }
 
@@ -193,19 +190,9 @@ function LivePuttingStations(props) {
 }
 
 function LiveRoundStats(props) {
-  const solo = props.solo === true;
-  const phone = useScoreMedia();
-  const collapsible = phone || !solo;
-  const [open, setOpen] = React.useState(false);
-  const expanded = collapsible ? open : true;
   const putting = props.putting === true;
   const stations = putting ? puttingStationRows(props.holes, props.holeGrid) : [];
-  const throwsByHole = putting ? {} : props.throwsByHole;
-  const view = putting ? null : liveRoundStatsFromCard({
-    holeGrid: props.holeGrid,
-    holes: props.holes,
-    throwsByHole,
-  });
+  const view = props.stats;
   const holeCount = Array.isArray(props.holes) && props.holes.length
     ? props.holes.length
     : (Array.isArray(props.holeGrid) ? props.holeGrid.length : 0);
@@ -224,55 +211,26 @@ function LiveRoundStats(props) {
     : thru
       ? (hasThrows ? null : "Mark lies for fairways, C1, and putting")
       : "Score holes and mark lies — mix, FIR, C1, and putting fill in live.";
-  const headChildren = [
-    h("div", { className: "live-round-stats-copy", key: "copy" }, [
-      h("div", { className: "live-round-stats-title", key: "title" }, "Live stats"),
-      h("div", { className: "live-round-stats-meta", key: "meta" }, [
-        props.formatLabel || "Singles · Stroke",
-        " · Thru ",
-        String(thru),
-        "/",
-        String(holeCount),
-      ]),
-    ]),
-    collapsible ? h("span", { className: "live-round-stats-toggle", key: "toggle" }, [
-      h("span", { key: "label" }, expanded ? "Minimize" : "Expand"),
-      icon(expanded ? ChevronUp : ChevronDown),
-    ]) : null,
-  ];
-  const head = collapsible
-    ? h("button", {
-      "aria-controls": "live-round-stats-body",
-      "aria-expanded": expanded ? "true" : "false",
-      "aria-label": expanded ? "Minimize live stats" : "Expand live stats",
-      className: "live-round-stats-head",
-      key: "head",
-      type: "button",
-      onClick: () => setOpen((value) => !value),
-    }, headChildren)
-    : h("div", { className: "live-round-stats-head", key: "head" }, headChildren);
   return h("section", {
     "aria-label": "Live round stats",
     "aria-live": "polite",
-    className: "live-round-stats" + (collapsible ? " compact" : "") + (expanded ? " open" : ""),
-    key: "live-stats",
+    className: "live-round-stats",
   }, [
-    head,
+    h("div", { className: "live-round-stats-head", key: "head" },
+      h("div", { className: "live-round-stats-copy" }, [
+        h("div", { className: "live-round-stats-title", key: "title" }, "Live stats"),
+        h("div", { className: "live-round-stats-meta", key: "meta" },
+          `${props.formatLabel || "Singles · Stroke"} · Thru ${thru}/${holeCount}`),
+      ])),
     putting ? null : h(PlayingRating, { delta: props.playingDelta, key: "rating", rating: props.playingRating }),
-    props.summaryOnly ? null : h("div", { className: "live-stats-peek", key: "peek" }, putting
-      ? h(LivePuttingStations, { stations })
-      : [
-        h(LiveMixBar, { key: "bar", rows: view.mix }),
-        h(LiveMixLegend, { key: "legend", rows: view.mix }),
-      ]),
-    h("div", { className: "live-stats-body", id: "live-round-stats-body", key: "body" }, putting
+    h("div", { className: "live-stats-body", key: "body" }, putting
       ? h(LivePuttingStations, { stations })
       : [
         h("div", { className: "live-stats-mix-wrap", key: "mix" }, [
           h(LiveMixBar, { key: "bar", rows: view.mix }),
           h(LiveMixLegend, { key: "legend", rows: view.mix }),
         ]),
-        h("div", { className: "live-stats-grid", key: "grid" }, view.throwStats.map((row) => LiveStatTile(row, false))),
+        h("div", { className: "live-stats-grid", key: "grid" }, view.throwStats.map(LiveStatTile)),
         hint ? h("p", { className: "live-stats-hint", key: "hint" }, hint) : null,
       ]),
   ]);
@@ -402,10 +360,12 @@ function RoundTools(props) {
   const [open, setOpen] = React.useState(false);
   const [shots, setShots] = React.useState(false);
   const [sharing, setSharing] = React.useState(false);
+  const [details, setDetails] = React.useState(false);
   const titleId = React.useId();
   const titleRef = React.useRef(null);
   const ledgerButton = React.useRef(null);
-  function close() { setShots(false); setSharing(false); setOpen(false); }
+  const detailsButton = React.useRef(null);
+  function close() { setShots(false); setSharing(false); setDetails(false); setOpen(false); }
   function openSharing() {
     if (props.roundSharingApi) { setSharing(true); setOpen(true); }
     else props.onWatchShare?.();
@@ -420,6 +380,14 @@ function RoundTools(props) {
   function backFromLedger() {
     setShots(false);
     requestAnimationFrame(() => ledgerButton.current?.focus());
+  }
+  function openDetails() {
+    setDetails(true);
+    requestAnimationFrame(() => titleRef.current?.focus());
+  }
+  function backFromDetails() {
+    setDetails(false);
+    requestAnimationFrame(() => detailsButton.current?.focus());
   }
   return h(React.Fragment, null,
     h("div", { className: "score-glove-tools round-quick-tools" },
@@ -441,16 +409,22 @@ function RoundTools(props) {
         "aria-labelledby": titleId, tabIndex: -1, ref: dialog.panelRef,
       },
         h("div", { className: "grab" }),
-        h("h2", { id: titleId, className: "section", ref: titleRef, tabIndex: -1 }, shots ? `Shot details · Hole ${props.hole.hole}` : sharing ? "Share watch link" : "Round tools"),
+        h("h2", { id: titleId, className: "section", ref: titleRef, tabIndex: -1 }, shots ? `Shot details · Hole ${props.hole.hole}` : sharing ? "Share watch link" : details ? "Round details" : "Round tools"),
         sharing ? h(RoundSharing, { api: props.roundSharingApi, onCopyWatch: props.onCopyWatch })
           : shots ? h(React.Fragment, null,
           h(ShotLedgerPanel, { key: `${props.scorerIndex}:${props.hole.hole}`, model: props.shotLedger, score: props.ledgerScore,
             onSave: props.onSaveShots, onDiscard: props.onDiscardRecovery, getFix: props.getShotFix, enableGps: props.enableGps,
             measured: props.shotMeasurement }),
           h("button", { type: "button", className: "btn secondary", onClick: backFromLedger }, "Back to round tools"))
+          : details ? h("div", { className: "round-details" },
+            props.roundDetails,
+            h(HoleGrid, { holes: props.holeGrid, onJump: closeThen(props.onJumpHole), putting: props.putting }),
+            h("button", { type: "button", className: "btn secondary", onClick: backFromDetails }, "Back to round tools"))
           : h(React.Fragment, null,
             props.roundSharingApi && h(WatchSharingDetails, { api: props.roundSharingApi, onCopyWatch: props.onCopyWatch }),
-            (props.onFullScorecard || props.shotLedger) && h("div", { className: "round-tools-direct" },
+            h("div", { className: "round-tools-direct" },
+              h("button", { type: "button", ref: detailsButton, className: "btn secondary", onClick: openDetails },
+                icon(ListChecks), "Round details"),
               props.onFullScorecard && h("button", { type: "button", className: "btn secondary", onClick: closeThen(props.onFullScorecard) },
                 icon(ClipboardList), "Full scorecard"),
               props.shotLedger && h("button", { type: "button", ref: ledgerButton, className: "btn secondary", onClick: openLedger },
@@ -640,7 +614,7 @@ function useDeviceFix() {
 function RangeHud(props) {
   if (!props.hud) return null;
   const circleClass = props.hud.circle === "C1" ? " in-c1" : props.hud.circle === "C2" ? " in-c2" : "";
-  const holeFt = props.hud.mode !== "hole" && Number.isFinite(props.hud.holeFt) ? props.hud.holeFt : null;
+  const hasReading = props.hud.mode !== "hole";
   const prompt = gpsHudPrompt(props.gpsStatus, props.hud && props.hud.mode);
   const clickable = Boolean(prompt && props.onEnableGps);
   const nextTee = props.nextTee;
@@ -654,11 +628,8 @@ function RangeHud(props) {
     type: clickable ? "button" : undefined,
     onClick: clickable ? props.onEnableGps : undefined,
   }, [
-    h("strong", { key: "ft" }, props.hud.ft + " ft"),
-    h("span", { key: "cap" }, props.hud.caption),
-    holeFt != null
-      ? h("em", { className: "hole-range-hud-len", key: "len" }, holeFt + " ft hole")
-      : null,
+    hasReading ? h("strong", { key: "ft" }, props.hud.ft + " ft") : null,
+    hasReading ? h("span", { key: "cap" }, props.hud.caption) : null,
     nextTee
       ? h("em", { className: "hole-range-hud-next", key: "next" }, nextTee.ft + " ft next tee")
       : null,
@@ -675,38 +646,50 @@ function pointReady(point) {
 
 function HoleMedia(props) {
   const [signOpen, setSignOpen] = React.useState(false);
-  const hasMap = holeHasMap(props.hole) || pointReady(props.hole && props.hole.tee) || pointReady(props.hole && props.hole.target);
+  const [size, setSize] = React.useState(null);
+  const mapRef = React.useRef(null);
+  const hasMap = holeHasMap(props.hole) || pointReady(props.hole?.tee) || pointReady(props.hole?.target);
   const hasSign = Boolean(props.teeSign);
-  const smallMap = useScoreMedia("(max-width: 360px)");
-  const landscape = useScoreMedia("(orientation: landscape) and (min-width: 600px) and (max-height: 620px)");
-  const signRef = React.useRef(null);
-  const mapHeight = landscape ? 220 : smallMap ? 390 : props.solo ? 443 : 320;
+  const signId = React.useId();
+  const signDialog = useAccessibleDialog({ open: signOpen && hasSign, onClose: () => setSignOpen(false), labelledBy: signId });
+  React.useLayoutEffect(() => {
+    const frame = mapRef.current;
+    if (!frame) return;
+    function measure() {
+      const { width, height } = frame.getBoundingClientRect();
+      if (width < 1 || height < 1) return;
+      const scale = Math.min(1, 1024 / Math.max(width, height));
+      const next = { width: Math.round(width * scale), height: Math.round(height * scale) };
+      setSize((current) => current?.width === next.width && current.height === next.height ? current : next);
+    }
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, [hasMap]);
+  React.useEffect(() => {
+    if (!size || props.offline || !navigator.onLine) return;
+    preloadRoundMaps(props.holes, { activeIndex: props.activeHoleIndex, ahead: 1, size, fitViewport: true });
+  }, [size, props.holes, props.activeHoleIndex, props.offline]);
   const canSurvey = typeof props.onMarkTee === "function" || typeof props.onMarkPin === "function";
   if (!hasMap && !hasSign && !canSurvey && !props.offline) return null;
-  const style = props.teeSign && props.teeSign.highlightColor
-    ? { boxShadow: `0 0 0 3px ${props.teeSign.highlightColor}` }
-    : undefined;
   const signButton = hasSign && h("button", {
-    "aria-expanded": signOpen,
-    className: "hole-media-chip" + (signOpen ? " open" : ""),
+    "aria-haspopup": "dialog",
+    className: "hole-media-chip",
     key: "sign",
     type: "button",
-    onClick: () => {
-      setSignOpen(!signOpen);
-      if (!signOpen) requestAnimationFrame(() => signRef.current?.scrollIntoView({ block: "nearest" }));
-    },
-  }, signOpen ? "Hide tee sign" : "Tee sign");
+    onClick: () => setSignOpen(true),
+  }, "Tee sign");
 
   return h("div", {
     className: "hole-media", key: "media",
-    style: { "--score-map-ratio": `480 / ${mapHeight}` },
   }, [
     hasMap
-      ? h("div", { className: "hole-media-map-wrap", key: "map-wrap" }, [
-        h(HoleMap, {
+      ? h("div", { className: "hole-media-map-wrap", key: "map-wrap", ref: mapRef }, [
+        size && h(HoleMap, {
           compact: true,
-          size: { width: 480, height: mapHeight },
-          controlsOutside: true,
+          size,
+          fitted: true,
           controlAccessory: signButton,
           focus: props.mapFocus,
           hole: props.hole,
@@ -745,22 +728,18 @@ function HoleMedia(props) {
           props.throws.length > 0 && h("button", { className: "btn secondary small", type: "button", onClick: props.onUndoThrow }, "Undo mark")),
       ]),
     !hasMap && signButton,
-    signOpen && hasSign
-      ? h("div", { className: "card tee-sign-card", key: "tee-sign", style, ref: signRef }, [
-        h("img", {
-          alt: props.teeSign.alt,
-          height: 400,
-          key: "image",
-          loading: "lazy",
-          src: props.teeSign.src,
-          width: 640,
-        }),
-        h("div", { className: "tee-sign-caption", key: "caption" }, [
-          h("span", { key: "label" }, "Tee sign"),
-          h("span", { key: "hole" }, `Hole ${props.teeSign.hole}`),
-        ]),
-      ])
-      : null,
+    signOpen && hasSign ? createPortal(h("div", {
+      className: "overlay", "data-a11y-overlay": "true", key: "tee-sign",
+      role: "presentation", ref: signDialog.overlayRef,
+    }, h("section", {
+      className: "sheet score-tee-sign", ref: signDialog.panelRef, role: "dialog",
+      "aria-modal": signDialog.isolated ? "true" : undefined, "aria-labelledby": signId, tabIndex: -1,
+    },
+      h("h2", { className: "section", id: signId }, `Tee sign · Hole ${props.teeSign.hole}`),
+      h("img", { alt: props.teeSign.alt, src: props.teeSign.src, width: 640, height: 400,
+        style: props.teeSign.highlightColor ? { outlineColor: props.teeSign.highlightColor } : undefined }),
+      h("button", { className: "btn secondary sheet-close", type: "button", onClick: () => setSignOpen(false) }, "Close tee sign"),
+    )), document.body) : null,
   ]);
 }
 
@@ -1122,7 +1101,6 @@ function FinishCard(props) {
 
 function FinishDockBar(props) {
   const finish = props.finish;
-  const [dismissed, setDismissed] = React.useState({});
   if (!finish || finish.locked) return null;
   if (finish.canFinish && typeof props.onOpenFinish === "function") {
     return h("div", { className: "score-glove-finish", key: "finish-bar" }, h("button", {
@@ -1134,7 +1112,7 @@ function FinishDockBar(props) {
   let blocker = finish.blocker;
   if (blocker && blocker.kind === "missing") {
     const skipped = Array.isArray(finish.skipped) && finish.skipped.length ? finish.skipped : [blocker];
-    blocker = skipped.find((row) => row && !dismissed[row.hole]) || null;
+    blocker = skipped.find((row) => row && !props.dismissed[row.hole]) || null;
   }
   if (!blocker) return null;
   const jump = h("button", {
@@ -1153,7 +1131,7 @@ function FinishDockBar(props) {
       className: "score-glove-finish-dismiss",
       key: "dismiss",
       type: "button",
-      onClick: () => setDismissed((prev) => ({ ...prev, [blocker.hole]: true })),
+      onClick: () => props.onDismiss(blocker.hole),
     }, icon(X)),
   ]);
 }
@@ -1264,24 +1242,38 @@ function ConfirmScoresSheet(props) {
   );
 }
 
+function hasRecoveryStatus(props) {
+  return Boolean(props.recoveryItems?.length || props.recoveryStorageError || props.recoveryUnavailable);
+}
+
 function RecoveryStatus(props) {
   const items = props.recoveryItems || [];
+  const active = hasRecoveryStatus(props);
+  const [open, setOpen] = React.useState(false);
+  const titleId = React.useId();
+  const triggerRef = React.useRef(null);
+  const dialog = useAccessibleDialog({
+    open: open && active, onClose: () => setOpen(false), labelledBy: titleId,
+    returnFocus: () => triggerRef.current || props.scoreRegionRef?.current,
+  });
+  React.useEffect(() => { if (!active) setOpen(false); }, [active]);
   const failed = items.filter((item) => item.state === "error" || item.state === "auth");
   const selectedHole = props.hole?.hole;
   const marks = items.filter((item) => item.kind === "throws" && item.body.scorerIndex === props.scorerIndex && item.body.hole === selectedHole);
   const mark = marks[marks.length - 1];
-  if (!items.length && !props.recoveryStorageError && !props.recoveryUnavailable) return null;
+  if (!active) return null;
 
   const names = new Map((props.choices || []).map((row) => [row.index, row.name]));
-  return h("section", { "aria-label": "Card sync" }, [
+  const failureLabel = failed.length + (failed.length === 1 ? " change needs attention" : " changes need attention");
+  const content = [
     h("p", { className: "muted", key: "status", role: "status" }, [
       props.recoveryStorageError ? "This phone’s card storage is unavailable. " : "",
       props.recoveryUnavailable ? "Open this card online to enable saved edits. " : "",
       items.length ? items.length + (items.length === 1 ? " change saved on this phone, awaiting sync. " : " changes saved on this phone, awaiting sync. ") : "",
       mark ? (mark.state === "pending" ? "Lie changes pending." : "Lie changes need attention.") : "",
     ].filter(Boolean).join(" ")),
-    failed.length ? h("details", { key: "errors" }, [
-      h("summary", { key: "summary" }, failed.length + (failed.length === 1 ? " change needs attention" : " changes need attention")),
+    failed.length ? h("details", { key: "errors", open: props.compact || undefined }, [
+      h("summary", { key: "summary" }, failureLabel),
       h("ul", { key: "list" }, failed.map((item) => h("li", { key: item.id }, [
         (item.kind === "throws" ? "Lies" : item.kind === "shots" ? "Shot details" : "Score") + " on " + (props.putting ? "station " : "hole ") + item.body.hole
           + " · " + (names.get(item.body.scorerIndex) || "Card player") + ". "
@@ -1292,12 +1284,35 @@ function RecoveryStatus(props) {
       ]))),
     ]) : null,
     items.length ? h("button", { className: "btn secondary", key: "retry", type: "button", onClick: props.onRetryRecovery }, "Retry sync") : null,
-  ]);
+  ];
+  if (!props.compact) return h("section", { "aria-label": "Card sync" }, content);
+  const label = props.recoveryStorageError ? "Card storage unavailable"
+    : props.recoveryUnavailable ? "Open online to enable saved edits"
+    : failed.length ? failureLabel
+    : items.length + (items.length === 1 ? " change awaiting sync" : " changes awaiting sync");
+  return h("section", { className: "card-sync-summary", "aria-label": "Card sync" },
+    h("button", { className: "card-sync-trigger", type: "button", "aria-haspopup": "dialog", "aria-label": label, ref: triggerRef, onClick: () => setOpen(true) },
+      h("span", { role: "status" }, label), icon(ChevronRight)),
+    open && createPortal(h("div", {
+      className: "overlay", "data-a11y-overlay": "true", role: "presentation", ref: dialog.overlayRef,
+    }, h("section", {
+      className: "sheet score-sync-sheet", role: "dialog", "aria-modal": dialog.isolated ? "true" : undefined,
+      "aria-labelledby": titleId, tabIndex: -1, ref: dialog.panelRef,
+    },
+      h("h2", { id: titleId, className: "section" }, "Card sync"),
+      props.turnHint,
+      ...content,
+      h("button", { className: "btn secondary sheet-close", type: "button", onClick: () => setOpen(false) }, "Back to round"),
+    )), document.body),
+  );
 }
 
 export function ScorecardView(props) {
   useVisibleBottomInset();
+  const shortDock = useShortScoreDock();
+  const [dismissedFinishHoles, setDismissedFinishHoles] = React.useState({});
   const clipDrafts = useClipRecovery(props.clipRecovery);
+  const scoreRegionRef = React.useRef(null);
   const [padRow, setPadRow] = React.useState(null);
   const [measure, setMeasure] = React.useState(null);
   const holeNumber = props.hole && props.hole.hole;
@@ -1454,48 +1469,67 @@ export function ScorecardView(props) {
   const holeHeader = h(HoleHeader, { ...props, key: "active-hole" });
   const onMarkPin = typeof props.onMapMark === "function" ? () => onMapMark("target") : null;
   const onMarkTee = typeof props.onMapMark === "function" ? () => onMapMark("tee") : null;
+  const turn = props.yourTurn ? h("p", { className: "your-turn-hint", key: "turn" }, props.yourTurn) : null;
   const status = [
     props.offlineStatus,
-    h(RecoveryStatus, { ...props, key: "recovery" }),
+    hasRecoveryStatus(props)
+      ? h(RecoveryStatus, { ...props, key: "recovery", compact: true, turnHint: turn, scoreRegionRef })
+      : turn,
     h(JoinRequestBanner, { key: "joins", onApprove: props.onApproveJoin, onDecline: props.onDeclineJoin, requests: props.joinRequests }),
   ];
   const weather = h(WeatherStrip, { compact: true, key: "weather", scorecard: true, title: "Round weather", weather: props.weather });
-  const turn = props.yourTurn ? h("p", { className: "your-turn-hint", key: "turn" }, props.yourTurn) : null;
-  const tools = h(RoundTools, {
-    ...props, onMarkPin, onMarkTee, key: "round-tools", clipDrafts, measureLabel, measuring, rangeLockOn, getShotFix: gps.getShotFix,
-    enableGps: gps.enableGps, shotMeasurement: measure?.b ? remainingFt(measure.a, measure.b) : null, wrist,
-    onMeasure, onToggleLock, onWrist: () => setWrist(true),
-  });
   const map = props.putting ? null : h(HoleMedia, {
-    ...props, solo, key: "hole-media", gpsFix: gps.fix, gpsStatus: gps.status, lastThrow: lastThrowLine, lie, mapFocus,
+    ...props, activeHoleIndex, key: "hole-media", gpsFix: gps.fix, gpsStatus: gps.status, lastThrow: lastThrowLine, lie, mapFocus,
     measureFrom: measure && measure.a, measureTo, nextTee, rangeHud: hud, scoreFlight, throws,
     onEnableGps: gps.enableGps, onMapFocus, onMapPoint, onMarkLie,
     onMarkPin, onMarkTee,
     onUndoThrow,
   });
-  const holeGrid = h(HoleGrid, { key: "holes", holes: props.holeGrid, onJump: props.onJumpHole, putting: props.putting });
-  const roundStats = [
+  const statsHoles = props.shotStats?.holes ?? props.holes;
+  const stats = props.putting ? null : liveRoundStatsFromCard({
+    holeGrid: props.holeGrid, holes: statsHoles, throwsByHole: props.shotStats?.throws ?? props.throwsByHole,
+  });
+  const roundDetails = [
     h(LiveRoundStats, {
-      key: "live-stats", summaryOnly: playerBand >= 3, formatLabel: props.formatLabel, holeGrid: props.holeGrid, holes: props.shotStats?.holes ?? props.holes,
-      playingDelta: props.playingDelta, playingRating: props.playingRating, putting: props.putting, solo,
-      throwsByHole: props.shotStats?.throws ?? props.throwsByHole,
+      key: "live-stats", formatLabel: props.formatLabel, holeGrid: props.holeGrid, holes: statsHoles, stats,
+      playingDelta: props.playingDelta, playingRating: props.playingRating, putting: props.putting,
     }),
     !props.offline && h(RoundHighlights, { canStar: true, generation: props.clipGeneration, holes: props.holeGrid, key: "clips", putting: props.putting === true }),
     props.putting ? null : h(HoleStatChips, { key: "hole-stats", chips: holeStatChips(holePlayStats(statsHole, statsRows, ((props.holeGrid || []).find((hole) => hole.current) || {}).score)) }),
     props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,
     props.potsAceHint ? h("p", { className: "pots-ace-hint", key: "ace-hint" }, props.potsAceHint) : null,
   ];
+  const tools = h(RoundTools, {
+    ...props, onMarkPin, onMarkTee, key: "round-tools", clipDrafts, measureLabel, measuring, rangeLockOn, getShotFix: gps.getShotFix,
+    enableGps: gps.enableGps, shotMeasurement: measure?.b ? remainingFt(measure.a, measure.b) : null, wrist, roundDetails,
+    onMeasure, onToggleLock, onWrist: () => setWrist(true),
+  });
+  const finishDock = h(FinishDockBar, {
+    key: "finish-dock",
+    finish: props.finish,
+    dismissed: dismissedFinishHoles,
+    onOpenFinish: props.onOpenFinish,
+    onJump: (index) => {
+      if (shortDock && scoreRegionRef.current) {
+        scoreRegionRef.current.scrollTop = 0;
+        scoreRegionRef.current.focus({ preventScroll: true });
+      }
+      props.onJumpHole?.(index);
+    },
+    onDismiss: (hole) => setDismissedFinishHoles((previous) => ({ ...previous, [hole]: true })),
+  });
   const dock = h("div", { className: "score-glove-dock", key: "dock" }, [
     tools,
     h("div", {
-      className: "score-glove-scores", key: "scores",
+      className: "score-glove-scores", key: "scores", ref: scoreRegionRef,
       role: "region", "aria-label": "Player scores", tabIndex: 0,
     }, [
       h(ScorecardBox, { ...props, key: "scorecard", onOpenPad: setPadRow, onScore }),
       h(CtpClaim, { key: "ctp", ctpClaim: props.ctpClaim, onCtpVote: props.onCtpVote }),
       h(FinishCard, { key: "finish", finish: props.finish, onOpenFinish: props.onOpenFinish, onShare: props.onShare }),
+      shortDock ? finishDock : null,
     ]),
-    h(FinishDockBar, { key: "finish-dock", finish: props.finish, onJump: props.onJumpHole, onOpenFinish: props.onOpenFinish }),
+    shortDock ? null : finishDock,
     holeHeader,
   ]);
   const layoutClass = "score-glove-layout" + (solo ? " solo" : "") + " players-" + playerBand;
@@ -1524,8 +1558,11 @@ export function ScorecardView(props) {
     }) : h("div", { className: layoutClass + " score-bottom-layout", key: "glove" }, [
       h("div", { className: "score-bottom-course", key: "course" }, [
         weather,
-        h("div", { className: "score-glove-stage", key: "stage", role: "region", "aria-label": "Map and round details", tabIndex: 0 },
-          [...status, turn, map, ...roundStats, holeGrid]),
+        h("div", { className: "score-glove-stage", key: "stage" }, [
+          h("div", { className: "score-stage-status", key: "status" }, status),
+          map,
+          stats && h(LiveMixLegend, { key: "outcomes", dashboard: true, rows: stats.mix }),
+        ]),
       ]),
       dock,
     ]),
