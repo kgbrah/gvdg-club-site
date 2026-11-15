@@ -11,6 +11,8 @@ const out = process.env.GVDG_SCORER_SCREENSHOTS || "/tmp/gvdg-scorer-polish";
 await mkdir(out, { recursive: true });
 const fontDir = process.env.GVDG_SCORE_FONT_DIR;
 const serve = process.env.GVDG_SCORER_SERVE === "1";
+const concepts = process.env.GVDG_SCORER_CONCEPTS === "1";
+const sampleCourse = concepts || process.env.GVDG_SCORER_PREVIEW_DATA === "1";
 const compiled = await build({
   configFile: false, mode: "production", logLevel: "silent",
   build: { write: false, emptyOutDir: false,
@@ -33,9 +35,13 @@ const server = createServer(async (request, response) => {
     if (serve && path === "/score.html") {
       const session = previewSession(request, response);
       const theme = url.searchParams.get("appearance");
-      if (theme === "light" || theme === "dark" || theme === "ocean") session.appearance = theme;
+      const concept = url.searchParams.get("concept");
+      const players = Number(url.searchParams.get("players"));
+      if (sampleCourse && (players === 1 || players === 4)) session.players = roster("singles", players);
+      if (theme === "light" || theme === "dark" || theme === "ocean" || theme === "blue") session.appearance = theme;
       response.setHeader("Content-Type", "text/html");
       const seeded = html.replace('data-api-base=""', 'data-api-base="' + site + '/qa-api"')
+        .replace("<body", concept === "map" || concept === "score" ? '<body data-score-concept="' + concept + '"' : "<body")
         .replace("</head>", '<script>localStorage.setItem("gvdg_member_token", "qa-scorer-visual");localStorage.setItem("theme",' +
           JSON.stringify(session.appearance === "light" ? "light" : "dark") + ');</script></head>');
       return response.end(seeded);
@@ -52,29 +58,43 @@ await new Promise((ready) => server.listen(Number(process.env.GVDG_SCORER_PORT |
 const site = "http://127.0.0.1:" + server.address().port;
 console.log("Scorer QA fixture " + site);
 const api = "http://127.0.0.1:8788";
-const browser = serve ? null : await chromium.launch({ headless: true, args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] });
+const browser = serve ? null : await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_PATH, args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] });
 const initials = { starts: { 1: 3, 2: 2, 3: 3 }, other: { 1: 4, 2: 3, 3: 4 } };
-const holes = Array.from({ length: 9 }, (_, index) => ({
+const place = sampleCourse ? { lat: 35.604686, lng: -77.576533 } : { lat: 34.95595, lng: -82.18772 };
+const holes = Array.from({ length: sampleCourse ? 18 : 9 }, (_, index) => ({
   hole: index + 1, par: 3, distance_ft: 272 + index * 18,
-  tee: { label: "Long", lat: 34.95490 + index * 0.00035, lng: -82.18772 },
-  target: { label: "Basket", lat: 34.95536 + index * 0.00035, lng: -82.18713 },
+  tee: { label: "Long", lat: place.lat + (index - 3) * 0.00022, lng: place.lng },
+  target: { label: "Basket", lat: place.lat + (index - 3) * 0.00022 + 0.00056, lng: place.lng + 0.00055 },
+  ...(sampleCourse && index === 3 ? { tee_sign_id: 4 } : {}),
 }));
-const course = { id: 100, name: "Rocky Ford", lat: 34.955, lng: -82.188, location: "Greenville", coverage: "full" };
-const layout = { id: 101, name: "Long tees", course_id: 100, expected_holes: 9, holes };
+const course = { id: 100, name: sampleCourse ? "Farmville DiscGolfPark" : "Rocky Ford", ...place,
+  location: sampleCourse ? "Farmville" : "Greenville", coverage: "full" };
+const sampleWeather = {
+  location: { ...place, label: course.name }, updatedAt: "2026-11-14T21:50:00.000Z",
+  current: { condition: "Partly cloudy", weatherCode: 2, temperatureF: 57, windDirectionDeg: 292,
+    windSpeedMph: 8, windGustMph: 13, relativeHumidity: 52, fetchedAt: "2026-11-14T21:50:00.000Z" },
+};
+const sampleLie = { lat: place.lat + .00028, lng: place.lng + .00024, n: 1 };
+function heatmap(hole) {
+  const tee = holes[Number(hole) - 1]?.tee || holes[3].tee;
+  return { lies: Array.from({ length: 8 }, (_, index) => ({ lat: tee.lat + .00023 + index * .000009,
+    lng: tee.lng + .0002 + (index % 3) * .000026, n: 1 })), you: [] };
+}
+const layout = { id: 101, name: sampleCourse ? "Blue tees" : "Long tees", course_id: 100, expected_holes: holes.length, holes };
 const code = "GVDG44";
 const roundId = "qa-visual-round-v1";
 const edit = { kind: "throw", attempt: "throw", outcome: "missed", originLie: "tee", landingLie: "fairway",
   id: "10000000-0000-4000-8000-000000000001", recordedAt: Date.now(), distanceFt: 219, distanceSource: "manual" };
 
-function roster(group) {
+function roster(group, playerCount) {
   const names = group === "doubles" ? ["Taylor Morgan", "Avery Brooks", "Jordan Reyes", "Morgan Lee"]
-    : ["Taylor Morgan", "Avery Brooks", "Jordan Reyes"];
+    : ["Taylor Morgan", "Avery Brooks", "Jordan Reyes", "Morgan Lee"].slice(0, playerCount || 3);
   return names.map((name, index) => {
     const scores = { ...(index < (group === "doubles" ? 2 : 1) ? initials.starts : initials.other) };
     return {
       index, cardId: "c0", name, isMe: index === 0, canEnterScorecard: index === 0,
       startingHole: 4, scores, scorecards: Object.fromEntries(Object.entries(scores).map(([hole, strokes]) => [hole, { "player:0": strokes }])),
-      throws: index === 0 ? { 4: [{ lat: 34.9561, lng: -82.1876, n: 1 }] } : {},
+      throws: index === 0 ? { 4: [sampleLie] } : {},
     };
   });
 }
@@ -82,6 +102,10 @@ function roster(group) {
 const customTheme = buildTheme({ mode: "dark", preset: "Frost",
   wallpaper: "data:image/jpeg;base64," + (await readFile("img/slide4.jpg")).toString("base64") });
 assert.ok(customTheme?.wallpaper);
+// Sample member palette matched to the reference preview, without account information.
+const bluePalette = ["#263b64", "#ee938c", "#86d695", "#e9c775", "#3c5c82", "#8999d4", "#7ec5da", "#deeffa",
+  "#8ea4c1", "#f99d96", "#96f5a0", "#ffd997", "#6aa1d7", "#a9b4f1", "#a6e7ff", "#edfcff"];
+const blueTheme = buildTheme({ mode: "dark", sourcePalette: bluePalette, palette: bluePalette });
 const previewSessions = new Map();
 function previewSession(request, response) {
   const current = /(?:^|; *)qa-scorer=([0-9a-f-]+)(?:;|$)/.exec(request.headers.cookie || "")?.[1];
@@ -117,7 +141,7 @@ async function previewReply(request, response, url) {
     return { status: "live", roundCode: code, courseId: course.id, layoutId: layout.id, courseName: course.name,
       layoutName: layout.name, recoveryRoundId: roundId, rev: state.rev, holes, scoreTargets, standings,
       cardId: "c0", playerIndex: 0, players, cardmates: players, shotLedgers, conflicts: [], missing: [],
-      roundConfig: { groupFormat: "singles", scoringStyle: "stroke" }, startingHole: 4 };
+      roundConfig: { groupFormat: "singles", scoringStyle: "stroke" }, startingHole: 4, weather: sampleWeather };
   }
   if (path.endsWith("/live/score") && request.method === "POST") {
     let raw = "";
@@ -139,9 +163,14 @@ async function previewReply(request, response, url) {
   }
   if (path.endsWith("/live/mine") || path.endsWith("/live")) return reply(snapshot());
   if (path.endsWith("/live/throws")) return reply({ shotLedgers });
-  if (path.endsWith("/live/sharing")) return reply({ visibility: "card", includeMarked: false, clips: false });
+  if (path.endsWith("/live/sharing")) return reply({ owner: true, visibility: "public", includeMarked: true, clips: true });
+  if (path.endsWith("/heatmap")) return reply(heatmap(url.searchParams.get("hole")));
+  if (sampleCourse && path === "/tee-signs/4/image") {
+    response.writeHead(200, { "Content-Type": "image/svg+xml" });
+    return response.end(teeSign);
+  }
   if (path.endsWith("/live/clips")) return reply({ clips: [] });
-  if (path === "/me/dashboard-theme") return reply({ theme: state.appearance === "ocean" ? customTheme : null });
+  if (path === "/me/dashboard-theme") return reply({ theme: state.appearance === "blue" ? blueTheme : state.appearance === "ocean" ? customTheme : null });
   if (path === "/me") return reply({ sub: "m_scorer_qa", name: players[0].name });
   if (path === "/courses") return reply({ courses: [course] });
   if (path === "/courses/100/layouts") return reply({ layouts: [layout] });
@@ -149,16 +178,26 @@ async function previewReply(request, response, url) {
   return reply({ rounds: [], events: [], devices: [], rows: [] });
 }
 
-async function makePage({ width, height, scheme = "light", scale = 1, group = "singles", locked = false, complete = false } = {}) {
+const teeSign = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 390" role="img">
+  <rect width="640" height="390" fill="#154136"/><rect x="28" y="26" width="584" height="338" rx="12" fill="#f2efdf"/>
+  <text x="54" y="91" font-size="41" font-family="sans-serif" fill="#154136">Farmville · Sample sign</text>
+  <path stroke="#35694b" stroke-width="15" fill="none" stroke-dasharray="13 14" d="M130 295 C183 217 292 243 433 145"/>
+  <circle cx="433" cy="145" r="17" fill="#c76a32"/><rect x="102" y="286" width="42" height="14" fill="#154136"/>
+  <text x="438" y="288" font-size="30" font-family="sans-serif" fill="#154136">Hole 4</text>
+  <text x="438" y="326" font-size="24" font-family="sans-serif" fill="#154136">326 ft · Par 3</text>
+  </svg>`;
+
+async function makePage({ width, height, scheme = "light", scale = 1, group = "singles", locked = false, complete = false,
+  concept, playerCount, weather = sampleWeather } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, colorScheme: scheme === "light" ? "light" : "dark",
-    permissions: ["geolocation", "camera", "microphone"], geolocation: { latitude: 34.9561, longitude: -82.1876, accuracy: 4 },
+    permissions: ["geolocation", "camera", "microphone"], geolocation: { latitude: sampleLie.lat, longitude: sampleLie.lng, accuracy: 4 },
     serviceWorkers: "block" });
   const page = await context.newPage();
   page.setDefaultTimeout(18000);
   page.setDefaultNavigationTimeout(90000);
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  const players = roster(group);
+  const players = roster(group, playerCount);
   if (complete) for (const player of players) for (const { hole } of holes) {
     player.scores[hole] = 3;
     player.scorecards[hole] = { "player:0": 3 };
@@ -169,7 +208,7 @@ async function makePage({ width, height, scheme = "light", scale = 1, group = "s
     ? { id: "pair:team " + (index + 1), type: "pair", label: "Team " + (index + 1),
       playerIndexes: indexes, members: indexes.map((i) => players[i].name) }
     : { id: "player:" + index, type: "player", label: players[index].name, playerIndexes: indexes, members: [players[index].name] });
-  const theme = scheme === "ocean" ? customTheme : null;
+  const theme = scheme === "blue" ? blueTheme : scheme === "ocean" ? customTheme : null;
   let writes = [];
   let rev = 1;
   let offline = false;
@@ -191,13 +230,14 @@ async function makePage({ width, height, scheme = "light", scale = 1, group = "s
     return { status: finished ? "final" : "live", cardLocked: finished, roundCode: code, courseId: course.id, layoutId: layout.id,
       courseName: course.name, layoutName: layout.name, recoveryRoundId: roundId, rev, holes, scoreTargets, standings,
       cardId: "c0", playerIndex: 0, players, cardmates: players, shotLedgers, conflicts: [], missing: [],
-      roundConfig: { groupFormat: group, scoringStyle: group === "doubles" ? "matchplay" : "stroke" }, startingHole: 4 };
+      roundConfig: { groupFormat: group, scoringStyle: group === "doubles" ? "matchplay" : "stroke" }, startingHole: 4, weather };
   }
   await context.routeWebSocket("ws://127.0.0.1:8788/**", () => {});
   await context.route(/^https?:\/\//, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     if (url.origin === site) return route.continue();
+    if (sampleCourse && url.hostname === "server.arcgisonline.com") return route.continue();
     if (url.origin !== api) return route.abort();
     const allow = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Authorization,Content-Type",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS, PATCH, PUT, DELETE" };
@@ -252,7 +292,9 @@ async function makePage({ width, height, scheme = "light", scale = 1, group = "s
       return reply({ snapshot: snapshot() });
     }
     if (path.endsWith("/live/throws")) return reply({ shotLedgers });
-    if (path.endsWith("/live/sharing")) return reply({ visibility: "card", includeMarked: false, clips: false });
+    if (path.endsWith("/live/sharing")) return reply({ owner: true, visibility: "public", includeMarked: true, clips: true });
+    if (path.endsWith("/heatmap")) return reply(heatmap(url.searchParams.get("hole")));
+    if (sampleCourse && path === "/tee-signs/4/image") return route.fulfill({ contentType: "image/svg+xml", body: teeSign, headers: allow });
     if (path.endsWith("/live/clips")) return reply({ clips: [] });
     if (path.endsWith("/live")) return reply(snapshot());
     if (path === "/me/dashboard-theme") return reply({ theme });
@@ -263,13 +305,16 @@ async function makePage({ width, height, scheme = "light", scale = 1, group = "s
     if (path === "/rounds") return reply({ code });
     return reply({ rounds: [], events: [], rows: [] });
   });
-  await page.addInitScript(({ scheme, scale }) => {
+  await page.addInitScript(({ scheme, scale, concept }) => {
     localStorage.setItem("gvdg_member_token", localStorage.getItem("qa-scorer-actor") || "qa-scorer-visual");
     localStorage.setItem("gvdg_member_name", "Taylor Morgan");
     localStorage.setItem("theme", scheme === "light" ? "light" : "dark");
     Object.defineProperty(navigator, "onLine", { get: () => localStorage.getItem("qa-offline") !== "yes" });
-    if (scale !== 1) document.addEventListener("DOMContentLoaded", () => { document.documentElement.style.fontSize = 16 * scale + "px"; });
-  }, { scheme, scale });
+    document.addEventListener("DOMContentLoaded", () => {
+      if (scale !== 1) document.documentElement.style.fontSize = 16 * scale + "px";
+      if (concept) document.body.dataset.scoreConcept = concept;
+    });
+  }, { scheme, scale, concept });
   const button = (label) => page.getByRole("button", { name: label, exact: true });
   const go = (query = "") => page.goto(site + "/score.html" + query, { waitUntil: "domcontentloaded" });
   async function ready() {
@@ -370,6 +415,62 @@ if (serve) {
   console.log("Preview dark theme " + site + "/score.html?round=" + code + "&appearance=dark");
   await new Promise((stop) => { process.once("SIGINT", stop); process.once("SIGTERM", stop); });
   await new Promise((done) => server.close(done));
+} else if (concepts) {
+  try {
+    for (const [concept, playerCount, width, height, scheme, scale] of [
+      ["map", 1, 390, 844], ["map", 4, 390, 844], ["score", 1, 390, 844], ["score", 4, 390, 844],
+      ["map", 1, 390, 844, "blue"], ["map", 4, 390, 844, "blue"],
+      ["score", 1, 390, 844, "blue"], ["score", 4, 390, 844, "blue"],
+      ["map", 4, 320, 720, "dark", 1.25], ["map", 4, 1280, 900, "ocean", 1],
+    ]) {
+      const preview = await makePage({ width, height, scheme, scale, concept, playerCount });
+      await preview.go("?round=" + code);
+      await preview.ready();
+      const weather = preview.page.getByRole("region", { name: "Round weather" });
+      await weather.getByText("Partly cloudy", { exact: true }).waitFor();
+      await weather.getByText("Wind WNW 8 mph", { exact: true }).waitFor();
+      await weather.getByText("Gusts 13 mph", { exact: true }).waitFor();
+      await preview.page.locator(".score-concept").waitFor();
+      await preview.page.waitForFunction(() => {
+        const image = document.querySelector(".hole-map-satellite");
+        return image?.complete && image.naturalWidth > 0;
+      }, { timeout: 15_000 });
+      const file = concept + "-first-" + width + "-" + playerCount + "p" + (scheme === "blue" ? "-blue" : "");
+      for (const label of ["Film throw", "Share watch link", "Round tools", "Mark lie", "Measure"]) {
+        const target = label === "Film throw" ? preview.page.locator(".round-quick-tools button").first() : preview.button(label);
+        const size = await target.boundingBox();
+        assert.ok(size && size.height >= 44 && size.width >= 44, label + " has a 44px target");
+      }
+      if (width === 320) {
+        const map = await preview.page.locator(".hole-map-frame").boundingBox();
+        assert.ok(map.height >= 240, "Narrow aerial map remains tall enough for its controls");
+      }
+      await preview.screenshot(file);
+      if (width === 390 && playerCount === 4 && !scheme) {
+        await preview.button("Increase Taylor Morgan on hole 4").click();
+        await preview.page.locator(".score-entry-card .prow").first().locator(".val .n").getByText("3", { exact: true }).waitFor();
+        await preview.button("Enter score for Taylor Morgan on hole 4").click();
+        await preview.page.locator(".score-pad-sheet").waitFor();
+        await preview.page.keyboard.press("Escape");
+        await preview.button("Share watch link").click();
+        await preview.page.getByRole("dialog", { name: "Share watch link" }).getByRole("button", { name: "Copy watch link" }).waitFor();
+        await preview.page.keyboard.press("Escape");
+        await preview.button("Round tools").click();
+        await preview.button("Shot details").waitFor();
+        await preview.button("Invite to score").waitFor();
+        await preview.page.keyboard.press("Escape");
+        await preview.button("Next hole").click();
+        await preview.page.getByRole("heading", { name: "Hole 5" }).waitFor();
+        await weather.getByText("Wind WNW 8 mph", { exact: true }).waitFor();
+      }
+      await preview.noOverflow();
+      await preview.context.close();
+    }
+    console.log("Scorer design previews with sample weather, scores, lies and satellite imagery are in " + out);
+  } finally {
+    await browser.close();
+    await new Promise((done) => server.close(done));
+  }
 } else try {
   const phone = await makePage({ width: 390, height: 844 });
   await phone.go();
