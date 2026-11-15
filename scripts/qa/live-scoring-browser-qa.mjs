@@ -121,6 +121,7 @@ function makePlayer({ index, name, cardId, scores }) {
     startingHole: 1,
     scores: { ...scores },
     scorecards: {},
+    throws: index === 0 ? { 1: [{ n: 1, lat: 35.6312, lng: -77.3198 }] } : {},
     canEnterScorecard: true,
   };
 }
@@ -343,6 +344,9 @@ async function runCasualRoundQa(browser, origin) {
   await page.locator('.weather-strip[title="Round weather"]').waitFor();
   await waitForPageText(page, ".weather-strip", "Clear", "casual weather condition");
   await waitForPageText(page, ".weather-wind", "SSE 7 mph", "casual weather wind");
+  if (await page.getByRole("region", { name: "Card sync", exact: true }).count()) {
+    throw new Error("A fully synced saved lie must not leave a permanent status strip above the weather.");
+  }
   await waitForPageText(page, "#barTitle", qaCourse.name, "casual weather course context");
   await page.locator(".weather-wind").click();
   await page.evaluate(() => {
