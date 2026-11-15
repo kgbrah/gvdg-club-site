@@ -165,7 +165,7 @@ function clearIsolation(applied) {
 }
 
 function isFocusable(node) {
-  return Boolean(node && typeof node.focus === "function" && node.isConnected);
+  return Boolean(node?.isConnected && typeof node.focus === "function" && node.getClientRects().length && !node.closest("[inert]"));
 }
 
 export function useAccessibleDialog({
@@ -173,13 +173,16 @@ export function useAccessibleDialog({
   onClose,
   labelledBy,
   label,
+  returnFocus,
   closeOnBackdrop = true,
 } = {}) {
   const overlayRef = React.useRef(null);
   const panelRef = React.useRef(null);
   const onCloseRef = React.useRef(onClose);
+  const returnFocusRef = React.useRef(returnFocus);
   const [isolated, setIsolated] = React.useState(false);
   onCloseRef.current = onClose;
+  returnFocusRef.current = returnFocus;
 
   React.useLayoutEffect(() => {
     if (!open) return undefined;
@@ -248,12 +251,11 @@ export function useAccessibleDialog({
       }
       const first = items[0];
       const last = items[items.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      const active = document.activeElement;
+      const outsideTabOrder = !items.includes(active);
+      if (event.shiftKey ? outsideTabOrder || active === first : outsideTabOrder || active === last) {
         event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
+        (event.shiftKey ? last : first).focus();
       }
     }
 
@@ -285,9 +287,11 @@ export function useAccessibleDialog({
         document.body.style.overflow = previousOverflow;
         setIsolated(false);
       }
-      if (isFocusable(opener)) {
+      const requested = returnFocusRef.current?.();
+      const target = isFocusable(requested) ? requested : opener;
+      if (isFocusable(target)) {
         try {
-          opener.focus();
+          target.focus({ preventScroll: true });
         } catch {
           /* opener may have been disabled */
         }

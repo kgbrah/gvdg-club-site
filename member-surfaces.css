@@ -448,7 +448,6 @@ body .login-gate .member-auth-alternate .login-subtitle { margin: 0; }
 body .login-gate :is(a,button,input,select,textarea):focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; }
 
 body #membersReactDialogsApp .member-dialog { border-radius: .9rem; text-align: left; max-width: min(28rem, calc(100% - 1.8rem)); }
-body #crottsReactApp #crotts-panel { border-radius: .9rem; max-width: calc(100% - 1.25rem); }
 body #crottsReactApp :is(#crotts-close,#crotts-attach,#crotts-send,#crotts-input) { min-height: 44px; border-radius: .55rem; }
 body #crottsReactApp :is(#crotts-close,#crotts-attach) { min-width: 44px; }
 body #crottsReactApp #crotts-input { font: 1rem/1.27 Archivo, system-ui, sans-serif; }

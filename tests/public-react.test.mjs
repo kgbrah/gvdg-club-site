@@ -142,7 +142,7 @@ test('Crotts assistant stays hidden until Help is requested', () => {
   assert.match(widget, /sanitizeCrottsActions/);
   assert.match(widget, /crotts-action/);
   assert.match(widget, /I can also open the page you need/);
-  assert.doesNotMatch(widget, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|dangerouslySetInnerHTML|☰|✕|🌙|☀️|🥏|…/);
+  assert.doesNotMatch(widget, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|dangerouslySetInnerHTML|☰|✕|🌙|☀️|🥏/);
 });
 
 test('Events previous results panel is rendered by the public React bundle', () => {

@@ -36,6 +36,7 @@ test("shared a11y module provides announce and a React dialog hook without raw h
 
 test("course, player, leaderboard, manage-player, confirm-scores, score-dialog, and admin dialogs use the shared a11y hook", () => {
   const course = source("src/home-app/course-modal.js");
+  const crotts = source("src/shared/crotts-widget.js");
   const doubles = source("src/members-app/doubles-league-panel.js");
   const leaderboard = source("src/score-app/leaderboard-sheet.js");
   const manage = source("src/score-app/manage-players-sheet.js");
@@ -46,6 +47,7 @@ test("course, player, leaderboard, manage-player, confirm-scores, score-dialog, 
 
   for (const [name, src] of [
     ["course", course],
+    ["Crotts", crotts],
     ["player", doubles],
     ["leaderboard", leaderboard],
     ["manage", manage],

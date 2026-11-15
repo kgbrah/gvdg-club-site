@@ -125,8 +125,12 @@ function ScoreShell() {
           type: "button",
           key: "help",
           "aria-label": "Help",
+          "aria-haspopup": "dialog",
           title: "Help",
-          onClick: () => requestCrottsHelp(),
+          onClick: (event) => {
+            const opener = event.currentTarget;
+            requestCrottsHelp(() => opener);
+          },
         },
         [icon(CircleHelp), h("span", { className: "top-link-label", key: "label" }, "Help")],
       ),

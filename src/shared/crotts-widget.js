@@ -1,6 +1,8 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import { ImagePlus, Send, X } from "lucide-react";
 
+import { useAccessibleDialog } from "./a11y.js";
 import { resolveApiBase } from "./api-base.js";
 import { sanitizeCrottsActions } from "./crotts-actions.js";
 import { photoDataUrl, videoFrames } from "./ruling-media.js";
@@ -10,44 +12,116 @@ const AVATAR = "img/crotts.jpg";
 export const CROTTS_HELP_EVENT = "gvdg:help-request";
 
 const CROTTS_CSS = `
-#crotts-panel{position:fixed;left:18px;bottom:18px;width:340px;max-width:calc(100vw - 36px);height:520px;max-height:calc(100vh - 120px);background:var(--bg-primary);color:var(--text-primary);border:1px solid var(--border-color);border-radius:12px;box-shadow:0 20px 60px var(--card-shadow-hover);z-index:9999;display:flex;flex-direction:column;overflow:hidden;font-family:inherit}
-#crotts-head{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--secondary);color:white}
-#crotts-head img{width:36px;height:36px;border-radius:50%;object-fit:cover;object-position:center 28%;border:2px solid color-mix(in srgb, white 60%, transparent)}
-#crotts-head .t{font-weight:700;line-height:1.1}
-#crotts-head .s{font-size:11px;opacity:.85}
-#crotts-close{margin-left:auto;background:transparent;border:0;color:white;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;cursor:pointer;line-height:1;transition:background .15s ease,transform .15s ease}
-#crotts-close:hover{background:color-mix(in srgb, white 16%, transparent);transform:scale(1.03)}
-#crotts-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--bg-secondary)}
-.crotts-b{max-width:85%;padding:8px 11px;border-radius:12px;font-size:14px;line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere}
-.crotts-b.them{background:var(--bg-primary);color:var(--text-primary);border:1px solid var(--border-color);align-self:flex-start;border-bottom-left-radius:4px}
-.crotts-b.me{background:var(--secondary);color:white;align-self:flex-end;border-bottom-right-radius:4px}
-.crotts-b.err{background:var(--over-soft);color:var(--over);border:1px solid var(--over);align-self:flex-start}
-#crotts-form{display:flex;gap:6px;padding:10px;border-top:1px solid var(--border-color);background:var(--bg-primary)}
-#crotts-input{flex:1;resize:none;border:1px solid var(--border-color);border-radius:8px;padding:8px;font:inherit;font-size:14px;background:var(--bg-secondary);color:var(--text-primary)}
-#crotts-send{display:inline-flex;align-items:center;gap:0.35rem;background:var(--secondary);color:white;border:0;border-radius:8px;padding:0 13px;font-weight:700;cursor:pointer}
-#crotts-send:disabled{opacity:.5;cursor:default}
-.crotts-typing{font-size:12px;color:var(--text-muted);align-self:flex-start;padding:2px 4px}
-.crotts-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.crotts-action{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:6px 10px;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font:inherit;font-size:12px;font-weight:700;text-decoration:none;cursor:pointer}
-.crotts-action:hover{border-color:var(--secondary);color:var(--secondary)}
-#crotts-attach{display:inline-flex;align-items:center;justify-content:center;width:40px;flex:0 0 auto;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-secondary);color:var(--text-primary);cursor:pointer}
-#crotts-attach:disabled{opacity:.5;cursor:default}
-#crotts-file{display:none}
-.crotts-shot{display:flex;gap:8px;align-items:center;padding:0 10px 8px;background:var(--bg-primary);color:var(--text-muted);font-size:12px}
-.crotts-shot img{width:42px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--border-color)}
-.crotts-shot button{margin-left:auto;border:0;background:transparent;color:var(--text-primary);font:inherit;font-weight:700;cursor:pointer}
-@media (max-width:768px){#crotts-panel{left:12px;right:12px;width:auto;bottom:calc(14px + env(safe-area-inset-bottom,0px));max-height:calc(100vh - 96px)}}
-@media (max-width:768px){body.admin-page #crotts-panel,body[data-member-shell="members"] #crotts-panel{bottom:calc(4.75rem + env(safe-area-inset-bottom,0px));max-height:calc(100vh - 10.5rem);z-index:10040}}
+.crotts-overlay {
+  position: fixed; inset: 0; z-index: 12000;
+  display: grid; place-items: center;
+  box-sizing: border-box; height: 100vh; height: 100dvh;
+  padding: max(.8rem, var(--safe-top)) .8rem max(.8rem, var(--safe-bottom));
+  background: color-mix(in srgb, var(--member-chrome-bg) 66%, transparent);
+  overscroll-behavior: contain;
+}
+body .crotts-overlay > #crotts-panel {
+  box-sizing: border-box; display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(100%, 28rem); height: min(100%, 33rem); min-height: 0; max-height: 100%;
+  background: var(--bg-primary); color: var(--text-primary);
+  margin: 0; padding: 0; border: 1px solid var(--border-color); border-radius: 16px;
+  box-shadow: 0 18px 54px var(--card-shadow-hover); overflow: hidden;
+  font-family: Archivo, system-ui, sans-serif;
+}
+#crotts-panel :is(button, a, textarea):focus-visible, #crotts-thread:focus-visible {
+  outline: 2px solid var(--secondary-text); outline-offset: -3px;
+}
+#crotts-head {
+  display: flex; align-items: center; gap: .7rem; padding: .65rem .8rem;
+  background: var(--member-chrome-bg); color: var(--member-chrome-ink);
+}
+#crotts-head img {
+  flex: 0 0 42px; width: 42px; height: 42px; border-radius: 50%;
+  object-fit: cover; object-position: center 28%; border: 1px solid var(--member-chrome-line);
+}
+#crotts-head h2 { margin: 0; color: inherit; font-size: 1.15rem; font-weight: 775; line-height: 1.12; }
+#crotts-head p { margin: .12rem 0 0; color: inherit; font-size: .78rem; line-height: 1.23; }
+#crotts-panel button, .crotts-action {
+  box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px; min-width: 44px; border-radius: 9px;
+  font: 680 .84rem/1.25 Archivo, system-ui, sans-serif; cursor: pointer;
+}
+#crotts-close {
+  flex: 0 0 44px; margin-inline-start: auto;
+  border: 1px solid var(--member-chrome-line); background: transparent; color: inherit;
+}
+#crotts-close:hover { background: var(--member-chrome-hover); }
+#crotts-close:focus-visible { outline-color: var(--member-chrome-focus); }
+#crotts-thread {
+  min-height: 0; overflow: auto; overscroll-behavior: contain;
+  padding: .85rem; background: var(--bg-secondary);
+}
+#crotts-msgs { display: flex; flex-direction: column; gap: .5rem; }
+.crotts-b {
+  box-sizing: border-box; max-width: 92%; padding: .65rem .78rem;
+  border-radius: 13px; font-size: .92rem; line-height: 1.46;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.crotts-b.them {
+  align-self: flex-start; border: 1px solid var(--border-color); border-end-start-radius: 4px;
+  background: var(--bg-primary); color: var(--text-primary);
+}
+.crotts-b.me {
+  align-self: flex-end; border-end-end-radius: 4px;
+  background: var(--member-chrome-bg); color: var(--member-chrome-ink);
+}
+.crotts-actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .55rem; }
+.crotts-action {
+  max-width: 100%; padding: .35rem .62rem; border: 1px solid var(--border-color);
+  background: var(--bg-secondary); color: var(--text-primary); text-decoration: none;
+}
+.crotts-action:hover { border-color: var(--secondary-text); text-decoration: underline; }
+.crotts-composer { border-top: 1px solid var(--border-color); }
+#crotts-form { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: .35rem; padding: .55rem; }
+#crotts-input {
+  box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px;
+  resize: none; padding: .6rem .5rem; border: 1px solid var(--border-color); border-radius: 9px;
+  font: inherit; font-size: max(16px, .86rem); line-height: 1.24;
+  background: var(--bg-secondary); color: var(--text-primary);
+}
+#crotts-attach, .crotts-shot button {
+  border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);
+}
+#crotts-attach:hover:not(:disabled), .crotts-shot button:hover { border-color: var(--secondary-text); }
+#crotts-send {
+  gap: .34rem; padding: .34rem .62rem; border: 1px solid transparent;
+  background: var(--member-chrome-bg); color: var(--member-chrome-ink);
+}
+#crotts-send:hover:not(:disabled) { background: var(--member-chrome-hover); }
+#crotts-panel button:disabled { opacity: .58; cursor: default; }
+#crotts-file { display: none; }
+.crotts-shot {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center;
+  gap: .5rem; padding: .5rem .55rem 0; font-size: .82rem; line-height: 1.25;
+}
+.crotts-shot img { width: 42px; height: 42px; object-fit: cover; border-radius: 7px; border: 1px solid var(--border-color); }
+.crotts-shot button { padding: 0 .55rem; }
+.crotts-status { margin-top: .45rem; font-size: .86rem; line-height: 1.35; color: var(--text-secondary); }
+.crotts-status.error {
+  padding: .6rem .7rem; border: 1px solid var(--over); border-radius: 9px;
+  background: var(--over-soft); color: var(--text-primary);
+}
+@media (max-width: 600px) {
+  .crotts-overlay { align-items: end; padding-inline: .45rem; padding-bottom: max(.45rem, var(--safe-bottom)); }
+}
+@media (max-width: 360px) { #crotts-send svg { display: none; } }
 `;
 
 function apiBase() {
   return resolveApiBase({ datasetKeys: ["apiBase", "authBase"] });
 }
 
-function icon(Icon, size = 18) {
+function icon(Icon, size = 18, key) {
   return h(Icon, {
     "aria-hidden": "true",
     focusable: "false",
+    key,
     size,
     strokeWidth: 2.3,
   });
@@ -71,9 +145,9 @@ function clearHelpHash() {
   }
 }
 
-export function requestCrottsHelp() {
+export function requestCrottsHelp(returnFocus) {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(CROTTS_HELP_EVENT));
+  window.dispatchEvent(new CustomEvent(CROTTS_HELP_EVENT, { detail: { returnFocus } }));
 }
 
 export function CrottsHelpLink(props) {
@@ -83,7 +157,8 @@ export function CrottsHelpLink(props) {
     href: "#help",
     onClick: (event) => {
       event.preventDefault();
-      requestCrottsHelp();
+      const link = event.currentTarget;
+      requestCrottsHelp(() => props.returnFocus ? props.returnFocus(link) : link);
       props.onClick?.(event);
     },
   }, props.children ?? "Help");
@@ -97,7 +172,7 @@ function AssistantBubble({ message }) {
       ? h("div", { className: "crotts-actions", key: "actions" }, actions.map((action) => h("a", {
         className: "crotts-action",
         href: action.href,
-        key: action.id,
+        key: action.href,
       }, action.label)))
       : null,
   ]);
@@ -105,19 +180,30 @@ function AssistantBubble({ message }) {
 
 export function CrottsWidget() {
   const [open, setOpen] = React.useState(false);
-  const [busy, setBusy] = React.useState(false);
+  const [operation, setOperation] = React.useState(null);
+  const [error, setError] = React.useState("");
   const [draft, setDraft] = React.useState("");
   const [shot, setShot] = React.useState(null);
   const [messages, setMessages] = React.useState([]);
   const historyRef = React.useRef([]);
+  const operationRef = React.useRef(null);
+  const restoreFocus = React.useRef(null);
   const inputRef = React.useRef(null);
   const fileRef = React.useRef(null);
-  const messagesRef = React.useRef(null);
+  const attachRef = React.useRef(null);
+  const threadRef = React.useRef(null);
   const idCounter = React.useRef(0);
   const api = React.useMemo(apiBase, []);
+  const titleId = React.useId();
+  const busy = operation != null;
+  const dialog = useAccessibleDialog({ open, onClose: closeHelp, labelledBy: titleId,
+    label: "Crotts assistant", returnFocus: () => restoreFocus.current?.() });
 
   React.useEffect(() => {
-    function openHelp() {
+    function openHelp(event) {
+      if (dialog.panelRef.current) return;
+      const restore = event?.detail?.returnFocus;
+      restoreFocus.current = typeof restore === "function" ? restore : null;
       setOpen(true);
     }
     function openHelpFromHash() {
@@ -137,40 +223,40 @@ export function CrottsWidget() {
     setMessages((current) => {
       if (current.length) return current;
       return [{
-        content: "Hey, I'm Crotts. Ask me about GVDG events, courses, how to use the site, or a rules question. Attach a photo or a short video of the lie and I'll read it. I can also open the page you need.",
+        content: "Ask me about club events, courses, scoring, or rules questions. Share a photo or short video of a lie for help with a ruling. I can also open the page you need.",
         id: messageId(idCounter),
         kind: "them",
       }];
     });
-    window.setTimeout(() => inputRef.current?.focus(), 50);
   }, [open]);
 
   React.useEffect(() => {
-    if (!messagesRef.current) return;
-    messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
-  }, [messages, busy]);
+    const thread = threadRef.current;
+    if (thread) thread.scrollTop = thread.scrollHeight;
+  }, [messages, busy, error]);
 
   function closeHelp() {
     setOpen(false);
     clearHelpHash();
   }
 
+  function updateOperation(next) {
+    operationRef.current = next;
+    setOperation(next);
+  }
+
   async function onPickFile(event) {
-    const file = event.target.files && event.target.files[0];
+    const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file || busy) return;
-    setBusy(true);
+    if (!file || operationRef.current) return;
+    inputRef.current?.focus({ preventScroll: true });
+    updateOperation("attachment");
+    setError("");
     try {
       const video = file.type.startsWith("video/");
       const images = video ? await videoFrames(file) : [await photoDataUrl(file)].filter(Boolean);
       if (!images.length) {
-        setMessages((current) => current.concat({
-          content: video
-            ? "I couldn't pull a frame from that video. Try a photo of the lie."
-            : "I couldn't read that photo. Try another one.",
-          id: messageId(idCounter),
-          kind: "err",
-        }));
+        setError(video ? "No frames were found in this video. Try a photo of the lie." : "Couldn’t read that photo. Try another one.");
         return;
       }
       setShot({
@@ -180,27 +266,21 @@ export function CrottsWidget() {
         preview: images[0],
       });
     } catch {
-      setMessages((current) => current.concat({
-        content: "I couldn't read that file. Try a photo of the lie.",
-        id: messageId(idCounter),
-        kind: "err",
-      }));
+      setError("Couldn’t read that file. Try a photo of the lie.");
     } finally {
-      setBusy(false);
+      updateOperation(null);
     }
   }
 
   async function sendMessage() {
     const text = draft.trim();
     const attachment = shot;
-    if ((!text && !attachment) || busy) return;
+    if ((!text && !attachment) || operationRef.current) return;
 
-    setBusy(true);
-    setDraft("");
-    setShot(null);
-    const shown = [text, attachment ? attachment.label : ""].filter(Boolean).join("\n");
-    setMessages((current) => current.concat({ content: shown, id: messageId(idCounter), kind: "me" }));
-
+    inputRef.current?.focus({ preventScroll: true });
+    updateOperation("send");
+    setError("");
+    const shown = [text, attachment?.label].filter(Boolean).join("\n");
     try {
       const payload = { message: text, history: historyRef.current.slice(-8) };
       if (attachment) {
@@ -212,130 +292,131 @@ export function CrottsWidget() {
         headers: { "Content-Type": "application/json" },
         method: "POST",
       });
-
-      if (response.status === 429) {
-        setMessages((current) => current.concat({
-          content: "I'm getting a lot of questions right now. Give me a minute and try again.",
-          id: messageId(idCounter),
-          kind: "err",
-        }));
-        return;
-      }
       if (!response.ok) {
-        setMessages((current) => current.concat({
-          content: "Sorry, I couldn't reach the club assistant just now.",
-          id: messageId(idCounter),
-          kind: "err",
-        }));
+        setError(response.status === 429 ? "Crotts is getting a lot of questions. Try again in a minute." : "Crotts couldn’t answer. Try sending your question again.");
         return;
       }
-
       const data = await response.json();
-      const reply = data && data.reply ? String(data.reply) : "Hmm, I didn't catch that.";
-      const actions = sanitizeCrottsActions(data && data.actions);
-      setMessages((current) => current.concat({ actions, content: reply, id: messageId(idCounter), kind: "them" }));
+      const reply = data?.reply ? String(data.reply) : "Hmm, I didn't catch that.";
+      const actions = sanitizeCrottsActions(data?.actions);
+      setMessages((current) => current.concat(
+        { content: shown, id: messageId(idCounter), kind: "me" },
+        { actions, content: reply, id: messageId(idCounter), kind: "them" },
+      ));
+      setDraft("");
+      setShot(null);
       historyRef.current = historyRef.current.concat(
         { role: "user", content: shown },
         { role: "assistant", content: reply },
       ).slice(-16);
     } catch {
-      setMessages((current) => current.concat({
-        content: "Network hiccup - I couldn't reach the assistant.",
-        id: messageId(idCounter),
-        kind: "err",
-      }));
+      setError("Couldn’t connect to Crotts. Check your connection and try again.");
     } finally {
-      setBusy(false);
-      window.setTimeout(() => inputRef.current?.focus(), 0);
+      updateOperation(null);
     }
   }
 
   if (!open) return null;
 
-  return h(React.Fragment, null, [
+  return createPortal(h("div", {
+    "data-a11y-overlay": "true",
+    className: "crotts-overlay",
+    ref: dialog.overlayRef,
+    role: "presentation",
+  }, [
     h("style", { key: "style" }, CROTTS_CSS),
-    h("section", {
-      "aria-label": "Crotts assistant",
-      "aria-modal": "true",
+    h("div", {
+      "aria-labelledby": titleId,
+      "aria-modal": dialog.isolated ? "true" : undefined,
       id: "crotts-panel",
       key: "panel",
+      ref: dialog.panelRef,
       role: "dialog",
+      tabIndex: -1,
     }, [
       h("div", { id: "crotts-head", key: "head" }, [
-        h("img", { alt: "Crotts", key: "avatar", src: AVATAR }),
+        h("img", { alt: "", key: "avatar", src: AVATAR }),
         h("div", { key: "titles" }, [
-          h("div", { className: "t", key: "title" }, "Crotts"),
-          h("div", { className: "s", key: "subtitle" }, "GVDG assistant"),
+          h("h2", { "aria-label": "Crotts assistant", id: titleId, key: "title" }, "Crotts"),
+          h("p", { key: "subtitle" }, "Club assistant"),
         ]),
         h("button", {
           "aria-label": "Close Crotts assistant",
           id: "crotts-close",
           key: "close",
           onClick: closeHelp,
-          title: "Close",
           type: "button",
         }, icon(X, 20)),
       ]),
-      h("div", { id: "crotts-msgs", key: "messages", ref: messagesRef }, [
-        ...messages.map((message) => h(AssistantBubble, { key: message.id, message })),
-        busy ? h("div", { className: "crotts-typing", key: "typing" }, shot ? "Crotts is looking..." : "Crotts is typing...") : null,
+      h("div", { "aria-label": "Conversation", id: "crotts-thread", key: "thread", ref: threadRef, role: "region", tabIndex: 0 }, [
+        h("div", { "aria-label": "Messages", id: "crotts-msgs", key: "messages", role: "log" },
+          messages.map((message) => h(AssistantBubble, { key: message.id, message }))),
+        busy && h("div", { className: "crotts-status", key: "progress", role: "status" }, operation === "attachment"
+          ? "Preparing attachment…" : shot ? "Crotts is looking at your attachment…" : "Waiting for Crotts…"),
+        error && h("div", { className: "crotts-status error", key: "error", role: "alert" }, error),
       ]),
-      shot ? h("div", { className: "crotts-shot", key: "shot" }, [
-        h("img", { alt: "", key: "preview", src: shot.preview }),
-        h("span", { key: "label" }, shot.label + ". A still is a helper, not the card's call."),
-        h("button", { key: "clear", onClick: () => setShot(null), type: "button" }, "Remove"),
-      ]) : null,
-      h("form", {
-        id: "crotts-form",
-        key: "form",
-        onSubmit: (event) => {
-          event.preventDefault();
-          void sendMessage();
-        },
-      }, [
-        h("input", {
-          accept: "image/*,video/*",
-          id: "crotts-file",
-          key: "file",
-          onChange: (event) => { void onPickFile(event); },
-          ref: fileRef,
-          type: "file",
-        }),
-        h("button", {
-          "aria-label": "Attach a photo or video of the lie",
-          disabled: busy,
-          id: "crotts-attach",
-          key: "attach",
-          onClick: () => fileRef.current?.click(),
-          title: "Photo or video of the lie",
-          type: "button",
-        }, icon(ImagePlus, 18)),
-        h("textarea", {
-          "aria-label": "Message Crotts",
-          id: "crotts-input",
-          key: "input",
-          onChange: (event) => setDraft(event.target.value),
-          onKeyDown: (event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              void sendMessage();
-            }
+      h("div", { className: "crotts-composer", key: "composer" }, [
+        shot && h("div", { className: "crotts-shot", key: "shot" }, [
+          h("img", { alt: "", key: "preview", src: shot.preview }),
+          h("span", { key: "label", role: "status" }, shot.label),
+          h("button", { "aria-label": "Remove attachment", disabled: busy, key: "clear", onClick: () => {
+            attachRef.current?.focus({ preventScroll: true });
+            setShot(null);
+          }, type: "button" }, "Remove"),
+        ]),
+        h("form", {
+          id: "crotts-form",
+          key: "form",
+          onSubmit: (event) => {
+            event.preventDefault();
+            void sendMessage();
           },
-          placeholder: shot ? "What's the ruling?" : "Ask Crotts...",
-          ref: inputRef,
-          rows: 1,
-          value: draft,
-        }),
-        h("button", {
-          disabled: busy || (!draft.trim() && !shot),
-          id: "crotts-send",
-          key: "send",
-          type: "submit",
         }, [
-          icon(Send, 15),
-          h("span", { key: "label" }, busy ? "Sending" : "Send"),
+          h("input", {
+            accept: "image/*,video/*",
+            id: "crotts-file",
+            key: "file",
+            onChange: (event) => { void onPickFile(event); },
+            ref: fileRef,
+            type: "file",
+          }),
+          h("button", {
+            "aria-label": "Attach a photo or video of the lie",
+            disabled: busy,
+            id: "crotts-attach",
+            key: "attach",
+            onClick: () => fileRef.current?.click(),
+            ref: attachRef,
+            type: "button",
+          }, icon(ImagePlus)),
+          h("textarea", {
+            "aria-label": "Message Crotts",
+            id: "crotts-input",
+            key: "input",
+            onChange: (event) => setDraft(event.target.value),
+            onKeyDown: (event) => {
+              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                void sendMessage();
+              }
+            },
+            placeholder: shot ? "Ask about the lie" : "Ask Crotts",
+            readOnly: busy,
+            ref: inputRef,
+            rows: 1,
+            value: draft,
+          }),
+          h("button", {
+            disabled: busy || (!draft.trim() && !shot),
+            id: "crotts-send",
+            key: "send",
+            type: "submit",
+          }, [
+            icon(Send, 15, "icon"),
+            h("span", { key: "label" }, operation === "send" ? "Sending" : "Send"),
+          ]),
         ]),
       ]),
     ]),
-  ]);
+  ]), document.body);
 }
