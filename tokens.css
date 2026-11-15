@@ -310,6 +310,7 @@ body.player-theme-page header .nav-more-menu {
   }
 }
 
+.is-sheet-dragging { touch-action: none; }
 #gvdg-a11y-announcer {
   position: absolute;
   width: 1px;

@@ -147,7 +147,7 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.doesNotMatch(html, /\.dtab-off/);
   assert.doesNotMatch(html, /members-react-(shell|overview|ratings|registration|board|tee-signs|club)-ready/);
   assertNoLegacyMemberFallbacks(html);
-  assert.match(html, /<script type="module" src="members-app\/members-app\.js\?v=192"><\/script>/);
+  assert.match(html, /<script type="module" src="members-app\/members-app\.js\?v=193"><\/script>/);
   assert.doesNotMatch(html, /matchplay-colors\.js/);
   assert.match(app, /createRoot\(pageChromeMount\)\.render\(profileKey.*h\(MemberPageChrome\)\)/);
   assert.match(app, /createRoot\(authMount\)\.render/);
@@ -320,6 +320,7 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(dialogs, /export function MemberDialogs\(\)/);
   assert.match(dialogs, /export function memberAlert\(options\)/);
   assert.match(dialogs, /export function memberConfirm\(options\)/);
+  assert.match(dialogs, /useAccessibleDialog/);
   assert.match(dialogs, /role: "dialog"/);
   assert.match(dialogs, /aria-modal/);
   assert.match(overview, /data-react-overview-dashboard/);

@@ -265,7 +265,7 @@ export function useAccessibleDialog({
     }
 
     let swipeCleanup = () => {};
-    if (closeOnBackdrop && panel.classList.contains("sheet")) {
+    if (closeOnBackdrop) {
       let startX = 0;
       let startY = 0;
       let startTime = 0;

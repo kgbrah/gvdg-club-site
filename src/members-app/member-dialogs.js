@@ -1,4 +1,5 @@
 import React from "react";
+import { useAccessibleDialog } from "../shared/a11y.js";
 
 const h = React.createElement;
 const subscribers = new Set();
@@ -51,6 +52,14 @@ export function memberConfirm(options) {
 
 export function MemberDialogs() {
   const [dialog, setDialog] = React.useState(activeDialog);
+  const titleId = dialog ? `memberDialogTitle-${dialog.id}` : "memberDialogTitle";
+  const bodyId = dialog ? `memberDialogBody-${dialog.id}` : "memberDialogBody";
+  const a11y = useAccessibleDialog({
+    open: Boolean(dialog),
+    onClose: () => settle(dialog && dialog.type === "confirm" ? false : true),
+    labelledBy: titleId,
+    label: dialog?.title || "Notice",
+  });
 
   React.useEffect(() => {
     subscribers.add(setDialog);
@@ -58,32 +67,22 @@ export function MemberDialogs() {
     return () => subscribers.delete(setDialog);
   }, []);
 
-  React.useEffect(() => {
-    if (!dialog) return undefined;
-    function onKeyDown(event) {
-      if (event.key === "Escape") settle(dialog.type === "confirm" ? false : true);
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [dialog]);
-
   if (!dialog) return null;
-  const titleId = `memberDialogTitle-${dialog.id}`;
-  const bodyId = `memberDialogBody-${dialog.id}`;
   const confirmClass = `member-dialog-btn primary${dialog.tone === "danger" ? " danger" : ""}`;
 
   return h("div", {
     className: "member-dialog-overlay active",
+    "data-a11y-overlay": "true",
     role: "presentation",
-    onClick: (event) => {
-      if (event.currentTarget === event.target) settle(dialog.type === "confirm" ? false : true);
-    },
+    ref: a11y.overlayRef,
   }, h("div", {
     className: `member-dialog${dialog.tone ? ` ${dialog.tone}` : ""}`,
     role: "dialog",
-    "aria-modal": "true",
+    "aria-modal": a11y.isolated ? "true" : undefined,
     "aria-labelledby": titleId,
     "aria-describedby": bodyId,
+    ref: a11y.panelRef,
+    tabIndex: -1,
   }, [
     h("div", { className: "member-dialog-title", id: titleId, key: "title" }, dialog.title),
     h("p", { className: "member-dialog-message", id: bodyId, key: "message" }, dialog.message),

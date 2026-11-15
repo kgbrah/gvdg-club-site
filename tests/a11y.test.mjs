@@ -28,7 +28,8 @@ test("shared a11y module provides announce and a React dialog hook without raw h
   assert.match(a11y, /Escape/);
   assert.match(a11y, /touchmove/);
   assert.match(a11y, /translateY/);
-  assert.match(a11y, /classList\.contains\("sheet"\)/);
+  assert.match(a11y, /if \(closeOnBackdrop\)/);
+  assert.doesNotMatch(a11y, /classList\.contains\("sheet"\)/);
   assert.match(a11y, /pagehide/);
   assert.match(a11y, /gvdg-a11y-announcer/);
   assert.doesNotMatch(a11y, /#[0-9A-Fa-f]{3,8}\b/);
