@@ -104,7 +104,7 @@ describe("discGolfApiUrl", () => {
 
 describe("defaultPar3Holes", () => {
   it("builds exclusive par-3 holes for a card-ready layout", () => {
-    expect(defaultPar3Holes(9)).toEqual(Array.from({ length: 9 }, (_, i) => ({ hole: i + 1, par: 3 })));
+    expect(defaultPar3Holes(9)).toEqual(Array.from({ length: 9 }, (_, i) => ({ hole: i + 1, par: 3, par_source: "placeholder" })));
   });
 });
 

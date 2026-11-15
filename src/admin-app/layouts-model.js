@@ -64,6 +64,8 @@ export function rowFromHole(hole, index = 0) {
     key: `hole-${index}-${normalizeText(source.hole, index + 1)}`,
     manualDistance: source.manual_distance == null ? "" : String(source.manual_distance),
     par: String(verified ? verified.par : source.par ?? 3),
+    originalPar: source.par,
+    parSource: source.par_source,
     target: positionFromHole(source.target),
     tee: positionFromHole(source.tee),
     verified,
@@ -118,12 +120,18 @@ export function parseLayoutHoles(layout) {
 export function normalizeLayout(layout, index = 0) {
   const source = objectOrEmpty(layout);
   const id = source.id == null ? "" : String(source.id);
-  const holes = parseLayoutHoles(source);
+  const name = normalizeText(source.name, id ? `Layout #${id}` : "Layout");
+  const holes = parseLayoutHoles(source).map((hole) => {
+    if (name.trim().toLowerCase() === "default (par 3s)" && Number(hole?.par) === 3 && !hole.par_source) {
+      return { ...hole, par_source: "placeholder" };
+    }
+    return hole;
+  });
   return {
     holes,
     id,
     key: id || `layout-${index}`,
-    name: normalizeText(source.name, id ? `Layout #${id}` : "Layout"),
+    name,
     source,
     totalPar: source.total_par == null ? null : Number(source.total_par),
   };
@@ -134,11 +142,16 @@ function positionPayload(position) {
 }
 
 export function layoutPayload(rows) {
-  return rows.map((row, index) => ({
-    hole: index + 1,
-    manual_distance: parseNumber(row.manualDistance),
-    par: parseInt(row.par, 10),
-    target: positionPayload(row.target),
-    tee: positionPayload(row.tee),
-  }));
+  return rows.map((row, index) => {
+    const par = parseInt(row.par, 10);
+    const parSource = row.parSource ? (par === Number(row.originalPar) ? row.parSource : "recorded") : null;
+    return {
+      hole: index + 1,
+      manual_distance: parseNumber(row.manualDistance),
+      par,
+      ...(parSource ? { par_source: parSource } : {}),
+      target: positionPayload(row.target),
+      tee: positionPayload(row.tee),
+    };
+  });
 }

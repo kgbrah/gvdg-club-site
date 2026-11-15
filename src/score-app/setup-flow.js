@@ -1,16 +1,14 @@
 import React from "react";
-import { ArrowLeft, ChevronRight, LogOut, Navigation, PlayCircle, Search } from "lucide-react";
+import { ArrowLeft, ChevronRight, LogOut, Navigation, PlayCircle, Search, Star } from "lucide-react";
 import {
   BROWSE_MAPPED_LIMIT,
   CLUB_ORIGIN,
   COURSE_RANGE_DEFAULT,
   COURSE_RANGES,
-  courseHasMap,
   courseSub,
   coursesForPickScreen,
   filterCoursesForPick,
   googleMapsDirectionsUrl,
-  layoutHasMap,
   readLastCourse,
   sortLayoutsForPick,
   teeSignCaptureHref,
@@ -19,6 +17,10 @@ import { HoleMap } from "../shared/hole-map.js";
 import { safeExternalUrl } from "../shared/safe-url.js";
 import { resolveApiBase } from "../shared/api-base.js";
 import { courseTrafficMatch, trafficHoleLine, trafficSummary } from "../shared/course-traffic.js";
+import { COVERAGE_LABELS, courseCoverage, layoutQuality, mapCoordinates } from "../shared/course-quality.js";
+import { coursePackKey } from "../shared/course-packs.js";
+import { useCourseFavorites } from "./course-favorites.js";
+import { coursePackDate, PackLayoutActions, SavedCoursesView, SavedLayoutPreview, useCoursePacks } from "./saved-courses-view.js";
 
 const h = React.createElement;
 
@@ -40,19 +42,20 @@ function BackButton({ onBack }) {
   );
 }
 
-function MapBadge({ mapped }) {
+function MapBadge({ coverage, course }) {
+  const label = coverage === "full" && course ? "Fully mapped layout" : COVERAGE_LABELS[coverage];
   return h("span", {
-    className: mapped ? "course-map-badge" : "course-map-badge missing",
+    className: coverage === "full" || coverage === "partial" ? "course-map-badge" : "course-map-badge missing",
     key: "map",
-  }, mapped ? "Mapped" : "No map");
+  }, label);
 }
 
-function CourseMeta({ text, mapped, lastPlayed, traffic }) {
+function CourseMeta({ text, coverage, course, lastPlayed, traffic }) {
   return h("div", { className: "sub-row", key: "meta" }, [
     text ? h("div", { className: "sub", key: "sub" }, text) : null,
     traffic ? h("div", { className: "sub course-traffic-sub", key: "traffic" }, traffic) : null,
     lastPlayed ? h("span", { className: "course-map-badge last", key: "last" }, "Last played") : null,
-    h(MapBadge, { mapped }),
+    h(MapBadge, { key: "map", coverage, course }),
   ]);
 }
 
@@ -96,12 +99,14 @@ function readRecentRounds() {
 
 function HomeView({ onStart, onJoin, onInvalidCode, onSignOut, onSignIn, onWatch, signedIn, playerName }) {
   const [joinCode, setJoinCode] = React.useState("");
+  const [showSaved, setShowSaved] = React.useState(false);
   const submitJoin = () => {
     const code = joinCode.toUpperCase().replace(/[^A-Z0-9]/g, "");
     if (code.length >= 4) onJoin(code);
     else onInvalidCode();
   };
   const recent = readRecentRounds();
+  if (showSaved) return h(SavedCoursesView, { onBack: () => setShowSaved(false) });
 
   return h("div", { className: "stack" }, [
     h("div", { className: "card stack", key: "card" }, [
@@ -121,6 +126,7 @@ function HomeView({ onStart, onJoin, onInvalidCode, onSignOut, onSignIn, onWatch
         { className: "btn", type: "button", onClick: onStart, key: "start" },
         [icon(PlayCircle), "Start a casual round"],
       ),
+      h("button", { className: "btn secondary", type: "button", key: "saved", onClick: () => setShowSaved(true) }, "Saved course layouts"),
       h("label", { className: "lbl", htmlFor: "joinRoundCode", key: "joinLabel" }, "Join with a code"),
       h("input", {
         className: "field",
@@ -178,25 +184,43 @@ function HomeView({ onStart, onJoin, onInvalidCode, onSignOut, onSignIn, onWatch
 }
 
 function useDeviceOrigin() {
-  const [origin, setOrigin] = React.useState(null);
+  const [state, setState] = React.useState({ origin: null, status: "idle" });
+  const request = React.useRef(0);
+  React.useEffect(() => () => { request.current += 1; }, []);
+  function locate() {
+    const id = ++request.current;
+    if (!navigator.geolocation) {
+      setState({ origin: null, status: "unavailable" });
+      return;
+    }
+    setState({ origin: null, status: "loading" });
+    navigator.geolocation.getCurrentPosition((position) => {
+      if (id !== request.current) return;
+      const origin = mapCoordinates({ lat: position.coords?.latitude, lng: position.coords?.longitude });
+      setState({ origin, status: origin ? "ready" : "unavailable" });
+    }, () => {
+      if (id === request.current) setState({ origin: null, status: "unavailable" });
+    }, { enableHighAccuracy: false, maximumAge: 120000, timeout: 10000 });
+  }
+  const reset = () => {
+    request.current += 1;
+    setState({ origin: null, status: "idle" });
+  };
+  return { ...state, locate, reset };
+}
+
+function useOnlineStatus() {
+  const [online, setOnline] = React.useState(() => globalThis.navigator?.onLine !== false);
   React.useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) return undefined;
-    let cancelled = false;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords && pos.coords.latitude;
-        const lng = pos.coords && pos.coords.longitude;
-        if (cancelled || !Number.isFinite(lat) || !Number.isFinite(lng)) return;
-        setOrigin({ lat, lng });
-      },
-      () => {},
-      { enableHighAccuracy: false, maximumAge: 120000, timeout: 10000 },
-    );
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
     return () => {
-      cancelled = true;
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
     };
   }, []);
-  return origin;
+  return online;
 }
 
 function useCourseTraffic() {
@@ -227,26 +251,34 @@ function CoursePickView({ courses, onBack, onSelect }) {
   const [query, setQuery] = React.useState("");
   const [range, setRange] = React.useState(COURSE_RANGE_DEFAULT);
   const [rangeTouched, setRangeTouched] = React.useState(false);
-  const origin = useDeviceOrigin();
+  const [coverage, setCoverage] = React.useState("");
+  const [favoritesOnly, setFavoritesOnly] = React.useState(false);
+  const [savedOnly, setSavedOnly] = React.useState(false);
+  const device = useDeviceOrigin();
+  const online = useOnlineStatus();
+  const favoriteState = useCourseFavorites();
+  const { packs } = useCoursePacks();
+  const [showSaved, setShowSaved] = React.useState(false);
   const lastPlayed = React.useMemo(() => readLastCourse(), []);
   const traffic = useCourseTraffic();
+  const savedIds = new Set(packs.map((pack) => String(pack.course.id)));
   const browsing = !query.trim();
-  const sortOrigin = origin || CLUB_ORIGIN;
+  const sortOrigin = device.origin || CLUB_ORIGIN;
+  const filterOptions = { coverage, favoritesOnly, favoriteIds: favoriteState.favorites, savedOnly, savedIds };
   const filtered = coursesForPickScreen(courses, query, range, sortOrigin, {
-    lastCourseId: browsing ? lastPlayed && lastPlayed.id : null,
+    ...filterOptions, lastCourseId: browsing ? lastPlayed?.id : null,
   });
-  const mappedCount = filtered.filter(courseHasMap).length;
-  const hidden = browsing && range !== "all" && filterCoursesForPick(courses, "", range, sortOrigin).length > filtered.length;
+  const hidden = browsing && range !== "all" && filterCoursesForPick(courses, "", range, sortOrigin, filterOptions).length > filtered.length;
 
   function onQuery(value) {
     setQuery(value);
     if (!rangeTouched) setRange(value.trim() ? "all" : COURSE_RANGE_DEFAULT);
   }
-
-  const count = browsing
-    ? `${filtered.length} nearby mapped course${filtered.length === 1 ? "" : "s"}${origin ? "" : " near the club"} · maps first, then nearest`
-    : `${filtered.length} course${filtered.length === 1 ? "" : "s"}${mappedCount ? ` · ${mappedCount} mapped` : ""} · maps first, then nearest`;
-
+  function toggleList(set, current) {
+    set(!current);
+    if (!current && !rangeTouched) setRange("all");
+  }
+  if (showSaved) return h(SavedCoursesView, { onBack: () => setShowSaved(false) });
   return h("div", { className: "stack" }, [
     h(BackButton, { onBack, key: "back" }),
     h("h2", { className: "section", key: "title" }, "Pick a course"),
@@ -269,16 +301,30 @@ function CoursePickView({ courses, onBack, onSelect }) {
         id: "courseSearch",
         key: "input",
         value: query,
-        placeholder: "Name or city — search every course",
+        placeholder: "Course name, city, or layout",
         enterKeyHint: "search",
         onChange: (event) => onQuery(event.target.value),
       }),
     ]),
-    h("p", { className: "muted", key: "hint" }, browsing
-      ? `Closest mapped courses${hidden ? `, up to ${BROWSE_MAPPED_LIMIT}` : ""}. Type a name to search the full list.`
-      : "Search covers every course. Narrow it with the radius if you want."),
+    h("div", { className: "course-map-holes", key: "tools" }, [
+      h("button", { className: "btn ghost small", type: "button", key: "near", "aria-pressed": Boolean(device.origin),
+        disabled: device.status === "loading", onClick: device.origin ? device.reset : device.locate },
+        device.status === "loading" ? "Finding location…" : device.origin ? "Use Greenville instead" : "Use my location"),
+      favoriteState.available ? h("button", { className: "btn ghost small", key: "favorites", type: "button",
+        "aria-pressed": favoritesOnly, onClick: () => toggleList(setFavoritesOnly, favoritesOnly) }, "Favorites") : null,
+      h("button", { className: "btn ghost small", key: "saved", type: "button", onClick: () => setShowSaved(true) }, "Saved layouts"),
+      online && packs.length ? h("button", { className: "btn ghost small", key: "savedOnly", type: "button",
+        "aria-pressed": savedOnly, onClick: () => toggleList(setSavedOnly, savedOnly) }, "Courses with downloads") : null,
+    ]),
+    device.status === "unavailable" ? h("p", { key: "location", className: "muted", role: "status" }, "Location unavailable. Showing distances from Greenville.") : null,
+    favoriteState.error ? h("p", { key: "favoriteError", className: "muted", role: "status" }, favoriteState.error) : null,
+    h("label", { className: "lbl", key: "coverage" }, "Map coverage",
+      h("select", { className: "field", value: coverage, onChange: (event) => setCoverage(event.target.value) }, [
+        h("option", { key: "all", value: "" }, "Any coverage"),
+        ...Object.entries(COVERAGE_LABELS).reverse().map(([id, label]) => h("option", { key: id, value: id }, label)),
+      ])),
     h("div", { className: "course-range", key: "range" }, [
-      h("label", { className: "lbl", htmlFor: "courseRadius", key: "radiusLabel" }, "Search radius"),
+      h("label", { className: "lbl", htmlFor: "courseRadius", key: "radiusLabel" }, device.origin ? "Radius from your location" : "Radius from Greenville"),
       h(
         "select",
         {
@@ -297,12 +343,16 @@ function CoursePickView({ courses, onBack, onSelect }) {
         ),
       ),
     ]),
-    h("p", { className: "muted", key: "count" }, filtered.length ? count : "No courses match that search."),
+    h("p", { className: "muted", key: "count" }, !online && !filtered.length ? "The course catalog needs a connection. You can open your saved layouts." :
+      filtered.length ? filtered.length + " course" + (filtered.length === 1 ? "" : "s") +
+        (hidden ? " · Showing up to " + BROWSE_MAPPED_LIMIT + " nearby mapped courses. Choose All courses to browse more." : "") : "No courses match your filters."),
     filtered.length
       ? filtered.map((course) => {
-          const mapped = courseHasMap(course);
+          const level = courseCoverage(course);
+          const favorite = favoriteState.favorites.has(String(course.id));
           const last = lastPlayed && String(lastPlayed.id) === String(course.id);
           const live = courseTrafficMatch(traffic, course);
+          const updated = Array.isArray(course.layouts) ? coursePackDate(course.layouts.map((layout) => layout.updated_at).filter(Boolean).sort().at(-1)) : "";
           return h(
             "div",
             { className: "tap-row", key: course.id || course.name },
@@ -313,23 +363,19 @@ function CoursePickView({ courses, onBack, onSelect }) {
                 [
                   h("div", { className: "grow", key: "content" }, [
                     h("div", { className: "title", key: "title" }, course.name),
-                    h(CourseMeta, { text: courseSub(course, sortOrigin), mapped, lastPlayed: last, traffic: live ? trafficSummary(live) : "", key: "meta" }),
+                    h(CourseMeta, { text: [courseSub(course, sortOrigin), updated ? "Layout updated " + updated : ""].filter(Boolean).join(" · "),
+                      coverage: level, course: true, lastPlayed: last, traffic: live ? trafficSummary(live) : "", key: "meta" }),
                   ]),
                   h("div", { className: "chev", key: "chev" }, icon(ChevronRight)),
                 ],
               ),
-              mapped
-                ? null
-                : h(
-                    "a",
-                    {
-                      className: "course-map-capture",
-                      href: teeSignCaptureHref(course),
-                      key: "capture",
-                      onClick: (event) => event.stopPropagation(),
-                    },
-                    "Add a map",
-                  ),
+              favoriteState.available ? h("button", { className: "course-directions", key: "favorite", type: "button",
+                disabled: favoriteState.loading || Boolean(favoriteState.busy), "aria-pressed": favorite,
+                "aria-label": (favorite ? "Remove " : "Add ") + course.name + (favorite ? " from favorites" : " to favorites"),
+                title: favorite ? "Remove favorite" : "Add favorite",
+                onClick: () => favoriteState.toggle(course.id),
+              }, h(Star, { size: 18, fill: favorite ? "currentColor" : "none", "aria-hidden": true })) : null,
+              level !== "full" ? h("a", { className: "course-map-capture", key: "capture", href: teeSignCaptureHref(course) }, "Add a map") : null,
               h(DirectionsLink, { course, origin: sortOrigin, key: "dir" }),
             ],
           );
@@ -339,45 +385,83 @@ function CoursePickView({ courses, onBack, onSelect }) {
   ]);
 }
 
+const MISSING_LAYOUT_LABELS = {
+  tee: "tee", basket: "basket", par: "par", "confirmed-par": "confirmed par", "distinct-positions": "separate tee and basket positions",
+};
+
+function LayoutCoverageDetails({ layout, quality }) {
+  const missing = quality.holes.filter((hole) => hole.missing.length);
+  const updated = [layout.updated_at, layout.map_updated_at].filter(Boolean).sort().at(-1);
+  const date = coursePackDate(updated || layout.created_at);
+  return h("div", { className: "stack" }, [
+    h("p", { className: "muted", key: "summary" }, [
+      quality.mappedCount + " of " + quality.holeCount + " layout holes have a tee and basket.",
+      quality.placeholderPars ? " " + quality.placeholderPars + " placeholder " + (quality.placeholderPars === 1 ? "par." : "pars.") : "",
+      quality.teeSignPars ? " " + quality.teeSignPars + " " + (quality.teeSignPars === 1 ? "par is" : "pars are") + " approved from tee signs." : "",
+      date ? " " + (updated ? "Layout data updated " : "Layout record added ") + date + "." : "",
+    ].join("")),
+    missing.length || quality.invalidRows || quality.unlistedHoles ? h("details", { key: "gaps" }, [
+      h("summary", { key: "heading" }, "Missing hole data"),
+      h("ul", { key: "gaps" }, [
+        ...missing.map((hole) => h("li", { key: hole.hole }, "Hole " + hole.hole + " needs " + hole.missing.map((key) => MISSING_LAYOUT_LABELS[key]).join(", "))),
+        quality.invalidRows ? h("li", { key: "invalid" }, quality.invalidRows + " invalid or duplicate hole records") : null,
+        quality.unlistedHoles ? h("li", { key: "unlisted" }, quality.unlistedHoles + " expected holes are missing from the layout") : null,
+      ]),
+    ]) : null,
+  ]);
+}
+
 function LayoutPickView({ course, layouts, onBack, onSelect }) {
   const sorted = sortLayoutsForPick(layouts);
-  const mapped = sorted.some(layoutHasMap);
+  const { packs, refresh } = useCoursePacks();
+  const [savedPreview, setSavedPreview] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const [status, setStatus] = React.useState("");
+  const [query, setQuery] = React.useState("");
+  const online = useOnlineStatus();
+  const coursePacks = packs.filter((pack) => String(pack.course.id) === String(course.id));
+  const visible = sorted.filter((layout) => String(layout.name || "").toLowerCase().includes(query.trim().toLowerCase()));
+  const catalogIds = new Set(sorted.map((layout) => coursePackKey(course.id, layout.id)));
+  if (savedPreview) return h(SavedLayoutPreview, { pack: savedPreview, key: savedPreview.key, onBack: () => setSavedPreview(null) });
   return h("div", { className: "stack" }, [
     h(BackButton, { onBack, key: "back" }),
     h("h2", { className: "section", key: "title" }, course.name),
-    mapped
-      ? null
-      : h("div", { className: "card stack", key: "unmapped" }, [
-          h("p", { className: "muted", key: "copy" }, "This course has no hole map yet. You can still start a round, or photograph a tee sign so the next card has a map."),
-          h(
-            "a",
-            { className: "btn secondary", href: teeSignCaptureHref(course), key: "capture" },
-            "Capture a tee sign",
-          ),
+    h("label", { className: "lbl", key: "search" }, "Search layouts",
+      h("input", { className: "field", placeholder: "Layout name", type: "search", value: query,
+        onChange: (event) => setQuery(event.target.value) })),
+    !online ? h("p", { className: "muted", key: "offline" }, "You can view saved layouts offline. Starting a round here needs a connection.") : null,
+    h("p", { className: "muted", key: "packInfo" }, "Offline saves include available hole data and schematic maps."),
+    h("p", { className: "muted", key: "status", role: "status" }, status),
+    ...visible.map((layout) => {
+      const quality = layoutQuality(layout);
+      const pack = coursePacks.find((row) => row.key === coursePackKey(course.id, layout.id));
+      return h("section", { className: "card stack", key: layout.id || layout.name }, [
+        h("button", {
+          className: "tap-row", type: "button", onClick: () => onSelect(layout), key: "start",
+          disabled: !online || !quality.scorable, "aria-label": "Choose " + (layout.name || "Layout"),
+        }, [
+          h("div", { className: "grow", key: "content" }, [
+            h("div", { className: "title", key: "title" }, layout.name || "Layout"),
+            h(CourseMeta, { key: "meta", coverage: quality.status,
+              text: layout.total_par != null ? (quality.placeholderPars ? "Estimated par " : "Par ") + layout.total_par : "" }),
+          ]),
+          h("div", { className: "chev", key: "chev" }, icon(ChevronRight)),
         ]),
-    sorted.length
-      ? sorted.map((layout) =>
-          h(
-            "button",
-            { className: "tap-row", type: "button", key: layout.id || layout.name, onClick: () => onSelect(layout) },
-            [
-              h("div", { className: "grow", key: "content" }, [
-                h("div", { className: "title", key: "title" }, layout.name || "Layout"),
-                h(CourseMeta, {
-                  text: layout.total_par != null ? `Par ${layout.total_par}` : "",
-                  mapped: layoutHasMap(layout),
-                  key: "meta",
-                }),
-              ]),
-              h("div", { className: "chev", key: "chev" }, icon(ChevronRight)),
-            ],
-          ),
-        )
-      : h(
-          "p",
-          { className: "muted", key: "empty" },
-          "This course has no scorable layouts yet - an admin can add one from Admin > Layouts, or import from UDisc.",
-        ),
+        h(LayoutCoverageDetails, { key: "details", layout, quality }),
+        h(PackLayoutActions, { key: "pack", course, layout, pack, refresh, busy, onBusy: setBusy,
+          onOpen: setSavedPreview, onStatus: setStatus, allowSave: quality.holes.length > 0 }),
+      ]);
+    }),
+    ...coursePacks.filter((pack) => !catalogIds.has(pack.key) && pack.layout.name.toLowerCase().includes(query.trim().toLowerCase())).map((pack) =>
+      h("section", { className: "card stack", key: pack.key }, [
+        h("h3", { key: "title" }, pack.layout.name),
+        h(PackLayoutActions, { key: "pack", course, layout: pack.layout, pack, refresh, busy,
+          onBusy: setBusy, onOpen: setSavedPreview, onStatus: setStatus }),
+      ])),
+    !visible.length && !coursePacks.length ? h("p", { className: "muted", key: "empty" },
+      query.trim() ? "No layouts match your search." : "No layouts are available. An admin can add one from the layout editor.") : null,
+    sorted.some((layout) => layoutQuality(layout).status !== "full") ?
+      h("a", { className: "btn secondary", href: teeSignCaptureHref(course), key: "capture" }, "Capture a tee sign") : null,
   ]);
 }
 

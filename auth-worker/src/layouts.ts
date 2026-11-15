@@ -17,6 +17,7 @@ export interface VerifiedHole {
 export interface LayoutHole {
   hole: number;
   par: number;
+  par_source?: "placeholder" | "udisc" | "recorded";
   tee?: ({ label?: string | null } & LatLng) | null;
   target?: ({ label?: string | null } & LatLng) | null;
   manual_distance?: number | null;

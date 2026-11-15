@@ -217,7 +217,7 @@ export async function handleClubPublic(
     if (cid == null) return json({ error: "not_found" }, 404, origin);
     if (seg[2] === "layouts") {
       return cachedCourseCatalogJson(request, origin, async () => {
-        const listed = await db.listLayoutsCatalog(env.DB, cid);
+        const listed = await db.listPublicLayoutsCatalog(env.DB, cid);
         return { payload: { layouts: listed.results }, cacheable: listed.cacheable };
       });
     }

@@ -132,9 +132,9 @@ export function planNearbyCourseImport(
   return { insert, skipped, considered: nearby.length };
 }
 
-export function defaultPar3Holes(count: number): { hole: number; par: number }[] {
+export function defaultPar3Holes(count: number): { hole: number; par: number; par_source: "placeholder" }[] {
   const n = Math.max(MIN_HOLES, Math.min(MAX_HOLES, Math.round(count)));
-  return Array.from({ length: n }, (_, i) => ({ hole: i + 1, par: 3 }));
+  return Array.from({ length: n }, (_, i) => ({ hole: i + 1, par: 3, par_source: "placeholder" }));
 }
 
 export function defaultLayoutName(): string {
