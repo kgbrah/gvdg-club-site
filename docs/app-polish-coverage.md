@@ -12,14 +12,14 @@ Each lane records the actual states and interactions checked. A successful build
 | --- | --- | --- | --- |
 | Reviewed member Home | Continue round, progress checklist, account rows, course conditions, history, rating | Sol stats / root | Live in PR95; deployment 43669165687 and both post-deploy checks passed |
 | Reviewed Practice and My bag | Putting, fieldwork, disc inventory, forms, export and removal | Sol stats / root | Live in PR95; 320/390/1280 interactions verified |
-| Remaining member app | All 21 MEMBER_DESTINATIONS, auth/profile/passkeys, help/install, nested forms and dialogs | Sol stats | Integrated;21routes×3viewports and representative nested flows passed |
-| Admin | All 24 ADMIN_DESTINATIONS, event workspace, reports, moderation, nested forms and dialogs | Sol recovery | Integrated;24routes×3viewports and operator/finance/form workflows passed |
-| Scorecard and round lifecycle | See scorecard matrix below | Sol watch | Bottom-control layout approved with compact name styling and imagery credit inside the map; final integration and regression checks underway. |
+| Remaining member app | All 21 MEMBER_DESTINATIONS, auth/profile/passkeys, help/install, nested forms and dialogs | Sol stats | Integrated; 21 routes × 3 viewports and representative nested flows passed |
+| Admin | All 24 ADMIN_DESTINATIONS, event workspace, reports, moderation, nested forms and dialogs | Sol recovery | Integrated; 24 routes × 3 viewports and operator/finance/form workflows passed |
+| Scorecard and round lifecycle | See scorecard matrix below | Sol watch | Bottom-control layout approved with compact name styling and imagery credit inside the map; integrated, with scoring, weather, offline service-worker and touch-layout regression checks passed. |
 | Public Home | index.html; navigation, hero, memberships/dues/donate, course modal/carousel, feeds and footer | Sol stats / root | Integrated; public matrix and Home navigation/carousel/dialog actions passed |
 | Events | events.html; hub, schedule, event/league details, live standings/chat, registrations, previous results, bag tags, campaigns and minutes | Sol stats / root | Integrated; public render and relevant nested interaction checks passed |
 | Shop | pro-shop.html; search/filter, product, cart, checkout states and wallet/payment entry | Sol stats / root | Integrated; public render and relevant nested interaction checks passed |
 | Public supporting pages | gvdg-blog.html, ryder-cup.html, scoring-app.html, tee-sign-preview.html | Sol stats / root | Integrated; public render and relevant nested interaction checks passed |
-| Compatibility | archive.html redirects to the existing Events previous-results anchor | Root | Redirect target verified at390 and1280 |
+| Compatibility | archive.html redirects to the existing Events previous-results anchor | Root | Redirect target verified at 390 and 1280 px |
 | Design references | design.html, design-field.html, design-night.html | Sol stats / root | Integrated; chooser, both directions and nested reference links verified at four sizes/themes |
 
 ## Scorecard matrix
@@ -38,7 +38,7 @@ Root integration must verify the combined generated build and real service worke
 
 ## Outstanding original roadmap work
 
-Archive export/reimport and migration0057 are integrated, with browser download/restore and Worker validation. Native phone source, pairing presentation and CI builds are integrated; physical validation, signing and store distribution remain separate. No broader UDisc parity claim is made from these software checks alone.
+Archive export/reimport and migration 0057 are integrated, with browser download/restore and Worker validation. Native phone source, pairing presentation and CI builds are integrated; physical validation, signing and store distribution remain separate. No broader UDisc parity claim is made from these software checks alone.
 
 ## Scorecard direction revision
 
@@ -49,9 +49,9 @@ The next previews were also rejected for oversized map controls and moving hole 
 
 ## Shared Help and subsequent member cleanup
 
-Help now uses the accessible shared dialog, restores focus, preserves a failed question/attachment and stays above the app docks. Five source entry points and320px enlarged text were checked. Public validation details are in `public-ui-validation.md`. The requested Home header removal, Account admin banner and Account typography cleanup are tracked as a focused live update; they do not authorize the rejected scorecard design.
+Help now uses the accessible shared dialog, restores focus, preserves a failed question/attachment and stays above the app docks. Five source entry points and 320 px enlarged text were checked. Public validation details are in `public-ui-validation.md`. The requested Home header removal, Account admin banner and Account typography cleanup shipped in PR #98 and remain in this release.
 
 
 ## Bag entry follow-up
 
-The user requested searchable brand/model/plastic choices with custom options and voice input for adding discs. This is being implemented with editable suggestions, explicit Save, browser voice support/error handling, and preserved custom values.
+The user requested searchable brand/model/plastic choices with custom options and voice input for adding discs. Implemented with editable suggestions, weight presets and custom values, reviewed voice transcripts, explicit Save, and typing fallback. Browser tests cover 320/390/1280 px, keyboard operation, permission and service failures, cancellation, and account changes. Real microphone recognition and provider availability are not established by mocked recognition tests.
