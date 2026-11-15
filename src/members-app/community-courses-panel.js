@@ -19,6 +19,17 @@ function Rating({ course, as = "p" }) {
     : "No published reviews");
 }
 
+function CourseChips({ course }) {
+  const level = COURSE_DIFFICULTIES.find(([value]) => value === course.difficulty);
+  const amenities = COURSE_AMENITIES.filter(([key]) => course.amenities?.[key] === "yes");
+  if ((!level || level[0] === "unknown") && !amenities.length) return null;
+  return h("span", { className: "course-chips", key: "chips" }, [
+    level && level[0] !== "unknown" ? h("span", { className: "course-chip level-" + level[0], key: "level" }, level[1]) : null,
+    ...amenities.slice(0, 3).map(([key, label]) => h("span", { className: "course-chip", key }, label)),
+    amenities.length > 3 ? h("span", { className: "course-chip", key: "more" }, "+" + (amenities.length - 3)) : null,
+  ]);
+}
+
 function CourseInfo({ course }) {
   const difficulty = COURSE_DIFFICULTIES.find(([value]) => value === course.difficulty)?.[1] || "Unknown";
   return h("section", { className: "player-card", "aria-label": "Course amenities and access" }, [
@@ -277,6 +288,7 @@ export function MemberCourseDiscovery({ courseId, token }) {
             h("strong", { key: "name" }, course.name),
             course.location ? h("small", { key: "town" }, course.location) : null,
             h(Rating, { course, as: "span", key: "rating" }),
+            h(CourseChips, { course, key: "chips" }),
           ]),
           h(ChevronRight, { size: 17, "aria-hidden": true, key: "arrow" }),
         ]),

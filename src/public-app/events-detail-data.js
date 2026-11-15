@@ -253,7 +253,16 @@ export function useEventsEventDetail() {
           return;
         }
 
-        const event = normalizeEvent(detail.event);
+        const rawEvent = detail.event;
+        const event = {
+          ...normalizeEvent(rawEvent),
+          ctp_fee_cents: Number(rawEvent.ctp_fee_cents) || 0,
+          divisions: Array.isArray(rawEvent.divisions) ? rawEvent.divisions : [],
+          entry_fee_cents: Number(rawEvent.entry_fee_cents) || 0,
+          field: Array.isArray(rawEvent.field) ? rawEvent.field : [],
+          league_name: rawEvent.league_name ? String(rawEvent.league_name) : "",
+          play_format: rawEvent.play_format ? String(rawEvent.play_format) : "",
+        };
         const baseDetail = {
           apiBase: api,
           course: eventCourse(courseData.index, event),

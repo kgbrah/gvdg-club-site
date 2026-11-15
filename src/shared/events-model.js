@@ -163,18 +163,36 @@ export function isPastClubCalendarEvent(event, now = new Date()) {
   return day < clubToday(now);
 }
 
-// A UDisc import sometimes stores "League - League Nov 8th". Show that once.
-export function displayEventTitle(name) {
-  const title = String(name || "").trim();
+// A UDisc import sometimes stores "League - League Nov 8th", or prefixes a league name onto an event
+// name that already carries it. Show the name once. With `leagueName`, a leading
+// "<League> - " is also dropped when the remainder still identifies the event.
+function titleKey(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+export function stripLeaguePrefix(name, leagueName) {
+  const title = String(name || '').trim();
+  const league = titleKey(leagueName);
+  if (!title || !league) return title;
+  const match = title.match(/^(.+?)\s+[–—-]\s+(.+)$/);
+  if (!match) return title;
+  const lead = titleKey(match[1]);
+  const rest = match[2].trim();
+  if (!rest || lead !== league) return title;
+  return rest;
+}
+
+export function displayEventTitle(name, leagueName) {
+  const title = String(name || '').trim();
   const parts = title.split(/\s+[–—-]\s+/);
   if (parts.length < 2) return title;
   const first = parts[0].trim();
-  const rest = parts.slice(1).join(" – ").trim();
+  const rest = parts.slice(1).join(' – ').trim();
   if (!first || !rest) return title;
   const lead = first.toLowerCase();
   const tail = rest.toLowerCase();
   if (tail === lead || tail.startsWith(`${lead} `)) return rest;
-  return title;
+  return stripLeaguePrefix(title, leagueName) || title;
 }
 
 // Format a date for display. Tolerates ISO strings, Date objects and nulls.

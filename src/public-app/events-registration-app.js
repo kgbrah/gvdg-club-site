@@ -1,6 +1,7 @@
 import React from "react";
 import { CalendarDays, CheckCircle2 } from "lucide-react";
 
+import { humanDate } from "../shared/events-display.js";
 import { displayEventTitle, formatLabel, isPastClubCalendarEvent, normalizeEvent } from "../shared/events-model.js";
 import { EventScheduleFacts } from "../shared/event-schedule.js";
 import { EventFieldRoster } from "../shared/event-field-roster.js";
@@ -329,7 +330,7 @@ function RegisterForm({ api, event, onRefresh, onSessionExpired, token }) {
   ]);
 }
 
-function RegistrationCard({ api, event, guestReg, myReg, onRefresh, onSessionExpired, token }) {
+function RegistrationCard({ api, event, guestReg, inline = false, myReg, onRefresh, onSessionExpired, token }) {
   const registered = Boolean(myReg || guestReg);
   const who = myReg
     ? myReg.division ? ` - ${myReg.division}` : ""
@@ -337,13 +338,20 @@ function RegistrationCard({ api, event, guestReg, myReg, onRefresh, onSessionExp
   const addons = myReg ? parseObject(myReg.addons) : guestReg ? parseObject(guestReg.addons) : {};
   const owed = registered ? clientOwed(event, addons) : 0;
 
-  return h("article", { className: "event-card register-card", "data-react-events-registration-card": "true" }, [
-    h("div", { className: "event-card-top", key: "top" },
+  const feeText = `${event.entry_fee_cents ? `${dollars(event.entry_fee_cents)} entry` : "Free entry"}${event.play_format ? ` - ${formatLabel(event.play_format)}` : ""}`;
+  // Inline (event page) mode: the page already shows title, schedule and field, so only the fee line + sign-up control render.
+  const summary = [
+    event.date || event.starts_at ? humanDate(event.date || event.starts_at) : "",
+    event.entry_fee_cents ? `${dollars(event.entry_fee_cents)} entry` : "Free entry",
+    event.play_format ? formatLabel(event.play_format) : "",
+  ].filter(Boolean).join(" · ");
+
+  return h("article", { className: `event-card register-card${inline ? " inline" : ""}`, "data-react-events-registration-card": "true" }, [
+    inline ? null : h("div", { className: "event-card-top", key: "top" },
       h("h3", { className: "event-name" }, displayEventTitle(event.name || "Event"))),
-    h(EventMeta, { event, key: "meta" }),
-    h("div", { className: "register-fee", key: "fee" },
-      `${event.entry_fee_cents ? `${dollars(event.entry_fee_cents)} entry` : "Free entry"}${event.play_format ? ` - ${formatLabel(event.play_format)}` : ""}`),
-    h(EventFieldRoster, { compact: true, key: "field", players: event.field }),
+    inline ? null : h(EventMeta, { event, key: "meta" }),
+    h("div", { className: "register-fee", key: "fee" }, inline ? [h("span", { className: "meta-icon", key: "icon" }, icon(CalendarDays)), h("span", { key: "text" }, summary)] : feeText),
+    inline ? null : h(EventFieldRoster, { compact: true, key: "field", players: event.field }),
     registered ? h("div", { className: "register-status", key: "status" }, [
       h("span", { className: "meta-icon", key: "icon" }, icon(CheckCircle2)),
       h("span", { key: "text" }, `Registered${who}`),
@@ -361,7 +369,7 @@ function RegistrationCard({ api, event, guestReg, myReg, onRefresh, onSessionExp
   ]);
 }
 
-export function EventsRegistrationApp() {
+function useRegistrationState() {
   const api = React.useMemo(apiBase, []);
   const [events, setEvents] = React.useState([]);
   const [myRegs, setMyRegs] = React.useState({});
@@ -402,6 +410,36 @@ export function EventsRegistrationApp() {
     return () => window.removeEventListener(REGISTRATION_REFRESH_EVENT, load);
   }, [load]);
 
+  return { api, events, guestMap, load, myRegs, setToken, token };
+}
+
+function cardProps(state, event) {
+  const id = event && event.id;
+  return {
+    api: state.api,
+    event,
+    guestReg: id != null ? state.guestMap[id] || null : null,
+    myReg: id != null ? state.myRegs[id] || null : null,
+    onRefresh: state.load,
+    onSessionExpired: () => state.setToken(null),
+    token: state.token,
+  };
+}
+
+/** Reuses the hub's registration card on the event page (only when the event is open for sign-up). */
+export function EventRegistrationPanel({ eventId }) {
+  const state = useRegistrationState();
+  const event = state.events.find((item) => String(item && item.id) === String(eventId));
+  if (!event) return null;
+  return h("section", { className: "event-register-panel", "data-react-events-registration": "inline" }, [
+    h("h2", { className: "roster-title", key: "title" }, "Register"),
+    h(RegistrationCard, { ...cardProps(state, event), inline: true, key: "card" }),
+  ]);
+}
+
+export function EventsRegistrationApp() {
+  const state = useRegistrationState();
+  const { events } = state;
   if (!events.length) return null;
 
   return h("section", { "data-react-events-registration": "true" }, [
@@ -409,18 +447,7 @@ export function EventsRegistrationApp() {
       h("h2", { className: "events-section-title", key: "title" }, "Currently Registering"),
       h("p", { className: "events-group-sub", key: "sub" }, "Sign up for upcoming club events – members or guests"),
     ]),
-    h("div", { className: "events-grid", key: "grid" }, events.map((event, index) => {
-      const id = event && event.id;
-      return h(RegistrationCard, {
-        api,
-        event,
-        guestReg: id != null ? guestMap[id] || null : null,
-        key: eventKey(event, index),
-        myReg: id != null ? myRegs[id] || null : null,
-        onRefresh: load,
-        onSessionExpired: () => setToken(null),
-        token,
-      });
-    })),
+    h("div", { className: "events-grid", key: "grid" }, events.map((event, index) =>
+      h(RegistrationCard, { ...cardProps(state, event), key: eventKey(event, index) }))),
   ]);
 }
