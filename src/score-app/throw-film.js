@@ -7,6 +7,7 @@ import { resolveApiBase } from "../shared/api-base.js";
 import { liveRoundCodeFromSearch } from "../shared/live-watch.js";
 import { readMemberToken } from "../shared/member-session.js";
 import { readOpenPlayToken } from "./open-play-session.js";
+import { createClipStore, drainClipDrafts } from "./clip-recovery.js";
 
 const h = React.createElement;
 const MAX_SECONDS = 15;
@@ -414,42 +415,187 @@ function makeRecorder(stream, mime, bitrate) {
   }
 }
 
+const clipStore = createClipStore(globalThis.indexedDB);
+
+export function useClipRecovery(context) {
+  const scopeKey = context?.scopeKey;
+  const upload = context?.upload;
+  const [state, setState] = React.useState({ scopeKey: null, drafts: [], error: false });
+  const helpers = React.useMemo(() => {
+    if (!scopeKey || !upload) return null;
+    let active = true;
+    let timer;
+    let running;
+    let wake = false;
+
+    async function refresh() {
+      try {
+        const drafts = await clipStore.list(scopeKey);
+        drafts.sort((a, b) => b.createdAt - a.createdAt);
+        if (active) setState({ scopeKey, drafts, error: false });
+        return drafts;
+      } catch {
+        if (active) setState((previous) => ({
+          scopeKey, drafts: previous.scopeKey === scopeKey ? previous.drafts : [], error: true,
+        }));
+        return [];
+      }
+    }
+    function schedule(at) {
+      if (active && at) timer = setTimeout(() => {
+        timer = null;
+        void sync();
+      }, Math.max(100, at - Date.now()));
+    }
+    async function sync(reconnect = false) {
+      if (!active || !navigator.onLine) return;
+      if (reconnect) wake = true;
+      if (running) return running;
+      clearTimeout(timer);
+      timer = null;
+      const perform = async () => {
+        if (!active) return;
+        if (wake) {
+          wake = false;
+          for (const row of await refresh()) {
+            if (row.state === "auth" || (row.state === "pending" && row.nextAt)) {
+              await clipStore.put({ ...row, state: "pending", nextAt: 0 });
+            }
+          }
+        }
+        const next = await drainClipDrafts(clipStore, scopeKey, upload, {
+          active: () => active,
+          online: () => navigator.onLine,
+          onResult(_row, status) {
+            if (status === "saved") window.dispatchEvent(new CustomEvent(CLIPS_EVENT));
+            void refresh();
+          },
+        });
+        schedule(next);
+      };
+      running = (async () => {
+        try {
+          if (navigator.locks && navigator.locks.request) {
+            await navigator.locks.request("gvdg:clips:" + scopeKey, { ifAvailable: true }, (lock) => {
+              if (lock) return perform();
+              schedule(Date.now() + 1000);
+            });
+          } else await perform();
+        } catch {
+          if (active) setState((previous) => ({
+            scopeKey, drafts: previous.scopeKey === scopeKey ? previous.drafts : [], error: true,
+          }));
+          schedule(Date.now() + 5000);
+        }
+      })();
+      try { await running; }
+      finally {
+        running = null;
+        if (wake && !timer) void sync();
+      }
+    }
+    return {
+      start() {
+        active = true;
+        void refresh();
+        void sync(true);
+      },
+      stop() {
+        active = false;
+        clearTimeout(timer);
+        timer = null;
+      },
+      sync,
+      async put(record) {
+        await clipStore.put({ ...record, scopeKey });
+        void refresh();
+        if (record.state === "pending") void sync();
+      },
+      async remove(id) {
+        await clipStore.remove(id);
+        void refresh();
+      },
+    };
+  }, [scopeKey, upload]);
+
+  React.useEffect(() => {
+    if (!helpers) return undefined;
+    helpers.start();
+    const online = () => { void helpers.sync(true); };
+    const visible = () => { if (!document.hidden) void helpers.sync(); };
+    window.addEventListener("online", online);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      helpers.stop();
+      window.removeEventListener("online", online);
+      document.removeEventListener("visibilitychange", visible);
+    };
+  }, [helpers]);
+
+  if (!helpers) return null;
+  return {
+    ...helpers,
+    scopeKey,
+    drafts: state.scopeKey === scopeKey ? state.drafts : [],
+    storageError: state.scopeKey === scopeKey && state.error,
+  };
+}
+
 export function ThrowFilm(props) {
-  const { api, scope } = useThrowClips();
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = React.useState(null);
   const rows = Array.isArray(props.rows) ? props.rows : [];
   const hole = props.hole && props.hole.hole;
-  const par = props.hole && props.hole.par;
   const putting = props.putting === true;
-  if (!scope || !rows.length || !hole) return null;
+  const recovery = props.recovery;
+  if (!recovery || !rows.length || !hole) return null;
   const filmLabel = putting ? "Film a putt" : "Film a throw";
+  const count = recovery.drafts.length;
   return h(React.Fragment, null, [
     h("button", {
-      "aria-label": filmLabel,
+      "aria-label": count ? filmLabel + ", " + count + " clips on this phone" : filmLabel,
       className: "score-glove-tool",
       key: "film",
       title: filmLabel,
       type: "button",
-      onClick: () => setOpen(true),
-    }, [icon(Video), h("span", { key: "label" }, "Film")]),
-    open ? h(ThrowFilmSheet, {
-      api,
-      hole,
+      onClick: () => setOpen({
+        scopeKey: recovery.scopeKey, hole, putting, rows, par: props.hole.par,
+        placeLabel: filmPlaceLabel(props.hole, putting),
+      }),
+    }, [icon(Video), h("span", { key: "label" }, count ? "Film (" + count + ")" : "Film")]),
+    open?.scopeKey === recovery.scopeKey ? h(ThrowFilmSheet, {
+      ...open,
       key: "sheet",
-      listPath: scope.listPath,
-      par,
-      placeLabel: filmPlaceLabel(props.hole, putting),
-      putting,
-      rows,
-      onClose: () => setOpen(false),
+      recovery,
+      onClose: () => setOpen(null),
     }) : null,
   ]);
+}
+
+function clipMetadata(player, hole, putting, par, highlight) {
+  const source = player.source || {};
+  return {
+    hole,
+    playerIndex: Array.isArray(source.playerIndexes) ? source.playerIndexes[0] : source.index,
+    playerName: source.type === "pair" ? "" : String(player.label || "").replace(/\s+\(you\)$/i, ""),
+    highlight,
+    moment: (putting ? null : suggestedMoment(player.currentScore, par)) || (highlight ? "manual" : ""),
+  };
+}
+
+function clipDraftStatus(draft) {
+  if (draft.state === "draft") return "Draft saved on this phone";
+  if (draft.state === "pending") return "Saved on this phone, upload pending";
+  if (draft.state === "auth") return "Sign in to this card to upload";
+  if (draft.error === "clip_limit") return "This round already has enough clips";
+  if (draft.error === "clip_too_large") return "This clip is too large to upload";
+  if (draft.error === "round_not_live" || draft.error === "recovery_scope_changed") return "This clip’s original card is unavailable";
+  return "Upload needs attention";
 }
 
 function ThrowFilmSheet(props) {
   const dialog = useAccessibleDialog({
     open: true,
-    onClose: props.onClose,
+    onClose: requestClose,
     labelledBy: "throw-film-title",
     label: props.putting ? "Film a putt" : "Film a throw",
   });
@@ -466,7 +612,12 @@ function ThrowFilmSheet(props) {
   const [error, setError] = React.useState("");
   const [seconds, setSeconds] = React.useState(0);
   const [clipUrl, setClipUrl] = React.useState("");
-  const [blob, setBlob] = React.useState(null);
+  const [draft, setDraft] = React.useState(null);
+  const [stored, setStored] = React.useState(false);
+  const [playerEdited, setPlayerEdited] = React.useState(false);
+  const closingRef = React.useRef(false);
+  const metadataRef = React.useRef(null);
+  metadataRef.current = clipMetadata(player, props.hole, props.putting, props.par, highlight);
   const liveRef = React.useRef(null);
   const playRef = React.useRef(null);
   const streamRef = React.useRef(null);
@@ -479,9 +630,9 @@ function ThrowFilmSheet(props) {
   const openingRef = React.useRef(null);
 
   React.useEffect(() => {
-    if (props.putting) return;
+    if (props.putting || draft) return;
     setHighlight(Boolean(suggestedMoment(player.currentScore, props.par)));
-  }, [player.key, player.currentScore, props.par, props.putting]);
+  }, [draft, player.key, player.currentScore, props.par, props.putting]);
 
   React.useEffect(() => () => {
     window.clearInterval(timerRef.current);
@@ -591,10 +742,23 @@ function ThrowFilmSheet(props) {
           setPhase("idle");
           return;
         }
-        if (clipUrl) URL.revokeObjectURL(clipUrl);
-        setBlob(next);
+        const draft = {
+          ...metadataRef.current, blob: next, id: crypto.randomUUID(), createdAt: Date.now(),
+          state: "draft", attempt: 0, nextAt: 0,
+        };
+        setDraft(draft);
+        setStored(false);
         setClipUrl(URL.createObjectURL(next));
-        setPhase("review");
+        setPhase("persisting");
+        void props.recovery.put(draft).then(() => {
+          setStored(true);
+          setPhase("review");
+          if (closingRef.current) props.onClose();
+        }).catch(() => {
+          closingRef.current = false;
+          setError("This phone couldn’t store the draft. Keep this window open and download a copy.");
+          setPhase("review");
+        });
       };
       recorderRef.current = recorder;
       try {
@@ -616,8 +780,22 @@ function ThrowFilmSheet(props) {
     }
   }
 
-  function discard() {
-    if (phase === "saving") return;
+  function requestClose() {
+    if (phase === "persisting" || phase === "saving") return;
+    if (phase === "recording") {
+      closingRef.current = true;
+      stop();
+      return;
+    }
+    if (draft && !stored) {
+      setError("Download a copy or discard this recording before closing.");
+      return;
+    }
+    props.onClose();
+  }
+
+  async function discard() {
+    if (phase === "saving" || phase === "persisting" || draft?.state === "pending") return;
     dropRef.current = true;
     window.clearInterval(timerRef.current);
     const recorder = recorderRef.current;
@@ -625,11 +803,13 @@ function ThrowFilmSheet(props) {
       recorder.stop();
       return;
     }
-    stopStream();
-    if (clipUrl) URL.revokeObjectURL(clipUrl);
-    setBlob(null);
-    setClipUrl("");
-    props.onClose();
+    try {
+      if (stored && draft) await props.recovery.remove(draft.id);
+      stopStream();
+      props.onClose();
+    } catch {
+      setError("Couldn’t delete the clip from this phone.");
+    }
   }
 
   function stop() {
@@ -639,52 +819,50 @@ function ThrowFilmSheet(props) {
     else stopStream();
   }
 
+  function review(record) {
+    stopStream();
+    setDraft(record);
+    setStored(true);
+    setPlayerEdited(false);
+    const original = rows.find((row) => clipMetadata(row, record.hole, props.putting, props.par, false).playerIndex === record.playerIndex);
+    if (original) setPlayerKey(String(original.key));
+    setHighlight(record.highlight);
+    setClipUrl(URL.createObjectURL(record.blob));
+    setError("");
+    setPhase("review");
+  }
+
+  function retake() {
+    setDraft(null);
+    setStored(false);
+    setClipUrl("");
+    setError("");
+    setPhase("idle");
+  }
+
   async function save() {
-    if (!blob || phase === "saving") return;
-    if (blob.size > MAX_CLIP_BYTES) {
-      setError("That clip is too big to save. Record a shorter one.");
+    if (!draft || phase !== "review" || draft.state === "pending") return;
+    if (draft.blob.size > MAX_CLIP_BYTES) {
+      setError("That clip is too big to upload. You can download a copy.");
       return;
     }
     setPhase("saving");
     setError("");
-    const source = player.source || {};
-    const index = Array.isArray(source.playerIndexes) ? source.playerIndexes[0] : source.index;
-    const playerName = source.type === "pair" ? "" : String(player.label || "").replace(/\s+\(you\)$/i, "");
-    const query = new URLSearchParams({
-      hole: String(props.hole),
-      highlight: highlight ? "1" : "0",
-      moment: moment || (highlight ? "manual" : ""),
-      playerIndex: String(index),
-      playerName,
-    });
-    const { path, token } = withGuest(props.listPath + "?" + query.toString());
+    const metadata = draft.attempt || draft.hole !== props.hole ? {}
+      : playerEdited ? metadataRef.current : { highlight, moment: draft.moment || (highlight ? "manual" : "") };
     try {
-      const response = await fetch(props.api + path, {
-        body: blob,
-        headers: { ...authHeaders(token), "Content-Type": blob.type || "application/octet-stream" },
-        method: "POST",
-      });
-      const data = await readJson(response);
-      if (!response.ok) {
-        const reason = data && data.error === "clip_limit"
-          ? "This round already has enough clips."
-          : data && data.error === "clip_too_large"
-            ? "That clip is too big to save. Record a shorter one."
-            : data && data.error === "round_not_live"
-              ? "The round isn't live, so the clip wasn't saved."
-              : "The clip didn't save. Try again.";
-        setError(reason);
-        setPhase("review");
-        return;
-      }
-      window.dispatchEvent(new CustomEvent(CLIPS_EVENT));
+      await props.recovery.put({ ...draft, ...metadata, state: "pending", nextAt: 0, error: null });
       props.onClose();
     } catch {
-      setError("Network hiccup. The clip is still on this phone until you close this.");
+      setError("This phone couldn’t save the upload. Try again or download a copy.");
       setPhase("review");
     }
   }
 
+  const draftOnPhone = props.recovery.drafts.find((row) => row.id === draft?.id);
+  const reviewing = phase === "review" || phase === "saving" || phase === "persisting";
+  const canEdit = !draft || (draft.state === "draft" && draft.hole === props.hole);
+  const activeDraft = draftOnPhone || draft;
   const title = props.putting
     ? "Film the putt. Star it if it's a highlight."
     : moment === "ace"
@@ -714,35 +892,48 @@ function ThrowFilmSheet(props) {
         "aria-label": "Close",
         className: "iconbtn",
         key: "close",
-        onClick: props.onClose,
+        onClick: requestClose,
         type: "button",
       }, icon(X)),
     ]),
-    h("p", { className: "muted", key: "hint" }, title),
-    h("label", { className: "lbl", key: "who" }, [
+    h("p", { className: "muted", key: "hint" }, reviewing && activeDraft
+      ? ((props.putting ? "Station " : "Hole ") + activeDraft.hole + " · " + (activeDraft.playerName || "Card player"))
+      : title),
+    props.recovery.storageError ? h("p", { className: "throw-film-error", key: "storage", role: "alert" }, "This phone’s clip storage is unavailable.") : null,
+    !reviewing && phase !== "recording" && props.recovery.drafts.length ? h("ul", { key: "drafts" },
+      props.recovery.drafts.map((record) => h("li", { key: record.id }, h("button", {
+        className: "btn secondary", type: "button", onClick: () => review(record),
+      }, (props.putting ? "Station " : "Hole ") + record.hole + " · " + clipDraftStatus(record)))),
+    ) : null,
+    canEdit ? h("label", { className: "lbl", key: "who" }, [
       "Player",
       h("select", {
         key: "select",
-        onChange: (event) => setPlayerKey(event.target.value),
+        disabled: phase === "recording" || phase === "persisting" || phase === "saving",
+        onChange: (event) => { setPlayerKey(event.target.value); setPlayerEdited(Boolean(draft)); },
         value: String(player.key),
       }, rows.map((row) => h("option", { key: row.key, value: String(row.key) }, row.label))),
-    ]),
-    phase === "review"
+    ]) : null,
+    reviewing
       ? h("video", appleVideoAttrs({ autoPlay: true, className: "throw-film-preview", controls: true, key: "play", onLoadedMetadata: markClipFrame, ref: playRef, src: clipUrl }))
       : h("video", appleVideoAttrs({ autoPlay: true, className: "throw-film-preview", key: "live", muted: true, ref: liveRef })),
     phase === "recording" ? h("p", { className: "throw-film-timer", key: "timer" }, "Recording " + seconds + "s / " + MAX_SECONDS + "s") : null,
     error ? h("p", { className: "throw-film-error", key: "error", role: "alert" }, error) : null,
-    h("label", { className: "throw-film-star", key: "star" }, [
+    phase === "persisting" ? h("p", { className: "muted", key: "persisting", role: "status" }, "Saving draft on this phone…")
+      : activeDraft && stored ? h("p", { className: "muted", key: "draft-status", role: "status" },
+        !draftOnPhone && draft.state === "pending" ? "Check Round clips for this upload." : clipDraftStatus(activeDraft)) : null,
+    canEdit ? h("label", { className: "throw-film-star", key: "star" }, [
       h("input", {
         checked: highlight,
+        disabled: phase === "persisting" || phase === "saving",
         key: "check",
         onChange: (event) => setHighlight(event.target.checked),
         type: "checkbox",
       }),
       "Round highlight",
-    ]),
+    ]) : null,
     h("div", { className: "throw-film-actions", key: "actions" }, [
-      phase !== "review" && phase !== "saving" && (phase === "idle" || lightReady || torchOn)
+      !reviewing && (phase === "idle" || lightReady || torchOn)
         ? h("button", {
           "aria-pressed": torchOn ? "true" : "false",
           className: "btn secondary throw-film-light" + (torchOn ? " on" : ""),
@@ -753,14 +944,18 @@ function ThrowFilmSheet(props) {
         : null,
       phase === "recording"
         ? h("button", { className: "btn primary", key: "stop", onClick: stop, type: "button" }, "Stop")
-        : phase === "review" || phase === "saving"
-          ? h("button", { className: "btn primary", disabled: phase === "saving", key: "save", onClick: () => { void save(); }, type: "button" }, phase === "saving" ? "Saving" : "Save to round")
+        : reviewing
+          ? activeDraft?.state === "pending" ? null : h("button", {
+            className: "btn primary", disabled: phase !== "review", key: "save", onClick: () => { void save(); }, type: "button",
+          }, phase === "saving" ? "Saving" : activeDraft?.attempt ? "Retry upload" : "Upload to round")
           : h("button", { className: "btn primary", key: "start", onClick: () => { void start(); }, type: "button" }, "Record"),
-      phase === "review"
-        ? h("button", { className: "btn secondary", key: "retake", onClick: () => { setPhase("idle"); setBlob(null); if (clipUrl) URL.revokeObjectURL(clipUrl); setClipUrl(""); }, type: "button" }, "Retake")
-        : null,
+      phase === "review" && stored ? h("button", { className: "btn secondary", key: "retake", onClick: retake, type: "button" }, "New clip") : null,
+      phase === "review" && draft ? h("a", {
+        className: "btn secondary", download: "hole-" + draft.hole + (draft.blob.type === "video/mp4" ? ".mp4" : ".webm"),
+        href: clipUrl, key: "download",
+      }, "Download clip") : null,
     ]),
-    phase === "recording" || phase === "review"
+    phase === "recording" || (phase === "review" && activeDraft?.state !== "pending")
       ? h("button", {
         className: "btn danger",
         key: "discard",
@@ -768,6 +963,6 @@ function ThrowFilmSheet(props) {
         type: "button",
       }, "Discard")
       : null,
-    h("p", { className: "muted throw-film-note", key: "note" }, "A cardmate films it. The clip stays with this round. Highlights are the ones you star."),
+
   ])), document.body);
 }

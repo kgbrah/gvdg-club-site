@@ -38,7 +38,7 @@ class FakeState {
   alarmAt: number | null = null; // exposed so weather-alarm tests can trigger/inspect it
   readonly storage: {
     get<T = unknown>(key: string): Promise<T | undefined>;
-    put(key: string, value: unknown): Promise<void>;
+    put(key: string | Record<string, unknown>, value?: unknown): Promise<void>;
     getAlarm(): Promise<number | null>;
     setAlarm(scheduledTime: number): Promise<void>;
     deleteAlarm(): Promise<void>;
@@ -49,8 +49,9 @@ class FakeState {
     this.stored = { ...stored };
     this.storage = {
       get: async <T = unknown>(key: string) => this.stored[key] as T | undefined,
-      put: async (key: string, value: unknown) => {
-        this.stored[key] = value;
+      put: async (key: string | Record<string, unknown>, value?: unknown) => {
+        if (typeof key === "string") this.stored[key] = value;
+        else Object.assign(this.stored, key);
       },
       getAlarm: async () => this.alarmAt,
       setAlarm: async (scheduledTime: number) => {
@@ -2546,5 +2547,68 @@ describe("LiveEventDO player GPS overlay", () => {
     const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { status: string; playerLocations: unknown[] };
     expect(snap.status).toBe("final");
     expect(snap.playerLocations).toEqual([]);
+  });
+});
+
+describe("durable phone score and lie recovery", () => {
+  const send = (live: LiveEventDO, action: string, actor: string, body?: unknown) =>
+    live.fetch(new Request("https://do/" + action, {
+      method: body ? "POST" : "GET",
+      headers: { "X-Auth-Member": actor },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    }));
+
+  const hole = { hole: 1, par: 3 };
+  const player = { name: "Ana", memberId: "ana", cardId: "c1" };
+  const cardmate = { name: "Cam", memberId: "cam", cardId: "c1" };
+  const guest = { name: "Guest", memberId: null, cardId: "c1" };
+  const stream = "90e04432-2cd8-4da8-a666-5a585249d948";
+  const otherStream = "00e04432-2cd8-4da8-a666-5a585249d948";
+  const order = (n: number) => String(n).padStart(16, "0") + ":" + stream;
+
+  it("checks the authenticated /mine generation and never replays a lost acknowledgement into a different actor", async () => {
+    const state = new FakeState({});
+    let live = new LiveEventDO(state, { DB: db });
+    await send(live, "start", "ana", { eventId: 42, holes: [hole], players: [player, cardmate, guest] });
+    const mine = await (await send(live, "mine", "ana")).json() as { playerIndex: number; recoveryRoundId: string; cardId: string };
+    const ctx = { roundId: mine.recoveryRoundId, actorIndex: mine.playerIndex, cardId: mine.cardId, stream, order: order(1) };
+    const first = { index: 0, scorerIndex: 2, hole: 1, strokes: 3, recovery: ctx };
+    expect((await send(live, "score", "cam", first)).status).toBe(409);
+    expect((await send(live, "score", "ana", first)).status).toBe(200);
+    live = new LiveEventDO(state, { DB: db });
+    const newer = { ...first, strokes: 4, recovery: { ...ctx, stream: otherStream, order: order(2) } };
+    expect((await send(live, "score", "ana", newer)).status).toBe(200);
+    const replay = await send(live, "score", "ana", first);
+    expect(replay.status).toBe(200);
+    const stale = { ...first, strokes: 5, recovery: { ...ctx, order: order(3), previous: 3 } };
+    const conflict = await send(live, "score", "ana", stale);
+    expect(conflict.status).toBe(409);
+    expect(await conflict.json()).toMatchObject({ error: "recovery_edit_conflict" });
+    const snapshot = await replay.json() as { players: { scores: Record<number, number>; recoveryOrders?: unknown }[] };
+    expect(snapshot.players[0]?.scores[1]).toBe(4);
+    expect(snapshot.players.every((row) => row.recoveryOrders === undefined)).toBe(true);
+    await send(live, "start", "ana", { eventId: 42, holes: [hole], players: [player, cardmate, guest] });
+    expect((await send(live, "score", "ana", first)).status).toBe(409);
+  });
+
+  it("persists ordered same-position marks and their receipt, and rejects new marks after lock", async () => {
+    const state = new FakeState({});
+    let live = new LiveEventDO(state, { DB: db });
+    await send(live, "start", "ana", { eventId: 42, holes: [hole], players: [player] });
+    const mine = await (await send(live, "mine", "ana")).json() as { playerIndex: number; recoveryRoundId: string; cardId: string };
+    const ctx = { roundId: mine.recoveryRoundId, actorIndex: mine.playerIndex, cardId: mine.cardId, stream };
+    const point = { lat: 34.79, lng: -82.4, n: 1 };
+    const first = { hole: 1, scorerIndex: 0, throws: [point], recovery: { ...ctx, order: order(1) } };
+    const second = { ...first, throws: [point, { ...point, n: 2 }], recovery: { ...ctx, order: order(2) } };
+    expect((await send(live, "throws", "ana", first)).status).toBe(200);
+    expect((await send(live, "throws", "ana", second)).status).toBe(200);
+    live = new LiveEventDO(state, { DB: db });
+    expect((await send(live, "throws", "ana", first)).status).toBe(200);
+    const fresh = await (await send(live, "mine", "ana")).json() as { cardmates: { throws: Record<number, { n: number }[]> }[] };
+    expect(fresh.cardmates[0]?.throws[1]).toEqual(second.throws);
+    expect((await send(live, "score", "ana", { index: 0, hole: 1, strokes: 3 })).status).toBe(200);
+    expect((await send(live, "finish-card", "ana", { playerIndex: 0 })).status).toBe(200);
+    expect((await send(live, "throws", "ana", second)).status).toBe(200);
+    expect((await send(live, "throws", "ana", { ...first, recovery: { ...ctx, order: order(3) } })).status).toBe(409);
   });
 });

@@ -6,6 +6,7 @@ import type { PlayerState } from "./scoring.js";
 import { attestationForCard, canEnterScorecard, computeRoundStandings, healthyTargets, isCardLocked, publicScoreTargets, resolvedHoles, scorecardIssues, scoringState } from "./live-state.js";
 import type { LiveMeta } from "./live-types.js";
 import type { LiveStanding } from "./live-scoring.js";
+import { liveRecoveryId } from "./live-recovery.js";
 import { handicapKey } from "./handicap.js";
 
 const EMPTY_LOCATIONS: ReadonlyMap<number, LivePlayerLocation> = new Map();
@@ -76,6 +77,7 @@ export function publicSnapshot(
   return {
     status: meta?.status ?? "none",
     rev: meta?.rev ?? 0,
+    recoveryRoundId: liveRecoveryId(meta),
     eventId: meta?.eventId ?? null,
     courseId: meta?.courseId ?? null,
     layoutId: meta?.layoutId ?? null,
@@ -197,6 +199,7 @@ export function mineData(
       startingHole: player.startingHole ?? null,
       scores: player.scores,
       scorecards: player.scorecards ?? {},
+      throws: publicPlayerThrows(player.throws),
       isMe: index === meIdx,
       canEnterScorecard: canEnterScorecard(player, authMember),
       ctpEligible: player.ctpEligible !== false,
@@ -206,6 +209,8 @@ export function mineData(
   return {
     ...base,
     cardId,
+    recoveryRoundId: liveRecoveryId(meta),
+    rev: meta?.rev ?? 0,
     playerIndex: meIdx,
     cardmates,
     cardLocked: isCardLocked(meta?.lockedCardIds, cardId),

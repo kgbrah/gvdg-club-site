@@ -471,10 +471,35 @@ export function scoreRows(state) {
   }, []);
 }
 
+export function throwsByScorer(state, scorerIndex) {
+  const player = (state.cardmates || []).find((row) => row.index === scorerIndex);
+  const byHole = { ...(player && player.throws) };
+  for (const { kind, body } of state.recoveryItems || []) {
+    if (kind === "throws" && body.scorerIndex === scorerIndex) byHole[body.hole] = body.throws;
+  }
+  return byHole;
+}
+
+export function optimisticScores(items) {
+  const scores = new Map();
+  for (const { kind, body } of items) {
+    if (kind === "score") scores.set(scorePendingKey(body.scorerIndex, body.index, body.hole, body.targetId), body.strokes);
+  }
+  return scores;
+}
+
 export function strokesFor(state, index, hole, scorerIndex) {
   const cardmate = (state.cardmates || []).find((player) => player.index === index);
   if (!cardmate) return null;
 
+  const pending = state.optimisticScores;
+  if (pending && scorerIndex != null) {
+    const target = scoreTargetForPlayer(state, index);
+    const targetKey = target && scorePendingKey(scorerIndex, index, hole, target.id);
+    const indexKey = scorePendingKey(scorerIndex, index, hole, null);
+    if (targetKey && pending.has(targetKey)) return pending.get(targetKey);
+    if (pending.has(indexKey)) return pending.get(indexKey);
+  }
   const votes = cardmate.scorecards && cardmate.scorecards[hole];
   if (scorerIndex != null && votes && typeof votes["player:" + scorerIndex] === "number") {
     return votes["player:" + scorerIndex];
@@ -856,6 +881,7 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
     roundCode,
     rows: rowViews,
     scorerIndex,
+    throwsByHole: throwsByScorer(state, scorerIndex),
     show: mode === "round",
     showPots: pots.visible,
     showWeather: Boolean(state.weather),
@@ -924,16 +950,17 @@ function finishBlocker(state, blockers) {
 
 function buildFinishView(state, mode, blockers, locked, scorerIndex) {
   const canMode = mode === "round" || mode === "event";
+  const pending = Boolean(state.recoveryStorageError || (state.recoveryItems || []).length);
   const attestation = state.cardAttestation && typeof state.cardAttestation === "object" ? state.cardAttestation : {};
   const agreedIndexes = Array.isArray(attestation.agreedIndexes) ? attestation.agreedIndexes : [];
   const review = cardReview(state, scorerIndex, agreedIndexes);
   const skipped = locked || blockers.ready ? [] : skippedUnscoredHoles(state, blockers);
   return {
     locked,
-    ready: blockers.ready,
+    ready: blockers.ready && !pending,
     status: state.status,
-    canFinish: canMode && state.status === "live" && blockers.ready && !locked,
-    confirmOpen: Boolean(state.finishConfirmOpen) && !locked,
+    canFinish: canMode && state.status === "live" && blockers.ready && !pending && !locked,
+    confirmOpen: Boolean(state.finishConfirmOpen) && !pending && !locked,
     review,
     waiting: review.waiting,
     voterIndex: scorerIndex ?? state.myIndex,

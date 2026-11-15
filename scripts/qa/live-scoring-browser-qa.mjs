@@ -145,6 +145,7 @@ function makeLiveSnapshot({ eventId = null, roundCode = null, roundConfig, playe
     missing: [],
     standings: standingsFor(players),
     rev: 1,
+    recoveryRoundId: "test-round-" + (roundCode || eventId),
   };
 }
 

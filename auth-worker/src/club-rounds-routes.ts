@@ -292,7 +292,7 @@ export async function handleCasualRounds(
   if (sub === "live" && method === "POST" && seg[3] === "finish-card") {
     if (await kvRateLimited(env, "live-finish:" + actor.sub, 30, 60)) return json({ error: "rate_limited" }, 429, origin);
     const b = (await readJson(request)) ?? {};
-    const r = await stub.fetch("https://do/finish-card", { method: "POST", headers: hdr, body: JSON.stringify({ playerIndex: b.playerIndex }) });
+    const r = await stub.fetch("https://do/finish-card", { method: "POST", headers: hdr, body: JSON.stringify({ playerIndex: b.playerIndex, recovery: b.recovery }) });
     return json(await r.json().catch(() => ({})), r.status, origin);
   }
   if (sub === "live" && method === "POST" && seg[3] === "location") {

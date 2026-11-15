@@ -20,6 +20,7 @@ import { replacePlayerHoleMarks } from "./db-hole-shot-marks.js";
 import { shotRoundKey } from "./hole-shot-marks.js";
 import { updateLivePairs } from "./live-pairs.js";
 import { getLayoutRatingBaseline } from "./rating-store.js";
+import { checkLiveRecovery, matchesLiveRecoveryScope, recordLiveRecovery } from "./live-recovery.js";
 import { mineData, publicSnapshot } from "./live-snapshot.js";
 import { attestationForCard, canEnterScorecard, cardKey, findPlayer, invalidScoreTargetsResponse, isCardLocked, issuesForCard, scoreTargetForBody, scorecardIssues, scoringState, targetAnchor } from "./live-state.js";
 import { j, type CtpVoteBody, type LiveEnv, type LiveMeta, type LiveState, type OverrideBody, type PairAssignmentBody, type RemoveBody, type ScoreBody, type StartBody, type WeatherBody } from "./live-types.js";
@@ -57,11 +58,15 @@ export class LiveEventDO {
     this.loaded = true;
     if (this.warmedLayoutId === undefined) this.warmRatingBaseline();
   }
-  private async persist(): Promise<void> {
+  private async persist(extra?: Record<string, unknown>): Promise<void> {
     if (this.meta) this.meta.rev = (this.meta.rev ?? 0) + 1; // one bump per mutation (persist is the mutation marker)
-    await this.state.storage.put("meta", this.meta);
-    await this.state.storage.put("players", this.players);
-    await this.state.storage.put("liveCtps", this.liveCtps);
+    if (extra) {
+      await this.state.storage.put({ meta: this.meta, players: this.players, liveCtps: this.liveCtps, ...extra });
+    } else {
+      await this.state.storage.put("meta", this.meta);
+      await this.state.storage.put("players", this.players);
+      await this.state.storage.put("liveCtps", this.liveCtps);
+    }
   }
 
   private async persistLocations(): Promise<void> {
@@ -146,7 +151,7 @@ export class LiveEventDO {
     if (action === "weather") return this.ensureWeather(body as WeatherBody); // one-time weather backfill
     if (action === "override") return this.override(body as OverrideBody);
     if (action === "finalize") return this.finalize(authMember, authAdmin, (body as { force?: boolean }).force === true);
-    if (action === "finish-card") return this.finishCard(body as { playerIndex?: number }, authMember, authAdmin);
+    if (action === "finish-card") return this.finishCard(body as { playerIndex?: number; recovery?: unknown }, authMember, authAdmin);
     return j({ error: "not_found" }, 404);
   }
 
@@ -177,7 +182,7 @@ export class LiveEventDO {
       if (isLiveFormatError(error)) return j({ error: "invalid_live_scoring_config", code: error.code, message: error.message }, 400);
       throw error;
     }
-    this.meta = { eventId: b.eventId ?? 0, casual: !!b.casual, roundCode: b.roundCode ?? null, courseId: b.courseId ?? null, layoutId: b.layoutId ?? null, createdBy: b.createdBy ?? null, courseName: b.courseName ?? null, layoutName: b.layoutName ?? null, udiscCourseId: b.udiscCourseId ?? null, holes, status: "live", startedAt: b.startedAt ?? "", weather: createWeatherState(b.weatherLocation ?? null), roundConfig, overrides: {}, ctpBuyInRequired: b.ctpBuyInRequired === true };
+    this.meta = { eventId: b.eventId ?? 0, casual: !!b.casual, roundCode: b.roundCode ?? null, courseId: b.courseId ?? null, layoutId: b.layoutId ?? null, createdBy: b.createdBy ?? null, courseName: b.courseName ?? null, layoutName: b.layoutName ?? null, udiscCourseId: b.udiscCourseId ?? null, holes, status: "live", startedAt: b.startedAt ?? "", recoveryRoundId: crypto.randomUUID(), weather: createWeatherState(b.weatherLocation ?? null), roundConfig, overrides: {}, ctpBuyInRequired: b.ctpBuyInRequired === true };
     this.liveCtps = {};
     this.locations = new Map();
     this.players = (Array.isArray(b.players) ? b.players : []).map((p) => ({
@@ -210,7 +215,7 @@ export class LiveEventDO {
   }
 
   private async score(b: ScoreBody, authMember: string | null, authAdmin: boolean): Promise<Response> {
-    if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
+    if (!this.meta || (this.meta.status !== "live" && b.recovery === undefined)) return j({ error: "not_live" }, 409);
     const hole = Number(b.hole);
     if (!this.meta.holes.some((h) => h.hole === hole)) return j({ error: "bad_hole" }, 400);
     // JSON null withdraws the vote (hole goes unstarted if nobody else scored it). Narrow with
@@ -244,7 +249,6 @@ export class LiveEventDO {
       }
     }
     if (!target || !anchor) return j({ error: b.targetId ? "no_target" : "no_player" }, 404); // a removed player is no longer scorable
-    if (!authAdmin && isCardLocked(this.meta.lockedCardIds, anchor.player.cardId)) return j({ error: "card_locked" }, 409);
     const meIndex = authMember ? this.players.findIndex((p) => p.memberId === authMember && !p.removed) : -1;
     const me = meIndex >= 0 ? this.players[meIndex] : undefined;
     // Authorize from the Worker-trusted identity ONLY: an admin may score anyone; otherwise the
@@ -259,7 +263,14 @@ export class LiveEventDO {
     if (!scorer || scorer.removed) return j({ error: "bad_scorer" }, 400);
     if ((scorer.cardId ?? null) !== (anchor.player.cardId ?? null)) return j({ error: "scorer_wrong_card" }, 403);
     if (!authAdmin && !canEnterScorecard(scorer, authMember)) return j({ error: "wrong_scorer" }, 403);
+    const recovery = checkLiveRecovery(b.recovery, this.meta, me, meIndex, ["score", scorerIndex, target.id, hole]);
+    if (typeof recovery === "string") return j({ error: recovery }, recovery === "invalid_recovery" ? 400 : 409);
+    if (recovery?.duplicate) return j(this.snapshot());
+    if (this.meta.status !== "live") return j({ error: "not_live" }, 409);
+    if (!authAdmin && isCardLocked(this.meta.lockedCardIds, anchor.player.cardId)) return j({ error: "card_locked" }, 409);
     const scorerId = playerScorerId(scorerIndex);
+    const previous = anchor.player.scorecards?.[hole]?.[scorerId] ?? null;
+    if (recovery && recovery.previous !== undefined && recovery.previous !== previous) return j({ error: "recovery_edit_conflict" }, 409);
     const conflict = recordScoreTargetVote({ players: this.players, target, scorerId, hole, strokes });
     if (!isCardLocked(this.meta.lockedCardIds, anchor.player.cardId) && this.meta.cardAttestations) {
       const key = cardKey(anchor.player.cardId);
@@ -269,6 +280,7 @@ export class LiveEventDO {
         this.meta.cardAttestations = next;
       }
     }
+    recordLiveRecovery(me, recovery);
     await this.persist();
     if (conflict) {
       this.sendAll({ type: "conflict", ...conflict, from: conflict.values[0] ?? null, to: conflict.values[1] ?? null });
@@ -521,12 +533,15 @@ export class LiveEventDO {
   }
 
   /** Anyone on the card can lock it once every hole has a living consensus score. */
-  private async finishCard(body: { playerIndex?: number }, authMember: string | null, authAdmin: boolean): Promise<Response> {
+  private async finishCard(body: { playerIndex?: number; recovery?: unknown }, authMember: string | null, authAdmin: boolean): Promise<Response> {
     if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
     const meIndex = authMember ? this.players.findIndex((player) => player.memberId === authMember && !player.removed) : -1;
     const me = meIndex >= 0 ? this.players[meIndex] : undefined;
     if (!me && !authAdmin) return j({ error: "not_on_card" }, 403);
     const requested = Number(body.playerIndex);
+    if (body.recovery !== undefined && !matchesLiveRecoveryScope(body.recovery, this.meta, me, meIndex)) {
+      return j({ error: "recovery_scope_changed" }, 409);
+    }
     const voterIndex = Number.isInteger(requested) ? requested : meIndex;
     const voter = voterIndex >= 0 ? this.players[voterIndex] : undefined;
     if (!voter || voter.removed) return j({ error: "no_player" }, 404);
@@ -659,7 +674,7 @@ export class LiveEventDO {
   }
 
   private async saveThrows(body: unknown, authMember: string | null, authAdmin: boolean): Promise<Response> {
-    if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
+    if (!this.meta) return j({ error: "not_live" }, 409);
     const parsed = parseThrowsBody(body);
     if (!parsed) return j({ error: "bad_throws" }, 400);
     if (!this.meta.holes.some((hole) => hole.hole === parsed.hole)) return j({ error: "bad_hole" }, 400);
@@ -675,14 +690,26 @@ export class LiveEventDO {
       if ((me.cardId ?? null) !== (player.cardId ?? null)) return j({ error: "wrong_card" }, 403);
       if (!canEnterScorecard(player, authMember) && index !== meIndex) return j({ error: "wrong_scorer" }, 403);
     }
+    const recovery = checkLiveRecovery((body as { recovery?: unknown }).recovery, this.meta, me, meIndex, ["throws", index, parsed.hole]);
+    if (typeof recovery === "string") return j({ error: recovery }, recovery === "invalid_recovery" ? 400 : 409);
+    if (recovery?.duplicate) return j({ ok: true, hole: parsed.hole, throws: player.throws?.[parsed.hole]?.length ?? 0, snapshot: this.snapshot() });
+    if (this.meta.status !== "live") return j({ error: "not_live" }, 409);
+    if (!authAdmin && isCardLocked(this.meta.lockedCardIds, player.cardId)) return j({ error: "card_locked" }, 409);
+    if (recovery && recovery.previous !== undefined) {
+      const previous = parseThrowsBody({ hole: parsed.hole, throws: recovery.previous });
+      if (!previous || JSON.stringify(previous.throws) !== JSON.stringify(player.throws?.[parsed.hole] ?? [])) {
+        return j({ error: "recovery_edit_conflict" }, 409);
+      }
+    }
     player.throws = { ...(player.throws || {}), [parsed.hole]: parsed.throws };
     player.throwAt = Date.now();
     const discColor = sanitizeDiscColor((body as { discColor?: unknown }).discColor);
     if (discColor) player.discColor = discColor;
+    recordLiveRecovery(me, recovery);
     await this.persist();
     this.broadcast();
     void persistLiveThrows(this.env, this.meta, player.memberId, parsed.hole, parsed.throws);
-    return j({ ok: true, hole: parsed.hole, throws: parsed.throws.length });
+    return j({ ok: true, hole: parsed.hole, throws: parsed.throws.length, ...(recovery ? { snapshot: this.snapshot() } : {}) });
   }
 
   private warmRatingBaseline(): void {

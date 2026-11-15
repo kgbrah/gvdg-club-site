@@ -42,6 +42,10 @@ function memoryDb() {
             const matched = rows.filter((row) => row.scope === scope && row.scope_key === scopeKey && (!onlyStars || row.highlight === 1));
             return { n: matched.length };
           }
+          if (text.includes("filmed_by = ? AND client_id = ?")) {
+            const [scope, scopeKey, actor, clientId] = stmt.binds;
+            return rows.find((row) => row.scope === scope && row.scope_key === scopeKey && row.filmed_by === actor && row.client_id === clientId) ?? null;
+          }
           if (text.startsWith("SELECT id, hole")) {
             const [id, scope, scopeKey] = stmt.binds;
             return rows.find((row) => row.id === id && row.scope === scope && row.scope_key === scopeKey) ?? null;
@@ -50,14 +54,17 @@ function memoryDb() {
         },
         async run() {
           if (text.startsWith("INSERT")) {
-            const [scope, scopeKey, hole, playerName, playerIndex, filmedBy, r2Key, contentType, bytes, highlight, moment] = stmt.binds;
+            const [scope, scopeKey, hole, playerName, playerIndex, filmedBy, r2Key, contentType, bytes, highlight, moment, clientId] = stmt.binds;
+            if (clientId && rows.some((row) => row.scope === scope && row.scope_key === scopeKey && row.filmed_by === filmedBy && row.client_id === clientId)) {
+              return { success: true, results: [], meta: { changes: 0 } };
+            }
             const id = nextId++;
             rows.push({
               id, scope, scope_key: scopeKey, hole, player_name: playerName, player_index: playerIndex,
               filmed_by: filmedBy, r2_key: r2Key, content_type: contentType, bytes, highlight, moment,
-              created_at: "2026-11-02",
+              created_at: "2026-11-02", client_id: clientId,
             });
-            return { success: true, results: [], meta: { last_row_id: id } };
+            return { success: true, results: [], meta: { last_row_id: id, changes: 1 } };
           }
           if (text.startsWith("UPDATE")) {
             const [highlight, moment, id, scope, scopeKey] = stmt.binds;
@@ -215,5 +222,36 @@ describe("throw clip rules", () => {
     expect(media.headers.get("Content-Type")).toBe("video/webm");
     const bytes = new Uint8Array(await media.arrayBuffer());
     expect(Array.from(bytes)).toEqual([0x1a, 0x45, 0xdf, 0xa3]);
+  });
+});
+
+describe("throw clip recovery", () => {
+  it("deduplicates interrupted/concurrent POSTs and scopes clip IDs to the authenticated actor and original card", async () => {
+    const db = memoryDb();
+    const bucket = photos();
+    const testEnv = { ...env(), DB: db, PHOTOS: bucket } as unknown as Env;
+    const clientId = "90e04432-2cd8-4da8-a666-5a585249d948";
+    const card = { ...CARD, recoveryRoundId: "round-1", cardId: "c1", actorIndex: 1 };
+    function post(actor: string, uploadCard = card, recoveryRoundId = card.recoveryRoundId) {
+      const query = new URLSearchParams({
+        hole: "7", playerIndex: "1", clientId, recoveryRoundId, recoveryCardId: "c1", recoveryActorIndex: "1",
+      });
+      return handleThrowClips({
+        request: new Request("https://test/clips?" + query, { method: "POST", body: webm().buffer as ArrayBuffer }),
+        env: testEnv, origin: null, method: "POST", scope: "round", scopeKey: "TEST", tail: [], card: uploadCard, authMember: actor,
+      });
+    }
+    const firstPair = await Promise.all([post("ana"), post("ana")]);
+    expect(firstPair.map((response) => response.status).sort()).toEqual([200, 201]);
+    const retry = await post("ana", { ...card, status: "final" });
+    expect(retry.status).toBe(200);
+    expect(await retry.json()).toMatchObject({ id: 1, mediaPath: "/rounds/TEST/live/clips/1/media" });
+    expect(db.rows).toHaveLength(1);
+    expect(bucket.objects.size).toBe(1);
+    expect((await post("cam", { ...card, actorIndex: 2 })).status).toBe(409);
+    expect((await post("ana", { ...card, recoveryRoundId: "round-2" })).status).toBe(409);
+    expect((await post("cam")).status).toBe(201);
+    expect(db.rows).toHaveLength(2);
+    expect(bucket.objects.size).toBe(2);
   });
 });

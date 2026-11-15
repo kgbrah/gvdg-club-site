@@ -20,11 +20,11 @@ test("a cardmate can film a throw and star a highlight", () => {
   const watch = readFileSync("src/score-app/watch-view.js", "utf8");
   assert.match(film, /Round highlight/);
   assert.match(film, /suggestedMoment/);
-  assert.match(film, /Save to round/);
+  assert.match(film, /Upload to round/);
   assert.match(film, /"Discard"/);
   assert.match(card, /ThrowFilm/);
   assert.match(card, /canStar: true/);
-  assert.match(card, /putting: true, rows: props\.rows/);
+  assert.match(card, /putting: true, recovery: clipDrafts, rows: props\.rows/);
   assert.match(card, /putting: props\.putting === true/);
   assert.doesNotMatch(card, /props\.putting \? null : h\(RoundHighlights/);
   assert.match(film, /Film a putt/);

@@ -9,6 +9,9 @@ export type ClipMoment = "ace" | "birdie" | "manual";
 
 export interface ClipCard {
   status: string;
+  recoveryRoundId?: string;
+  cardId?: string;
+  actorIndex?: number;
   holes: { hole: number }[];
   cardmates: { index: number; name: string }[];
 }
@@ -92,7 +95,12 @@ export function cardFromMine(status: number, body: unknown): ClipCard | null {
       return Number.isInteger(index) && name ? [{ index, name }] : [];
     })
     : [];
-  return { status: String(row.status ?? ""), holes, cardmates };
+  return {
+    status: String(row.status ?? ""), holes, cardmates,
+    ...(typeof row.recoveryRoundId === "string" && typeof row.cardId === "string" && Number.isInteger(row.playerIndex)
+      ? { recoveryRoundId: row.recoveryRoundId, cardId: row.cardId, actorIndex: Number(row.playerIndex) }
+      : {}),
+  };
 }
 
 export function throwClipKey(scope: string, scopeKey: string, ext: string, uuid: string): string {

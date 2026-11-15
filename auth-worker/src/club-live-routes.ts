@@ -214,7 +214,7 @@ export async function handleClubLive(
     if (await kvRateLimited(env, "live-finish:" + id.authMember, 30, 60)) return json({ error: "rate_limited" }, 429, origin);
     const r = await stub.fetch("https://do/finish-card", {
       method: "POST",
-      body: JSON.stringify({ playerIndex: body.playerIndex }),
+      body: JSON.stringify({ playerIndex: body.playerIndex, recovery: body.recovery }),
       headers: { "X-Auth-Member": id.authMember, "X-Auth-Admin": String(id.authAdmin) },
     });
     return json(await r.json().catch(() => ({})), r.status, origin);

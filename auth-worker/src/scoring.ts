@@ -10,6 +10,8 @@ export type { FinalLiveStanding, LiveScoringInput, LiveStanding, ScoringGroup } 
 export type { MatchStatus } from "./matchplay-scoring.js";
 
 export interface PlayerState {
+  /** Highest accepted recovery mutation per device and cell. Kept private. */
+  recoveryOrders?: Record<string, string>;
   memberId: string | null;
   name: string;
   division?: string | null;
