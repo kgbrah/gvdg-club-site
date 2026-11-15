@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#1A1A2E">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1212,7 +1212,10 @@
         .manage-pair-field { display: grid; gap: 0.35rem; }
         .manage-player-row { justify-content: space-between; }
         .manage-player-row .btn { width: auto; min-width: 96px; }
-        .score-dialog-overlay { z-index: 90; justify-content: center; padding: calc(1rem + var(--safe-top)) 1rem calc(1rem + var(--safe-bottom)); }
+        .score-dialog-overlay {
+            z-index: 90; justify-content: center;
+            padding: calc(1rem + var(--safe-top)) 1rem calc(1rem + max(var(--safe-bottom), var(--score-nav-bottom, 0px)));
+        }
         .score-dialog { width: min(100%, 430px); max-height: min(82vh, 560px); margin: auto; border-radius: 18px; padding: 1rem; box-shadow: 0 20px 60px var(--shadow); }
         .score-dialog-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 14px; background: var(--bg-tertiary); color: var(--primary); margin-bottom: 0.7rem; }
         .score-dialog-icon.danger { color: var(--over); }

@@ -597,11 +597,30 @@ export function HoleMap(props) {
     const point = mapPointFromEvent(event, map);
     if (point) props.onMapPoint(point);
   }
+  const focusControls = h(MapFocusChips, {
+    focus: map.focus,
+    heat: showHeat,
+    key: "focus",
+    onFocus: props.onFocus,
+    onHeat: heatAvailable ? () => setHeatOn((value) => !value) : undefined,
+  });
+  const lieControls = h(MapLieChip, {
+    key: "lie-chip",
+    showMarkLabel: props.showMarkLabel,
+    surveyed: props.surveyed,
+    throws,
+    loose: map.loose,
+    onMarkLie: props.onMarkLie,
+    onMarkPin: props.onMarkPin,
+    onMarkTee: props.onMarkTee,
+    onUndoThrow: props.onUndoThrow,
+  });
   return h("div", {
     className: compact
       ? "hole-map-card hole-map-compact"
       : ("card hole-map-card" + (large ? " hole-map-watch" : "")),
   }, [
+    props.controlsOutside && h("div", { className: "hole-map-options", key: "options" }, [focusControls, props.controlAccessory]),
     h("div", { className: "hole-map-frame", key: "frame" }, [
       !props.schematic && h(SatelliteLayer, {
         bounds: map.bounds,
@@ -726,26 +745,11 @@ export function HoleMap(props) {
         ],
       ),
       h(ScoreChips, { compact, height: map.height, key: "chips", marks: players, width: map.width }),
-      h(MapFocusChips, {
-        focus: map.focus,
-        heat: showHeat,
-        key: "focus",
-        onFocus: props.onFocus,
-        onHeat: heatAvailable ? () => setHeatOn((value) => !value) : undefined,
-      }),
-      h(MapLieChip, {
-        key: "lie-chip",
-        showMarkLabel: props.showMarkLabel,
-        surveyed: props.surveyed,
-        throws,
-        loose: map.loose,
-        onMarkLie: props.onMarkLie,
-        onMarkPin: props.onMarkPin,
-        onMarkTee: props.onMarkTee,
-        onUndoThrow: props.onUndoThrow,
-      }),
-      props.hud || null,
+      props.controlsOutside ? null : focusControls,
+      props.controlsOutside ? null : lieControls,
+      props.controlsOutside ? null : props.hud,
     ]),
+    props.controlsOutside && h("div", { className: "hole-map-actions", key: "actions" }, [props.hud, lieControls]),
     h("div", { className: "hole-map-caption", key: "caption" }, [
       h("span", { key: "tee" }, map.tee ? map.tee.label : "You"),
       h("span", { key: "dist" }, map.distanceFt ? `${map.distanceFt} ft` : (map.loose ? "Around you" : "Map")),
