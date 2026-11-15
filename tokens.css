@@ -437,3 +437,18 @@ body[data-member-shell="members"] {
   --member-round-cta: #D9EDCA;
   --member-round-cta-ink: #13302A;
 }
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  src: url("img/fonts/archivo.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Bebas Neue";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("img/fonts/bebas-neue.woff2") format("woff2");
+}

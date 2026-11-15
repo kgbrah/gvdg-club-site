@@ -9,7 +9,7 @@ import { createCoursePackStore } from "../../src/shared/course-packs.js";
 // document, script or offline request, so a missing precache really fails.
 const root = process.cwd();
 const mime = { ".js": "text/javascript", ".html": "text/html", ".css": "text/css", ".json": "application/json",
-  ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".webmanifest": "application/manifest+json" };
+  ".woff2": "font/woff2", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".webmanifest": "application/manifest+json" };
 const server = createServer(async (request, response) => {
   const url = new URL(request.url, "http://localhost");
   if (url.pathname === "/version.json") { response.setHeader("Content-Type", "application/json"); response.end('{"commit":"offline-qa"}'); return; }
@@ -65,6 +65,8 @@ try {
   await page.getByRole("button", { name: "Finish card", exact: true }).click();
   await page.getByRole("button", { name: "Save finished round", exact: true }).click();
   await page.getByRole("heading", { name: "Finished offline round", exact: true }).waitFor();
+  await page.evaluate(() => document.fonts.ready);
+  assert.equal(await page.evaluate(() => document.fonts.check('16px "Archivo"')), true);
   assert.deepEqual(errors, []);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   console.log("Built service-worker offline start, scoring, reload and finish passed.");

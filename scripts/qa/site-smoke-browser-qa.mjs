@@ -186,6 +186,11 @@ async function startStaticServer() {
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url || "/", "http://127.0.0.1");
+      if (url.pathname === "/version.json") {
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({ commit: "site-smoke-fixture", branch: "fixture" }));
+        return;
+      }
       const requestPath = url.pathname === "/" ? "/index.html" : url.pathname;
       const normalized = path.normalize(decodeURIComponent(requestPath)).replace(/^(\.\.[/\\])+/, "");
       const filePath = path.join(repoRoot, normalized);
@@ -213,7 +218,7 @@ async function startStaticServer() {
 function collectPageErrors(page) {
   const errors = [];
   page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
+    if (message.type() === "error") errors.push(message.text() + " " + (message.location().url || ""));
   });
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("dialog", (dialog) => {
