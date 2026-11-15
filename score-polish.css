@@ -386,7 +386,7 @@ body .overlay > .sheet {
   overscroll-behavior-y: contain;
   overflow-wrap: anywhere;
 }
-body .overlay > .sheet .grab { background: var(--score-line); margin-bottom: .75rem; }
+body .overlay > .sheet.is-sheet-dragging { touch-action: none; }
 body .overlay > .sheet .section { margin-bottom: .32rem; }
 body .overlay > .score-dialog { width: min(100%, 27rem); border-radius: var(--score-radius); }
 .overlay :is(button.lb-hole, .lb-name-btn, .round-talk-form button) { min-height: 44px; }

@@ -264,6 +264,128 @@ export function useAccessibleDialog({
       if (closeOnBackdrop && event.target === overlay) close();
     }
 
+    let swipeCleanup = () => {};
+    if (closeOnBackdrop && panel.classList.contains("sheet")) {
+      let startX = 0;
+      let startY = 0;
+      let startTime = 0;
+      let tracking = false;
+      let dragging = false;
+      let blocked = false;
+      let swallowClick = false;
+      let settled = false;
+      let dismissTimer = 0;
+
+      function pullBlocked(startNode) {
+        let el = startNode instanceof Element ? startNode : null;
+        while (el) {
+          const oy = window.getComputedStyle(el).overflowY;
+          if ((oy === "auto" || oy === "scroll") && el.scrollTop > 1) return true;
+          if (el === panel) break;
+          el = el.parentElement;
+        }
+        return false;
+      }
+
+      function clearDrag() {
+        tracking = false;
+        dragging = false;
+        panel.classList.remove("is-sheet-dragging");
+        panel.style.transition = "";
+        panel.style.transform = "";
+      }
+
+      function dismiss() {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(dismissTimer);
+        close();
+      }
+
+      function onStart(event) {
+        if (!isTopmostOverlay(overlay) || event.touches.length !== 1) return;
+        const target = event.target;
+        if (target instanceof Element && target.closest("input, textarea, select, [contenteditable='true']")) return;
+        const touch = event.touches[0];
+        startX = touch.clientX;
+        startY = touch.clientY;
+        startTime = event.timeStamp;
+        tracking = true;
+        dragging = false;
+        blocked = pullBlocked(target);
+      }
+
+      function onMove(event) {
+        if (!tracking || event.touches.length !== 1) return;
+        const touch = event.touches[0];
+        const dx = touch.clientX - startX;
+        const dy = touch.clientY - startY;
+        if (!dragging) {
+          if (blocked || dy < 8 || Math.abs(dx) > Math.abs(dy)) {
+            if (blocked || dy < -8 || Math.abs(dx) > 10) tracking = false;
+            return;
+          }
+          dragging = true;
+          panel.classList.add("is-sheet-dragging");
+          panel.style.transition = "none";
+        }
+        if (event.cancelable) event.preventDefault();
+        panel.style.transform = "translateY(" + Math.max(0, dy) + "px)";
+      }
+
+      function onEnd(event) {
+        if (!tracking) return;
+        const touch = event.changedTouches && event.changedTouches[0];
+        const dy = touch ? touch.clientY - startY : 0;
+        const elapsed = Math.max(event.timeStamp - startTime, 1);
+        const flung = dy > 36 && dy / elapsed > 0.65;
+        const wasDragging = dragging;
+        tracking = false;
+        dragging = false;
+        if (!wasDragging) return;
+        swallowClick = true;
+        if (dy > 96 || flung) {
+          panel.style.transition = "transform 160ms ease";
+          panel.style.transform = "translateY(110%)";
+          panel.addEventListener("transitionend", dismiss, { once: true });
+          dismissTimer = window.setTimeout(dismiss, 200);
+          return;
+        }
+        panel.classList.remove("is-sheet-dragging");
+        panel.style.transition = "transform 180ms ease";
+        panel.style.transform = "";
+      }
+
+      function onCancel() {
+        if (dragging) clearDrag();
+        tracking = false;
+      }
+
+      function onClick(event) {
+        if (!swallowClick) return;
+        swallowClick = false;
+        event.preventDefault();
+        event.stopPropagation();
+      }
+
+      panel.addEventListener("touchstart", onStart, { passive: true });
+      panel.addEventListener("touchmove", onMove, { passive: false });
+      panel.addEventListener("touchend", onEnd);
+      panel.addEventListener("touchcancel", onCancel);
+      panel.addEventListener("click", onClick, true);
+      swipeCleanup = () => {
+        settled = true;
+        window.clearTimeout(dismissTimer);
+        panel.removeEventListener("touchstart", onStart);
+        panel.removeEventListener("touchmove", onMove);
+        panel.removeEventListener("touchend", onEnd);
+        panel.removeEventListener("touchcancel", onCancel);
+        panel.removeEventListener("click", onClick, true);
+        panel.removeEventListener("transitionend", dismiss);
+        clearDrag();
+      };
+    }
+
     function onPageHide() {
       try {
         clearIsolation(applied);
@@ -277,6 +399,7 @@ export function useAccessibleDialog({
     window.addEventListener("pagehide", onPageHide);
 
     return () => {
+      swipeCleanup();
       observer.disconnect();
       overlay.removeEventListener("click", onBackdrop);
       document.removeEventListener("keydown", onKeyDown, true);
