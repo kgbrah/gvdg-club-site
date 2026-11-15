@@ -146,16 +146,16 @@ export function WeatherStrip(props) {
   if (props.scorecard) {
     const gust = current?.windGustMph;
     const pending = weather && !weather.current && !weather.error;
-    return h("section", { className: "score-concept-weather", "aria-label": "Round weather" },
-      summary ? h("div", { className: "score-concept-conditions", title: summary.updatedText || undefined },
+    return h("section", { className: "scorecard-weather", "aria-label": "Round weather" },
+      summary ? h("div", { className: "scorecard-conditions", title: summary.updatedText || undefined },
         h(WeatherGraphic, { graphic: summary.graphic }),
         h("div", null, h("strong", null, summary.tempText === "--" ? summary.condition : summary.tempText),
           summary.tempText !== "--" && h("span", null, summary.condition)))
-        : h("div", { className: "score-concept-weather-status", role: "status" }, pending ? "Checking weather…" : "Weather unavailable"),
+        : h("div", { className: "scorecard-weather-status", role: "status" }, pending ? "Checking weather…" : "Weather unavailable"),
       summary?.windText ? h(WeatherWind, {
         compact: true, scorecard: true, compassState, summary, windDirectionDeg: current.windDirectionDeg,
         gustText: typeof gust === "number" && Number.isFinite(gust) ? "Gusts " + Math.round(gust) + " mph" : null,
-      }) : h("div", { className: "score-concept-weather-status" }, pending ? "Wind pending" : "Wind unavailable"),
+      }) : h("div", { className: "scorecard-weather-status" }, pending ? "Wind pending" : "Wind unavailable"),
     );
   }
 

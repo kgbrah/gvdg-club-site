@@ -670,280 +670,15 @@ body.score-glove #scoreRoot .topbar { position: relative; top: auto; }
   #scoreRoot .topbar h1 small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
 
-/* Local concept previews. Both use the same scoring card, tools and map interactions. */
-body.score-glove[data-score-concept] #scoreRoot > .wrap {
-  height: auto;
-  max-height: none;
-  overflow: visible;
+/* Local bottom-dock preview, using the live scorecard's viewport layout. */
+body.score-glove:has(.score-bottom-layout) #scoreRoot > .wrap {
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
 }
-
-body.score-glove[data-score-concept] #scoreRoot main#app {
-  display: block;
-  overflow: visible;
-  padding: 0;
-}
-
-body.score-glove[data-score-concept] #scoreRoot .topbar {
-  position: sticky;
-  top: 0;
-}
-body.score-glove[data-score-concept]:has(.offline-bar) #scoreRoot .topbar { top: var(--score-offline); }
-
-.score-concept.score-glove-layout {
-  --concept-map-ratio: 480 / 300;
-  display: grid;
-  grid-template-areas: none;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-  gap: .8rem;
-  padding: .65rem var(--score-gutter) calc(1.2rem + var(--safe-bottom));
-  max-width: 36rem;
-  margin-inline: auto;
-}
-.score-concept.score-concept--map { --concept-map-ratio: 480 / 340; }
-
-body #scoreRoot .score-concept > .hole-head {
-  grid-template-columns: 44px minmax(0, 1fr) 44px;
-  width: 100%;
-  padding: 0;
-  gap: .6rem;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--text-primary);
-  box-shadow: none;
-}
-
-.score-concept > .hole-head .hnum { margin: 0; font-size: clamp(1.45rem, 5.8vw, 1.85rem); }
-.score-concept > .hole-head :is(.hpar, .pmeta, .tee-order-hint) { color: var(--text-muted); }
-.score-concept > .hole-head .tee-order-hint { line-height: 1.3; margin-top: .27rem; font-size: .71rem; }
-.score-concept > .hole-head .navbtn {
-  border: 1px solid var(--score-line);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-}
-.score-concept > .hole-head .navbtn:disabled { color: var(--text-muted); background: var(--score-soft); }
-body #scoreRoot .score-concept > .hole-head .navbtn:focus-visible { outline-color: var(--text-primary); }
-
-.score-concept-status:empty { display: none; }
-.score-concept-status { display: grid; min-width: 0; gap: .35rem; }
-
-.score-concept-weather {
-  position: sticky;
-  z-index: 7;
-  top: var(--concept-header-height, calc(52px + var(--safe-top)));
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
-  align-items: center;
-  gap: .6rem;
-  min-width: 0;
-  padding: .22rem .68rem;
-  border-block: 1px solid var(--score-line);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-}
-body:has(.offline-bar) .score-concept-weather { top: calc(var(--concept-header-height, 52px) + var(--score-offline)); }
-
-.score-concept .score-concept-conditions { display: flex; gap: .5rem; align-items: center; min-width: 0; }
-.score-concept .score-concept-conditions > div:last-child { display: grid; gap: .08rem; min-width: 0; }
-.score-concept .score-concept-conditions strong { font: 790 1.15rem/1.1 var(--score-font); }
-.score-concept .score-concept-conditions span { color: var(--text-muted); font: 600 .74rem/1.24 var(--score-font); }
-.score-concept .score-concept-conditions .weather-graphic { flex: none; width: auto; height: auto; border: 0; background: none; }
-.score-concept .score-concept-conditions .weather-graphic-icon { font-size: 1.4rem; }
-.score-concept .score-concept-weather .weather-wind {
-  grid-column: auto;
-  align-self: stretch;
-  justify-content: flex-start;
-  width: auto;
-  min-height: 44px;
-  padding: .18rem .25rem .18rem .7rem;
-  border: 0;
-  border-inline-start: 1px solid var(--score-line);
-  border-radius: 0;
-  background: transparent;
-}
-.score-concept .weather-wind-compact .weather-wind-copy { display: grid; gap: .12rem; }
-.score-concept .weather-wind-compact .weather-wind-copy strong { font-size: .81rem; white-space: normal; }
-.score-concept .weather-wind-compact .weather-wind-copy span { display: block; font-size: .72rem; white-space: normal; }
-.score-concept .score-concept-weather-status { padding-block: .55rem; font: 640 .76rem/1.2 var(--score-font); }
-.score-concept .score-concept-weather-status:last-child { color: var(--text-muted); text-align: end; }
-.score-concept .score-concept-weather .weather-wind-arrow { color: var(--secondary-text); }
-.score-concept .score-concept-weather .weather-wind[data-relative="facing"] .weather-wind-arrow { color: var(--primary-strong); }
-
-.score-concept .round-quick-tools {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(4.6rem, 1fr));
-  gap: .25rem;
-  align-items: stretch;
-  margin: 0;
-  border-block-end: 1px solid var(--score-line);
-}
-
-.score-concept .round-quick-tools .score-glove-tool {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 46px;
-  margin: 0;
-  border: 0;
-  border-radius: .3rem;
-  padding: .3rem;
-  color: var(--text-primary);
-  background: transparent;
-  gap: .35rem;
-  font: 720 .79rem/1.2 var(--score-font);
-  white-space: normal;
-}
-.score-concept .round-quick-tools .score-glove-tool span { display: inline; }
-.score-concept .round-quick-tools .score-glove-tool svg { flex: 0 0 auto; color: var(--secondary-text); }
-.score-concept .round-quick-tools .score-glove-tool:hover { background: var(--score-soft); }
-.score-concept .round-quick-tools .score-glove-tool[aria-label="Share watch link"] { color: var(--secondary-text); }
-
-.score-concept .score-concept-section-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: .15rem .5rem;
-  margin-block-end: .27rem;
-}
-
-.score-concept .score-concept-section-head h3 {
-  margin: 0;
-  color: var(--text-primary);
-  font: 780 .96rem/1.2 var(--score-font);
-  letter-spacing: -.012em;
-}
-
-.score-concept .hole-media { position: relative; margin: 0; }
-.score-concept .hole-map-compact { margin: 0; }
-.score-concept .hole-map-frame {
-  width: 100%;
-  height: auto;
-  max-height: none;
-  aspect-ratio: var(--concept-map-ratio);
-  border: 0;
-  border-radius: 12px;
-  background-color: var(--score-soft);
-}
-.score-concept .hole-map-satellite { object-fit: fill; }
-.score-concept .hole-map-focus { gap: .28rem; }
-.score-concept :is(.hole-map-focus-btn, .hole-map-lie-btn, .hole-map-lie-undo, .hole-map-survey-btn, .hole-media-chip) {
-  min-width: 44px;
-  min-height: 44px;
-  border-radius: .55rem;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  font: 710 .73rem/1.12 var(--score-font);
-}
-.score-concept :is(.hole-map-focus-btn, .hole-map-lie-btn, .hole-map-survey-btn).active {
-  background: var(--member-round-cta);
-  border-color: var(--member-round-hover);
-  color: var(--member-round-cta-ink);
-}
-.score-concept .hole-map-lie-actions {
-  left: auto;
-  max-width: 62%;
-  flex-wrap: wrap;
-  align-content: end;
-  gap: .24rem;
-}
-.score-concept .hole-media-empty .hole-map-lie-actions { position: static; max-width: 100%; }
-.score-concept .hole-range-hud-btn { min-height: 44px; min-width: 44px; }
-.score-concept .hole-map-caption { display: none; }
-.score-concept .hole-map-credit { display: block; margin: .25rem 0 0; text-align: end; color: var(--text-muted); }
-.score-concept .hole-media-chip { position: absolute; top: .45rem; right: .45rem; z-index: 5; }
-.score-concept .tee-sign-card { position: relative; margin-top: .35rem; }
-
-.score-concept.score-glove-layout .score-glove-dock {
-  grid-area: auto;
-  min-width: 0;
-  max-height: none;
-  padding: .72rem .78rem;
-  overflow: visible;
-  border: 0;
-  background: var(--bg-secondary);
-}
-.score-concept.score-glove-layout .score-glove-scores { max-height: none; overflow: visible; }
-.score-concept .score-glove-dock .prow {
-  padding-block: .35rem;
-  min-height: 51px;
-  border: 0;
-  border-block-start: 1px solid var(--score-line);
-  border-radius: 0;
-}
-.score-concept .score-glove-dock .stepper .minus { background: var(--bg-tertiary); }
-.score-concept .score-glove-dock .stepper .plus { color: var(--member-round-cta-ink); background: var(--member-round-cta); }
-.score-concept .score-glove-dock .stepper .val { border-color: transparent; background: transparent; }
-.score-concept .score-glove-dock .score-entry-card { margin-block-end: 0; }
-.score-concept .score-glove-dock .your-turn-hint { margin-block: 0 .35rem; }
-.score-concept .scorecard-owner.compact { flex: none; max-width: 64%; }
-.score-concept .scorecard-owner select { min-height: 40px; }
-.score-concept .score-concept-tee-order {
-  color: var(--text-muted);
-  font: 630 .72rem/1.3 var(--score-font);
-}
-.score-concept .score-concept-tee-order summary { cursor: pointer; }
-.score-concept .score-concept-tee-order p { margin: .3rem 0 0; }
-.score-concept .score-concept-more { display: grid; gap: .52rem; min-width: 0; }
-.score-concept .score-concept-more .holegrid { margin: 0; max-width: 100%; }
-.score-concept .score-concept-more .holegrid button { min-height: 44px; min-width: 44px; }
-.score-concept .score-concept-more :is(.live-round-stats, .throw-highlights, .pots-strip) { margin: 0; }
-
-@media (min-width: 900px) {
-  .score-concept.score-glove-layout {
-    max-width: 70rem;
-    grid-template-columns: minmax(0, 1.4fr) minmax(22rem, 1fr);
-    grid-template-areas: "hole hole" "weather weather" "status status" "tools tools" "map scores" "more more";
-    column-gap: 1.4rem;
-    row-gap: .55rem;
-  }
-  .score-concept.score-concept--score {
-    grid-template-columns: minmax(22rem, 1fr) minmax(0, 1.4fr);
-    grid-template-areas: "hole hole" "weather weather" "status status" "tools tools" "scores map" "more more";
-  }
-  .score-concept .score-concept-status:empty { margin-block-end: -.55rem; }
-  .score-concept .score-concept-status { grid-area: status; }
-  .score-concept .score-concept-weather { grid-area: weather; }
-  .score-concept .score-concept-map { grid-area: map; }
-  .score-concept.score-glove-layout .score-glove-dock { grid-area: scores; }
-  .score-concept .score-concept-more { grid-area: more; }
-  .score-concept .round-quick-tools { grid-area: tools; grid-template-columns: repeat(auto-fit, minmax(7rem, max-content)); justify-content: center; }
-  .score-concept .score-concept-weather { grid-template-columns: 1fr 1fr; }
-  .score-concept .score-concept-conditions { justify-content: end; padding-inline-end: .45rem; }
-}
-
-@media (max-width: 360px) {
-  .score-concept .score-glove-dock .prow { gap: .32rem; }
-  .score-concept .score-glove-dock .tee-pos { flex: 0 0 22px; height: 22px; }
-  .score-concept .score-glove-dock .stepper { gap: .18rem; }
-  .score-concept .score-glove-dock .stepper button.val { width: 44px; }
-  .score-concept .round-quick-tools { grid-template-columns: repeat(auto-fit, minmax(3.25rem, 1fr)); }
-  .score-concept .round-quick-tools .score-glove-tool { flex-wrap: wrap; gap: .2rem; padding-inline: .15rem; }
-}
-
-.score-concept .score-concept-more .holegrid {
-  display: flex;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  align-items: stretch;
-  gap: .3rem;
-  padding: .16rem .15rem .28rem;
-  scrollbar-width: thin;
-}
-.score-concept .score-concept-more .holegrid button { flex: 0 0 2.9rem; min-height: 46px; }
-.score-concept .score-concept-more .live-round-stats-head { min-height: 44px; }
-
-@media (max-width: 360px) {
-  body[data-score-concept] #scoreRoot .topbar h1 small { white-space: normal; text-overflow: clip; }
-}
-
-@media (min-width: 900px) {
-  body #scoreRoot .score-concept > .hole-head { width: min(100%, 33rem); justify-self: center; }
-  .score-concept .score-concept-weather { width: min(100%, 33rem); justify-self: center; }
-}
-
-body.score-glove[data-score-concept] #scoreRoot .topbar h1 small {
+body.score-glove:has(.score-bottom-layout) #scoreRoot main#app { display: flex; overflow: hidden; }
+body.score-glove:has(.score-bottom-layout) #scoreRoot .topbar { position: relative; top: auto; }
+body.score-glove:has(.score-bottom-layout) #scoreRoot .topbar h1 small {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -952,33 +687,213 @@ body.score-glove[data-score-concept] #scoreRoot .topbar h1 small {
   text-transform: none;
   letter-spacing: .01em;
 }
-body.score-glove[data-score-concept].player-theme-page:not(.player-theme-active) { background-color: var(--bg-primary); }
-body.score-glove[data-score-concept].player-theme-page #scoreRoot .topbar { background: var(--bg-secondary); border-color: var(--border-color); }
-.score-concept .score-glove-dock .stepper .val { border-color: var(--score-line); background: var(--score-paper); }
+body.score-glove.player-theme-page:not(.player-theme-active):has(.score-bottom-layout) { background: var(--bg-primary); }
+body.score-glove.player-theme-page:has(.score-bottom-layout) #scoreRoot .topbar {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+}
 
-@media (min-width: 361px) {
-  .score-concept .round-quick-tools { display: flex; flex-wrap: wrap; }
-  .score-concept .round-quick-tools .score-glove-tool { flex: 1 1 auto; }
+.score-bottom-layout.score-glove-layout {
+  display: grid;
+  grid-template: "course" minmax(0, 1fr) "dock" auto / minmax(0, 1fr);
+  gap: 0;
+  height: 100%;
+  align-items: stretch;
+  padding-block: 0;
 }
-@media (min-width: 900px) {
-  .score-concept .round-quick-tools .score-glove-tool { flex: 0 1 auto; padding-inline: .9rem; }
+
+.score-bottom-course { grid-area: course; display: flex; min-height: 0; flex-direction: column; padding-top: .35rem; }
+.score-bottom-layout .score-glove-stage {
+  min-height: 0;
+  overflow: auto;
+  gap: .23rem;
+  padding: .04rem .15rem .35rem;
+  scrollbar-width: thin;
 }
+.score-bottom-layout .score-glove-stage .live-round-stats { padding-block: 0; }
+
+.scorecard-weather {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+  align-items: center;
+  gap: .55rem;
+  padding: .12rem .58rem;
+  min-width: 0;
+  border-block: 1px solid var(--score-line);
+  background: var(--bg-secondary);
+}
+
+.scorecard-conditions, .scorecard-weather .weather-wind { display: flex; align-items: center; min-width: 0; gap: .45rem; }
+.scorecard-conditions > div:last-child, .scorecard-weather .weather-wind-copy { display: grid; gap: .1rem; min-width: 0; }
+.scorecard-conditions strong { font: 790 1.13rem/1.08 var(--score-font); }
+.scorecard-conditions span, .scorecard-weather .weather-wind-copy span { color: var(--text-muted); font: 600 .71rem/1.25 var(--score-font); }
+.scorecard-conditions .weather-graphic { flex: none; width: auto; height: auto; border: 0; background: none; }
+.scorecard-conditions .weather-graphic-icon { font-size: 1.28rem; }
+.scorecard-weather .weather-wind {
+  width: auto;
+  grid-column: auto;
+  justify-content: flex-start;
+  min-height: 44px;
+  border: 0;
+  border-inline-start: 1px solid var(--score-line);
+  border-radius: 0;
+  padding: .14rem .25rem .14rem .56rem;
+  background: transparent;
+}
+.scorecard-weather .weather-wind-copy strong { font-size: .81rem; white-space: normal; }
+.scorecard-weather .weather-wind-copy span { display: block; white-space: normal; }
+.scorecard-weather .weather-wind-arrow { color: var(--secondary-text); }
+.scorecard-weather-status { padding-block: .55rem; font: 620 .78rem/1.24 var(--score-font); }
+.scorecard-weather-status:last-child { color: var(--text-muted); text-align: end; }
+
+.score-glove-layout.score-bottom-layout .score-glove-stage .hole-media .hole-map-frame {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  aspect-ratio: var(--score-map-ratio);
+  border: 0;
+  border-radius: .6rem;
+}
+.score-bottom-layout .hole-map-satellite { object-fit: fill; }
+.score-bottom-layout .hole-map-options, .score-bottom-layout .hole-map-actions {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  justify-content: space-between;
+  align-items: center;
+  gap: .25rem;
+}
+.score-bottom-layout .hole-map-options .hole-map-focus,
+.score-bottom-layout .hole-map-actions .hole-map-lie-actions { position: static; max-width: none; flex-wrap: nowrap; gap: .08rem; }
+.score-bottom-layout .hole-map-options .hole-media-chip { position: static; margin-inline-start: auto; }
+.score-bottom-layout .score-glove-stage :is(.hole-map-focus-btn, .hole-map-lie-btn, .hole-map-lie-undo, .hole-media-chip) {
+  min-width: 44px;
+  min-height: 44px;
+  padding: .2rem .31rem;
+  border: 0;
+  border-radius: .35rem;
+  color: var(--text-primary);
+  background: transparent;
+  font: 720 .77rem/1.13 var(--score-font);
+  white-space: normal;
+  box-shadow: none;
+}
+.score-bottom-layout .score-glove-stage :is(.hole-map-focus-btn.active, .hole-media-chip.open, .hole-map-lie-btn) {
+  color: var(--secondary-text);
+  text-decoration: underline;
+  text-underline-offset: .22em;
+  text-decoration-thickness: 1.5px;
+}
+.score-bottom-layout .hole-map-actions .hole-range-hud {
+  position: static;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: .27rem;
+  min-width: 0;
+  padding: .16rem 0;
+  border: 0;
+  background: transparent;
+}
+.score-bottom-layout .hole-range-hud strong { font-size: 1.01rem; }
+.score-bottom-layout .hole-range-hud :is(span, em) { margin: 0; font-size: .61rem; }
+.score-bottom-layout .score-glove-stage .hole-map-credit { display: block; margin-top: -.16rem; text-align: end; }
+.score-bottom-layout .score-glove-stage .tee-sign-card { position: static; margin-top: .32rem; }
+.score-bottom-layout .score-glove-stage .hole-media:has(.hole-media-empty) .hole-media-chip { position: static; }
+
+.score-bottom-layout.score-glove-layout .score-glove-dock {
+  grid-area: dock;
+  display: flex;
+  flex-direction: column;
+  gap: .08rem;
+  max-height: none;
+  padding: .08rem var(--score-gutter) calc(.08rem + var(--safe-bottom));
+  margin-inline: calc(-1 * var(--score-gutter));
+  border: 0;
+  border-block-start: 1px solid var(--score-line);
+  border-radius: .85rem .85rem 0 0;
+  background: var(--bg-secondary);
+}
+body.score-glove.player-theme-page .score-bottom-layout .score-glove-dock { background: var(--bg-secondary); }
+.score-bottom-layout .score-glove-dock .round-quick-tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: .12rem;
+  margin: 0;
+  border-block-end: 1px solid var(--score-line);
+}
+.score-bottom-layout .round-quick-tools .score-glove-tool {
+  min-width: 44px;
+  min-height: 44px;
+  flex: 1 1 auto;
+  margin: 0;
+  padding: .25rem .3rem;
+  gap: .26rem;
+  border: 0;
+  border-radius: .35rem;
+  background: transparent;
+  color: var(--text-primary);
+  font: 720 .78rem/1.15 var(--score-font);
+}
+.score-bottom-layout .round-quick-tools .score-glove-tool span { display: inline; }
+.score-bottom-layout .round-quick-tools .score-glove-tool svg { color: var(--secondary-text); flex: none; }
+.score-bottom-layout .round-quick-tools .score-glove-tool.active { color: var(--primary-strong); }
+.score-bottom-layout .score-glove-scores { max-height: min(34dvh, 21rem); overflow: auto; scrollbar-width: thin; }
+.score-bottom-layout .score-glove-dock .score-entry-card { margin: 0; }
+.score-bottom-layout .score-glove-dock .prow { min-height: 47px; padding: .11rem 0; border-radius: 0; }
+.score-bottom-layout .score-glove-dock .stepper .val { border-color: var(--score-line); background: var(--bg-primary); }
+.score-bottom-layout .score-glove-dock .stepper .plus { color: var(--member-round-cta-ink); background: var(--member-round-cta); }
+.score-bottom-layout .score-glove-dock .totbar { margin-block: .15rem; padding-top: .24rem; }
+.score-bottom-layout .score-glove-dock .hole-head {
+  margin: 0;
+  min-height: 48px;
+  justify-content: space-between;
+  border-block-start: 1px solid var(--score-line);
+  padding: .12rem .18rem;
+}
+.score-bottom-layout .hole-head .hnum {
+  margin: 0;
+  color: var(--text-primary);
+  font: 790 1.07rem/1.15 var(--score-font);
+  letter-spacing: normal;
+}
+.score-bottom-layout .hole-head .navbtn { min-width: 44px; min-height: 44px; background: var(--bg-tertiary); }
+.score-bottom-layout .hole-head .navbtn:not(:disabled):last-child { color: var(--member-round-cta-ink); background: var(--member-round-cta); }
+.round-tools-tee-order { margin-top: .4rem; color: var(--text-secondary); font-size: .83rem; }
+.round-tools-tee-order summary { min-height: 44px; align-content: center; cursor: pointer; }
+
 @media (max-width: 360px) {
-  .score-concept .score-concept-weather { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: .4rem; padding-inline: .43rem; }
-  .score-concept .score-concept-conditions { gap: .3rem; }
-  .score-concept .score-concept-conditions .weather-graphic-icon { font-size: 1.18rem; }
-  .score-concept .score-concept-weather .weather-wind { padding-inline: .4rem .06rem; gap: .3rem; }
+  .scorecard-weather { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: .3rem; padding-inline: .35rem; }
+  .scorecard-conditions, .scorecard-weather .weather-wind { gap: .3rem; }
+  .scorecard-weather .weather-wind { padding-inline: .32rem .06rem; }
+  .score-bottom-layout .score-glove-scores { max-height: 26dvh; scroll-padding: .2rem; }
+  .score-bottom-layout .score-glove-dock .round-quick-tools { flex-wrap: nowrap; }
+  .score-bottom-layout .round-quick-tools .score-glove-tool { flex: 1 1 0; padding-inline: .14rem; font-size: .72rem; }
+  .score-bottom-layout .round-quick-tools .score-glove-tool svg { display: none; }
+  .score-bottom-layout .score-glove-stage :is(.live-stats-mix-legend, .live-stats-grid) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .score-bottom-layout .score-glove-stage .live-stats-k { white-space: normal; overflow-wrap: anywhere; }
 }
 
-body.score-glove.player-theme-page .score-concept .score-glove-dock { background: var(--bg-secondary); }
-body.score-glove.player-theme-page .score-concept .score-glove-dock .stepper .val {
-  background: color-mix(in srgb, var(--bg-secondary) 55%, var(--bg-primary));
-}
-
-@media (max-width: 360px) {
-  .score-concept.score-glove-layout { --concept-map-ratio: 480 / 400; }
-  .score-concept .score-concept-more :is(.live-stats-mix-legend, .live-stats-grid) {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+@media (min-width: 900px), (orientation: landscape) and (min-width: 600px) and (max-height: 620px) {
+  .score-bottom-layout.score-glove-layout {
+    grid-template: "course dock" minmax(0, 1fr) / minmax(0, 1.4fr) minmax(16rem, 1fr);
+    gap: .7rem;
+    padding-block: .25rem;
   }
-  .score-concept .score-concept-more .live-stats-k { white-space: normal; overflow-wrap: anywhere; }
+  .score-bottom-layout.score-glove-layout .score-glove-dock {
+    align-self: end;
+    margin: 0;
+    border: 1px solid var(--score-line);
+    border-radius: .85rem;
+  }
+  .score-bottom-layout .score-glove-scores { max-height: 30dvh; }
+}
+
+@media (orientation: landscape) and (min-width: 600px) and (max-height: 620px) {
+  body.score-glove:has(.score-bottom-layout) #scoreRoot .topbar,
+  .score-bottom-layout.score-glove-layout {
+    padding-inline: max(var(--score-gutter), env(safe-area-inset-left)) max(var(--score-gutter), env(safe-area-inset-right));
+  }
+  .score-bottom-layout .score-glove-scores { max-height: min(52dvh, 16rem); }
 }

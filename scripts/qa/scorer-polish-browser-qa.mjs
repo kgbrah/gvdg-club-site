@@ -11,8 +11,8 @@ const out = process.env.GVDG_SCORER_SCREENSHOTS || "/tmp/gvdg-scorer-polish";
 await mkdir(out, { recursive: true });
 const fontDir = process.env.GVDG_SCORE_FONT_DIR;
 const serve = process.env.GVDG_SCORER_SERVE === "1";
-const concepts = process.env.GVDG_SCORER_CONCEPTS === "1";
-const sampleCourse = concepts || process.env.GVDG_SCORER_PREVIEW_DATA === "1";
+const bottomPreview = process.env.GVDG_SCORER_BOTTOM === "1";
+const sampleCourse = bottomPreview || process.env.GVDG_SCORER_PREVIEW_DATA === "1";
 const compiled = await build({
   configFile: false, mode: "production", logLevel: "silent",
   build: { write: false, emptyOutDir: false,
@@ -35,13 +35,13 @@ const server = createServer(async (request, response) => {
     if (serve && path === "/score.html") {
       const session = previewSession(request, response);
       const theme = url.searchParams.get("appearance");
-      const concept = url.searchParams.get("concept");
+      const layout = url.searchParams.get("layout");
       const players = Number(url.searchParams.get("players"));
       if (sampleCourse && (players === 1 || players === 4)) session.players = roster("singles", players);
       if (theme === "light" || theme === "dark" || theme === "ocean" || theme === "blue") session.appearance = theme;
       response.setHeader("Content-Type", "text/html");
       const seeded = html.replace('data-api-base=""', 'data-api-base="' + site + '/qa-api"')
-        .replace("<body", concept === "map" || concept === "score" ? '<body data-score-concept="' + concept + '"' : "<body")
+        .replace("<body", layout === "bottom" ? '<body data-score-layout="bottom"' : "<body")
         .replace("</head>", '<script>localStorage.setItem("gvdg_member_token", "qa-scorer-visual");localStorage.setItem("theme",' +
           JSON.stringify(session.appearance === "light" ? "light" : "dark") + ');</script></head>');
       return response.end(seeded);
@@ -188,7 +188,7 @@ const teeSign = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 390" r
   </svg>`;
 
 async function makePage({ width, height, scheme = "light", scale = 1, group = "singles", locked = false, complete = false,
-  concept, playerCount, weather = sampleWeather } = {}) {
+  bottomDock, playerCount, weather = sampleWeather } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, colorScheme: scheme === "light" ? "light" : "dark",
     permissions: ["geolocation", "camera", "microphone"], geolocation: { latitude: sampleLie.lat, longitude: sampleLie.lng, accuracy: 4 },
     serviceWorkers: "block" });
@@ -237,7 +237,9 @@ async function makePage({ width, height, scheme = "light", scale = 1, group = "s
     const request = route.request();
     const url = new URL(request.url());
     if (url.origin === site) return route.continue();
-    if (sampleCourse && url.hostname === "server.arcgisonline.com") return route.continue();
+    if (sampleCourse && url.hostname === "server.arcgisonline.com") {
+      return url.searchParams.get("size")?.startsWith("480,") ? route.continue() : route.abort();
+    }
     if (url.origin !== api) return route.abort();
     const allow = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Authorization,Content-Type",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS, PATCH, PUT, DELETE" };
@@ -305,16 +307,16 @@ async function makePage({ width, height, scheme = "light", scale = 1, group = "s
     if (path === "/rounds") return reply({ code });
     return reply({ rounds: [], events: [], rows: [] });
   });
-  await page.addInitScript(({ scheme, scale, concept }) => {
+  await page.addInitScript(({ scheme, scale, bottomDock }) => {
     localStorage.setItem("gvdg_member_token", localStorage.getItem("qa-scorer-actor") || "qa-scorer-visual");
     localStorage.setItem("gvdg_member_name", "Taylor Morgan");
     localStorage.setItem("theme", scheme === "light" ? "light" : "dark");
     Object.defineProperty(navigator, "onLine", { get: () => localStorage.getItem("qa-offline") !== "yes" });
     document.addEventListener("DOMContentLoaded", () => {
       if (scale !== 1) document.documentElement.style.fontSize = 16 * scale + "px";
-      if (concept) document.body.dataset.scoreConcept = concept;
+      if (bottomDock) document.body.dataset.scoreLayout = "bottom";
     });
-  }, { scheme, scale, concept });
+  }, { scheme, scale, bottomDock });
   const button = (label) => page.getByRole("button", { name: label, exact: true });
   const go = (query = "") => page.goto(site + "/score.html" + query, { waitUntil: "domcontentloaded" });
   async function ready() {
@@ -415,58 +417,137 @@ if (serve) {
   console.log("Preview dark theme " + site + "/score.html?round=" + code + "&appearance=dark");
   await new Promise((stop) => { process.once("SIGINT", stop); process.once("SIGTERM", stop); });
   await new Promise((done) => server.close(done));
-} else if (concepts) {
+} else if (bottomPreview) {
   try {
-    for (const [concept, playerCount, width, height, scheme, scale] of [
-      ["map", 1, 390, 844], ["map", 4, 390, 844], ["score", 1, 390, 844], ["score", 4, 390, 844],
-      ["map", 1, 390, 844, "blue"], ["map", 4, 390, 844, "blue"],
-      ["score", 1, 390, 844, "blue"], ["score", 4, 390, 844, "blue"],
-      ["map", 4, 320, 720, "dark", 1.25], ["map", 4, 1280, 900, "ocean", 1],
+    for (const [playerCount, width, height, scheme, scale] of [
+      [1, 390, 844, "blue"], [4, 390, 844, "blue"], [1, 390, 844], [4, 390, 844],
+      [4, 320, 720, "dark", 1.25], [4, 844, 390, "blue"], [4, 1280, 900, "ocean", 1],
     ]) {
-      const preview = await makePage({ width, height, scheme, scale, concept, playerCount });
+      const preview = await makePage({ width, height, scheme, scale, bottomDock: true, playerCount });
       await preview.go("?round=" + code);
       await preview.ready();
       const weather = preview.page.getByRole("region", { name: "Round weather" });
       await weather.getByText("Partly cloudy", { exact: true }).waitFor();
       await weather.getByText("Wind WNW 8 mph", { exact: true }).waitFor();
       await weather.getByText("Gusts 13 mph", { exact: true }).waitFor();
-      await preview.page.locator(".score-concept").waitFor();
-      await preview.page.waitForFunction(() => {
-        const image = document.querySelector(".hole-map-satellite");
-        return image?.complete && image.naturalWidth > 0;
-      }, { timeout: 15_000 });
-      const file = concept + "-first-" + width + "-" + playerCount + "p" + (scheme === "blue" ? "-blue" : "");
-      for (const label of ["Film throw", "Share watch link", "Round tools", "Mark lie", "Measure"]) {
-        const target = label === "Film throw" ? preview.page.locator(".round-quick-tools button").first() : preview.button(label);
-        const size = await target.boundingBox();
-        assert.ok(size && size.height >= 44 && size.width >= 44, label + " has a 44px target");
+      const stage = preview.page.getByRole("region", { name: "Map and round details" });
+      await stage.locator(".hole-map-satellite").evaluate((image) => image.decode());
+      const suffix = scheme ? "-" + scheme : "-light";
+      const file = "bottom-scorecard-" + width + "x" + height + "-" + playerCount + "p" + suffix;
+      const geometry = await preview.page.evaluate(() => {
+        const rect = (selector) => document.querySelector(selector).getBoundingClientRect();
+        const nav = [...document.querySelectorAll('[aria-label="Previous hole"], [aria-label="Next hole"]')];
+        const scores = [...document.querySelectorAll(".score-glove-dock .stepper .plus")];
+        const scroller = document.querySelector(".score-glove-scores").getBoundingClientRect();
+        const frame = document.querySelector(".hole-map-frame");
+        return {
+          height: innerHeight, scroll: scrollY, dockTop: rect(".score-glove-dock").top,
+          buttons: nav.map((button) => ({
+            docked: Boolean(button.closest(".score-glove-dock")), height: button.offsetHeight, width: button.offsetWidth,
+            bottom: button.getBoundingClientRect().bottom,
+          })),
+          scoreButtons: scores.map((button) => {
+            const { top, bottom } = button.getBoundingClientRect();
+            return { visible: top >= scroller.top && bottom <= scroller.bottom, height: button.offsetHeight, width: button.offsetWidth };
+          }),
+          mapHeight: frame.clientHeight,
+          mapObstructions: frame.querySelectorAll(".hole-map-focus, .hole-map-lie-actions, .hole-range-hud, .hole-media-chip").length,
+          weatherAboveMap: rect(".scorecard-weather").bottom <= frame.getBoundingClientRect().top,
+        };
+      });
+      assert.equal(geometry.scroll, 0);
+      assert.equal(geometry.buttons.length, 2);
+      for (const button of geometry.buttons) {
+        assert.equal(button.docked, true);
+        assert.ok(button.width >= 44 && button.height >= 44);
+        assert.ok(button.bottom <= geometry.height && button.bottom >= geometry.height - 60, "Hole navigation stays at the viewport bottom");
       }
-      if (width === 320) {
-        const map = await preview.page.locator(".hole-map-frame").boundingBox();
-        assert.ok(map.height >= 240, "Narrow aerial map remains tall enough for its controls");
+      if (width === 390) {
+        assert.ok(geometry.dockTop >= height * .55, "Scores are in the lower half of the phone");
+        assert.equal(geometry.scoreButtons.filter((button) => button.visible && button.width >= 44 && button.height >= 44).length, playerCount);
+        assert.ok(geometry.mapHeight >= (playerCount === 1 ? 320 : 240));
+      }
+      assert.equal(geometry.weatherAboveMap, true);
+      assert.equal(geometry.mapObstructions, 0);
+      assert.equal(await stage.getByRole("button", { name: "Mark tee", exact: true }).count(), 0);
+      assert.equal(await stage.getByRole("button", { name: "Mark pin", exact: true }).count(), 0);
+      for (const target of [preview.page.locator(".round-quick-tools button").first(), ...[
+        "Share watch link", "Round tools", "Mark lie", "Measure", "Tee sign", "Undo",
+      ].map(preview.button)]) {
+        const size = await target.boundingBox();
+        assert.ok(size && size.height >= 44 && size.width >= 44);
       }
       await preview.screenshot(file);
+      if (width === 320) {
+        const finalPlayer = preview.button("Increase Morgan Lee on hole 4");
+        const initialNav = await preview.button("Next hole").boundingBox();
+        await finalPlayer.click();
+        const scores = await preview.page.getByRole("region", { name: "Player scores" }).boundingBox();
+        const player = await finalPlayer.boundingBox();
+        assert.ok(player.y >= scores.y && player.y + player.height <= scores.y + scores.height, "Final score row can scroll fully into view");
+        const mark = preview.button("Mark lie");
+        await mark.scrollIntoViewIfNeeded();
+        const stageBounds = await stage.boundingBox();
+        const markBounds = await mark.boundingBox();
+        assert.ok(markBounds.y + markBounds.height <= stageBounds.y + stageBounds.height, "Mark lie can scroll fully into view");
+        assert.deepEqual(await preview.button("Next hole").boundingBox(), initialNav);
+        await preview.screenshot(file + "-scrolled");
+      }
       if (width === 390 && playerCount === 4 && !scheme) {
         await preview.button("Increase Taylor Morgan on hole 4").click();
         await preview.page.locator(".score-entry-card .prow").first().locator(".val .n").getByText("3", { exact: true }).waitFor();
-        await preview.button("Enter score for Taylor Morgan on hole 4").click();
-        await preview.page.locator(".score-pad-sheet").waitFor();
+        const score = preview.button("Enter score for Taylor Morgan on hole 4");
+        await score.click();
+        const keypad = preview.page.locator(".score-pad-sheet");
+        await keypad.waitFor();
+        await keypad.getByRole("heading").focus();
+        await preview.page.keyboard.press("Shift+Tab");
+        assert.equal(await keypad.evaluate((sheet) => sheet.contains(document.activeElement)), true);
         await preview.page.keyboard.press("Escape");
+        assert.equal(await score.evaluate((button) => document.activeElement === button), true);
         await preview.button("Share watch link").click();
         await preview.page.getByRole("dialog", { name: "Share watch link" }).getByRole("button", { name: "Copy watch link" }).waitFor();
         await preview.page.keyboard.press("Escape");
         await preview.button("Round tools").click();
-        await preview.button("Shot details").waitFor();
-        await preview.button("Invite to score").waitFor();
+        const tools = preview.page.getByRole("dialog", { name: "Round tools" });
+        for (const label of ["Mark tee", "Mark pin", "Shot details", "Invite to score"]) await tools.getByRole("button", { name: label, exact: true }).waitFor();
         await preview.page.keyboard.press("Escape");
+        await preview.button("Tee sign").click();
+        await stage.getByAltText("Tee sign for hole 4").waitFor();
+        await preview.button("Hide tee sign").click();
         await preview.button("Next hole").click();
         await preview.page.getByRole("heading", { name: "Hole 5" }).waitFor();
+        await preview.button("Previous hole").click();
+        await preview.page.getByRole("heading", { name: "Hole 4" }).waitFor();
         await weather.getByText("Wind WNW 8 mph", { exact: true }).waitFor();
+        await stage.evaluate((el) => { el.scrollTop = el.scrollHeight; });
+        const navTop = (await preview.button("Next hole").boundingBox()).y;
+        assert.ok(navTop >= height - 100, "Scrolling the map stage leaves navigation in place");
+        await preview.button("Round tools").click();
+        await preview.button("Add player").click();
+        const input = preview.page.getByRole("textbox", { name: "Player name" });
+        await input.focus();
+        await preview.page.evaluate(() => {
+          Object.defineProperty(visualViewport, "height", { configurable: true, value: innerHeight - 240 });
+          visualViewport.dispatchEvent(new Event("resize"));
+        });
+        assert.equal(await preview.page.evaluate(() => document.documentElement.style.getPropertyValue("--score-nav-bottom")), "240px");
+        const dialog = await preview.page.getByRole("dialog", { name: "Add player" }).boundingBox();
+        const navigation = await preview.page.locator(".score-bottom-layout .hole-head").boundingBox();
+        assert.ok(dialog.y + dialog.height <= height - 240, "Focused text form sits above the simulated viewport inset");
+        assert.ok(navigation.y + navigation.height <= height - 240, "The footer sits above the simulated viewport inset");
+        assert.equal(await input.evaluate((element) => document.activeElement === element), true);
+        await input.fill("Sample walk-on");
+        await preview.page.keyboard.press("Escape");
+        await preview.page.evaluate(() => {
+          delete visualViewport.height;
+          visualViewport.dispatchEvent(new Event("resize"));
+        });
       }
       await preview.noOverflow();
       await preview.context.close();
     }
-    console.log("Scorer design previews with sample weather, scores, lies and satellite imagery are in " + out);
+    console.log("Bottom-dock scorer previews with sample weather and aerial imagery " + out);
   } finally {
     await browser.close();
     await new Promise((done) => server.close(done));
