@@ -34,6 +34,7 @@ import { handleUdiscHistory } from "./udisc-history-routes.js";
 import { handleMyPlayHistory, handleMyPlayExport } from "./play-history-routes.js";
 import { handleWatchRoute } from "./watch-routes.js";
 import { handleCourseFavorites } from "./course-favorite-routes.js";
+import { handlePracticeRoute } from "./practice-routes.js";
 
 /**
  * STOPGAP: when no Workers KV namespace is bound (deployed dev/staging while this account's KV data
@@ -63,6 +64,8 @@ export default {
     try {
       const watch = await handleWatchRoute(request, env, origin, pathname, method);
       if (watch) return watch;
+      const practice = await handlePracticeRoute(request, env, origin, pathname, method);
+      if (practice) return practice;
       if (pathname === "/me/course-favorites" || /^\/me\/course-favorites\/\d+$/.test(pathname)) {
         return await handleCourseFavorites(request, env, origin);
       }
