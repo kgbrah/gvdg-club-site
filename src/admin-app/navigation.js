@@ -43,8 +43,8 @@ function PrimaryNav({ group, dock = false }) {
   }));
 }
 
-function SectionLinks({ items, route, label }) {
-  return h("nav", { className: "admin-section-links", "aria-label": label }, items.map((item) => {
+function SectionLinks({ items, route, label, layout }) {
+  return h("nav", { className: "admin-section-links" + (layout ? " " + layout : ""), "aria-label": label }, items.map((item) => {
     const selected = route.tab === item.key;
     return h("button", {
       "aria-current": selected ? "page" : undefined,
@@ -88,13 +88,13 @@ function Workspace({ route, title, group, events, courses }) {
       h("h1", { className: "admin-pane-heading admin-context-title", ref: heading, tabIndex: -1, key: "title" }, title),
       showEvent ? h("button", { className: "admin-chip", key: "event-list", onClick: () => requestAdminTab("events"), type: "button" }, "Event list") : null,
     ]),
-    !showEvent && groupLinks.length > 1 ? h(SectionLinks, { key: "group", items: groupLinks, route, label: "Sections in " + group }) : null,
-    route.tab === "events" ? h(SectionLinks, { key: "event-entry", items: workspace, route, label: "Event tools" }) : null,
+    !showEvent && route.tab !== "events" && groupLinks.length > 1 ? h(SectionLinks, { key: "group", items: groupLinks, route, label: "Sections in " + group }) : null,
+    route.tab === "events" ? h(SectionLinks, { key: "event-entry", items: groupLinks.concat(workspace), route, label: "Event tools", layout: "admin-tool-grid" }) : null,
     showEvent ? h("section", { className: "admin-context", "aria-label": "Selected event", key: "event" }, [
       h("p", { className: "admin-context-caption", key: "event" },
         event?.name || (route.eventId ? "Event #" + route.eventId : "Select an event"),
         event?.status === "live" ? h("span", { className: "admin-badge live" }, "Live") : null),
-      h(SectionLinks, { items: workspace, route, label: "Event workspace", key: "event-links" }),
+      h(SectionLinks, { items: workspace, route, label: "Event workspace", layout: "admin-tool-grid", key: "event-links" }),
       h("div", { key: "event-payments", className: "admin-context-links" }, [
         h("button", {
           className: "admin-chip", key: "wallets", type: "button", onClick: () => requestAdminTab("wallets", { eventId: route.eventId }),

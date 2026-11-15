@@ -258,21 +258,16 @@
             .weather-wind { grid-column: 1 / -1; justify-content: flex-start; width: 100%; }
         }
         .lb-wrap { margin: 0.25rem 0 1.25rem; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        .lb-table { width: 100%; min-width: 0; border-collapse: collapse; font-size: 0.95rem; }
-        .lb-table th, .lb-table td { vertical-align: top; }
-        .lb-table th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); padding: 0.4rem 0.6rem; border-bottom: 2px solid var(--border-color); }
-        .lb-table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary); }
+        .lb-table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+        .lb-table th, .lb-table td { vertical-align: middle; white-space: nowrap; }
+        .lb-table th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); padding: 0.4rem 0.45rem; border-bottom: 2px solid var(--border-color); }
+        .lb-table td { padding: 0.5rem 0.45rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary); }
         .lb-table tbody tr:first-child td { font-weight: 700; color: var(--text-primary); }
-        .lb-pos { width: 2.5rem; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-        .lb-name { font-weight: 600; color: var(--text-primary); white-space: normal; line-height: 1.25; overflow-wrap: anywhere; }
-        .lb-table.live-matchplay { min-width: 0; table-layout: fixed; }
-        .lb-table.live-matchplay th:nth-child(1),
-        .lb-table.live-matchplay td:nth-child(1) { width: 2.4rem; }
-        .lb-table.live-matchplay th:nth-child(3),
-        .lb-table.live-matchplay td:nth-child(3) { width: 3rem; }
-        .lb-table.live-matchplay th:nth-child(4),
-        .lb-table.live-matchplay td:nth-child(4) { width: 4.9rem; }
-        .lb-table.live-matchplay .lb-name { white-space: normal; line-height: 1.25; overflow-wrap: anywhere; }
+        .lb-pos { color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .lb-table :is(th, td):not(.lb-name) { width: 1%; }
+        .lb-name { font-weight: 600; color: var(--text-primary); white-space: nowrap; line-height: 1.25; overflow-wrap: normal; word-break: normal; }
+        .lb-table.live-matchplay { min-width: 100%; table-layout: auto; }
+        .lb-table.live-matchplay .lb-name { white-space: nowrap; line-height: 1.25; overflow-wrap: normal; word-break: normal; }
         .lb-table.live-matchplay .lb-members { display: block; margin-top: 0.12rem; color: var(--text-muted); font-size: 0.78rem; font-weight: 600; }
         .lb-table.live-matchplay .lb-match { line-height: 1.2; }
         .lb-topar { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }

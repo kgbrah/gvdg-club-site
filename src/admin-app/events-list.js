@@ -217,18 +217,6 @@ export function AdminEventsList() {
   const rows = kind === "all" ? timed : timed.filter((event) => event.bucket === kind);
 
   return h("div", { "data-react-admin-events-list": "ready" }, [
-    h("div", { className: "admin-events-toolbar", key: "toolbar" }, [
-
-      h("button", {
-        className: "admin-btn",
-        key: "create",
-        onClick: () => {
-          dispatchRequest("gvdg:admin-event-form-reset", {});
-          requestTab("create");
-        },
-        type: "button",
-      }, "New event"),
-    ]),
     h("div", { className: "admin-seg", key: "kinds", role: "group", "aria-label": "Calendar types" }, KINDS.map((item) => h("button", {
       "aria-pressed": kind === item.id ? "true" : "false",
       className: kind === item.id ? "on" : "",

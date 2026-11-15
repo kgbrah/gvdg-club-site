@@ -276,7 +276,7 @@ body.admin-page #adminPanel { padding: 0; border: 0; background: transparent; bo
 .admin-page .orders-badge { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--admin-hairline); min-width: 1.45em; padding-inline: .32em; font-variant-numeric: tabular-nums; }
 .admin-page .admin-events-toolbar { flex-wrap: wrap; }
 .admin-page .admin-seg { max-width: 29rem; gap: .12rem; border: 1px solid var(--admin-hairline); background: var(--admin-paper); }
-.admin-page .admin-seg button { min-width: 0; min-height: 44px; color: var(--text-secondary); padding: .3rem .28rem; overflow-wrap: anywhere; }
+.admin-page .admin-seg button { min-width: 0; min-height: 44px; color: var(--text-secondary); padding: .3rem .28rem; overflow-wrap: normal; white-space: nowrap; }
 .admin-page .admin-event-card { display: grid; gap: .5rem; grid-template-columns: minmax(0, 1fr) auto auto; padding: .55rem .7rem; }
 .admin-page .admin-event-card-main { min-height: 44px; justify-content: start; align-content: center; }
 .admin-page .admin-event-card .ev-name { min-width: 0; }
@@ -431,7 +431,17 @@ body.admin-page.player-theme-active {
 }
 
 .admin-page .admin-workspace-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .35rem .65rem; }
-@media (max-width: 400px) {
-  .admin-page .admin-context[aria-label="Selected event"] .admin-section-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .admin-page .admin-context[aria-label="Selected event"] .admin-section-links .admin-chip { width: 100%; }
+.admin-page .admin-tool-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .4rem;
+}
+.admin-page .admin-tool-grid .admin-chip {
+  width: 100%;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+}
+@media (min-width: 720px) {
+  .admin-page .admin-tool-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
