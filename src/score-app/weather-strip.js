@@ -63,11 +63,12 @@ function WeatherWind(props) {
   const model = windArrowModel(props.windDirectionDeg);
   const modeText = model ? model.modeText : props.compassState.modeText;
   const windLabel = model ? model.label : "Tap to orient wind to your phone heading";
+  const windReadout = props.scorecard ? ["Wind " + summary.windText, props.gustText, windLabel].filter(Boolean).join(". ") : windLabel;
 
   return h(
     "button",
     {
-      "aria-label": windLabel,
+      "aria-label": windReadout,
       className: props.compact ? "weather-wind weather-wind-compact" : "weather-wind",
       "data-compass-status": model ? model.compassStatus : props.compassState.status,
       "data-relative": model ? model.relative : props.compassState.relative,
@@ -80,7 +81,8 @@ function WeatherWind(props) {
     [
       h(WindArrow, { key: "arrow", model }),
       h("span", { className: "weather-wind-copy", key: "copy" }, [
-        h("strong", { key: "speed" }, summary.windText),
+        h("strong", { key: "speed" }, (props.scorecard ? "Wind " : "") + summary.windText),
+        props.scorecard && props.gustText ? h("span", { key: "course-gust" }, props.gustText) : null,
         props.compact ? null : (summary.gustText ? h("span", { key: "gust" }, summary.gustText) : null),
         props.compact ? null : h("span", { className: "weather-wind-mode", key: "mode" }, modeText),
       ]),
@@ -93,7 +95,7 @@ function useResolvedWeather(serverWeather) {
   const loc = serverWeather && serverWeather.location;
   const lat = loc ? loc.lat : null;
   const lng = loc ? loc.lng : null;
-  const canFallback = Boolean(!hasCurrent && Number.isFinite(Number(lat)) && Number.isFinite(Number(lng)));
+  const canFallback = Boolean(!hasCurrent && lat != null && lng != null && Number.isFinite(Number(lat)) && Number.isFinite(Number(lng)));
   const [fallback, setFallback] = React.useState(null);
   const [pending, setPending] = React.useState(canFallback);
 
@@ -126,7 +128,7 @@ export function WeatherStrip(props) {
   const weather = useResolvedWeather(props.weather);
 
   const chips = weatherChips(weather);
-  if (!chips.length) return null;
+  if (!chips.length && !props.scorecard) return null;
 
   const summary = currentWeatherSummary(weather);
   const current = weather && weather.current;
@@ -140,6 +142,22 @@ export function WeatherStrip(props) {
       windDirectionDeg: current && current.windDirectionDeg,
     })
     : null;
+
+  if (props.scorecard) {
+    const gust = current?.windGustMph;
+    const pending = weather && !weather.current && !weather.error;
+    return h("section", { className: "score-concept-weather", "aria-label": "Round weather" },
+      summary ? h("div", { className: "score-concept-conditions", title: summary.updatedText || undefined },
+        h(WeatherGraphic, { graphic: summary.graphic }),
+        h("div", null, h("strong", null, summary.tempText === "--" ? summary.condition : summary.tempText),
+          summary.tempText !== "--" && h("span", null, summary.condition)))
+        : h("div", { className: "score-concept-weather-status", role: "status" }, pending ? "Checking weather…" : "Weather unavailable"),
+      summary?.windText ? h(WeatherWind, {
+        compact: true, scorecard: true, compassState, summary, windDirectionDeg: current.windDirectionDeg,
+        gustText: typeof gust === "number" && Number.isFinite(gust) ? "Gusts " + Math.round(gust) + " mph" : null,
+      }) : h("div", { className: "score-concept-weather-status" }, pending ? "Wind pending" : "Wind unavailable"),
+    );
+  }
 
   if (props.compact) {
     return h("div", { className: "weather-strip weather-strip-compact", title: props.title || "Round weather" }, [

@@ -131,7 +131,7 @@ function MapLieChip(props) {
           event.stopPropagation();
           props.onMarkLie();
         },
-      }, count ? "Lie " + (count + 1) : "Mark lie")
+      }, count && !props.showMarkLabel ? "Lie " + (count + 1) : "Mark lie")
       : null,
     count && typeof props.onUndoThrow === "function"
       ? h("button", {
@@ -503,7 +503,7 @@ export function HoleMap(props) {
   const hole = props.hole;
   const compact = Boolean(props.compact);
   const large = Boolean(props.large);
-  const size = compact ? HOLE_MAP_COMPACT_SIZE : large ? HOLE_MAP_WATCH_SIZE : HOLE_MAP_SIZE;
+  const size = props.size || (compact ? HOLE_MAP_COMPACT_SIZE : large ? HOLE_MAP_WATCH_SIZE : HOLE_MAP_SIZE);
   const map = projectLooseHoleMap(hole, {
     focus: props.focus,
     height: size.height,
@@ -735,6 +735,7 @@ export function HoleMap(props) {
       }),
       h(MapLieChip, {
         key: "lie-chip",
+        showMarkLabel: props.showMarkLabel,
         surveyed: props.surveyed,
         throws,
         loose: map.loose,
