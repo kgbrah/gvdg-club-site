@@ -28,6 +28,13 @@ jobs:
           node scripts/lint-hex.mjs
       - name: Check React
         run: npm run qa:react
+      - name: Install browser for interaction checks
+        run: npx playwright install --with-deps chromium-headless-shell
+      - name: Verify navigation, scoring and member workflows
+        run: |
+          node scripts/qa/navigation-browser-qa.mjs
+          node scripts/qa/live-scoring-browser-qa.mjs
+          node scripts/qa/members-dashboard-browser-qa.mjs
 
   worker:
     runs-on: ubuntu-24.04
