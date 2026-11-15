@@ -1,6 +1,8 @@
 # App-wide visual polish
 
-Actual working components with synthetic accounts and rounds. These captures extend the approved [Home and Practice direction](visual-redesign.md). Integration and final release checks are in progress in PR #96. Native hardware/store publication is not represented by these browser previews.
+**Scorecard iteration rejected by the user; do not deploy these scorecard visuals.** The user requested less crowding and visible weather/wind. New scorecard alternatives are being prepared for fresh approval. Member/admin captures below still document their completed lane.
+
+Actual working components with synthetic accounts and rounds. Integration continues in draft PR #96. Native hardware/store publication is not represented by browser previews.
 
 ## Scorecard on a phone
 
