@@ -248,6 +248,40 @@
   word-break: normal;
   hyphens: none;
 }
+[data-public-polish="events"] .league-about {
+  display: grid;
+  gap: 0.9rem;
+  margin: 0.85rem 0 1.15rem;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+[data-public-polish="events"] .league-about p { margin: 0; }
+[data-public-polish="events"] .league-layouts-label {
+  margin: 0 0 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+[data-public-polish="events"] .league-layouts dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.4rem 0.85rem;
+  margin: 0;
+}
+[data-public-polish="events"] .league-layouts dt {
+  margin: 0;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+[data-public-polish="events"] .league-layouts dd { margin: 0; }
+[data-public-polish="events"] .league-about-links a {
+  font-weight: 700;
+  color: var(--site-link);
+}
 [data-public-polish="events"] :is(.event-card, .detail-card, .previous-results-toggle, .status-box, .register-card, .league-card, .fundraiser-card) {
   background: var(--site-paper);
   border: 1px solid var(--site-line);

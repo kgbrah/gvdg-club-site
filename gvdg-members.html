@@ -88,7 +88,6 @@
             .nav-links li { padding: 1rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
             body[data-member-shell="members"] header .menu-toggle { display: none !important; }
             body[data-member-shell="members"] header .nav-links { display: none !important; }
-            body[data-member-shell="members"] header .theme-toggle { display: none !important; }
             body[data-member-shell="members"] .install-coach { margin-top: 0.75rem; }
         }
         @media (display-mode: standalone) {
@@ -1284,7 +1283,7 @@
                     margin: 0 auto;
                 }
                 @supports (color: oklch(from white l c h)) {
-                    body[data-member-shell="members"] #members {
+                    body[data-member-shell="members"]:not(.player-theme-page) #members {
                         --member-paper: oklch(from var(--bg-primary) l calc(c * .24) h);
                     }
                 }
@@ -1314,6 +1313,18 @@
                 }
                 .member-app-header .member-header-link:hover { background: var(--member-chrome-hover); }
                 .member-app-header .member-header-link:focus-visible { outline: 2px solid var(--member-chrome-focus); outline-offset: -2px; }
+                body[data-member-shell="members"] .member-app-header .theme-toggle {
+                    display: inline-flex;
+                    width: 44px;
+                    height: 44px;
+                    min-width: 44px;
+                    flex: 0 0 44px;
+                    padding: 0;
+                    border: 0;
+                    border-radius: .5rem;
+                    color: var(--member-chrome-ink);
+                    background: transparent;
+                }
                 .member-page-heading {
                     margin-bottom: .85rem;
                     gap: .3rem .75rem;
@@ -1628,6 +1639,15 @@
                     font: 750 .78rem/1.2 Archivo, system-ui, sans-serif;
                     cursor: pointer;
                 }
+                #members .member-home-tags .member-account-action {
+                    border: 0;
+                    background: transparent;
+                    padding: 0 .15rem;
+                    min-width: 44px;
+                    min-height: 44px;
+                    font: 700 .84rem/1.2 Archivo, system-ui, sans-serif;
+                }
+                .member-account-spacer { width: 20px; height: 20px; flex: 0 0 20px; }
                 .member-account-action:hover, .player-home .player-job-link:hover { border-color: var(--text-primary); }
                 .member-account-action:disabled { cursor: progress; opacity: .78; }
                 .member-home-tags { margin: 0; }
@@ -1850,6 +1870,22 @@
                 .player-home .player-story-move.down { color: color-mix(in srgb, var(--text-primary) 82%, var(--over)); }
                 .player-home .player-story-block + .player-story-block { border-color: var(--member-line); padding-top: .95rem; }
                 .player-home .player-story .player-btn { width: auto; padding-inline: .9rem; margin-right: .35rem; }
+                #members .player-home .player-story .member-action-grid,
+                #members .player-home .player-story .member-action-grid:has(> :nth-child(3):last-child) {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: .45rem;
+                    margin-top: .55rem;
+                }
+                #members .player-home .player-story .member-action-grid:has(> :nth-child(3):last-child) > :first-child { grid-column: 1 / -1; }
+                #members .player-home .player-story .member-action-grid .player-btn {
+                    width: 100%;
+                    margin: 0;
+                    text-decoration: none;
+                    white-space: nowrap;
+                    overflow: visible;
+                    text-overflow: clip;
+                }
                 @media (min-width: 900px) {
                     .player-app-nav {
                         top: 5.15rem;

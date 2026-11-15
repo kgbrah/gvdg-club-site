@@ -35,11 +35,11 @@ export function MemberPageChrome({ showInstall = true } = {}) {
         } : undefined,
       }),
       h("div", { className: "member-header-controls", key: "controls" }, [
+        h(PlayerThemeToggle, { key: "theme" }),
         h(CrottsHelpLink, { className: "member-header-link", key: "help" }, "Help"),
         signedIn ? h("button", {
           className: "member-header-link", key: "account", type: "button", onClick: () => selectDashboardTab("account"),
-        }, [h(UserRound, { "aria-hidden": true, key: "icon", size: 18 }), "Account"])
-          : h(PlayerThemeToggle, { key: "theme" }),
+        }, [h(UserRound, { "aria-hidden": true, key: "icon", size: 18 }), "Account"]) : null,
       ]),
     ])),
     signedIn || !showInstall || authMode === "pin" || authMode === "profile" ? null : h(InstallCoachBanner, { key: "install" }),

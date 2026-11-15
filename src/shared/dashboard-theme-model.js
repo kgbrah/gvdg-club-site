@@ -1130,8 +1130,10 @@ function wallpaperImage(theme, glass = false) {
   if (!theme?.wallpaper) return "";
   const bg = hexToRgb(theme.tokens["bg-primary"]) || (theme.mode === "dark" ? rgb(8, 10, 18) : rgb(248, 248, 252));
   const dark = theme.mode === "dark";
-  const start = glass ? (dark ? 0.68 : 0.66) : (dark ? 0.78 : 0.86);
-  const end = glass ? (dark ? 0.8 : 0.78) : (dark ? 0.9 : 0.93);
+  // Glass off keeps main's scrim. Glass on: light mode lightens the scrim so the photo shows through;
+  // dark mode keeps a slightly heavier scrim so text in see-through panels stays WCAG AA (theme-glass QA).
+  const start = dark ? (glass ? 0.68 : 0.5) : (glass ? 0.66 : 0.86);
+  const end = dark ? (glass ? 0.8 : 0.68) : (glass ? 0.78 : 0.93);
   const scrim = `linear-gradient(rgba(${bg.r}, ${bg.g}, ${bg.b}, ${start}), rgba(${bg.r}, ${bg.g}, ${bg.b}, ${end}))`;
   return `${scrim}, url("${theme.wallpaper}")`;
 }

@@ -320,6 +320,42 @@
         .player-rating { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; color: var(--text-primary); }
         .player-team { margin-left: auto; font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
         .player-row .player-rating + .player-team { margin-left: 0.5rem; }
+        .player-list:has(.league-round-card) { grid-template-columns: 1fr; }
+        .player-row.league-round-card {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 0.2rem 0.85rem;
+            width: 100%;
+            padding: 0.75rem 0.9rem 0.75rem 1rem;
+            text-align: left;
+            font: inherit;
+        }
+        .league-round-copy { display: grid; gap: 0.12rem; min-width: 0; }
+        .league-round-name {
+            color: var(--text-primary);
+            font-weight: 700;
+            line-height: 1.25;
+            overflow-wrap: normal;
+            word-break: normal;
+            hyphens: none;
+        }
+        .league-round-date {
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+        .league-round-status {
+            margin: 0;
+            justify-self: end;
+            white-space: nowrap;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: none;
+            color: var(--text-muted);
+        }
         .event-field-compact { margin-top: 0.75rem; }
         .event-field-title { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); margin: 0 0 0.4rem; }
         .event-field-compact .division-group { margin-bottom: 0.7rem; }
