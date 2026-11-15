@@ -1,5 +1,9 @@
 import React from "react";
 
+import { readMemberToken, TOKEN_KEY } from "../shared/member-session.js";
+import { discCatalog, discChoices, unfilledDiscDetails } from "./bag-disc-catalog.js";
+import { BagDiscChoice, BagDiscVoice, BagDiscWeight } from "./bag-disc-inputs.js";
+
 import { MoreLink } from "./more-page.js";
 import { memberConfirm } from "./member-dialogs.js";
 import {
@@ -111,11 +115,16 @@ function ExportPractice({ workspace }) {
   ]);
 }
 
-function DiscForm({ initial, onSave, onClose }) {
+function DiscForm({ initial, onSave, onClose, savedDiscs, sessionToken }) {
   const [form, setForm] = React.useState(() => initial ? { ...initial.record, weightGrams: initial.record.weightGrams ?? "" } : EMPTY_DISC);
   const [error, setError] = React.useState("");
+  const catalog = discCatalog(savedDiscs);
+  const { brands, models, plastics } = discChoices(catalog, form.brand, form.model);
+  const isCurrentSession = () => Boolean(sessionToken) && readMemberToken() === sessionToken;
+
   function submit(event) {
     event.preventDefault();
+    if (!isCurrentSession()) return;
     const record = {
       ...form, brand: form.brand.trim(), model: form.model.trim(), plastic: form.plastic.trim(), notes: form.notes.trim(),
       weightGrams: form.weightGrams === "" ? null : Number(form.weightGrams),
@@ -123,17 +132,35 @@ function DiscForm({ initial, onSave, onClose }) {
     if (!record.brand || !record.model) { setError("Enter the disc’s brand and model."); return; }
     setError(onSave(record, initial) || "");
   }
-  return h("form", { className: "player-card member-practice-form", onSubmit: submit }, [
+
+  function choice(name, label, options, required = false) {
+    return h(BagDiscChoice, {
+      key: name, label, name, required, options, value: form[name],
+      onChange: (value) => setForm((current) => ({ ...current, [name]: value })),
+    });
+  }
+
+  return h("form", { className: "player-card member-practice-form bag-disc-form", onSubmit: submit }, [
     h("h2", { key: "heading" }, initial ? "Edit disc" : "Add a disc"),
-    h("div", { className: "member-practice-grid", key: "fields" }, [
-      field("Brand", updateField(form, setForm, "brand", { required: true, maxLength: 80 })),
-      field("Model", updateField(form, setForm, "model", { required: true, maxLength: 80 })),
-      field("Plastic", updateField(form, setForm, "plastic", { maxLength: 80 })),
-      field("Weight (g)", updateField(form, setForm, "weightGrams", { type: "number", min: "40", max: "220", step: "0.1" })),
+    h(BagDiscVoice, {
+      catalog, form, isCurrentSession, key: "voice",
+      onFill: (details) => setForm((current) => ({ ...current, ...unfilledDiscDetails(current, details) })),
+    }),
+    h("div", { className: "member-practice-grid bag-disc-fields", key: "fields" }, [
+      choice("brand", "Brand", brands, true),
+      choice("model", "Model", models, true),
+      choice("plastic", "Plastic", plastics),
+      h(BagDiscWeight, {
+        key: "weight", value: form.weightGrams,
+        onChange: (value) => setForm((current) => ({ ...current, weightGrams: value })),
+      }),
     ]),
     field("Notes", updateField(form, setForm, "notes", { rows: 2, maxLength: 480 })),
     !form.archived ? h("label", { key: "in-bag" }, [
-      h("input", { type: "checkbox", key: "check", checked: form.inBag, onChange: (event) => setForm({ ...form, inBag: event.target.checked }) }), " In my bag",
+      h("input", { type: "checkbox", key: "check", checked: form.inBag, onChange: (event) => {
+        const inBag = event.target.checked;
+        setForm((current) => ({ ...current, inBag }));
+      } }), " In my bag",
     ]) : null,
     formError(error),
     h("div", { className: "dashboard-actions", key: "actions" }, [
@@ -177,6 +204,17 @@ export function MemberBagPage({ workspace }) {
   const [editor, setEditor] = React.useState(null);
   const [error, setError] = React.useState("");
   const [query, setQuery] = React.useState("");
+  const sessionToken = readMemberToken();
+  React.useEffect(() => {
+    function clearPriorEditor(event) {
+      if (event.key !== null && event.key !== TOKEN_KEY) return;
+      const token = readMemberToken();
+      setEditor((current) => current?.sessionToken === token ? current : null);
+    }
+    window.addEventListener("storage", clearPriorEditor);
+    return () => window.removeEventListener("storage", clearPriorEditor);
+  }, []);
+  const openEditor = (initial) => setEditor({ initial, sessionToken });
   const term = query.trim().toLowerCase();
   const records = workspace.data.discs.filter(({ record }) => [record.brand, record.model, record.plastic].join(" ").toLowerCase().includes(term))
     .sort((a, b) => Number(b.record.inBag) - Number(a.record.inBag) || DiscLabel(a.record).localeCompare(DiscLabel(b.record)));
@@ -189,16 +227,17 @@ export function MemberBagPage({ workspace }) {
       row.record.archived ? "Archived" : row.record.inBag ? "In bag" : "Out of bag", draftLabel(row),
     ].filter(Boolean).join(" · ")),
     row.record.notes ? h("p", { className: "player-card-meta", key: "notes" }, row.record.notes) : null,
-    discActions(row, workspace, setEditor, setError),
+    discActions(row, workspace, openEditor, setError),
   ])));
   return h("div", { className: "react-play-page player-play member-practice", "data-member-bag": "ready" }, [
     h("div", { className: "member-practice-toolbar", key: "toolbar" }, [
-      formButton("Add disc", { className: "dashboard-action primary", key: "add", onClick: () => setEditor({}) }),
+      formButton("Add disc", { className: "dashboard-action primary", key: "add", onClick: () => openEditor(null) }),
       h(MoreLink, { tab: "practice", label: "Log a practice session", key: "practice" }),
     ]),
     h(SyncStatus, { workspace, key: "sync" }),
-    editor ? h(DiscForm, {
-      initial: editor.record ? editor : null, key: editor.id || "new",
+    editor?.sessionToken && editor.sessionToken === sessionToken ? h(DiscForm, {
+      initial: editor.initial, key: editor.initial?.id || "new",
+      savedDiscs: workspace.data.discs, sessionToken,
       onSave: (record, original) => {
         const failure = editRecord(workspace, "disc", record, original);
         if (!failure) setEditor(null);

@@ -1,11 +1,19 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { createServer } from "vite";
 import { chromium } from "playwright";
+import { buildTheme } from "../../src/shared/dashboard-theme-model.js";
 import { EMPTY_PRACTICE, metersFromDistance, puttingMakeTotals } from "../../src/members-app/practice-model.js";
 
 const members = new Map([["qa-one", "qa-one"], ["qa-two", "qa-two"]]);
 const serveOnly = Boolean(process.env.GVDG_PRACTICE_QA_SERVE);
+const bagEvidence = process.env.GVDG_BAG_QA_IMAGES;
+const blueTheme = buildTheme({ mode: "dark",
+  wallpaper: "data:image/jpeg;base64," + (await readFile("img/slide4.jpg")).toString("base64"),
+  sourcePalette: ["#112a57", "#b5e64e", "#88c9a3", "#e7cc9b", "#507be1", "#b190d6", "#a7caf4", "#e3eefc",
+    "#415876", "#d1f29c", "#c2efcf", "#f5e0b6", "#8cb2ff", "#dbbbef", "#c3e3fe", "#f4f8ff"],
+});
 const records = new Map();
 const operations = new Map();
 let available = true;
@@ -54,6 +62,7 @@ const vite = await createServer({
         const owner = members.get(token);
         function reply(body, status = 200) { res.writeHead(status, { "Content-Type": "application/json" }); res.end(JSON.stringify(body)); }
         if (path === "/fixture/me") { reply({ sub: owner, name: owner, pdgaNo: "123" }); return; }
+        if (path === "/fixture/me/dashboard-theme" && owner === "bag-390") { reply({ theme: blueTheme }); return; }
         if (!path.startsWith("/fixture/me/practice")) { reply({}); return; }
         if (!owner) { reply({ error: "unauthorized" }, 401); return; }
         if (!available) { reply({ error: "outage" }, 503); return; }
@@ -91,7 +100,179 @@ if (serveOnly) {
 }
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 
-try {
+async function bagEntryContext(width, voiceSupported) {
+  const owner = "bag-" + width;
+  members.set(owner, owner);
+  const context = await browser.newContext({
+    viewport: { width, height: 844 }, hasTouch: width < 800, isMobile: width < 800, serviceWorkers: "block",
+  });
+  await context.route(/^https?:/, (route) => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+  const page = await context.newPage();
+  await page.addInitScript(({ owner, wide, large, voiceSupported }) => {
+    localStorage.setItem("gvdg_member_token", owner);
+    localStorage.setItem("theme", wide ? "light" : "dark");
+    if (large) document.addEventListener("DOMContentLoaded", () => { document.documentElement.style.fontSize = "20px"; }, { once: true });
+    const mock = { starts: 0, stops: 0, aborts: 0, active: null };
+    class Recognition {
+      start() {
+        mock.starts++;
+        mock.active = this;
+        const onResult = this.onresult;
+        const onEnd = this.onend;
+        mock.finish = (text) => {
+          const result = Object.assign([{ transcript: text }], { isFinal: true });
+          onResult?.({ resultIndex: 0, results: [result] });
+          onEnd?.();
+        };
+        queueMicrotask(() => this.onstart?.());
+      }
+      stop() { mock.stops++; }
+      abort() { mock.aborts++; }
+    }
+    Object.defineProperty(window, "SpeechRecognition", { configurable: true, value: voiceSupported ? Recognition : undefined });
+    Object.defineProperty(window, "webkitSpeechRecognition", { configurable: true, value: undefined });
+    window.bagVoiceMock = mock;
+  }, { owner, wide: width >= 800, large: width === 320, voiceSupported });
+  page.setDefaultTimeout(15_000);
+  return { context, page, owner };
+}
+
+async function checkBagEntry(width, voiceSupported) {
+  const { context, page, owner } = await bagEntryContext(width, voiceSupported);
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  async function capture(label) {
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, label + " fits");
+    if (bagEvidence) await page.screenshot({ path: join(bagEvidence, width + "-" + label + ".png"), animations: "disabled" });
+  }
+  try {
+    await page.goto(origin + "/practice-qa.html#my-bag", { waitUntil: "commit" });
+    await page.getByText("Practice record synced.").waitFor({ timeout: 60_000 });
+    await page.getByRole("button", { name: "Add disc", exact: true }).click();
+    const brand = page.getByRole("combobox", { name: "Brand", exact: true });
+    const model = page.getByRole("combobox", { name: "Model", exact: true });
+    const plastic = page.getByRole("combobox", { name: "Plastic", exact: true });
+    const weight = page.getByLabel("Weight (g)", { exact: true });
+    assert.equal(await page.evaluate(() => window.bagVoiceMock.starts), 0);
+    await brand.fill("ax");
+    await brand.press("ArrowDown");
+    await brand.press("Enter");
+    assert.equal(await brand.inputValue(), "Axiom");
+    await page.getByRole("button", { name: "Show model choices" }).click();
+    const models = page.getByRole("listbox", { name: "Model choices" });
+    await models.getByRole("option", { name: "Hex", exact: true }).waitFor();
+    assert.equal(await models.getByRole("option", { name: "Glitch", exact: true }).count(), 0);
+    await capture("model-choices");
+    await models.getByRole("option", { name: "Envy", exact: true }).click();
+    await plastic.fill("Elec");
+    await plastic.press("ArrowDown");
+    await plastic.press("Enter");
+    assert.equal(await plastic.inputValue(), "Electron");
+    await brand.fill("Innova");
+    await brand.press("Escape");
+    assert.equal(await model.inputValue(), "Envy", "Changing brands preserves the model text");
+    assert.equal(await plastic.inputValue(), "Electron", "Changing brands preserves the plastic text");
+    await page.getByRole("button", { name: "Show model choices" }).click();
+    assert.equal(await models.getByRole("option", { name: "Envy", exact: true }).count(), 0);
+    await model.press("Escape");
+    const commonWeights = page.getByRole("combobox", { name: "Common weights", exact: true });
+    await commonWeights.selectOption("173");
+    assert.equal(await weight.inputValue(), "173");
+    await commonWeights.press("ArrowDown");
+    assert.equal(await weight.inputValue(), "174");
+    await brand.fill("North Flight");
+    await page.getByRole("option", { name: "Use “North Flight”", exact: true }).click();
+    await model.fill("Starling V2");
+    await model.press("ArrowDown");
+    await model.press("Enter");
+    await plastic.fill("Cloud Flex");
+    await page.getByRole("option", { name: "Use “Cloud Flex”", exact: true }).click();
+    await weight.fill("221");
+    assert.equal(await weight.evaluate((input) => input.validity.rangeOverflow), true);
+    await page.getByRole("button", { name: "Save disc", exact: true }).click();
+    assert.equal(db(owner).size, 0);
+    await weight.fill("167.5");
+    await page.getByRole("button", { name: "Save disc", exact: true }).click();
+    await page.getByRole("heading", { name: "North Flight Starling V2", exact: true }).waitFor();
+    await page.getByText("Practice record synced.").waitFor();
+    assert.deepEqual([...db(owner).values()][0].record, {
+      brand: "North Flight", model: "Starling V2", plastic: "Cloud Flex", weightGrams: 167.5, notes: "", inBag: true, archived: false,
+    });
+
+    await page.getByRole("button", { name: "Add disc", exact: true }).click();
+    await brand.fill("North");
+    await page.getByRole("option", { name: "North Flight", exact: true }).waitFor();
+    await brand.press("Escape");
+    await brand.fill("");
+    await brand.press("Escape");
+
+    if (!voiceSupported) {
+      await page.getByText(/Voice entry is unavailable in this browser/).waitFor();
+      await capture("typing-fallback");
+      assert.deepEqual(errors, []);
+      return;
+    }
+    const start = page.getByRole("button", { name: "Add by voice", exact: true });
+    const transcript = page.getByLabel("Voice transcript", { exact: true });
+    const notes = page.locator(".bag-disc-form").getByLabel("Notes", { exact: true });
+    await notes.fill("Keep this note");
+    await page.getByRole("checkbox", { name: "In my bag" }).uncheck();
+    await start.click();
+    await page.getByText("Listening…", { exact: true }).waitFor();
+    await capture("listening");
+    await page.getByRole("button", { name: "Stop listening" }).click();
+    await page.getByText("Finishing voice recognition…", { exact: true }).waitFor();
+    await page.evaluate(() => window.bagVoiceMock.finish("Innova Star Destroyer, 175 grams"));
+    await transcript.waitFor();
+    await transcript.fill("Innova Star Destroyer, 174.5 grams");
+    await capture("voice-review");
+    await page.getByRole("button", { name: "Fill empty fields" }).click();
+    assert.equal(await brand.inputValue(), "Innova");
+    assert.equal(await model.inputValue(), "Destroyer");
+    assert.equal(await plastic.inputValue(), "Star");
+    assert.equal(await weight.inputValue(), "174.5");
+    assert.equal(await notes.inputValue(), "Keep this note");
+    assert.equal(await page.getByRole("checkbox", { name: "In my bag" }).isChecked(), false);
+    assert.equal(db(owner).size, 1, "Voice entry does not save");
+    await page.getByRole("button", { name: "Save disc", exact: true }).click();
+    await page.getByRole("heading", { name: "Innova Destroyer", exact: true }).waitFor();
+    await page.getByText("Practice record synced.").waitFor();
+    assert.equal(db(owner).size, 2);
+
+    if (width === 390) {
+      await page.getByRole("button", { name: "Add disc", exact: true }).click();
+      for (const [code, message] of [["not-allowed", "Microphone permission was denied."], ["no-speech", "No speech was detected."]]) {
+        await start.click();
+        await page.evaluate((code) => window.bagVoiceMock.active.onerror({ error: code }), code);
+        await page.getByText(message, { exact: false }).waitFor();
+        assert.equal(await model.isEditable(), true);
+      }
+      await start.click();
+      await page.getByRole("button", { name: "Cancel voice" }).click();
+      await page.evaluate(() => window.bagVoiceMock.finish("Axiom Envy Electron 170 grams"));
+      assert.equal(await transcript.count(), 0);
+      assert.equal(await brand.inputValue(), "");
+      await start.click();
+      await page.getByRole("button", { name: "Edit", exact: true }).first().click();
+      await page.evaluate(() => window.bagVoiceMock.finish("Axiom Envy 170 grams"));
+      assert.equal(await transcript.count(), 0);
+      await start.click();
+      await page.evaluate(() => {
+        localStorage.setItem("gvdg_member_token", "qa-two");
+        window.bagVoiceMock.finish("Axiom Envy 170 grams");
+      });
+      assert.equal(await transcript.count(), 0);
+      assert((await page.evaluate(() => window.bagVoiceMock.aborts)) >= 4, "Errors, cancellation and record/owner changes abort speech");
+      assert.equal(db(owner).size, 2);
+    }
+    assert.deepEqual(errors, []);
+    console.log("Bag choices and voice review verified at " + width);
+  } finally {
+    await context.close();
+  }
+}
+
+async function checkPractice() {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
   await context.route(/^https?:/, (route) => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
   const page = await context.newPage();
@@ -113,9 +294,9 @@ try {
   await page.getByRole("button", { name: "My bag", exact: true }).click();
   await page.getByText("Practice record synced.").waitFor();
   await page.getByRole("button", { name: "Add disc" }).click();
-  await page.getByLabel("Brand").fill("MVP");
-  await page.getByLabel("Model").fill("Wave");
-  await page.getByLabel("Plastic").fill("Neutron");
+  await page.getByLabel("Brand", { exact: true }).fill("MVP");
+  await page.getByLabel("Model", { exact: true }).fill("Wave");
+  await page.getByLabel("Plastic", { exact: true }).fill("Neutron");
   await page.getByLabel("Weight (g)").fill("172");
 
   await page.evaluate(() => {
@@ -183,6 +364,14 @@ try {
   assert.deepEqual(pageErrors, [], "Practice must not produce runtime errors");
   console.log("Practice mobile QA passed: quota failure, offline restart, owner isolation, lost acknowledgement, putting totals and private-by-default GPS.");
   await context.close();
+}
+
+try {
+  if (!process.env.GVDG_PRACTICE_QA_BAG_ONLY) await checkPractice();
+  if (bagEvidence) await mkdir(bagEvidence, { recursive: true });
+  await checkBagEntry(390, true);
+  await checkBagEntry(320, false);
+  await checkBagEntry(1280, true);
 } finally {
   await browser.close();
   await vite.close();
