@@ -84,8 +84,9 @@ function PairingForm({ api, round, query }) {
   }
 
   return h("details", { className: "watch-pairing", onToggle: (event) => setOpen(event.currentTarget.open) },
-    h("summary", null, "Pair a watch"),
+    h("summary", null, "Pair a watch · preview"),
     open && h("div", { className: "watch-pairing-body" },
+      h("p", null, "Requires a GVDG watch test app. App-store releases are not available yet."),
       h("p", null, "Open GVDG on your watch. Enter the code shown on your own watch to let it score on this card as you."),
       h("form", { onSubmit: approve },
         h("label", { htmlFor: inputId, className: "lbl" }, "Watch code"),
