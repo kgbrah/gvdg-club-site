@@ -42,6 +42,7 @@ jobs:
           node scripts/qa/phone-activity-browser-qa.mjs
           node scripts/qa/member-visual-polish-qa.mjs
           node scripts/qa/member-subpages-browser-qa.mjs
+          node scripts/qa/member-archive-browser-qa.mjs
           node scripts/qa/admin-visual-polish-qa.mjs
           node scripts/qa/offline-round-browser-qa.mjs
           node scripts/qa/offline-service-worker-browser-qa.mjs

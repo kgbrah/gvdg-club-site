@@ -3,6 +3,7 @@ import { request, requestJson, storageGet, TOKEN_KEY } from "./api.js";
 import { formatPct, playStyleLabel, statPct } from "../shared/play-stats.js";
 import { SHOT_STAT_DEFINITIONS } from "../shared/shot-stats-model.js";
 import { describeShot } from "../shared/shot-ledger.js";
+import { PersonalArchivePanel } from "./member-archive-panel.js";
 
 const h = React.createElement;
 const initialFilters = { window: "year", last: "10", from: "", to: "", source: "all", group: "singles", style: "stroke", course: "", layout: "", hole: "" };
@@ -286,5 +287,6 @@ export function PersonalPlayHistory() {
     status === "ready" && payload?.roundCount ? historySummary(payload, token) : null,
     status === "ready" && !payload?.roundCount ? h("p", { className: "player-card-meta" }, "No saved rounds match these filters.") : null,
     h(PlayExport, { key: token, token }),
+    h(PersonalArchivePanel, { key: "personal-backup", token }),
   );
 }

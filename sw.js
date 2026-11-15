@@ -8,6 +8,7 @@ const ASSETS = [
   "phone-activity.css",
   "score-polish.css",
   "member-surfaces.css",
+  "member-archive.css",
   "admin-polish.css",
   "homepage-polish.css",
   "home-polish-sections.css",
