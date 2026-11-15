@@ -34,4 +34,21 @@ Actual working components with synthetic accounts and rounds. Integration contin
 
 ![New event form](admin-refined-create.png)
 
-The scorecard checks include rapid taps, score corrections, lost acknowledgements, reload/reconnect, offline marked lies, incomplete-card blocking and shotgun match-play completion. Public page and shared Help previews will be added after their final review.
+The scorecard checks include rapid taps, score corrections, lost acknowledgements, reload/reconnect, offline marked lies, incomplete-card blocking and shotgun match-play completion.
+
+
+## Public Events, Shop and app guide
+
+![Club events on a phone](public-refined-events.png)
+
+![Shop on a phone](public-refined-shop.png)
+
+![App guide at 320px with enlarged text](public-refined-guide.png)
+
+## Shared Help
+
+![Help above the admin dock](help-refined-phone.png)
+
+![Help at 320px with enlarged text](help-refined-large-text.png)
+
+These captures use fixture data and the actual application components. Checkout and Help requests were intercepted locally; no payments or messages were sent.

@@ -32,6 +32,8 @@ jobs:
         run: npx playwright install --with-deps chromium-headless-shell
       - name: Verify navigation, scoring and member workflows
         run: |
+          node scripts/qa/public-polish-browser-qa.mjs
+          node scripts/qa/crotts-browser-qa.mjs
           node scripts/qa/navigation-browser-qa.mjs
           node scripts/qa/live-scoring-browser-qa.mjs
           node scripts/qa/scorer-polish-browser-qa.mjs

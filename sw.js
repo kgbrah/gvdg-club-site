@@ -1,7 +1,8 @@
-const CACHE = "gvdg-club-v250";
+const CACHE = "gvdg-club-v252";
 const OFFLINE_PAGE = "gvdg-members.html";
 const ASSETS = [
   "tokens.css",
+  "public-polish.css",
   "img/fonts/archivo.woff2",
   "img/fonts/bebas-neue.woff2",
   "watch-pairing.css",
