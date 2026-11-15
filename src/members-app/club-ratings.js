@@ -10,7 +10,7 @@ const RATING_PAGE_SIZE = 250;
 const KINDS = ["competitive", "casual"];
 
 function emptyKind() {
-  return { rounds: [], liveRating: null, ratedShown: 0, totalShown: 0, eligibleRated: 0, minimumRated: 8, offset: 0, hasMore: false, loading: false };
+  return { rounds: [], liveRating: null, ratedShown: 0, archivedShown: 0, totalShown: 0, eligibleRated: 0, minimumRated: 8, offset: 0, hasMore: false, loading: false };
 }
 
 function initialState() {
@@ -58,6 +58,7 @@ function mergeKind(previous, group, append) {
     eligibleRated: group?.eligible_rated_rounds ?? 0,
     minimumRated: group?.minimum_rated_rounds ?? 8,
     ratedShown: (append ? previous.ratedShown : 0) + (group?.rated_rounds || 0),
+    archivedShown: (append ? previous.archivedShown : 0) + rounds.filter((round) => round.rating_method === "archived").length,
     totalShown: (append ? previous.totalShown : 0) + rounds.length,
     offset: (append ? previous.offset : 0) + rounds.length,
     hasMore: rounds.length === RATING_PAGE_SIZE,
@@ -130,6 +131,7 @@ const UNRATED_REASONS = {
   "not-enough-prior-anchors": "Too few prior ratings to calibrate this field.",
   "no-prior-layout-baseline": "No earlier calibration for this layout.",
   "unverified-layout-revision": "As-played tee or basket positions are missing.",
+  "rating-source-changed": "The scorecard or its calibration changed. This round needs a new rating.",
   "missing-rating-evidence": "No rating evidence is available for this round.",
 };
 
@@ -189,6 +191,8 @@ function RatingPanel({ kind, title, group, onLoadMore }) {
           : group.eligibleRated + " eligible rated rounds in the past year"),
       ]),
     ]),
+    group.archivedShown ? h("p", { className: "club-rating-count", key: "archive" },
+      group.archivedShown + " archived " + plural(group.archivedShown, "rating is", "ratings are") + " shown below. The overall estimate uses at least " + group.minimumRated + " eligible rounds from the past year.") : null,
     h("div", { className: "club-rating-list", key: "list" }, group.rounds.length
       ? group.rounds.map((round, index) => h(RatingRoundRow, { round, kind, key: `${kind}-${round.id || index}` }))
       : h("div", { className: "club-rating-empty" }, empty)),

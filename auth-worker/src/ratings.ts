@@ -1,7 +1,8 @@
-import type { D1Like } from "./db.js";
+import type { D1Like } from "./db-types.js";
 
-import { aggregatePlayerRating, MIN_OVERALL_ROUNDS, type RatingMethod, type RatingRound as EngineRound, type RatingStream } from "./rating-engine.js";
-import { singlesStrokeEvidence } from "./rating-repair.js";
+import { aggregatePlayerRating, roundRatingForScoreWithWeather, MIN_OVERALL_ROUNDS, type RatingMethod, type RatingRound as EngineRound, type RatingStream } from "./rating-engine.js";
+import { CURRENT_RESULT_FIELDS, STORED_EVIDENCE_FIELDS, matchesStoredRatingEvidence, singlesStrokeEvidence } from "./rating-source.js";
+import { getSourceRatingBaseline, type LayoutRatingBaseline } from "./rating-store.js";
 
 export type RatingKind = "competitive" | "casual";
 export type RatingSource = "stored" | "unrated";
@@ -145,86 +146,90 @@ export function summarizeRatingRows(
   };
 }
 
-const RATING_EVIDENCE_FIELDS = `rr.source_result_id, rr.rating_method, rr.anchor_count, rr.propagator_count,
-   rr.baseline_event_id, rr.layout_revision, rr.unrated_reason`;
+export const RATING_EVIDENCE_FIELDS = `${STORED_EVIDENCE_FIELDS}, rr.rating_method, rr.anchor_count, rr.propagator_count,
+  rr.baseline_event_id, rr.unrated_reason, rr.round_date, rr.round_rating, rr.wind_gust_mph`;
+const JOINS = {
+  competition: `JOIN events e ON e.id = res.event_id LEFT JOIN event_config ec ON ec.event_id = e.id`,
+  casual: `JOIN casual_rounds cround ON cround.id = res.casual_round_id`,
+} as const;
 
-async function eligibleRatingHistory(db: D1Like, memberId: string, stream: RatingStream, now: string): Promise<EngineRound[]> {
+type RatingRow = Record<string, unknown>;
+type ValidRating = (row: RatingRow, stream: RatingStream) => Promise<boolean>;
+
+export function makeRatingValidator(db: D1Like): ValidRating {
+  const baselines = new Map<string, Promise<LayoutRatingBaseline | null>>();
+  return async (row, stream) => {
+    if (!await matchesStoredRatingEvidence(row, stream)) return false;
+    // A casual estimate must still agree with its source event's current valid calibration.
+    if (row.rating_method !== "layout" || row.round_rating == null) return true;
+    const revision = stringOrNull(row.layout_revision);
+    const baselineId = intOrNull(row.baseline_event_id);
+    const total = intOrNull(row.total);
+    if (!revision || baselineId == null || total == null) return false;
+    const key = revision + ":" + baselineId;
+    const retrieved = baselines.get(key) ?? getSourceRatingBaseline(db, revision, baselineId);
+    baselines.set(key, retrieved);
+    const baseline = await retrieved;
+    if (!baseline || baseline.availableAt >= String(row.round_date ?? "")) return false;
+    const predicted = roundRatingForScoreWithWeather({
+      score: total, ssa: baseline.ssa, ppt: baseline.ppt, weather: { windGustMph: numberOrNull(row.wind_gust_mph) },
+    });
+    return predicted.roundRating === row.round_rating && baseline.propagatorCount === row.propagator_count;
+  };
+}
+
+async function eligibleRatingHistory(db: D1Like, memberId: string, stream: RatingStream, now: string, valid: ValidRating): Promise<EngineRound[]> {
   const source = stream === "competition" ? "results" : "casual_results";
   const since = new Date(Date.parse(now) - 365 * 86_400_000).toISOString();
   const rows = await db.prepare(
-    `SELECT rr.round_rating, rr.round_date FROM round_ratings rr
-       JOIN ${source} res ON res.id = rr.source_result_id AND res.member_id = rr.member_id
+    `SELECT ${CURRENT_RESULT_FIELDS[stream]}, ${RATING_EVIDENCE_FIELDS}
+       FROM round_ratings rr JOIN ${source} res ON res.id = rr.source_result_id AND res.member_id = rr.member_id
+       ${JOINS[stream]}
        WHERE rr.member_id = ? AND rr.stream = ? AND rr.round_rating IS NOT NULL
        AND rr.round_date >= ? AND rr.round_date <= ?`,
-  ).bind(memberId, stream, since, now).all<{ round_rating: number; round_date: string }>();
-  return rows.results.map(({ round_rating, round_date }) => ({ roundRating: round_rating, roundDate: round_date }));
+  ).bind(memberId, stream, since, now).all<RatingRow>();
+  const validated = await Promise.all(rows.results.map(async (row) => await valid(row, stream)
+    ? { roundRating: intOrNull(row.round_rating), roundDate: String(row.round_date) } : null));
+  return validated.filter((row): row is EngineRound => row != null);
 }
 
-async function competitiveRows(
+async function ratingDisplayRows(
   db: D1Like,
   memberId: string,
-  opts: { limit?: number | null; offset?: number | null } = {},
-): Promise<readonly Record<string, unknown>[]> {
+  stream: RatingStream,
+  opts: { limit?: number | null; offset?: number | null },
+  valid: ValidRating,
+): Promise<RatingRow[]> {
   const binds: unknown[] = [memberId];
   const limit = Number.isInteger(opts.limit) && opts.limit != null ? opts.limit : null;
-  const rawOffset = opts.offset;
-  const offset = typeof rawOffset === "number" && Number.isInteger(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
-  let sql =
-    `SELECT r.id, r.event_id, r.member_id, r.name, r.place, r.total, r.to_par,
-            COALESCE(rr.round_rating, r.rating) AS rating, r.breakdown, r.scorecard,
-            r.created_at, r.scoring_group, r.match_result, e.name AS event_name, e.date AS event_date,
-            e.type AS event_type, c.name AS course_name, c.udisc_course_id AS udisc_course_id, l.name AS layout_name,
-            e.format, ec.play_format, ec.live_scoring_config AS scoring_config, ${RATING_EVIDENCE_FIELDS}
-     FROM results r
-     JOIN events e ON e.id = r.event_id
-     LEFT JOIN event_config ec ON ec.event_id = e.id
-     LEFT JOIN courses c ON c.id = e.course_id
-     LEFT JOIN course_layouts l ON l.id = e.layout_id
-     LEFT JOIN round_ratings rr
-       ON rr.event_id = r.event_id AND rr.member_id = r.member_id AND rr.stream = 'competition'
-       AND (rr.source_result_id IS NULL OR rr.source_result_id = r.id)
-     WHERE r.member_id = ?
-     ORDER BY COALESCE(e.date, r.created_at) DESC, r.created_at DESC, r.id DESC`;
+  const offset = typeof opts.offset === "number" && Number.isInteger(opts.offset) && opts.offset > 0 ? opts.offset : 0;
+  const sharedFields = `${CURRENT_RESULT_FIELDS[stream]}, ${RATING_EVIDENCE_FIELDS}`;
+  let sql = stream === "competition"
+    ? `SELECT ${sharedFields}, CASE WHEN rr.source_result_id IS NOT NULL THEN rr.round_rating
+          ELSE COALESCE(rr.round_rating, res.rating) END AS rating,
+          e.name AS event_name, c.name AS course_name, c.udisc_course_id, l.name AS layout_name
+       FROM results res ${JOINS.competition}
+       LEFT JOIN courses c ON c.id = e.course_id
+       LEFT JOIN course_layouts l ON l.id = e.layout_id
+       LEFT JOIN round_ratings rr ON rr.event_id = res.event_id AND rr.member_id = res.member_id AND rr.stream = 'competition'
+         AND (rr.source_result_id IS NULL OR rr.source_result_id = res.id)
+       WHERE res.member_id = ? ORDER BY COALESCE(e.date, res.created_at) DESC, res.created_at DESC, res.id DESC`
+    : `SELECT ${sharedFields}, rr.round_rating AS rating, cround.course_name, cround.layout_name, c.udisc_course_id
+       FROM casual_results res ${JOINS.casual}
+       LEFT JOIN courses c ON c.id = cround.course_id
+       LEFT JOIN round_ratings rr ON rr.casual_round_code = cround.round_code AND rr.member_id = res.member_id AND rr.stream = 'casual'
+         AND (rr.source_result_id IS NULL OR rr.source_result_id = res.id)
+       WHERE res.member_id = ? ORDER BY cround.finalized_at DESC, res.created_at DESC, res.id DESC`;
   if (limit != null) {
     sql += " LIMIT ?";
     binds.push(limit);
-    if (offset > 0) {
-      sql += " OFFSET ?";
-      binds.push(offset);
-    }
+    if (offset) { sql += " OFFSET ?"; binds.push(offset); }
   }
-  return (await db.prepare(sql).bind(...binds).all()).results;
-}
-
-async function casualRows(
-  db: D1Like,
-  memberId: string,
-  opts: { limit?: number | null; offset?: number | null } = {},
-): Promise<readonly Record<string, unknown>[]> {
-  const binds: unknown[] = [memberId];
-  const limit = Number.isInteger(opts.limit) && opts.limit != null ? opts.limit : null;
-  const rawOffset = opts.offset;
-  const offset = typeof rawOffset === "number" && Number.isInteger(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
-  let sql =
-    `SELECT cr.*, r.round_code, r.course_name, r.layout_name, r.layout_id, r.finalized_at,
-            c.udisc_course_id AS udisc_course_id, rr.round_rating AS rating, r.scoring_config, ${RATING_EVIDENCE_FIELDS}
-     FROM casual_results cr
-     JOIN casual_rounds r ON r.id = cr.casual_round_id
-     LEFT JOIN courses c ON c.id = r.course_id
-     LEFT JOIN round_ratings rr
-       ON rr.casual_round_code = r.round_code AND rr.member_id = cr.member_id AND rr.stream = 'casual'
-       AND (rr.source_result_id IS NULL OR rr.source_result_id = cr.id)
-     WHERE cr.member_id = ?
-     ORDER BY r.finalized_at DESC, cr.created_at DESC, cr.id DESC`;
-  if (limit != null) {
-    sql += " LIMIT ?";
-    binds.push(limit);
-    if (offset > 0) {
-      sql += " OFFSET ?";
-      binds.push(offset);
-    }
-  }
-  return (await db.prepare(sql).bind(...binds).all()).results;
+  const { results } = await db.prepare(sql).bind(...binds).all<RatingRow>();
+  return Promise.all(results.map(async (row) => {
+    if (row.source_result_id == null || await valid(row, stream)) return row;
+    return { ...row, rating: null, anchor_count: 0, propagator_count: 0, baseline_event_id: null, unrated_reason: "rating-source-changed" };
+  }));
 }
 
 export async function getMemberRatings(
@@ -238,11 +243,12 @@ export async function getMemberRatings(
   } = {},
 ): Promise<MemberRatings> {
   const now = new Date().toISOString();
+  const valid = makeRatingValidator(db);
   const [competitive, casual, competitiveEvidence, casualEvidence] = await Promise.all([
-    competitiveRows(db, memberId, { limit: opts.competitiveLimit ?? null, offset: opts.competitiveOffset ?? null }),
-    casualRows(db, memberId, { limit: opts.casualLimit ?? null, offset: opts.casualOffset ?? null }),
-    eligibleRatingHistory(db, memberId, "competition", now),
-    eligibleRatingHistory(db, memberId, "casual", now),
+    ratingDisplayRows(db, memberId, "competition", { limit: opts.competitiveLimit, offset: opts.competitiveOffset }, valid),
+    ratingDisplayRows(db, memberId, "casual", { limit: opts.casualLimit, offset: opts.casualOffset }, valid),
+    eligibleRatingHistory(db, memberId, "competition", now, valid),
+    eligibleRatingHistory(db, memberId, "casual", now, valid),
   ]);
   return {
     competitive: summarizeRatingRows("competitive", competitive, competitiveEvidence, now),

@@ -1,10 +1,11 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { listMemberCasualResults, listMemberResults } from "../src/db-results.js";
 import type { D1Like, D1StatementLike } from "../src/db-types.js";
 import { repairRatingSource } from "../src/rating-repair.js";
 import { runRatingRepairCycle, runRatingsRecompute } from "../src/ratings-recompute.js";
 import { readArchivedRatingHoles, ratingLayoutRevision } from "../src/rating-layout.js";
-import { getLayoutRatingBaseline, queueRatingRepair } from "../src/rating-store.js";
+import { getLayoutRatingBaseline, priorRatingAnchors, queueRatingRepair } from "../src/rating-store.js";
 import { getMemberRatings } from "../src/ratings.js";
 import type { Env } from "../src/env.js";
 
@@ -209,6 +210,84 @@ describe("versioned, transactional rating repair", () => {
     const display = await getMemberRatings(db, ALPHA);
     expect(display.casual.rounds.find((row) => row.round_code === "OLDPIN")).toMatchObject({ rating_method: "layout", baseline_event_id: 1 });
     expect(display.competitive.rounds.find((row) => row.id === 1)).toMatchObject({ rating_method: "provisional", anchor_count: 2 });
+  });
+
+  it.each(["format", "score", "basket", "deleted"] as const)(
+    "withholds a baseline and dependent casual estimate immediately after a source %s correction",
+    async (change) => {
+      const { db, sqlite } = await fixture();
+      await repairRatingSource(db, "competition", 1);
+      await repairRatingSource(db, "casual", 1);
+      expect((await getMemberRatings(db, ALPHA)).casual.rounds.find((row) => row.round_code === "OLDPIN")?.rating).toEqual(expect.any(Number));
+      expect((await getMemberRatings(db, BETA)).competitive.rounds.find((row) => row.id != null && row.label === "Initial round")?.rating)
+        .toEqual(expect.any(Number));
+
+      if (change === "format") sqlite.exec("UPDATE events SET format='doubles' WHERE id=1");
+      if (change === "score") sqlite.prepare("UPDATE results SET total=11, to_par=2, scorecard=? WHERE event_id=1 AND member_id=?")
+        .run(card(OLD, 11), BETA);
+      if (change === "basket") sqlite.prepare("UPDATE results SET scorecard=? WHERE event_id=1 AND member_id=?")
+        .run(card(MOVED, 9), BETA);
+      if (change === "deleted") sqlite.prepare("DELETE FROM results WHERE event_id=1 AND member_id=?").run(BETA);
+
+      await expect(getLayoutRatingBaseline(db, LAYOUT, positions(OLD), "2026-06-12")).resolves.toBeNull();
+      const casual = (await getMemberRatings(db, ALPHA)).casual.rounds.find((row) => row.round_code === "OLDPIN");
+      expect(casual).toMatchObject({ rating: null, unrated_reason: "rating-source-changed" });
+      const corrected = (await getMemberRatings(db, BETA)).competitive.rounds.find((row) => row.label === "Initial round");
+      expect((await listMemberCasualResults(db, ALPHA)).find((row) => row.round_code === "OLDPIN")).toMatchObject({ round_rating: null });
+      if (change !== "deleted") {
+        expect((await listMemberResults(db, BETA)).find((row) => row.event_id === 1)).toMatchObject({ round_rating: null, rating: null });
+      }
+      if (change === "deleted") expect(corrected).toBeUndefined();
+      else expect(corrected).toMatchObject({ rating: null, unrated_reason: change === "format" ? "not-singles-stroke" : "rating-source-changed" });
+      if (change === "basket") {
+        await repairRatingSource(db, "competition", 1);
+        expect(sqlite.prepare("SELECT round_rating, unrated_reason FROM round_ratings WHERE event_id=1 AND member_id=?").get(BETA))
+          .toEqual({ round_rating: null, unrated_reason: "not-enough-prior-anchors" });
+        expect(sqlite.prepare("SELECT rating FROM results WHERE event_id=1 AND member_id=?").get(BETA)?.rating).toBeNull();
+      }
+      await repairRatingSource(db, "casual", 1);
+      expect(sqlite.prepare("SELECT round_rating, unrated_reason FROM round_ratings WHERE casual_round_code='OLDPIN'").get())
+        .toEqual({ round_rating: null, unrated_reason: "no-prior-layout-baseline" });
+      expect(sqlite.prepare("SELECT COUNT(*) AS count FROM layout_rating_baselines WHERE event_id=1").get()?.count).toBe(1);
+    },
+  );
+
+  it("counts only current qualifying scorecards in overall ratings and prior anchors and still displays legacy ratings", async () => {
+    const { db, sqlite } = await fixture();
+    sqlite.exec("DELETE FROM rating_anchor_snapshots WHERE member_id='m_alpha'");
+    sqlite.exec("UPDATE rating_anchor_snapshots SET observed_at='2026-05-08T00:00:00.000Z' WHERE member_id='m_gamma'");
+    sqlite.exec("UPDATE results SET rating=942 WHERE event_id=3");
+    const delta = "m_delta";
+    sqlite.prepare("INSERT INTO rating_anchor_snapshots (member_id,observed_at,effective_at,rating) VALUES (?,'2026-05-08T00:00:00.000Z','2026-05-06T00:00:00.000Z',1005)").run(delta);
+    const event = sqlite.prepare("INSERT INTO events (id, name, type, status, format, date, course_id, layout_id) VALUES (?,'Sample','league_round','final','stroke',?,1,4)");
+    const insert = sqlite.prepare("INSERT INTO results (event_id,member_id,name,place,total,to_par,scorecard,created_at) VALUES (?,?,?,1,9,0,?,?)");
+    for (let id = 10; id < 18; id += 1) {
+      const date = "2026-06-" + (id + 1);
+      event.run(id, date);
+      for (const member of [ALPHA, BETA, GAMMA, delta]) insert.run(id, member, member, card(OLD, 9), date + " 20:00:00");
+      await repairRatingSource(db, "competition", id);
+    }
+
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-09-01T00:00:00Z"));
+      const asOf = "2026-08-25T00:00:00.000Z";
+      expect((await getMemberRatings(db, ALPHA)).competitive).toMatchObject({ eligible_rated_rounds: 8, live_rating: expect.any(Number) });
+      expect((await priorRatingAnchors(db, [ALPHA], asOf)).get(ALPHA)).toEqual(expect.any(Number));
+
+      sqlite.exec("UPDATE events SET format='doubles' WHERE id=10");
+      for (const reprocessed of [false, true]) {
+        if (reprocessed) await repairRatingSource(db, "competition", 10);
+        const history = (await getMemberRatings(db, ALPHA)).competitive;
+        expect(history).toMatchObject({ eligible_rated_rounds: 7, live_rating: null });
+        expect(history.rounds.find((row) => row.label === "Old unsupported result")).toMatchObject({ rating: 942, rating_method: "archived" });
+        expect((await priorRatingAnchors(db, [ALPHA], asOf)).has(ALPHA)).toBe(false);
+      }
+      expect(sqlite.prepare("SELECT round_rating FROM round_ratings WHERE event_id=10 AND member_id=?").get(ALPHA)?.round_rating)
+        .toEqual(expect.any(Number));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("prefers the actual archived start over an edited event calendar and queues a failed finalize for immediate repair", async () => {

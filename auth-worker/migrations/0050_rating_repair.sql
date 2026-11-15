@@ -49,3 +49,7 @@ CREATE TABLE rating_anchor_refresh_state (
   cursor TEXT,
   last_key TEXT
 );
+
+-- Verify current scorecards and their calibration field before reusing stored estimates.
+ALTER TABLE round_ratings ADD COLUMN source_fingerprint TEXT;
+ALTER TABLE layout_rating_baselines ADD COLUMN field_fingerprint TEXT;
