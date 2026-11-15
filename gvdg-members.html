@@ -814,6 +814,24 @@
                 .member-page-heading .player-app-title { flex: 1; margin: 0; text-align: left; }
                 .member-page-heading .player-app-title:focus-visible { outline-color: var(--primary); }
                 .member-parent-link { border: 0; background: transparent; color: var(--secondary-text); padding: .45rem .2rem; min-height: 44px; font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: .2em; }
+                .member-practice { gap: .8rem; min-width: 0; }
+                .member-practice > .dashboard-action.primary { justify-self: start; }
+                .member-practice [aria-pressed="true"] { background: var(--secondary); color: white; }
+                .member-practice-form, .member-practice-status, .member-practice-records { display: grid; gap: .55rem; min-width: 0; }
+                .member-practice-status:has(button) { padding: .55rem .7rem; border: 1px solid var(--border-color); border-radius: .7rem; }
+                .member-practice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr)); gap: .65rem; }
+                .member-practice-field { display: grid; gap: .25rem; min-width: 0; }
+                .member-practice :is(input,textarea,select).form-input { padding: .5rem .65rem; min-height: 44px; font-size: 1rem; }
+                .member-practice-station { border: 1px solid var(--border-color); border-radius: .6rem; padding: .5rem .65rem .65rem; min-width: 0; }
+                .member-practice-station legend { padding-inline: .28rem; font-weight: 700; }
+                .member-practice-history, .member-practice-problems { list-style: none; padding: 0; }
+                .member-practice-history li, .member-practice-problems li {
+                    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .45rem;
+                    border-top: 1px solid var(--border-color); padding-block: .55rem;
+                }
+                .member-practice-trend { display: grid; gap: .2rem; border-top: 1px solid var(--border-color); padding-block: .45rem; font-size: .9rem; }
+                .member-practice summary { cursor: pointer; padding-block: .45rem; font-weight: 700; }
+                .member-practice-export { overflow-wrap: anywhere; }
                 .member-appearance-toggle { display: flex; align-items: center; gap: .55rem; }
                 .member-appearance-toggle .theme-toggle { color: var(--text-primary); border-color: var(--border-color); }
                 .member-first-use { margin-bottom: .75rem; color: var(--text-secondary); }

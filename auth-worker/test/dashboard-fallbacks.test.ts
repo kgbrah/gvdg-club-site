@@ -46,8 +46,8 @@ describe("dashboard D1 fallback reads", () => {
 
     await expect((await get("/my-results", jwt)).json()).resolves.toEqual({ results: [], casual: [] });
     await expect((await get("/my-ratings?competitiveLimit=250&casualLimit=250", jwt)).json()).resolves.toEqual({
-      competitive: { live_rating: null, rated_rounds: 0, rounds_count: 0, rounds: [] },
-      casual: { live_rating: null, rated_rounds: 0, rounds_count: 0, rounds: [] },
+      competitive: { live_rating: null, rated_rounds: 0, rounds_count: 0, rounds: [], eligible_rated_rounds: 0, minimum_rated_rounds: 8 },
+      casual: { live_rating: null, rated_rounds: 0, rounds_count: 0, rounds: [], eligible_rated_rounds: 0, minimum_rated_rounds: 8 },
     });
     await expect((await get("/my-live-rounds", jwt)).json()).resolves.toEqual({ rounds: [] });
     await expect((await get("/board", jwt)).json()).resolves.toEqual({ posts: [], authors: {} });

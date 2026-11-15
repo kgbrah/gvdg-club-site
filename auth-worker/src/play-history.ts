@@ -1,6 +1,8 @@
 import type { D1Like } from "./db-types.js";
 import { emptyPlayTotals, parseBreakdown, roundPlayStats, statPct, sumPlayTotals, type PlayTotals } from "./play-stats.js";
 import { SHOT_STAT_DEFINITIONS } from "../../src/shared/shot-stats-model.js";
+import { parseShotRows, shotHoleGeometry, shotPoint, validLedgerRevision } from "../../src/shared/shot-ledger.js";
+import type { ArchivedShotLedger } from "./shot-ledgers.js";
 
 type RoundSource = "competitive" | "casual" | "udisc";
 type GroupFormat = "singles" | "doubles" | "unknown";
@@ -12,6 +14,7 @@ type Hole = {
   hole: number; par: number | null; strokes: number | null; points: number | null;
   distanceFt: number | null; layoutAtPlay: LayoutAtPlay | null;
   marks: Mark[]; marksStatus: "saved" | "none" | "unattributed";
+  shotLedger?: ArchivedShotLedger;
 };
 type Round = {
   id: string; source: RoundSource; resultId: number; eventId: number | null; roundCode: string | null;
@@ -32,7 +35,7 @@ const ROUND_QUERIES: Record<RoundSource, string> = {
       res.scoring_group, res.match_result, e.name AS event_name, e.date AS event_date,
       res.created_at AS played_at, e.format AS event_format, e.course_id, e.layout_id,
       c.name AS course_name, l.name AS layout_name, ec.live_scoring_config AS scoring_config,
-      ec.play_format,
+      ec.play_format, private_shots.ledger_json AS shot_ledger,
       EXISTS (SELECT 1 FROM results other WHERE other.event_id = res.event_id AND other.id != res.id
           AND other.name = res.name AND other.member_id IS NOT res.member_id) AS name_collision
     FROM results res
@@ -40,19 +43,21 @@ const ROUND_QUERIES: Record<RoundSource, string> = {
     LEFT JOIN courses c ON c.id = e.course_id
     LEFT JOIN course_layouts l ON l.id = e.layout_id
     LEFT JOIN event_config ec ON ec.event_id = e.id
+    LEFT JOIN round_shot_ledgers private_shots ON private_shots.event_result_id = res.id AND private_shots.member_id = res.member_id
     WHERE res.member_id = ?`,
   casual: `SELECT res.id, res.total, res.to_par, res.breakdown, res.scorecard,
       res.scoring_group, res.match_result, r.round_code, r.course_id, r.layout_id,
       COALESCE(NULLIF(r.course_name, ''), c.name) AS course_name,
       COALESCE(NULLIF(r.layout_name, ''), l.name) AS layout_name,
       COALESCE(NULLIF(r.started_at, ''), r.finalized_at, res.created_at) AS played_at, r.holes AS round_holes,
-      r.scoring_config,
+      r.scoring_config, private_shots.ledger_json AS shot_ledger,
       EXISTS (SELECT 1 FROM casual_results other WHERE other.casual_round_id = res.casual_round_id
           AND other.id != res.id AND other.name = res.name AND other.member_id IS NOT res.member_id) AS name_collision
     FROM casual_results res
     JOIN casual_rounds r ON r.id = res.casual_round_id
     LEFT JOIN courses c ON c.id = r.course_id
     LEFT JOIN course_layouts l ON l.id = r.layout_id
+    LEFT JOIN round_shot_ledgers private_shots ON private_shots.casual_result_id = res.id AND private_shots.member_id = res.member_id
     WHERE res.member_id = ?`,
   udisc: `SELECT id, round_key, imported_at, course_name, layout_name, played_at, total, to_par,
       holes AS scorecard FROM udisc_history res WHERE member_id = ?`,
@@ -91,6 +96,20 @@ function point(value: unknown): Point | null {
   const lng = number(row.lng);
   if (lat == null || lng == null || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
   return { lat, lng, ...(typeof row.label === "string" ? { label: row.label } : {}) };
+}
+
+function archivedLedger(value: unknown): ArchivedShotLedger | null {
+  const data = record(value);
+  const rows = parseShotRows(data.rows);
+  const geometry = record(data.geometry);
+  const { revision, scope, binding, targetId, label, version, matchesResult } = data;
+  if (!rows?.length || typeof revision !== "string" || !validLedgerRevision(revision) ||
+      typeof binding !== "string" || typeof targetId !== "string" || typeof label !== "string" ||
+      typeof version !== "number" || !Number.isSafeInteger(version) || (scope !== "team" && scope !== "player")) return null;
+  return {
+    rows, revision, scope, binding, targetId, label, version, matchesResult: matchesResult === true,
+    geometry: { tee: shotPoint(geometry.tee), target: shotPoint(geometry.target) },
+  };
 }
 
 function exactDate(value: string | null): string | null {
@@ -161,6 +180,16 @@ function normalRound(raw: Row, source: RoundSource): Round | null {
       points: number(row.points) ?? prior?.points ?? null,
       distanceFt, layoutAtPlay, marks,
       marksStatus: marks.length ? "saved" : rawMarks.length && !owned ? "unattributed" : "none",
+    });
+  }
+  for (const [key, rawLedger] of Object.entries(record(parseJson(raw.shot_ledger)))) {
+    const hole = Number(key);
+    const shotLedger = archivedLedger(rawLedger);
+    if (!Number.isInteger(hole) || hole < 1 || hole > 36 || !shotLedger) continue;
+    const prior = byHole.get(hole);
+    byHole.set(hole, prior ? { ...prior, shotLedger } : {
+      hole, par: null, strokes: null, points: null, distanceFt: null, layoutAtPlay: null,
+      marks: [], marksStatus: "none", shotLedger,
     });
   }
   const breakdown = record(parseJson(raw.breakdown));
@@ -271,6 +300,12 @@ export async function readPersonalPlayPage(db: D1Like, memberId: string, cursor:
   return { rounds, clips, next };
 }
 
+export async function readRoundShotHistory(db: D1Like, memberId: string, source: "competitive" | "casual", resultId: number) {
+  const raw = await db.prepare(ROUND_QUERIES[source] + " AND res.id = ?").bind(memberId, resultId).first();
+  const round = raw ? normalRound(raw, source) : null;
+  return round ? round.holes.filter((hole) => hole.shotLedger).map(({ hole, strokes, shotLedger }) => ({ hole, strokes, shotLedger })) : null;
+}
+
 export const PLAY_EXPORT_SCHEMA = "gvdg-play-export-1";
 
 export function personalPlayExport(memberId: string, rounds: Round[], clips: Clip[], exportedAt = new Date().toISOString()) {
@@ -281,6 +316,7 @@ export function personalPlayExport(memberId: string, rounds: Round[], clips: Cli
       scope: "Saved GVDG results, imported UDisc rounds, and clips uploaded by this account. Active cards and local drafts are not archived results.",
       layout: "Course/layout IDs identify the saved round's layout record or configured event layout. Older cards may have hole pars and distances but no archived tee or target. Current map positions are not substituted.",
       marks: "Coordinates are the saved positions, ordered by n. Doubles and ambiguous legacy mark ownership are excluded. Empty marks do not imply no throws.",
+      shotLedger: "Explicit edits are exported with their saved classifications, measurements, and basket and tee. Team ledgers describe the team's observed strokes. A changed team assignment excludes the earlier ledger from statistics.",
       clips: "Clip references identify videos uploaded by this account; video bytes are not embedded and existing access rules apply.",
       csv: "Each data_json cell contains the exact record. Use it to recover text that CSV spreadsheet protection prefixes with an apostrophe.",
     },
@@ -367,11 +403,12 @@ function summarizeRound(round: Round, selectedHole: number | null) {
   for (const hole of holes) {
     if (hole.strokes != null) scores[hole.hole] = hole.strokes;
     // Shot totals need archived geometry; current pin positions can silently change apparent distances.
-    if (hole.layoutAtPlay?.target) marks[hole.hole] = hole.marks;
+    if (hole.shotLedger?.matchesResult) marks[hole.hole] = hole.shotLedger.rows;
+    else if (hole.layoutAtPlay?.target) marks[hole.hole] = hole.marks;
   }
-  const play = roundPlayStats(holes.map((hole) => ({
+  const play = roundPlayStats(holes.map((hole) => shotHoleGeometry({
     par: hole.par, hole: hole.hole, tee: hole.layoutAtPlay?.tee, target: hole.layoutAtPlay?.target,
-  })), marks, scores);
+  }, hole.shotLedger?.matchesResult ? hole.shotLedger : null)), marks, scores);
   const played = holes.filter((hole) => (hole.strokes ?? 0) > 0);
   const scoreSample = played.filter((hole) => (hole.par ?? 0) > 0);
   const toPar = scoreSample.reduce((sum, hole) => sum + (hole.strokes! - hole.par!), 0);
@@ -390,8 +427,9 @@ function summarizeRound(round: Round, selectedHole: number | null) {
     toPar: scoreSample.length ? toPar : selectedHole == null ? round.toPar : null,
     // Never attach a denominator to an aggregate-only to-par number whose holes were not archived.
     toParForTrend: toPar,
-    noArchivedGeometry: played.filter((hole) => hole.marks.length && !hole.layoutAtPlay?.target).length,
+    noArchivedGeometry: played.filter((hole) => !hole.shotLedger?.matchesResult && hole.marks.length && !hole.layoutAtPlay?.target).length,
     withheldMarkHoles: holes.filter((hole) => hole.marksStatus === "unattributed").length,
+    explicitLedgerHoles: holes.filter((hole) => hole.shotLedger).length,
     totals: play,
   };
 }
@@ -447,8 +485,8 @@ export async function loadPlayHistory(db: D1Like, memberId: string, filters: His
       withheldMarkHoles: visible.reduce((sum, row) => sum + row.withheldMarkHoles, 0),
     },
     totals: sumPlayTotals(visible.map(({ totals }) => totals)),
-    recentRounds: visible.slice(0, 12).map(({ id, eventName, date, course, layout, source, group, style, strokes, toPar, scoredHoles }) =>
-      ({ id, eventName, date, course, layout, source, group, style, strokes, toPar, scoredHoles })),
+    recentRounds: visible.slice(0, 12).map(({ id, eventName, date, course, layout, source, group, style, strokes, toPar, scoredHoles, explicitLedgerHoles }) =>
+      ({ id, eventName, date, course, layout, source, group, style, strokes, toPar, scoredHoles, explicitLedgerHoles })),
     definitions: SHOT_STAT_DEFINITIONS,
   };
 }

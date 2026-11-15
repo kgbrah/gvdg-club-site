@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Link2, Lock, Ruler, Settings2, Share2, UserPlus, Watch, X } from "lucide-react";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { HoleMap } from "../shared/hole-map.js";
-import { addThrow, currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, lastThrow, lastThrowHud, nextTeeHud, HOLE_MAP_COMPACT_SIZE, resolveMapFocus, undoThrow, withSelfLocation } from "../shared/hole-map-model.js";
+import { addThrow, currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, lastThrow, lastThrowHud, nextTeeHud, HOLE_MAP_COMPACT_SIZE, remainingFt, resolveMapFocus, undoThrow, withSelfLocation } from "../shared/hole-map-model.js";
 import { preloadRoundMaps } from "../shared/satellite-preload.js";
 import { formatPct, holePlayStats, holeStatChips, liveRoundStatsFromCard } from "../shared/play-stats.js";
 import { PotsStrip } from "./pots-strip.js";
@@ -13,6 +13,7 @@ import { RoundHighlights, ThrowFilm, useClipRecovery } from "./throw-film.js";
 import { RoundTalk } from "./round-talk.js";
 import { WristScore } from "./wrist-score.js";
 import { WatchPairing } from "./watch-pairing.js";
+import { ShotLedgerPanel } from "./shot-ledger-view.js";
 import { closeRangeLock, postRangeLock, rangeLockChanged, rangeLockNote, readRangeLockEnabled, writeRangeLockEnabled } from "../shared/range-lock.js";
 
 const h = React.createElement;
@@ -212,9 +213,12 @@ function LiveRoundStats(props) {
   const hasThrows = !putting && view.throwStats.some((row) => row.mine && row.mine.att);
   const eligible = view?.totals.shot_eligible_holes;
   const matched = view?.totals.shot_count_matched_holes;
+  const recorded = view?.totals.shot_verified_holes;
+  const incomplete = view?.totals.shot_incomplete_holes;
   const hint = putting
     ? null
-    : eligible > 0 ? "Estimated from marked lies. " + matched + " of " + eligible + " scored holes match the recorded shot count."
+    : eligible > 0 ? [`Recorded shots on ${recorded} of ${eligible} scored holes.`,
+      matched > 0 ? `Marked-lie estimates on ${matched}.` : "", incomplete > 0 ? `${incomplete} incomplete.` : ""].filter(Boolean).join(" ")
     : thru
       ? (hasThrows ? null : "Mark lies for fairways, C1, and putting")
       : "Score holes and mark lies — mix, FIR, C1, and putting fill in live.";
@@ -352,11 +356,11 @@ function RoundToolActions(props) {
     h(
       "button",
       {
-        "aria-label": "Wrist score",
+        "aria-label": "Open wrist layout",
         "aria-pressed": props.wrist ? "true" : "false",
         className: "score-glove-tool" + (props.wrist ? " active" : ""),
         key: "wrist",
-        title: "Wrist score",
+        title: "Wrist layout",
         type: "button",
         onClick: props.onWrist,
       },
@@ -365,11 +369,11 @@ function RoundToolActions(props) {
     h(
       "button",
       {
-        "aria-label": props.rangeLockOn ? "Lock screen rangefinder is on" : "Pin distance to the lock screen",
+        "aria-label": props.rangeLockOn ? "Distance alerts on" : "Turn on distance alerts",
         "aria-pressed": props.rangeLockOn ? "true" : "false",
         className: "score-glove-tool" + (props.rangeLockOn ? " active" : ""),
         key: "lock",
-        title: "Lock screen",
+        title: "Distance alerts",
         type: "button",
         onClick: props.onToggleLock,
       },
@@ -394,9 +398,22 @@ function RoundToolActions(props) {
 
 function RoundTools(props) {
   const [open, setOpen] = React.useState(false);
+  const [shots, setShots] = React.useState(false);
   const titleId = React.useId();
-  const dialog = useAccessibleDialog({ open, onClose: () => setOpen(false), labelledBy: titleId, label: "Round tools" });
-  const closeThen = (action) => (...args) => { setOpen(false); action?.(...args); };
+  const titleRef = React.useRef(null);
+  const ledgerButton = React.useRef(null);
+  function close() { setShots(false); setOpen(false); }
+  const dialog = useAccessibleDialog({ open, onClose: close, labelledBy: titleId, label: "Round tools" });
+  const closeThen = (action) => (...args) => { close(); action?.(...args); };
+  function openLedger() {
+    setShots(true);
+    void props.onRefreshShots?.();
+    requestAnimationFrame(() => titleRef.current?.focus());
+  }
+  function backFromLedger() {
+    setShots(false);
+    requestAnimationFrame(() => ledgerButton.current?.focus());
+  }
   return h(React.Fragment, null,
     h("div", { className: "score-glove-tools round-quick-tools" },
       h(ThrowFilm, { hole: props.hole, putting: props.putting, recovery: props.clipDrafts, rows: props.rows }),
@@ -406,7 +423,7 @@ function RoundTools(props) {
       }, icon(Ruler), h("span", null, props.measureLabel || "Measure")),
       h("button", { type: "button", className: "score-glove-tool", "aria-label": "Round tools", "aria-haspopup": "dialog", onClick: () => setOpen(true) },
         icon(Settings2), h("span", null, "Round tools")),
-      h(ScorecardOwner, { ...props, compact: true }),
+      h(ScorecardOwner, { ...props, compact: true, key: "owner" }),
     ),
     open && createPortal(h("div", { className: "overlay", "data-a11y-overlay": "true", role: "presentation", ref: dialog.overlayRef },
       h("section", {
@@ -414,17 +431,24 @@ function RoundTools(props) {
         "aria-labelledby": titleId, tabIndex: -1, ref: dialog.panelRef,
       },
         h("div", { className: "grab" }),
-        h("h2", { id: titleId, className: "section" }, "Round tools"),
-        h("p", { className: "muted" }, "Your hole and saved changes stay in place when you close this menu."),
-        props.onFullScorecard && h("button", { type: "button", className: "btn secondary", onClick: closeThen(props.onFullScorecard) }, "Full scorecard"),
-        h(RoundToolActions, {
-          ...props,
-          onMeasure: closeThen(props.onMeasure), onWrist: closeThen(props.onWrist),
-          onAddPlayer: closeThen(props.onAddPlayer), onManagePlayers: closeThen(props.onManagePlayers),
-        }),
-        props.watchApi && h(WatchPairing, { api: props.watchApi, roundCode: props.roundCode, eventId: props.eventId }),
-        h("p", { className: "muted round-tools-note" }, "Saved scores and lies sync when connected. Watch pairing and sharing need internet. Distance alerts update while this screen stays active."),
-        h("button", { type: "button", className: "btn secondary sheet-close", onClick: () => setOpen(false) }, "Back to round"),
+        h("h2", { id: titleId, className: "section", ref: titleRef, tabIndex: -1 }, shots ? `Shot details · Hole ${props.hole.hole}` : "Round tools"),
+        shots ? h(React.Fragment, null,
+          h(ShotLedgerPanel, { key: `${props.scorerIndex}:${props.hole.hole}`, model: props.shotLedger, score: props.ledgerScore,
+            onSave: props.onSaveShots, onDiscard: props.onDiscardRecovery, getFix: props.getShotFix, enableGps: props.enableGps,
+            measured: props.shotMeasurement }),
+          h("button", { type: "button", className: "btn secondary", onClick: backFromLedger }, "Back to round tools"))
+          : h(React.Fragment, null,
+            h("p", { className: "muted" }, "Your hole and saved changes stay in place when you close this menu."),
+            props.onFullScorecard && h("button", { type: "button", className: "btn secondary", onClick: closeThen(props.onFullScorecard) }, "Full scorecard"),
+            props.shotLedger && h("button", { type: "button", ref: ledgerButton, className: "btn secondary", onClick: openLedger }, "Shot details"),
+            h(RoundToolActions, {
+              ...props,
+              onMeasure: closeThen(props.onMeasure), onWrist: closeThen(props.onWrist),
+              onAddPlayer: closeThen(props.onAddPlayer), onManagePlayers: closeThen(props.onManagePlayers),
+            }),
+            props.watchApi && h(WatchPairing, { api: props.watchApi, roundCode: props.roundCode, eventId: props.eventId }),
+            h("p", { className: "muted round-tools-note" }, "Saved scores, lies, and shots sync when connected. Watch pairing and sharing need internet. Distance alerts update while this screen stays active.")),
+        h("button", { type: "button", className: "btn secondary sheet-close", onClick: close }, "Back to round"),
       )), document.body),
   );
 }
@@ -493,6 +517,7 @@ function useDeviceFix() {
   const watchId = React.useRef(null);
   const retryTimer = React.useRef(null);
   const fixRef = React.useRef(null);
+  const shotFixRef = React.useRef(null);
   const alive = React.useRef(true);
 
   const enableGps = React.useCallback(() => {
@@ -517,6 +542,8 @@ function useDeviceFix() {
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
       const next = { lat, lng };
       if (Number.isFinite(pos.coords && pos.coords.accuracy)) next.accuracyM = pos.coords.accuracy;
+      if (Number.isSafeInteger(pos.timestamp)) next.observedAt = pos.timestamp;
+      shotFixRef.current = next;
       const prev = fixRef.current;
       // Phone GPS jitters a few meters. Repainting on every tick reloads the
       // hole picture. Keep the last fix until the phone actually moves.
@@ -540,6 +567,7 @@ function useDeviceFix() {
         const policy = gpsErrorPolicy(err && err.code, Boolean(fixRef.current));
         if (!policy.keepFix) {
           fixRef.current = null;
+          shotFixRef.current = null;
           setFix(null);
         }
         setStatus(policy.status);
@@ -592,7 +620,7 @@ function useDeviceFix() {
       }
     };
   }, [enableGps]);
-  return { enableGps, fix, status };
+  return { enableGps, fix, status, getShotFix: () => shotFixRef.current };
 }
 
 function RangeHud(props) {
@@ -1230,7 +1258,7 @@ function RecoveryStatus(props) {
     failed.length ? h("details", { key: "errors" }, [
       h("summary", { key: "summary" }, failed.length + (failed.length === 1 ? " change needs attention" : " changes need attention")),
       h("ul", { key: "list" }, failed.map((item) => h("li", { key: item.id }, [
-        (item.kind === "throws" ? "Lies" : "Score") + " on " + (props.putting ? "station " : "hole ") + item.body.hole
+        (item.kind === "throws" ? "Lies" : item.kind === "shots" ? "Shot details" : "Score") + " on " + (props.putting ? "station " : "hole ") + item.body.hole
           + " · " + (names.get(item.body.scorerIndex) || "Card player") + ". "
           + (item.state === "auth" ? "Check that you’re signed in to this card."
             : item.error === "recovery_edit_conflict" ? "This was edited on another device. Review the current value before re-entering."
@@ -1396,6 +1424,8 @@ export function ScorecardView(props) {
     if (typeof props.onScore === "function") props.onScore(source, hole, strokes, props.scorerIndex);
   }
   const measureLabel = measure && measure.b ? "Clear" : measure && measure.a ? "Mark" : "Measure";
+  const statsHole = props.shotStats?.holes.find((hole) => hole.hole === holeNumber) || props.hole;
+  const statsRows = props.shotStats?.throws[holeNumber] ?? throws;
   const solo = props.solo === true || (Array.isArray(props.rows) && props.rows.length === 1);
   const playerBand = Math.min(Math.max(Array.isArray(props.rows) ? props.rows.length : 1, 1), 4);
   return h(React.Fragment, null, [
@@ -1453,12 +1483,12 @@ export function ScorecardView(props) {
         h(LiveRoundStats, {
           formatLabel: props.formatLabel,
           holeGrid: props.holeGrid,
-          holes: props.holes,
+          holes: props.shotStats?.holes ?? props.holes,
           playingDelta: props.playingDelta,
           playingRating: props.playingRating,
           putting: props.putting,
           solo,
-          throwsByHole: props.throwsByHole,
+          throwsByHole: props.shotStats?.throws ?? props.throwsByHole,
         }),
         h(RoundTools, {
           ...props,
@@ -1466,6 +1496,9 @@ export function ScorecardView(props) {
           measureLabel,
           measuring,
           rangeLockOn,
+          getShotFix: gps.getShotFix,
+          enableGps: gps.enableGps,
+          shotMeasurement: measure?.b ? remainingFt(measure.a, measure.b) : null,
           wrist,
           onMeasure,
           onToggleLock,
@@ -1473,7 +1506,7 @@ export function ScorecardView(props) {
         }),
         h(RoundHighlights, { canStar: true, holes: props.holeGrid, key: "clips", putting: props.putting === true }),
         h(HoleGrid, { holes: props.holeGrid, onJump: props.onJumpHole, putting: props.putting }),
-        props.putting ? null : h(HoleStatChips, { chips: holeStatChips(holePlayStats(props.hole, throws, ((props.holeGrid || []).find((hole) => hole.current) || {}).score)) }),
+        props.putting ? null : h(HoleStatChips, { chips: holeStatChips(holePlayStats(statsHole, statsRows, ((props.holeGrid || []).find((hole) => hole.current) || {}).score)) }),
         props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,
         props.potsAceHint ? h("p", { className: "pots-ace-hint", key: "ace-hint" }, props.potsAceHint) : null,
       ]),

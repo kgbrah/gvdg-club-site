@@ -1,4 +1,23 @@
 import type { D1Like, D1StatementLike } from "./db-types.js";
+import type { RatingStream } from "./rating-engine.js";
+import { COMPETITION_FIELD_REVISION, singlesStrokeEvidence } from "./rating-source.js";
+import { makeRatingValidator, RATING_EVIDENCE_FIELDS } from "./ratings.js";
+
+async function validateListedResultRatings(db: D1Like, stream: RatingStream, rows: Record<string, unknown>[]) {
+  const validate = makeRatingValidator(db);
+  return Promise.all(rows.map(async (row) => {
+    const { source_result_id, source_fingerprint, rating_total, rating_to_par, layout_revision, rating_method, anchor_count,
+      propagator_count, baseline_event_id, unrated_reason, round_date, wind_gust_mph, event_status, starts_at,
+      format, play_format, scoring_config, started_at, layout_holes, field_revision, ...result } = row;
+    if (!singlesStrokeEvidence(row, "competition") || (source_result_id != null && !await validate(row, stream))) {
+      result.round_rating = null;
+      if (stream === "competition") result.rating = null;
+    } else if (stream === "competition" && source_result_id != null) {
+      result.rating = result.round_rating;
+    }
+    return result;
+  }));
+}
 
 /** Run statements as ONE atomic D1 transaction when the binding supports batch() (real D1 does); otherwise
  *  fall back to sequential execution (the d1kv fallback and test stubs don't implement batch). Used to make
@@ -51,8 +70,19 @@ export function createResultStmt(db: D1Like, r: ResultInput): D1StatementLike {
     .bind(r.event_id, r.member_id ?? null, r.name, r.place ?? null, r.total ?? null, r.to_par ?? null, r.rating ?? null, r.breakdown ?? null, r.scorecard ?? null, r.scoring_group ?? null, r.match_result ?? null);
 }
 
+const COMPETITION_RATING_FIELDS = `e.status AS event_status, e.starts_at, e.format, ec.play_format,
+  ec.live_scoring_config AS scoring_config, ${COMPETITION_FIELD_REVISION}, ${RATING_EVIDENCE_FIELDS}`;
+const COMPETITION_RATING_JOINS = `LEFT JOIN event_config ec ON ec.event_id = e.id
+  LEFT JOIN round_ratings rr ON rr.event_id = res.event_id AND rr.member_id = res.member_id AND rr.stream = 'competition'`;
+
 export async function listResults(db: D1Like, eventId: number) {
-  return (await db.prepare("SELECT * FROM results WHERE event_id = ? ORDER BY place, total").bind(eventId).all()).results;
+  const { results } = await db.prepare(
+    `SELECT res.*, e.date AS event_date, ${COMPETITION_RATING_FIELDS}
+     FROM results res JOIN events e ON e.id = res.event_id ${COMPETITION_RATING_JOINS}
+     WHERE res.event_id = ? ORDER BY res.place, res.total`,
+  ).bind(eventId).all();
+  const checked = await validateListedResultRatings(db, "competition", results);
+  return checked.map(({ round_rating, event_date, ...result }) => result);
 }
 
 export async function listMemberResults(db: D1Like, memberId: string, opts: { limit?: number | null; offset?: number | null } = {}) {
@@ -61,15 +91,13 @@ export async function listMemberResults(db: D1Like, memberId: string, opts: { li
   const rawOffset = opts.offset;
   const offset = typeof rawOffset === "number" && Number.isInteger(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
   let sql =
-    `SELECT r.*, e.name AS event_name, e.date AS event_date, e.type AS event_type,
+    `SELECT res.*, e.name AS event_name, e.date AS event_date, e.type AS event_type,
                 c.udisc_course_id AS udisc_course_id, c.udisc_url AS udisc_url,
-                rr.round_rating AS round_rating
-         FROM results r JOIN events e ON e.id = r.event_id
+                ${COMPETITION_RATING_FIELDS}
+         FROM results res JOIN events e ON e.id = res.event_id ${COMPETITION_RATING_JOINS}
          LEFT JOIN courses c ON c.id = e.course_id
-         LEFT JOIN round_ratings rr
-           ON rr.event_id = r.event_id AND rr.member_id = r.member_id AND rr.stream = 'competition'
-         WHERE r.member_id = ?
-         ORDER BY COALESCE(e.date, r.created_at) DESC, r.created_at DESC, r.id DESC`;
+         WHERE res.member_id = ?
+         ORDER BY COALESCE(e.date, res.created_at) DESC, res.created_at DESC, res.id DESC`;
   if (limit != null) {
     sql += " LIMIT ?";
     binds.push(limit);
@@ -78,12 +106,7 @@ export async function listMemberResults(db: D1Like, memberId: string, opts: { li
       binds.push(offset);
     }
   }
-  return (
-    await db
-      .prepare(sql)
-      .bind(...binds)
-      .all()
-  ).results;
+  return validateListedResultRatings(db, "competition", (await db.prepare(sql).bind(...binds).all()).results);
 }
 
 export interface CasualRoundInput {
@@ -157,7 +180,7 @@ export async function listMemberCasualResults(db: D1Like, memberId: string, opts
   let sql =
     `SELECT cr.*, r.round_code, r.course_name, r.layout_name, r.layout_id, r.finalized_at, r.holes AS round_holes,
                 c.udisc_course_id AS udisc_course_id,
-                rr.round_rating AS round_rating,
+                r.started_at, r.scoring_config, r.holes AS layout_holes, ${RATING_EVIDENCE_FIELDS},
                 CASE
                   WHEN cr.match_result IS NOT NULL AND TRIM(cr.match_result) != '' AND cr.match_result != 'null' THEN 0
                   WHEN json_extract(r.scoring_config, '$.scoringStyle') = 'matchplay' THEN 0
@@ -179,12 +202,7 @@ export async function listMemberCasualResults(db: D1Like, memberId: string, opts
       binds.push(offset);
     }
   }
-  return (
-    await db
-      .prepare(sql)
-      .bind(...binds)
-      .all()
-  ).results;
+  return validateListedResultRatings(db, "casual", (await db.prepare(sql).bind(...binds).all()).results);
 }
 
 export async function listSeasonPlayRows(db: D1Like, year: number) {

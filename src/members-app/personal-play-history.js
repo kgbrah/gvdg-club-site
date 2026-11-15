@@ -2,6 +2,7 @@ import React from "react";
 import { request, requestJson, storageGet, TOKEN_KEY } from "./api.js";
 import { formatPct, playStyleLabel, statPct } from "../shared/play-stats.js";
 import { SHOT_STAT_DEFINITIONS } from "../shared/shot-stats-model.js";
+import { describeShot } from "../shared/shot-ledger.js";
 
 const h = React.createElement;
 const initialFilters = { window: "year", last: "10", from: "", to: "", source: "all", group: "singles", style: "stroke", course: "", layout: "", hole: "" };
@@ -57,7 +58,33 @@ function signed(n) {
   return n > 0 ? "+" + n : String(n);
 }
 
-function historySummary(view) {
+function ArchivedShots({ round, token }) {
+  const [open, setOpen] = React.useState(false);
+  const [state, setState] = React.useState({ status: "loading", holes: [] });
+  React.useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+    const query = new URLSearchParams({ shotResult: `${round.source}:${round.resultId}` });
+    setState({ status: "loading", holes: [] });
+    requestJson("/my-play-history?" + query, { token, signal: controller.signal }).then((data) => {
+      if (!controller.signal.aborted) setState({ status: "ready", holes: data.holes });
+    }).catch(() => {
+      if (!controller.signal.aborted) setState({ status: "error", holes: [] });
+    });
+    return () => controller.abort();
+  }, [open, round.resultId, round.source, token]);
+  const details = state.status === "ready"
+    ? state.holes.map(({ hole, strokes, shotLedger }) => h("section", { key: hole },
+      h("p", null, `Hole ${hole}` + (strokes == null ? " · Unscored" : ` · ${strokes} on card`) + (shotLedger.scope === "team" ? " · Team shots" : "")),
+      !shotLedger.matchesResult && h("p", { className: "player-card-meta" }, "Record from an earlier scoring assignment."),
+      h("ol", null, shotLedger.rows.map((shot) => h("li", { key: shot.id }, describeShot(shot))))))
+    : h("p", { role: "status" }, state.status === "error" ? "Could not load these shots. Close and try again." : "Loading saved shots…");
+  return h("details", { onToggle: (event) => setOpen(event.currentTarget.open) },
+    h("summary", null, `Shot records on ${round.explicitLedgerHoles} ${round.explicitLedgerHoles === 1 ? "hole" : "holes"}`),
+    open && details);
+}
+
+function historySummary(view, token) {
   const overall = view.scoreTrend;
   const totals = view.totals;
   const latest = view.latest;
@@ -72,9 +99,9 @@ function historySummary(view) {
   }
   const summaryRows = [
     ["Score vs. par per hole", signed(overall.averageToParPerHole) + " · " + overall.scoreHoles + " holes with par"],
-    ["Estimated C1 putting", putts("c1")],
-    ["Estimated C1X putting", putts("c1x")],
-    ["Estimated C2 putting", putts("c2")],
+    ["C1 putting", putts("c1")],
+    ["C1X putting", putts("c1x")],
+    ["C2 putting", putts("c2")],
   ];
   return h(React.Fragment, null,
     h("p", { className: "player-card-meta" }, view.roundCount + " matching rounds"),
@@ -82,7 +109,9 @@ function historySummary(view) {
       key: label, className: "play-stat-card",
     }, h("dt", { className: "play-stat-k" }, label), h("dd", { className: "play-stat-s", style: { margin: 0 } }, value)))),
     h("p", { className: "player-card-meta" }, [
-      totals.shot_count_matched_holes + " of " + totals.shot_eligible_holes + " recorded non-ace scores have a matching lie count and an archived basket.",
+      `${totals.shot_verified_holes} of ${totals.shot_eligible_holes} scored non-ace holes have a complete shot ledger.`,
+      totals.shot_count_matched_holes ? ` ${totals.shot_count_matched_holes} have marked-lie estimates.` : "",
+      totals.shot_incomplete_holes ? ` ${totals.shot_incomplete_holes} have incomplete records.` : "",
       view.coverage.noArchivedGeometry ? " " + view.coverage.noArchivedGeometry + " marked holes are missing archived basket positions." : "",
       view.coverage.withheldMarkHoles ? " " + view.coverage.withheldMarkHoles + " holes have marks that cannot be attributed to your account." : "",
     ].join("")),
@@ -90,10 +119,10 @@ function historySummary(view) {
       "Latest " + latest.rounds + " matching rounds vs. the previous " + prior.rounds + ": ",
       [
         scoreDelta == null ? null : signed(scoreDelta) + " strokes to par per hole (" + latest.scoreHoles + " vs. " + prior.scoreHoles + " holes)",
-        puttDelta == null ? null : signed(puttDelta) + " percentage points in estimated C1X (" + latest.c1x.attempts + " vs. " + prior.c1x.attempts + " attempts)",
+        puttDelta == null ? null : signed(puttDelta) + " percentage points in C1X (" + latest.c1x.attempts + " vs. " + prior.c1x.attempts + " attempts)",
       ].filter(Boolean).join(" · "), ".") : null,
     h("details", { className: "player-card-meta" }, h("summary", null, "How the numbers are calculated"),
-      h("p", null, SHOT_STAT_DEFINITIONS.putting), h("p", null, SHOT_STAT_DEFINITIONS.legacy),
+      h("p", null, SHOT_STAT_DEFINITIONS.putting), h("p", null, SHOT_STAT_DEFINITIONS.ledger), h("p", null, SHOT_STAT_DEFINITIONS.legacy),
       h("p", null, "Score trends use positive hole scores with known pars. Putting leagues are excluded.")),
     h("div", { style: { overflowX: "auto" } }, h("table", { style: { width: "100%", textAlign: "left" } },
       h("caption", { style: { textAlign: "left", marginBlock: ".5rem" } }, "Recent matching rounds"),
@@ -101,7 +130,8 @@ function historySummary(view) {
       h("tbody", null, view.recentRounds.map((round) => h("tr", { key: round.id },
         h("td", null, round.date || "—"),
         h("td", null, [round.course || round.eventName || sourceNames[round.source], round.layout].filter(Boolean).join(" / "),
-          h("small", { style: { display: "block" } }, sourceNames[round.source] + (round.group === "doubles" ? " · Team score" : ""))),
+          h("small", { style: { display: "block" } }, sourceNames[round.source] + (round.group === "doubles" ? " · Team score" : "")),
+          round.explicitLedgerHoles > 0 && h(ArchivedShots, { round, token })),
         h("td", null, round.scoredHoles || "—"),
         h("td", null, round.strokes ?? "—"),
         h("td", null, signed(round.toPar)),
@@ -186,7 +216,7 @@ function PlayExport({ token }) {
     }
   }
   return h("details", { key: "export", style: { marginBlock: ".75rem" } }, h("summary", null, "Download my play data"),
-    h("p", { className: "player-card-meta" }, "Includes your saved scores, attributable marks, linked layout details, imported rounds, and references to clips you uploaded. The download includes your full archive regardless of the filters above."),
+    h("p", { className: "player-card-meta" }, "Includes your saved scores, shot records, attributable marks, layout details, imported rounds, and references to clips you uploaded. The download includes your full archive regardless of the filters above."),
     h("div", { className: "play-stats-kind", role: "group", "aria-label": "Download format" }, ["json", "csv"].map((format) =>
       h("button", { key: format, disabled: busy, type: "button", onClick: () => download(format) }, "Download " + format.toUpperCase()))),
     h("p", { className: "player-card-meta", role: "status" }, status),
@@ -251,7 +281,7 @@ export function PersonalPlayHistory() {
     status === "error" ? h("p", { className: "player-card-meta", role: "alert" }, "Could not load play history.") : null,
     status === "ready" && payload?.truncated ? h("p", { className: "player-card-meta", role: "status" },
       "This view checks up to " + payload.maxSavedRoundsPerSource.toLocaleString() + " recently saved rounds per source. The full archive is available below.") : null,
-    status === "ready" && payload?.roundCount ? historySummary(payload) : null,
+    status === "ready" && payload?.roundCount ? historySummary(payload, token) : null,
     status === "ready" && !payload?.roundCount ? h("p", { className: "player-card-meta" }, "No saved rounds match these filters.") : null,
     h(PlayExport, { key: token, token }),
   );

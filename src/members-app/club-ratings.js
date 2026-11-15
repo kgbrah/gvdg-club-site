@@ -10,11 +10,11 @@ const RATING_PAGE_SIZE = 250;
 const KINDS = ["competitive", "casual"];
 
 function emptyKind() {
-  return { rounds: [], liveRating: null, ratedShown: 0, totalShown: 0, offset: 0, hasMore: false, loading: false };
+  return { rounds: [], liveRating: null, ratedShown: 0, archivedShown: 0, totalShown: 0, eligibleRated: 0, minimumRated: 8, offset: 0, hasMore: false, loading: false };
 }
 
 function initialState() {
-  return { status: "idle", competitive: emptyKind(), casual: emptyKind() };
+  return { owner: null, status: "idle", competitive: emptyKind(), casual: emptyKind() };
 }
 
 function ratingValue(value) {
@@ -55,7 +55,10 @@ function mergeKind(previous, group, append) {
   return {
     rounds: append ? previous.rounds.concat(rounds) : rounds,
     liveRating: group?.live_rating ?? null,
+    eligibleRated: group?.eligible_rated_rounds ?? 0,
+    minimumRated: group?.minimum_rated_rounds ?? 8,
     ratedShown: (append ? previous.ratedShown : 0) + (group?.rated_rounds || 0),
+    archivedShown: (append ? previous.archivedShown : 0) + rounds.filter((round) => round.rating_method === "archived").length,
     totalShown: (append ? previous.totalShown : 0) + rounds.length,
     offset: (append ? previous.offset : 0) + rounds.length,
     hasMore: rounds.length === RATING_PAGE_SIZE,
@@ -66,6 +69,7 @@ function mergeKind(previous, group, append) {
 function useClubRatings(token) {
   const [state, setState] = React.useState(initialState);
   const stateRef = React.useRef(state);
+  const active = React.useRef(null);
   React.useEffect(() => {
     stateRef.current = state;
   }, [state]);
@@ -77,12 +81,18 @@ function useClubRatings(token) {
     }
     const current = stateRef.current;
     const reset = appendKind == null;
-    setState((prev) => ({
-      ...prev,
-      status: "loading",
-      competitive: { ...prev.competitive, loading: reset || appendKind === "competitive" },
-      casual: { ...prev.casual, loading: reset || appendKind === "casual" },
-    }));
+    active.current?.abort();
+    const controller = new AbortController();
+    active.current = controller;
+    setState((prev) => {
+      const account = prev.owner === token ? prev : initialState();
+      return {
+        owner: token,
+        status: "loading",
+        competitive: { ...account.competitive, loading: reset || appendKind === "competitive" },
+        casual: { ...account.casual, loading: reset || appendKind === "casual" },
+      };
+    });
 
     const params = new URLSearchParams({
       competitiveLimit: String((reset || appendKind === "competitive") ? RATING_PAGE_SIZE : 0),
@@ -92,22 +102,57 @@ function useClubRatings(token) {
     });
 
     try {
-      const data = await requestJson(`/my-ratings?${params.toString()}`, { token });
+      const data = await requestJson(`/my-ratings?${params.toString()}`, { token, signal: controller.signal });
+      if (controller.signal.aborted) return;
       setState((prev) => ({
+        owner: token,
         status: "ready",
         competitive: appendKind === "casual" ? { ...prev.competitive, loading: false } : mergeKind(prev.competitive, data.competitive, !reset),
         casual: appendKind === "competitive" ? { ...prev.casual, loading: false } : mergeKind(prev.casual, data.casual, !reset),
       }));
     } catch {
-      setState((prev) => ({ ...prev, status: "error", competitive: { ...prev.competitive, loading: false }, casual: { ...prev.casual, loading: false } }));
+      if (!controller.signal.aborted) {
+        setState((prev) => ({ ...prev, status: "error", competitive: { ...prev.competitive, loading: false }, casual: { ...prev.casual, loading: false } }));
+      }
     }
   }, [token]);
 
   React.useEffect(() => {
     void load();
+    return () => active.current?.abort();
   }, [load]);
 
-  return { state, loadMore: (kind) => load({ appendKind: kind }) };
+  return { state: state.owner === token ? state : initialState(), loadMore: (kind) => load({ appendKind: kind }) };
+}
+
+const UNRATED_REASONS = {
+  "not-singles-stroke": "Club ratings apply to singles stroke play.",
+  "incomplete-result": "No completed singles score.",
+  "not-enough-prior-anchors": "Too few prior ratings to calibrate this field.",
+  "no-prior-layout-baseline": "No earlier calibration for this layout.",
+  "unverified-layout-revision": "As-played tee or basket positions are missing.",
+  "rating-source-changed": "The scorecard or its calibration changed. This round needs a new rating.",
+  "missing-rating-evidence": "No rating evidence is available for this round.",
+};
+
+function ratingLabel(round) {
+  if (round.rating == null) return "Unrated";
+  if (round.rating_method === "provisional") return "Provisional";
+  if (round.rating_method === "layout") return "Layout estimate";
+  if (round.rating_method === "stable") return "Club estimate";
+  if (round.rating_source === "estimated") return "Est.";
+  return "Archived rating";
+}
+
+function ratingEvidence(round) {
+  if (round.rating == null) {
+    const reason = UNRATED_REASONS[round.unrated_reason];
+    return reason && round.anchor_count ? reason + " " + round.anchor_count + " available." : reason;
+  }
+  const count = round.propagator_count;
+  if (round.rating_method === "layout") return count ? "Earlier same-layout field · " + count + " anchors" : "";
+  if (count) return count + " prior rating " + plural(count, "anchor", "anchors");
+  return "";
 }
 
 function RatingRoundRow({ round, kind }) {
@@ -117,10 +162,11 @@ function RatingRoundRow({ round, kind }) {
       h("div", { key: "main" }, [
         h("div", { className: "club-rating-title", key: "title" }, title),
         roundMeta(round) ? h("div", { className: "club-rating-meta", key: "meta" }, roundMeta(round)) : null,
+        ratingEvidence(round) ? h("div", { className: "club-rating-meta", key: "evidence" }, ratingEvidence(round)) : null,
       ]),
       h("div", { className: "club-rating-score", key: "score" }, [
         h("div", { className: "club-rating-score-main", key: "rating" }, ratingValue(round.rating)),
-        h("div", { className: "club-rating-score-sub", key: "source" }, round.rating == null ? "Unrated" : round.rating_source === "estimated" ? "Est." : "Rating"),
+        h("div", { className: "club-rating-score-sub", key: "source" }, ratingLabel(round)),
       ]),
     ]),
     h("div", { className: "club-rating-export", key: "export" },
@@ -139,9 +185,14 @@ function RatingPanel({ kind, title, group, onLoadMore }) {
       ]),
       h("div", { className: "club-rating-live", key: "live" }, [
         h("div", { className: "club-rating-number", key: "number" }, ratingValue(group.liveRating)),
-        h("div", { className: "club-rating-live-label", key: "label" }, "Live"),
+        h("div", { className: "club-rating-live-label", key: "label" }, "Club estimate"),
+        h("div", { className: "club-rating-count", key: "evidence" }, group.liveRating == null
+          ? group.eligibleRated + " of " + group.minimumRated + " needed in the past year"
+          : group.eligibleRated + " eligible rated rounds in the past year"),
       ]),
     ]),
+    group.archivedShown ? h("p", { className: "club-rating-count", key: "archive" },
+      group.archivedShown + " archived " + plural(group.archivedShown, "rating is", "ratings are") + " shown below. The overall estimate uses at least " + group.minimumRated + " eligible rounds from the past year.") : null,
     h("div", { className: "club-rating-list", key: "list" }, group.rounds.length
       ? group.rounds.map((round, index) => h(RatingRoundRow, { round, kind, key: `${kind}-${round.id || index}` }))
       : h("div", { className: "club-rating-empty" }, empty)),

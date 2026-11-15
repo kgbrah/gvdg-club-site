@@ -1,12 +1,20 @@
 import type { Env } from "./env.js";
 import { requireAuth } from "./authz.js";
 import { corsHeaders, json } from "./http.js";
-import { parseExportCursor, parsePlayHistoryFilter, personalPlayCsv, personalPlayExport, readPersonalPlayPage, loadPlayHistory } from "./play-history.js";
+import { parseExportCursor, parsePlayHistoryFilter, personalPlayCsv, personalPlayExport, readPersonalPlayPage, loadPlayHistory, readRoundShotHistory } from "./play-history.js";
 
 export async function handleMyPlayHistory(request: Request, env: Env, origin: string | null): Promise<Response> {
   const claims = await requireAuth(request, env);
   if (!claims?.member || claims.member.mustChangePin) return json({ error: "unauthorized" }, 401, origin);
-  const filters = parsePlayHistoryFilter(new URL(request.url).searchParams);
+  const params = new URL(request.url).searchParams;
+  if (params.has("shotResult")) {
+    const match = /^(competitive|casual):([1-9]\d{0,15})$/.exec(params.get("shotResult") || "");
+    const resultId = Number(match?.[2]);
+    if (!match || !Number.isSafeInteger(resultId)) return json({ error: "invalid_shot_result" }, 400, origin);
+    const holes = await readRoundShotHistory(env.DB, claims.sub, match[1] === "casual" ? "casual" : "competitive", resultId);
+    return holes ? json({ holes }, 200, origin, { "Cache-Control": "private, no-store" }) : json({ error: "not_found" }, 404, origin);
+  }
+  const filters = parsePlayHistoryFilter(params);
   if (!filters) return json({ error: "invalid_history_filters" }, 400, origin);
   const history = await loadPlayHistory(env.DB, claims.sub, filters);
   return json(history, 200, origin, { "Cache-Control": "private, no-store" });

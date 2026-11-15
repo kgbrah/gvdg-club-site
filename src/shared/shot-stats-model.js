@@ -1,4 +1,4 @@
-export const SHOT_STATS_VERSION = "gvdg-shots-2";
+export const SHOT_STATS_VERSION = "gvdg-shots-3";
 export const TAP_IN_METERS = 3.3;
 export const CIRCLE1_M = 10;
 export const CIRCLE2_M = 20;
@@ -15,6 +15,7 @@ export const SHOT_STAT_DEFINITIONS = Object.freeze({
   putting: "C1: up to 10 m; C1X: over 3.3 m through 10 m (excludes tap-in distances); C2: over 10 m through 20 m. Boundaries use unrounded distances.",
   legacy: "Marked lies are distance and outcome estimates, used only when the ordered lie count matches the score minus one. Matching the count does not verify that the player recorded every throw or confirm whether a stroke was a penalty. Legacy scorecards without recoverable as-played positions retain their original estimates separately.",
   fairway: "First throw fairway landing or, when inferred, within 45 ft of the straight tee-to-basket segment. This estimate does not follow doglegs or establish out-of-bounds status.",
+  ledger: "Recorded shots use the entered outcomes and lie classifications. Putts use a recorded basket distance or an observed origin with the ledger’s saved basket coordinates. Distances whose reported GPS accuracy crosses a category boundary omit that category. Penalties are excluded from putt and throw counts.",
   regulation: "C1/C2 and parked measure the lie after par minus two strokes; C2 in regulation includes C1. Parked is no more than 10 ft from the basket. A hole completed before the regulation checkpoint has no marked-lie sample.",
   scramble: "Par or better among holes where the known regulation lie missed Circle 1.",
   unavailable: "No sample for unknown distances, incomplete shot sequences, or unlabeled team marks. A score can count without yielding any throw statistics.",
@@ -80,6 +81,27 @@ export function puttingBuckets(meters) {
   return [];
 }
 
+function observedRange(from, to) {
+  const meters = distanceMeters(point(from), point(to));
+  if (meters == null) return null;
+  const error = Math.max(0, finite(from?.accuracyM) ?? 0) + Math.max(0, finite(to?.accuracyM) ?? 0);
+  return { min: Math.max(0, meters - error), max: meters + error };
+}
+
+function within(range, threshold) {
+  if (!range) return null;
+  return range.max <= threshold ? sample(true) : range.min > threshold ? sample(false) : null;
+}
+
+function certainPuttingBuckets(range) {
+  if (!range) return [];
+  return [
+    ...(range.max <= CIRCLE1_M ? ["c1Putt"] : []),
+    ...(range.min > TAP_IN_METERS && range.max <= CIRCLE1_M ? ["c1xPutt"] : []),
+    ...(range.min > CIRCLE1_M && range.max <= CIRCLE2_M ? ["c2Putt"] : []),
+  ];
+}
+
 // `throws` can be legacy ordered lies or a reconciled ledger entered by a scorer. A
 // ledger's penalty entries consume a score stroke but never count as a putt or throw.
 export function holePlayStats(hole, throws, score) {
@@ -87,7 +109,8 @@ export function holePlayStats(hole, throws, score) {
   const strokes = finite(score);
   const scored = Number.isInteger(strokes) && strokes > 0;
   const tee = point(hole?.tee);
-  const basket = point(hole?.target) || point(hole?.basket);
+  const basketSource = point(hole?.target) ? hole.target : hole?.basket;
+  const basket = point(basketSource);
   const par = finite(hole?.par);
   const stats = {
     fir: null, c1r: null, c2r: null, parked: null, scramble: null,
@@ -102,7 +125,7 @@ export function holePlayStats(hole, throws, score) {
   let regulationLie = null;
   if (hasLedgerEntries) {
     if (rows.length !== strokes || !rows.every((row) => row?.kind === "penalty" ||
-      (row?.kind === "throw" && (row.outcome === "missed" || row.outcome === "made")))) return stats;
+      (row?.kind === "throw" && row.attempt !== "unknown" && (row.outcome === "missed" || row.outcome === "made")))) return stats;
     const madeIndex = rows.findIndex((row) => row.kind === "throw" && row.outcome === "made");
     if (madeIndex < 0 || rows.slice(madeIndex + 1).some((row) => row.kind !== "penalty")) return stats;
     stats.shotQuality = "recorded";
@@ -114,11 +137,14 @@ export function holePlayStats(hole, throws, score) {
     if (reg != null && reg <= madeIndex) {
       const step = rows[reg - 1];
       const next = rows[reg];
-      regulationLie = step.outOfBounds === true ? null : point(step.landing) || (next?.kind === "throw" ? point(next.origin) : null);
+      regulationLie = step.outOfBounds === true ? null : point(step.landing) ? step.landing : (next?.kind === "throw" ? next.origin : null);
     }
     for (const row of rows) {
       if (row.kind === "throw" && row.attempt === "putt") {
-        putting.push({ meters: distanceMeters(point(row.origin), basket), made: row.outcome === "made" });
+        const measured = finite(row.puttDistanceFt);
+        const meters = measured != null && measured >= 0 ? measured / 3.28084 : null;
+        const buckets = meters != null ? puttingBuckets(meters) : certainPuttingBuckets(observedRange(row.origin, basketSource));
+        putting.push({ buckets, made: row.outcome === "made" });
       }
     }
   } else {
@@ -130,19 +156,17 @@ export function holePlayStats(hole, throws, score) {
     if (fairway != null) stats.fir = sample(fairway);
     if (reg != null) regulationLie = lies[reg - 1];
     for (const [index, lie] of lies.entries()) {
-      putting.push({ meters: distanceMeters(lie, basket), made: index === lies.length - 1 });
+      putting.push({ buckets: puttingBuckets(distanceMeters(lie, basket)), made: index === lies.length - 1 });
     }
   }
 
-  const regulationDistance = distanceMeters(regulationLie, basket);
-  if (regulationDistance != null) {
-    stats.c1r = sample(regulationDistance <= CIRCLE1_M);
-    stats.c2r = sample(regulationDistance <= CIRCLE2_M);
-    stats.parked = sample(regulationDistance * 3.28084 <= PARKED_FT);
-    if (stats.c1r.hit === 0) stats.scramble = sample(strokes <= par);
-  }
-  for (const { meters, made } of putting) {
-    for (const key of puttingBuckets(meters)) {
+  const regulationDistance = observedRange(regulationLie, hasLedgerEntries ? basketSource : basket);
+  stats.c1r = within(regulationDistance, CIRCLE1_M);
+  stats.c2r = within(regulationDistance, CIRCLE2_M);
+  stats.parked = within(regulationDistance, PARKED_FT / 3.28084);
+  if (stats.c1r?.hit === 0) stats.scramble = sample(strokes <= par);
+  for (const { buckets, made } of putting) {
+    for (const key of buckets) {
       const bucket = stats[key] || (stats[key] = { att: 0, hit: 0 });
       bucket.att += 1;
       bucket.hit += Number(made);
