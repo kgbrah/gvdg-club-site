@@ -688,7 +688,8 @@ if (serve) {
         await tools.getByRole("button", { name: "Round details", exact: true }).click();
         const details = preview.page.getByRole("dialog", { name: "Round details" });
         await details.getByRole("region", { name: "Live round stats" }).getByText("Singles · Stroke · Thru 4/18", { exact: true }).waitFor();
-        await details.getByRole("button", { name: /^Hole 6(?:,|$)/ }).click();
+        await preview.page.keyboard.press("Escape");
+        await preview.page.locator(".score-glove-stage .holegrid").getByRole("button", { name: /^Hole 6(?:,|$)/ }).click();
         await preview.page.getByRole("heading", { name: "Hole 6" }).waitFor();
         await preview.button("Previous hole").click();
         await preview.button("Previous hole").click();
@@ -888,9 +889,7 @@ if (serve) {
 
   async function selectFourth() {
     if (await phone.page.locator(".hole-head .hnum").textContent() !== "Hole 4") {
-      await phone.button("Round tools").click();
-      await phone.button("Round details").click();
-      await phone.page.locator(".holegrid").getByRole("button", { name: /^Hole 4(?:,|$)/ }).click();
+      await phone.page.locator(".score-glove-stage .holegrid").getByRole("button", { name: /^Hole 4(?:,|$)/ }).click();
     }
   }
   const score = phone.button("Enter score for Taylor Morgan on hole 4");

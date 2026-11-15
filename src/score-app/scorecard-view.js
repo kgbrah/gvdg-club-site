@@ -440,7 +440,6 @@ function RoundTools(props) {
           h("button", { type: "button", className: "btn secondary", onClick: backFromLedger }, "Back to round tools"))
           : details ? h("div", { className: "round-details" },
             props.roundDetails,
-            h(HoleGrid, { holes: props.holeGrid, onJump: closeThen(props.onJumpHole), putting: props.putting }),
             h("button", { type: "button", className: "btn secondary", onClick: backFromDetails }, "Back to round tools"))
           : h(React.Fragment, null,
             props.roundSharingApi && h(WatchSharingDetails, { api: props.roundSharingApi, onCopyWatch: props.onCopyWatch }),
@@ -1584,6 +1583,7 @@ export function ScorecardView(props) {
           h("div", { className: "score-stage-status", key: "status" }, status),
           map,
           stats && h(ScoreAdvancedStats, { key: "advanced", stats }),
+          h(HoleGrid, { key: "holes", holes: props.holeGrid, onJump: props.onJumpHole, putting: props.putting }),
         ]),
       ]),
       dock,
