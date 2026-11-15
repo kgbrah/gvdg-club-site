@@ -941,3 +941,9 @@ body:has(.stats-jump), #members:has(.stats-jump) { overflow-x: clip; }
 #members .member-stats .club-rating-head { flex-wrap: wrap; }
 #members .member-stats .club-rating-live { flex: 1 1 auto; min-width: 0; }
 /* ===== /T3 stats ===== */
+
+/* While a search field is focused on a phone, give the page room below so the field can scroll up above
+   an overlaying keyboard (the community directory is the last card on its page). */
+@media (max-width: 640px) {
+  html.member-keyboard-open body #members { padding-bottom: 60vh !important; }
+}

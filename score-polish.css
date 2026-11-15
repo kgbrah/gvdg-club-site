@@ -949,3 +949,6 @@ body.score-glove.player-theme-page .score-bottom-layout .score-glove-dock { back
     max-height: max(44px, calc(var(--score-tray-limit) - 48px));
   }
 }
+
+/* Course search: keep room for the magnifier icon (a later .field rule was overriding the padding). */
+#courseSearch.field { padding-left: 2.6rem !important; }

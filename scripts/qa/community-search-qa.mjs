@@ -82,7 +82,14 @@ async function run(mode, width, large) {
     const button = page.getByRole("button", { name: "Search members" });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, "no horizontal scroll");
     for (const box of [await input.boundingBox(), await button.boundingBox()]) assert.ok(box.x >= 0 && box.x + box.width <= width, "controls inside viewport");
-    // Focus, then simulate the keyboard by shrinking the visible viewport.
+    // Overlay keyboard (Android with interactive-widget=overlays-content): the page does NOT shrink, the
+    // keyboard simply covers the bottom ~45%. After focus the field must sit in the top half.
+    await input.tap();
+    await page.waitForTimeout(600);
+    const overlayTop = await input.evaluate((el) => { const r = el.getBoundingClientRect(); return { bottom: r.bottom, h: innerHeight }; });
+    assert.ok(overlayTop.bottom <= overlayTop.h * 0.5, "with an overlay keyboard the field sits in the top half: " + JSON.stringify(overlayTop));
+    await input.evaluate((el) => el.blur());
+    // Then simulate a resizing keyboard by shrinking the visible viewport.
     await input.tap();
     await page.setViewportSize({ width, height: 420 });
     await page.waitForFunction(() => {
