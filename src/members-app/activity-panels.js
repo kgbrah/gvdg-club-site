@@ -1,4 +1,5 @@
 import React from "react";
+import { ArrowRight, ChevronRight, Wallet } from "lucide-react";
 import { selectDashboardTab } from "./dashboard-shell.js";
 
 import { RECENT_ROUNDS_KEY, localStorageGet, requestJson } from "./api.js";
@@ -78,7 +79,7 @@ function LiveRoundCard({ item }) {
   ]);
 }
 
-export function LiveScoringPanel({ token, compact = false, variant = "home" }) {
+export function LiveScoringPanel({ token, compact = false, variant = "home", onCasualActive }) {
   const [state, setState] = React.useState({ status: "idle", items: [] });
 
   React.useEffect(() => {
@@ -99,12 +100,14 @@ export function LiveScoringPanel({ token, compact = false, variant = "home" }) {
         href: `score.html?event=${encodeURIComponent(event.id)}`,
         sort: Date.parse(event.date || "") || 0,
       }));
+      if (controller.signal.aborted) return;
+      onCasualActive?.(casualRows.length > 0);
       setState({ status: "ready", items: eventRows.concat(casualRows).sort((a, b) => (b.sort || 0) - (a.sort || 0)) });
     }).catch((error) => {
       if (error.name !== "AbortError") setState({ status: "ready", items: [] });
     });
     return () => controller.abort();
-  }, [token]);
+  }, [token, onCasualActive]);
 
   if (!token) return null;
   const count = state.items.length;
@@ -120,29 +123,19 @@ export function LiveScoringPanel({ token, compact = false, variant = "home" }) {
     const live = state.items[0];
     const extras = state.items.slice(1);
     return h("div", { className: "player-keep-score-wrap", "data-react-live-scoring": state.status }, [
-      live
-        ? h("a", {
-          className: "player-keep-score",
-          href: live.href,
-          key: "cta",
-        }, [
-          h("div", { key: "copy" }, [
-            h("h2", { key: "title" }, "Continue round"),
-            h("p", { key: "meta" }, live.title),
-          ]),
-          h("span", { className: "player-keep-score-go", key: "go" }, "Rejoin"),
-        ])
-        : h("a", {
-          className: "player-keep-score",
-          href: "score.html?start=1",
-          key: "cta",
-        }, [
-          h("div", { key: "copy" }, [
-            h("h2", { key: "title" }, "Start a round"),
-            h("p", { key: "meta" }, "No live card. Start a casual round."),
-          ]),
-          h("span", { className: "player-keep-score-go", key: "go" }, "Start"),
+      h("a", {
+        className: "player-keep-score member-round-hero",
+        href: live?.href || "score.html?start=1",
+        key: "cta",
+      }, [
+        h("div", { className: "member-round-copy", key: "copy" }, [
+          live ? h("span", { className: "member-round-status", key: "status" },
+            live.kind === "event" ? "Club event in progress" : "Casual round in progress") : null,
+          h("h2", { key: "title" }, live ? "Continue round" : "Start a round"),
+          h("p", { key: "meta" }, live?.title || "Open a casual scorecard"),
         ]),
+        h("span", { className: "member-round-arrow", key: "go" }, h(ArrowRight, { size: 23, "aria-hidden": true })),
+      ]),
       extras.length
         ? h("div", { className: "live-round-list", key: "extras" }, extras.map((item) => h(LiveRoundCard, { item, key: `${item.kind}-${item.href}` })))
         : null,
@@ -200,7 +193,7 @@ export function WalletPanel({ token, compact = false }) {
   }
   if (compact) {
     return h("a", {
-      className: "player-stat player-wallet-compact react-wallet-panel",
+      className: "member-account-row member-account-link react-wallet-panel",
       href: "#wallet",
       onClick: (event) => {
         if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -209,9 +202,13 @@ export function WalletPanel({ token, compact = false }) {
       },
       "data-react-wallet": state.status,
     }, [
-      h("div", { className: "player-stat-k", key: "label" }, "Wallet"),
-      h("div", { className: "player-stat-v", key: "amount" }, dollars(state.wallet.balance_cents || 0)),
-      h("div", { className: "player-stat-s", key: "hint" }, "View store credit"),
+      h(Wallet, { className: "member-account-icon", key: "icon", size: 20, "aria-hidden": true }),
+      h("span", { className: "member-account-copy", key: "copy" }, [
+        h("strong", { key: "label" }, "Wallet"),
+        h("small", { key: "hint" }, "Store credit"),
+      ]),
+      h("strong", { className: "member-account-value", key: "amount" }, dollars(state.wallet.balance_cents || 0)),
+      h(ChevronRight, { className: "member-account-chevron", size: 18, "aria-hidden": true, key: "arrow" }),
     ]);
   }
   const transactions = (Array.isArray(state.wallet.transactions) ? state.wallet.transactions : []).slice(0, 4);
