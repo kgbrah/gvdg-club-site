@@ -230,11 +230,13 @@
     });
   }
 
-  function timeoutWorkerCheck(promise) {
-    return new Promise(function (resolve, reject) {
-      var timeout = window.setTimeout(function () { reject(new Error('Update check timed out')); }, REFRESH_TIMEOUT_MS);
-      promise.then(resolve, reject).finally(function () { window.clearTimeout(timeout); });
-    });
+  async function activateIncomingWorker() {
+    if (!registration) return;
+    var incoming = registration.waiting || registration.installing;
+    var active = registration.active;
+    var controller = navigator.serviceWorker.controller;
+    if (incoming) await waitForControl(incoming, true);
+    else if (active && controller && active !== controller) await waitForControl(active, false);
   }
 
   async function checkPageAvailable() {
@@ -255,20 +257,11 @@
     refreshError = '';
     showBanner();
     try {
-      if (registration) {
-        var incoming = registration.waiting || registration.installing;
-        if (!incoming) {
-          await timeoutWorkerCheck(checkWorker());
-          incoming = registration.waiting || registration.installing;
-        }
-        var active = registration.active;
-        var controller = navigator.serviceWorker.controller;
-        if (incoming) await waitForControl(incoming, true);
-        else if (active && controller && active !== controller) await waitForControl(active, false);
-      }
+      await activateIncomingWorker();
       var commit = await checkPublishedBuild();
       if ((offer.commit && !commit) || navigator.onLine === false) throw new Error('Could not verify the update');
       await checkPageAvailable();
+      await activateIncomingWorker();
       if (refreshCancelled || scoringOpen() || navigator.onLine === false) return;
       if (commit) {
         writeStorage('sessionStorage', REFRESH_KEY, JSON.stringify({ commit: commit, requestedAt: Date.now() }));
