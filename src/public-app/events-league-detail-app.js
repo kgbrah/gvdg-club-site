@@ -206,20 +206,24 @@ function TeamStandingsTable({ teams }) {
 }
 
 function PlayerStandingsTable({ isMatch, standings }) {
+  const tags = !isMatch && standings.some((standing) => standing && standing.current_place != null);
   return h(React.Fragment, null, [
-    h("h3", { className: "roster-title", key: "title" }, isMatch ? "Player records" : "Standings"),
+    h("h3", { className: "roster-title", key: "title" }, isMatch ? "Player records" : tags ? "Current tag order" : "Standings"),
+    tags ? h("p", { className: "detail-notes", key: "note" }, "Order is the last finished round. Earlier rounds are listed below.") : null,
     standings.length
       ? h(ScrollTable, { key: "table" }, h("table", { className: "lb-table" }, [
         h("thead", { key: "head" }, h("tr", null, (isMatch
           ? ["Pos", "Player", "Pts", "Played", "Wins"]
-          : ["Pos", "Player", "Pts", "Played", "Wins", "To Par"]).map((label) =>
+          : tags
+            ? ["Tag", "Player", "Played", "Wins", "To Par"]
+            : ["Pos", "Player", "Pts", "Played", "Wins", "To Par"]).map((label) =>
           h("th", { key: label }, label)))),
         h("tbody", { key: "body" }, standings.map((standing, index) => {
           const totalToPar = Number(standing.total_to_par) || 0;
           return h("tr", { key: [standing.name, String(index)].filter(Boolean).join("|") }, [
-            h("td", { className: "lb-pos", key: "pos" }, String(index + 1)),
+            h("td", { className: "lb-pos", key: "pos" }, tags ? cellText(standing.current_place, "—") : String(index + 1)),
             h("td", { className: "lb-name", key: "name" }, cellText(standing.name, "Player")),
-            h("td", { key: "points" }, cellText(standing.points)),
+            tags ? null : h("td", { key: "points" }, cellText(standing.points)),
             h("td", { key: "events" }, cellText(standing.events)),
             h("td", { key: "wins" }, cellText(standing.wins)),
             isMatch ? null : h("td", {

@@ -1,6 +1,6 @@
 import type { Env } from "./env.js";
 import * as db from "./db.js";
-import { safeFetch, normalizeDgs, normalizeCsvEvents, parseCsvRows, parseUdiscLayouts, ImportError, mergeUdiscCalendars, normalizeUdiscEventsUrl, parseUdiscCalendar, udiscSchedulePageUrl, parseUdiscStandings } from "./imports.js";
+import { safeFetch, normalizeDgs, normalizeCsvEvents, parseCsvRows, parseUdiscLayouts, ImportError, mergeUdiscCalendars, normalizeUdiscEventsUrl, parseUdiscCalendar, udiscSchedulePageUrl, parseUdiscStandings, parseUdiscLeaderboard, tagStandingsFromBoards } from "./imports.js";
 import {
   DAY_TRIP_MILES,
   DISCGOLFAPI_ATTRIBUTION,
@@ -67,6 +67,7 @@ export async function handleAdminImport(request: Request, env: Env, origin: stri
         standings: loaded.standings?.standings || [],
         rounds_kept: loaded.standings?.roundsKept ?? null,
         result_events: loaded.standings?.events.length || 0,
+        standings_mode: loaded.standings?.mode || "points",
       }, 200, origin);
     }
     if (kind === "udisc") {
@@ -127,12 +128,42 @@ async function loadUdiscLeague(target: { kind: "league" | "event"; fetchUrl: str
       if (!(error instanceof ImportError)) throw error;
     }
   }
+  if (!standings?.events.length) {
+    standings = await loadLeaderboardStandings(calendar.league?.name || standings?.leagueName || null, calendar.events);
+  }
   return {
     league: calendar.league,
     events: calendar.events,
     standings,
     truncated: calendar.resultsCount != null && calendar.events.length < calendar.resultsCount,
   };
+}
+
+async function loadLeaderboardStandings(leagueName: string | null, events: UdiscImportCandidate[]): Promise<UdiscStandings | null> {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+  const played = events
+    .filter((event) => event.type !== "league" && event.external_url && event.date && event.date <= today)
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+    .slice(0, 6);
+  const boards = [];
+  for (const event of played) {
+    const url = event.external_url!;
+    const leaderboardUrl = url.endsWith("/leaderboard") ? url : `${url}/leaderboard`;
+    try {
+      const board = parseUdiscLeaderboard(await fetchUdiscHtml(leaderboardUrl));
+      boards.push({
+        name: event.name,
+        date: event.date || null,
+        externalUrl: url,
+        venue: event.venue || null,
+        finished: board.finished,
+        results: board.results,
+      });
+    } catch (error) {
+      if (!(error instanceof ImportError)) throw error;
+    }
+  }
+  return tagStandingsFromBoards(leagueName, boards);
 }
 
 async function importNearbyCourses(env: Env, body: Record<string, unknown>): Promise<{

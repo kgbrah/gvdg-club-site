@@ -1442,6 +1442,12 @@ export function startAdminController() {
             window.addEventListener('gvdg:admin-meeting-create-request', async (event) => {
                 await adminAddMeetingFromReact(event.detail || {});
             });
+            window.addEventListener('gvdg:admin-udisc-save-result', (event) => {
+                if (event.detail && event.detail.ok) {
+                    adminLoadLeagues();
+                    adminLoadEvents();
+                }
+            });
             window.addEventListener('gvdg:admin-league-delete-request', async (event) => {
                 const league = event.detail && event.detail.league;
                 if (!league || league.id == null) return;

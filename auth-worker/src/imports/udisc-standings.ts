@@ -40,6 +40,7 @@ export interface UdiscStandings {
   minimumPoints: number | null;
   events: UdiscPastEvent[];
   standings: UdiscStandingRow[];
+  mode?: "points" | "tags";
 }
 
 const EMPTY: UdiscStandings = {

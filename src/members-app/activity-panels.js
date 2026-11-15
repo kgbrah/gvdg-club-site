@@ -255,13 +255,13 @@ function LeagueCard({ item }) {
       ]))),
     ]) : null,
     players.length ? h("details", { key: "players" }, [
-      h("summary", { className: "standings-summary", key: "summary" }, `Player records (${players.length})`),
+      h("summary", { className: "standings-summary", key: "summary" }, players.some((player) => player.current_place != null) ? `Tag order (${players.length})` : `Player records (${players.length})`),
       h("table", { className: "lb-table", key: "table" }, [
-        h("thead", { key: "head" }, h("tr", null, ["Pos", "Player", "Pts", "Played", "Wins"].map((label) => h("th", { key: label }, label)))),
+        h("thead", { key: "head" }, h("tr", null, (players.some((player) => player.current_place != null) ? ["Tag", "Player", "Played", "Wins"] : ["Pos", "Player", "Pts", "Played", "Wins"]).map((label) => h("th", { key: label }, label)))),
         h("tbody", { key: "body" }, players.map((player, index) => h("tr", { key: `${player.name || "player"}-${index}` }, [
-          h("td", { key: "pos" }, String(index + 1)),
+          h("td", { key: "pos" }, player.current_place != null ? String(player.current_place) : String(index + 1)),
           h("td", { key: "name" }, player.name != null ? String(player.name) : "Player"),
-          h("td", { key: "points" }, String(player.points)),
+          player.current_place != null ? null : h("td", { key: "points" }, String(player.points)),
           h("td", { key: "events" }, String(player.events)),
           h("td", { key: "wins" }, String(player.wins)),
         ]))),

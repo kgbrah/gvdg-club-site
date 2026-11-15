@@ -27,12 +27,13 @@ export async function saveUdiscLeague(
     if (event.externalUrl) past.set(event.externalUrl, event);
   }
   const planned = mergeEvents(input.events, [...past.values()]).slice(0, MAX_EVENTS);
+  const currentUrl = [...past.values()].sort((a, b) => (b.date || "").localeCompare(a.date || ""))[0]?.externalUrl || null;
   let events = 0;
   let results = 0;
   let skipped = 0;
   for (const event of planned) {
     const scored = event.external_url ? past.get(event.external_url) : null;
-    const outcome = await saveEvent(env, adminId, leagueId, event, scored, input.standings);
+    const outcome = await saveEvent(env, adminId, leagueId, event, scored, input.standings, scored?.externalUrl === currentUrl);
     if (outcome === "skipped") skipped += 1;
     else {
       events += 1;
@@ -67,7 +68,10 @@ function pastCandidate(event: UdiscPastEvent): UdiscImportCandidate {
   };
 }
 
-function resultBreakdown(points: number | null, standings: UdiscStandings | null): string | null {
+function resultBreakdown(points: number | null, standings: UdiscStandings | null, current: boolean): string | null {
+  if (standings?.mode === "tags") {
+    return JSON.stringify({ udisc_bag_tag: true, udisc_current: current });
+  }
   if (points == null) return null;
   return JSON.stringify({
     udisc_points: points,
@@ -83,6 +87,7 @@ async function saveEvent(
   event: UdiscImportCandidate,
   scored: UdiscPastEvent | null | undefined,
   standings: UdiscStandings | null,
+  current: boolean,
 ): Promise<number | "skipped"> {
   const url = event.external_url;
   const existing = url
@@ -119,7 +124,7 @@ async function saveEvent(
       place: result.place,
       total: result.total,
       to_par: result.toPar,
-      breakdown: resultBreakdown(result.points, standings),
+      breakdown: resultBreakdown(result.points, standings, current),
     }));
   }
   await db.runBatch(env.DB, statements);

@@ -141,6 +141,7 @@ export interface LeagueStanding {
   total_to_par: number;
   best_place: number | null;
   points: number;
+  current_place?: number | null;
 }
 
 // Season points by finishing place, for STROKE rounds (tunable).
@@ -155,6 +156,17 @@ function udiscPoints(breakdown: string | null | undefined): { points: number; ro
     const roundsKept = typeof parsed.udisc_rounds_kept === "number" && parsed.udisc_rounds_kept > 0 ? parsed.udisc_rounds_kept : null;
     const minimum = typeof parsed.udisc_minimum_points === "number" && parsed.udisc_minimum_points > 0 ? parsed.udisc_minimum_points : null;
     return { points: parsed.udisc_points, roundsKept, minimum };
+  } catch {
+    return null;
+  }
+}
+
+function bagTag(breakdown: string | null | undefined): { current: boolean } | null {
+  if (!breakdown) return null;
+  try {
+    const parsed = JSON.parse(breakdown) as { udisc_bag_tag?: unknown; udisc_current?: unknown };
+    if (parsed?.udisc_bag_tag !== true) return null;
+    return { current: parsed.udisc_current === true };
   } catch {
     return null;
   }
@@ -210,14 +222,15 @@ export function computeLeagueStandings(
     const key = memberId ? "id:" + memberId : "name:" + (clustered.get(r.name) || r.name);
     let s = map.get(key);
     if (!s) {
-      s = { member_id: memberId ?? null, name: clustered.get(r.name) || r.name, events: 0, wins: 0, podiums: 0, total_to_par: 0, best_place: null, points: 0 };
+      s = { member_id: memberId ?? null, name: clustered.get(r.name) || r.name, events: 0, wins: 0, podiums: 0, total_to_par: 0, best_place: null, points: 0, current_place: null };
       map.set(key, s);
     }
     s.name = preferredPlayerName([s.name, clustered.get(r.name) || r.name]);
     if (!s.member_id && memberId) s.member_id = memberId;
     s.events++;
     const outcome = parseOutcome(r.match_result);
-    const imported = outcome ? null : udiscPoints(r.breakdown);
+    const tagged = outcome ? null : bagTag(r.breakdown);
+    const imported = outcome || tagged ? null : udiscPoints(r.breakdown);
     if (imported) {
       const bag = udisc.get(key) ?? { points: [], roundsKept: imported.roundsKept, minimum: imported.minimum };
       bag.points.push(imported.points);
@@ -233,7 +246,8 @@ export function computeLeagueStandings(
       if (r.place === 1) s.wins++;
       if (r.place != null && r.place <= 3) s.podiums++;
       if (r.to_par != null) s.total_to_par += r.to_par;
-      if (!imported) s.points += placePoints(r.place);
+      if (tagged?.current && r.place != null) s.current_place = r.place;
+      if (!imported && !tagged) s.points += placePoints(r.place);
     }
     if (r.place != null && (s.best_place == null || r.place < s.best_place)) s.best_place = r.place;
   }
@@ -245,7 +259,11 @@ export function computeLeagueStandings(
     standing.points = counted.reduce((sum, value) => sum + value, 0);
     if (bag.minimum != null && standing.points < bag.minimum) map.delete(key);
   }
-  return [...map.values()].sort(
+  const standings = [...map.values()];
+  if (standings.some((standing) => standing.current_place != null)) {
+    return standings.sort((a, b) => (a.current_place ?? 10000) - (b.current_place ?? 10000) || b.wins - a.wins || a.total_to_par - b.total_to_par || a.name.localeCompare(b.name));
+  }
+  return standings.sort(
     (a, b) => b.points - a.points || b.wins - a.wins || a.total_to_par - b.total_to_par || a.name.localeCompare(b.name),
   );
 }

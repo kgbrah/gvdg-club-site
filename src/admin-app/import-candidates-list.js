@@ -4,7 +4,7 @@ import { useSettledWhileLoading } from "../shared/settled-state.js";
 
 const h = React.createElement;
 
-const EMPTY_STATE = { sourceUrl: "", standings: [], status: "idle", candidates: [] };
+const EMPTY_STATE = { sourceUrl: "", standings: [], status: "idle", candidates: [], mode: "points" };
 
 function objectOrEmpty(value) {
   return value && typeof value === "object" ? value : {};
@@ -44,6 +44,7 @@ function normalizeState(state) {
   return {
     candidates: Array.isArray(state.candidates) ? state.candidates.map(normalizeCandidate) : [],
     sourceUrl: normalizeText(state.sourceUrl),
+    mode: state.mode === "tags" ? "tags" : "points",
     standings: Array.isArray(state.standings) ? state.standings.map(normalizeStanding).filter((row) => row.name) : [],
     status: state.status === "loading" ? "loading" : state.status === "ready" ? "ready" : "idle",
   };
@@ -123,12 +124,17 @@ export function AdminImportCandidatesList() {
     dispatchRequest("gvdg:admin-udisc-save-request", { requestId: `udisc-save-${requestCounter.current += 1}`, url: view.sourceUrl });
   }
 
+  const tags = view.mode === "tags";
   const standings = view.standings.length
     ? h("div", { className: "admin-cand", key: "standings" }, [
       h("div", { key: "copy" }, [
-        h("strong", { key: "title" }, "Current UDisc standings"),
-        h("p", { className: "dash-note", key: "note" }, "Past rounds are included. Saving writes the scores and this season table onto the league page. Points follow UDisc, including only the rounds it keeps."),
-        h("ol", { key: "list" }, view.standings.slice(0, 12).map((row, index) => h("li", { key: row.key }, `${index + 1}. ${row.name} · ${row.points} pts · ${row.events} rounds`))),
+        h("strong", { key: "title" }, tags ? "Current tag order" : "Current UDisc standings"),
+        h("p", { className: "dash-note", key: "note" }, tags
+          ? "This league plays bag tags, so the order is the last finished round. Saving writes each finished round and that order onto the league page."
+          : "Past rounds are included. Saving writes the scores and this season table onto the league page. Points follow UDisc, including only the rounds it keeps."),
+        h("ol", { key: "list" }, view.standings.slice(0, 12).map((row, index) => h("li", { key: row.key }, tags
+          ? `${index + 1}. ${row.name}`
+          : `${index + 1}. ${row.name} · ${row.points} pts · ${row.events} rounds`))),
       ]),
       h("button", {
         className: "admin-btn",
@@ -139,7 +145,18 @@ export function AdminImportCandidatesList() {
         type: "button",
       }, saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : saveState === "failed" ? "Save failed" : "Save results and standings"),
     ])
-    : null;
+    : view.sourceUrl
+      ? h("div", { className: "admin-cand", key: "save-only" }, [
+        h("button", {
+          className: "admin-btn",
+          disabled: saveState === "saving" || saveState === "saved",
+          key: "save",
+          id: "udiscSaveResultsBtn",
+          onClick: requestSave,
+          type: "button",
+        }, saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : saveState === "failed" ? "Save failed" : "Save league and rounds"),
+      ])
+      : null;
 
   return h("div", { "data-react-admin-import-candidates": "ready" }, [
     standings,

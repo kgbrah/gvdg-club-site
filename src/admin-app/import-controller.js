@@ -6,6 +6,7 @@ function showImportCandidates(candidates, extra) {
   const detail = { status: 'ready', candidates: Array.isArray(candidates) ? candidates : [] };
   if (extra && Array.isArray(extra.standings)) detail.standings = extra.standings;
   if (extra && extra.sourceUrl) detail.sourceUrl = extra.sourceUrl;
+  if (extra && extra.mode) detail.mode = extra.mode;
   dispatchAdminEvent('gvdg:admin-import-candidates', detail);
 }
 
@@ -82,7 +83,7 @@ export async function adminUdiscEventsImportFromReact(detail, { adminApi, adminM
   }
   if (r.ok) {
     const d = await r.json();
-    showImportCandidates(d.candidates, { standings: d.standings, sourceUrl: url });
+    showImportCandidates(d.candidates, { standings: d.standings, sourceUrl: url, mode: d.standings_mode });
     const count = (d.candidates || []).length;
     const players = Array.isArray(d.standings) ? d.standings.length : 0;
     adminMsg(count + ' UDisc row' + (count === 1 ? '' : 's') + (players ? ', standings for ' + players + ' players' : '') + (d.truncated ? ' (first pages only)' : ''), true);

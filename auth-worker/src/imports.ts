@@ -30,6 +30,7 @@ export {
   type UdiscImportCandidate,
 } from "./imports/udisc-events.js";
 export { parseUdiscStandings, udiscStandingsFromLoader, type UdiscPastEvent, type UdiscStandings, type UdiscStandingRow } from "./imports/udisc-standings.js";
+export { parseUdiscLeaderboard, tagStandingsFromBoards, udiscLeaderboardFromLoader } from "./imports/udisc-leaderboard.js";
 export {
   CLUB_ORIGIN,
   DAY_TRIP_MILES,
