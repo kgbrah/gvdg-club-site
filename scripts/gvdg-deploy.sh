@@ -227,6 +227,7 @@ cp -R ./*.html ./*.js ./*.css home-app public-app admin-app tee-sign-preview-app
 mkdir -p "$DIST/src/shared"
 cp src/shared/tee-sign-model.js "$DIST/src/shared/"
 printf '{"commit":"%s","branch":"%s","deployedAt":"%s","deployer":"%s"}\n' "$HEAD_SHA" "$BRANCH" "$NOW" "$DEPLOYER" > "$DIST/version.json"
+node scripts/stamp-app-build.mjs "$DIST" "$HEAD_SHA"
 log "artifact built @ $HEAD_SHORT ($BRANCH) by $DEPLOYER; version.json stamped."
 
 if [ "$DRY_RUN" = 1 ]; then

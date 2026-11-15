@@ -7,6 +7,7 @@ import { chromium } from "playwright";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
 const apiBase = "http://127.0.0.1:8788";
+const bundleDir = process.env.GVDG_SCORER_BUNDLE_DIR;
 
 const mimeTypes = new Map([
   [".css", "text/css; charset=utf-8"],
@@ -229,7 +230,10 @@ async function startStaticServer() {
         response.end("forbidden");
         return;
       }
-      const body = await readFile(filePath);
+      const asset = bundleDir && normalized.startsWith("/score-app/")
+        ? path.join(bundleDir, normalized.slice("/score-app/".length))
+        : filePath;
+      const body = await readFile(asset);
       response.writeHead(200, { "Content-Type": mimeTypes.get(path.extname(filePath)) || "application/octet-stream" });
       response.end(body);
     } catch (error) {
@@ -340,15 +344,19 @@ async function runCasualRoundQa(browser, origin) {
   await page.locator("[data-scoring-style='stroke']").click();
   await page.locator("[data-create-round='casual']").click();
   await page.waitForURL(/round=QA1234/);
-  await page.waitForSelector(".hole-head");
-  await page.locator('.weather-strip[title="Round weather"]').waitFor();
-  await waitForPageText(page, ".weather-strip", "Clear", "casual weather condition");
-  await waitForPageText(page, ".weather-wind", "SSE 7 mph", "casual weather wind");
+  const footer = page.getByRole("navigation", { name: "Hole navigation" });
+  await footer.getByRole("button", { name: "Next hole" }).waitFor();
+  if (!await footer.evaluate((nav) => nav.closest(".score-glove-dock") !== null)) {
+    throw new Error("Hole navigation must be in the score dock");
+  }
+  const roundWeather = page.getByRole("region", { name: "Round weather" });
+  await roundWeather.getByText("Clear", { exact: true }).waitFor();
+  await roundWeather.getByText("Wind SSE 7 mph", { exact: true }).waitFor();
   if (await page.getByRole("region", { name: "Card sync", exact: true }).count()) {
     throw new Error("A fully synced saved lie must not leave a permanent status strip above the weather.");
   }
   await waitForPageText(page, "#barTitle", qaCourse.name, "casual weather course context");
-  await page.locator(".weather-wind").click();
+  await roundWeather.getByRole("button", { name: /Wind SSE 7 mph/ }).click();
   await page.evaluate(() => {
     window.dispatchEvent(new DeviceOrientationEvent("deviceorientation", { absolute: true, alpha: 90 }));
   });
@@ -369,7 +377,7 @@ async function runCasualRoundQa(browser, origin) {
   await page.getByRole("dialog", { name: "Add player" }).waitFor();
   await page.getByLabel("Player name").fill("Nina Park");
   await page.locator(".score-dialog").getByRole("button", { name: "Add player" }).click();
-  await waitForPageText(page, "body", "Nina Park", "added player score row");
+  await page.getByRole("button", { name: "Enter score for Nina Park on hole 1" }).waitFor();
   await page.getByRole("button", { name: "Round tools", exact: true }).click();
   await page.getByRole("button", { name: "Manage" }).click();
   await page.waitForSelector(".sheet");
@@ -378,6 +386,7 @@ async function runCasualRoundQa(browser, origin) {
   await page.getByRole("dialog", { name: "Remove Nina Park?" }).waitFor();
   await page.locator(".score-dialog").getByRole("button", { name: "Remove player" }).click();
   await ninaRow.waitFor({ state: "detached" });
+  await page.getByRole("button", { name: "Enter score for Nina Park on hole 1" }).waitFor({ state: "detached" });
 
   if (createdRoundBody?.liveScoringConfig?.groupFormat !== "singles") {
     throw new Error(`Expected singles config, got ${JSON.stringify(createdRoundBody)}`);
@@ -386,7 +395,7 @@ async function runCasualRoundQa(browser, origin) {
     throw new Error(`Expected stroke config, got ${JSON.stringify(createdRoundBody)}`);
   }
 
-  await page.locator(".prow").filter({ hasText: "Ava King" }).locator("button.plus").click();
+  await page.getByRole("button", { name: "Increase Ava King on hole 1", exact: true }).click();
   await waitForPageText(page, ".totbar", "1/18", "casual score total");
   await page.locator("#lbBtn").click();
   await page.waitForSelector(".sheet");
@@ -441,7 +450,7 @@ async function runAdminEventQa(browser, origin) {
 }
 
 const staticServer = await startStaticServer();
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_PATH });
 
 try {
   await runCasualRoundQa(browser, staticServer.origin);

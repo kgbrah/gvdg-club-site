@@ -55,7 +55,7 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(themeChrome, /localStorage\.getItem\("theme"\)/);
   assert.match(themeChrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app admin-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v251"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v252"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
@@ -142,7 +142,7 @@ test('Crotts assistant stays hidden until Help is requested', () => {
   assert.match(widget, /sanitizeCrottsActions/);
   assert.match(widget, /crotts-action/);
   assert.match(widget, /I can also open the page you need/);
-  assert.doesNotMatch(widget, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|dangerouslySetInnerHTML|☰|✕|🌙|☀️|🥏|…/);
+  assert.doesNotMatch(widget, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|dangerouslySetInnerHTML|☰|✕|🌙|☀️|🥏/);
 });
 
 test('Events previous results panel is rendered by the public React bundle', () => {
@@ -409,12 +409,12 @@ test('Events registration is rendered by the public React bundle', () => {
 
 test('Blog body coming-soon page is rendered by the public React bundle', () => {
   const html = readFileSync('gvdg-blog.html', 'utf8');
-  const body = html.slice(html.indexOf('<body>'));
+  const body = html.slice(html.indexOf('<body'));
   const main = readFileSync('src/public-app/main.js', 'utf8');
   const app = readFileSync('src/public-app/blog-app.js', 'utf8');
 
   assert.match(html, /id="blogReactApp"/);
-  assert.match(html, /<body data-page="gvdg-blog">/);
+  assert.match(html, /<body[^>]*data-page="gvdg-blog"/);
   assert.doesNotMatch(body, /<section class="page-hero"|<section class="construction-section"|class="disc-icon"|class="progress-fill"|class="back-btn"/);
   assert.doesNotMatch(html, /🥏/);
   assert.match(main, /import \{ BlogApp \} from "\.\/blog-app\.js"/);

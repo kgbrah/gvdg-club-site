@@ -128,6 +128,7 @@ function AdminMemberRow({ adminCount, currentMemberId, member }) {
 export function AdminMemberTempPin() {
   const [state, setState] = React.useState(() => normalizeTempPinState(EMPTY_TEMP_PIN_STATE));
   const [copied, setCopied] = React.useState(false);
+  const [copyFailed, setCopyFailed] = React.useState(false);
   const resetTimer = React.useRef(0);
   const boxRef = React.useRef(null);
 
@@ -141,6 +142,7 @@ export function AdminMemberTempPin() {
 
   React.useEffect(() => {
     setCopied(false);
+    setCopyFailed(false);
     if (resetTimer.current) window.clearTimeout(resetTimer.current);
     resetTimer.current = 0;
     if (state.tempPin && boxRef.current && typeof boxRef.current.scrollIntoView === "function") {
@@ -154,8 +156,12 @@ export function AdminMemberTempPin() {
 
   async function copyPin() {
     try {
-      if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(state.tempPin);
-    } catch {}
+      await navigator.clipboard.writeText(state.tempPin);
+      setCopyFailed(false);
+    } catch {
+      setCopyFailed(true);
+      return;
+    }
     setCopied(true);
     if (resetTimer.current) window.clearTimeout(resetTimer.current);
     resetTimer.current = window.setTimeout(() => setCopied(false), 1200);
@@ -182,6 +188,7 @@ export function AdminMemberTempPin() {
         type: "button",
       }, "Hide"),
     ]),
+    copyFailed ? h("p", { className: "al-note", key: "copy-error" }, "Select the PIN and copy it manually.") : null,
     h("div", { className: "admin-temp-pin-note", key: "note" }, `Give this to ${state.member.name}. They log in with their ${loginMethod} and this PIN, then set their own PIN. It stays here until you hide it.`),
   ]);
 }

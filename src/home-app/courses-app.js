@@ -415,12 +415,14 @@ function ConditionBadge({ condition }) {
 
 function CourseImage({ course, condition }) {
   const image = safeExternalUrl(course.image || "");
+  const [failed, setFailed] = React.useState(false);
+  const showImage = image && !failed;
   return h(
     "div",
-    { className: "course-image" + (image ? "" : " no-image") },
+    { className: "course-image" + (showImage ? "" : " no-image") },
     [
-      image
-        ? h("img", { src: image, alt: course.imageAlt || course.name, loading: "lazy", key: "img" })
+      showImage
+        ? h("img", { src: image, alt: course.imageAlt || course.name, loading: "lazy", onError: () => setFailed(true), key: "img" })
         : icon(Disc3, { className: "course-placeholder-icon", size: 64, strokeWidth: 1.8, key: "placeholder" }),
       condition ? h(ConditionBadge, { condition, key: "condition" }) : null,
     ],
@@ -483,7 +485,20 @@ function CourseCard({ course, condition }) {
 }
 
 function CourseSlide({ active, onNext, onPrevious, onSizeChange, reports, slide, slideRef }) {
-  return h("div", { className: "carousel-slide-courses", onLoadCapture: onSizeChange, ref: slideRef }, [
+  const cards = slide.courses.map((course) => h(CourseCard, {
+    condition: matchCourseCondition(course, reports),
+    course,
+    key: course.course,
+  }));
+  const visibleCount = 2;
+  const remaining = cards.length - visibleCount;
+  return h("div", {
+    "aria-hidden": active ? undefined : true,
+    className: "carousel-slide-courses",
+    inert: !active,
+    onLoadCapture: onSizeChange,
+    ref: slideRef,
+  }, [
     h("div", { className: "slide-header-nav", key: "header-nav" }, [
       h(SlideArrow, { direction: "previous", disabled: !active || onPrevious == null, key: "previous", onClick: onPrevious }),
       h("div", { className: "slide-header", key: "header" }, [
@@ -492,11 +507,11 @@ function CourseSlide({ active, onNext, onPrevious, onSizeChange, reports, slide,
       ]),
       h(SlideArrow, { direction: "next", disabled: !active || onNext == null, key: "next", onClick: onNext }),
     ]),
-    h("div", { className: "courses-grid", key: "grid" }, slide.courses.map((course) => h(CourseCard, {
-      condition: matchCourseCondition(course, reports),
-      course,
-      key: course.course,
-    }))),
+    h("div", { className: "courses-grid", key: "grid" }, cards.slice(0, visibleCount)),
+    remaining > 0 ? h("details", { className: "course-more", key: "more", onToggle: onSizeChange }, [
+      h("summary", { key: "summary" }, `Show ${remaining} more ${remaining === 1 ? "course" : "courses"}`),
+      h("div", { className: "courses-grid", key: "cards" }, cards.slice(visibleCount)),
+    ]) : null,
   ]);
 }
 
@@ -574,11 +589,15 @@ export function HomeCoursesApp() {
   React.useEffect(() => {
     window.addEventListener("resize", measureHeight);
     const timeoutId = window.setTimeout(measureHeight, 250);
+    const slide = slideRefs.current[current];
+    const observer = slide && typeof ResizeObserver === "function" ? new ResizeObserver(measureHeight) : null;
+    if (observer) observer.observe(slide);
     return () => {
       window.removeEventListener("resize", measureHeight);
       window.clearTimeout(timeoutId);
+      observer?.disconnect();
     };
-  }, [measureHeight]);
+  }, [current, measureHeight]);
 
   function go(index) {
     setCurrent(clampedIndex(index, COURSE_SLIDES.length));

@@ -71,7 +71,6 @@ export function HomeMembershipSection() {
   return h("div", { className: "membership-content", "data-react-home-membership": "ready" }, [
     h("h2", { className: "section-title visible", key: "title" }, "Become a Member"),
     h("p", { className: "membership-subtitle", key: "subtitle" }, "Join our growing community and enjoy exclusive benefits"),
-    h("div", { className: "membership-perks", key: "perks" }, MEMBERSHIP_PERKS.map((perk, index) => h(PerkCard, { index, perk, key: perk.title }))),
     h("div", { className: "price", key: "price" }, "$15 / Year"),
     h("ol", { className: "membership-steps", "aria-label": "How to join the club", key: "steps" }, [
       h("li", { className: "membership-step", key: "dues" }, [
@@ -98,6 +97,7 @@ export function HomeMembershipSection() {
       ]),
     ]),
     h("p", { className: "membership-next", key: "next" }, "Already paid your dues? Go straight to step 2 to create your member login."),
+    h("div", { className: "membership-perks", key: "perks" }, MEMBERSHIP_PERKS.map((perk, index) => h(PerkCard, { index, perk, key: perk.title }))),
   ]);
 }
 

@@ -1,6 +1,8 @@
 import React from "react";
 
 import { MemberBoardPanel } from "./board-panel.js";
+import { MemberCommunityPage } from "./community-panel.js";
+import { MemberCourseDiscovery } from "./community-courses-panel.js";
 import { MemberClubPanel } from "./club-panel.js";
 import { MemberDashboardShell } from "./dashboard-shell.js";
 import { MemberAccountPage, MemberAppearancePage, MemberInstallPage, MemberMorePage, MemberWalletPage } from "./more-page.js";
@@ -62,6 +64,8 @@ export function MemberDashboardApp() {
     tab === "standings" ? h(ActiveStandingsPanel, { key: "standings" }) : null,
     tab === "leagues" ? h(DoublesLeaguePanel, { key: "leagues" }) : null,
     tab === "results" ? h(MemberSeasonPage, { key: "results", resultsOnly: true }) : null,
+    tab === "community" && token ? h(MemberCommunityPage, { token, key: "community" }) : null,
+    tab === "course-discovery" && token ? h(MemberCourseDiscovery, { token, courseId: route.courseId, key: "course-discovery" }) : null,
     tab === "practice" && token ? h(MemberPracticePage, { workspace: practice, key: "practice" }) : null,
     tab === "my-bag" && token ? h(MemberBagPage, { workspace: practice, key: "my-bag" }) : null,
     tab === "imports" && token ? h(UdiscHistory, { key: "imports", token }) : null,

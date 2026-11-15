@@ -5,6 +5,7 @@ import type { LiveScoringConfig } from "./live-format.js";
 import { finalizeStandings, type FinalLiveStanding, type PlayerState } from "./scoring.js";
 import { finalizeRoundStandings, healthyTargets, invalidScoreTargetsResponse, resolvedHoles, roundConfig, scoringState } from "./live-state.js";
 import { j, metadataJson, type LiveEnv, type LiveMeta, type ResolvedHole, type ScoringState } from "./live-types.js";
+import { liveRecoveryId } from "./live-recovery.js";
 import { attachThrowsToScorecard } from "./live-snapshot.js";
 import { repairRatingSource } from "./rating-repair.js";
 import { queueRatingRepair } from "./rating-store.js";
@@ -208,6 +209,7 @@ async function persistCasualResults(
     scoring_config: JSON.stringify(config),
     created_by: meta.createdBy ?? null,
     started_at: meta.startedAt || null,
+    live_generation: liveRecoveryId(meta),
   });
   const roundId = casualRoundId(round);
   if (roundId == null) throw new Error("casual_round_insert_failed");
@@ -227,6 +229,7 @@ async function persistCasualResults(
         scorecard: scorecardForArchive(standing),
         scoring_group: metadataJson(standing.scoringGroup),
         match_result: metadataJson(standing.matchResult),
+        live_player_index: standing.livePlayerIndex ?? null,
       }),
     ), ...Array.from(shotArchives, ([memberId, archive]) => archiveShotLedgerStmt(env.DB, archive, memberId, { casualRoundId: roundId }))],
   );

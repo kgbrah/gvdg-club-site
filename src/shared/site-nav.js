@@ -42,6 +42,11 @@ function navLink(item, page, onNavigate) {
   }, item.label));
 }
 
+function restoreHelpMenuFocus(helpLink) {
+  const menu = helpLink.closest("nav")?.querySelector(".menu-toggle");
+  return menu?.getClientRects().length ? menu : helpLink.closest(".nav-more")?.querySelector(".nav-more-btn");
+}
+
 export function SiteNavItems({ page, moreOpen, onNavigate, onToggleMore }) {
   const moreCurrent = siteMoreIsCurrent(page);
   return [
@@ -72,7 +77,7 @@ export function SiteNavItems({ page, moreOpen, onNavigate, onToggleMore }) {
       ]),
       h("ul", { className: "nav-more-menu", key: "menu" }, [
         ...SITE_NAV_MORE.map((item) => navLink(item, page, onNavigate)),
-        h("li", { key: "help" }, h(CrottsHelpLink, { onClick: onNavigate })),
+        h("li", { key: "help" }, h(CrottsHelpLink, { onClick: onNavigate, returnFocus: restoreHelpMenuFocus })),
       ]),
     ]),
     h("li", { key: "donate" }, h("a", {

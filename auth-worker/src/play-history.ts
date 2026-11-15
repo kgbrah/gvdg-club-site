@@ -2,9 +2,10 @@ import type { D1Like } from "./db-types.js";
 import { emptyPlayTotals, parseBreakdown, roundPlayStats, statPct, sumPlayTotals, type PlayTotals } from "./play-stats.js";
 import { SHOT_STAT_DEFINITIONS } from "../../src/shared/shot-stats-model.js";
 import { parseShotRows, shotHoleGeometry, shotPoint, validLedgerRevision } from "../../src/shared/shot-ledger.js";
+import { offlineRoundOutcome, parseOfflineRound, type OfflineRound } from "../../src/shared/offline-round.js";
 import type { ArchivedShotLedger } from "./shot-ledgers.js";
 
-type RoundSource = "competitive" | "casual" | "udisc";
+type RoundSource = "competitive" | "casual" | "udisc" | "offline";
 type GroupFormat = "singles" | "doubles" | "unknown";
 type ScoringStyle = "stroke" | "matchplay" | "putting";
 type Point = { lat: number; lng: number; label?: string };
@@ -16,16 +17,17 @@ type Hole = {
   marks: Mark[]; marksStatus: "saved" | "none" | "unattributed";
   shotLedger?: ArchivedShotLedger;
 };
-type Round = {
+export type Round = {
   id: string; source: RoundSource; resultId: number; eventId: number | null; roundCode: string | null;
   importedRoundKey: string | null; importedAt: string | null;
   playedAt: string | null; playedDate: string | null; eventName: string | null;
   courseId: number | null; courseName: string | null; layoutId: number | null; layoutName: string | null;
   group: GroupFormat; style: ScoringStyle; total: number | null; toPar: number | null;
   holes: Hole[]; savedBreakdown: Partial<PlayTotals> | null;
+  offlineSnapshot?: OfflineRound;
 };
-type Clip = {
-  id: number; scope: "round" | "event"; scopeKey: string; hole: number; createdAt: string;
+export type Clip = {
+  id: number; scope: "round" | "event" | "offline"; clientId?: string; playerIndex?: number; playerName?: string; scopeKey: string; hole: number; createdAt: string;
   contentType: string; bytes: number; highlight: boolean; moment: string | null; mediaPath: string;
 };
 type Row = Record<string, unknown>;
@@ -61,6 +63,7 @@ const ROUND_QUERIES: Record<RoundSource, string> = {
     WHERE res.member_id = ?`,
   udisc: `SELECT id, round_key, imported_at, course_name, layout_name, played_at, total, to_par,
       holes AS scorecard FROM udisc_history res WHERE member_id = ?`,
+  offline: `SELECT res.id, res.snapshot, res.created_at FROM offline_rounds res WHERE res.owner_kind = 'member' AND res.owner_id = ?`,
 };
 
 function parseJson(value: unknown): unknown {
@@ -135,9 +138,42 @@ function playedDate(localDate: string | null, timestamp: string | null): string 
     ? easternDate(date) : exactDate(timestamp.slice(0, 10));
 }
 
+function normalOfflineRound(raw: Row, resultId: number): Round | null {
+  const snapshot = parseOfflineRound(parseJson(raw.snapshot));
+  if (!snapshot) return null;
+  const { source, format, localId, startedAt, scores, marks, shots } = snapshot;
+  const outcome = offlineRoundOutcome(snapshot);
+  const own = outcome.summaries[0];
+  if (!own) return null;
+  const required = new Set(outcome.requiredHoles);
+  const holes = source.holes.map(({ hole, par, tee, target, distance_ft: distanceFt }): Hole => {
+    const strokes = required.has(hole) ? scores[own.id]?.[hole] ?? null : null;
+    const lies = marks[hole] || [];
+    const rows = shots[hole];
+    return {
+      hole, par, distanceFt, strokes, points: null,
+      layoutAtPlay: { tee: point(tee), target: point(target), distanceFt, overridden: false },
+      marks: lies, marksStatus: lies.length ? "saved" : "none",
+      ...(rows?.length ? { shotLedger: {
+        rows, version: 1, revision: "0000000000000000:" + localId, targetId: own.id, label: own.label, binding: own.playerIndexes.join(","),
+        scope: own.type === "pair" ? "team" : "player", matchesResult: strokes != null,
+        geometry: { tee: shotPoint(tee), target: shotPoint(target) },
+      } } : {}),
+    };
+  });
+  return {
+    id: "offline:" + localId + ":" + resultId, source: "offline", resultId, eventId: null, roundCode: null,
+    importedRoundKey: null, importedAt: string(raw.created_at), playedAt: startedAt, playedDate: playedDate(null, startedAt),
+    eventName: null, courseId: source.courseId, courseName: source.courseName, layoutId: source.layoutId, layoutName: source.layoutName,
+    group: format.groupFormat, style: format.scoringStyle, total: own.total, toPar: own.toPar, holes,
+    savedBreakdown: null, offlineSnapshot: snapshot,
+  };
+}
+
 function normalRound(raw: Row, source: RoundSource): Round | null {
   const resultId = integer(raw.id);
   if (!resultId) return null;
+  if (source === "offline") return normalOfflineRound(raw, resultId);
   const eventId = integer(raw.event_id);
   const roundCode = string(raw.round_code);
   const importedRoundKey = string(raw.round_key);
@@ -218,7 +254,19 @@ function normalRound(raw: Row, source: RoundSource): Round | null {
 }
 
 export const HISTORY_LIMIT_PER_SOURCE = 2_000;
-const ROUND_SOURCES: RoundSource[] = ["competitive", "casual", "udisc"];
+const ROUND_SOURCES: RoundSource[] = ["competitive", "casual", "udisc", "offline"];
+// Preserve the first four section indices for existing cursors.
+const EXPORT_SECTIONS = ["competitive", "casual", "udisc", "clips", "offline", "offlineClips"] as const;
+const CLIP_QUERIES = {
+  clips: `SELECT id, scope, scope_key, hole, content_type, bytes, highlight, moment, created_at
+    FROM throw_clips WHERE filmed_by = ? AND id > ? ORDER BY id LIMIT ?`,
+  archiveClips: `SELECT id, scope, scope_key, hole, content_type, bytes, highlight, moment, created_at, client_id, player_index
+    FROM throw_clips WHERE filmed_by = ? AND id > ? ORDER BY id LIMIT ?`,
+  offlineClips: `SELECT clip.id, 'offline' AS scope, CAST(r.id AS TEXT) AS scope_key, clip.hole, clip.content_type,
+      clip.bytes, clip.highlight, clip.moment, clip.created_at, clip.client_id, clip.player_index, clip.player_name
+    FROM offline_round_clips clip JOIN offline_rounds r ON r.id = clip.offline_round_id
+    WHERE r.owner_kind = 'member' AND r.owner_id = ? AND clip.id > ? ORDER BY clip.id LIMIT ?`,
+};
 
 async function* scanHistoryRounds(db: D1Like, memberId: string, status: { truncated: boolean }): AsyncGenerator<Round> {
   const batchSize = 125;
@@ -249,13 +297,17 @@ function exportClips(rows: Row[]): Clip[] {
     const hole = integer(row.hole);
     const scope = row.scope;
     const scopeKey = string(row.scope_key);
-    if (!id || !hole || (scope !== "round" && scope !== "event") || !scopeKey) return [];
+    if (!id || !hole || (scope !== "round" && scope !== "event" && scope !== "offline") || !scopeKey) return [];
     const base = scope === "event" ? "/events/" : "/rounds/";
     return [{
       id, scope, scopeKey, hole, createdAt: string(row.created_at) ?? "",
       contentType: string(row.content_type) ?? "", bytes: integer(row.bytes) ?? 0,
       highlight: row.highlight === 1, moment: string(row.moment),
-      mediaPath: base + encodeURIComponent(scopeKey) + "/live/clips/" + id + "/media",
+      mediaPath: scope === "offline" ? `/offline-rounds/${scopeKey}/clips/${id}/media`
+        : base + encodeURIComponent(scopeKey) + "/live/clips/" + id + "/media",
+      ...(string(row.client_id) ? { clientId: string(row.client_id)! } : {}),
+      ...(integer(row.player_index) !== null ? { playerIndex: integer(row.player_index)! } : {}),
+      ...(string(row.player_name) ? { playerName: string(row.player_name)! } : {}),
     }];
   });
 }
@@ -265,21 +317,21 @@ export type ExportCursor = { section: number; after: number };
 
 export function parseExportCursor(raw: string | null): ExportCursor | null {
   if (!raw) return { section: 0, after: 0 };
-  const match = /^([0-3]):(\d{1,16})$/.exec(raw);
+  const match = /^([0-5]):(\d{1,16})$/.exec(raw);
   return match && Number.isSafeInteger(Number(match[2])) ? { section: Number(match[1]), after: Number(match[2]) } : null;
 }
 
-export async function readPersonalPlayPage(db: D1Like, memberId: string, cursor: ExportCursor) {
+export async function readPersonalPlayPage(db: D1Like, memberId: string, cursor: ExportCursor, pageSize = PLAY_EXPORT_PAGE_SIZE, archiveClips = false) {
   const rounds: Round[] = [];
   const clips: Clip[] = [];
-  let remaining = PLAY_EXPORT_PAGE_SIZE;
+  let remaining = pageSize;
   let after = cursor.after;
   let next: string | null = null;
-  for (let section = cursor.section; section <= ROUND_SOURCES.length && remaining > 0; section += 1) {
-    const source = ROUND_SOURCES[section];
-    const sql = source ? ROUND_QUERIES[source] + " AND res.id > ? ORDER BY res.id LIMIT ?" :
-      `SELECT id, scope, scope_key, hole, content_type, bytes, highlight, moment, created_at
-       FROM throw_clips WHERE filmed_by = ? AND id > ? ORDER BY id LIMIT ?`;
+  for (let section = cursor.section; section < EXPORT_SECTIONS.length && remaining > 0; section += 1) {
+    const entry = EXPORT_SECTIONS[section]!;
+    const source = entry === "clips" || entry === "offlineClips" ? null : entry;
+    const sql = entry === "clips" || entry === "offlineClips" ? CLIP_QUERIES[archiveClips && entry === "clips" ? "archiveClips" : entry]
+      : ROUND_QUERIES[entry] + " AND res.id > ? ORDER BY res.id LIMIT ?";
     const response = await db.prepare(sql).bind(memberId, after, remaining + 1).all();
     if (!response.success) throw new Error("play_export_read_failed");
     const results = response.results.slice(0, remaining);
@@ -294,28 +346,29 @@ export async function readPersonalPlayPage(db: D1Like, memberId: string, cursor:
       next = section + ":" + integer(results.at(-1)?.id);
       break;
     }
-    if (!remaining && section < ROUND_SOURCES.length) next = (section + 1) + ":0";
+    if (!remaining && section + 1 < EXPORT_SECTIONS.length) next = (section + 1) + ":0";
     after = 0;
   }
   return { rounds, clips, next };
 }
 
-export async function readRoundShotHistory(db: D1Like, memberId: string, source: "competitive" | "casual", resultId: number) {
+export async function readRoundShotHistory(db: D1Like, memberId: string, source: "competitive" | "casual" | "offline", resultId: number) {
   const raw = await db.prepare(ROUND_QUERIES[source] + " AND res.id = ?").bind(memberId, resultId).first();
   const round = raw ? normalRound(raw, source) : null;
   return round ? round.holes.filter((hole) => hole.shotLedger).map(({ hole, strokes, shotLedger }) => ({ hole, strokes, shotLedger })) : null;
 }
 
-export const PLAY_EXPORT_SCHEMA = "gvdg-play-export-1";
+export const PLAY_EXPORT_SCHEMA = "gvdg-play-export-2";
 
 export function personalPlayExport(memberId: string, rounds: Round[], clips: Clip[], exportedAt = new Date().toISOString()) {
   return {
     schemaVersion: PLAY_EXPORT_SCHEMA, exportedAt, memberId,
     definitions: {
       ...SHOT_STAT_DEFINITIONS,
-      scope: "Saved GVDG results, imported UDisc rounds, and clips uploaded by this account. Active cards and local drafts are not archived results.",
+      scope: "Saved GVDG results, imported UDisc rounds, personal offline archives, and uploaded clips. Active cards and local drafts stay outside the archive.",
+      offline: "Personal offline archives retain the saved layout and full card snapshot. They do not enter club standings or ratings.",
       layout: "Course/layout IDs identify the saved round's layout record or configured event layout. Older cards may have hole pars and distances but no archived tee or target. Current map positions are not substituted.",
-      marks: "Coordinates are the saved positions, ordered by n. Doubles and ambiguous legacy mark ownership are excluded. Empty marks do not imply no throws.",
+      marks: "Coordinates are the saved positions, ordered by n. Ambiguous legacy mark ownership is excluded. Offline marks belong to the scoring owner, including on doubles cards. Empty marks do not imply no throws.",
       shotLedger: "Explicit edits are exported with their saved classifications, measurements, and basket and tee. Team ledgers describe the team's observed strokes. A changed team assignment excludes the earlier ledger from statistics.",
       clips: "Clip references identify videos uploaded by this account; video bytes are not embedded and existing access rules apply.",
       csv: "Each data_json cell contains the exact record. Use it to recover text that CSV spreadsheet protection prefixes with an apostrophe.",
@@ -367,7 +420,7 @@ export function parsePlayHistoryFilter(params: URLSearchParams, now = new Date()
   const group = params.get("group") ?? "singles";
   const style = params.get("style") ?? "stroke";
   if (window !== "all" && window !== "year" && window !== "last" && window !== "custom") return null;
-  if (source !== "all" && source !== "competitive" && source !== "casual" && source !== "udisc") return null;
+  if (source !== "all" && source !== "competitive" && source !== "casual" && source !== "udisc" && source !== "offline") return null;
   if (group !== "all" && group !== "singles" && group !== "doubles" && group !== "unknown") return null;
   if (style !== "all" && style !== "stroke" && style !== "matchplay") return null;
   const course = params.get("course") ?? "";
@@ -485,8 +538,8 @@ export async function loadPlayHistory(db: D1Like, memberId: string, filters: His
       withheldMarkHoles: visible.reduce((sum, row) => sum + row.withheldMarkHoles, 0),
     },
     totals: sumPlayTotals(visible.map(({ totals }) => totals)),
-    recentRounds: visible.slice(0, 12).map(({ id, eventName, date, course, layout, source, group, style, strokes, toPar, scoredHoles, explicitLedgerHoles }) =>
-      ({ id, eventName, date, course, layout, source, group, style, strokes, toPar, scoredHoles, explicitLedgerHoles })),
+    recentRounds: visible.slice(0, 12).map(({ id, eventName, date, course, layout, source, group, style, strokes, toPar, scoredHoles, explicitLedgerHoles, resultId }) =>
+      ({ id, eventName, date, course, layout, source, group, style, strokes, toPar, scoredHoles, explicitLedgerHoles, resultId })),
     definitions: SHOT_STAT_DEFINITIONS,
   };
 }

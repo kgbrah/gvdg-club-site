@@ -505,7 +505,7 @@ export function AdminEventForm() {
     ? `Registration closes ${registrationText || "at the start"}. Check-in closes ${checkinText || "15 minutes before"}.`
     : "Add a start time. Registration closes then, and check-in closes 15 minutes before.";
 
-  return h("div", { "data-react-admin-event-form": editingEvent ? "edit" : "create" }, [
+  return h("div", { className: "admin-surface admin-event-editor", "data-react-admin-event-form": editingEvent ? "edit" : "create" }, [
     h("p", { className: "admin-form-note", id: "aeModeNote", key: "note" }, note),
     repeatSource ? h("button", {
       className: "admin-btn secondary",

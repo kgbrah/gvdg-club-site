@@ -30,6 +30,7 @@ export interface LiveStanding extends Standing {
 }
 
 export interface FinalLiveStanding extends FinalStanding {
+  readonly livePlayerIndex?: number;
   readonly scoringGroup?: ScoringGroup;
   readonly matchResult?: MatchStatus;
 }
@@ -248,6 +249,7 @@ function expandFinalTargetRow(players: readonly PlayerState[], row: RankedTarget
   return row.playerIndexes.map((index) => {
     const player = playerAt(players, index);
     const base = {
+      livePlayerIndex: index,
       memberId: player.memberId,
       name: player.name,
       division: player.division ?? null,

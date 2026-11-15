@@ -23,6 +23,10 @@ type Stored = {
 
 class FakeSocket extends EventTarget {
   readonly sent: string[] = [];
+  private attachment: unknown;
+
+  serializeAttachment(value: unknown) { this.attachment = value; }
+  deserializeAttachment() { return this.attachment; }
 
   accept(): void {
     throw new Error("legacy_accept_used");
@@ -169,6 +173,7 @@ function liveNamespace(state: LiveRouteState) {
     fetch: async (url: string, init?: RequestInit) => {
       const payload = init?.body ? (JSON.parse(String(init.body)) as StartPayload) : {};
       const action = new URL(url).pathname.split("/").filter(Boolean).pop();
+      if (action === "snapshot") return new Response(JSON.stringify({ status: "none" }));
       if (action === "cancel") {
         state.cancellations?.push({
           isAdmin: headerValue(init?.headers, "X-Auth-Admin") === "true",
@@ -1239,6 +1244,7 @@ describe("LiveEventDO card-scoped scoring", () => {
     const live = new LiveEventDO(state, { DB: db });
     await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ casual: true, holes: [{ hole: 1, par: 3 }], players: [{ memberId: "m0", name: "A" }, { memberId: "m1", name: "B" }] }) }));
     const sock = new FakeSocket();
+    sock.serializeAttachment({ actor: "m0" });
     state.acceptWebSocket(sock);
     sock.sent.length = 0;
     const first = (await (await live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Member": "m0" }, body: JSON.stringify({ index: 1, hole: 1, strokes: 3 }) }))).json()) as SnapshotBody;
@@ -1360,6 +1366,7 @@ describe("LiveEventDO card-scoped scoring", () => {
     const live = new LiveEventDO(state, { DB: db });
     await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ casual: true, holes: [{ hole: 1, par: 3 }], players: [{ memberId: "m0", name: "A" }, { memberId: "m1", name: "B" }] }) }));
     const sock = new FakeSocket();
+    sock.serializeAttachment({ actor: "m0" });
     state.acceptWebSocket(sock);
     sock.sent.length = 0;
 
@@ -1868,6 +1875,36 @@ describe("LiveEventDO finish-card", () => {
       body: JSON.stringify({ index: 0, hole: 1, strokes: 2 }),
     }));
     expect(admin.status).toBe(200);
+  });
+
+  it("locks a shotgun match that clinches in play order with its last holes unplayed", async () => {
+    const live = new LiveEventDO(new FakeState({}), { DB: db });
+    await live.fetch(new Request("https://do/start", {
+      method: "POST",
+      body: JSON.stringify({
+        eventId: 41,
+        holes: Array.from({ length: 9 }, (_, index) => ({ hole: index + 1, par: 3 })),
+        players: [
+          { memberId: "m_a", name: "A", startingHole: 4 },
+          { memberId: "m_b", name: "B", startingHole: 4 },
+        ],
+        liveScoringConfig: { groupFormat: "singles", scoringStyle: "matchplay" },
+      }),
+    }));
+    for (const hole of [4, 5, 7, 8, 9]) {
+      expect((await act(live, "score", "m_a", { index: 0, hole, strokes: 2 })).status).toBe(200);
+      expect((await act(live, "score", "m_a", { index: 1, hole, strokes: 3 })).status).toBe(200);
+    }
+    const blocked = await act(live, "finish-card", "m_a");
+    expect(blocked.status).toBe(409);
+    await expect(blocked.json()).resolves.toMatchObject({ error: "scorecard_incomplete", missing: expect.arrayContaining([expect.objectContaining({ hole: 6 })]) });
+    await act(live, "score", "m_a", { index: 0, hole: 6, strokes: 2 });
+    await act(live, "score", "m_a", { index: 1, hole: 6, strokes: 3 });
+    const finished = await act(live, "finish-card", "m_a");
+    expect(finished.status).toBe(200);
+    await expect(finished.json()).resolves.toMatchObject({ status: "live", lockedCardIds: ["h4"], missing: [],
+      standings: expect.arrayContaining([expect.objectContaining({ name: "A", match: expect.objectContaining({ lead: 6, holesRemaining: 3 }) })]),
+    });
   });
 
   it("finalizes a casual round through finish-card", async () => {

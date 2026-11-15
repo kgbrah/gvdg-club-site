@@ -10,12 +10,18 @@ import { selectDashboardTab } from "./dashboard-shell.js";
 
 const h = React.createElement;
 
-export function MemberPageChrome() {
+export function MemberPageChrome({ showInstall = true } = {}) {
   const [signedIn, setSignedIn] = React.useState(() => document.body.dataset.memberShell === "members");
+  const [authMode, setAuthMode] = React.useState("login");
   React.useEffect(() => {
     const update = (event) => setSignedIn(event.detail?.view === "members");
+    const updateAuthMode = (event) => setAuthMode(event.detail?.mode || "login");
     window.addEventListener("gvdg:member-shell-view", update);
-    return () => window.removeEventListener("gvdg:member-shell-view", update);
+    window.addEventListener("gvdg:member-auth-mode", updateAuthMode);
+    return () => {
+      window.removeEventListener("gvdg:member-shell-view", update);
+      window.removeEventListener("gvdg:member-auth-mode", updateAuthMode);
+    };
   }, []);
 
   return h(React.Fragment, null, [
@@ -36,6 +42,6 @@ export function MemberPageChrome() {
           : h(PlayerThemeToggle, { key: "theme" }),
       ]),
     ])),
-    signedIn ? null : h(InstallCoachBanner, { key: "install" }),
+    signedIn || !showInstall || authMode === "pin" || authMode === "profile" ? null : h(InstallCoachBanner, { key: "install" }),
   ]);
 }

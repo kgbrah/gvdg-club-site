@@ -1,4 +1,5 @@
 import React from "react";
+import { Ellipsis } from "lucide-react";
 
 import { adminConfirm } from "./admin-dialogs.js";
 import {
@@ -31,7 +32,7 @@ const KINDS = [
 function normalizeState(state) {
   const events = Array.isArray(state.events) ? state.events.map(normalizeAdminEvent) : [];
   return {
-    status: state.status === "loading" ? "loading" : "ready",
+    status: state.status === "loading" || state.status === "error" ? state.status : "ready",
     events,
   };
 }
@@ -116,7 +117,7 @@ function AdminEventRow({ event }) {
       key: "more",
       onClick: () => setMenuOpen((open) => !open),
       type: "button",
-    }, "···") : null,
+    }, h(Ellipsis, { size: 19, "aria-hidden": true })) : null,
     event.kind === "event" && menuOpen ? h("div", { className: "admin-event-menu", key: "menu" }, [
       h("label", { className: "admin-event-menu-status", key: "status" }, [
         "Status",
@@ -188,8 +189,12 @@ export function AdminEventsList() {
     }, "Loading…");
   }
 
+  if (view.status === "error") {
+    return h("p", { className: "dash-note", "data-react-admin-events-list": "error", role: "alert" }, "Couldn’t load events. Open the event list again to retry.");
+  }
+
   if (!view.events.length && !fundraisers.length && !meetings.length) {
-    return h("div", { "data-react-admin-events-list": "empty" }, [
+    return h("div", { className: "admin-surface", "data-react-admin-events-list": "empty" }, [
       h("p", { className: "dash-note", key: "empty", role: "status" }, "No events yet — create or import one."),
       h("button", {
         className: "admin-btn",
@@ -213,7 +218,7 @@ export function AdminEventsList() {
 
   return h("div", { "data-react-admin-events-list": "ready" }, [
     h("div", { className: "admin-events-toolbar", key: "toolbar" }, [
-      h("h2", { className: "admin-pane-heading", key: "title" }, "Events"),
+
       h("button", {
         className: "admin-btn",
         key: "create",
@@ -224,15 +229,15 @@ export function AdminEventsList() {
         type: "button",
       }, "New event"),
     ]),
-    h("div", { className: "admin-seg", key: "kinds", role: "tablist", "aria-label": "Calendar types" }, KINDS.map((item) => h("button", {
-      "aria-selected": kind === item.id ? "true" : "false",
+    h("div", { className: "admin-seg", key: "kinds", role: "group", "aria-label": "Calendar types" }, KINDS.map((item) => h("button", {
+      "aria-pressed": kind === item.id ? "true" : "false",
       className: kind === item.id ? "on" : "",
       key: item.id,
       onClick: () => setKind(item.id),
       type: "button",
     }, item.label))),
-    h("div", { className: "admin-seg", key: "filters", role: "tablist", "aria-label": "Event filters" }, FILTERS.map((item) => h("button", {
-      "aria-selected": filter === item.id ? "true" : "false",
+    h("div", { className: "admin-seg", key: "filters", role: "group", "aria-label": "Event filters" }, FILTERS.map((item) => h("button", {
+      "aria-pressed": filter === item.id ? "true" : "false",
       className: filter === item.id ? "on" : "",
       key: item.id,
       onClick: () => setFilter(item.id),

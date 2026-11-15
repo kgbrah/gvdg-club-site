@@ -1,0 +1,469 @@
+/* Member destinations share the same opaque surfaces and action hierarchy as Home. */
+#members {
+  --member-content-gap: .9rem;
+  --member-section-padding: clamp(.85rem, 2.6vw, 1.2rem);
+}
+#members .member-page-heading .player-app-title:focus:not([data-navigation-focus="keyboard"]) { outline: none; }
+#members :is(#mySeason, #clubRegister, #clubBoard, #teeCapture) {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+#members :is(.member-subpage, .member-events-sections, .member-event-section, .member-subgrid) {
+  display: grid;
+  align-content: start;
+  gap: var(--member-content-gap);
+  min-width: 0;
+}
+#members :is(.member-subpage, .member-subgrid) > * { min-width: 0; }
+#members .member-subpage > :is(.player-card, .dash-collapse, .wallet-panel, .member-link-section) { margin: 0; }
+#members :is(.member-subpage, .member-install, .members-react-club-panel, .react-board-panel, .react-tee-signs-panel) h2,
+#members :is(.member-result-list, .member-link-section) h2,
+#members :is(.course-conditions-title, .meeting-minutes-title, .members-chart-title, .react-board-panel .my-dashboard-title, .react-tee-signs-panel .my-dashboard-title) {
+  margin: 0;
+  color: var(--text-primary);
+  font: 800 clamp(1.03rem, 2.7vw, 1.3rem)/1.2 Archivo, system-ui, sans-serif;
+  letter-spacing: -.023em;
+  text-transform: none;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+#members :is(.member-subpage, .react-board-panel, .react-tee-signs-panel) :is(.player-card-meta, .dash-note, .board-note, .tee-capture-note, .register-fee, .register-date, .live-round-meta) {
+  color: var(--member-muted);
+  line-height: 1.45;
+}
+#members :is(.member-subactions, .member-subpage .dashboard-actions) {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .45rem;
+  justify-content: flex-start;
+  margin: 0;
+}
+#members :is(.member-subactions, .member-subpage .dashboard-actions) > .dashboard-action,
+#members .member-subpage > .dashboard-action {
+  width: auto;
+  justify-self: start;
+}
+#members :is(.dashboard-action, .player-btn, .passkey-btn, .board-link, .member-course-favorite, .play-stats-kind button) {
+  min-height: 44px;
+}
+#members :is(.dashboard-action, .player-btn, .board-link, .play-stats-kind button):disabled,
+#members :is(.form-input, .player-play-code):disabled {
+  opacity: .63;
+  cursor: not-allowed;
+}
+#members :is(.member-subpage, .member-install) .dashboard-action:not(.primary),
+#members :is(.board-link, .member-course-favorite) {
+  background: var(--member-paper);
+  border: 1px solid var(--member-line);
+  border-radius: .55rem;
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: .82rem;
+}
+#members :is(.member-subpage, .member-install) .dashboard-action:not(.primary):hover,
+#members :is(.board-link, .member-course-favorite):hover { background: var(--member-hover); }
+#members :is(.member-subpage, .member-install, .react-board-panel, .react-tee-signs-panel, .members-react-club-panel) :is(input,select,textarea).form-input,
+#members .member-history-panel :is(input,select) {
+  min-height: 44px;
+  max-width: 100%;
+  border: 1px solid var(--member-line);
+  border-radius: .55rem;
+  background: var(--member-paper);
+  color: var(--text-primary);
+  padding: .53rem .63rem;
+  font: 1rem/1.24 Archivo, system-ui, sans-serif;
+}
+#members :is(.member-subpage, .member-install, .members-react-club-panel) .player-card,
+#members :is(.member-result-list, .course-conditions-panel, .meeting-minutes-container, .members-chart-container) {
+  padding: var(--member-section-padding);
+}
+#members :is(.member-subpage, .member-practice, .react-board-panel, .react-tee-signs-panel) summary,
+#members .member-history-panel summary { min-height: 44px; align-content: center; }
+#members .member-section-heading > .dashboard-action { width: auto; }
+#members :is(.member-section-heading, .member-appearance-toggle) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .5rem .85rem;
+}
+
+/* Play and course discovery */
+#members .member-play-entry { display: grid; gap: .7rem; min-width: 0; }
+#members .member-play-entry .member-round-hero { margin: 0; min-height: 7.3rem; }
+#members .member-play-entry .member-round-hero h2 {
+  color: white;
+  font: 850 clamp(1.45rem, 5.8vw, 2.2rem)/1.06 Archivo, system-ui, sans-serif;
+  letter-spacing: -.045em;
+}
+#members .member-play-entry .member-join { margin: 0; }
+#members .member-join .player-play-label { text-transform: none; letter-spacing: 0; font-size: .82rem; color: var(--text-primary); }
+#members .member-join .player-play-join { margin-top: .65rem; }
+#members .member-join .player-play-code { min-width: 0; }
+#members .member-join .player-play-code::placeholder {
+  color: var(--member-muted);
+  opacity: .9;
+  text-transform: none;
+  letter-spacing: .035em;
+  font-weight: 600;
+}
+#members .member-join .player-btn:not(.primary) {
+  background: var(--member-paper);
+  color: var(--text-primary);
+  border-color: var(--member-line);
+}
+#members .member-join .player-play-actions { display: flex; flex-wrap: wrap; }
+#members .member-join .player-btn { width: auto; min-width: 5.2rem; }
+#members .member-course-search summary { cursor: pointer; font-weight: 750; list-style-position: inside; }
+#members .member-course-search summary svg { vertical-align: -.2em; margin-inline: .25rem .36rem; }
+#members .member-search-matches { list-style: none; margin-top: .55rem; }
+#members .member-search-matches a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .45rem;
+  min-height: 44px;
+  padding: .52rem .25rem;
+  color: var(--text-primary);
+  text-decoration: none;
+  border-top: 1px solid var(--member-line);
+}
+#members .member-search-matches a small { display: block; font-size: .78rem; color: var(--member-muted); margin-top: .14rem; }
+#members .member-search-matches a:hover { background: var(--member-hover); }
+#members .member-play-surface :is(.live-round-list, .handicap-list) { gap: 0; }
+#members .member-play-surface :is(.live-round-card, .handicap-row) {
+  padding: .72rem .16rem;
+  border: 0;
+  border-top: 1px solid var(--member-line);
+  border-radius: 0;
+  background: transparent;
+}
+#members .member-play-surface .live-round-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+#members .member-play-surface .live-round-card > div { min-width: 0; }
+#members .member-play-surface .live-round-title { overflow-wrap: anywhere; }
+#members .member-play-surface .live-round-badge {
+  color: var(--member-muted);
+  background: var(--member-paper);
+  border: 1px solid var(--member-line);
+  border-radius: 999px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+#members .member-play-surface .live-round-card .passkey-btn { width: auto; justify-self: start; white-space: normal; text-align: center; }
+#members .member-course-results { list-style: none; }
+#members .member-course-results li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+#members .member-course-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .65rem;
+  padding: .8rem .76rem;
+  min-height: 56px;
+  border: 0;
+  color: var(--text-primary);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+#members .member-course-link:hover { background: var(--member-hover); }
+#members .member-course-favorite { margin-inline: .4rem .6rem; width: 44px; display: grid; place-items: center; cursor: pointer; }
+#members .member-course-favorite[aria-pressed="true"] { color: var(--text-primary); background: var(--member-hover); }
+#members .member-course-favorite[aria-pressed="true"] svg { color: var(--secondary-text); }
+#members .member-discovery-filters details .community-grid { margin-top: .55rem; }
+#members .member-discovery-filters input[type="checkbox"] { margin-inline-end: .3rem; }
+#members .member-course-details > .dashboard-action { justify-self: start; }
+
+/* Events and history */
+#members .member-events-sections { gap: 1.05rem; }
+#members .member-event-list { display: grid; gap: .6rem; }
+#members .member-event-list .register-card { margin: 0; }
+#members .events-timeline :is(.register-card, .pdga-events, .casual-register-card) { padding: var(--member-section-padding); }
+#members .events-timeline :is(.register-subhead, .dash-collapse-summary) {
+  margin: 0;
+  color: var(--text-primary);
+  font: 790 1.03rem/1.22 Archivo, system-ui, sans-serif;
+  letter-spacing: -.02em;
+  text-transform: none;
+}
+#members .events-timeline details :is(.register-subhead, .dash-collapse-summary) { min-height: 44px; align-content: center; }
+#members .member-event-heading { align-items: flex-start; justify-content: space-between; gap: .35rem; }
+#members .member-event-heading .register-date { margin-bottom: .2rem; font-variant-numeric: tabular-nums; }
+#members .member-event-heading .register-name { margin: 0; font: 790 1.1rem/1.17 Archivo, system-ui, sans-serif; }
+#members .events-timeline :is(.register-status, .register-cancelled-badge) { color: var(--text-primary); font-size: .86rem; }
+#members .events-timeline .register-live-badge {
+  color: var(--text-primary);
+  background: var(--member-hover);
+  border: 1px solid var(--member-line);
+  gap: .27rem;
+}
+#members .events-timeline .register-live-badge::before {
+  content: "";
+  width: .36rem;
+  height: .36rem;
+  border-radius: 50%;
+  background: var(--primary);
+}
+#members .events-timeline :is(.register-form select, .register-form input:not([type="checkbox"])) {
+  min-height: 44px;
+  min-width: 0;
+  max-width: 100%;
+  background: var(--member-paper);
+  border-color: var(--member-line);
+  font-size: .92rem;
+}
+#members .events-timeline :is(.register-form, .register-actions, .event-schedule) { margin-top: .56rem; }
+#members .member-stats .doubles-quick-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
+#members .member-stats .doubles-quick-stat {
+  background: var(--member-panel);
+  color: var(--text-primary);
+  border: 1px solid var(--member-line);
+  border-radius: .7rem;
+  text-align: left;
+  padding: .65rem .77rem;
+}
+#members .member-stats .doubles-quick-stat-val { color: var(--text-primary); font: 800 1.32rem/1.1 Archivo, system-ui, sans-serif; }
+#members .member-stats .doubles-quick-stat-label { color: var(--member-muted); text-transform: none; font-size: .75rem; letter-spacing: 0; }
+#members .member-result-list .dash-event,
+#members .member-stats .club-rating-round {
+  border-radius: 0;
+  border: 0;
+  border-top: 1px solid var(--member-line);
+  background: transparent;
+  padding-inline: .25rem;
+}
+#members .member-result-list h2 { margin-bottom: .55rem; }
+#members .member-history-table { margin-top: .64rem; }
+#members .member-history-table td, #members .member-history-table th {
+  padding: .48rem .36rem;
+  border-top: 1px solid var(--member-line);
+  vertical-align: top;
+}
+#members .member-history-panel { max-width: 100%; min-width: 0; }
+#members .member-history-panel .play-stat-k {
+  color: var(--member-muted);
+  font-size: .76rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+#members .member-history-panel .play-stat-s { color: var(--text-primary); font-variant-numeric: tabular-nums; line-height: 1.3; }
+#members .member-history-panel .play-stats-kind button[type="submit"] { border-radius: .55rem; }
+#members :is(.member-history-panel, .member-stats) .play-stats-kind button { white-space: normal; }
+#members .member-stats :is(.play-stat-card, .play-score-legend-item, .club-rating-round) {
+  border-color: var(--member-line);
+}
+#members .member-stats .play-stat-card { background: var(--member-paper); }
+
+/* Club, account and privacy controls */
+#members :is(.member-link-list, .member-course-results) {
+  border: 1px solid var(--member-line);
+  border-radius: var(--member-radius);
+  background: var(--member-panel);
+}
+#members .member-link-section { padding: 0; }
+#members .member-link-section > h2 { margin: 0 0 .52rem; }
+#members :is(.member-link-list > :not(:first-child), .member-course-results > li + li) { border-top: 1px solid var(--member-line); }
+#members .member-link-row {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  width: 100%;
+  min-height: 54px;
+  cursor: pointer;
+  padding: .64rem .75rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  text-decoration: none;
+  font: inherit;
+}
+#members .member-link-row:disabled { opacity: .58; cursor: progress; }
+#members .member-link-row:not(:disabled):hover { background: var(--member-hover); }
+#members :is(.member-link-icon, .member-link-arrow) { flex-shrink: 0; color: var(--member-muted); }
+#members .member-link-copy { display: grid; gap: .18rem; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+#members .member-link-copy strong { font-size: .9rem; font-weight: 760; }
+#members .member-link-copy small { color: var(--member-muted); font-size: .76rem; line-height: 1.25; }
+#members .member-settings-profile { display: flex; align-items: center; gap: .75rem; margin: .12rem 0 .65rem; }
+#members .member-settings-profile img { width: 2.75rem; height: 2.75rem; object-fit: cover; border-radius: 50%; }
+#members .member-settings-profile svg { flex-shrink: 0; }
+#members .member-subpage .player-logout-btn { justify-self: start; width: auto; min-height: 44px; padding-inline: .8rem; }
+#members .member-subpage .app-tool-finder { margin: 0; }
+#members .member-subpage .app-tool-finder form { max-width: none; }
+#members :is(.member-community-profile, .member-community-friends, .member-community-directory, .member-community-progress) { display: grid; gap: .54rem; }
+#members .member-community :is(.community-list > li, .community-amenities > li) { border-color: var(--member-line); }
+#members .member-community .community-list li a { display: inline-flex; align-items: center; min-height: 44px; padding-inline: 0; }
+#members .member-community .community-list .dashboard-actions button { font-size: .78rem; }
+#members .member-community input[type="checkbox"] { margin-inline-end: .28rem; }
+#members .member-inline-search { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+#members .member-inline-search .dashboard-action { font-size: .78rem; }
+#members .member-wallet-page .wallet-panel { grid-template-columns: minmax(0, 1fr) auto; }
+#members .member-wallet-page .wallet-ledger { padding-top: .6rem; border-top: 1px solid var(--member-line); }
+#members .member-wallet-page .wallet-balance { color: var(--text-primary); font: 800 2rem/1.05 Archivo, system-ui, sans-serif; }
+
+#members .members-react-club-panel {
+  display: grid;
+  gap: var(--member-content-gap);
+}
+#members .members-react-club-panel :is(.course-conditions-panel, .meeting-minutes-container, .members-chart-container) {
+  margin: 0;
+  background: var(--member-panel);
+  border-color: var(--member-line);
+  border-radius: var(--member-radius);
+}
+#members .members-react-club-panel :is(.course-conditions-title, .meeting-minutes-title, .members-chart-title) { margin-bottom: .55rem; }
+#members .members-react-club-panel .course-conditions-note { text-align: left; }
+#members .members-react-club-panel :is(.course-conditions-row, .meeting-minutes-item, .members-stat-card) {
+  background: var(--member-paper);
+  border-color: var(--member-line);
+  color: var(--text-primary);
+}
+#members .members-stat-card:nth-child(n) { background: var(--member-panel); color: var(--text-primary); border: 1px solid var(--member-line); }
+#members .members-controls .members-search { min-width: min(12.5rem, 100%); }
+#members .members-controls > * { min-height: 44px; }
+#members :is(.react-board-panel, .react-tee-signs-panel) { display: grid; gap: .65rem; }
+#members :is(.board-compose, .board-post, .board-reply, .ts-controls, .ts-card) {
+  border-color: var(--member-line);
+  background: var(--member-panel);
+  border-radius: var(--member-radius);
+}
+#members .board-compose { padding: var(--member-section-padding); }
+#members .board-compose .passkey-btn { justify-self: start; }
+#members .board-link { padding: .35rem .62rem; }
+#members .board-link.danger { color: var(--member-muted); }
+#members .board-link.danger:hover { color: var(--over); }
+#members .ts-controls { padding: .7rem; border: 1px solid var(--member-line); }
+#members .ts-controls .ts-field { flex: 1 1 7.5rem; min-width: 0; }
+#members .ts-controls select { min-width: 0; width: 100%; min-height: 44px; }
+#members .ts-filelabel { color: var(--text-primary); border-color: var(--member-line); }
+.member-file-input, #members .udisc-import-btn input {
+  display: block;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+#members .udisc-import-btn:focus-within,
+#members .ts-controls:has(#reactTsPhotoInput:focus-visible) .ts-filelabel,
+body .profile-photo-row:has(#photoInput:focus-visible) label {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+
+/* Appearance and signed-out flows */
+#members .member-appearance .dash-theme { margin: 0; background: var(--member-panel); border-color: var(--member-line); border-radius: var(--member-radius); }
+#members .member-appearance .dash-theme > summary { color: var(--text-primary); text-transform: none; font-weight: 800; }
+#members .member-appearance .dash-theme-header {
+  position: static;
+  inset: auto;
+  color: var(--text-primary);
+  background: var(--member-panel);
+  border-color: var(--member-line);
+  backdrop-filter: none;
+}
+#members .member-appearance :is(.dash-theme-studio, .dash-theme-sidebar, .dash-theme-actionbar, .dash-theme-drop) {
+  background: var(--member-paper);
+  border-color: var(--member-line);
+  color: var(--text-primary);
+}
+#members .member-appearance :is(.dash-theme-toggle button, .dash-theme-pills button, .dash-theme-preset, .disc-color-swatch, .theme-toggle) { min-height: 44px; }
+#members .member-appearance :is(.dash-theme-swatch, .dash-theme-drop):focus-within { outline: 2px solid var(--text-primary); outline-offset: 2px; }
+#members .member-appearance .dash-theme-swatch-role { overflow-wrap: anywhere; }
+#members .member-appearance .dash-theme-apply { min-height: 44px; }
+#members .member-appearance .dash-theme-slider input { min-height: 28px; }
+
+body[data-member-shell="auth"]:not(.player-theme-page)::before { opacity: .42; }
+body[data-member-shell="auth"] .member-app-header {
+  background: var(--dark);
+  color: var(--light);
+  border-bottom: 1px solid color-mix(in srgb, var(--dark) 78%, var(--light));
+  backdrop-filter: none;
+}
+body[data-member-shell="auth"] .member-app-header :is(.logo, .member-header-link, .theme-toggle) { color: var(--light); }
+body[data-member-shell="auth"] .member-app-header .logo-wordmark em { color: var(--accent); }
+body[data-member-shell="auth"] .install-coach { max-width: min(28rem, calc(100% - 1.75rem)); margin-inline: auto; }
+body[data-member-shell="auth"] .install-coach .install-coach-btn {
+  min-height: 44px;
+  background: var(--primary-strong);
+  color: white;
+  border-color: var(--primary-strong);
+}
+body[data-member-shell="auth"] .install-coach .install-coach-dismiss { min-height: 44px; }
+body .login-gate { padding-inline: clamp(.85rem, 4vw, 2rem); align-items: flex-start; }
+body .login-gate .login-card {
+  width: min(100%, 28rem);
+  max-width: none;
+  margin: 0 auto;
+  padding: clamp(1.05rem, 4vw, 1.65rem);
+  border-radius: 1rem;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+  text-align: left;
+}
+body .login-gate :is(.login-title, .community-shared-profile .section-title) {
+  margin: 0 0 .35rem;
+  color: var(--text-primary);
+  font: 800 clamp(1.45rem, 5vw, 2.05rem)/1.15 Archivo, system-ui, sans-serif;
+  letter-spacing: -.04em;
+  text-align: left;
+}
+body .login-gate .login-icon { display: inline-flex; margin: 0 0 .62rem; color: var(--text-secondary); }
+body .login-gate .login-icon svg { width: 1.75rem; height: 1.75rem; }
+body .login-gate :is(.login-subtitle, .form-hint) { color: var(--text-secondary); line-height: 1.45; }
+body .login-gate .form-input { min-height: 44px; font-size: 1rem; }
+body .login-gate .login-btn {
+  min-height: 44px;
+  border-radius: .6rem;
+  font: 750 .94rem/1.2 Archivo, system-ui, sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+}
+body .login-gate .login-btn-secondary { background: var(--bg-secondary); color: var(--text-primary); border-color: var(--border-color); }
+body .login-gate .login-btn-secondary:hover { background: var(--bg-tertiary); }
+body .login-gate .back-link { display: inline-flex; align-items: center; min-height: 44px; }
+body .login-gate .member-auth-alternate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .45rem;
+  margin-top: .85rem;
+  padding-top: .68rem;
+  border-top: 1px solid var(--border-color);
+}
+body .login-gate .member-auth-alternate .login-subtitle { margin: 0; }
+body .login-gate :is(a,button,input,select,textarea):focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; }
+
+body #membersReactDialogsApp .member-dialog { border-radius: .9rem; text-align: left; max-width: min(28rem, calc(100% - 1.8rem)); }
+body #crottsReactApp :is(#crotts-close,#crotts-attach,#crotts-send,#crotts-input) { min-height: 44px; border-radius: .55rem; }
+body #crottsReactApp :is(#crotts-close,#crotts-attach) { min-width: 44px; }
+body #crottsReactApp #crotts-input { font: 1rem/1.27 Archivo, system-ui, sans-serif; }
+body #crottsReactApp :is(button,textarea,a):focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+
+@media (min-width: 900px) {
+  #members .member-subgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  #members .member-play-entry { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+  #members .member-stats .doubles-quick-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  #members .member-community-hub { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+}
+@media (max-width: 360px) {
+  body[data-member-shell="auth"] .member-app-header .logo-wordmark { display: none; }
+  #members .member-play-surface .live-round-card { grid-template-columns: 1fr; }
+  #members .member-inline-search { grid-template-columns: 1fr; }
+  #members .member-inline-search .dashboard-action { justify-self: start; width: auto; }
+  #members .member-appearance .dash-theme-palette { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  #members .member-wallet-page .wallet-panel { grid-template-columns: 1fr; }
+}

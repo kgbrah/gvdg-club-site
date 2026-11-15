@@ -33,8 +33,11 @@ function ScoreDialog(props) {
   });
 
   React.useEffect(() => {
-    if (isPrompt) inputRef.current?.focus();
-  }, [isPrompt]);
+    if (isPrompt) {
+      inputRef.current?.focus();
+      if (dialog.readOnly) inputRef.current?.select();
+    }
+  }, [isPrompt, dialog.readOnly]);
 
   function cancel() {
     props.onResolve(isPrompt ? null : false);
@@ -88,6 +91,7 @@ function ScoreDialog(props) {
                 maxLength: dialog.maxLength || 60,
                 placeholder: dialog.placeholder || "",
                 ref: inputRef,
+                readOnly: dialog.readOnly === true,
                 value,
                 onChange: (event) => {
                   setValue(event.target.value);

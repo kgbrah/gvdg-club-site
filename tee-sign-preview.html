@@ -5,9 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Tee-sign preview · GVDG</title>
 <link rel="icon" href="data:," /><!-- suppress the default /favicon.ico request (keeps console clean) -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="tokens.css">
 <style>
   * { box-sizing: border-box; }
@@ -31,8 +28,9 @@
   @media (max-width: 420px) { .tee-preview-sample, .tee-sign { width: 100%; height: auto; } }
 </style>
 <script type="module" src="tee-sign-preview-app/tee-sign-preview-app.js"></script>
+  <link rel="stylesheet" href="public-polish.css">
 </head>
-<body>
+<body data-public-polish="tee">
 <div id="teeSignPreviewReactApp"></div>
 </body>
 </html>

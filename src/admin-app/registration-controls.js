@@ -151,7 +151,7 @@ export function useAdminRegistrationControlsState() {
 }
 
 function EventSelector({ state }) {
-  return h("div", { "data-react-admin-registration-controls": state.status }, [
+  return h("div", { className: "admin-surface admin-event-picker", "data-react-admin-registration-controls": state.status }, [
     h("label", { htmlFor: "rgEvent", key: "label" }, "Event"),
     h("select", {
       disabled: state.status === "loading" && !state.events.length,
@@ -180,7 +180,7 @@ function NameListEditor({ addId, disabled, hint, label, names, onChange, placeho
   }
 
   return h("div", { className: "al-name-list", key: addId }, [
-    h("span", { className: "al-name-label", key: "label" }, label),
+    h("label", { className: "al-name-label", htmlFor: addId, key: "label" }, label),
     hint ? h("span", { className: "al-note", key: "hint" }, hint) : null,
     names.length ? h("div", { className: "al-name-chips", key: "chips" }, names.map((name) => h("button", {
       "aria-label": `Remove ${name}`,
@@ -194,6 +194,7 @@ function NameListEditor({ addId, disabled, hint, label, names, onChange, placeho
       h("input", {
         disabled,
         id: addId,
+        key: "input",
         maxLength: 40,
         onChange: (event) => setDraft(event.target.value),
         onKeyDown: (event) => {
@@ -204,7 +205,7 @@ function NameListEditor({ addId, disabled, hint, label, names, onChange, placeho
         placeholder,
         value: draft,
       }),
-      h("button", { className: "admin-btn secondary", disabled: disabled || !draft.trim(), onClick: add, type: "button" }, "Add"),
+      h("button", { className: "admin-btn secondary", key: "submit-name", disabled: disabled || !draft.trim(), onClick: add, type: "button" }, "Add"),
     ]),
   ]);
 }
@@ -212,19 +213,23 @@ function NameListEditor({ addId, disabled, hint, label, names, onChange, placeho
 function SettingsForm({ state }) {
   const [form, setForm] = React.useState(() => formFromConfig(state.config));
   const [pendingRequest, setPendingRequest] = React.useState("");
+  const eventRef = React.useRef(state.selectedEventId);
+  const dirty = React.useRef(false);
 
   React.useEffect(() => {
-    const active = typeof document !== "undefined" ? document.activeElement : null;
-    const editing = active && active.closest && active.closest("[data-react-admin-registration-settings]") && active.matches("input, textarea, select");
-    if (editing) return;
-    setForm(formFromConfig(state.config));
-    setPendingRequest("");
-  }, [state.selectedEventId, state.config]);
+    if (eventRef.current !== state.selectedEventId) {
+      eventRef.current = state.selectedEventId;
+      dirty.current = false;
+      setPendingRequest("");
+    }
+    if (!dirty.current && state.configStatus === "ready") setForm(formFromConfig(state.config));
+  }, [state.selectedEventId, state.config, state.configStatus]);
 
   React.useEffect(() => {
     if (!pendingRequest) return undefined;
     function update(event) {
       if (event.detail?.requestId !== pendingRequest) return;
+      if (event.detail.ok === true) dirty.current = false;
       setPendingRequest("");
     }
     window.addEventListener("gvdg:admin-registration-config-save-result", update);
@@ -232,6 +237,7 @@ function SettingsForm({ state }) {
   }, [pendingRequest]);
 
   function setField(field, value) {
+    dirty.current = true;
     setForm((current) => ({ ...current, [field]: value }));
   }
 
@@ -274,16 +280,17 @@ function SettingsForm({ state }) {
           checked: form.registrationOpen,
           disabled,
           id: "rgOpen",
+          key: "open",
           onChange: (event) => setField("registrationOpen", event.target.checked),
           type: "checkbox",
         }),
         " Registration open",
       ]),
-      h("div", { className: "al-row", key: "fees", style: { marginTop: "0.5rem" } }, [
-        h("label", { key: "entry" }, ["Entry $", h("input", { disabled, id: "rgEntry", min: "0", onChange: (event) => setField("entryFee", event.target.value), size: 5, step: "1", type: "number", value: form.entryFee })]),
-        h("label", { key: "ctp" }, ["CTP $", h("input", { disabled, id: "rgCtp", min: "0", onChange: (event) => setField("ctpFee", event.target.value), size: 5, step: "1", type: "number", value: form.ctpFee })]),
-        h("label", { key: "ace" }, ["Ace $", h("input", { disabled, id: "rgAce", min: "0", onChange: (event) => setField("aceFee", event.target.value), size: 5, step: "1", type: "number", value: form.aceFee })]),
-        h("select", { disabled, id: "rgFormat", key: "format", onChange: (event) => setField("playFormat", event.target.value), value: form.playFormat }, FORMATS.map(([value, label]) => h("option", { key: value || "empty", value }, label))),
+      h("div", { className: "admin-registration-fees", key: "fees" }, [
+        h("label", { key: "entry" }, ["Entry fee ($)", h("input", { disabled, key: "input", id: "rgEntry", min: "0", onChange: (event) => setField("entryFee", event.target.value), size: 5, step: "1", type: "number", value: form.entryFee })]),
+        h("label", { key: "ctp" }, ["CTP fee ($)", h("input", { disabled, key: "input", id: "rgCtp", min: "0", onChange: (event) => setField("ctpFee", event.target.value), size: 5, step: "1", type: "number", value: form.ctpFee })]),
+        h("label", { key: "ace" }, ["Ace fee ($)", h("input", { disabled, key: "input", id: "rgAce", min: "0", onChange: (event) => setField("aceFee", event.target.value), size: 5, step: "1", type: "number", value: form.aceFee })]),
+        h("label", { key: "format" }, "Play format", h("select", { disabled, id: "rgFormat", onChange: (event) => setField("playFormat", event.target.value), value: form.playFormat }, FORMATS.map(([value, label]) => h("option", { key: value || "empty", value }, label)))),
       ]),
       h("div", { key: "menus" }, [
         h(NameListEditor, {

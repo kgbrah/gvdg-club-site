@@ -91,7 +91,7 @@ function StandingScorecard({ holes, isPutting, onHole, scorecard, standing }) {
   }));
 }
 
-export function LeaderboardTable({ clipApi, clipHoles, clips, isDoubles, isMatchplay, isPutting, onHole, relClass, relText, standings, startExpanded }) {
+export function LeaderboardTable({ clipApi, clipGeneration, clipHoles, clips, isDoubles, isMatchplay, isPutting, onHole, relClass, relText, standings, startExpanded }) {
   const [toggled, setToggled] = React.useState(() => new Set());
   function isOpen(id, hasCard) {
     if (!hasCard) return false;
@@ -129,7 +129,7 @@ export function LeaderboardTable({ clipApi, clipHoles, clips, isDoubles, isMatch
     h("tbody", { key: "body" }, standings.map((standing, index) => {
       const id = standingKey(standing, index);
       const hasCard = Array.isArray(standing.scorecard) && standing.scorecard.length > 0;
-      const playerClips = clipsForStanding(clips, standing);
+      const playerClips = clipsForStanding(clips, standing, clipGeneration);
       const open = isOpen(id, hasCard || playerClips.length > 0);
       const label = hasCard || playerClips.length
         ? h("button", {

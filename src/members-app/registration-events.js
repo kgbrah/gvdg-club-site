@@ -130,6 +130,7 @@ function OpenEventForm({ event, token, onReload }) {
     isDoublesRegistration(event) ? h("input", {
       type: "text",
       placeholder: "Pair label or partner",
+      "aria-label": "Pair label or partner",
       maxLength: 40,
       value: team,
       "data-register-pair": "team",
@@ -157,10 +158,12 @@ export function EventRegistrationCard({ event, registration, token, paymentsConf
     tabIndex: -1,
     "data-event-state": registration && event.status !== "cancelled" ? "in" : "register",
   }, [
-    h("div", { className: "register-head", key: "head" }, [
-      h("span", { className: "register-name", key: "name" }, event.name || "Event"),
+    h("div", { className: "register-head member-event-heading", key: "head" }, [
+      h("div", { key: "heading" }, [
+        event.date ? h("p", { className: "register-date", key: "date" }, formatEventDay(event.date)) : null,
+        h("h3", { className: "register-name", key: "name" }, event.name || "Event"),
+      ]),
       h(EventBadge, { status: event.status, key: "badge" }),
-      event.date ? h("span", { className: "register-date", key: "date" }, formatEventDay(event.date)) : null,
     ]),
     eventMeta(event) ? h("div", { className: "register-fee", key: "meta" }, eventMeta(event)) : null,
     h(EventScheduleFacts, { event, key: "schedule" }),
@@ -199,9 +202,9 @@ export function EventRegistrationCard({ event, registration, token, paymentsConf
 }
 
 function Section({ title, children }) {
-  return h(React.Fragment, null, [
-    h("h4", { className: "register-subhead", key: "title" }, title),
-    ...children,
+  return h("section", { className: "member-event-section", "aria-label": title }, [
+    h("h2", { className: "register-subhead", key: "title" }, title),
+    h("div", { className: "member-event-list", key: "events" }, children),
   ]);
 }
 

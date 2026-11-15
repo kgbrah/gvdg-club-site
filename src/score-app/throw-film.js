@@ -5,6 +5,7 @@ import { ChevronDown, ChevronUp, Video, X } from "lucide-react";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { resolveApiBase } from "../shared/api-base.js";
 import { liveRoundCodeFromSearch } from "../shared/live-watch.js";
+import { spectatorHeaders, watchKeyFromLocation } from "../shared/spectator-link.js";
 import { readMemberToken } from "../shared/member-session.js";
 import { readOpenPlayToken } from "./open-play-session.js";
 import { createClipStore, drainClipDrafts } from "./clip-recovery.js";
@@ -31,6 +32,7 @@ export function suggestedMoment(strokes, par) {
 
 export function clipScopeFromLocation(loc) {
   const params = new URLSearchParams((loc && loc.search) || "");
+  if (watchKeyFromLocation(loc || {})) return { key: "watch-link", listPath: "/watch-round/clips" };
   const code = liveRoundCodeFromSearch(params);
   const eventId = String(params.get("event") || "").replace(/[^0-9]/g, "");
   if (code) return { key: code, listPath: "/rounds/" + code + "/live/clips" };
@@ -46,59 +48,77 @@ function guestToken() {
   }
 }
 
-function authHeaders(token) {
-  return token ? { Authorization: "Bearer " + token } : {};
+function authHeaders(token, guest) {
+  return token ? { Authorization: "Bearer " + token } : guest ? { Authorization: "Guest " + guest } : {};
 }
 
 function withGuest(path) {
   const token = readMemberToken() || readOpenPlayToken() || "";
   const gt = token ? "" : guestToken();
-  if (!gt) return { path, token };
-  return { path: path + (path.includes("?") ? "&" : "?") + "gt=" + encodeURIComponent(gt), token };
+  return { path, token, guest: gt };
 }
 
 async function readJson(response) {
   try { return await response.json(); } catch { return null; }
 }
 
-export function useThrowClips(options) {
-  const refresh = !options || options.refresh !== false;
+function spectatorClipRequest(listPath, spectator) {
+  const key = spectator ? watchKeyFromLocation(window.location) : null;
+  const endpoint = listPath + (spectator ? "?viewer=1" : "");
+  const { path, token, guest } = key ? { path: endpoint, token: "" } : withGuest(endpoint);
+  return { path, headers: key ? spectatorHeaders(key) : authHeaders(token, guest), identity: key || token || guest || path };
+}
+
+export function useThrowClips(options = {}) {
+  const { enabled = true, refresh = true, spectator = false, generation = null } = options;
   const scope = React.useMemo(() => clipScopeFromLocation(window.location), []);
   const api = React.useMemo(() => resolveApiBase({ datasetKeys: ["apiBase"] }), []);
-  const [clips, setClips] = React.useState([]);
+  const list = scope ? spectatorClipRequest(scope.listPath, spectator) : null;
+  const owner = list?.identity || null;
+  const [feed, setFeed] = React.useState(null);
+  const [, refreshAuth] = React.useReducer((state) => state + 1, 0);
 
   React.useEffect(() => {
-    if (!scope) return undefined;
-    let alive = true;
+    const change = () => { refreshAuth(); };
+    window.addEventListener("storage", change);
+    return () => window.removeEventListener("storage", change);
+  }, []);
+
+  React.useEffect(() => {
+    if (!scope || !enabled) {
+      setFeed(null);
+      return undefined;
+    }
     const controller = new AbortController();
+    let ticket = 0;
     async function load() {
-      if (typeof document !== "undefined" && document.hidden) return;
+      if (document.hidden) return;
+      const current = ++ticket;
+      const { path, headers, identity } = spectatorClipRequest(scope.listPath, spectator);
+      if (identity !== owner) { refreshAuth(); return; }
       try {
-        const { path } = withGuest(scope.listPath);
-        const response = await fetch(api + path, { cache: "no-store", signal: controller.signal });
+        const response = await fetch(api + path, { cache: "no-store", headers, signal: controller.signal });
         const data = response.ok ? await response.json() : null;
-        if (alive && data && Array.isArray(data.clips)) setClips(data.clips);
+        if (controller.signal.aborted || current !== ticket || spectatorClipRequest(scope.listPath, spectator).identity !== owner) return;
+        if (Array.isArray(data?.clips)) setFeed({ owner, spectator, clips: data.clips });
+        else if (response.status === 401 || response.status === 403 || response.status === 404) setFeed(null);
       } catch {
-        /* keep the last list; a blip shouldn't blank the round */
+        /* Keep the last authorized list during a transient outage. */
       }
     }
     void load();
-    const onChange = () => { void load(); };
-    window.addEventListener(CLIPS_EVENT, onChange);
-    const timer = refresh ? window.setInterval(() => { void load(); }, CLIP_POLL_MS) : 0;
-    const onVisible = () => {
-      if (!document.hidden) void load();
-    };
-    if (refresh && typeof document !== "undefined") document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener(CLIPS_EVENT, load);
+    const timer = refresh ? window.setInterval(load, CLIP_POLL_MS) : null;
+    document.addEventListener("visibilitychange", load);
     return () => {
-      alive = false;
       controller.abort();
-      window.removeEventListener(CLIPS_EVENT, onChange);
-      if (timer) window.clearInterval(timer);
-      if (refresh && typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener(CLIPS_EVENT, load);
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", load);
     };
-  }, [api, refresh, scope]);
+  }, [api, enabled, owner, refresh, scope, spectator]);
 
+  const clips = enabled && feed?.owner === owner && feed?.spectator === spectator ? feed.clips.filter((clip) => generation == null || clip.generation == null || clip.generation === generation) : [];
   return { api, clips, scope };
 }
 
@@ -123,7 +143,7 @@ function clipCaption(clip, holes, putting) {
   return momentLabel(clip.moment) + " · " + place;
 }
 
-export function clipsForStanding(clips, standing) {
+export function clipsForStanding(clips, standing, generation) {
   const names = new Set();
   function add(value) {
     const name = String(value || "").trim().toLowerCase().replace(/\s+\(you\)$/i, "");
@@ -133,13 +153,84 @@ export function clipsForStanding(clips, standing) {
   add(standing && standing.label);
   const members = standing && Array.isArray(standing.members) ? standing.members : [];
   members.forEach(add);
-  const indexes = new Set((standing && Array.isArray(standing.playerIndexes) ? standing.playerIndexes : []).map((index) => Number(index)));
+  const playerIndexes = standing?.clipPlayerIndexes ?? standing?.playerIndexes ?? [];
+  const indexes = new Set(playerIndexes.map(Number));
   return (Array.isArray(clips) ? clips : []).filter((clip) => {
     if (!clip || !clip.mediaPath) return false;
-    if (clip.playerIndex != null && indexes.size && indexes.has(Number(clip.playerIndex))) return true;
+    if (clip.generation) {
+      return clip.generation === generation && clip.playerIndex != null && indexes.has(Number(clip.playerIndex));
+    }
+    if (Array.isArray(standing?.clipPlayerIndexes)) return false;
     const name = String(clip.playerName || "").trim().toLowerCase();
+    if (clip.playerIndex != null && indexes.size && !indexes.has(Number(clip.playerIndex))) return false;
     return Boolean(name) && names.has(name);
   });
+}
+
+function ClipPlayer({ api, clip, label }) {
+  const [asset, setAsset] = React.useState(null);
+  const [attempt, setAttempt] = React.useState(0);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const abort = React.useRef(null);
+  const video = React.useRef(null);
+  const playButton = React.useRef(null);
+  const focusPlayer = React.useRef(false);
+  const key = watchKeyFromLocation(window.location);
+  const credential = withGuest(clip.mediaPath);
+  const identity = credential.token || credential.guest || credential.path;
+  const source = clip.requiresAuth
+    ? (asset?.identity === identity ? asset.url : "")
+    : api + clip.mediaPath + (key ? "?wl=" + encodeURIComponent(key) : "");
+  React.useEffect(() => () => abort.current?.abort(), [identity, clip.requiresAuth]);
+  React.useEffect(() => () => { if (asset) URL.revokeObjectURL(asset.url); }, [asset]);
+
+  async function load() {
+    focusPlayer.current = document.activeElement === playButton.current;
+    setError("");
+    setBusy(true);
+    const controller = new AbortController();
+    abort.current = controller;
+    try {
+      const response = await fetch(api + credential.path, { cache: "no-store", headers: authHeaders(credential.token, credential.guest), signal: controller.signal });
+      if (!response.ok) throw new Error("video_unavailable");
+      const blob = await response.blob();
+      if (!controller.signal.aborted) setAsset({ identity, url: URL.createObjectURL(blob) });
+    } catch {
+      if (!controller.signal.aborted) {
+        setError("Couldn’t load this clip. Check your connection or access and try again.");
+        window.dispatchEvent(new CustomEvent(CLIPS_EVENT));
+      }
+    } finally {
+      if (!controller.signal.aborted) setBusy(false);
+    }
+  }
+
+  React.useEffect(() => {
+    if (clip.requiresAuth && source && focusPlayer.current) {
+      video.current?.focus();
+      focusPlayer.current = false;
+    }
+  }, [source, clip.requiresAuth]);
+
+  return h(React.Fragment, null,
+    source ? h("video", appleVideoAttrs({
+      key: attempt,
+      "aria-label": label,
+      controls: true,
+      onError: () => setError("Couldn’t play this clip. Check your connection and access."),
+      onLoadedMetadata: markClipFrame,
+      preload: "metadata",
+      ref: video,
+      src: source,
+      tabIndex: 0,
+    })) : h("button", { type: "button", className: "btn secondary", ref: playButton, "aria-label": "Load " + label, disabled: busy, onClick: () => { void load(); } }, busy ? "Loading clip…" : "Load clip"),
+    error ? h("p", { className: "muted", role: "status" }, error) : null,
+    source && error ? h("button", { type: "button", className: "btn secondary", onClick: () => {
+      setError("");
+      if (clip.requiresAuth) { setAsset(null); void load(); }
+      else setAttempt((value) => value + 1);
+    } }, "Retry clip") : null);
 }
 
 export function HighlightClipList(props) {
@@ -147,18 +238,12 @@ export function HighlightClipList(props) {
   if (!clips.length || !props.api) return null;
   const putting = props.putting === true;
   const holes = Array.isArray(props.holes) ? props.holes : [];
-  return h("div", { className: "throw-highlights-row lb-clips" }, clips.map((clip) => {
-    return h("figure", { className: "throw-highlight", key: clip.id }, [
-      h("video", appleVideoAttrs({
-        controls: true,
-        key: "video",
-        onLoadedMetadata: markClipFrame,
-        preload: "metadata",
-        src: props.api + clip.mediaPath,
-      })),
+  return h("div", { className: "throw-highlights-row lb-clips" }, clips.map((clip) =>
+    h("figure", { className: "throw-highlight", key: clip.id }, [
+      h(ClipPlayer, { api: props.api, clip, label: clip.playerName + " · " + clipCaption(clip, holes, putting), key: "video" }),
       h("figcaption", { key: "cap" }, clipCaption(clip, holes, putting)),
-    ]);
-  }));
+    ]),
+  ));
 }
 
 function filmPlaceLabel(hole, putting) {
@@ -169,30 +254,54 @@ function filmPlaceLabel(hole, putting) {
 }
 
 export function RoundHighlights(props) {
-  const { api, clips } = useThrowClips({ refresh: props.live !== false });
+  return props.film ? h(ClipGallery, props) : h(ManagedClipGallery, props);
+}
+
+function ManagedClipGallery(props) {
+  const film = useThrowClips({ generation: props.generation });
+  return h(ClipGallery, { ...props, film, allowCardStar: props.canStar });
+}
+
+function ClipGallery(props) {
+  const { api, clips } = props.film;
   const landscape = usePhoneLandscape();
   const [open, setOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState(null);
+  const [note, setNote] = React.useState("");
+  const bodyId = React.useId();
   const rows = clips.filter((clip) => clip && clip.mediaPath);
   if (!rows.length) return null;
   const canStar = props.canStar === true;
   const putting = props.putting === true;
   const videosLabel = putting ? "Putt videos" : "Throw videos";
   const countLabel = rows.length === 1 ? "1 clip" : rows.length + " clips";
-  async function toggle(clip) {
-    const { path, token } = withGuest(clip.mediaPath.replace(/\/media$/, "/highlight"));
-    const response = await fetch(api + path, {
-      body: JSON.stringify({ highlight: !clip.highlight }),
-      headers: { ...authHeaders(token), "Content-Type": "application/json" },
-      method: "POST",
-    });
-    if (response.ok) window.dispatchEvent(new CustomEvent(CLIPS_EVENT));
+  async function update(clip, field) {
+    const sharing = field === "visibility";
+    const value = sharing ? (clip.visibility === "private" ? "round" : "private") : !clip.highlight;
+    const { path, token, guest } = withGuest(clip.mediaPath.replace(/\/media$/, "/" + field));
+    setBusy(clip.id);
+    setNote("");
+    try {
+      const response = await fetch(api + path, {
+        body: JSON.stringify({ [field]: value }),
+        headers: { ...authHeaders(token, guest), "Content-Type": "application/json" },
+        method: sharing ? "PUT" : "POST",
+      });
+      if (!response.ok) throw new Error("clip_update_failed");
+      setNote(sharing ? (value === "private" ? "Clip is private." : "Clip shared with round viewers.") : (value ? "Highlight starred." : "Highlight unstarred."));
+      window.dispatchEvent(new CustomEvent(CLIPS_EVENT));
+    } catch {
+      setNote("Couldn’t update this clip. Try again.");
+    } finally {
+      setBusy(null);
+    }
   }
   return h("section", {
     className: "throw-highlights" + (open ? " open" : "") + (landscape ? " is-landscape" : " is-portrait"),
     "data-react-throw-highlights": open ? "open" : "collapsed",
   }, [
     h("button", {
-      "aria-controls": "throw-videos-body",
+      "aria-controls": bodyId,
       "aria-expanded": open ? "true" : "false",
       "aria-label": (open ? "Minimize " : "Expand ") + videosLabel.toLowerCase(),
       className: "throw-highlights-head",
@@ -215,27 +324,32 @@ export function RoundHighlights(props) {
         }),
       ]),
     ]),
-    open ? h("div", { className: "throw-highlights-row", id: "throw-videos-body", key: "row" }, rows.map((clip) =>
+    open ? h("div", { className: "throw-highlights-row", id: bodyId, key: "row" }, rows.map((clip) =>
       h("figure", { className: "throw-highlight", key: clip.id }, [
-        h("video", appleVideoAttrs({
-          controls: true,
-          key: "video",
-          onLoadedMetadata: markClipFrame,
-          preload: "metadata",
-          src: api + clip.mediaPath,
-        })),
+        h(ClipPlayer, { api, clip, label: clip.playerName + " · " + clipCaption(clip, props.holes, putting), key: "video" }),
         h("figcaption", { key: "cap" }, [
           clipCaption(clip, props.holes, putting),
           clip.playerName ? " · " + clip.playerName : "",
+          clip.canManage ? (clip.visibility === "private" ? " · Private" : " · Round viewers") : "",
         ]),
-        canStar ? h("button", {
+        canStar && (clip.canManage || props.allowCardStar) ? h("button", {
           className: "throw-highlight-star",
           key: "star",
-          onClick: () => { void toggle(clip); },
+          disabled: busy !== null,
+          "aria-pressed": clip.highlight,
+          onClick: () => { void update(clip, "highlight"); },
           type: "button",
         }, clip.highlight ? "Unstar" : "Star highlight") : null,
+        clip.canManage ? h("button", {
+          className: "throw-highlight-star",
+          key: "visibility",
+          disabled: busy !== null,
+          onClick: () => { void update(clip, "visibility"); },
+          type: "button",
+        }, clip.visibility === "private" ? "Share with round viewers" : "Make clip private") : null,
       ]),
     )) : null,
+    note ? h("p", { className: "muted", key: "note", role: "status" }, note) : null,
   ]);
 }
 
@@ -543,7 +657,7 @@ export function useClipRecovery(context) {
 
 export function ThrowFilm(props) {
   const [open, setOpen] = React.useState(null);
-  const rows = Array.isArray(props.rows) ? props.rows : [];
+  const rows = props.offlineRows || (Array.isArray(props.rows) ? props.rows : []);
   const hole = props.hole && props.hole.hole;
   const putting = props.putting === true;
   const recovery = props.recovery;
@@ -566,6 +680,7 @@ export function ThrowFilm(props) {
       ...open,
       key: "sheet",
       recovery,
+      offline: props.offline,
       onClose: () => setOpen(null),
     }) : null,
   ]);
@@ -947,7 +1062,7 @@ function ThrowFilmSheet(props) {
         : reviewing
           ? activeDraft?.state === "pending" ? null : h("button", {
             className: "btn primary", disabled: phase !== "review", key: "save", onClick: () => { void save(); }, type: "button",
-          }, phase === "saving" ? "Saving" : activeDraft?.attempt ? "Retry upload" : "Upload to round")
+          }, phase === "saving" ? "Saving" : props.offline ? "Queue for upload after the round" : activeDraft?.attempt ? "Retry upload" : "Upload private clip")
           : h("button", { className: "btn primary", key: "start", onClick: () => { void start(); }, type: "button" }, "Record"),
       phase === "review" && stored ? h("button", { className: "btn secondary", key: "retake", onClick: retake, type: "button" }, "New clip") : null,
       phase === "review" && draft ? h("a", {

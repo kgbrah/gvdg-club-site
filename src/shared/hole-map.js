@@ -26,6 +26,7 @@ function SatelliteLayer({ url, bounds, width, height }) {
           decoding: "async",
           draggable: false,
           key: tile.url,
+          onError: (event) => { event.currentTarget.style.visibility = "hidden"; },
           src: tile.url,
           style: {
             left: tile.left + "%",
@@ -130,7 +131,7 @@ function MapLieChip(props) {
           event.stopPropagation();
           props.onMarkLie();
         },
-      }, count ? "Lie " + (count + 1) : "Mark lie")
+      }, count && !props.controlsOutside ? "Lie " + (count + 1) : "Mark lie")
       : null,
     count && typeof props.onUndoThrow === "function"
       ? h("button", {
@@ -502,7 +503,7 @@ export function HoleMap(props) {
   const hole = props.hole;
   const compact = Boolean(props.compact);
   const large = Boolean(props.large);
-  const size = compact ? HOLE_MAP_COMPACT_SIZE : large ? HOLE_MAP_WATCH_SIZE : HOLE_MAP_SIZE;
+  const size = props.size || (compact ? HOLE_MAP_COMPACT_SIZE : large ? HOLE_MAP_WATCH_SIZE : HOLE_MAP_SIZE);
   const map = projectLooseHoleMap(hole, {
     focus: props.focus,
     height: size.height,
@@ -511,7 +512,7 @@ export function HoleMap(props) {
   });
   const [flight, setFlight] = React.useState(null);
   const [heatOn, setHeatOn] = React.useState(true);
-  const heatmap = useHoleHeatmap(props.layoutId, hole && hole.hole);
+  const heatmap = useHoleHeatmap(props.schematic ? null : props.layoutId, hole && hole.hole);
   const heatSamples = heatmap && Array.isArray(heatmap.lies) ? heatmap.lies.length : 0;
   const youSamples = heatmap && Array.isArray(heatmap.you) ? heatmap.you.length : 0;
   const heatAvailable = heatSamples >= HEATMAP_MIN_SAMPLES || youSamples > 0;
@@ -596,13 +597,36 @@ export function HoleMap(props) {
     const point = mapPointFromEvent(event, map);
     if (point) props.onMapPoint(point);
   }
+  const focusControls = h(MapFocusChips, {
+    focus: map.focus,
+    heat: showHeat,
+    key: "focus",
+    onFocus: props.onFocus,
+    onHeat: heatAvailable ? () => setHeatOn((value) => !value) : undefined,
+  });
+  const lieControls = h(MapLieChip, {
+    key: "lie-chip",
+    controlsOutside: props.controlsOutside,
+    surveyed: props.surveyed,
+    throws,
+    loose: map.loose,
+    onMarkLie: props.onMarkLie,
+    onMarkPin: props.onMarkPin,
+    onMarkTee: props.onMarkTee,
+    onUndoThrow: props.onUndoThrow,
+  });
+  const credit = h("div", {
+    className: "hole-map-credit" + (props.controlsOutside ? " hole-map-credit-overlay" : ""),
+    key: "credit",
+  }, SATELLITE_CREDIT);
   return h("div", {
     className: compact
       ? "hole-map-card hole-map-compact"
       : ("card hole-map-card" + (large ? " hole-map-watch" : "")),
   }, [
+    props.controlsOutside && h("div", { className: "hole-map-options", key: "options" }, [focusControls, props.controlAccessory]),
     h("div", { className: "hole-map-frame", key: "frame" }, [
-      h(SatelliteLayer, {
+      !props.schematic && h(SatelliteLayer, {
         bounds: map.bounds,
         height: map.height,
         key: map.satelliteUrl || "satellite",
@@ -725,31 +749,18 @@ export function HoleMap(props) {
         ],
       ),
       h(ScoreChips, { compact, height: map.height, key: "chips", marks: players, width: map.width }),
-      h(MapFocusChips, {
-        focus: map.focus,
-        heat: showHeat,
-        key: "focus",
-        onFocus: props.onFocus,
-        onHeat: heatAvailable ? () => setHeatOn((value) => !value) : undefined,
-      }),
-      h(MapLieChip, {
-        key: "lie-chip",
-        surveyed: props.surveyed,
-        throws,
-        loose: map.loose,
-        onMarkLie: props.onMarkLie,
-        onMarkPin: props.onMarkPin,
-        onMarkTee: props.onMarkTee,
-        onUndoThrow: props.onUndoThrow,
-      }),
-      props.hud || null,
+      props.controlsOutside ? null : focusControls,
+      props.controlsOutside ? null : lieControls,
+      props.controlsOutside ? null : props.hud,
+      props.controlsOutside && !props.schematic ? credit : null,
     ]),
+    props.controlsOutside && h("div", { className: "hole-map-actions", key: "actions" }, [props.hud, lieControls]),
     h("div", { className: "hole-map-caption", key: "caption" }, [
       h("span", { key: "tee" }, map.tee ? map.tee.label : "You"),
       h("span", { key: "dist" }, map.distanceFt ? `${map.distanceFt} ft` : (map.loose ? "Around you" : "Map")),
       h("span", { key: "basket" }, map.basket ? map.basket.label : ""),
     ]),
-    h("div", { className: "hole-map-credit", key: "credit" }, SATELLITE_CREDIT),
+    !props.controlsOutside ? credit : null,
     udiscHref
       ? h("a", {
         className: "hole-map-udisc",

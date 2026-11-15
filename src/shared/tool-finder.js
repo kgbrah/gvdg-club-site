@@ -16,7 +16,7 @@ export function ToolFinder({ role = "member", isAdmin, onNavigate }) {
     if (!item) return;
     setOpen(false);
     setQuery("");
-    if (item.action === "help") requestCrottsHelp();
+    if (item.action === "help") requestCrottsHelp(() => input.current);
     else if (item.key) onNavigate(item.key);
     else if (item.href) location.assign(item.href);
   }

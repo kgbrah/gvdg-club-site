@@ -18,6 +18,8 @@ function icon(Icon) {
 
 export function HomePageChrome() {
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const menuButton = React.useRef(null);
+  const navLinks = React.useRef(null);
   const [scrolled, setScrolled] = React.useState(false);
   const page = siteCurrentPage();
   const more = useSiteMoreMenu(menuOpen);
@@ -38,14 +40,33 @@ export function HomePageChrome() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  React.useEffect(() => {
+    if (!menuOpen) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      navLinks.current?.firstElementChild?.firstElementChild?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [menuOpen]);
+
   function closeMenu() {
     setMenuOpen(false);
     more.closeMore();
   }
 
-  return h("header", { className: scrolled ? "scrolled" : "", "data-react-home-chrome": "true" }, h("nav", null, [
+  function onNavKey(event) {
+    if (event.key !== "Escape") return;
+    if (more.moreOpen) {
+      more.closeMore();
+      event.target.closest(".nav-more")?.firstElementChild?.focus();
+    } else if (menuOpen) {
+      closeMenu();
+      menuButton.current?.focus();
+    }
+  }
+
+  return h("header", { className: scrolled ? "scrolled" : "", "data-react-home-chrome": "true" }, h("nav", { "aria-label": "Main navigation", onKeyDown: onNavKey }, [
     h(ClubLogo, { href: "#", key: "logo", onClick: closeMenu }),
-    h("ul", { className: menuOpen ? "nav-links active" : "nav-links", id: "navLinks", key: "links" },
+    h("ul", { className: menuOpen ? "nav-links active" : "nav-links", id: "navLinks", key: "links", ref: navLinks },
       SiteNavItems({
         moreOpen: more.moreOpen,
         page,
@@ -61,6 +82,7 @@ export function HomePageChrome() {
         className: "menu-toggle",
         key: "menu",
         onClick: () => setMenuOpen((current) => !current),
+        ref: menuButton,
         title: menuOpen ? "Close menu" : "Open menu",
         type: "button",
       }, icon(menuOpen ? X : Menu)),

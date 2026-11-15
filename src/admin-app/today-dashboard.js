@@ -13,7 +13,8 @@ import {
 import { nextWeekOffer } from "./repeat-draft.js";
 import { clubToday } from "../shared/events-model.js";
 import { AdminPushCard } from "./admin-push.js";
-import { useAdminNeeds } from "./admin-needs.js";
+import { AdminOrdersBadge } from "./orders-badge.js";
+import { AdminNeedsBadge, useAdminNeeds } from "./admin-needs.js";
 
 const h = React.createElement;
 const EMPTY_STATE = { status: "loading", events: [] };
@@ -29,7 +30,7 @@ function requestTab(tab, extra = {}) {
 
 function statusChip(status) {
   const label = status === "live" ? "Live" : status === "scheduled" ? "Scheduled" : status;
-  return h("span", { className: `admin-badge ${status}` }, label);
+  return h("span", { className: `admin-badge ${status}`, key: "status" }, label);
 }
 
 function DeskLine({ onTap, player }) {
@@ -71,7 +72,10 @@ export function MorningDesk({ event }) {
     return h("p", { className: "dash-note", key: "desk" }, "Checking the line…");
   }
   if (desk.status === "error") {
-    return h("button", { className: "admin-btn", key: "score", onClick: () => requestTab("scoring", { eventId }), type: "button" }, "Start scoring");
+    return h("div", { className: "admin-desk", key: "desk" }, [
+      h("p", { className: "dash-note", key: "error", role: "alert" }, "Couldn’t load the check-in line."),
+      h("button", { className: "admin-btn", key: "score", onClick: () => requestTab("scoring", { eventId }), type: "button" }, "Open scoring"),
+    ]);
   }
   const nextOrder = holdDeskOrder(desk.players, order.current);
   if (nextOrder !== order.current) order.current = nextOrder;
@@ -119,6 +123,17 @@ function HandoffCard({ order }) {
   ]);
 }
 
+function QueueLinks() {
+  return h("div", { className: "admin-queue-links" }, [
+    h("button", { className: "admin-chip", key: "orders", type: "button", onClick: () => requestTab("orders", { filter: "new" }) }, [
+      "New orders", h(AdminOrdersBadge, { key: "badge" }),
+    ]),
+    h("button", { className: "admin-chip", key: "applications", type: "button", onClick: () => requestTab("applications") }, [
+      "Member applications", h(AdminNeedsBadge, { key: "badge", tab: "members" }),
+    ]),
+  ]);
+}
+
 function NeedsYou() {
   const { items, ready } = useAdminNeeds();
   if (!ready && !items.length) return null;
@@ -151,7 +166,7 @@ export function AdminTodayDashboard() {
     function updateEvents(event) {
       const detail = event.detail && typeof event.detail === "object" ? event.detail : EMPTY_STATE;
       setState({
-        status: detail.status === "loading" ? "loading" : "ready",
+        status: detail.status === "loading" || detail.status === "error" ? detail.status : "ready",
         events: Array.isArray(detail.events) ? detail.events.map(normalizeAdminEvent) : [],
       });
     }
@@ -188,17 +203,13 @@ export function AdminTodayDashboard() {
   const when = next ? formatAdminEventWhen(next) : "";
   const place = next ? formatAdminEventPlace(next) : "";
 
-  return h("div", { "data-react-admin-today": next ? "ready" : "empty" }, [
-
-    h(AdminPushCard, { key: "alerts" }),
-    h(NeedsYou, { key: "needs" }),
+  return h("div", { "data-react-admin-today": view.status === "error" ? "error" : next ? "ready" : "empty" }, [
     next
-      ? h("div", { className: "admin-today-card", "data-admin-event-id": next.id, key: "next" }, [
+      ? h("div", { className: "admin-today-card admin-today-feature", "data-event-status": next.status, "data-admin-event-id": next.id, key: "next" }, [
         statusChip(next.status === "live" ? "live" : "scheduled"),
         h("div", { className: "ev-name", key: "name" }, next.name),
         when ? h("div", { className: "admin-event-meta", key: "when" }, when) : null,
         place ? h("div", { className: "admin-event-meta", key: "place" }, place) : null,
-        deskEvent ? h(MorningDesk, { event: next, key: "morning" }) : null,
         h("div", { className: "admin-today-actions", key: "actions" }, [
           next.status === "live" ? h("button", {
             className: "admin-btn",
@@ -213,8 +224,13 @@ export function AdminTodayDashboard() {
             type: "button",
           }, "Check-in"),
         ]),
+        deskEvent ? h(MorningDesk, { event: next, key: "morning" }) : null,
       ].filter(Boolean))
-      : null,
+      : h("div", { className: "admin-surface", key: "empty", role: view.status === "error" ? "alert" : "status" },
+        view.status === "error" ? "Couldn’t load today’s events." : "No active or scheduled events."),
+    h(NeedsYou, { key: "needs" }),
+    h(QueueLinks, { key: "queues" }),
+    h(AdminPushCard, { key: "alerts" }),
     offer ? h("button", {
       className: "admin-btn",
       key: "next-week",

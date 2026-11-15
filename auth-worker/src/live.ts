@@ -2,8 +2,8 @@
 // players + per-hole strokes) in DO storage, accepts score submissions, pushes leaderboard updates to
 // WebSocket viewers, and on finalize writes results to D1 and marks the event final.
 //
-// Auth is enforced by the Worker BEFORE forwarding here (start/score/finalize are admin-gated; the
-// snapshot + ws reads are public). The DO trusts requests it receives.
+// The Worker verifies identities before forwarding. Card membership and spectator sharing are
+// enforced here for live sockets so a visibility change also cuts off already-connected viewers.
 
 import { cardHasScoredHole, type JoinRequest } from "./live-join.js";
 import { addWatchReceipt, beginWatchScore, checkWatchScore, readWatchCard, watchActor, watchReceiptKey, type WatchReceipts, type WatchScope, type WatchScoreOperation, type WatchWrite } from "./watch-do.js";
@@ -25,13 +25,16 @@ import { getLayoutRatingBaseline } from "./rating-store.js";
 import { checkLiveRecovery, liveRecoveryId, matchesLiveRecoveryScope, recordLiveRecovery } from "./live-recovery.js";
 import { mineData, publicSnapshot } from "./live-snapshot.js";
 import { attestationForCard, canEnterScorecard, cardKey, findPlayer, invalidScoreTargetsResponse, isCardLocked, issuesForCard, resolvedHoles, scoreTargetForBody, scorecardIssues, scoringState, targetAnchor } from "./live-state.js";
-import { j, type CtpVoteBody, type LiveEnv, type LiveMeta, type LiveState, type OverrideBody, type PairAssignmentBody, type RemoveBody, type ScoreBody, type StartBody, type WeatherBody } from "./live-types.js";
+import { j, type CtpVoteBody, type LiveEnv, type LiveMeta, type LiveSocket, type LiveState, type OverrideBody, type PairAssignmentBody, type RemoveBody, type ScoreBody, type StartBody, type WeatherBody } from "./live-types.js";
+import { archivedRoundActor, initializeRoundSharing, isRoundVisibility, readRoundSharing, roundViewerAccess, SCORER_SOCKET, SPECTATOR_SOCKET, spectatorSnapshot, updateRoundSharing } from "./spectator-access.js";
 import { assignCards, type PlayerState } from "./scoring.js";
 import { createWeatherState, refreshWeatherState, WEATHER_REFRESH_MS } from "./weather.js";
 
 // Stop the background weather alarm for a round "live" longer than this — a safety bound so an abandoned
 // (started, never finalized) round can't keep polling Open-Meteo indefinitely.
 const WEATHER_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+
+type SocketAudience = { actor: string | null; admin: boolean; includeMarked: boolean; hideJoinCode: boolean; viewerActor: string | null; expiresAt: number | null };
 
 export class LiveEventDO {
   private state: LiveState;
@@ -61,7 +64,10 @@ export class LiveEventDO {
     if (this.warmedLayoutId === undefined) this.warmRatingBaseline();
   }
   private async persist(extra?: Record<string, unknown>): Promise<void> {
-    if (this.meta) this.meta.rev = (this.meta.rev ?? 0) + 1; // one bump per mutation (persist is the mutation marker)
+    if (this.meta) {
+      this.meta.rev = (this.meta.rev ?? 0) + 1;
+      this.meta.updatedAt = new Date().toISOString();
+    }
     if (extra) {
       await this.state.storage.put({ meta: this.meta, players: this.players, liveCtps: this.liveCtps, ...extra });
     } else {
@@ -132,13 +138,17 @@ export class LiveEventDO {
     // never reads identity from the request body for authorization (the body is spoofable).
     const authMember = request.headers.get("X-Auth-Member");
     const authAdmin = request.headers.get("X-Auth-Admin") === "true";
-    if (action === "ws") return this.handleWs(request);
+    if (action === "ws") return this.handleWs(request, authMember, authAdmin);
+    if (action === "sharing") {
+      const code = this.meta?.roundCode || request.headers.get("X-Round-Code");
+      return code ? this.sharing(request, code, authMember) : j({ error: "not_found" }, 404);
+    }
     if (action === "mine") return this.mine(authMember); // a player's own card (authed read)
-    if (request.method === "GET") return j(this.snapshot()); // public leaderboard/scorecard (no identity)
+    if (request.method === "GET") return j({ ...this.snapshot(), observedAt: Date.now() }); // public leaderboard/scorecard (no identity)
     const body = await request.json().catch(() => ({}));
     if (action === "watch-card") return this.watchCard(body as { scope?: WatchScope; deviceId?: string }, authMember);
     if (action === "watch-score") return this.watchScore(body as { scope: WatchScope; deviceId: string; op: WatchScoreOperation }, authMember);
-    if (action === "start") return this.start(body as StartBody);
+    if (action === "start") return this.exclusive(() => this.start(body as StartBody));
     if (action === "score") return this.score(body as ScoreBody, authMember, authAdmin);
     if (action === "ctp") return this.claimCtp(body as CtpVoteBody, authMember, authAdmin);
     if (action === "ctp-forget") return this.forgetCtp(body as { ctpId?: number }, authAdmin);
@@ -179,6 +189,7 @@ export class LiveEventDO {
         };
       });
     if (holes.length === 0 || (!b.eventId && !b.casual)) return j({ error: "invalid_start" }, 400);
+    if (b.casual && b.roundCode && this.meta) return j({ error: "code_taken" }, 409);
     let roundConfig: LiveScoringConfig;
     try {
       roundConfig = normalizeLiveScoringConfig(b.liveScoringConfig);
@@ -186,6 +197,7 @@ export class LiveEventDO {
       if (isLiveFormatError(error)) return j({ error: "invalid_live_scoring_config", code: error.code, message: error.message }, 400);
       throw error;
     }
+    if (b.casual && b.roundCode && b.createdBy) await initializeRoundSharing(this.env.DB, b.roundCode);
     this.meta = { eventId: b.eventId ?? 0, casual: !!b.casual, roundCode: b.roundCode ?? null, courseId: b.courseId ?? null, layoutId: b.layoutId ?? null, createdBy: b.createdBy ?? null, courseName: b.courseName ?? null, layoutName: b.layoutName ?? null, udiscCourseId: b.udiscCourseId ?? null, holes, status: "live", startedAt: b.startedAt ?? "", recoveryRoundId: crypto.randomUUID(), weather: createWeatherState(b.weatherLocation ?? null), roundConfig, overrides: {}, ctpBuyInRequired: b.ctpBuyInRequired === true };
     this.liveCtps = {};
     this.locations = new Map();
@@ -311,18 +323,25 @@ export class LiveEventDO {
     recordLiveRecovery(me, recovery);
     await this.persist(watch ? { [watch.key]: addWatchReceipt(watch.receipts, watch.op) } : undefined);
     if (conflict) {
-      this.sendAll({ type: "conflict", ...conflict, from: conflict.values[0] ?? null, to: conflict.values[1] ?? null });
+      this.sendAll({ type: "conflict", ...conflict, from: conflict.values[0] ?? null, to: conflict.values[1] ?? null }, conflict.cardId);
     }
     this.broadcast();
     return watch ? j({ sequence: watch.op.sequence }) : j(this.snapshot());
   }
 
   private async mine(authMember: string | null): Promise<Response> {
-    if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
     const meta = this.meta;
-    const ledgers = await readShotLedgers(this.state.storage, meta, this.players, authMember);
-    if (this.meta !== meta || meta.status !== "live") return j({ error: "not_live" }, 409);
-    return j(mineData(meta, this.players, authMember, this.liveCtps, this.locations, this.ratingBaseline, ledgers));
+    if (!meta) return j({ error: "not_live" }, 409);
+    const onCard = this.isSocketActor(authMember);
+    if (!onCard && meta.status !== "live") return j({ error: "not_live" }, 409);
+    if (!onCard && meta.casual) {
+      const pending = authMember ? meta.joinRequests?.find((request) => request.memberId === authMember) : null;
+      const pendingJoin = pending ? { id: pending.id, name: pending.name, cardId: pending.cardId } : null;
+      return j({ status: "live", cardId: null, playerIndex: null, cardmates: [], pendingJoin });
+    }
+    const ledgers = onCard ? await readShotLedgers(this.state.storage, meta, this.players, authMember) : {};
+    if (this.meta !== meta) return j({ error: "not_live" }, 409);
+    return j(mineData(meta, this.players, authMember, this.liveCtps, this.cardLocations(authMember), this.ratingBaseline, ledgers));
   }
 
   /** Casual round: the authenticated caller joins (added once, on the single card "c0"). No-op if already in.
@@ -339,7 +358,7 @@ export class LiveEventDO {
         await this.persist();
         this.broadcast();
       }
-      return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations, this.ratingBaseline));
+      return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.cardLocations(authMember), this.ratingBaseline));
     }
     const cardId = existing?.cardId ?? (this.meta.casual ? "c0" : (this.players.find((player) => !player.removed)?.cardId ?? this.players[0]?.cardId ?? "c0"));
     const activeOnCard = this.players.some((player) => !player.removed && (player.cardId ?? null) === (cardId ?? null));
@@ -349,7 +368,7 @@ export class LiveEventDO {
     this.admitPlayer({ memberId: authMember, name: displayName, photo, cardId: cardId ?? "c0", existing });
     await this.persist();
     this.broadcast();
-    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations, this.ratingBaseline));
+    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.cardLocations(authMember), this.ratingBaseline));
   }
 
   private async holdJoin(input: { memberId: string; name: string; photo: string | null; cardId: string }): Promise<Response> {
@@ -425,7 +444,7 @@ export class LiveEventDO {
     this.meta.joinRequests = (this.meta.joinRequests || []).filter((row) => row.id !== actor.request.id);
     await this.persist();
     this.broadcast();
-    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations, this.ratingBaseline));
+    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.cardLocations(authMember), this.ratingBaseline));
   }
 
   private async declineJoin(body: { id?: unknown }, authMember: string | null): Promise<Response> {
@@ -436,7 +455,7 @@ export class LiveEventDO {
     this.meta.joinRequests = (this.meta.joinRequests || []).filter((row) => row.id !== actor.request.id);
     await this.persist();
     this.broadcast();
-    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations, this.ratingBaseline));
+    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.cardLocations(authMember), this.ratingBaseline));
   }
 
   /** Add a non-member guest to the caller's card (the caller must already be on the round). A pair label
@@ -452,7 +471,7 @@ export class LiveEventDO {
     this.players.push({ memberId: null, name: nm.slice(0, 60), division: null, team: normalizePairLabel(team), startingHole: null, cardId: me.cardId ?? "c0", scores: {}, scorecards: {}, ctpEligible: this.meta.ctpBuyInRequired !== true });
     await this.persist();
     this.broadcast();
-    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations, this.ratingBaseline));
+    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.cardLocations(authMember), this.ratingBaseline));
   }
 
   /** Remove a player from the card — a casual-round player who registered by accident, had to leave
@@ -491,7 +510,7 @@ export class LiveEventDO {
     else purgeScoreTargetScorerVotes(this.players, idx, this.meta.holes, scoring.targets); // drop this player's votes on cardmates + re-derive consensus, so a leaver can't pin a hole in permanent conflict
     await this.persist();
     this.broadcast();
-    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations, this.ratingBaseline));
+    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.cardLocations(authMember), this.ratingBaseline));
   }
 
   private async updatePairs(b: PairAssignmentBody, authMember: string | null, authAdmin: boolean): Promise<Response> {
@@ -506,7 +525,7 @@ export class LiveEventDO {
       await this.persist();
       this.broadcast();
     }
-    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.locations, this.ratingBaseline));
+    return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.cardLocations(authMember), this.ratingBaseline));
   }
 
   // Round-scoped single-use override of a hole's par/distance. Admin-gated at the Worker. The layout
@@ -775,23 +794,143 @@ export class LiveEventDO {
     });
   }
 
-  private handleWs(_request: Request): Response {
-    const pair = new WebSocketPair();
-    const client = pair[0];
-    const server = pair[1];
-    this.state.acceptWebSocket(server);
-    try { server.send(JSON.stringify({ type: "snapshot", ...this.snapshot() })); } catch { /* ignore */ }
-    return new Response(null, { status: 101, webSocket: client });
+  private exclusive<T>(callback: () => Promise<T>): Promise<T> {
+    return this.state.blockConcurrencyWhile ? this.state.blockConcurrencyWhile(callback) : callback();
   }
 
-  private sendAll(obj: unknown): void {
-    const msg = JSON.stringify(obj);
-    for (const ws of this.state.getWebSockets()) {
-      try { ws.send(msg); } catch { /* ignore */ }
+  private async sharing(request: Request, code: string, actor: string | null): Promise<Response> {
+    if (!actor) return j({ error: "unauthorized" }, 401);
+    const settings = async () => {
+      const owner = this.meta ? this.meta.casual === true && this.meta.createdBy === actor : (await archivedRoundActor(this.env.DB, code, actor)).owner;
+      if (request.method === "GET") {
+        const row = await readRoundSharing(this.env.DB, code);
+        return j({ owner, visibility: row?.visibility ?? "public", includeMarked: row ? row.include_marked === 1 : true });
+      }
+      if (!owner) return j({ error: "forbidden" }, 403);
+      const { visibility, includeMarked } = await request.json().catch(() => ({})) as { visibility?: unknown; includeMarked?: unknown };
+      if (!isRoundVisibility(visibility) || typeof includeMarked !== "boolean") return j({ error: "invalid_visibility" }, 400);
+      const result = await updateRoundSharing(this.env.DB, code, visibility, includeMarked);
+      for (const socket of this.state.getWebSockets()) {
+        if (!this.socketActor(socket)) {
+          try { socket.close?.(4403, "Sharing changed"); } catch { /* already closed */ }
+        }
+      }
+      return j({ ...result, owner: true });
+    };
+    return request.method === "PUT" ? this.exclusive(settings) : settings();
+  }
+
+  private isSocketActor(actor: string | null): boolean {
+    return !!actor && this.players.some((p) => !p.removed && p.memberId === actor);
+  }
+
+  private socketActor(socket: LiveSocket): string | null {
+    const attachment = socket.deserializeAttachment?.() as SocketAudience | undefined;
+    if (this.expired(attachment)) return null;
+    return attachment?.admin && !this.meta?.casual ? attachment.actor ?? null
+      : this.isSocketActor(attachment?.actor ?? null) ? attachment?.actor ?? null : null;
+  }
+
+  private expired(audience: SocketAudience | undefined): boolean {
+    return typeof audience?.expiresAt === "number" && Date.now() >= audience.expiresAt;
+  }
+
+  private async handleWs(request: Request, actor: string | null, admin: boolean): Promise<Response> {
+    const protocol = request.headers.get("Sec-WebSocket-Protocol");
+    return this.exclusive(async () => {
+      const casualCode = this.meta?.roundCode || request.headers.get("X-Round-Code");
+      const scoring = protocol === SCORER_SOCKET && (this.isSocketActor(actor) || (!casualCode && !!actor && admin));
+      if (protocol === SCORER_SOCKET && !scoring) return j({ error: "forbidden" }, 403);
+      let includeMarked = true;
+      const hideJoinCode = request.headers.has("X-Watch-Key");
+      let viewerActor = null;
+      if (casualCode && !scoring) {
+        const access = await roundViewerAccess(this.env.DB, casualCode, request.headers.get("X-Watch-Key"));
+        if (!access.allowed) {
+          if (!this.isSocketActor(actor)) return j({ error: "not_found" }, 404);
+          viewerActor = actor;
+        }
+        includeMarked = access.includeMarked;
+      }
+      const pair = new WebSocketPair();
+      const client = pair[0];
+      const server = pair[1];
+      this.state.acceptWebSocket(server);
+      const expires = request.headers.get("X-Auth-Expires");
+      const expiresAt = (scoring || viewerActor) && expires !== null ? Number(expires) : null;
+      server.serializeAttachment({ actor: scoring ? actor : null, admin: scoring && admin, includeMarked, hideJoinCode, viewerActor, expiresAt } satisfies SocketAudience);
+      try { server.send(JSON.stringify(this.socketSnapshot(scoring ? actor : null, includeMarked, hideJoinCode))); } catch { /* disconnected */ }
+      const headers = protocol === SPECTATOR_SOCKET || protocol === SCORER_SOCKET ? { "Sec-WebSocket-Protocol": protocol } : undefined;
+      return new Response(null, { status: 101, webSocket: client, headers });
+    });
+  }
+
+  private cardLocations(actor: string | null) {
+    const indexes = this.cardIndexes(actor);
+    return new Map(Array.from(this.locations).filter(([index]) => indexes.has(index)));
+  }
+
+  private cardIndexes(actor: string | null): Set<number> {
+    const player = actor && this.players.find((row) => row.memberId === actor && !row.removed);
+    if (!player) return new Set();
+    const indexes = this.players.flatMap((row, index) => !row.removed && row.cardId === player.cardId ? [index] : []);
+    return new Set(indexes);
+  }
+
+  private socketSnapshot(actor: string | null, includeMarked = true, hideJoinCode = false, data = this.snapshot()) {
+    if (!actor) return { type: "snapshot", ...spectatorSnapshot(data, includeMarked, hideJoinCode), observedAt: Date.now() };
+    const indexes = this.cardIndexes(actor);
+    const players = data.players.map((player) => indexes.has(player.index) ? player : { ...player, throws: {}, scorecards: {}, throwAt: null });
+    const playerLocations = data.playerLocations.filter((row) => indexes.has(row.index));
+    return { type: "snapshot", ...data, players, playerLocations, observedAt: Date.now() };
+  }
+
+  webSocketMessage(socket: LiveSocket, message: string | ArrayBuffer): void {
+    const audience = socket.deserializeAttachment?.() as SocketAudience | undefined;
+    if (this.expired(audience)) {
+      socket.close?.(4403, "Session expired");
+      return;
+    }
+    if (message === "ping") {
+      try { socket.send('{"type":"pong"}'); } catch { /* disconnected */ }
     }
   }
+
+  private sendAll(obj: unknown, cardId: string | null): void {
+    const msg = JSON.stringify(obj);
+    for (const ws of this.state.getWebSockets()) {
+      const actor = this.socketActor(ws);
+      if (!actor || !this.players.some((p) => !p.removed && p.memberId === actor && p.cardId === cardId)) continue;
+      try { ws.send(msg); } catch { /* disconnected */ }
+    }
+  }
+
   private broadcast(): void {
-    this.sendAll({ type: "snapshot", ...this.snapshot() });
+    const sockets = this.state.getWebSockets();
+    if (!sockets.length) return;
+    const data = this.snapshot();
+    const viewer = new Map<string, string>();
+    const frame = (audience: SocketAudience | undefined) => {
+      const marked = audience?.includeMarked !== false;
+      const hideCode = audience?.hideJoinCode === true;
+      const key = String(marked) + String(hideCode);
+      const existing = viewer.get(key);
+      if (existing) return existing;
+      const message = JSON.stringify(this.socketSnapshot(null, marked, hideCode, data));
+      viewer.set(key, message);
+      return message;
+    };
+    for (const ws of sockets) {
+      const audience = ws.deserializeAttachment?.() as SocketAudience | undefined;
+      const actor = this.socketActor(ws);
+      try {
+        if (this.expired(audience) || (audience?.actor && !actor) || (audience?.viewerActor && !this.isSocketActor(audience.viewerActor))) {
+          ws.close?.(4403, "Card access changed");
+        } else {
+          ws.send(actor ? JSON.stringify(this.socketSnapshot(actor, true, false, data)) : frame(audience));
+        }
+      } catch { /* disconnected */ }
+    }
   }
 }
 

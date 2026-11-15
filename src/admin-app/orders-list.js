@@ -170,7 +170,7 @@ function OrderCard({ order }) {
   return h("div", { className, "data-admin-order-id": order.id }, [
     h("div", { className: "order-head", key: "head" }, [
       h("strong", { key: "title" }, orderTitle(order)),
-      h("span", { key: "total" }, `${dollarsFromCents(order.totalCents)} - ${order.paymentMethod || ""}`),
+      h("span", { key: "total" }, [dollarsFromCents(order.totalCents), order.paymentMethod].filter(Boolean).join(" · ")),
     ]),
     h("div", { className: "shop-admin-meta", key: "meta" }, orderMeta(order)),
     h(OrderItems, { items: order.items, key: "items" }),

@@ -28,6 +28,12 @@ export function AdminMessage() {
     return () => window.removeEventListener("gvdg:admin-message", update);
   }, []);
 
+  React.useEffect(() => {
+    if (!message.text || !message.ok) return undefined;
+    const timer = window.setTimeout(() => setMessage(normalizeMessage({})), 4600);
+    return () => window.clearTimeout(timer);
+  }, [message]);
+
   const hasText = Boolean(message.text);
   const statusClass = hasText ? (message.ok ? " ok" : " err") : "";
   const role = hasText ? (message.ok ? "status" : "alert") : undefined;

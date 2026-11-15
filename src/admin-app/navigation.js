@@ -24,17 +24,6 @@ function itemBadge(key) {
   return null;
 }
 
-function QueueLinks() {
-  return h("div", { className: "admin-queue-links" }, [
-    h("button", { className: "admin-chip", key: "orders", type: "button", onClick: () => requestAdminTab("orders", { filter: "new" }) }, [
-      "New orders", h(AdminOrdersBadge, { key: "badge" }),
-    ]),
-    h("button", { className: "admin-chip", key: "applications", type: "button", onClick: () => requestAdminTab("applications") }, [
-      "Member applications", h(AdminNeedsBadge, { key: "badge", tab: "members" }),
-    ]),
-  ]);
-}
-
 function PrimaryNav({ group, dock = false }) {
   return h("nav", {
     "aria-label": "Admin navigation",
@@ -95,11 +84,16 @@ function Workspace({ route, title, group, events, courses }) {
   }, [route]);
 
   return h("div", { className: "admin-workspace-context" }, [
-    h("h1", { className: "admin-pane-heading admin-context-title", ref: heading, tabIndex: -1, key: "title" }, title),
-    groupLinks.length > 1 ? h(SectionLinks, { key: "group", items: groupLinks, route, label: "Sections in " + group }) : null,
+    h("div", { className: "admin-workspace-heading", key: "heading" }, [
+      h("h1", { className: "admin-pane-heading admin-context-title", ref: heading, tabIndex: -1, key: "title" }, title),
+      showEvent ? h("button", { className: "admin-chip", key: "event-list", onClick: () => requestAdminTab("events"), type: "button" }, "Event list") : null,
+    ]),
+    !showEvent && groupLinks.length > 1 ? h(SectionLinks, { key: "group", items: groupLinks, route, label: "Sections in " + group }) : null,
     route.tab === "events" ? h(SectionLinks, { key: "event-entry", items: workspace, route, label: "Event tools" }) : null,
     showEvent ? h("section", { className: "admin-context", "aria-label": "Selected event", key: "event" }, [
-      h("p", { className: "admin-context-caption", key: "event" }, event?.name || (route.eventId ? "Event #" + route.eventId : "Select an event")),
+      h("p", { className: "admin-context-caption", key: "event" },
+        event?.name || (route.eventId ? "Event #" + route.eventId : "Select an event"),
+        event?.status === "live" ? h("span", { className: "admin-badge live" }, "Live") : null),
       h(SectionLinks, { items: workspace, route, label: "Event workspace", key: "event-links" }),
       h("div", { key: "event-payments", className: "admin-context-links" }, [
         h("button", {
@@ -109,7 +103,7 @@ function Workspace({ route, title, group, events, courses }) {
       route.tab === "check-in" && event ? h(MorningDesk, { event, key: event.id }) : null,
     ]) : null,
     showCourse ? h("section", { className: "admin-context", "aria-label": "Selected course", key: "course" }, [
-      route.tab === "layouts" ? h("p", { className: "admin-context-caption", key: "course-label" }, selectedCourse?.name || "Select a course below")
+      route.tab === "course-health" ? null : route.tab === "layouts" ? h("p", { className: "admin-context-caption", key: "course-label" }, selectedCourse?.name || "Select a course below")
         : h("label", { className: "admin-context-caption", key: "course-label" }, [
         "Course",
         h("select", {
@@ -125,7 +119,6 @@ function Workspace({ route, title, group, events, courses }) {
     route.tab === "wallets" && route.eventId ? h("button", {
       className: "admin-chip", type: "button", key: "event-back", onClick: () => requestAdminTab("registration", { eventId: route.eventId }),
     }, "Back to event registration and payouts") : null,
-    route.tab === "today" ? h(QueueLinks, { key: "queues" }) : null,
   ]);
 }
 

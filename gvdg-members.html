@@ -12,9 +12,6 @@
     <link rel="icon" type="image/png" href="img/logo.png">
     <link rel="manifest" href="site.webmanifest?v=179">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400..900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="tokens.css">
     <script>try{var m=localStorage.getItem('theme')||'light';if(m==='dark')document.documentElement.setAttribute('data-theme','dark');var c=m==='dark'?'#0F0F1E':'#1A1A2E';var tags=document.getElementsByTagName('meta');for(var i=0;i<tags.length;i++){if(tags[i].getAttribute('name')==='theme-color')tags[i].setAttribute('content',c)}}catch(e){}</script>
     <style>
@@ -382,6 +379,9 @@
         .doubles-table tbody tr.clickable-row { cursor: pointer; }
     </style>
   <script src="pwa.js" defer></script>
+    <link rel="stylesheet" href="member-surfaces.css">
+    <link rel="stylesheet" href="member-archive.css">
+    <link rel="stylesheet" href="phone-activity.css">
 </head>
 <body data-auth-base="">
     <div id="membersReactPageChrome"></div>
@@ -790,6 +790,22 @@
                 .member-page-heading .player-app-title { flex: 1; margin: 0; text-align: left; }
                 .member-page-heading .player-app-title:focus-visible { outline-color: var(--primary); }
                 .member-parent-link { border: 0; background: transparent; color: var(--secondary-text); padding: .45rem .2rem; min-height: 44px; font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: .2em; }
+                .community-form, .community-field { display: grid; gap: .5rem; min-width: 0; }
+                .community-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr)); gap: .6rem; }
+                .community-list { list-style: none; padding: 0; }
+                .community-list > li { padding: .65rem 0; border-bottom: 1px solid var(--border-color); overflow-wrap: anywhere; }
+                .community-amenities > li { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: .35rem .8rem; }
+                .community-amenities > li > * + * { margin-top: 0; }
+                .community-list > li.player-card { padding: .75rem; margin-bottom: .45rem; }
+                .community-list > li > * + * { margin-top: .3rem; }
+                .community-list li a { color: var(--secondary-text); font-weight: 700; display: inline-block; padding: .35rem; }
+                .community-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+                .community-week { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
+                .community-week progress { flex: 1; min-width: 5rem; max-width: 18rem; accent-color: var(--green); }
+                .member-community .form-input { min-height: 44px; font-size: 1rem; }
+                .member-community summary { cursor: pointer; font-weight: 700; padding-block: .45rem; }
+                .community-shared-profile .section-title { overflow-wrap: anywhere; }
+                .community-shared-profile .dashboard-action { margin-top: 1.1rem; }
                 .member-practice { gap: .8rem; min-width: 0; }
                 .member-practice > .dashboard-action.primary { justify-self: start; }
                 .member-practice [aria-pressed="true"] { background: var(--secondary); color: white; }
@@ -1298,12 +1314,13 @@
                     clip-path: inset(50%);
                     white-space: nowrap;
                 }
-                .member-account-page :is(.player-more-item, .player-logout-btn, .member-admin-banner) {
+                #members .member-account-page :is(.player-more-item, .member-link-row, .player-logout-btn, .member-admin-banner) {
                     font: inherit;
                     font-size: .95rem;
                     font-weight: 750;
                     line-height: 1.25;
                 }
+                #members .member-account-page .member-link-copy strong { font: inherit; }
                 .member-admin-banner {
                     display: grid;
                     grid-template-columns: auto minmax(0, 1fr) auto;
@@ -1615,6 +1632,126 @@
                     font: 800 1.09rem/1.2 Archivo, system-ui, sans-serif;
                     letter-spacing: -.02em;
                     margin-bottom: .35rem;
+                }
+                .bag-disc-fields {
+                    display: grid;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    gap: .7rem;
+                }
+                .bag-disc-choice { position: relative; }
+                .bag-disc-form .bag-disc-choice-control { position: relative; min-width: 0; }
+                .bag-disc-form .bag-disc-choice-control .form-input {
+                    width: 100%;
+                    min-width: 0;
+                    min-height: 44px;
+                    padding-inline-end: 48px;
+                }
+                .bag-disc-menu-toggle {
+                    position: absolute;
+                    inset-block: 1px;
+                    inset-inline-end: 1px;
+                    display: grid;
+                    place-items: center;
+                    width: 44px;
+                    min-height: 44px;
+                    padding: 0;
+                    border: 0;
+                    border-inline-start: 1px solid var(--member-line);
+                    border-radius: 0 .5rem .5rem 0;
+                    background: transparent;
+                    color: var(--text-primary);
+                    cursor: pointer;
+                }
+                .bag-disc-menu-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+                .bag-disc-menu-toggle:hover { background: var(--member-hover); }
+                .bag-disc-weight-picker:focus-within {
+                    outline: 2px solid var(--text-primary);
+                    outline-offset: -2px;
+                }
+                .bag-disc-weight-picker select {
+                    position: absolute;
+                    inset: 0;
+                    width: 100%;
+                    height: 100%;
+                    opacity: 0;
+                    cursor: pointer;
+                    font-size: 1rem;
+                }
+                .bag-disc-options {
+                    position: absolute;
+                    inset: calc(100% + .2rem) 0 auto;
+                    z-index: 3;
+                    display: grid;
+                    max-height: min(15rem, 38dvh);
+                    overflow-y: auto;
+                    overscroll-behavior: contain;
+                    list-style: none;
+                    padding: .2rem;
+                    margin: 0;
+                    border: 1px solid var(--member-line);
+                    border-radius: .6rem;
+                    background: var(--member-paper);
+                    color: var(--text-primary);
+                    box-shadow: 0 8px 20px var(--card-shadow);
+                }
+                .bag-disc-options[hidden] { display: none; }
+                .bag-disc-options li {
+                    display: flex;
+                    align-items: center;
+                    min-height: 44px;
+                    padding: .35rem .5rem;
+                    border-radius: .42rem;
+                    cursor: pointer;
+                    overflow-wrap: anywhere;
+                }
+                .bag-disc-options li:is(:hover, [aria-selected="true"]) { background: var(--member-hover); }
+                .bag-disc-options .bag-disc-custom { border-top: 1px solid var(--member-line); }
+                .bag-disc-voice {
+                    display: grid;
+                    gap: .4rem;
+                    padding: .6rem;
+                    border: 1px solid var(--member-line);
+                    border-radius: .65rem;
+                    background: var(--member-paper);
+                }
+                .bag-disc-voice :is(p, dl), .bag-disc-voice-fallback { margin: 0; }
+                .bag-disc-voice p, .bag-disc-voice-fallback {
+                    color: var(--member-muted);
+                    font-size: .83rem;
+                    line-height: 1.45;
+                }
+                .bag-disc-voice .bag-disc-voice-status { color: var(--text-primary); font-weight: 650; }
+                .bag-disc-voice-review { display: grid; gap: .55rem; min-width: 0; }
+                .bag-disc-form textarea.form-input { font-family: inherit; }
+                .bag-disc-voice-details {
+                    display: grid;
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    gap: .4rem;
+                }
+                .bag-disc-voice-details div { padding: .3rem .45rem; border: 1px solid var(--member-line); border-radius: .45rem; }
+                .bag-disc-voice-details dt { color: var(--member-muted); font-size: .78rem; }
+                .bag-disc-voice-details dd { margin: 0; overflow-wrap: anywhere; font-weight: 650; }
+                .bag-disc-voice-actions { display: flex; flex-wrap: wrap; gap: .35rem; }
+                .bag-disc-button {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: .3rem;
+                    min-width: 44px;
+                    min-height: 44px;
+                    padding: .35rem .56rem;
+                    border: 1px solid var(--member-line);
+                    border-radius: .5rem;
+                    background: var(--member-panel);
+                    color: var(--text-primary);
+                    font: 700 .82rem/1.2 Archivo, system-ui, sans-serif;
+                    cursor: pointer;
+                }
+                .bag-disc-button:is(:hover, [aria-pressed="true"]) { background: var(--member-hover); }
+                .bag-disc-button[aria-pressed="true"] { border-color: currentColor; }
+                .bag-disc-button:disabled { opacity: .6; cursor: wait; }
+                @media (max-width: 355px) {
+                    .bag-disc-fields { grid-template-columns: minmax(0, 1fr); }
                 }
                 .member-practice-tabs {
                     display: grid;

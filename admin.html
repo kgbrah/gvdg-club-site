@@ -12,9 +12,6 @@
     <link rel="icon" type="image/png" href="img/logo.png">
     <link rel="manifest" href="site.webmanifest?v=179">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="pwa.js" defer></script>
     <link rel="stylesheet" href="tokens.css">
     <script>try{var m=localStorage.getItem('theme')||'light';if(m==='dark')document.documentElement.setAttribute('data-theme','dark');var c=m==='dark'?'#0F0F1E':'#1A1A2E';var tags=document.getElementsByTagName('meta');for(var i=0;i<tags.length;i++){if(tags[i].getAttribute('name')==='theme-color')tags[i].setAttribute('content',c)}}catch(e){}</script>
@@ -346,6 +343,7 @@
         body[data-admin-tab="create"] #apane-create,
         body[data-admin-tab="import"] #apane-import,
         body[data-admin-tab="courses"] #apane-courses,
+        body[data-admin-tab="course-health"] #apane-course-health,
         body[data-admin-tab="layouts"] #apane-layouts,
         body[data-admin-tab="tee-signs"] #apane-tee-signs,
         body[data-admin-tab="scoring"] #apane-scoring,
@@ -359,6 +357,7 @@
         body[data-admin-tab="orders"] #apane-orders,
         body[data-admin-tab="members"] #apane-members,
         body[data-admin-tab="data-archive"] #apane-data-archive { display: block; }
+        body[data-admin-tab="review-queue"] #apane-review-queue { display: block; }
         /* Grouped sidebar nav on desktop; bottom dock on mobile. */
         .admin-main { display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 1.5rem; align-items: start; }
         .admin-sidebar { display: flex; flex-direction: column; gap: 0.15rem; position: sticky; top: 84px; }
@@ -668,6 +667,8 @@
             border: 1px solid rgba(255,255,255,.45); border-radius: .6rem; color: white; font-weight: 700; text-decoration: none;
         }
         .admin-sidebar .admin-tab { display: flex; align-items: center; gap: .6rem; min-height: 44px; }
+        .admin-community-list { list-style: none; padding: 0; }
+        .admin-community-review { white-space: pre-wrap; overflow-wrap: anywhere; margin: .45rem 0; }
         .admin-context-title { margin: 0; }
         .admin-workspace-context { display: grid; gap: .65rem; margin-bottom: 1rem; }
         .admin-section-links, .admin-queue-links, .admin-context-links { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
@@ -693,6 +694,20 @@
         .app-tool-results li > *, .app-tool-results p { display: block; width: 100%; padding: .6rem; min-height: 44px; text-align: left; color: var(--text-primary); background: transparent; border: 0; border-radius: .3rem; font: inherit; text-decoration: none; }
         .app-tool-results li > *:hover, .app-tool-results li > *:focus-visible { background: var(--bg-tertiary); outline: 2px solid var(--primary); outline-offset: -2px; }
         .admin-context-title, #admin-applications-heading, #admin-bag-requests, #admin-bag-challenges { scroll-margin-top: 7rem; }
+        .course-operator { display: grid; gap: 1rem; min-width: 0; }
+        .course-operator-section { display: grid; gap: .8rem; min-width: 0; }
+        .course-operator-fields, .course-operator-metrics { display: grid; gap: .75rem; align-items: end; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10.75rem), 1fr)); }
+        .course-operator label { display: grid; gap: .3rem; min-width: 0; }
+        .course-operator label input, .course-operator label select, .course-operator label textarea { box-sizing: border-box; width: 100%; min-height: 2.4rem; }
+        .course-operator-metrics { align-items: stretch; margin: 0; }
+        .course-operator-metrics > div, .course-operator-detail { min-width: 0; padding: .75rem; border: 1px solid var(--primary); border-radius: .55rem; overflow-wrap: anywhere; }
+        .course-operator-metrics dt { color: var(--text-muted); font-size: .88rem; }
+        .course-operator-metrics dd { margin: .2rem 0 0; font-size: 1.2rem; font-weight: 700; }
+        .course-operator-detail summary { cursor: pointer; font-weight: 700; }
+        .course-operator-detail ul { margin: .5rem 0 0; padding-left: 1.25rem; }
+        .course-operator-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+        .course-operator-editor fieldset { display: grid; gap: .75rem; padding: .65rem 0 0; margin: 0; border: 0; min-width: 0; }
+        .course-operator-task-copy { white-space: pre-wrap; overflow-wrap: anywhere; }
         body[data-admin-panel="visible"] > main > .page-title,
         body[data-admin-panel="visible"] > main > .page-subtitle { display: none; }
         #adminNavigationReactApp .app-tool-finder {
@@ -708,6 +723,7 @@
             .admin-header-link { padding-inline: .45rem; }
         }
 </style>
+    <link rel="stylesheet" href="admin-polish.css">
 </head>
 <body class="admin-page" data-auth-base="" data-admin-panel="hidden" data-admin-tab="today">
     <div id="adminReactPageChromeApp"></div>
@@ -741,6 +757,9 @@
             </div>
             <div class="admin-pane" id="apane-layouts">
                 <div id="adminLayoutsReactApp"></div>
+            </div>
+            <div class="admin-pane" id="apane-course-health">
+                <div id="adminCourseHealthReactApp"></div>
             </div>
             <div class="admin-pane" id="apane-tee-signs">
                 <div id="adminTeeSignReviewControlsReactApp"></div>
@@ -793,7 +812,10 @@
                 <div id="adminOrdersListReactApp"></div>
             </div>
             <div class="admin-pane" id="apane-members">
-                <div id="adminMemberFormReactApp"></div>
+                <details class="admin-surface admin-details">
+                    <summary>Add a member</summary>
+                    <div id="adminMemberFormReactApp"></div>
+                </details>
                 <div id="adminMemberTempPinReactApp"></div>
                 <div class="al-section" style="margin-top:1rem;">
                     <h4 class="al-h" id="admin-applications-heading" tabindex="-1">Member applications</h4>
@@ -806,6 +828,7 @@
                 </div>
             </div>
             <div class="admin-pane" id="apane-more"><div id="adminMoreReactApp"></div></div>
+            <div class="admin-pane" id="apane-review-queue"><div id="adminCommunityReactApp"></div></div>
             <div class="admin-pane" id="apane-data-archive">
                 <div class="al-section">
                     <h4 class="al-h">Archive destinations</h4>

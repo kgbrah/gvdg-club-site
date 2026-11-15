@@ -86,6 +86,10 @@ reassert() { # $1 = full origin/main sha, $2 = reason, $3 = dryrun(0/1)
     log "ERROR: static artifact build failed; cannot re-assert Pages."
     return
   fi
+  if ! node "$build/scripts/stamp-app-build.mjs" "$build/.pages-dist" "$sha" >>"$LOG" 2>&1; then
+    log "ERROR: document release stamping failed; cannot re-assert Pages."
+    return
+  fi
   printf '{"commit":"%s","branch":"main","deployedAt":"%s","deployer":"watchdog"}\n' \
     "$sha" "$(date -u +%FT%TZ)" > "$build/.pages-dist/version.json"
   if wrangler pages deploy "$build/.pages-dist" --project-name "$PROJECT" --branch main --commit-dirty=true >>"$LOG" 2>&1; then

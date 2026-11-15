@@ -23,9 +23,6 @@
     <link rel="icon" type="image/png" href="img/logo.png">
     <link rel="manifest" href="site.webmanifest?v=179">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="tokens.css">
     <style>
         /* Design tokens (color / surfaces / text) live in tokens.css, linked above — one source of truth. */
@@ -517,8 +514,17 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
     </style>
   <script src="pwa.js" defer></script>
 </head>
-<body>
+<body data-public-polish="home">
     <div id="homeReactPageChromeApp"></div>
+    <noscript>
+      <main class="public-noscript">
+        <h1>Greenville Disc Golf Club</h1>
+        <p>Greenville, North Carolina</p>
+        <p><a href="scoring-app.html">Scoring app guide</a> · <a href="events.html">Club events</a> · <a href="gvdg-members.html">Member login</a></p>
+        <p><a href="https://paypal.me/greenvillediscgolf/15" target="_blank" rel="noopener noreferrer">Pay $15 annual dues</a> · <a href="gvdg-members.html#apply">Create member login</a></p>
+        <p><a href="mailto:greenvillediscgolf@gmail.com">Email the club</a></p>
+      </main>
+    </noscript>
 
     <div id="homeReactHeroApp"></div>
 
@@ -608,6 +614,7 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
     <div id="homeReactFooterApp"></div>
 
     <link rel="stylesheet" href="homepage-polish.css">
+    <link rel="stylesheet" href="public-polish.css">
     <script type="module" src="home-app/home-app.js?v=184"></script>
 </body>
 </html>

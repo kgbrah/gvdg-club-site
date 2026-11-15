@@ -127,6 +127,7 @@ function HomeView({ onStart, onJoin, onInvalidCode, onSignOut, onSignIn, onWatch
         [icon(PlayCircle), "Start a casual round"],
       ),
       h("button", { className: "btn secondary", type: "button", key: "saved", onClick: () => setShowSaved(true) }, "Saved course layouts"),
+      h("a", { className: "btn secondary", href: "score.html?offline=1", key: "offline" }, "Offline rounds"),
       h("label", { className: "lbl", htmlFor: "joinRoundCode", key: "joinLabel" }, "Join with a code"),
       h("input", {
         className: "field",
@@ -559,7 +560,7 @@ function SetupPickView({ layout, defaultConfig, notice, onBack, onCreate }) {
         : h("p", { className: "muted", key: "note" }, "Off by default. Turn it on to rank this card with club handicaps."),
     ]),
     h("div", { className: "card stack", key: "code" }, [
-      h("label", { className: "lbl", htmlFor: "roundCode", key: "label" }, "Share code"),
+      h("label", { className: "lbl", htmlFor: "roundCode", key: "label" }, "Scoring invite code"),
       h("input", {
         autoCapitalize: "characters",
         className: "field",
@@ -570,7 +571,7 @@ function SetupPickView({ layout, defaultConfig, notice, onBack, onCreate }) {
         value: code,
         onChange: (event) => setCode(event.target.value),
       }),
-      h("p", { className: "muted", key: "hint" }, "Leave it blank and we'll make one. 4–12 letters or numbers."),
+      h("p", { className: "muted", key: "hint" }, "Leave it blank and we'll make one. 4–12 letters or numbers. New rounds start as Card only. Use Round tools to share a watch link."),
       notice ? h("p", { className: "muted", key: "notice", role: "alert" }, notice) : null,
     ]),
     h(

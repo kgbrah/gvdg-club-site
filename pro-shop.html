@@ -12,9 +12,6 @@
     <link rel="icon" type="image/png" href="img/logo.png">
     <link rel="manifest" href="site.webmanifest?v=179">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="tokens.css">
     <script>try{var m=localStorage.getItem('theme')||'light';if(m==='dark')document.documentElement.setAttribute('data-theme','dark');var c=m==='dark'?'#0F0F1E':'#1A1A2E';var tags=document.getElementsByTagName('meta');for(var i=0;i<tags.length;i++){if(tags[i].getAttribute('name')==='theme-color')tags[i].setAttribute('content',c)}}catch(e){}</script>
     <style>
@@ -111,8 +108,9 @@
     </style>
   <script type="module" src="public-app/public-app.js"></script>
   <script src="pwa.js" defer></script>
+  <link rel="stylesheet" href="public-polish.css">
 </head>
-<body data-auth-base="" data-page="pro-shop">
+<body data-public-polish="shop" data-auth-base="" data-page="pro-shop">
     <div id="publicReactPageChrome"></div>
     <div id="proShopReactApp"></div>
     <div id="crottsReactApp"></div>

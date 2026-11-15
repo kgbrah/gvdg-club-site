@@ -12,9 +12,6 @@
     <link rel="icon" type="image/png" href="img/logo.png">
     <link rel="manifest" href="site.webmanifest?v=179">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="tokens.css">
     <script>try{var m=localStorage.getItem('theme')||'light';if(m==='dark')document.documentElement.setAttribute('data-theme','dark');var c=m==='dark'?'#0F0F1E':'#1A1A2E';var tags=document.getElementsByTagName('meta');for(var i=0;i<tags.length;i++){if(tags[i].getAttribute('name')==='theme-color')tags[i].setAttribute('content',c)}}catch(e){}</script>
     <style>
@@ -449,14 +446,17 @@
     </style>
   <script type="module" src="public-app/public-app.js?v=185"></script>
   <script src="pwa.js" defer></script>
+  <link rel="stylesheet" href="public-polish.css">
 </head>
-<body data-api-base="" data-page="events" data-events-view="status">
+<body data-public-polish="events" data-api-base="" data-page="events" data-events-view="status">
     <div id="publicReactPageChrome"></div>
     <div id="eventsViewControllerReactApp"></div>
 
     <main>
-        <h1 class="page-title">Events &amp; Club Events</h1>
-        <p class="page-subtitle">Disc golf tournaments &amp; league rounds, plus club fundraisers, meetings &amp; minutes</p>
+        <div class="events-intro">
+            <h1 class="page-title">Club events</h1>
+            <p class="page-subtitle">Tournaments, league rounds, fundraisers and club meetings.</p>
+        </div>
 
         <!-- Loading / error -->
         <div id="status" class="events-route"></div>

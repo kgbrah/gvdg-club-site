@@ -1,3 +1,4 @@
+import { spectatorHeaders, watchKeyFromLocation } from "../shared/spectator-link.js";
 import React from "react";
 import { createPortal } from "react-dom";
 import { MessageCircle } from "lucide-react";
@@ -14,6 +15,7 @@ const POLL_MS = 2000;
 
 export function messagePathFromLocation(loc) {
   const params = new URLSearchParams((loc && loc.search) || "");
+  if (watchKeyFromLocation(loc || {})) return "/watch-round/messages";
   const code = liveRoundCodeFromSearch(params);
   const eventId = String(params.get("event") || "").replace(/[^0-9]/g, "");
   if (code) return "/rounds/" + code + "/live/messages";
@@ -89,6 +91,7 @@ function TalkRow({ message }) {
 
 export function RoundTalk({ inline, live, players, viewer, viewerName }) {
   const path = React.useMemo(() => messagePathFromLocation(window.location), []);
+  const key = viewer === "watch" ? watchKeyFromLocation(window.location) : null;
   const api = React.useMemo(() => resolveApiBase({ datasetKeys: ["apiBase"] }), []);
   const [open, setOpen] = React.useState(false);
   const [chatOpen, setChatOpen] = React.useState(false);
@@ -111,7 +114,7 @@ export function RoundTalk({ inline, live, players, viewer, viewerName }) {
 
   const reload = React.useCallback((signal) => {
     if (!path || !live) return Promise.resolve();
-    return fetch(api + withGuest(path), { cache: "no-store", headers: { Accept: "application/json" }, signal })
+    return fetch(api + (key ? path : withGuest(path)), { cache: "no-store", headers: { Accept: "application/json", ...(key ? spectatorHeaders(key) : authHeaders()) }, signal })
       .then((response) => (response.ok ? response.json() : { open: false, messages: [] }))
       .then((data) => {
         setChatOpen(data?.open === true);
@@ -121,7 +124,7 @@ export function RoundTalk({ inline, live, players, viewer, viewerName }) {
       .catch((error) => {
         if (error?.name === "AbortError") return;
       });
-  }, [api, live, path]);
+  }, [api, key, live, path]);
 
   React.useEffect(() => {
     if (!path || !live) return undefined;
@@ -175,7 +178,7 @@ export function RoundTalk({ inline, live, players, viewer, viewerName }) {
     event.preventDefault();
     const text = draft.trim();
     const who = (viewerName || name).trim();
-    if (!text || !who || busy) return;
+    if (!text || !who || busy || key) return;
     setBusy(true);
     setNote("");
     rememberName(who);
@@ -220,7 +223,7 @@ export function RoundTalk({ inline, live, players, viewer, viewerName }) {
     h("div", { className: "round-talk-list", key: "list", ref: listRef }, messages.length
       ? messages.map((message) => h(TalkRow, { key: message.id || message.body, message }))
       : h("p", { className: "muted", key: "empty" }, chatOpen ? "No messages yet." : "Messages open while the round is live.")),
-    h("form", { className: "round-talk-form", key: "form", onSubmit: (event) => { void send(event); } }, [
+    key ? null : h("form", { className: "round-talk-form", key: "form", onSubmit: (event) => { void send(event); } }, [
       viewer === "watch" && names.length ? h("select", {
         "aria-label": "Who is this for",
         key: "to",

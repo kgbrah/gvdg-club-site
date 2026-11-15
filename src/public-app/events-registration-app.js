@@ -256,6 +256,7 @@ function RegisterForm({ api, event, onRefresh, onSessionExpired, token }) {
       key: "name",
       maxLength: 80,
       onChange: (event) => setName(event.target.value),
+      "aria-label": "Your name",
       placeholder: "Your name",
       ref: nameRef,
       type: "text",
@@ -266,6 +267,7 @@ function RegisterForm({ api, event, onRefresh, onSessionExpired, token }) {
       key: "email",
       maxLength: 120,
       onChange: (event) => setEmail(event.target.value),
+      "aria-label": "Email (optional)",
       placeholder: "Email (optional)",
       type: "email",
       value: email,
@@ -293,6 +295,7 @@ function RegisterForm({ api, event, onRefresh, onSessionExpired, token }) {
       key: "team",
       maxLength: 40,
       onChange: (event) => setTeam(event.target.value),
+      "aria-label": "Pair label or partner",
       placeholder: "Pair label or partner",
       type: "text",
       value: team,
@@ -351,7 +354,10 @@ function RegistrationCard({ api, event, guestReg, myReg, onRefresh, onSessionExp
       : null,
     registered
       ? h(RegisteredCardActions, { api, event, guestReg, key: "actions", myReg, onRefresh, token })
-      : h(RegisterForm, { api, event, key: "form", onRefresh, onSessionExpired, token }),
+      : h("details", { className: "event-registration-form", key: "registration-form" }, [
+          h("summary", { key: "summary" }, "Sign up"),
+          h(RegisterForm, { api, event, key: "form", onRefresh, onSessionExpired, token }),
+        ]),
   ]);
 }
 

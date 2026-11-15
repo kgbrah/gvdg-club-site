@@ -18,6 +18,7 @@ export function requestLogout() {
 export function MemberDashboardShell() {
   const [tab, setTab] = React.useState(currentDashboardTab);
   const heading = React.useRef(null);
+  const keyboardNavigation = React.useRef(false);
   const current = destination("member", tab);
   const parent = destination("member", current.group);
 
@@ -28,14 +29,22 @@ export function MemberDashboardShell() {
       if (event.detail.scroll) {
         requestAnimationFrame(() => {
           window.scrollTo(0, 0);
+          const title = heading.current;
+          if (title) title.dataset.navigationFocus = keyboardNavigation.current ? "keyboard" : "default";
           heading.current?.focus({ preventScroll: true });
         });
       }
     }
+    const pointer = () => { keyboardNavigation.current = false; };
+    const keyboard = () => { keyboardNavigation.current = true; };
+    window.addEventListener("pointerdown", pointer, true);
+    window.addEventListener("keydown", keyboard, true);
     window.addEventListener("gvdg:dashboard-tab-selected", update);
     window.addEventListener("gvdg:member-dashboard-ready", update);
     setTab(currentDashboardTab());
     return () => {
+      window.removeEventListener("pointerdown", pointer, true);
+      window.removeEventListener("keydown", keyboard, true);
       window.removeEventListener("gvdg:dashboard-tab-selected", update);
       window.removeEventListener("gvdg:member-dashboard-ready", update);
     };

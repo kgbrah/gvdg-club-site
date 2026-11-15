@@ -9,9 +9,13 @@ export interface LiveEnv {
 
 export type LiveSocket = {
   send(message: string): void;
+  close?(code: number, reason: string): void;
+  serializeAttachment?(value: unknown): void;
+  deserializeAttachment?(): unknown;
 };
 
 export interface LiveState {
+  blockConcurrencyWhile?<T>(callback: () => Promise<T>): Promise<T>;
   storage: {
     get<T = unknown>(key: string): Promise<T | undefined>;
     put(key: string, value: unknown): Promise<void>;
@@ -37,6 +41,7 @@ export interface LiveMeta {
   holes: { hole: number; par: number; distance_ft?: number | null; points?: number; tee_sign_id?: number | null; tee?: { label?: string | null; lat?: number | null; lng?: number | null } | null; target?: { label?: string | null; lat?: number | null; lng?: number | null } | null }[];
   status: "live" | "final";
   startedAt: string;
+  updatedAt?: string;
   recoveryRoundId?: string;
   /** Private shot books live outside the public players value. This index keeps archive reads bounded. */
   shotLedgerScorers?: number[];

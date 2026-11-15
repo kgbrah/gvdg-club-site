@@ -6,13 +6,13 @@ test("a live round can be shared by code and an unmapped hole can be pinned", ()
   const view = readFileSync("src/score-app/scorecard-view.js", "utf8");
   const controller = readFileSync("src/score-app/score-controller.js", "utf8");
   const home = readFileSync("src/members-app/overview-dashboard.js", "utf8");
-  assert.match(view, /Share round code/);
-  assert.match(view, /Tee is here/);
-  assert.match(view, /Basket is here/);
+  assert.match(view, /Invite to score/);
+  assert.match(view, /Use Round tools to mark the tee or pin/);
+  assert.match(view, /"aria-label": "Survey this hole"[\s\S]*"Mark tee"[\s\S]*"Mark pin"/);
   assert.match(view, /Sign in to drop the tee and basket/);
   assert.match(controller, /function shareJoinCode\(\)/);
   assert.match(controller, /Join my card — code /);
-  assert.match(controller, /onShareCode: ROUND_CODE \? shareJoinCode : null/);
+  assert.match(controller, /onShareCode: ROUND_CODE && S.status === 'live' \? shareJoinCode : null/);
   assert.match(view, /Use \" \+ value/);
   assert.match(readFileSync("src/score-app/setup-flow.js", "utf8"), /Jump back in/);
   assert.match(controller, /function forgetRecentRound/);

@@ -22,6 +22,10 @@ The shared checkout stays untouched. Each implementation lane has its own branch
 | Operators | `codex/course-operator` | Course health, maintenance tasks and participation reports | 0052 |
 | Offline rounds | `codex/offline-rounds` | New local rounds, completion, owner-safe import and media recovery | 0053 |
 | Community | `codex/community-discovery` | Opt-in profiles, friends, progress, reviews and maintained discovery metadata | 0054 |
+| Spectators | `codex/spectator-privacy` | Sharing, reconnect recovery and durable video associations | 0055 |
+| Native phones | `codex/native-phone` | Private background activity and lock-screen tools | 0056 |
+| Archive restore | `codex/archive-roundtrip` | Provenance-preserving personal archive export/reimport | 0057 |
+| Visual polish | `codex/member-visual-polish` | Member Home, compact onboarding and cohesive theme-aware UI | None |
 
 Shared scoring and watch commands retain normal actor authorization, validation, card locks, and consensus. Atomic retry/ordering semantics are coordinated between the recovery and watch lanes. Symlinked dependencies are read-only; install new dependencies into separate package directories.
 
@@ -36,21 +40,23 @@ An implementation is not marked verified merely because code exists. Native sign
 | Native watches | Scoped pairing and revocation; safe phone/watch sync; executable clients and platform build checks | Integrated; Wear OS, watchOS Simulator and generic Garmin CI passed; physical/store checks remain |
 | Course quality | Complete versus partial mapping; provenance, freshness, revision-safe data, usable discovery | Integrated; favorites routes wired; 484 frontend/776 Worker checks passed |
 | Navigation | Approved proposal in navigation-proposal.md; every old destination/action retained | Integrated; desktop/phone navigation and compatibility tests passed |
-| Offline course use | Explicit downloadable course packs and local round lifecycle with reconciliation | Packs deployed; new offline rounds in implementation with migration 0053 reserved |
-| Explicit shot records | Outcomes, penalties, make/miss, accuracy and editable classifications | Integrated for next release; private archive/recovery tests passed |
-| Ratings | Missing-result repair, stable baselines and transparent provisional status | Integrated for next release; whole-field/calibration race rejection verified; predictive accuracy remains unknown |
-| Personal practice and equipment | Physical disc inventory, putting sessions and measured-throw history | Integrated for next release; owner isolation, offline drafts and mobile workflows passed |
-| Social and discovery | Favorites, appropriate public profiles, progress milestones and sharing controls | In implementation; migration 0054 reserved |
-| Course operators | Course health, maintenance tasks and honest participation reporting | In implementation; migration 0052 reserved |
-| Complete data ownership | Personal export/reimport with original provenance and media manifests | Export implemented; archive reimport remains queued |
-| Native phone convenience | Background activity and supported lock-screen tools with explicit permission | Requires implementation and physical-device validation |
-| Spectator and video quality | Reconnect recovery, durable history, accessible controls and clear sharing scope | Queued after recovery |
+| Offline course use | Explicit downloadable course packs and local round lifecycle with reconciliation | Packs deployed; fresh offline rounds integrated with migration 0053; real service-worker offline start, score, reload and finish passed |
+| Explicit shot records | Outcomes, penalties, make/miss, accuracy and editable classifications | Live in PR93; private archive/recovery tests passed |
+| Ratings | Missing-result repair, stable baselines and transparent provisional status | Live in PR93; whole-field/calibration race rejection verified; predictive accuracy remains unknown |
+| Personal practice and equipment | Physical disc inventory, putting sessions and measured-throw history | Live in PR93; owner isolation, offline drafts and mobile workflows passed |
+| Social and discovery | Favorites, appropriate public profiles, progress milestones and sharing controls | Integrated for expansion release with migration 0054; privacy and discovery tests passed |
+| Course operators | Course health, maintenance tasks and honest participation reporting | Integrated for expansion release with migration 0052; 24 admin destinations and representative nested workflows verified |
+| Complete data ownership | Personal export/reimport with original provenance and media manifests | Integrated with migration 0057; owner/schema/limits, duplicate restore and private provenance-preserving snapshots verified; media bytes and device-only data are excluded |
+| Native phone convenience | Background activity and supported lock-screen tools with explicit permission | Native source integrated with migration 0056; Android APK/lint/unit and iPhone Simulator/ActivityKit tests passed; member and scorecard pairing UI integrated; 320/390/1280 browser actions passed; physical/store verification remains |
+| Spectator and video quality | Reconnect recovery, durable history, accessible controls and clear sharing scope | Integrated for expansion release with migration 0055; read-only watch links, revocation, private clip sharing, socket recovery and actual video playback passed |
 | Accessibility and performance | Large text, keyboard/screen-reader paths, outdoor readability, slow-network behavior | Continuous verification |
 | Field evidence | Real phone/watch rounds, battery, interruptions, and course-data verification | Pending device/data access |
 
 ## Release gates
 
-First release: [PR #92](https://github.com/kgbrah/gvdg-club-site/pull/92), commit `9929342`, cache `gvdg-club-v247`. [GitHub deployment 43663733864](https://github.com/kgbrah/gvdg-club-site/actions/runs/43663733864) applied migrations 0046–0048 and deployed Pages, Worker and alert keys. Both post-deployment live-scoring and member-dashboard checks actually ran and passed. Later milestones remain in [draft PR #93](https://github.com/kgbrah/gvdg-club-site/pull/93) and isolated implementation lanes.
+First release: [PR #92](https://github.com/kgbrah/gvdg-club-site/pull/92), commit `9929342`, cache `gvdg-club-v247`. [GitHub deployment 43663733864](https://github.com/kgbrah/gvdg-club-site/actions/runs/43663733864) applied migrations 0046–0048 and deployed Pages, Worker and alert keys. Both post-deployment live-scoring and member-dashboard checks actually ran and passed. Second release: [PR #93](https://github.com/kgbrah/gvdg-club-site/pull/93), commit `6a97728`, cache `gvdg-club-v248`. [Deployment 43666724474](https://github.com/kgbrah/gvdg-club-site/actions/runs/43666724474) applied migrations 0049–0051, deployed Worker and Pages, uploaded alert keys, and ran both post-deploy checks successfully.
+
+The revised Home/Practice direction was explicitly approved for the entire app and released in [PR #95](https://github.com/kgbrah/gvdg-club-site/pull/95), commit `6aeea38`, cache `gvdg-club-v249`. [Deployment 43669165687](https://github.com/kgbrah/gvdg-club-site/actions/runs/43669165687) and both post-deploy checks passed. Current priority: apply that approved direction to every member, admin, scoring and public surface while preserving all functions. The scorecard receives deeper rapid-input, offline/reconnect and finalization verification. See `app-polish-coverage.md` for the route and state inventory. Archive restore is integrated. The approved bottom-control scorecard and requested image-credit/name refinements are integrated, along with the new bag choices and voice-entry feature. PR #96 is completing its final combined release checks.
 
 - Unit and integration tests exercise actual failure modes: HTTP 5xx, network failure, reload, actor/round switching, expired authorization, duplicate and stale writes, storage failure, and upload acknowledgement loss.
 - Golden statistic fixtures preserve numerators/denominators and label unknown or inferred data.
@@ -59,3 +65,17 @@ First release: [PR #92](https://github.com/kgbrah/gvdg-club-site/pull/92), commi
 - Browser verification covers new user flows on desktop and phone widths, with screenshots before publication.
 - Production-style GitHub checks, worker migrations, site and worker deployment, and post-deployment scoring/dashboard tests must actually execute and pass.
 - Worldwide course coverage and comparative battery/reliability claims require measured evidence; do not manufacture those claims from software completion.
+
+
+## Focused live cleanup and final integration
+
+[PR97](https://github.com/kgbrah/gvdg-club-site/pull/97), commit `a5a44ee`, removed the permanent synced-lie success strip from the existing live scorecard. Pending edits, offline state, failed edits, Retry and Discard remain. [Deployment 43672667698](https://github.com/kgbrah/gvdg-club-site/actions/runs/43672667698) completed successfully; both live scoring and member dashboard checks passed. Live version and service-worker cache `gvdg-club-v250` were verified.
+
+The user also requested removal of the redundant visible Home heading/admin link, an admin-only banner in Account, and consistent Account row typography. That focused update shipped in PR #98 and is included in the final integration.
+
+Public page polish and shared Help are integrated in the draft. Public checks cover 52 route/viewport captures and simulated signup/cart/payment handoff; shared Help checks cover keyboard focus, retry preservation, image/video attachments and five app entry points. All public/Help writes were intercepted locally. Physical payment capture, real native devices, signing and store distribution are not claimed by those checks.
+
+
+[PR98](https://github.com/kgbrah/gvdg-club-site/pull/98), commit `e790199`, shipped the redundant Home/Play header cleanup and the Account admin banner/typography fix. [Deployment 43674386914](https://github.com/kgbrah/gvdg-club-site/actions/runs/43674386914) and both live checks passed. Live version and service-worker cache `gvdg-club-v251` were verified.
+
+The user approved the revised bottom-control scorecard layout, requesting compact given-name/surname styling and imagery credit inside the map. The bag dropdown/custom-entry/voice feature was also explicitly requested. Neither needs another permission round before integration and normal release checks.

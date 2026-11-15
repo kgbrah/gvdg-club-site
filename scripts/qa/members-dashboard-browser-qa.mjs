@@ -411,7 +411,9 @@ async function captureState(browser, origin, viewport, slug) {
   await expectDashboardPanel(page, "play", "#playerPlay", "Play tab");
   await page.locator('[data-react-play-page="ready"]').waitFor({ state: "visible", timeout: 10_000 });
   await waitForText(page, "[data-react-play-page]", "Start a round", "play start card");
-  await waitForText(page, "[data-react-play-join]", "Join a card", "play join card");
+  await page.locator("[data-react-play-join]").getByLabel("Round code", { exact: true }).waitFor();
+  await page.locator("[data-react-play-join]").getByRole("button", { name: "Join", exact: true }).waitFor();
+  await page.locator("[data-react-play-join]").getByRole("button", { name: "Watch", exact: true }).waitFor();
   await captureFullPage(page, path.join(evidenceDir, `${slug}-play.png`));
 
   await page.getByRole("navigation", { name: "Member app" }).getByRole("button", { name: "Stats" }).click();

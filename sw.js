@@ -1,8 +1,16 @@
-const CACHE = "gvdg-club-v251";
+const CACHE = "gvdg-club-v252";
 const OFFLINE_PAGE = "gvdg-members.html";
 const ASSETS = [
   "tokens.css",
+  "public-polish.css",
+  "img/fonts/archivo.woff2",
+  "img/fonts/bebas-neue.woff2",
   "watch-pairing.css",
+  "phone-activity.css",
+  "score-polish.css",
+  "member-surfaces.css",
+  "member-archive.css",
+  "admin-polish.css",
   "homepage-polish.css",
   "home-polish-sections.css",
   "scoring-app.html",
@@ -132,7 +140,18 @@ self.addEventListener("fetch", (event) => {
           }
           return res;
         })
-        .catch(() => caches.match(req).then((cached) => cached || Response.error()))
+        .catch(async () => {
+          const exact = await caches.match(req);
+          if (exact) return exact;
+          // HTML cache-busters must also work on the first offline scorer visit:
+          // install precaches the canonical bundle before any ?v= URL is opened.
+          const asset = url.pathname.slice(1);
+          if (ASSETS.includes(asset) && [...url.searchParams.keys()].every((key) => key === "v")) {
+            const installed = await caches.match(asset);
+            if (installed) return installed;
+          }
+          return Response.error();
+        })
     );
     return;
   }

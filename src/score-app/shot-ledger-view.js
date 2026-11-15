@@ -82,9 +82,9 @@ function ShotEditor({ edit, getFix, enableGps, measured, onCancel, onSave }) {
     }
   }
 
-  return h("form", { className: "stack", ref: formRef, tabIndex: -1, onSubmit: (event) => { event.preventDefault(); void save(draft); } },
+  return h("form", { className: "stack shot-editor", ref: formRef, tabIndex: -1, onSubmit: (event) => { event.preventDefault(); void save(draft); } },
     h("h3", null, `${edit.existing ? "Edit" : "Add"} ${draft.kind === "penalty" ? "penalty" : "shot"}`),
-    h("fieldset", { disabled: busy, className: "stack" },
+    h("fieldset", { disabled: busy, className: "shot-editor-fields" },
       isThrow && h(SelectField, { label: "Stroke type", options: SHOT_ATTEMPTS, value: draft.attempt,
         onChange: (attempt) => update({ attempt, ...(attempt !== "putt" ? { puttDistanceFt: undefined } : {}) }) }),
       isThrow && h(SelectField, { label: "Outcome", options: SHOT_OUTCOMES, value: draft.outcome, onChange: (outcome) => update({ outcome }) }),
@@ -104,11 +104,12 @@ function ShotEditor({ edit, getFix, enableGps, measured, onCancel, onSave }) {
         isThrow && draft.attempt === "putt" && h(NumberField, { label: "Measured starting distance to basket in feet", value: draft.puttDistanceFt,
           onChange: (puttDistanceFt) => update({ puttDistanceFt }) })),
       h("p", { className: "muted", role: "status" }, notice),
-      h("button", { className: "btn", type: "submit" }, "Save shot"),
-      h("button", { className: "btn secondary", type: "button", onClick: onCancel }, "Cancel edit"),
+      h("div", { className: "shot-editor-actions" },
+        h("button", { className: "btn", type: "submit" }, "Save shot"),
+        h("button", { className: "btn secondary", type: "button", onClick: onCancel }, "Cancel edit")),
       edit.existing && (confirmRemove
-        ? h("button", { className: "btn secondary", type: "button", onClick: () => { void save(null); } }, "Confirm remove shot")
-        : h("button", { className: "btn secondary", type: "button", onClick: () => setConfirmRemove(true) }, "Remove shot"))));
+        ? h("button", { className: "btn danger shot-remove", type: "button", onClick: () => { void save(null); } }, "Confirm remove shot")
+        : h("button", { className: "btn ghost shot-remove", type: "button", onClick: () => setConfirmRemove(true) }, "Remove shot"))));
 }
 
 export function ShotLedgerPanel({ model, score, getFix, enableGps, measured, onSave, onDiscard }) {
@@ -133,8 +134,8 @@ export function ShotLedgerPanel({ model, score, getFix, enableGps, measured, onS
     return false;
   }
 
-  return h("div", { className: "stack" },
-    h("p", { className: "muted" }, (target.scope === "team" ? "Your record of team shots · " : "Shots for ") + target.label),
+  return h("div", { className: "stack shot-ledger" },
+    h("p", { className: "muted shot-owner" }, (target.scope === "team" ? "Your record of team shots · " : "Shots for ") + target.label),
     h("p", { role: "status" }, qualityLabel(rows, score)),
     model.pending && h("p", { className: "muted" }, "Shot changes saved on this phone, awaiting sync."),
     model.previousTeam?.rows.length > 0 && h("details", null,
@@ -149,11 +150,11 @@ export function ShotLedgerPanel({ model, score, getFix, enableGps, measured, onS
         onClick: () => onDiscard?.(model.review.id) }, "Discard saved change")),
     edit ? h(ShotEditor, { key: edit.row.id, edit, getFix, enableGps, measured, onSave: save, onCancel: () => setEdit(null) })
       : h(React.Fragment, null,
-        rows.length > 0 && h("ol", { style: listStyle }, rows.map((row, index) => h("li", { key: row.id },
+        rows.length > 0 && h("ol", { className: "shot-ledger-list" }, rows.map((row, index) => h("li", { key: row.id },
           h("p", null, describeShot(row)),
           onSave && h("button", { className: "btn secondary", type: "button", "aria-label": `Edit stroke ${index + 1}`,
             onClick: () => begin(row, true) }, "Edit")))),
-        onSave && h("div", { className: "score-glove-tools" }, ["throw", "putt", "penalty"].map((attempt) =>
+        onSave && h("div", { className: "shot-add-actions" }, ["throw", "putt", "penalty"].map((attempt) =>
           h("button", { className: "btn secondary", type: "button", key: attempt, disabled: rows.length >= MAX_LEDGER_STROKES,
             onClick: () => add(attempt) }, `Add ${attempt}`))),
         !onSave && h("p", { className: "muted" }, "This ledger is read-only until the card is open for scoring.")));

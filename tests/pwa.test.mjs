@@ -114,8 +114,8 @@ test('shared service worker caches app install assets and member fallback', () =
   assert.match(pwa, /updateViaCache/);
   assert.match(pwa, /SKIP_WAITING/);
   assert.match(pwa, /pwa-update/);
-  assert.match(pwa, /Home Screen/);
-  assert.match(pwa, /Recents/);
+  assert.match(pwa, /gvdg-build/);
+  assert.match(pwa, /controllerchange/);
   assert.match(pwa, /visibilitychange/);
   assert.match(sw, /SKIP_WAITING/);
   const tokens = readFileSync('tokens.css', 'utf8');

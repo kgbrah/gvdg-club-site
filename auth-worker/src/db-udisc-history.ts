@@ -34,13 +34,15 @@ export async function upsertUdiscHistory(db: D1Like, memberId: string, rounds: r
     db
       .prepare(
         `INSERT INTO udisc_history (
-           member_id, round_key, player_name, course_name, layout_name, played_at, total, to_par, holes
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           member_id, round_key, player_name, course_name, layout_name, played_at, total, to_par, holes, source_played_at, source_finished_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(member_id, round_key) DO UPDATE SET
            player_name = excluded.player_name,
            course_name = excluded.course_name,
            layout_name = excluded.layout_name,
            played_at = excluded.played_at,
+           source_played_at = COALESCE(excluded.source_played_at, udisc_history.source_played_at),
+           source_finished_at = COALESCE(excluded.source_finished_at, udisc_history.source_finished_at),
            total = excluded.total,
            to_par = excluded.to_par,
            holes = excluded.holes,
@@ -56,6 +58,8 @@ export async function upsertUdiscHistory(db: D1Like, memberId: string, rounds: r
         round.total,
         round.toPar,
         JSON.stringify(round.holes),
+        round.sourcePlayedAt ?? null,
+        round.sourceFinishedAt ?? null,
       ),
   );
   for (let i = 0; i < statements.length; i += 40) {

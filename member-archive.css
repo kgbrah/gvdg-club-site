@@ -1,0 +1,140 @@
+.personal-archive-panel {
+  display: grid;
+  min-inline-size: 0;
+  gap: .7rem;
+  padding: clamp(.85rem, 3vw, 1.2rem);
+  border: 1px solid var(--border-color);
+  border-radius: 1rem;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.personal-archive-panel h2,
+.personal-archive-panel h3,
+.personal-archive-panel p {
+  margin: 0;
+}
+
+.personal-archive-panel h2 {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font: 750 1.05rem/1.3 Archivo, system-ui, sans-serif;
+}
+
+.personal-archive-panel h2 svg {
+  flex: none;
+}
+
+.personal-archive-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem;
+}
+
+.personal-archive-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+  min-block-size: 2.5rem;
+  max-inline-size: 100%;
+  padding: .4rem .7rem;
+  border: 1px solid var(--border-color);
+  border-radius: .65rem;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font: 650 .83rem/1.25 Archivo, system-ui, sans-serif;
+  text-align: center;
+  cursor: pointer;
+}
+
+.personal-archive-button svg { flex: none; }
+.personal-archive-button:enabled:hover { border-color: var(--text-muted); }
+.personal-archive-button:disabled { opacity: .6; cursor: default; }
+.personal-archive-button[data-primary] {
+  background: var(--primary-strong);
+  border-color: var(--primary-strong);
+  color: #fff;
+}
+
+.personal-archive-panel :is(button, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+
+.personal-archive-library {
+  min-inline-size: 0;
+  border-block-start: 1px solid var(--border-color);
+}
+
+.personal-archive-panel summary {
+  padding-block: .6rem;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.personal-archive-library > summary { font-weight: 700; }
+.personal-archive-preview {
+  display: grid;
+  gap: .45rem;
+  padding: .75rem;
+  border: 1px solid var(--border-color);
+  border-radius: .7rem;
+  background: var(--bg-primary);
+}
+
+.personal-archive-preview h3 { font: 700 .95rem/1.3 Archivo, system-ui, sans-serif; }
+
+.personal-archive-entries {
+  display: grid;
+  gap: .35rem;
+  margin: .35rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.personal-archive-entry {
+  min-inline-size: 0;
+  padding: 0 .65rem;
+  border: 1px solid var(--border-color);
+  border-radius: .65rem;
+  overflow-wrap: anywhere;
+}
+
+.personal-archive-entry summary .player-card-meta { display: block; }
+.personal-archive-entry details > :is(p, div, ul, dl) { margin-block: 0 .5rem; }
+
+.personal-archive-metadata {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: .2rem .5rem;
+  font-size: .78rem;
+}
+
+.personal-archive-metadata dt { color: var(--text-muted); }
+.personal-archive-metadata dd { margin: 0; }
+
+.personal-archive-table {
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: .45rem;
+}
+
+.personal-archive-table table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: .79rem;
+  white-space: nowrap;
+}
+
+.personal-archive-table :is(th, td) {
+  padding: .35rem .5rem;
+  border-block-end: 1px solid var(--border-color);
+  text-align: start;
+}
+
+.personal-archive-table tr:last-child td { border-block-end: none; }
+.personal-archive-stations { padding-inline-start: 1.3rem; }
+.personal-archive-confirm .personal-archive-button { margin: .2rem .3rem 0 0; }

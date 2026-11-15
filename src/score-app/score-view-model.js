@@ -1,4 +1,5 @@
 import { aceHint, buildLivePots } from "../shared/live-pots-model.js";
+import { matchPlayStartHole, requiredMatchPlayHoles } from "../shared/match-play-order.js";
 import { displayMatchStatus } from "../shared/match-status.js";
 import { playGroupLabel, playStyleLabel } from "../shared/play-stats.js";
 import { remainingFt } from "../shared/hole-map-model.js";
@@ -528,6 +529,7 @@ export function playOrderIndexes(holes, startingHole) {
 
 export function startingHoleForState(state) {
   const mates = Array.isArray(state && state.cardmates) ? state.cardmates : [];
+  if (isMatchplayScoring(state)) return matchPlayStartHole((state.holes || []).filter(Boolean), mates.filter(Boolean));
   const me = mates.find((player) => player && player.isMe) || mates[0];
   return me && me.startingHole;
 }
@@ -1052,9 +1054,20 @@ function selfMapMark(state) {
   return mark;
 }
 
+function cardRequiredHoles(state, rows, holes) {
+  if (!isMatchplayScoring(state) || rows.length !== 2) return holes;
+  return requiredMatchPlayHoles(holes, startingHoleForState(state), (hole) =>
+    rows.map((row) => strokesForRow(state, row, hole, null)));
+}
+
 export function finalizeBlockers(state) {
   const conflicts = state.conflicts || [];
-  const missing = state.missing || [];
+  const holes = Array.isArray(state.holes) ? state.holes.filter(Boolean) : [];
+  const rows = scoreRows(state);
+  const missing = state.missing?.length ? state.missing : cardRequiredHoles(state, rows, holes).flatMap(({ hole }) => (
+    rows.filter((row) => strokesForRow(state, row, hole, null) == null && !conflictForRow(state, row, hole))
+      .map((row) => ({ hole, playerIndex: row.index, playerName: row.label, targetId: row.targetId }))
+  ));
   const lines = [];
   conflicts.forEach((conflict) => {
     lines.push(placeLabel(state, conflict.hole) + " — " + (conflict.playerName || conflict.label || "a target") + ": scores disagree (" + (Array.isArray(conflict.values) ? conflict.values.join(" vs ") : "?") + ")");
@@ -1064,8 +1077,8 @@ export function finalizeBlockers(state) {
     lines.push(placeLabel(state, row.hole) + " — " + (row.playerName || row.label || "a target") + ": no confirmed score yet");
   });
   if (missing.length > shown.length) lines.push("…and " + (missing.length - shown.length) + " more holes without a score");
-  const holeCount = Array.isArray(state.holes) ? state.holes.filter(Boolean).length : 0;
-  return { conflicts, missing, ready: holeCount > 0 && conflicts.length === 0 && missing.length === 0, lines };
+  const ready = holes.length > 0 && rows.length > 0 && !state.scoreTargetError && conflicts.length === 0 && missing.length === 0;
+  return { conflicts, missing, ready, lines };
 }
 
 export function finishRoundHint(blockers, mode, locked) {

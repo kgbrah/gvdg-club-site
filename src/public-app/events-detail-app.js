@@ -291,15 +291,13 @@ function safeWinnerClass(value) {
   return key === "red" || key === "blue" || key === "tie" ? key : "";
 }
 
-function TeeSigns({ apiBase, teeSigns }) {
-  const holes = teeSigns && Array.isArray(teeSigns.holes) ? teeSigns.holes : [];
-  if (!holes.length) return null;
-  const layout = teeSigns.layout || null;
-  const courseName = teeSigns.courseName || "";
-
-  return h(React.Fragment, null, [
-    h("h3", { className: "roster-title", key: "title" }, `Tee Signs${layout && layout.name ? ` - ${layout.name}` : ""}`),
-    h("div", { className: "tee-signs-grid", key: "grid" }, holes.map((hole) => {
+function TeeSignGroup({ holes, layout, courseName, apiBase, first }) {
+  const title = holes.length === 1 ? "Hole " + holes[0].hole :
+    "Holes " + holes[0].hole + "–" + holes.at(-1).hole;
+  const [expanded, setExpanded] = React.useState(first);
+  return h("details", { className: "event-tee-sign-group", open: expanded, onToggle: (event) => setExpanded(event.currentTarget.open) }, [
+    h("summary", { key: "heading" }, title),
+    expanded ? h("div", { className: "tee-signs-grid", key: "grid" }, holes.map((hole) => {
       const winner = safeWinnerClass(hole.winner);
       const className = `ts-hole-card${winner ? ` winner-${winner}` : ""}`;
       const bits = [];
@@ -310,19 +308,14 @@ function TeeSigns({ apiBase, teeSigns }) {
         hole.signId != null
           ? h("img", {
             alt: `Tee sign, hole ${hole.hole}`,
-            className: "ts-hole-photo",
-            key: "photo",
-            loading: "lazy",
+            className: "ts-hole-photo", key: "photo", loading: "lazy",
             src: `${apiBase}/tee-signs/${encodeURIComponent(hole.signId)}/image`,
           })
           : h("div", { className: "ts-hole-svg", key: "svg" }, h(TeeSignSvg, {
-            courseName,
-            hole: hole && hole.hole,
+            courseName, hole: hole.hole,
             layouts: [{
-              color: (hole && (hole.color || (hole.tee && hole.tee.color))) || null,
-              distance_ft: hole && hole.distance_ft != null ? hole.distance_ft : null,
-              label: layout && layout.name ? layout.name : "Layout",
-              par: hole && hole.par != null ? hole.par : null,
+              color: hole.color || hole.tee?.color || null, distance_ft: hole.distance_ft ?? null,
+              label: layout?.name || "Layout", par: hole.par ?? null,
             }],
           })),
         h("div", { className: "ts-hole-meta", key: "meta" }, [
@@ -330,7 +323,29 @@ function TeeSigns({ apiBase, teeSigns }) {
           bits.length ? ` · ${bits.join(" · ")}` : "",
         ]),
       ]);
-    })),
+    })) : null,
+  ]);
+}
+
+function TeeSigns({ apiBase, teeSigns }) {
+  const [expanded, setExpanded] = React.useState(false);
+  const holes = teeSigns && Array.isArray(teeSigns.holes) ? teeSigns.holes : [];
+  if (!holes.length) return null;
+  const layout = teeSigns.layout || null;
+  const courseName = teeSigns.courseName || "";
+
+  const groups = [];
+  for (let start = 0; start < holes.length; start += 6) groups.push(holes.slice(start, start + 6));
+  return h("details", {
+    className: "event-tee-signs", open: expanded, onToggle: (event) => setExpanded(event.currentTarget.open),
+  }, [
+    h("summary", { key: "summary" }, [
+      h("span", { key: "title" }, "Tee signs and hole maps"),
+      h("small", { key: "count" }, [layout?.name, holes.length + (holes.length === 1 ? " hole" : " holes")].filter(Boolean).join(" · ")),
+    ]),
+    expanded ? groups.map((group, index) => h(TeeSignGroup, {
+      apiBase, courseName, layout, holes: group, first: index === 0, key: group[0].hole,
+    })) : null,
   ]);
 }
 
@@ -351,7 +366,7 @@ export function EventsEventDetailApp() {
     h(BackButton, { key: "back" }),
     h("article", { className: "detail-card", key: "card", "data-react-events-event-detail": "true" }, [
       h("div", { className: "detail-head", key: "head" }, [
-        h("h2", { className: "detail-title", key: "title" }, event.name || "Event"),
+        h("h1", { className: "detail-title", key: "title" }, event.name || "Event"),
         event.type ? h(Badge, { className: `type-badge ${typeClass}`, key: "type", text: typeLabel(event.type) }) : null,
         event.status ? h(Badge, { className: `status-badge ${statusClass}`, key: "status", text: statusLabel(event.status) }) : null,
       ]),

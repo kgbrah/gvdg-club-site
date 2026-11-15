@@ -79,15 +79,14 @@ export function MemberRegistrationPanel({ eventId } = {}) {
 
   if (!token) return null;
 
-  return h("div", { className: "react-registration-panel events-timeline", "data-react-registration-panel": state.status }, [
-    h("div", { className: "dashboard-actions", key: "event-tools" }, [
-      h(MoreLink, { tab: "leagues", key: "league" }),
-      h(MoreLink, { tab: "results", key: "results" }),
+  return h("div", { className: "react-registration-panel events-timeline member-subpage", "data-react-registration-panel": state.status }, [
+    h("nav", { className: "member-subactions", "aria-label": "Event tools", key: "event-tools" }, [
+      h(MoreLink, { tab: "leagues", className: "dashboard-action", key: "league" }),
+      h(MoreLink, { tab: "results", className: "dashboard-action", key: "results" }),
     ]),
-    h("p", { className: "dash-note", key: "note" }, "Club events you're in come first. Nearby PDGA events follow, soonest first."),
     state.status === "loading" && !state.events.length && !state.registrations.length ? h("p", { className: "dash-note", key: "loading" }, "Loading registration options...") : null,
     state.status === "error" ? h("p", { className: "dash-note", key: "error" }, "Registration is temporarily unavailable. Please refresh or try again in a minute.") : null,
-    state.status !== "error" ? h("div", { key: "content" }, [
+    state.status !== "error" ? h("div", { className: "member-events-sections", key: "content" }, [
       h(EventRegistrationSections, {
         events: state.events,
         registrations: state.registrations,

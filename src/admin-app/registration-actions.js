@@ -102,7 +102,7 @@ export function AdminRegistrationAssignControls() {
     h("button", { className: "admin-btn secondary", disabled: Boolean(pendingRequest), key: "button", onClick: assignCards, type: "button" }, pendingRequest ? "Assigning..." : "Assign Cards"),
     h("label", { className: "al-note", htmlFor: "rgCardSize", key: "size" }, [
       "Players/Card ",
-      h("input", { id: "rgCardSize", min: "1", onChange: (event) => setGroupSize(event.target.value), style: { width: "3rem" }, type: "number", value: groupSize }),
+      h("input", { id: "rgCardSize", key: "input", min: "1", onChange: (event) => setGroupSize(event.target.value), style: { width: "3rem" }, type: "number", value: groupSize }),
     ]),
   ]);
 }
@@ -140,8 +140,8 @@ export function AdminRegistrationCtpAddForm() {
   }
 
   return h("form", { className: "al-row", "data-react-admin-registration-ctp-add": "", onSubmit: submit }, [
-    h("label", { key: "hole" }, ["Hole ", h("input", { id: "rgCtpHole", min: "1", onChange: (event) => setField("hole", event.target.value), style: { width: "4rem" }, type: "number", value: form.hole })]),
-    h("input", { key: "division", id: "rgCtpDivision", maxLength: 60, onChange: (event) => setField("division", event.target.value), placeholder: "division (optional)", size: 12, value: form.division }),
+    h("label", { key: "hole" }, ["Hole ", h("input", { id: "rgCtpHole", key: "input", min: "1", onChange: (event) => setField("hole", event.target.value), style: { width: "4rem" }, type: "number", value: form.hole })]),
+    h("input", { key: "division", id: "rgCtpDivision", "aria-label": "CTP division (optional)", maxLength: 60, onChange: (event) => setField("division", event.target.value), placeholder: "division (optional)", size: 12, value: form.division }),
     h("input", { key: "prize", id: "rgCtpPrize", maxLength: 200, onChange: (event) => setField("prize", event.target.value), placeholder: "prize", size: 16, value: form.prize }),
     h("button", { className: "admin-btn secondary", disabled: Boolean(pendingRequest), key: "submit", type: "submit" }, pendingRequest ? "Adding..." : "Add CTP"),
   ]);
@@ -205,9 +205,9 @@ export function AdminRegistrationAcePotControls() {
   }
 
   return h("div", { className: "al-row", "data-react-admin-registration-ace-pot-controls": "", style: { marginTop: "0.5rem" } }, [
-    h("label", { key: "carry", htmlFor: "rgAceCarry" }, ["Carryover in $", h("input", { id: "rgAceCarry", min: "0", onChange: (event) => setCarryover(event.target.value), style: { width: "5rem" }, type: "number", value: carryover })]),
+    h("label", { key: "carry", htmlFor: "rgAceCarry" }, ["Carryover in $", h("input", { id: "rgAceCarry", key: "input", min: "0", onChange: (event) => setCarryover(event.target.value), style: { width: "5rem" }, type: "number", value: carryover })]),
     h("button", { className: "admin-btn secondary", disabled: Boolean(pendingRequest), key: "save", onClick: () => sendAction("save", { carryover_in_cents: carryoverCents(), status: "active" }), type: "button" }, pendingRequest ? "Saving..." : "Save carryover"),
-    h("input", { id: "rgAceWinner", key: "winner", maxLength: 100, onChange: (event) => setWinnerName(event.target.value), placeholder: "ace winner name", size: 14, value: winnerName }),
+    h("input", { id: "rgAceWinner", "aria-label": "Ace winner", key: "winner", maxLength: 100, onChange: (event) => setWinnerName(event.target.value), placeholder: "ace winner name", size: 14, value: winnerName }),
     h("button", { className: "admin-btn", disabled: Boolean(pendingRequest), key: "payout", onClick: payOut, type: "button" }, "Pay out"),
     h("button", { className: "admin-btn secondary", disabled: Boolean(pendingRequest), key: "carry-next", onClick: carryNext, type: "button" }, "Carry to next"),
   ]);

@@ -29,12 +29,16 @@ function StatusBox({ onRetry, status }) {
 
 function TeamPanel({ side, team, teamLabel, teamPoints }) {
   return h("div", { className: `team-panel ${side}` }, [
-    h("div", { className: "team-side-label", key: "label" }, teamLabel),
+    String(team.name || "").toLowerCase() !== teamLabel.toLowerCase()
+      ? h("div", { className: "team-side-label", key: "label" }, teamLabel) : null,
     h("div", { className: "team-name", key: "name" }, team.name),
     h("div", { className: "team-points", key: "points" }, String(teamPoints)),
     h("div", { className: "team-points-label", key: "points-label" }, "Points"),
     team.players.length
-      ? h("div", { className: "roster", key: "roster" }, team.players.join(ROSTER_SEPARATOR))
+      ? h("details", { className: "ryder-roster", key: "roster" }, [
+          h("summary", { key: "summary" }, "Roster (" + team.players.length + ")"),
+          h("div", { className: "roster", key: "players" }, team.players.join(ROSTER_SEPARATOR)),
+        ])
       : null,
   ]);
 }
@@ -168,10 +172,12 @@ export function RyderCupApp() {
   const ready = state.status === "ready" && state.data;
 
   return h("main", { "data-react-ryder-cup": state.status }, [
-    h("h1", { className: "page-title", key: "title" }, "Ryder Cup"),
-    h("p", { className: "page-subtitle", key: "subtitle" }, "Red vs Blue \u2014 team matchplay"),
-    h("p", { className: "league-nav", key: "league-nav" },
-      h("a", { className: "back-link", href: "events.html#league/4" }, "View Ryder Cup League standings and events")),
+    h("div", { className: "ryder-intro", key: "intro" }, [
+      h("h1", { className: "page-title", key: "title" }, "Ryder Cup"),
+      h("p", { className: "page-subtitle", key: "subtitle" }, "Red vs Blue \u2014 team matchplay"),
+      h("p", { className: "league-nav", key: "league-nav" },
+        h("a", { className: "back-link", href: "events.html#league/4" }, "League standings and events")),
+    ]),
     ready ? h(Scoreboard, { key: "scoreboard", scoreboard: state.data.scoreboard, teamPoints: state.data.teamPoints }) : null,
     ready ? h(ScoringNote, { key: "note", officialPoints: state.data.officialPoints }) : null,
     ready

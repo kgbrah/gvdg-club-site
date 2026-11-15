@@ -154,6 +154,7 @@ export function RegistrationRow({ divisions = [], registration, teams = [] }) {
           "Division",
           h(ChoiceOrText, {
             ariaLabel: `Division for ${registration.name}`,
+            key: "input",
             names: divisions,
             onCommit: (next) => patchText("division", next, registration.division),
             placeholder: "division",
@@ -165,6 +166,7 @@ export function RegistrationRow({ divisions = [], registration, teams = [] }) {
           "Team",
           h(ChoiceOrText, {
             ariaLabel: `Team for ${registration.name}`,
+            key: "input",
             names: teams,
             onCommit: (next) => patchText("team", next, registration.team),
             placeholder: teams.length ? "No team" : "pair/team",
@@ -176,6 +178,7 @@ export function RegistrationRow({ divisions = [], registration, teams = [] }) {
           "Start hole",
           h("input", {
             "aria-label": `Starting hole for ${registration.name}`,
+            key: "input",
             min: "1",
             onBlur: patchStartingHole,
             onChange: (event) => setStartingHole(event.target.value),
@@ -187,6 +190,7 @@ export function RegistrationRow({ divisions = [], registration, teams = [] }) {
         h("label", { className: "admin-roster-toggle", key: "paid-entry" }, [
           h("input", {
             "aria-label": `Paid entry for ${registration.name}`,
+            key: "input",
             checked: paidEntry,
             onChange: (event) => {
               setPaidEntry(event.target.checked);

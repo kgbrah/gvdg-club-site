@@ -4,6 +4,7 @@ import { bearer, clientIp, json, readJson } from "./http.js";
 import { asStr } from "./input.js";
 import { signOpenPlaySession, verifySession } from "./jwt.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
+import { signOfflineOpenSession } from "./offline-round-auth.js";
 
 export { OPEN_PLAY_PREFIX, isOpenPlayId };
 
@@ -27,5 +28,5 @@ export async function mintOpenPlaySession(request: Request, env: Env, origin: st
   const existing = bearer(request) ? await verifySession(bearer(request)!, env.JWT_SECRET) : null;
   const sub = existing?.play && isOpenPlayId(existing.sub) ? existing.sub : newOpenPlayId();
   const token = await signOpenPlaySession({ sub, name }, env.JWT_SECRET, OPEN_PLAY_TTL_SEC);
-  return json({ token, playerId: sub, name }, 200, origin);
+  return json({ token, offlineToken: await signOfflineOpenSession(sub, env.JWT_SECRET), playerId: sub, name }, 200, origin);
 }

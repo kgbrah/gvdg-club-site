@@ -3,10 +3,11 @@ import { request, requestJson, storageGet, TOKEN_KEY } from "./api.js";
 import { formatPct, playStyleLabel, statPct } from "../shared/play-stats.js";
 import { SHOT_STAT_DEFINITIONS } from "../shared/shot-stats-model.js";
 import { describeShot } from "../shared/shot-ledger.js";
+import { PersonalArchivePanel } from "./member-archive-panel.js";
 
 const h = React.createElement;
 const initialFilters = { window: "year", last: "10", from: "", to: "", source: "all", group: "singles", style: "stroke", course: "", layout: "", hole: "" };
-const sourceNames = { competitive: "Club event", casual: "Casual", udisc: "UDisc import" };
+const sourceNames = { competitive: "Club event", casual: "Casual", udisc: "UDisc import", offline: "Personal offline round" };
 const inputStyle = { display: "block", width: "100%", minHeight: "2.25rem" };
 const filterStyle = { display: "grid", gap: ".75rem", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 9rem), 1fr))", alignItems: "end", marginBottom: "1rem" };
 
@@ -76,7 +77,8 @@ function ArchivedShots({ round, token }) {
   const details = state.status === "ready"
     ? state.holes.map(({ hole, strokes, shotLedger }) => h("section", { key: hole },
       h("p", null, `Hole ${hole}` + (strokes == null ? " · Unscored" : ` · ${strokes} on card`) + (shotLedger.scope === "team" ? " · Team shots" : "")),
-      !shotLedger.matchesResult && h("p", { className: "player-card-meta" }, "Record from an earlier scoring assignment."),
+      !shotLedger.matchesResult && h("p", { className: "player-card-meta" }, round.source === "offline"
+        ? "Recorded outside the completed match." : "Record from an earlier scoring assignment."),
       h("ol", null, shotLedger.rows.map((shot) => h("li", { key: shot.id }, describeShot(shot))))))
     : h("p", { role: "status" }, state.status === "error" ? "Could not load these shots. Close and try again." : "Loading saved shots…");
   return h("details", { onToggle: (event) => setOpen(event.currentTarget.open) },
@@ -124,14 +126,15 @@ function historySummary(view, token) {
     h("details", { className: "player-card-meta" }, h("summary", null, "How the numbers are calculated"),
       h("p", null, SHOT_STAT_DEFINITIONS.putting), h("p", null, SHOT_STAT_DEFINITIONS.ledger), h("p", null, SHOT_STAT_DEFINITIONS.legacy),
       h("p", null, "Score trends use positive hole scores with known pars. Putting leagues are excluded.")),
-    h("div", { style: { overflowX: "auto" } }, h("table", { style: { width: "100%", textAlign: "left" } },
+    h("div", { className: "member-history-table", style: { overflowX: "auto" } }, h("table", { style: { width: "100%", textAlign: "left" } },
       h("caption", { style: { textAlign: "left", marginBlock: ".5rem" } }, "Recent matching rounds"),
       h("thead", null, h("tr", null, ["Date", "Course / layout", "Holes with scores", "Strokes", "To par"].map((title) => h("th", { key: title, scope: "col" }, title)))),
       h("tbody", null, view.recentRounds.map((round) => h("tr", { key: round.id },
         h("td", null, round.date || "—"),
         h("td", null, [round.course || round.eventName || sourceNames[round.source], round.layout].filter(Boolean).join(" / "),
           h("small", { style: { display: "block" } }, sourceNames[round.source] + (round.group === "doubles" ? " · Team score" : "")),
-          round.explicitLedgerHoles > 0 && h(ArchivedShots, { round, token })),
+          round.explicitLedgerHoles > 0 && h(ArchivedShots, { round, token }),
+          round.source === "offline" && h("a", { href: "score.html?offline=1&archive=" + round.resultId }, "View offline card")),
         h("td", null, round.scoredHoles || "—"),
         h("td", null, round.strokes ?? "—"),
         h("td", null, signed(round.toPar)),
@@ -239,7 +242,7 @@ export function PersonalPlayHistory() {
       if (["source", "group", "style"].includes(key)) next.course = "";
       if (["source", "group", "style", "course"].includes(key)) next.layout = "";
       if (key !== "hole") next.hole = "";
-      if (key === "source") next.group = value === "udisc" ? "unknown" : "singles";
+      if (key === "source") next.group = value === "udisc" ? "unknown" : value === "offline" ? "all" : "singles";
       return next;
     });
   }
@@ -264,7 +267,7 @@ export function PersonalPlayHistory() {
   const sameSource = [draft.source, draft.group, draft.style].every((value, index) => value === [payload?.filters?.source, payload?.filters?.group, payload?.filters?.style][index]);
   const sameCourse = sameSource && draft.course === payload?.filters?.course;
   const sameLayout = sameCourse && draft.layout === payload?.filters?.layout;
-  return h("section", { className: "player-card", style: { marginBlockEnd: "1rem" }, "aria-label": "Personal play history" },
+  return h("section", { className: "player-card member-history-panel", "aria-label": "Personal play history" },
     h("h3", null, "My play history"),
     h("form", { onSubmit: apply, "aria-label": "Filter my play history" }, h("div", { style: filterStyle },
       selectField("Period", "window", options({ year: "This year", all: "All time", last: "Last N rounds", custom: "Custom dates" }), draft, change),
@@ -284,5 +287,6 @@ export function PersonalPlayHistory() {
     status === "ready" && payload?.roundCount ? historySummary(payload, token) : null,
     status === "ready" && !payload?.roundCount ? h("p", { className: "player-card-meta" }, "No saved rounds match these filters.") : null,
     h(PlayExport, { key: token, token }),
+    h(PersonalArchivePanel, { key: "personal-backup", token }),
   );
 }

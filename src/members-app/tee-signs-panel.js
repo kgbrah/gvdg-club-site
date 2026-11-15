@@ -196,7 +196,7 @@ export function MemberTeeSignsPanel({ routeCourseId } = {}) {
         "data-react-tee-file": "true",
         accept: "image/png,image/jpeg,image/webp",
         capture: "environment",
-        style: { display: "none" },
+        className: "member-file-input",
         onChange: onFileChange,
         key: "file",
       }),

@@ -53,6 +53,7 @@ jobs:
           mkdir -p .pages-dist/src/shared
           cp src/shared/tee-sign-model.js .pages-dist/src/shared/
           printf '{"commit":"%s","branch":"%s","deployedAt":"%s","deployer":"github-actions"}\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" "$(date -u +%FT%TZ)" > .pages-dist/version.json
+          node scripts/stamp-app-build.mjs .pages-dist "$GITHUB_SHA"
       # Deploy the LIVE worker ONCE. [env.gvdgclub] and [env.staging] now target the same Worker
       # (gvdg-member-auth-staging = the one auth.gvdgclub.com is attached to), so one deploy suffices.
       - name: Apply D1 migrations

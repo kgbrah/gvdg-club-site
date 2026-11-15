@@ -66,7 +66,7 @@ test("the score app reapplies remembered pins after a socket snapshot", () => {
   const controller = readFileSync("src/score-app/score-controller.js", "utf8");
   assert.match(controller, /function assignHoles/);
   assert.match(controller, /function ensureCatalogPins/);
-  assert.equal([...controller.matchAll(/assignHoles\(snap\.holes, snap\)/g)].length, 2);
+  assert.equal([...controller.matchAll(/assignHoles\(snap\.holes, snap\)/g)].length, 1);
   assert.equal([...controller.matchAll(/assignHoles\(Array\.isArray\(d\.holes\) \? d\.holes : \[\], d\)/g)].length, 2);
   assert.match(controller, /\/positions"/);
   assert.doesNotMatch(readFileSync("src/score-app/scorecard-view.js", "utf8"), /pointReady\(props\.gpsFix\)/);

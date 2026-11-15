@@ -104,12 +104,18 @@ export async function buildCasualArchiveSnapshot(database: D1Like, roundCode: st
     ? ((await db.getCourse(database, courseId)) as { udisc_course_id?: string | null } | null)
     : null;
 
-  const players = results.map((row, index) => {
+  // Archived results are sorted by place. Stable indexes come from the live round when known.
+  const mappedIndexes = results.flatMap((row) => Number.isInteger(row.live_player_index) ? [Number(row.live_player_index)] : []);
+  let unmappedIndex = Math.max(-1, ...mappedIndexes) + 1;
+  const players = results.map((row) => {
+    const mapped = Number.isInteger(row.live_player_index);
+    const index = mapped ? Number(row.live_player_index) : unmappedIndex++;
     const scorecard = parseScorecard(row.scorecard);
     const scores: Record<number, number> = {};
     for (const hole of scorecard) scores[hole.hole] = hole.strokes;
     return {
       index,
+      clipPlayerIndex: mapped ? index : null,
       cardId: "h1",
       name: String(row.name || "Player"),
       division: row.division == null ? null : String(row.division),
@@ -127,15 +133,17 @@ export async function buildCasualArchiveSnapshot(database: D1Like, roundCode: st
     const total = asInt(row.total);
     const toPar = asInt(row.to_par);
     const thru = scorecard.length || (total != null && holeCount ? holeCount : 0);
+    const player = players[index]!;
     return {
       name: String(row.name || "Player"),
       division: row.division == null ? null : String(row.division),
       thru,
       total: total ?? 0,
       toPar: toPar ?? 0,
-      targetId: "p" + index,
+      targetId: "p" + player.index,
       targetType: "player",
-      playerIndexes: [index],
+      playerIndexes: [player.index],
+      clipPlayerIndexes: player.clipPlayerIndex == null ? [] : [player.clipPlayerIndex],
       members: [String(row.name || "Player")],
       scorecard: scorecard.map((hole) => ({ hole: hole.hole, par: hole.par, strokes: hole.strokes })),
       scoringGroup: parseJson(row.scoring_group),
@@ -146,6 +154,7 @@ export async function buildCasualArchiveSnapshot(database: D1Like, roundCode: st
   return {
     status: "final",
     rev: 0,
+    recoveryRoundId: typeof round.live_generation === "string" ? round.live_generation : null,
     eventId: null,
     courseId,
     layoutId,

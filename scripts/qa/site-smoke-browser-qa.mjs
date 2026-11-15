@@ -81,7 +81,7 @@ const pages = [
   {
     name: "events-status",
     path: "/events.html",
-    text: ["Events & Club Events", "Leagues & Standings"],
+    text: ["Club events", "Leagues & Standings"],
   },
   {
     name: "events-detail",
@@ -118,6 +118,11 @@ const pages = [
     path: "/ryder-cup.html",
     text: ["Ryder Cup"],
   },
+  { name: "scoring-app", path: "/scoring-app.html", text: ["Your game.", "GVDG vs UDisc Pro.", "Watch live."] },
+  { name: "archive-redirect", path: "/archive.html", text: ["Club events"], redirect: "/events.html#previousResultsSection" },
+  { name: "design-chooser", path: "/design.html", text: ["Direction 01", "Direction 02"] },
+  { name: "design-field", path: "/design-field.html", text: ["Where to play", "One card for the year."] },
+  { name: "design-night", path: "/design-night.html", text: ["Where to play", "One card for the year."] },
   {
     name: "tee-sign-preview",
     path: "/tee-sign-preview.html",
@@ -160,7 +165,7 @@ function apiResponse(url) {
   if (pathName === "/club-feed") return json({ events: [], clubEvents: [] });
   if (pathName === "/fundraisers") return json({ fundraisers: [] });
   if (pathName === "/leagues") return json({ leagues: [league] });
-  if (pathName === "/leagues/4") return json(league);
+  if (pathName === "/leagues/4") return json({ ...league, league });
   if (pathName === "/meetings") return json({ meetings: [] });
   if (pathName === "/payments/config") return json({ enabled: false });
   if (pathName === "/shop/products") {
@@ -186,6 +191,11 @@ async function startStaticServer() {
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url || "/", "http://127.0.0.1");
+      if (url.pathname === "/version.json") {
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({ commit: "site-smoke-fixture", branch: "fixture" }));
+        return;
+      }
       const requestPath = url.pathname === "/" ? "/index.html" : url.pathname;
       const normalized = path.normalize(decodeURIComponent(requestPath)).replace(/^(\.\.[/\\])+/, "");
       const filePath = path.join(repoRoot, normalized);
@@ -213,7 +223,7 @@ async function startStaticServer() {
 function collectPageErrors(page) {
   const errors = [];
   page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
+    if (message.type() === "error") errors.push(message.text() + " " + (message.location().url || ""));
   });
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("dialog", (dialog) => {
@@ -262,6 +272,7 @@ async function runPage(browser, server, item, viewport) {
     await page.goto(`${server.origin}${item.path}`, { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => {});
     await waitForText(page, item.text, item.name);
+    if (item.redirect) await page.waitForURL(`${server.origin}${item.redirect}`);
     await assertNoHorizontalOverflow(page, `${viewport.width} ${item.name}`);
     if (errors.length) throw new Error(errors.join("\n"));
     await page.screenshot({
@@ -279,7 +290,7 @@ const browser = await chromium.launch();
 const failures = [];
 try {
   for (const viewport of viewports) {
-    for (const item of pages) {
+    for (const item of pages.filter(item => !process.env.GVDG_SMOKE_PAGES || process.env.GVDG_SMOKE_PAGES.split(",").includes(item.name))) {
       try {
         await runPage(browser, server, item, { width: viewport.width, height: viewport.height });
         console.log(`PASS ${viewport.label} ${item.name}`);

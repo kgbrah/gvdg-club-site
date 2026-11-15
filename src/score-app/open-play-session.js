@@ -1,5 +1,6 @@
 export const OPEN_PLAY_TOKEN_KEY = "gvdg_open_play_token";
 export const OPEN_PLAY_NAME_KEY = "gvdg_open_play_name";
+export const OFFLINE_OPEN_TOKEN_KEY = "gvdg_offline_open_token";
 
 function storeGet(store, key) {
   try {
@@ -35,12 +36,18 @@ export function readOpenPlayName(storage = globalThis.localStorage) {
   return storeGet(storage, OPEN_PLAY_NAME_KEY);
 }
 
-export function writeOpenPlaySession({ token, name } = {}, storage = globalThis.localStorage) {
+export function readOfflineOpenToken(storage = globalThis.localStorage) {
+  return storeGet(storage, OFFLINE_OPEN_TOKEN_KEY);
+}
+
+export function writeOpenPlaySession({ token, name, offlineToken } = {}, storage = globalThis.localStorage) {
   if (token != null) storeSet(storage, OPEN_PLAY_TOKEN_KEY, token);
   if (name != null) storeSet(storage, OPEN_PLAY_NAME_KEY, name);
+  if (offlineToken != null) storeSet(storage, OFFLINE_OPEN_TOKEN_KEY, offlineToken);
 }
 
 export function clearOpenPlaySession(storage = globalThis.localStorage) {
   storeRemove(storage, OPEN_PLAY_TOKEN_KEY);
   storeRemove(storage, OPEN_PLAY_NAME_KEY);
+  storeRemove(storage, OFFLINE_OPEN_TOKEN_KEY);
 }

@@ -8,10 +8,10 @@ export async function handleMyPlayHistory(request: Request, env: Env, origin: st
   if (!claims?.member || claims.member.mustChangePin) return json({ error: "unauthorized" }, 401, origin);
   const params = new URL(request.url).searchParams;
   if (params.has("shotResult")) {
-    const match = /^(competitive|casual):([1-9]\d{0,15})$/.exec(params.get("shotResult") || "");
+    const match = /^(competitive|casual|offline):([1-9]\d{0,15})$/.exec(params.get("shotResult") || "");
     const resultId = Number(match?.[2]);
     if (!match || !Number.isSafeInteger(resultId)) return json({ error: "invalid_shot_result" }, 400, origin);
-    const holes = await readRoundShotHistory(env.DB, claims.sub, match[1] === "casual" ? "casual" : "competitive", resultId);
+    const holes = await readRoundShotHistory(env.DB, claims.sub, match[1] === "casual" || match[1] === "offline" ? match[1] : "competitive", resultId);
     return holes ? json({ holes }, 200, origin, { "Cache-Control": "private, no-store" }) : json({ error: "not_found" }, 404, origin);
   }
   const filters = parsePlayHistoryFilter(params);

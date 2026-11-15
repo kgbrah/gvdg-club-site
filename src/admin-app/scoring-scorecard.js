@@ -10,7 +10,7 @@ function dispatchRequest(name, detail) {
   window.dispatchEvent(new CustomEvent(name, { detail }));
 }
 
-function ScoreInput({ hole, max = 30, min = 1, row, score }) {
+function ScoreInput({ hole, max = 30, min = 1, readOnly, row, score }) {
   const [value, setValue] = React.useState(score == null ? "" : String(score));
   const focused = React.useRef(false);
 
@@ -19,12 +19,14 @@ function ScoreInput({ hole, max = 30, min = 1, row, score }) {
   }, [score]);
 
   function commit() {
-    if (!value.trim()) return;
+    if (readOnly || !value.trim()) return;
     dispatchRequest("gvdg:admin-scoring-score-request", { hole, row, value });
   }
 
   return h("input", {
+    "aria-label": row.label + " · Hole " + hole,
     className: "sc-score-input",
+    readOnly,
     max: String(max),
     min: String(min),
     onBlur: () => {
@@ -71,7 +73,7 @@ export function AdminScoringScorecard({ snapshot }) {
 
   const putting = isPutting(snap);
   const weighted = putting && puttingWeighted(holes);
-  const table = h("div", { className: "sc-scorecard-desktop", key: "desktop", style: { overflowX: "auto" } }, h("table", {
+  const table = h("div", { className: "sc-scorecard-desktop admin-table-scroll", key: "desktop", role: "region", "aria-label": snap.status === "final" ? "Final scorecard table" : "Editable scorecard table", tabIndex: 0 }, h("table", {
     className: "al-holes",
     "data-react-admin-scoring-grid": "ready",
     id: "scGrid",
@@ -91,7 +93,7 @@ export function AdminScoringScorecard({ snapshot }) {
         ...holes.map((hole) => {
           const conflict = conflictForRow(snap, row, hole.hole);
           return h("td", { className: conflict ? "sc-conflict" : undefined, key: hole.hole }, [
-            h(ScoreInput, { hole: hole.hole, key: "score", max: putting ? hole.par : 30, min: putting ? 0 : 1, row, score: scoreForRow(snap, row, hole.hole) }),
+            h(ScoreInput, { hole: hole.hole, key: "score", max: putting ? hole.par : 30, min: putting ? 0 : 1, readOnly: snap.status === "final", row, score: scoreForRow(snap, row, hole.hole) }),
             conflict ? h("span", {
               "aria-label": conflictTitle(conflict),
               className: "sc-conflict-flag",
@@ -150,7 +152,7 @@ export function AdminScoringScorecard({ snapshot }) {
           h("span", { className: "lb-name", key: "name" }, row.label),
           meta ? h("span", { className: "sc-hole-pager-meta", key: "meta" }, meta) : null,
         ]),
-        h(ScoreInput, { hole: hole.hole, key: "score", max: putting ? hole.par : 30, min: putting ? 0 : 1, row, score: scoreForRow(snap, row, hole.hole) }),
+        h(ScoreInput, { hole: hole.hole, key: "score", max: putting ? hole.par : 30, min: putting ? 0 : 1, readOnly: snap.status === "final", row, score: scoreForRow(snap, row, hole.hole) }),
         conflict ? h("span", {
           "aria-label": conflictTitle(conflict),
           className: "sc-conflict-flag",
@@ -179,7 +181,7 @@ export function AdminScoringLeaderboard({ snapshot }) {
       key: "errors",
       style: { color: "var(--over)", fontWeight: "600", marginBottom: ".5rem" },
     }, `Attention: ${errors.map((error) => error?.message || "A card has an invalid pair").join(" - ")} - the pair can rejoin or the team can withdraw; otherwise admin-force finalize to close the round.`) : null,
-    standings.length ? h("div", { key: "table", style: { overflowX: "auto" } }, h("table", { className: "al-holes" }, [
+    standings.length ? h("div", { className: "admin-table-scroll", key: "table", role: "region", "aria-label": "Leaderboard table", tabIndex: 0 }, h("table", { className: "al-holes" }, [
       h("thead", { key: "head" }, h("tr", null, ["Pos", isDoubles(snap) ? "Pair" : "Player", "Thru", totalHead, finalHead].map((label) => h("th", { key: label }, label)))),
       h("tbody", { key: "body" }, standings.map((standing, index) => {
         const makes = Array.isArray(standing.scorecard)

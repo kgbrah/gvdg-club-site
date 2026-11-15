@@ -5,6 +5,7 @@ import { CircleHelp, Moon, Sun, Trophy, UsersRound } from "lucide-react";
 import { startScoreApp } from "./score-controller.js";
 import { ScoreAuthFlow } from "./auth-flow.js";
 import { ScorecardView, SoloScorecardPreview } from "./scorecard-view.js";
+import { OfflineRoundView, offlineScoreRoute } from "./offline-round-view.js";
 import { ScoreSetupFlow } from "./setup-flow.js";
 import { StatusView } from "./status-view.js";
 import { WatchView } from "./watch-view.js";
@@ -63,10 +64,12 @@ function themeRoot() {
 
 function ScoreShell() {
   const previewSolo = previewSoloRequested();
+  const [offline] = React.useState(() => offlineScoreRoute(location.search));
+  const [offlineScoring, setOfflineScoring] = React.useState(false);
   const [header, setHeader] = React.useState({
     showLeaderboard: false,
     subtitle: previewSolo ? "Covenant Church · Covey" : "Greenville Disc Golf Club",
-    title: previewSolo ? "Round PREVIEW" : "Live Scoring",
+    title: previewSolo ? "Round PREVIEW" : offline ? "Offline Scoring" : "Live Scoring",
   });
   const [bodyView, setBodyView] = React.useState(INITIAL_SCORE_VIEW);
   const { dark, toggle: onToggleTheme } = usePlayerThemeSession();
@@ -79,7 +82,7 @@ function ScoreShell() {
   }), []);
 
   React.useEffect(() => {
-    if (previewSolo) return undefined;
+    if (previewSolo || offline) return undefined;
     startScoreApp({
       body: bodyController,
       shell: {
@@ -94,7 +97,7 @@ function ScoreShell() {
     return () => {
       leaderboardHandlerRef.current = null;
     };
-  }, [bodyController, previewSolo]);
+  }, [bodyController, previewSolo, offline]);
 
   React.useEffect(() => {
     return () => {
@@ -103,45 +106,52 @@ function ScoreShell() {
   }, []);
 
   React.useEffect(() => {
-    const glove = previewSolo || bodyView.kind === "scorecard";
+    const glove = previewSolo || offlineScoring || bodyView.kind === "scorecard";
     document.body.classList.toggle("score-glove", glove);
     return () => document.body.classList.remove("score-glove");
-  }, [bodyView.kind, previewSolo]);
+  }, [bodyView.kind, previewSolo, offlineScoring]);
 
-  return h("div", { class: "wrap" }, [
-    h("header", { class: "topbar" }, [
-      h("img", { src: "img/logo.png", alt: "GVDG", class: "logo", width: 32, height: 32 }),
-      h("h1", { id: "barTitle" }, [
+  return h("div", { className: "wrap" }, [
+    h("header", { key: "header", className: "topbar" }, [
+      h("img", { key: "logo", src: "img/logo.png", alt: "GVDG", className: "logo", width: 32, height: 32 }),
+      h("h1", { key: "title", id: "barTitle" }, [
         header.title,
         h("small", { id: "barSub", key: "subtitle" }, header.subtitle),
       ]),
       h(
         "button",
         {
-          class: "top-link",
+          className: "top-link",
           type: "button",
+          key: "help",
           "aria-label": "Help",
+          "aria-haspopup": "dialog",
           title: "Help",
-          onClick: () => requestCrottsHelp(),
+          onClick: (event) => {
+            const opener = event.currentTarget;
+            requestCrottsHelp(() => opener);
+          },
         },
-        [icon(CircleHelp), h("span", { class: "top-link-label", key: "label" }, "Help")],
+        [icon(CircleHelp), h("span", { className: "top-link-label", key: "label" }, "Help")],
       ),
       h(
         "a",
         {
-          class: "top-link",
+          className: "top-link",
+          key: "members",
           href: "gvdg-members.html",
           "aria-label": "Return to members",
           title: "Members",
         },
-        [icon(UsersRound), h("span", { class: "top-link-label", key: "label" }, "Members")],
+        [icon(UsersRound), h("span", { className: "top-link-label", key: "label" }, "Members")],
       ),
       h(
         "button",
         {
           "aria-label": "Leaderboard",
-          class: "iconbtn",
+          className: "iconbtn",
           hidden: !header.showLeaderboard,
+          key: "leaderboard",
           id: "lbBtn",
           title: "Leaderboard",
           type: "button",
@@ -153,7 +163,8 @@ function ScoreShell() {
         "button",
         {
           "aria-label": dark ? "Switch to light mode" : "Switch to dark mode",
-          class: "iconbtn",
+          className: "iconbtn",
+          key: "theme",
           id: "themeBtn",
           title: dark ? "Switch to light mode" : "Switch to dark mode",
           type: "button",
@@ -162,8 +173,9 @@ function ScoreShell() {
         icon(dark ? Sun : Moon),
       ),
     ]),
-    previewSolo || bodyView.kind === "watch" || bodyView.kind === "scorecard" ? null : h(InstallCoachBanner, { key: "install" }),
-    h("main", { id: "app" }, previewSolo ? h(SoloScorecardPreview) : h(ScoreBody, { view: bodyView })),
+    previewSolo || offline || bodyView.kind === "watch" || bodyView.kind === "scorecard" ? null : h(InstallCoachBanner, { key: "install" }),
+    h("main", { key: "main", id: "app" }, previewSolo ? h(SoloScorecardPreview)
+      : offline ? h(OfflineRoundView, { route: offline, onScoring: setOfflineScoring }) : h(ScoreBody, { view: bodyView })),
     h(CrottsWidget, { key: "help" }),
   ]);
 }

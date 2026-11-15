@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
+import { scoreNameParts } from '../src/score-app/scorecard-view.js';
 
 function scoreSetupSource() {
   const source = readFileSync('src/score-app/setup-flow.js', 'utf8');
@@ -488,7 +489,29 @@ test('score view model derives rows, totals, conflicts, blockers, and UDisc expo
   assert.deepEqual(udiscExportData(state), { courseId: '123', scorecard: [{ hole: 1, par: 3, strokes: 2 }] });
   assert.equal(finalizeBlockers(state).ready, false);
   assert.equal(finalizeBlockers({ conflicts: [], missing: [], holes: [] }).ready, false);
-  assert.equal(finalizeBlockers({ conflicts: [], missing: [], holes: [{ hole: 1 }] }).ready, true);
+  assert.equal(finalizeBlockers({ conflicts: [], missing: [], holes: [{ hole: 1 }] }).ready, false);
+  const progress = {
+    ...state, conflicts: [], missing: [], holes: [{ hole: 1 }, { hole: 2 }, { hole: 3 }],
+    roundConfig: { groupFormat: "singles", scoringStyle: "matchplay" },
+    cardmates: [{ index: 0, name: "Ava", scores: { 1: 2, 2: 2 } }, { index: 1, name: "Milo", scores: { 1: 3, 2: 3 } }],
+  };
+  assert.equal(finalizeBlockers(progress).ready, true, "a clinched match does not require dead holes");
+  const preClinch = { ...progress, cardmates: progress.cardmates.map((row) => ({ ...row, scores: { 1: row.scores[1] } })) };
+  assert.equal(finalizeBlockers(preClinch).ready, false);
+  const shotgun = { ...progress, holes: [1, 2, 3, 4, 5].map((hole) => ({ hole })), cardmates: progress.cardmates.map((row) => ({
+    ...row, startingHole: 4, scores: { 1: row.scores[1], 4: row.scores[1], 5: row.scores[1] },
+  })) };
+  assert.equal(finalizeBlockers(shotgun).ready, true, "match play may clinch in shotgun order before reaching every numbered hole");
+  const shotgunGap = { ...shotgun, cardmates: shotgun.cardmates.map((row) => ({ ...row, scores: { 1: row.scores[1], 4: row.scores[4] } })) };
+  assert.deepEqual(finalizeBlockers(shotgunGap).missing.map((row) => row.hole), [2, 2, 3, 3, 5, 5], "a missing pre-clinch hole blocks finishing");
+  const incomplete = { ...progress, roundConfig: { groupFormat: "singles", scoringStyle: "stroke" } };
+  assert.equal(finalizeBlockers(incomplete).ready, false);
+  assert.deepEqual(finalizeBlockers(incomplete).missing.map((row) => row.hole), [3, 3]);
+  const completed = { ...incomplete, cardmates: incomplete.cardmates.map((row) => ({ ...row, scores: { ...row.scores, 3: 3 } })) };
+  assert.equal(finalizeBlockers(completed).ready, true);
+  const putting = { ...completed, roundConfig: { groupFormat: "singles", scoringStyle: "putting" },
+    cardmates: completed.cardmates.map((row) => ({ ...row, scores: { ...row.scores, 3: 0 } })) };
+  assert.equal(finalizeBlockers(putting).ready, true, "zero makes is a confirmed putting score");
   assert.match(finishRoundHint(finalizeBlockers(state), 'round'), /disagreeing scores/);
   assert.match(finishRoundHint({ ready: true, conflicts: [], missing: [], lines: [] }, 'round'), /Anyone on this card can finish/);
   assert.match(finishRoundHint({ ready: true, conflicts: [], missing: [], lines: [] }, 'event'), /Anyone on this card can submit/);
@@ -658,11 +681,11 @@ test('player leaderboard renders matchplay and pair labels without primary to-pa
   assert.match(source, /aria-expanded/);
   assert.match(source, /"aria-label": isPutting \? \(station === String\(hole\.hole\) \? "Station " \+ hole\.hole : station \+ " ft"\) : "Hole " \+ hole\.hole/);
   assert.match(source, /hole\.strokes \+ "\/" \+ attempts/);
-  assert.match(source, /clipsForStanding\(clips, standing\)/);
+  assert.match(source, /clipsForStanding\(clips, standing, clipGeneration\)/);
   assert.match(source, /HighlightClipList/);
   assert.match(readFileSync('src/score-app/score-controller.js', 'utf8'), /onHole: function \(holeNumber\)/);
   assert.match(readFileSync('src/score-app/watch-view.js', 'utf8'), /onHole: focusHole/);
-  assert.match(readFileSync('src/score-app/watch-view.js', 'utf8'), /startExpanded: true/);
+  assert.match(readFileSync('src/score-app/watch-view.js', 'utf8'), /h\(LeaderboardTable/);
   assert.match(readFileSync('src/score-app/score-controller.js', 'utf8'), /Pair changes are blocked after scoring starts/);
 });
 
@@ -728,7 +751,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /function ScoreRow\(props\)/);
   assert.match(scorecard, /nextHoleScore/);
   assert.match(scorecard, /Clear \$\{row\.label\} on hole/);
-  assert.match(scorecard, /tee-order-hint/);
+  assert.match(scorecard, /className: "round-tools-tee-order"[\s\S]*"summary", null, "Tee order"/);
   assert.doesNotMatch(scorecard, /honors-chip/);
   assert.doesNotMatch(scorecard, /Throws first/);
   assert.match(scorecard, /function FinishCard\(props\)/);
@@ -756,7 +779,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /rows\.map\(\(row\) => h\(ScoreRow/);
   assert.doesNotMatch(scorecard, /function ScorePlayerRail/);
   assert.doesNotMatch(scorecard, /collapsed-others/);
-  assert.match(scorecard, /scrollIntoView/);
+  assert.match(scorecard, /root\.scrollLeft/);
   assert.match(scorecard, /liveRoundStatsFromCard/);
   assert.match(scorecard, /props\.throwsByHole/);
   assert.match(scorecard, /Live stats/);
@@ -1168,10 +1191,10 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.match(shared, /export function liveWatchHref/);
   assert.match(controller, /const ROUND_CODE = liveRoundCodeFromSearch\(params\)/);
   assert.match(controller, /const WATCH = isLiveWatchRequest\(params\)/);
-  assert.match(controller, /async function loadWatch\(\)/);
-  assert.match(controller, /api\(LIVE, \{ auth: false, guest: false \}\)/);
-  assert.match(controller, /if \(WATCH && \(EVENT_ID \|\| ROUND_CODE\)\)/);
-  assert.match(controller, /if \(WATCH\) return;/);
+  assert.match(controller, /function startWatch\(\)/);
+  assert.match(controller, /const response = await get\(LIVE\)/);
+  assert.match(controller, /if \(WATCH && \(EVENT_ID \|\| ROUND_CODE \|\| WATCH_KEY\)\)/);
+  assert.match(controller, /createSpectatorTransport/);
   assert.match(main, /WatchView/);
   assert.match(watch, /data-react-live-watch/);
   assert.match(watch, /Copy watch link/);
@@ -1186,7 +1209,7 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.match(watch, /scoreFlight/);
   assert.match(watch, /function WatchReplayBar/);
   assert.match(watch, /watchReplayVisibleThrows/);
-  assert.match(watch, /Replay round/);
+  assert.match(watch, /final: "Final"/);
   assert.match(watch, /props\.status === "final"/);
   assert.match(watch, /function WatchFollowBar/);
   assert.match(watch, /function WatchMatchCards/);
@@ -1195,8 +1218,8 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   assert.match(watch, /watchStrokeHoleChips/);
   assert.match(watch, /watchMatchCards/);
   assert.match(controller, /function watchHoleViews\(\)/);
-  assert.match(controller, /holes: watchHoleViews\(\)/);
-  assert.match(controller, /players: Array.isArray\(snap\.players\)/);
+  assert.match(controller, /holes: snap \? watchHoleViews\(\) : \[\]/);
+  assert.match(controller, /players: Array.isArray\(snap\?\.players\)/);
   const html = readFileSync('score.html', 'utf8');
   assert.match(html, /\.hole-map-score-chip/);
   assert.match(html, /\.watch-match-card/);
@@ -1219,7 +1242,7 @@ test('spectator watch mode loads the public snapshot and never joins the card', 
   const watchBody = watch.slice(watch.indexOf("export function WatchView"));
   assert.ok(watchBody.indexOf("h(WatchHoles") < watchBody.indexOf("Live leaderboard"));
   assert.ok(watchBody.indexOf("Live leaderboard") < watchBody.indexOf("Round weather"));
-  const watchBoot = controller.slice(controller.indexOf('async function loadWatch'), controller.indexOf('function watchRoundCode'));
+  const watchBoot = controller.slice(controller.indexOf('function startWatch'), controller.indexOf('function watchRoundCode'));
   assert.match(watchBoot, /watchableLiveSnapshot/);
   assert.match(watchBoot, /\/rounds\/' \+ ROUND_CODE \+ '\/results'/);
   assert.match(watchBoot, /casualReplaySnapshot/);
@@ -1261,7 +1284,7 @@ test("hole maps overlay a landing-zone heatmap of saved marked lies", () => {
   assert.match(html, /mix-blend-mode: screen/);
   assert.match(scorecard, /layoutId: props\.layoutId/);
   assert.match(watch, /layoutId: props\.layoutId/);
-  assert.match(controller, /layoutId: S\.layoutId \|\| snap\.layoutId \|\| null/);
+  assert.match(controller, /layoutId: S\.layoutId \|\| snap\?\.layoutId \|\| null/);
 });
 
 test("watch follow prefers the most recently marked player on the hole", async () => {
@@ -1334,4 +1357,13 @@ test('score weather strip is React-owned without legacy DOM replacement', () => 
   assert.doesNotMatch(controller, /querySelector\('\.weather-strip'\)/);
   assert.doesNotMatch(controller, /replaceWith\(fresh\)/);
   assert.doesNotMatch(controller, /GVDGWeather\.buildWeatherStrip\(document/);
+});
+
+test('compact score names preserve mononyms and team labels and keep common surname particles and suffixes together', () => {
+  assert.deepEqual(scoreNameParts('Taylor Morgan', { type: 'player' }), { given: 'Taylor', surname: 'Morgan' });
+  assert.deepEqual(scoreNameParts('Ana María de la Cruz'), { given: 'Ana María', surname: 'de la Cruz' });
+  assert.deepEqual(scoreNameParts('Avery van der Meer Jr.'), { given: 'Avery', surname: 'van der Meer Jr.' });
+  assert.equal(scoreNameParts('Solo'), null);
+  assert.equal(scoreNameParts('Northern Lights', { type: 'pair', playerIndexes: [0, 1] }), null);
+  assert.equal(scoreNameParts('Northern Lights', { playerIndexes: [0, 1] }), null);
 });

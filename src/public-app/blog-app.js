@@ -22,24 +22,19 @@ export function BlogApp() {
       ])),
     h("section", { className: "construction-section", "data-react-blog": "coming-soon", key: "content" },
       h("div", { className: "construction-card" }, [
-        h("div", { className: "disc-icon", key: "icon" }, icon(Disc3, 72)),
+        h("div", { className: "disc-icon", key: "icon" }, icon(Disc3, 32)),
         h("h2", { className: "construction-heading", key: "heading" }, [
           "Blog ",
           h("span", { key: "soon" }, "Coming Soon"),
         ]),
         h("p", { className: "construction-text", key: "text" },
-          "We're working on something great! The GVDG blog will feature tournament recaps, course tips, member spotlights, and everything disc golf in Greenville. Stay tuned."),
-        h("div", { className: "progress-wrap", key: "progress" }, [
-          h("div", { className: "progress-label", key: "label" }, [
-            h("span", { key: "name" }, "Progress"),
-            h("span", { key: "value" }, "30%"),
+          "Club stories are coming here. In the meantime, browse upcoming rounds and recent results on the events page."),
+        h("div", { className: "blog-actions", key: "actions" }, [
+          h("a", { className: "back-btn", href: "events.html", key: "events" }, "Browse events"),
+          h("a", { className: "blog-home-link", href: "index.html", key: "back" }, [
+            h(MoveLeft, { "aria-hidden": "true", key: "icon", size: 18, strokeWidth: 2.5 }),
+            h("span", { key: "text" }, "Back to Home"),
           ]),
-          h("div", { className: "progress-track", key: "track" },
-            h("div", { className: "progress-fill" })),
-        ]),
-        h("a", { className: "back-btn", href: "index.html", key: "back" }, [
-          icon(MoveLeft),
-          h("span", { key: "text" }, "Back to Home"),
         ]),
       ])),
   ]);

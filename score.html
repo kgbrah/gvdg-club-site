@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=overlays-content">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#1A1A2E">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -15,6 +15,7 @@
     <script src="pwa.js" defer></script>
     <link rel="stylesheet" href="tokens.css">
     <link rel="stylesheet" href="watch-pairing.css">
+    <link rel="stylesheet" href="phone-activity.css">
     <script>try{var m=localStorage.getItem('theme')||'light';if(m==='dark')document.documentElement.setAttribute('data-theme','dark');var c=m==='dark'?'#0F0F1E':'#1A1A2E';var tags=document.getElementsByTagName('meta');for(var i=0;i<tags.length;i++){if(tags[i].getAttribute('name')==='theme-color')tags[i].setAttribute('content',c)}}catch(e){}</script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -69,7 +70,7 @@
             border-radius: 8px; background: var(--bg-primary); border: 1px solid var(--border-color);
         }
         .topbar h1 { font-family: 'Bebas Neue', sans-serif; font-size: clamp(1.08rem, 4.8vw, 1.4rem); letter-spacing: 0.04em; font-weight: 400; flex: 1; line-height: 1; min-width: 0; overflow: hidden; }
-        .topbar h1 small { display: block; font-family: 'Archivo'; font-size: 0.58rem; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 600; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .topbar h1 small { display: block; font-family: 'Archivo', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 0.58rem; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 600; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .top-link {
             display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: 0 0 44px; padding: 0;
             border: 1px solid var(--border-color); border-radius: 11px; background: var(--bg-tertiary); color: var(--primary);
@@ -164,10 +165,10 @@
         }
         .center { text-align: center; }
         .stack > * + * { margin-top: 0.7rem; }
-        h2.section { font-family: 'Bebas Neue'; font-weight: 400; font-size: 1.5rem; letter-spacing: 0.5px; margin-bottom: 0.5rem; }
+        h2.section { font-family: 'Bebas Neue', sans-serif; font-weight: 400; font-size: 1.5rem; letter-spacing: 0.5px; margin-bottom: 0.5rem; }
         .btn {
             display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; width: 100%;
-            min-height: 50px; padding: 0 1rem; border: none; border-radius: 13px; font-family: 'Archivo'; font-weight: 700;
+            min-height: 50px; padding: 0 1rem; border: none; border-radius: 13px; font-family: 'Archivo', -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 700;
             font-size: 1rem; cursor: pointer; background: var(--primary-strong); color: #fff; transition: transform .06s, filter .15s;
         }
         .btn:active { transform: scale(0.98); }
@@ -178,7 +179,7 @@
         .btn.small { min-height: 44px; width: auto; font-size: 0.85rem; padding: 0 0.85rem; border-radius: 10px; }
         input.field {
             width: 100%; min-height: 50px; padding: 0 0.9rem; border: 1.5px solid var(--border-color);
-            border-radius: 12px; background: var(--bg-primary); color: var(--text-primary); font-size: 1rem; font-family: 'Archivo';
+            border-radius: 12px; background: var(--bg-primary); color: var(--text-primary); font-size: 1rem; font-family: 'Archivo', -apple-system, BlinkMacSystemFont, sans-serif;
         }
         input.field:focus { outline: none; border-color: var(--primary); }
         .course-range select.field {
@@ -286,7 +287,7 @@
         .ava:first-child { margin-left: 0; }
         /* ---- scorecard ---- */
         .hole-head { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.8rem; }
-        .hole-head .hnum { font-family: 'Bebas Neue'; font-size: 2.6rem; line-height: 0.9; color: var(--primary); }
+        .hole-head .hnum { font-family: 'Bebas Neue', sans-serif; font-size: 2.6rem; line-height: 0.9; color: var(--primary); }
         .hole-head .hmeta { text-align: right; }
         .hole-head .hpar { font-size: 1.5rem; font-weight: 700; }
         .round-tools {
@@ -637,7 +638,9 @@
         .throw-highlights.is-landscape video[data-orientation="portrait"],
         .throw-film-sheet.is-landscape .throw-film-preview[data-orientation="portrait"] { max-height: min(72dvh, 16rem); }
         .throw-highlight figcaption { font-size: 0.68rem; color: var(--text-muted); margin-top: 0.15rem; }
-        .throw-highlight-star { border: 0; background: transparent; color: var(--primary); font: 700 0.68rem Archivo, sans-serif; padding: 0.2rem 0; cursor: pointer; }
+        .throw-highlight-star { border: 0; background: transparent; color: var(--primary); font: 700 0.78rem Archivo, sans-serif; padding: 0.35rem 0.6rem 0.35rem 0; min-height: 44px; cursor: pointer; }
+        .throw-highlight > .btn { width: auto; min-height: 44px; margin-bottom: 0.25rem; }
+        .throw-highlight figcaption { font-size: 0.82rem; margin-top: 0.3rem; }
         .throw-film-sheet { display: flex; flex-direction: column; gap: 0.55rem; }
         .throw-film-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
         .throw-film-preview { width: 100%; }
@@ -986,15 +989,43 @@
         .watch-replay-play { background: var(--primary); color: var(--bg-secondary); border-color: var(--primary); }
         .watch-banner .live-dot.is-final { background: var(--text-muted); }
         .watch-view { display: grid; gap: 0.85rem; align-items: start; }
-        .watch-view > .card,
-        .watch-view > .weather-strip,
-        .watch-view > .pots-strip { margin: 0; }
-        .watch-banner { display: flex; align-items: center; gap: 0.55rem; margin: 0; font-weight: 800; }
-        .watch-banner .live-dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--primary); display: inline-block; }
-        .watch-banner .lb-conn { margin-left: auto; font-size: 0.78rem; color: var(--text-muted); }
+        .watch-overview { display: flex; align-items: center; gap: 0.5rem 0.85rem; flex-wrap: wrap; }
+        .watch-banner { display: flex; align-items: center; gap: 0.55rem; font-size: 0.82rem; min-height: 44px; flex-wrap: wrap; }
+        .watch-banner .live-dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--primary); display: inline-block; }
+        .watch-banner .lb-conn { display: inline-flex; gap: 0.33rem; align-items: center; border: 1px solid var(--border-color); border-radius: 999px; padding: 0.32rem 0.52rem; font-weight: 800; }
+        .watch-overview .watch-copy { margin-left: auto; min-height: 44px; width: auto; font-size: 0.8rem; }
+        .watch-layout { display: grid; grid-template-areas: "media" "holes" "results"; gap: 0.85rem; min-width: 0; }
+        .watch-holes { grid-area: holes; min-width: 0; }
+        .watch-hole-heading { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+        .watch-hole-heading .btn { width: auto; min-height: 44px; padding: 0.35rem 0.7rem; font-size: 0.8rem; }
+        .watch-hole-heading .btn[aria-pressed="true"] { color: var(--primary); border-color: var(--primary); }
+        .watch-pick-hole .holegrid { margin: 0; }
+        .watch-media { grid-area: media; display: flex; flex-wrap: wrap; align-items: start; gap: 0.5rem; min-width: 0; }
+        .watch-media:empty { display: none; }
+        .watch-media .throw-highlights { flex: 1 1 15rem; min-width: 0; margin: 0; }
+        .watch-media .round-talk { margin: 0; }
+        .watch-media .watch-manage-clips { width: auto; min-height: 44px; }
+        .watch-results { grid-area: results; min-width: 0; display: grid; gap: 0.85rem; align-content: start; }
+        .watch-results > .card, .watch-results > .weather-strip, .watch-results > .pots-strip { margin: 0; }
+        @media (min-width: 780px) {
+            .wrap:has(.watch-view) { max-width: 980px; }
+            .watch-layout { grid-template: "holes media" auto "holes results" 1fr / minmax(0, 1.18fr) minmax(0, 1fr); column-gap: 1rem; }
+            .watch-layout .watch-holes { align-self: start; }
+        }
         .watch-meta { margin: 0; }
         .watch-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.55rem; margin: 0; position: relative; z-index: 0; }
-        .watch-actions .btn { width: auto; flex: 0 0 auto; }
+        .watch-actions:empty { display: none; }
+        .watch-actions .btn { width: auto; min-height: 44px; flex: 0 0 auto; }
+        .watch-sharing { color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-secondary); }
+        .watch-sharing summary { padding: 0.72rem 0.85rem; min-height: 44px; font-weight: 800; cursor: pointer; }
+        .watch-sharing-form { display: grid; gap: 0.45rem; padding: 0.65rem 0.85rem 0.85rem; border-top: 1px solid var(--border-color); }
+        .watch-sharing-form select { width: 100%; min-height: 42px; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.42rem 0.56rem; background: var(--bg-primary); color: var(--text-primary); font: inherit; font-size: 0.87rem; }
+        .watch-sharing-form p { margin: 0; font-size: 0.82rem; line-height: 1.4; }
+        .watch-sharing-form label:has(input) { display: flex; align-items: center; gap: 0.4rem; min-height: 44px; padding-top: 0.35rem; font-weight: 700; }
+        .watch-sharing-form input[type="checkbox"] { accent-color: var(--primary); }
+        .watch-sharing-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; margin-top: 0.35rem; }
+        .watch-sharing-actions:empty { display: none; }
+        .watch-sharing-actions .btn { width: auto; min-height: 44px; }
         .join-requests { display: grid; gap: 0.65rem; }
         .join-request { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
         .join-request p { margin: 0; flex: 1 1 12rem; }
@@ -1091,6 +1122,12 @@
         .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 40; display: flex; flex-direction: column; justify-content: flex-end; }
         .sheet { background: var(--bg-secondary); border-radius: 20px 20px 0 0; max-height: 82vh; overflow-y: auto; padding: 1rem 0.9rem calc(1.4rem + var(--safe-bottom)); }
         .sheet .grab { width: 40px; height: 4px; border-radius: 4px; background: var(--border-color); margin: 0 auto 0.7rem; }
+        .round-tools-sheet { width: min(100%, 32rem); align-self: center; }
+        .round-tools-direct { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.65rem; }
+        .round-tools-direct .btn { min-height: 44px; flex: 1 1 9rem; width: auto; }
+        @media (min-width: 650px) {
+            .round-tools-sheet { border-radius: 18px; margin-block: auto; box-shadow: 0 18px 58px var(--card-shadow); }
+        }
         table.lb { width: 100%; border-collapse: collapse; }
         table.lb th { text-align: left; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); padding: 0.4rem 0.4rem; border-bottom: 2px solid var(--border-color); }
         table.lb td { padding: 0.5rem 0.4rem; border-bottom: 1px solid var(--border-color); font-size: 0.92rem; }
@@ -1175,7 +1212,10 @@
         .manage-pair-field { display: grid; gap: 0.35rem; }
         .manage-player-row { justify-content: space-between; }
         .manage-player-row .btn { width: auto; min-width: 96px; }
-        .score-dialog-overlay { z-index: 90; justify-content: center; padding: calc(1rem + var(--safe-top)) 1rem calc(1rem + var(--safe-bottom)); }
+        .score-dialog-overlay {
+            z-index: 90; justify-content: center;
+            padding: calc(1rem + var(--safe-top)) 1rem calc(1rem + max(var(--safe-bottom), var(--score-nav-bottom, 0px)));
+        }
         .score-dialog { width: min(100%, 430px); max-height: min(82vh, 560px); margin: auto; border-radius: 18px; padding: 1rem; box-shadow: 0 20px 60px var(--shadow); }
         .score-dialog-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 14px; background: var(--bg-tertiary); color: var(--primary); margin-bottom: 0.7rem; }
         .score-dialog-icon.danger { color: var(--over); }
@@ -1236,6 +1276,7 @@
         }
         .wrist-nav-btn:disabled, .wrist-step button:disabled { opacity: 0.4; }
     </style>
+    <link rel="stylesheet" href="score-polish.css">
 </head>
 <body data-api-base="">
     <div id="scoreRoot"></div>

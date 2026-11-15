@@ -1,5 +1,5 @@
 import React from "react";
-import { Camera, KeyRound, LockKeyhole } from "lucide-react";
+import { Camera, KeyRound, LockKeyhole, UserRound } from "lucide-react";
 
 const h = React.createElement;
 
@@ -10,13 +10,14 @@ function request(eventName, detail = {}) {
 function FormGroup({ label, htmlFor, hint, children }) {
   return h("div", { className: "form-group" }, [
     h("label", { className: "form-label", htmlFor, key: "label" }, label),
-    children,
-    hint ? h("p", { className: "form-hint", key: "hint" }, hint) : null,
+    React.cloneElement(children, { ...(hint ? { "aria-describedby": htmlFor + "Hint" } : {}), key: "input" }),
+    hint ? h("p", { className: "form-hint", id: htmlFor + "Hint", key: "hint" }, hint) : null,
   ]);
 }
 
-export function AuthIcon() {
-  return h("div", { className: "login-icon", "aria-hidden": "true" }, h(LockKeyhole, { size: 56, strokeWidth: 1.8 }));
+export function AuthIcon({ mode }) {
+  const Icon = mode === "profile" ? UserRound : mode === "pin" ? KeyRound : LockKeyhole;
+  return h("div", { className: "login-icon", "aria-hidden": "true" }, h(Icon, { size: 28, strokeWidth: 1.8 }));
 }
 
 function IconLabel({ icon, text }) {
@@ -268,7 +269,7 @@ export function ProfileForm({ active, state, onValuesChange }) {
         type: "file",
         id: "photoInput",
         accept: "image/png,image/jpeg,image/webp",
-        hidden: true,
+        className: "member-file-input",
         onChange: (event) => request("gvdg:member-profile-photo-chosen", { files: event.target.files }),
         key: "input",
       }),

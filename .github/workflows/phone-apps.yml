@@ -1,0 +1,63 @@
+name: Build native phone activity apps
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'phones/**'
+      - '.github/workflows/phone-apps.yml'
+  push:
+    paths:
+      - 'phones/**'
+      - '.github/workflows/phone-apps.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-phone-activity-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Android phone APK and tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install build SDK
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"'
+      - name: Build, lint and test
+        working-directory: phones/android
+        run: ./gradlew --no-daemon :app:assembleDebug :app:lintDebug :app:testDebugUnitTest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gvdg-activity-android-debug
+          path: phones/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+  ios:
+    name: iPhone simulator app and Live Activity extension
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test route math and build unsigned iPhone app
+        working-directory: phones/ios
+        run: |
+          swiftc GVDGPhone/ActivityTrack.swift Tests/RouteMathChecks.swift -o "$RUNNER_TEMP/gvdg-activity-math"
+          "$RUNNER_TEMP/gvdg-activity-math"
+          xcodebuild -project GVDGPhone.xcodeproj -scheme GVDGPhone -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO build
+      - name: Package the simulator app and verify the embedded extension
+        working-directory: phones/ios
+        run: |
+          test -d DerivedData/Build/Products/Debug-iphonesimulator/GVDGPhone.app/PlugIns/ActivityWidget.appex
+          ditto -c -k --keepParent DerivedData/Build/Products/Debug-iphonesimulator/GVDGPhone.app "$RUNNER_TEMP/GVDGActivity-simulator.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gvdg-activity-ios-simulator
+          path: ${{ runner.temp }}/GVDGActivity-simulator.zip
+          if-no-files-found: error
