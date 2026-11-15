@@ -221,7 +221,7 @@ export function PdgaDashboard({ pdgaNo, state, children, compact = false }) {
   const live = stats?.live_rating;
   const official = stats?.official_rating;
   const delta = live != null && official != null
-    ? `${live - official >= 0 ? "+" : ""}${live - official} vs official`
+    ? `${live - official >= 0 ? "+" : ""}${live - official} vs PDGA rating`
     : "";
 
   const history = events.length ? h(TournamentList, { events, key: "events" }) : null;
@@ -236,9 +236,9 @@ export function PdgaDashboard({ pdgaNo, state, children, compact = false }) {
   return dashboardShell("ready", [
     h("div", { className: "react-pdga-meta", key: "meta" }, `PDGA #${pdgaNo}`),
     h("div", { className: "dash-rating-row", key: "ratings" }, [
-      h(RatingTile, { label: "Live Rating", value: live, delta, live: true, key: "live" }),
-      h(RatingTile, { label: "Official", value: official, key: "official" }),
-      h(RatingTile, { label: "Peak", value: stats?.peak_rating, key: "peak" }),
+      h(RatingTile, { label: "PDGA live", value: live, delta, live: true, key: "live" }),
+      h(RatingTile, { label: "PDGA rating", value: official, key: "official" }),
+      h(RatingTile, { label: "PDGA peak", value: stats?.peak_rating, key: "peak" }),
       h(RatingTile, { label: "Events", value: stats?.events_count != null ? stats.events_count : events.length, key: "events" }),
     ]),
     ...extras,

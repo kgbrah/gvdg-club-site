@@ -139,7 +139,7 @@ function ratingLabel(round) {
   if (round.rating == null) return "Unrated";
   if (round.rating_method === "provisional") return "Provisional";
   if (round.rating_method === "layout") return "Layout estimate";
-  if (round.rating_method === "stable") return "Club estimate";
+  if (round.rating_method === "stable") return "Round rating";
   if (round.rating_source === "estimated") return "Est.";
   return "Archived rating";
 }
@@ -185,7 +185,7 @@ function RatingPanel({ kind, title, group, onLoadMore }) {
       ]),
       h("div", { className: "club-rating-live", key: "live" }, [
         h("div", { className: "club-rating-number", key: "number" }, ratingValue(group.liveRating)),
-        h("div", { className: "club-rating-live-label", key: "label" }, "Club estimate"),
+        h("div", { className: "club-rating-live-label", key: "label" }, "Club rating"),
         h("div", { className: "club-rating-count", key: "evidence" }, group.liveRating == null
           ? group.eligibleRated + " of " + group.minimumRated + " needed in the past year"
           : group.eligibleRated + " eligible rated rounds in the past year"),
