@@ -12,15 +12,15 @@ Each lane records the actual states and interactions checked. A successful build
 | --- | --- | --- | --- |
 | Reviewed member Home | Continue round, progress checklist, account rows, course conditions, history, rating | Sol stats / root | Live in PR95; deployment 43669165687 and both post-deploy checks passed |
 | Reviewed Practice and My bag | Putting, fieldwork, disc inventory, forms, export and removal | Sol stats / root | Live in PR95; 320/390/1280 interactions verified |
-| Remaining member app | All 21 MEMBER_DESTINATIONS, auth/profile/passkeys, help/install, nested forms and dialogs | Sol stats | Active in member-surfaces worktree |
-| Admin | All 24 ADMIN_DESTINATIONS, event workspace, reports, moderation, nested forms and dialogs | Sol recovery | Active in admin-polish worktree |
+| Remaining member app | All 21 MEMBER_DESTINATIONS, auth/profile/passkeys, help/install, nested forms and dialogs | Sol stats | Integrated;21routes×3viewports and representative nested flows passed |
+| Admin | All 24 ADMIN_DESTINATIONS, event workspace, reports, moderation, nested forms and dialogs | Sol recovery | Integrated;24routes×3viewports and operator/finance/form workflows passed |
 | Scorecard and round lifecycle | See scorecard matrix below | Sol watch | Highest-priority active lane |
-| Public Home | index.html; navigation, hero, memberships/dues/donate, course modal/carousel, feeds and footer | Root audit, builder to follow | Inventory complete; visual pass pending |
-| Events | events.html; hub, schedule, event/league details, live standings/chat, registrations, previous results, bag tags, campaigns and minutes | Root audit, builder to follow | Pending |
-| Shop | pro-shop.html; search/filter, product, cart, checkout states and wallet/payment entry | Root audit, builder to follow | Pending |
-| Public supporting pages | gvdg-blog.html, ryder-cup.html, scoring-app.html, tee-sign-preview.html | Root audit, builder to follow | Pending |
+| Public Home | index.html; navigation, hero, memberships/dues/donate, course modal/carousel, feeds and footer | Sol stats / root | Inventory complete; visual pass pending |
+| Events | events.html; hub, schedule, event/league details, live standings/chat, registrations, previous results, bag tags, campaigns and minutes | Sol stats / root | Pending |
+| Shop | pro-shop.html; search/filter, product, cart, checkout states and wallet/payment entry | Sol stats / root | Pending |
+| Public supporting pages | gvdg-blog.html, ryder-cup.html, scoring-app.html, tee-sign-preview.html | Sol stats / root | Pending |
 | Compatibility | archive.html redirects to the existing Events previous-results anchor | Root | Redirect target verified at390 and1280 |
-| Design references | design.html, design-field.html, design-night.html | Root audit, builder to follow | Chooser and both reference layouts pass390/1280 smoke; nested links queued for public lane |
+| Design references | design.html, design-field.html, design-night.html | Sol stats / root | Chooser and both reference layouts pass390/1280 smoke; nested links queued for public lane |
 
 ## Scorecard matrix
 
@@ -38,4 +38,4 @@ Root integration must verify the combined generated build and real service worke
 
 ## Outstanding original roadmap work
 
-Archive export/reimport WIP is preserved in archive worktree (0057 reserved) while UI polish takes priority. Native phone source and CI builds are complete (PR94), but pairing presentation awaits polished member/scorer placement; physical validation and signing remain separate. No broader UDisc parity claim is made from these software checks alone.
+Archive export/reimport resumed in archive worktree (0057 reserved). Native phone source and CI builds are complete (PR94), but pairing presentation awaits polished member/scorer placement; physical validation and signing remain separate. No broader UDisc parity claim is made from these software checks alone.

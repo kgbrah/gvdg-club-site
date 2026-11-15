@@ -13,6 +13,7 @@ import { selectDashboardTab, requestLogout } from "./dashboard-shell.js";
 import { useMemberContext } from "./member-context.js";
 import { DiscColorPicker } from "./disc-color-picker.js";
 import { DashboardThemeBuilder } from "./dashboard-theme.js";
+import { MemberPhoneActivityPanel } from "./phone-activity-panel.js";
 
 const h = React.createElement;
 const PASSKEY_STATE_EVENT = "gvdg:member-passkey-state";
@@ -127,6 +128,7 @@ export function MemberAccountPage() {
       ]),
       h(MemberLinkSection, { title: "Devices", "data-member-account-devices": "ready", key: "devices" }, [
         h(MemberLinkRow, { tab: "install", title: "Install app", detail: "Add GVDG to your home screen", icon: Smartphone, key: "install" }),
+        h(MemberPhoneActivityPanel, { key: "phone-activity" }),
       ]),
       h(MemberLinkSection, { title: "Support", key: "support" }, [
         h(MemberLinkRow, { title: "Club website", icon: Globe, href: "index.html", key: "site" }),
