@@ -53,6 +53,8 @@ async function open(glass, mode, { reduced = false } = {}) {
   await page.waitForSelector("body.score-glove.player-theme-active");
   await page.locator(".score-glove-dock .stepper").first().waitFor();
   await page.evaluate(() => document.fonts.ready);
+  // The satellite imagery is fetched live; wait for it so screenshots and pixel checks never catch a grey frame.
+  await page.locator(".hole-map-satellite").first().evaluate((image) => image.decode()).catch(() => {});
   await page.waitForTimeout(600);
   return { page, context, errors };
 }
@@ -76,6 +78,41 @@ try {
       assert.equal(state.overflow, false);
       await page.screenshot({ path: join(images, "scorecard-" + glass + "-" + mode + "-390.png"), animations: "disabled" });
       assert.deepEqual(errors, []);
+      await context.close();
+    }
+  }
+
+  // The map and its controls are never glassed or tinted: the map frame renders the same pixels with glass Off
+  // and Frosted in both themes, and no ancestor of the imagery carries a filter.
+  for (const mode of ["dark", "light"]) {
+    const shots = {};
+    for (const glass of ["off", "frosted", "60-24"]) {
+      const { page, context } = await open(glass, mode);
+      const chain = await page.evaluate(() => {
+        const out = [];
+        for (let el = document.querySelector(".hole-map-satellite"); el && el !== document.body; el = el.parentElement) {
+          const s = getComputedStyle(el);
+          if ((s.backdropFilter && s.backdropFilter !== "none") || (s.filter && s.filter !== "none")) out.push(el.className);
+        }
+        return out;
+      });
+      assert.deepEqual(chain, [], "no filter on the map ancestors (" + glass + " " + mode + ")");
+      const naturalWidth = await page.locator(".hole-map-satellite").first().evaluate((image) => image.naturalWidth);
+      assert.ok(naturalWidth > 0, "satellite tiles loaded (" + glass + " " + mode + ")");
+      shots[glass] = (await page.locator(".hole-map-frame").first().screenshot({ animations: "disabled" })).toString("base64");
+      if (glass !== "off") {
+        const diff = await page.evaluate(async ([a, b]) => {
+          const load = (data) => new Promise((resolve) => { const img = new Image(); img.onload = () => resolve(img); img.src = "data:image/png;base64," + data; });
+          const [one, two] = await Promise.all([load(a), load(b)]);
+          const read = (img) => { const c = document.createElement("canvas"); c.width = img.width; c.height = img.height; const x = c.getContext("2d"); x.drawImage(img, 0, 0); return x.getImageData(0, 0, c.width, c.height).data; };
+          const da = read(one); const db = read(two);
+          let total = 0;
+          for (let i = 0; i < da.length; i += 4) total += Math.abs(da[i] - db[i]) + Math.abs(da[i + 1] - db[i + 1]) + Math.abs(da[i + 2] - db[i + 2]);
+          return { size: [one.width, one.height, two.width, two.height], mean: total / (da.length / 4 * 3) };
+        }, [shots.off, shots[glass]]);
+        assert.deepEqual(diff.size.slice(0, 2), diff.size.slice(2), "map frame size unchanged " + glass + " " + mode);
+        assert.ok(diff.mean < 1, "map pixels identical with glass " + glass + " vs Off (" + mode + "): mean diff " + diff.mean.toFixed(2));
+      }
       await context.close();
     }
   }
