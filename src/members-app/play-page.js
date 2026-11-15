@@ -519,6 +519,10 @@ export function MemberPlayPage() {
       ]),
       h("span", { className: "player-keep-score-go", key: "go" }, "Start"),
     ]),
+    token ? h("div", { className: "dashboard-actions", key: "practice-tools" }, [
+      h(MoreLink, { tab: "practice", key: "practice" }),
+      h(MoreLink, { tab: "my-bag", key: "bag" }),
+    ]) : null,
     h(PlayJoinCard, { key: "join" }),
     h(CourseSearch, { key: "courses" }),
     h(CourseTrafficCard, { key: "traffic" }),

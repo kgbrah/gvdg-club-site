@@ -3,6 +3,8 @@ const entry = (key, label, group, options = {}) => ({ key, label, group, hash: k
 export const MEMBER_DESTINATIONS = [
   entry("overview", "Home", "overview", { hash: "home" }),
   entry("play", "Play", "play", { terms: "start join watch round code course map recent replay film" }),
+  entry("practice", "Practice", "play", { terms: "putting fieldwork measured distance throw session repetitions attempts trends putting drill" }),
+  entry("my-bag", "My bag", "play", { terms: "disc inventory equipment mold manufacturer brand model plastic weight archive" }),
   entry("events", "Events", "events", { terms: "register registration sign up upcoming entries schedule tournament" }),
   entry("season", "Stats", "season", { hash: "stats", terms: "season history score metrics shot putting rating trend filter export" }),
   entry("more", "Club", "more", { hash: "club-hub" }),

@@ -12,6 +12,8 @@ import { useSessionToken } from "./session-token.js";
 import { currentDashboardRoute } from "./dashboard-router.js";
 import { MemberPlayPage, UdiscHistory } from "./play-page.js";
 import { MemberRegistrationPanel, RegistrationProvider } from "./registration-panel.js";
+import { MemberBagPage, MemberPracticePage } from "./practice-panels.js";
+import { usePracticeWorkspace } from "./practice-workspace.js";
 import { MemberSeasonPage } from "./season-page.js";
 import { MemberTeeSignsPanel } from "./tee-signs-panel.js";
 
@@ -21,6 +23,7 @@ export function MemberDashboardApp() {
   const token = useSessionToken();
   const [route, setRoute] = React.useState(currentDashboardRoute);
   const tab = route.tab;
+  const practice = usePracticeWorkspace(token, tab === "practice" || tab === "my-bag");
   React.useEffect(() => {
     const update = () => setRoute(currentDashboardRoute());
     window.addEventListener("gvdg:dashboard-tab-selected", update);
@@ -59,6 +62,8 @@ export function MemberDashboardApp() {
     tab === "standings" ? h(ActiveStandingsPanel, { key: "standings" }) : null,
     tab === "leagues" ? h(DoublesLeaguePanel, { key: "leagues" }) : null,
     tab === "results" ? h(MemberSeasonPage, { key: "results", resultsOnly: true }) : null,
+    tab === "practice" && token ? h(MemberPracticePage, { workspace: practice, key: "practice" }) : null,
+    tab === "my-bag" && token ? h(MemberBagPage, { workspace: practice, key: "my-bag" }) : null,
     tab === "imports" && token ? h(UdiscHistory, { key: "imports", token }) : null,
   ]);
 }
