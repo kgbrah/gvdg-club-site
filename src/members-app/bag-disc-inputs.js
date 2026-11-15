@@ -134,7 +134,7 @@ export function BagDiscWeight({ value, onChange }) {
         h(ChevronDown, { "aria-hidden": true, key: "icon", size: 18 }),
         h("select", {
           "aria-label": "Common weights", key: "weights", title: "Common weights",
-          value: COMMON_WEIGHTS.includes(Number(value)) ? String(value) : "",
+          value: COMMON_WEIGHTS.includes(Number(value)) ? Number(value) : "",
           onChange: (event) => { if (event.target.value) onChange(event.target.value); },
         }, [
           h("option", { disabled: true, key: "choose", value: "" }, "Common weights"),
@@ -158,8 +158,11 @@ export function BagDiscVoice({ catalog, form, isCurrentSession, onFill }) {
   if (!voice.supported) return h("p", { className: "bag-disc-voice-fallback" },
     "Voice entry is unavailable in this browser. You can type or use your keyboard’s dictation.");
 
+  const cancel = h("button", {
+    className: "bag-disc-button", key: "cancel", type: "button", onClick: () => voice.cancel(),
+  }, "Cancel voice");
   return h("section", { className: "bag-disc-voice", "aria-label": "Voice entry" }, [
-    h("div", { className: "bag-disc-voice-actions", key: "actions" }, [
+    !review ? h("div", { className: "bag-disc-voice-actions", key: "actions" }, [
       !recording && !review ? h("button", {
         "aria-describedby": id + "-hint",
         className: "bag-disc-button", key: "start", type: "button", onClick: voice.start,
@@ -167,11 +170,9 @@ export function BagDiscVoice({ catalog, form, isCurrentSession, onFill }) {
       recording && h("button", {
         className: "bag-disc-button", disabled: voice.phase !== "listening", key: "stop", type: "button", onClick: voice.stop,
       }, h(Square, { "aria-hidden": true, size: 14 }), " Stop listening"),
-      (recording || review) && h("button", {
-        className: "bag-disc-button", key: "cancel", type: "button", onClick: () => voice.cancel(),
-      }, "Cancel voice"),
-    ]),
-    h("p", { id: id + "-hint", key: "hint" }, "Try “Innova Star Destroyer, 175 grams.” Your browser may process audio online."),
+      recording ? cancel : null,
+    ]) : null,
+    !review ? h("p", { id: id + "-hint", key: "hint" }, "Try “Innova Star Destroyer, 175 grams.” Your browser may process audio online.") : null,
     voice.message ? h("p", { className: "bag-disc-voice-status", key: "status", role: "status" }, voice.message) : null,
     review ? h("div", { className: "bag-disc-voice-review", key: "review" }, [
       h("div", { className: "member-practice-field", key: "transcript" }, [
@@ -185,14 +186,17 @@ export function BagDiscVoice({ catalog, form, isCurrentSession, onFill }) {
         h("dt", { key: "label" }, DETAIL_LABELS[field]),
         h("dd", { key: "value" }, details[field] + (field === "weightGrams" ? " g" : "")),
       ]))) : h("p", { key: "manual" }, "For custom discs, say “brand” and “model” before the names, or type the details below."),
-      fields.length ? h("button", {
-        className: "bag-disc-button", key: "fill", type: "button",
-        onClick: () => {
-          if (!isCurrentSession()) { voice.cancel(); return; }
-          onFill(details);
-          voice.cancel("Disc details added to the form. Review them, then save the disc.");
-        },
-      }, "Fill empty fields") : null,
+      h("div", { className: "bag-disc-voice-actions", key: "review-actions" }, [
+        fields.length ? h("button", {
+          className: "bag-disc-button", key: "fill", type: "button",
+          onClick: () => {
+            if (!isCurrentSession()) { voice.cancel(); return; }
+            onFill(details);
+            voice.cancel("Disc details added to the form. Review them, then save the disc.");
+          },
+        }, "Fill empty fields") : null,
+        cancel,
+      ]),
     ]) : null,
   ]);
 }

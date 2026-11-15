@@ -118,6 +118,7 @@ function ExportPractice({ workspace }) {
 function DiscForm({ initial, onSave, onClose, savedDiscs, sessionToken }) {
   const [form, setForm] = React.useState(() => initial ? { ...initial.record, weightGrams: initial.record.weightGrams ?? "" } : EMPTY_DISC);
   const [error, setError] = React.useState("");
+  const notesId = React.useId();
   const catalog = discCatalog(savedDiscs);
   const { brands, models, plastics } = discChoices(catalog, form.brand, form.model);
   const isCurrentSession = () => Boolean(sessionToken) && readMemberToken() === sessionToken;
@@ -155,7 +156,11 @@ function DiscForm({ initial, onSave, onClose, savedDiscs, sessionToken }) {
         onChange: (value) => setForm((current) => ({ ...current, weightGrams: value })),
       }),
     ]),
-    field("Notes", updateField(form, setForm, "notes", { rows: 2, maxLength: 480 })),
+    h("div", { className: "member-practice-field", key: "notes" }, [
+      h("label", { htmlFor: notesId, key: "label" }, "Notes"),
+      h("textarea", { className: "form-input", id: notesId, key: "text",
+        ...updateField(form, setForm, "notes", { rows: 2, maxLength: 480 }) }),
+    ]),
     !form.archived ? h("label", { key: "in-bag" }, [
       h("input", { type: "checkbox", key: "check", checked: form.inBag, onChange: (event) => {
         const inBag = event.target.checked;
