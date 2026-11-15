@@ -16,6 +16,28 @@ export function normalizeRoundMessage(raw) {
   };
 }
 
+export function messageSortId(message) {
+  const id = Number(message && message.id);
+  return Number.isFinite(id) ? id : 0;
+}
+
+/** Messages the other side sent that this viewer has not opened. Card viewers only see watcher messages. */
+export function unseenRoundMessages(messages, seenId, viewer) {
+  const seen = Number(seenId) || 0;
+  const want = viewer === "watch" ? "card" : "watch";
+  return (Array.isArray(messages) ? messages : []).filter((message) => {
+    if (!message || message.side !== want) return false;
+    return messageSortId(message) > seen;
+  });
+}
+
+export function roundMessageNotice(message) {
+  if (!message) return null;
+  const who = String(message.authorName || "").trim() || "Someone";
+  const aimed = message.toName ? " to " + message.toName : "";
+  return { title: who + aimed, body: String(message.body || "") };
+}
+
 export function mergeRoundMessages(current, incoming) {
   const byId = new Map();
   for (const row of [...(Array.isArray(current) ? current : []), ...(Array.isArray(incoming) ? incoming : [])]) {

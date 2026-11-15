@@ -339,14 +339,6 @@ function RoundToolActions(props) {
       },
       [icon(Lock), h("span", { key: "label" }, props.rangeLockOn ? "Distance alerts on" : "Distance alerts")],
     ),
-    !props.offline && h(RoundTalk, {
-      inline: true,
-      key: "talk",
-      live: true,
-      players: (Array.isArray(props.rows) ? props.rows : []).map((row) => row && row.label).filter(Boolean),
-      viewer: "card",
-      viewerName: ((Array.isArray(props.rows) ? props.rows : []).find((row) => row && row.isMe) || {}).label || "",
-    }),
     showManage
       ? h("button", { className: "score-glove-tool", key: "manage", type: "button", onClick: props.onManagePlayers }, [
         icon(Settings2),
@@ -400,6 +392,14 @@ function RoundTools(props) {
         type: "button", className: "score-glove-tool" + (props.measuring ? " active" : ""),
         "aria-label": props.measureLabel || "Measure", "aria-pressed": Boolean(props.measuring), onClick: props.onMeasure,
       }, icon(Ruler), h("span", null, props.measureLabel || "Measure")),
+      !props.offline && h(RoundTalk, {
+        inline: true,
+        key: "talk",
+        live: true,
+        players: (Array.isArray(props.rows) ? props.rows : []).map((row) => row && row.label).filter(Boolean),
+        viewer: "card",
+        viewerName: ((Array.isArray(props.rows) ? props.rows : []).find((row) => row && row.isMe) || {}).label || "",
+      }),
       h("button", { type: "button", className: "score-glove-tool", "aria-label": "Round tools", "aria-haspopup": "dialog", onClick: () => setOpen(true) },
         icon(Settings2), h("span", null, "Tools")),
     ),

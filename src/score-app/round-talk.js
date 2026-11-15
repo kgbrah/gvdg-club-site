@@ -7,11 +7,60 @@ import { resolveApiBase } from "../shared/api-base.js";
 import { liveRoundCodeFromSearch } from "../shared/live-watch.js";
 import { readMemberToken } from "../shared/member-session.js";
 import { readOpenPlayToken } from "./open-play-session.js";
-import { ROUND_MESSAGE_MAX, mergeRoundMessages, normalizeRoundMessage } from "../shared/round-messages-model.js";
+import { ROUND_MESSAGE_MAX, mergeRoundMessages, messageSortId, normalizeRoundMessage, roundMessageNotice, unseenRoundMessages } from "../shared/round-messages-model.js";
 
 const h = React.createElement;
 const NAME_KEY = "gvdg_chat_name";
 const POLL_MS = 2000;
+const TALK_TAG = "gvdg-card-talk";
+
+function seenKey(path) { return "gvdg.roundTalkSeen:" + path; }
+function notifiedKey(path) { return "gvdg.roundTalkNotified:" + path; }
+
+function readStoredId(key) {
+  try {
+    const id = Number(localStorage.getItem(key));
+    return Number.isFinite(id) ? id : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeStoredId(key, id) {
+  try { localStorage.setItem(key, String(id)); } catch { /* private mode */ }
+}
+
+export async function postCardMessageNotice(note, pageUrl) {
+  if (!note || typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  if (typeof navigator === "undefined" || !navigator.serviceWorker) return;
+  const reg = await navigator.serviceWorker.ready;
+  if (!reg || typeof reg.showNotification !== "function") return;
+  const origin = (typeof location !== "undefined" && location.origin) || "";
+  await reg.showNotification(note.title, {
+    body: note.body,
+    tag: TALK_TAG,
+    renotify: true,
+    icon: origin + "/img/icons/app-icon-192.png",
+    badge: origin + "/img/icons/notification-badge.png",
+    data: { kind: "talk", url: pageUrl || "/score.html" },
+  });
+}
+
+export async function closeCardMessageNotice() {
+  if (typeof navigator === "undefined" || !navigator.serviceWorker) return;
+  const reg = await navigator.serviceWorker.ready;
+  if (!reg || typeof reg.getNotifications !== "function") return;
+  const notes = await reg.getNotifications({ tag: TALK_TAG });
+  for (const note of notes) note.close();
+}
+
+function scoreTalkUrl() {
+  if (typeof location === "undefined") return "/score.html";
+  const path = String(location.pathname || "");
+  const search = String(location.search || "");
+  const url = (path.startsWith("/") ? path : "/" + path) + search;
+  return url.startsWith("/score.html") && !url.includes("://") ? url : "/score.html";
+}
 
 export function messagePathFromLocation(loc) {
   const params = new URLSearchParams((loc && loc.search) || "");
@@ -101,12 +150,32 @@ export function RoundTalk({ inline, live, players, viewer, viewerName }) {
   const [toName, setToName] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [note, setNote] = React.useState("");
-  const [seen, setSeen] = React.useState(0);
+  const [seen, setSeen] = React.useState(() => readStoredId(seenKey(path)));
   const [toast, setToast] = React.useState(null);
   const listRef = React.useRef(null);
-  const seeded = React.useRef(false);
-  const seenRef = React.useRef(0);
+  const notifiedRef = React.useRef(readStoredId(notifiedKey(path)));
+  const seenRef = React.useRef(seen);
+  const latestUnseenRef = React.useRef(null);
   const names = [...new Set((Array.isArray(players) ? players : []).map((player) => String(player || "").trim()).filter(Boolean))];
+  const unseen = unseenRoundMessages(messages, seen, viewer);
+  const latestUnseen = unseen.length ? unseen[unseen.length - 1] : null;
+  const latestUnseenId = latestUnseen ? messageSortId(latestUnseen) : 0;
+  latestUnseenRef.current = latestUnseen;
+
+  function markSeen(rows) {
+    const last = (Array.isArray(rows) ? rows : []).reduce((max, message) => Math.max(max, messageSortId(message)), 0);
+    if (last > seenRef.current) {
+      seenRef.current = last;
+      setSeen(last);
+      writeStoredId(seenKey(path), last);
+    }
+    if (last > notifiedRef.current) {
+      notifiedRef.current = last;
+      writeStoredId(notifiedKey(path), last);
+    }
+    setToast(null);
+    void closeCardMessageNotice();
+  }
 
   React.useEffect(() => {
     if (viewerName) setName(viewerName);
@@ -130,48 +199,43 @@ export function RoundTalk({ inline, live, players, viewer, viewerName }) {
     if (!path || !live) return undefined;
     const ac = new AbortController();
     void reload(ac.signal);
-    const timer = window.setInterval(() => {
-      if (typeof document !== "undefined" && document.hidden) return;
-      void reload(ac.signal);
-    }, POLL_MS);
+    const timer = window.setInterval(() => { void reload(ac.signal); }, POLL_MS);
+    function onShow() {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") void reload(ac.signal);
+    }
+    if (typeof document !== "undefined") document.addEventListener("visibilitychange", onShow);
     return () => {
       ac.abort();
       window.clearInterval(timer);
+      if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onShow);
     };
   }, [live, path, reload]);
 
   React.useEffect(() => {
-    if (open || seeded.current || !messages.length) return;
-    seeded.current = true;
-    seenRef.current = Number(messages[messages.length - 1].id) || messages.length;
-    setSeen(seenRef.current);
-  }, [messages, open]);
-
-  React.useEffect(() => {
-    if (!open || !listRef.current) return;
-    listRef.current.scrollTop = listRef.current.scrollHeight;
-    const last = messages.length ? Number(messages[messages.length - 1].id) || messages.length : 0;
-    seenRef.current = last;
-    setSeen(last);
-    setToast(null);
+    if (!open) return;
+    if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+    markSeen(messages);
   }, [open, messages]);
 
   React.useEffect(() => {
-    if (open || !seeded.current || !messages.length) return undefined;
-    const latest = messages[messages.length - 1];
-    const id = Number(latest.id) || messages.length;
-    if (id <= seenRef.current) return undefined;
-    setToast(latest);
-    const timer = window.setTimeout(() => setToast(null), 6000);
+    if (open || latestUnseenId <= notifiedRef.current) return undefined;
+    const message = latestUnseenRef.current;
+    if (!message) return undefined;
+    notifiedRef.current = latestUnseenId;
+    writeStoredId(notifiedKey(path), latestUnseenId);
+    setToast(message);
+    if (typeof document !== "undefined" && document.hidden) {
+      void postCardMessageNotice(roundMessageNotice(message), scoreTalkUrl()).catch(() => {});
+    }
+    const timer = window.setTimeout(() => setToast(null), 8000);
     return () => window.clearTimeout(timer);
-  }, [messages, open]);
+  }, [latestUnseenId, open, path]);
 
   const lift = Boolean(inline && (open || toast));
   const aboveDock = useAboveDock(lift);
 
   if (!path || !live) return null;
-  const last = messages.length ? Number(messages[messages.length - 1].id) || messages.length : 0;
-  const unread = !open && last > seen ? last - seen || messages.length : 0;
+  const unread = open ? 0 : unseen.length;
   const showName = viewer !== "card" && !viewerName;
 
   async function send(event) {
@@ -264,7 +328,8 @@ export function RoundTalk({ inline, live, players, viewer, viewerName }) {
       onClick: () => setOpen((current) => !current),
       type: "button",
     }, [
-      h(MessageCircle, { "aria-hidden": "true", focusable: "false", key: "icon", size: 22, strokeWidth: 2.4 }),
+      h(MessageCircle, { "aria-hidden": "true", focusable: "false", key: "icon", size: inline ? 18 : 22, strokeWidth: 2.4 }),
+      inline ? h("span", { key: "label" }, "Messages") : null,
       unread ? h("span", { className: "round-talk-badge", key: "badge" }, unread > 9 ? "9+" : String(unread)) : null,
     ]),
     inline ? null : panelNode,

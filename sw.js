@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v253";
+const CACHE = "gvdg-club-v254";
 const OFFLINE_PAGE = "gvdg-members.html";
 const ASSETS = [
   "tokens.css",
@@ -256,7 +256,8 @@ async function focusScore(target) {
 
 self.addEventListener("notificationclick", (event) => {
   const data = event.notification.data || {};
-  if (data.kind === "range") {
+  if (data.kind === "range" || data.kind === "talk") {
+    if (data.kind === "talk") event.notification.close();
     event.waitUntil(focusScore(rangeNotificationUrl(data.url)));
     return;
   }

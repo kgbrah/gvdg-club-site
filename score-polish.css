@@ -755,6 +755,35 @@ body.score-glove.player-theme-page .score-bottom-layout .score-glove-dock { back
 .score-bottom-layout .round-quick-tools .score-glove-tool span { display: inline; }
 .score-bottom-layout .round-quick-tools .score-glove-tool svg { color: var(--secondary-text); flex: none; }
 .score-bottom-layout .round-quick-tools .score-glove-tool.active { color: var(--primary-strong); }
+.score-bottom-layout .round-quick-tools .round-talk {
+  display: flex;
+  flex: 1 1 auto;
+  margin: 0;
+  min-width: 0;
+  position: static;
+}
+.score-bottom-layout .round-quick-tools .round-talk-bubble {
+  position: relative;
+  width: auto;
+  height: auto;
+  min-width: 44px;
+  min-height: 44px;
+  flex: 1 1 auto;
+  margin: 0;
+  padding: .25rem .3rem;
+  gap: .26rem;
+  border: 0;
+  border-radius: .35rem;
+  background: transparent;
+  color: var(--text-primary);
+  font: 720 .78rem/1.15 var(--score-font);
+}
+.score-bottom-layout .round-quick-tools .round-talk-bubble.has-new { color: var(--primary-strong); }
+.score-bottom-layout .round-quick-tools .round-talk-badge {
+  position: absolute;
+  top: 0.05rem;
+  right: 0.02rem;
+}
 .score-bottom-layout .score-glove-scores { max-height: var(--score-tray-limit); overflow: auto; scrollbar-width: thin; }
 .score-bottom-layout .score-glove-dock .score-entry-card { margin: 0; }
 .score-bottom-layout .score-glove-dock .prow { min-height: 47px; padding: .11rem 0; border-radius: 0; }
@@ -814,6 +843,7 @@ body.score-glove.player-theme-page .score-bottom-layout .score-glove-dock { back
   }
   .score-bottom-layout .score-glove-dock .totbar .v { font-size: .91rem; }
   .score-bottom-layout .score-glove-dock .round-quick-tools { flex-wrap: nowrap; }
+  .score-bottom-layout .round-quick-tools .round-talk { flex: 1 1 0; }
   .score-bottom-layout .round-quick-tools .score-glove-tool { flex: 1 1 0; padding-inline: .14rem; font-size: .72rem; }
   .score-bottom-layout .round-quick-tools .score-glove-tool svg { display: none; }
   .round-details :is(.live-stats-mix-legend, .live-stats-grid) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
