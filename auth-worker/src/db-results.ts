@@ -1,6 +1,6 @@
 import type { D1Like, D1StatementLike } from "./db-types.js";
 import type { RatingStream } from "./rating-engine.js";
-import { singlesStrokeEvidence } from "./rating-source.js";
+import { COMPETITION_FIELD_REVISION, singlesStrokeEvidence } from "./rating-source.js";
 import { makeRatingValidator, RATING_EVIDENCE_FIELDS } from "./ratings.js";
 
 async function validateListedResultRatings(db: D1Like, stream: RatingStream, rows: Record<string, unknown>[]) {
@@ -8,7 +8,7 @@ async function validateListedResultRatings(db: D1Like, stream: RatingStream, row
   return Promise.all(rows.map(async (row) => {
     const { source_result_id, source_fingerprint, rating_total, rating_to_par, layout_revision, rating_method, anchor_count,
       propagator_count, baseline_event_id, unrated_reason, round_date, wind_gust_mph, event_status, starts_at,
-      format, play_format, scoring_config, started_at, layout_holes, ...result } = row;
+      format, play_format, scoring_config, started_at, layout_holes, field_revision, ...result } = row;
     if (!singlesStrokeEvidence(row, "competition") || (source_result_id != null && !await validate(row, stream))) {
       result.round_rating = null;
       if (stream === "competition") result.rating = null;
@@ -71,7 +71,7 @@ export function createResultStmt(db: D1Like, r: ResultInput): D1StatementLike {
 }
 
 const COMPETITION_RATING_FIELDS = `e.status AS event_status, e.starts_at, e.format, ec.play_format,
-  ec.live_scoring_config AS scoring_config, ${RATING_EVIDENCE_FIELDS}`;
+  ec.live_scoring_config AS scoring_config, ${COMPETITION_FIELD_REVISION}, ${RATING_EVIDENCE_FIELDS}`;
 const COMPETITION_RATING_JOINS = `LEFT JOIN event_config ec ON ec.event_id = e.id
   LEFT JOIN round_ratings rr ON rr.event_id = res.event_id AND rr.member_id = res.member_id AND rr.stream = 'competition'`;
 

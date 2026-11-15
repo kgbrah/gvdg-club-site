@@ -5,10 +5,12 @@ import { readArchivedRatingHoles, ratingGeometrySnapshot, ratingLayoutRevision, 
 type Row = Record<string, unknown>;
 export const MAX_RATING_ROUND_RESULTS = 240;
 
+export const COMPETITION_FIELD_REVISION = "COALESCE((SELECT revision FROM rating_event_revisions WHERE event_id = e.id), 0) AS field_revision";
+
 export const CURRENT_RESULT_FIELDS = {
   competition: `res.id, res.member_id, res.place, res.total, res.to_par, res.scorecard, res.created_at,
     res.scoring_group, res.match_result, e.id AS event_id, e.status AS event_status, e.starts_at,
-    e.date AS event_date, e.format, ec.play_format, ec.live_scoring_config AS scoring_config`,
+    e.date AS event_date, e.format, ec.play_format, ec.live_scoring_config AS scoring_config, ${COMPETITION_FIELD_REVISION}`,
   casual: `res.id, res.member_id, res.place, res.total, res.to_par, res.scorecard, res.created_at,
     res.scoring_group, res.match_result, cround.round_code, cround.started_at, cround.finalized_at,
     cround.holes AS layout_holes, cround.scoring_config`,
@@ -26,7 +28,7 @@ export const RATING_SOURCE_ROWS = {
   competition: `SELECT res.id, res.member_id, res.name, res.place, res.total, res.to_par, res.scorecard,
       res.created_at, res.scoring_group, res.match_result, e.id AS event_id, e.status AS event_status, e.starts_at,
       e.date AS event_date, e.format, ec.play_format, ec.live_scoring_config AS scoring_config,
-      c.id AS course_id, l.id AS layout_id, rr.wind_gust_mph
+      c.id AS course_id, l.id AS layout_id, rr.wind_gust_mph, ${COMPETITION_FIELD_REVISION}
     FROM results res JOIN events e ON e.id = res.event_id
     LEFT JOIN event_config ec ON ec.event_id = e.id
     LEFT JOIN courses c ON c.id = e.course_id LEFT JOIN course_layouts l ON l.id = e.layout_id
@@ -104,7 +106,7 @@ export async function eligibleRatingSource(row: Row, stream: RatingStream, curre
   const layoutRevision = await ratingLayoutRevision(actualLayoutId, archived);
   const sourceFingerprint = await ratingFingerprint([
     stream, id, memberId, place, roundDate, availableAt, total, toPar, actualCourseId, actualLayoutId,
-    row.scorecard, ratingGeometrySnapshot(archived),
+    row.scorecard, ratingGeometrySnapshot(archived), row.field_revision ?? null,
   ]);
   return {
     stream, sourceResultId: id, sourceScorecard: row.scorecard, memberId, playerName: String(row.name || "Player"),

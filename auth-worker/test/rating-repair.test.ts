@@ -230,8 +230,13 @@ describe("versioned, transactional rating repair", () => {
       if (change === "deleted") sqlite.prepare("DELETE FROM results WHERE event_id=1 AND member_id=?").run(BETA);
 
       await expect(getLayoutRatingBaseline(db, LAYOUT, positions(OLD), "2026-06-12")).resolves.toBeNull();
-      const casual = (await getMemberRatings(db, ALPHA)).casual.rounds.find((row) => row.round_code === "OLDPIN");
-      expect(casual).toMatchObject({ rating: null, unrated_reason: "rating-source-changed" });
+      const alpha = await getMemberRatings(db, ALPHA);
+      expect(alpha.casual.rounds.find((row) => row.round_code === "OLDPIN"))
+        .toMatchObject({ rating: null, unrated_reason: "rating-source-changed" });
+      expect(alpha.competitive.rounds.find((row) => row.label === "Initial round"))
+        .toMatchObject({ rating: null, unrated_reason: change === "format" ? "not-singles-stroke" : "rating-source-changed" });
+      expect((await listMemberResults(db, ALPHA)).find((row) => row.event_id === 1))
+        .toMatchObject({ round_rating: null, rating: null });
       const corrected = (await getMemberRatings(db, BETA)).competitive.rounds.find((row) => row.label === "Initial round");
       expect((await listMemberCasualResults(db, ALPHA)).find((row) => row.round_code === "OLDPIN")).toMatchObject({ round_rating: null });
       if (change !== "deleted") {
@@ -275,6 +280,15 @@ describe("versioned, transactional rating repair", () => {
       expect((await getMemberRatings(db, ALPHA)).competitive).toMatchObject({ eligible_rated_rounds: 8, live_rating: expect.any(Number) });
       expect((await priorRatingAnchors(db, [ALPHA], asOf)).get(ALPHA)).toEqual(expect.any(Number));
 
+      // A peer's corrected card changes the field without changing Alpha's result.
+      sqlite.prepare("UPDATE results SET total=10, to_par=1, scorecard=? WHERE event_id=10 AND member_id=?")
+        .run(card(OLD, 10), BETA);
+      expect((await getMemberRatings(db, ALPHA)).competitive).toMatchObject({ eligible_rated_rounds: 7, live_rating: null });
+      expect((await priorRatingAnchors(db, [ALPHA], asOf)).has(ALPHA)).toBe(false);
+      await repairRatingSource(db, "competition", 10);
+      expect((await getMemberRatings(db, ALPHA)).competitive).toMatchObject({ eligible_rated_rounds: 8, live_rating: expect.any(Number) });
+      expect((await priorRatingAnchors(db, [ALPHA], asOf)).get(ALPHA)).toEqual(expect.any(Number));
+
       sqlite.exec("UPDATE events SET format='doubles' WHERE id=10");
       for (const reprocessed of [false, true]) {
         if (reprocessed) await repairRatingSource(db, "competition", 10);
@@ -288,6 +302,20 @@ describe("versioned, transactional rating repair", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("leaves rating mirrors out of field revisions and removes the revision when an event is deleted", async () => {
+    const { db, sqlite } = await fixture();
+    const revision = () => sqlite.prepare("SELECT revision FROM rating_event_revisions WHERE event_id=1").get()?.revision;
+    const original = revision();
+    await repairRatingSource(db, "competition", 1);
+    expect(revision()).toBe(original);
+    sqlite.exec("UPDATE results SET rating=850, name='Edited spelling', place=place WHERE event_id=1");
+    expect(revision()).toBe(original);
+    expect((await getMemberRatings(db, ALPHA)).competitive.rounds.find((row) => row.label === "Initial round")?.rating).toBe(1000);
+    sqlite.exec("DELETE FROM events WHERE id=1");
+    expect(revision()).toBeUndefined();
+    await expect(getLayoutRatingBaseline(db, LAYOUT, positions(OLD), "2026-06-12")).resolves.toBeNull();
   });
 
   it("prefers the actual archived start over an edited event calendar and queues a failed finalize for immediate repair", async () => {
