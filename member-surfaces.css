@@ -358,10 +358,14 @@ body .member-dialog-title {
 #members :is(.member-community-profile, .member-community-friends, .member-community-directory, .member-community-progress) { display: grid; gap: .54rem; }
 #members .member-community :is(.community-list > li, .community-amenities > li) { border-color: var(--member-line); }
 #members .member-community .community-list li a { display: inline-flex; align-items: center; min-height: 44px; padding-inline: 0; }
-#members .member-community .community-list .dashboard-actions button { font-size: .78rem; }
+#members .member-community .community-list .dashboard-actions button { font-size: .78rem; white-space: normal; overflow-wrap: anywhere; line-height: 1.15; }
 #members .member-community input[type="checkbox"] { margin-inline-end: .28rem; }
 #members .member-inline-search { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
 #members .member-inline-search .dashboard-action { font-size: .78rem; }
+@media (max-width: 640px) {
+  html.member-keyboard-open .player-app-nav { display: none; }
+  #members .member-community-directory { scroll-margin-block: 1rem; }
+}
 #members .member-wallet-page .wallet-panel { grid-template-columns: minmax(0, 1fr) auto; }
 #members .member-wallet-page .wallet-ledger { padding-top: .6rem; border-top: 1px solid var(--member-line); }
 #members .member-wallet-page .wallet-balance { color: var(--text-primary); font: 800 2rem/1.05 Archivo, system-ui, sans-serif; }
