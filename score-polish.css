@@ -733,7 +733,7 @@ body.score-glove.player-theme-page:has(.score-bottom-layout) #scoreRoot .topbar 
 body.score-glove.player-theme-page .score-bottom-layout .score-glove-dock { background: var(--bg-secondary); }
 .score-bottom-layout .score-glove-dock .round-quick-tools {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: space-between;
   gap: .12rem;
   margin: 0;

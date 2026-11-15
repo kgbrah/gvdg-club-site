@@ -21,6 +21,9 @@ test("a watcher message lands on the card thread", () => {
   const tools = card.slice(card.indexOf("function RoundTools"), card.indexOf("function HoleHeader"));
   assert.doesNotMatch(actions, /RoundTalk/);
   assert.match(tools, /round-quick-tools[\s\S]*RoundTalk/);
+  const quick = tools.slice(0, tools.indexOf('aria-label": "Round tools"'));
+  assert.doesNotMatch(quick, /Measure/);
+  assert.match(actions, /measureLabel \|\| "Measure"/);
   assert.match(readFileSync("sw.js", "utf8"), /data\.kind === "talk"/);
 });
 

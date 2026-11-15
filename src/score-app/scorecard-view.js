@@ -388,10 +388,6 @@ function RoundTools(props) {
         type: "button", className: "score-glove-tool", "aria-label": "Share watch link",
         "aria-haspopup": props.roundSharingApi ? "dialog" : undefined, onClick: openSharing,
       }, icon(Eye), h("span", null, "Watch link")),
-      !props.putting && h("button", {
-        type: "button", className: "score-glove-tool" + (props.measuring ? " active" : ""),
-        "aria-label": props.measureLabel || "Measure", "aria-pressed": Boolean(props.measuring), onClick: props.onMeasure,
-      }, icon(Ruler), h("span", null, props.measureLabel || "Measure")),
       !props.offline && h(RoundTalk, {
         inline: true,
         key: "talk",

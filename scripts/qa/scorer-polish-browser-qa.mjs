@@ -607,7 +607,7 @@ if (serve) {
       assert.equal(await stage.getByRole("button", { name: "Mark tee", exact: true }).count(), 0);
       assert.equal(await stage.getByRole("button", { name: "Mark pin", exact: true }).count(), 0);
       for (const target of [preview.page.locator(".round-quick-tools button").first(), ...[
-        "Share watch link", "Round tools", "Mark lie", "Measure", "Tee sign", "Undo",
+        "Share watch link", "Round tools", "Mark lie", "Tee sign", "Undo",
       ].map(preview.button)]) {
         const size = await target.boundingBox();
         assert.ok(size && size.height >= 44 && size.width >= 44);
@@ -677,7 +677,7 @@ if (serve) {
         await preview.page.keyboard.press("Escape");
         await preview.button("Round tools").click();
         const tools = preview.page.getByRole("dialog", { name: "Round tools" });
-        for (const label of ["Mark tee", "Mark pin", "Shot details", "Invite to score"]) await tools.getByRole("button", { name: label, exact: true }).waitFor();
+        for (const label of ["Mark tee", "Mark pin", "Shot details", "Invite to score", "Measure"]) await tools.getByRole("button", { name: label, exact: true }).waitFor();
         const originalMap = await frame.boundingBox();
         async function assertMapInPlace() {
           const current = await frame.boundingBox();
