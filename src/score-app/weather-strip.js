@@ -90,42 +90,43 @@ function WeatherWind(props) {
   );
 }
 
+function weatherCoordinate(value, limit) {
+  if (typeof value !== "number" && !(typeof value === "string" && value.trim())) return null;
+  const number = Number(value);
+  return Number.isFinite(number) && Math.abs(number) <= limit ? number : null;
+}
+
 function useResolvedWeather(serverWeather) {
-  const hasCurrent = Boolean(serverWeather && serverWeather.current);
-  const loc = serverWeather && serverWeather.location;
-  const lat = loc ? loc.lat : null;
-  const lng = loc ? loc.lng : null;
-  const canFallback = Boolean(!hasCurrent && lat != null && lng != null && Number.isFinite(Number(lat)) && Number.isFinite(Number(lng)));
+  const lat = weatherCoordinate(serverWeather?.location?.lat, 90);
+  const lng = weatherCoordinate(serverWeather?.location?.lng, 180);
+  const requestKey = !serverWeather?.current && lat != null && lng != null
+    ? JSON.stringify([lat, lng, serverWeather.error || null]) : null;
   const [fallback, setFallback] = React.useState(null);
-  const [pending, setPending] = React.useState(canFallback);
 
   React.useEffect(() => {
-    if (!canFallback) {
+    if (requestKey == null) {
       setFallback(null);
-      setPending(false);
       return undefined;
     }
-    let cancelled = false;
-    setPending(true);
-    fetchCourseWeather(loc).then((sample) => {
-      if (cancelled) return;
-      setPending(false);
-      setFallback(sample ? mergeFallbackWeather(serverWeather, sample) : null);
-    });
-    return function () {
-      cancelled = true;
-    };
-  }, [hasCurrent, lat, lng, serverWeather && serverWeather.error]);
+    let active = true;
+    function settle(sample) {
+      if (active) setFallback({ requestKey, sample });
+    }
+    void fetchCourseWeather({ lat, lng }).then(settle, () => settle(null));
+    return () => { active = false; };
+  }, [requestKey, lat, lng]);
 
-  if (hasCurrent) return serverWeather;
-  if (fallback && fallback.current) return fallback;
-  if (pending && serverWeather) return { ...serverWeather, error: null };
-  return serverWeather;
+  if (!serverWeather || serverWeather.current) return { weather: serverWeather, pending: false };
+  // A different course can render before the previous request effect is cleaned up.
+  const matching = requestKey != null && fallback?.requestKey === requestKey ? fallback : null;
+  if (matching?.sample) return { weather: mergeFallbackWeather(serverWeather, matching.sample), pending: false };
+  const pending = requestKey != null && !matching;
+  return { weather: { ...serverWeather, error: pending ? null : serverWeather.error || "weather_unavailable" }, pending };
 }
 
 export function WeatherStrip(props) {
   const compassState = useCompassState();
-  const weather = useResolvedWeather(props.weather);
+  const { weather, pending } = useResolvedWeather(props.weather);
 
   const chips = weatherChips(weather);
   if (!chips.length && !props.scorecard) return null;
@@ -145,7 +146,6 @@ export function WeatherStrip(props) {
 
   if (props.scorecard) {
     const gust = current?.windGustMph;
-    const pending = weather && !weather.current && !weather.error;
     return h("section", { className: "scorecard-weather", "aria-label": "Round weather" },
       summary ? h("div", { className: "scorecard-conditions", title: summary.updatedText || undefined },
         h(WeatherGraphic, { graphic: summary.graphic }),
