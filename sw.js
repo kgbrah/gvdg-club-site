@@ -107,7 +107,15 @@ self.addEventListener("fetch", (event) => {
           }
           return res;
         })
-        .catch(() => caches.match(req).then((cached) => cached || caches.match(OFFLINE_PAGE)))
+        .catch(async () => {
+          const exact = await caches.match(req);
+          if (exact) return exact;
+          if (url.pathname === "/score.html") {
+            const scorer = await caches.match("score.html");
+            if (scorer) return scorer;
+          }
+          return caches.match(OFFLINE_PAGE);
+        })
     );
     return;
   }

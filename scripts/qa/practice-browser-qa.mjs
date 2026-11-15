@@ -5,6 +5,7 @@ import { chromium } from "playwright";
 import { EMPTY_PRACTICE, metersFromDistance, puttingMakeTotals } from "../../src/members-app/practice-model.js";
 
 const members = new Map([["qa-one", "qa-one"], ["qa-two", "qa-two"]]);
+const serveOnly = Boolean(process.env.GVDG_PRACTICE_QA_SERVE);
 const records = new Map();
 const operations = new Map();
 let available = true;
@@ -28,8 +29,8 @@ function summary(owner) {
 
 process.env.VITE_DISABLE_REACT_DEVTOOLS = "1";
 const vite = await createServer({
-  configFile: false, cacheDir: "/tmp/gvdg-practice-browser-qa",
-  server: { host: "127.0.0.1", hmr: false },
+  configFile: false, cacheDir: process.env.GVDG_PRACTICE_QA_CACHE || "/tmp/gvdg-practice-browser-qa",
+  server: { host: "127.0.0.1", port: 0, hmr: false },
   optimizeDeps: { entries: ["src/members-app/main.js"] },
   plugins: [{
     name: "gvdg-practice-test",
@@ -42,7 +43,10 @@ const vite = await createServer({
             .replace('data-auth-base=""', 'data-auth-base="/fixture"')
             .replace(/src="members-app\/[^"]+"/, 'src="/src/members-app/main.js"');
           res.setHeader("Content-Type", "text/html");
-          res.end(await server.transformIndexHtml(req.url, html));
+          const fixture = serveOnly
+            ? html.replace("<head>", '<head><script>localStorage.setItem("gvdg_member_token", "qa-one")</script>')
+            : html;
+          res.end(await server.transformIndexHtml(req.url, fixture));
           return;
         }
         if (!path.startsWith("/fixture/")) { next(); return; }
@@ -79,6 +83,12 @@ const vite = await createServer({
 });
 await vite.listen();
 const origin = vite.resolvedUrls.local[0].replace(/\/$/, "");
+if (serveOnly) {
+  console.log("Practice preview: " + origin + "/practice-qa.html#practice");
+  await new Promise((resolve) => process.once("SIGTERM", resolve));
+  await vite.close();
+  process.exit(0);
+}
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 
 try {
