@@ -1,5 +1,7 @@
 .codegraph/
 node_modules/
+/node_modules
+/auth-worker/node_modules
 .omo/
 .pages-dist/
 /score-app/

@@ -15,6 +15,7 @@ export interface LiveState {
   storage: {
     get<T = unknown>(key: string): Promise<T | undefined>;
     put(key: string, value: unknown): Promise<void>;
+    put(entries: Record<string, unknown>): Promise<void>;
     getAlarm(): Promise<number | null>;
     setAlarm(scheduledTime: number): Promise<void>;
     deleteAlarm(): Promise<void>;
@@ -36,6 +37,7 @@ export interface LiveMeta {
   holes: { hole: number; par: number; distance_ft?: number | null; points?: number; tee_sign_id?: number | null; tee?: { label?: string | null; lat?: number | null; lng?: number | null } | null; target?: { label?: string | null; lat?: number | null; lng?: number | null } | null }[];
   status: "live" | "final";
   startedAt: string;
+  recoveryRoundId?: string;
   weather?: WeatherState | null;
   roundConfig?: LiveScoringConfig;
   rev?: number;
@@ -77,6 +79,7 @@ export interface ScoreBody {
   scorerIndex?: number | null;
   hole: number;
   strokes: number | null;
+  recovery?: unknown;
 }
 
 export interface CtpVoteBody {

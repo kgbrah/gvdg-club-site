@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { holePlayStats, mergePartnerPlayInputs, parseBreakdown, parseThrowsBody, playStatsByKind, playStatsView, roundPlayStats, selectPlayStatsView, totalsFromPdgaScoreLine, withPlayBreakdown } from "../src/play-stats.js";
@@ -72,3 +73,13 @@ describe("play stats", () => {
     expect(totalsFromPdgaScoreLine("2,3", "3,3", 2).birdies).toBe(1);
   });
 });
+
+const golden = JSON.parse(readFileSync(new URL("../../tests/fixtures/shot-stats-golden.json", import.meta.url), "utf8")) as {
+  hole: Parameters<typeof holePlayStats>[0];
+  cases: { title: string; throws: unknown; score: number; expect: Partial<ReturnType<typeof holePlayStats>> }[];
+};
+for (const fixture of golden.cases) {
+  it(fixture.title, () => {
+    expect(holePlayStats(golden.hole, fixture.throws, fixture.score)).toMatchObject(fixture.expect);
+  });
+}

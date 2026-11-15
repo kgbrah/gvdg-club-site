@@ -31,6 +31,9 @@ import { runRatingsRecompute } from "./ratings-recompute.js";
 import { isPdgaEventCron, refreshClubPdgaEvents } from "./pdga-events.js";
 import { isUdiscLayoutCron, runUdiscLayoutImportTick } from "./udisc-layout-import.js";
 import { handleUdiscHistory } from "./udisc-history-routes.js";
+import { handleMyPlayHistory, handleMyPlayExport } from "./play-history-routes.js";
+import { handleWatchRoute } from "./watch-routes.js";
+import { handleCourseFavorites } from "./course-favorite-routes.js";
 
 /**
  * STOPGAP: when no Workers KV namespace is bound (deployed dev/staging while this account's KV data
@@ -58,6 +61,11 @@ export default {
     if (!secretOk(env)) return json({ error: "server_misconfigured" }, 500, origin);
 
     try {
+      const watch = await handleWatchRoute(request, env, origin, pathname, method);
+      if (watch) return watch;
+      if (pathname === "/me/course-favorites" || /^\/me\/course-favorites\/\d+$/.test(pathname)) {
+        return await handleCourseFavorites(request, env, origin);
+      }
       if (pathname === "/login" && method === "POST") return await handleLogin(request, env, origin);
       if (pathname === "/me" && method === "GET") return await handleMe(request, env, origin);
       if (pathname === "/my-results" && method === "GET") return await handleMyResults(request, env, origin);
@@ -69,6 +77,8 @@ export default {
         return await handleUdiscHistory(request, env, origin, method, Number(udiscHistoryId[1]));
       }
       if (pathname === "/play-stats" && method === "GET") return await handlePlayStats(request, env, origin);
+      if (pathname === "/my-play-history" && method === "GET") return await handleMyPlayHistory(request, env, origin);
+      if (pathname === "/my-play-export" && method === "GET") return await handleMyPlayExport(request, env, origin);
       if (pathname === "/my-ratings" && method === "GET") return await handleMyRatings(request, env, origin);
       if (pathname === "/my-live-rounds" && method === "GET") return await handleMyLiveRounds(request, env, origin);
       if (pathname === "/board" || pathname.startsWith("/board/")) return await handleBoard(request, env, origin);

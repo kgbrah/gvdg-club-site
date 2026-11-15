@@ -47,11 +47,11 @@ test("today command center links each queue and keeps the scoring card", () => {
   assert.doesNotMatch(today, /Nothing on the card right now/);
   assert.doesNotMatch(today, /admin-today-tiles/);
   assert.match(today, /Start scoring/);
-  assert.match(today, /Open scoring/);
+  assert.match(today, /Live scoring/);
   assert.match(nav, /AdminNeedsBadge/);
-  assert.match(nav, /item\.id === "today" \? h\(AdminNeedsBadge, \{ key: "needs", tab: "today" \}\)/);
-  assert.match(nav, /item\.id === "more" \? h\(AdminNeedsBadge, \{ key: "needs", tab: "more" \}\)/);
-  assert.match(nav, /item\.id === "shop" \? h\(AdminOrdersBadge, \{ key: "badge" \}\) : null/);
+  assert.match(nav, /requestAdminTab\("applications"\)/);
+  assert.match(more, /NEEDS_TABS\.has\(item.key\)/);
+  assert.match(nav, /requestAdminTab\("orders", \{ filter: "new" \}\)/);
   assert.match(more, /AdminNeedsBadge/);
   assert.match(controller, /async function refreshAdminNeeds\(\)/);
   assert.match(controller, /\/admin\/bag-tags/);
@@ -59,5 +59,5 @@ test("today command center links each queue and keeps the scoring card", () => {
   assert.match(controller, /\/admin\/tee-signs\?status=candidate/);
   assert.match(controller, /gvdg:admin-needs-refresh/);
   assert.match(controller, /setOrdersBadge\(0\);/);
-  assert.match(controller, /adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);/);
+  assert.match(controller, /navigationFromUrl\(true\)/);
 });

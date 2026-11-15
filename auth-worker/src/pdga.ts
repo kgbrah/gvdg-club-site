@@ -49,6 +49,7 @@ const RECENT_ROUNDS = 8; // "live" rating = mean of the most recent N round rati
 const MAX_HOLE_ROUNDS = 80; // newest-first hole mix; keeps worker subrequests bounded
 const STAGING_QA_PDGA = "90000001";
 const STAGING_QA_PLAY = {
+  ...emptyPlayTotals(),
   holes: 54,
   aces: 0,
   eagles: 1,
@@ -58,20 +59,6 @@ const STAGING_QA_PLAY = {
   doubles_plus: 2,
   birdie_hit: 12,
   par_hit: 28,
-  fir_hit: 0,
-  fir_att: 0,
-  c1r_hit: 0,
-  c1r_att: 0,
-  c2r_hit: 0,
-  c2r_att: 0,
-  parked_hit: 0,
-  parked_att: 0,
-  scramble_hit: 0,
-  scramble_att: 0,
-  c1_putt_hit: 0,
-  c1_putt_att: 0,
-  c2_putt_hit: 0,
-  c2_putt_att: 0,
 } satisfies PlayTotals;
 const STAGING_QA_STATS: PdgaStats = {
   pdga: STAGING_QA_PDGA,

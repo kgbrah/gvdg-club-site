@@ -1,0 +1,80 @@
+name: Build native watch apps
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'watches/**'
+      - '.github/workflows/watch-apps.yml'
+  push:
+    paths:
+      - 'watches/**'
+      - '.github/workflows/watch-apps.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-watches-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  garmin:
+    name: Garmin generic compile (not device package)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Download verified Connect IQ compiler
+        run: |
+          curl -fsSL https://developer.garmin.com/downloads/connect-iq/sdks/connectiq-sdk-lin-9.3.0-2026-10-20-95888f262.zip -o "$RUNNER_TEMP/connectiq.zip"
+          echo "1653cc98edd70029670a3e3fcd4ad6e746974a8b758a7b736a4e11506dfd8bc8  $RUNNER_TEMP/connectiq.zip" | sha256sum --check
+          unzip -q "$RUNNER_TEMP/connectiq.zip" -d "$RUNNER_TEMP/connectiq"
+          openssl genrsa -out "$RUNNER_TEMP/ciq-test.pem" 4096
+          openssl pkcs8 -topk8 -inform PEM -outform DER -in "$RUNNER_TEMP/ciq-test.pem" -out "$RUNNER_TEMP/ciq-test.der" -nocrypt
+      - name: Compile generic app
+        working-directory: watches/garmin
+        run: '"$RUNNER_TEMP/connectiq/bin/monkeyc" -l 1 -f monkey.jungle -y "$RUNNER_TEMP/ciq-test.der" -o "$RUNNER_TEMP/GVDG-generic.prg"'
+
+  wear:
+    name: Wear OS debug APK
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install build SDK
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"'
+      - name: Build and lint
+        working-directory: watches/wear-os
+        run: ./gradlew --no-daemon :app:assembleDebug :app:lintDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gvdg-wear-os-debug
+          path: watches/wear-os/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+  apple-watch:
+    name: watchOS simulator app
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build unsigned watch app
+        working-directory: watches/watch-os
+        run: >-
+          xcodebuild -project GVDGWatch.xcodeproj -scheme GVDGWatch -configuration Debug
+          -destination 'generic/platform=watchOS Simulator' -derivedDataPath DerivedData
+          CODE_SIGNING_ALLOWED=NO build
+      - name: Package the simulator bundle
+        working-directory: watches/watch-os
+        run: ditto -c -k --keepParent DerivedData/Build/Products/Debug-watchsimulator/GVDGWatch.app GVDGWatch-simulator.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gvdg-watchos-simulator
+          path: watches/watch-os/GVDGWatch-simulator.zip
+          if-no-files-found: error

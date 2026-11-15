@@ -145,6 +145,7 @@ function makeLiveSnapshot({ eventId = null, roundCode = null, roundConfig, playe
     missing: [],
     standings: standingsFor(players),
     rev: 1,
+    recoveryRoundId: "test-round-" + (roundCode || eventId),
   };
 }
 
@@ -339,15 +340,15 @@ async function runCasualRoundQa(browser, origin) {
   await page.locator("[data-create-round='casual']").click();
   await page.waitForURL(/round=QA1234/);
   await page.waitForSelector(".hole-head");
-  await waitForPageText(page, ".weather-strip", "Round weather", "casual weather title");
+  await page.locator('.weather-strip[title="Round weather"]').waitFor();
   await waitForPageText(page, ".weather-strip", "Clear", "casual weather condition");
   await waitForPageText(page, ".weather-wind", "SSE 7 mph", "casual weather wind");
-  await waitForPageText(page, ".weather-strip", qaCourse.name, "casual weather course label");
+  await waitForPageText(page, "#barTitle", qaCourse.name, "casual weather course context");
   await page.locator(".weather-wind").click();
   await page.evaluate(() => {
     window.dispatchEvent(new DeviceOrientationEvent("deviceorientation", { absolute: true, alpha: 90 }));
   });
-  await waitForPageText(page, ".weather-wind", "Phone-relative", "casual weather wind device orientation mode");
+  await page.locator('.weather-wind[data-compass-status="active"]').waitFor();
   const windArrow = await page.locator(".weather-wind-arrow").evaluate((arrow) => ({
     relative: arrow.getAttribute("data-relative"),
     status: arrow.getAttribute("data-compass-status"),
@@ -359,18 +360,20 @@ async function runCasualRoundQa(browser, origin) {
     throw new Error(`Unexpected relative wind arrow state: ${JSON.stringify(windArrow)}`);
   }
 
+  await page.getByRole("button", { name: "Round tools", exact: true }).click();
   await page.getByRole("button", { name: "Add player" }).click();
   await page.getByRole("dialog", { name: "Add player" }).waitFor();
   await page.getByLabel("Player name").fill("Nina Park");
   await page.locator(".score-dialog").getByRole("button", { name: "Add player" }).click();
   await waitForPageText(page, "body", "Nina Park", "added player score row");
+  await page.getByRole("button", { name: "Round tools", exact: true }).click();
   await page.getByRole("button", { name: "Manage" }).click();
   await page.waitForSelector(".sheet");
   const ninaRow = page.locator(".manage-player-row").filter({ hasText: "Nina Park" });
   await ninaRow.getByRole("button", { name: "Remove" }).click();
   await page.getByRole("dialog", { name: "Remove Nina Park?" }).waitFor();
   await page.locator(".score-dialog").getByRole("button", { name: "Remove player" }).click();
-  await page.waitForFunction(() => !document.body.textContent.includes("Nina Park"), null, { timeout: 5_000 });
+  await ninaRow.waitFor({ state: "detached" });
 
   if (createdRoundBody?.liveScoringConfig?.groupFormat !== "singles") {
     throw new Error(`Expected singles config, got ${JSON.stringify(createdRoundBody)}`);
@@ -416,7 +419,7 @@ async function runAdminEventQa(browser, origin) {
 
   await page.goto(`${origin}/admin.html`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("#adminPanel", { state: "visible" });
-  await page.locator('[data-atab="scoring"]').first().click();
+  await page.locator("#apane-today").getByRole("button", { name: "Live scoring" }).click();
   await page.locator("#scEvent").selectOption("2");
   await page.waitForSelector("#scGrid tbody tr");
   const rowsBefore = await page.locator("#scGrid tbody tr").evaluateAll((rows) => rows.map((row) => row.textContent?.trim() || ""));

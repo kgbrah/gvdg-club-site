@@ -4,7 +4,7 @@ import { ctpAwardWinners, type LiveCtpStore } from "./live-ctp.js";
 import type { LiveScoringConfig } from "./live-format.js";
 import { finalizeStandings, type FinalLiveStanding, type PlayerState } from "./scoring.js";
 import { finalizeRoundStandings, healthyTargets, invalidScoreTargetsResponse, resolvedHoles, roundConfig, scoringState } from "./live-state.js";
-import { j, metadataJson, type LiveEnv, type LiveMeta, type ScoringState } from "./live-types.js";
+import { j, metadataJson, type LiveEnv, type LiveMeta, type ResolvedHole, type ScoringState } from "./live-types.js";
 import { attachThrowsToScorecard } from "./live-snapshot.js";
 import { roundRatingForScoreWithWeather, solveSsa, type Propagator, type RatingMethod, type RatingStream } from "./rating-engine.js";
 import { clearRoundRatingsForCasualRound, clearRoundRatingsForEvent, createRoundRating, findRatingAnchor, getLayoutRatingBaseline, upsertLayoutRatingBaseline, upsertPlayerRatingFromRounds } from "./rating-store.js";
@@ -74,11 +74,25 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
       holes: attachThrowsToScorecard(standing.holes, merged.throws),
     };
   });
+  const layoutByHole = new Map(holes.map((hole) => [hole.hole, hole]));
+  const scorecardForArchive = (standing: FinalLiveStanding) => {
+    if (!standing.holes.length) return null;
+    return JSON.stringify(standing.holes.map((score) => {
+      const hole = layoutByHole.get(score.hole);
+      if (!hole) return score;
+      const throwsProvenance = standing.scoringGroup?.targetType === "pair" ? "team" : standing.memberId ? "member" : "unknown";
+      return {
+        ...score,
+        layoutAtPlay: archivedLayoutHole(meta, hole),
+        ...(scoreHasThrows(score) ? { throwsProvenance } : {}),
+      };
+    }));
+  };
   meta.status = "final";
   if (meta.casual || !meta.eventId) {
     if (meta.casual && meta.roundCode) {
       try {
-        await persistCasualResults(input.env, meta, input.players, standings);
+        await persistCasualResults(input.env, meta, standings, scorecardForArchive);
       } catch (error) {
         meta.status = "live";
         throw error;
@@ -104,7 +118,7 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
           total: standing.total,
           to_par: standing.toPar,
           breakdown: JSON.stringify(standing.breakdown),
-          scorecard: standing.holes.length ? JSON.stringify(standing.holes) : null,
+          scorecard: scorecardForArchive(standing),
           scoring_group: metadataJson(standing.scoringGroup),
           match_result: metadataJson(standing.matchResult),
         }),
@@ -123,6 +137,20 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
   await persistRatingsBestEffort(input.env, meta, standings); // ratings never gate the finalize
   void persistHeatmapMarksBestEffort(input.env, meta, standings);
   return j({ status: "final", standings, forced });
+}
+
+function scoreHasThrows(score: object) {
+  return "throws" in score && Array.isArray(score.throws) && score.throws.length > 0;
+}
+
+function archivedLayoutHole(meta: LiveMeta, hole: ResolvedHole) {
+  return {
+    tee: hole.tee, target: hole.target, distance_ft: hole.distance_ft, overridden: hole.overridden,
+    ...(meta.courseId != null ? { courseId: meta.courseId } : {}),
+    ...(meta.layoutId != null ? { layoutId: meta.layoutId } : {}),
+    ...(meta.courseName ? { courseName: meta.courseName } : {}),
+    ...(meta.layoutName ? { layoutName: meta.layoutName } : {}),
+  };
 }
 
 /** Finalize a round that may mix healthy and broken cards. Healthy cards finalize in their REAL format
@@ -146,11 +174,17 @@ function finalizeMixedStandings(holes: { hole: number; par: number }[], players:
   return [...healthyRows, ...brokenRows];
 }
 
-async function persistCasualResults(env: LiveEnv, meta: LiveMeta, players: PlayerState[], standings: FinalLiveStanding[]): Promise<void> {
+async function persistCasualResults(
+  env: LiveEnv,
+  meta: LiveMeta,
+  standings: FinalLiveStanding[],
+  scorecardForArchive: (standing: FinalLiveStanding) => string | null,
+): Promise<void> {
   const holes = resolvedHoles(meta).map((hole) => ({
     hole: hole.hole,
     par: hole.par,
     distance_ft: hole.distance_ft,
+    layoutAtPlay: archivedLayoutHole(meta, hole),
     ...(hole.points != null && hole.points > 1 ? { points: hole.points } : {}),
   }));
   const config = roundConfig(meta);
@@ -182,7 +216,7 @@ async function persistCasualResults(env: LiveEnv, meta: LiveMeta, players: Playe
         total: standing.total,
         to_par: standing.toPar,
         breakdown: JSON.stringify(standing.breakdown),
-        scorecard: standing.holes.length ? JSON.stringify(standing.holes) : null,
+        scorecard: scorecardForArchive(standing),
         scoring_group: metadataJson(standing.scoringGroup),
         match_result: metadataJson(standing.matchResult),
       }),

@@ -1,192 +1,159 @@
 import React from "react";
 import { createPortal } from "react-dom";
-import { CalendarDays, House, MoreHorizontal, ShoppingBag, Timer } from "lucide-react";
+import { CalendarDays, House, Settings, Users, Wallet } from "lucide-react";
 
-import { currentAdminActiveTab } from "./admin-shell-state.js";
+import { ADMIN_DESTINATIONS, ADMIN_PRIMARY, destination } from "../shared/app-navigation.js";
+import { ToolFinder } from "../shared/tool-finder.js";
+import { currentAdminRoute } from "./admin-shell-state.js";
 import { AdminNeedsBadge } from "./admin-needs.js";
 import { AdminOrdersBadge } from "./orders-badge.js";
+import { MorningDesk } from "./today-dashboard.js";
 
 const h = React.createElement;
+const ICONS = { today: House, events: CalendarDays, members: Users, shop: Wallet, more: Settings };
 
-export const ADMIN_NAV_GROUPS = [
-  {
-    label: "Home",
-    items: [
-      { tab: "today", label: "Today" },
-    ],
-  },
-  {
-    label: "Events",
-    items: [
-      { tab: "events", label: "Events" },
-      { tab: "create", label: "New Event" },
-      { tab: "import", label: "Import" },
-      { tab: "registration", label: "Registration" },
-    ],
-  },
-  {
-    label: "Scoring",
-    items: [
-      { tab: "scoring", label: "Live Scoring" },
-    ],
-  },
-  {
-    label: "Shop",
-    items: [
-      { tab: "shop", label: "Pro Shop" },
-      { tab: "orders", label: "Orders", badge: "orders" },
-      { tab: "wallets", label: "Wallets" },
-    ],
-  },
-  {
-    label: "Club",
-    items: [
-      { tab: "courses", label: "Courses" },
-      { tab: "layouts", label: "Layouts" },
-      { tab: "tee-signs", label: "Tee Signs" },
-      { tab: "leagues-mgmt", label: "League seasons" },
-      { tab: "bag-tags", label: "Bag tags" },
-      { tab: "fundraisers", label: "Campaigns" },
-      { tab: "meetings", label: "Minutes" },
-      { tab: "members", label: "Members" },
-      { tab: "data-archive", label: "Data archive" },
-    ],
-  },
-];
-
-export const ADMIN_DOCK = [
-  { id: "today", label: "Home", tab: "today", Icon: House, tabs: ["today"] },
-  {
-    id: "events",
-    label: "Events",
-    tab: "events",
-    Icon: CalendarDays,
-    tabs: ["events", "create", "import", "registration"],
-    chips: [
-      { tab: "events", label: "Events" },
-      { tab: "create", label: "New" },
-      { tab: "import", label: "Import" },
-      { tab: "registration", label: "Registration" },
-    ],
-  },
-  { id: "scoring", label: "Scoring", tab: "scoring", Icon: Timer, tabs: ["scoring"] },
-  {
-    id: "shop",
-    label: "Shop",
-    tab: "shop",
-    Icon: ShoppingBag,
-    tabs: ["shop", "orders", "wallets"],
-    chips: [
-      { tab: "shop", label: "Inventory" },
-      { tab: "orders", label: "Orders", badge: "orders" },
-      { tab: "wallets", label: "Wallets" },
-    ],
-  },
-  {
-    id: "more",
-    label: "More",
-    tab: "more",
-    Icon: MoreHorizontal,
-    tabs: ["more", "courses", "layouts", "tee-signs", "leagues-mgmt", "bag-tags", "fundraisers", "meetings", "members", "data-archive"],
-  },
-];
-
-function initialTab() {
-  return currentAdminActiveTab();
+export function requestAdminTab(tab, context = {}) {
+  window.dispatchEvent(new CustomEvent("gvdg:admin-tab-request", { detail: { tab, ...context } }));
 }
 
-function tabLabel(item) {
-  if (item.badge === "orders") {
-    return [item.label, " ", h(AdminOrdersBadge, { key: "badge" })];
+function itemBadge(key) {
+  if (key === "orders") return h(AdminOrdersBadge, { key: "badge" });
+  if (key === "applications" || key === "bag-tags" || key === "tee-signs") {
+    return h(AdminNeedsBadge, { key: "badge", tab: key === "applications" ? "members" : key });
   }
-  if (item.tab === "today" || item.tab === "bag-tags" || item.tab === "members" || item.tab === "tee-signs" || item.tab === "shop") {
-    return [item.label, " ", h(AdminNeedsBadge, { key: "needs", tab: item.tab })];
-  }
-  return item.label;
+  return null;
 }
 
-function requestTab(tab) {
-  window.dispatchEvent(new CustomEvent("gvdg:admin-tab-request", { detail: { tab } }));
+function QueueLinks() {
+  return h("div", { className: "admin-queue-links" }, [
+    h("button", { className: "admin-chip", key: "orders", type: "button", onClick: () => requestAdminTab("orders", { filter: "new" }) }, [
+      "New orders", h(AdminOrdersBadge, { key: "badge" }),
+    ]),
+    h("button", { className: "admin-chip", key: "applications", type: "button", onClick: () => requestAdminTab("applications") }, [
+      "Member applications", h(AdminNeedsBadge, { key: "badge", tab: "members" }),
+    ]),
+  ]);
 }
 
-function dockForTab(tab) {
-  return ADMIN_DOCK.find((item) => item.tabs.includes(tab)) || ADMIN_DOCK[0];
-}
-
-function AdminDock({ activeId }) {
+function PrimaryNav({ group, dock = false }) {
   return h("nav", {
-    "aria-label": "Admin tabs",
-    className: "admin-dock",
-    "data-admin-dock": "portal",
-  }, ADMIN_DOCK.map((item) => {
-    const on = activeId === item.id;
+    "aria-label": "Admin navigation",
+    className: dock ? "admin-dock" : "admin-sidebar",
+    "data-admin-dock": dock ? "portal" : undefined,
+  }, ADMIN_PRIMARY.map((item) => {
+    const selected = group === (item.key === "shop" ? "money" : item.key);
     return h("button", {
-      "aria-current": on ? "page" : undefined,
-      className: on ? "admin-dock-item on" : "admin-dock-item",
-      key: item.id,
-      onClick: () => requestTab(item.tab),
-      type: "button",
+      "aria-current": selected ? "page" : undefined,
+      className: (dock ? "admin-dock-item" : "admin-tab") + (selected ? (dock ? " on" : " active") : ""),
+      "data-atab": item.key,
+      key: item.key, type: "button", onClick: () => requestAdminTab(item.key),
     }, [
-      h(item.Icon, { "aria-hidden": true, key: "icon", size: 20, strokeWidth: 2.3 }),
+      h(ICONS[item.key], { "aria-hidden": true, key: "icon", size: dock ? 20 : 18, strokeWidth: 2.2 }),
       item.label,
-      item.id === "today" ? h(AdminNeedsBadge, { key: "needs", tab: "today" }) : null,
-      item.id === "shop" ? h(AdminOrdersBadge, { key: "badge" }) : null,
-      item.id === "more" ? h(AdminNeedsBadge, { key: "needs", tab: "more" }) : null,
     ]);
   }));
 }
 
-export function AdminNavigation() {
-  const [activeTab, setActiveTab] = React.useState(initialTab);
+function SectionLinks({ items, route, label }) {
+  return h("nav", { className: "admin-section-links", "aria-label": label }, items.map((item) => {
+    const selected = route.tab === item.key;
+    return h("button", {
+      "aria-current": selected ? "page" : undefined,
+      className: "admin-chip" + (selected ? " on" : ""),
+      type: "button", key: item.key, "data-atab": item.key,
+      onClick: () => requestAdminTab(item.key, item.key === "orders" ? { filter: "new" }
+        : item.key === "tee-signs" ? { filter: "candidate" } : {}),
+    }, [item.label, itemBadge(item.key)]);
+  }));
+}
+
+function Workspace({ route, title, group, events, courses }) {
+  const workspace = ADMIN_DESTINATIONS.filter((item) => item.context === "event");
+  const courseTools = ADMIN_DESTINATIONS.filter((item) => item.context === "course");
+  const showEvent = workspace.some((item) => item.key === route.tab);
+  const showCourse = courseTools.some((item) => item.key === route.tab);
+  const event = events.find((item) => String(item.id) === route.eventId);
+  const selectedCourse = courses.find((item) => String(item.id) === route.courseId);
+  const groupLinks = ADMIN_DESTINATIONS.filter((item) => item.group === group && !item.context && (group !== "more" || item.key === "more"));
+  const heading = React.useRef(null);
 
   React.useEffect(() => {
-    function update(event) {
-      const tab = event.detail?.tab;
-      if (typeof tab === "string" && tab) setActiveTab(tab);
-    }
+    document.title = title + (showEvent && event?.name ? " · " + event.name : "") + " | GVDG Admin";
+  }, [title, showEvent, event?.name]);
+
+  React.useEffect(() => {
+    if (!route.focusHeading) return;
+    const target = route.tab === "applications" ? document.getElementById("admin-applications-heading")
+      : route.filter === "alerts" ? document.querySelector("[data-admin-push]")
+      : route.filter === "requests" || route.filter === "challenges" ? document.getElementById("admin-bag-" + route.filter)
+      : heading.current;
+    const frame = requestAnimationFrame(() => {
+      (target || heading.current)?.scrollIntoView({ block: "start" });
+      (target || heading.current)?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [route]);
+
+  return h("div", { className: "admin-workspace-context" }, [
+    h("h1", { className: "admin-pane-heading admin-context-title", ref: heading, tabIndex: -1, key: "title" }, title),
+    groupLinks.length > 1 ? h(SectionLinks, { key: "group", items: groupLinks, route, label: "Sections in " + group }) : null,
+    route.tab === "events" ? h(SectionLinks, { key: "event-entry", items: workspace, route, label: "Event tools" }) : null,
+    showEvent ? h("section", { className: "admin-context", "aria-label": "Selected event", key: "event" }, [
+      h("p", { className: "admin-context-caption", key: "event" }, event?.name || (route.eventId ? "Event #" + route.eventId : "Select an event")),
+      h(SectionLinks, { items: workspace, route, label: "Event workspace", key: "event-links" }),
+      h("div", { key: "event-payments", className: "admin-context-links" }, [
+        h("button", {
+          className: "admin-chip", key: "wallets", type: "button", onClick: () => requestAdminTab("wallets", { eventId: route.eventId }),
+        }, "Event payments and wallets"),
+      ]),
+      route.tab === "check-in" && event ? h(MorningDesk, { event, key: event.id }) : null,
+    ]) : null,
+    showCourse ? h("section", { className: "admin-context", "aria-label": "Selected course", key: "course" }, [
+      route.tab === "layouts" ? h("p", { className: "admin-context-caption", key: "course-label" }, selectedCourse?.name || "Select a course below")
+        : h("label", { className: "admin-context-caption", key: "course-label" }, [
+        "Course",
+        h("select", {
+          value: selectedCourse ? route.courseId : "", key: "select",
+          onChange: (event) => requestAdminTab(route.tab, { courseId: event.target.value || null }),
+        }, [
+          h("option", { value: "", key: "all" }, "All courses"),
+          ...courses.map((course) => h("option", { value: String(course.id), key: course.id }, course.name)),
+        ]),
+      ]),
+      h(SectionLinks, { items: courseTools, route, label: "Course workspace", key: "course-links" }),
+    ]) : null,
+    route.tab === "wallets" && route.eventId ? h("button", {
+      className: "admin-chip", type: "button", key: "event-back", onClick: () => requestAdminTab("registration", { eventId: route.eventId }),
+    }, "Back to event registration and payouts") : null,
+    route.tab === "today" ? h(QueueLinks, { key: "queues" }) : null,
+  ]);
+}
+
+export function AdminNavigation() {
+  const [route, setRoute] = React.useState(currentAdminRoute);
+  const [events, setEvents] = React.useState([]);
+  const [courses, setCourses] = React.useState([]);
+  React.useEffect(() => {
+    const update = (event) => setRoute(event.detail || currentAdminRoute());
+    const eventList = (event) => { if (event.detail?.status === "ready") setEvents(event.detail.events || []); };
+    const courseList = (event) => { if (event.detail?.status === "ready") setCourses(event.detail.courses || []); };
     window.addEventListener("gvdg:admin-active-tab", update);
-    setActiveTab(initialTab());
-    return () => window.removeEventListener("gvdg:admin-active-tab", update);
+    window.addEventListener("gvdg:admin-events-list", eventList);
+    window.addEventListener("gvdg:admin-courses-list", courseList);
+    setRoute(currentAdminRoute());
+    return () => {
+      window.removeEventListener("gvdg:admin-active-tab", update);
+      window.removeEventListener("gvdg:admin-events-list", eventList);
+      window.removeEventListener("gvdg:admin-courses-list", courseList);
+    };
   }, []);
 
-  const dock = dockForTab(activeTab);
-  const chips = dock.chips || [];
-  const dockNav = typeof document === "undefined"
-    ? null
-    : createPortal(h(AdminDock, { activeId: dock.id }), document.body, "dock");
-
+  const active = destination("admin", route.tab);
+  const contextMount = document.getElementById("adminContextReactApp");
   return h(React.Fragment, null, [
-    chips.length ? h("div", {
-      className: "admin-mobile-chips",
-      key: "chips",
-      role: "tablist",
-      "aria-label": `${dock.label} sections`,
-    }, chips.map((item) => {
-      const selected = item.tab === activeTab;
-      return h("button", {
-        "aria-selected": selected ? "true" : "false",
-        className: selected ? "admin-chip on" : "admin-chip",
-        key: item.tab,
-        onClick: () => requestTab(item.tab),
-        role: "tab",
-        type: "button",
-      }, tabLabel(item));
-    })) : null,
-    dockNav,
-    h("nav", { "aria-label": "Admin sections", className: "admin-sidebar", key: "sidebar" },
-      ADMIN_NAV_GROUPS.flatMap((group) => [
-        h("div", { className: "admin-navgroup", key: `${group.label}-group` }, group.label),
-        ...group.items.map((item) => {
-          const active = item.tab === activeTab;
-          return h("button", {
-            "aria-current": active ? "page" : undefined,
-            className: active ? "admin-tab active" : "admin-tab",
-            "data-atab": item.tab,
-            key: item.tab,
-            onClick: () => requestTab(item.tab),
-            type: "button",
-          }, tabLabel(item));
-        }),
-      ])),
+    h(ToolFinder, { role: "admin", isAdmin: true, onNavigate: requestAdminTab, key: "search" }),
+    h(PrimaryNav, { group: active.group, key: "sidebar" }),
+    createPortal(h(PrimaryNav, { group: active.group, dock: true }), document.body, "dock"),
+    contextMount ? createPortal(h(Workspace, { title: active.label, group: active.group, route, events, courses }), contextMount, "context") : null,
   ]);
 }

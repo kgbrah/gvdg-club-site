@@ -1,4 +1,5 @@
 import React from "react";
+import { MoreLink } from "./more-page.js";
 
 import { requestJson } from "./api.js";
 import { useMemberContext } from "./member-context.js";
@@ -63,14 +64,26 @@ export function useRegistrationData() {
   return value;
 }
 
-export function MemberRegistrationPanel() {
+export function MemberRegistrationPanel({ eventId } = {}) {
   const context = useMemberContext();
   const { token, state, reload } = useRegistrationData();
+  React.useEffect(() => {
+    if (!eventId || state.status !== "ready") return undefined;
+    const frame = requestAnimationFrame(() => {
+      const event = document.querySelector(`[data-member-event-id="${eventId}"]`);
+      event?.scrollIntoView({ block: "start" });
+      event?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [eventId, state.status]);
 
   if (!token) return null;
 
   return h("div", { className: "react-registration-panel events-timeline", "data-react-registration-panel": state.status }, [
-    h("h3", { className: "my-dashboard-title", key: "title" }, "Events"),
+    h("div", { className: "dashboard-actions", key: "event-tools" }, [
+      h(MoreLink, { tab: "leagues", key: "league" }),
+      h(MoreLink, { tab: "results", key: "results" }),
+    ]),
     h("p", { className: "dash-note", key: "note" }, "Club events you're in come first. Nearby PDGA events follow, soonest first."),
     state.status === "loading" && !state.events.length && !state.registrations.length ? h("p", { className: "dash-note", key: "loading" }, "Loading registration options...") : null,
     state.status === "error" ? h("p", { className: "dash-note", key: "error" }, "Registration is temporarily unavailable. Please refresh or try again in a minute.") : null,

@@ -52,6 +52,7 @@ function emptyRows() {
 export function AdminLayoutsManager() {
   const [courses, setCourses] = React.useState(() => normalizeCourses(EMPTY_COURSES_STATE));
   const [selectedCourseId, setSelectedCourseId] = React.useState("");
+  const selectedCourseRef = React.useRef("");
   const [layoutsState, setLayoutsState] = React.useState(() => normalizeLayoutsState(EMPTY_LAYOUTS_STATE));
   const [editingId, setEditingId] = React.useState(null);
   const [layoutName, setLayoutName] = React.useState("");
@@ -72,7 +73,14 @@ export function AdminLayoutsManager() {
   React.useLayoutEffect(() => {
     function update(event) {
       const detail = event.detail && typeof event.detail === "object" ? event.detail : EMPTY_LAYOUTS_STATE;
-      setLayoutsState(normalizeLayoutsState(detail));
+      const layouts = normalizeLayoutsState(detail);
+      setLayoutsState(layouts);
+      if (detail.courseId != null && String(detail.courseId) !== selectedCourseRef.current) {
+        selectedCourseRef.current = String(detail.courseId);
+        setSelectedCourseId(selectedCourseRef.current);
+        resetBuilder();
+      }
+
     }
     window.addEventListener("gvdg:admin-course-layouts-state", update);
     return () => window.removeEventListener("gvdg:admin-course-layouts-state", update);
@@ -96,8 +104,10 @@ export function AdminLayoutsManager() {
   }
 
   function selectCourse(courseId) {
+    selectedCourseRef.current = courseId;
     setSelectedCourseId(courseId);
     resetBuilder();
+    dispatchRequest("gvdg:admin-course-context-selected", { courseId });
     if (!courseId) {
       setLayoutsState(normalizeLayoutsState(EMPTY_LAYOUTS_STATE));
       return;

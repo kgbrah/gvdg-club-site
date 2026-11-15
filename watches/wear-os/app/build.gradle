@@ -1,0 +1,38 @@
+plugins {
+    id 'com.android.application' version '8.9.2'
+}
+
+def releaseSite = providers.gradleProperty('watchProduction').getOrElse('false') == 'true' ? 'greenvillediscgolf.com' : 'gvdgclub.com'
+
+android {
+    namespace 'com.gvdgclub.wear'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.gvdgclub.wear'
+        minSdk 28
+        targetSdk 35
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix '.debug'
+            buildConfigField 'String', 'API_BASE', '"https://auth.gvdgclub.com"'
+            resValue 'string', 'pair_site', 'gvdgclub.com'
+        }
+        release {
+            buildConfigField 'String', 'API_BASE', '"https://auth.' + releaseSite + '"'
+            resValue 'string', 'pair_site', releaseSite
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

@@ -104,6 +104,10 @@ function AdminMemberRow({ adminCount, currentMemberId, member }) {
   return h("div", { className: "admin-evrow", "data-admin-member-id": member.memberId || member.identifier }, [
     h("span", { className: "ev-name", key: "name" }, memberSummary(member)),
     h("button", {
+      className: "admin-btn secondary", disabled: !member.identifier, key: "wallet", type: "button",
+      onClick: () => dispatchRequest("gvdg:admin-tab-request", { tab: "wallets", memberId: member.identifier }),
+    }, "Wallet"),
+    h("button", {
       className: "admin-btn",
       disabled: !member.identifier,
       key: "pin",

@@ -9,7 +9,7 @@ test("bag tags show on the events hub, member home, and admin club tools", () =>
   const members = readFileSync("src/members-app/overview-dashboard.js", "utf8");
   const panel = readFileSync("src/members-app/bag-tag-panel.js", "utf8");
   const admin = readFileSync("admin.html", "utf8");
-  const nav = readFileSync("src/admin-app/navigation.js", "utf8");
+  const nav = readFileSync("src/shared/app-navigation.js", "utf8");
   const adminPanel = readFileSync("src/admin-app/bag-tags-panel.js", "utf8");
 
   assert.match(events, /body\[data-events-view="hub"\] #bagTagsSection/);
@@ -28,7 +28,7 @@ test("bag tags show on the events hub, member home, and admin club tools", () =>
   assert.match(panel, /must_challenge_better_tag/);
   assert.match(admin, /body\[data-admin-tab="bag-tags"\] #apane-bag-tags/);
   assert.match(admin, /id="adminBagTagsReactApp"/);
-  assert.match(nav, /tab: "bag-tags", label: "Bag tags"/);
+  assert.match(nav, /entry\("bag-tags", "Bag tags", "more"/);
   assert.match(adminPanel, /Settle this card/);
   assert.match(adminPanel, /Next new player is #/);
   assert.match(adminPanel, /Give #\$\{nextTag\}/);

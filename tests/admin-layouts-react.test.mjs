@@ -11,17 +11,17 @@ test('admin course layouts tab is rendered by React from direct loader events', 
   const builder = readFileSync('src/admin-app/layouts-builder.js', 'utf8');
   const model = readFileSync('src/admin-app/layouts-model.js', 'utf8');
   const adminLoadCourses = html.match(/async function adminLoadCourses\(\) \{[\s\S]*?\n        \}/)?.[0];
-  const adminSwitch = html.match(/function adminSwitch\(tab, detail\) \{[\s\S]*?\n        \}/)?.[0];
+  const adminSwitch = html.match(/function adminSwitch\(tab, detail = \{\}, options = \{\}\) \{[\s\S]*?\n        \}/)?.[0];
   const adminLoadCourseLayouts = layoutsController.match(/async function loadCourseLayouts\(detail\) \{[\s\S]*?async function adminAddLayoutPositionFromReact/)?.[0];
 
   assert.match(html, /id="adminLayoutsReactApp"/);
   assert.doesNotMatch(html, /id="alCourse"|id="alBody"|id="alUdiscUrl"|id="alUdiscBtn"|id="alUdiscResult"|id="alPoolList"|id="alPosKind"|id="alPosLabel"|id="alPosLat"|id="alPosLng"|id="alPosAddBtn"|id="alName"|id="alHoles"|id="alAddHole"|id="alSaveLayout"|id="alResetLayout"|id="alLayoutsList"/);
   assert.doesNotMatch(html, /function alOnCourseChange|function alLoadPool|function alUdiscFetch|function posOptions|function refreshRowSelects|function addHoleRow|function renderHoleRows|function gatherHoles|function alSaveLayout|function alLoadLayouts|function alEditLayout/);
   assert.ok(adminLoadCourses);
-  assert.match(adminLoadCourses, /setAdminCoursesListState\(\{ courses \}\)/);
+  assert.match(adminLoadCourses, /setAdminCoursesListState\(\{ status: 'ready', courses \}\)/);
   assert.doesNotMatch(adminLoadCourses, /alCourse|lsel/);
   assert.ok(adminSwitch);
-  assert.match(adminSwitch, /if \(tab === 'layouts'\) adminLoadCourses\(\)/);
+  assert.match(adminSwitch, /await loadCourseLayouts\(\{ courseId: route\.courseId \}\)/);
   assert.match(layoutsController, /function setAdminCourseLayoutsState\(state\) \{[\s\S]*dispatchAdminEvent\('gvdg:admin-course-layouts-state', state\)/);
   assert.doesNotMatch(`${html}\n${layoutsController}`, /publishAdminState\('courseLayouts'/);
   assert.ok(adminLoadCourseLayouts);

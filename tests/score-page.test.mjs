@@ -167,7 +167,7 @@ test('casual round course pick searches and sorts mapped courses first', () => {
   assert.match(setup, /courseSub\(course, sortOrigin\)/);
   assert.match(setup, /coursesForPickScreen/);
   assert.match(setup, /Add a map/);
-  assert.match(setup, /maps first, then nearest/);
+  assert.match(setup, /Map coverage/);
   assert.match(setup, /course-map-badge/);
   assert.match(setup, /course-directions/);
   assert.match(setup, /Directions to/);
@@ -366,11 +366,9 @@ test('player score page supports pair target rows and target-id offline replay',
   const viewModel = scoreViewModelSource();
   assert.match(viewModel, /export function scoreRows\(state\)/);
   assert.match(viewModel, /target\.type === "pair"/);
-  assert.match(source, /let flushQueuePromise = null/);
-  assert.match(source, /if \(flushQueuePromise\) return flushQueuePromise/);
-  assert.match(source, /body\.targetId = item\.targetId/);
+  assert.match(source, /drainRoundJournal\(context\.journal/);
   assert.match(source, /body\.targetId = row\.targetId/);
-  assert.match(source, /qAdd\(row\.targetId \?/);
+  assert.match(source, /enqueueRecovery\('score'/);
   assert.match(source, /function savePairLabels\(assignments\)/);
 });
 
@@ -380,7 +378,7 @@ test('score controller delegates scorecard derivation to a pure view model', () 
   assert.match(controller, /buildScorecardViewState\(\{/);
   assert.match(controller, /finalizeBlockers\(S\)/);
   assert.match(controller, /udiscExportData\(S\)/);
-  assert.match(controller, /scoreTargetForPlayer\(S, index\)/);
+  assert.match(viewModel, /scoreTargetForPlayer\(state, index\)/);
   assert.match(viewModel, /export function buildScorecardViewState/);
   assert.match(viewModel, /export function yourTurnHint\(state\)/);
   assert.match(viewModel, /export function scoreRows\(state\)/);
@@ -394,7 +392,7 @@ test('score controller delegates scorecard derivation to a pure view model', () 
   assert.match(controller, /playOrderStep\(S\.holes, S\.holeIdx, startingHoleForState\(S\), 1\)/);
   assert.match(controller, /readMemberToken/);
   assert.match(controller, /createWakeLock/);
-  assert.match(controller, /readMineCache\(currentMineKey\(\)\)/);
+  assert.match(controller, /readMineCache\(cacheKey\)/);
   assert.match(controller, /wakeLock\.start\(\)/);
   assert.doesNotMatch(scoreLeaderboardSource(), /Every member on the card must enter matching scores/);
   assert.doesNotMatch(controller, /function scoreRows\(\)|function strokesFor\(|function strokesForRow\(|function conflictForRow\(|function holeHasConflict\(|function isMatchDormie\(|function matchStatusText\(|function myScoreRow\(|function udiscExportData\(\)|function finalizeBlockers\(\)/);
@@ -760,7 +758,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.doesNotMatch(scorecard, /collapsed-others/);
   assert.match(scorecard, /scrollIntoView/);
   assert.match(scorecard, /liveRoundStatsFromCard/);
-  assert.match(scorecard, /readAllThrows/);
+  assert.match(scorecard, /props\.throwsByHole/);
   assert.match(scorecard, /Live stats/);
   assert.match(scorecard, /className: "live-stats-peek"/);
   assert.match(scorecard, /h\(LiveMixBar, \{ key: "bar", rows: view\.mix \}\)/);
@@ -829,7 +827,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.doesNotMatch(holeMapModel, /primary\.ft > GPS_REMAINING_MAX_FT/);
   assert.match(scorecard, /getCurrentPosition/);
   assert.match(scorecard, /hud: h\(RangeHud/);
-  assert.match(scorecard, /compact: true, key: "owner"/);
+  assert.match(scorecard, /compact: true/);
   assert.match(holeMap, /props\.hud/);
   assert.match(html, /score-glove-tools \.scorecard-owner/);
   assert.match(scorecard, /function RangeHud/);
@@ -861,7 +859,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /setScoreFlight/);
   assert.match(scorecard, /holeStatChips/);
   assert.match(scorecard, /onThrows/);
-  assert.match(controller, /LIVE \+ '\/throws'/);
+  assert.match(controller, /enqueueRecovery\('throws'/);
   assert.match(controller, /data-disc-color/);
   assert.match(scorecard, /lastThrowHud/);
   assert.match(html, /hole-map-lie-actions/);
@@ -1136,7 +1134,6 @@ test('stepper minus from blank sets birdie; minus from 1 clears the hole', async
   assert.equal(nextHoleScore(1, 3, 'minus'), null);
   assert.equal(nextHoleScore(1, 3, 'plus'), 2);
   const controller = scoreControllerSource();
-  assert.match(controller, /if \(strokes == null\) delete cm\.scores\[hole\]/);
 });
 
 test('live CTP and ace pot strip uses public event reads without scoring writes', () => {

@@ -19,6 +19,8 @@ import {
   selectPlayStatsView,
 } from "../shared/play-stats.js";
 import { selectDashboardTab } from "./dashboard-shell.js";
+import { PersonalPlayHistory } from "./personal-play-history.js";
+import { SHOT_STAT_DEFINITIONS } from "../shared/shot-stats-model.js";
 
 const h = React.createElement;
 
@@ -98,7 +100,7 @@ function StatCard({ compact, row, showLeaders = true, showRank = true }) {
   return h("div", { className: "play-stat-card" + (compact ? " compact" : "") + (row.tone ? " tone-" + row.tone : "") }, [
     h("div", { className: "play-stat-k", key: "k" }, row.label),
     h("div", { className: "play-stat-v", key: "v" }, pct),
-    h("div", { className: "play-stat-s", key: "s" }, [showRank ? rankText(row) : null, sample].filter(Boolean).join(" · ")),
+    h("div", { className: "play-stat-s", key: "s" }, [showRank ? rankText(row) : null, sample, row.group === "throw" && sample ? "Estimated" : null].filter(Boolean).join(" · ")),
     showLeaders && !compact && row.leaders && row.leaders.length
       ? h("ol", { className: "play-stat-leaders", key: "leaders" }, row.leaders.slice(0, 3).map((leader) =>
         h("li", { key: leader.memberId || leader.name }, [
@@ -148,6 +150,7 @@ export function PlayStatsKindBlock({
   ].filter(Boolean);
   const formatNote = formatBits.length ? formatBits.join(" · ").toLowerCase() + " " : "";
   const hasSample = holes > 0 || cards.some((row) => row.mine && row.mine.att);
+  const hasShotSample = cards.some((row) => row.group === "throw" && row.mine?.att);
   const status = state?.status || "idle";
   const emptyCopy = selected === "pdga"
     ? "PDGA live scorecards for recent events will fill this mix. Club event ranks stay separate."
@@ -198,6 +201,8 @@ export function PlayStatsKindBlock({
           ? "No " + formatNote + kindLabel.toLowerCase() + " holes this season yet."
           : emptyCopy)
         : null,
+    hasShotSample && !compact ? h("p", { className: "player-card-meta", key: "estimate-note" },
+      "Shot percentages are estimates from marked lies; older saved rounds may use the original estimate rules. ", SHOT_STAT_DEFINITIONS.putting) : null,
   ]);
 }
 
@@ -257,7 +262,7 @@ export function PlayStatsPanel({ compact = false, pdgaStats = null }) {
   }, [state.payload, pdgaRows, memberId]);
   const hasPdga = Boolean(context.pdgaNo) || pdgaRows.length > 0 || Number(mergedPayload?.pdga?.mine?.totals?.holes) > 0;
   const kinds = hasPdga ? PLAY_KINDS : PLAY_KINDS.filter((id) => id !== "pdga");
-  return h(PlayStatsGrid, {
+  return h(React.Fragment, null, compact ? null : h(PersonalPlayHistory), h(PlayStatsGrid, {
     compact,
     kind: kinds.includes(kind) ? kind : "competitive",
     onKind: setKind,
@@ -266,5 +271,5 @@ export function PlayStatsPanel({ compact = false, pdgaStats = null }) {
     style,
     onStyle: setStyle,
     state: { ...state, payload: mergedPayload, kinds },
-  });
+  }));
 }

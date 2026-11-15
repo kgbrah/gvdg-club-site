@@ -14,11 +14,11 @@ test("admin today can turn on push alerts and open the right tab", () => {
   assert.match(card, /Alerts are on for this phone/);
   assert.match(card, /applicationServerKey/);
   assert.match(card, /\/admin\/push/);
-  assert.match(controller, /alertTab === "orders"/);
-  assert.match(controller, /alertTab === "bag-tags"/);
-  assert.match(controller, /alertTab === "members"/);
-  assert.match(controller, /alertTab === "tee-signs"/);
-  assert.match(sw, /const CACHE = "gvdg-club-v246"/);
+  assert.match(controller, /queryTab === 'orders'/);
+  assert.match(controller, /readAppRoute/);
+  assert.match(controller, /queryTab === 'members'/);
+  assert.match(controller, /queryTab === 'tee-signs'/);
+  assert.match(sw, /const CACHE = "gvdg-club-v247"/);
   assert.match(sw, /new URL\("\/img\/icons\/app-icon-192\.png", self\.location\.origin\)/);
   assert.match(sw, /new URL\("\/img\/icons\/notification-badge\.png", self\.location\.origin\)/);
   assert.match(sw, /Brave draws its own lion/);

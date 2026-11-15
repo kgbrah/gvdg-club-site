@@ -3,15 +3,16 @@ import { createPortal } from "react-dom";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Link2, Lock, Ruler, Settings2, Share2, UserPlus, Watch, X } from "lucide-react";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { HoleMap } from "../shared/hole-map.js";
-import { addThrow, currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, lastThrow, lastThrowHud, nextTeeHud, HOLE_MAP_COMPACT_SIZE, readAllThrows, readThrows, resolveMapFocus, undoThrow, withSelfLocation, writeThrows } from "../shared/hole-map-model.js";
+import { addThrow, currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, lastThrow, lastThrowHud, nextTeeHud, HOLE_MAP_COMPACT_SIZE, resolveMapFocus, undoThrow, withSelfLocation } from "../shared/hole-map-model.js";
 import { preloadRoundMaps } from "../shared/satellite-preload.js";
 import { formatPct, holePlayStats, holeStatChips, liveRoundStatsFromCard } from "../shared/play-stats.js";
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
 import { nextHoleScore, nextPuttingScore, puttingStationRows, relClass, relText, strokeLabel } from "./score-view-model.js";
-import { RoundHighlights, ThrowFilm } from "./throw-film.js";
+import { RoundHighlights, ThrowFilm, useClipRecovery } from "./throw-film.js";
 import { RoundTalk } from "./round-talk.js";
 import { WristScore } from "./wrist-score.js";
+import { WatchPairing } from "./watch-pairing.js";
 import { closeRangeLock, postRangeLock, rangeLockChanged, rangeLockNote, readRangeLockEnabled, writeRangeLockEnabled } from "../shared/range-lock.js";
 
 const h = React.createElement;
@@ -196,9 +197,7 @@ function LiveRoundStats(props) {
   const expanded = collapsible ? open : true;
   const putting = props.putting === true;
   const stations = putting ? puttingStationRows(props.holes, props.holeGrid) : [];
-  const storage = typeof sessionStorage === "undefined" ? null : sessionStorage;
-  const throwsByHole = putting ? {} : readAllThrows(storage, props.roundCode, props.holes);
-  if (!putting && props.currentHole != null) throwsByHole[props.currentHole] = Array.isArray(props.throws) ? props.throws : [];
+  const throwsByHole = putting ? {} : props.throwsByHole;
   const view = putting ? null : liveRoundStatsFromCard({
     holeGrid: props.holeGrid,
     holes: props.holes,
@@ -211,8 +210,11 @@ function LiveRoundStats(props) {
     ? stations.filter((station) => station.made != null).length
     : view.totals.holes;
   const hasThrows = !putting && view.throwStats.some((row) => row.mine && row.mine.att);
+  const eligible = view?.totals.shot_eligible_holes;
+  const matched = view?.totals.shot_count_matched_holes;
   const hint = putting
     ? null
+    : eligible > 0 ? "Estimated from marked lies. " + matched + " of " + eligible + " scored holes match the recorded shot count."
     : thru
       ? (hasThrows ? null : "Mark lies for fairways, C1, and putting")
       : "Score holes and mark lies — mix, FIR, C1, and putting fill in live.";
@@ -270,7 +272,7 @@ function LiveRoundStats(props) {
   ]);
 }
 
-function RoundTools(props) {
+function RoundToolActions(props) {
   const showManage = Boolean(props.show);
   const [copied, setCopied] = React.useState(false);
   function copyWatch() {
@@ -334,7 +336,7 @@ function RoundTools(props) {
         [icon(UserPlus), h("span", { key: "label" }, "Add")],
       )
       : null,
-    h(
+    !props.putting && h(
       "button",
       {
         "aria-label": props.measureLabel || "Measure",
@@ -358,7 +360,7 @@ function RoundTools(props) {
         type: "button",
         onClick: props.onWrist,
       },
-      [icon(Watch), h("span", { key: "label" }, "Wrist")],
+      [icon(Watch), h("span", { key: "label" }, "Wrist layout")],
     ),
     h(
       "button",
@@ -371,9 +373,8 @@ function RoundTools(props) {
         type: "button",
         onClick: props.onToggleLock,
       },
-      [icon(Lock), h("span", { key: "label" }, props.rangeLockOn ? "Locked" : "Lock")],
+      [icon(Lock), h("span", { key: "label" }, props.rangeLockOn ? "Distance alerts on" : "Distance alerts")],
     ),
-    h(ThrowFilm, { hole: props.hole, key: "film", rows: props.rows }),
     h(RoundTalk, {
       inline: true,
       key: "talk",
@@ -388,8 +389,44 @@ function RoundTools(props) {
         h("span", { key: "label" }, "Manage"),
       ])
       : null,
-    h(ScorecardOwner, { ...props, compact: true, key: "owner" }),
   ]);
+}
+
+function RoundTools(props) {
+  const [open, setOpen] = React.useState(false);
+  const titleId = React.useId();
+  const dialog = useAccessibleDialog({ open, onClose: () => setOpen(false), labelledBy: titleId, label: "Round tools" });
+  const closeThen = (action) => (...args) => { setOpen(false); action?.(...args); };
+  return h(React.Fragment, null,
+    h("div", { className: "score-glove-tools round-quick-tools" },
+      h(ThrowFilm, { hole: props.hole, putting: props.putting, recovery: props.clipDrafts, rows: props.rows }),
+      !props.putting && h("button", {
+        type: "button", className: "score-glove-tool" + (props.measuring ? " active" : ""),
+        "aria-label": props.measureLabel || "Measure", "aria-pressed": Boolean(props.measuring), onClick: props.onMeasure,
+      }, icon(Ruler), h("span", null, props.measureLabel || "Measure")),
+      h("button", { type: "button", className: "score-glove-tool", "aria-label": "Round tools", "aria-haspopup": "dialog", onClick: () => setOpen(true) },
+        icon(Settings2), h("span", null, "Round tools")),
+      h(ScorecardOwner, { ...props, compact: true }),
+    ),
+    open && createPortal(h("div", { className: "overlay", "data-a11y-overlay": "true", role: "presentation", ref: dialog.overlayRef },
+      h("section", {
+        className: "sheet round-tools-sheet", role: "dialog", "aria-modal": dialog.isolated ? "true" : undefined,
+        "aria-labelledby": titleId, tabIndex: -1, ref: dialog.panelRef,
+      },
+        h("div", { className: "grab" }),
+        h("h2", { id: titleId, className: "section" }, "Round tools"),
+        h("p", { className: "muted" }, "Your hole and saved changes stay in place when you close this menu."),
+        props.onFullScorecard && h("button", { type: "button", className: "btn secondary", onClick: closeThen(props.onFullScorecard) }, "Full scorecard"),
+        h(RoundToolActions, {
+          ...props,
+          onMeasure: closeThen(props.onMeasure), onWrist: closeThen(props.onWrist),
+          onAddPlayer: closeThen(props.onAddPlayer), onManagePlayers: closeThen(props.onManagePlayers),
+        }),
+        props.watchApi && h(WatchPairing, { api: props.watchApi, roundCode: props.roundCode, eventId: props.eventId }),
+        h("p", { className: "muted round-tools-note" }, "Saved scores and lies sync when connected. Watch pairing and sharing need internet. Distance alerts update while this screen stays active."),
+        h("button", { type: "button", className: "btn secondary sheet-close", onClick: () => setOpen(false) }, "Back to round"),
+      )), document.body),
+  );
 }
 
 function HoleHeader(props) {
@@ -1161,6 +1198,7 @@ function ConfirmScoresSheet(props) {
         h("button", {
           className: "btn finish-round-btn",
           key: "lock",
+          disabled: props.finishing,
           type: "button",
           onClick: () => props.onAgree && props.onAgree(finish.voterIndex),
         }, "Looks good — lock card"),
@@ -1171,11 +1209,46 @@ function ConfirmScoresSheet(props) {
   );
 }
 
+function RecoveryStatus(props) {
+  const items = props.recoveryItems || [];
+  const failed = items.filter((item) => item.state === "error" || item.state === "auth");
+  const selectedHole = props.hole?.hole;
+  const marks = items.filter((item) => item.kind === "throws" && item.body.scorerIndex === props.scorerIndex && item.body.hole === selectedHole);
+  const mark = marks[marks.length - 1];
+  const lieSaved = props.throwsByHole?.[selectedHole]?.length > 0
+    || (props.lastSavedLie && props.lastSavedLie.hole === selectedHole && props.lastSavedLie.scorerIndex === props.scorerIndex);
+  if (!items.length && !lieSaved && !props.recoveryStorageError && !props.recoveryUnavailable) return null;
+
+  const names = new Map((props.choices || []).map((row) => [row.index, row.name]));
+  return h("section", { "aria-label": "Card sync" }, [
+    h("p", { className: "muted", key: "status", role: "status" }, [
+      props.recoveryStorageError ? "This phone’s card storage is unavailable. " : "",
+      props.recoveryUnavailable ? "Open this card online to enable saved edits. " : "",
+      items.length ? items.length + (items.length === 1 ? " change saved on this phone, awaiting sync. " : " changes saved on this phone, awaiting sync. ") : "",
+      mark ? (mark.state === "pending" ? "Lie changes pending." : "Lie changes need attention.") : lieSaved ? "Lie changes saved to the round." : "",
+    ].filter(Boolean).join(" ")),
+    failed.length ? h("details", { key: "errors" }, [
+      h("summary", { key: "summary" }, failed.length + (failed.length === 1 ? " change needs attention" : " changes need attention")),
+      h("ul", { key: "list" }, failed.map((item) => h("li", { key: item.id }, [
+        (item.kind === "throws" ? "Lies" : "Score") + " on " + (props.putting ? "station " : "hole ") + item.body.hole
+          + " · " + (names.get(item.body.scorerIndex) || "Card player") + ". "
+          + (item.state === "auth" ? "Check that you’re signed in to this card."
+            : item.error === "recovery_edit_conflict" ? "This was edited on another device. Review the current value before re-entering."
+            : "The round could not accept this change."),
+        h("button", { className: "btn secondary", key: "discard", type: "button", onClick: () => props.onDiscardRecovery(item.id) }, "Discard change"),
+      ]))),
+    ]) : null,
+    items.length ? h("button", { className: "btn secondary", key: "retry", type: "button", onClick: props.onRetryRecovery }, "Retry sync") : null,
+  ]);
+}
+
 export function ScorecardView(props) {
   useVisibleBottomInset();
+  const clipDrafts = useClipRecovery(props.clipRecovery);
   const [padRow, setPadRow] = React.useState(null);
   const [measure, setMeasure] = React.useState(null);
-  const [throws, setThrows] = React.useState([]);
+  const holeNumber = props.hole && props.hole.hole;
+  const throws = props.throwsByHole?.[holeNumber] || [];
   const [surveyed, setSurveyed] = React.useState({});
   const [pinnedFocus, setPinnedFocus] = React.useState(null);
   const [scoreFlight, setScoreFlight] = React.useState(0);
@@ -1203,7 +1276,6 @@ export function ScorecardView(props) {
   const showNextTee = Boolean(hud && (hud.circle === "C1" || hud.circle === "C2") && hud.mode === "remaining");
   const nextTee = showNextTee ? nextTeeHud(gps.fix, props.nextHole) : null;
   const lastThrowLine = lastThrowHud(throws, props.hole && props.hole.tee);
-  const holeNumber = props.hole && props.hole.hole;
   const rangeNote = rangeLockNote({
     hud,
     hole: holeNumber,
@@ -1247,19 +1319,15 @@ export function ScorecardView(props) {
     rangePosted.current = null;
     setRangeLockOn(true);
   }
-  const storage = typeof sessionStorage === "undefined" ? null : sessionStorage;
-
   React.useEffect(() => {
     setMeasure(null);
     setPinnedFocus(null);
+    setPadRow(null);
     setSurveyed({});
-    setThrows(readThrows(storage, props.roundCode, holeNumber));
-  }, [holeNumber, props.roundCode]);
+  }, [holeNumber, props.scorerIndex, props.clipRecovery?.scopeKey]);
 
-  function persistThrows(next) {
-    setThrows(next);
-    writeThrows(storage, props.roundCode, holeNumber, next);
-    if (typeof props.onThrows === "function") props.onThrows(holeNumber, next);
+  function persistThrows(edit) {
+    if (typeof props.onThrows === "function") props.onThrows(holeNumber, edit, props.scorerIndex);
   }
 
   function onMeasure() {
@@ -1294,20 +1362,20 @@ export function ScorecardView(props) {
       setMeasure(null);
       return;
     }
-    persistThrows(addThrow(throws, point));
+    persistThrows((rows) => addThrow(rows, point, 0));
   }
   function onMapFocus(id) {
     setPinnedFocus((current) => (current === id ? null : id));
   }
   function onMarkLie() {
     if (gps.fix) {
-      persistThrows(addThrow(throws, gps.fix));
+      persistThrows((rows) => addThrow(rows, gps.fix, 0));
       return;
     }
     gps.enableGps();
   }
   function onUndoThrow() {
-    persistThrows(undoThrow(throws));
+    persistThrows(undoThrow);
   }
   function onMapMark(kind) {
     if (!gps.fix) {
@@ -1325,12 +1393,13 @@ export function ScorecardView(props) {
   }
   function onScore(source, hole, strokes) {
     if (strokes != null) setScoreFlight((value) => value + 1);
-    if (typeof props.onScore === "function") props.onScore(source, hole, strokes);
+    if (typeof props.onScore === "function") props.onScore(source, hole, strokes, props.scorerIndex);
   }
   const measureLabel = measure && measure.b ? "Clear" : measure && measure.a ? "Mark" : "Measure";
   const solo = props.solo === true || (Array.isArray(props.rows) && props.rows.length === 1);
   const playerBand = Math.min(Math.max(Array.isArray(props.rows) ? props.rows.length : 1, 1), 4);
   return h(React.Fragment, null, [
+    wrist ? h(RecoveryStatus, { ...props, key: "wrist-recovery" }) : null,
     wrist ? h(WristScore, {
       atEnd: props.atEnd,
       atStart: props.atStart,
@@ -1355,6 +1424,7 @@ export function ScorecardView(props) {
       key: "glove",
     }, [
       h("div", { className: "score-glove-stage", key: "stage" }, [
+        h(RecoveryStatus, { ...props, key: "recovery" }),
         h(JoinRequestBanner, { key: "joins", onApprove: props.onApproveJoin, onDecline: props.onDeclineJoin, requests: props.joinRequests }),
         props.showWeather ? h(WeatherStrip, { compact: true, key: "weather", title: "Round weather", weather: props.weather }) : null,
         props.yourTurn ? h("p", { className: "your-turn-hint", key: "turn" }, props.yourTurn) : null,
@@ -1381,36 +1451,18 @@ export function ScorecardView(props) {
           onUndoThrow,
         }),
         h(LiveRoundStats, {
-          currentHole: holeNumber,
           formatLabel: props.formatLabel,
           holeGrid: props.holeGrid,
           holes: props.holes,
           playingDelta: props.playingDelta,
           playingRating: props.playingRating,
           putting: props.putting,
-          roundCode: props.roundCode,
           solo,
-          throws,
+          throwsByHole: props.throwsByHole,
         }),
-        props.putting ? h("div", { className: "score-glove-tools", key: "round-tools" }, [
-          h(ThrowFilm, { hole: props.hole, key: "film", putting: true, rows: props.rows }),
-          h("button", {
-            "aria-label": "Wrist score",
-            className: "score-glove-tool",
-            key: "wrist",
-            type: "button",
-            onClick: () => setWrist(true),
-          }, [icon(Watch), h("span", { key: "label" }, "Wrist")]),
-          h("button", {
-            "aria-label": rangeLockOn ? "Lock screen rangefinder is on" : "Pin distance to the lock screen",
-            "aria-pressed": rangeLockOn ? "true" : "false",
-            className: "score-glove-tool" + (rangeLockOn ? " active" : ""),
-            key: "lock",
-            type: "button",
-            onClick: onToggleLock,
-          }, [icon(Lock), h("span", { key: "label" }, rangeLockOn ? "Locked" : "Lock")]),
-        ]) : h(RoundTools, {
+        h(RoundTools, {
           ...props,
+          clipDrafts,
           measureLabel,
           measuring,
           rangeLockOn,
@@ -1437,6 +1489,7 @@ export function ScorecardView(props) {
     ]),
     h(ConfirmScoresSheet, {
       finish: props.finish,
+      finishing: props.finishing,
       holeGrid: props.holeGrid,
       onAgree: props.onAgreeFinish,
       onCloseFinish: props.onCloseFinish,

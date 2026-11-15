@@ -76,7 +76,7 @@ export function adminNeedsItems(source) {
       id: "applications",
       tab: "members",
       count: applications,
-      label: applications === 1 ? "Membership request" : "Membership requests",
+      label: applications === 1 ? "Member application" : "Member applications",
       detail: "Approve or decline",
     });
   }

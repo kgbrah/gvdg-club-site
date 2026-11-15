@@ -5,6 +5,7 @@ import { applyOfficialRyderTally } from "../public-app/ryder-board-merge.js";
 import { fetchMergedRyderData } from "../shared/ryder-cup-data.js";
 import { ActiveStandingsPanel } from "./activity-panels.js";
 import { ClubRatings } from "./club-ratings.js";
+import { MoreLink } from "./more-page.js";
 import { selectDashboardTab } from "./dashboard-shell.js";
 import { formatEventDay, formatToPar } from "./format.js";
 import { useMemberContext } from "./member-context.js";
@@ -115,7 +116,7 @@ function StandingCard({ item }) {
   ]);
 }
 
-export function MemberSeasonPage() {
+export function MemberSeasonPage({ resultsOnly = false } = {}) {
   const context = useMemberContext();
   const token = storageGet(TOKEN_KEY);
   const pdgaState = usePdgaStats(context.pdgaNo);
@@ -152,6 +153,14 @@ export function MemberSeasonPage() {
   if (!token) return null;
 
   const page = state.page;
+  const results = page ? h("div", { key: "results" }, [
+      h("h4", { className: "dash-subtitle", key: "title" }, "Club results"),
+      page.results.length
+        ? page.results.map((row, index) => h(ResultRow, { row, key: row.id || `${row.event_id}-${index}` }))
+        : h("p", { className: "dash-note", key: "empty" }, "No finalized club or casual rounds this season yet."),
+    ]) : null;
+  if (resultsOnly) return results || h("p", { className: "dash-note", role: "status" }, "Loading event results…");
+
   return h("div", { className: "react-season-page", "data-react-season-page": state.status }, [
     h("h3", { className: "my-dashboard-title", key: "title" }, page ? `${page.year} Season` : "Your Season"),
     state.status === "loading" ? h("p", { className: "dash-note", key: "loading" }, "Loading your season...") : null,
@@ -163,6 +172,7 @@ export function MemberSeasonPage() {
       h(StatTile, { label: "Club rating", value: page.clubRating == null ? "-" : String(page.clubRating), key: "rating" }),
     ]) : null,
     h(PlayStatsPanel, { key: "play-stats", pdgaStats: pdgaState.stats }),
+    h(MoreLink, { tab: "imports", label: "Import UDisc history", key: "imports" }),
     h(ActiveStandingsPanel, { key: "active-standings" }),
     page?.standings.length
       ? h("div", { key: "standings" }, [
@@ -182,12 +192,7 @@ export function MemberSeasonPage() {
         key: "register",
       }, "Register for an event"),
     ]) : null,
-    page ? h("div", { key: "results" }, [
-      h("h4", { className: "dash-subtitle", key: "title" }, "Club results"),
-      page.results.length
-        ? page.results.map((row, index) => h(ResultRow, { row, key: row.id || `${row.event_id}-${index}` }))
-        : h("p", { className: "dash-note", key: "empty" }, "No finalized club or casual rounds this season yet."),
-    ]) : null,
+    results,
     h(PdgaDashboard, { pdgaNo: context.pdgaNo, state: pdgaState, key: "pdga" }),
     h(ClubRatings, { token, key: "ratings" }),
   ]);

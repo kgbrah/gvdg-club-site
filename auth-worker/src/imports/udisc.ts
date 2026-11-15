@@ -25,6 +25,7 @@ export interface UdiscPosition {
 export interface UdiscHole {
   hole: number;
   par: number;
+  par_source?: "placeholder" | "udisc";
   tee: { label: string; lat: number | null; lng: number | null } | null;
   target: { label: string; lat: number | null; lng: number | null } | null;
 }
@@ -183,14 +184,15 @@ function layoutToUdisc(layout: { name?: unknown; holes: unknown[] }, url: string
     const h = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
     const parsedNum = parseInt(String(h.name ?? ""), 10);
     const hole = Number.isFinite(parsedNum) ? parsedNum : i + 1;
-    const par = typeof h.par === "number" ? h.par : 3;
+    const recordedPar = typeof h.par === "number" && Number.isInteger(h.par) && h.par >= 1 && h.par <= 15 ? h.par : null;
+    const par = recordedPar ?? 3;
     const teeC = coordOf(h.teePosition) ?? coordOf(h.teePad);
     const tgtC = coordOf(h.targetPosition) ?? coordOf(h.basket);
     const tee = teeC ? { label: `Hole ${hole} tee`, lat: teeC.lat, lng: teeC.lng } : null;
     const target = tgtC ? { label: `Hole ${hole} basket`, lat: tgtC.lat, lng: tgtC.lng } : null;
     if (tee) positions.push({ kind: "tee", ...tee });
     if (target) positions.push({ kind: "target", ...target });
-    return { hole, par, tee, target };
+    return { hole, par, par_source: recordedPar == null ? "placeholder" : "udisc", tee, target };
   });
   const name = typeof layout.name === "string" && layout.name.trim() ? layout.name.trim() : null;
   return {

@@ -55,7 +55,7 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(themeChrome, /localStorage\.getItem\("theme"\)/);
   assert.match(themeChrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app admin-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v246"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v247"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
@@ -128,7 +128,7 @@ test('Crotts assistant stays hidden until Help is requested', () => {
   assert.match(adminMain, /createRoot\(crottsMount\)\.render\(h\(CrottsWidget\)\)/);
   assert.match(homeChrome, /SiteNavItems/);
   assert.match(publicChrome, /SiteNavItems/);
-  assert.match(membersChrome, /SiteNavItems/);
+  assert.match(membersChrome, /CrottsHelpLink/);
   assert.match(adminChrome, /CrottsHelpLink/);
   assert.match(widget, /export function CrottsWidget/);
   assert.match(widget, /export function CrottsHelpLink/);

@@ -83,10 +83,14 @@ function TeeSignList({ signs, courses, token, status }) {
   return h(React.Fragment, null, signs.map((row) => h(TeeSignCard, { row, courses, token, key: row.id })));
 }
 
-export function MemberTeeSignsPanel() {
+export function MemberTeeSignsPanel({ routeCourseId } = {}) {
   const token = useSessionToken();
   const [state, setState] = React.useState({ status: token ? "loading" : "idle", courses: [], signs: [] });
   const [selectedCourse, setSelectedCourse] = React.useState("");
+  React.useEffect(() => {
+    if (routeCourseId) setSelectedCourse(String(routeCourseId));
+  }, [routeCourseId]);
+
   const [selectedHole, setSelectedHole] = React.useState("1");
   const [pending, setPending] = React.useState(null);
   const [message, setMessage] = React.useState({ text: "", tone: "" });

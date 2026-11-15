@@ -15,8 +15,9 @@ import {
     playOrderStep,
     relClass,
     relText,
-    scorePendingKey as pendingKey,
-    scoreTargetForPlayer,
+    optimisticScores,
+    scorePendingKey,
+    throwsByScorer,
     scorecardChoices,
     startingHoleForState,
     udiscExportData,
@@ -27,13 +28,14 @@ import { decorateStandings, handicapScoringEnabled } from "../shared/handicap.js
 import { resolveApiBase } from "../shared/api-base.js";
 import { clearMemberSession, readMemberToken, writeMemberSession } from "../shared/member-session.js";
 import { createWakeLock } from "../shared/wake-lock.js";
-import { isTransientMineFailure, mineCacheKey, readMineCache, writeMineCache } from "./score-session-cache.js";
+import { isTransientMineFailure, readMineCache, secureMineCacheKey, writeMineCache } from "./score-session-cache.js";
 import { readOpenPlayName, readOpenPlayToken, writeOpenPlaySession } from "./open-play-session.js";
 import { buildLivePots, withLiveCtpLeaders } from "../shared/live-pots-model.js";
 import { isLiveWatchRequest, liveRoundCodeFromSearch, liveWatchHref } from "../shared/live-watch.js";
 import { casualReplaySnapshot, watchableLiveSnapshot } from "../shared/casual-replay.js";
 import { holeWinners, winnerColor } from "../shared/matchplay-colors.js";
 import { GPS_WATCH_OPTIONS, gpsErrorPolicy } from "../shared/hole-map-model.js";
+import { createRoundJournal, drainRoundJournal, resetJournalRetries, roundRecoveryScope } from "./round-recovery.js";
 import { notifyScoreAuthChanged } from "../shared/player-theme-session.js";
 import {
     buildShareCard,
@@ -75,14 +77,27 @@ export function startScoreApp(options) {
         let locLastFix = null;
         let locLifecycleBound = false;
         let catalogPinsFor = null;
-        const pending = new Map();            // pendingKey -> in-flight count (refcount: concurrent taps on one cell each stay protected until their own POST returns)
-        const QKEY = 'gvdg_score_queue:' + (ROUND_CODE || EVENT_ID);
+        let recovery = null;
+        let recoveryTimer = null;
+        let recoveryRun = null;
+        let recoveryWake = null;
+        let mineRequest = 0;
+        let finishing = false;
         const wakeLock = createWakeLock();
 
         // ---------- tiny helpers ----------
         function memberToken() { return readMemberToken() || null; }
-        function scoringToken() { return memberToken() || readOpenPlayToken() || GUEST_TOKEN || null; }
-        function currentMineKey() { return mineCacheKey(ROUND_CODE, EVENT_ID, scoringToken()); }
+        function scoringCredential() {
+            const member = memberToken();
+            if (member) return { type: 'bearer', token: member };
+            const token = MODE === 'event' ? GUEST_TOKEN : readOpenPlayToken();
+            return { type: MODE === 'event' ? 'guest' : 'bearer', token };
+        }
+        function scoringToken() { return scoringCredential().token; }
+        function sameCredential(credential) {
+            const current = scoringCredential();
+            return Boolean(credential && credential.token && credential.type === current.type && credential.token === current.token);
+        }
         function hasScoringIdentity() { return !!(memberToken() || readOpenPlayToken()); }
         function rememberRecentRound(entry) {
             try {
@@ -168,24 +183,30 @@ export function startScoreApp(options) {
         }
 
         // ---------- API (member Bearer token OR guest ?gt=/guestToken) ----------
-        async function api(path, opts) {
-            opts = opts || {};
-            const headers = {};
+        async function api(path, opts = {}) {
+            const headers = { ...opts.headers };
             let url = path;
-            const tok = memberToken() || (opts.auth !== false ? readOpenPlayToken() : null);
-            if (tok && opts.auth !== false) headers['Authorization'] = 'Bearer ' + tok;
-            else if (!tok && GUEST_TOKEN && opts.guest !== false) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'gt=' + encodeURIComponent(GUEST_TOKEN);
+            const credential = opts.credential || scoringCredential();
+            const token = opts.auth !== false && credential.type === 'bearer' ? credential.token : null;
+            const guest = opts.guest !== false && credential.type === 'guest' ? credential.token : null;
+            if (token) headers.Authorization = 'Bearer ' + token;
+            if (guest) url += (url.includes('?') ? '&' : '?') + 'gt=' + encodeURIComponent(guest);
             let body = opts.body;
-            if (body !== undefined) {
+            if (body !== undefined && !opts.raw) {
                 headers['Content-Type'] = 'application/json';
-                if (!tok && GUEST_TOKEN && body && typeof body === 'object') body = Object.assign({ guestToken: GUEST_TOKEN }, body);
-                body = JSON.stringify(body);
+                body = JSON.stringify(guest ? { guestToken: guest, ...body } : body);
             }
-            let r;
-            try { r = await fetch(API_BASE + url, { method: opts.method || 'GET', headers, body, cache: 'no-store' }); }
-            catch (e) { return { ok: false, status: 0, data: null, neterr: true }; }
-            let data = null; try { data = await r.json(); } catch (e) {}
-            return { ok: r.ok, status: r.status, data };
+            const abort = opts.timeout ? new AbortController() : null;
+            const timer = abort ? setTimeout(() => abort.abort(), opts.timeout) : null;
+            try {
+                const response = await fetch(API_BASE + url, { method: opts.method || 'GET', headers, body, cache: 'no-store', signal: abort?.signal });
+                const data = await response.json().catch(() => null);
+                return { ok: response.ok, status: response.status, data, retryAfter: response.headers.get('Retry-After') };
+            } catch {
+                return { ok: false, status: 0, data: null, neterr: true };
+            } finally {
+                clearTimeout(timer);
+            }
         }
 
         async function loadPots() {
@@ -317,56 +338,187 @@ export function startScoreApp(options) {
             return weatherChanged || locationsChanged || baselineChanged;
         }
 
-        // ---------- offline score queue ----------
-        function qLoad() { try { return JSON.parse(localStorage.getItem(QKEY) || '[]'); } catch (e) { return []; } }
-        function qSave(q) { try { localStorage.setItem(QKEY, JSON.stringify(q)); } catch (e) {} }
-        function qAdd(item) { const q = qLoad(); q.push(item); qSave(q); }
-        let flushQueuePromise = null;
-        async function flushQueue() {
-            if (flushQueuePromise) return flushQueuePromise;
-            flushQueuePromise = (async function () {
-                let q = qLoad(); if (!q.length) return;
-                const remain = [];   // transient failures (network / 5xx) — keep to retry
-                const rejected = []; // permanent server rejections (4xx) — CANNOT retry; must tell the scorer
-                for (const item of q) {
-                    const body = { hole: item.hole, strokes: item.strokes };
-                    if (item.targetId) body.targetId = item.targetId;
-                    else body.index = item.index;
-                    if (Number.isInteger(item.scorerIndex)) body.scorerIndex = item.scorerIndex;
-                    // Protect the queued optimistic value with the same pending refcount so an interim WS snapshot
-                    // (which doesn't have this score yet) can't wipe it mid-replay.
-                    const key = Number.isInteger(item.scorerIndex) ? pendingKey(item.scorerIndex, item.targetId ? null : item.index, item.hole, item.targetId || null) : null;
-                    if (key) pending.set(key, (pending.get(key) || 0) + 1);
-                    const r = await api(LIVE + '/score', { method: 'POST', body: body });
-                    if (key) { const m = (pending.get(key) || 0) - 1; if (m > 0) pending.set(key, m); else pending.delete(key); }
-                    if (r.ok) S.snap = r.data;
-                    else if (r.neterr || r.status >= 500) remain.push(item); // transient — retry on next flush
-                    else rejected.push(item); // 4xx (bad hole / not-your-card / consensus conflict): drop, but surface it
+        // ---------- durable card recovery ----------
+        function isCurrentRecovery(context) {
+            return Boolean(context && context === recovery && sameCredential(context.credential));
+        }
+        function readRecovery(context = recovery) {
+            S.recoveryStorageError = false;
+            try { S.recoveryItems = context ? context.journal.entries() : []; }
+            catch {
+                S.recoveryItems = [];
+                S.recoveryStorageError = true;
+            }
+            S.optimisticScores = optimisticScores(S.recoveryItems);
+        }
+        function stopRecovery() {
+            clearTimeout(recoveryTimer);
+            recoveryTimer = null;
+            recoveryWake = null;
+            recovery = null;
+            S.lastSavedLie = null;
+            if (S.ws) { const ws = S.ws; S.ws = null; ws.close(); }
+            clearTimeout(S.wsTimer);
+            S.wsTimer = null;
+        }
+        function bindRecovery(scope, credential, cacheKey) {
+            if (scope && isCurrentRecovery(recovery) && recovery.scope.key === scope.key) {
+                readRecovery();
+                return;
+            }
+            stopRecovery();
+            if (scope) {
+                let storage = null;
+                try { storage = window.localStorage; } catch { /* availability is surfaced by readRecovery */ }
+                const context = { scope, credential, cacheKey, journal: createRoundJournal(storage, scope) };
+                context.uploadClip = function (record) {
+                    if (!isCurrentRecovery(context)) return null;
+                    const query = new URLSearchParams({
+                        hole: record.hole, playerIndex: record.playerIndex, playerName: record.playerName,
+                        highlight: record.highlight ? '1' : '0', moment: record.moment || '',
+                        clientId: record.id, recoveryRoundId: scope.roundId, recoveryCardId: scope.cardId,
+                        recoveryActorIndex: scope.actorIndex,
+                    });
+                    return api(LIVE + '/clips?' + query, {
+                        method: 'POST', credential, raw: true, body: record.blob, timeout: 120000,
+                        headers: { 'Content-Type': record.blob.type || 'application/octet-stream' },
+                    });
+                };
+                recovery = context;
+            }
+            readRecovery();
+        }
+        async function enqueueRecovery(kind, prepare) {
+            const context = recovery;
+            if (!isCurrentRecovery(context)) { toast('Open your card online to enable recovery'); return; }
+            const perform = () => {
+                if (!isCurrentRecovery(context)) return false;
+                if (finishing || S.cardLocked || S.status !== 'live' || context.journal.isSubmitted()) {
+                    toast('This card is already being submitted or locked');
+                    return false;
                 }
-                qSave(remain);
-                mergeFromSnap(); // reconcile the card with the server once the queue has drained
-                if (rejected.length) {
-                    // Never silently lose a score AND never lie with a "Synced" toast. Tell the scorer exactly
-                    // which holes the server refused so they can re-enter them.
-                    const holes = rejected.map(function (it) { return it.hole; }).sort(function (a, b) { return a - b; }).join(', ');
-                    notifications.showConflict(
-                        rejected.length + ' offline score' + (rejected.length > 1 ? 's were' : ' was') +
-                        ' rejected and NOT saved (hole' + (rejected.length > 1 ? 's' : '') + ' ' + holes + '). Please re-enter. Tap to dismiss.');
-                    if (navigator.vibrate) { try { navigator.vibrate([120, 60, 120]); } catch (e) {} }
-                } else if (q.length && !remain.length) {
-                    toast('Synced offline scores');
+                readRecovery(context);
+                const edit = prepare();
+                if (!edit) return false;
+                context.journal.enqueue(kind, edit.body, edit.previous);
+                readRecovery(context);
+                return true;
+            };
+            try {
+                const added = navigator.locks && navigator.locks.request
+                    ? await navigator.locks.request(context.journal.writeLockName, (lock) => lock && perform())
+                    : perform();
+                if (!added) return;
+            } catch {
+                toast(kind === 'score' ? 'Score not saved. Free space on this phone and try again.' : 'Lie not saved. Free space on this phone and try again.');
+                return;
+            }
+            renderHole();
+            void flushRecovery();
+        }
+        function scheduleRecovery(context, at) {
+            if (!at || !isCurrentRecovery(context)) return;
+            if (recoveryTimer) clearTimeout(recoveryTimer);
+            recoveryTimer = setTimeout(() => {
+                recoveryTimer = null;
+                void flushRecovery();
+            }, Math.max(100, at - Date.now()));
+        }
+        async function flushRecovery(wake) {
+            const context = recovery;
+            if (!isCurrentRecovery(context) || finishing) return;
+            if (!navigator.onLine) { if (wake === 'manual') toast('Connect to the internet to sync the card'); return; }
+            if (wake) recoveryWake = { context, includeErrors: wake === 'manual' || Boolean(recoveryWake?.includeErrors) };
+            if (recoveryRun) return recoveryRun;
+            clearTimeout(recoveryTimer);
+            recoveryTimer = null;
+            const perform = async () => {
+                if (!isCurrentRecovery(context)) return;
+                if (recoveryWake && recoveryWake.context === context) {
+                    resetJournalRetries(context.journal, { includeErrors: recoveryWake.includeErrors });
+                    recoveryWake = null;
+                    readRecovery(context);
+                    renderHole();
+                }
+                const at = await drainRoundJournal(context.journal, (item) => {
+                    if (!isCurrentRecovery(context)) return null;
+                    const { roundId, cardId, actorIndex } = context.scope;
+                    const body = { ...item.body, recovery: { roundId, cardId, actorIndex, order: item.order, stream: item.stream, previous: item.previous } };
+                    return api(LIVE + '/' + item.kind, { method: 'POST', body, credential: context.credential, timeout: 12000 });
+                }, {
+                    active: () => isCurrentRecovery(context) && !finishing,
+                    online: () => navigator.onLine,
+                    onResult: (item, state, result) => {
+                        if (!isCurrentRecovery(context)) return;
+                        readRecovery(context);
+                        if (state === 'saved') {
+                            if (item.kind === 'throws') S.lastSavedLie = { hole: item.body.hole, scorerIndex: item.body.scorerIndex };
+                            const snap = item.kind === 'score' ? result.data : result.data && result.data.snapshot;
+                            if (snap && snap.recoveryRoundId === context.scope.roundId && (snap.rev == null || snap.rev > S.lastRev)) {
+                                S.snap = snap;
+                                mergeFromSnap();
+                            }
+                        }
+                        renderHole();
+                    },
+                });
+                scheduleRecovery(context, at);
+            };
+            recoveryRun = (async () => {
+                try {
+                    if (navigator.locks && navigator.locks.request) {
+                        await navigator.locks.request(context.journal.lockName, { ifAvailable: true }, (lock) => {
+                            if (!lock) { scheduleRecovery(context, Date.now() + 700); return; }
+                            return perform();
+                        });
+                    } else await perform();
+                } catch {
+                    if (isCurrentRecovery(context)) {
+                        S.recoveryStorageError = true;
+                        renderHole();
+                        scheduleRecovery(context, Date.now() + 5000);
+                    }
                 }
             })();
-            try { return await flushQueuePromise; }
-            finally { flushQueuePromise = null; }
+            try { await recoveryRun; }
+            finally {
+                recoveryRun = null;
+                if ((recoveryWake && !recoveryTimer) || (recovery && recovery !== context)) void flushRecovery();
+            }
+        }
+        async function discardRecovery(id) {
+            const context = recovery;
+            if (!isCurrentRecovery(context)) return;
+            const perform = () => {
+                if (!isCurrentRecovery(context)) return;
+                const item = context.journal.entries().find((row) => row.id === id && (row.state === 'error' || row.state === 'auth'));
+                if (item) context.journal.remove(item);
+                readRecovery(context);
+                renderHole();
+            };
+            try {
+                if (navigator.locks && navigator.locks.request) await navigator.locks.request(context.journal.lockName, perform);
+                else { await recoveryRun; perform(); }
+            } catch { toast('Could not update the saved changes on this phone'); }
+            void flushRecovery();
         }
 
-        // ---------- offline bar ----------
-        function setOnline(on) {
-            notifications.setOnline(on);
-        }
-        window.addEventListener('online', function () { setOnline(true); flushQueue(); connectWs(); });
+        function setOnline(on) { notifications.setOnline(on); }
+        window.addEventListener('online', function () {
+            setOnline(true);
+            void flushRecovery('online');
+            if (WATCH || isCurrentRecovery(recovery)) connectWs();
+        });
         window.addEventListener('offline', function () { setOnline(false); });
+        window.addEventListener('storage', function (event) {
+            const context = recovery;
+            if (!context) return;
+            if (!isCurrentRecovery(context)) { void boot(); return; }
+            if (context.journal.hasStorageKey(event.key)) { readRecovery(context); renderHole(); void flushRecovery(); }
+        });
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) void flushRecovery();
+        });
 
         // ---------- score state access ----------
         function currentScorerIndex() {
@@ -376,34 +528,6 @@ export function startScoreApp(options) {
             const mine = choices.find((p) => p.index === S.myIndex);
             S.scorerIndex = (mine || choices[0]).index;
             return S.scorerIndex;
-        }
-        function hasPendingScore(index, hole) {
-            const legacySuffix = ':index:' + index + ':' + hole;
-            for (const key of pending.keys()) {
-                if (key.endsWith(legacySuffix)) return true;
-                const target = scoreTargetForPlayer(S, index);
-                if (target && key.endsWith(':target:' + target.id + ':' + hole)) return true;
-            }
-            return false;
-        }
-        function setLocal(index, hole, strokes) {
-            const cm = S.cardmates.find((p) => p.index === index);
-            if (!cm) return;
-            // Optimistically record the SELECTED scorecard's own vote (not the consensus) so the number sticks
-            // and can be incremented during a conflict instead of snapping back to blank.
-            const sIdx = currentScorerIndex();
-            cm.scorecards = cm.scorecards || {};
-            cm.scorecards[hole] = Object.assign({}, cm.scorecards[hole]);
-            if (sIdx != null) {
-                if (strokes == null) delete cm.scorecards[hole]['player:' + sIdx];
-                else cm.scorecards[hole]['player:' + sIdx] = strokes;
-            }
-            cm.scores = cm.scores || {};
-            if (strokes == null) delete cm.scores[hole];
-            else cm.scores[hole] = strokes;
-        }
-        function setLocalRow(row, hole, strokes) {
-            (row.playerIndexes || []).forEach(function (index) { setLocal(index, hole, strokes); });
         }
         function setConflicts(rows) {
             S.conflicts = (Array.isArray(rows) ? rows : []).filter((c) => c && c.cardId === S.cardId);
@@ -419,15 +543,17 @@ export function startScoreApp(options) {
             if (Array.isArray(msg.values) && msg.values.length > 1) S.conflicts.push({ cardId: msg.cardId, playerIndex: msg.playerIndex, playerName: msg.playerName, targetId: msg.targetId, label: msg.label, hole: msg.hole, values: msg.values });
         }
 
-        function postThrows(hole, throws) {
-            const scorerIndex = currentScorerIndex();
-            const body = { hole: hole, throws: throws || [] };
-            if (Number.isInteger(scorerIndex)) body.scorerIndex = scorerIndex;
-            try {
-                const discColor = document.documentElement && document.documentElement.getAttribute("data-disc-color");
-                if (discColor) body.discColor = discColor;
-            } catch (e) {}
-            void api(LIVE + '/throws', { method: 'POST', body: body });
+        function postThrows(hole, edit, scorerIndex) {
+            if (scorerIndex == null || scorerIndex !== currentScorerIndex()) return;
+            void enqueueRecovery('throws', () => {
+                const previous = throwsByScorer(S, scorerIndex)[hole] || [];
+                const throws = edit(previous).map((point) => ({ lat: Number(point.lat.toFixed(5)), lng: Number(point.lng.toFixed(5)), n: point.n }));
+                if (throws.length === previous.length) return null;
+                if (throws.length > 18) { toast('This hole already has 18 marked lies'); return null; }
+                const discColor = document.documentElement?.getAttribute('data-disc-color');
+                const body = { hole, throws, scorerIndex, ...(discColor ? { discColor } : {}) };
+                return { body, previous };
+            });
         }
         function patchHoleMarker(hole, kind, point) {
             const row = (S.holes || []).find(function (h) { return h && h.hole === hole; });
@@ -464,51 +590,22 @@ export function startScoreApp(options) {
                 else toast('Could not save that map mark');
             });
         }
-        async function postScore(row, hole, strokes) {
-            if (S.cardLocked || S.status === 'final') { toast('This card is already submitted'); return; }
+        function postScore(row, hole, strokes, viewScorer) {
             const scorerIndex = currentScorerIndex();
+            if (viewScorer !== undefined && viewScorer !== scorerIndex) return;
             if (scorerIndex == null) { toast('Choose a scorecard'); return; }
-            const key = pendingKey(scorerIndex, row.index, hole, row.targetId || null);
-            // Snapshot the cell's prior value so a rejection can be rolled back even before any snapshot exists.
-            const previous = (row.playerIndexes || []).map(function (index) {
-                const cm = S.cardmates.find((p) => p.index === index);
-                return {
-                    cm: cm,
-                    vote: cm && cm.scorecards && cm.scorecards[hole] ? cm.scorecards[hole]['player:' + scorerIndex] : undefined,
-                    score: cm && cm.scores ? cm.scores[hole] : undefined
-                };
-            });
-            pending.set(key, (pending.get(key) || 0) + 1); // refcount so a later concurrent tap stays protected
-            setLocalRow(row, hole, strokes);
-            renderHole();
-            const body = { scorerIndex: scorerIndex, hole: hole, strokes: strokes };
+            const body = { scorerIndex, hole, strokes };
             if (row.targetId) body.targetId = row.targetId;
             else body.index = row.index;
-            const r = await api(LIVE + '/score', { method: 'POST', body: body });
-            const n = (pending.get(key) || 0) - 1; if (n > 0) pending.set(key, n); else pending.delete(key);
-            if (r.ok) { S.snap = r.data; mergeFromSnap(); }
-            else if (r.neterr) { qAdd(row.targetId ? { targetId: row.targetId, scorerIndex: scorerIndex, hole: hole, strokes: strokes } : { index: row.index, scorerIndex: scorerIndex, hole: hole, strokes: strokes }); setOnline(false); }
-            else {
-                if (r.status === 403) toast('You can only score your own card');
-                else if (r.status === 401) toast('Session expired — sign in again');
-                else if (r.status === 429) toast('Easy there — one moment');
-                else if (r.status === 409) toast((r.data && r.data.error === 'card_locked') ? 'This card is already submitted' : 'Round isn’t live');
-                else toast('Could not save that score');
-                // Rejected — roll the phantom optimistic vote back. Reconcile from the snapshot if we have one;
-                // otherwise (no snapshot yet) restore the captured prior value directly.
-                if (S.snap) mergeFromSnap();
-                previous.forEach(function (prev) {
-                    const cm0 = prev.cm; if (!cm0) return;
-                    cm0.scorecards = cm0.scorecards || {}; cm0.scorecards[hole] = Object.assign({}, cm0.scorecards[hole]);
-                    if (prev.vote === undefined) delete cm0.scorecards[hole]['player:' + scorerIndex]; else cm0.scorecards[hole]['player:' + scorerIndex] = prev.vote;
-                    cm0.scores = cm0.scores || {};
-                    if (prev.score === undefined) delete cm0.scores[hole]; else cm0.scores[hole] = prev.score;
-                });
-                renderHole();
-            }
+            void enqueueRecovery('score', () => {
+                const key = scorePendingKey(scorerIndex, row.index, hole, row.targetId);
+                const player = S.cardmates.find((mate) => mate.index === row.playerIndexes?.[0]);
+                const previous = S.optimisticScores.has(key) ? S.optimisticScores.get(key) : player?.scorecards?.[hole]?.['player:' + scorerIndex] ?? null;
+                return { body, previous };
+            });
         }
 
-        // ---------- merge a snapshot's scores into our cardmates (respecting pending optimistic edits) ----------
+        // ---------- merge a snapshot's authoritative scores into our cardmates ----------
         // My own score-target error: a whole-round error (public scoreTargetError) else the per-pair error
         // covering MY player index. The public snapshot narrows scoreTargetError to null on a per-PAIR break
         // (so it can't bleed to every viewer over /ws), exposing the detail in the additive scoreTargetErrors[]
@@ -631,27 +728,11 @@ export function startScoreApp(options) {
                 });
             }
             S.cardmates.forEach((cm) => {
-                const sp = byIndex.get(cm.index); if (!sp) return;
-                cm.scores = cm.scores || {};
-                cm.scorecards = cm.scorecards || {};
-                S.holes.forEach((hh) => {
-                    // Consensus value (drives totals/leaderboard + the fallback display).
-                    if (!hasPendingScore(cm.index, hh.hole)) {
-                        const scores = sp.scores || {};
-                        if (Object.prototype.hasOwnProperty.call(scores, hh.hole)) cm.scores[hh.hole] = scores[hh.hole];
-                        else delete cm.scores[hh.hole];
-                    }
-                    // Per-scorer votes: the snapshot is the source of truth, but keep any of OUR own in-flight
-                    // (pending) optimistic votes so the number doesn't flicker back while a POST is in flight.
-                    const votes = Object.assign({}, (sp.scorecards && sp.scorecards[hh.hole]) || {});
-                    const local = cm.scorecards[hh.hole] || {};
-                    Object.keys(local).forEach((sid) => {
-                        const sidx = sid.indexOf('player:') === 0 ? Number(sid.slice(7)) : NaN;
-                        const target = scoreTargetForPlayer(S, cm.index);
-                        if (Number.isInteger(sidx) && (pending.has(pendingKey(sidx, cm.index, hh.hole, null)) || (target && pending.has(pendingKey(sidx, null, hh.hole, target.id))))) votes[sid] = local[sid];
-                    });
-                    if (Object.keys(votes).length) cm.scorecards[hh.hole] = votes; else delete cm.scorecards[hh.hole];
-                });
+                const player = byIndex.get(cm.index);
+                if (!player) return;
+                cm.scores = player.scores || {};
+                cm.scorecards = player.scorecards || {};
+                if (player.throws) cm.throws = player.throws;
             });
             renderHole();
             if (lbOpen) renderLeaderboard();
@@ -661,8 +742,8 @@ export function startScoreApp(options) {
 
         // ---------- WebSocket live sync ----------
         function connectWs() {
-            if (MODE === 'home') return;
-            try { if (S.ws) S.ws.close(); } catch (e) {}
+            if (MODE === 'home' || (!WATCH && !isCurrentRecovery(recovery))) return;
+            if (S.ws && (S.ws.readyState === WebSocket.OPEN || S.ws.readyState === WebSocket.CONNECTING)) return;
             let ws;
             try { ws = new WebSocket(API_BASE.replace(/^http/, 'ws') + LIVE + '/ws'); }
             catch (e) { return; }
@@ -671,9 +752,22 @@ export function startScoreApp(options) {
                 let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
                 // Two scorers on the same card disagreed on a hole — alert this card immediately to reconcile.
                 if (msg && msg.type === 'conflict') { if (WATCH) return; if (msg.cardId === S.cardId) { upsertConflict(msg); conflictAlert(msg); renderHole(); } return; }
-                if (msg && msg.type === 'snapshot') { S.snap = msg; mergeFromSnap(); }
+                if (msg && msg.type === 'snapshot') {
+                    if (!WATCH) {
+                        if (!isCurrentRecovery(recovery)) return;
+                        if (msg.recoveryRoundId !== recovery.scope.roundId) { void loadMine(); return; }
+                    }
+                    if (msg.rev != null && msg.rev < S.lastRev) return;
+                    S.snap = msg;
+                    mergeFromSnap();
+                }
             });
-            ws.addEventListener('close', function () { if (S.wsTimer) return; S.wsTimer = setTimeout(function () { S.wsTimer = null; connectWs(); }, 4000); });
+            ws.addEventListener('close', function () {
+                if (S.ws !== ws) return;
+                S.ws = null;
+                if (S.wsTimer) return;
+                S.wsTimer = setTimeout(function () { S.wsTimer = null; connectWs(); }, 4000);
+            });
             ws.addEventListener('error', function () { try { ws.close(); } catch (e) {} });
         }
 
@@ -866,6 +960,7 @@ export function startScoreApp(options) {
             if (!S.holes.length) return;
             const h = holeMeta(S.holeIdx);
             const scorerIndex = currentScorerIndex();
+            if (recovery && !isCurrentRecovery(recovery)) return;
             const scorecardState = buildScorecardViewState({
                 state: S,
                 mode: MODE,
@@ -875,18 +970,29 @@ export function startScoreApp(options) {
             });
             renderScoreBody('scorecard', {
                 ...scorecardState,
+                watchApi: !WATCH && (memberToken() || (ROUND_CODE && readOpenPlayToken())) ? api : null,
+                eventId: EVENT_ID,
+                onFullScorecard: openLeaderboard,
                 onAddPlayer: addGuestPrompt,
                 onManagePlayers: openManagePlayers,
                 onNext: function () { S.holeIdx = playOrderStep(S.holes, S.holeIdx, startingHoleForState(S), 1); renderHole(); },
                 onPrevious: function () { S.holeIdx = playOrderStep(S.holes, S.holeIdx, startingHoleForState(S), -1); renderHole(); },
                 onJumpHole: function (index) { S.holeIdx = index; renderHole(); },
                 onScore: postScore,
-                onThrows: postThrows,
+                clipRecovery: recovery ? { scopeKey: recovery.scope.key, upload: recovery.uploadClip } : null,
+                recoveryItems: S.recoveryItems || [],
+                lastSavedLie: S.lastSavedLie,
+                recoveryStorageError: S.recoveryStorageError,
+                recoveryUnavailable: !recovery,
+                onRetryRecovery: () => { void flushRecovery('manual'); },
+                onDiscardRecovery: discardRecovery,
+                onThrows: !finishing && !S.cardLocked && S.status === 'live' ? postThrows : null,
                 onMapMark: memberToken() && S.status !== 'final' ? postMapMark : null,
                 onCtpVote: EVENT_ID && !WATCH ? postCtpVote : null,
                 onOpenFinish: WATCH ? null : openFinishConfirm,
                 onCloseFinish: closeFinishConfirm,
                 onAgreeFinish: agreeFinish,
+                finishing,
                 onScorerChange: function (index) { S.scorerIndex = index; renderHole(); },
                 onShare: shareRound,
                 onShareCode: ROUND_CODE ? shareJoinCode : null,
@@ -969,6 +1075,12 @@ export function startScoreApp(options) {
         }
         function openFinishConfirm() {
             if (WATCH) return;
+            readRecovery();
+            if (S.recoveryStorageError || S.recoveryItems.length || !isCurrentRecovery(recovery)) {
+                toast('Sync this card’s scores and lies before submitting');
+                renderHole();
+                return;
+            }
             if (!finalizeBlockers(S).ready && !S.cardLocked) { toast('Finish the remaining holes first'); return; }
             S.finishConfirmOpen = true;
             closeLeaderboard();
@@ -979,8 +1091,42 @@ export function startScoreApp(options) {
             renderHole();
         }
         async function agreeFinish(playerIndex) {
+            const context = recovery;
+            if (!isCurrentRecovery(context) || finishing) return;
+            finishing = true;
+            renderHole();
+            try {
+                const perform = async () => {
+                    if (!isCurrentRecovery(context)) return;
+                    readRecovery(context);
+                    if (S.recoveryStorageError || S.recoveryItems.length || !finalizeBlockers(S).ready) {
+                        S.finishConfirmOpen = false;
+                        toast('Sync this card’s scores and lies before submitting');
+                        return;
+                    }
+                    await submitFinish(playerIndex, context);
+                };
+                if (navigator.locks && navigator.locks.request) {
+                    await navigator.locks.request(context.journal.lockName,
+                        () => navigator.locks.request(context.journal.writeLockName, perform));
+                } else { await recoveryRun; await perform(); }
+            } catch {
+                toast('Could not verify this card’s saved changes');
+            } finally {
+                finishing = false;
+                if (isCurrentRecovery(context)) { renderHole(); void flushRecovery(); }
+            }
+        }
+        async function submitFinish(playerIndex, { credential, scope, journal }) {
             if (S.cardLocked && S.status !== 'final') { toast('This card is already submitted'); return; }
-            const r = await api(LIVE + '/finish-card', { method: 'POST', body: { playerIndex: playerIndex } });
+            const { roundId, cardId, actorIndex } = scope;
+            const r = await api(LIVE + '/finish-card', {
+                method: 'POST', credential, body: { playerIndex, recovery: { roundId, cardId, actorIndex } }, timeout: 12000,
+            });
+            if (r.ok && (r.data?.status === 'final' || r.data?.lockedCardIds?.includes(String(cardId)))) {
+                try { journal.markSubmitted(); } catch { /* the server already locked the card */ }
+            }
+            if (!sameCredential(credential)) return;
             if (r.ok) {
                 S.snap = r.data || S.snap;
                 if (r.data && r.data.status === 'final') {
@@ -1019,8 +1165,10 @@ export function startScoreApp(options) {
 
         // ---------- boot ----------
         function persistMineCache() {
-            if (!S.cardId) return;
-            writeMineCache(currentMineKey(), {
+            if (!isCurrentRecovery(recovery)) return;
+            writeMineCache(recovery.cacheKey, {
+                recoveryRoundId: recovery.scope.roundId,
+                rev: S.lastRev,
                 cardAttestation: S.cardAttestation,
                 cardId: S.cardId,
                 cardLocked: S.cardLocked,
@@ -1041,8 +1189,13 @@ export function startScoreApp(options) {
             });
         }
         function applyMinePayload(d, options) {
-            const offline = Boolean(options && options.offline);
+            const { offline, credential, cacheKey } = options;
+            const scope = roundRecoveryScope({ roundCode: ROUND_CODE, eventId: EVENT_ID, roundId: d.recoveryRoundId, cardId: d.cardId, playerIndex: d.playerIndex });
+            const sameScope = scope && recovery && scope.key === recovery.scope.key;
+            if (sameScope && !offline && d.rev != null && d.rev < S.lastRev && S.snap?.players) return;
+            bindRecovery(scope, credential, cacheKey);
             S.snap = d;
+            S.lastRev = d.rev ?? -1;
             S.status = d.status || null;
             assignHoles(Array.isArray(d.holes) ? d.holes : [], d);
             S.cardId = d.cardId; S.myIndex = d.playerIndex; S.cardmates = d.cardmates;
@@ -1056,7 +1209,7 @@ export function startScoreApp(options) {
             if (!offline) ensureHandicaps(S.layoutId);
             S.weather = d.weather || null;
             S.playerLocations = Array.isArray(d.playerLocations) ? d.playerLocations : [];
-            S.scorerIndex = d.playerIndex;
+            if (!sameScope) S.scorerIndex = d.playerIndex;
             if (MODE === 'round') {
                 const place = [S.courseName, S.layoutName].filter(Boolean).join(' · ');
                 rememberRecentRound({ code: ROUND_CODE, label: place || ('Casual round ' + ROUND_CODE) });
@@ -1065,7 +1218,7 @@ export function startScoreApp(options) {
             setConflicts(d.conflicts);
             setMissing(d.missing);
             const me = d.cardmates.find((p) => p.isMe);
-            S.holeIdx = activeHoleIndex({
+            if (!sameScope) S.holeIdx = activeHoleIndex({
                 holes: S.holes,
                 startingHole: me && me.startingHole,
                 isHoleComplete: function (hole) { return cardHoleComplete(S, hole, S.scorerIndex); },
@@ -1079,10 +1232,10 @@ export function startScoreApp(options) {
             if (!offline) connectWs();
             startPotsPolling();
             if (!offline) startLiveLocation();
-            flushQueue();
+            void flushRecovery('boot');
             loadPlayingAnchor();
             void wakeLock.start();
-            if (offline) toast('Offline — showing last saved card. Scores sync when reconnected.');
+            if (offline) { connectWs(); toast('Offline — showing your saved card. Changes sync when reconnected.'); }
             else persistMineCache();
         }
         let ratingAnchorStarted = false;
@@ -1099,7 +1252,13 @@ export function startScoreApp(options) {
             renderHole();
         }
         async function loadMine() {
-            let r = await api(LIVE + '/mine');
+            const ticket = ++mineRequest;
+            const credential = scoringCredential();
+            const active = () => ticket === mineRequest && sameCredential(credential);
+            const cacheKey = await secureMineCacheKey(ROUND_CODE, EVENT_ID, credential.token).catch(() => '');
+            if (!active()) return;
+            let r = await api(LIVE + '/mine', { credential, timeout: 10000 });
+            if (!active()) return;
             // Casual round: if we're not on it yet, join with the code, then re-load our card.
             // Once a hole is scored, the card has to approve the join before we are added.
             if (MODE === 'round' && r.ok && r.data && r.data.cardId == null && r.data.status === 'live') {
@@ -1110,7 +1269,8 @@ export function startScoreApp(options) {
                     startJoinPoll();
                     return;
                 }
-                const jr = await api('/rounds/' + ROUND_CODE + '/join', { method: 'POST', body: {} });
+                const jr = await api('/rounds/' + ROUND_CODE + '/join', { method: 'POST', body: {}, credential });
+                if (!active()) return;
                 if (jr.ok && jr.data && jr.data.pendingJoin) {
                     S.snap = r.data;
                     S.status = r.data.status;
@@ -1126,12 +1286,17 @@ export function startScoreApp(options) {
                     );
                     return;
                 }
-                if (jr.ok) r = await api(LIVE + '/mine');
+                if (jr.ok) r = await api(LIVE + '/mine', { credential, timeout: 10000 });
+                if (!active()) return;
             }
-            if (r.status === 401) { if (MODE === 'round') renderOpenPlay(); else renderLogin('Please sign in to keep score.'); return; }
+            if (r.status === 401 || r.status === 403) {
+                stopRecovery();
+                renderLogin('Sign in to sync any saved scores, lies and clips.');
+                return;
+            }
             if (!r.ok || !r.data) {
-                const cached = isTransientMineFailure(r) ? readMineCache(currentMineKey()) : null;
-                if (cached) { applyMinePayload(cached, { offline: true }); return; }
+                const cached = isTransientMineFailure(r) ? readMineCache(cacheKey) : null;
+                if (cached) { applyMinePayload(cached, { offline: true, credential, cacheKey }); return; }
                 renderMessage('Couldn’t load your card', 'Check your connection and try again.', true); return;
             }
             const d = r.data;
@@ -1143,8 +1308,7 @@ export function startScoreApp(options) {
                 else renderMessage('No card yet', 'Either the round hasn’t started or you’re not on a card for this event. Ask an admin to start the round and assign cards.', true);
                 return;
             }
-            writeMineCache(currentMineKey(), d);
-            applyMinePayload(d);
+            applyMinePayload(d, { credential, cacheKey });
         }
         let joinPoll = null;
         function stopJoinPoll() {
@@ -1172,7 +1336,7 @@ export function startScoreApp(options) {
             if (!next.ok || !next.data || next.data.status !== 'live') return;
             if (next.data.cardId != null) {
                 stopJoinPoll();
-                applyMinePayload(next.data);
+                await loadMine();
                 return;
             }
             if (!next.data.pendingJoin) {
@@ -1189,18 +1353,17 @@ export function startScoreApp(options) {
                 return;
             }
             if (jr.ok) {
-                const next = await api(LIVE + '/mine');
-                if (next.ok && next.data && next.data.cardId != null) applyMinePayload(next.data);
+                await loadMine();
             }
         }
         async function answerJoinRequest(id) {
             const response = await api('/rounds/' + ROUND_CODE + '/join-approve', { method: 'POST', body: { id: id } });
-            if (response.ok && response.data && Array.isArray(response.data.cardmates)) applyMinePayload(response.data);
+            if (response.ok && response.data && Array.isArray(response.data.cardmates)) await loadMine();
             else toast('Could not add them to the card.');
         }
         async function declineJoinRequest(id) {
             const response = await api('/rounds/' + ROUND_CODE + '/join-decline', { method: 'POST', body: { id: id } });
-            if (response.ok && response.data && Array.isArray(response.data.cardmates)) applyMinePayload(response.data);
+            if (response.ok && response.data && Array.isArray(response.data.cardmates)) await loadMine();
             else toast('Could not update that request.');
         }
 
@@ -1211,7 +1374,7 @@ export function startScoreApp(options) {
             if (code.length >= 4) location.search = '?round=' + code;
             else toast('Enter a valid code');
         }
-        function signOut() { clearMemberSession(); wakeLock.stop(); notifyScoreAuthChanged(); if (MODE === 'home') renderHome(); else renderLogin(); }
+        function signOut() { stopRecovery(); clearMemberSession(); wakeLock.stop(); notifyScoreAuthChanged(); if (MODE === 'home') renderHome(); else renderLogin(); }
         function renderHome() {
             renderSetupFlow({
                 view: 'home',
@@ -1569,6 +1732,7 @@ export function startScoreApp(options) {
         }
 
         async function boot() {
+            if (!isCurrentRecovery(recovery)) stopRecovery();
             setOnline(navigator.onLine);
             if (WATCH && (EVENT_ID || ROUND_CODE)) {
                 renderLoading();

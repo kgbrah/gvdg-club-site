@@ -1,6 +1,7 @@
 import type { D1Like } from "./db-types.js";
 import { fallbackCourse, fallbackCourses, fallbackLayout, fallbackLayoutNames, fallbackLayouts } from "./course-catalog-fallback.js";
 import { readD1OrFallback } from "./d1-retry.js";
+import { COVERAGE_ORDER, layoutQuality, layoutRevision, layoutRows, mapCoordinates, type Coverage, type Quality } from "../../src/shared/course-quality.js";
 
 export interface CourseInput {
   name: string;
@@ -25,22 +26,107 @@ async function listed<T>(
   return { results, cacheable };
 }
 
+type DirectoryCourse = Record<string, unknown> & { id: number; name: string };
+
 export async function listCoursesCatalog(db: D1Like) {
   const catalog = await listed(
-    () => db.prepare("SELECT * FROM courses ORDER BY is_default DESC, name").all(),
+    () => db.prepare("SELECT * FROM courses ORDER BY is_default DESC, name").all<DirectoryCourse>(),
     fallbackCourses,
   );
   const layouts = (await readD1OrFallback(
-    () => db.prepare("SELECT id, course_id, holes FROM course_layouts").all(),
-    () => ({ results: [], success: true }),
-  )).results as { id?: unknown; course_id?: unknown; holes?: unknown }[];
-  const consensus = (await readD1OrFallback(
-    () => db.prepare("SELECT layout_id, hole, kind, published FROM course_map_consensus WHERE published = 1").all(),
-    () => ({ results: [], success: true }),
-  )).results as { layout_id?: unknown; hole?: unknown; kind?: unknown; published?: unknown }[];
+    () => db.prepare("SELECT * FROM course_layouts").all(),
+    () => ({ results: catalog.results.flatMap((course) => fallbackLayouts(Number(course.id))), success: true }),
+  )).results;
+  const consensus = await publishedCatalogMapMarks(db);
+  const summaries = courseCoverageSummaries(layouts, consensus);
   return {
-    results: withCourseMapFlags(catalog.results, mappedCourseIdsFromSources(layouts, consensus)),
+    results: catalog.results.map((course) => {
+      const summary = summaries.get(Number(course.id));
+      return {
+        ...course,
+        // Existing importer metrics use mapped to mean at least one usable tee/basket pair.
+        mapped: summary?.mappedHoles ? 1 : 0,
+        coverage: summary?.coverage ?? "listed",
+        layouts: summary?.layouts ?? [],
+      };
+    }),
     cacheable: catalog.cacheable,
+  };
+}
+
+type CatalogRow = Record<string, unknown>;
+type PublicCatalogLayout = CatalogRow & { quality: Quality; revision: string; map_updated_at: string | null; map_holes?: unknown[] };
+
+async function publishedCatalogMapMarks(db: D1Like, courseId?: number): Promise<CatalogRow[]> {
+  const sql = `SELECT cm.layout_id, cm.hole, cm.kind, cm.lat, cm.lng, cm.updated_at
+      FROM course_map_consensus cm JOIN course_layouts l ON l.id = cm.layout_id
+      WHERE cm.published = 1` + (courseId == null ? "" : " AND l.course_id = ?");
+  return (await readD1OrFallback(
+    () => db.prepare(sql).bind(...(courseId == null ? [] : [courseId])).all(),
+    () => ({ results: [], success: true }),
+  )).results;
+}
+
+function marksByLayout(rows: CatalogRow[]) {
+  const layouts = new Map<number, Map<string, CatalogRow>>();
+  for (const row of rows) {
+    if (!mapCoordinates(row) || (row.kind !== "tee" && row.kind !== "target")) continue;
+    const id = Number(row.layout_id);
+    const holes = layouts.get(id) ?? new Map<string, CatalogRow>();
+    holes.set(String(row.hole) + ":" + String(row.kind), row);
+    layouts.set(id, holes);
+  }
+  return layouts;
+}
+
+function catalogLayout(layout: CatalogRow, marks: Map<string, CatalogRow> | undefined): PublicCatalogLayout {
+  let mapUpdatedAt: string | null = null;
+  const mapHoles = marks?.size ? layoutRows(layout).map((row) => {
+    if (!row || typeof row !== "object") return row;
+    const hole = row as CatalogRow;
+    const updated = { ...hole };
+    for (const kind of ["tee", "target"] as const) {
+      const mark = marks.get(String(hole.hole) + ":" + kind);
+      const coordinates = mapCoordinates(mark);
+      if (!mark || !coordinates) continue;
+      const stored = holeMarker(hole[kind]);
+      updated[kind] = { ...coordinates, label: stored?.label ?? (kind === "tee" ? "Tee" : "Basket"), source: "community" };
+      if (typeof mark.updated_at === "string" && (!mapUpdatedAt || mark.updated_at > mapUpdatedAt)) mapUpdatedAt = mark.updated_at;
+    }
+    return updated;
+  }) : null;
+  // Keep the unmodified holes field for existing editors and expose the public map separately.
+  const effective = mapHoles ? { ...layout, map_holes: mapHoles } : layout;
+  return { ...effective, quality: layoutQuality(effective), revision: layoutRevision(effective), map_updated_at: mapUpdatedAt };
+}
+
+export function courseCoverageSummaries(layouts: CatalogRow[], marks: CatalogRow[]) {
+  type Summary = { coverage: Coverage; mappedHoles: number; layouts: {
+    id: unknown; name: unknown; coverage: Coverage; updated_at: string | null; expected_holes: number | null;
+  }[] };
+  const courses = new Map<number, Summary>();
+  const byLayout = marksByLayout(marks);
+  for (const layout of layouts) {
+    const courseId = Number(layout.course_id);
+    if (!Number.isSafeInteger(courseId) || courseId <= 0) continue;
+    const { quality, map_updated_at } = catalogLayout(layout, byLayout.get(Number(layout.id)));
+    const current = courses.get(courseId) ?? { coverage: "listed", mappedHoles: 0, layouts: [] };
+    if (COVERAGE_ORDER[quality.status] > COVERAGE_ORDER[current.coverage]) current.coverage = quality.status;
+    current.mappedHoles += quality.mappedCount;
+    const updated = [layout.updated_at, map_updated_at].filter((value): value is string => typeof value === "string").sort().at(-1);
+    current.layouts.push({ id: layout.id, name: layout.name, coverage: quality.status, updated_at: updated ?? null,
+      expected_holes: typeof layout.expected_holes === "number" ? layout.expected_holes : null });
+    courses.set(courseId, current);
+  }
+  return courses;
+}
+
+export async function listPublicLayoutsCatalog(db: D1Like, courseId: number) {
+  const [catalog, marks] = await Promise.all([listLayoutsCatalog(db, courseId), publishedCatalogMapMarks(db, courseId)]);
+  const byLayout = marksByLayout(marks);
+  return {
+    ...catalog,
+    results: catalog.results.map((layout) => catalogLayout(layout, byLayout.get(Number(layout.id)))),
   };
 }
 
@@ -119,9 +205,14 @@ export async function listLayouts(db: D1Like, courseId: number) {
 
 export async function createLayout(
   db: D1Like,
-  l: { course_id: number; name?: string; holes: unknown; total_par?: number | null },
+  l: { course_id: number; name?: string; holes: unknown; total_par?: number | null; expected_holes?: number },
 ) {
   const holesJson = JSON.stringify(l.holes ?? []);
+  if (l.expected_holes != null) {
+    return db.prepare("INSERT INTO course_layouts (course_id, name, holes, total_par, expected_holes) VALUES (?, ?, ?, ?, ?) RETURNING *")
+      .bind(l.course_id, l.name ?? "Main", holesJson, l.total_par ?? null, l.expected_holes)
+      .first();
+  }
   return db
     .prepare("INSERT INTO course_layouts (course_id, name, holes, total_par) VALUES (?, ?, ?, ?) RETURNING *")
     .bind(l.course_id, l.name ?? "Main", holesJson, l.total_par ?? null)
@@ -259,9 +350,14 @@ export async function getLayoutHoles(db: D1Like, layoutId: number | null | undef
 export async function updateLayout(
   db: D1Like,
   id: number,
-  l: { name?: string | null; holes?: unknown; total_par?: number | null },
+  l: { name?: string | null; holes?: unknown; total_par?: number | null; expected_holes?: number | null },
 ) {
   const holesJson = l.holes === undefined ? null : JSON.stringify(l.holes ?? []);
+  if (l.expected_holes !== undefined) {
+    return db.prepare(
+      "UPDATE course_layouts SET name=COALESCE(?,name), holes=COALESCE(?,holes), total_par=COALESCE(?,total_par), expected_holes=? WHERE id=? RETURNING *",
+    ).bind(l.name ?? null, holesJson, l.total_par ?? null, l.expected_holes, id).first();
+  }
   return db
     .prepare(
       "UPDATE course_layouts SET name=COALESCE(?,name), holes=COALESCE(?,holes), total_par=COALESCE(?,total_par) WHERE id=? RETURNING *",

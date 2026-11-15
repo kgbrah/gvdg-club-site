@@ -1,4 +1,5 @@
 import React from "react";
+import { currentAdminRoute } from "./admin-shell-state.js";
 
 const h = React.createElement;
 
@@ -30,7 +31,15 @@ function formBody(form) {
 }
 
 export function AdminWalletAdjustmentForm() {
-  const [form, setForm] = React.useState(EMPTY_FORM);
+  const [form, setForm] = React.useState(() => ({ ...EMPTY_FORM, memberId: currentAdminRoute().memberId || "" }));
+  React.useEffect(() => {
+    function selectMember(event) {
+      if (event.detail?.tab !== "wallets" || !event.detail.memberId) return;
+      setForm({ ...EMPTY_FORM, memberId: event.detail.memberId });
+    }
+    window.addEventListener("gvdg:admin-active-tab", selectMember);
+    return () => window.removeEventListener("gvdg:admin-active-tab", selectMember);
+  }, []);
   const [busy, setBusy] = React.useState(false);
   const currentRequest = React.useRef("");
   const requestCounter = React.useRef(0);

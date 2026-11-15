@@ -101,6 +101,7 @@ async function importNearbyCourses(env: Env, body: Record<string, unknown>): Pro
         name: defaultLayoutName(),
         holes,
         total_par: holes.reduce((sum, h) => sum + h.par, 0),
+        expected_holes: course.holes,
       });
       imported.push(course);
     }

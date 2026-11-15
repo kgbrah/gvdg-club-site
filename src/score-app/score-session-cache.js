@@ -1,4 +1,5 @@
 const MINE_TTL_MS = 24 * 60 * 60 * 1000;
+const RECOVERY_CACHE_PREFIX = "gvdg:score-mine:";
 
 function tokenTag(token) {
   const value = String(token || "").trim();
@@ -10,6 +11,15 @@ export function mineCacheKey(roundCode, eventId, token) {
   if (!id) return "";
   const who = tokenTag(token);
   return who ? "gvdg_score_mine:" + id + ":" + who : "gvdg_score_mine:" + id;
+}
+
+export async function secureMineCacheKey(roundCode, eventId, token) {
+  const id = roundCode || eventId;
+  if (!id || !token) return "";
+  const bytes = new TextEncoder().encode(token);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const tag = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return RECOVERY_CACHE_PREFIX + (roundCode ? "round:" : "event:") + id + ":" + tag;
 }
 
 export function writeMineCache(key, data, storage = globalThis.localStorage) {
@@ -33,7 +43,7 @@ export function readMineCache(key, storage = globalThis.localStorage, now = Date
     if (!Array.isArray(data.cardmates) || !data.cardmates.length) return null;
     if (!Array.isArray(data.holes) || !data.holes.length) return null;
     const savedAt = Number(parsed.savedAt);
-    if (!Number.isFinite(savedAt) || now - savedAt > MINE_TTL_MS) return null;
+    if (!Number.isFinite(savedAt) || now - savedAt > (key.startsWith(RECOVERY_CACHE_PREFIX) ? 7 : 1) * MINE_TTL_MS) return null;
     return data;
   } catch {
     return null;
@@ -44,5 +54,5 @@ export function isTransientMineFailure(result) {
   if (!result) return true;
   if (result.neterr) return true;
   const status = Number(result.status);
-  return status === 0 || status >= 500;
+  return status === 0 || status === 429 || status >= 500;
 }

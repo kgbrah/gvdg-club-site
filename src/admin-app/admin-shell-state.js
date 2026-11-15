@@ -3,7 +3,7 @@ const DEFAULT_ACTIVE_TAB = "today";
 const DEFAULT_MESSAGE_STATE = { text: "", ok: null };
 
 let adminAuthGateState = DEFAULT_AUTH_GATE_STATE;
-let adminActiveTab = DEFAULT_ACTIVE_TAB;
+let adminRoute = { tab: DEFAULT_ACTIVE_TAB, eventId: null, courseId: null, filter: null };
 let adminMessageState = DEFAULT_MESSAGE_STATE;
 let adminOrdersBadgeCount = 0;
 
@@ -40,13 +40,15 @@ export function publishAdminAuthGateState(state) {
 }
 
 export function currentAdminActiveTab() {
-  return adminActiveTab;
+  return adminRoute.tab;
 }
 
-export function publishAdminActiveTab(tab) {
-  adminActiveTab = normalizedTab(tab);
-  window.dispatchEvent(new CustomEvent("gvdg:admin-active-tab", { detail: { tab: adminActiveTab } }));
-  return adminActiveTab;
+export function currentAdminRoute() { return adminRoute; }
+
+export function publishAdminActiveTab(tab, detail = {}) {
+  adminRoute = { ...detail, tab: normalizedTab(tab) };
+  window.dispatchEvent(new CustomEvent("gvdg:admin-active-tab", { detail: adminRoute }));
+  return adminRoute.tab;
 }
 
 export function currentAdminMessageState() {

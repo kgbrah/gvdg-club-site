@@ -1,0 +1,58 @@
+name: Verify scoring platform
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-platform-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Test and build all app entry points
+        run: |
+          npm test
+          npm run build
+          node scripts/lint-hex.mjs
+      - name: Check React
+        run: npm run qa:react
+      - name: Install browser for interaction checks
+        run: npx playwright install --with-deps chromium-headless-shell
+      - name: Verify navigation, scoring and member workflows
+        run: |
+          node scripts/qa/navigation-browser-qa.mjs
+          node scripts/qa/live-scoring-browser-qa.mjs
+          node scripts/qa/members-dashboard-browser-qa.mjs
+
+  worker:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: auth-worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: auth-worker/package-lock.json
+      - run: npm ci
+      - name: Validate types, behavior and deployment bindings
+        run: |
+          npm run typegen:check
+          npm run typecheck
+          npm test
+          node scripts/validate-wrangler-config.mjs --env staging
+          node scripts/validate-wrangler-config.mjs --env gvdgclub

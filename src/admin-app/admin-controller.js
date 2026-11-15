@@ -1,11 +1,12 @@
 import { adminConfirm, adminShowPin } from "./admin-dialogs.js";
-import { publishAdminActiveTab, publishAdminAuthGateState, publishAdminMessageState, publishAdminOrdersBadgeCount } from "./admin-shell-state.js";
+import { currentAdminRoute, publishAdminActiveTab, publishAdminAuthGateState, publishAdminMessageState, publishAdminOrdersBadgeCount } from "./admin-shell-state.js";
 import { publishAdminNeeds } from "./admin-needs.js";
 import { installCourseLayoutsController } from "./course-layouts-controller.js";
 import { installDataArchiveController } from "./data-archive-controller.js";
 import { installImportController } from "./import-controller.js";
 import { installTeeSignReviewController } from "./tee-sign-review-controller.js";
 import { normalizeConfig as normalizeScoringConfig } from "./scoring-model.js";
+import { destination, navigationHref, readAppRoute } from "../shared/app-navigation.js";
 import { resolveApiBase } from "../shared/api-base.js";
 import { readMemberToken } from "../shared/member-session.js";
 
@@ -82,29 +83,77 @@ export function startAdminController() {
         let loadTeeSignReview = async () => {};
         let adminProductInventoryControlsSnapshot = {};
         let adminOrderControlsSnapshot = {};
-        async function adminSwitch(tab, detail) {
-            publishAdminActiveTab(tab);
-            const eventId = detail && detail.eventId != null && detail.eventId !== '' ? detail.eventId : null;
-            if (tab === 'create') { adminLoadCourses(); adminLoadLeagues(); }
-            if (tab === 'today' || tab === 'events') adminLoadEvents();
-            if (tab === 'events') { adminLoadFundraisers(); adminLoadMeetings(); }
-            if (tab === 'today') { adminLoadShelf(); adminLoadOrders(); refreshAdminNeeds(); }
-            if (tab === 'scoring') {
+        let lastEventId = null;
+        let lastCourseId = null;
+        let navTicket = 0;
+        let loadCourseLayouts = async () => {};
+
+        function publishRoute(tabValue, detail = {}, { fromHistory = false, focusHeading = true } = {}) {
+            const item = destination('admin', tabValue);
+            const contextId = (value) => /^\d{1,12}$/.test(String(value ?? '')) && Number(value) > 0 ? String(Number(value)) : null;
+            const eventContext = item.context === 'event' || item.key === 'wallets' || item.key === 'create';
+            const eventId = eventContext
+                ? contextId('eventId' in detail ? detail.eventId : item.context === 'event' ? lastEventId : null)
+                : null;
+            const courseId = item.context === 'course'
+                ? contextId('courseId' in detail ? detail.courseId : lastCourseId)
+                : null;
+            if (item.context === 'event' || eventId) lastEventId = eventId;
+            if (item.context === 'course') lastCourseId = courseId;
+            const memberId = item.key === 'wallets' && typeof detail.memberId === 'string' ? detail.memberId : null;
+            const route = { tab: item.key, eventId, courseId, memberId, filter: detail.filter || null, focusHeading };
+            if (!fromHistory) {
+                const href = navigationHref('admin', window.location, item.key, route);
+                const current = window.location.pathname + window.location.search + window.location.hash;
+                if (href !== current || memberId !== currentAdminRoute().memberId) window.history.pushState({ memberId }, '', href);
+            }
+            publishAdminActiveTab(item.key, route);
+            return route;
+        }
+
+        async function adminSwitch(tab, detail = {}, options = {}) {
+            const route = publishRoute(tab, detail, options);
+            const ticket = ++navTicket;
+            const pane = destination('admin', route.tab).pane || route.tab;
+            if (pane === 'create') { adminLoadCourses(); adminLoadLeagues(); }
+            if (pane === 'today' || pane === 'events') adminLoadEvents();
+            if (pane === 'events') { adminLoadFundraisers(); adminLoadMeetings(); }
+            if (pane === 'today') { adminLoadShelf(); adminLoadOrders({ status: '' }); refreshAdminNeeds(); }
+            if (pane === 'scoring') {
                 await scLoadEvents();
-                if (eventId) await scSelectEventFromReact({ eventId });
+                if (ticket !== navTicket) return;
+                const selected = route.eventId || (route.tab === 'scoring' ? scEvents().find((event) => event.status === 'live')?.id : null);
+                if (selected && !route.eventId) publishRoute(route.tab, { eventId: selected }, { fromHistory: true, focusHeading: false });
+                await scSelectEventFromReact({ eventId: selected });
             }
-            if (tab === 'layouts') adminLoadCourses();
-            if (tab === 'leagues-mgmt') adminLoadLeagues();
-            if (tab === 'fundraisers') adminLoadFundraisers();
-            if (tab === 'meetings') adminLoadMeetings();
-            if (tab === 'registration') {
+            if (pane === 'layouts') {
+                adminLoadCourses();
+                await loadCourseLayouts({ courseId: route.courseId });
+            }
+            if (pane === 'leagues-mgmt') adminLoadLeagues();
+            if (pane === 'fundraisers') adminLoadFundraisers();
+            if (pane === 'meetings') adminLoadMeetings();
+            if (pane === 'registration') {
                 await rgLoadEvents();
-                if (eventId) await rgSelectEventFromReact({ eventId });
+                if (ticket !== navTicket) return;
+                await rgSelectEventFromReact({ eventId: route.eventId });
             }
-            if (tab === 'shop') adminLoadProducts();
-            if (tab === 'orders') adminLoadOrders();
-            if (tab === 'tee-signs') loadTeeSignReview();
-            if (tab === 'members') adminLoadMembers();
+            if (pane === 'shop') adminLoadProducts(route.filter === 'stock' ? { status: 'active', sort: 'stock_asc', lowStock: true } : { ...adminProductInventoryControlsSnapshot, lowStock: false });
+            if (pane === 'orders') adminLoadOrders({ status: route.filter === 'new' ? 'unfulfilled' : route.filter === 'handoff' ? 'ready' : '' });
+            if (pane === 'tee-signs') loadTeeSignReview({ courseId: route.courseId, ...(route.filter === 'candidate' ? { status: 'candidate' } : {}) });
+            if (pane === 'members') adminLoadMembers();
+        }
+
+        function navigationFromUrl(force = false) {
+            const route = readAppRoute('admin', window.location);
+            const queryTab = new URLSearchParams(window.location.search).get('tab');
+            if (!window.location.hash && queryTab === 'orders' && !route.filter) route.filter = 'new';
+            if (!window.location.hash && queryTab === 'members' && !route.filter) route.tab = 'applications';
+            if (!window.location.hash && queryTab === 'tee-signs' && !route.filter) route.filter = 'candidate';
+            route.memberId = window.history.state?.memberId || null;
+            const current = currentAdminRoute();
+            if (!force && ['tab', 'eventId', 'courseId', 'filter', 'memberId'].every((key) => current[key] === route[key])) return;
+            void adminSwitch(route.tab, route, { fromHistory: true, focusHeading: !force }).catch(() => {});
         }
 
         function setAdminEventFormLayoutsState(state) {
@@ -132,7 +181,7 @@ export function startAdminController() {
             let courses = [];
             try { const r = await api('/courses'); if (r.ok) courses = (await r.json()).courses || []; } catch (e) {}
             adminCoursesCache = courses;
-            setAdminCoursesListState({ courses });
+            setAdminCoursesListState({ status: 'ready', courses });
         }
         function setAdminCoursesListState(state) {
             window.dispatchEvent(new CustomEvent('gvdg:admin-courses-list', { detail: state }));
@@ -149,7 +198,7 @@ export function startAdminController() {
             window.dispatchEvent(new CustomEvent('gvdg:admin-event-form-reset'));
         }
         function aeEditEvent(ev) {
-            adminSwitch('create');
+            adminSwitch('create', { eventId: ev.id });
             window.dispatchEvent(new CustomEvent('gvdg:admin-event-form-edit', { detail: { event: ev } }));
         }
         async function adminSaveEventFromReact(detail) {
@@ -299,7 +348,8 @@ export function startAdminController() {
         }
 
         async function scSelectEventFromReact(detail) {
-            scEventId = detail && detail.eventId ? Number(detail.eventId) : null;
+            const eventId = detail && detail.eventId ? Number(detail.eventId) : null;
+            scEventId = eventId;
             scSnap = null;
             scTeeSignData = { teeSigns: [], layouts: [] };
             if (!scEventId) {
@@ -310,21 +360,24 @@ export function startAdminController() {
             scSelectedEvent = scEventById(scEventId);
             if (!scSelectedEvent) {
                 await scLoadEvents();
-                scSelectedEvent = scEventById(scEventId);
+                if (eventId !== scEventId) return;
+                scSelectedEvent = scEventById(eventId);
             }
             if (!scSelectedEvent) {
                 setAdminScoringState({ eventId: String(scEventId), layouts: [], message: 'Event not found.', status: 'error' });
                 return;
             }
             setAdminScoringState({ event: scSelectedEvent, eventId: String(scEventId), layouts: [], status: 'loading' });
-            if (scSelectedEvent.status === 'live') {
+            if (scSelectedEvent.status === 'live' || scSelectedEvent.status === 'final' || currentAdminRoute().tab === 'results') {
                 await scRefresh();
                 return;
             }
             await scShowStartControls();
         }
         async function scShowStartControls(validation) {
+            const eventId = scEventId;
             const layouts = await scLayoutsForEvent(scSelectedEvent);
+            if (eventId !== scEventId) return;
             setAdminScoringState({
                 config: scEventConfig(scSelectedEvent),
                 event: scSelectedEvent,
@@ -386,19 +439,29 @@ export function startAdminController() {
 
         async function scRefresh() {
             if (!scEventId) return;
-            const r = await api('/events/' + scEventId + '/live');
+            const eventId = scEventId;
+            const r = await api('/events/' + eventId + '/live');
+            if (eventId !== scEventId) return;
             if (!r.ok) {
                 setAdminScoringState({ event: scSelectedEvent, eventId: String(scEventId), layouts: [], message: 'Live scoring is not available for this event.', status: 'error' });
                 return;
             }
-            scSnap = await r.json();
+            const snap = await r.json();
+            if (eventId !== scEventId) return;
+            scSnap = snap;
             if (scSnap.status !== 'live' && scSnap.status !== 'final') {
+                if (currentAdminRoute().tab === 'results') {
+                    setAdminScoringState({ event: scSelectedEvent, eventId: String(eventId), layouts: [], message: 'Results will appear when scoring starts.', status: 'error' });
+                    return;
+                }
                 await scShowStartControls(scSelectedEvent && scSelectedEvent.status === 'live'
                     ? 'Event is marked Live, but scoring has not started yet. Add players if needed, then start live scoring here.'
                     : '');
                 return;
             }
-            scTeeSignData = await scLoadTeeSignData();
+            const teeSignData = await scLoadTeeSignData();
+            if (eventId !== scEventId) return;
+            scTeeSignData = teeSignData;
             publishScoringLiveState();
             if (scSnap.status === 'live') scConnectWs();
         }
@@ -439,9 +502,9 @@ export function startAdminController() {
             scWs = ws;
             ws.addEventListener('message', (ev) => {
                 let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
-                if (msg && msg.type === 'snapshot' && scWsEvent === scEventId) { scSnap = msg; publishScoringLiveState(); }
+                if (msg && msg.type === 'snapshot' && scWs === ws && scWsEvent === scEventId) { scSnap = msg; publishScoringLiveState(); }
             });
-            ws.addEventListener('close', () => { if (scWsEvent === scEventId && !scWsTimer) scWsTimer = setTimeout(() => { scWsTimer = null; if (scWsEvent === scEventId) scConnectWs(); }, 4000); });
+            ws.addEventListener('close', () => { if (scWs === ws && scWsEvent === scEventId && !scWsTimer) scWsTimer = setTimeout(() => { scWsTimer = null; if (scWsEvent === scEventId) scConnectWs(); }, 4000); });
             ws.addEventListener('error', () => { try { ws.close(); } catch (e) {} });
         }
 
@@ -756,18 +819,19 @@ export function startAdminController() {
             const source = detail && typeof detail === 'object' ? detail : adminProductInventoryControlsSnapshot;
             const sort = typeof source.sort === 'string' && source.sort ? source.sort : 'newest';
             const status = typeof source.status === 'string' && source.status ? source.status : 'active';
-            adminProductInventoryControlsSnapshot = { sort, status };
+            adminProductInventoryControlsSnapshot = { sort, status, lowStock: source.lowStock === true };
             return adminProductInventoryControlsSnapshot;
         }
         async function adminLoadProducts(detail) {
-            const { sort, status } = adminProductInventoryControlsState(detail);
+            const { sort, status, lowStock } = adminProductInventoryControlsState(detail);
             setAdminProductsListState({ status: 'loading', products: [], inventoryStatus: status });
             let products = [];
             const params = new URLSearchParams();
             if (sort) params.set('sort', sort);
             if (status) params.set('status', status);
             try { const r = await adminApi('/admin/shop/products?' + params.toString()); if (r.ok) products = (await r.json()).products || []; } catch (e) {}
-            setAdminProductsListState({ status: 'ready', products, inventoryStatus: status });
+            if (lowStock) products = products.filter((product) => Number(product.stock_qty) <= 2);
+            setAdminProductsListState({ status: 'ready', products, inventoryStatus: status, lowStock, sort });
         }
         function setAdminProductsListState(state) {
             window.dispatchEvent(new CustomEvent('gvdg:admin-products-list', { detail: state }));
@@ -817,10 +881,11 @@ export function startAdminController() {
             setAdminOrdersListState({ status: 'loading', orders: [], filterStatus: status });
             let orders = [], unfulfilled = 0;
             try {
-                const r = await adminApi('/admin/orders' + (status ? '?status=' + encodeURIComponent(status) : ''));
+                const r = await adminApi('/admin/orders' + (status && status !== 'unfulfilled' ? '?status=' + encodeURIComponent(status) : ''));
                 if (!r.ok) throw new Error('orders_failed');
                 const d = await r.json();
                 orders = d.orders || [];
+                if (status === 'unfulfilled') orders = orders.filter((order) => order.status === 'submitted' || order.status === 'processing');
                 unfulfilled = d.unfulfilled || 0;
             } catch (e) {
                 setOrdersBadge(0);
@@ -951,7 +1016,7 @@ export function startAdminController() {
             try {
                 const r = await api('/events');
                 if (!r.ok) throw new Error('events_failed');
-                events = ((await r.json()).events || []).filter((e) => e.status === 'scheduled' || e.status === 'live');
+                events = ((await r.json()).events || []).filter((e) => e.status === 'scheduled' || e.status === 'live' || String(e.id) === currentAdminRoute().eventId);
             } catch (e) {
                 setAdminRegistrationControlsState({ status: 'error', events: [] });
                 return;
@@ -968,17 +1033,19 @@ export function startAdminController() {
                 rgClearSelectedEventState();
                 return;
             }
-            setAdminRegistrationControlsState({ selectedEventId: rgEventId, configStatus: 'loading', config: null });
+            const eventId = rgEventId;
+            setAdminRegistrationControlsState({ selectedEventId: eventId, configStatus: 'loading', config: null });
             let cfg = null;
             let configStatus = 'ready';
             try {
-                const r = await adminApi('/events/' + rgEventId + '/registration');
+                const r = await adminApi('/events/' + eventId + '/registration');
                 if (!r.ok) throw new Error('registration_config_failed');
                 cfg = (await r.json()).config || null;
             } catch (e) {
                 configStatus = 'error';
             }
-            setAdminRegistrationControlsState({ selectedEventId: rgEventId, configStatus, config: cfg, notice: null });
+            if (eventId !== rgEventId) return;
+            setAdminRegistrationControlsState({ selectedEventId: eventId, configStatus, config: cfg, notice: null });
             rgLoadRoster();
             rgLoadMembers();
             rgLoadCtps();
@@ -1000,14 +1067,15 @@ export function startAdminController() {
             window.dispatchEvent(new CustomEvent('gvdg:admin-registration-config-save-result', { detail: { ok: r.ok, requestId } }));
         }
         async function rgLoadRoster(options) {
+            const eventId = rgEventId;
             const quiet = Boolean(options && options.quiet);
             if (!quiet) setAdminRegistrationRosterState({ status: 'loading', registrations: [], manualPlayers: [] });
             let regs = [];
             let ok = true;
-            try { const r = await adminApi('/admin/events/' + rgEventId + '/registrations'); if (!r.ok) throw new Error('registrations_failed'); regs = (await r.json()).registrations || []; } catch (e) { ok = false; }
+            try { const r = await adminApi('/admin/events/' + eventId + '/registrations'); if (!r.ok) throw new Error('registrations_failed'); regs = (await r.json()).registrations || []; } catch (e) { ok = false; }
             let manual = [];
-            try { const r = await api('/events/' + rgEventId); if (!r.ok) throw new Error('event_failed'); manual = ((await r.json()).event || {}).players || []; } catch (e) { ok = false; }
-            if (!ok && quiet) return;
+            try { const r = await api('/events/' + eventId); if (!r.ok) throw new Error('event_failed'); manual = ((await r.json()).event || {}).players || []; } catch (e) { ok = false; }
+            if (eventId !== rgEventId || (!ok && quiet)) return;
             const memberOptions = regs.filter((rg) => rg.member_id).map((rg) => ({ value: rg.member_id, label: rg.name || rg.member_id }));
             setAdminRegistrationMemberOptionsState({ status: ok ? 'ready' : 'error', options: memberOptions });
             setAdminRegistrationRosterState({ status: ok ? 'ready' : 'error', registrations: regs, manualPlayers: manual });
@@ -1278,7 +1346,7 @@ export function startAdminController() {
             if (adminInited) { adminLoadEvents(); adminLoadCourses(); adminLoadLeagues(); return; }
             adminInited = true;
             const adminControllerDeps = { adminApi, adminMsg };
-            installCourseLayoutsController({ api, ...adminControllerDeps });
+            loadCourseLayouts = installCourseLayoutsController({ api, ...adminControllerDeps }).loadCourseLayouts;
             installDataArchiveController(adminControllerDeps);
             installImportController(adminControllerDeps);
             loadTeeSignReview = installTeeSignReviewController({
@@ -1489,7 +1557,9 @@ export function startAdminController() {
                 if (r.ok) adminLoadMembershipApplications();
             });
             window.addEventListener('gvdg:admin-registration-event-select-request', async (event) => {
-                await rgSelectEventFromReact(event.detail || {});
+                const tab = currentAdminRoute().tab;
+                const next = publishRoute(tab === 'check-in' ? tab : 'registration', event.detail || {}, { focusHeading: false });
+                await rgSelectEventFromReact(next);
             });
             window.addEventListener('gvdg:admin-desk-request', async (event) => {
                 await adminLoadDesk(event.detail && event.detail.eventId);
@@ -1583,7 +1653,9 @@ export function startAdminController() {
                 await scLoadEvents();
             });
             window.addEventListener('gvdg:admin-scoring-select-event-request', async (event) => {
-                await scSelectEventFromReact(event.detail || {});
+                const tab = currentAdminRoute().tab;
+                const next = publishRoute(tab === 'results' ? tab : 'scoring', event.detail || {}, { focusHeading: false });
+                await scSelectEventFromReact(next);
             });
             window.addEventListener('gvdg:admin-scoring-start-request', async (event) => {
                 await scStartFromReact(event.detail || {});
@@ -1601,17 +1673,19 @@ export function startAdminController() {
                 await scCancel();
             });
             window.addEventListener('gvdg:admin-needs-refresh', () => { refreshAdminNeeds(); });
+            window.addEventListener('gvdg:admin-course-context-selected', (event) => {
+                publishRoute('layouts', event.detail || {}, { focusHeading: false });
+            });
+            window.addEventListener('popstate', () => navigationFromUrl());
+            window.addEventListener('hashchange', () => navigationFromUrl());
             refreshOrdersBadge();                          // show the new-order count on load
             refreshAdminNeeds();
             adminLoadShelf();
             setInterval(refreshOrdersBadge, 60000);        // and keep it current while the page is open
             setInterval(refreshAdminNeeds, 60000);
             setInterval(adminLoadShelf, 60000);
-            const alertTab = new URLSearchParams(window.location.search).get("tab");
-            if (alertTab === "today" || alertTab === "orders" || alertTab === "bag-tags" || alertTab === "members" || alertTab === "tee-signs") {
-                adminSwitch(alertTab).catch(() => {});
-            }
-            adminLoadEvents();
+            navigationFromUrl(true);
+            if (!['today', 'events'].includes(currentAdminRoute().tab)) adminLoadEvents();
             adminLoadCourses();
             adminLoadLeagues();
         }

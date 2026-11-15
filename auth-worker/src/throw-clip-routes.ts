@@ -51,6 +51,13 @@ async function readClip(env: Env, scope: string, scopeKey: string, id: number): 
   ).bind(id, scope, scopeKey).first<ClipRow>();
 }
 
+async function readClientClip(env: Env, scope: string, scopeKey: string, actor: string, clientId: string): Promise<ClipRow | null> {
+  return env.DB.prepare(
+    `SELECT id, hole, player_name, player_index, highlight, moment, created_at, filmed_by, r2_key, content_type
+       FROM throw_clips WHERE scope = ? AND scope_key = ? AND filmed_by = ? AND client_id = ?`,
+  ).bind(scope, scopeKey, actor, clientId).first<ClipRow>();
+}
+
 function mediaHeaders(row: ClipRow, origin: string | null, size: number, span: { offset: number; length: number } | null) {
   const headers: Record<string, string> = {
     "Accept-Ranges": "bytes",
@@ -124,8 +131,19 @@ export async function handleThrowClips(opts: {
   if (!authMember) return json({ error: "unauthorized" }, 401, origin);
 
   if (method === "POST" && tail.length === 0) {
-    if (await kvRateLimited(env, "clips:" + authMember, 8, 60)) return json({ error: "rate_limited" }, 429, origin);
     const url = new URL(request.url);
+    const clientId = url.searchParams.get("clientId");
+    if (clientId !== null) {
+      if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(clientId)) return json({ error: "invalid_request" }, 400, origin);
+      if (!card?.recoveryRoundId || url.searchParams.get("recoveryRoundId") !== card.recoveryRoundId
+          || url.searchParams.get("recoveryCardId") !== card.cardId
+          || asInt(url.searchParams.get("recoveryActorIndex")) !== card.actorIndex) {
+        return json({ error: "recovery_scope_changed" }, 409, origin);
+      }
+      const existing = await readClientClip(env, scope, scopeKey, authMember, clientId);
+      if (existing) return json(publicClip(existing, scope, scopeKey), 200, origin);
+    }
+    if (await kvRateLimited(env, "clips:" + authMember, 8, 60)) return json({ error: "rate_limited" }, 429, origin);
     const hole = asInt(url.searchParams.get("hole"));
     const playerIndex = asInt(url.searchParams.get("playerIndex"));
     const playerName = asStr(url.searchParams.get("playerName") ?? undefined, 80) ?? "";
@@ -160,12 +178,28 @@ export async function handleThrowClips(opts: {
     try {
       const inserted = await env.DB.prepare(
         `INSERT INTO throw_clips
-          (scope, scope_key, hole, player_name, player_index, filmed_by, r2_key, content_type, bytes, highlight, moment)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).bind(scope, scopeKey, hole, target.name, playerIndex, authMember, key, video.contentType, bytes.byteLength, highlight ? 1 : 0, moment).run();
+          (scope, scope_key, hole, player_name, player_index, filmed_by, r2_key, content_type, bytes, highlight, moment, client_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(scope, scope_key, filmed_by, client_id) WHERE client_id IS NOT NULL DO NOTHING`,
+      ).bind(scope, scopeKey, hole, target.name, playerIndex, authMember, key, video.contentType, bytes.byteLength, highlight ? 1 : 0, moment, clientId).run();
+      if (clientId && !inserted.meta?.changes) {
+        await env.PHOTOS.delete(key).catch(() => {});
+        const existing = await readClientClip(env, scope, scopeKey, authMember, clientId);
+        if (existing) return json(publicClip(existing, scope, scopeKey), 200, origin);
+        return json({ error: "clip_save_incomplete" }, 503, origin);
+      }
       const id = Number(inserted.meta?.last_row_id ?? 0);
       return json({ id, highlight, moment, playerName: target.name, hole }, 201, origin);
     } catch (error) {
+      // A write that committed before a transport failure still owns its R2 object.
+      if (clientId) {
+        const existing = await readClientClip(env, scope, scopeKey, authMember, clientId).catch(() => undefined);
+        if (existing) {
+          if (existing.r2_key !== key) await env.PHOTOS.delete(key).catch(() => {});
+          return json(publicClip(existing, scope, scopeKey), 200, origin);
+        }
+        if (existing === undefined) throw error;
+      }
       await env.PHOTOS.delete(key).catch(() => {});
       throw error;
     }

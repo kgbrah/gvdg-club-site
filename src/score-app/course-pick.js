@@ -1,3 +1,5 @@
+import { COVERAGE_ORDER, courseCoverage, layoutQuality, layoutRows, mapCoordinates, mappedHole } from "../shared/course-quality.js";
+
 export const CLUB_ORIGIN = { lat: 35.6127, lng: -77.3664 };
 export const COURSE_RANGES = [
   { value: "all", label: "All courses", miles: Infinity },
@@ -11,28 +13,16 @@ export const COURSE_RANGE_DEFAULT = "25";
 export const BROWSE_MAPPED_LIMIT = 12;
 export const LAST_COURSE_KEY = "gvdg.lastCourse";
 
-function courseCoord(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-}
-
-function finiteCoord(value) {
-  if (value == null || value === "") return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-}
-
 export function milesFromClub(course, origin = CLUB_ORIGIN) {
   return milesFromOrigin(course, origin);
 }
 
 export function milesFromOrigin(course, origin) {
-  if (!origin) return null;
-  const lat = courseCoord(course && course.lat);
-  const lng = courseCoord(course && course.lng);
-  const fromLat = courseCoord(origin.lat);
-  const fromLng = courseCoord(origin.lng);
-  if (lat == null || lng == null || fromLat == null || fromLng == null) return null;
+  const coordinates = mapCoordinates(course);
+  const from = mapCoordinates(origin);
+  if (!coordinates || !from) return null;
+  const { lat, lng } = coordinates;
+  const { lat: fromLat, lng: fromLng } = from;
   const toRad = (d) => (d * Math.PI) / 180;
   const dLat = toRad(lat - fromLat);
   const dLng = toRad(lng - fromLng);
@@ -43,32 +33,14 @@ export function milesFromOrigin(course, origin) {
 }
 
 export function layoutHoles(layout) {
-  let holes = layout && layout.holes;
-  if (typeof holes === "string") {
-    try {
-      holes = JSON.parse(holes);
-    } catch {
-      holes = [];
-    }
-  }
-  if (!Array.isArray(holes)) return [];
-  return holes.map((hole, index) => ({
-    ...hole,
-    hole: Number(hole && (hole.hole || hole.number)) || index + 1,
-  }));
+  return layoutRows(layout).flatMap((row) => {
+    const hole = Number(row?.hole ?? row?.number);
+    return Number.isInteger(hole) && hole >= 1 && hole <= 36 ? [{ ...row, hole }] : [];
+  });
 }
 
 export function layoutHasMap(layout) {
-  return layoutHoles(layout).some((hole) => {
-    const tee = hole && hole.tee;
-    const target = hole && hole.target;
-    return (
-      finiteCoord(tee && tee.lat) != null &&
-      finiteCoord(tee && tee.lng) != null &&
-      finiteCoord(target && target.lat) != null &&
-      finiteCoord(target && target.lng) != null
-    );
-  });
+  return layoutHoles(layout).some(mappedHole);
 }
 
 export function courseMapHref(name) {
@@ -86,35 +58,39 @@ export function matchCourseByName(courses, query) {
 }
 
 export function courseHasMap(course) {
-  if (!course) return false;
-  if (course.mapped === true || course.mapped === 1 || course.mapped === "1") return true;
-  if (course.has_map === true || course.has_map === 1) return true;
-  if (Array.isArray(course.layouts) && course.layouts.some(layoutHasMap)) return true;
-  return layoutHasMap(course);
+  return COVERAGE_ORDER[courseCoverage(course)] >= COVERAGE_ORDER.partial;
 }
 
 function compareNames(a, b) {
   return String((a && a.name) || "").localeCompare(String((b && b.name) || ""));
 }
 
-export function filterCoursesForPick(courses, query, range, origin) {
-  const q = String(query || "").trim().toLowerCase();
+function searchable(value) {
+  return String(value || "").normalize("NFKD").replace(/\p{M}/gu, "").trim().toLowerCase();
+}
+
+export function filterCoursesForPick(courses, query, range, origin, options = {}) {
+  const q = searchable(query);
   const maxMiles = (COURSE_RANGES.find((option) => option.value === range) || COURSE_RANGES[0]).miles;
   const rows = (Array.isArray(courses) ? courses : []).map((course) => ({
     course,
     miles: milesFromOrigin(course, origin),
-    mapped: courseHasMap(course),
+    coverage: courseCoverage(course),
   }));
-  const matched = rows.filter(({ course, miles }) => {
+  const matched = rows.filter(({ course, miles, coverage }) => {
+    if (options.coverage && options.coverage !== coverage) return false;
+    if (options.favoritesOnly && !options.favoriteIds?.has(String(course.id))) return false;
+    if (options.savedOnly && !options.savedIds?.has(String(course.id))) return false;
     if (q) {
-      const hay = `${course.name || ""} ${course.location || ""}`.toLowerCase();
-      if (!hay.includes(q)) return false;
+      const layouts = Array.isArray(course.layouts) ? course.layouts.map((layout) => layout.name).join(" ") : "";
+      const hay = searchable([course.name, course.location, layouts].join(" "));
+      if (!q.split(/\s+/).every((token) => hay.includes(token))) return false;
     }
     if (maxMiles === Infinity || !origin) return true;
     return miles != null && miles <= maxMiles;
   });
   matched.sort((a, b) => {
-    if (a.mapped !== b.mapped) return a.mapped ? -1 : 1;
+    if (a.coverage !== b.coverage) return COVERAGE_ORDER[b.coverage] - COVERAGE_ORDER[a.coverage];
     if (a.miles == null && b.miles == null) return compareNames(a.course, b.course);
     if (a.miles == null) return 1;
     if (b.miles == null) return -1;
@@ -133,19 +109,17 @@ export function courseSub(course, origin) {
 }
 
 export function googleMapsDirectionsUrl(course, origin) {
-  const lat = courseCoord(course && course.lat);
-  const lng = courseCoord(course && course.lng);
-  const name = String((course && course.name) || "").trim();
-  const loc = String((course && course.location) || "").trim();
-  const destination = lat != null && lng != null ? `${lat},${lng}` : [name, loc].filter(Boolean).join(", ");
+  const coordinates = mapCoordinates(course);
+  const name = String(course?.name || "").trim();
+  const loc = String(course?.location || "").trim();
+  const destination = coordinates ? `${coordinates.lat},${coordinates.lng}` : [name, loc].filter(Boolean).join(", ");
   if (!destination) return "";
   const url = new URL("https://www.google.com/maps/dir/");
   url.searchParams.set("api", "1");
   url.searchParams.set("destination", destination);
   url.searchParams.set("travelmode", "driving");
-  const fromLat = origin && courseCoord(origin.lat);
-  const fromLng = origin && courseCoord(origin.lng);
-  if (fromLat != null && fromLng != null) url.searchParams.set("origin", `${fromLat},${fromLng}`);
+  const from = mapCoordinates(origin);
+  if (from) url.searchParams.set("origin", `${from.lat},${from.lng}`);
   return url.href;
 }
 
@@ -179,9 +153,9 @@ export function teeSignCaptureHref(course) {
 /** Idle list is the nearest mapped courses. Typing, or choosing All, opens the catalog. */
 export function coursesForPickScreen(courses, query, range, origin, options = {}) {
   const browsing = !String(query || "").trim();
-  const rows = filterCoursesForPick(courses, query, range, origin);
+  const rows = filterCoursesForPick(courses, query, range, origin, options);
   let visible = rows;
-  if (browsing && range !== "all") {
+  if (browsing && range !== "all" && !options.coverage && !options.favoritesOnly && !options.savedOnly) {
     const mapped = rows.filter((course) => courseHasMap(course));
     visible = (mapped.length ? mapped : rows).slice(0, BROWSE_MAPPED_LIMIT);
     const lastId = options.lastCourseId;
@@ -195,11 +169,6 @@ export function coursesForPickScreen(courses, query, range, origin, options = {}
 
 export function sortLayoutsForPick(layouts) {
   const rows = Array.isArray(layouts) ? layouts.slice() : [];
-  rows.sort((a, b) => {
-    const mapA = layoutHasMap(a);
-    const mapB = layoutHasMap(b);
-    if (mapA !== mapB) return mapA ? -1 : 1;
-    return compareNames(a, b);
-  });
+  rows.sort((a, b) => COVERAGE_ORDER[layoutQuality(b).status] - COVERAGE_ORDER[layoutQuality(a).status] || compareNames(a, b));
   return rows;
 }

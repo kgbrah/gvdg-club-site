@@ -45,7 +45,7 @@ function DeskLine({ onTap, player }) {
   ]);
 }
 
-function MorningDesk({ event }) {
+export function MorningDesk({ event }) {
   const [desk, setDesk] = React.useState(EMPTY_DESK);
   const order = React.useRef([]);
   const eventId = event && event.id ? String(event.id) : "";
@@ -128,7 +128,9 @@ function NeedsYou() {
       ? h("div", { className: "admin-needs-list", key: "list" }, items.map((item) => h("button", {
         className: "admin-needs-row",
         key: item.id,
-        onClick: () => requestTab(item.tab),
+        onClick: () => requestTab(item.id === "applications" ? "applications" : item.tab, { filter:
+          ({ "bag-requests": "requests", "bag-challenges": "challenges", "tee-signs": "candidate", shelf: "stock", orders: "new" })[item.id],
+        }),
         type: "button",
       }, [
         h("span", { className: "admin-needs-copy", key: "copy" }, [
@@ -170,7 +172,7 @@ export function AdminTodayDashboard() {
 
   if (view.status === "loading") {
     return h("div", { "data-react-admin-today": "loading" }, [
-      h("h2", { className: "admin-pane-heading", key: "title" }, "Today"),
+
       h(AdminPushCard, { key: "alerts" }),
       h(NeedsYou, { key: "needs" }),
       h("p", { className: "dash-note", key: "loading", role: "status" }, "Loading…"),
@@ -187,7 +189,7 @@ export function AdminTodayDashboard() {
   const place = next ? formatAdminEventPlace(next) : "";
 
   return h("div", { "data-react-admin-today": next ? "ready" : "empty" }, [
-    h("h2", { className: "admin-pane-heading", key: "title" }, "Today"),
+
     h(AdminPushCard, { key: "alerts" }),
     h(NeedsYou, { key: "needs" }),
     next
@@ -203,13 +205,13 @@ export function AdminTodayDashboard() {
             key: "score",
             onClick: () => requestTab("scoring", { eventId: next.id }),
             type: "button",
-          }, "Open scoring") : null,
+          }, "Live scoring") : null,
           h("button", {
             className: "admin-btn secondary",
             key: "roster",
-            onClick: () => requestTab("registration", { eventId: next.id }),
+            onClick: () => requestTab("check-in", { eventId: next.id }),
             type: "button",
-          }, "Roster"),
+          }, "Check-in"),
         ]),
       ].filter(Boolean))
       : null,

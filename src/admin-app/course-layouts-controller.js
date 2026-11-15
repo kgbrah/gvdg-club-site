@@ -25,7 +25,9 @@ function normalizeCourseLayoutForReact(layout) {
 }
 
 export function installCourseLayoutsController({ api, adminApi, adminMsg }) {
+  let layoutLoad = 0;
   async function loadCourseLayouts(detail) {
+    const ticket = ++layoutLoad;
     const courseId = detail && detail.courseId ? String(detail.courseId) : '';
     if (!courseId) {
       setAdminCourseLayoutsState({ status: 'idle', courseId: '', layouts: [], positions: [] });
@@ -41,9 +43,9 @@ export function installCourseLayoutsController({ api, adminApi, adminMsg }) {
       ]);
       if (positionResponse.ok) positions = ((await positionResponse.json()).positions || []);
       if (layoutResponse.ok) layouts = ((await layoutResponse.json()).layouts || []).map(normalizeCourseLayoutForReact);
-      setAdminCourseLayoutsState({ status: 'ready', courseId, layouts, positions });
+      if (ticket === layoutLoad) setAdminCourseLayoutsState({ status: 'ready', courseId, layouts, positions });
     } catch (e) {
-      setAdminCourseLayoutsState({ status: 'error', courseId, layouts, positions });
+      if (ticket === layoutLoad) setAdminCourseLayoutsState({ status: 'error', courseId, layouts, positions });
     }
   }
 

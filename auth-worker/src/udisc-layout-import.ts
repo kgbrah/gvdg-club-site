@@ -460,13 +460,14 @@ function holesFromUdisc(layout: UdiscLayout): LayoutHole[] {
   return layout.holes.map((hole) => ({
     hole: hole.hole,
     par: hole.par,
+    par_source: hole.par_source,
     tee: hole.tee,
     target: hole.target,
   }));
 }
 
 export type LayoutApply =
-  | { action: "update"; layoutId: number; name: string; holes: LayoutHole[]; total_par: number }
+  | { action: "update"; layoutId: number; name: string; holes: LayoutHole[]; total_par: number; replacesTemplate?: true }
   | { action: "create"; name: string; holes: LayoutHole[]; total_par: number };
 
 export function planUdiscLayoutApply(opts: {
@@ -496,7 +497,7 @@ export function planUdiscLayoutApply(opts: {
     }
     if (placeholder) {
       usedIds.add(placeholder.id);
-      layouts.push({ action: "update", layoutId: placeholder.id, name, holes, total_par });
+      layouts.push({ action: "update", layoutId: placeholder.id, name, holes, total_par, replacesTemplate: true });
       placeholder = null;
       continue;
     }
@@ -724,7 +725,9 @@ async function importOneCourse(
     }
     for (const layout of plan.layouts) {
       if (layout.action === "update") {
-        await db.updateLayout(env.DB, layout.layoutId, { name: layout.name, holes: layout.holes, total_par: layout.total_par });
+        // A distinct replacement layout need not have the same hole count as the regional template.
+        await db.updateLayout(env.DB, layout.layoutId, { name: layout.name, holes: layout.holes, total_par: layout.total_par,
+          ...(layout.replacesTemplate ? { expected_holes: null } : {}) });
       } else {
         await db.createLayout(env.DB, { course_id: next.id, name: layout.name, holes: layout.holes, total_par: layout.total_par });
       }
