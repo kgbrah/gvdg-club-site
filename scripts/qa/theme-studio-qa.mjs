@@ -218,6 +218,28 @@ try {
     await context.close();
   }
 
+  // Leaving Appearance keeps the saved custom theme on the rest of the app (regression: the studio's unmount
+  // used to clear it until the next reload). After Reset, leaving shows the club default.
+  {
+    const { page, context, errors } = await open(390, 844, { theme: "preset" });
+    const themed = () => page.evaluate(() => document.body.classList.contains("player-theme-page"));
+    const go = async (hash) => { await page.evaluate((h) => { location.hash = h; }, hash); await page.waitForTimeout(700); };
+    assert.equal(await themed(), true, "custom theme painted on Appearance");
+    await go("account");
+    assert.equal(await themed(), true, "custom theme kept after leaving Appearance for Account");
+    await go("home");
+    assert.equal(await themed(), true, "custom theme kept on Home");
+    await go("appearance");
+    await page.locator(".dash-theme-studio").waitFor();
+    await page.getByRole("button", { name: "Reset", exact: true }).click();
+    await page.waitForFunction(() => !document.body.classList.contains("player-theme-page"));
+    await go("account");
+    assert.equal(await themed(), false, "after Reset, leaving Appearance shows the club default");
+    assert.deepEqual(errors.filter((message) => !/blocked/.test(message)), []);
+    results.leaveAppearance = "kept theme; Reset leaves club default";
+    await context.close();
+  }
+
   // 4. Screenshots: all collapsed, Glass + Custom expanded, desktop.
   for (const mode of ["dark", "light"]) {
     const { page, context } = await open(390, 844, { mode });
