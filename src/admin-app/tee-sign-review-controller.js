@@ -16,8 +16,9 @@ export function installTeeSignReviewController({ adminApi, adminMsg, api, authBa
 
   function adminTeeSignReviewControlsState(detail) {
     const source = detail && typeof detail === 'object' ? detail : teeSignReviewControlsSnapshot;
-    const status = ['candidate', 'official', 'rejected'].includes(source.status) ? source.status : 'candidate';
-    teeSignReviewControlsSnapshot = { status };
+    const status = ['candidate', 'official', 'rejected'].includes(source.status) ? source.status : teeSignReviewControlsSnapshot.status || 'candidate';
+    const courseId = Object.hasOwn(source, 'courseId') ? source.courseId : teeSignReviewControlsSnapshot.courseId || null;
+    teeSignReviewControlsSnapshot = { status, courseId };
     return teeSignReviewControlsSnapshot;
   }
 
@@ -29,8 +30,10 @@ export function installTeeSignReviewController({ adminApi, adminMsg, api, authBa
     return [];
   }
 
+  let reviewLoad = 0;
   async function loadReview(detail) {
-    const { status: queueStatus } = adminTeeSignReviewControlsState(detail);
+    const ticket = ++reviewLoad;
+    const { status: queueStatus, courseId } = adminTeeSignReviewControlsState(detail);
     setAdminTeeSignReviewState({ status: 'loading', queueStatus, signs: [], courses: currentCourses(getCourses), layoutsByCourse: {}, authBase });
     if (!currentCourses(getCourses).length) await ensureCoursesLoaded();
     const courses = currentCourses(getCourses);
@@ -38,20 +41,20 @@ export function installTeeSignReviewController({ adminApi, adminMsg, api, authBa
     try {
       r = await adminApi('/admin/tee-signs?status=' + encodeURIComponent(queueStatus));
     } catch (e) {
-      setAdminTeeSignReviewState({ status: 'error', queueStatus, signs: [], courses, layoutsByCourse: {}, authBase });
+      if (ticket === reviewLoad) setAdminTeeSignReviewState({ status: 'error', queueStatus, signs: [], courses, layoutsByCourse: {}, authBase });
       return;
     }
     if (!r.ok) {
-      setAdminTeeSignReviewState({ status: 'error', queueStatus, signs: [], courses, layoutsByCourse: {}, authBase });
+      if (ticket === reviewLoad) setAdminTeeSignReviewState({ status: 'error', queueStatus, signs: [], courses, layoutsByCourse: {}, authBase });
       return;
     }
-    const signs = (await r.json()).teeSigns || [];
+    const signs = ((await r.json()).teeSigns || []).filter((sign) => !courseId || String(sign.course_id) === String(courseId));
     const layoutsByCourse = {};
     for (const sign of signs) {
       const cid = Number(sign.course_id);
       if (!layoutsByCourse[String(cid)]) layoutsByCourse[String(cid)] = await tsLayoutsForCourse(cid);
     }
-    setAdminTeeSignReviewState({ status: 'ready', queueStatus, signs, courses: currentCourses(getCourses), layoutsByCourse, authBase });
+    if (ticket === reviewLoad) setAdminTeeSignReviewState({ status: 'ready', queueStatus, signs, courses: currentCourses(getCourses), layoutsByCourse, authBase });
   }
 
   function finishTeeSignReviewAction(requestId, ok) {

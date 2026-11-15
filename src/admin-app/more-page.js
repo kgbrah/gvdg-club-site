@@ -2,28 +2,19 @@ import React from "react";
 
 import { CrottsHelpLink } from "../shared/crotts-widget.js";
 import { clearMemberSession, readMemberToken } from "../shared/member-session.js";
-import { themeRoot } from "../shared/player-theme-chrome.js";
+import { PlayerThemeToggle, themeRoot } from "../shared/player-theme-chrome.js";
 import { paintPlayerTheme } from "../shared/player-theme-session.js";
+import { ADMIN_DESTINATIONS } from "../shared/app-navigation.js";
 import { AdminNeedsBadge } from "./admin-needs.js";
 
 const h = React.createElement;
 
 const NEEDS_TABS = new Set(["bag-tags", "members", "tee-signs"]);
 
-const MORE_LINKS = [
-  { tab: "courses", label: "Courses" },
-  { tab: "layouts", label: "Layouts" },
-  { tab: "tee-signs", label: "Tee signs" },
-  { tab: "leagues-mgmt", label: "League seasons" },
-  { tab: "bag-tags", label: "Bag tags" },
-  { tab: "fundraisers", label: "Campaigns" },
-  { tab: "meetings", label: "Minutes" },
-  { tab: "members", label: "Members" },
-  { tab: "data-archive", label: "Data archive" },
-];
+const MORE_LINKS = ADMIN_DESTINATIONS.filter((item) => item.group === "more" && item.key !== "more");
 
-function requestTab(tab) {
-  window.dispatchEvent(new CustomEvent("gvdg:admin-tab-request", { detail: { tab } }));
+function requestTab(tab, context = {}) {
+  window.dispatchEvent(new CustomEvent("gvdg:admin-tab-request", { detail: { tab, ...context } }));
 }
 
 function clearSession() {
@@ -45,6 +36,10 @@ function AccountLinks() {
         className: "admin-more-link",
         key: "help",
       }, ["Help", h("span", { "aria-hidden": "true", key: "chev" }, "›")]),
+      h("button", { className: "admin-more-link", key: "notifications", type: "button", onClick: () => requestTab("today", { filter: "alerts" }) }, "Admin alerts"),
+      h("div", { className: "admin-appearance-toggle", key: "appearance" }, [
+        h("span", { key: "label" }, "Light or dark mode"), h(PlayerThemeToggle, { key: "toggle" }),
+      ]),
       signedIn
         ? h("a", {
           className: "admin-more-link",
@@ -63,17 +58,15 @@ function AccountLinks() {
 
 export function AdminMorePage() {
   return h("div", { "data-react-admin-more": "ready" }, [
-    h("h2", { className: "admin-pane-heading", key: "title" }, "More"),
-    h("p", { className: "dash-note", key: "note" }, "Courses, club ops, members, and archives."),
     h("div", { className: "admin-more-list", key: "list" }, MORE_LINKS.map((item) => h("button", {
       className: "admin-more-link",
-      key: item.tab,
-      onClick: () => requestTab(item.tab),
+      key: item.key,
+      onClick: () => requestTab(item.key, item.key === "tee-signs" ? { filter: "candidate" } : {}),
       type: "button",
     }, [
       h("span", { className: "admin-more-label", key: "label" }, [
         item.label,
-        NEEDS_TABS.has(item.tab) ? h(AdminNeedsBadge, { key: "badge", tab: item.tab }) : null,
+        NEEDS_TABS.has(item.key) ? h(AdminNeedsBadge, { key: "badge", tab: item.key }) : null,
       ]),
       h("span", { "aria-hidden": "true", key: "chev" }, "›"),
     ]))),

@@ -159,6 +159,7 @@ test('overview dashboard is a compact home and keeps registration on Events', ()
   const overview = readFileSync('src/members-app/overview-dashboard.js', 'utf8');
   const more = readFileSync('src/members-app/more-page.js', 'utf8');
   const activity = readFileSync('src/members-app/activity-panels.js', 'utf8');
+  const registry = readFileSync('src/shared/app-navigation.js', 'utf8');
   const shell = readFileSync('src/members-app/dashboard-shell.js', 'utf8');
   const html = readFileSync('gvdg-members.html', 'utf8');
   assert.doesNotMatch(overview, /MemberRegistrationPanel/);
@@ -173,13 +174,11 @@ test('overview dashboard is a compact home and keeps registration on Events', ()
   assert.match(overview, /You're in/);
   assert.match(overview, /EventFieldRoster/);
   assert.doesNotMatch(overview, /Nothing open to register for right now/);
-  assert.match(more, /Club directory/);
+  assert.match(registry, /Club directory/);
   assert.match(more, /Club website/);
   assert.match(more, /CrottsHelpLink/);
-  assert.match(more, /Message board/);
-  assert.match(more, /Tee signs/);
-  assert.match(more, /tab: "play"/);
-  assert.match(more, /Play \/ live scoring/);
+  assert.match(registry, /Message board/);
+  assert.match(registry, /Tee signs/);
   assert.doesNotMatch(more, /href: "score.html"/);
   assert.match(more, /WalletPanel/);
   assert.match(activity, /player-wallet-compact/);
@@ -189,9 +188,9 @@ test('overview dashboard is a compact home and keeps registration on Events', ()
   assert.match(activity, /variant === "play"/);
   assert.match(activity, /href: live\.href/);
   assert.match(activity, /event_entry/);
-  assert.match(shell, /label: "Home"/);
-  assert.match(shell, /label: "Play"/);
-  assert.match(shell, /key: "play"/);
+  assert.match(registry, /entry\("overview", "Home"/);
+  assert.match(registry, /entry\("play", "Play"/);
+  assert.match(shell, /MEMBER_PRIMARY/);
   assert.match(shell, /player-app-nav/);
   assert.match(html, /body\[data-member-dashboard-tab="more"\] #playerMore/);
   assert.match(html, /body\[data-member-dashboard-tab="play"\] #playerPlay/);

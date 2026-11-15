@@ -1,59 +1,41 @@
 import React from "react";
-import { Menu, X } from "lucide-react";
+import { UserRound } from "lucide-react";
 
 import { ClubLogo } from "../shared/club-logo.js";
+import { CrottsHelpLink } from "../shared/crotts-widget.js";
 import { InstallCoachBanner } from "../shared/install-coach-ui.js";
 import { PlayerThemeToggle } from "../shared/player-theme-chrome.js";
-import { siteCurrentPage, SiteNavItems, useSiteMoreMenu } from "../shared/site-nav.js";
+
+import { selectDashboardTab } from "./dashboard-shell.js";
 
 const h = React.createElement;
 
-function icon(Icon, size = 22) {
-  return h(Icon, {
-    size,
-    strokeWidth: 2.3,
-    "aria-hidden": "true",
-    focusable: "false",
-  });
-}
-
 export function MemberPageChrome() {
-  const [menuOpen, setMenuOpen] = React.useState(false);
-  const page = siteCurrentPage();
-  const more = useSiteMoreMenu(menuOpen);
-
-  function closeMenu() {
-    setMenuOpen(false);
-    more.closeMore();
-  }
+  const [signedIn, setSignedIn] = React.useState(() => document.body.dataset.memberShell === "members");
+  React.useEffect(() => {
+    const update = (event) => setSignedIn(event.detail?.view === "members");
+    window.addEventListener("gvdg:member-shell-view", update);
+    return () => window.removeEventListener("gvdg:member-shell-view", update);
+  }, []);
 
   return h(React.Fragment, null, [
-    h("header", { "data-react-page-chrome": "true", key: "header" }, h("nav", null, [
-    h(ClubLogo, { href: "gvdg-members.html", key: "logo", onClick: closeMenu }),
-    h("div", { className: "nav-right", key: "nav" }, [
-      h("button", {
-        "aria-controls": "navLinks",
-        "aria-expanded": menuOpen ? "true" : "false",
-        "aria-label": menuOpen ? "Close menu" : "Open menu",
-        className: "menu-toggle",
-        key: "menu",
-        onClick: () => setMenuOpen((current) => !current),
-        title: menuOpen ? "Close menu" : "Open menu",
-        type: "button",
-      }, icon(menuOpen ? X : Menu, 24)),
-      h("ul", {
-        className: menuOpen ? "nav-links active" : "nav-links",
-        id: "navLinks",
-        key: "links",
-      }, SiteNavItems({
-        moreOpen: more.moreOpen,
-        page,
-        onNavigate: closeMenu,
-        onToggleMore: more.onToggleMore,
-      })),
-      h(PlayerThemeToggle, { key: "theme" }),
-    ]),
-  ])),
-    h(InstallCoachBanner, { key: "install" }),
+    h("header", { className: "member-app-header", "data-react-page-chrome": "true", key: "header" }, h("nav", { "aria-label": "Member header" }, [
+      h(ClubLogo, {
+        href: signedIn ? "#home" : "index.html", key: "logo",
+        onClick: signedIn ? (event) => {
+          if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          selectDashboardTab("overview");
+        } : undefined,
+      }),
+      h("div", { className: "member-header-controls", key: "controls" }, [
+        h(CrottsHelpLink, { className: "member-header-link", key: "help" }, "Help"),
+        signedIn ? h("button", {
+          className: "member-header-link", key: "account", type: "button", onClick: () => selectDashboardTab("account"),
+        }, [h(UserRound, { "aria-hidden": true, key: "icon", size: 18 }), "Account"])
+          : h(PlayerThemeToggle, { key: "theme" }),
+      ]),
+    ])),
+    signedIn ? null : h(InstallCoachBanner, { key: "install" }),
   ]);
 }

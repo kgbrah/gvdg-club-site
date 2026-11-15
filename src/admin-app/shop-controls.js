@@ -24,6 +24,7 @@ const PRODUCT_STATUS_OPTIONS = [
 
 const ORDER_STATUS_OPTIONS = [
   ["", "All orders"],
+  ["unfulfilled", "Needs fulfillment"],
   ["submitted", "Submitted"],
   ["processing", "Processing"],
   ["ready", "Ready for pickup"],
@@ -69,6 +70,17 @@ export function AdminProductInventoryControls() {
   React.useEffect(() => {
     setProductControlsState({ sort, status });
   }, [sort, status]);
+
+  React.useEffect(() => {
+    function fromList(event) {
+      if (event.detail?.status === "ready" && event.detail.lowStock) {
+        setSort("stock_asc");
+        setStatus("active");
+      }
+    }
+    window.addEventListener("gvdg:admin-products-list", fromList);
+    return () => window.removeEventListener("gvdg:admin-products-list", fromList);
+  }, []);
 
   function requestLoad(nextState) {
     setProductControlsState(nextState);
@@ -122,6 +134,14 @@ export function AdminOrderControls() {
   React.useEffect(() => {
     setOrderControlsState({ status });
   }, [status]);
+
+  React.useEffect(() => {
+    function fromList(event) {
+      if (typeof event.detail?.filterStatus === "string") setStatus(optionValue(event.detail.filterStatus, ORDER_STATUS_OPTIONS, ""));
+    }
+    window.addEventListener("gvdg:admin-orders-list", fromList);
+    return () => window.removeEventListener("gvdg:admin-orders-list", fromList);
+  }, []);
 
   function requestLoad(nextStatus) {
     const nextState = { status: nextStatus };

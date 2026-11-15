@@ -2,6 +2,8 @@ import React from "react";
 
 import { TOKEN_KEY, requestJson, storageGet } from "./api.js";
 import { LiveScoringPanel, WalletPanel } from "./activity-panels.js";
+import { FirstUseGuide } from "./first-use-guide.js";
+import { MoreLink } from "./more-page.js";
 import { selectDashboardTab } from "./dashboard-shell.js";
 import { dollars, formatEventDay, formatToPar } from "./format.js";
 import { HomeJobs } from "./home-jobs.js";
@@ -101,7 +103,7 @@ function UpNextCard({ events, registrations }) {
           window.location.href = `score.html?event=${encodeURIComponent(event.id)}`;
           return;
         }
-        selectDashboardTab("events");
+        selectDashboardTab("events", { eventId: event.id });
       },
       key: "register",
     }, actionLabel),
@@ -256,8 +258,8 @@ export function MemberOverviewDashboard() {
 
   return h("div", { className: "react-overview-dashboard player-home", "data-react-overview-dashboard": "ready" }, [
     h(HomeHero, { context, pdgaState, key: "hero" }),
-    h(BagTagPanel, { key: "bag-tags", token }),
     h(LiveScoringPanel, { token, compact: true, key: "live-scoring" }),
+    h(FirstUseGuide, { key: "first-use" }),
     h(HomeJobs, {
       events: registration.state.events,
       registrations: registration.state.registrations,
@@ -266,12 +268,14 @@ export function MemberOverviewDashboard() {
       key: "jobs",
     }),
     h(WalletPanel, { token, compact: true, key: "wallet" }),
+    h(MoreLink, { tab: "account", label: "Membership and profile", key: "membership" }),
+    h(BagTagPanel, { key: "bag-tags", token }),
     h("section", { className: "player-card player-story", "data-react-home-story": "ready", key: "story" }, [
-      h(RatingMove, { stats: pdgaState.stats, status: pdgaState.status }),
-      h(LastRoundCard, { token }),
-      h(UpNextCard, { events: registration.state.events, registrations: registration.state.registrations }),
-      h(NextPdgaCard),
-      h(PdgaHistory, { stats: pdgaState.stats }),
+      h(RatingMove, { stats: pdgaState.stats, status: pdgaState.status, key: "rating" }),
+      h(LastRoundCard, { token, key: "recent" }),
+      h(UpNextCard, { events: registration.state.events, registrations: registration.state.registrations, key: "up-next" }),
+      h(NextPdgaCard, { key: "next-pdga" }),
+      h(PdgaHistory, { stats: pdgaState.stats, key: "history" }),
     ]),
     h(PlayStatsPanel, { compact: true, key: "play-stats", pdgaStats: pdgaState.stats }),
   ]);

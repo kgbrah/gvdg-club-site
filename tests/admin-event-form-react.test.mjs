@@ -18,13 +18,13 @@ test('admin new event form is rendered by React and saved through bridge events'
   assert.doesNotMatch(html, /publishAdminState\('eventFormLayouts'/);
   assert.ok(adminLoadCourses);
   assert.match(adminLoadCourses, /adminCoursesCache = courses/);
-  assert.match(adminLoadCourses, /setAdminCoursesListState\(\{ courses \}\)/);
+  assert.match(adminLoadCourses, /setAdminCoursesListState\(\{ status: 'ready', courses \}\)/);
   assert.doesNotMatch(adminLoadCourses, /aeCourse|document\.createElement|appendChild|textContent/);
   assert.ok(adminLoadLeagues);
   assert.match(adminLoadLeagues, /gvdg:admin-leagues-list', \{ detail: \{ leagues \} \}/);
   assert.doesNotMatch(adminLoadLeagues, /aeLeague|document\.createElement|appendChild|textContent/);
   assert.ok(aeEditEvent);
-  assert.match(aeEditEvent, /adminSwitch\('create'\)/);
+  assert.match(aeEditEvent, /adminSwitch\('create', \{ eventId: ev\.id \}\)/);
   assert.match(aeEditEvent, /gvdg:admin-event-form-edit/);
   assert.doesNotMatch(aeEditEvent, /\$\('aeName'\)|\$\('aeCourse'\)|\$\('aeLayout'\)|scrollIntoView/);
   assert.ok(adminSaveEvent);

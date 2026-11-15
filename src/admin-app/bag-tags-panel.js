@@ -1,4 +1,5 @@
 import React from "react";
+import { currentAdminRoute, currentAdminAuthGateState } from "./admin-shell-state.js";
 
 import { adminJson, adminRequest } from "./admin-api.js";
 
@@ -51,7 +52,7 @@ export function AdminBagTagsPanel() {
 
   React.useEffect(() => {
     function maybe() {
-      if (document.body.dataset.adminTab === "bag-tags") load();
+      if (currentAdminRoute().tab === "bag-tags" && currentAdminAuthGateState().status === "panel") load();
     }
     window.addEventListener("gvdg:admin-active-tab", maybe);
     window.addEventListener("gvdg:admin-auth-gate", maybe);
@@ -75,6 +76,17 @@ export function AdminBagTagsPanel() {
       setBusy(false);
     }
   }
+
+  React.useEffect(() => {
+    const route = currentAdminRoute();
+    if (!board || route.tab !== "bag-tags" || !["requests", "challenges"].includes(route.filter)) return undefined;
+    const frame = requestAnimationFrame(() => {
+      const target = document.getElementById("admin-bag-" + route.filter);
+      target?.scrollIntoView({ block: "start" });
+      target?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [board]);
 
   const holders = board && Array.isArray(board.holders) ? board.holders : [];
   const challenges = board && Array.isArray(board.challenges) ? board.challenges : [];
@@ -150,7 +162,7 @@ export function AdminBagTagsPanel() {
       ])
       : null,
     series && requests.length
-      ? h("div", { key: "requests" }, [
+      ? h("div", { key: "requests", id: "admin-bag-requests", tabIndex: -1 }, [
         h("h3", { className: "al-h", key: "head" }, "Tag requests"),
         ...requests.map((request) => h("div", { className: "sc-hole-pager-row", key: request.memberId }, [
           h("div", { key: "who" }, request.name || request.memberId),
@@ -211,7 +223,7 @@ export function AdminBagTagsPanel() {
       ])
       : null,
     challenges.length
-      ? h("div", { key: "challenges" }, [
+      ? h("div", { key: "challenges", id: "admin-bag-challenges", tabIndex: -1 }, [
         h("h3", { className: "al-h", key: "head" }, "Challenges waiting"),
         ...challenges.map((challenge) => h("div", { className: "sc-hole-pager-row", key: challenge.id }, [
           h("div", { key: "text" },

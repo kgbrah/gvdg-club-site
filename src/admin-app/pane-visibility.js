@@ -1,12 +1,7 @@
 import React from "react";
 
 import { currentAdminActiveTab, currentAdminAuthGateState } from "./admin-shell-state.js";
-import { ADMIN_NAV_GROUPS } from "./navigation.js";
-
-const TAB_IDS = new Set([
-  "more",
-  ...ADMIN_NAV_GROUPS.flatMap((group) => group.items.map((item) => item.tab)),
-]);
+import { destination } from "../shared/app-navigation.js";
 
 function currentPanel() {
   const state = currentAdminAuthGateState();
@@ -14,7 +9,8 @@ function currentPanel() {
 }
 
 function normalizeTab(tab) {
-  return typeof tab === "string" && TAB_IDS.has(tab) ? tab : "today";
+  const row = destination("admin", tab);
+  return row.pane || row.key;
 }
 
 function currentTab() {

@@ -88,13 +88,13 @@ async function waitForText(page, selector, expected, label) {
 }
 
 async function expectReactTab(page, name) {
-  const selected = await page.getByRole("tab", { name }).getAttribute("aria-selected");
-  if (selected !== "true") throw new Error(`Expected React tab ${name} to be selected, got ${selected}`);
+  const selected = await page.getByRole("navigation", { name: "Member app" }).getByRole("button", { name }).getAttribute("aria-current");
+  if (selected !== "page") throw new Error(`Expected React tab ${name} to be selected, got ${selected}`);
 }
 
 async function openMoreItem(page, name) {
-  await page.getByRole("tab", { name: "More" }).click();
-  await expectReactTab(page, "More");
+  await page.getByRole("navigation", { name: "Member app" }).getByRole("button", { name: "Club" }).click();
+  await expectReactTab(page, "Club");
   await page.getByRole("button", { name }).click();
 }
 
@@ -398,7 +398,7 @@ async function captureState(browser, origin, viewport, slug) {
   }
   await captureFullPage(page, path.join(evidenceDir, `${slug}-overview.png`));
 
-  await page.getByRole("tab", { name: "Play" }).click();
+  await page.getByRole("navigation", { name: "Member app" }).getByRole("button", { name: "Play" }).click();
   await waitForText(page, "#membersReactDashboardShell", "Play", "play title");
   await expectReactTab(page, "Play");
   await expectDashboardPanel(page, "play", "#playerPlay", "Play tab");
@@ -407,9 +407,9 @@ async function captureState(browser, origin, viewport, slug) {
   await waitForText(page, "[data-react-play-join]", "Join a card", "play join card");
   await captureFullPage(page, path.join(evidenceDir, `${slug}-play.png`));
 
-  await page.getByRole("tab", { name: "Season" }).click();
-  await waitForText(page, "#membersReactDashboardShell", "Season", "season title");
-  await expectReactTab(page, "Season");
+  await page.getByRole("navigation", { name: "Member app" }).getByRole("button", { name: "Stats" }).click();
+  await waitForText(page, "#membersReactDashboardShell", "Stats", "season title");
+  await expectReactTab(page, "Stats");
   await expectDashboardPanel(page, "season", "#mySeason", "Season tab");
   await page.locator('[data-react-season-page="ready"]').waitFor({ state: "visible", timeout: 10_000 });
   await waitForText(page, "[data-react-season-page]", "2026 Season", "season year heading");
@@ -422,7 +422,7 @@ async function captureState(browser, origin, viewport, slug) {
   await waitForText(page, "[data-react-club-ratings]", "906", "React club ratings");
   await captureFullPage(page, path.join(evidenceDir, `${slug}-season.png`));
 
-  await page.getByRole("tab", { name: "Events" }).click();
+  await page.getByRole("navigation", { name: "Member app" }).getByRole("button", { name: "Events" }).click();
   await waitForText(page, "#membersReactDashboardShell", "Events", "events title");
   await expectReactTab(page, "Events");
   await expectDashboardPanel(page, "events", "#clubRegister", "Events tab");
@@ -454,10 +454,11 @@ async function captureState(browser, origin, viewport, slug) {
   await page.waitForTimeout(250);
   await captureFullPage(page, path.join(evidenceDir, `${slug}-events.png`));
 
-  await page.getByRole("tab", { name: "More" }).click();
-  await waitForText(page, "#membersReactDashboardShell", "More", "more title");
-  await expectReactTab(page, "More");
+  await page.getByRole("navigation", { name: "Member app" }).getByRole("button", { name: "Club" }).click();
+  await waitForText(page, "#membersReactDashboardShell", "Club", "more title");
+  await expectReactTab(page, "Club");
   await expectDashboardPanel(page, "more", "#playerMore", "More tab");
+  await page.getByRole("button", { name: "Account", exact: true }).click();
   await page.waitForSelector('[data-react-account-tools="ready"]', { timeout: 10_000 });
   await waitForText(page, "[data-react-account-tools]", "Edit profile", "React account tools");
   await page.evaluate(() => {
@@ -474,8 +475,8 @@ async function captureState(browser, origin, viewport, slug) {
   await captureFullPage(page, path.join(evidenceDir, `${slug}-more.png`));
 
   await openMoreItem(page, "Message board");
-  await waitForText(page, "#membersReactDashboardShell", "Member Board", "board title");
-  await expectReactTab(page, "More");
+  await waitForText(page, "#membersReactDashboardShell", "Message board", "board title");
+  await expectReactTab(page, "Club");
   await expectDashboardPanel(page, "board", "#clubBoard", "Board tab");
   await page.locator('[data-react-board-panel="ready"]').waitFor({ state: "visible", timeout: 10_000 });
   await waitForText(page, "[data-react-board-panel]", "League night", "React board fixture");
@@ -501,8 +502,8 @@ async function captureState(browser, origin, viewport, slug) {
   await captureFullPage(page, path.join(evidenceDir, `${slug}-board.png`));
 
   await openMoreItem(page, "Tee signs");
-  await waitForText(page, "#membersReactDashboardShell", "Tee Sign Capture", "tee signs title");
-  await expectReactTab(page, "More");
+  await waitForText(page, "#membersReactDashboardShell", "Tee signs", "tee signs title");
+  await expectReactTab(page, "Club");
   await expectDashboardPanel(page, "tee", "#teeCapture", "Tee Signs tab");
   await page.locator('[data-react-tee-signs-panel="ready"]').waitFor({ state: "visible", timeout: 10_000 });
   await waitForText(page, "[data-react-tee-signs-panel]", "Blue - Par 3", "React tee sign fixture");
@@ -522,8 +523,8 @@ async function captureState(browser, origin, viewport, slug) {
   await captureFullPage(page, path.join(evidenceDir, `${slug}-tee.png`));
 
   await openMoreItem(page, "Club directory");
-  await waitForText(page, "#membersReactDashboardShell", "GVDG Member Directory", "club title");
-  await expectReactTab(page, "More");
+  await waitForText(page, "#membersReactDashboardShell", "Club directory", "club title");
+  await expectReactTab(page, "Club");
   await expectDashboardPanel(page, "club", "#membersReactClubPanel", "Club tab");
   await page.locator('[data-react-club-panel="ready"]').waitFor({ state: "visible", timeout: 10_000 });
   const clubPanel = page.locator('[data-react-club-panel]');
@@ -561,8 +562,7 @@ async function captureState(browser, origin, viewport, slug) {
   await captureFullPage(page, path.join(evidenceDir, `${slug}-club.png`));
 
   await assertNoHorizontalOverflow(page, slug);
-  await page.getByRole("tab", { name: "More" }).click();
-  await expectReactTab(page, "More");
+  await page.getByRole("button", { name: "Account", exact: true }).click();
   await page.getByRole("button", { name: "Log Out" }).click();
   await page.locator('[data-react-auth-gate="login"]').waitFor({ state: "visible", timeout: 10_000 });
   if (errors.length) throw new Error(errors.join("\n"));

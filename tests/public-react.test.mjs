@@ -128,7 +128,7 @@ test('Crotts assistant stays hidden until Help is requested', () => {
   assert.match(adminMain, /createRoot\(crottsMount\)\.render\(h\(CrottsWidget\)\)/);
   assert.match(homeChrome, /SiteNavItems/);
   assert.match(publicChrome, /SiteNavItems/);
-  assert.match(membersChrome, /SiteNavItems/);
+  assert.match(membersChrome, /CrottsHelpLink/);
   assert.match(adminChrome, /CrottsHelpLink/);
   assert.match(widget, /export function CrottsWidget/);
   assert.match(widget, /export function CrottsHelpLink/);

@@ -48,17 +48,15 @@ test('admin page chrome is rendered by the admin React bundle', () => {
   assert.match(main, /createRoot\(pageChromeMount\)\.render\(h\(AdminPageChrome\)\)/);
   assert.match(chrome, /export function AdminPageChrome/);
   assert.match(chrome, /data-react-admin-chrome/);
-  assert.match(chrome, /aria-expanded/);
-  assert.match(chrome, /aria-current/);
-  assert.match(chrome, /PlayerThemeToggle/);
-  assert.match(chrome, /className: current \? "active" : undefined/);
-  assert.match(chrome, /Menu, X/);
-  assert.match(chrome, /window\.requestAnimationFrame\(update\)/);
+  assert.match(chrome, /Member app/);
+  assert.match(chrome, /CrottsHelpLink/);
+  const more = readFileSync("src/admin-app/more-page.js", "utf8");
+  assert.match(more, /PlayerThemeToggle/);
   const themeChrome = readFileSync('src/shared/player-theme-chrome.js', 'utf8');
   assert.match(themeChrome, /aria-pressed/);
   assert.match(themeChrome, /localStorage\.getItem\("theme"\)/);
   assert.match(themeChrome, /localStorage\.setItem\("theme", theme\)/);
-  assert.match(chrome, /clearMemberSession/);
+  assert.match(more, /clearMemberSession/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
 });
 
@@ -82,7 +80,7 @@ test('admin order badge updates through React instead of DOM text mutation', () 
   assert.match(html, /async function refreshOrdersBadge\(\) \{[\s\S]*setOrdersBadge\(0\);[\s\S]*catch \(e\) \{ setOrdersBadge\(0\); \}/);
   assert.doesNotMatch(main, /ordersBadgeMount|ordersBadgeReactApp/);
   assert.match(nav, /import \{ AdminOrdersBadge \} from "\.\/orders-badge\.js"/);
-  assert.match(nav, /\{ tab: "orders", label: "Orders", badge: "orders" \}/);
+  assert.match(nav, /requestAdminTab\("orders", \{ filter: "new" \}\)/);
   assert.match(nav, /h\(AdminOrdersBadge, \{ key: "badge" \}\)/);
   assert.match(badge, /export function AdminOrdersBadge/);
   assert.match(badge, /gvdg:admin-orders-badge/);
@@ -111,7 +109,7 @@ test('admin auth gate is rendered by React from auth state events', () => {
 
   assert.match(html, /id="adminAuthGateReactApp"/);
   assert.doesNotMatch(html, /id="adminStatus"|id="adminGate"/);
-  assert.match(html, /import \{ publishAdminActiveTab, publishAdminAuthGateState, publishAdminMessageState, publishAdminOrdersBadgeCount \} from "\.\/admin-shell-state\.js"/);
+  assert.match(html, /publishAdminActiveTab, publishAdminAuthGateState, publishAdminMessageState, publishAdminOrdersBadgeCount \} from "\.\/admin-shell-state\.js"/);
   assert.match(html, /function setAdminAuthGateState\(state\) \{[\s\S]*publishAdminAuthGateState\(state\)/);
   assert.doesNotMatch(`${html}\n${gate}`, /__gvdgAdminAuthGateState/);
   assert.ok(showPanel);
@@ -145,7 +143,7 @@ test('admin pane visibility is controlled by React state and body attributes', (
   const shellState = readFileSync('src/admin-app/admin-shell-state.js', 'utf8');
   const showPanel = html.match(/function showAdminPanel\(\) \{[\s\S]*?\n        \}/)?.[0];
   const showGate = html.match(/function showGate\(message, withMembersLink\) \{[\s\S]*?\n        \}/)?.[0];
-  const adminSwitch = html.match(/function adminSwitch\(tab, detail\) \{[\s\S]*?\n        \}/)?.[0];
+  const adminSwitch = html.match(/function adminSwitch\(tab, detail = \{\}, options = \{\}\) \{[\s\S]*?\n        \}/)?.[0];
 
   assert.match(html, /data-admin-panel="hidden"/);
   assert.match(html, /data-admin-tab="today"/);
@@ -163,8 +161,8 @@ test('admin pane visibility is controlled by React state and body attributes', (
   assert.ok(showGate);
   assert.doesNotMatch(showGate, /adminPanel|style\.display|\$\('adminPanel'\)/);
   assert.ok(adminSwitch);
-  assert.match(adminSwitch, /publishAdminActiveTab\(tab\)/);
-  assert.match(shellState, /export function publishAdminActiveTab\(tab\)/);
+  assert.match(adminSwitch, /publishRoute\(tab, detail, options\)/);
+  assert.match(shellState, /export function publishAdminActiveTab\(tab, detail = \{\}\)/);
   assert.match(shellState, /gvdg:admin-active-tab/);
   assert.doesNotMatch(`${html}\n${controller}`, /__gvdgAdmin(AuthGateState|ActiveTab)/);
   assert.doesNotMatch(adminSwitch, /querySelectorAll|classList|admin-pane/);
@@ -172,7 +170,7 @@ test('admin pane visibility is controlled by React state and body attributes', (
   assert.match(main, /const paneVisibilityMount = document\.getElementById\("adminPaneVisibilityReactApp"\)/);
   assert.match(main, /createRoot\(paneVisibilityMount\)\.render\(h\(AdminPaneVisibility\)\)/);
   assert.match(controller, /export function AdminPaneVisibility/);
-  assert.match(controller, /ADMIN_NAV_GROUPS/);
+  assert.match(controller, /destination\("admin", tab\)/);
   assert.match(controller, /currentAdminAuthGateState/);
   assert.match(controller, /currentAdminActiveTab/);
   assert.match(controller, /gvdg:admin-auth-gate/);
@@ -187,14 +185,14 @@ test('admin navigation is rendered by React and drives pane switching through ev
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const nav = readFileSync('src/admin-app/navigation.js', 'utf8');
   const shellState = readFileSync('src/admin-app/admin-shell-state.js', 'utf8');
-  const adminSwitch = html.match(/function adminSwitch\(tab, detail\) \{[\s\S]*?\n        \}/)?.[0];
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
+  const adminSwitch = html.match(/function adminSwitch\(tab, detail = \{\}, options = \{\}\) \{[\s\S]*?\n        \}/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?navigationFromUrl\(true\);[\s\S]*?adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminNavigationReactApp"/);
   assert.doesNotMatch(html, /<nav class="admin-sidebar"|<div class="admin-mobile-nav" role="group"/);
   assert.doesNotMatch(html, /document\.querySelectorAll\('\.admin-tab'\)|document\.querySelectorAll\('\.admin-mnav'\)/);
   assert.ok(adminSwitch);
-  assert.match(adminSwitch, /publishAdminActiveTab\(tab\)/);
+  assert.match(adminSwitch, /publishRoute\(tab, detail, options\)/);
   assert.match(shellState, /gvdg:admin-active-tab/);
   assert.doesNotMatch(adminSwitch, /querySelectorAll|classList|\.admin-pane|\.admin-tab|\.admin-mnav/);
   assert.ok(initAdmin);
@@ -203,19 +201,19 @@ test('admin navigation is rendered by React and drives pane switching through ev
   assert.match(main, /import \{ AdminNavigation \} from "\.\/navigation\.js"/);
   assert.match(main, /const navigationMount = document\.getElementById\("adminNavigationReactApp"\)/);
   assert.match(main, /createRoot\(navigationMount\)\.render\(h\(AdminNavigation\)\)/);
-  assert.match(nav, /export const ADMIN_NAV_GROUPS/);
-  assert.match(nav, /export const ADMIN_DOCK/);
+  assert.match(nav, /ADMIN_DESTINATIONS, ADMIN_PRIMARY/);
+  assert.match(nav, /function PrimaryNav/);
   assert.match(nav, /export function AdminNavigation/);
-  assert.match(nav, /className: "admin-dock"/);
-  assert.match(nav, /className: "admin-sidebar"/);
+  assert.match(nav, /"admin-dock" : "admin-sidebar"/);
+
   assert.match(nav, /aria-current/);
   assert.match(nav, /gvdg:admin-tab-request/);
   assert.match(nav, /gvdg:admin-active-tab/);
-  assert.match(nav, /currentAdminActiveTab/);
+  assert.match(nav, /currentAdminRoute/);
   assert.doesNotMatch(nav, /__gvdgAdminActiveTab/);
-  assert.match(nav, /setActiveTab\(initialTab\(\)\)/);
-  assert.match(nav, /dockForTab\(activeTab\)/);
-  assert.doesNotMatch(nav, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️/);
+  assert.match(nav, /setRoute\(currentAdminRoute\(\)\)/);
+  assert.match(nav, /group: active.group/);
+  assert.doesNotMatch(nav, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|classList|textContent\s*=|☰|✕|🔒|🌙|☀️/);
 });
 
 test('admin message surface is rendered by React from adminMsg events', () => {
@@ -294,7 +292,7 @@ test('admin events list is rendered by React from direct loader events', () => {
   const eventsList = readFileSync('src/admin-app/events-list.js', 'utf8');
   const importCandidates = readFileSync('src/admin-app/import-candidates-list.js', 'utf8');
   const adminLoadEvents = html.match(/async function adminLoadEvents\(\) \{[\s\S]*?\n        \}/)?.[0];
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?navigationFromUrl\(true\);[\s\S]*?adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminEventsListReactApp"/);
   assert.doesNotMatch(html, /id="adminEventsList"/);
@@ -349,7 +347,7 @@ test('admin courses list and event form course options share React state', () =>
   assert.doesNotMatch(html, /publishAdminState\('coursesList'/);
   assert.ok(adminLoadCourses);
   assert.match(adminLoadCourses, /adminCoursesCache = courses/);
-  assert.match(adminLoadCourses, /setAdminCoursesListState\(\{ courses \}\)/);
+  assert.match(adminLoadCourses, /setAdminCoursesListState\(\{ status: 'ready', courses \}\)/);
   assert.doesNotMatch(adminLoadCourses, /aeCourse|alCourse|lsel|document\.createElement|appendChild|textContent|adminCoursesList|list\.textContent|list\.appendChild|elx\('div', 'admin-cand'/);
   assert.match(main, /import \{ AdminCoursesList \} from "\.\/courses-list\.js"/);
   assert.match(main, /const coursesListMount = document\.getElementById\("adminCoursesListReactApp"\)/);
@@ -370,7 +368,7 @@ test('admin club content lists are rendered by React from direct loader events',
   const adminLoadLeagues = html.match(/async function adminLoadLeagues\(\) \{[\s\S]*?\n        \}/)?.[0];
   const adminLoadFundraisers = html.match(/async function adminLoadFundraisers\(\) \{[\s\S]*?\n        \}/)?.[0];
   const adminLoadMeetings = html.match(/async function adminLoadMeetings\(\) \{[\s\S]*?\n        \}/)?.[0];
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?navigationFromUrl\(true\);[\s\S]*?adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminLeaguesListReactApp"/);
   assert.match(html, /id="adminFundraisersListReactApp"/);
@@ -427,7 +425,7 @@ test('admin members list is rendered by React from direct loader events', () => 
   const membersList = readFileSync('src/admin-app/members-list.js', 'utf8');
   const adminLoadMembers = html.match(/async function adminLoadMembers\(\) \{[\s\S]*?\n        \}/)?.[0];
   const adminCreateMember = html.match(/async function adminCreateMemberFromReact\(detail\) \{[\s\S]*?\n        \}/)?.[0];
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?navigationFromUrl\(true\);[\s\S]*?adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminMemberFormReactApp"/);
   assert.match(html, /id="adminMemberApplicationsReactApp"/);
@@ -498,7 +496,7 @@ test('admin wallet recent list is fetched by React after admin auth and wallet t
   const walletForm = readFileSync('src/admin-app/wallet-form.js', 'utf8');
   const walletRecent = readFileSync('src/admin-app/wallet-recent-list.js', 'utf8');
   const adminPostWalletAdjustment = html.match(/async function adminPostWalletAdjustmentFromReact\(detail\) \{[\s\S]*?\n        \}/)?.[0];
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?navigationFromUrl\(true\);[\s\S]*?adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminWalletFormReactApp"/);
   assert.match(html, /id="adminWalletRecentReactApp"/);
@@ -562,7 +560,7 @@ test('admin registration CTP, credit, and ace pot widgets are rendered by React 
   const rgLoadCredits = html.match(/async function rgLoadCredits\(\) \{[\s\S]*?\n        \}/)?.[0];
   const rgLoadAcePot = html.match(/async function rgLoadAcePot\(\) \{[\s\S]*?\n        \}/)?.[0];
   const rgAwardCtpCredit = html.match(/async function rgAwardCtpCredit\(ctp, memberIdValue, winnerNameValue, amountValue\) \{[\s\S]*?\n        \}/)?.[0];
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?navigationFromUrl\(true\);[\s\S]*?adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminRegistrationReactApp"/);
   assert.doesNotMatch(html, /id="adminRegistrationCtpsReactApp"/);
@@ -635,7 +633,7 @@ test('admin product inventory list is rendered by React from direct loader event
   const shopControls = readFileSync('src/admin-app/shop-controls.js', 'utf8');
   const adminLoadProducts = html.match(/async function adminLoadProducts\(detail\) \{[\s\S]*?\n        \}/)?.[0];
   const adminCreateProduct = html.match(/async function adminCreateProductFromReact\(detail\) \{[\s\S]*?\n        \}/)?.[0];
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?navigationFromUrl\(true\);[\s\S]*?adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminProductFormReactApp"/);
   assert.match(html, /id="adminProductInventoryControlsReactApp"/);
@@ -649,7 +647,7 @@ test('admin product inventory list is rendered by React from direct loader event
   assert.ok(adminLoadProducts);
   assert.match(adminLoadProducts, /adminProductInventoryControlsState\(detail\)/);
   assert.match(adminLoadProducts, /setAdminProductsListState\(\{ status: 'loading', products: \[\], inventoryStatus:/);
-  assert.match(adminLoadProducts, /setAdminProductsListState\(\{ status: 'ready', products, inventoryStatus: status \}\)/);
+  assert.match(adminLoadProducts, /setAdminProductsListState\(\{ status: 'ready', products, inventoryStatus: status, lowStock, sort \}\)/);
   assert.match(adminLoadProducts, /adminApi\('\/admin\/shop\/products\?' \+ params\.toString\(\)\)/);
   assert.doesNotMatch(adminLoadProducts, /\$\('psInvSort'\)|\$\('psInvStatus'\)|adminProductsList|replaceChildren|appendChild|productThumb|shop-admin-row|document\.createElement|querySelector|classList|textContent\s*=/);
   assert.doesNotMatch(html, /function productThumb|function productIsActive/);
@@ -722,7 +720,7 @@ test('admin orders list is rendered by React from direct loader events', () => {
   const saveOrder = html.match(/async function saveOrder\(id, body\) \{[\s\S]*?\n        \}/)?.[0];
   const cancelOrder = html.match(/async function cancelOrder\(id, status\) \{[\s\S]*?\n        \}/)?.[0];
   const deleteOrder = html.match(/async function deleteOrder\(id\) \{[\s\S]*?\n        \}/)?.[0];
-  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
+  const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?navigationFromUrl\(true\);[\s\S]*?adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminOrderControlsReactApp"/);
   assert.match(html, /id="adminOrdersListReactApp"/);
@@ -736,7 +734,7 @@ test('admin orders list is rendered by React from direct loader events', () => {
   assert.match(adminLoadOrders, /setAdminOrdersListState\(\{ status: 'loading', orders: \[\], filterStatus: status \}\)/);
   assert.match(adminLoadOrders, /setAdminOrdersListState\(\{ status: 'error', orders: \[\], filterStatus: status \}\)/);
   assert.match(adminLoadOrders, /setAdminOrdersListState\(\{ status: 'ready', orders, filterStatus: status \}\)/);
-  assert.match(adminLoadOrders, /adminApi\('\/admin\/orders' \+ \(status \? '\?status=' \+ encodeURIComponent\(status\) : ''\)\)/);
+  assert.match(adminLoadOrders, /adminApi\('\/admin\/orders' \+ \(status && status !== 'unfulfilled' \? '\?status=' \+ encodeURIComponent\(status\) : ''\)\)/);
   assert.match(adminLoadOrders, /setOrdersBadge\(unfulfilled\)/);
   assert.doesNotMatch(adminLoadOrders, /\$\('ordStatusFilter'\)|\$\('ordRefresh'\)|\$\('adminOrdersList'\)|replaceChildren|appendChild|orderCard|document\.createElement|querySelector|classList|textContent\s*=|addEventListener/);
   assert.ok(saveOrder);

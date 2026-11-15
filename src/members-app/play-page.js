@@ -1,4 +1,5 @@
 import React from "react";
+import { MoreLink } from "./more-page.js";
 
 import { TOKEN_KEY, request, requestJson, storageGet } from "./api.js";
 import { LiveScoringPanel } from "./activity-panels.js";
@@ -53,6 +54,34 @@ function CourseTrafficCard() {
           ]),
         ])))
         : h("p", { className: "player-card-meta", key: "empty" }, "No cards on a course right now."),
+  ]);
+}
+
+function CourseSearch() {
+  const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState("");
+  const [courses, setCourses] = React.useState(null);
+  React.useEffect(() => {
+    if (!open || courses) return undefined;
+    const controller = new AbortController();
+    requestJson("/courses", { signal: controller.signal }).then((data) => {
+      setCourses(Array.isArray(data?.courses) ? data.courses : []);
+    }).catch((error) => {
+      if (error.name !== "AbortError") setCourses([]);
+    });
+    return () => controller.abort();
+  }, [open, courses]);
+  const term = query.trim().toLowerCase();
+  const matches = term ? (courses || []).filter((row) => [row.name, row.location].join(" ").toLowerCase().includes(term)).slice(0, 8) : [];
+  return h("details", { className: "player-card", onToggle: (event) => setOpen(event.currentTarget.open) }, [
+    h("summary", { key: "summary" }, "Find a course"),
+    h("label", { className: "player-play-join", key: "search" }, [
+      "Course name or town", h("input", { className: "player-play-code", type: "search", key: "input", value: query, onChange: (event) => setQuery(event.target.value) }),
+    ]),
+    matches.length ? h("ul", { key: "matches" }, matches.map((row) => h("li", { key: row.id }, [
+      h("a", { href: "score.html?course=" + encodeURIComponent(row.name), key: "link" }, row.name),
+      row.location ? " · " + row.location : null,
+    ]))) : term ? h("p", { className: "dash-note", role: "status", key: "status" }, courses ? "No matching courses." : "Loading courses…") : null,
   ]);
 }
 
@@ -272,7 +301,7 @@ function UdiscRoundRow({ item, onRemove }) {
   ]);
 }
 
-function UdiscHistory({ token }) {
+export function UdiscHistory({ token }) {
   const [state, setState] = React.useState({ status: "loading", rounds: [], stats: null });
   const [message, setMessage] = React.useState("");
   const [error, setError] = React.useState("");
@@ -490,10 +519,11 @@ export function MemberPlayPage() {
       ]),
       h("span", { className: "player-keep-score-go", key: "go" }, "Start"),
     ]),
+    h(PlayJoinCard, { key: "join" }),
+    h(CourseSearch, { key: "courses" }),
     h(CourseTrafficCard, { key: "traffic" }),
     token ? h(LiveScoringPanel, { token, variant: "play", key: "live" }) : null,
     token ? h(PlayHistory, { token, key: "history" }) : null,
-    token ? h(UdiscHistory, { token, key: "udisc" }) : null,
-    h(PlayJoinCard, { key: "join" }),
+    token ? h(MoreLink, { tab: "imports", key: "udisc" }) : null,
   ]);
 }

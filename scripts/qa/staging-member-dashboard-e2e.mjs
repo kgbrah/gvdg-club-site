@@ -189,13 +189,13 @@ async function expectAuthSubmitDetail(page, eventName, expected) {
 }
 
 async function expectReactTab(page, name) {
-  const selected = await page.getByRole("tab", { name }).getAttribute("aria-selected");
-  if (selected !== "true") throw new Error(`Expected React tab ${name} to be selected, got ${selected}`);
+  const selected = await page.getByRole("navigation", { name: "Member app" }).getByRole("button", { name }).getAttribute("aria-current");
+  if (selected !== "page") throw new Error(`Expected React tab ${name} to be selected, got ${selected}`);
 }
 
 async function openMoreItem(page, name) {
-  await page.getByRole("tab", { name: "More" }).click();
-  await expectReactTab(page, "More");
+  await page.getByRole("navigation", { name: "Member app" }).getByRole("button", { name: "Club" }).click();
+  await expectReactTab(page, "Club");
   await page.getByRole("button", { name }).click();
 }
 
@@ -416,13 +416,13 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
 
     await waitForLiveRating(page);
 
-    await page.getByRole("tab", { name: "Season" }).click();
-    await waitForText(page, "#membersReactDashboardShell", "Season", "season tab title");
-    await expectReactTab(page, "Season");
+    await page.getByRole("navigation", { name: "Member app" }).getByRole("button", { name: "Stats" }).click();
+    await waitForText(page, "#membersReactDashboardShell", "Stats", "season tab title");
+    await expectReactTab(page, "Stats");
     await expectDashboardPanel(page, "season", "#mySeason", "Season tab");
     await page.locator("[data-react-season-page]").waitFor({ state: "visible", timeout: 15_000 });
 
-    await page.getByRole("tab", { name: "Events" }).click();
+    await page.getByRole("navigation", { name: "Member app" }).getByRole("button", { name: "Events" }).click();
     await waitForText(page, "#membersReactDashboardShell", "Events", "events tab title");
     await expectReactTab(page, "Events");
     if (await page.locator("[data-react-admin-portal]").count()) {
@@ -432,10 +432,11 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
     await page.locator('#clubRegister [data-react-registration-panel="ready"]').waitFor({ state: "visible", timeout: 15_000 });
     await openCasualRounds(page, "#clubRegister");
 
-    await page.getByRole("tab", { name: "More" }).click();
-    await waitForText(page, "#membersReactDashboardShell", "More", "more tab title");
-    await expectReactTab(page, "More");
+    await page.getByRole("navigation", { name: "Member app" }).getByRole("button", { name: "Club" }).click();
+    await waitForText(page, "#membersReactDashboardShell", "Club", "more tab title");
+    await expectReactTab(page, "Club");
     await expectDashboardPanel(page, "more", "#playerMore", "More tab");
+    await page.getByRole("button", { name: "Account", exact: true }).click();
     await page.locator('[data-react-account-tools="ready"]').waitFor({ state: "visible", timeout: 15_000 });
     await waitForText(page, "[data-react-account-tools]", "Edit profile", "React account tools");
     await page.evaluate(() => {
@@ -451,20 +452,20 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
     });
 
     await openMoreItem(page, "Message board");
-    await waitForText(page, "#membersReactDashboardShell", "Member Board", "board tab title");
-    await expectReactTab(page, "More");
+    await waitForText(page, "#membersReactDashboardShell", "Message board", "board tab title");
+    await expectReactTab(page, "Club");
     await expectDashboardPanel(page, "board", "#clubBoard", "Board tab");
     await page.locator('[data-react-board-panel="ready"]').waitFor({ state: "visible", timeout: 15_000 });
 
     await openMoreItem(page, "Tee signs");
-    await waitForText(page, "#membersReactDashboardShell", "Tee Sign Capture", "tee signs tab title");
-    await expectReactTab(page, "More");
+    await waitForText(page, "#membersReactDashboardShell", "Tee signs", "tee signs tab title");
+    await expectReactTab(page, "Club");
     await expectDashboardPanel(page, "tee", "#teeCapture", "Tee Signs tab");
     await page.locator('[data-react-tee-signs-panel="ready"]').waitFor({ state: "visible", timeout: 15_000 });
 
     await openMoreItem(page, "Club directory");
-    await waitForText(page, "#membersReactDashboardShell", "GVDG Member Directory", "club tab title");
-    await expectReactTab(page, "More");
+    await waitForText(page, "#membersReactDashboardShell", "Club directory", "club tab title");
+    await expectReactTab(page, "Club");
     await page.locator('[data-react-club-panel="ready"]').waitFor({ state: "visible", timeout: 15_000 });
     await expectDashboardPanel(page, "club", "#membersReactClubPanel", "Club tab");
     await waitForText(page, "[data-react-club-panel]", "Membership Growth Since 2004", "React club growth chart");
@@ -494,8 +495,7 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
     const width = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth));
     const viewport = page.viewportSize()?.width || 390;
     if (width > viewport + 1) throw new Error(`Members dashboard has horizontal overflow: ${width}px > ${viewport}px.`);
-    await page.getByRole("tab", { name: "More" }).click();
-    await expectReactTab(page, "More");
+    await page.getByRole("button", { name: "Account", exact: true }).click();
     await page.getByRole("button", { name: "Log Out" }).click();
     await page.locator('[data-react-auth-gate="login"]').waitFor({ state: "visible", timeout: 15_000 });
     if (errors.length) throw new Error(errors.join("\n"));

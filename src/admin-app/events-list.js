@@ -98,12 +98,13 @@ function AdminEventRow({ event }) {
         else if (event.kind === "minutes") requestTab("meetings");
         else if (event.status === "live") requestTab("scoring", { eventId: event.id });
         else if (event.status === "scheduled") requestTab("registration", { eventId: event.id });
+        else if (event.status === "final" || event.status === "completed") requestTab("results", { eventId: event.id });
         else dispatchRequest("gvdg:admin-event-edit-request", { event: event.source });
       },
       type: "button",
     }, [
       h("span", { className: "ev-name", key: "name" }, event.name),
-      h("span", { className: "admin-event-meta", key: "type" }, event.kind === "campaign" ? "Campaign" : event.kind === "minutes" ? "Minutes" : typeLabel(event.type)),
+      h("span", { className: "admin-event-meta", key: "type" }, event.kind === "campaign" ? "Campaign" : event.kind === "minutes" ? "Meeting minutes" : typeLabel(event.type)),
       when ? h("span", { className: "admin-event-meta", key: "when" }, when) : null,
       place ? h("span", { className: "admin-event-meta", key: "place" }, place) : null,
     ]),
@@ -137,7 +138,7 @@ function AdminEventRow({ event }) {
         key: "roster",
         onClick: () => requestTab("registration", { eventId: event.id }),
         type: "button",
-      }, "Roster"),
+      }, "Registration"),
       h("button", {
         className: "admin-btn danger",
         key: "delete",

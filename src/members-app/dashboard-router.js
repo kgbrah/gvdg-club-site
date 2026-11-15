@@ -1,64 +1,59 @@
-import { NAME_KEY, PDGA_KEY, storageGet } from "./api.js";
+import { destination, readAppRoute, navigationHref } from "../shared/app-navigation.js";
 import { readMemberContext } from "./member-context.js";
 
-const DASH_TITLES = {
-  overview: "Home",
-  play: "Play",
-  season: "Season",
-  events: "Events",
-  more: "More",
-  board: "Member Board",
-  tee: "Tee Sign Capture",
-  club: "GVDG Member Directory",
-};
-
-const DASH_TABS = new Set(Object.keys(DASH_TITLES));
-let selectedDashTab = "overview";
+let selected = { tab: "overview", eventId: null, courseId: null };
 let routerInstalled = false;
+let dashboardOpen = false;
 
-function safeTab(tab) {
-  return DASH_TABS.has(tab) ? tab : "overview";
+function dashboardDetail(route, extra = {}) {
+  return { ...readMemberContext(extra), ...route, title: destination("member", route.tab).label, scroll: extra.scroll === true };
 }
 
-function dashboardDetail(tab, extra = {}) {
-  const context = readMemberContext(extra);
-  return {
-    ...context,
-    tab,
-    title: DASH_TITLES[tab] || DASH_TITLES.overview,
-    name: context.name || storageGet(NAME_KEY) || null,
-    pdgaNo: context.pdgaNo || storageGet(PDGA_KEY) || null,
-    scroll: extra.scroll === true,
-  };
+function emitDashboardState(eventName, route, extra = {}) {
+  window.dispatchEvent(new CustomEvent(eventName, { detail: dashboardDetail(route, extra) }));
 }
 
-function emitDashboardState(eventName, tab, extra = {}) {
-  window.dispatchEvent(new CustomEvent(eventName, { detail: dashboardDetail(tab, extra) }));
-}
-
-export function currentDashboardTab() {
-  return selectedDashTab;
-}
+export function currentDashboardTab() { return selected.tab; }
+export function currentDashboardRoute() { return selected; }
 
 export function selectDashboardTab(tabValue, options = {}) {
-  const tab = safeTab(tabValue);
-  selectedDashTab = tab;
-  emitDashboardState("gvdg:dashboard-tab-selected", tab, { scroll: options.scroll !== false });
+  const route = {
+    tab: destination("member", tabValue).key,
+    eventId: options.eventId ?? null,
+    courseId: options.courseId ?? (tabValue === "tee" ? selected.courseId : null),
+  };
+  if (options.history !== false) {
+    const href = navigationHref("member", window.location, route.tab, route);
+    const current = window.location.pathname + window.location.search + window.location.hash;
+    if (href !== current) window.history.pushState(null, "", href);
+  }
+  selected = route;
+  emitDashboardState("gvdg:dashboard-tab-selected", route, { scroll: options.scroll !== false });
 }
 
-function hashTab() {
-  const hash = String(window.location.hash || "").replace(/^#/, "").split(/[/?]/)[0].toLowerCase();
-  return DASH_TABS.has(hash) ? hash : null;
+function syncDashboardLocation(scroll = true) {
+  const route = readAppRoute("member", window.location);
+  if (scroll && route.tab === selected.tab && route.eventId === selected.eventId && route.courseId === selected.courseId) return;
+  selectDashboardTab(route.tab, { ...route, history: false, scroll });
 }
 
 export function openMemberDashboard(detail = {}) {
-  selectDashboardTab(hashTab() || "overview");
-  emitDashboardState("gvdg:member-dashboard-ready", selectedDashTab, detail);
+  dashboardOpen = true;
+  syncDashboardLocation(false);
+  emitDashboardState("gvdg:member-dashboard-ready", selected, detail);
 }
 
 export function installDashboardRouter() {
   if (routerInstalled) return;
   routerInstalled = true;
-  window.addEventListener("gvdg:select-dashboard-tab", (event) => selectDashboardTab(event.detail?.tab));
+  window.addEventListener("gvdg:select-dashboard-tab", (event) => {
+    if (dashboardOpen) selectDashboardTab(event.detail?.tab, event.detail || {});
+  });
   window.addEventListener("gvdg:member-dashboard-opened", (event) => openMemberDashboard(event.detail || {}));
+  window.addEventListener("gvdg:member-shell-view", (event) => {
+    if (event.detail?.view !== "members") dashboardOpen = false;
+  });
+  const followUrl = () => { if (dashboardOpen) syncDashboardLocation(); };
+  window.addEventListener("popstate", followUrl);
+  window.addEventListener("hashchange", followUrl);
 }

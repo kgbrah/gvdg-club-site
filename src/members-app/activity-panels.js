@@ -1,4 +1,5 @@
 import React from "react";
+import { selectDashboardTab } from "./dashboard-shell.js";
 
 import { RECENT_ROUNDS_KEY, localStorageGet, requestJson } from "./api.js";
 import { dollars, formatEventDay, formatToPar } from "./format.js";
@@ -126,7 +127,7 @@ export function LiveScoringPanel({ token, compact = false, variant = "home" }) {
           key: "cta",
         }, [
           h("div", { key: "copy" }, [
-            h("h2", { key: "title" }, "Keep score"),
+            h("h2", { key: "title" }, "Continue round"),
             h("p", { key: "meta" }, live.title),
           ]),
           h("span", { className: "player-keep-score-go", key: "go" }, "Rejoin"),
@@ -137,7 +138,7 @@ export function LiveScoringPanel({ token, compact = false, variant = "home" }) {
           key: "cta",
         }, [
           h("div", { key: "copy" }, [
-            h("h2", { key: "title" }, "Keep score"),
+            h("h2", { key: "title" }, "Start a round"),
             h("p", { key: "meta" }, "No live card. Start a casual round."),
           ]),
           h("span", { className: "player-keep-score-go", key: "go" }, "Start"),
@@ -192,16 +193,25 @@ export function WalletPanel({ token, compact = false }) {
     };
   }, [token]);
 
-  if (!token || state.status === "error" || !state.wallet) return null;
+  if (!token) return null;
+  if (!state.wallet) {
+    return compact ? null : h("p", { className: "dash-note", role: "status" },
+      state.status === "error" ? "Wallet is temporarily unavailable." : "Loading wallet…");
+  }
   if (compact) {
     return h("a", {
       className: "player-stat player-wallet-compact react-wallet-panel",
-      href: "pro-shop.html",
+      href: "#wallet",
+      onClick: (event) => {
+        if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        selectDashboardTab("wallet");
+      },
       "data-react-wallet": state.status,
     }, [
       h("div", { className: "player-stat-k", key: "label" }, "Wallet"),
       h("div", { className: "player-stat-v", key: "amount" }, dollars(state.wallet.balance_cents || 0)),
-      h("div", { className: "player-stat-s", key: "hint" }, "Shop with credit"),
+      h("div", { className: "player-stat-s", key: "hint" }, "View store credit"),
     ]);
   }
   const transactions = (Array.isArray(state.wallet.transactions) ? state.wallet.transactions : []).slice(0, 4);

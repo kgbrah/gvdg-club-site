@@ -29,15 +29,15 @@ test("admin phone chrome hides the public hamburger and stacks the dock above Cr
   assert.match(html, /\.admin-more-account \{/);
   assert.match(html, /@supports[\s\S]*?body\.player-theme-page \.admin-gate,\s*body\.player-theme-page \.admin-dock \{[\s\S]*?backdrop-filter: blur\(12px\)/);
   assert.doesNotMatch(html, /player-theme-page \.admin-panel,[\s\S]{0,120}player-theme-page \.admin-dock/);
-  assert.match(chrome, /helpLink\("desktop-help-link"\)/);
+
   assert.match(chrome, /CrottsHelpLink/);
-  assert.match(chrome, /nav-account-short/);
-  assert.match(chrome, /Back to Members/);
+
+  assert.match(chrome, /Member app/);
   assert.match(nav, /createPortal/);
   assert.match(nav, /document\.body/);
-  assert.match(nav, /data-admin-dock": "portal"/);
-  assert.match(nav, /"aria-selected": selected \? "true" : "false"/);
-  assert.match(nav, /role: "tab"/);
+  assert.match(nav, /data-admin-dock": dock/);
+  assert.match(nav, /"aria-current": selected/);
+  assert.match(nav, /"aria-label": "Admin navigation"/);
   assert.match(more, /data-admin-more-account/);
   assert.match(more, /gvdg-members\.html/);
   assert.match(more, /CrottsHelpLink/);

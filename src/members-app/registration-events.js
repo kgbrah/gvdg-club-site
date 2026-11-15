@@ -153,6 +153,8 @@ export function EventRegistrationCard({ event, registration, token, paymentsConf
   const owed = registration ? clientOwed(event, addons) : 0;
   return h("div", {
     className: `register-card${event.status === "live" ? " live" : ""}`,
+    "data-member-event-id": event.id,
+    tabIndex: -1,
     "data-event-state": registration && event.status !== "cancelled" ? "in" : "register",
   }, [
     h("div", { className: "register-head", key: "head" }, [

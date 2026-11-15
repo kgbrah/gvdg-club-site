@@ -28,7 +28,7 @@ test('admin tee-sign review queue is rendered by React from direct loader events
   assert.match(html, /import \{ installTeeSignReviewController \} from "\.\/tee-sign-review-controller\.js"/);
   assert.match(html, /let loadTeeSignReview = async \(\) => \{\}/);
   assert.match(html, /loadTeeSignReview = installTeeSignReviewController\(/);
-  assert.match(html, /if \(tab === 'tee-signs'\) loadTeeSignReview\(\)/);
+  assert.match(html, /if \(pane === 'tee-signs'\) loadTeeSignReview\(/);
   assert.match(teeSignController, /gvdg:admin-tee-sign-review-controls-request/);
   assert.match(teeSignController, /loadReview\(event\.detail \|\| \{\}\)/);
   assert.match(teeSignController, /gvdg:admin-tee-sign-review-approve-request/);
