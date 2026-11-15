@@ -1,6 +1,6 @@
 # Navigation proposal for members and admins
 
-Status: recommendation for review. The user requested recommendations without losing functionality. Do not replace the existing navigation until the proposed structure and a complete destination mapping have been reviewed.
+Status: user approved implementation of the entire proposal. Preserve every existing capability and verify the destination mapping while implementing the new structure.
 
 ## Problems to address
 

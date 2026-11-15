@@ -14,6 +14,8 @@ The shared checkout stays untouched. Each implementation lane has its own branch
 | Round recovery | `codex/round-recovery` | Scorer controller/view, lie identity, durable queues, video drafts, live DO and clip persistence | 0046 |
 | Stats and exports | `codex/stats-parity` | Metric definitions, member stats controls, history and own-data export | Request if needed |
 | Watches | `codex/watch-parity` | Pairing, scoped watch routes, native clients, wrist/range feature review | 0047 |
+| Course quality | `codex/course-quality` | Coverage, freshness, course selection, favorites and offline packs | 0048 |
+| Navigation | `codex/app-navigation` | Approved member/admin structure, tool search, contextual navigation and onboarding | None |
 
 Shared scoring and watch commands retain normal actor authorization, validation, card locks, and consensus. Atomic retry/ordering semantics are coordinated between the recovery and watch lanes. Symlinked dependencies are read-only; install new dependencies into separate package directories.
 
@@ -24,9 +26,10 @@ An implementation is not marked verified merely because code exists. Native sign
 | Milestone | Required result | Status |
 | --- | --- | --- |
 | Recoverable rounds | Correct identity isolation; durable scores, marked lies and video; retry visibility; safe finalization | In implementation |
-| Analytics and data ownership | C1X, honest coverage, time/course/layout trends, golden fixtures, own-data exports | In implementation |
+| Analytics and data ownership | C1X, honest coverage, time/course/layout trends, golden fixtures, own-data exports | Integrated; combined verification pending |
 | Native watches | Scoped pairing and revocation; safe phone/watch sync; executable clients and platform build checks | In implementation |
-| Course quality | Complete versus partial mapping; provenance, freshness, revision-safe data, usable discovery | Queued |
+| Course quality | Complete versus partial mapping; provenance, freshness, revision-safe data, usable discovery | In implementation |
+| Navigation | Approved proposal in navigation-proposal.md; every old destination/action retained | Assigned next |
 | Offline course use | Explicit downloadable course packs and local round lifecycle with reconciliation | Queued |
 | Explicit shot records | Outcomes, penalties, make/miss, accuracy and editable classifications | Queued after recovery |
 | Ratings | Missing-result repair, stable baselines and transparent provisional status | Queued |
