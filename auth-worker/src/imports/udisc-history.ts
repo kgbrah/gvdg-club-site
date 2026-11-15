@@ -15,6 +15,8 @@ export interface UdiscHistoryRound {
   courseName: string;
   layoutName: string;
   playedAt: string;
+  sourcePlayedAt?: string;
+  sourceFinishedAt?: string;
   total: number | null;
   toPar: number | null;
   holes: UdiscHistoryHole[];
@@ -167,12 +169,13 @@ export function parseUdiscHistory(csv: string): UdiscHistoryParse {
   }
 
   const pars = new Map<string, Map<number, number>>();
-  const playerRows: { playerName: string; courseName: string; layoutName: string; playedAt: string; total: number | null; toPar: number | null; strokes: Map<number, number> }[] = [];
+  const playerRows: { playerName: string; courseName: string; layoutName: string; playedAt: string; sourcePlayedAt: string; sourceFinishedAt?: string; total: number | null; toPar: number | null; strokes: Map<number, number> }[] = [];
   for (const row of parsed) {
     const playerName = clip(row.playername || "", 80);
     const courseName = clip(row.coursename || "", 120);
     const layoutName = clip(row.layoutname || "", 80);
-    const playedAt = parseUdiscPlayedAt(rowWhen(row));
+    const sourcePlayedAt = rowWhen(row).trim();
+    const playedAt = parseUdiscPlayedAt(sourcePlayedAt);
     if (!playerName || !courseName || !playedAt) continue;
     const cardKey = [norm(courseName), norm(layoutName), playedAt].join("\n");
     if (norm(playerName) === "par") {
@@ -192,11 +195,14 @@ export function parseUdiscHistory(csv: string): UdiscHistoryParse {
     const total = parseTotal(row.total || "");
     const strokes = dropScratchedHole(rawStrokes, total);
     if (!strokes.size) continue;
+    const sourceFinishedAt = row.enddate?.trim();
     playerRows.push({
       playerName,
       courseName,
       layoutName,
       playedAt,
+      sourcePlayedAt,
+      ...(sourceFinishedAt && parseUdiscPlayedAt(sourceFinishedAt) ? { sourceFinishedAt } : {}),
       total,
       toPar: parseToPar(row["+/-"] || row.topar || ""),
       strokes,
@@ -220,6 +226,8 @@ export function parseUdiscHistory(csv: string): UdiscHistoryParse {
       courseName: row.courseName,
       layoutName: row.layoutName,
       playedAt: row.playedAt,
+      sourcePlayedAt: row.sourcePlayedAt,
+      ...(row.sourceFinishedAt ? { sourceFinishedAt: row.sourceFinishedAt } : {}),
       total: row.total ?? holeRows.reduce((sum, hole) => sum + hole.strokes, 0),
       toPar,
       holes: holeRows,

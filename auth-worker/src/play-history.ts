@@ -17,7 +17,7 @@ type Hole = {
   marks: Mark[]; marksStatus: "saved" | "none" | "unattributed";
   shotLedger?: ArchivedShotLedger;
 };
-type Round = {
+export type Round = {
   id: string; source: RoundSource; resultId: number; eventId: number | null; roundCode: string | null;
   importedRoundKey: string | null; importedAt: string | null;
   playedAt: string | null; playedDate: string | null; eventName: string | null;
@@ -26,7 +26,7 @@ type Round = {
   holes: Hole[]; savedBreakdown: Partial<PlayTotals> | null;
   offlineSnapshot?: OfflineRound;
 };
-type Clip = {
+export type Clip = {
   id: number; scope: "round" | "event" | "offline"; clientId?: string; playerIndex?: number; playerName?: string; scopeKey: string; hole: number; createdAt: string;
   contentType: string; bytes: number; highlight: boolean; moment: string | null; mediaPath: string;
 };
@@ -260,6 +260,8 @@ const EXPORT_SECTIONS = ["competitive", "casual", "udisc", "clips", "offline", "
 const CLIP_QUERIES = {
   clips: `SELECT id, scope, scope_key, hole, content_type, bytes, highlight, moment, created_at
     FROM throw_clips WHERE filmed_by = ? AND id > ? ORDER BY id LIMIT ?`,
+  archiveClips: `SELECT id, scope, scope_key, hole, content_type, bytes, highlight, moment, created_at, client_id, player_index
+    FROM throw_clips WHERE filmed_by = ? AND id > ? ORDER BY id LIMIT ?`,
   offlineClips: `SELECT clip.id, 'offline' AS scope, CAST(r.id AS TEXT) AS scope_key, clip.hole, clip.content_type,
       clip.bytes, clip.highlight, clip.moment, clip.created_at, clip.client_id, clip.player_index, clip.player_name
     FROM offline_round_clips clip JOIN offline_rounds r ON r.id = clip.offline_round_id
@@ -303,8 +305,9 @@ function exportClips(rows: Row[]): Clip[] {
       highlight: row.highlight === 1, moment: string(row.moment),
       mediaPath: scope === "offline" ? `/offline-rounds/${scopeKey}/clips/${id}/media`
         : base + encodeURIComponent(scopeKey) + "/live/clips/" + id + "/media",
-      ...(scope === "offline" ? { clientId: string(row.client_id) ?? undefined, playerIndex: integer(row.player_index) ?? undefined,
-        playerName: string(row.player_name) ?? undefined } : {}),
+      ...(string(row.client_id) ? { clientId: string(row.client_id)! } : {}),
+      ...(integer(row.player_index) !== null ? { playerIndex: integer(row.player_index)! } : {}),
+      ...(string(row.player_name) ? { playerName: string(row.player_name)! } : {}),
     }];
   });
 }
@@ -318,16 +321,16 @@ export function parseExportCursor(raw: string | null): ExportCursor | null {
   return match && Number.isSafeInteger(Number(match[2])) ? { section: Number(match[1]), after: Number(match[2]) } : null;
 }
 
-export async function readPersonalPlayPage(db: D1Like, memberId: string, cursor: ExportCursor) {
+export async function readPersonalPlayPage(db: D1Like, memberId: string, cursor: ExportCursor, pageSize = PLAY_EXPORT_PAGE_SIZE, archiveClips = false) {
   const rounds: Round[] = [];
   const clips: Clip[] = [];
-  let remaining = PLAY_EXPORT_PAGE_SIZE;
+  let remaining = pageSize;
   let after = cursor.after;
   let next: string | null = null;
   for (let section = cursor.section; section < EXPORT_SECTIONS.length && remaining > 0; section += 1) {
     const entry = EXPORT_SECTIONS[section]!;
     const source = entry === "clips" || entry === "offlineClips" ? null : entry;
-    const sql = entry === "clips" || entry === "offlineClips" ? CLIP_QUERIES[entry]
+    const sql = entry === "clips" || entry === "offlineClips" ? CLIP_QUERIES[archiveClips && entry === "clips" ? "archiveClips" : entry]
       : ROUND_QUERIES[entry] + " AND res.id > ? ORDER BY res.id LIMIT ?";
     const response = await db.prepare(sql).bind(memberId, after, remaining + 1).all();
     if (!response.success) throw new Error("play_export_read_failed");
