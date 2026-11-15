@@ -40,15 +40,15 @@ An implementation is not marked verified merely because code exists. Native sign
 | Native watches | Scoped pairing and revocation; safe phone/watch sync; executable clients and platform build checks | Integrated; Wear OS, watchOS Simulator and generic Garmin CI passed; physical/store checks remain |
 | Course quality | Complete versus partial mapping; provenance, freshness, revision-safe data, usable discovery | Integrated; favorites routes wired; 484 frontend/776 Worker checks passed |
 | Navigation | Approved proposal in navigation-proposal.md; every old destination/action retained | Integrated; desktop/phone navigation and compatibility tests passed |
-| Offline course use | Explicit downloadable course packs and local round lifecycle with reconciliation | Packs deployed; new offline rounds in implementation with migration 0053 reserved |
-| Explicit shot records | Outcomes, penalties, make/miss, accuracy and editable classifications | Integrated for next release; private archive/recovery tests passed |
-| Ratings | Missing-result repair, stable baselines and transparent provisional status | Integrated for next release; whole-field/calibration race rejection verified; predictive accuracy remains unknown |
-| Personal practice and equipment | Physical disc inventory, putting sessions and measured-throw history | Integrated for next release; owner isolation, offline drafts and mobile workflows passed |
-| Social and discovery | Favorites, appropriate public profiles, progress milestones and sharing controls | In implementation; migration 0054 reserved |
-| Course operators | Course health, maintenance tasks and honest participation reporting | In implementation; migration 0052 reserved |
+| Offline course use | Explicit downloadable course packs and local round lifecycle with reconciliation | Packs deployed; fresh offline rounds integrated with migration 0053; real service-worker offline start, score, reload and finish passed |
+| Explicit shot records | Outcomes, penalties, make/miss, accuracy and editable classifications | Live in PR93; private archive/recovery tests passed |
+| Ratings | Missing-result repair, stable baselines and transparent provisional status | Live in PR93; whole-field/calibration race rejection verified; predictive accuracy remains unknown |
+| Personal practice and equipment | Physical disc inventory, putting sessions and measured-throw history | Live in PR93; owner isolation, offline drafts and mobile workflows passed |
+| Social and discovery | Favorites, appropriate public profiles, progress milestones and sharing controls | Integrated for expansion release with migration 0054; privacy and discovery tests passed |
+| Course operators | Course health, maintenance tasks and honest participation reporting | Integrated for expansion release with migration 0052; admin visual review underway |
 | Complete data ownership | Personal export/reimport with original provenance and media manifests | Export implemented; archive reimport remains queued |
-| Native phone convenience | Background activity and supported lock-screen tools with explicit permission | Requires implementation and physical-device validation |
-| Spectator and video quality | Reconnect recovery, durable history, accessible controls and clear sharing scope | Queued after recovery |
+| Native phone convenience | Background activity and supported lock-screen tools with explicit permission | Native source integrated with migration 0056; Android APK/lint/unit and iPhone Simulator/ActivityKit tests passed; phone UI integration underway; physical/store verification remains |
+| Spectator and video quality | Reconnect recovery, durable history, accessible controls and clear sharing scope | Integrated for expansion release with migration 0055; read-only watch links, revocation, private clip sharing, socket recovery and actual video playback passed |
 | Accessibility and performance | Large text, keyboard/screen-reader paths, outdoor readability, slow-network behavior | Continuous verification |
 | Field evidence | Real phone/watch rounds, battery, interruptions, and course-data verification | Pending device/data access |
 
@@ -56,7 +56,7 @@ An implementation is not marked verified merely because code exists. Native sign
 
 First release: [PR #92](https://github.com/kgbrah/gvdg-club-site/pull/92), commit `9929342`, cache `gvdg-club-v247`. [GitHub deployment 43663733864](https://github.com/kgbrah/gvdg-club-site/actions/runs/43663733864) applied migrations 0046–0048 and deployed Pages, Worker and alert keys. Both post-deployment live-scoring and member-dashboard checks actually ran and passed. Second release: [PR #93](https://github.com/kgbrah/gvdg-club-site/pull/93), commit `6a97728`, cache `gvdg-club-v248`. [Deployment 43666724474](https://github.com/kgbrah/gvdg-club-site/actions/runs/43666724474) applied migrations 0049–0051, deployed Worker and Pages, uploaded alert keys, and ran both post-deploy checks successfully.
 
-Current priority: the user rejected the member Home visual quality on their blue custom theme. Rework spacing, hierarchy, onboarding and utility controls, then show actual revised mobile previews before the next deployment. Expansion features remain held for that visual review. Archive work is preserved and paused while its builder handles polish; spectator and native-phone lanes continue independently.
+The revised Home/Practice direction was explicitly approved for the entire app and released in [PR #95](https://github.com/kgbrah/gvdg-club-site/pull/95), commit `6aeea38`, cache `gvdg-club-v249`. [Deployment 43669165687](https://github.com/kgbrah/gvdg-club-site/actions/runs/43669165687) and both post-deploy checks passed. Current priority: apply that approved direction to every member, admin, scoring and public surface while preserving all functions. The scorecard receives deeper rapid-input, offline/reconnect and finalization verification. See `app-polish-coverage.md` for the route and state inventory. Archive work is preserved and resumes after its builder completes admin polish.
 
 - Unit and integration tests exercise actual failure modes: HTTP 5xx, network failure, reload, actor/round switching, expired authorization, duplicate and stale writes, storage failure, and upload acknowledgement loss.
 - Golden statistic fixtures preserve numerators/denominators and label unknown or inferred data.

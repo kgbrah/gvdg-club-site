@@ -118,6 +118,11 @@ const pages = [
     path: "/ryder-cup.html",
     text: ["Ryder Cup"],
   },
+  { name: "scoring-app", path: "/scoring-app.html", text: ["Your game.", "GVDG vs UDisc Pro.", "Watch live."] },
+  { name: "archive-redirect", path: "/archive.html", text: ["Events & Club Events"], redirect: "/events.html#previousResultsSection" },
+  { name: "design-chooser", path: "/design.html", text: ["Direction 01", "Direction 02"] },
+  { name: "design-field", path: "/design-field.html", text: ["Where to play", "One card for the year."] },
+  { name: "design-night", path: "/design-night.html", text: ["Where to play", "One card for the year."] },
   {
     name: "tee-sign-preview",
     path: "/tee-sign-preview.html",
@@ -267,6 +272,7 @@ async function runPage(browser, server, item, viewport) {
     await page.goto(`${server.origin}${item.path}`, { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => {});
     await waitForText(page, item.text, item.name);
+    if (item.redirect) await page.waitForURL(`${server.origin}${item.redirect}`);
     await assertNoHorizontalOverflow(page, `${viewport.width} ${item.name}`);
     if (errors.length) throw new Error(errors.join("\n"));
     await page.screenshot({
@@ -284,7 +290,7 @@ const browser = await chromium.launch();
 const failures = [];
 try {
   for (const viewport of viewports) {
-    for (const item of pages) {
+    for (const item of pages.filter(item => !process.env.GVDG_SMOKE_PAGES || process.env.GVDG_SMOKE_PAGES.split(",").includes(item.name))) {
       try {
         await runPage(browser, server, item, { width: viewport.width, height: viewport.height });
         console.log(`PASS ${viewport.label} ${item.name}`);

@@ -19,8 +19,8 @@ Each lane records the actual states and interactions checked. A successful build
 | Events | events.html; hub, schedule, event/league details, live standings/chat, registrations, previous results, bag tags, campaigns and minutes | Root audit, builder to follow | Pending |
 | Shop | pro-shop.html; search/filter, product, cart, checkout states and wallet/payment entry | Root audit, builder to follow | Pending |
 | Public supporting pages | gvdg-blog.html, ryder-cup.html, scoring-app.html, tee-sign-preview.html | Root audit, builder to follow | Pending |
-| Compatibility | archive.html redirects to the existing Events previous-results anchor | Root | Redirect source checked; browser verification pending |
-| Design references | design.html, design-field.html, design-night.html | Root audit, builder to follow | Reference-page inventory recorded; links/layout pending |
+| Compatibility | archive.html redirects to the existing Events previous-results anchor | Root | Redirect target verified at390 and1280 |
+| Design references | design.html, design-field.html, design-night.html | Root audit, builder to follow | Chooser and both reference layouts pass390/1280 smoke; nested links queued for public lane |
 
 ## Scorecard matrix
 
