@@ -53,15 +53,6 @@ jobs:
           mkdir -p .pages-dist/src/shared
           cp src/shared/tee-sign-model.js .pages-dist/src/shared/
           printf '{"commit":"%s","branch":"%s","deployedAt":"%s","deployer":"github-actions"}\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" "$(date -u +%FT%TZ)" > .pages-dist/version.json
-      - name: Deploy static site to Cloudflare Pages
-        if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_CF_ACCOUNT == 'true' }}
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          wranglerVersion: 4.105.0
-          command: pages deploy .pages-dist --project-name gvdg-club-site --branch main --commit-dirty=true
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       # Deploy the LIVE worker ONCE. [env.gvdgclub] and [env.staging] now target the same Worker
       # (gvdg-member-auth-staging = the one auth.gvdgclub.com is attached to), so one deploy suffices.
       - name: Apply D1 migrations
@@ -102,6 +93,16 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+      # Publish the frontend after its additive schema and API changes are live.
+      - name: Deploy static site to Cloudflare Pages
+        if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_CF_ACCOUNT == 'true' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          wranglerVersion: 4.105.0
+          command: pages deploy .pages-dist --project-name gvdg-club-site --branch main --commit-dirty=true
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - name: Install Playwright Chromium
         if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_CF_ACCOUNT == 'true' && (env.HAS_QA_TOKEN == 'true' || env.HAS_QA_LOGIN == 'true') }}
         run: npx playwright install --with-deps chromium
