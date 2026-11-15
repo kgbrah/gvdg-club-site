@@ -843,6 +843,7 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
     dormie: isMatchDormie(state),
     hole,
     layoutId: state.layoutId || (state.snap && state.snap.layoutId) || null,
+    courseName: (state.snap && state.snap.courseName) || "",
     holeGrid,
     holeMeta: isPuttingScoring(state)
       ? ((hole.distance_ft ? hole.distance_ft + " ft · " : "") + hole.par + " putts" + (Number(hole.points) > 1 ? " · " + hole.points + " pts each" : ""))

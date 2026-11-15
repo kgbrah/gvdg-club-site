@@ -20,6 +20,7 @@ import { buildCasualArchiveSnapshot, shouldUseCasualArchive } from "./casual-arc
 import { liveHolesWithPins, overlayLiveSnapshot, submitLiveMapMark } from "./course-map-marks-routes.js";
 import { cardFromMine, handleThrowClips } from "./throw-clip-routes.js";
 import { handleRoundMessages } from "./round-message-routes.js";
+import { dropLiveRound, noteLiveRound } from "./course-traffic.js";
 
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // unambiguous (no 0/O/1/I/L)
 function genCode(): string {
@@ -149,6 +150,15 @@ export async function handleCasualRounds(
       body: JSON.stringify({ casual: true, roundCode: code, courseId: layout?.course_id ?? null, layoutId, createdBy: actor.sub, courseName: course?.name ?? null, layoutName: layout?.name ?? null, udiscCourseId: course?.udisc_course_id ?? null, weatherLocation, holes, players: seeded, liveScoringConfig, startedAt: new Date().toISOString() }),
     });
     if (r.status !== 200) return json({ error: "start_failed" }, 502, origin);
+    await noteLiveRound(env, {
+      key: "round:" + code,
+      course_id: layout?.course_id ?? null,
+      course_name: course?.name ?? null,
+      layout_name: layout?.name ?? null,
+      lat: course?.lat ?? null,
+      lng: course?.lng ?? null,
+      started_at: new Date().toISOString(),
+    });
     return json({ code }, 201, origin);
   }
 
@@ -209,7 +219,10 @@ export async function handleCasualRounds(
     if (!claims) return json({ error: "unauthorized" }, 401, origin);
     const member = await getMember(env.ROSTER, claims.sub);
     if (member?.isAdmin !== true) return json({ error: "forbidden" }, 403, origin);
-    return proxy(stub, "/cancel", { method: "POST", headers: { "X-Auth-Member": claims.sub, "X-Auth-Admin": "true" } }, origin);
+    return proxy(stub, "/cancel", { method: "POST", headers: { "X-Auth-Member": claims.sub, "X-Auth-Admin": "true" } }, origin).then(async (response) => {
+      if (response.status === 200) await dropLiveRound(env, "round:" + code);
+      return response;
+    });
   }
 
   // Everything else needs a round actor (member or open-play). The DO binds the write to this identity.
@@ -261,7 +274,9 @@ export async function handleCasualRounds(
     const force = b.force === true || new URL(request.url).searchParams.get("force") === "1";
     let admin = false;
     if (force && actor.kind === "member") { const m = await getMember(env.ROSTER, actor.sub); admin = m?.isAdmin === true; }
-    return proxy(stub, "/finalize", { method: "POST", headers: { ...hdr, "X-Auth-Admin": String(admin) }, body: JSON.stringify({ force }) }, origin);
+    const response = await proxy(stub, "/finalize", { method: "POST", headers: { ...hdr, "X-Auth-Admin": String(admin) }, body: JSON.stringify({ force }) }, origin);
+    if (response.status === 200) await dropLiveRound(env, "round:" + code);
+    return response;
   }
   if (sub === "live" && method === "GET" && seg[3] === "mine") {
     const r = await stub.fetch("https://do/mine", { headers: hdr });

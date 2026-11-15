@@ -1,6 +1,6 @@
 import React from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Link2, Ruler, Settings2, Share2, UserPlus, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Link2, Lock, Ruler, Settings2, Share2, UserPlus, Watch, X } from "lucide-react";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { HoleMap } from "../shared/hole-map.js";
 import { addThrow, currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, lastThrow, lastThrowHud, nextTeeHud, HOLE_MAP_COMPACT_SIZE, readAllThrows, readThrows, resolveMapFocus, undoThrow, withSelfLocation, writeThrows } from "../shared/hole-map-model.js";
@@ -11,6 +11,8 @@ import { WeatherStrip } from "./weather-strip.js";
 import { nextHoleScore, nextPuttingScore, puttingStationRows, relClass, relText, strokeLabel } from "./score-view-model.js";
 import { RoundHighlights, ThrowFilm } from "./throw-film.js";
 import { RoundTalk } from "./round-talk.js";
+import { WristScore } from "./wrist-score.js";
+import { closeRangeLock, postRangeLock, rangeLockChanged, rangeLockNote, readRangeLockEnabled, writeRangeLockEnabled } from "../shared/range-lock.js";
 
 const h = React.createElement;
 
@@ -344,6 +346,32 @@ function RoundTools(props) {
         onClick: props.onMeasure,
       },
       [icon(Ruler), h("span", { key: "label" }, props.measureLabel || "Measure")],
+    ),
+    h(
+      "button",
+      {
+        "aria-label": "Wrist score",
+        "aria-pressed": props.wrist ? "true" : "false",
+        className: "score-glove-tool" + (props.wrist ? " active" : ""),
+        key: "wrist",
+        title: "Wrist score",
+        type: "button",
+        onClick: props.onWrist,
+      },
+      [icon(Watch), h("span", { key: "label" }, "Wrist")],
+    ),
+    h(
+      "button",
+      {
+        "aria-label": props.rangeLockOn ? "Lock screen rangefinder is on" : "Pin distance to the lock screen",
+        "aria-pressed": props.rangeLockOn ? "true" : "false",
+        className: "score-glove-tool" + (props.rangeLockOn ? " active" : ""),
+        key: "lock",
+        title: "Lock screen",
+        type: "button",
+        onClick: props.onToggleLock,
+      },
+      [icon(Lock), h("span", { key: "label" }, props.rangeLockOn ? "Locked" : "Lock")],
     ),
     h(ThrowFilm, { hole: props.hole, key: "film", rows: props.rows }),
     h(RoundTalk, {
@@ -1152,6 +1180,9 @@ export function ScorecardView(props) {
   const [pinnedFocus, setPinnedFocus] = React.useState(null);
   const [scoreFlight, setScoreFlight] = React.useState(0);
   const gps = useDeviceFix();
+  const [wrist, setWrist] = React.useState(false);
+  const [rangeLockOn, setRangeLockOn] = React.useState(() => readRangeLockEnabled(typeof localStorage === "undefined" ? null : localStorage));
+  const rangePosted = React.useRef(null);
   const lie = lastThrow(throws);
   const hud = currentRangeHud(props.hole, gps.fix, measure, lie);
   const remaining = hud && hud.mode === "remaining" ? hud.ft : null;
@@ -1173,6 +1204,49 @@ export function ScorecardView(props) {
   const nextTee = showNextTee ? nextTeeHud(gps.fix, props.nextHole) : null;
   const lastThrowLine = lastThrowHud(throws, props.hole && props.hole.tee);
   const holeNumber = props.hole && props.hole.hole;
+  const rangeNote = rangeLockNote({
+    hud,
+    hole: holeNumber,
+    par: props.hole && props.hole.par,
+    courseName: props.courseName,
+  });
+  const rangeNoteKey = rangeNote ? rangeNote.title + "|" + rangeNote.body : "";
+  React.useEffect(() => {
+    if (!rangeLockOn) {
+      void closeRangeLock();
+      return undefined;
+    }
+    if (!rangeNote) {
+      void closeRangeLock();
+      return undefined;
+    }
+    if (!rangeLockChanged(rangePosted.current, rangeNote)) return undefined;
+    rangePosted.current = rangeNote;
+    void postRangeLock(rangeNote).catch(() => {});
+    return undefined;
+  }, [rangeLockOn, rangeNoteKey]);
+  React.useEffect(() => () => { void closeRangeLock(); }, []);
+  async function onToggleLock() {
+    if (rangeLockOn) {
+      writeRangeLockEnabled(typeof localStorage === "undefined" ? null : localStorage, false);
+      setRangeLockOn(false);
+      rangePosted.current = null;
+      void closeRangeLock();
+      return;
+    }
+    let granted = typeof Notification !== "undefined" && Notification.permission === "granted";
+    if (!granted && typeof Notification !== "undefined" && typeof Notification.requestPermission === "function") {
+      try {
+        granted = (await Notification.requestPermission()) === "granted";
+      } catch {
+        granted = false;
+      }
+    }
+    if (!granted) return;
+    writeRangeLockEnabled(typeof localStorage === "undefined" ? null : localStorage, true);
+    rangePosted.current = null;
+    setRangeLockOn(true);
+  }
   const storage = typeof sessionStorage === "undefined" ? null : sessionStorage;
 
   React.useEffect(() => {
@@ -1257,7 +1331,26 @@ export function ScorecardView(props) {
   const solo = props.solo === true || (Array.isArray(props.rows) && props.rows.length === 1);
   const playerBand = Math.min(Math.max(Array.isArray(props.rows) ? props.rows.length : 1, 1), 4);
   return h(React.Fragment, null, [
-    h("div", {
+    wrist ? h(WristScore, {
+      atEnd: props.atEnd,
+      atStart: props.atStart,
+      courseName: props.courseName,
+      hole: props.hole,
+      holeMeta: props.holeMeta,
+      hud,
+      key: "wrist",
+      locked: Boolean(props.finish && props.finish.locked),
+      putting: props.putting,
+      rangeLockOn,
+      rows: props.rows,
+      onEnableGps: gps.enableGps,
+      onExit: () => setWrist(false),
+      onNext: props.onNext,
+      onOpenPad: setPadRow,
+      onPrevious: props.onPrevious,
+      onScore,
+      onToggleLock,
+    }) : h("div", {
       className: "score-glove-layout" + (solo ? " solo" : "") + " players-" + playerBand,
       key: "glove",
     }, [
@@ -1301,11 +1394,30 @@ export function ScorecardView(props) {
         }),
         props.putting ? h("div", { className: "score-glove-tools", key: "round-tools" }, [
           h(ThrowFilm, { hole: props.hole, key: "film", putting: true, rows: props.rows }),
+          h("button", {
+            "aria-label": "Wrist score",
+            className: "score-glove-tool",
+            key: "wrist",
+            type: "button",
+            onClick: () => setWrist(true),
+          }, [icon(Watch), h("span", { key: "label" }, "Wrist")]),
+          h("button", {
+            "aria-label": rangeLockOn ? "Lock screen rangefinder is on" : "Pin distance to the lock screen",
+            "aria-pressed": rangeLockOn ? "true" : "false",
+            className: "score-glove-tool" + (rangeLockOn ? " active" : ""),
+            key: "lock",
+            type: "button",
+            onClick: onToggleLock,
+          }, [icon(Lock), h("span", { key: "label" }, rangeLockOn ? "Locked" : "Lock")]),
         ]) : h(RoundTools, {
           ...props,
           measureLabel,
           measuring,
+          rangeLockOn,
+          wrist,
           onMeasure,
+          onToggleLock,
+          onWrist: () => setWrist(true),
         }),
         h(RoundHighlights, { canStar: true, holes: props.holeGrid, key: "clips", putting: props.putting === true }),
         h(HoleGrid, { holes: props.holeGrid, onJump: props.onJumpHole, putting: props.putting }),

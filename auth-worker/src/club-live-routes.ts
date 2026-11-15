@@ -15,6 +15,7 @@ import { playersMatch } from "./player-identity.js";
 import { liveHolesWithPins, overlayLiveSnapshot, submitLiveMapMark } from "./course-map-marks-routes.js";
 import { cardFromMine, handleThrowClips } from "./throw-clip-routes.js";
 import { handleRoundMessages } from "./round-message-routes.js";
+import { dropLiveRound, noteLiveRound } from "./course-traffic.js";
 
 type RosterPlayer = { memberId: string | null; name: string; division: string | null; startingHole: number | null; team: string | null };
 
@@ -122,7 +123,19 @@ export async function startLiveEvent(
   }
   const r = await stub.fetch("https://do/start", { method: "POST", body: JSON.stringify({ eventId: eid, courseId: evLayout?.course_id ?? null, layoutId: ev.layout_id ?? null, courseName: evCourse?.name ?? null, layoutName: evLayout?.name ?? null, holes, players, liveScoringConfig, startedAt: new Date().toISOString(), weatherLocation, ctpBuyInRequired: buyInRequired }) });
   const data = await r.json().catch(() => ({}));
-  if (r.status === 200) await db.updateEvent(env.DB, eid, { status: "live" });
+  if (r.status === 200) {
+    await db.updateEvent(env.DB, eid, { status: "live" });
+    const startedAt = new Date().toISOString();
+    await noteLiveRound(env, {
+      key: "event:" + eid,
+      course_id: evLayout?.course_id ?? null,
+      course_name: evCourse?.name ?? null,
+      layout_name: evLayout?.name ?? null,
+      lat: evCourse?.lat ?? null,
+      lng: evCourse?.lng ?? null,
+      started_at: startedAt,
+    });
+  }
   return json(data, r.status, origin);
 }
 
@@ -339,7 +352,10 @@ export async function handleClubLive(
     if (sub === "cancel") {
       const r = await stub.fetch("https://do/cancel", { method: "POST", headers: { "X-Auth-Admin": "true" } });
       const data = await r.json().catch(() => ({}));
-      if (r.status === 200) await db.updateEvent(env.DB, eid, { status: "scheduled" });
+      if (r.status === 200) {
+        await db.updateEvent(env.DB, eid, { status: "scheduled" });
+        await dropLiveRound(env, "event:" + eid);
+      }
       return json(data, r.status, origin);
     }
 
@@ -352,7 +368,10 @@ export async function handleClubLive(
       // This route already passed adminGate, so the caller is a club admin → allow the force override
       // (finalize past scorecards that don't fully agree). Force comes from ?force=1 or body.force.
       const force = body.force === true || new URL(request.url).searchParams.get("force") === "1";
-      return liveProxy(stub, "/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify({ ...body, force }) }, origin);
+      const r = await stub.fetch("https://do/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify({ ...body, force }) });
+      const data = await r.json().catch(() => ({}));
+      if (r.status === 200) await dropLiveRound(env, "event:" + eid);
+      return json(data, r.status, origin);
     }
     return liveProxy(stub, "/" + sub, { method: "POST", body: JSON.stringify(body) }, origin);
   }

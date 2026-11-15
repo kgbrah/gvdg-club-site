@@ -1188,6 +1188,52 @@
         @keyframes sp { to { transform: rotate(360deg); } }
         a.link { color: var(--primary); font-weight: 700; text-decoration: none; }
         .return-members .link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 0.25rem; }
+        .course-traffic-sub { color: var(--primary-strong); font-weight: 700; }
+        .wrist-score {
+            position: fixed; inset: 0; z-index: 35; display: flex; flex-direction: column; gap: 0.45rem;
+            background: var(--bg-primary); color: var(--text-primary);
+            padding: calc(0.55rem + var(--safe-top)) 0.7rem calc(0.55rem + var(--safe-bottom));
+        }
+        .wrist-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.6rem; }
+        .wrist-kicker { margin: 0; font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); font-weight: 700; }
+        .wrist-top h2 { margin: 0.05rem 0; font-size: 1.35rem; }
+        .wrist-meta { margin: 0; color: var(--text-muted); font-size: 0.85rem; }
+        .wrist-exit {
+            min-height: 44px; padding: 0 0.85rem; border-radius: 999px; border: 1px solid var(--border-color);
+            background: var(--bg-tertiary); color: var(--text-primary); font-weight: 700;
+        }
+        .wrist-range {
+            flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            border: 0; border-radius: 22px; background: var(--bg-secondary); color: var(--text-primary); min-height: 8.5rem;
+        }
+        .wrist-range strong { font-size: clamp(4.4rem, 28vw, 7.5rem); line-height: 0.85; font-weight: 800; font-variant-numeric: tabular-nums; }
+        .wrist-range span { margin-top: 0.35rem; font-size: 1rem; font-weight: 700; color: var(--text-muted); }
+        .wrist-range em { margin-top: 0.45rem; font-style: normal; font-size: 0.82rem; font-weight: 700; color: var(--primary-strong); }
+        .wrist-range.in-c1 strong { color: var(--under); }
+        .wrist-range.in-c2 strong { color: var(--accent); }
+        .wrist-players { display: flex; flex-direction: column; gap: 0.45rem; }
+        .wrist-player-name { font-weight: 700; font-size: 0.95rem; margin-bottom: 0.2rem; }
+        .wrist-step { display: flex; align-items: center; justify-content: space-between; gap: 0.45rem; }
+        .wrist-step button {
+            width: clamp(4.4rem, 26vw, 6.4rem); height: clamp(4.4rem, 22vw, 6rem);
+            border-radius: 18px; border: 0; font-size: 2rem; font-weight: 800; color: var(--text-primary);
+        }
+        .wrist-minus { background: var(--bg-tertiary); border: 1px solid var(--border-color); }
+        .wrist-plus, .wrist-nav-next { background: var(--primary-strong); color: var(--light); }
+        .wrist-val {
+            flex: 1 1 auto; background: var(--bg-secondary); display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 0.1rem;
+        }
+        .wrist-val b { font-size: clamp(2rem, 10vw, 3rem); line-height: 1; }
+        .wrist-val .rel { font-size: 0.85rem; font-weight: 800; }
+        .wrist-val .rel.under { color: var(--under); }
+        .wrist-val .rel.over { color: var(--over); }
+        .wrist-nav { display: flex; gap: 0.45rem; }
+        .wrist-nav-btn {
+            flex: 1 1 0; min-height: 52px; border-radius: 16px; border: 1px solid var(--border-color);
+            background: var(--bg-tertiary); color: var(--text-primary); font-size: 1.05rem; font-weight: 800;
+        }
+        .wrist-nav-btn:disabled, .wrist-step button:disabled { opacity: 0.4; }
     </style>
 </head>
 <body data-api-base="">
@@ -1196,6 +1242,6 @@
     <div id="scoreReactLeaderboardSheetApp"></div>
     <div id="scoreReactManagePlayersSheetApp"></div>
     <div id="scoreReactDialogsApp"></div>
-    <script type="module" src="score-app/score-app.js?v=225"></script>
+    <script type="module" src="score-app/score-app.js?v=226"></script>
 </body>
 </html>

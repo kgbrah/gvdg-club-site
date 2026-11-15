@@ -6,12 +6,54 @@ import { formatEventDay, formatToPar } from "./format.js";
 import { liveScoreHref, liveWatchHref } from "../shared/live-watch.js";
 import { formatUdiscWhen, recentPlayRounds, relClass } from "./play-page-model.js";
 import { myLayoutHandicaps } from "../shared/handicap.js";
+import { trafficHoleLine, trafficSummary } from "../shared/course-traffic.js";
 import { memberConfirm } from "./member-dialogs.js";
 
 const h = React.createElement;
 
 function normalizeCode(value) {
   return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function CourseTrafficCard() {
+  const [rows, setRows] = React.useState([]);
+  const [status, setStatus] = React.useState("loading");
+  React.useEffect(() => {
+    let dead = false;
+    function load() {
+      requestJson("/course-traffic")
+        .then((data) => {
+          if (dead) return;
+          setRows(Array.isArray(data && data.courses) ? data.courses : []);
+          setStatus("ready");
+        })
+        .catch(() => {
+          if (!dead) setStatus("ready");
+        });
+    }
+    load();
+    const timer = window.setInterval(load, 45000);
+    return () => {
+      dead = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+  return h("section", { className: "player-card", "data-react-course-traffic": status, key: "traffic" }, [
+    h("h3", { key: "title" }, "Course traffic"),
+    h("p", { className: "player-card-meta", key: "copy" }, "Live groups, hole by hole, from cards scoring right now."),
+    status === "loading"
+      ? h("p", { className: "player-card-meta", key: "loading" }, "Checking who's out…")
+      : rows.length
+        ? h("div", { className: "live-round-list", key: "list" }, rows.map((row) => h("div", { className: "live-round-card", key: row.courseId || row.name }, [
+          h("div", { key: "body" }, [
+            h("span", { className: "live-round-badge", key: "badge" }, "Live"),
+            h("div", { className: "live-round-title", key: "title" }, row.name),
+            h("div", { className: "live-round-meta", key: "meta" }, trafficSummary(row)),
+            trafficHoleLine(row) ? h("div", { className: "player-card-meta", key: "holes" }, trafficHoleLine(row)) : null,
+          ]),
+        ])))
+        : h("p", { className: "player-card-meta", key: "empty" }, "No cards on a course right now."),
+  ]);
 }
 
 function PlayJoinCard() {
@@ -448,6 +490,7 @@ export function MemberPlayPage() {
       ]),
       h("span", { className: "player-keep-score-go", key: "go" }, "Start"),
     ]),
+    h(CourseTrafficCard, { key: "traffic" }),
     token ? h(LiveScoringPanel, { token, variant: "play", key: "live" }) : null,
     token ? h(PlayHistory, { token, key: "history" }) : null,
     token ? h(UdiscHistory, { token, key: "udisc" }) : null,

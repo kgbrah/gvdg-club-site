@@ -12,6 +12,7 @@ import { COURSE_CATALOG_CACHE_NAME, courseCatalogCacheKey } from "./course-catal
 import { getUdiscImportState } from "./db-udisc-layout-imports.js";
 import { listNearbyPdgaEvents, PDGA_EVENT_MILES } from "./pdga-events.js";
 import { handicapCutoffDate, handicapsFromRounds, type HandicapRound } from "./handicap.js";
+import { courseTrafficPayload } from "./course-traffic.js";
 
 const CATALOG_CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -54,6 +55,10 @@ export async function handleClubPublic(
       const listed = await db.listCoursesCatalog(env.DB);
       return { payload: { courses: listed.results }, cacheable: listed.cacheable };
     });
+  }
+  if (method === "GET" && pathname === "/course-traffic") {
+    const payload = await courseTrafficPayload(env);
+    return json(payload, 200, origin, { "Cache-Control": "no-store" });
   }
   if (method === "GET" && pathname === "/courses/map-import") {
     const listed = await db.listCoursesCatalog(env.DB);

@@ -203,8 +203,36 @@ self.addEventListener("push", (event) => {
   }));
 });
 
+function rangeNotificationUrl(raw) {
+  if (typeof raw === "string" && raw.startsWith("/score.html") && !raw.startsWith("//") && !raw.includes("\\") && !raw.includes("://")) {
+    return new URL(raw, self.location.origin).href;
+  }
+  return new URL("/score.html", self.location.origin).href;
+}
+
+async function focusScore(target) {
+  const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  const scores = [];
+  for (const client of all) {
+    let url;
+    try { url = new URL(client.url); } catch { continue; }
+    if (url.origin !== self.location.origin) continue;
+    if (!url.pathname.endsWith("/score.html")) continue;
+    scores.push(client);
+  }
+  const installed = scores.find((client) => appClients.has(client.id));
+  const client = installed || scores[0];
+  if (client && typeof client.focus === "function") return client.focus();
+  if (self.clients.openWindow) return self.clients.openWindow(target);
+}
+
 self.addEventListener("notificationclick", (event) => {
+  const data = event.notification.data || {};
+  if (data.kind === "range") {
+    event.waitUntil(focusScore(rangeNotificationUrl(data.url)));
+    return;
+  }
   event.notification.close();
-  const target = adminNotificationUrl(event.notification.data && event.notification.data.url);
+  const target = adminNotificationUrl(data.url);
   event.waitUntil(openAdmin(target));
 });

@@ -17,6 +17,8 @@ import {
 } from "./course-pick.js";
 import { HoleMap } from "../shared/hole-map.js";
 import { safeExternalUrl } from "../shared/safe-url.js";
+import { resolveApiBase } from "../shared/api-base.js";
+import { courseTrafficMatch, trafficHoleLine, trafficSummary } from "../shared/course-traffic.js";
 
 const h = React.createElement;
 
@@ -45,9 +47,10 @@ function MapBadge({ mapped }) {
   }, mapped ? "Mapped" : "No map");
 }
 
-function CourseMeta({ text, mapped, lastPlayed }) {
+function CourseMeta({ text, mapped, lastPlayed, traffic }) {
   return h("div", { className: "sub-row", key: "meta" }, [
     text ? h("div", { className: "sub", key: "sub" }, text) : null,
+    traffic ? h("div", { className: "sub course-traffic-sub", key: "traffic" }, traffic) : null,
     lastPlayed ? h("span", { className: "course-map-badge last", key: "last" }, "Last played") : null,
     h(MapBadge, { mapped }),
   ]);
@@ -196,12 +199,37 @@ function useDeviceOrigin() {
   return origin;
 }
 
+function useCourseTraffic() {
+  const [courses, setCourses] = React.useState([]);
+  React.useEffect(() => {
+    const base = resolveApiBase({ datasetKeys: ["apiBase"] });
+    let dead = false;
+    let timer = 0;
+    function load() {
+      fetch(base + "/course-traffic", { cache: "no-store", headers: { Accept: "application/json" } })
+        .then((response) => (response.ok ? response.json() : { courses: [] }))
+        .then((data) => {
+          if (!dead) setCourses(Array.isArray(data && data.courses) ? data.courses : []);
+        })
+        .catch(() => {});
+    }
+    load();
+    timer = window.setInterval(load, 45000);
+    return () => {
+      dead = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+  return courses;
+}
+
 function CoursePickView({ courses, onBack, onSelect }) {
   const [query, setQuery] = React.useState("");
   const [range, setRange] = React.useState(COURSE_RANGE_DEFAULT);
   const [rangeTouched, setRangeTouched] = React.useState(false);
   const origin = useDeviceOrigin();
   const lastPlayed = React.useMemo(() => readLastCourse(), []);
+  const traffic = useCourseTraffic();
   const browsing = !query.trim();
   const sortOrigin = origin || CLUB_ORIGIN;
   const filtered = coursesForPickScreen(courses, query, range, sortOrigin, {
@@ -222,6 +250,17 @@ function CoursePickView({ courses, onBack, onSelect }) {
   return h("div", { className: "stack" }, [
     h(BackButton, { onBack, key: "back" }),
     h("h2", { className: "section", key: "title" }, "Pick a course"),
+    traffic.length
+      ? h("div", { className: "card stack", "data-course-traffic": "ready", key: "traffic" }, [
+        h("h3", { className: "section", key: "label" }, "On a course now"),
+        h("p", { className: "muted", key: "copy" }, "Live groups, hole by hole, from cards scoring in the app."),
+        ...traffic.map((row) => h("p", { className: "muted", key: row.courseId || row.name }, [
+          h("strong", { key: "name" }, row.name),
+          " — " + trafficSummary(row),
+          trafficHoleLine(row) ? h("span", { key: "holes" }, "  " + trafficHoleLine(row)) : null,
+        ])),
+      ])
+      : null,
     h("label", { className: "lbl", htmlFor: "courseSearch", key: "searchLabel" }, "Search"),
     h("div", { className: "course-search", key: "search" }, [
       icon(Search, { size: 16, key: "icon" }),
@@ -263,6 +302,7 @@ function CoursePickView({ courses, onBack, onSelect }) {
       ? filtered.map((course) => {
           const mapped = courseHasMap(course);
           const last = lastPlayed && String(lastPlayed.id) === String(course.id);
+          const live = courseTrafficMatch(traffic, course);
           return h(
             "div",
             { className: "tap-row", key: course.id || course.name },
@@ -273,7 +313,7 @@ function CoursePickView({ courses, onBack, onSelect }) {
                 [
                   h("div", { className: "grow", key: "content" }, [
                     h("div", { className: "title", key: "title" }, course.name),
-                    h(CourseMeta, { text: courseSub(course, sortOrigin), mapped, lastPlayed: last, key: "meta" }),
+                    h(CourseMeta, { text: courseSub(course, sortOrigin), mapped, lastPlayed: last, traffic: live ? trafficSummary(live) : "", key: "meta" }),
                   ]),
                   h("div", { className: "chev", key: "chev" }, icon(ChevronRight)),
                 ],
