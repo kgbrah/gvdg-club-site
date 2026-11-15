@@ -236,11 +236,10 @@ test("live round stats update from scored holes and marked lies", () => {
   assert.equal(live.mix.find((row) => row.id === "parMix").mine.hit, 1);
   assert.equal(live.throwStats.find((row) => row.id === "c1r").mine.hit, 1);
   assert.equal(live.throwStats.find((row) => row.id === "birdie").short, "Birdie");
-  assert.equal(live.throwStats.find((row) => row.id === "par").short, "Par");
+  assert.equal(live.throwStats.find((row) => row.id === "par"), undefined);
+  assert.equal(live.throwStats.length, 9);
   assert.equal(live.throwStats.find((row) => row.id === "birdie").mine.hit, 1);
-  assert.equal(live.throwStats.find((row) => row.id === "par").mine.hit, 1);
   assert.equal(live.throwStats.find((row) => row.id === "birdie").mine.pct, statPct(1, 2));
-  assert.equal(live.throwStats.find((row) => row.id === "par").mine.pct, statPct(1, 2));
 
   const stacked = liveRoundStatsFromCard({
     holes: [
@@ -267,7 +266,7 @@ test("live round stats update from scored holes and marked lies", () => {
   assert.equal(stacked.mix.find((row) => row.id === "bogey").mine.hit, 1);
   assert.equal(stacked.mix.find((row) => row.id === "double").mine.hit, 1);
   assert.equal(stacked.throwStats.find((row) => row.id === "birdie").mine.hit, 1);
-  assert.equal(stacked.throwStats.find((row) => row.id === "par").mine.hit, 1);
+  assert.equal(stacked.throwStats.find((row) => row.id === "par"), undefined);
 });
 
 

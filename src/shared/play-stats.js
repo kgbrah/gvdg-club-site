@@ -240,7 +240,7 @@ export const PLAY_CATEGORIES = [
 
 export const SCORE_MIX_IDS = PLAY_CATEGORIES.filter((row) => row.group === "mix").map((row) => row.id);
 export const COMPACT_STAT_IDS = ["birdie", "par", "fir", "c1Putt"];
-export const LIVE_ROUND_STAT_IDS = ["fir", "c1r", "c2r", "parked", "c1Putt", "c1xPutt", "c2Putt", "scramble", "birdie", "par"];
+export const LIVE_ROUND_STAT_IDS = ["fir", "c1r", "c2r", "parked", "c1Putt", "c1xPutt", "c2Putt", "scramble", "birdie"];
 
 export function statPct(hit, att) {
   if (!att) return null;
