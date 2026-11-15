@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1A1A2E">
+  <title>GVDG Scoring App vs UDisc Pro | Greenville Disc Golf Club</title>
+  <meta name="description" content="Make GVDG your own with custom themes, save video clips with your round history, and let friends watch live. Explore deeper club stats and compare with UDisc Pro.">
+  <link rel="icon" type="image/png" href="img/logo.png">
+  <link rel="manifest" href="site.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Archivo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="scoring-app.css">
+  <script>try{if(localStorage.getItem('theme')==='dark')document.documentElement.setAttribute('data-theme','dark')}catch(e){}</script>
+  <script type="module" src="public-app/public-app.js"></script>
+  <script src="pwa.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div id="publicReactPageChrome"></div>
+  <main id="main">
+    <section class="app-hero" aria-labelledby="app-title">
+      <div class="hero-layout wrap">
+        <div class="hero-copy">
+          <p class="eyebrow">The Greenville Disc Golf Club app</p>
+          <h1 id="app-title">Your game.<br><span>Your way.</span></h1>
+          <p class="hero-description">Make the app yours. Save video clips with your round history. Let friends watch live. Then dig into the stats behind every score.</p>
+          <div class="hero-actions"><a class="button primary" href="score.html">Open scoring app <span aria-hidden="true">↗</span></a><a class="compare-link" href="#watch-live">Watch a round <span aria-hidden="true">↓</span></a></div>
+          <p class="hero-note">Start a casual round in your browser. No club login required.</p>
+          <a class="hero-comparison" href="#compare">See the GVDG vs UDisc Pro comparison →</a>
+        </div>
+        <figure class="stats-preview" aria-label="Illustrative GVDG statistics with example data">
+          <figcaption><span>Inside your game</span><span class="sample-badge">Example data</span></figcaption>
+          <div class="preview-heading"><div><p class="micro">Competitive scoring</p><h2>A season in the details.</h2></div><span class="sample-holes">180 holes</span></div>
+          <div class="preview-mix" role="img" aria-label="Example scoring mix: 30 percent birdies, 50 percent pars, 20 percent bogeys"><span>30%</span><span>50%</span><span>20%</span></div>
+          <div class="mix-legend"><span><i class="birdie-dot"></i>Birdie</span><span><i class="par-dot"></i>Par</span><span><i class="bogey-dot"></i>Bogey</span></div>
+          <div class="preview-stats">
+            <div><span>Fairways</span><strong>72.2<span>%</span></strong><small>65 / 90 · #3 of 24</small></div>
+            <div><span>C1 putting</span><strong>84<span>%</span></strong><small>63 / 75 · #2 of 24</small></div>
+            <div><span>C2 in regulation</span><strong>61.1<span>%</span></strong><small>55 / 90 · #4 of 24</small></div>
+            <div><span>Scramble</span><strong>58.3<span>%</span></strong><small>14 / 24 · #5 of 24</small></div>
+          </div>
+          <p class="preview-caption">Percentages. Sample sizes. Your place in the club.</p>
+        </figure>
+      </div>
+      <div class="hero-rail wrap"><span>Custom themes</span><span>Saved video clips</span><span>Watch live</span><span>Deeper club stats</span></div>
+    </section>
+
+    <section class="signature-section" aria-labelledby="signature-title">
+      <div class="wrap">
+        <div class="section-intro"><div><p class="eyebrow">More of what makes a round yours</p><h2 id="signature-title">Make it yours.<br>Bring the round to life.</h2></div><p>From the way your app looks to the moments you save and the people following along, GVDG goes beyond the scorecard.</p></div>
+        <div class="signature-grid">
+          <article id="customize"><p class="feature-number">Make the app yours</p><h3>Your colors.<br>Your disc. Your app.</h3><p>Choose a theme or bring your own wallpaper. Pull a palette from your image, fine-tune the colors, and switch between light and dark. Even choose the color or pattern of the disc on your scoring map.</p><ul class="signature-tags" aria-label="Customization features"><li>Custom wallpaper</li><li>Editable colors</li><li>Disc styles</li></ul><p class="watch-how">In the member dashboard, open <strong>More → Dashboard theme</strong>. Your saved theme follows your account into scoring.</p><a href="gvdg-members.html">Make it yours <span aria-hidden="true">↗</span></a></article>
+          <article id="round-clips"><p class="feature-number">Video that stays with the round</p><h3>Film the throw.<br>Keep the moment.</h3><p>Capture clips up to 15 seconds long and choose <strong>Save to round</strong> to attach them to the player and hole. Friends can see uploaded clips while you play, and they stay with your round history after the final score.</p><ul class="signature-tags" aria-label="Video features"><li>During the round</li><li>Player + hole</li><li>Saved for later</li></ul><p class="watch-how">Revisit them from <strong>Play → Recent rounds → Replay</strong> in your member dashboard, or reopen the round's watch link.</p><a href="score.html">Start your next highlight <span aria-hidden="true">↗</span></a></article>
+          <article id="watch-live"><p class="feature-number">Bring your people along</p><h3>Watch live.<br>Follow every hole.</h3><p>Share your watch link so friends can follow scores, available hole maps, marked shots, and saved clips. No spectator login required. When the round is final, the same link becomes a replay.</p><p class="watch-how"><strong>Have a round code?</strong> Open the scorer, enter the code, and choose <strong>Watch this round</strong>.</p><div class="watch-actions"><a href="events.html">Watch live events <span aria-hidden="true">↗</span></a><a href="score.html">Watch a friend's card <span aria-hidden="true">↗</span></a></div></article>
+        </div>
+        <p class="signature-note">Video highlights are short clips uploaded during play. Live scores and new clips need an internet connection.</p>
+      </div>
+    </section>
+
+    <section class="depth-section wrap" aria-labelledby="depth-title">
+      <div class="section-intro"><div><p class="eyebrow">The details behind the score</p><h2 id="depth-title">Give every round<br>something to tell you.</h2></div><p>Your total is the starting point. GVDG shows how you got there, which parts of your game hold up, and where you sit among the players you know.</p></div>
+      <div class="depth-grid">
+        <article><span class="feature-number">01 / Track the shot</span><h3>See what led to the score.</h3><p>Mark your lies to build fairway, C1/C2 in regulation, parked, putting, and scramble statistics. Review saved marked lies in a round replay.</p><p class="detail-note">Shot stats use recorded lies and mapped tee/basket positions. They are estimates, not automatic shot detection.</p></article>
+        <article><span class="feature-number">02 / Separate your rounds</span><h3>Give each format its own context.</h3><p>Keep casual and competitive stats separate. Filter by singles or doubles, then stroke play or match play. See a separate scoring mix for available PDGA rounds.</p><p class="detail-note">PDGA scorecards supply scoring results, not missing shot-level stats.</p></article>
+        <article><span class="feature-number">03 / Find your place</span><h3>Put your numbers next to the club.</h3><p>See your percentage, makes or hits out of attempts, and club rank for each tracked category. Sample minimums help keep a handful of shots from topping the standings.</p><p class="detail-note">Member season views connect recorded results to your club account.</p></article>
+      </div>
+      <div class="history-callout"><div><p class="eyebrow">Your history belongs here, too</p><h3>Bring your UDisc rounds with you.</h3></div><p>Import a UDisc CSV to explore your scoring average, best round, bogey-free rounds, and hardest/easiest holes. Imported history stays separate from club ranks and handicap. The import brings in hole scores, not detailed putting or fairway data.</p><a href="gvdg-members.html">Explore your stats <span aria-hidden="true">↗</span></a></div>
+    </section>
+
+    <section class="comparison-section" id="compare" aria-labelledby="comparison-title">
+      <div class="wrap">
+        <div class="section-intro"><div><p class="eyebrow">The feature comparison</p><h2 id="comparison-title">GVDG vs UDisc Pro.</h2></div><p>Start with the stats, then the way you play. Both apps track more than a score; here is what each experience offers.</p></div>
+        <div class="table-shell">
+          <table class="comparison-table">
+            <caption class="sr-only">GVDG and UDisc Pro feature comparison, reviewed November 14, 2026.</caption>
+            <thead><tr><th scope="col">What matters to you</th><th scope="col"><span class="column-kicker">Built for our players</span>GVDG Club App</th><th scope="col"><span class="column-kicker">Worldwide disc golf</span>UDisc Pro</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">How you stack up</th><td data-label="GVDG"><strong>Club ranks by stat</strong>Category rankings, sample counts, and minimum attempts before a player qualifies.</td><td data-label="UDisc Pro"><strong>Course and friend leaderboards</strong>Compare scores locally and worldwide. <a href="#source-pro" aria-label="Source: UDisc Pro benefits">[2]</a></td></tr>
+              <tr><th scope="row">Shot and putting stats</th><td data-label="GVDG"><strong>From your marked lies</strong>Fairways, C1/C2 in regulation, parked, C1/C2 putting, and scrambling.</td><td data-label="UDisc Pro"><strong>From Throw Tracker</strong>Driving accuracy, C1/C2 in regulation, parked, C1/C1X/C2 putting, scrambling, and more. <a href="#source-stats" aria-label="Source: UDisc statistics">[1]</a></td></tr>
+              <tr><th scope="row">Doubles performance</th><td data-label="GVDG"><strong>A separate view for your doubles rounds</strong>Filter your recorded club stats by singles or doubles to keep team play in context.</td><td data-label="UDisc Pro"><strong>Excluded from personal stats history</strong>Doubles and triples are excluded from personal performance stats; totals such as aces still count. <a href="#source-history" aria-label="Source: UDisc stats-history rules">[7]</a></td></tr>
+              <tr><th scope="row">Where you review stats</th><td data-label="GVDG"><strong>In your browser</strong>Open your member stats on a phone or computer, without installing a native app.</td><td data-label="UDisc Pro"><strong>In the native app</strong>Personal round history and profile/course stats are app features. <a href="#source-browser" aria-label="Source: UDisc website capabilities">[3]</a></td></tr>
+              <tr><th scope="row">Context for your stats</th><td data-label="GVDG"><strong>Casual and competitive views</strong>Singles/doubles and stroke/match-play filters, with PDGA scoring shown separately.</td><td data-label="UDisc Pro"><strong>Lifetime history and stats</strong>Review your game across saved rounds, with time-range filters. <a href="#source-pro" aria-label="Source: UDisc Pro benefits">[2]</a></td></tr>
+              <tr><th scope="row">Round and player ratings</th><td data-label="GVDG"><strong>Club ratings + live estimates</strong>Playing estimates on supported layouts; linked PDGA ratings in the member dashboard.</td><td data-label="UDisc Pro"><strong>UDisc's rating system</strong>Round and player ratings across supported courses and layouts. <a href="#source-pro" aria-label="Source: UDisc Pro benefits">[2]</a></td></tr>
+              <tr><th scope="row">Match-play scoring</th><td data-label="GVDG"><strong>Play the format you want</strong>Score stroke play or match play, then filter club statistics by scoring style.</td><td data-label="UDisc Pro"><strong>Traditional stroke play</strong>Match play is not currently supported by UDisc scoring. <a href="#source-formats" aria-label="Source: UDisc scoring formats">[8]</a></td></tr>
+              <tr><th scope="row">Start keeping score</th><td data-label="GVDG"><strong>Open a link and play</strong>Start or join a casual card by code in your phone's browser, without a club login.</td><td data-label="UDisc Pro"><strong>Score in the UDisc app</strong>Unlimited scorecards are also included in UDisc's free plan. <a href="#source-browser" aria-label="Source: UDisc website capabilities">[3]</a> <a href="#source-plans" aria-label="Source: UDisc plans">[4]</a></td></tr>
+              <tr><th scope="row">Your club, in one place</th><td data-label="GVDG"><strong>The Greenville connection</strong>Bag tags, challenges, event registration, member wallet, and club standings.</td><td data-label="UDisc Pro"><strong>Leagues and events</strong>UDisc also offers free organizer tools, event scoring, and live leaderboards. <a href="#source-leagues" aria-label="Source: UDisc leagues">[5]</a></td></tr>
+              <tr><th scope="row">Smartwatch and course traffic</th><td data-label="GVDG"><strong>Designed for the phone browser</strong>No dedicated smartwatch scoring or worldwide course-traffic view.</td><td data-label="UDisc Pro"><strong>Part of Pro</strong>Compatible smartwatch scoring, live course traffic, and a lock-screen rangefinder. <a href="#source-pro" aria-label="Source: UDisc Pro benefits">[2]</a></td></tr>
+              <tr><th scope="row">When the signal drops</th><td data-label="GVDG"><strong>Continue a cached card</strong>Queue scores for reconnection. Starting or joining a round and live updates need a connection.</td><td data-label="UDisc Pro"><strong>Offline core scoring</strong>Load a new course before going offline. Offline support also exists in the free app. <a href="#source-offline" aria-label="Source: UDisc offline support">[6]</a></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="comparison-note">UDisc Pro includes the free app's core features. GVDG club/playing ratings and UDisc ratings are separate from official PDGA round ratings. <a href="https://udisc.com/subscribe" target="_blank" rel="noopener noreferrer">See current UDisc pricing ↗</a></p>
+        <details class="metric-note"><summary>How do the stat definitions compare?</summary><p>GVDG estimates fairways from marked positions relative to the tee-to-basket line. Its C1 putting includes short putts; UDisc also offers C1X with tap-ins excluded. Parked means within 10 feet in GVDG and about 11 feet in UDisc. GVDG scrambling measures par-or-better after missing C1 in regulation; UDisc uses holes with an off-fairway or OB throw. These percentages should not be treated as interchangeable. <a href="#source-stats">UDisc metric definitions [1]</a></p></details>
+      </div>
+    </section>
+
+    <section class="walkthrough-section" id="mark-lie" aria-labelledby="walkthrough-title">
+      <div class="wrap">
+        <div class="section-intro"><div><p class="eyebrow">A little tracking. A clearer picture.</p><h2 id="walkthrough-title">From your first throw<br>to your shot stats.</h2></div><p>Use a layout with mapped tees and baskets. Mark the landing spots as you play so your scorecard has the detail behind each hole.</p></div>
+        <ol class="walkthrough-steps">
+          <li><span class="step-number" aria-hidden="true">01</span><h3>Throw. Walk. Mark.</h3><p>After your tee shot, stand at your disc and tap <strong>Mark lie</strong>. If the first tap requests location access, wait for your position and tap again.</p><p class="detail-note">Start with where your tee shot landed. You do not need to mark the tee.</p></li>
+          <li><span class="step-number" aria-hidden="true">02</span><h3>Follow the disc.</h3><p>Mark each next landing spot before you throw again, including missed putts. The button advances to <strong>Lie 2</strong>, <strong>Lie 3</strong>, and so on.</p><p class="detail-note">An accidental mark? Use <strong>Undo</strong> to remove the most recent one.</p></li>
+          <li><span class="step-number" aria-hidden="true">03</span><h3>Hole out. Enter the score.</h3><p>When the disc is in the basket, enter your final hole score. The score accounts for the holed-out throw; you do not need to mark the basket as another lie.</p><p class="detail-note">Keep your scores and marked lies accurate throughout the card.</p></li>
+          <li><span class="step-number" aria-hidden="true">04</span><h3>Finish the card.</h3><p>Once all scores agree, choose <strong>Finish card</strong>. Review <strong>Confirm scores</strong>, then tap <strong>Looks good — lock card</strong> to finish.</p><p class="detail-note">Sign in as a member before playing to connect your rounds to your club account.</p></li>
+        </ol>
+        <p class="walkthrough-note">You can also tap a landing spot on the hole map with <strong>Measure</strong> mode off. Stay connected while marking lies; offline score queuing does not guarantee shot history will upload. Location accuracy, very short movements, and mapped positions affect the estimates.</p>
+      </div>
+    </section>
+
+    <section class="install-section wrap" id="install" aria-labelledby="install-title">
+      <div class="section-intro"><div><p class="eyebrow">One tap from your next round</p><h2 id="install-title">Put the club on your Home Screen.</h2></div><p>Keep GVDG alongside your other apps. You can also keep using it directly in your browser.</p></div>
+      <div class="install-grid">
+        <article><p class="feature-number">iPhone / Safari</p><h3>Add GVDG to your Home Screen.</h3><ol><li>Open <a href="https://gvdgclub.com">gvdgclub.com</a> in Safari.</li><li>Open <strong>Share</strong> and choose <strong>Add to Home Screen</strong>.</li><li>If shown, turn on <strong>Open as Web App</strong>, then tap <strong>Add</strong>.</li></ol><p class="detail-note">If the option is missing, scroll to Edit Actions in the Share menu. <a href="https://support.apple.com/guide/iphone/iphea86e5236/ios" target="_blank" rel="noopener noreferrer">Apple's instructions ↗</a></p></article>
+        <article><p class="feature-number">Android / Chrome</p><h3>Install from your browser.</h3><ol><li>Open <a href="https://gvdgclub.com">gvdgclub.com</a> in Chrome.</li><li>Open the three-dot menu and choose <strong>Install and create shortcut</strong>, then <strong>Install</strong>.</li><li>Follow the confirmation prompts, then open <strong>GVDG Club</strong> from your phone.</li></ol><p class="detail-note">Some Chrome versions call this Install app or Add to Home screen. <a href="https://support.google.com/chrome/answer/9658361?hl=en&amp;co=GENIE.Platform%3DAndroid" target="_blank" rel="noopener noreferrer">Google's instructions ↗</a></p></article>
+      </div>
+      <p class="install-note">The installed app opens the member dashboard. Choose <strong>Keep score</strong> in the menu to start a casual round. On a phone, open the menu button first.</p>
+    </section>
+
+    <section class="start-section wrap" aria-labelledby="start-title">
+      <div><p class="eyebrow">Take it to the course</p><h2 id="start-title">Your next round starts here.</h2><p>Open the scorer, choose a mapped layout, and share the round code with your card. Sign in as a member to connect your rounds with your club season.</p><a class="button primary" href="score.html">Open scoring app <span aria-hidden="true">↗</span></a><a class="member-link" href="gvdg-members.html">Member dashboard →</a></div>
+      <div class="app-faq">
+        <details open><summary>Do I need to join the club to keep score?</summary><p>No club login is required to start, join, or watch a casual round. The member dashboard and club features use your member account. <a href="index.html#membership">Explore membership.</a></p></details>
+        <details><summary>How do I get the detailed shot stats?</summary><p>Use Mark lie during your round on a mapped layout. Fairway, circle, and putting stats depend on those recorded positions. Entering only final hole scores builds your scoring mix, not a complete shot history. <a href="#mark-lie">Follow the Mark lie walkthrough.</a></p></details>
+        <details><summary>Can I keep using UDisc too?</summary><p>Yes. GVDG's Add to UDisc helper opens the course in UDisc and shows your scores to copy. It is manual re-entry, not automatic account syncing.</p></details>
+        <details><summary>Can I add GVDG to my Home Screen?</summary><p>Yes. Add the club app from Safari on iPhone or Chrome on Android, then open it from the GVDG Club icon. <a href="#install">See the phone installation steps.</a></p></details>
+      </div>
+    </section>
+
+    <aside class="sources wrap" aria-label="Comparison sources">
+      <p><strong>A comparison you can check.</strong> Reviewed November 14, 2026 against GVDG's current app and UDisc's official documentation. Features can change.</p>
+      <ol><li id="source-stats"><a href="https://help.udisc.com/en/articles/10705077-what-do-the-symbols-on-my-scorecard-mean" target="_blank" rel="noopener noreferrer">UDisc stat definitions</a></li><li id="source-pro"><a href="https://help.udisc.com/en/articles/10705396-what-is-included-in-udisc-pro" target="_blank" rel="noopener noreferrer">UDisc Pro benefits</a></li><li id="source-browser"><a href="https://help.udisc.com/en/articles/11020790-what-s-available-on-the-udisc-website" target="_blank" rel="noopener noreferrer">UDisc on the web</a></li><li id="source-plans"><a href="https://udisc.com/subscribe" target="_blank" rel="noopener noreferrer">UDisc plans</a></li><li id="source-leagues"><a href="https://udisc.com/f/leagues" target="_blank" rel="noopener noreferrer">UDisc Leagues</a></li><li id="source-offline"><a href="https://help.udisc.com/en/articles/10705110-is-udisc-accessible-offline" target="_blank" rel="noopener noreferrer">UDisc offline support</a></li><li id="source-history"><a href="https://help.udisc.com/en/articles/10705123-what-does-include-in-my-stats-history-mean" target="_blank" rel="noopener noreferrer">UDisc stats-history rules</a></li><li id="source-formats"><a href="https://help.udisc.com/en/articles/12631819-does-udisc-support-alternate-scoring-formats-like-match-play-skins-or-ace-race" target="_blank" rel="noopener noreferrer">UDisc scoring formats</a></li></ol>
+      <p>Independent comparison by Greenville Disc Golf Club. UDisc is a trademark of its owner; GVDG is not affiliated with UDisc. The statistics illustration uses example data.</p>
+    </aside>
+  </main>
+  <footer><a href="index.html">Greenville Disc Golf Club</a><span>Local courses. Your people. More rounds.</span><a href="index.html#contact">Get in touch ↗</a></footer>
+  <div id="crottsReactApp"></div>
+</body>
+</html>

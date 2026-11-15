@@ -8,6 +8,7 @@ import { AreaTournamentsFeed, HomeEventsFeed } from "./feed-panels.js";
 import { HomeAboutSection, HomeHeroSection } from "./hero-about-app.js";
 import { HomePageChrome } from "./page-chrome.js";
 import { HomeBackToTop } from "./page-controls.js";
+import { HomeScoringTeaser } from "./scoring-teaser.js";
 import { CrottsWidget } from "../shared/crotts-widget.js";
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
@@ -25,6 +26,11 @@ if (pageChromeMount) {
 const heroMount = document.getElementById("homeReactHeroApp");
 if (heroMount) {
   createRoot(heroMount).render(h(HomeHeroSection));
+}
+
+const scoringTeaserMount = document.getElementById("homeReactScoringTeaserApp");
+if (scoringTeaserMount) {
+  createRoot(scoringTeaserMount).render(h(HomeScoringTeaser));
 }
 
 const aboutMount = document.getElementById("homeReactAboutApp");
