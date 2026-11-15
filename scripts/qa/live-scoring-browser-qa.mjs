@@ -373,7 +373,7 @@ async function runCasualRoundQa(browser, origin) {
   await ninaRow.getByRole("button", { name: "Remove" }).click();
   await page.getByRole("dialog", { name: "Remove Nina Park?" }).waitFor();
   await page.locator(".score-dialog").getByRole("button", { name: "Remove player" }).click();
-  await page.waitForFunction(() => !document.body.textContent.includes("Nina Park"), null, { timeout: 5_000 });
+  await ninaRow.waitFor({ state: "detached" });
 
   if (createdRoundBody?.liveScoringConfig?.groupFormat !== "singles") {
     throw new Error(`Expected singles config, got ${JSON.stringify(createdRoundBody)}`);
