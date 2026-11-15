@@ -350,7 +350,7 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
     );
 
     await page.goto(`${siteUrl}/gvdg-members.html`, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector("#membersReactDashboardShell:not(:empty)", { timeout: 15_000 });
+    await page.waitForSelector("#membersReactDashboardShell:not(:empty)", { state: "attached", timeout: 15_000 });
     await page.waitForSelector("#membersReactOverviewPanel:not(:empty)", { state: "attached", timeout: 15_000 });
     await page.waitForSelector("#membersReactRegistrationPanel:not(:empty)", { state: "attached", timeout: 15_000 });
     await page.waitForSelector("#membersReactBoardPanel:not(:empty)", { state: "attached", timeout: 15_000 });
@@ -371,10 +371,8 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
     if (await page.locator("#myDashboard [data-react-registration-panel]").count()) {
       throw new Error("Registration panel should not render on Home.");
     }
-    if (memberIsAdmin) {
-      await waitForText(page, "[data-react-admin-portal]", "Admin portal", "React admin portal");
-    } else if (await page.locator("[data-react-admin-portal]").count()) {
-      throw new Error("React admin portal link rendered for a non-admin member.");
+    if (await page.locator("[data-react-admin-portal]").count()) {
+      throw new Error("The Admin portal should not appear on Home.");
     }
 
     const migratedLegacyNodes = await page.locator([
@@ -426,7 +424,7 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
     await waitForText(page, "#membersReactDashboardShell", "Events", "events tab title");
     await expectReactTab(page, "Events");
     if (await page.locator("[data-react-admin-portal]").count()) {
-      throw new Error("React admin portal link should only render on the overview tab.");
+      throw new Error("The Admin portal should only appear on Account.");
     }
     await expectDashboardPanel(page, "events", "#clubRegister", "Events tab");
     await page.locator('#clubRegister [data-react-registration-panel="ready"]').waitFor({ state: "visible", timeout: 15_000 });
@@ -438,6 +436,11 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
     await expectDashboardPanel(page, "more", "#playerMore", "More tab");
     await page.getByRole("button", { name: "Account", exact: true }).click();
     await page.locator('[data-react-account-tools="ready"]').waitFor({ state: "visible", timeout: 15_000 });
+    if (memberIsAdmin) {
+      await waitForText(page, "[data-react-admin-portal]", "Admin portal", "React admin portal on Account");
+    } else if (await page.locator("[data-react-admin-portal]").count()) {
+      throw new Error("React admin portal link rendered for a non-admin member.");
+    }
     await waitForText(page, "[data-react-account-tools]", "Edit profile", "React account tools");
     await page.evaluate(() => {
       window.dispatchEvent(new CustomEvent("gvdg:member-passkey-state", {

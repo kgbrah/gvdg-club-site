@@ -302,11 +302,13 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(pageChrome, /PlayerThemeToggle/);
   assert.doesNotMatch(pageChrome, /querySelector|classList|textContent\s*=|installMemberPageChrome/);
   assert.doesNotMatch(pageChrome, /☰|🌙|☀️/);
-  assert.match(shell, /data-react-admin-portal/);
-  assert.match(shell, /id: "adminPortalLink"/);
+  const accountPage = readFileSync('src/members-app/more-page.js', 'utf8');
+  assert.doesNotMatch(shell, /data-react-admin-portal|adminPortalLink/);
+  assert.match(shell, /member-home-heading/);
+  assert.match(accountPage, /data-react-admin-portal[\s\S]*?href: "admin\.html"/);
+  assert.match(accountPage, /context\.isAdmin \? h\(AdminPortalBanner/);
   assert.match(shell, /player-app-nav/);
   assert.match(shell, /MEMBER_PRIMARY/);
-  assert.match(shell, /readMemberContext/);
   assert.match(shell, /gvdg:member-logout-requested/);
   assert.match(shell, /document\.body\.dataset\.memberDashboardTab/);
   assert.match(shell, /heading\.current\?\.focus/);
