@@ -7,7 +7,7 @@ const listStyle = { paddingInlineStart: "1.25rem" };
 
 function qualityLabel(rows, score) {
   switch (shotLedgerQuality(rows, score)) {
-    case "different-count": return `${rows.length} recorded ${rows.length === 1 ? "stroke" : "strokes"} and ${score} on the card. Review the ledger or the score.`;
+    case "different-count": return `${rows.length} recorded ${rows.length === 1 ? "stroke" : "strokes"} and ${score} on the card. Review these shots or the score.`;
     case "unknown-outcome": return "Some outcomes are unknown. Complete them to include this hole in shot stats.";
     case "unknown-attempt": return "Some stroke types are unknown. Choose throw or putt to include this hole in shot stats.";
     case "missing-finish": return "Check which stroke completed the hole before these shots count in stats.";

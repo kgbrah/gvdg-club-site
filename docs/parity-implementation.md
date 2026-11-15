@@ -36,7 +36,7 @@ An implementation is not marked verified merely because code exists. Native sign
 | Native watches | Scoped pairing and revocation; safe phone/watch sync; executable clients and platform build checks | Integrated; Wear OS, watchOS Simulator and generic Garmin CI passed; physical/store checks remain |
 | Course quality | Complete versus partial mapping; provenance, freshness, revision-safe data, usable discovery | Integrated; favorites routes wired; 484 frontend/776 Worker checks passed |
 | Navigation | Approved proposal in navigation-proposal.md; every old destination/action retained | Integrated; desktop/phone navigation and compatibility tests passed |
-| Offline course use | Explicit downloadable course packs and local round lifecycle with reconciliation | Queued |
+| Offline course use | Explicit downloadable course packs and local round lifecycle with reconciliation | Packs deployed; new offline rounds in implementation with migration 0053 reserved |
 | Explicit shot records | Outcomes, penalties, make/miss, accuracy and editable classifications | Integrated for next release; private archive/recovery tests passed |
 | Ratings | Missing-result repair, stable baselines and transparent provisional status | Integrated for next release; whole-field/calibration race rejection verified; predictive accuracy remains unknown |
 | Personal practice and equipment | Physical disc inventory, putting sessions and measured-throw history | Integrated for next release; owner isolation, offline drafts and mobile workflows passed |

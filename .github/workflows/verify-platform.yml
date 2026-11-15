@@ -35,6 +35,8 @@ jobs:
           node scripts/qa/navigation-browser-qa.mjs
           node scripts/qa/live-scoring-browser-qa.mjs
           node scripts/qa/members-dashboard-browser-qa.mjs
+          node scripts/qa/practice-browser-qa.mjs
+          node scripts/qa/shot-ledger-browser-qa.mjs
 
   worker:
     runs-on: ubuntu-24.04

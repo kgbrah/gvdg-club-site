@@ -431,7 +431,7 @@ function RoundTools(props) {
         "aria-labelledby": titleId, tabIndex: -1, ref: dialog.panelRef,
       },
         h("div", { className: "grab" }),
-        h("h2", { id: titleId, className: "section", ref: titleRef, tabIndex: -1 }, shots ? `Shot ledger · Hole ${props.hole.hole}` : "Round tools"),
+        h("h2", { id: titleId, className: "section", ref: titleRef, tabIndex: -1 }, shots ? `Shot details · Hole ${props.hole.hole}` : "Round tools"),
         shots ? h(React.Fragment, null,
           h(ShotLedgerPanel, { key: `${props.scorerIndex}:${props.hole.hole}`, model: props.shotLedger, score: props.ledgerScore,
             onSave: props.onSaveShots, onDiscard: props.onDiscardRecovery, getFix: props.getShotFix, enableGps: props.enableGps,
@@ -440,7 +440,7 @@ function RoundTools(props) {
           : h(React.Fragment, null,
             h("p", { className: "muted" }, "Your hole and saved changes stay in place when you close this menu."),
             props.onFullScorecard && h("button", { type: "button", className: "btn secondary", onClick: closeThen(props.onFullScorecard) }, "Full scorecard"),
-            props.shotLedger && h("button", { type: "button", ref: ledgerButton, className: "btn secondary", onClick: openLedger }, "Shot ledger"),
+            props.shotLedger && h("button", { type: "button", ref: ledgerButton, className: "btn secondary", onClick: openLedger }, "Shot details"),
             h(RoundToolActions, {
               ...props,
               onMeasure: closeThen(props.onMeasure), onWrist: closeThen(props.onWrist),
@@ -1258,7 +1258,7 @@ function RecoveryStatus(props) {
     failed.length ? h("details", { key: "errors" }, [
       h("summary", { key: "summary" }, failed.length + (failed.length === 1 ? " change needs attention" : " changes need attention")),
       h("ul", { key: "list" }, failed.map((item) => h("li", { key: item.id }, [
-        (item.kind === "throws" ? "Lies" : item.kind === "shots" ? "Shot ledger" : "Score") + " on " + (props.putting ? "station " : "hole ") + item.body.hole
+        (item.kind === "throws" ? "Lies" : item.kind === "shots" ? "Shot details" : "Score") + " on " + (props.putting ? "station " : "hole ") + item.body.hole
           + " · " + (names.get(item.body.scorerIndex) || "Card player") + ". "
           + (item.state === "auth" ? "Check that you’re signed in to this card."
             : item.error === "recovery_edit_conflict" ? "This was edited on another device. Review the current value before re-entering."

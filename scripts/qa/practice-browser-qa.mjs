@@ -95,6 +95,8 @@ try {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
   await context.route(/^https?:/, (route) => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
   const page = await context.newPage();
+  const pageErrors = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
   page.setDefaultTimeout(25000);
   await page.addInitScript(() => {
     if (!localStorage.getItem("gvdg_member_token")) localStorage.setItem("gvdg_member_token", "qa-one");
@@ -107,6 +109,7 @@ try {
     } });
   });
   await page.goto(origin + "/practice-qa.html#play", { waitUntil: "commit" });
+  await page.getByRole("button", { name: "My bag", exact: true }).waitFor({ state: "visible", timeout: 60000 });
   await page.getByRole("button", { name: "My bag", exact: true }).click();
   await page.getByText("Practice record synced.").waitFor();
   await page.getByRole("button", { name: "Add disc" }).click();
@@ -177,6 +180,7 @@ try {
   const fieldwork = [...db("qa-one").values()].find((row) => row.kind === "throw");
   assert.ok(fieldwork.record.meters > 100);
   assert.equal(fieldwork.record.origin, undefined);
+  assert.deepEqual(pageErrors, [], "Practice must not produce runtime errors");
   console.log("Practice mobile QA passed: quota failure, offline restart, owner isolation, lost acknowledgement, putting totals and private-by-default GPS.");
   await context.close();
 } finally {
