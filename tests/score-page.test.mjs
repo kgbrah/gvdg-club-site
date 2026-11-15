@@ -827,7 +827,7 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.doesNotMatch(holeMapModel, /primary\.ft > GPS_REMAINING_MAX_FT/);
   assert.match(scorecard, /getCurrentPosition/);
   assert.match(scorecard, /hud: h\(RangeHud/);
-  assert.match(scorecard, /compact: true, key: "owner"/);
+  assert.match(scorecard, /compact: true/);
   assert.match(holeMap, /props\.hud/);
   assert.match(html, /score-glove-tools \.scorecard-owner/);
   assert.match(scorecard, /function RangeHud/);

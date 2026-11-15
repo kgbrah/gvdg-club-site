@@ -33,6 +33,7 @@ import { isUdiscLayoutCron, runUdiscLayoutImportTick } from "./udisc-layout-impo
 import { handleUdiscHistory } from "./udisc-history-routes.js";
 import { handleMyPlayHistory, handleMyPlayExport } from "./play-history-routes.js";
 import { handleWatchRoute } from "./watch-routes.js";
+import { handleCourseFavorites } from "./course-favorite-routes.js";
 
 /**
  * STOPGAP: when no Workers KV namespace is bound (deployed dev/staging while this account's KV data
@@ -62,6 +63,9 @@ export default {
     try {
       const watch = await handleWatchRoute(request, env, origin, pathname, method);
       if (watch) return watch;
+      if (pathname === "/me/course-favorites" || /^\/me\/course-favorites\/\d+$/.test(pathname)) {
+        return await handleCourseFavorites(request, env, origin);
+      }
       if (pathname === "/login" && method === "POST") return await handleLogin(request, env, origin);
       if (pathname === "/me" && method === "GET") return await handleMe(request, env, origin);
       if (pathname === "/my-results" && method === "GET") return await handleMyResults(request, env, origin);

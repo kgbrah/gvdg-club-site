@@ -25,15 +25,15 @@ An implementation is not marked verified merely because code exists. Native sign
 
 | Milestone | Required result | Status |
 | --- | --- | --- |
-| Recoverable rounds | Correct identity isolation; durable scores, marked lies and video; retry visibility; safe finalization | In implementation |
-| Analytics and data ownership | C1X, honest coverage, time/course/layout trends, golden fixtures, own-data exports | Integrated; combined verification pending |
-| Native watches | Scoped pairing and revocation; safe phone/watch sync; executable clients and platform build checks | In implementation |
-| Course quality | Complete versus partial mapping; provenance, freshness, revision-safe data, usable discovery | In implementation |
-| Navigation | Approved proposal in navigation-proposal.md; every old destination/action retained | Assigned next |
+| Recoverable rounds | Correct identity isolation; durable scores, marked lies and video; retry visibility; safe finalization | Integrated; combined tests and browser scoring flow passed |
+| Analytics and data ownership | C1X, honest coverage, time/course/layout trends, golden fixtures, own-data exports | Integrated; combined unit and Worker checks passed |
+| Native watches | Scoped pairing and revocation; safe phone/watch sync; executable clients and platform build checks | Integrated; Wear OS, watchOS Simulator and generic Garmin CI passed; physical/store checks remain |
+| Course quality | Complete versus partial mapping; provenance, freshness, revision-safe data, usable discovery | Integrated; favorites routes wired; combined verification pending |
+| Navigation | Approved proposal in navigation-proposal.md; every old destination/action retained | In implementation and browser verification |
 | Offline course use | Explicit downloadable course packs and local round lifecycle with reconciliation | Queued |
-| Explicit shot records | Outcomes, penalties, make/miss, accuracy and editable classifications | Queued after recovery |
-| Ratings | Missing-result repair, stable baselines and transparent provisional status | Queued |
-| Personal practice and equipment | Physical disc inventory, putting sessions and measured-throw history | Queued |
+| Explicit shot records | Outcomes, penalties, make/miss, accuracy and editable classifications | In implementation; migration 0049 reserved |
+| Ratings | Missing-result repair, stable baselines and transparent provisional status | Assigned next; migration 0050 reserved |
+| Personal practice and equipment | Physical disc inventory, putting sessions and measured-throw history | Assigned after navigation; migration 0051 reserved |
 | Social and discovery | Favorites, appropriate public profiles, progress milestones and sharing controls | Queued |
 | Spectator and video quality | Reconnect recovery, durable history, accessible controls and clear sharing scope | Queued after recovery |
 | Accessibility and performance | Large text, keyboard/screen-reader paths, outdoor readability, slow-network behavior | Continuous verification |
