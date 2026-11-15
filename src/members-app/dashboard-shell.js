@@ -60,7 +60,7 @@ export function MemberDashboardShell() {
       }, [h(ICONS[key], { size: 22, strokeWidth: 2.2, "aria-hidden": true, key: "icon" }), item.label]);
     })),
     h("div", { className: "member-page-heading" + (current.key === "overview" ? " member-home-heading" : ""), key: "heading" }, [
-      current.key !== current.group
+      current.key !== current.group && current.group !== "play"
         ? h("button", { type: "button", className: "member-parent-link", onClick: () => selectDashboardTab(parent.key), key: "parent" }, "‹ " + parent.label)
         : null,
       h("h1", { className: "section-title player-app-title", id: "membersReactDashboardTitle", tabIndex: -1, ref: heading, key: "title" }, current.label),

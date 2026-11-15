@@ -238,6 +238,10 @@ try {
     try {
       await practice.goto(origin + pageName + "?mode=blue" + (width === 320 ? "&large" : "") + "#practice", { waitUntil: "commit" });
       const rail = practice.getByRole("group", { name: "Practice type" });
+      await rail.waitFor();
+      assert.equal(await practice.getByRole("button", { name: "‹ Play", exact: true }).count(), 0);
+      assert.equal(await practice.getByRole("navigation", { name: "Member app" })
+        .getByRole("button", { name: "Play", exact: true }).getAttribute("aria-current"), "page");
       const bounds = await Promise.all(["Putting", "Fieldwork", "My bag"].map(async (label) => {
         const button = rail.getByRole("button", { name: label, exact: true });
         await button.waitFor();

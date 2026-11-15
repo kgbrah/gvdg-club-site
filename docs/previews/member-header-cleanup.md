@@ -1,6 +1,6 @@
 # Home and Account cleanup
 
-Actual member components with a synthetic account and a custom blue theme. The redundant visible Home heading and admin link are removed; the accessible Home page heading and bottom Home navigation remain. Admin access is a single banner at the top of Account, only for admins. Account links and buttons share the inherited font family and consistent size, weight and line-height.
+Actual member components with a synthetic account and a custom blue theme. The redundant visible Home heading and admin link are removed; the accessible Home page heading and bottom Home navigation remain. Admin access is a single banner at the top of Account, only for admins. Play subpages also omit the redundant “‹ Play” heading link while preserving the bottom Play tab. Account links and buttons share the inherited font family and consistent size, weight and line-height.
 
 ![Home with profile directly below the header](home-header-cleanup.png)
 
