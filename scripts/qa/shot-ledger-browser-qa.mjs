@@ -88,9 +88,14 @@ try {
   await btn('Confirm remove shot').click();
   await content('1 recorded stroke and 2 on the card. Review these shots or the score.').waitFor();
   await btn('Back to round tools').click();
-  await page.waitForFunction(()=>document.activeElement.textContent==='Shot details');
+  const shotDetails = await btn('Shot details').elementHandle();
+  await page.waitForFunction(button => document.activeElement === button, shotDetails);
+  const toolsDialog = page.getByRole('dialog', { name: 'Round tools', exact: true });
+  await toolsDialog.waitFor({ state: 'visible' });
   await page.keyboard.press('Escape');
-  await page.waitForFunction(()=>document.activeElement.textContent==='Round tools');
+  await toolsDialog.waitFor({ state: 'hidden' });
+  const roundTools = await btn('Round tools').elementHandle();
+  await page.waitForFunction(button => document.activeElement === button, roundTools);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),390);
   assert.deepEqual(errors,[]);
   console.log('Mobile editable shot ledger, offline reload, FIFO sync, removal, and focus verified');
