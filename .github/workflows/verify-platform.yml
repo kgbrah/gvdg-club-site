@@ -49,6 +49,7 @@ jobs:
           node scripts/qa/admin-visual-polish-qa.mjs
           node scripts/qa/offline-round-browser-qa.mjs
           node scripts/qa/offline-service-worker-browser-qa.mjs
+          node scripts/qa/pwa-update-browser-qa.mjs
 
   worker:
     runs-on: ubuntu-24.04
