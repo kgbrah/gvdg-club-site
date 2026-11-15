@@ -784,6 +784,8 @@ test('scorecard view is React-owned without legacy hole DOM construction', () =>
   assert.match(scorecard, /props\.throwsByHole/);
   assert.match(scorecard, /Live stats/);
   assert.match(scorecard, /h\(LiveMixLegend, \{ key: "outcomes", dashboard: true, rows: stats\.mix \}\)/);
+  assert.match(scorecard, /Expand advanced stats/);
+  assert.match(scorecard, /function ScoreAdvancedStats/);
   assert.match(scorecard, /h\(LiveMixBar, \{ key: "bar", rows: view\.mix \}\)/);
   assert.match(scorecard, /"aria-haspopup": "dialog"/);
   assert.match(scorecard, /"Round details"/);

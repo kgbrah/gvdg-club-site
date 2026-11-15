@@ -1,6 +1,6 @@
 import React from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, ClipboardList, Eye, Link2, ListChecks, Lock, Ruler, Settings2, Share2, UserPlus, Watch, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, Eye, Link2, ListChecks, Lock, Ruler, Settings2, Share2, UserPlus, Watch, X } from "lucide-react";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { HoleMap } from "../shared/hole-map.js";
 import { addThrow, currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, lastThrow, lastThrowHud, nextTeeHud, HOLE_MAP_COMPACT_SIZE, remainingFt, resolveMapFocus, undoThrow, withSelfLocation } from "../shared/hole-map-model.js";
@@ -122,6 +122,32 @@ function LiveMixLegend(props) {
       h("b", { key: "v" }, String(row.mine.hit)),
     ]),
   ));
+}
+
+function ScoreAdvancedStats(props) {
+  const [open, setOpen] = React.useState(false);
+  const stats = props.stats;
+  if (!stats) return null;
+  const rows = Array.isArray(stats.throwStats) ? stats.throwStats : [];
+  return h("div", { className: "score-advanced" + (open ? " open" : "") }, [
+    h(LiveMixLegend, { key: "outcomes", dashboard: true, rows: stats.mix }),
+    h("div", { className: "score-advanced-bar", key: "bar" }, [
+      h("span", { key: "label" }, "Advanced stats"),
+      h("button", {
+        "aria-controls": "score-advanced-stats",
+        "aria-expanded": open ? "true" : "false",
+        "aria-label": open ? "Minimize advanced stats" : "Expand advanced stats",
+        className: "score-advanced-toggle",
+        key: "toggle",
+        type: "button",
+        onClick: () => setOpen((current) => !current),
+      }, [
+        h("span", { key: "label" }, open ? "Minimize" : "Expand"),
+        icon(open ? ChevronUp : ChevronDown),
+      ]),
+    ]),
+    open ? h("div", { className: "live-stats-grid score-advanced-grid", id: "score-advanced-stats", key: "grid" }, rows.map(LiveStatTile)) : null,
+  ]);
 }
 
 function LiveStatTile(row) {
@@ -1557,7 +1583,7 @@ export function ScorecardView(props) {
         h("div", { className: "score-glove-stage", key: "stage" }, [
           h("div", { className: "score-stage-status", key: "status" }, status),
           map,
-          stats && h(LiveMixLegend, { key: "outcomes", dashboard: true, rows: stats.mix }),
+          stats && h(ScoreAdvancedStats, { key: "advanced", stats }),
         ]),
       ]),
       dock,

@@ -716,6 +716,35 @@ body.score-glove.player-theme-page:has(.score-bottom-layout) #scoreRoot .topbar 
   white-space: nowrap;
 }
 .score-outcomes .live-stats-mix-item b { font-size: .86rem; }
+.score-advanced { display: flex; flex-direction: column; gap: .12rem; flex: none; min-width: 0; }
+.score-advanced-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .4rem;
+  min-height: 32px;
+}
+.score-advanced-bar > span {
+  color: var(--text-muted);
+  font: 800 .62rem/1 var(--score-font);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.score-advanced-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: .2rem;
+  min-height: 32px;
+  min-width: 44px;
+  margin: 0;
+  padding: 0 .55rem;
+  border: 1px solid var(--score-line);
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font: 800 .68rem/1 var(--score-font);
+}
+.score-advanced-grid { flex: none; }
 
 .score-bottom-layout.score-glove-layout .score-glove-dock {
   grid-area: dock;
