@@ -19,6 +19,35 @@ const event = { id: 51, name: "Sunday Bag Tag Round", status: "scheduled", type:
 const alternatives = { ...event, id: 52, name: "Winter League Kickoff", status: "live" };
 const score = { id: 5, round_code: "FORD19", course_name: course.name, layout_name: layout.name, layout_id: layout.id,
   finalized_at: now, total: 57, to_par: 3, place: 1, stroke: true, scorecard: '[{"hole":1,"par":3,"strokes":4}]' };
+const playSchema = "gvdg-play-export-2";
+const playCursor = "3:0";
+const playRound = { id: "casual:5", source: "casual", playedAt: now, courseName: course.name, layoutName: layout.name,
+  total: 4, holes: [{ hole: 1, par: 3, strokes: 4, marks: [{ n: 1, lat: 35.62, lng: -77.375 }] }] };
+const playClip = { id: 30, scope: "round", scopeKey: "FORD19", hole: 1, mediaPath: "/rounds/FORD19/live/clips/30/media" };
+const playCsvHeader = "record_type,schema_version,member_id,round_id,source,played_at,course,layout,hole,par,strokes,data_json";
+
+function playExportPage(cursor) {
+  const manifest = { schemaVersion: playSchema, memberId: member.sub, exportedAt: now };
+  return { ...manifest, rounds: cursor ? [] : [playRound], clips: cursor ? [playClip] : [] };
+}
+
+function playExportCsv(archive) {
+  const { rounds, clips, ...manifest } = archive;
+  const record = (type, data, fields = []) => {
+    const escaped = '"' + JSON.stringify(data).replaceAll('"', '""') + '"';
+    return [type, manifest.schemaVersion, manifest.memberId, ...fields, ...Array(8 - fields.length).fill(""), escaped].join(",");
+  };
+  const rows = [record("manifest", manifest)];
+  for (const round of rounds) {
+    const { holes, ...summary } = round;
+    const fields = [round.id, round.source, round.playedAt, round.courseName, round.layoutName];
+    rows.push(record("round", summary, fields));
+    for (const hole of holes) rows.push(record("hole", hole, [...fields, hole.hole, hole.par, hole.strokes]));
+  }
+  for (const clip of clips) rows.push(record("clip", clip));
+  return [playCsvHeader, ...rows, ""].join("\r\n");
+}
+
 const profileKey = "5df897bb-c32c-4705-900c-14cb396246bc";
 const friendKey = "b8c81812-738e-43d0-a231-35ee773329a1";
 const profile = { key: profileKey, audience: "public", displayName: "Taylor Morgan", bio: "Weekend doubles and Rocky Ford rounds.",
@@ -44,7 +73,7 @@ const snapshots = new Map();
 
 function seededFixture(id) {
   if (!snapshots.has(id)) snapshots.set(id, {
-    favorite: false, asks: 0, themeWrites: 0, signs: [], profile, posts: [{ id: 4, member_id: member.sub, author_name: member.name,
+    favorite: false, asks: 0, themeWrites: 0, signs: [], playExportQueries: [], profile, posts: [{ id: 4, member_id: member.sub, author_name: member.name,
       created_at: "Nov 13, 2026", body: "Meet at the first tee at 9 on Sunday.", replies: [] }],
   });
   return snapshots.get(id);
@@ -99,8 +128,15 @@ async function serveFixture(path, query, request, ref, reply) {
       scoredHoles: 18, strokes: 57, toPar: 3, group: "singles", explicitLedgerHoles: 0 }],
   });
   else if (path === "/my-play-export") {
-    if (query.get("format") === "csv") reply("record_type,data_json\r\nmanifest,{}\r\n", 200, "text/csv");
-    else reply({ schemaVersion: "test", memberId: member.sub, rounds: [], clips: [] });
+    if (request.headers.authorization !== "Bearer member-token") return reply({ error: "unauthorized" }, 401);
+    fixture.playExportQueries.push(Object.fromEntries(query));
+    const format = query.get("format");
+    const cursor = query.get("cursor");
+    if (!["csv", "json"].includes(format) || (cursor && cursor !== playCursor)) return reply({ error: "invalid_export" }, 400);
+    const archive = playExportPage(cursor);
+    const headers = cursor ? {} : { "X-GVDG-Next-Export": playCursor };
+    if (format === "csv") reply(playExportCsv(archive), 200, "text/csv", headers);
+    else reply(archive, 200, "application/json", headers);
   }
   else if (path === "/me/udisc-history") {
     const imported = { id: 12, courseName: course.name, layoutName: layout.name, playedAt: "2026-11-12T15:20:00", total: 55, toPar: 1 };
@@ -185,8 +221,8 @@ const vite = await createServer({
         response.end(localFont); return;
       }
       if (!url.pathname.startsWith(apiRoot + "/")) { next(); return; }
-      await serveFixture(url.pathname.slice(apiRoot.length), url.searchParams, request, ref, (data, status = 200, type = "application/json") => {
-        response.writeHead(status, { "Content-Type": type });
+      await serveFixture(url.pathname.slice(apiRoot.length), url.searchParams, request, ref, (data, status = 200, type = "application/json", headers = {}) => {
+        response.writeHead(status, { "Content-Type": type, ...headers });
         response.end(type === "application/json" ? JSON.stringify(data) : data);
       });
     });
@@ -246,6 +282,38 @@ async function verifyDestinations(width, mode) {
   } finally { await view.context.close(); }
 }
 
+async function verifyPlayDownloads(page, fixture) {
+  await page.getByText("Download my play data", { exact: true }).click();
+  const formats = page.getByRole("group", { name: "Download format", exact: true });
+  for (const format of ["json", "csv"]) {
+    const [download] = await Promise.all([
+      page.waitForEvent("download", { timeout: 15_000 }),
+      formats.getByRole("button", { name: "Download " + format.toUpperCase(), exact: true }).click(),
+    ]);
+    assert.equal(download.suggestedFilename(), "gvdg-play-history." + format);
+    const contents = await readFile(await download.path(), "utf8");
+    if (format === "json") {
+      assert.deepEqual(JSON.parse(contents), {
+        schemaVersion: playSchema, memberId: member.sub, exportedAt: now,
+        rounds: [playRound], clips: [playClip],
+      });
+    } else {
+      const [header, ...rows] = contents.trimEnd().split("\r\n");
+      assert.equal(header, playCsvHeader);
+      assert.deepEqual(rows.map((row) => row.split(",", 1)[0]), ["manifest", "round", "hole", "clip"]);
+      assert.deepEqual(rows[2].split(",", 11), [
+        "hole", playSchema, member.sub, playRound.id, playRound.source, now, course.name, layout.name, "1", "3", "4",
+      ]);
+      assert.ok(rows[2].includes('""lat"":35.62'));
+      assert.ok(rows[3].includes(playClip.mediaPath));
+    }
+  }
+  assert.deepEqual(fixture.playExportQueries, [
+    { format: "json" }, { format: "json", cursor: playCursor },
+    { format: "csv" }, { format: "csv", cursor: playCursor },
+  ], "Downloads request all pages independently of the history filters");
+}
+
 async function verifyActions(width, mode) {
   const view = await pageFor(width, mode, "actions-" + width);
   const { page, go, screen } = view;
@@ -289,12 +357,7 @@ async function verifyActions(width, mode) {
     await filters.getByLabel("End date").fill("2026-11-01");
     await filters.getByRole("button", { name: "Apply filters" }).click();
     await filters.getByRole("alert").waitFor();
-    await page.getByText("Download my play data", { exact: true }).click();
-    for (const format of ["JSON", "CSV"]) {
-      const pending = page.waitForEvent("download");
-      await page.getByRole("button", { name: "Download " + format, exact: true }).click();
-      assert.equal((await pending).suggestedFilename(), "gvdg-play-history." + format.toLowerCase());
-    }
+    await verifyPlayDownloads(page, seededFixture("actions-" + width));
 
     await go("appearance");
     await page.getByText("Live scoring disc", { exact: true }).click();
