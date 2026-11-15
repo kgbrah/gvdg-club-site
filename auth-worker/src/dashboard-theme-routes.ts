@@ -80,6 +80,9 @@ export interface DashboardTheme {
   palette: string[];
   tokens: ThemeTokens;
   wallpaper: string | null;
+  glass?: { opacity: number; blur: number };
+  /** Glass with the club default colors: no palette, wallpaper or preset (client paints glass only). */
+  glassOnly?: true;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -95,6 +98,20 @@ function sanitizeAdjustments(raw: unknown): Record<string, number> {
     adjustments[key] = Number.isFinite(value) ? clamp(value, limit.min, limit.max) : limit.fallback;
   }
   return adjustments;
+}
+
+// Glass: opacity 0-60 (%), blur 0-24 (px). Missing or invalid -> omitted (client treats as Off); never
+// a reason to reject an otherwise valid theme.
+function sanitizeGlass(raw: unknown): { opacity: number; blur: number } | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const source = raw as Record<string, unknown>;
+  const opacity = Number(source.opacity);
+  const blur = Number(source.blur);
+  if (!Number.isFinite(opacity) && !Number.isFinite(blur)) return undefined;
+  return {
+    opacity: Number.isFinite(opacity) ? Math.round(clamp(opacity, 0, 60)) : 0,
+    blur: Number.isFinite(blur) ? Math.round(clamp(blur, 0, 24)) : 0,
+  };
 }
 
 function sanitizeHexList(raw: unknown, max = 16): string[] {
@@ -129,6 +146,7 @@ function sanitizeTheme(raw: unknown): DashboardTheme | null {
     && source.wallpaper.length <= MAX_WALLPAPER_CHARS
     ? source.wallpaper
     : null;
+  const glass = sanitizeGlass(source.glass);
   return {
     mode,
     extractMode,
@@ -138,6 +156,8 @@ function sanitizeTheme(raw: unknown): DashboardTheme | null {
     palette,
     tokens,
     wallpaper,
+    ...(glass ? { glass } : {}),
+    ...(source.glassOnly === true && !palette.length && !wallpaper && !preset ? { glassOnly: true as const } : {}),
   };
 }
 

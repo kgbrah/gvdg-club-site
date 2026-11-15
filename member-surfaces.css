@@ -439,7 +439,7 @@ body .profile-photo-row:has(#photoInput:focus-visible) label {
 #members .member-appearance :is(.dash-theme-swatch, .dash-theme-drop):focus-within { outline: 2px solid var(--text-primary); outline-offset: 2px; }
 #members .member-appearance .dash-theme-swatch-role { overflow-wrap: normal; word-break: normal; }
 #members .member-appearance .dash-theme-apply { min-height: 44px; }
-#members .member-appearance .dash-theme-slider input { min-height: 28px; }
+#members .member-appearance .dash-theme-slider input { min-height: 44px; touch-action: pan-y; }
 
 body[data-member-shell="auth"]:not(.player-theme-page)::before { opacity: .42; }
 body[data-member-shell="auth"] .member-app-header {

@@ -78,6 +78,49 @@ export const DEFAULT_ADJUSTMENTS = Object.fromEntries(
   ADJUSTMENT_KEYS.map((key) => [key, ADJUSTMENT_LIMITS[key].default]),
 );
 
+// Glass: how see-through (opacity, %) and how blurred (blur, px) raised surfaces are over the wallpaper.
+// Off by default so nobody changes unless they opt in.
+export const GLASS_LIMITS = {
+  opacity: { min: 0, max: 60, step: 1, default: 0, label: "Glass", unit: "%" },
+  blur: { min: 0, max: 24, step: 1, default: 0, label: "Blur", unit: "px" },
+};
+export const DEFAULT_GLASS = Object.freeze({ opacity: GLASS_LIMITS.opacity.default, blur: GLASS_LIMITS.blur.default });
+export const GLASS_PRESETS = {
+  off: { label: "Off", opacity: 0, blur: 0 },
+  frosted: { label: "Frosted", opacity: 30, blur: 16 },
+  clear: { label: "Clear", opacity: 50, blur: 8 },
+};
+export const GLASS_PRESET_KEYS = Object.keys(GLASS_PRESETS);
+
+export function clampGlassValue(key, value) {
+  const limit = GLASS_LIMITS[key];
+  const n = Number(value);
+  if (!limit || !Number.isFinite(n)) return limit ? limit.default : 0;
+  return Math.max(limit.min, Math.min(limit.max, Math.round(n)));
+}
+
+export function sanitizeGlass(raw) {
+  if (!raw || typeof raw !== "object") return { ...DEFAULT_GLASS };
+  return { opacity: clampGlassValue("opacity", raw.opacity), blur: clampGlassValue("blur", raw.blur) };
+}
+
+export function glassIsOn(glass) {
+  const safe = sanitizeGlass(glass);
+  return safe.opacity > 0 || safe.blur > 0;
+}
+
+// Returns the preset key matching these values, or "custom".
+export function glassPresetFor(glass) {
+  const safe = sanitizeGlass(glass);
+  const hit = GLASS_PRESET_KEYS.find((key) => GLASS_PRESETS[key].opacity === safe.opacity && GLASS_PRESETS[key].blur === safe.blur);
+  return hit || "custom";
+}
+
+export function glassCssVars(glass) {
+  const safe = sanitizeGlass(glass);
+  return { "--glass-alpha": `${safe.opacity}%`, "--glass-blur": `${safe.blur}px` };
+}
+
 export function clampByte(value) {
   return Math.max(0, Math.min(255, Math.round(Number(value) || 0)));
 }
@@ -932,6 +975,7 @@ export function buildTheme({
   sourcePalette,
   preset = null,
   palette: editedPalette,
+  glass,
 } = {}) {
   const safeMode = THEME_MODES.includes(mode) ? mode : "dark";
   const safeExtract = normalizeExtractMode(extractMode);
@@ -963,7 +1007,20 @@ export function buildTheme({
     palette,
     tokens,
     wallpaper: typeof wallpaper === "string" && WALLPAPER_RE.test(wallpaper) ? wallpaper : null,
+    glass: sanitizeGlass(glass),
   };
+}
+
+// Glass without a custom theme: the palette stays the club default (nothing is painted from `tokens`,
+// they only exist so older readers and the server see a well-formed theme). Off clears it entirely.
+export function buildGlassOnlyTheme(glass, mode = "dark") {
+  const base = buildTheme({ preset: Object.keys(PRESET_THEMES)[0], mode });
+  if (!base) return null;
+  return { ...base, preset: null, sourcePalette: [], palette: [], wallpaper: null, glass: sanitizeGlass(glass), glassOnly: true };
+}
+
+export function themeHasPalette(theme) {
+  return Boolean(theme && !theme.glassOnly);
 }
 
 export function sanitizeTheme(raw) {
@@ -1004,7 +1061,11 @@ export function sanitizeTheme(raw) {
   const wallpaper = typeof raw.wallpaper === "string" && WALLPAPER_RE.test(raw.wallpaper) && raw.wallpaper.length <= MAX_WALLPAPER_CHARS
     ? raw.wallpaper
     : null;
-  if (!palette.length && !wallpaper && !preset) return { mode, extractMode, preset, adjustments, sourcePalette, palette, tokens, wallpaper };
+  const glass = sanitizeGlass(raw.glass);
+  // A glass-only theme carries no palette of its own: colors stay the club default, only glass applies.
+  const glassOnly = raw.glassOnly === true && !palette.length && !wallpaper && !preset;
+  if (glassOnly) return { mode, extractMode, preset, adjustments, sourcePalette: [], palette, tokens, wallpaper, glass, glassOnly: true };
+  if (!palette.length && !wallpaper && !preset) return { mode, extractMode, preset, adjustments, sourcePalette, palette, tokens, wallpaper, glass };
   return {
     mode,
     extractMode,
@@ -1014,7 +1075,18 @@ export function sanitizeTheme(raw) {
     palette,
     tokens,
     wallpaper,
+    glass,
   };
+}
+
+// A server that predates glass silently drops the field. When a remote theme has no usable `glass`,
+// keep the glass the member already has locally instead of resetting it to Off.
+export function sanitizeRemoteTheme(rawRemote, localGlass) {
+  const safe = sanitizeTheme(rawRemote);
+  if (!safe) return safe;
+  const hasGlass = rawRemote && typeof rawRemote === "object" && rawRemote.glass && typeof rawRemote.glass === "object";
+  if (!hasGlass && localGlass) safe.glass = sanitizeGlass(localGlass);
+  return safe;
 }
 
 export function themeStorageKey(memberId) {
@@ -1053,11 +1125,13 @@ export function clearStoredTheme(storage, memberId) {
   }
 }
 
-function wallpaperImage(theme) {
+// Glass needs the wallpaper to show through, so its scrim is lighter than the default one.
+function wallpaperImage(theme, glass = false) {
   if (!theme?.wallpaper) return "";
   const bg = hexToRgb(theme.tokens["bg-primary"]) || (theme.mode === "dark" ? rgb(8, 10, 18) : rgb(248, 248, 252));
-  const start = theme.mode === "dark" ? 0.78 : 0.86;
-  const end = theme.mode === "dark" ? 0.9 : 0.93;
+  const dark = theme.mode === "dark";
+  const start = glass ? (dark ? 0.68 : 0.66) : (dark ? 0.78 : 0.86);
+  const end = glass ? (dark ? 0.8 : 0.78) : (dark ? 0.9 : 0.93);
   const scrim = `linear-gradient(rgba(${bg.r}, ${bg.g}, ${bg.b}, ${start}), rgba(${bg.r}, ${bg.g}, ${bg.b}, ${end}))`;
   return `${scrim}, url("${theme.wallpaper}")`;
 }
@@ -1073,11 +1147,25 @@ function clearThemeOn(el) {
   el.style.removeProperty("--player-theme-image");
   el.style.removeProperty("--player-theme-footer");
   el.style.removeProperty("--player-theme-link");
-  el.classList?.remove?.("player-theme-active", "player-theme-page");
+  el.style.removeProperty("--player-theme-image-glass");
+  el.style.removeProperty("--glass-alpha");
+  el.style.removeProperty("--glass-blur");
+  el.classList?.remove?.("player-theme-active", "player-theme-page", "player-theme-glass");
+}
+
+function paintGlassOn(el, theme) {
+  const vars = glassCssVars(theme.glass);
+  for (const [name, value] of Object.entries(vars)) el.style.setProperty(name, value);
+  const image = glassIsOn(theme.glass) ? wallpaperImage(theme, true) : "";
+  if (image) el.style.setProperty("--player-theme-image-glass", image);
+  else el.style.removeProperty("--player-theme-image-glass");
+  if (glassIsOn(theme.glass)) el.classList?.add?.("player-theme-glass");
+  else el.classList?.remove?.("player-theme-glass");
 }
 
 function paintThemeOn(el, theme) {
   if (!el?.style) return;
+  paintGlassOn(el, theme);
   for (const key of TOKEN_KEYS) el.style.setProperty(`--${key}`, theme.tokens[key]);
   const image = wallpaperImage(theme);
   if (image) {
@@ -1091,6 +1179,7 @@ function paintThemeOn(el, theme) {
 
 function paintPageOn(el, theme) {
   if (!el?.style) return;
+  paintGlassOn(el, theme);
   el.style.setProperty("--bg-primary", theme.tokens["bg-primary"]);
   el.style.setProperty("--text-primary", theme.tokens["text-primary"]);
   el.style.setProperty("--player-theme-footer", theme.tokens["text-muted"]);
@@ -1116,6 +1205,14 @@ export function applyDashboardTheme(theme, root) {
   }
   const safe = sanitizeTheme(theme);
   if (!safe) return;
+  if (safe.glassOnly) {
+    // Club default colors and forest wallpaper stay; only the glass variables and class are set.
+    clearThemeOn(root);
+    clearThemeOn(page);
+    paintGlassOn(root, safe);
+    if (page) paintGlassOn(page, safe);
+    return;
+  }
   paintThemeOn(root, safe);
   if (page) paintPageOn(page, safe);
   else root.classList?.add?.("player-theme-page");
