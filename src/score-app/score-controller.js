@@ -970,6 +970,9 @@ export function startScoreApp(options) {
             });
             renderScoreBody('scorecard', {
                 ...scorecardState,
+                watchApi: !WATCH && (memberToken() || (ROUND_CODE && readOpenPlayToken())) ? api : null,
+                eventId: EVENT_ID,
+                onFullScorecard: openLeaderboard,
                 onAddPlayer: addGuestPrompt,
                 onManagePlayers: openManagePlayers,
                 onNext: function () { S.holeIdx = playOrderStep(S.holes, S.holeIdx, startingHoleForState(S), 1); renderHole(); },

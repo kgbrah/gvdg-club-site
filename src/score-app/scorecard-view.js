@@ -12,6 +12,7 @@ import { nextHoleScore, nextPuttingScore, puttingStationRows, relClass, relText,
 import { RoundHighlights, ThrowFilm, useClipRecovery } from "./throw-film.js";
 import { RoundTalk } from "./round-talk.js";
 import { WristScore } from "./wrist-score.js";
+import { WatchPairing } from "./watch-pairing.js";
 import { closeRangeLock, postRangeLock, rangeLockChanged, rangeLockNote, readRangeLockEnabled, writeRangeLockEnabled } from "../shared/range-lock.js";
 
 const h = React.createElement;
@@ -271,7 +272,7 @@ function LiveRoundStats(props) {
   ]);
 }
 
-function RoundTools(props) {
+function RoundToolActions(props) {
   const showManage = Boolean(props.show);
   const [copied, setCopied] = React.useState(false);
   function copyWatch() {
@@ -335,7 +336,7 @@ function RoundTools(props) {
         [icon(UserPlus), h("span", { key: "label" }, "Add")],
       )
       : null,
-    h(
+    !props.putting && h(
       "button",
       {
         "aria-label": props.measureLabel || "Measure",
@@ -374,7 +375,6 @@ function RoundTools(props) {
       },
       [icon(Lock), h("span", { key: "label" }, props.rangeLockOn ? "Locked" : "Lock")],
     ),
-    h(ThrowFilm, { hole: props.hole, key: "film", recovery: props.clipDrafts, rows: props.rows }),
     h(RoundTalk, {
       inline: true,
       key: "talk",
@@ -391,6 +391,42 @@ function RoundTools(props) {
       : null,
     h(ScorecardOwner, { ...props, compact: true, key: "owner" }),
   ]);
+}
+
+function RoundTools(props) {
+  const [open, setOpen] = React.useState(false);
+  const titleId = React.useId();
+  const dialog = useAccessibleDialog({ open, onClose: () => setOpen(false), labelledBy: titleId, label: "Round tools" });
+  const closeThen = (action) => (...args) => { setOpen(false); action?.(...args); };
+  return h(React.Fragment, null,
+    h("div", { className: "score-glove-tools round-quick-tools" },
+      h(ThrowFilm, { hole: props.hole, putting: props.putting, recovery: props.clipDrafts, rows: props.rows }),
+      !props.putting && h("button", {
+        type: "button", className: "score-glove-tool" + (props.measuring ? " active" : ""),
+        "aria-pressed": Boolean(props.measuring), onClick: props.onMeasure,
+      }, icon(Ruler), h("span", null, props.measureLabel || "Measure")),
+      h("button", { type: "button", className: "score-glove-tool", "aria-haspopup": "dialog", onClick: () => setOpen(true) },
+        icon(Settings2), h("span", null, "Round tools")),
+    ),
+    open && createPortal(h("div", { className: "overlay", "data-a11y-overlay": "true", role: "presentation", ref: dialog.overlayRef },
+      h("section", {
+        className: "sheet round-tools-sheet", role: "dialog", "aria-modal": dialog.isolated ? "true" : undefined,
+        "aria-labelledby": titleId, tabIndex: -1, ref: dialog.panelRef,
+      },
+        h("div", { className: "grab" }),
+        h("h2", { id: titleId, className: "section" }, "Round tools"),
+        h("p", { className: "muted" }, "Your hole and saved changes stay in place when you close this menu."),
+        props.onFullScorecard && h("button", { type: "button", className: "btn secondary", onClick: closeThen(props.onFullScorecard) }, "Full scorecard"),
+        h(RoundToolActions, {
+          ...props,
+          onMeasure: closeThen(props.onMeasure), onWrist: closeThen(props.onWrist),
+          onAddPlayer: closeThen(props.onAddPlayer), onManagePlayers: closeThen(props.onManagePlayers),
+        }),
+        props.watchApi && h(WatchPairing, { api: props.watchApi, roundCode: props.roundCode, eventId: props.eventId }),
+        h("p", { className: "muted round-tools-note" }, "Pairing and sharing need a connection. Scores and marked lies show their save status on the card. Distance notifications update while this browser can run; they are not background GPS tracking."),
+        h("button", { type: "button", className: "btn secondary sheet-close", onClick: () => setOpen(false) }, "Back to round"),
+      )), document.body),
+  );
 }
 
 function HoleHeader(props) {
@@ -1424,24 +1460,7 @@ export function ScorecardView(props) {
           solo,
           throwsByHole: props.throwsByHole,
         }),
-        props.putting ? h("div", { className: "score-glove-tools", key: "round-tools" }, [
-          h(ThrowFilm, { hole: props.hole, key: "film", putting: true, recovery: clipDrafts, rows: props.rows }),
-          h("button", {
-            "aria-label": "Wrist score",
-            className: "score-glove-tool",
-            key: "wrist",
-            type: "button",
-            onClick: () => setWrist(true),
-          }, [icon(Watch), h("span", { key: "label" }, "Wrist")]),
-          h("button", {
-            "aria-label": rangeLockOn ? "Lock screen rangefinder is on" : "Pin distance to the lock screen",
-            "aria-pressed": rangeLockOn ? "true" : "false",
-            className: "score-glove-tool" + (rangeLockOn ? " active" : ""),
-            key: "lock",
-            type: "button",
-            onClick: onToggleLock,
-          }, [icon(Lock), h("span", { key: "label" }, rangeLockOn ? "Locked" : "Lock")]),
-        ]) : h(RoundTools, {
+        h(RoundTools, {
           ...props,
           clipDrafts,
           measureLabel,
