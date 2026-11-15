@@ -158,4 +158,3 @@ enum ActivityFailure: Error { case limit, storage, invalidReply, credential, own
 enum WallClock {
     static var now: Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
 }
-

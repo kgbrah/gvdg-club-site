@@ -145,7 +145,8 @@ function receipt(row: Saved) {
     pointCount: row.point_count, archivedAt: row.archived_at };
 }
 
-async function importTrack(request: Request, env: Env, origin: string | null, owner: string) {
+async function importTrack(request: Request, env: Env, origin: string | null, device: Device & { member_id: string }) {
+  const owner = device.member_id;
   if (await kvRateLimited(env, "activity-upload:" + owner, 20, 60)) return json({ error: "rate_limited" }, 429, origin);
   const track = parseActivityTrack(await readJson(request, 580_000));
   if (!track) return json({ error: "invalid_activity_track" }, 400, origin);
@@ -161,9 +162,13 @@ async function importTrack(request: Request, env: Env, origin: string | null, ow
   const payloadHash = await hash(snapshot);
   const row = await env.DB.prepare(`INSERT INTO phone_activity_tracks
     (client_id, member_id, payload_hash, started_at, stopped_at, distance_m, point_count, snapshot)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(client_id) DO NOTHING RETURNING *`)
-    .bind(track.clientId, owner, payloadHash, track.startedAt, track.stoppedAt, distanceM, pointCount, snapshot).first<Saved>();
+    SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (
+      SELECT 1 FROM phone_activity_devices WHERE id = ? AND member_id = ? AND expires_at > ? AND revoked_at IS NULL
+    ) ON CONFLICT(client_id) DO NOTHING RETURNING *`)
+    .bind(track.clientId, owner, payloadHash, track.startedAt, track.stoppedAt, distanceM, pointCount, snapshot,
+      device.id, owner, Date.now()).first<Saved>();
   if (row) return json(receipt(row), 201, origin, privacy);
+  if (!await paired(request, env)) return json({ error: "activity_access_ended" }, 401, origin);
   const prior = await env.DB.prepare("SELECT * FROM phone_activity_tracks WHERE client_id = ?")
     .bind(track.clientId).first<Saved>();
   if (prior?.member_id === owner && prior.deleted_at) return json({ error: "activity_track_deleted" }, 410, origin);
@@ -210,7 +215,7 @@ export async function handlePhoneActivityRoute(request: Request, env: Env, origi
     const device = await paired(request, env);
     if (!device) return json({ error: "activity_access_ended" }, 401, origin);
     if (!device.member_id) return json({ error: "activity_pairing_pending", expiresAt: device.expires_at }, 409, origin);
-    return method === "GET" ? deviceState(env, origin, device) : importTrack(request, env, origin, device.member_id);
+    return method === "GET" ? deviceState(env, origin, device) : importTrack(request, env, origin, { ...device, member_id: device.member_id });
   }
   const auth = await requireAuth(request, env);
   if (!auth?.member || auth.member.mustChangePin) return json({ error: "unauthorized" }, 401, origin);
@@ -218,8 +223,8 @@ export async function handlePhoneActivityRoute(request: Request, env: Env, origi
   if (path === "/activity/pairings/approve" && method === "POST") return approvePair(request, env, origin, owner, auth.member.pinVer ?? 0);
   if (path === "/activity/pairings" && method === "GET") {
     const devices = await env.DB.prepare(`SELECT id, platform, approved_at, expires_at, round_key FROM phone_activity_devices
-      WHERE member_id = ? AND expires_at > ? AND revoked_at IS NULL ORDER BY approved_at DESC`)
-      .bind(owner, Date.now()).all<Device>();
+      WHERE member_id = ? AND pin_version = ? AND expires_at > ? AND revoked_at IS NULL ORDER BY approved_at DESC`)
+      .bind(owner, auth.member.pinVer ?? 0, Date.now()).all<Device>();
     return json({ devices: devices.results.map((row) => ({ deviceId: row.id, platform: row.platform, approvedAt: row.approved_at,
       expiresAt: row.expires_at, roundKey: row.round_key })) }, 200, origin, privacy);
   }
