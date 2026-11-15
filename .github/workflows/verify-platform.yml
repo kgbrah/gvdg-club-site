@@ -34,6 +34,8 @@ jobs:
         run: |
           node scripts/qa/navigation-browser-qa.mjs
           node scripts/qa/live-scoring-browser-qa.mjs
+          node scripts/qa/scorer-polish-browser-qa.mjs
+          node scripts/qa/spectator-browser-qa.mjs
           node scripts/qa/members-dashboard-browser-qa.mjs
           node scripts/qa/practice-browser-qa.mjs
           node scripts/qa/shot-ledger-browser-qa.mjs

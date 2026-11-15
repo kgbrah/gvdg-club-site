@@ -6,6 +6,7 @@ const ASSETS = [
   "img/fonts/bebas-neue.woff2",
   "watch-pairing.css",
   "phone-activity.css",
+  "score-polish.css",
   "member-surfaces.css",
   "admin-polish.css",
   "homepage-polish.css",

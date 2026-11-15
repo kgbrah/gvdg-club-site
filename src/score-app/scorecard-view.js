@@ -14,6 +14,7 @@ import { RoundTalk } from "./round-talk.js";
 import { WristScore } from "./wrist-score.js";
 import { WatchSharingDetails } from "./round-sharing.js";
 import { WatchPairing } from "./watch-pairing.js";
+import { PhoneActivityPairing } from "../shared/phone-activity-view.js";
 import { ShotLedgerPanel } from "./shot-ledger-view.js";
 import { closeRangeLock, postRangeLock, rangeLockChanged, rangeLockNote, readRangeLockEnabled, writeRangeLockEnabled } from "../shared/range-lock.js";
 
@@ -451,6 +452,7 @@ function RoundTools(props) {
               onAddPlayer: closeThen(props.onAddPlayer), onManagePlayers: closeThen(props.onManagePlayers),
             }),
             props.watchApi && h(WatchPairing, { api: props.watchApi, roundCode: props.roundCode, eventId: props.eventId }),
+            props.phoneActivityApi && h(PhoneActivityPairing, { api: props.phoneActivityApi, ownerId: props.phoneOwnerId, roundCode: props.roundCode, eventId: props.eventId }),
             h("p", { className: "muted round-tools-note" }, props.offline
               ? "Scores, lies, shots, and clips are saved on this device. Finished rounds can upload to your personal archive."
               : "Saved scores, lies, and shots sync when connected. Watch pairing and sharing need internet. Distance alerts update while this screen stays active.")),

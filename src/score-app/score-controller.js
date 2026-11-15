@@ -44,7 +44,7 @@ import { GPS_WATCH_OPTIONS, gpsErrorPolicy } from "../shared/hole-map-model.js";
 import { createRoundJournal, drainRoundJournal, resetJournalRetries, roundRecoveryScope } from "./round-recovery.js";
 import { parseShotRows, shotPoint } from "../shared/shot-ledger.js";
 import { shotLedgerState, statsFromShotLedgers } from "./shot-ledger-model.js";
-import { notifyScoreAuthChanged } from "../shared/player-theme-session.js";
+import { decodeJwtPayload, notifyScoreAuthChanged } from "../shared/player-theme-session.js";
 import {
     buildShareCard,
     canShareFiles,
@@ -99,6 +99,16 @@ export function startScoreApp(options) {
 
         // ---------- tiny helpers ----------
         function memberToken() { return readMemberToken() || null; }
+        let phoneActivitySession = null;
+        function phoneActivityApi() {
+            const token = memberToken();
+            if (!token) { phoneActivitySession = null; return null; }
+            if (phoneActivitySession?.token !== token) {
+                const credential = { type: 'bearer', token };
+                phoneActivitySession = { token, request: (path, options = {}) => api(path, { ...options, guest: false, credential }) };
+            }
+            return phoneActivitySession.request;
+        }
         function scoringCredential() {
             const member = memberToken();
             if (member) return { type: 'bearer', token: member };
@@ -1036,6 +1046,8 @@ export function startScoreApp(options) {
             renderScoreBody('scorecard', {
                 ...scorecardState,
                 watchApi: !WATCH && (memberToken() || (ROUND_CODE && readOpenPlayToken())) ? api : null,
+                phoneActivityApi: !WATCH ? phoneActivityApi() : null,
+                phoneOwnerId: decodeJwtPayload(memberToken())?.sub || null,
                 eventId: EVENT_ID,
                 onFullScorecard: openLeaderboard,
                 onAddPlayer: addGuestPrompt,
