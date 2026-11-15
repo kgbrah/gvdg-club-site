@@ -1143,6 +1143,32 @@ function themePage(root) {
   return body && body !== root ? body : null;
 }
 
+// Member/scorer top bar and dock follow a custom theme: map its tokens onto the --member-chrome-* variables.
+const CHROME_VARS = ["--member-round-title", "--member-round-bg", "--member-round-edge", "--member-round-scrim", "--member-round-hover", "--member-round-ink", "--member-round-subtle", "--member-round-live", "--member-round-cta", "--member-round-cta-ink",
+  "--member-chrome-bg", "--member-chrome-line", "--member-chrome-hover", "--member-chrome-ink", "--member-chrome-focus"];
+function paintChromeOn(el, theme) {
+  const t = theme.tokens;
+  el.style.setProperty("--member-chrome-bg", t["bg-secondary"] || t["bg-primary"]);
+  el.style.setProperty("--member-chrome-line", t["border-color"]);
+  el.style.setProperty("--member-chrome-hover", t["bg-tertiary"]);
+  el.style.setProperty("--member-chrome-ink", t["text-primary"]);
+  el.style.setProperty("--member-chrome-focus", t.primary);
+  // The "Start/Continue a round" hero: a primary-tinted theme surface, theme text, CTA in the primary colour.
+  const bg = `color-mix(in srgb, ${t["bg-secondary"]} 82%, ${t.primary})`;
+  const cta = hexToRgb(t.primary);
+  const ctaInk = ["#0a0f1c", "#ffffff"].reduce((best, c) => (contrastRatio(cta || { r: 128, g: 128, b: 128 }, hexToRgb(c)) > contrastRatio(cta || { r: 128, g: 128, b: 128 }, hexToRgb(best)) ? c : best));
+  el.style.setProperty("--member-round-title", t["text-primary"]);
+  el.style.setProperty("--member-round-bg", bg);
+  el.style.setProperty("--member-round-scrim", `color-mix(in srgb, ${bg} 93%, transparent)`);
+  el.style.setProperty("--member-round-edge", `color-mix(in srgb, ${bg} 55%, transparent)`);
+  el.style.setProperty("--member-round-hover", t.primary);
+  el.style.setProperty("--member-round-ink", t["text-primary"]);
+  el.style.setProperty("--member-round-subtle", t["text-secondary"]);
+  el.style.setProperty("--member-round-live", t.primary);
+  el.style.setProperty("--member-round-cta", t.primary);
+  el.style.setProperty("--member-round-cta-ink", ctaInk);
+}
+
 function clearThemeOn(el) {
   if (!el?.style) return;
   for (const key of TOKEN_KEYS) el.style.removeProperty(`--${key}`);
@@ -1152,6 +1178,7 @@ function clearThemeOn(el) {
   el.style.removeProperty("--player-theme-image-glass");
   el.style.removeProperty("--glass-alpha");
   el.style.removeProperty("--glass-blur");
+  for (const name of CHROME_VARS) el.style.removeProperty(name);
   el.classList?.remove?.("player-theme-active", "player-theme-page", "player-theme-glass");
 }
 
@@ -1168,6 +1195,7 @@ function paintGlassOn(el, theme) {
 function paintThemeOn(el, theme) {
   if (!el?.style) return;
   paintGlassOn(el, theme);
+  paintChromeOn(el, theme);
   for (const key of TOKEN_KEYS) el.style.setProperty(`--${key}`, theme.tokens[key]);
   const image = wallpaperImage(theme);
   if (image) {
@@ -1182,6 +1210,7 @@ function paintThemeOn(el, theme) {
 function paintPageOn(el, theme) {
   if (!el?.style) return;
   paintGlassOn(el, theme);
+  paintChromeOn(el, theme);
   el.style.setProperty("--bg-primary", theme.tokens["bg-primary"]);
   el.style.setProperty("--text-primary", theme.tokens["text-primary"]);
   el.style.setProperty("--player-theme-footer", theme.tokens["text-muted"]);

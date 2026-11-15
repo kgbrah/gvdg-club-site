@@ -174,6 +174,37 @@ function connectionAction(label, key, pending, update, attrs = {}) {
   return action(label, { key, disabled: pending, onClick: () => { void update(key); }, ...attrs });
 }
 
+const KEYBOARD_CLASS = "member-keyboard-open";
+
+// The page uses interactive-widget=overlays-content, so the on-screen keyboard covers the layout
+// instead of resizing it. Hide the fixed dock while the field is focused and keep the field and
+// its results in the visible viewport.
+function useKeyboardSafeSearch(ref) {
+  React.useEffect(() => {
+    const root = document.documentElement;
+    let timer = 0;
+    const reveal = () => {
+      const input = ref.current;
+      if (!input || document.activeElement !== input) return;
+      (input.closest("form") || input).scrollIntoView({ block: "center", behavior: "auto" });
+    };
+    const schedule = () => { clearTimeout(timer); timer = setTimeout(reveal, 120); };
+    const focus = (event) => { if (event.target === ref.current) { root.classList.add(KEYBOARD_CLASS); schedule(); } };
+    const blur = (event) => { if (event.target === ref.current) { root.classList.remove(KEYBOARD_CLASS); clearTimeout(timer); } };
+    const viewport = window.visualViewport;
+    document.addEventListener("focusin", focus);
+    document.addEventListener("focusout", blur);
+    viewport?.addEventListener("resize", schedule);
+    return () => {
+      clearTimeout(timer);
+      root.classList.remove(KEYBOARD_CLASS);
+      document.removeEventListener("focusin", focus);
+      document.removeEventListener("focusout", blur);
+      viewport?.removeEventListener("resize", schedule);
+    };
+  }, [ref]);
+}
+
 export function MemberCommunityPage({ token }) {
   const [state, setState] = React.useState(null);
   const [error, setError] = React.useState("");
@@ -181,6 +212,7 @@ export function MemberCommunityPage({ token }) {
   const [query, setQuery] = React.useState("");
   const [page, setPage] = React.useState({ profiles: [], more: false, offset: 0, status: "loading" });
   const [pending, setPending] = React.useState(false);
+  const searchRef = React.useRef(null);
   const [version, reload] = React.useReducer((value) => value + 1, 0);
   const valid = () => token === readMemberToken();
 
@@ -202,6 +234,15 @@ export function MemberCommunityPage({ token }) {
       .catch(() => { if (!controller.signal.aborted && valid()) setPage({ profiles: [], more: false, offset: 0, status: "error" }); });
     return () => controller.abort();
   }, [token, query, version]);
+
+  const trimmed = filter.trim();
+  const wanted = trimmed.length >= 2 ? trimmed : "";
+  React.useEffect(() => {
+    if (wanted === query) return undefined;
+    const timer = setTimeout(() => setQuery(wanted), 250);
+    return () => clearTimeout(timer);
+  }, [wanted, query]);
+  useKeyboardSafeSearch(searchRef);
 
   async function save(data) {
     const result = await communityRequest("/me/community/profile", { token, method: "PUT", body: data });
@@ -274,11 +315,11 @@ export function MemberCommunityPage({ token }) {
     h("section", { className: "player-card member-community-directory", "aria-label": "Community directory", key: "directory" }, [
       h("h2", { key: "heading" }, "Community directory"),
       note("Find members who have shared a community profile."),
-      h("form", { className: "community-form member-inline-search", role: "search", key: "filter", onSubmit: (event) => { event.preventDefault(); setQuery(filter.trim()); } }, [
-        field("Find a member", "input", { name: "memberSearch", type: "search", value: filter, maxLength: 60, onChange: (event) => setFilter(event.target.value) }),
+      h("form", { className: "community-form member-inline-search", role: "search", key: "filter", onSubmit: (event) => { event.preventDefault(); setQuery(wanted); } }, [
+        field("Find a member", "input", { name: "memberSearch", type: "search", ref: searchRef, enterKeyHint: "search", autoComplete: "off", value: filter, maxLength: 60, onChange: (event) => setFilter(event.target.value) }),
         action("Search members", { type: "submit", key: "search" }),
       ]),
-      page.status === "loading" ? note("Searching the directory…", "loading") : page.status === "error" ? h("div", { className: "member-subactions", key: "directory-error" }, [
+      page.status === "loading" || (wanted !== query && page.status !== "error") ? note("Searching the directory…", "loading") : page.status === "error" ? h("div", { className: "member-subactions", key: "directory-error" }, [
         h("p", { className: "dash-note", role: "alert", key: "error" }, "The directory couldn’t load."),
         action("Try again", { onClick: reload, key: "retry" }),
       ]) : page.profiles.length ? h("ul", { className: "community-list", key: "profiles" }, page.profiles.map((item) => h("li", { key: item.key }, [
@@ -288,7 +329,7 @@ export function MemberCommunityPage({ token }) {
             connectionAction("Send friend request", "request", pending, (operation) => update(item.key, operation)) : null,
           connectionAction("Block", "block", pending, (operation) => update(item.key, operation)),
         ]),
-      ]))) : note("No matching profiles.", "empty"),
+      ]))) : note(query ? "No matching profiles." : "Type at least 2 letters to search.", "empty"),
       state.profile.audience === "private" ? note("Share a display name in your profile settings before sending requests.", "request-note") : null,
       page.status === "ready" && page.more ? action("More members", { key: "more", disabled: pending, onClick: () => { void older(); } }) : null,
     ]),
