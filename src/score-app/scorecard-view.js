@@ -285,7 +285,7 @@ function RoundToolActions(props) {
     window.setTimeout(() => setCopied(false), 1600);
   }
   return h("div", { className: "score-glove-tools", key: "round-tools" }, [
-    h(
+    props.onShare && h(
       "button",
       {
         "aria-label": "Share scorecard",
@@ -379,7 +379,7 @@ function RoundToolActions(props) {
       },
       [icon(Lock), h("span", { key: "label" }, props.rangeLockOn ? "Distance alerts on" : "Distance alerts")],
     ),
-    h(RoundTalk, {
+    !props.offline && h(RoundTalk, {
       inline: true,
       key: "talk",
       live: true,
@@ -416,7 +416,7 @@ function RoundTools(props) {
   }
   return h(React.Fragment, null,
     h("div", { className: "score-glove-tools round-quick-tools" },
-      h(ThrowFilm, { hole: props.hole, putting: props.putting, recovery: props.clipDrafts, rows: props.rows }),
+      h(ThrowFilm, { hole: props.hole, offline: props.offline, putting: props.putting, recovery: props.clipDrafts, rows: props.rows, offlineRows: props.clipRows }),
       !props.putting && h("button", {
         type: "button", className: "score-glove-tool" + (props.measuring ? " active" : ""),
         "aria-label": props.measureLabel || "Measure", "aria-pressed": Boolean(props.measuring), onClick: props.onMeasure,
@@ -447,7 +447,9 @@ function RoundTools(props) {
               onAddPlayer: closeThen(props.onAddPlayer), onManagePlayers: closeThen(props.onManagePlayers),
             }),
             props.watchApi && h(WatchPairing, { api: props.watchApi, roundCode: props.roundCode, eventId: props.eventId }),
-            h("p", { className: "muted round-tools-note" }, "Saved scores, lies, and shots sync when connected. Watch pairing and sharing need internet. Distance alerts update while this screen stays active.")),
+            h("p", { className: "muted round-tools-note" }, props.offline
+              ? "Scores, lies, shots, and clips are saved on this device. Finished rounds can upload to your personal archive."
+              : "Saved scores, lies, and shots sync when connected. Watch pairing and sharing need internet. Distance alerts update while this screen stays active.")),
         h("button", { type: "button", className: "btn secondary sheet-close", onClick: close }, "Back to round"),
       )), document.body),
   );
@@ -672,7 +674,7 @@ function HoleMedia(props) {
   const hasMap = holeHasMap(props.hole) || pointReady(props.hole && props.hole.tee) || pointReady(props.hole && props.hole.target);
   const hasSign = Boolean(props.teeSign);
   const canSurvey = typeof props.onMarkTee === "function" || typeof props.onMarkPin === "function";
-  if (!hasMap && !hasSign && !canSurvey) return null;
+  if (!hasMap && !hasSign && !canSurvey && !props.offline) return null;
   const style = props.teeSign && props.teeSign.highlightColor
     ? { boxShadow: `0 0 0 3px ${props.teeSign.highlightColor}` }
     : undefined;
@@ -704,6 +706,7 @@ function HoleMedia(props) {
           focus: props.mapFocus,
           hole: props.hole,
           layoutId: props.layoutId,
+          schematic: props.offline,
           hud: h(RangeHud, {
             gpsStatus: props.gpsStatus,
             hud: props.rangeHud,
@@ -728,12 +731,17 @@ function HoleMedia(props) {
           onUndoThrow: props.onUndoThrow,
         }),
       ])
-      : h("div", { className: "hole-media-empty", key: "empty" }, [
+      : h("div", { className: "hole-media-empty", key: "empty",
+        style: props.offline ? { height: "auto", minHeight: 0, padding: ".55rem", rowGap: ".35rem" } : undefined }, [
         h("span", { key: "copy" }, "No map for this hole yet"),
-        canSurvey
+        props.offline ? h("span", { className: "hole-media-empty-hint", key: "hint" }, "You can still score this hole.")
+          : canSurvey
           ? h("span", { className: "hole-media-empty-hint", key: "hint" }, props.gpsStatus === "watching" ? "Getting your location…" : "Stand on it, then tap once.")
           : h("span", { className: "hole-media-empty-hint", key: "hint" }, "Sign in to drop the tee and basket."),
         surveyBtns,
+        props.offline && typeof props.onThrows === "function" && h("div", { className: "hole-map-lie-actions", key: "offline-lies" },
+          h("button", { className: "btn secondary small", type: "button", onClick: props.onMarkLie }, "Mark lie"),
+          props.throws.length > 0 && h("button", { className: "btn secondary small", type: "button", onClick: props.onUndoThrow }, "Undo mark")),
       ]),
     hasSign
       ? h("button", {
@@ -1144,7 +1152,7 @@ function ConfirmScoresSheet(props) {
   const putting = props.putting === true;
   const review = finish.review || { holes: [], rows: [], voters: [], waiting: [] };
   const grid = Array.isArray(props.holeGrid) ? props.holeGrid : [];
-  const copy = putting
+  const copy = props.offline ? "Review your card and save the finished round on this device." : putting
     ? "Anyone on this card can confirm. Matching makes on each station are enough."
     : FINISH_COPY;
   return createPortal(
@@ -1229,7 +1237,7 @@ function ConfirmScoresSheet(props) {
           disabled: props.finishing,
           type: "button",
           onClick: () => props.onAgree && props.onAgree(finish.voterIndex),
-        }, "Looks good — lock card"),
+        }, props.offline ? "Save finished round" : "Looks good — lock card"),
         h("button", { className: "btn secondary sheet-close", key: "close", type: "button", onClick: props.onCloseFinish }, "Back"),
       ]),
     ),
@@ -1293,6 +1301,7 @@ export function ScorecardView(props) {
   const holes = Array.isArray(props.holes) ? props.holes : [];
   const activeHoleIndex = Math.max(0, holes.findIndex((row) => row && props.hole && row.hole === props.hole.hole));
   React.useEffect(() => {
+    if (props.offline) return;
     preloadRoundMaps(holes, {
       activeIndex: activeHoleIndex,
       ahead: 2,
@@ -1300,7 +1309,7 @@ export function ScorecardView(props) {
       size: HOLE_MAP_COMPACT_SIZE,
       zooms: true,
     });
-  }, [holes, activeHoleIndex, mapFocus]);
+  }, [holes, activeHoleIndex, mapFocus, props.offline]);
   const showNextTee = Boolean(hud && (hud.circle === "C1" || hud.circle === "C2") && hud.mode === "remaining");
   const nextTee = showNextTee ? nextTeeHud(gps.fix, props.nextHole) : null;
   const lastThrowLine = lastThrowHud(throws, props.hole && props.hole.tee);
@@ -1429,6 +1438,7 @@ export function ScorecardView(props) {
   const solo = props.solo === true || (Array.isArray(props.rows) && props.rows.length === 1);
   const playerBand = Math.min(Math.max(Array.isArray(props.rows) ? props.rows.length : 1, 1), 4);
   return h(React.Fragment, null, [
+    wrist ? props.offlineStatus : null,
     wrist ? h(RecoveryStatus, { ...props, key: "wrist-recovery" }) : null,
     wrist ? h(WristScore, {
       atEnd: props.atEnd,
@@ -1454,6 +1464,7 @@ export function ScorecardView(props) {
       key: "glove",
     }, [
       h("div", { className: "score-glove-stage", key: "stage" }, [
+        props.offlineStatus,
         h(RecoveryStatus, { ...props, key: "recovery" }),
         h(JoinRequestBanner, { key: "joins", onApprove: props.onApproveJoin, onDecline: props.onDeclineJoin, requests: props.joinRequests }),
         props.showWeather ? h(WeatherStrip, { compact: true, key: "weather", title: "Round weather", weather: props.weather }) : null,
@@ -1504,7 +1515,7 @@ export function ScorecardView(props) {
           onToggleLock,
           onWrist: () => setWrist(true),
         }),
-        h(RoundHighlights, { canStar: true, holes: props.holeGrid, key: "clips", putting: props.putting === true }),
+        !props.offline && h(RoundHighlights, { canStar: true, holes: props.holeGrid, key: "clips", putting: props.putting === true }),
         h(HoleGrid, { holes: props.holeGrid, onJump: props.onJumpHole, putting: props.putting }),
         props.putting ? null : h(HoleStatChips, { chips: holeStatChips(holePlayStats(statsHole, statsRows, ((props.holeGrid || []).find((hole) => hole.current) || {}).score)) }),
         props.showPots ? h(PotsStrip, { key: "pots", pots: props.pots }) : null,
@@ -1521,6 +1532,7 @@ export function ScorecardView(props) {
       ]),
     ]),
     h(ConfirmScoresSheet, {
+      offline: props.offline,
       finish: props.finish,
       finishing: props.finishing,
       holeGrid: props.holeGrid,

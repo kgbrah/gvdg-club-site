@@ -127,6 +127,7 @@ function HomeView({ onStart, onJoin, onInvalidCode, onSignOut, onSignIn, onWatch
         [icon(PlayCircle), "Start a casual round"],
       ),
       h("button", { className: "btn secondary", type: "button", key: "saved", onClick: () => setShowSaved(true) }, "Saved course layouts"),
+      h("a", { className: "btn secondary", href: "score.html?offline=1", key: "offline" }, "Offline rounds"),
       h("label", { className: "lbl", htmlFor: "joinRoundCode", key: "joinLabel" }, "Join with a code"),
       h("input", {
         className: "field",

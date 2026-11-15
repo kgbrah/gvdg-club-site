@@ -543,7 +543,7 @@ export function useClipRecovery(context) {
 
 export function ThrowFilm(props) {
   const [open, setOpen] = React.useState(null);
-  const rows = Array.isArray(props.rows) ? props.rows : [];
+  const rows = props.offlineRows || (Array.isArray(props.rows) ? props.rows : []);
   const hole = props.hole && props.hole.hole;
   const putting = props.putting === true;
   const recovery = props.recovery;
@@ -566,6 +566,7 @@ export function ThrowFilm(props) {
       ...open,
       key: "sheet",
       recovery,
+      offline: props.offline,
       onClose: () => setOpen(null),
     }) : null,
   ]);
@@ -947,7 +948,7 @@ function ThrowFilmSheet(props) {
         : reviewing
           ? activeDraft?.state === "pending" ? null : h("button", {
             className: "btn primary", disabled: phase !== "review", key: "save", onClick: () => { void save(); }, type: "button",
-          }, phase === "saving" ? "Saving" : activeDraft?.attempt ? "Retry upload" : "Upload to round")
+          }, phase === "saving" ? "Saving" : props.offline ? "Queue for upload after the round" : activeDraft?.attempt ? "Retry upload" : "Upload to round")
           : h("button", { className: "btn primary", key: "start", onClick: () => { void start(); }, type: "button" }, "Record"),
       phase === "review" && stored ? h("button", { className: "btn secondary", key: "retake", onClick: retake, type: "button" }, "New clip") : null,
       phase === "review" && draft ? h("a", {

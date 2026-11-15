@@ -29,6 +29,7 @@ import { resolveApiBase } from "../shared/api-base.js";
 import { clearMemberSession, readMemberToken, writeMemberSession } from "../shared/member-session.js";
 import { createWakeLock } from "../shared/wake-lock.js";
 import { isTransientMineFailure, readMineCache, secureMineCacheKey, writeMineCache } from "./score-session-cache.js";
+import { OFFLINE_ID } from "../shared/offline-round.js";
 import { readOpenPlayName, readOpenPlayToken, writeOpenPlaySession } from "./open-play-session.js";
 import { buildLivePots, withLiveCtpLeaders } from "../shared/live-pots-model.js";
 import { isLiveWatchRequest, liveRoundCodeFromSearch, liveWatchHref } from "../shared/live-watch.js";
@@ -58,6 +59,7 @@ export function startScoreApp(options) {
         const EVENT_ID = (params.get('event') || '').replace(/[^0-9]/g, '');
         const ROUND_CODE = liveRoundCodeFromSearch(params);
         const MODE = ROUND_CODE ? 'round' : (EVENT_ID ? 'event' : 'home'); // event scoring · casual round · home
+        const offlineReturn = MODE === 'home' && OFFLINE_ID.test(params.get('returnToOffline') || '') ? params.get('returnToOffline') : null;
         const COURSE_QUERY = MODE === 'home' ? String(params.get('course') || '').trim() : '';
         const WATCH = isLiveWatchRequest(params);
         const LIVE = ROUND_CODE ? ('/rounds/' + ROUND_CODE + '/live') : ('/events/' + EVENT_ID + '/live');
@@ -886,18 +888,22 @@ export function startScoreApp(options) {
         // After any successful auth (PIN or passkey): store the token, then force the PIN change if the
         // account still requires it — the must-change-PIN gate rejects EVERY protected route (incl. joining
         // a card), so without this a temp-PIN member logs in but gets bounced right back to the login screen.
+        function returnAfterLogin() {
+            if (offlineReturn) location.replace('score.html?offline=' + offlineReturn);
+            else boot();
+        }
         function afterAuth(data) {
             writeMemberSession({ token: data.token, name: data.name || undefined });
             notifyScoreAuthChanged();
             if (data.mustChangePin) renderSetPin();
-            else boot();
+            else returnAfterLogin();
         }
         async function saveNewPin(newPin) {
             const r = await api('/set-pin', { method: 'POST', guest: false, body: { newPin: newPin } });
             if (r.status === 200 && r.data && r.data.token) {
                 writeMemberSession({ token: r.data.token });
                 notifyScoreAuthChanged();
-                boot();
+                returnAfterLogin();
                 return { ok: true };
             }
             if (r.status === 401) { renderLogin('Please sign in again.'); return { ok: true }; }
@@ -927,9 +933,9 @@ export function startScoreApp(options) {
                 mode: 'login',
                 onGuestContinue: function () { clearMemberSession(); notifyScoreAuthChanged(); boot(); },
                 onLogin: loginWithPin,
-                onOpenPlay: MODE === 'event' ? null : function () { renderOpenPlay(); },
+                onOpenPlay: MODE === 'event' || offlineReturn ? null : function () { renderOpenPlay(); },
                 onPasskeyLogin: supported ? loginWithPasskey : null,
-                openPlayAvailable: MODE !== 'event',
+                openPlayAvailable: MODE !== 'event' && !offlineReturn,
                 passkeysSupported: supported
             });
             if (supported) {
@@ -951,7 +957,7 @@ export function startScoreApp(options) {
             if (!r.ok || !r.data || !r.data.token) {
                 return { ok: false, message: r.status === 429 ? 'Too many tries — wait a minute and try again.' : 'Could not start a guest card. Check the connection and try again.' };
             }
-            writeOpenPlaySession({ token: r.data.token, name: r.data.name || name });
+            writeOpenPlaySession({ token: r.data.token, name: r.data.name || name, offlineToken: r.data.offlineToken });
             if (typeof after === 'function') after();
             else boot();
             return { ok: true };
@@ -1799,6 +1805,7 @@ export function startScoreApp(options) {
                 return;
             }
             if (MODE === 'home') {
+                if (offlineReturn) { renderLogin(); return; }
                 if (COURSE_QUERY) { renderCourseMap(COURSE_QUERY); return; }
                 if (params.get('start') === '1') {
                     history.replaceState(null, '', 'score.html');

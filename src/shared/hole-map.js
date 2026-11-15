@@ -511,7 +511,7 @@ export function HoleMap(props) {
   });
   const [flight, setFlight] = React.useState(null);
   const [heatOn, setHeatOn] = React.useState(true);
-  const heatmap = useHoleHeatmap(props.layoutId, hole && hole.hole);
+  const heatmap = useHoleHeatmap(props.schematic ? null : props.layoutId, hole && hole.hole);
   const heatSamples = heatmap && Array.isArray(heatmap.lies) ? heatmap.lies.length : 0;
   const youSamples = heatmap && Array.isArray(heatmap.you) ? heatmap.you.length : 0;
   const heatAvailable = heatSamples >= HEATMAP_MIN_SAMPLES || youSamples > 0;
@@ -602,7 +602,7 @@ export function HoleMap(props) {
       : ("card hole-map-card" + (large ? " hole-map-watch" : "")),
   }, [
     h("div", { className: "hole-map-frame", key: "frame" }, [
-      h(SatelliteLayer, {
+      !props.schematic && h(SatelliteLayer, {
         bounds: map.bounds,
         height: map.height,
         key: map.satelliteUrl || "satellite",

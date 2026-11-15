@@ -23,7 +23,7 @@ async function fixture() {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec("PRAGMA foreign_keys = ON");
   for (const migration of ["0001_init.sql", "0005_registration.sql", "0015_udisc_export.sql", "0016_casual_rounds.sql",
-    "0018_live_scoring_metadata.sql", "0022_ratings.sql", "0038_udisc_history.sql", "0039_throw_clips.sql", "0049_private_shot_ledgers.sql"]) {
+    "0018_live_scoring_metadata.sql", "0022_ratings.sql", "0038_udisc_history.sql", "0039_throw_clips.sql", "0049_private_shot_ledgers.sql", "0053_offline_rounds.sql"]) {
     sqlite.exec(readFileSync(new URL("../migrations/" + migration, import.meta.url), "utf8"));
   }
   sqlite.exec("INSERT INTO events(id, name, type, date, status) VALUES (1, 'Ledger event', 'tournament', '2026-08-01', 'live')");

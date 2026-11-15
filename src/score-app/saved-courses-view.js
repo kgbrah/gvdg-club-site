@@ -58,6 +58,11 @@ function SchematicHole({ hole }) {
   ]);
 }
 
+function startOfflineLink(pack) {
+  return pack.quality.scorable ? h("a", { className: "btn secondary small", key: "start-offline",
+    href: "score.html?offline=1&pack=" + encodeURIComponent(pack.key) }, "Start offline round") : null;
+}
+
 export function SavedLayoutPreview({ pack, onBack }) {
   const holes = layoutRows(pack.layout).filter((hole) => Number.isInteger(Number(hole?.hole)) && Number(hole.hole) >= 1 && Number(hole.hole) <= 36);
   const [selection, setSelection] = React.useState(0);
@@ -68,6 +73,7 @@ export function SavedLayoutPreview({ pack, onBack }) {
     h("h2", { className: "section", key: "title" }, pack.course.name),
     h("p", { className: "muted", key: "layout" }, pack.layout.name + " · Saved " + coursePackDate(pack.savedAt)),
     h("p", { className: "muted", key: "maps" }, pack.assets.schematicHoles + " of " + pack.quality.holeCount + " hole schematics. Straight-line reference, with no satellite imagery."),
+    startOfflineLink(pack),
     holes.length ? h("label", { className: "lbl", key: "select" }, "Hole",
       h("select", { className: "field", "aria-label": "Hole", value: selection, onChange: (event) => setSelection(Number(event.target.value)) },
         holes.map((row, index) => h("option", { key: index, value: index }, "Hole " + row.hole)),
@@ -100,6 +106,7 @@ export function PackLayoutActions({ course, layout, pack, refresh, onOpen, allow
       allowSave && (!pack || outdated) ? h("button", { className: "btn secondary small", type: "button", disabled: busy, key: "save",
         onClick: () => update(false) }, outdated ? "Update saved layout" : "Save for offline") : null,
       pack ? h("button", { className: "btn ghost small", type: "button", key: "open", onClick: () => onOpen(pack) }, "Open saved layout") : null,
+      pack ? startOfflineLink(pack) : null,
       pack ? h("button", { className: "btn ghost small", type: "button", disabled: busy, key: "remove", onClick: () => update(true) }, "Remove download") : null,
     ]),
   ]);

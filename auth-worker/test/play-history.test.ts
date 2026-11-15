@@ -23,7 +23,7 @@ async function fixture() {
   const { DatabaseSync } = await import("node:sqlite");
   const sqlite = new DatabaseSync(":memory:");
   for (const file of ["0001_init.sql", "0005_registration.sql", "0015_udisc_export.sql", "0016_casual_rounds.sql",
-    "0018_live_scoring_metadata.sql", "0038_udisc_history.sql", "0039_throw_clips.sql", "0049_private_shot_ledgers.sql"]) {
+    "0018_live_scoring_metadata.sql", "0038_udisc_history.sql", "0039_throw_clips.sql", "0049_private_shot_ledgers.sql", "0053_offline_rounds.sql"]) {
     sqlite.exec(readFileSync(new URL("../migrations/" + file, import.meta.url), "utf8"));
   }
   sqlite.exec(`
