@@ -236,7 +236,9 @@ try {
   await score("QA Owner", 1, 2);
   const gps = button("Tap for GPS");
   if (await gps.count()) await gps.click();
-  await page.locator(".hole-range-hud-len").waitFor();
+  await page.locator(".hole-range-hud strong").waitFor();
+  assert.match(await page.locator(".hole-range-hud").textContent(), /to basket/i);
+  assert.equal(await page.locator(".hole-range-hud-len").count(), 0, "The badge does not repeat the footer's hole length");
   const localId = new URL(page.url()).searchParams.get("offline");
   assert.ok(localId, "The round has a persistent local ID");
   const markedLie = [{ lat: 35.0002, lng: -82, n: 1 }];
