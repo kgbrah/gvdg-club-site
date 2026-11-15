@@ -6,6 +6,7 @@ import { extname, join } from "node:path";
 import { chromium } from "playwright";
 import { build } from "vite";
 import { buildTheme, contrastRatio } from "../../src/shared/dashboard-theme-model.js";
+import { HOLE_MAP_COMPACT_SIZE, projectHoleMap } from "../../src/shared/hole-map-model.js";
 
 const out = process.env.GVDG_SCORER_SCREENSHOTS || "/tmp/gvdg-scorer-polish";
 await mkdir(out, { recursive: true });
@@ -240,7 +241,7 @@ async function makePage({ width, height, scheme = "light", scale = 1, group = "s
     const url = new URL(request.url());
     if (url.origin === site) return route.continue();
     if (sampleCourse && url.hostname === "server.arcgisonline.com") {
-      return url.searchParams.get("size")?.startsWith("480,") ? route.continue() : route.abort();
+      return url.searchParams.get("size") !== "320,180" ? route.continue() : route.abort();
     }
     if (url.origin !== api) return route.abort();
     const allow = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Authorization,Content-Type",
@@ -511,8 +512,8 @@ if (serve) {
 } else if (bottomPreview) {
   try {
     for (const [playerCount, width, height, scheme, scale] of [
-      [1, 390, 844, "blue"], [4, 390, 844, "blue"], [1, 390, 844], [4, 390, 844],
-      [4, 320, 720, "dark", 1.25], [4, 844, 390, "blue"], [4, 1280, 900, "ocean", 1],
+      [1, 390, 844, "blue"], [4, 390, 844, "blue"], [1, 390, 844, "light"], [4, 390, 844, "light"], [2, 390, 720, "blue"], [3, 320, 844, "dark"],
+      [4, 320, 720, "dark", 1.25], [4, 320, 568, "dark", 1.25], [4, 844, 390, "blue"], [4, 1280, 900, "ocean", 1],
     ]) {
       const preview = await makePage({ width, height, scheme, scale, playerCount });
       await preview.go("?round=" + code);
@@ -521,8 +522,13 @@ if (serve) {
       await weather.getByText("Partly cloudy", { exact: true }).waitFor();
       await weather.getByText("Wind WNW 8 mph", { exact: true }).waitFor();
       await weather.getByText("Gusts 13 mph", { exact: true }).waitFor();
-      const stage = preview.page.getByRole("region", { name: "Map and round details" });
-      await stage.locator(".hole-map-satellite").evaluate((image) => image.decode());
+      const stage = preview.page.locator(".score-glove-stage");
+      const frame = stage.locator(".hole-map-frame");
+      await frame.getByRole("button", { name: "Heat" }).waitFor();
+      await frame.locator(".hole-map-satellite").evaluate((image) => image.decode());
+      const outcomes = stage.getByRole("region", { name: "Scoring outcomes" });
+      assert.deepEqual(await outcomes.locator(".live-stats-k").allTextContents(), ["Ace", "Eagle", "Birdie", "Par", "Bogey", "Double+"]);
+      assert.deepEqual(await outcomes.locator("b").allTextContents(), ["0", "0", "1", "2", "0", "0"]);
       const suffix = scheme ? "-" + scheme : "-light";
       const file = "bottom-scorecard-" + width + "x" + height + "-" + playerCount + "p" + suffix;
       const geometry = await preview.page.evaluate(() => {
@@ -531,6 +537,12 @@ if (serve) {
         const scores = [...document.querySelectorAll(".score-glove-dock .stepper .plus")];
         const scroller = document.querySelector(".score-glove-scores").getBoundingClientRect();
         const frame = document.querySelector(".hole-map-frame");
+        const frameBounds = frame.getBoundingClientRect();
+        const stage = document.querySelector(".score-glove-stage");
+        const tally = document.querySelector(".score-outcomes");
+        const tallyBounds = tally.getBoundingClientRect();
+        const photo = frame.querySelector(".hole-map-satellite");
+        const { width, height } = frame.querySelector("svg[aria-label]").viewBox.baseVal;
         return {
           height: innerHeight, scroll: scrollY, dockTop: rect(".score-glove-dock").top,
           buttons: nav.map((button) => ({
@@ -542,7 +554,18 @@ if (serve) {
             return { visible: top >= scroller.top && bottom <= scroller.bottom, height: button.offsetHeight, width: button.offsetWidth };
           }),
           mapHeight: frame.clientHeight,
-          mapObstructions: frame.querySelectorAll(".hole-map-focus, .hole-map-lie-actions, .hole-range-hud, .hole-media-chip").length,
+          frameWidth: frame.clientWidth,
+          mapDims: { width, height, photoWidth: photo.naturalWidth, photoHeight: photo.naturalHeight, objectFit: getComputedStyle(photo).objectFit },
+          stageFit: stage.scrollHeight <= stage.clientHeight + 1 && !["auto", "scroll"].includes(getComputedStyle(stage).overflowY),
+          mapEndsAtTally: frameBounds.bottom <= tallyBounds.top && tallyBounds.top - frameBounds.bottom < 6,
+          tallyVisible: tallyBounds.top >= 0 && tallyBounds.bottom <= innerHeight
+            && [...tally.querySelectorAll(".live-stats-k")].every((label) => label.clientWidth >= label.scrollWidth),
+          onMap: [...frame.querySelectorAll("button")].map((button) => {
+            const { left, right, top, bottom, width, height } = button.getBoundingClientRect();
+            return { label: button.textContent, width, height,
+              tappable: button.contains(document.elementFromPoint(left + width / 2, top + height / 2)),
+              within: left >= frameBounds.left && right <= frameBounds.right && top >= frameBounds.top && bottom <= frameBounds.bottom };
+          }),
           weatherAboveMap: rect(".scorecard-weather").bottom <= frame.getBoundingClientRect().top,
         };
       });
@@ -553,13 +576,23 @@ if (serve) {
         assert.ok(button.width >= 44 && button.height >= 44);
         assert.ok(button.bottom <= geometry.height && button.bottom >= geometry.height - 60, "Hole navigation stays at the viewport bottom");
       }
-      if (width === 390) {
+      if (width === 390 && height >= 720) {
         assert.ok(geometry.dockTop >= height * .55, "Scores are in the lower half of the phone");
         assert.equal(geometry.scoreButtons.filter((button) => button.visible && button.width >= 44 && button.height >= 44).length, playerCount);
         assert.ok(geometry.mapHeight >= (playerCount === 1 ? 320 : 240));
       }
       assert.equal(geometry.weatherAboveMap, true);
-      assert.equal(geometry.mapObstructions, 0);
+      assert.ok(geometry.stageFit && geometry.mapEndsAtTally && geometry.tallyVisible, JSON.stringify(geometry));
+      assert.ok(geometry.mapHeight >= 130, JSON.stringify(geometry));
+      assert.ok(Math.abs(geometry.mapDims.width - geometry.frameWidth) <= 1);
+      assert.ok(Math.abs(geometry.mapDims.height - geometry.mapHeight) <= 1);
+      assert.equal(geometry.mapDims.width, geometry.mapDims.photoWidth);
+      assert.equal(geometry.mapDims.height, geometry.mapDims.photoHeight);
+      assert.equal(geometry.mapDims.objectFit, "contain");
+      for (const label of ["Hole", "C2", "C1", "Heat", "Tee sign", "Mark lie", "Undo"]) {
+        assert.ok(geometry.onMap.some((button) => button.label === label && button.width >= 44 && button.height >= 44 && button.within && button.tappable),
+          `${label} must be fully inside the map with a 44px hit target. ${JSON.stringify(geometry.onMap)}`);
+      }
       assert.match(await stage.locator(".hole-map-frame .hole-map-credit").innerText(), /Imagery: Esri, Maxar, Earthstar Geographics/);
       assert.equal(await stage.locator(".hole-map-card > .hole-map-credit").count(), 0);
       assert.equal(await stage.getByRole("button", { name: "Mark tee", exact: true }).count(), 0);
@@ -571,27 +604,54 @@ if (serve) {
         assert.ok(size && size.height >= 44 && size.width >= 44);
       }
       await preview.screenshot(file);
-      if (width === 320) {
-        assert.equal(geometry.scoreButtons.filter(({ visible }) => visible).length, playerCount, "All four scorers fit in the narrow tray");
+      if (width === 320 && playerCount === 4) {
+        if (height >= 720) assert.equal(geometry.scoreButtons.filter(({ visible }) => visible).length, playerCount, "All four scorers fit in the narrow tray");
+        else assert.ok(geometry.scoreButtons.some(({ visible }) => !visible), "The shortest viewport reserves map space by scrolling the player tray");
         const name = preview.page.locator(".prow .pname").first();
         assert.equal(await name.locator(".score-name-given").innerText(), "Taylor");
         assert.equal(await name.locator(".score-name-surname").innerText(), "Morgan");
         assert.equal(await name.getAttribute("title"), "Taylor Morgan");
         const finalPlayer = preview.button("Increase Morgan Lee on hole 4");
         const initialNav = await preview.button("Next hole").boundingBox();
-        await finalPlayer.click();
+        await finalPlayer.scrollIntoViewIfNeeded();
         const scores = await preview.page.getByRole("region", { name: "Player scores" }).boundingBox();
         const player = await finalPlayer.boundingBox();
-        assert.ok(player.y >= scores.y && player.y + player.height <= scores.y + scores.height, "Final score row can scroll fully into view");
+        assert.ok(player.y >= scores.y - 1 && player.y + player.height <= scores.y + scores.height + 1, "Final score row can scroll fully into view");
+        await finalPlayer.click();
+        await preview.page.locator(".score-entry-card .prow").last().locator(".val .n").getByText("3", { exact: true }).waitFor();
         const mark = preview.button("Mark lie");
-        await mark.scrollIntoViewIfNeeded();
         const stageBounds = await stage.boundingBox();
         const markBounds = await mark.boundingBox();
-        assert.ok(markBounds.y + markBounds.height <= stageBounds.y + stageBounds.height, "Mark lie can scroll fully into view");
+        assert.ok(markBounds.y + markBounds.height <= stageBounds.y + stageBounds.height, "Mark lie is fully visible without a map scroll");
         assert.deepEqual(await preview.button("Next hole").boundingBox(), initialNav);
-        await preview.screenshot(file + "-scrolled");
       }
-      if (width === 390 && playerCount === 4 && !scheme) {
+      if (width === 320 && height === 568) {
+        const sync = preview.page.getByRole("region", { name: "Card sync" });
+        await sync.waitFor({ state: "hidden" });
+        await preview.offlineMode(true);
+        await preview.button("Increase Morgan Lee on hole 4").click();
+        await sync.getByText("1 change awaiting sync", { exact: true }).waitFor();
+        preview.editElsewhere(3, 4, 7);
+        await preview.offlineMode(false);
+        await sync.getByText("1 change needs attention", { exact: true }).waitFor();
+        assert.equal(await frame.evaluate((element) => [...element.querySelectorAll("button")].every((button) => {
+          const { x, y, width, height } = button.getBoundingClientRect();
+          return [.28, .5, .72].every((position) =>
+            button.contains(document.elementFromPoint(x + width / 2, y + height * position)));
+        })), true, "Map controls remain tappable during a sync conflict");
+        assert.deepEqual(await outcomes.locator(".live-stats-k").allTextContents(), ["Ace", "Eagle", "Birdie", "Par", "Bogey", "Double+"]);
+        await frame.locator(".hole-map-satellite").evaluate((image) => image.decode());
+        await preview.screenshot(file + "-conflict");
+        await sync.getByRole("button", { name: "1 change needs attention" }).click();
+        const recovery = preview.page.getByRole("dialog", { name: "Card sync" });
+        await recovery.getByText(/edited on another device/).waitFor();
+        await recovery.getByRole("button", { name: "Retry sync" }).waitFor();
+        await preview.screenshot(file + "-recovery");
+        await recovery.getByRole("button", { name: "Discard change" }).click();
+        await sync.waitFor({ state: "hidden" });
+        await preview.page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Player scores");
+      }
+      if (width === 390 && playerCount === 4 && scheme === "light") {
         await preview.button("Increase Taylor Morgan on hole 4").click();
         await preview.page.locator(".score-entry-card .prow").first().locator(".val .n").getByText("3", { exact: true }).waitFor();
         const score = preview.button("Enter score for Taylor Morgan on hole 4");
@@ -609,18 +669,49 @@ if (serve) {
         await preview.button("Round tools").click();
         const tools = preview.page.getByRole("dialog", { name: "Round tools" });
         for (const label of ["Mark tee", "Mark pin", "Shot details", "Invite to score"]) await tools.getByRole("button", { name: label, exact: true }).waitFor();
-        await preview.page.keyboard.press("Escape");
+        const originalMap = await frame.boundingBox();
+        async function assertMapInPlace() {
+          const current = await frame.boundingBox();
+          for (const side of ["x", "y", "width", "height"]) {
+            assert.ok(Math.abs(current[side] - originalMap[side]) <= 1, "Round details and map controls leave the map in place");
+          }
+        }
+        await tools.getByRole("button", { name: "Round details", exact: true }).click();
+        const details = preview.page.getByRole("dialog", { name: "Round details" });
+        await details.getByRole("region", { name: "Live round stats" }).getByText("Singles · Stroke · Thru 4/18", { exact: true }).waitFor();
+        await details.getByRole("button", { name: /^Hole 6(?:,|$)/ }).click();
+        await preview.page.getByRole("heading", { name: "Hole 6" }).waitFor();
+        await preview.button("Previous hole").click();
+        await preview.button("Previous hole").click();
+        await preview.page.getByRole("heading", { name: "Hole 4" }).waitFor();
         await preview.button("Tee sign").click();
-        await stage.getByAltText("Tee sign for hole 4").waitFor();
-        await preview.button("Hide tee sign").click();
+        await preview.page.getByRole("dialog", { name: "Tee sign · Hole 4" }).getByAltText("Tee sign for hole 4").waitFor();
+        await preview.page.keyboard.press("Escape");
+        assert.equal(await preview.button("Tee sign").evaluate((button) => button === document.activeElement), true);
+        await assertMapInPlace();
+        const focus = frame.getByRole("group", { name: "Map overlay" });
+        for (const label of ["C1", "C2", "Hole"]) {
+          await focus.getByRole("button", { name: label, exact: true }).click();
+          assert.equal(await focus.getByRole("button", { name: label, exact: true }).getAttribute("aria-pressed"), "true");
+        }
+        const heat = focus.getByRole("button", { name: "Heat" });
+        await heat.click();
+        assert.equal(await heat.getAttribute("aria-pressed"), "false");
+        await heat.click();
+        assert.equal(await heat.getAttribute("aria-pressed"), "true");
+        await frame.getByRole("button", { name: "Undo" }).click();
+        await frame.getByRole("button", { name: "Undo" }).waitFor({ state: "detached" });
+        await frame.getByRole("button", { name: "Mark lie" }).click();
+        await frame.getByRole("button", { name: "Undo" }).waitFor();
+        assert.deepEqual(await outcomes.locator("b").allTextContents(), ["0", "0", "1", "3", "0", "0"]);
         await preview.button("Next hole").click();
         await preview.page.getByRole("heading", { name: "Hole 5" }).waitFor();
         await preview.button("Previous hole").click();
         await preview.page.getByRole("heading", { name: "Hole 4" }).waitFor();
         await weather.getByText("Wind WNW 8 mph", { exact: true }).waitFor();
         await stage.evaluate((el) => { el.scrollTop = el.scrollHeight; });
-        const navTop = (await preview.button("Next hole").boundingBox()).y;
-        assert.ok(navTop >= height - 100, "Scrolling the map stage leaves navigation in place");
+        assert.equal(await stage.evaluate((el) => el.scrollTop), 0, "The map stage never scrolls");
+        await assertMapInPlace();
         await preview.button("Round tools").click();
         await preview.button("Add player").click();
         const input = preview.page.getByRole("textbox", { name: "Player name" });
@@ -641,6 +732,31 @@ if (serve) {
           delete visualViewport.height;
           visualViewport.dispatchEvent(new Event("resize"));
         });
+      }
+      if (width === 390 && height === 844 && playerCount === 1 && scheme === "blue") {
+        const legacy = projectHoleMap(holes[3], HOLE_MAP_COMPACT_SIZE);
+        await preview.page.evaluate(async (url) => {
+          const cache = await caches.open("gvdg-maps-v2");
+          await cache.put(url, new Response('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"/>', {
+            headers: { "Content-Type": "image/svg+xml" },
+          }));
+        }, legacy.satelliteUrl);
+        await preview.context.route("https://server.arcgisonline.com/**", (route) => route.abort("internetdisconnected"));
+        await preview.page.setViewportSize({ width: 320, height: 720 });
+        const fallback = frame.locator(".hole-map-satellite-backdrop");
+        await fallback.evaluate((image) => image.decode());
+        const placement = await fallback.evaluate((image) => {
+          const fit = image.closest(".hole-map-frame").getBoundingClientRect();
+          const rect = image.getBoundingClientRect();
+          return {
+            fitWidth: fit.width, fitHeight: fit.height, width: rect.width, height: rect.height,
+            offsetX: rect.x - fit.x, offsetY: rect.y - fit.y,
+          };
+        });
+        assert.ok(Math.abs(placement.width / placement.height - 320 / 180) < .02, "The cached aerial retains its source ratio");
+        assert.ok(Math.abs(placement.offsetX - (placement.fitWidth - placement.width) / 2) < 1);
+        assert.ok(Math.abs(placement.offsetY - (placement.fitHeight - placement.height) / 2) < 1);
+        await preview.page.setViewportSize({ width, height });
       }
       await preview.noOverflow();
       await preview.context.close();
@@ -697,8 +813,11 @@ if (serve) {
   await phone.button("Phone").click();
 
   async function selectFourth() {
-    if (await phone.page.locator(".hole-head .hnum").textContent() !== "Hole 4")
+    if (await phone.page.locator(".hole-head .hnum").textContent() !== "Hole 4") {
+      await phone.button("Round tools").click();
+      await phone.button("Round details").click();
       await phone.page.locator(".holegrid").getByRole("button", { name: /^Hole 4(?:,|$)/ }).click();
+    }
   }
   const score = phone.button("Enter score for Taylor Morgan on hole 4");
   await score.click();
@@ -743,7 +862,7 @@ if (serve) {
   await phone.page.getByText(/edited on another device/).waitFor();
   await phone.screenshot("score-conflict-phone");
   await phone.button("Discard change").click();
-  await phone.page.getByText("1 change needs attention", { exact: true }).waitFor({ state: "hidden" });
+  await phone.page.getByRole("region", { name: "Card sync", exact: true }).waitFor({ state: "hidden" });
   await phone.page.reload({ waitUntil: "domcontentloaded" });
   await phone.ready();
   await selectFourth();

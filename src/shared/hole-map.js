@@ -8,16 +8,66 @@ import { udiscDeepLink } from "./udisc-export.js";
 
 const h = React.createElement;
 
-function SatelliteLayer({ url, bounds, width, height }) {
+const CACHED_SCORER_SIZES = [HOLE_MAP_COMPACT_SIZE, ...[443, 320, 390, 220].map((height) => ({ width: 480, height }))];
+
+async function cachedScorerImage(hole, focus) {
+  const cache = globalThis.caches;
+  if (!cache) return null;
+  for (const size of CACHED_SCORER_SIZES) {
+    const options = { ...size, focus };
+    const legacy = projectLooseHoleMap(hole, options);
+    const response = legacy && await cache.match(legacy.satelliteUrl, { cacheName: "gvdg-maps-v2" });
+    if (!response?.ok || !response.headers.get("content-type")?.startsWith("image/")) continue;
+    // The old export URL used unadjusted bounds, but ArcGIS expanded the returned image.
+    const { bounds } = projectLooseHoleMap(hole, { ...options, fitViewport: true });
+    return { bounds, blob: await response.blob() };
+  }
+  return null;
+}
+
+function imagePlacement(bounds, viewport) {
+  const spanLng = viewport.maxLng - viewport.minLng;
+  const spanLat = viewport.maxLat - viewport.minLat;
+  return {
+    left: (bounds.minLng - viewport.minLng) / spanLng * 100 + "%",
+    top: (viewport.maxLat - bounds.maxLat) / spanLat * 100 + "%",
+    width: (bounds.maxLng - bounds.minLng) / spanLng * 100 + "%",
+    height: (bounds.maxLat - bounds.minLat) / spanLat * 100 + "%",
+  };
+}
+
+function SatelliteLayer({ url, bounds, width, height, cachedHole, focus }) {
   const href = safeExternalUrl(url);
   const [attempt, setAttempt] = React.useState(0);
+  const [backup, setBackup] = React.useState(null);
+  const failed = attempt > 0;
+  const holeRef = React.useRef(cachedHole);
+  holeRef.current = cachedHole;
+  React.useEffect(() => {
+    if (!failed || !holeRef.current) return;
+    let active = true;
+    let objectUrl;
+    cachedScorerImage(holeRef.current, focus).then((image) => {
+      if (!active || !image) return;
+      objectUrl = URL.createObjectURL(image.blob);
+      setBackup({ url: objectUrl, bounds: image.bounds });
+    }).catch(() => {});
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [failed, focus]);
   React.useEffect(() => {
     setAttempt(0);
   }, [href]);
   const tiles = !href || attempt > 0 ? satelliteTileLayers(bounds, width, height) : [];
   const showPhoto = Boolean(href) && attempt <= 2;
-  if (!showPhoto && !tiles.length) return null;
+  if (!showPhoto && !tiles.length && !backup) return null;
   return h(React.Fragment, null, [
+    backup && h("img", {
+      alt: "", className: "hole-map-satellite-backdrop", draggable: false, key: "backdrop",
+      src: backup.url, style: imagePlacement(backup.bounds, bounds),
+    }),
     tiles.length
       ? h("div", { className: "hole-map-satellite-tiles", key: "tiles" }, tiles.map((tile) =>
         h("img", {
@@ -131,7 +181,7 @@ function MapLieChip(props) {
           event.stopPropagation();
           props.onMarkLie();
         },
-      }, count && !props.controlsOutside ? "Lie " + (count + 1) : "Mark lie")
+      }, count && !props.fitted ? "Lie " + (count + 1) : "Mark lie")
       : null,
     count && typeof props.onUndoThrow === "function"
       ? h("button", {
@@ -505,6 +555,7 @@ export function HoleMap(props) {
   const large = Boolean(props.large);
   const size = props.size || (compact ? HOLE_MAP_COMPACT_SIZE : large ? HOLE_MAP_WATCH_SIZE : HOLE_MAP_SIZE);
   const map = projectLooseHoleMap(hole, {
+    fitViewport: props.fitted,
     focus: props.focus,
     height: size.height,
     width: size.width,
@@ -606,7 +657,7 @@ export function HoleMap(props) {
   });
   const lieControls = h(MapLieChip, {
     key: "lie-chip",
-    controlsOutside: props.controlsOutside,
+    fitted: props.fitted,
     surveyed: props.surveyed,
     throws,
     loose: map.loose,
@@ -616,7 +667,7 @@ export function HoleMap(props) {
     onUndoThrow: props.onUndoThrow,
   });
   const credit = h("div", {
-    className: "hole-map-credit" + (props.controlsOutside ? " hole-map-credit-overlay" : ""),
+    className: "hole-map-credit" + (props.fitted ? " hole-map-credit-overlay" : ""),
     key: "credit",
   }, SATELLITE_CREDIT);
   return h("div", {
@@ -624,10 +675,11 @@ export function HoleMap(props) {
       ? "hole-map-card hole-map-compact"
       : ("card hole-map-card" + (large ? " hole-map-watch" : "")),
   }, [
-    props.controlsOutside && h("div", { className: "hole-map-options", key: "options" }, [focusControls, props.controlAccessory]),
     h("div", { className: "hole-map-frame", key: "frame" }, [
       !props.schematic && h(SatelliteLayer, {
         bounds: map.bounds,
+        cachedHole: props.fitted ? hole : null,
+        focus: map.focus,
         height: map.height,
         key: map.satelliteUrl || "satellite",
         url: map.satelliteUrl,
@@ -647,7 +699,7 @@ export function HoleMap(props) {
         },
         [
           h("title", { key: "title" }, label),
-          h("text", { className: "hole-map-north", key: "north", x: 14, y: 22 }, "N"),
+          h("text", { className: "hole-map-north", key: "north", x: 14, y: props.fitted ? 58 : 22 }, "N"),
           h(CircleRing, { className: "hole-map-c2", key: "c2", ring: map.circle2 }),
           h(CircleRing, { className: "hole-map-c1", key: "c1", ring: map.circle1 }),
           map.tee && map.basket
@@ -707,7 +759,7 @@ export function HoleMap(props) {
               y: map.basket.y,
             })
             : null,
-          map.windBlowToDeg == null ? null : h(WindMark, { deg: map.windBlowToDeg, key: "wind", x: map.width - 24, y: 24 }),
+          map.windBlowToDeg == null ? null : h(WindMark, { deg: map.windBlowToDeg, key: "wind", x: map.width - 24, y: props.fitted ? 54 : 24 }),
           ...players.map((player) => h(PlayerMark, {
             compact,
             initials: player.initials,
@@ -749,18 +801,21 @@ export function HoleMap(props) {
         ],
       ),
       h(ScoreChips, { compact, height: map.height, key: "chips", marks: players, width: map.width }),
-      props.controlsOutside ? null : focusControls,
-      props.controlsOutside ? null : lieControls,
-      props.controlsOutside ? null : props.hud,
-      props.controlsOutside && !props.schematic ? credit : null,
+      props.fitted
+        ? h("div", { className: "hole-map-options", key: "options" }, focusControls, props.controlAccessory)
+        : focusControls,
+      props.fitted
+        ? h("div", { className: "hole-map-actions", key: "actions" }, props.hud, lieControls)
+        : lieControls,
+      props.fitted ? null : props.hud,
+      props.fitted && !props.schematic ? credit : null,
     ]),
-    props.controlsOutside && h("div", { className: "hole-map-actions", key: "actions" }, [props.hud, lieControls]),
     h("div", { className: "hole-map-caption", key: "caption" }, [
       h("span", { key: "tee" }, map.tee ? map.tee.label : "You"),
       h("span", { key: "dist" }, map.distanceFt ? `${map.distanceFt} ft` : (map.loose ? "Around you" : "Map")),
       h("span", { key: "basket" }, map.basket ? map.basket.label : ""),
     ]),
-    !props.controlsOutside ? credit : null,
+    !props.fitted ? credit : null,
     udiscHref
       ? h("a", {
         className: "hole-map-udisc",

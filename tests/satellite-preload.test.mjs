@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { HOLE_MAP_COMPACT_SIZE, HOLE_MAP_WATCH_SIZE } from "../src/shared/hole-map-model.js";
+import { HOLE_MAP_COMPACT_SIZE, HOLE_MAP_WATCH_SIZE, projectHoleMap } from "../src/shared/hole-map-model.js";
 import {
   preloadRoundMaps,
   satelliteUrlForHole,
@@ -64,6 +64,12 @@ test("preloadRoundMaps fetches neighbors now and the rest of the layout later", 
   assert.deepEqual(loaded, result.now);
   idle.forEach((fn) => fn());
   assert.deepEqual(loaded, [...result.now, ...result.later]);
+});
+
+test("the scorer warms neighboring exports at its fitted dimensions", () => {
+  const size = { width: 362, height: 356 };
+  const urls = satelliteUrlsForRound(layout, { size, activeIndex: 2, ahead: 1, fitViewport: true });
+  assert.deepEqual(urls, layout.slice(1, 4).map((hole) => projectHoleMap(hole, { ...size, fitViewport: true }).satelliteUrl));
 });
 
 test("watch and scorecard surfaces preload maps before they are shown", () => {

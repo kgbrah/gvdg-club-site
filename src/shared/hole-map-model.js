@@ -384,6 +384,22 @@ function boundsForFocus(tee, basket, focus) {
   return paddedBounds(tee, basket);
 }
 
+// ArcGIS adjusts its export extent to the image aspect ratio. Use that extent
+// for the map overlay and inverse pointer projection too.
+function fitBoundsToSize(bounds, width, height) {
+  const spanLng = bounds.maxLng - bounds.minLng;
+  const spanLat = bounds.maxLat - bounds.minLat;
+  const degreesPerPixel = Math.max(spanLng / width, spanLat / height);
+  const lngPad = (width * degreesPerPixel - spanLng) / 2;
+  const latPad = (height * degreesPerPixel - spanLat) / 2;
+  return {
+    minLng: bounds.minLng - lngPad,
+    maxLng: bounds.maxLng + lngPad,
+    minLat: bounds.minLat - latPad,
+    maxLat: bounds.maxLat + latPad,
+  };
+}
+
 export function satelliteImageUrl(bounds, width, height) {
   if (!bounds) return "";
   const spanLng = bounds.maxLng - bounds.minLng;
@@ -508,7 +524,8 @@ export function projectHoleMap(hole, options = {}) {
   const width = finite(options.width) || 640;
   const height = finite(options.height) || 360;
   const focus = options.focus === "c1" || options.focus === "c2" ? options.focus : "hole";
-  const bounds = boundsForFocus(tee, basket, focus);
+  const focusBounds = boundsForFocus(tee, basket, focus);
+  const bounds = options.fitViewport ? fitBoundsToSize(focusBounds, width, height) : focusBounds;
 
   const teePt = { ...mapXy(bounds, width, height, tee.lng, tee.lat), lat: tee.lat, lng: tee.lng, label: tee.label || "Tee" };
   const basketPt = { ...mapXy(bounds, width, height, basket.lng, basket.lat), lat: basket.lat, lng: basket.lng, label: basket.label || "Basket" };
@@ -574,12 +591,13 @@ export function projectLooseHoleMap(hole, options = {}) {
   if (!anchors.length) return null;
   const width = finite(options.width) || 640;
   const height = finite(options.height) || 360;
-  const bounds = anchors.length === 1
+  const anchorBounds = anchors.length === 1
     ? boundsAround(anchors, LOOSE_PAD_M)
     : paddedBounds(
       { lat: Math.min(...anchors.map((point) => point.lat)), lng: Math.min(...anchors.map((point) => point.lng)) },
       { lat: Math.max(...anchors.map((point) => point.lat)), lng: Math.max(...anchors.map((point) => point.lng)) },
     );
+  const bounds = options.fitViewport ? fitBoundsToSize(anchorBounds, width, height) : anchorBounds;
   const place = (point, label) => (
     point
       ? { ...mapXy(bounds, width, height, point.lng, point.lat), lat: point.lat, lng: point.lng, label }
