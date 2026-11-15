@@ -37,6 +37,11 @@ async function startStaticServer() {
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url || "/", "http://127.0.0.1");
+      if (url.pathname === "/version.json") {
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({ commit: "local-browser-qa", branch: "qa" }));
+        return;
+      }
       const requestPath = url.pathname === "/" ? "/index.html" : url.pathname;
       const normalized = path.normalize(decodeURIComponent(requestPath)).replace(/^(\.\.[/\\])+/, "");
       const filePath = path.join(repoRoot, normalized);
@@ -64,7 +69,7 @@ async function startStaticServer() {
 function collectPageErrors(page) {
   const errors = [];
   page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
+    if (message.type() === "error") errors.push(`${message.text()} (${message.location().url})`);
   });
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("dialog", (dialog) => {
@@ -360,7 +365,7 @@ async function captureState(browser, origin, viewport, slug) {
   await waitForText(page, "[data-react-home-conditions]", "ECU North Rec Complex", "React home conditions");
   await waitForText(page, "[data-react-home-conditions]", "Wet", "React home wet condition");
   await page.waitForSelector('[data-react-member-banner="ready"]', { timeout: 10_000 });
-  await waitForText(page, "[data-react-admin-portal]", "Admin Portal", "React admin portal");
+  await waitForText(page, "[data-react-admin-portal]", "Admin portal", "React admin portal");
   if (await page.locator("#myDashboard [data-react-registration-panel]").count()) {
     throw new Error("Registration panel should not render on Home.");
   }
