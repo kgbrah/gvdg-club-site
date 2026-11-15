@@ -16,6 +16,9 @@ export function AdminImportControls() {
   const [busyCsv, setBusyCsv] = React.useState(false);
   const dgsRequest = React.useRef("");
   const csvRequest = React.useRef("");
+  const [udiscUrl, setUdiscUrl] = React.useState("");
+  const [busyUdisc, setBusyUdisc] = React.useState(false);
+  const udiscRequest = React.useRef("");
   const requestCounter = React.useRef(0);
 
   React.useEffect(() => {
@@ -31,11 +34,19 @@ export function AdminImportControls() {
       setBusyCsv(false);
       csvRequest.current = "";
     }
+    function updateUdisc(event) {
+      const detail = resultDetail(event);
+      if (!detail.requestId || detail.requestId !== udiscRequest.current) return;
+      setBusyUdisc(false);
+      udiscRequest.current = "";
+    }
     window.addEventListener("gvdg:admin-dgs-import-result", updateDgs);
     window.addEventListener("gvdg:admin-csv-import-result", updateCsv);
+    window.addEventListener("gvdg:admin-udisc-events-import-result", updateUdisc);
     return () => {
       window.removeEventListener("gvdg:admin-dgs-import-result", updateDgs);
       window.removeEventListener("gvdg:admin-csv-import-result", updateCsv);
+      window.removeEventListener("gvdg:admin-udisc-events-import-result", updateUdisc);
     };
   }, []);
 
@@ -53,6 +64,15 @@ export function AdminImportControls() {
     setBusyCsv(true);
     dispatchRequest("gvdg:admin-csv-import-request", { csv: csvText, requestId, valid });
     if (!valid) setBusyCsv(false);
+  }
+
+  function requestUdiscImport() {
+    const requestId = `udisc-events-import-${requestCounter.current += 1}`;
+    const valid = /^https:\/\/(?:www\.)?udisc\.com\/(?:leagues|events)\//i.test(udiscUrl.trim());
+    udiscRequest.current = requestId;
+    setBusyUdisc(true);
+    dispatchRequest("gvdg:admin-udisc-events-import-request", { requestId, url: udiscUrl.trim(), valid });
+    if (!valid) setBusyUdisc(false);
   }
 
   return h("div", { className: "admin-surface admin-import-editor", "data-react-admin-import-controls": "ready" }, [
@@ -87,6 +107,26 @@ export function AdminImportControls() {
         onClick: requestCsvImport,
         type: "button",
       }, busyCsv ? "Previewing..." : "Preview CSV"),
+    ]),
+    h("div", { className: "admin-import-csv", key: "udisc" }, [
+      h("label", { htmlFor: "udiscImportUrl", key: "label" }, "UDisc league or event link"),
+      h("input", {
+        id: "udiscImportUrl",
+        key: "url",
+        onChange: (event) => setUdiscUrl(event.target.value),
+        placeholder: "https://udisc.com/leagues/your-league",
+        type: "url",
+        value: udiscUrl,
+      }),
+      h("button", {
+        className: "admin-btn secondary",
+        disabled: busyUdisc,
+        id: "udiscImportBtn",
+        key: "button",
+        onClick: requestUdiscImport,
+        type: "button",
+      }, busyUdisc ? "Importing..." : "Import from UDisc"),
+      h("p", { className: "dash-note", key: "hint" }, "Create the league first, then its events, so the rounds stay attached."),
     ]),
   ]);
 }

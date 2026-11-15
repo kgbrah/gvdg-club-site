@@ -374,6 +374,10 @@ export async function handleAdminEvents(
     const b = await readJson(request);
     const v = b && validEventInput(b);
     if (!v) return json({ error: "invalid_event" }, 400, origin);
+    if (v.source === "udisc" && v.external_url) {
+      const existing = await env.DB.prepare("SELECT id, name, external_url FROM events WHERE external_url = ? LIMIT 1").bind(v.external_url).first();
+      if (existing) return json({ event: existing, duplicate: true }, 200, origin);
+    }
     let layout: unknown = null;
     let eventInput = v;
     const layoutBody = b && typeof b === "object" ? (b as Record<string, unknown>).layout : null;

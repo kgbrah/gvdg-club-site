@@ -59,11 +59,44 @@ export async function adminCsvImportFromReact(detail, { adminApi, adminMsg }) {
   }
 }
 
+export async function adminUdiscEventsImportFromReact(detail, { adminApi, adminMsg }) {
+  const requestId = detail.requestId;
+  if (!requestId) return;
+  const url = typeof detail.url === 'string' ? detail.url.trim() : '';
+  if (detail.valid !== true || !url) {
+    adminMsg('Paste a UDisc league or event link', false);
+    dispatchAdminEvent('gvdg:admin-udisc-events-import-result', { ok: false, requestId });
+    return;
+  }
+  dispatchAdminEvent('gvdg:admin-import-candidates', { status: 'loading', candidates: [] });
+  let r;
+  try {
+    r = await adminApi('/admin/import/udisc-events', { method: 'POST', body: { url } });
+  } catch (err) {
+    adminMsg('UDisc import failed', false);
+    dispatchAdminEvent('gvdg:admin-udisc-events-import-result', { ok: false, requestId });
+    return;
+  }
+  if (r.ok) {
+    const d = await r.json();
+    showImportCandidates(d.candidates);
+    const count = (d.candidates || []).length;
+    adminMsg(count + ' UDisc row' + (count === 1 ? '' : 's') + ' loaded' + (d.truncated ? ' (first pages only)' : ''), true);
+    dispatchAdminEvent('gvdg:admin-udisc-events-import-result', { ok: true, requestId });
+  } else {
+    adminMsg('UDisc import failed (' + r.status + ')', false);
+    dispatchAdminEvent('gvdg:admin-udisc-events-import-result', { ok: false, requestId });
+  }
+}
+
 export function installImportController(deps) {
   window.addEventListener('gvdg:admin-dgs-import-request', async (event) => {
     await adminDgsImportFromReact(event.detail || {}, deps);
   });
   window.addEventListener('gvdg:admin-csv-import-request', async (event) => {
     await adminCsvImportFromReact(event.detail || {}, deps);
+  });
+  window.addEventListener('gvdg:admin-udisc-events-import-request', async (event) => {
+    await adminUdiscEventsImportFromReact(event.detail || {}, deps);
   });
 }

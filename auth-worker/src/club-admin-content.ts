@@ -15,6 +15,10 @@ export async function handleAdminLeagues(
     const b = await readJson(request);
     const name = b && asStr(b.name, 120);
     if (!b || !name) return json({ error: "invalid_league" }, 400, origin);
+    if (b.source === "udisc") {
+      const existing = await env.DB.prepare("SELECT * FROM leagues WHERE name = ? COLLATE NOCASE LIMIT 1").bind(name).first();
+      if (existing) return json({ league: existing, duplicate: true }, 200, origin);
+    }
     const row = await db.createLeague(env.DB, { name, season: asStr(b.season, 40), format: asStr(b.format, 20), description: asStr(b.description, 2000), created_by: adminId });
     return json({ league: row }, 201, origin);
   }

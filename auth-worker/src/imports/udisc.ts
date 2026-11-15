@@ -205,6 +205,17 @@ function layoutToUdisc(layout: { name?: unknown; holes: unknown[] }, url: string
   };
 }
 
+// The hydrated React Router payload for a UDisc page, or null when the stream is missing or broken.
+export function readUdiscPage(html: string): unknown | null {
+  try {
+    const values = turboStreamValues(html);
+    if (!values.length) return null;
+    return unflatten(values);
+  } catch {
+    return null;
+  }
+}
+
 // Parse ALL scorable layouts from a UDisc course page (deduped by UDisc layout id, in page order).
 export function parseUdiscLayouts(html: string, url: string): { name: string | null; udisc_course_id: string | null; layouts: UdiscLayout[] } {
   const name = titleFromHtml(html) || null;

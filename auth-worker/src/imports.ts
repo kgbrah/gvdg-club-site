@@ -21,6 +21,15 @@ export {
   type UdiscPosition,
 } from "./imports/udisc.js";
 export {
+  mergeUdiscCalendars,
+  normalizeUdiscEventsUrl,
+  parseUdiscCalendar,
+  udiscImportCandidates,
+  udiscSchedulePageUrl,
+  type UdiscCalendar,
+  type UdiscImportCandidate,
+} from "./imports/udisc-events.js";
+export {
   CLUB_ORIGIN,
   DAY_TRIP_MILES,
   DISCGOLFAPI_ATTRIBUTION,

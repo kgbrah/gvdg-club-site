@@ -1409,9 +1409,26 @@ export function startAdminController() {
                 const candidate = detail.candidate || {};
                 const requestId = detail.requestId;
                 if (!requestId || !candidate.name) return;
-                const r = await adminApi('/admin/events', { method: 'POST', body: { type: candidate.type || 'tournament', name: candidate.name, date: candidate.date || null, format: candidate.format || null, source: candidate.source || 'manual', external_url: candidate.external_url || null } });
+                let r;
+                if (candidate.type === 'league') {
+                    r = await adminApi('/admin/leagues', { method: 'POST', body: { name: candidate.name, season: candidate.season || null, format: candidate.format || null, description: candidate.description || candidate.external_url || null, source: 'udisc' } });
+                } else {
+                    let leagueId = null;
+                    if (candidate.league_name) {
+                        try {
+                            const listed = await api('/leagues');
+                            const leagues = listed.ok ? ((await listed.json()).leagues || []) : [];
+                            const match = leagues.find((league) => league && league.name === candidate.league_name);
+                            if (match) leagueId = match.id;
+                        } catch (err) { /* the event can still be created without the league link */ }
+                    }
+                    r = await adminApi('/admin/events', { method: 'POST', body: { type: candidate.type || 'tournament', name: candidate.name, date: candidate.date || null, format: candidate.format || null, source: candidate.source || 'manual', external_url: candidate.external_url || null, notes: candidate.notes || null, league_id: leagueId } });
+                }
                 window.dispatchEvent(new CustomEvent('gvdg:admin-import-candidate-create-result', { detail: { ok: r.ok, requestId } }));
-                if (r.ok) adminLoadEvents();
+                if (r.ok) {
+                    if (candidate.type === 'league') adminLoadLeagues();
+                    else adminLoadEvents();
+                }
             });
             window.addEventListener('gvdg:admin-league-create-request', async (event) => {
                 await adminAddLeagueFromReact(event.detail || {});

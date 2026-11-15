@@ -1,6 +1,6 @@
 import type { Env } from "./env.js";
 import * as db from "./db.js";
-import { safeFetch, normalizeDgs, normalizeCsvEvents, parseCsvRows, parseUdiscLayouts, ImportError } from "./imports.js";
+import { safeFetch, normalizeDgs, normalizeCsvEvents, parseCsvRows, parseUdiscLayouts, ImportError, mergeUdiscCalendars, normalizeUdiscEventsUrl, parseUdiscCalendar, udiscImportCandidates, udiscSchedulePageUrl } from "./imports.js";
 import {
   DAY_TRIP_MILES,
   DISCGOLFAPI_ATTRIBUTION,
@@ -40,6 +40,31 @@ export async function handleAdminImport(request: Request, env: Env, origin: stri
       if (!csvText) return json({ error: "invalid_request" }, 400, origin);
       return json({ source: "csv", candidates: normalizeCsvEvents(parseCsvRows(csvText)) }, 200, origin);
     }
+    if (kind === "udisc-events") {
+      const target = normalizeUdiscEventsUrl(asStr(b.url, 500));
+      if (!target) return json({ error: "invalid_request" }, 400, origin);
+      const pages = [parseUdiscCalendar(await fetchUdiscHtml(target.fetchUrl), target.fetchUrl)];
+      const total = pages[0]?.resultsCount ?? pages[0]?.events.length ?? 0;
+      if (target.scheduleUrl && total > pages[0]!.events.length) {
+        for (let page = 2; page <= 3; page += 1) {
+          if (mergeUdiscCalendars(pages).events.length >= total) break;
+          try {
+            const next = parseUdiscCalendar(await fetchUdiscHtml(udiscSchedulePageUrl(target.scheduleUrl, page)), target.scheduleUrl);
+            pages.push(next);
+            if (!next.events.length) break;
+          } catch (error) {
+            if (!(error instanceof ImportError)) throw error;
+            break;
+          }
+        }
+      }
+      const calendar = mergeUdiscCalendars(pages);
+      return json({
+        source: "udisc",
+        candidates: udiscImportCandidates(calendar),
+        truncated: calendar.resultsCount != null && calendar.events.length < calendar.resultsCount,
+      }, 200, origin);
+    }
     if (kind === "udisc") {
       const url = asStr(b.url, 500);
       if (!url) return json({ error: "invalid_request" }, 400, origin);
@@ -61,6 +86,10 @@ export async function handleAdminImport(request: Request, env: Env, origin: stri
     if (e instanceof ImportError) return json({ error: "import_failed", reason: e.message }, 400, origin);
     throw e;
   }
+}
+
+async function fetchUdiscHtml(url: string): Promise<string> {
+  return safeFetch(url, ["udisc.com"], { maxBytes: 3_000_000, timeoutMs: 12_000 });
 }
 
 async function importNearbyCourses(env: Env, body: Record<string, unknown>): Promise<{

@@ -8,7 +8,7 @@ test('admin import controls are rendered by React from request events', () => {
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const controls = readFileSync('src/admin-app/import-controls.js', 'utf8');
   const adminDgsImport = importController.match(/export async function adminDgsImportFromReact\(detail, \{ adminApi, adminMsg \}\) \{[\s\S]*?export async function adminCsvImportFromReact/)?.[0];
-  const adminCsvImport = importController.match(/export async function adminCsvImportFromReact\(detail, \{ adminApi, adminMsg \}\) \{[\s\S]*?export function installImportController/)?.[0];
+  const adminCsvImport = importController.match(/export async function adminCsvImportFromReact\(detail, \{ adminApi, adminMsg \}\) \{[\s\S]*?export async function adminUdiscEventsImportFromReact/)?.[0];
 
   assert.match(html, /id="adminImportControlsReactApp"/);
   assert.doesNotMatch(html, /id="dgsImportBtn"|id="csvImportBtn"|id="csvImportText"/);
@@ -37,6 +37,8 @@ test('admin import controls are rendered by React from request events', () => {
   assert.match(controls, /id: "dgsImportBtn"/);
   assert.match(controls, /id: "csvImportText"/);
   assert.match(controls, /id: "csvImportBtn"/);
+  assert.match(controls, /id: "udiscImportUrl"/);
+  assert.match(controls, /id: "udiscImportBtn"/);
   assert.match(controls, /csv: csvText/);
   assert.doesNotMatch(controls, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🔒|🌙|☀️|🏆|⚠|⏱|⬇|✓|—/);
 });

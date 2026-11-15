@@ -36,7 +36,8 @@ function normalizeState(state) {
 }
 
 function candidateLabel(candidate) {
-  return `${candidate.name || "?"}${candidate.date ? ` (${candidate.date})` : ""} [${candidate.type}]`;
+  const venue = normalizeText(candidate.source.venue);
+  return `${candidate.name || "?"}${candidate.date ? ` (${candidate.date})` : ""}${venue ? ` · ${venue}` : ""} [${candidate.type}]`;
 }
 
 function dispatchRequest(name, detail) {
