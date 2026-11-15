@@ -372,7 +372,7 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
       throw new Error("Registration panel should not render on Home.");
     }
     if (memberIsAdmin) {
-      await waitForText(page, "[data-react-admin-portal]", "Admin Portal", "React admin portal");
+      await waitForText(page, "[data-react-admin-portal]", "Admin portal", "React admin portal");
     } else if (await page.locator("[data-react-admin-portal]").count()) {
       throw new Error("React admin portal link rendered for a non-admin member.");
     }
