@@ -10,6 +10,7 @@ import { MemberOverviewDashboard } from "./overview-dashboard.js";
 import { ActiveStandingsPanel } from "./activity-panels.js";
 import { BagTagPanel } from "./bag-tag-panel.js";
 import { DoublesLeaguePanel } from "./doubles-league-panel.js";
+import { ClubLeagueCards } from "./club-leagues.js";
 import { useSessionToken } from "./session-token.js";
 import { currentDashboardRoute } from "./dashboard-router.js";
 import { MemberPlayPage, UdiscHistory } from "./play-page.js";
@@ -62,7 +63,10 @@ export function MemberDashboardApp() {
     tab === "install" ? h(MemberInstallPage, { key: "install" }) : null,
     tab === "tags" && token ? h(BagTagPanel, { key: "tags", token }) : null,
     tab === "standings" ? h(ActiveStandingsPanel, { key: "standings" }) : null,
-    tab === "leagues" ? h(DoublesLeaguePanel, { key: "leagues" }) : null,
+    tab === "leagues" ? h(React.Fragment, { key: "leagues" }, [
+      h(ClubLeagueCards, { key: "current" }),
+      h(DoublesLeaguePanel, { key: "doubles" }),
+    ]) : null,
     tab === "results" ? h(MemberSeasonPage, { key: "results", resultsOnly: true }) : null,
     tab === "community" && token ? h(MemberCommunityPage, { token, key: "community" }) : null,
     tab === "course-discovery" && token ? h(MemberCourseDiscovery, { token, courseId: route.courseId, key: "course-discovery" }) : null,

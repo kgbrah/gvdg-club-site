@@ -2,6 +2,7 @@ import React from "react";
 import { Tag } from "lucide-react";
 
 import { request } from "./api.js";
+import { BagTagLeagueOrder } from "./club-leagues.js";
 
 const h = React.createElement;
 
@@ -48,7 +49,7 @@ export function BagTagPanel({ token, compact = false }) {
     load();
   }, [load]);
 
-  if (!board || !board.series) return null;
+  if (!board || !board.series) return h(BagTagLeagueOrder, { compact });
   const mine = board.mine;
   const holders = Array.isArray(board.holders) ? board.holders : [];
   const challenges = Array.isArray(board.challenges) ? board.challenges : [];
@@ -134,6 +135,7 @@ export function BagTagPanel({ token, compact = false }) {
         }, busy ? "Requesting…" : "Request tag")
         : null,
     ]),
+    h(BagTagLeagueOrder, { compact, key: "imported" }),
     incoming.map((challenge) => h("div", { className: compact ? "member-tag-detail" : undefined, key: challenge.id }, [
       h("p", { className: "player-card-meta", key: "text" },
         `${challenge.challengerName} called out your #${challenge.defenderTag}. They shot ${challenge.challengerScore}, you shot ${challenge.defenderScore}.`),
