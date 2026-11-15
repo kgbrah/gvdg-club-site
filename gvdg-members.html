@@ -814,6 +814,22 @@
                 .member-page-heading .player-app-title { flex: 1; margin: 0; text-align: left; }
                 .member-page-heading .player-app-title:focus-visible { outline-color: var(--primary); }
                 .member-parent-link { border: 0; background: transparent; color: var(--secondary-text); padding: .45rem .2rem; min-height: 44px; font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: .2em; }
+                .community-form, .community-field { display: grid; gap: .5rem; min-width: 0; }
+                .community-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr)); gap: .6rem; }
+                .community-list { list-style: none; padding: 0; }
+                .community-list > li { padding: .65rem 0; border-bottom: 1px solid var(--border-color); overflow-wrap: anywhere; }
+                .community-amenities > li { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: .35rem .8rem; }
+                .community-amenities > li > * + * { margin-top: 0; }
+                .community-list > li.player-card { padding: .75rem; margin-bottom: .45rem; }
+                .community-list > li > * + * { margin-top: .3rem; }
+                .community-list li a { color: var(--secondary-text); font-weight: 700; display: inline-block; padding: .35rem; }
+                .community-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+                .community-week { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
+                .community-week progress { flex: 1; min-width: 5rem; max-width: 18rem; accent-color: var(--green); }
+                .member-community .form-input { min-height: 44px; font-size: 1rem; }
+                .member-community summary { cursor: pointer; font-weight: 700; padding-block: .45rem; }
+                .community-shared-profile .section-title { overflow-wrap: anywhere; }
+                .community-shared-profile .dashboard-action { margin-top: 1.1rem; }
                 .member-practice { gap: .8rem; min-width: 0; }
                 .member-practice > .dashboard-action.primary { justify-self: start; }
                 .member-practice [aria-pressed="true"] { background: var(--secondary); color: white; }

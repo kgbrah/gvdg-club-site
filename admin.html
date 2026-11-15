@@ -360,6 +360,7 @@
         body[data-admin-tab="orders"] #apane-orders,
         body[data-admin-tab="members"] #apane-members,
         body[data-admin-tab="data-archive"] #apane-data-archive { display: block; }
+        body[data-admin-tab="review-queue"] #apane-review-queue { display: block; }
         /* Grouped sidebar nav on desktop; bottom dock on mobile. */
         .admin-main { display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 1.5rem; align-items: start; }
         .admin-sidebar { display: flex; flex-direction: column; gap: 0.15rem; position: sticky; top: 84px; }
@@ -669,6 +670,8 @@
             border: 1px solid rgba(255,255,255,.45); border-radius: .6rem; color: white; font-weight: 700; text-decoration: none;
         }
         .admin-sidebar .admin-tab { display: flex; align-items: center; gap: .6rem; min-height: 44px; }
+        .admin-community-list { list-style: none; padding: 0; }
+        .admin-community-review { white-space: pre-wrap; overflow-wrap: anywhere; margin: .45rem 0; }
         .admin-context-title { margin: 0; }
         .admin-workspace-context { display: grid; gap: .65rem; margin-bottom: 1rem; }
         .admin-section-links, .admin-queue-links, .admin-context-links { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
@@ -824,6 +827,7 @@
                 </div>
             </div>
             <div class="admin-pane" id="apane-more"><div id="adminMoreReactApp"></div></div>
+            <div class="admin-pane" id="apane-review-queue"><div id="adminCommunityReactApp"></div></div>
             <div class="admin-pane" id="apane-data-archive">
                 <div class="al-section">
                     <h4 class="al-h">Archive destinations</h4>

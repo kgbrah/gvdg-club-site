@@ -8,6 +8,7 @@ import { AdminFundraiserForm, AdminLeagueForm, AdminMeetingForm } from "./club-c
 import { AdminLeagueNightForm } from "./league-night-form.js";
 import { AdminFundraisersList, AdminLeaguesList, AdminMeetingsList } from "./club-content-lists.js";
 import { AdminBagTagsPanel } from "./bag-tags-panel.js";
+import { AdminCommunityPanel } from "./community-panel.js";
 import { AdminCourseForm } from "./course-form.js";
 import { AdminCourseHealth } from "./course-health.js";
 import { AdminCoursesList } from "./courses-list.js";
@@ -234,6 +235,11 @@ if (walletRecentMount) {
 const walletFormMount = document.getElementById("adminWalletFormReactApp");
 if (walletFormMount) {
   flushSync(() => createRoot(walletFormMount).render(h(AdminWalletAdjustmentForm)));
+}
+
+const communityMount = document.getElementById("adminCommunityReactApp");
+if (communityMount) {
+  flushSync(() => createRoot(communityMount).render(h(AdminCommunityPanel)));
 }
 
 const dataArchiveDestinationFormMount = document.getElementById("adminDataArchiveDestinationFormReactApp");

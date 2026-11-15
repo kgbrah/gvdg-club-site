@@ -76,7 +76,7 @@ export function MemberMorePage() {
   return h("div", { className: "react-more-page", "data-react-more-page": "ready" }, [
     h(ToolFinder, { key: "finder", isAdmin, onNavigate: selectDashboardTab }),
     h("div", { className: "player-more-grid", key: "links" }, [
-      ...["club", "board", "tags", "standings", "tee"].map((tab) => h(MoreLink, { tab, key: tab })),
+      ...["club", "community", "board", "tags", "standings", "tee"].map((tab) => h(MoreLink, { tab, key: tab })),
       h("a", { className: "player-more-item", href: "pro-shop.html", key: "shop" }, "Pro shop"),
       h("a", { className: "player-more-item", href: "index.html", key: "home" }, "Club website"),
     ]),

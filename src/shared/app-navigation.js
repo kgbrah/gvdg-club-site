@@ -3,6 +3,8 @@ const entry = (key, label, group, options = {}) => ({ key, label, group, hash: k
 export const MEMBER_DESTINATIONS = [
   entry("overview", "Home", "overview", { hash: "home" }),
   entry("play", "Play", "play", { terms: "start join watch round code course map recent replay film" }),
+  entry("course-discovery", "Course discovery", "play", { context: "course", terms: "find courses reviews amenities accessibility difficulty favorites restrooms parking step free" }),
+  entry("community", "Community", "more", { terms: "friends member directory profile privacy share social milestones streak" }),
   entry("practice", "Practice", "play", { terms: "putting fieldwork measured distance throw session repetitions attempts trends putting drill" }),
   entry("my-bag", "My bag", "play", { terms: "disc inventory equipment mold manufacturer brand model plastic weight archive" }),
   entry("events", "Events", "events", { terms: "register registration sign up upcoming entries schedule tournament" }),
@@ -46,6 +48,7 @@ export const ADMIN_DESTINATIONS = [
   entry("bag-tags", "Bag tags", "more", { terms: "challenge claim requests ladder" }),
   entry("meetings", "Meeting minutes", "more", { terms: "notes minutes minutes upload" }),
   entry("data-archive", "Data archive", "more", { terms: "export archive backup destinations" }),
+  entry("review-queue", "Review queue", "more", { terms: "moderate publish hide course reviews reports amenity amenities difficulty accessibility" }),
 ];
 
 export const MEMBER_PRIMARY = ["overview", "play", "events", "season", "more"];

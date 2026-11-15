@@ -149,7 +149,7 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assertNoLegacyMemberFallbacks(html);
   assert.match(html, /<script type="module" src="members-app\/members-app\.js\?v=192"><\/script>/);
   assert.doesNotMatch(html, /matchplay-colors\.js/);
-  assert.match(app, /createRoot\(pageChromeMount\)\.render\(h\(MemberPageChrome\)\)/);
+  assert.match(app, /createRoot\(pageChromeMount\)\.render\(profileKey.*h\(MemberPageChrome\)\)/);
   assert.match(app, /createRoot\(authMount\)\.render/);
   assert.match(app, /MemberDialogs/);
   assert.match(app, /const dialogMount = document\.getElementById\("membersReactDialogsApp"\)/);
@@ -294,7 +294,7 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(profile, /detailString\(event, "udisc"\)/);
   assert.doesNotMatch(profile, /byId|getElementById|profilePdgaInput|profileUdiscInput|\.value/);
   assert.doesNotMatch(profile, /loginGate|membersContent|classList\.remove\("active"\)|gate\.style|content\?|profilePhotoPreview|profileError|profileSaveBtn|style\.display|textContent\s*=|setBusy|showError|clearError/);
-  assert.match(pageChrome, /export function MemberPageChrome\(\)/);
+  assert.match(pageChrome, /export function MemberPageChrome\(\{ showInstall = true \} = \{\}\)/);
   assert.match(pageChrome, /data-react-page-chrome/);
   assert.match(pageChrome, /InstallCoachBanner/);
   assert.match(readFileSync('src/shared/install-coach.js', 'utf8'), /export function installCoachMode/);

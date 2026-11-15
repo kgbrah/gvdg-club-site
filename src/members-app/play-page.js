@@ -522,6 +522,7 @@ export function MemberPlayPage() {
     token ? h("div", { className: "dashboard-actions", key: "practice-tools" }, [
       h(MoreLink, { tab: "practice", key: "practice" }),
       h(MoreLink, { tab: "my-bag", key: "bag" }),
+      h(MoreLink, { tab: "course-discovery", key: "discovery" }),
     ]) : null,
     h(PlayJoinCard, { key: "join" }),
     h(CourseSearch, { key: "courses" }),

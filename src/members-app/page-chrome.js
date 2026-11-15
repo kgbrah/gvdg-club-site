@@ -10,7 +10,7 @@ import { selectDashboardTab } from "./dashboard-shell.js";
 
 const h = React.createElement;
 
-export function MemberPageChrome() {
+export function MemberPageChrome({ showInstall = true } = {}) {
   const [signedIn, setSignedIn] = React.useState(() => document.body.dataset.memberShell === "members");
   React.useEffect(() => {
     const update = (event) => setSignedIn(event.detail?.view === "members");
@@ -36,6 +36,6 @@ export function MemberPageChrome() {
           : h(PlayerThemeToggle, { key: "theme" }),
       ]),
     ])),
-    signedIn ? null : h(InstallCoachBanner, { key: "install" }),
+    signedIn || !showInstall ? null : h(InstallCoachBanner, { key: "install" }),
   ]);
 }

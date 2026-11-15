@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 
+import { PublicCommunityProfile } from "./community-panel.js";
 import { MemberAuthGate } from "./auth-gate.js";
 import { MemberDashboardApp } from "./dashboard-app.js";
 import { installDashboardRouter } from "./dashboard-router.js";
@@ -21,21 +22,26 @@ if (dialogMount) {
   createRoot(dialogMount).render(h(MemberDialogs));
 }
 
-installMemberAuthController();
-installDashboardRouter();
+const profileKey = new URLSearchParams(window.location.search).get("profile");
+if (!profileKey) {
+  installMemberAuthController();
+  installDashboardRouter();
+} else {
+  document.body.dataset.memberShell = "auth";
+}
 
 const pageChromeMount = document.getElementById("membersReactPageChrome");
 if (pageChromeMount) {
-  createRoot(pageChromeMount).render(h(MemberPageChrome));
+  createRoot(pageChromeMount).render(profileKey ? h(MemberPageChrome, { showInstall: false }) : h(MemberPageChrome));
 }
 
 const authMount = document.getElementById("membersReactAuthGate");
 if (authMount) {
-  createRoot(authMount).render(h(MemberAuthGate));
+  createRoot(authMount).render(profileKey ? h(PublicCommunityProfile, { profileKey }) : h(MemberAuthGate));
 }
 
 const dashboardMount = document.getElementById("membersReactDashboardApp");
-if (dashboardMount) {
+if (dashboardMount && !profileKey) {
   createRoot(dashboardMount).render(h(MemberDashboardApp));
 }
 
