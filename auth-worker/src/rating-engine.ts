@@ -56,7 +56,7 @@ const MIN_PROPAGATOR_RATING = 700;
 const LOW_PROPAGATOR_ROUND_GAP = 60;
 const MIN_PROPAGATORS = 2;
 const STABLE_PROPAGATORS = 3;
-const MIN_OVERALL_ROUNDS = 8;
+export const MIN_OVERALL_ROUNDS = 8;
 const RECENT_WEIGHT_ROUNDS = 9;
 const RATING_WINDOW_MS = 365 * 24 * 60 * 60 * 1000;
 const WIND_GUST_BASELINE_MPH = 18;
@@ -94,6 +94,7 @@ export function solveSsa(propagators: readonly Propagator[]): SsaSolve | null {
   for (let pass = 0; pass < 8; pass++) {
     if (active.length < MIN_PROPAGATORS) return null;
     const estimate = estimateSsa(active);
+    if (!Number.isFinite(estimate.ssa) || estimate.ssa <= 0 || !Number.isFinite(estimate.ppt) || estimate.ppt <= 0) return null;
     const kept = active.filter((p) => roundRatingForScore(p.score, estimate.ssa, estimate.ppt) >= p.rating - LOW_PROPAGATOR_ROUND_GAP);
     const newlyDropped = active.length - kept.length;
     if (newlyDropped === 0) {

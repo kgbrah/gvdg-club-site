@@ -1,182 +1,169 @@
 import type { Env } from "./env.js";
-import { fetchPdgaStats, type PdgaStats } from "./pdga.js";
-import { upsertLayoutRatingBaseline, upsertPlayerRatingFromRounds } from "./rating-store.js";
-import { listMembers, type AdminMember } from "./roster.js";
-import type { RatingStream } from "./rating-engine.js";
-import { recomputeRatingRows, type RecomputedLayoutBaseline, type RecomputedRoundRating, type StoredRoundRating } from "./ratings-recompute-core.js";
+import type { D1Like } from "./db-types.js";
+import { parseMemberOverview } from "./pdga.js";
+import { getMember } from "./roster.js";
+import { ratingRecord, ratingTimestamp } from "./rating-layout.js";
+import { RATING_STREAMS, type RatingStream } from "./rating-engine.js";
+import { repairRatingSource } from "./rating-repair.js";
 
-export type RatingsRecomputeResult = {
-  readonly pdgaRefreshed: number;
-  readonly roundRows: number;
-  readonly playerRows: number;
-  readonly layoutBaselines: number;
+const SOURCES_PER_STREAM = 8;
+const RETRIES_PER_TICK = 4;
+const ROSTER_PAGE_SIZE = 12;
+const WAITING_REVIEW_DAYS = 7;
+const DAY_MS = 86_400_000;
+
+type WorkSummary = {
+  checkedSources: number;
+  retriedSources: number;
+  failedSources: number;
+  waitingSources: number;
+  roundRows: number;
+  layoutBaselines: number;
 };
 
-type StoredRoundRow = {
-  readonly id: number;
-  readonly member_id: string;
-  readonly stream: string;
-  readonly event_id: number | null;
-  readonly casual_round_code: string | null;
-  readonly layout_id: number | null;
-  readonly round_date: string;
-  readonly total: number;
-  readonly to_par: number | null;
-  readonly wind_gust_mph: number | null;
-};
+type SourceRef = { stream: RatingStream; source_id: number; attempts?: number };
+type RefreshSummary = { pdgaRefreshed: number; pdgaRefreshErrors: number };
 
-type LayoutBaselineRow = {
-  readonly layout_id: number;
-  readonly ssa: number;
-  readonly ppt: number;
-  readonly propagator_count: number;
-};
-
-type PdgaCacheRow = {
-  readonly data: string | null;
-};
-
-type PlayerStreamKey = {
-  readonly memberId: string;
-  readonly stream: RatingStream;
-};
-
-const PDGA_REFRESH_MS = 20 * 60 * 60 * 1000;
-
-export async function runRatingsRecompute(env: Env, doFetch: typeof fetch = fetch): Promise<RatingsRecomputeResult> {
-  const members = await listMembers(env.ROSTER);
-  const pdgaRefreshed = await refreshPdgaCache(env.DB, members, Date.now(), doFetch);
-  const rows = await loadRoundRows(env.DB);
-  const officialAnchors = await loadOfficialAnchors(env.DB, members);
-  const layoutBaselines = await loadLayoutBaselines(env.DB);
-  const now = new Date().toISOString();
-  const recomputed = recomputeRatingRows({ rows, officialAnchors, layoutBaselines, now });
-  await Promise.all(recomputed.rows.map((row) => updateRoundRating(env.DB, row)));
-  await Promise.all(
-    recomputed.layoutBaselines.map((row) =>
-      upsertLayoutRatingBaseline(env.DB, { layoutId: row.layoutId, eventId: row.eventId, baseline: row }),
-    ),
-  );
-  const playerKeys = memberStreamKeys(recomputed.rows);
-  await Promise.all(playerKeys.map((key) => upsertPlayerRatingFromRounds(env.DB, { memberId: key.memberId, stream: key.stream, now })));
-  return { pdgaRefreshed, roundRows: recomputed.rows.length, playerRows: playerKeys.length, layoutBaselines: recomputed.layoutBaselines.length };
+async function dueIssues(db: D1Like, now: string) {
+  const { results } = await db.prepare(
+    `SELECT stream, source_id, attempts FROM rating_repair_issues WHERE retry_at <= ?
+      ORDER BY (last_code = 'awaiting-evidence'), retry_at, source_id LIMIT ?`,
+  ).bind(now, RETRIES_PER_TICK).all<SourceRef>();
+  return results;
 }
 
-async function refreshPdgaCache(db: D1Database, members: readonly AdminMember[], now: number, doFetch: typeof fetch): Promise<number> {
-  let refreshed = 0;
-  for (const member of members) {
-    const pdga = digits(member.pdgaNo);
-    if (!pdga) continue;
-    const row = await db.prepare("SELECT fetched_at FROM pdga_cache WHERE pdga = ?").bind(pdga).first<{ readonly fetched_at: number | null }>();
-    if (row?.fetched_at != null && now - Number(row.fetched_at) < PDGA_REFRESH_MS) continue;
-    const stats = await freshPdgaStats(pdga, doFetch);
-    if (!stats || (stats.official_rating == null && stats.events.length === 0)) continue;
-    await db
-      .prepare(
-        "INSERT INTO pdga_cache (pdga, data, fetched_at) VALUES (?, ?, ?) " +
-          "ON CONFLICT(pdga) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at",
-      )
-      .bind(pdga, JSON.stringify(stats), now)
-      .run();
-    refreshed++;
+async function scanSources(db: D1Like, stream: RatingStream) {
+  const checkpoint = await db.prepare("SELECT after_id FROM rating_repair_checkpoints WHERE stream = ?")
+    .bind(stream).first<{ after_id: number }>();
+  const sql = stream === "competition"
+    ? `SELECT e.id FROM events e WHERE e.id > ? AND e.status = 'final'
+         AND EXISTS (SELECT 1 FROM results r WHERE r.event_id = e.id AND r.member_id IS NOT NULL)
+       ORDER BY e.id LIMIT ?`
+    : `SELECT r.id FROM casual_rounds r WHERE r.id > ?
+         AND EXISTS (SELECT 1 FROM casual_results cr WHERE cr.casual_round_id = r.id AND cr.member_id IS NOT NULL)
+       ORDER BY r.id LIMIT ?`;
+  const { results } = await db.prepare(sql).bind(checkpoint?.after_id ?? 0, SOURCES_PER_STREAM).all<{ id: number }>();
+  return results.map(({ id }) => ({ stream, source_id: id }));
+}
+
+async function saveCheckpoint(db: D1Like, stream: RatingStream, afterId: number, now: string) {
+  await db.prepare(
+    `INSERT INTO rating_repair_checkpoints (stream, after_id, checked_at) VALUES (?, ?, ?)
+     ON CONFLICT(stream) DO UPDATE SET after_id = excluded.after_id, checked_at = excluded.checked_at`,
+  ).bind(stream, afterId, now).run();
+}
+
+async function saveIssue(db: D1Like, ref: SourceRef, code: string, now: string) {
+  const attempts = (ref.attempts ?? 0) + 1;
+  const days = code === "awaiting-evidence" ? WAITING_REVIEW_DAYS : Math.min(28, 2 ** Math.min(attempts - 1, 5));
+  const retryAt = new Date(Date.parse(now) + days * DAY_MS).toISOString();
+  await db.prepare(
+    `INSERT INTO rating_repair_issues (stream, source_id, attempts, last_code, checked_at, retry_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(stream, source_id) DO UPDATE SET attempts = rating_repair_issues.attempts + 1,
+        last_code = excluded.last_code, checked_at = excluded.checked_at, retry_at = excluded.retry_at`,
+  ).bind(ref.stream, ref.source_id, attempts, code, now, retryAt).run();
+}
+
+export async function runRatingRepairCycle(db: D1Like, now = new Date().toISOString()): Promise<WorkSummary> {
+  const summary: WorkSummary = { checkedSources: 0, retriedSources: 0, failedSources: 0, waitingSources: 0, roundRows: 0, layoutBaselines: 0 };
+  const seen = new Set<string>();
+  async function repair(ref: SourceRef) {
+    const key = ref.stream + ":" + ref.source_id;
+    if (seen.has(key)) return;
+    seen.add(key);
+    if (ref.attempts == null) {
+      const issue = await db.prepare("SELECT retry_at FROM rating_repair_issues WHERE stream = ? AND source_id = ?")
+        .bind(ref.stream, ref.source_id).first<{ retry_at: string }>();
+      if (issue?.retry_at && issue.retry_at > now) return;
+    }
+    summary.checkedSources += 1;
+    if (ref.attempts != null) summary.retriedSources += 1;
+    try {
+      const result = await repairRatingSource(db, ref.stream, ref.source_id);
+      summary.roundRows += result.rows;
+      summary.layoutBaselines += result.layoutBaselines;
+      if (result.waiting) {
+        summary.waitingSources += 1;
+        await saveIssue(db, ref, "awaiting-evidence", now);
+      } else {
+        await db.prepare("DELETE FROM rating_repair_issues WHERE stream = ? AND source_id = ?")
+          .bind(ref.stream, ref.source_id).run();
+      }
+    } catch (error) {
+      summary.failedSources += 1;
+      await saveIssue(db, ref, "source-repair-failed", now);
+      console.warn(JSON.stringify({ message: "rating_repair_failed", stream: ref.stream, sourceId: ref.source_id,
+        error: error instanceof Error ? error.message : String(error) }));
+    }
   }
-  return refreshed;
+  for (const issue of await dueIssues(db, now)) await repair(issue);
+  for (const stream of RATING_STREAMS) {
+    const sources = await scanSources(db, stream);
+    for (const ref of sources) await repair(ref);
+    // Start the next sweep at zero so late corrections or newly finalized lower IDs get repaired too.
+    await saveCheckpoint(db, stream, sources.length === SOURCES_PER_STREAM ? sources.at(-1)!.source_id : 0, now);
+  }
+  return summary;
 }
 
-async function freshPdgaStats(pdga: string, doFetch: typeof fetch): Promise<PdgaStats | null> {
+async function recordObservedAnchor(db: D1Like, memberId: string, observedAt: string, effectiveAt: string, rating: number) {
+  const response = await db.prepare(
+    `INSERT OR IGNORE INTO rating_anchor_snapshots (member_id, observed_at, effective_at, rating)
+     SELECT ?, ?, ?, ? WHERE NOT EXISTS (
+       SELECT 1 FROM rating_anchor_snapshots WHERE member_id = ? AND effective_at = ? AND rating = ?
+     )`,
+  ).bind(memberId, observedAt, effectiveAt, rating, memberId, effectiveAt, rating).run();
+  return Number(response.meta?.changes ?? 0) > 0;
+}
+
+async function refreshRatingAnchors(env: Env, doFetch: typeof fetch): Promise<RefreshSummary> {
+  const state = await env.DB.prepare("SELECT cursor, last_key FROM rating_anchor_refresh_state WHERE id = 1")
+    .first<{ cursor: string | null; last_key: string | null }>();
+  const page = await env.ROSTER.list({ prefix: "member:", limit: ROSTER_PAGE_SIZE, cursor: state?.cursor ?? undefined });
+  // D1's roster fallback returns all matching keys. Bound processing there too using the last processed key.
+  const keys = page.keys.filter(({ name }) => !state?.last_key || name > state.last_key);
+  const batch = keys.slice(0, ROSTER_PAGE_SIZE);
+  const result = { pdgaRefreshed: 0, pdgaRefreshErrors: 0 };
+  for (const key of batch) {
+    try {
+      const member = await getMember(env.ROSTER, key.name.slice("member:".length));
+      const pdga = member?.pdgaNo?.replace(/\D/g, "");
+      if (!member || !pdga || !/^[0-9]{1,8}$/.test(pdga)) continue;
+      // Read the authoritative overview only. The dashboard may contain demo data and the
+      // complete PDGA stats fetch fans out into events unrelated to establishing an anchor.
+      const response = await doFetch(`https://www.pdga.com/api/v1/feat/members/${pdga}/overview`, {
+        headers: { Accept: "application/json", "User-Agent": "GVDGClubBot/1.0" },
+        signal: AbortSignal.timeout(6_000),
+      });
+      if (!response.ok) continue;
+      const payload = await response.json();
+      const player = parseMemberOverview(payload);
+      const effectiveAt = ratingTimestamp(ratingRecord(ratingRecord(payload).currentRating).effectiveDate);
+      const observedAt = new Date().toISOString();
+      const rating = player.official_rating;
+      if (rating == null || rating < 700 || rating > 1300 || !effectiveAt || effectiveAt > observedAt) continue;
+      if (await recordObservedAnchor(env.DB, member.memberId, observedAt, effectiveAt, rating)) result.pdgaRefreshed += 1;
+    } catch {
+      result.pdgaRefreshErrors += 1;
+    }
+  }
+  const nextCursor = !page.list_complete ? page.cursor ?? null : null;
+  const nextKey = keys.length > batch.length ? batch.at(-1)?.name ?? null : null;
+  await env.DB.prepare(
+    `INSERT INTO rating_anchor_refresh_state (id, cursor, last_key) VALUES (1, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET cursor = excluded.cursor, last_key = excluded.last_key`,
+  ).bind(nextCursor, nextKey).run();
+  return result;
+}
+
+export async function runRatingsRecompute(env: Env, doFetch: typeof fetch = fetch) {
+  // Repair local rows before making any provider requests, so provider failures do not delay recovery.
+  const repair = await runRatingRepairCycle(env.DB);
   try {
-    return await fetchPdgaStats(pdga, doFetch);
+    return { ...repair, ...await refreshRatingAnchors(env, doFetch) };
   } catch (error) {
-    if (error instanceof Error) return null;
-    throw error;
+    console.warn(JSON.stringify({ message: "rating_anchor_refresh_failed", error: error instanceof Error ? error.message : String(error) }));
+    return { ...repair, pdgaRefreshed: 0, pdgaRefreshErrors: 1 };
   }
-}
-
-async function loadRoundRows(db: D1Database): Promise<StoredRoundRating[]> {
-  const rows = await db
-    .prepare(
-      `SELECT rr.id, rr.member_id, rr.stream, rr.event_id, rr.casual_round_code, rr.layout_id,
-              rr.round_date, rr.total, rr.to_par, rr.wind_gust_mph
-       FROM round_ratings rr
-       ORDER BY rr.round_date, rr.id`,
-    )
-    .all<StoredRoundRow>();
-  return rows.results.map((row) => ({
-    id: row.id,
-    memberId: row.member_id,
-    stream: row.stream === "casual" ? "casual" : "competition",
-    eventId: row.event_id,
-    casualRoundCode: row.casual_round_code,
-    layoutId: row.layout_id,
-    roundDate: row.round_date,
-    total: row.total,
-    toPar: row.to_par,
-    windGustMph: finiteNumber(row.wind_gust_mph),
-  }));
-}
-
-async function loadLayoutBaselines(db: D1Database): Promise<Map<number, Omit<RecomputedLayoutBaseline, "layoutId" | "eventId">>> {
-  const rows = await db.prepare("SELECT layout_id, ssa, ppt, propagator_count FROM layout_ssa").all<LayoutBaselineRow>();
-  return new Map(rows.results.map((row) => [row.layout_id, { ssa: row.ssa, ppt: row.ppt, propagatorCount: row.propagator_count }]));
-}
-
-async function loadOfficialAnchors(db: D1Database, members: readonly AdminMember[]): Promise<Map<string, number>> {
-  const anchors = new Map<string, number>();
-  for (const member of members) {
-    const pdga = digits(member.pdgaNo);
-    if (!pdga) continue;
-    const row = await db.prepare("SELECT data FROM pdga_cache WHERE pdga = ?").bind(pdga).first<PdgaCacheRow>();
-    const rating = officialRating(row?.data);
-    if (rating != null && rating >= 700) anchors.set(member.memberId, rating);
-  }
-  return anchors;
-}
-
-function memberStreamKeys(rows: readonly RecomputedRoundRating[]): readonly PlayerStreamKey[] {
-  const keys = new Map<string, PlayerStreamKey>();
-  for (const row of rows) keys.set(`${row.memberId}|${row.stream}`, { memberId: row.memberId, stream: row.stream });
-  return [...keys.values()];
-}
-
-async function updateRoundRating(db: D1Database, row: RecomputedRoundRating): Promise<void> {
-  await db
-    .prepare(
-      `UPDATE round_ratings
-       SET round_rating = ?, ssa = ?, ppt = ?, wind_gust_mph = ?, weather_adjustment = ?,
-           propagator_count = ?, rating_method = ?
-       WHERE id = ?`,
-    )
-    .bind(row.roundRating, row.ssa, row.ppt, row.windGustMph, row.weatherAdjustment, row.propagatorCount, row.ratingMethod, row.id)
-    .run();
-  // Only mirror a real rating onto the displayed results row. A re-solve that comes back unrated
-  // (roundRating null) must NOT wipe a rating that was previously stored + shown — leave it as-is.
-  if (row.stream === "competition" && row.eventId != null && row.roundRating != null) {
-    await db.prepare("UPDATE results SET rating = ? WHERE event_id = ? AND member_id = ?").bind(row.roundRating, row.eventId, row.memberId).run();
-  }
-}
-
-function digits(value: string | null | undefined): string | null {
-  const pdga = value?.replace(/\D/g, "") ?? "";
-  return pdga || null;
-}
-
-function officialRating(data: string | null | undefined): number | null {
-  if (!data) return null;
-  try {
-    const parsed: unknown = JSON.parse(data);
-    if (!isRecord(parsed)) return null;
-    const rating = parsed["official_rating"];
-    return typeof rating === "number" && Number.isFinite(rating) ? Math.round(rating) : null;
-  } catch (error) {
-    if (error instanceof SyntaxError) return null;
-    throw error;
-  }
-}
-
-function finiteNumber(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value != null && typeof value === "object" && !Array.isArray(value);
 }

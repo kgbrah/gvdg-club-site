@@ -23,7 +23,7 @@ import { updateLivePairs } from "./live-pairs.js";
 import { getLayoutRatingBaseline } from "./rating-store.js";
 import { checkLiveRecovery, liveRecoveryId, matchesLiveRecoveryScope, recordLiveRecovery } from "./live-recovery.js";
 import { mineData, publicSnapshot } from "./live-snapshot.js";
-import { attestationForCard, canEnterScorecard, cardKey, findPlayer, invalidScoreTargetsResponse, isCardLocked, issuesForCard, scoreTargetForBody, scorecardIssues, scoringState, targetAnchor } from "./live-state.js";
+import { attestationForCard, canEnterScorecard, cardKey, findPlayer, invalidScoreTargetsResponse, isCardLocked, issuesForCard, resolvedHoles, scoreTargetForBody, scorecardIssues, scoringState, targetAnchor } from "./live-state.js";
 import { j, type CtpVoteBody, type LiveEnv, type LiveMeta, type LiveState, type OverrideBody, type PairAssignmentBody, type RemoveBody, type ScoreBody, type StartBody, type WeatherBody } from "./live-types.js";
 import { assignCards, type PlayerState } from "./scoring.js";
 import { createWeatherState, refreshWeatherState, WEATHER_REFRESH_MS } from "./weather.js";
@@ -523,6 +523,8 @@ export class LiveEventDO {
       if (entry.par == null && entry.distance_ft == null) return j({ error: "empty_override" }, 400);
       overrides[String(hole)] = entry;
     }
+    this.ratingBaseline = null;
+    this.warmRatingBaseline();
     await this.persist();
     this.broadcast();
     return j(this.snapshot());
@@ -747,7 +749,7 @@ export class LiveEventDO {
       this.ratingBaseline = null;
       return;
     }
-    void getLayoutRatingBaseline(this.env.DB, layoutId).then((row) => {
+    void getLayoutRatingBaseline(this.env.DB, layoutId, resolvedHoles(this.meta), this.meta?.startedAt).then((row) => {
       if (token !== this.ratingBaselineToken) return;
       const next = row ? { ssa: row.ssa, ppt: row.ppt } : null;
       const changed = next?.ssa !== this.ratingBaseline?.ssa || next?.ppt !== this.ratingBaseline?.ppt;
