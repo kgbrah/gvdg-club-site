@@ -3,7 +3,8 @@ import { loadUdiscLeague } from "./club-admin-imports.js";
 import { normalizeUdiscEventsUrl } from "./imports.js";
 import { saveUdiscLeague } from "./udisc-league-save.js";
 
-// Sunday 19:00 UTC is 3pm EDT. Sunday 20:00 UTC is 3pm EST. The handler keeps the one that is 3pm Eastern.
+// The live worker is already at its cron limit, so this rides the hourly tick
+// (minute 7) and only fetches when that tick falls on Sunday at 3pm Eastern.
 export const UDISC_LEAGUE_REFRESH_CRONS = ["0 19 * * 0", "0 20 * * 0"] as const;
 
 const LEAGUE_URL = /https:\/\/(?:www\.)?udisc\.com\/leagues\/[A-Za-z0-9-]+/i;

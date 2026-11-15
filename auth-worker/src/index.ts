@@ -144,6 +144,8 @@ export default {
           if (isPdgaEventCron(controller.cron)) {
             const result = await refreshClubPdgaEvents(env);
             console.log(JSON.stringify({ message: "pdga_events_refresh", cron: controller.cron, ...result }));
+            const leagues = await refreshImportedUdiscLeagues(env, new Date(controller.scheduledTime));
+            if (!leagues.skipped) console.log(JSON.stringify({ message: "udisc_league_refresh", cron: controller.cron, ...leagues }));
             return;
           }
           if (isUdiscLeagueRefreshCron(controller.cron)) {
