@@ -1243,9 +1243,7 @@ function RecoveryStatus(props) {
   const selectedHole = props.hole?.hole;
   const marks = items.filter((item) => item.kind === "throws" && item.body.scorerIndex === props.scorerIndex && item.body.hole === selectedHole);
   const mark = marks[marks.length - 1];
-  const lieSaved = props.throwsByHole?.[selectedHole]?.length > 0
-    || (props.lastSavedLie && props.lastSavedLie.hole === selectedHole && props.lastSavedLie.scorerIndex === props.scorerIndex);
-  if (!items.length && !lieSaved && !props.recoveryStorageError && !props.recoveryUnavailable) return null;
+  if (!items.length && !props.recoveryStorageError && !props.recoveryUnavailable) return null;
 
   const names = new Map((props.choices || []).map((row) => [row.index, row.name]));
   return h("section", { "aria-label": "Card sync" }, [
@@ -1253,7 +1251,7 @@ function RecoveryStatus(props) {
       props.recoveryStorageError ? "This phone’s card storage is unavailable. " : "",
       props.recoveryUnavailable ? "Open this card online to enable saved edits. " : "",
       items.length ? items.length + (items.length === 1 ? " change saved on this phone, awaiting sync. " : " changes saved on this phone, awaiting sync. ") : "",
-      mark ? (mark.state === "pending" ? "Lie changes pending." : "Lie changes need attention.") : lieSaved ? "Lie changes saved to the round." : "",
+      mark ? (mark.state === "pending" ? "Lie changes pending." : "Lie changes need attention.") : "",
     ].filter(Boolean).join(" ")),
     failed.length ? h("details", { key: "errors" }, [
       h("summary", { key: "summary" }, failed.length + (failed.length === 1 ? " change needs attention" : " changes need attention")),
