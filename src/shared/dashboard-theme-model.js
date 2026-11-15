@@ -1056,8 +1056,8 @@ export function clearStoredTheme(storage, memberId) {
 function wallpaperImage(theme) {
   if (!theme?.wallpaper) return "";
   const bg = hexToRgb(theme.tokens["bg-primary"]) || (theme.mode === "dark" ? rgb(8, 10, 18) : rgb(248, 248, 252));
-  const start = theme.mode === "dark" ? 0.78 : 0.86;
-  const end = theme.mode === "dark" ? 0.9 : 0.93;
+  const start = theme.mode === "dark" ? 0.5 : 0.86;
+  const end = theme.mode === "dark" ? 0.68 : 0.93;
   const scrim = `linear-gradient(rgba(${bg.r}, ${bg.g}, ${bg.b}, ${start}), rgba(${bg.r}, ${bg.g}, ${bg.b}, ${end}))`;
   return `${scrim}, url("${theme.wallpaper}")`;
 }

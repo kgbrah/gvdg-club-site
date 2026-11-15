@@ -144,6 +144,11 @@ test("wallpaper scrim uses the theme paper so body text is not bleached", () => 
   applyDashboardTheme(theme, root);
   const bg = hexToRgb(theme.tokens["bg-primary"]);
   assert.match(props.get("--player-theme-image"), new RegExp(`rgba\\(${bg.r}, ${bg.g}, ${bg.b}, 0\\.86\\)`));
+  const dark = buildTheme({ preset: "Nord", mode: "dark", wallpaper });
+  applyDashboardTheme(dark, root);
+  const darkBg = hexToRgb(dark.tokens["bg-primary"]);
+  assert.match(props.get("--player-theme-image"), new RegExp(`rgba\\(${darkBg.r}, ${darkBg.g}, ${darkBg.b}, 0\\.5\\)`));
+  assert.match(props.get("--player-theme-image"), /url\("data:image\/png/);
 });
 
 test("recolored palettes swap anchors when switching to light", () => {

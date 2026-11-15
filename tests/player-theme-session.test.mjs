@@ -235,9 +235,10 @@ test("status bar color follows the player theme instead of brand orange", () => 
 });
 
 test("themeWithMode rebuilds light and dark surfaces from the same palette", () => {
-  const dark = buildTheme({ preset: "Nord", mode: "dark" });
+  const dark = buildTheme({ preset: "Nord", mode: "dark", wallpaper: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p94AAAAASUVORK5CYII=" });
   const light = themeWithMode(dark, "light");
   assert.equal(light.mode, "light");
+  assert.equal(light.wallpaper, dark.wallpaper);
   assert.deepEqual(light.palette, dark.palette);
   const darkLum = parseInt(dark.tokens["bg-primary"].slice(1, 3), 16);
   const lightLum = parseInt(light.tokens["bg-primary"].slice(1, 3), 16);
