@@ -55,3 +55,10 @@ Help now uses the accessible shared dialog, restores focus, preserves a failed q
 ## Bag entry follow-up
 
 The user requested searchable brand/model/plastic choices with custom options and voice input for adding discs. Implemented with editable suggestions, weight presets and custom values, reviewed voice transcripts, explicit Save, and typing fallback. Browser tests cover 320/390/1280 px, keyboard operation, permission and service failures, cancellation, and account changes. Real microphone recognition and provider availability are not established by mocked recognition tests.
+
+
+## Installed app updates
+
+Each deployed HTML document carries its own release marker. The update checker compares that loaded release with the published release on return to the app, reconnection and periodic checks. Later applies to the offered release only. Refresh waits for a pending worker to take control and checks that the page is reachable; it never reloads automatically. Entering an active scorecard cancels an in-progress requested refresh, and the prompt is deferred until scoring closes. Authentication, offline records and map storage are retained.
+
+Already-open legacy windows need one reopen/reload after deployment to load this fix. The browser test uses real service-worker activation; actual app cache/offline behavior is covered separately by the built service-worker round test. Android notification sender branding remains controlled by the installed browser/app; the website already supplies club icon and badge assets.

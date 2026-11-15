@@ -2,7 +2,7 @@
 
 The approved scorer keeps score entry and previous/next-hole navigation at the bottom. Weather, wind and gusts are populated in the actual-source browser fixture. Map actions no longer cover imagery; credits stay inside the image. Compact player labels retain full accessible names while separating smaller given names from emphasized surnames. The user approved this layout and these refinements.
 
-The original visual pass was rejected and is superseded. Its rapid-input, recovery, finalization and shotgun match-play correctness fixes remain. The final combined source passed 513 frontend tests plus Chromium scoring/weather checks. These checks cover real app code with synthetic accounts and intercepted API responses.
+The original visual pass was rejected and is superseded. Its rapid-input, recovery, finalization and shotgun match-play correctness fixes remain. The final combined source passed 515 frontend tests plus Chromium scoring/weather checks. These checks cover real app code with synthetic accounts and intercepted API responses.
 
 ## Repeat the checks
 
@@ -19,7 +19,7 @@ The scorer fixture builds the source in memory and runs in Chromium. `GVDG_SCORE
 
 | Check | Evidence |
 | --- | --- |
-| Frontend suite and Worker typecheck | 513 frontend tests passed and Worker typecheck passed |
+| Frontend suite and Worker typecheck | 515 frontend tests passed and Worker typecheck passed |
 | Live Durable Object | 107 tests passed, including an incomplete card returning 409, casual round finalization, and a match starting on hole 4 that blocked finishing with a gap before the clinch and locked with holes 1–3 unplayed |
 | Scorer input and recovery | Five rapid increments produced five unique edits. A dropped acknowledgement triggered one retry. Pending scores survived reload, and reconnect synced the expected value. A cross-device conflict surfaced for review. Discard, reload, switched actor, and switched round left other scores intact |
 | Local rounds | Single player and doubles, rapid input and keypad correction, marking a GPS fixture lie, reload, saved shots and clip draft, finish after queued edits, account and expiry checks, lost upload acknowledgement and personal archive link |
