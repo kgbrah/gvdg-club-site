@@ -53,10 +53,9 @@ body #scoreRoot .topbar {
 
 #scoreRoot .topbar h1 small {
   margin-top: .22rem;
-  color: var(--member-chrome-ink);
+  color: inherit;
   font: 600 .64rem/1.18 var(--score-font);
   letter-spacing: .045em;
-  opacity: .84;
 }
 
 #scoreRoot .topbar :is(.top-link, .iconbtn) {
@@ -66,15 +65,15 @@ body #scoreRoot .topbar {
   border: 0;
   border-radius: 9px;
   background: transparent;
-  color: var(--member-chrome-ink);
+  color: inherit;
 }
 
 #scoreRoot .topbar :is(.top-link, .iconbtn):hover {
-  background: var(--member-chrome-hover);
+  background: var(--score-header-hover, var(--member-chrome-hover));
 }
 
 #scoreRoot .topbar :is(.top-link, .iconbtn):focus-visible {
-  outline: 2px solid var(--member-chrome-focus);
+  outline: 2px solid var(--score-header-focus, var(--member-chrome-focus));
   outline-offset: -2px;
 }
 
@@ -583,7 +582,10 @@ body.score-glove:has(.score-bottom-layout) #scoreRoot .topbar h1 small {
 }
 body.score-glove.player-theme-page:not(.player-theme-active):has(.score-bottom-layout) { background: var(--bg-primary); }
 body.score-glove.player-theme-page:has(.score-bottom-layout) #scoreRoot .topbar {
+  --score-header-hover: var(--bg-tertiary);
+  --score-header-focus: var(--text-primary);
   background: var(--bg-secondary);
+  color: var(--text-primary);
   border-color: var(--border-color);
 }
 

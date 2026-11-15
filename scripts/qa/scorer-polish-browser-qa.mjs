@@ -5,13 +5,14 @@ import { mkdir, readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { chromium } from "playwright";
 import { build } from "vite";
-import { buildTheme } from "../../src/shared/dashboard-theme-model.js";
+import { buildTheme, contrastRatio } from "../../src/shared/dashboard-theme-model.js";
 
 const out = process.env.GVDG_SCORER_SCREENSHOTS || "/tmp/gvdg-scorer-polish";
 await mkdir(out, { recursive: true });
 const fontDir = process.env.GVDG_SCORE_FONT_DIR;
 const serve = process.env.GVDG_SCORER_SERVE === "1";
 const bottomPreview = process.env.GVDG_SCORER_BOTTOM === "1";
+const headerPreview = process.env.GVDG_SCORER_HEADER_CONTRAST === "1";
 const sampleCourse = bottomPreview || process.env.GVDG_SCORER_PREVIEW_DATA === "1";
 const compiled = await build({
   configFile: false, mode: "production", logLevel: "silent",
@@ -186,7 +187,7 @@ const teeSign = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 390" r
   </svg>`;
 
 async function makePage({ width, height, scheme = "light", scale = 1, group = "singles", locked = false, complete = false,
-  playerCount, weather = sampleWeather, scoringStyle = group === "doubles" ? "matchplay" : "stroke" } = {}) {
+  playerCount, dashboardTheme, weather = sampleWeather, scoringStyle = group === "doubles" ? "matchplay" : "stroke" } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, colorScheme: scheme === "light" ? "light" : "dark",
     permissions: ["geolocation", "camera", "microphone"], geolocation: { latitude: sampleLie.lat, longitude: sampleLie.lng, accuracy: 4 },
     serviceWorkers: "block" });
@@ -209,7 +210,7 @@ async function makePage({ width, height, scheme = "light", scale = 1, group = "s
     ? { id: "pair:team " + (index + 1), type: "pair", label: "Team " + (index + 1),
       playerIndexes: indexes, members: indexes.map((i) => players[i].name) }
     : { id: "player:" + index, type: "player", label: players[index].name, playerIndexes: indexes, members: [players[index].name] });
-  const theme = scheme === "blue" ? blueTheme : scheme === "ocean" ? customTheme : null;
+  const theme = dashboardTheme ?? (scheme === "blue" ? blueTheme : scheme === "ocean" ? customTheme : null);
   let writes = [];
   let rev = 1;
   let offline = false;
@@ -412,11 +413,101 @@ async function feedbackMetrics(fixture) {
   }
 }
 
+async function checkHeaderContrast(page, label, custom) {
+  const header = page.locator("#scoreRoot .topbar");
+  const colors = await header.evaluate((root) => {
+    const context = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+    const sample = (value) => {
+      context.clearRect(0, 0, 1, 1);
+      context.fillStyle = value;
+      context.fillRect(0, 0, 1, 1);
+      return [...context.getImageData(0, 0, 1, 1).data];
+    };
+    const background = sample(getComputedStyle(root).backgroundColor);
+    const details = [...root.querySelectorAll("h1, h1 small, .top-link, .iconbtn")].filter((element) => element.getClientRects().length);
+    return {
+      background,
+      themeBackground: sample(getComputedStyle(root).getPropertyValue("--bg-secondary").trim()),
+      details: details.map((element) => {
+        const style = getComputedStyle(element);
+        const button = element.matches(".top-link, .iconbtn");
+        const icon = element.querySelector("svg");
+        return {
+          name: element.getAttribute("aria-label") || (element.tagName === "SMALL" ? "Course and layout" : "Round title"),
+          foreground: sample(icon ? getComputedStyle(icon).stroke : style.color),
+          backdrop: button ? sample(style.backgroundColor) : background,
+          focus: element.matches(":focus-visible") ? sample(style.outlineColor) : null,
+          opacity: Number(style.opacity),
+          minimum: button && !element.querySelector(".top-link-label") ? 3 : 4.5,
+        };
+      }),
+    };
+  });
+  const rgb = ([r, g, b]) => ({ r, g, b });
+  const blend = (upper, lower, opacity = 1) => {
+    const weight = upper[3] / 255 * opacity;
+    return lower.map((channel, index) => Math.round(channel + (upper[index] - channel) * weight));
+  };
+  if (custom) assert.deepEqual(colors.background, colors.themeBackground, label + " keeps the chosen header surface");
+  assert.equal(colors.background[3], 255, label + " uses an opaque header");
+  assert.equal(colors.details.length, 6, label + " has a title, course and four visible actions");
+  for (const item of colors.details) {
+    const background = blend(item.backdrop, colors.background);
+    const ratio = contrastRatio(rgb(blend(item.foreground, background, item.opacity)), rgb(background));
+    assert.ok(ratio >= item.minimum, `${label} / ${item.name} contrast ${ratio.toFixed(2)} below ${item.minimum}:1`);
+    if (item.focus) assert.ok(contrastRatio(rgb(item.focus), rgb(background)) >= 3, label + " / " + item.name + " focus ring contrast");
+  }
+}
+
 if (serve) {
   console.log("Preview scorecard " + site + "/score.html?round=" + code);
   console.log("Preview dark theme " + site + "/score.html?round=" + code + "&appearance=dark");
   await new Promise((stop) => { process.once("SIGINT", stop); process.once("SIGTERM", stop); });
   await new Promise((done) => server.close(done));
+} else if (headerPreview) {
+  const lightTheme = buildTheme({ mode: "light", preset: "Frost",
+    wallpaper: "data:image/jpeg;base64," + (await readFile("img/slide4.jpg")).toString("base64") });
+  try {
+    for (const [width, height, scale] of [[390, 844, 1], [320, 720, 1.25], [1280, 900, 1]]) {
+      for (const [name, scheme, dashboardTheme] of [
+        ["custom-light", "light", lightTheme], ["custom-dark", "dark", blueTheme],
+        ["default-light", "light", null], ["default-dark", "dark", null],
+      ]) {
+        const sample = await makePage({ width, height, scale, scheme, dashboardTheme, playerCount: 1 });
+        await sample.go("?round=" + code);
+        await sample.ready();
+        const label = width + "-" + name;
+        await sample.screenshot("score-header-" + label);
+        await checkHeaderContrast(sample.page, label, dashboardTheme !== null);
+        await sample.page.getByRole("region", { name: "Round weather" }).getByText(/Wind WNW 8 mph/).waitFor();
+        const footer = sample.page.getByRole("navigation", { name: "Hole navigation" });
+        await footer.getByRole("button", { name: "Next hole" }).waitFor();
+        const { y, height: footerHeight } = await footer.boundingBox();
+        assert.ok(y + footerHeight >= height - 60 && y + footerHeight <= height, "Hole navigation stays at the bottom");
+        const help = sample.button("Help");
+        await help.hover();
+        await checkHeaderContrast(sample.page, label + "-hover", dashboardTheme !== null);
+        await sample.page.keyboard.press("Tab");
+        await help.focus();
+        assert.equal(await help.evaluate((element) => element.matches(":focus-visible")), true);
+        await checkHeaderContrast(sample.page, label + "-keyboard-focus", dashboardTheme !== null);
+        if (width === 390 && name === "custom-light") {
+          await sample.button("Switch to dark mode").click();
+          await sample.button("Switch to light mode").waitFor();
+          await checkHeaderContrast(sample.page, label + "-toggled-dark", true);
+          await sample.button("Switch to light mode").click();
+          await sample.button("Switch to dark mode").waitFor();
+          await checkHeaderContrast(sample.page, label + "-toggled-light", true);
+        }
+        await sample.noOverflow();
+        await sample.context.close();
+      }
+    }
+    console.log("Scorecard header contrast passed for 12 layouts and both custom theme toggle directions.");
+  } finally {
+    await browser.close();
+    await new Promise((done) => server.close(done));
+  }
 } else if (bottomPreview) {
   try {
     for (const [playerCount, width, height, scheme, scale] of [
@@ -698,7 +789,10 @@ if (serve) {
   assert.equal(geometry.headerTop, 0);
   assert.ok(geometry.holeTop >= geometry.headerBottom && geometry.nextBottom <= 720 && geometry.nextBottom >= 660, "hole navigation remains at the bottom");
   assert.equal(await narrow.page.locator(".prow .score-name-compact").count(), 0, "Doubles team labels stay whole");
+  const teamScoreSaved = narrow.page.waitForResponse((response) =>
+    response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/live/score") && response.ok());
   await narrow.button("Increase Team 1 on hole 4").click();
+  await teamScoreSaved;
   await narrow.page.waitForFunction(() => !document.querySelector('[aria-label="Card sync"]')?.textContent.includes("awaiting sync"));
   assert.equal(narrow.data[0].scores[4], 3);
   assert.equal(narrow.data[1].scores[4], 3);
@@ -755,6 +849,11 @@ if (serve) {
   await desktop.screenshot("scorecard-desktop-custom");
   await desktop.button("Round tools").click();
   await desktop.screenshot("round-tools-desktop-custom");
+  await desktop.page.keyboard.press("Escape");
+  await desktop.page.getByRole("dialog", { name: "Round tools" }).waitFor({ state: "hidden" });
+  await desktop.button("Switch to light mode").click();
+  await desktop.button("Switch to dark mode").waitFor();
+  await checkHeaderContrast(desktop.page, "default QA / custom light after a theme toggle", true);
   await desktop.noOverflow();
   await desktop.context.close();
 
