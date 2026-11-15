@@ -2432,7 +2432,7 @@ describe("LiveEventDO finalize atomicity (db.batch)", () => {
 });
 
 describe("LiveEventDO UDisc export bridge", () => {
-  it("persists each player's per-hole scorecard to the result row on admin-event finalize", async () => {
+  it("persists per-hole scores, owned marks, and the as-played pin on admin-event finalize", async () => {
     const inserts: { sql: string; args: unknown[] }[] = [];
     const recDb = {
       prepare(sql: string) {
@@ -2450,19 +2450,25 @@ describe("LiveEventDO UDisc export bridge", () => {
       },
     };
     const live = new LiveEventDO(new FakeState({}), { DB: recDb });
-    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ eventId: 9, holes: [{ hole: 1, par: 3 }, { hole: 2, par: 4 }], players: [{ memberId: "m_jane", name: "Jane" }] }) }));
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({ eventId: 9, layoutId: 7,
+      holes: [{ hole: 1, par: 3, distance_ft: 300, target: { lat: 35.601, lng: -77.37, label: "Blue pin" } }, { hole: 2, par: 4 }],
+      players: [{ memberId: "m_jane", name: "Jane" }] }) }));
     const score = (hole: number, strokes: number) =>
       live.fetch(new Request("https://do/score", { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify({ index: 0, scorerIndex: 0, hole, strokes }) }));
-    await score(1, 3);
+    await score(1, 2);
     await score(2, 5);
+    const marks = await live.fetch(new Request("https://do/throws", { method: "POST", headers: { "X-Auth-Member": "m_jane" },
+      body: JSON.stringify({ hole: 1, throws: [{ lat: 35.60105, lng: -77.37 }] }) }));
+    expect(marks.status).toBe(200);
 
     const fin = await live.fetch(new Request("https://do/finalize", { method: "POST", headers: { "X-Auth-Admin": "true" } }));
     expect(fin.status).toBe(200);
     expect(inserts).toHaveLength(1);
     const scorecard = must(inserts[0]).args[8]; // 9th bind column = scorecard JSON
     expect(JSON.parse(scorecard as string)).toEqual([
-      { hole: 1, par: 3, strokes: 3 },
-      { hole: 2, par: 4, strokes: 5 },
+      { hole: 1, par: 3, strokes: 2, throws: [{ lat: 35.60105, lng: -77.37, n: 1 }], throwsProvenance: "member",
+        layoutAtPlay: { tee: null, target: { lat: 35.601, lng: -77.37, label: "Blue pin" }, distance_ft: 300, overridden: false, layoutId: 7 } },
+      { hole: 2, par: 4, strokes: 5, layoutAtPlay: { tee: null, target: null, distance_ft: null, overridden: false, layoutId: 7 } },
     ]);
   });
 

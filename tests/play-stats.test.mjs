@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
+import { puttingBuckets } from "../src/shared/shot-stats-model.js";
 
 import {
   addHoleToTotals,
@@ -63,11 +65,11 @@ test("holePlayStats marks C1R, C1 putting, and scramble from throw pins", () => 
   assert.equal(birdie.scramble, null);
 
   const miss = holePlayStats(HOLE, [c1], 3);
-  assert.equal(miss.c1Putt.hit, 0);
-  assert.equal(miss.c1Putt.att, 1);
+  assert.equal(miss.c1Putt, null);
+  assert.equal(miss.shotQuality, "incomplete");
 
   const offline = eastOf(northOf(TEE, 50), 40);
-  const scramble = holePlayStats(HOLE, [offline], 3);
+  const scramble = holePlayStats(HOLE, [offline, c1], 3);
   assert.equal(scramble.c1r.hit, 0);
   assert.equal(scramble.fir.hit, 0);
   assert.equal(scramble.scramble.hit, 1);
@@ -266,4 +268,37 @@ test("live round stats update from scored holes and marked lies", () => {
   assert.equal(stacked.mix.find((row) => row.id === "double").mine.hit, 1);
   assert.equal(stacked.throwStats.find((row) => row.id === "birdie").mine.hit, 1);
   assert.equal(stacked.throwStats.find((row) => row.id === "par").mine.hit, 1);
+});
+
+
+const golden = JSON.parse(readFileSync(new URL("./fixtures/shot-stats-golden.json", import.meta.url), "utf8"));
+for (const fixture of golden.cases) {
+  test(fixture.title, () => {
+    const stats = holePlayStats(golden.hole, fixture.throws, fixture.score);
+    for (const [key, value] of Object.entries(fixture.expect)) assert.deepEqual(stats[key], value, key);
+  });
+}
+
+test("unrounded C1X boundaries do not inflate the denominator", () => {
+  assert.deepEqual(puttingBuckets(3.3), ["c1Putt"]);
+  assert.deepEqual(puttingBuckets(3.30001), ["c1Putt", "c1xPutt"]);
+  assert.deepEqual(puttingBuckets(10), ["c1Putt", "c1xPutt"]);
+  assert.deepEqual(puttingBuckets(10.00001), ["c2Putt"]);
+  assert.deepEqual(puttingBuckets(20), ["c2Putt"]);
+  assert.deepEqual(puttingBuckets(20.00001), []);
+  assert.deepEqual(puttingBuckets(null), []);
+});
+
+test("coverage separates known outcomes, count-matched estimates, and unknown strokes", () => {
+  const holes = Array.from({ length: 5 }, (_, index) => ({ ...golden.hole, hole: index + 1 }));
+  const totals = roundPlayStats(holes, {
+    1: golden.cases[1].throws, 2: golden.cases[2].throws, 3: golden.cases[6].throws,
+  }, { 1: 2, 2: 3, 3: 3, 4: 3, 5: 1 });
+  assert.equal(totals.holes, 5);
+  assert.equal(totals.shot_eligible_holes, 4);
+  assert.equal(totals.shot_count_matched_holes, 1);
+  assert.equal(totals.shot_verified_holes, 1);
+  assert.equal(totals.shot_incomplete_holes, 1);
+  assert.equal(totals.c1_putt_att, 3);
+  assert.equal(totals.c1x_putt_att, 1);
 });

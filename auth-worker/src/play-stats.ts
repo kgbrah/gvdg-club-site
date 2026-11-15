@@ -1,10 +1,8 @@
 import type { Breakdown } from "./score-breakdown.js";
 import type { PlayerState } from "./scoring.js";
 
-export const PARKED_FT = 10;
-export const FAIRWAY_WIDTH_FT = 45;
-export const CIRCLE1_M = 10;
-export const CIRCLE2_M = 20;
+import { holePlayStats } from "../../src/shared/shot-stats-model.js";
+export { PARKED_FT, FAIRWAY_WIDTH_FT, CIRCLE1_M, CIRCLE2_M, regulationStrokes, holePlayStats } from "../../src/shared/shot-stats-model.js";
 
 export type PlayTotals = {
   holes: number;
@@ -28,6 +26,12 @@ export type PlayTotals = {
   scramble_att: number;
   c1_putt_hit: number;
   c1_putt_att: number;
+  c1x_putt_hit: number;
+  c1x_putt_att: number;
+  shot_eligible_holes: number;
+  shot_count_matched_holes: number;
+  shot_verified_holes: number;
+  shot_incomplete_holes: number;
   c2_putt_hit: number;
   c2_putt_att: number;
 };
@@ -44,7 +48,6 @@ export type PlayCategory = {
   tone: "ace" | "eagle" | "birdie" | "par" | "bogey" | "double" | null;
 };
 
-type LatLng = { lat: number; lng: number };
 type HolePoint = { lat?: number | null; lng?: number | null } | null | undefined;
 type HoleInput = {
   hole?: number;
@@ -53,128 +56,6 @@ type HoleInput = {
   target?: HolePoint;
   basket?: HolePoint;
 };
-
-function finite(value: unknown): number | null {
-  if (value == null || value === "") return null;
-  const num = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(num) ? num : null;
-}
-
-function holePoint(value: unknown): LatLng | null {
-  if (!value || typeof value !== "object") return null;
-  const lat = finite((value as LatLng).lat);
-  const lng = finite((value as LatLng).lng);
-  if (lat == null || lng == null) return null;
-  return { lat, lng };
-}
-
-function haversineMeters(a: LatLng, b: LatLng): number {
-  const rad = (degrees: number) => (degrees * Math.PI) / 180;
-  const dLat = rad(b.lat - a.lat);
-  const dLng = rad(b.lng - a.lng);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
-  return 2 * 6371000 * Math.asin(Math.min(1, Math.sqrt(h)));
-}
-
-function remainingFt(from: unknown, to: unknown): number | null {
-  const a = holePoint(from);
-  const b = holePoint(to);
-  if (!a || !b) return null;
-  return Math.round(haversineMeters(a, b) * 3.28084);
-}
-
-function puttingCircle(from: unknown, to: unknown): "C1" | "C2" | null {
-  const a = holePoint(from);
-  const b = holePoint(to);
-  if (!a || !b) return null;
-  const meters = haversineMeters(a, b);
-  if (meters <= CIRCLE1_M) return "C1";
-  if (meters <= CIRCLE2_M) return "C2";
-  return null;
-}
-
-function lineOffsetFt(point: unknown, a: unknown, b: unknown): number | null {
-  const p = holePoint(point);
-  const start = holePoint(a);
-  const end = holePoint(b);
-  if (!p || !start || !end) return null;
-  const mPerDegLat = 111320;
-  const mPerDegLng = 111320 * Math.cos(start.lat * Math.PI / 180);
-  const toXY = (item: LatLng) => ({
-    x: (item.lng - start.lng) * mPerDegLng * 3.28084,
-    y: (item.lat - start.lat) * mPerDegLat * 3.28084,
-  });
-  const A = toXY(start);
-  const B = toXY(end);
-  const P = toXY(p);
-  const abx = B.x - A.x;
-  const aby = B.y - A.y;
-  const ab2 = abx * abx + aby * aby;
-  if (ab2 === 0) return remainingFt(p, start);
-  let t = ((P.x - A.x) * abx + (P.y - A.y) * aby) / ab2;
-  t = Math.max(0, Math.min(1, t));
-  return Math.round(Math.hypot(P.x - (A.x + t * abx), P.y - (A.y + t * aby)));
-}
-
-export function regulationStrokes(par: unknown): number {
-  const n = Number(par);
-  if (!Number.isFinite(n) || n < 2) return 1;
-  return Math.max(1, Math.round(n) - 2);
-}
-
-function sample(hit: boolean, att: number) {
-  if (!att) return null;
-  return { att, hit: hit ? 1 : 0 };
-}
-
-export function holePlayStats(hole: HoleInput | null | undefined, throws: unknown, score: unknown) {
-  const rows = Array.isArray(throws) ? throws.map(holePoint).filter((row): row is LatLng => row != null) : [];
-  const strokes = Number(score);
-  const scored = Number.isInteger(strokes) && strokes > 0;
-  const tee = holePoint(hole?.tee);
-  const basket = holePoint(hole?.target || hole?.basket);
-  const par = Number(hole?.par);
-  const stats = {
-    fir: null as { hit: number; att: number } | null,
-    c1r: null as { hit: number; att: number } | null,
-    c2r: null as { hit: number; att: number } | null,
-    parked: null as { hit: number; att: number } | null,
-    scramble: null as { hit: number; att: number } | null,
-    c1Putt: { att: 0, hit: 0 } as { hit: number; att: number } | null,
-    c2Putt: { att: 0, hit: 0 } as { hit: number; att: number } | null,
-  };
-  if (rows[0] && tee && basket) {
-    const offset = lineOffsetFt(rows[0], tee, basket);
-    if (offset != null) stats.fir = sample(offset <= FAIRWAY_WIDTH_FT, 1);
-  }
-  const reg = regulationStrokes(par);
-  if (rows.length >= reg && basket) {
-    const lie = rows[reg - 1]!;
-    const circle = puttingCircle(lie, basket);
-    const rem = remainingFt(lie, basket);
-    stats.c1r = sample(circle === "C1", 1);
-    stats.c2r = sample(circle === "C1" || circle === "C2", 1);
-    stats.parked = sample(rem != null && rem <= PARKED_FT, 1);
-  }
-  if (scored && Number.isFinite(par) && stats.c1r && stats.c1r.hit === 0) {
-    stats.scramble = sample(strokes <= par, 1);
-  }
-  const c1 = { att: 0, hit: 0 };
-  const c2 = { att: 0, hit: 0 };
-  if (basket && scored) {
-    for (let i = 0; i < rows.length; i += 1) {
-      const circle = puttingCircle(rows[i], basket);
-      if (circle !== "C1" && circle !== "C2") continue;
-      const made = i === rows.length - 1 && strokes === i + 2;
-      const bucket = circle === "C1" ? c1 : c2;
-      bucket.att += 1;
-      if (made) bucket.hit += 1;
-    }
-  }
-  stats.c1Putt = c1.att ? c1 : null;
-  stats.c2Putt = c2.att ? c2 : null;
-  return stats;
-}
 
 export function emptyPlayTotals(): PlayTotals {
   return {
@@ -199,13 +80,19 @@ export function emptyPlayTotals(): PlayTotals {
     scramble_att: 0,
     c1_putt_hit: 0,
     c1_putt_att: 0,
+    c1x_putt_hit: 0,
+    c1x_putt_att: 0,
+    shot_eligible_holes: 0,
+    shot_count_matched_holes: 0,
+    shot_verified_holes: 0,
+    shot_incomplete_holes: 0,
     c2_putt_hit: 0,
     c2_putt_att: 0,
   };
 }
 
 function applyScoreMix(totals: PlayTotals, par: number, strokes: number) {
-  if (!Number.isInteger(strokes) || strokes <= 0 || !Number.isFinite(par)) return;
+  if (!Number.isInteger(strokes) || strokes <= 0 || !Number.isInteger(par) || par <= 0) return;
   totals.holes += 1;
   const delta = strokes - par;
   if (strokes === 1) totals.aces += 1;
@@ -241,6 +128,13 @@ export function roundPlayStats(
     addSample(totals, stats.parked, "parked_hit", "parked_att");
     addSample(totals, stats.scramble, "scramble_hit", "scramble_att");
     addSample(totals, stats.c1Putt, "c1_putt_hit", "c1_putt_att");
+    addSample(totals, stats.c1xPutt, "c1x_putt_hit", "c1x_putt_att");
+    if (Number.isInteger(Number(strokes)) && Number(strokes) > 1) {
+      totals.shot_eligible_holes += 1;
+      if (stats.shotQuality === "estimated") totals.shot_count_matched_holes += 1;
+      if (stats.shotQuality === "recorded") totals.shot_verified_holes += 1;
+      if (stats.shotQuality === "incomplete") totals.shot_incomplete_holes += 1;
+    }
     addSample(totals, stats.c2Putt, "c2_putt_hit", "c2_putt_att");
   }
   return totals;
@@ -254,7 +148,12 @@ export function parseBreakdown(raw: unknown): PlayTotals {
   }
   if (!obj || typeof obj !== "object") return totals;
   const row = obj as Record<string, unknown>;
-  const n = (key: string) => finite(row[key]) ?? 0;
+  const n = (key: string) => {
+    const value = row[key];
+    if (typeof value !== "number" && (typeof value !== "string" || !value.trim())) return 0;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
   const aces = n("aces");
   let eagles = n("eagles");
   const birdies = n("birdies");
@@ -285,6 +184,12 @@ export function parseBreakdown(raw: unknown): PlayTotals {
   totals.scramble_att = n("scramble_att");
   totals.c1_putt_hit = n("c1_putt_hit");
   totals.c1_putt_att = n("c1_putt_att");
+  totals.c1x_putt_hit = n("c1x_putt_hit");
+  totals.c1x_putt_att = n("c1x_putt_att");
+  totals.shot_eligible_holes = n("shot_eligible_holes");
+  totals.shot_count_matched_holes = n("shot_count_matched_holes");
+  totals.shot_verified_holes = n("shot_verified_holes");
+  totals.shot_incomplete_holes = n("shot_incomplete_holes");
   totals.c2_putt_hit = n("c2_putt_hit");
   totals.c2_putt_att = n("c2_putt_att");
   return totals;
@@ -365,10 +270,9 @@ export function partnersForStanding(
     const partners = players.filter((player) => player && !player.removed && names.has(String(player.name || "")));
     if (partners.length) return partners;
   }
-  const one = players.find((row) => (
-    (standing?.memberId && row.memberId === standing.memberId) ||
-    (standing && row.name === standing.name)
-  ));
+  const one = players.find((row) => !row.removed && (standing?.memberId
+    ? row.memberId === standing.memberId
+    : standing && !row.memberId && row.name === standing.name));
   return one ? [one] : [];
 }
 
@@ -385,6 +289,7 @@ export const PLAY_CATEGORIES: readonly PlayCategory[] = [
   { att: "c1r_att", group: "throw", hit: "c1r_hit", id: "c1r", invert: false, label: "C1 in reg", min: 9, short: "C1R", tone: null },
   { att: "c2r_att", group: "throw", hit: "c2r_hit", id: "c2r", invert: false, label: "C2 in reg", min: 9, short: "C2R", tone: null },
   { att: "c1_putt_att", group: "throw", hit: "c1_putt_hit", id: "c1Putt", invert: false, label: "C1 putting", min: 8, short: "C1 putt", tone: null },
+  { att: "c1x_putt_att", group: "throw", hit: "c1x_putt_hit", id: "c1xPutt", invert: false, label: "C1X putting", min: 8, short: "C1X putt", tone: null },
   { att: "c2_putt_att", group: "throw", hit: "c2_putt_hit", id: "c2Putt", invert: false, label: "C2 putting", min: 5, short: "C2 putt", tone: null },
   { att: "parked_att", group: "throw", hit: "parked_hit", id: "parked", invert: false, label: "Parked", min: 6, short: "Parked", tone: null },
   { att: "scramble_att", group: "throw", hit: "scramble_hit", id: "scramble", invert: false, label: "Scramble", min: 5, short: "Scramble", tone: null },

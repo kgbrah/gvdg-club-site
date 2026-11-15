@@ -1,0 +1,74 @@
+{
+  "hole": { "hole": 1, "par": 3, "tee": { "lat": 0, "lng": -0.001 }, "target": { "lat": 0, "lng": 0 } },
+  "cases": [
+    {
+      "title": "ace supplies a score and no synthetic putting or regulation attempt",
+      "score": 1,
+      "throws": [],
+      "expect": { "shotQuality": "not-applicable", "fir": null, "c1r": null, "c1Putt": null, "c1xPutt": null }
+    },
+    {
+      "title": "legacy marked C1X make, count reconciled but outcome inferred",
+      "score": 2,
+      "throws": [{ "lat": 0, "lng": -0.000055, "n": 1 }],
+      "expect": { "shotQuality": "estimated", "fir": { "att": 1, "hit": 1 }, "c1r": { "att": 1, "hit": 1 }, "c1Putt": { "att": 1, "hit": 1 }, "c1xPutt": { "att": 1, "hit": 1 } }
+    },
+    {
+      "title": "two short putts at the same spot include the miss in C1 and exclude both from C1X",
+      "score": 3,
+      "throws": [
+        { "kind": "throw", "outcome": "missed", "attempt": "throw", "landing": { "lat": 0, "lng": -0.000006 } },
+        { "kind": "throw", "outcome": "missed", "attempt": "putt", "origin": { "lat": 0, "lng": -0.000006 } },
+        { "kind": "throw", "outcome": "made", "attempt": "putt", "origin": { "lat": 0, "lng": -0.000006 } }
+      ],
+      "expect": { "shotQuality": "recorded", "parked": { "att": 1, "hit": 1 }, "c1Putt": { "att": 2, "hit": 1 }, "c1xPutt": null }
+    },
+    {
+      "title": "an explicit penalty after the final throw does not convert a make to a miss",
+      "score": 3,
+      "throws": [
+        { "kind": "throw", "outcome": "missed", "attempt": "throw", "landing": { "lat": 0, "lng": -0.000055 } },
+        { "kind": "throw", "outcome": "made", "attempt": "putt", "origin": { "lat": 0, "lng": -0.000055 } },
+        { "kind": "penalty" }
+      ],
+      "expect": { "shotQuality": "recorded", "c1Putt": { "att": 1, "hit": 1 }, "c1xPutt": { "att": 1, "hit": 1 } }
+    },
+    {
+      "title": "OB drive and drop zone do not fake a par three regulation lie",
+      "score": 3,
+      "throws": [
+        { "kind": "throw", "outcome": "missed", "outOfBounds": true, "landing": { "lat": 0, "lng": -0.000055 } },
+        { "kind": "penalty", "landing": { "lat": 0, "lng": -0.00014 } },
+        { "kind": "throw", "outcome": "made", "attempt": "putt", "origin": { "lat": 0, "lng": -0.00014 } }
+      ],
+      "expect": { "shotQuality": "recorded", "fir": { "att": 1, "hit": 0 }, "c1r": null, "c2r": null, "scramble": null, "c2Putt": { "att": 1, "hit": 1 } }
+    },
+    {
+      "title": "recorded dogleg fairway beats the straight corridor and throw-in is not a putt",
+      "score": 2,
+      "throws": [
+        { "kind": "throw", "outcome": "missed", "fairway": true, "landing": { "lat": 0.0003, "lng": -0.0003 } },
+        { "kind": "throw", "outcome": "made", "attempt": "throw", "origin": { "lat": 0.0003, "lng": -0.0003 } }
+      ],
+      "expect": { "shotQuality": "recorded", "fir": { "att": 1, "hit": 1 }, "c2r": { "att": 1, "hit": 0 }, "scramble": { "att": 1, "hit": 1 }, "c1Putt": null, "c2Putt": null }
+    },
+    {
+      "title": "one missing lie never creates a scored putt or a certain miss",
+      "score": 3,
+      "throws": [{ "lat": 0, "lng": -0.000055, "n": 1 }],
+      "expect": { "shotQuality": "incomplete", "fir": null, "c1r": null, "parked": null, "c1Putt": null, "c1xPutt": null }
+    },
+    {
+      "title": "an invalid coordinate does not become a lie at zero degrees",
+      "score": 2,
+      "throws": [{ "lat": null, "lng": 0, "n": 1 }],
+      "expect": { "shotQuality": "incomplete", "c1Putt": null, "c1r": null }
+    },
+    {
+      "title": "an out of sequence mark does not shift another stroke into the denominator",
+      "score": 2,
+      "throws": [{ "lat": 0, "lng": -0.000055, "n": 2 }],
+      "expect": { "shotQuality": "incomplete", "c1Putt": null, "c1xPutt": null }
+    }
+  ]
+}
