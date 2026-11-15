@@ -22,6 +22,10 @@ The shared checkout stays untouched. Each implementation lane has its own branch
 | Operators | `codex/course-operator` | Course health, maintenance tasks and participation reports | 0052 |
 | Offline rounds | `codex/offline-rounds` | New local rounds, completion, owner-safe import and media recovery | 0053 |
 | Community | `codex/community-discovery` | Opt-in profiles, friends, progress, reviews and maintained discovery metadata | 0054 |
+| Spectators | `codex/spectator-privacy` | Sharing, reconnect recovery and durable video associations | 0055 |
+| Native phones | `codex/native-phone` | Private background activity and lock-screen tools | 0056 |
+| Archive restore | `codex/archive-roundtrip` | Provenance-preserving personal archive export/reimport | 0057 |
+| Visual polish | `codex/member-visual-polish` | Member Home, compact onboarding and cohesive theme-aware UI | None |
 
 Shared scoring and watch commands retain normal actor authorization, validation, card locks, and consensus. Atomic retry/ordering semantics are coordinated between the recovery and watch lanes. Symlinked dependencies are read-only; install new dependencies into separate package directories.
 
@@ -50,7 +54,9 @@ An implementation is not marked verified merely because code exists. Native sign
 
 ## Release gates
 
-First release: [PR #92](https://github.com/kgbrah/gvdg-club-site/pull/92), commit `9929342`, cache `gvdg-club-v247`. [GitHub deployment 43663733864](https://github.com/kgbrah/gvdg-club-site/actions/runs/43663733864) applied migrations 0046–0048 and deployed Pages, Worker and alert keys. Both post-deployment live-scoring and member-dashboard checks actually ran and passed. Later milestones remain in [draft PR #93](https://github.com/kgbrah/gvdg-club-site/pull/93) and isolated implementation lanes.
+First release: [PR #92](https://github.com/kgbrah/gvdg-club-site/pull/92), commit `9929342`, cache `gvdg-club-v247`. [GitHub deployment 43663733864](https://github.com/kgbrah/gvdg-club-site/actions/runs/43663733864) applied migrations 0046–0048 and deployed Pages, Worker and alert keys. Both post-deployment live-scoring and member-dashboard checks actually ran and passed. Second release: [PR #93](https://github.com/kgbrah/gvdg-club-site/pull/93), commit `6a97728`, cache `gvdg-club-v248`. [Deployment 43666724474](https://github.com/kgbrah/gvdg-club-site/actions/runs/43666724474) applied migrations 0049–0051, deployed Worker and Pages, uploaded alert keys, and ran both post-deploy checks successfully.
+
+Current priority: the user rejected the member Home visual quality on their blue custom theme. Rework spacing, hierarchy, onboarding and utility controls, then show actual revised mobile previews before the next deployment. Expansion features remain held for that visual review. Archive work is preserved and paused while its builder handles polish; spectator and native-phone lanes continue independently.
 
 - Unit and integration tests exercise actual failure modes: HTTP 5xx, network failure, reload, actor/round switching, expired authorization, duplicate and stale writes, storage failure, and upload acknowledgement loss.
 - Golden statistic fixtures preserve numerators/denominators and label unknown or inferred data.
