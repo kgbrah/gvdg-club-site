@@ -4,10 +4,29 @@
   var local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
   var deferredInstall = null;
   var updateBanner = null;
+  var registration = null;
   var refreshing = false;
+  var refreshCancelled = false;
+  var refreshError = '';
+  var versionCheck = null;
+  var checkVersionAgain = false;
+  var workerCheck = null;
+  var installedWorker = null;
+  var snoozedWorker = null;
+  var publishedCommit = '';
+  var markerUnavailable = false;
   var SNOOZE_KEY = 'gvdg_update_snooze';
   var BUILD_KEY = 'gvdg_app_commit';
+  var REFRESH_KEY = 'gvdg_update_requested';
   var SNOOZE_MS = 12 * 60 * 60 * 1000;
+  var CHECK_MS = 5 * 60 * 1000;
+  var REFRESH_TIMEOUT_MS = 15000;
+  var buildTag = document.querySelector('meta[name="gvdg-build"]');
+  var stampedBuild = buildTag ? (buildTag.content || '').trim() : '';
+  var documentBuild = stampedBuild || readStorage('localStorage', BUILD_KEY);
+  var refreshReceipt = readRecord('sessionStorage', REFRESH_KEY);
+  var startedOffline = navigator.onLine === false;
+  var acceptedFirstMarker = false;
 
   window.addEventListener('beforeinstallprompt', function (event) {
     event.preventDefault();
@@ -34,158 +53,22 @@
     }
   });
 
-  function standaloneDisplay() {
+  function readStorage(storage, key) {
+    try { return window[storage].getItem(key) || ''; }
+    catch (err) { return ''; }
+  }
+
+  function readRecord(storage, key) {
+    try { return JSON.parse(readStorage(storage, key)); }
+    catch (err) { return null; }
+  }
+
+  function writeStorage(storage, key, value) {
     try {
-      return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-    } catch (err) {
-      return navigator.standalone === true;
-    }
-  }
-
-  function iosDevice() {
-    var ua = String(navigator.userAgent || '');
-    return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  }
-
-  function snoozed() {
-    try {
-      return Number(localStorage.getItem(SNOOZE_KEY) || 0) > Date.now();
-    } catch (err) {
-      return false;
-    }
-  }
-
-  function hideBanner() {
-    if (updateBanner && updateBanner.parentNode) updateBanner.parentNode.removeChild(updateBanner);
-    updateBanner = null;
-  }
-
-  function snooze() {
-    try {
-      localStorage.setItem(SNOOZE_KEY, String(Date.now() + SNOOZE_MS));
+      if (value == null) window[storage].removeItem(key);
+      else window[storage].setItem(key, value);
     } catch (err) {}
-    hideBanner();
   }
-
-  function updateCopy() {
-    if (iosDevice() && standaloneDisplay()) {
-      return {
-        title: 'Update available',
-        body: 'This Home Screen app is on an older version. Tap Refresh. If nothing changes, swipe up to close GVDG, then open it again from your Home Screen.',
-        action: 'Refresh',
-      };
-    }
-    return {
-      title: 'Update available',
-      body: 'A newer version of the club app is ready. Tap Refresh. If the top bar is still orange, swipe GVDG away from Recents and open it again from the Home Screen.',
-      action: 'Refresh',
-    };
-  }
-
-  function showBanner(onRefresh) {
-    if (updateBanner || snoozed() || !document.body) return;
-    var copy = updateCopy();
-    var root = document.createElement('div');
-    root.className = 'pwa-update';
-    root.setAttribute('role', 'status');
-
-    var text = document.createElement('div');
-    text.className = 'pwa-update-copy';
-    var title = document.createElement('strong');
-    title.textContent = copy.title;
-    var body = document.createElement('p');
-    body.textContent = copy.body;
-    text.appendChild(title);
-    text.appendChild(body);
-
-    var actions = document.createElement('div');
-    actions.className = 'pwa-update-actions';
-    var refreshBtn = document.createElement('button');
-    refreshBtn.type = 'button';
-    refreshBtn.className = 'pwa-update-refresh';
-    refreshBtn.textContent = copy.action;
-    refreshBtn.addEventListener('click', onRefresh);
-    var laterBtn = document.createElement('button');
-    laterBtn.type = 'button';
-    laterBtn.className = 'pwa-update-later';
-    laterBtn.textContent = 'Later';
-    laterBtn.addEventListener('click', snooze);
-    actions.appendChild(refreshBtn);
-    actions.appendChild(laterBtn);
-
-    root.appendChild(text);
-    root.appendChild(actions);
-    document.body.appendChild(root);
-    updateBanner = root;
-  }
-
-  var publishedCommit = '';
-  var versionChecked = false;
-
-  function refreshNow(registration) {
-    if (refreshing) return;
-    refreshing = true;
-    try {
-      if (publishedCommit) localStorage.setItem(BUILD_KEY, publishedCommit);
-      localStorage.setItem(SNOOZE_KEY, String(Date.now() + SNOOZE_MS));
-    } catch (err) {}
-    if (registration && registration.waiting) {
-      registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-    }
-    window.setTimeout(function () {
-      location.reload();
-    }, 80);
-  }
-
-  function watchRegistration(registration) {
-    if (!registration) return;
-    function prompt() {
-      if (!versionChecked || !publishedCommit || snoozed()) return;
-      var seen = '';
-      try {
-        seen = localStorage.getItem(BUILD_KEY) || '';
-      } catch (err) {}
-      if (!seen || seen === publishedCommit) return;
-      showBanner(function () { refreshNow(registration); });
-    }
-    if (registration.waiting && navigator.serviceWorker.controller) prompt();
-    registration.addEventListener('updatefound', function () {
-      var worker = registration.installing;
-      if (!worker) return;
-      worker.addEventListener('statechange', function () {
-        if (worker.state === 'installed' && navigator.serviceWorker.controller) prompt();
-      });
-    });
-  }
-
-  function checkPublishedBuild() {
-    fetch('version.json?t=' + Date.now(), { cache: 'no-store' }).then(function (res) {
-      return res.ok ? res.json() : null;
-    }).then(function (data) {
-      versionChecked = true;
-      if (!data || !data.commit) return;
-      publishedCommit = data.commit;
-      var seen = '';
-      try {
-        seen = localStorage.getItem(BUILD_KEY) || '';
-      } catch (err) {}
-      if (seen && seen !== data.commit) {
-        showBanner(function () {
-          refreshNow();
-        });
-        return;
-      }
-      if (!seen) {
-        try {
-          localStorage.setItem(BUILD_KEY, data.commit);
-        } catch (err) {}
-      }
-    }).catch(function () {
-      versionChecked = true;
-    });
-  }
-
-  checkPublishedBuild();
 
   function installedDisplay() {
     try {
@@ -196,32 +79,257 @@
     }
   }
 
-  function tellInstalledApp() {
-    if (!installedDisplay() || !navigator.serviceWorker.controller) return;
-    navigator.serviceWorker.controller.postMessage({ type: 'APP_WINDOW' });
+  function scoringOpen() {
+    if (!document.body) return false;
+    return document.body.classList.contains('score-glove') || Boolean(document.querySelector('.score-glove-layout, .wrist-score'));
   }
 
-  if (!('serviceWorker' in navigator) || (location.protocol !== 'https:' && !local)) return;
+  function tellInstalledApp() {
+    var controller = navigator.serviceWorker?.controller;
+    if (installedDisplay() && controller) controller.postMessage({ type: 'APP_WINDOW' });
+  }
 
-  window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js', { scope: './', updateViaCache: 'none' }).then(function (registration) {
-      watchRegistration(registration);
-      navigator.serviceWorker.ready.then(tellInstalledApp).catch(function () {});
-      function ping() {
-        registration.update().catch(function () {});
+  function pendingUpdate() {
+    if (publishedCommit && documentBuild !== publishedCommit) return { commit: publishedCommit };
+    var waiting = registration?.waiting;
+    if (waiting && navigator.serviceWorker.controller) return { worker: waiting };
+    if (markerUnavailable && installedWorker) return { worker: installedWorker };
+    return null;
+  }
+
+  var later = readRecord('localStorage', SNOOZE_KEY);
+  function snoozed(offer) {
+    if (!offer.commit) return offer.worker === snoozedWorker;
+    return later && later.commit === offer.commit && later.until > Date.now();
+  }
+
+  function hideBanner() {
+    if (updateBanner) updateBanner.remove();
+    updateBanner = null;
+  }
+
+  function showBanner() {
+    var offer = pendingUpdate();
+    var cardOpen = scoringOpen();
+    if (refreshing && cardOpen) refreshCancelled = true;
+    if (!offer || snoozed(offer) || navigator.onLine === false || cardOpen || !document.body) {
+      hideBanner();
+      return;
+    }
+    if (!updateBanner) {
+      var root = document.createElement('div');
+      root.className = 'pwa-update';
+      root.setAttribute('role', 'status');
+      root.innerHTML = '<div class="pwa-update-copy"><strong>Update available</strong><p></p></div>'
+        + '<div class="pwa-update-actions"><button type="button" class="pwa-update-refresh">Refresh</button>'
+        + '<button type="button" class="pwa-update-later">Later</button></div>';
+      root.querySelector('.pwa-update-refresh').addEventListener('click', refreshNow);
+      root.querySelector('.pwa-update-later').addEventListener('click', function () {
+        var next = pendingUpdate();
+        if (!next || refreshing) return;
+        if (next.commit) {
+          later = { commit: next.commit, until: Date.now() + SNOOZE_MS };
+          writeStorage('localStorage', SNOOZE_KEY, JSON.stringify(later));
+        } else snoozedWorker = next.worker;
+        hideBanner();
+      });
+      document.body.appendChild(root);
+      updateBanner = root;
+    }
+    var text = updateBanner.querySelector('p');
+    var message = refreshError || (refreshing
+      ? 'Preparing the update…'
+      : documentBuild ? 'Refresh to get the latest improvements.' : 'Refresh to check you’re using the latest club app.');
+    if (text.textContent !== message) text.textContent = message;
+    updateBanner.querySelector('.pwa-update-refresh').disabled = refreshing;
+    updateBanner.querySelector('.pwa-update-later').disabled = refreshing;
+  }
+
+  function acceptVersion(commit) {
+    if (!acceptedFirstMarker) {
+      acceptedFirstMarker = true;
+      // An explicit refresh is acknowledged by the next online document, not the old one.
+      var confirmed = refreshReceipt && refreshReceipt.commit === commit
+        && Date.now() - refreshReceipt.requestedAt < 5 * 60 * 1000;
+      if (!stampedBuild && (confirmed || (!documentBuild && !startedOffline))) documentBuild = commit;
+      if (documentBuild === commit) writeStorage('localStorage', BUILD_KEY, commit);
+      writeStorage('sessionStorage', REFRESH_KEY, null);
+    }
+    if (publishedCommit !== commit) refreshError = '';
+    publishedCommit = commit;
+  }
+
+  function checkPublishedBuild() {
+    if (navigator.onLine === false) { startedOffline = startedOffline || !acceptedFirstMarker; return Promise.resolve(''); }
+    if (versionCheck) return versionCheck;
+    var controller = new AbortController();
+    var timeout = window.setTimeout(function () { controller.abort(); }, REFRESH_TIMEOUT_MS);
+    versionCheck = fetch('version.json?t=' + Date.now(), { cache: 'no-store', signal: controller.signal }).then(function (res) {
+      return res.ok ? res.json() : null;
+    }).then(function (data) {
+      var commit = data && typeof data.commit === 'string' && data.commit.trim();
+      markerUnavailable = !commit;
+      if (commit) acceptVersion(commit);
+      else if (!acceptedFirstMarker && !documentBuild && navigator.serviceWorker?.controller) startedOffline = true;
+      return commit || '';
+    }).catch(function () {
+      markerUnavailable = true;
+      if (!acceptedFirstMarker && !documentBuild) startedOffline = true;
+      return '';
+    }).finally(function () {
+      window.clearTimeout(timeout);
+      versionCheck = null;
+      showBanner();
+      if (checkVersionAgain) {
+        checkVersionAgain = false;
+        void checkPublishedBuild();
       }
-      ping();
-      document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState === 'visible') {
-          ping();
-          tellInstalledApp();
+    });
+    return versionCheck;
+  }
+
+  function checkWorker() {
+    if (!registration || navigator.onLine === false) return Promise.resolve();
+    if (!workerCheck) {
+      workerCheck = registration.update().finally(function () { workerCheck = null; });
+    }
+    return workerCheck;
+  }
+
+  function checkForUpdates() {
+    tellInstalledApp();
+    showBanner();
+    if (versionCheck) checkVersionAgain = true;
+    else void checkPublishedBuild();
+    checkWorker().catch(function () {});
+  }
+
+  function waitForControl(worker, sendSkipWaiting) {
+    return new Promise(function (resolve, reject) {
+      var sent = false;
+      var timeout = window.setTimeout(function () { finish(new Error('Update did not activate')); }, REFRESH_TIMEOUT_MS);
+      function finish(error) {
+        window.clearTimeout(timeout);
+        navigator.serviceWorker.removeEventListener('controllerchange', inspect);
+        worker.removeEventListener('statechange', inspect);
+        if (error) reject(error);
+        else resolve();
+      }
+      function inspect() {
+        if (navigator.serviceWorker.controller === worker && worker.state === 'activated') { finish(); return; }
+        if (worker.state === 'redundant') { finish(new Error('Update was replaced')); return; }
+        if (sendSkipWaiting && !sent && worker.state === 'installed') {
+          sent = true;
+          try { worker.postMessage({ type: 'SKIP_WAITING' }); }
+          catch (err) { finish(err); }
         }
-      });
-      window.addEventListener('pageshow', function (event) {
-        if (event.persisted) ping();
-        tellInstalledApp();
-      });
-      window.setInterval(ping, 5 * 60 * 1000);
-    }).catch(function () {});
-  });
+      }
+      navigator.serviceWorker.addEventListener('controllerchange', inspect);
+      worker.addEventListener('statechange', inspect);
+      inspect();
+    });
+  }
+
+  function timeoutWorkerCheck(promise) {
+    return new Promise(function (resolve, reject) {
+      var timeout = window.setTimeout(function () { reject(new Error('Update check timed out')); }, REFRESH_TIMEOUT_MS);
+      promise.then(resolve, reject).finally(function () { window.clearTimeout(timeout); });
+    });
+  }
+
+  async function checkPageAvailable() {
+    var controller = new AbortController();
+    var timeout = window.setTimeout(function () { controller.abort(); }, REFRESH_TIMEOUT_MS);
+    try {
+      // A HEAD request bypasses the offline document fallback in sw.js.
+      var response = await fetch(location.href, { method: 'HEAD', cache: 'no-store', signal: controller.signal });
+      if (!response.ok) throw new Error('Page unavailable');
+    } finally { window.clearTimeout(timeout); }
+  }
+
+  async function refreshNow() {
+    var offer = pendingUpdate();
+    if (!offer || refreshing || scoringOpen() || navigator.onLine === false) return;
+    refreshing = true;
+    refreshCancelled = false;
+    refreshError = '';
+    showBanner();
+    try {
+      if (registration) {
+        var incoming = registration.waiting || registration.installing;
+        if (!incoming) {
+          await timeoutWorkerCheck(checkWorker());
+          incoming = registration.waiting || registration.installing;
+        }
+        var active = registration.active;
+        var controller = navigator.serviceWorker.controller;
+        if (incoming) await waitForControl(incoming, true);
+        else if (active && controller && active !== controller) await waitForControl(active, false);
+      }
+      var commit = await checkPublishedBuild();
+      if ((offer.commit && !commit) || navigator.onLine === false) throw new Error('Could not verify the update');
+      await checkPageAvailable();
+      if (refreshCancelled || scoringOpen() || navigator.onLine === false) return;
+      if (commit) {
+        writeStorage('sessionStorage', REFRESH_KEY, JSON.stringify({ commit: commit, requestedAt: Date.now() }));
+      }
+      location.reload();
+    } catch (err) {
+      refreshError = 'Couldn’t refresh the app. Try again when connected.';
+    } finally {
+      refreshing = false;
+      showBanner();
+    }
+  }
+
+  function watchRegistration(value) {
+    registration = value;
+    var controller = navigator.serviceWorker.controller;
+    function inspect(worker) {
+      if (!worker) return;
+      function changed() {
+        if (worker.state === 'installed' && controller) {
+          installedWorker = worker;
+          showBanner();
+          void checkPublishedBuild();
+        }
+      }
+      worker.addEventListener('statechange', changed);
+      changed();
+    }
+    if (registration.waiting) inspect(registration.waiting);
+    inspect(registration.installing);
+    registration.addEventListener('updatefound', function () { inspect(registration.installing); });
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      var next = navigator.serviceWorker.controller;
+      if (next && controller && next !== controller) installedWorker = next;
+      controller = next;
+      tellInstalledApp();
+      showBanner();
+      void checkPublishedBuild();
+    });
+    navigator.serviceWorker.ready.then(tellInstalledApp).catch(function () {});
+    checkForUpdates();
+  }
+
+  function start() {
+    checkForUpdates();
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') checkForUpdates();
+    });
+    window.addEventListener('pageshow', function () { checkForUpdates(); });
+    window.addEventListener('online', checkForUpdates);
+    window.addEventListener('offline', showBanner);
+    window.setInterval(function () {
+      if (document.visibilityState === 'visible') checkForUpdates();
+    }, CHECK_MS);
+    if (document.body) {
+      new MutationObserver(showBanner).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    }
+    if (!('serviceWorker' in navigator) || (location.protocol !== 'https:' && !local)) return;
+    navigator.serviceWorker.register('sw.js', { scope: './', updateViaCache: 'none' }).then(watchRegistration).catch(function () {});
+  }
+
+  if (document.readyState === 'complete') start();
+  else window.addEventListener('load', start);
 })();
