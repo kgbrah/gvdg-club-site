@@ -36,7 +36,7 @@ function adminUrl(url: string): string {
   return "/admin.html";
 }
 
-function endpointOf(value: unknown): string | null {
+export function endpointOf(value: unknown): string | null {
   if (typeof value !== "string" || value.length < 12 || value.length > 2000) return null;
   try {
     const url = new URL(value);
@@ -47,7 +47,7 @@ function endpointOf(value: unknown): string | null {
   }
 }
 
-function keyOf(value: unknown, bytes: number, uncompressed = false): string | null {
+export function keyOf(value: unknown, bytes: number, uncompressed = false): string | null {
   if (typeof value !== "string") return null;
   const raw = fromB64url(value);
   if (!raw || raw.length !== bytes) return null;
@@ -111,7 +111,7 @@ export async function sendAdminPush(env: Env, note: AdminPushNote): Promise<void
   }
 }
 
-async function postPush(keys: PushCryptoKeys, row: PushRow, payload: Uint8Array): Promise<number> {
+export async function postPush(keys: PushCryptoKeys, row: PushRow, payload: Uint8Array): Promise<number> {
   const clientKey = fromB64url(row.p256dh);
   const auth = fromB64url(row.auth);
   if (!clientKey || clientKey.length !== 65 || clientKey[0] !== 4 || !auth || auth.length !== 16) {
@@ -128,6 +128,7 @@ async function postPush(keys: PushCryptoKeys, row: PushRow, payload: Uint8Array)
       TTL: "86400",
     },
     body: body as BodyInit,
+    signal: AbortSignal.timeout(8000),
   });
   return response.status;
 }
