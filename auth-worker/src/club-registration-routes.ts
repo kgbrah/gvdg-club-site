@@ -2,6 +2,7 @@ import type { Env } from "./env.js";
 import * as db from "./db.js";
 import { requireAuth } from "./authz.js";
 import { getMember } from "./roster.js";
+import { registrationBlocked } from "./membership-year.js";
 import { computeOwed, paypalBase, createOrder as ppCreateOrder, captureOrder as ppCaptureOrder, isCaptureSettled, type CaptureResult, type OwedConfig } from "./payments.js";
 import { clientIp, json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
@@ -188,9 +189,11 @@ export async function handleClubRegistration(
 
     // Resolve who is registering: a signed-in member, or a guest (name required; gets a token to manage it).
     let memberId: string, name: string, email: string | null = null, guestToken: string | null = null;
+    let rosterMember: Awaited<ReturnType<typeof getMember>> = null;
     if (claims) {
       memberId = claims.sub;
-      name = (await getMember(env.ROSTER, claims.sub))?.name ?? "Member";
+      rosterMember = await getMember(env.ROSTER, claims.sub);
+      name = rosterMember?.name ?? "Member";
     } else {
       if (await kvRateLimited(env, "evreg:" + clientIp(request), GUEST_REGISTER_IP_LIMIT, 60)) return json({ error: "rate_limited" }, 429, origin);
       name = asStr(b.name, 80) ?? "";
@@ -210,6 +213,7 @@ export async function handleClubRegistration(
       if (owedNow > (existing.amount_paid_cents ?? 0)) return json({ error: "paid_addons_locked" }, 409, origin);
     }
     if (!existing) {
+      if (registrationBlocked(rosterMember)) return json({ error: "membership_lapsed" }, 403, origin);
       // A passed registration deadline closes NEW sign-ups; an existing registrant can still edit/withdraw.
       const sched = (await db.getEventSchedule(env.DB, eid)) as { registration_deadline?: string | null } | null;
       if (deadlinePassed(sched?.registration_deadline)) return json({ error: "registration_closed" }, 403, origin);

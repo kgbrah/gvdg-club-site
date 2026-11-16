@@ -1513,6 +1513,31 @@ export function startAdminController() {
                     adminMsg(err.error === 'last_admin' ? "Can't remove the last admin" : ('Role change failed (' + r.status + ')'), false);
                 }
             });
+            window.addEventListener('gvdg:admin-member-renew-request', async (event) => {
+                const member = event.detail && event.detail.member;
+                if (!member || !member.memberId) return;
+                const r = await adminApi('/admin/members/renew', { method: 'POST', body: { memberId: member.memberId } });
+                if (r.ok) {
+                    const j = await r.json();
+                    adminMsg(member.name + ' renewed through ' + (j.member && j.member.memberThroughYear), true);
+                    adminLoadMembers();
+                } else {
+                    let err = {}; try { err = await r.json(); } catch (e) {}
+                    adminMsg(err.error === 'already_renewed' ? 'Already renewed for next year' : ('Renew failed (' + r.status + ')'), false);
+                }
+            });
+            window.addEventListener('gvdg:admin-member-remove-request', async (event) => {
+                const member = event.detail && event.detail.member;
+                if (!member || !member.memberId) return;
+                const r = await adminApi('/admin/members/remove', { method: 'POST', body: { memberId: member.memberId } });
+                if (r.ok) {
+                    adminMsg('Removed ' + member.name, true);
+                    adminLoadMembers();
+                } else {
+                    let err = {}; try { err = await r.json(); } catch (e) {}
+                    adminMsg(err.error === 'last_admin' ? "Can't remove the last admin" : err.error === 'self' ? "You can't remove your own login" : ('Remove failed (' + r.status + ')'), false);
+                }
+            });
             window.addEventListener('gvdg:admin-product-save-request', async (event) => {
                 const detail = event.detail || {};
                 const product = detail.product;

@@ -15,6 +15,7 @@ import {
 import { isoBase64URL } from "@simplewebauthn/server/helpers";
 import type { KVLike } from "./ratelimit.js";
 import { getMember } from "./roster.js";
+import { publicMembership } from "./membership-year.js";
 import type { SessionClaims } from "./jwt.js";
 
 export interface StoredCredential {
@@ -207,6 +208,7 @@ export async function authenticationVerify(
       udisc: member.udisc ?? null,
       photo: member.photo ?? null,
       isAdmin: member.isAdmin === true, // so the admin portal link shows immediately after a passkey login
+      membership: publicMembership(member),
     },
   };
 }

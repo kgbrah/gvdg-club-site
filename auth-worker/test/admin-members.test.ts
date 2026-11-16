@@ -151,3 +151,57 @@ describe("admin member role toggle", () => {
     expect((await json(r)).member.isAdmin).toBe(false);
   });
 });
+
+describe("admin member removal and renewal", () => {
+  it("removes a member so they can no longer sign in", async () => {
+    const t = await login("1", "4821");
+    const r = await worker.fetch(req("/admin/members/remove", "POST", t, { memberId: "m_999" }), env);
+    expect(r.status).toBe(200);
+    expect((await worker.fetch(req("/login", "POST", undefined, { identifier: "999", pin: "4821" }), env)).status).toBe(401);
+    const list = await json(await worker.fetch(req("/admin/members", "GET", t), env));
+    expect(list.members.some((m: { memberId: string }) => m.memberId === "m_999")).toBe(false);
+    expect((await worker.fetch(req("/admin/members/remove", "POST", t, { memberId: "m_999" }), env)).status).toBe(404);
+  });
+
+  it("refuses to remove yourself, the last admin, or with a non-admin token", async () => {
+    const t = await login("1", "4821");
+    const self = await worker.fetch(req("/admin/members/remove", "POST", t, { memberId: "m_1" }), env);
+    expect(self.status).toBe(409);
+    expect((await json(self)).error).toBe("last_admin");
+    const still = await json(await worker.fetch(req("/admin/members", "GET", t), env));
+    expect(still.members.some((m: { memberId: string }) => m.memberId === "m_1")).toBe(true);
+    const nt = await login("999", "4821");
+    expect((await worker.fetch(req("/admin/members/remove", "POST", nt, { memberId: "m_999" }), env)).status).toBe(403);
+    expect((await worker.fetch(req("/admin/members/remove", "POST", t, {}), env)).status).toBe(400);
+  });
+
+  it("lets a second admin remove the other, and refuses removing yourself once you are not the last", async () => {
+    const t = await login("1", "4821");
+    await worker.fetch(req("/admin/members/set-role", "POST", t, { memberId: "m_999", isAdmin: true }), env);
+    const self = await worker.fetch(req("/admin/members/remove", "POST", t, { memberId: "m_1" }), env);
+    expect((await json(self)).error).toBe("self");
+    const other = await login("999", "4821");
+    const removed = await worker.fetch(req("/admin/members/remove", "POST", other, { memberId: "m_1" }), env);
+    expect(removed.status).toBe(200);
+    expect((await worker.fetch(req("/login", "POST", undefined, { identifier: "1", pin: "4821" }), env)).status).toBe(401);
+  });
+
+  it("renews one year at a time and stops once next year is covered", async () => {
+    await putMember(roster as never, {
+      memberId: "m_999", name: "Normal Member", pdgaNo: "999", pinHash: await hashPin("4821"), mustChangePin: false, memberThroughYear: 2020,
+    });
+    const t = await login("1", "4821");
+    const first = await json(await worker.fetch(req("/admin/members/renew", "POST", t, { memberId: "m_999" }), env));
+    expect(first.member.membershipCurrent).toBe(true);
+    expect(first.member.memberThroughYear).toBeGreaterThanOrEqual(2026);
+    const through = first.member.memberThroughYear as number;
+    const second = await json(await worker.fetch(req("/admin/members/renew", "POST", t, { memberId: "m_999" }), env));
+    expect(second.member.memberThroughYear).toBe(through + 1);
+    const third = await worker.fetch(req("/admin/members/renew", "POST", t, { memberId: "m_999" }), env);
+    expect(third.status).toBe(409);
+    expect((await json(third)).error).toBe("already_renewed");
+    const me = await json(await worker.fetch(req("/me", "GET", await login("999", "4821")), env));
+    expect(me.membership.throughYear).toBe(through + 1);
+    expect(me.membership.lapsed).toBe(false);
+  });
+});

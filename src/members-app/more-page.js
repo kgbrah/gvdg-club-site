@@ -11,6 +11,7 @@ import { WalletPanel } from "./activity-panels.js";
 import { TOKEN_KEY, storageGet } from "./api.js";
 import { selectDashboardTab, requestLogout } from "./dashboard-shell.js";
 import { useMemberContext } from "./member-context.js";
+import { membershipAccountLine } from "../shared/membership-status.js";
 import { DiscColorPicker } from "./disc-color-picker.js";
 import { DashboardThemeBuilder } from "./dashboard-theme.js";
 import { MemberPhoneActivityPanel } from "./phone-activity-panel.js";
@@ -136,6 +137,9 @@ export function MemberAccountPage() {
         h("div", { key: "body" }, [
           h("h2", { key: "name" }, context.name || "Club membership"),
           h("p", { className: "player-card-meta", key: "meta" }, context.pdgaNo ? "PDGA #" + context.pdgaNo : "Greenville DGC member"),
+          membershipAccountLine(context.membership)
+            ? h("p", { className: "player-card-meta", key: "dues" }, membershipAccountLine(context.membership))
+            : null,
         ]),
       ]),
       h(AccountTools, { key: "account-tools" }),

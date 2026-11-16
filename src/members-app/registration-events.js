@@ -105,7 +105,9 @@ function OpenEventForm({ event, token, onReload }) {
           ? "Please pick a team."
           : payload.error === "invalid_division"
             ? "Please pick a division."
-            : "Registration could not be completed.",
+            : payload.error === "membership_lapsed"
+              ? "Your membership lapsed on January 1. Ask a club admin to renew it before you register."
+              : "Registration could not be completed.",
         title: "Registration failed",
       });
     }

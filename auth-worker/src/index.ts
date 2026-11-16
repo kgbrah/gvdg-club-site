@@ -45,6 +45,7 @@ import { handleCommunityRoute } from "./community-routes.js";
 import { handleOfflineRoundRoute } from "./offline-round-routes.js";
 import { handlePhoneActivityRoute } from "./phone-activity-routes.js";
 import { handleMemberArchiveRoute } from "./member-archive-routes.js";
+import { sendMembershipRenewalReminders } from "./membership-renewal.js";
 
 /**
  * STOPGAP: when no Workers KV namespace is bound (deployed dev/staging while this account's KV data
@@ -166,6 +167,16 @@ export default {
             const result = await refreshImportedUdiscLeagues(env, new Date(controller.scheduledTime));
             console.log(JSON.stringify({ message: "udisc_league_refresh", cron: controller.cron, ...result }));
             return;
+          }
+          const renewal = await sendMembershipRenewalReminders(env, new Date(controller.scheduledTime)).catch((error) => {
+            console.error(JSON.stringify({
+              message: "membership_renewal_reminder_failed",
+              error: error instanceof Error ? error.stack : String(error),
+            }));
+            return null;
+          });
+          if (renewal && !renewal.skipped) {
+            console.log(JSON.stringify({ message: "membership_renewal_reminder", ...renewal }));
           }
           const result = await runRatingsRecompute(env);
           console.log(JSON.stringify({ message: "ratings_recompute_complete", cron: controller.cron, ...result }));

@@ -12,6 +12,7 @@ import { getMemberRatings, summarizeRatingRows } from "./ratings.js";
 import { publicMemberCasualResult } from "./casual-archive.js";
 import { playRowKind, playStatsByKind } from "./play-stats.js";
 import { readD1OrFallback } from "./d1-retry.js";
+import { publicMembership } from "./membership-year.js";
 
 // Iteration count must stay <=100000 to match crypto.ts / the workerd PBKDF2 cap, so the
 // no-such-member path computes a real PBKDF2 (constant-time-ish) instead of throwing immediately.
@@ -73,6 +74,7 @@ export async function handleLogin(request: Request, env: Env, origin: string | n
       photo: member.photo ?? null,
       isAdmin: member.isAdmin === true,
       welcome: member.welcomePending === true,
+      membership: publicMembership(member),
     },
     200,
     origin,
@@ -95,6 +97,7 @@ export async function handleMe(request: Request, env: Env, origin: string | null
       photo: member.photo ?? null,
       isAdmin: member.isAdmin === true,
       welcome: member.welcomePending === true,
+      membership: publicMembership(member),
     },
     200,
     origin,
@@ -229,7 +232,7 @@ export async function handleProfile(request: Request, env: Env, origin: string |
   if (!result.ok) return json({ error: "conflict", field: result.conflict }, 409, origin);
   const m = result.member;
   return json(
-    { pdgaNo: m.pdgaNo ?? null, udisc: m.udisc ?? null, photo: m.photo ?? null, name: m.name, mustChangePin: m.mustChangePin },
+    { pdgaNo: m.pdgaNo ?? null, udisc: m.udisc ?? null, photo: m.photo ?? null, name: m.name, mustChangePin: m.mustChangePin, membership: publicMembership(m) },
     200,
     origin,
   );
