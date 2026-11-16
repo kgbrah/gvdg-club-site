@@ -41,5 +41,5 @@ export function EventsLastUpdatedApp() {
     className: "last-updated",
     "data-react-events-last-updated": "ready",
     role: "status",
-  }, "Last updated " + updatedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+  }, "Last updated " + updatedAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: "America/New_York" }));
 }

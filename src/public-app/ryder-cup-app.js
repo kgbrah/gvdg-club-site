@@ -189,7 +189,7 @@ export function RyderCupApp() {
       : h(StatusBox, { key: "status", onRetry: () => load(), status: state.status }),
     ready && state.lastUpdated
       ? h("p", { className: "last-updated", key: "updated" },
-          "Last updated " + state.lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))
+          "Last updated " + state.lastUpdated.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: "America/New_York" }))
       : null,
     h("div", { key: "back" },
       h("a", { className: "back-link", href: "index.html" }, "\u2190 Back to home")),

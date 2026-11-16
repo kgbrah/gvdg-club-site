@@ -2,6 +2,7 @@ import React from "react";
 
 import { adminConfirm } from "./admin-dialogs.js";
 import { useSettledWhileLoading } from "../shared/settled-state.js";
+import { parseClubInstant } from "../shared/events-model.js";
 
 const h = React.createElement;
 
@@ -223,9 +224,9 @@ function normalizeApplication(row) {
 }
 
 function shortDate(iso) {
-  const time = Date.parse(iso);
-  if (!Number.isFinite(time)) return "";
-  return new Date(time).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const date = parseClubInstant(iso);
+  if (!date) return "";
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
 }
 
 function money(cents) {

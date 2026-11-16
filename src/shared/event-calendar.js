@@ -1,4 +1,4 @@
-import { eventClubCalendarDay } from "./events-model.js";
+import { eventClubCalendarDay, parseClubInstant } from "./events-model.js";
 
 const MONTHS = {
   jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
@@ -91,7 +91,7 @@ export function calendarEventFromClub(event) {
   const start = day.replace(/-/g, "");
   const where = [event.course_name, event.layout_name].filter(Boolean).join(" · ");
   const startsAt = event.starts_at || event.event_starts_at || "";
-  const timed = startsAt && !/^\d{4}-\d{2}-\d{2}$/.test(String(startsAt)) ? new Date(startsAt) : null;
+  const timed = startsAt && !/^\d{4}-\d{2}-\d{2}$/.test(String(startsAt)) ? parseClubInstant(startsAt) : null;
   if (timed && !Number.isNaN(timed.getTime())) {
     const end = new Date(timed.getTime() + 4 * 60 * 60 * 1000);
     return {

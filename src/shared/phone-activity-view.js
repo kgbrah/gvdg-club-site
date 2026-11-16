@@ -1,5 +1,7 @@
 import React from "react";
 
+import { formatClubDateTime } from "./events-model.js";
+
 const h = React.createElement;
 
 function failure(result) {
@@ -119,7 +121,7 @@ function ActivitySettings({ api, roundKey, showArchive }) {
         h("button", { className: "btn secondary", type: "button", disabled: loading, onClick: refresh }, "Try loading again")),
       !loading && !loadError && !devices.length && h("p", null, "No phones paired yet."),
       devices.length > 0 && h("ul", { className: "phone-activity-list" }, devices.map((device) => {
-        const label = (device.platform === "ios" ? "iPhone" : "Android") + " paired " + new Date(device.approvedAt).toLocaleString();
+        const label = (device.platform === "ios" ? "iPhone" : "Android") + " paired " + (formatClubDateTime(device.approvedAt) || "");
         return h("li", { key: device.deviceId, className: "phone-activity-item" }, h("span", null, label),
           h("button", { className: "btn secondary", type: "button", disabled: busy, "aria-label": "Remove " + label,
             onClick: () => { void action(() => revoke(device.deviceId)); } }, "Remove phone"));
@@ -128,7 +130,7 @@ function ActivitySettings({ api, roundKey, showArchive }) {
         h("h3", null, "Uploaded routes"),
         !loading && !loadError && !tracks.length && h("p", null, "No activity routes have been uploaded."),
         tracks.map((track) => {
-          const label = new Date(track.startedAt).toLocaleString();
+          const label = formatClubDateTime(track.startedAt) || "";
           return h("div", { key: track.id, className: "phone-activity-item phone-activity-route" },
             h("p", null, label + " · " + Math.round(track.distanceM) + " m recorded"),
             h("button", { className: "btn secondary", type: "button", "aria-label": "Download route recorded " + label,

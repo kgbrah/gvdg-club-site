@@ -6,6 +6,7 @@ import { selectDashboardTab } from "./dashboard-shell.js";
 import { plural } from "./format.js";
 import { announceInboxChanged, useInboxSummary } from "./inbox-summary.js";
 import { useSessionToken } from "./session-token.js";
+import { formatClubListTime } from "../shared/events-model.js";
 
 const h = React.createElement;
 
@@ -17,18 +18,7 @@ function threadFromHash() {
 }
 
 function messageWhen(value) {
-  if (!value) return "";
-  const raw = String(value).trim();
-  const stamp = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(raw) && !/[zZ]|[+-]\d{2}/.test(raw)
-    ? raw.replace(" ", "T") + "Z"
-    : raw;
-  const date = new Date(stamp);
-  if (Number.isNaN(date.getTime())) return "";
-  const zone = "America/New_York";
-  const sameDay = date.toLocaleDateString("en-US", { timeZone: zone }) === new Date().toLocaleDateString("en-US", { timeZone: zone });
-  return date.toLocaleString("en-US", sameDay
-    ? { hour: "numeric", minute: "2-digit", timeZone: zone }
-    : { month: "short", day: "numeric", timeZone: zone });
+  return formatClubListTime(value);
 }
 
 function memberDestination(href) {

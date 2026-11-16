@@ -7,6 +7,7 @@ import { dollars, formatEventDay, formatToPar } from "./format.js";
 import { applyOfficialRyderTally } from "../public-app/ryder-board-merge.js";
 import { displayMatchStatus } from "../shared/match-status.js";
 import { fetchMergedRyderData } from "../shared/ryder-cup-data.js";
+import { parseClubInstant } from "../shared/events-model.js";
 
 const h = React.createElement;
 
@@ -15,10 +16,10 @@ function roundMeta(parts) {
 }
 
 function walletDate(value) {
-  const date = new Date(value || "");
-  return Number.isNaN(date.getTime())
-    ? ""
-    : date.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "America/New_York" });
+  const date = parseClubInstant(value);
+  return date
+    ? date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" })
+    : "";
 }
 
 function walletSource(source) {

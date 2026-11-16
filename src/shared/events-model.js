@@ -53,13 +53,17 @@ export function statusLabel(status) {
 
 // Parse an event's date defensively. The API may send a full ISO timestamp, a
 // bare YYYY-MM-DD, null, or junk. Returns a Date or null (never throws).
+// A bare calendar day stays a date-only value. Any timestamp without a zone is
+// UTC (SQLite datetime('now')), never the viewer's local clock.
 export function parseEventDate(raw) {
   if (raw == null) return null;
   const s = String(raw).trim();
   if (!s) return null;
-  const d = new Date(s);
-  if (Number.isNaN(d.getTime())) return null;
-  return d;
+  if (DATE_ONLY.test(s)) {
+    const d = new Date(s);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return parseClubInstant(s);
 }
 
 // The club runs on Eastern time — show ALL wall-clock times in it regardless of the viewer's timezone.
@@ -67,6 +71,28 @@ export function parseEventDate(raw) {
 export const CLUB_TIME_ZONE = 'America/New_York';
 
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+const NAIVE_INSTANT = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?)$/;
+const HAS_ZONE = /(?:[zZ]|[+-]\d{2}:?\d{2})$/;
+
+/** An instant. Naive `YYYY-MM-DD HH:MM:SS` (SQLite) is UTC. A date-only value is not an instant.
+ *  Zone detection is anchored at the end so the month in `2026-11-16` is not read as an offset. */
+export function parseClubInstant(raw) {
+  if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? null : raw;
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    const date = new Date(raw);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const text = String(raw ?? '').trim();
+  if (!text || DATE_ONLY.test(text)) return null;
+  let stamp = text;
+  if (!HAS_ZONE.test(text)) {
+    const naive = NAIVE_INSTANT.exec(text);
+    if (!naive) return null;
+    stamp = `${naive[1]}T${naive[2]}Z`;
+  }
+  const date = new Date(stamp);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
 
 export function clubCalendarDay(raw) {
   if (raw == null || raw === '') return '';
@@ -115,9 +141,8 @@ function easternParts(date) {
 }
 
 export function isoToClubWallClock(raw) {
-  if (raw == null || raw === '') return '';
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) return '';
+  const date = parseClubInstant(raw);
+  if (!date) return '';
   const parts = easternParts(date);
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
 }
@@ -230,11 +255,10 @@ export function formatEventDate(raw) {
 // Format a timestamp (ISO instant) as an Eastern-time wall clock, e.g. "Sat, Jul 4, 9:00 AM EDT".
 // Used for scheduled start + registration/check-in deadlines. Returns '' for empty/invalid input.
 export function formatClubDateTime(raw) {
-  if (raw == null || raw === '') return '';
-  const d = new Date(raw);
-  if (Number.isNaN(d.getTime())) return '';
+  const d = parseClubInstant(raw);
+  if (!d) return '';
   try {
-    return d.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: CLUB_TIME_ZONE, timeZoneName: 'short' });
+    return d.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: CLUB_TIME_ZONE, timeZoneName: 'short' });
   } catch (_e) {
     return d.toISOString();
   }
@@ -242,15 +266,25 @@ export function formatClubDateTime(raw) {
 
 export function formatClubClock(raw) {
   if (raw == null || raw === '') return '';
-  const text = raw instanceof Date ? '' : String(raw).trim();
+  const text = raw instanceof Date || typeof raw === 'number' ? '' : String(raw).trim();
   if (text && DATE_ONLY.test(text)) return '';
-  const d = raw instanceof Date ? raw : new Date(raw);
-  if (Number.isNaN(d.getTime())) return '';
+  const d = parseClubInstant(raw);
+  if (!d) return '';
   try {
-    return d.toLocaleString([], { hour: 'numeric', minute: '2-digit', timeZone: CLUB_TIME_ZONE, timeZoneName: 'short' });
+    return d.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: CLUB_TIME_ZONE, timeZoneName: 'short' });
   } catch (_e) {
     return '';
   }
+}
+
+/** Inbox and list clocks: "9:58 AM" on the same Eastern day, otherwise "Nov 16". */
+export function formatClubListTime(raw, now = new Date()) {
+  const date = parseClubInstant(raw);
+  if (!date) return '';
+  const sameDay = date.toLocaleDateString('en-US', { timeZone: CLUB_TIME_ZONE }) === now.toLocaleDateString('en-US', { timeZone: CLUB_TIME_ZONE });
+  return date.toLocaleString('en-US', sameDay
+    ? { hour: 'numeric', minute: '2-digit', timeZone: CLUB_TIME_ZONE }
+    : { month: 'short', day: 'numeric', timeZone: CLUB_TIME_ZONE });
 }
 
 function firstTimestamp(event, keys) {
