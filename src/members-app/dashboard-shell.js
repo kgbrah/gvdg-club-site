@@ -3,6 +3,8 @@ import { CalendarDays, Home, PlayCircle, TrendingUp, Users } from "lucide-react"
 
 import { destination, MEMBER_PRIMARY } from "../shared/app-navigation.js";
 import { currentDashboardTab } from "./dashboard-router.js";
+import { useInboxSummary } from "./inbox-summary.js";
+import { useSessionToken } from "./session-token.js";
 
 const h = React.createElement;
 const ICONS = { overview: Home, play: PlayCircle, events: CalendarDays, season: TrendingUp, more: Users };
@@ -16,6 +18,8 @@ export function requestLogout() {
 }
 
 export function MemberDashboardShell() {
+  const token = useSessionToken();
+  const inbox = useInboxSummary(token);
   const [tab, setTab] = React.useState(currentDashboardTab);
   const heading = React.useRef(null);
   const keyboardNavigation = React.useRef(false);
@@ -62,11 +66,17 @@ export function MemberDashboardShell() {
     h("nav", { className: "player-app-nav", "aria-label": "Member app", key: "nav" }, MEMBER_PRIMARY.map((key) => {
       const item = destination("member", key);
       const active = current.group === key;
+      const unread = key === "more" ? inbox.total : 0;
       return h("button", {
         "aria-current": active ? "page" : undefined,
+        "aria-label": unread ? item.label + ", " + unread + " unread" : undefined,
         className: "player-app-nav-btn" + (active ? " active" : ""),
         type: "button", "data-dtab": key, key, onClick: () => selectDashboardTab(key),
-      }, [h(ICONS[key], { size: 22, strokeWidth: 2.2, "aria-hidden": true, key: "icon" }), item.label]);
+      }, [
+        h(ICONS[key], { size: 22, strokeWidth: 2.2, "aria-hidden": true, key: "icon" }),
+        item.label,
+        unread ? h("span", { className: "member-nav-badge", "aria-hidden": true, key: "badge" }, unread > 9 ? "9+" : String(unread)) : null,
+      ]);
     })),
     h("div", { className: "member-page-heading" + (current.key === "overview" ? " member-home-heading" : ""), key: "heading" }, [
       current.key !== current.group && current.group !== "play"

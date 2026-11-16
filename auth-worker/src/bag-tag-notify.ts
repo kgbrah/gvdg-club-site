@@ -4,6 +4,7 @@ import type { Env } from "./env.js";
 import type { BagChallengeRow } from "./db-bag-tags.js";
 import { leagueName } from "./db-bag-tag-leagues.js";
 import { sendMemberPush, type MemberPushNote } from "./member-push.js";
+import { recordMemberNotices } from "./member-messages.js";
 
 type Ctx = { waitUntil?: (promise: Promise<unknown>) => void } | undefined;
 
@@ -105,6 +106,13 @@ export function notifyChallenge(ctx: Ctx, env: Env, challenge: BagChallengeRow |
   const job = (async () => {
     const { to, note } = challengeNote(challenge, event, await suffixOf(env, challenge));
     await sendMemberPush(env, to, "bagTags", note);
+    await recordMemberNotices(env, to, {
+      kind: "bag-tag",
+      title: note.title,
+      body: note.body,
+      href: note.url,
+      refKey: `${note.tag}:${event.kind}`,
+    });
   })().catch(() => {});
   try {
     ctx?.waitUntil?.(job);
@@ -118,9 +126,16 @@ export async function notifyChallengesExpired(env: Env, leagueId: number, closed
   try {
     if (!closed.length) return;
     const league = await leagueName(env.DB, leagueId).catch(() => null);
-    await Promise.all(closed.map((challenge) => {
+    await Promise.all(closed.map(async (challenge) => {
       const { to, note } = expiredNote(challenge, league);
-      return sendMemberPush(env, to, "bagTags", note);
+      await sendMemberPush(env, to, "bagTags", note);
+      await recordMemberNotices(env, to, {
+        kind: "bag-tag",
+        title: note.title,
+        body: note.body,
+        href: note.url,
+        refKey: `${note.tag}:expired`,
+      });
     }));
   } catch {
     /* alerts are optional */

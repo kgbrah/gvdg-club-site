@@ -1,5 +1,5 @@
 import React from "react";
-import { Bell, Tag } from "lucide-react";
+import { Bell, Mail, Tag } from "lucide-react";
 
 import { TOKEN_KEY, request, storageGet } from "./api.js";
 
@@ -44,6 +44,7 @@ export function MemberNotificationsPanel() {
   // loading | unsupported | unconfigured | denied | off | on
   const [state, setState] = React.useState("loading");
   const [bagTags, setBagTags] = React.useState(true);
+  const [messages, setMessages] = React.useState(true);
   const [busy, setBusy] = React.useState(false);
   const [message, setMessage] = React.useState("");
   const publicKey = React.useRef(null);
@@ -57,6 +58,7 @@ export function MemberNotificationsPanel() {
       if (!info.data.configured || !info.data.publicKey) { setState("unconfigured"); return; }
       publicKey.current = info.data.publicKey;
       setBagTags(info.data.prefs?.bagTags !== false);
+      setMessages(info.data.prefs?.messages !== false);
       if (typeof Notification !== "undefined" && Notification.permission === "denied") { setState("denied"); return; }
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
@@ -88,7 +90,8 @@ export function MemberNotificationsPanel() {
       const json = subscription.toJSON();
       const saved = await api(token, "/me/push-subscription", "PUT", { endpoint: json.endpoint, keys: json.keys, prefs: { bagTags: true } });
       if (!saved.ok) throw new Error("subscribe failed");
-      setBagTags(true);
+      setBagTags(saved.data.prefs?.bagTags !== false);
+      setMessages(saved.data.prefs?.messages !== false);
       setState("on");
     } catch {
       setMessage("Could not turn notifications on. Try again.");
@@ -113,19 +116,23 @@ export function MemberNotificationsPanel() {
     }
   }
 
-  async function toggleBagTags() {
-    const next = !bagTags;
-    setBagTags(next);
+  async function togglePref(id, current, setCurrent) {
+    const next = !current;
+    setCurrent(next);
     setBusy(true);
     setMessage("");
     try {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
       const json = subscription && subscription.toJSON();
-      const saved = await api(token, "/me/push-subscription", "PUT", { endpoint: json.endpoint, keys: json.keys, prefs: { bagTags: next } });
+      const saved = await api(token, "/me/push-subscription", "PUT", {
+        endpoint: json.endpoint,
+        keys: json.keys,
+        prefs: { [id]: next },
+      });
       if (!saved.ok) throw new Error("save failed");
     } catch {
-      setBagTags(!next);
+      setCurrent(!next);
       setMessage("Could not save that. Try again.");
     } finally {
       setBusy(false);
@@ -138,7 +145,7 @@ export function MemberNotificationsPanel() {
     : state === "denied" ? "Blocked in your browser settings. Allow notifications for this site, then come back."
       : state === "unsupported" ? "This browser cannot show notifications. Install the app to your home screen."
         : state === "unconfigured" ? "Not turned on for the club yet."
-          : "Get a ping when someone challenges your bag tag";
+          : "Get a ping for messages and bag tag updates";
 
   return h("div", { className: "member-notifications", "data-member-notifications": state }, [
     h(Switch, {
@@ -146,8 +153,12 @@ export function MemberNotificationsPanel() {
       busy: busy || !["on", "off"].includes(state), onToggle: state === "on" ? turnOff : turnOn,
     }),
     state === "on" ? h(Switch, {
+      key: "messages", id: "messages", icon: Mail, label: "Messages", detail: "A ping when a member writes you",
+      on: messages, busy, onToggle: () => togglePref("messages", messages, setMessages),
+    }) : null,
+    state === "on" ? h(Switch, {
       key: "bag-tags", id: "bag-tags", icon: Tag, label: "Bag tag challenges", detail: "Challenges, results and ladder resets",
-      on: bagTags, busy, onToggle: toggleBagTags,
+      on: bagTags, busy, onToggle: () => togglePref("bagTags", bagTags, setBagTags),
     }) : null,
     message ? h("p", { className: "player-card-meta member-notifications-note", role: "status", key: "message" }, message) : null,
   ]);

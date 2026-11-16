@@ -9,6 +9,7 @@ import { MemberAccountPage, MemberAppearancePage, MemberInstallPage, MemberMoreP
 import { MemberOverviewDashboard } from "./overview-dashboard.js";
 import { ActiveStandingsPanel } from "./activity-panels.js";
 import { BagTagPanel } from "./bag-tag-panel.js";
+import { MemberMessagesPanel } from "./messages-panel.js";
 import { DoublesLeaguePanel } from "./doubles-league-panel.js";
 import { LeagueSchedule } from "./club-leagues.js";
 import { useSessionToken } from "./session-token.js";
@@ -62,6 +63,7 @@ export function MemberDashboardApp() {
     tab === "appearance" ? h(MemberAppearancePage, { key: "appearance" }) : null,
     tab === "install" ? h(MemberInstallPage, { key: "install" }) : null,
     tab === "tags" && token ? h(BagTagPanel, { key: "tags", token }) : null,
+    tab === "messages" && token ? h(MemberMessagesPanel, { key: "messages", token }) : null,
     tab === "standings" ? h(ActiveStandingsPanel, { key: "standings" }) : null,
     tab === "leagues" ? h(React.Fragment, { key: "leagues" }, [
       h(LeagueSchedule, { key: "current" }),

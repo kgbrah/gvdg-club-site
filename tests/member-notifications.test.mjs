@@ -9,6 +9,7 @@ test("members can opt in to push from Account and the service worker opens the m
   assert.match(panel, /\/me\/push-subscription/);
   assert.match(panel, /applicationServerKey/);
   assert.match(panel, /Bag tag challenges/);
+  assert.match(panel, /label: "Messages"/);
   assert.match(panel, /Notification\.requestPermission/);
   assert.match(more, /MemberNotificationsPanel/);
   // Member pushes use kind "member"; the click handler opens /gvdg-members.html (with the #tags hash).

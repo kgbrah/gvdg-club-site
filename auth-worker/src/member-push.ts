@@ -12,8 +12,8 @@ import { loadVapidKeys, type PushCryptoKeys } from "./web-push.js";
 const text = new TextEncoder();
 const MAX_DEVICES = 8;
 
-export type PushCategory = "bagTags";
-const CATEGORY_COLUMN: Record<PushCategory, string> = { bagTags: "bag_tags" };
+export type PushCategory = "bagTags" | "messages";
+const CATEGORY_COLUMN: Record<PushCategory, string> = { bagTags: "bag_tags", messages: "messages" };
 
 export interface MemberPushNote {
   title: string;
@@ -101,8 +101,8 @@ export async function handleMemberPush(request: Request, env: Env, origin: strin
   if (method === "GET") {
     const rows = keys
       ? (await env.DB.prepare(
-        "SELECT endpoint, bag_tags FROM member_push_subscriptions WHERE member_id = ? ORDER BY created_at",
-      ).bind(memberId).all<{ endpoint: string; bag_tags: number }>()).results ?? []
+        "SELECT endpoint, bag_tags, messages FROM member_push_subscriptions WHERE member_id = ? ORDER BY created_at",
+      ).bind(memberId).all<{ endpoint: string; bag_tags: number; messages: number }>()).results ?? []
       : [];
     const endpoint = new URL(request.url).searchParams.get("endpoint");
     return json({
@@ -110,7 +110,10 @@ export async function handleMemberPush(request: Request, env: Env, origin: strin
       publicKey: keys?.publicKey ?? null,
       devices: rows.length,
       subscribed: endpoint ? rows.some((row) => row.endpoint === endpoint) : rows.length > 0,
-      prefs: { bagTags: rows.length ? rows.every((row) => row.bag_tags === 1) : true },
+      prefs: {
+        bagTags: rows.length ? rows.every((row) => row.bag_tags === 1) : true,
+        messages: rows.length ? rows.every((row) => row.messages === 1) : true,
+      },
     }, 200, origin);
   }
 
@@ -124,33 +127,40 @@ export async function handleMemberPush(request: Request, env: Env, origin: strin
     const auth = keyOf(keysIn.auth, 16);
     const prefsIn = body.prefs && typeof body.prefs === "object" ? body.prefs as Record<string, unknown> : {};
     if (prefsIn.bagTags != null && typeof prefsIn.bagTags !== "boolean") return json({ error: "invalid_prefs" }, 400, origin);
+    if (prefsIn.messages != null && typeof prefsIn.messages !== "boolean") return json({ error: "invalid_prefs" }, 400, origin);
     if (!endpoint || !p256dh || !auth) return json({ error: "invalid_subscription" }, 400, origin);
     if (await kvRateLimited(env, "mepush:" + memberId, 30, 3600)) return json({ error: "rate_limited" }, 429, origin);
 
     // New devices inherit the member's current preference; "on" is the default for a first device.
     const existing = (await env.DB.prepare(
-      "SELECT endpoint, bag_tags FROM member_push_subscriptions WHERE member_id = ? ORDER BY created_at",
-    ).bind(memberId).all<{ endpoint: string; bag_tags: number }>()).results ?? [];
-    const inherited = existing.length ? (existing.every((row) => row.bag_tags === 1) ? 1 : 0) : 1;
-    const bagTags = typeof prefsIn.bagTags === "boolean" ? (prefsIn.bagTags ? 1 : 0) : inherited;
+      "SELECT endpoint, bag_tags, messages FROM member_push_subscriptions WHERE member_id = ? ORDER BY created_at",
+    ).bind(memberId).all<{ endpoint: string; bag_tags: number; messages: number }>()).results ?? [];
+    const inheritedBag = existing.length ? (existing.every((row) => row.bag_tags === 1) ? 1 : 0) : 1;
+    const inheritedMessages = existing.length ? (existing.every((row) => row.messages === 1) ? 1 : 0) : 1;
+    const bagTags = typeof prefsIn.bagTags === "boolean" ? (prefsIn.bagTags ? 1 : 0) : inheritedBag;
+    const messages = typeof prefsIn.messages === "boolean" ? (prefsIn.messages ? 1 : 0) : inheritedMessages;
     await env.DB.prepare(
-      `INSERT INTO member_push_subscriptions (endpoint, member_id, p256dh, auth, bag_tags)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO member_push_subscriptions (endpoint, member_id, p256dh, auth, bag_tags, messages)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(endpoint) DO UPDATE SET
          member_id = excluded.member_id,
          p256dh = excluded.p256dh,
          auth = excluded.auth,
-         bag_tags = excluded.bag_tags`,
-    ).bind(endpoint, memberId, p256dh, auth, bagTags).run();
+         bag_tags = excluded.bag_tags,
+         messages = excluded.messages`,
+    ).bind(endpoint, memberId, p256dh, auth, bagTags, messages).run();
     if (typeof prefsIn.bagTags === "boolean") {
       await env.DB.prepare("UPDATE member_push_subscriptions SET bag_tags = ? WHERE member_id = ?").bind(bagTags, memberId).run();
+    }
+    if (typeof prefsIn.messages === "boolean") {
+      await env.DB.prepare("UPDATE member_push_subscriptions SET messages = ? WHERE member_id = ?").bind(messages, memberId).run();
     }
     // Keep a sane number of devices: drop the oldest beyond the cap.
     await env.DB.prepare(
       `DELETE FROM member_push_subscriptions WHERE member_id = ? AND endpoint NOT IN (
          SELECT endpoint FROM member_push_subscriptions WHERE member_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ${MAX_DEVICES})`,
     ).bind(memberId, memberId).run();
-    return json({ ok: true, prefs: { bagTags: bagTags === 1 } }, 200, origin);
+    return json({ ok: true, prefs: { bagTags: bagTags === 1, messages: messages === 1 } }, 200, origin);
   }
 
   if (method === "DELETE") {

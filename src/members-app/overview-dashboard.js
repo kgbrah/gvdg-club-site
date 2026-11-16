@@ -18,6 +18,7 @@ import { EventFieldRoster } from "../shared/event-field-roster.js";
 import { AddToCalendarButton } from "../shared/add-to-calendar.js";
 import { WelcomeCard } from "./welcome-card.js";
 import { BagTagPanel } from "./bag-tag-panel.js";
+import { InboxHomeAlert } from "./messages-panel.js";
 import { calendarEventFromClub, calendarEventFromPdga } from "../shared/event-calendar.js";
 
 const h = React.createElement;
@@ -267,6 +268,7 @@ export function MemberOverviewDashboard() {
 
   return h("div", { className: "react-overview-dashboard player-home", "data-react-overview-dashboard": "ready" }, [
     h(WelcomeCard, { key: "welcome" }),
+    h(InboxHomeAlert, { key: "inbox" }),
     h(HomeHero, { context, pdgaState, key: "hero" }),
     h("div", { className: "member-home-feature", key: "feature" }, [
       h("div", { className: "member-home-play", key: "play" }, [

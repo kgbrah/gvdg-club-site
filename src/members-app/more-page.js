@@ -1,5 +1,5 @@
 import React from "react";
-import { Camera, ChevronRight, CircleHelp, ExternalLink, Globe, KeyRound, MessageSquare, Palette,
+import { Camera, ChevronRight, CircleHelp, ExternalLink, Globe, KeyRound, Mail, MessageSquare, Palette,
   ShieldCheck, Smartphone, Tag, Trophy, UserRound, Users, Wallet } from "lucide-react";
 
 import { destination } from "../shared/app-navigation.js";
@@ -95,6 +95,7 @@ export function MemberMorePage() {
       h(MemberLinkSection, { title: "Members and club activity", key: "people" }, [
         h(MemberLinkRow, { tab: "club", title: "Club directory", detail: "Members, course conditions and minutes", icon: Users, key: "club" }),
         h(MemberLinkRow, { tab: "community", title: "Community", detail: "Your profile and friends", icon: UserRound, key: "community" }),
+        h(MemberLinkRow, { tab: "messages", title: "Messages", detail: "Direct messages and club updates", icon: Mail, key: "messages" }),
         h(MemberLinkRow, { tab: "board", title: "Message board", icon: MessageSquare, key: "board" }),
       ]),
       h(MemberLinkSection, { title: "On the course", key: "play" }, [

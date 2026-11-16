@@ -201,12 +201,13 @@ describe("member push subscription endpoints", () => {
   it("subscribes devices (default on), toggles the preference for all, and only deletes its own", async () => {
     const t = await setup();
     const a = await device("a"); const b = await device("b");
-    expect((await call(t.env, "/me/push-subscription", "PUT", t.bo, sub(a))).data).toEqual({ ok: true, prefs: { bagTags: true } });
+    expect((await call(t.env, "/me/push-subscription", "PUT", t.bo, sub(a))).data).toEqual({ ok: true, prefs: { bagTags: true, messages: true } });
     expect((await call(t.env, "/me/push-subscription", "PUT", t.bo, sub(b))).status).toBe(200);
     const info = (await call(t.env, `/me/push-subscription?endpoint=${encodeURIComponent(a.endpoint)}`, "GET", t.bo)).data;
-    expect(info).toMatchObject({ configured: true, devices: 2, subscribed: true, prefs: { bagTags: true } });
+    expect(info).toMatchObject({ configured: true, devices: 2, subscribed: true, prefs: { bagTags: true, messages: true } });
     expect(info.publicKey).toBeTruthy();
-    expect((await call(t.env, "/me/push-subscription", "PUT", t.bo, sub(a, { bagTags: false }))).data.prefs.bagTags).toBe(false);
+    const toggled = (await call(t.env, "/me/push-subscription", "PUT", t.bo, sub(a, { bagTags: false }))).data.prefs;
+    expect(toggled).toEqual({ bagTags: false, messages: true });
     expect(rowsOf(t.db).map((r: any) => r.bag_tags)).toEqual([0, 0]);
     // A new device inherits the member's "off".
     const c = await device("c");
