@@ -344,7 +344,7 @@ describe("welcome email + push + in-app flag", () => {
 
 describe("email preview", () => {
   it("writes rendered HTML for visual QA when GVDG_EMAIL_PREVIEW_DIR is set", async () => {
-    const dir = process.env.GVDG_EMAIL_PREVIEW_DIR;
+    const dir = (globalThis as unknown as { process?: { env: Record<string, string | undefined> } }).process?.env.GVDG_EMAIL_PREVIEW_DIR;
     if (!dir) return;
     const { writeFileSync, mkdirSync } = (await import("node:fs")) as unknown as { writeFileSync(p: string, d: string): void; mkdirSync(p: string, o?: object): void };
     const { buildReceivedEmail } = await import("../src/membership-notify.js");
