@@ -186,9 +186,16 @@ function useKeyboardSafeSearch(ref) {
     const reveal = () => {
       const input = ref.current;
       if (!input || document.activeElement !== input) return;
-      (input.closest("form") || input).scrollIntoView({ block: "center", behavior: "auto" });
+      // The keyboard overlays the page (interactive-widget=overlays-content), so "center" can still land under it.
+      // Put the search form just below the sticky header instead, inside the visible viewport.
+      const target = input.closest("form") || input;
+      const header = document.querySelector(".member-app-header, header");
+      const headerBottom = header ? Math.max(0, header.getBoundingClientRect().bottom) : 0;
+      const top = (window.visualViewport?.offsetTop || 0) + headerBottom + 12;
+      const delta = target.getBoundingClientRect().top - top;
+      if (Math.abs(delta) > 4) window.scrollBy({ top: delta, behavior: "auto" });
     };
-    const schedule = () => { clearTimeout(timer); timer = setTimeout(reveal, 120); };
+    const schedule = () => { clearTimeout(timer); timer = setTimeout(() => { reveal(); timer = setTimeout(reveal, 300); }, 120); };
     const focus = (event) => { if (event.target === ref.current) { root.classList.add(KEYBOARD_CLASS); schedule(); } };
     const blur = (event) => { if (event.target === ref.current) { root.classList.remove(KEYBOARD_CLASS); clearTimeout(timer); } };
     const viewport = window.visualViewport;
