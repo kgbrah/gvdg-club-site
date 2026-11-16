@@ -14,7 +14,7 @@ const FORM_VALUES = {
   login: { identifier: "", pin: "" },
   pin: { newPin: "", confirmPin: "" },
   profile: { pdga: "", udisc: "" },
-  apply: { name: "", pdgaNo: "", udisc: "", pin: "", confirmPin: "" },
+  apply: { name: "", pdgaNo: "", udisc: "", email: "", pin: "", confirmPin: "", submitted: null },
 };
 
 function createFormState(form) {

@@ -2,7 +2,7 @@ import type { Env } from "./env.js";
 import { hashPin, verifyPin, pinHashNeedsUpgrade } from "./crypto.js";
 import { signSession, verifySession } from "./jwt.js";
 import { checkLockout, clearAttempts, recordFailure } from "./ratelimit.js";
-import { canonicalLoginKey, getMember, rehashPin, resolveMember, setPin, updateProfile, type ProfilePatch } from "./roster.js";
+import { canonicalLoginKey, getMember, putMember, rehashPin, resolveMember, setPin, updateProfile, type ProfilePatch } from "./roster.js";
 import * as db from "./db.js";
 import { bearer, clientIp, json, readJson } from "./http.js";
 import { requireAuth, ttl } from "./authz.js";
@@ -72,6 +72,7 @@ export async function handleLogin(request: Request, env: Env, origin: string | n
       udisc: member.udisc ?? null,
       photo: member.photo ?? null,
       isAdmin: member.isAdmin === true,
+      welcome: member.welcomePending === true,
     },
     200,
     origin,
@@ -93,6 +94,7 @@ export async function handleMe(request: Request, env: Env, origin: string | null
       udisc: member.udisc ?? null,
       photo: member.photo ?? null,
       isAdmin: member.isAdmin === true,
+      welcome: member.welcomePending === true,
     },
     200,
     origin,
@@ -262,4 +264,18 @@ export async function handleSetPin(request: Request, env: Env, origin: string | 
   const newVer = await setPin(env.ROSTER, claims.sub, await hashPin(newPin, env.PIN_PEPPER));
   const fresh = await signSession({ sub: claims.sub, mustChangePin: false, pinVer: newVer }, env.JWT_SECRET, ttl(env));
   return json({ token: fresh, mustChangePin: false }, 200, origin);
+}
+
+/** POST /me/welcome-seen — clears the one-time welcome-card flag set when an admin approves an application. */
+export async function handleWelcomeSeen(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const token = bearer(request);
+  const claims = token ? await verifySession(token, env.JWT_SECRET) : null;
+  if (!claims || claims.play) return json({ error: "unauthorized" }, 401, origin);
+  const member = await getMember(env.ROSTER, claims.sub);
+  if (!member) return json({ error: "unauthorized" }, 401, origin);
+  if (member.welcomePending) {
+    delete member.welcomePending;
+    await putMember(env.ROSTER, member);
+  }
+  return json({ ok: true }, 200, origin);
 }

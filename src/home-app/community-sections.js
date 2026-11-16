@@ -9,6 +9,7 @@ import {
   Trophy,
 } from "lucide-react";
 
+import { resolveApiBase } from "../shared/api-base.js";
 import { safeExternalUrl } from "../shared/safe-url.js";
 import { useRevealOnce } from "./interaction-hooks.js";
 
@@ -66,8 +67,45 @@ function ContactBox({ children, delay }) {
   return h("div", { className: "contact-box fade-in" + (visible ? " visible" : ""), ref }, children);
 }
 
+// Online dues are credential-gated server-side (PayPal secrets). Until the Worker says they are on, the
+// block renders exactly as it always has, including the paypal.me link.
+function useDuesOnline() {
+  const [online, setOnline] = React.useState(false);
+  React.useEffect(() => {
+    const controller = new AbortController();
+    fetch(`${resolveApiBase()}/membership/config`, { signal: controller.signal, headers: { Accept: "application/json" } })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((config) => setOnline(Boolean(config && config.duesOnline === true)))
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
+  return online;
+}
+
 export function HomeMembershipSection() {
   const membershipUrl = safeExternalUrl(PAYPAL_MEMBERSHIP_URL);
+  const duesOnline = useDuesOnline();
+  if (duesOnline) return h("div", { className: "membership-content", "data-react-home-membership": "ready", "data-dues-online": "true" }, [
+    h("h2", { className: "section-title visible", key: "title" }, "Become a Member"),
+    h("p", { className: "membership-subtitle", key: "subtitle" }, "Join our growing community and enjoy exclusive benefits"),
+    h("div", { className: "price", key: "price" }, "$15 / Year"),
+    h("ol", { className: "membership-steps", "aria-label": "How to join the club", key: "steps" }, [
+      h("li", { className: "membership-step", key: "apply" }, [
+        h("span", { className: "membership-step-label", key: "number", "aria-hidden": "true" }, "Step 1"),
+        h("h3", { className: "membership-step-title", key: "title" }, "Apply and pay $15 dues"),
+        h("p", { className: "membership-step-description", key: "description" }, "Create your member login and pay your annual dues online with PayPal, all in one place."),
+        h("a", { className: "cta-button membership-step-action", href: "gvdg-members.html#apply", key: "cta" }, "Apply & pay dues"),
+      ]),
+      h("li", { className: "membership-step", key: "login" }, [
+        h("span", { className: "membership-step-label", key: "number", "aria-hidden": "true" }, "Step 2"),
+        h("h3", { className: "membership-step-title", key: "title" }, "Get approved"),
+        h("p", { className: "membership-step-description", key: "description" }, "An admin approves your application and you get a welcome message. Then log in and start playing."),
+        h("a", { className: "cta-button membership-step-action membership-step-secondary", href: "gvdg-members.html", key: "cta" }, "Member log in"),
+      ]),
+    ]),
+    h("p", { className: "membership-next", key: "next" }, "Already paid another way? Choose that option on the application and an admin will confirm it."),
+    h("div", { className: "membership-perks", key: "perks" }, MEMBERSHIP_PERKS.map((perk, index) => h(PerkCard, { index, perk, key: perk.title }))),
+  ]);
   return h("div", { className: "membership-content", "data-react-home-membership": "ready" }, [
     h("h2", { className: "section-title visible", key: "title" }, "Become a Member"),
     h("p", { className: "membership-subtitle", key: "subtitle" }, "Join our growing community and enjoy exclusive benefits"),

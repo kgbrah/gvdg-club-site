@@ -9,6 +9,7 @@ let memberProfile = {
   photo: null,
   sub: null,
   udisc: null,
+  welcome: false,
 };
 
 export function memberDashboardContext() {
@@ -18,6 +19,7 @@ export function memberDashboardContext() {
     pdgaNo: memberProfile.pdgaNo || storageGet(PDGA_KEY) || null,
     photo: memberProfile.photo || null,
     sub: memberProfile.sub || null,
+    welcome: memberProfile.welcome === true,
   };
 }
 
@@ -38,6 +40,7 @@ export function applyProfile(data = {}) {
     photo: data.photo || null,
     sub: data.sub || memberProfile.sub || null,
     udisc: data.udisc || null,
+    welcome: data.welcome === true,
   };
 
   if (data.name) writeMemberSessionValue(NAME_KEY, data.name);
@@ -55,6 +58,7 @@ export function resetMemberProfile() {
     photo: null,
     sub: null,
     udisc: null,
+    welcome: false,
   };
   publishMemberProfile(memberDashboardContext());
 }

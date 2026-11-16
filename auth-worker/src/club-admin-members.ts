@@ -24,8 +24,9 @@ export async function handleAdminMembers(
   method: string,
   seg: string[],
   adminId: string,
+  ctx?: ExecutionContext,
 ): Promise<Response | null> {
-  const applications = await handleAdminMembershipApplications(env, origin, method, seg);
+  const applications = await handleAdminMembershipApplications(request, env, origin, method, seg, adminId, ctx);
   if (applications) return applications;
 
   // GET /admin/members — list members (public-safe fields, never the PIN hash)

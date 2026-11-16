@@ -1,5 +1,6 @@
 import React from "react";
 import { Camera, KeyRound, LockKeyhole, UserRound } from "lucide-react";
+import { ApplySubmitted } from "./apply-submitted.js";
 
 const h = React.createElement;
 
@@ -113,7 +114,11 @@ export function ApplyForm({ active, state, onValuesChange }) {
   const udisc = state.values.udisc || "";
   const pin = state.values.pin || "";
   const confirmPin = state.values.confirmPin || "";
+  const email = state.values.email || "";
+  const submitted = state.values.submitted || null;
   const busy = state.busyAction === "apply";
+
+  if (submitted) return h(ApplySubmitted, { active, info: submitted });
 
   return h("form", {
     className: "login-form",
@@ -122,7 +127,7 @@ export function ApplyForm({ active, state, onValuesChange }) {
     hidden: !active,
     onSubmit: (event) => {
       event.preventDefault();
-      request("gvdg:member-apply-requested", { name, pdgaNo, udisc, pin, confirmPin });
+      request("gvdg:member-apply-requested", { name, pdgaNo, udisc, pin, confirmPin, email });
     },
   }, [
     h("p", { className: "login-subtitle", key: "copy" }, "Pick a PDGA # or UDisc name and a PIN. An admin approves you, then you can log in."),
@@ -152,6 +157,16 @@ export function ApplyForm({ active, state, onValuesChange }) {
       maxLength: 50,
       value: udisc,
       onChange: (event) => onValuesChange("apply", { udisc: event.target.value }),
+    })),
+    h(FormGroup, { label: "Email (optional)", htmlFor: "applyEmailInput", hint: "For a welcome message when you're approved. Never shown publicly.", key: "email" }, h("input", {
+      type: "email",
+      className: "form-input",
+      id: "applyEmailInput",
+      name: "email",
+      autoComplete: "email",
+      maxLength: 120,
+      value: email,
+      onChange: (event) => onValuesChange("apply", { email: event.target.value }),
     })),
     h(FormGroup, { label: "Choose a PIN", htmlFor: "applyPinInput", key: "pin" }, h("input", {
       type: "password",

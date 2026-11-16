@@ -11,6 +11,7 @@ export function setMemberContext(detail = {}) {
     pdgaNo: detail.pdgaNo || null,
     photo: detail.photo || null,
     sub: detail.sub || null,
+    welcome: detail.welcome === true,
   };
   return readMemberContext(memberContext);
 }
@@ -24,6 +25,7 @@ export function readMemberContext(detail = null) {
     photo: source.photo || stored.photo || null,
     isAdmin: source.isAdmin === true || stored.isAdmin === true,
     sub: source.sub || stored.sub || null,
+    welcome: source.welcome === true,
   };
 }
 
@@ -57,6 +59,7 @@ export function useMemberContext() {
           photo: profile.photo || null,
           isAdmin: profile.isAdmin === true,
           sub: profile.sub || null,
+          welcome: profile.welcome === true,
         });
         setContext(next);
       })

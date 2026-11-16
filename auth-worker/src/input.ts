@@ -70,6 +70,15 @@ export function asStr(v: unknown, max = 500): string | null {
   return typeof v === "string" && v.trim().length > 0 && v.length <= max ? v.trim() : null;
 }
 
+/** Optional email field: absent/blank -> {ok:true,value:null}; present but malformed/too long -> {ok:false}. */
+export function parseOptionalEmail(v: unknown, max = 120): { ok: true; value: string | null } | { ok: false } {
+  if (v == null || (typeof v === "string" && v.trim() === "")) return { ok: true, value: null };
+  if (typeof v !== "string") return { ok: false };
+  const t = v.trim();
+  if (t.length > max || !/^[^@\s<>",;]+@[^@\s<>",;]+\.[^@\s<>",;]+$/.test(t)) return { ok: false };
+  return { ok: true, value: t.toLowerCase() };
+}
+
 // Normalize a client timestamp to an ISO string. null/"" -> null (clear); a valid instant -> its ISO form;
 // anything unparseable OR a zone-less "YYYY-MM-DDTHH:MM" (the Worker runs UTC and would misread it) ->
 // undefined, which callers treat as "invalid input" (reject) vs null ("explicitly cleared").
