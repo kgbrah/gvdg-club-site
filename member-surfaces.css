@@ -951,3 +951,31 @@ body:has(.stats-jump), #members:has(.stats-jump) { overflow-x: clip; }
 @media (max-width: 640px) {
   html.member-keyboard-open body #members { padding-bottom: 60vh !important; }
 }
+
+/* Account > Notifications switches */
+#members .member-notifications { display: grid; }
+#members .member-notifications-note { margin: 0; padding: 0 .82rem .7rem; }
+#members .member-switch {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  width: 2.6rem;
+  height: 1.5rem;
+  padding: .15rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--member-hover);
+  transition: background-color .15s ease, border-color .15s ease;
+}
+#members .member-switch-knob {
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  transition: transform .15s ease, background-color .15s ease;
+}
+#members .member-switch.is-on { background: var(--primary-strong); border-color: var(--primary-strong); }
+#members .member-switch.is-on .member-switch-knob { background: #fff; transform: translateX(1.1rem); }
+@media (prefers-reduced-motion: reduce) {
+  #members .member-switch, #members .member-switch-knob { transition: none; }
+}

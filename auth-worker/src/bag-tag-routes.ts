@@ -9,6 +9,7 @@ import * as tags from "./db-bag-tags.js";
 import * as leagueDb from "./db-bag-tag-leagues.js";
 import { ensureLeagueLadder, playerKey, relinkLeague } from "./bag-tag-leagues.js";
 import { notifyAdmins } from "./admin-push.js";
+import { notifyChallenge } from "./bag-tag-notify.js";
 
 function scoreOf(value: unknown): number | null {
   if (typeof value === "number" && Number.isInteger(value) && value >= -99 && value <= 400) return value;
@@ -171,6 +172,7 @@ async function settleLeagueChallenge(
 
 async function createLeagueChallenge(
   env: Env,
+  ctx: ExecutionContext | undefined,
   origin: string | null,
   memberId: string,
   input: { leagueId: number; defenderId: string; challengerScore: number; defenderScore: number },
@@ -197,6 +199,7 @@ async function createLeagueChallenge(
     challengerScore: input.challengerScore,
     defenderScore: input.defenderScore,
   });
+  notifyChallenge(ctx, env, created, { kind: "created" });
   return json({ challenge: created ? publicLeagueChallenge(created) : null }, 201, origin);
 }
 
@@ -338,7 +341,7 @@ export async function handleBagTags(
     if (body.leagueId != null) {
       const leagueId = asInt(body.leagueId);
       if (!leagueId) return json({ error: "invalid_challenge" }, 400, origin);
-      return createLeagueChallenge(env, origin, member.memberId, { leagueId, defenderId, challengerScore, defenderScore });
+      return createLeagueChallenge(env, ctx, origin, member.memberId, { leagueId, defenderId, challengerScore, defenderScore });
     }
     const series = await tags.activeSeries(env.DB);
     if (!series) return json({ error: "no_series" }, 404, origin);
@@ -366,6 +369,7 @@ export async function handleBagTags(
         url: "/admin.html?tab=bag-tags",
         tag: `bag-challenge:${created.id}`,
       });
+      notifyChallenge(ctx, env, created, { kind: "created" });
     }
     return json({ challenge: created ? publicChallenge(created) : null }, 201, origin);
   }
@@ -378,24 +382,29 @@ export async function handleBagTags(
     if (challenge.league_id != null) {
       if (seg[3] === "decline") {
         if (!await tags.claimChallenge(env.DB, challenge.id, "declined")) return json({ error: "not_found" }, 404, origin);
+        notifyChallenge(ctx, env, challenge, { kind: "declined" });
         return json({ ok: true }, 200, origin);
       }
       if (!await leagueTagsStillMatch(env, challenge)) {
         await tags.claimChallenge(env.DB, challenge.id, "declined", "tags changed before it was confirmed");
+        notifyChallenge(ctx, env, challenge, { kind: "declined", stale: true });
         return json({ error: "stale_tags" }, 409, origin);
       }
       if (!await tags.claimChallenge(env.DB, challenge.id, "settled")) return json({ error: "not_found" }, 404, origin);
       const done = await settleLeagueChallenge(env, challenge, member.memberId);
       if ("error" in done) return json({ error: done.error }, done.status, origin);
+      notifyChallenge(ctx, env, challenge, { kind: "confirmed", swapped: done.changes > 0 });
       return json({ ok: true, changes: done.changes }, 200, origin);
     }
     if (seg[3] === "decline") {
       const claimed = await tags.claimChallenge(env.DB, challenge.id, "declined");
       if (!claimed) return json({ error: "not_found" }, 404, origin);
+      notifyChallenge(ctx, env, challenge, { kind: "declined" });
       return json({ ok: true }, 200, origin);
     }
     if (!await tagsStillMatch(env, challenge)) {
       await tags.claimChallenge(env.DB, challenge.id, "declined");
+      notifyChallenge(ctx, env, challenge, { kind: "declined", stale: true });
       return json({ error: "stale_tags" }, 409, origin);
     }
     const claimed = await tags.claimChallenge(env.DB, challenge.id, "settled");
@@ -405,6 +414,7 @@ export async function handleBagTags(
       { memberId: challenge.defender_id, score: challenge.defender_score },
     ], "challenge", member.memberId);
     if ("error" in settled) return json({ error: settled.error }, settled.status, origin);
+    notifyChallenge(ctx, env, challenge, { kind: "confirmed", swapped: settled.changes > 0 });
     return json({ ok: true, changes: settled.changes }, 200, origin);
   }
 
@@ -418,6 +428,7 @@ export async function handleAdminBagTags(
   method: string,
   seg: string[],
   adminId: string,
+  ctx?: ExecutionContext,
 ): Promise<Response | null> {
   if (seg[1] !== "bag-tags") return null;
   const body = method === "POST" ? ((await readJson(request)) ?? {}) : {};
@@ -517,6 +528,7 @@ export async function handleAdminBagTags(
       { memberId: challenge.defender_id, score: challenge.defender_score },
     ], "challenge", adminId);
     if ("error" in settled) return json({ error: settled.error }, settled.status, origin);
+    notifyChallenge(ctx, env, challenge, { kind: "confirmed", swapped: settled.changes > 0, byAdmin: true });
     return json({ ok: true, changes: settled.changes }, 200, origin);
   }
 
@@ -526,6 +538,7 @@ export async function handleAdminBagTags(
     if (!await tags.claimChallenge(env.DB, challenge.id, "cancelled", "cancelled by an admin")) {
       return json({ error: "not_found" }, 404, origin);
     }
+    notifyChallenge(ctx, env, challenge, { kind: "cancelled" });
     return json({ ok: true }, 200, origin);
   }
 

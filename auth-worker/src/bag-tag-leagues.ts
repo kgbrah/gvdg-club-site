@@ -2,6 +2,7 @@ import type { Env } from "./env.js";
 import { compactPlayerName, playerNameTokens, playersMatch } from "./player-identity.js";
 import { listMembers } from "./roster.js";
 import * as league from "./db-bag-tag-leagues.js";
+import { notifyChallengesExpired } from "./bag-tag-notify.js";
 
 // Imported UDisc bag-tag leagues. UDisc's current order is the source of truth. The
 // app keeps its own ladder per league so members can challenge between imports.
@@ -118,9 +119,12 @@ async function keepResultLinks(env: Env, leagueId: number, players: readonly Lad
 export async function resetLeagueLadderFromUdisc(env: Env, leagueId: number): Promise<number> {
   const players = playersFromUdisc(await league.udiscTagRows(env.DB, leagueId));
   if (!players.length) return 0;
+  const open = await league.pendingLeagueChallenges(env.DB, leagueId).catch(() => []);
   await league.resetLadder(env.DB, leagueId, players);
   await keepResultLinks(env, leagueId, players);
   await resolveLinks(env, leagueId);
+  // resetLadder closed them; tell both members (best-effort, never throws).
+  await notifyChallengesExpired(env, leagueId, open);
   return players.length;
 }
 

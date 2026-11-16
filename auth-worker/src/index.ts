@@ -32,6 +32,7 @@ export { LiveEventDO } from "./live.js";
 import { runRatingsRecompute } from "./ratings-recompute.js";
 import { isPdgaEventCron, refreshClubPdgaEvents } from "./pdga-events.js";
 import { isUdiscLayoutCron, runUdiscLayoutImportTick } from "./udisc-layout-import.js";
+import { handleMemberPush } from "./member-push.js";
 import { isUdiscLeagueRefreshCron, refreshImportedUdiscLeagues } from "./udisc-league-refresh.js";
 import { handleUdiscHistory } from "./udisc-history-routes.js";
 import { handleMyPlayHistory, handleMyPlayExport } from "./play-history-routes.js";
@@ -91,6 +92,9 @@ export default {
       if (pathname === "/login" && method === "POST") return await handleLogin(request, env, origin);
       if (pathname === "/me" && method === "GET") return await handleMe(request, env, origin);
       if (pathname === "/me/welcome-seen" && method === "POST") return await handleWelcomeSeen(request, env, origin);
+      if (pathname === "/me/push-subscription" && (method === "GET" || method === "PUT" || method === "DELETE")) {
+        return await handleMemberPush(request, env, origin, method);
+      }
       if (pathname === "/my-results" && method === "GET") return await handleMyResults(request, env, origin);
       if (pathname === "/me/udisc-history" && (method === "GET" || method === "POST" || method === "DELETE")) {
         return await handleUdiscHistory(request, env, origin, method);

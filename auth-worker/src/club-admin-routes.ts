@@ -34,7 +34,7 @@ export async function handleClubAdmin(
   let response: Response | null = null;
 
   if (sub === "courses") response = await handleAdminCourses(request, env, origin, method, seg, adminId, id);
-  else if (sub === "bag-tags") response = await handleAdminBagTags(request, env, origin, method, seg, adminId);
+  else if (sub === "bag-tags") response = await handleAdminBagTags(request, env, origin, method, seg, adminId, ctx);
   else if (sub === "events") response = await handleAdminEvents(request, env, origin, method, seg, adminId, id);
   else if (sub === "leagues" && method === "POST" && seg[3] === "nights" && id != null) response = await handleAdminLeagueNight(request, env, origin, adminId, id);
   else if (sub === "leagues") response = await handleAdminLeagues(request, env, origin, method, adminId, id);
