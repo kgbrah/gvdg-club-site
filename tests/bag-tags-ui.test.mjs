@@ -36,3 +36,14 @@ test("bag tags show on the events hub, member home, and admin club tools", () =>
   assert.match(adminPanel, /Next new player is #/);
   assert.match(adminPanel, /Give #\$\{nextTag\}/);
 });
+
+test("league bag-tag ladders get their own challenges, the UDisc note, the no-tag hint, and an admin cancel", () => {
+  const panel = readFileSync("src/members-app/bag-tag-panel.js", "utf8");
+  const adminPanel = readFileSync("src/admin-app/bag-tags-panel.js", "utf8");
+  assert.match(panel, /Imported from UDisc\. The ladder resets to UDisc's order at each import \(Sundays 3pm\)\. Record challenge results in UDisc to keep them\./);
+  assert.match(panel, /Challenges unlock once you hold a tag\. Request a club tag, or join a bag-tag league\./);
+  assert.match(panel, /leagueId/);
+  assert.match(panel, /App challenge \(not in UDisc\)/);
+  assert.match(adminPanel, /\/admin\/bag-tags\/challenges\/\$\{challenge\.id\}\/cancel/);
+  assert.match(adminPanel, /Filter by series/);
+});

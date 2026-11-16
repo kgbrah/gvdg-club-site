@@ -829,6 +829,10 @@ body #crottsReactApp :is(button,textarea,a):focus-visible { outline: 2px solid c
 #members .tag-ladder-row.is-you + .tag-ladder-row { border-top-color: transparent; }
 #members .tag-incoming { display: grid; gap: .6rem; background: color-mix(in srgb, var(--accent) 10%, transparent); }
 #members .tag-incoming > .player-card-meta { color: var(--text-primary); margin: 0; }
+#members .bag-tag-home:not(.member-home-tags) + :is(.bag-tag-home, .member-list) { margin-top: .75rem; }
+#members .tag-league-note { margin: 0; padding: .6rem .82rem; }
+#members .tag-closed { color: var(--text-muted); }
+#members .tag-history { list-style: none; margin: 0; padding: .55rem .82rem .7rem; display: grid; gap: .3rem; font-size: .75rem; color: var(--text-muted); }
 #members .tag-challenge-form { gap: .7rem; }
 #members .tag-challenge-form > label { color: var(--text-muted); font-size: .75rem; font-weight: 600; }
 #members .tag-challenge-form :is(input, select) { min-height: 44px; }

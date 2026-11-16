@@ -37,7 +37,7 @@ function tagStandings(detail) {
   return standings.some((row) => row && row.current_place != null) ? standings : [];
 }
 
-export function BagTagLeagueOrder({ compact = false }) {
+export function BagTagLeagueOrder({ compact = false, skipIds = [] }) {
   const [leagues, setLeagues] = React.useState([]);
   React.useEffect(() => {
     let active = true;
@@ -48,8 +48,9 @@ export function BagTagLeagueOrder({ compact = false }) {
       active = false;
     };
   }, []);
-  if (!leagues.length) return null;
-  return h(React.Fragment, null, leagues.map((detail) => {
+  const shown = leagues.filter((detail) => !skipIds.includes(String(detail.league && detail.league.id)));
+  if (!shown.length) return null;
+  return h(React.Fragment, null, shown.map((detail) => {
     const league = detail.league || {};
     const tags = tagStandings(detail);
     const id = league.id == null ? "" : String(league.id);
