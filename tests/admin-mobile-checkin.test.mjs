@@ -54,7 +54,8 @@ test("admin phone chrome hides the public hamburger and stacks the dock above Cr
   assert.match(html, /\.admin-scoring-card \{/);
   assert.match(html, /@media \(max-width: 768px\) \{/);
   assert.match(crotts, /createPortal\(/);
-  assert.match(crotts, /position: fixed; inset: 0; z-index: 12000/);
+  assert.match(crotts, /position: fixed; z-index: 12000/);
+  assert.match(crotts, /bottom: var\(--crotts-keyboard, 0px\)/);
   assert.match(crotts, /props\.className/);
   assert.match(tokens, /body\.admin-page \.pwa-update/);
 });
