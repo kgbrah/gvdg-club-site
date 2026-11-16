@@ -24,6 +24,7 @@ const pageName = "/member-glass.html";
 const apiRoot = "/member-glass-api";
 const images = process.env.GVDG_GLASS_SHOTS || join(tmpdir(), "gvdg-glass-qa");
 
+const WARM = ["#c2410c", "#f59e0b", "#7c2d12", "#fde68a", "#1c1917"];
 function themeFor(query) {
   if (query.glass === "none") return null;
   if (query.wp === "default") {
@@ -34,7 +35,8 @@ function themeFor(query) {
   const custom = /^(\d+)-(\d+)$/.exec(query.glass || "");
   const preset = custom ? { opacity: Number(custom[1]), blur: Number(custom[2]) } : GLASS_PRESETS[query.glass] || GLASS_PRESETS.off;
   return buildTheme({
-    mode: query.mode === "light" ? "light" : "dark", preset: "Frost", wallpaper: wallpapers[query.wp || "slide5"],
+    mode: query.mode === "light" ? "light" : "dark", wallpaper: wallpapers[query.wp || "slide5"],
+    ...(query.pal === "warm" ? { sourcePalette: WARM } : { preset: "Frost" }),
     glass: { opacity: preset.opacity, blur: preset.blur },
   });
 }
@@ -106,7 +108,7 @@ function parseRgba(value) {
   return { r: Number(match[5]), g: Number(match[6]), b: Number(match[7]), a: match[8] === undefined ? 1 : Number(match[8]) };
 }
 
-async function open(width, height, route, { glass = "frosted", mode = "dark", wp = "slide5", reduced = false } = {}) {
+async function open(width, height, route, { glass = "frosted", mode = "dark", wp = "slide5", pal = "", reduced = false } = {}) {
   const context = await browser.newContext({
     viewport: { width, height }, serviceWorkers: "block", reducedMotion: "reduce",
     ...(reduced ? { forcedColors: "none" } : {}),
@@ -116,7 +118,7 @@ async function open(width, height, route, { glass = "frosted", mode = "dark", wp
   page.setDefaultTimeout(60_000);
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto(origin + pageName + "?glass=" + glass + "&mode=" + mode + "&wp=" + wp + "#" + route, { waitUntil: "commit" });
+  await page.goto(origin + pageName + "?glass=" + glass + "&mode=" + mode + "&wp=" + wp + (pal ? "&pal=" + pal : "") + "#" + route, { waitUntil: "commit" });
   await page.waitForSelector(wp === "default" ? "body[data-member-shell]" : "body.player-theme-active");
   if (wp === "default" && glass !== "off") await page.waitForSelector("body.player-theme-glass");
   await page.evaluate(() => document.fonts.ready);
@@ -139,7 +141,7 @@ try {
         }));
         assert.equal(body.glass, glass === "frosted", route + " " + mode + " glass class");
         assert.equal(body.overflow, false, route + " horizontal overflow");
-        if (glass === "frosted") assert.deepEqual([body.alpha, body.blur], ["30%", "16px"]);
+        if (glass === "frosted") assert.deepEqual([body.alpha, body.blur], ["45%", "20px"]);
         await page.screenshot({ path: join(images, "member-" + route + "-" + glass + "-" + mode + "-390.png"), animations: "disabled" });
         assert.deepEqual(errors, []);
         await context.close();
@@ -149,8 +151,8 @@ try {
 
   // 2. Guardrail checks on Home (frosted): header + dock + at least one panel carry a backdrop blur, and
   // the panels are translucent but never below 40% opaque.
-  {
-    const { page, context } = await open(390, 844, "home", { glass: "frosted", mode: "dark" });
+  for (const [mode, pal] of [["dark", ""], ["light", ""], ["dark", "warm"], ["light", "warm"]]) {
+    const { page, context } = await open(390, 844, "home", { glass: "frosted", mode, pal });
     await page.locator(".player-home").waitFor();
     const result = await page.evaluate(() => {
       const read = (selector) => {
@@ -159,13 +161,20 @@ try {
         const style = getComputedStyle(el);
         return { filter: style.backdropFilter || style.webkitBackdropFilter, bg: style.backgroundColor };
       };
-      return { header: read(".member-app-header"), dock: read(".player-app-nav"), panel: read("#members .member-list-rows, #members .bag-tag-home, #members .play-stats-panel, #members .member-home-services") };
+      return { header: read(".member-app-header"), dock: read(".player-app-nav"), hero: read("#members .member-round-hero"), panel: read("#members .member-list-rows, #members .bag-tag-home, #members .play-stats-panel, #members .member-home-services") };
     });
-    for (const key of ["header", "dock", "panel"]) {
+    for (const key of ["header", "dock", "panel", "hero"]) {
       assert.ok(result[key], key + " exists");
-      assert.match(result[key].filter, /blur\(16px\)/, key + " has blur");
+      const label = key + " " + mode + (pal ? " " + pal : "");
+      const blur = Number(/blur\(([\d.]+)px\)/.exec(result[key].filter)?.[1]);
+      assert.ok(blur >= 16, key + " blur is >= 16px: " + result[key].filter);
+      const sat = Number(/saturate\(([\d.]+)(%?)\)/.exec(result[key].filter)?.[1]);
+      assert.ok(sat > 0 && (sat <= 1.2 || (sat > 5 && sat <= 120)), key + " saturate <= 120%: " + result[key].filter);
       const color = parseRgba(result[key].bg);
-      assert.ok(color && color.a > 0.39 && color.a < 0.99, key + " is translucent but readable: " + result[key].bg);
+      // Visibility: Frosted must be obviously see-through (alpha <= 0.6) yet never below 40% opaque.
+      assert.ok(color && color.a > 0.39 && color.a <= 0.6, key + " is visibly see-through but readable: " + result[key].bg);
+      // Neutral glass: no theme colour in the fill (r, g, b nearly equal), even under a strongly warm theme.
+      assert.ok(Math.max(color.r, color.g, color.b) - Math.min(color.r, color.g, color.b) <= 12, key + " fill is neutral: " + result[key].bg);
     }
     await context.close();
   }
@@ -231,7 +240,7 @@ try {
     }
     await group.getByRole("button", { name: "Frosted" }).click();
     assert.equal(await active(), "frosted");
-    assert.equal(await page.evaluate(() => document.body.style.getPropertyValue("--glass-blur")), "16px");
+    assert.equal(await page.evaluate(() => document.body.style.getPropertyValue("--glass-blur")), "20px");
     assert.equal(await page.evaluate(() => document.body.classList.contains("player-theme-glass")), true);
     await group.scrollIntoViewIfNeeded();
     await page.screenshot({ path: join(images, "appearance-glass-frosted-" + width + ".png"), animations: "disabled" });
@@ -242,7 +251,7 @@ try {
     await blurSlider.focus();
     await page.keyboard.press("ArrowLeft");
     assert.equal(await active(), "custom");
-    assert.equal(await page.evaluate(() => document.body.style.getPropertyValue("--glass-blur")), "15px");
+    assert.equal(await page.evaluate(() => document.body.style.getPropertyValue("--glass-blur")), "19px");
     const slider = group.getByRole("slider", { name: "Glass" });
     for (const range of [slider, blurSlider]) {
       const box = await range.boundingBox();
@@ -251,12 +260,12 @@ try {
     await group.scrollIntoViewIfNeeded();
     await page.screenshot({ path: join(images, "appearance-glass-custom-" + width + ".png"), animations: "disabled" });
     const stored = await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith("gvdg_dashboard_theme:")).map(([, value]) => JSON.parse(value).glass));
-    assert.ok(stored.some((glass) => glass.opacity === 30 && glass.blur === 15), "glass saved locally: " + JSON.stringify(stored));
+    assert.ok(stored.some((glass) => glass.opacity === 45 && glass.blur === 19), "glass saved locally: " + JSON.stringify(stored));
     await group.getByRole("button", { name: "Off" }).click();
     assert.equal(await active(), "off");
     assert.equal(await page.evaluate(() => document.body.classList.contains("player-theme-glass")), false);
     await group.getByRole("button", { name: "Clear" }).click();
-    assert.equal(await page.evaluate(() => document.body.style.getPropertyValue("--glass-alpha")), "50%");
+    assert.equal(await page.evaluate(() => document.body.style.getPropertyValue("--glass-alpha")), "60%");
     await page.getByRole("button", { name: "Reset", exact: true }).click();
     await page.waitForFunction(() => !document.body.classList.contains("player-theme-glass"));
     assert.equal(await page.evaluate(() => document.body.style.getPropertyValue("--glass-alpha")), "");
@@ -313,7 +322,7 @@ try {
     await page.waitForFunction(() => document.body.classList.contains("player-theme-glass"));
     assert.equal(await page.evaluate(() => document.body.classList.contains("player-theme-page")), false);
     const stored = await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith("gvdg_dashboard_theme:")).map(([, value]) => JSON.parse(value)));
-    assert.ok(stored.some((theme) => theme.glassOnly === true && theme.glass.blur === 16 && !theme.palette.length), "glass-only theme saved locally");
+    assert.ok(stored.some((theme) => theme.glassOnly === true && theme.glass.blur === 20 && !theme.palette.length), "glass-only theme saved locally");
     await page.waitForTimeout(300);
     const last = puts.at(-1);
     assert.equal(last.method, "PUT");
@@ -346,7 +355,7 @@ try {
     await page.goto(origin + pageName + "?glass=off&mode=dark#home", { waitUntil: "commit" });
     await page.locator(".player-home").waitFor();
     await page.waitForTimeout(800);
-    assert.equal(await page.evaluate(() => document.body.style.getPropertyValue("--glass-blur")), "16px", "legacy server response keeps local glass");
+    assert.equal(await page.evaluate(() => document.body.style.getPropertyValue("--glass-blur")), "20px", "legacy server response keeps local glass");
     await context.close();
   }
   console.log("theme glass member QA passed; screenshots in " + images);
