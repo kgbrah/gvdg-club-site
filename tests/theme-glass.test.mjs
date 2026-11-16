@@ -51,10 +51,11 @@ test("glass values clamp and round", () => {
 
 test("preset values and detection", () => {
   assert.deepEqual([GLASS_PRESETS.off.opacity, GLASS_PRESETS.off.blur], [0, 0]);
-  assert.deepEqual([GLASS_PRESETS.frosted.opacity, GLASS_PRESETS.frosted.blur], [30, 16]);
-  assert.deepEqual([GLASS_PRESETS.clear.opacity, GLASS_PRESETS.clear.blur], [50, 8]);
-  assert.equal(glassPresetFor({ opacity: 30, blur: 16 }), "frosted");
-  assert.equal(glassPresetFor({ opacity: 31, blur: 16 }), "custom");
+  assert.deepEqual([GLASS_PRESETS.frosted.opacity, GLASS_PRESETS.frosted.blur], [45, 20]);
+  assert.deepEqual([GLASS_PRESETS.clear.opacity, GLASS_PRESETS.clear.blur], [60, 10]);
+  assert.equal(glassPresetFor({ opacity: 45, blur: 20 }), "frosted");
+  assert.equal(glassPresetFor({ opacity: 30, blur: 16 }), "custom");
+  assert.equal(glassPresetFor({ opacity: 46, blur: 20 }), "custom");
   assert.equal(glassPresetFor(undefined), "off");
 });
 

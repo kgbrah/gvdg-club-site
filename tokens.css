@@ -457,27 +457,44 @@ input, select, textarea {
 /* ==========================================================================
    Glass: member theme studio (Appearance -> Dashboard theme -> Glass)
    Opt-in: the theme applier adds body.player-theme-glass and sets --glass-alpha (0-60%) and --glass-blur
-   (0-24px) when either is above zero. Containers (cards, panels, header, docks, sheets) become frosted
-   over the wallpaper; rows and controls never get their own backdrop-filter. Score entry, totals and hole
-   navigation stay >= 85% opaque. Solid fallbacks at the bottom.
+   (0-24px) when either is above zero. Clear, neutral glass (iOS/macOS style): the fill is near-black ink in
+   dark and white in light, never the theme's surface colour, so the wallpaper shows through blurred in its own
+   true colours. The theme still colours text and accents. Readability comes from the fill alpha and blur, not
+   from darkening. Containers (cards, panels, header, docks, sheets) are glass; rows and controls never get
+   their own backdrop-filter. Score entry, totals and hole navigation stay >= 85% opaque. Fallbacks at the end.
    ========================================================================== */
 body.player-theme-glass {
-  --glass-base: color-mix(in srgb, var(--bg-primary) 94%, var(--text-primary));
-  --glass-fill: color-mix(in srgb, var(--glass-base) calc(100% - var(--glass-alpha, 0%)), transparent);
-  --glass-fill-sheet: color-mix(in srgb, var(--glass-base) calc(100% - min(var(--glass-alpha, 0%), 30%)), transparent);
-  --glass-fill-safe: color-mix(in srgb, var(--bg-secondary) calc(100% - min(var(--glass-alpha, 0%), 15%)), transparent);
-  --glass-fill-chrome: color-mix(in srgb, var(--member-chrome-bg) calc(100% - var(--glass-alpha, 0%)), transparent);
-  --glass-chip: color-mix(in srgb, var(--bg-tertiary) calc(100% - var(--glass-alpha, 0%)), transparent);
-  --glass-filter: blur(var(--glass-blur, 0px)) saturate(140%) var(--glass-tone, brightness(1));
-  --glass-line: color-mix(in srgb, var(--text-primary) 16%, transparent);
-  --glass-edge: inset 0 1px 0 color-mix(in srgb, var(--text-primary) 12%, transparent);
+  --glass-tint: #fff;
+  --glass-fill: color-mix(in srgb, var(--glass-tint) calc(100% - var(--glass-alpha, 0%)), transparent);
+  --glass-fill-sheet: color-mix(in srgb, var(--glass-tint) calc(100% - min(var(--glass-alpha, 0%), 45%)), transparent);
+  --glass-fill-safe: color-mix(in srgb, var(--glass-tint) calc(100% - min(var(--glass-alpha, 0%), 15%)), transparent);
+  --glass-fill-chrome: var(--glass-fill);
+  --glass-chip: color-mix(in srgb, var(--glass-tint) calc(100% - min(var(--glass-alpha, 0%), 20%)), transparent);
+  --glass-tone: brightness(1.05);
+  --glass-filter: blur(var(--glass-blur, 0px)) saturate(110%) var(--glass-tone);
+  --glass-line: color-mix(in srgb, #0a0c12 10%, transparent);
+  --glass-edge: inset 0 1px 0 color-mix(in srgb, #fff 70%, transparent);
+  --glass-drop: 0 8px 24px color-mix(in srgb, #0a0c12 12%, transparent);
+  --glass-halo: 0 0 6px rgb(255 255 255 / .6), 0 1px 2px rgb(255 255 255 / .5);
 }
-/* Tone: dim bright wallpaper behind light text (dark), lift dark wallpaper behind dark text (light). */
-:root[data-theme="dark"] body.player-theme-glass { --glass-tone: brightness(.66); }
-:root:not([data-theme="dark"]) body.player-theme-glass { --glass-tone: brightness(1.22); }
+:root[data-theme="dark"] body.player-theme-glass {
+  --glass-tint: #0a0c12;
+  --glass-tone: brightness(.8);
+  --glass-line: color-mix(in srgb, #fff 18%, transparent);
+  --glass-edge: inset 0 1px 0 color-mix(in srgb, #fff 14%, transparent);
+  --glass-drop: 0 8px 28px color-mix(in srgb, #000 35%, transparent);
+  --glass-halo: 0 1px 2px rgb(0 0 0 / .35);
+}
+/* Club default colours (glass without a custom theme): the light muted grey steps down a little over glass. */
+:root:not([data-theme="dark"]) body.player-theme-glass:not(.player-theme-page) { --text-muted: #525252; }
 body.player-theme-active.player-theme-glass,
 body.score-glove.player-theme-active.player-theme-glass {
   background-image: var(--player-theme-image-glass, var(--player-theme-image));
+}
+
+/* Text that sits on the bare wallpaper (page titles, headings outside cards) gets a soft halo. */
+body.player-theme-glass[data-member-shell="members"] #members :is(.member-page-heading, .member-page-heading *, .member-section-title, #members > h2, .member-home-section > h2, .member-home-section > h3) {
+  text-shadow: var(--glass-halo);
 }
 
 /* Member app: containers (cards, grouped lists, panels) */
@@ -492,14 +509,34 @@ body.player-theme-glass[data-member-shell="members"] #members :is(
 ) {
   background: var(--glass-fill);
   border-color: var(--glass-line);
-  box-shadow: var(--glass-edge);
+  box-shadow: var(--glass-edge), var(--glass-drop);
+  text-shadow: var(--glass-halo);
   -webkit-backdrop-filter: var(--glass-filter);
   backdrop-filter: var(--glass-filter);
+}
+
+/* The round hero: neutral glass over the wallpaper (text follows the theme's ink; the CTA keeps its accent).
+   Only when glass really applies: reduced transparency / no backdrop-filter keep the solid themed hero. */
+@media not (prefers-reduced-transparency: reduce) {
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  body.player-theme-glass[data-member-shell="members"] #members .member-round-hero {
+    background: var(--glass-fill);
+    --member-round-title: var(--text-primary);
+    --member-round-ink: var(--text-primary);
+    --member-round-subtle: var(--text-secondary);
+    border: 1px solid var(--glass-line);
+    box-shadow: var(--glass-edge), var(--glass-drop);
+    text-shadow: var(--glass-halo);
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+  }
+  }
 }
 
 /* Member header + bottom dock */
 body.player-theme-glass[data-member-shell="members"] .member-app-header {
   background: var(--glass-fill-chrome);
+  border-bottom-color: var(--glass-line);
   -webkit-backdrop-filter: var(--glass-filter);
   backdrop-filter: var(--glass-filter);
   box-shadow: var(--glass-edge);
@@ -518,6 +555,7 @@ body.player-theme-glass :is(.admin-dialog, .member-dialog, .score-dialog, .playe
   background: var(--glass-fill-sheet);
   border-color: var(--glass-line);
   box-shadow: var(--glass-edge), 0 18px 48px var(--shadow);
+  text-shadow: var(--glass-halo);
   -webkit-backdrop-filter: var(--glass-filter);
   backdrop-filter: var(--glass-filter);
 }
@@ -525,6 +563,7 @@ body.player-theme-glass :is(.admin-dialog, .member-dialog, .score-dialog, .playe
 /* Scorecard: header, weather strip, stats strip, hole strip, tools dock */
 body.score-glove.player-theme-glass #scoreRoot .topbar {
   background: var(--glass-fill-chrome);
+  border-bottom-color: var(--glass-line);
   -webkit-backdrop-filter: var(--glass-filter);
   backdrop-filter: var(--glass-filter);
   box-shadow: var(--glass-edge);
@@ -538,6 +577,7 @@ body.score-glove.player-theme-glass #scoreRoot .scorecard-weather {
 }
 /* Stats strip and hole strip: one blurred container each; the chips inside only tint. */
 body.score-glove.player-theme-glass #scoreRoot :is(.score-advanced, .score-glove-stage .holegrid) {
+  background: var(--glass-fill);
   -webkit-backdrop-filter: var(--glass-filter);
   backdrop-filter: var(--glass-filter);
   border-radius: 10px;
@@ -560,28 +600,32 @@ body.score-glove.player-theme-glass.player-theme-page .score-bottom-layout .scor
 /* Solid fallbacks: reduced transparency, or no backdrop-filter support. */
 @media (prefers-reduced-transparency: reduce) {
   body.player-theme-glass {
-    --glass-fill: var(--glass-base);
-    --glass-fill-sheet: var(--glass-base);
+    --glass-fill: var(--bg-secondary);
+    --glass-fill-sheet: var(--bg-secondary);
     --glass-fill-safe: var(--bg-secondary);
     --glass-fill-chrome: var(--member-chrome-bg);
     --glass-chip: var(--bg-tertiary);
     --glass-filter: none;
     --glass-line: var(--border-color);
     --glass-edge: none;
+    --glass-drop: none;
+    --glass-halo: none;
   }
   body.player-theme-active.player-theme-glass,
   body.score-glove.player-theme-active.player-theme-glass { background-image: var(--player-theme-image); }
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   body.player-theme-glass {
-    --glass-fill: var(--glass-base);
-    --glass-fill-sheet: var(--glass-base);
+    --glass-fill: var(--bg-secondary);
+    --glass-fill-sheet: var(--bg-secondary);
     --glass-fill-safe: var(--bg-secondary);
     --glass-fill-chrome: var(--member-chrome-bg);
     --glass-chip: var(--bg-tertiary);
     --glass-filter: none;
     --glass-line: var(--border-color);
     --glass-edge: none;
+    --glass-drop: none;
+    --glass-halo: none;
   }
   body.player-theme-active.player-theme-glass,
   body.score-glove.player-theme-active.player-theme-glass { background-image: var(--player-theme-image); }

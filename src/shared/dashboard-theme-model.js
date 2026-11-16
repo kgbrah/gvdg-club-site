@@ -87,8 +87,8 @@ export const GLASS_LIMITS = {
 export const DEFAULT_GLASS = Object.freeze({ opacity: GLASS_LIMITS.opacity.default, blur: GLASS_LIMITS.blur.default });
 export const GLASS_PRESETS = {
   off: { label: "Off", opacity: 0, blur: 0 },
-  frosted: { label: "Frosted", opacity: 30, blur: 16 },
-  clear: { label: "Clear", opacity: 50, blur: 8 },
+  frosted: { label: "Frosted", opacity: 45, blur: 20 },
+  clear: { label: "Clear", opacity: 60, blur: 10 },
 };
 export const GLASS_PRESET_KEYS = Object.keys(GLASS_PRESETS);
 
@@ -1128,12 +1128,13 @@ export function clearStoredTheme(storage, memberId) {
 // Glass needs the wallpaper to show through, so its scrim is lighter than the default one.
 function wallpaperImage(theme, glass = false) {
   if (!theme?.wallpaper) return "";
-  const bg = hexToRgb(theme.tokens["bg-primary"]) || (theme.mode === "dark" ? rgb(8, 10, 18) : rgb(248, 248, 252));
   const dark = theme.mode === "dark";
-  // Glass off keeps main's scrim. Glass on: light mode lightens the scrim so the photo shows through;
-  // dark mode keeps a slightly heavier scrim so text in see-through panels stays WCAG AA (theme-glass QA).
-  const start = dark ? (glass ? 0.68 : 0.5) : (glass ? 0.66 : 0.86);
-  const end = dark ? (glass ? 0.8 : 0.68) : (glass ? 0.78 : 0.93);
+  // Glass off keeps main's scrim, tinted with the theme background. Glass on uses a NEUTRAL, light scrim
+  // (ink in dark, white in light) so the photo stays vivid and in its own colours around and behind the panels;
+  // readability is handled by the panel fill alpha and blur, not by darkening the page.
+  const bg = glass ? (dark ? rgb(10, 12, 18) : rgb(255, 255, 255)) : (hexToRgb(theme.tokens["bg-primary"]) || (dark ? rgb(8, 10, 18) : rgb(248, 248, 252)));
+  const start = dark ? (glass ? 0.4 : 0.5) : (glass ? 0.32 : 0.86);
+  const end = dark ? (glass ? 0.54 : 0.68) : (glass ? 0.55 : 0.93);
   const scrim = `linear-gradient(rgba(${bg.r}, ${bg.g}, ${bg.b}, ${start}), rgba(${bg.r}, ${bg.g}, ${bg.b}, ${end}))`;
   return `${scrim}, url("${theme.wallpaper}")`;
 }
@@ -1182,6 +1183,17 @@ function clearThemeOn(el) {
   el.classList?.remove?.("player-theme-active", "player-theme-page", "player-theme-glass");
 }
 
+// Over see-through glass the secondary/muted text steps move a little further from the surface (towards white
+// in dark, ink in light), so small grey labels keep WCAG AA over a bright photo. Hue and primary text are the theme's.
+function glassTextToken(theme, key) {
+  const value = theme.tokens[key];
+  const from = hexToRgb(value);
+  if (!from || !glassIsOn(theme.glass)) return value;
+  const to = theme.mode === "dark" ? { r: 255, g: 255, b: 255 } : { r: 10, g: 12, b: 18 };
+  const mix = (a, b) => Math.round(a + (b - a) * 0.4);
+  return rgbToHex({ r: mix(from.r, to.r), g: mix(from.g, to.g), b: mix(from.b, to.b) });
+}
+
 function paintGlassOn(el, theme) {
   const vars = glassCssVars(theme.glass);
   for (const [name, value] of Object.entries(vars)) el.style.setProperty(name, value);
@@ -1197,6 +1209,7 @@ function paintThemeOn(el, theme) {
   paintGlassOn(el, theme);
   paintChromeOn(el, theme);
   for (const key of TOKEN_KEYS) el.style.setProperty(`--${key}`, theme.tokens[key]);
+  for (const key of ["text-secondary", "text-muted"]) el.style.setProperty(`--${key}`, glassTextToken(theme, key));
   const image = wallpaperImage(theme);
   if (image) {
     el.style.setProperty("--player-theme-image", image);
@@ -1213,7 +1226,7 @@ function paintPageOn(el, theme) {
   paintChromeOn(el, theme);
   el.style.setProperty("--bg-primary", theme.tokens["bg-primary"]);
   el.style.setProperty("--text-primary", theme.tokens["text-primary"]);
-  el.style.setProperty("--player-theme-footer", theme.tokens["text-muted"]);
+  el.style.setProperty("--player-theme-footer", glassTextToken(theme, "text-muted"));
   el.style.setProperty("--player-theme-link", theme.tokens.primary);
   const image = wallpaperImage(theme);
   if (image) {

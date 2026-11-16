@@ -16,6 +16,15 @@ export async function measureContrast(page, scope, { top = 56, bottomInset = 64 
       // Skip runs that are clipped or covered (e.g. scrolled out of a strip): whatever is hit isn't the run.
       const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
       if (!hit || !(el.contains(hit) || hit.contains(el))) continue;
+      // Skip runs whose box pokes out of a clipping ancestor (a scroller edge): the clipped part is not painted.
+      let clipped = false;
+      for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+        const o = getComputedStyle(a);
+        if (o.overflowX === "visible" && o.overflowY === "visible") continue;
+        const r = a.getBoundingClientRect();
+        if (rect.right > r.right + 0.5 || rect.left < r.left - 0.5) { clipped = true; break; }
+      }
+      if (clipped) continue;
       out.push({ text: node.textContent.trim().slice(0, 24), x: rect.x, y: rect.y, w: rect.width, h: rect.height, color: style.color,
         size: parseFloat(style.fontSize), weight: Number(style.fontWeight) || 400 });
     }
