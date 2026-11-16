@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { CircleHelp, Moon, Sun, Trophy, UsersRound } from "lucide-react";
 
 import { startScoreApp } from "./score-controller.js";
-import { ScoreAuthFlow } from "./auth-flow.js";
+import { ScoreAuthFlow, ApplyForClubLogin } from "./auth-flow.js";
 import { ScorecardView, SoloScorecardPreview } from "./scorecard-view.js";
 import { OfflineRoundView, offlineScoreRoute } from "./offline-round-view.js";
 import { ScoreSetupFlow } from "./setup-flow.js";
@@ -12,7 +12,8 @@ import { WatchView } from "./watch-view.js";
 import { InstallCoachBanner } from "../shared/install-coach-ui.js";
 import { CrottsWidget, requestCrottsHelp } from "../shared/crotts-widget.js";
 import { usePlayerThemeSession } from "../shared/player-theme-chrome.js";
-import { paintPlayerTheme } from "../shared/player-theme-session.js";
+import { paintPlayerTheme, SCORE_AUTH_EVENT } from "../shared/player-theme-session.js";
+import { readMemberToken } from "../shared/member-session.js";
 import { useDiscColorSession } from "../shared/disc-color.js";
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
@@ -62,6 +63,22 @@ function themeRoot() {
   return document.body;
 }
 
+function useClubMember() {
+  const [signedIn, setSignedIn] = React.useState(() => Boolean(readMemberToken()));
+  React.useEffect(() => {
+    const refresh = () => setSignedIn(Boolean(readMemberToken()));
+    window.addEventListener(SCORE_AUTH_EVENT, refresh);
+    window.addEventListener("storage", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.removeEventListener(SCORE_AUTH_EVENT, refresh);
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
+  return signedIn;
+}
+
 function ScoreShell() {
   const previewSolo = previewSoloRequested();
   const [offline] = React.useState(() => offlineScoreRoute(location.search));
@@ -73,6 +90,7 @@ function ScoreShell() {
   });
   const [bodyView, setBodyView] = React.useState(INITIAL_SCORE_VIEW);
   const { dark, toggle: onToggleTheme } = usePlayerThemeSession();
+  const signedIn = useClubMember();
   useDiscColorSession();
   const leaderboardHandlerRef = React.useRef(null);
   const bodyController = React.useMemo(() => ({
@@ -105,11 +123,15 @@ function ScoreShell() {
     };
   }, []);
 
+  const glove = previewSolo || offlineScoring || bodyView.kind === "scorecard";
+  const applyOnScreen = !offline && (bodyView.kind === "auth" || (bodyView.kind === "setup" && (bodyView.props?.view || "home") === "home"));
+  const loading = !offline && !previewSolo && bodyView.kind === "status" && bodyView.props?.mode === "loading";
+  const showApplyBar = !signedIn && !glove && !applyOnScreen && !loading;
+
   React.useEffect(() => {
-    const glove = previewSolo || offlineScoring || bodyView.kind === "scorecard";
     document.body.classList.toggle("score-glove", glove);
     return () => document.body.classList.remove("score-glove");
-  }, [bodyView.kind, previewSolo, offlineScoring]);
+  }, [glove]);
 
   return h("div", { className: "wrap" }, [
     h("header", { key: "header", className: "topbar" }, [
@@ -174,6 +196,12 @@ function ScoreShell() {
       ),
     ]),
     previewSolo || offline || bodyView.kind === "watch" || bodyView.kind === "scorecard" ? null : h(InstallCoachBanner, { key: "install" }),
+    showApplyBar
+      ? h("div", { className: "score-apply", key: "apply" }, [
+        h("p", { key: "copy" }, "No club login yet?"),
+        h(ApplyForClubLogin, { className: "btn secondary", key: "link" }),
+      ])
+      : null,
     h("main", { key: "main", id: "app" }, previewSolo ? h(SoloScorecardPreview)
       : offline ? h(OfflineRoundView, { route: offline, onScoring: setOfflineScoring }) : h(ScoreBody, { view: bodyView })),
     h(CrottsWidget, { key: "help" }),
