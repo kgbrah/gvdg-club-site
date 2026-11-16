@@ -193,7 +193,21 @@ export function AdminMemberTempPin() {
   ]);
 }
 
-const EMPTY_APPLICATIONS = { status: "loading", applications: [] };
+const EMPTY_APPLICATIONS = { status: "loading", applications: [], duesOnline: false };
+
+function normalizePayment(value) {
+  const source = objectOrEmpty(value);
+  const status = source.status === "paid" || source.status === "manual" ? source.status : "unpaid";
+  return {
+    status,
+    amountCents: Number.isFinite(source.amountCents) ? source.amountCents : 0,
+    captureId: normalizeText(source.captureId),
+    claimedOther: source.claimedOther === true,
+    markedBy: normalizeText(source.markedBy),
+    note: normalizeText(source.note),
+    paidAt: normalizeText(source.paidAt),
+  };
+}
 
 function normalizeApplication(row) {
   const source = objectOrEmpty(row);
@@ -202,9 +216,78 @@ function normalizeApplication(row) {
     createdAt: normalizeText(source.createdAt),
     id: normalizeText(source.id),
     name: normalizeText(source.name, "Unnamed applicant"),
+    payment: normalizePayment(source.payment),
     pdgaNo: normalizeText(source.pdgaNo),
     udisc: normalizeText(source.udisc),
   };
+}
+
+function shortDate(iso) {
+  const time = Date.parse(iso);
+  if (!Number.isFinite(time)) return "";
+  return new Date(time).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function money(cents) {
+  return `$${(cents / 100).toFixed(cents % 100 ? 2 : 0)}`;
+}
+
+// Payment state shown next to Approve. Approve is never blocked: the admin decides.
+export function paymentChipModel(payment, duesOnline) {
+  if (payment.status === "paid") {
+    const parts = [`Paid ${money(payment.amountCents)}`, "PayPal", shortDate(payment.paidAt), payment.captureId ? `receipt ${payment.captureId}` : ""];
+    return { tone: "paid", label: parts.filter(Boolean).join(" · ") };
+  }
+  if (payment.status === "manual") {
+    const who = payment.markedBy ? ` by ${payment.markedBy}` : "";
+    const parts = [`Marked paid (cash/other)${who}`, payment.note, shortDate(payment.paidAt)];
+    return { tone: "paid", label: parts.filter(Boolean).join(" · ") };
+  }
+  if (!duesOnline) return { tone: "unpaid", label: "Online dues off \u2014 confirm payment in PayPal or mark paid manually" };
+  return { tone: "unpaid", label: payment.claimedOther ? "Not paid yet · applicant says they paid another way" : "Not paid yet" };
+}
+
+function ApplicationRow({ row, duesOnline }) {
+  const [marking, setMarking] = React.useState(false);
+  const [note, setNote] = React.useState("");
+  const chip = paymentChipModel(row.payment, duesOnline);
+  const paid = row.payment.status !== "unpaid";
+
+  function submitMarkPaid(event) {
+    event.preventDefault();
+    dispatchRequest("gvdg:admin-membership-mark-paid-request", { id: row.id, name: row.name, note: note.trim() });
+    setMarking(false);
+    setNote("");
+  }
+
+  return h("div", { className: "admin-evrow", "data-admin-application-id": row.id }, [
+    h("span", { className: "ev-name", key: "name" }, `${row.name} - ${[row.pdgaNo && `PDGA# ${row.pdgaNo}`, row.udisc].filter(Boolean).join(" - ") || row.id}`),
+    h("span", { className: `admin-roster-chip ${chip.tone}`, "data-admin-payment-chip": row.payment.status, key: "chip" }, chip.label),
+    marking
+      ? h("form", { className: "admin-mark-paid-form", key: "form", onSubmit: submitMarkPaid }, [
+        h("input", {
+          "aria-label": `Payment note for ${row.name}`, autoFocus: true, key: "note", maxLength: 200,
+          onChange: (event) => setNote(event.target.value), placeholder: "Note (cash, check, who took it)", type: "text", value: note,
+        }),
+        h("button", { className: "admin-btn", key: "save", type: "submit" }, "Save"),
+        h("button", { className: "admin-btn secondary", key: "cancel", onClick: () => setMarking(false), type: "button" }, "Cancel"),
+      ])
+      : paid
+        ? null
+        : h("button", { className: "admin-btn secondary", key: "mark", onClick: () => setMarking(true), type: "button" }, "Mark paid (cash/other)"),
+    h("button", {
+      className: "admin-btn",
+      key: "approve",
+      type: "button",
+      onClick: () => dispatchRequest("gvdg:admin-membership-approve-request", { id: row.id, name: row.name }),
+    }, "Approve"),
+    h("button", {
+      className: "admin-btn danger",
+      key: "reject",
+      type: "button",
+      onClick: () => dispatchRequest("gvdg:admin-membership-reject-request", { id: row.id, name: row.name }),
+    }, "Reject"),
+  ]);
 }
 
 export function AdminMembershipApplications() {
@@ -215,6 +298,7 @@ export function AdminMembershipApplications() {
       const detail = event.detail && typeof event.detail === "object" ? event.detail : EMPTY_APPLICATIONS;
       setState({
         applications: Array.isArray(detail.applications) ? detail.applications.map(normalizeApplication) : [],
+        duesOnline: detail.duesOnline === true,
         status: detail.status === "ready" ? "ready" : "loading",
       });
     }
@@ -231,21 +315,7 @@ export function AdminMembershipApplications() {
     return h("p", { className: "al-note", "data-react-admin-membership-applications": "empty", role: "status" }, "No pending applications.");
   }
   return h("div", { "data-react-admin-membership-applications": "ready" }, view.applications.map((row) =>
-    h("div", { className: "admin-evrow", "data-admin-application-id": row.id, key: row.id }, [
-      h("span", { className: "ev-name", key: "name" }, `${row.name} - ${[row.pdgaNo && `PDGA# ${row.pdgaNo}`, row.udisc].filter(Boolean).join(" - ") || row.id}`),
-      h("button", {
-        className: "admin-btn",
-        key: "approve",
-        type: "button",
-        onClick: () => dispatchRequest("gvdg:admin-membership-approve-request", { id: row.id, name: row.name }),
-      }, "Approve"),
-      h("button", {
-        className: "admin-btn danger",
-        key: "reject",
-        type: "button",
-        onClick: () => dispatchRequest("gvdg:admin-membership-reject-request", { id: row.id, name: row.name }),
-      }, "Reject"),
-    ]),
+    h(ApplicationRow, { duesOnline: view.duesOnline, key: row.id, row }),
   ));
 }
 

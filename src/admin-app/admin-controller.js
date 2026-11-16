@@ -780,8 +780,9 @@ export function startAdminController() {
                 window.dispatchEvent(new CustomEvent('gvdg:admin-membership-applications', { detail: { status: 'loading', applications: [] } }));
             }
             let applications = [];
-            try { const r = await adminApi('/admin/members/applications'); if (r.ok) applications = (await r.json()).applications || []; } catch (e) {}
-            window.dispatchEvent(new CustomEvent('gvdg:admin-membership-applications', { detail: { status: 'ready', applications } }));
+            let duesOnline = false;
+            try { const r = await adminApi('/admin/members/applications'); if (r.ok) { const d = await r.json(); applications = d.applications || []; duesOnline = d.duesOnline === true; } } catch (e) {}
+            window.dispatchEvent(new CustomEvent('gvdg:admin-membership-applications', { detail: { status: 'ready', applications, duesOnline } }));
             window.dispatchEvent(new CustomEvent('gvdg:admin-needs-refresh'));
         }
         async function adminCreateMemberFromReact(detail) {
@@ -1583,6 +1584,13 @@ export function startAdminController() {
                 const r = await adminApi('/admin/members/applications/' + encodeURIComponent(id) + '/approve', { method: 'POST' });
                 adminMsg(r.ok ? ('Approved ' + (event.detail.name || 'applicant')) : 'Approve failed', r.ok);
                 if (r.ok) adminLoadMembers();
+            });
+            window.addEventListener('gvdg:admin-membership-mark-paid-request', async (event) => {
+                const id = event.detail && event.detail.id;
+                if (!id) return;
+                const r = await adminApi('/admin/members/applications/' + encodeURIComponent(id) + '/mark-paid', { method: 'POST', body: { note: event.detail.note || '' } });
+                adminMsg(r.ok ? ('Marked ' + (event.detail.name || 'applicant') + ' paid') : 'Mark paid failed', r.ok);
+                if (r.ok) adminLoadMembershipApplications(true);
             });
             window.addEventListener('gvdg:admin-membership-reject-request', async (event) => {
                 const id = event.detail && event.detail.id;

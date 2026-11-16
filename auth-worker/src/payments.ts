@@ -60,7 +60,7 @@ export async function createOrder(c: PayPalCreds, amountCents: number, descripti
 export async function captureOrder(
   c: PayPalCreds,
   orderId: string,
-): Promise<{ status: string; captureStatus: string; currency: string; amountCents: number }> {
+): Promise<CaptureResult> {
   const token = await accessToken(c);
   const res = await fetch(c.base + "/v2/checkout/orders/" + encodeURIComponent(orderId) + "/capture", {
     method: "POST",
@@ -70,19 +70,20 @@ export async function captureOrder(
   if (!res.ok) throw new Error("paypal_capture_" + res.status);
   const d = (await res.json()) as {
     status?: string;
-    purchase_units?: { payments?: { captures?: { status?: string; amount?: { value?: string; currency_code?: string } }[] } }[];
+    purchase_units?: { payments?: { captures?: { id?: string; status?: string; amount?: { value?: string; currency_code?: string } }[] } }[];
   };
   const cap = d.purchase_units?.[0]?.payments?.captures?.[0];
   return {
     status: d.status ?? "",
     captureStatus: cap?.status ?? "",
+    captureId: cap?.id ?? "",
     currency: cap?.amount?.currency_code ?? "",
     amountCents: Math.round(parseFloat(cap?.amount?.value || "0") * 100),
   };
 }
 
 /** The settled-funds shape returned by {@link captureOrder}. */
-export type CaptureResult = { status: string; captureStatus: string; currency: string; amountCents: number };
+export type CaptureResult = { status: string; captureStatus: string; currency: string; amountCents: number; captureId?: string };
 
 /** The single source of truth for "is this PayPal capture safe to treat as paid?" — used by BOTH the
  *  pro-shop and event-registration money paths so they cannot drift. Requires the order AND the capture

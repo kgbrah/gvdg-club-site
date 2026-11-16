@@ -15,7 +15,7 @@ function useLatest(value) {
   return ref;
 }
 
-function loadPaypalSdk(config) {
+export function loadPaypalSdk(config) {
   if (window.paypal) return Promise.resolve();
   if (paypalSdkPromise) return paypalSdkPromise;
   paypalSdkPromise = new Promise((resolve, reject) => {

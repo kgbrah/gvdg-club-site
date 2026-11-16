@@ -1,9 +1,11 @@
 import type { Env } from "./env.js";
 import { json, readJson, clientIp } from "./http.js";
-import { asStr } from "./input.js";
+import { asStr, parseOptionalEmail } from "./input.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { hashPin } from "./crypto.js";
-import { createMember, resolveMember, type KVListLike } from "./roster.js";
+import { createMember, resolveMember, getMember, putMember, type KVListLike } from "./roster.js";
+import { duesCents, duesFor, duesOnline, linkDuesMember, membershipConfig, markManualDues, publicPayment, type PublicPayment } from "./membership-dues-db.js";
+import { sendApplicationReceived, sendApprovalPush, sendWelcome } from "./membership-notify.js";
 import { notifyAdmins } from "./admin-push.js";
 
 const PDGA_RE = /^\d{1,12}$/;
@@ -22,12 +24,23 @@ export type MembershipApplication = {
   udisc: string | null;
   pinHash: string;
   createdAt: string;
+  /** Optional contact email (welcome/confirmation mail). Stored server-side only; never returned publicly. */
+  email?: string | null;
+  /** Unguessable capability the applicant's browser holds to pay dues / opt in to push for THIS application. */
+  payToken?: string;
 };
 
-export type PublicApplication = Omit<MembershipApplication, "pinHash">;
+export type PublicApplication = Pick<MembershipApplication, "id" | "name" | "pdgaNo" | "udisc" | "createdAt"> & {
+  hasEmail?: boolean;
+  payment?: PublicPayment;
+};
 
 function pub(row: MembershipApplication): PublicApplication {
   return { id: row.id, name: row.name, pdgaNo: row.pdgaNo, udisc: row.udisc, createdAt: row.createdAt };
+}
+
+function newPayToken() {
+  return (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, "");
 }
 
 function applicationKey(id: string) {
@@ -38,7 +51,7 @@ function newApplicationId() {
   return crypto.randomUUID().replace(/-/g, "").slice(0, 20);
 }
 
-async function readApplication(kv: KVListLike, id: string): Promise<MembershipApplication | null> {
+export async function readApplication(kv: KVListLike, id: string): Promise<MembershipApplication | null> {
   const raw = await kv.get(applicationKey(id));
   if (!raw) return null;
   try {
@@ -62,17 +75,26 @@ async function deleteApplication(kv: KVListLike, row: MembershipApplication) {
   if (row.udisc) await kv.delete(APPLY_UDISC(row.udisc));
 }
 
-export async function listApplications(kv: KVListLike): Promise<PublicApplication[]> {
+export async function listApplications(kv: KVListLike, db?: Env["DB"]): Promise<PublicApplication[]> {
   const out: PublicApplication[] = [];
+  const emails = new Set<string>();
   let cursor: string | undefined;
   do {
     const page = await kv.list({ prefix: APPLY_PREFIX, cursor });
     for (const key of page.keys) {
       const row = await readApplication(kv, key.name.slice(APPLY_PREFIX.length));
-      if (row) out.push(pub(row));
+      if (row) {
+        out.push(pub(row));
+        if (row.email) emails.add(row.id);
+      }
     }
     cursor = page.list_complete ? undefined : page.cursor;
   } while (cursor);
+  const dues = await duesFor(db, out.map((a) => a.id));
+  for (const a of out) {
+    a.hasEmail = emails.has(a.id);
+    a.payment = publicPayment(dues.get(a.id));
+  }
   out.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.name.localeCompare(b.name));
   return out;
 }
@@ -86,6 +108,8 @@ export async function handleMembershipApply(request: Request, env: Env, origin: 
   const pdgaNo = asStr(body.pdgaNo, 12);
   const udisc = asStr(body.udisc, 50);
   const pin = asStr(body.pin, 4);
+  const email = parseOptionalEmail(body.email);
+  if (!email.ok) return json({ error: "invalid_email" }, 400, origin);
   if (!name) return json({ error: "name_required" }, 400, origin);
   if (!pdgaNo && !udisc) return json({ error: "pdga_or_udisc_required" }, 400, origin);
   if (pdgaNo && !PDGA_RE.test(pdgaNo)) return json({ error: "invalid_pdga" }, 400, origin);
@@ -105,28 +129,36 @@ export async function handleMembershipApply(request: Request, env: Env, origin: 
     udisc: udisc || null,
     pinHash: await hashPin(pin, env.PIN_PEPPER),
     createdAt: new Date().toISOString(),
+    email: email.value,
+    payToken: newPayToken(),
   };
   await writeApplication(kv, row);
+  if (row.email) {
+    try { ctx?.waitUntil?.(sendApplicationReceived(env, row, false).catch(() => {})); } catch { /* optional */ }
+  }
   notifyAdmins(ctx, env, {
     title: "Membership application",
     body: `${name} applied to join.`,
     url: "/admin.html?tab=members",
     tag: `membership:${row.id}`,
   });
-  return json({ application: pub(row) }, 201, origin);
+  return json({ application: pub(row), payToken: row.payToken, ...(await membershipConfig(env)) }, 201, origin);
 }
 
 export async function handleAdminMembershipApplications(
+  request: Request,
   env: Env,
   origin: string | null,
   method: string,
   seg: string[],
+  adminId: string,
+  ctx?: ExecutionContext,
 ): Promise<Response | null> {
   if (seg[2] !== "applications") return null;
   const kv = env.ROSTER as unknown as KVListLike;
 
   if (method === "GET" && seg.length === 3) {
-    return json({ applications: await listApplications(kv) }, 200, origin);
+    return json({ applications: await listApplications(kv, env.DB), duesOnline: duesOnline(env), duesCents: duesCents(env) }, 200, origin);
   }
 
   if (method === "POST" && seg.length === 5) {
@@ -136,8 +168,18 @@ export async function handleAdminMembershipApplications(
     const row = await readApplication(kv, id);
     if (!row) return json({ error: "not_found" }, 404, origin);
 
+    if (action === "mark-paid") {
+      const b = (await readJson(request)) ?? {};
+      const note = asStr(b.note, 200);
+      const admin = await getMember(kv, adminId);
+      const rec = await markManualDues(env.DB, row.id, duesCents(env), admin?.name ?? "Admin", adminId, note);
+      if (!rec) return json({ error: "already_paid" }, 409, origin);
+      return json({ payment: publicPayment(rec) }, 200, origin);
+    }
+
     if (action === "reject") {
       await deleteApplication(kv, row);
+      try { await env.DB.prepare("DELETE FROM membership_push_subscriptions WHERE application_id = ?").bind(row.id).run(); } catch { /* optional */ }
       return json({ ok: true }, 200, origin);
     }
 
@@ -150,6 +192,17 @@ export async function handleAdminMembershipApplications(
       }, row.pinHash);
       if (!result.ok) return json({ error: "member_" + result.reason }, result.reason === "invalid" ? 400 : 409, origin);
       await deleteApplication(kv, row);
+      // One-time welcome card flag for the member's first sign-in (cleared by POST /me/welcome-seen).
+      const created = await getMember(kv, result.member.memberId);
+      if (created) await putMember(kv, { ...created, welcomePending: true });
+      await linkDuesMember(env.DB, row.id, result.member.memberId);
+      // Best-effort welcome email + push; never blocks or fails the approval.
+      try {
+        ctx?.waitUntil?.(Promise.all([
+          sendWelcome(env, row).catch(() => {}),
+          sendApprovalPush(env, row.id).catch(() => {}),
+        ]));
+      } catch { /* optional */ }
       return json({
         member: {
           memberId: result.member.memberId,

@@ -884,3 +884,17 @@ body.admin-page.player-theme-active {
 @media (max-width: 400px) {
   .admin-page .admin-queue-links { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Very narrow phones with enlarged text (320 px at 125%): let section/context chips wrap their label so
+   "Member applications" + its count badge stays inside the chip instead of widening the page. */
+@media (max-width: 360px) {
+  html .admin-page .admin-section-links:not(.admin-tool-grid) > .admin-chip,
+  html .admin-page .admin-context-links > .admin-chip,
+  html .admin-page .admin-queue-links > .admin-chip {
+    white-space: normal;
+    min-width: 0;
+    flex-wrap: wrap;
+    row-gap: .2rem;
+    text-wrap: balance;
+  }
+}

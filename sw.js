@@ -179,6 +179,13 @@ function adminNotificationUrl(raw) {
   return new URL(raw, self.location.origin).href;
 }
 
+function memberNotificationUrl(raw) {
+  if (typeof raw === "string" && raw.startsWith("/gvdg-members.html") && !raw.startsWith("//") && !raw.includes("\\") && !raw.includes("://")) {
+    return new URL(raw, self.location.origin).href;
+  }
+  return new URL("/gvdg-members.html", self.location.origin).href;
+}
+
 function readPush(event) {
   let data = {};
   try {
@@ -192,6 +199,7 @@ function readPush(event) {
     body: typeof data.body === "string" ? data.body.slice(0, 180) : "",
     tag: typeof data.tag === "string" && data.tag.trim() ? data.tag.trim().slice(0, 80) : "gvdg-admin",
     url: typeof data.url === "string" ? data.url : "/admin.html",
+    kind: data.kind === "member" ? "member" : "admin",
   };
 }
 
@@ -225,7 +233,7 @@ self.addEventListener("push", (event) => {
   event.waitUntil(self.registration.showNotification(note.title, {
     body: note.body,
     tag: note.tag,
-    data: { url: note.url },
+    data: { url: note.url, kind: note.kind },
     icon,
     badge,
   }));
@@ -262,6 +270,11 @@ self.addEventListener("notificationclick", (event) => {
     return;
   }
   event.notification.close();
+  if (data.kind === "member") {
+    // Applicant "you're approved" push: open the members page in whatever window is available.
+    event.waitUntil(self.clients.openWindow ? self.clients.openWindow(memberNotificationUrl(data.url)) : undefined);
+    return;
+  }
   const target = adminNotificationUrl(data.url);
   event.waitUntil(openAdmin(target));
 });

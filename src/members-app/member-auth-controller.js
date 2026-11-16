@@ -143,10 +143,21 @@ export function installMemberAuthController() {
     showApplyShell(passkeysSupported());
   }
 
+  function pushSupported() {
+    return "serviceWorker" in navigator && "PushManager" in window && typeof Notification !== "undefined" && Notification.permission !== "denied";
+  }
+
+  function finishApply() {
+    setAuthFormValues("apply", { submitted: null, name: "", pdgaNo: "", udisc: "", email: "" });
+    showLoginShell(passkeysSupported());
+    setAuthFormState("login", { error: "Application sent. After an admin approves you, log in with this PIN." });
+  }
+
   async function handleApply(event) {
     const name = detailString(event, "name");
     const pdgaNo = detailString(event, "pdgaNo");
     const udisc = detailString(event, "udisc");
+    const email = detailString(event, "email");
     const pin = detailString(event, "pin");
     const confirmPin = detailString(event, "confirmPin");
     clearAuthError("apply");
@@ -162,6 +173,10 @@ export function installMemberAuthController() {
       showAuthError("apply", "Enter a PDGA # or UDisc username.");
       return;
     }
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      showAuthError("apply", "Enter a valid email, or leave it blank.");
+      return;
+    }
     if (!/^\d{4}$/.test(pin)) {
       showAuthError("apply", "PIN must be exactly 4 digits.");
       return;
@@ -173,17 +188,34 @@ export function installMemberAuthController() {
 
     setAuthBusy("apply", "apply", true);
     try {
-      const response = await api("/membership/apply", { method: "POST", body: { name, pdgaNo, udisc, pin } });
+      const response = await api("/membership/apply", { method: "POST", body: { name, pdgaNo, udisc, pin, ...(email ? { email } : {}) } });
       if (response.status === 201) {
+        const data = await response.json().catch(() => ({}));
         setAuthFormValues("apply", { pin: "", confirmPin: "" });
         setAuthFormValues("login", { identifier: pdgaNo || udisc, pin: "" });
-        showLoginShell(passkeysSupported());
-        setAuthFormState("login", { error: "Application sent. After an admin approves you, log in with this PIN." });
+        // Dues checkout / push opt-in are credential-gated server-side: with neither available the flow is unchanged.
+        const pushKey = pushSupported() ? data.pushPublicKey : null;
+        if (data.payToken && data.application?.id && (data.duesOnline || pushKey)) {
+          setAuthFormValues("apply", {
+            submitted: {
+              id: data.application.id,
+              payToken: data.payToken,
+              duesOnline: data.duesOnline === true,
+              duesCents: Number(data.duesCents) || 1500,
+              paypalClientId: data.paypalClientId || null,
+              pushPublicKey: pushKey || null,
+            },
+          });
+        } else {
+          finishApply();
+        }
       } else if (response.status === 409) {
         const data = await response.json().catch(() => ({}));
         if (data.error === "member_exists") showAuthError("apply", "That PDGA # or UDisc is already on the roster. Log in instead.");
         else if (data.error === "already_pending") showAuthError("apply", "We already have an application for that PDGA # or UDisc.");
         else showAuthError("apply", "Could not submit that application.");
+      } else if (response.status === 400 && (await response.clone().json().catch(() => ({}))).error === "invalid_email") {
+        showAuthError("apply", "Enter a valid email, or leave it blank.");
       } else if (response.status === 429) {
         showAuthError("apply", "Too many tries. Wait a bit and try again.");
       } else {
@@ -225,6 +257,7 @@ export function installMemberAuthController() {
   window.addEventListener("gvdg:member-apply-open", openApply);
   window.addEventListener("gvdg:member-apply-cancel", showLogin);
   window.addEventListener("gvdg:member-apply-requested", handleApply);
+  window.addEventListener("gvdg:member-apply-finish", finishApply);
   window.addEventListener("gvdg:member-pin-change-requested", handleSetPin);
   window.addEventListener("gvdg:member-profile-save-requested", profile.saveProfile);
   window.addEventListener("gvdg:member-profile-skip-requested", () => showMembersContent(storageGet(NAME_KEY)));

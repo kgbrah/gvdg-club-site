@@ -22,6 +22,7 @@ export async function handleClubAdmin(
   origin: string | null,
   method: string,
   seg: string[],
+  ctx?: ExecutionContext,
 ): Promise<Response | null> {
   if (seg[0] !== "admin") return null;
   const gate = await adminGate(request, env, origin);
@@ -41,7 +42,7 @@ export async function handleClubAdmin(
   else if (sub === "meetings") response = await handleAdminMeetings(request, env, origin, method, adminId, id);
   else if (sub === "import" && method === "POST") response = await handleAdminImport(request, env, origin, adminId);
   else if (sub === "layouts") response = await handleAdminLayouts(request, env, origin, method, id);
-  else if (sub === "members") response = await handleAdminMembers(request, env, origin, method, seg, adminId);
+  else if (sub === "members") response = await handleAdminMembers(request, env, origin, method, seg, adminId, ctx);
   else if (sub === "shop" || sub === "wallets" || sub === "orders") response = await handleAdminShop(request, env, origin, method, seg, adminId);
   else if (sub === "tee-signs") response = await handleAdminTeeSigns(request, env, origin, method, seg, adminId, id);
   else if (sub === "voice-fill" && method === "POST") response = await handleAdminVoiceFill(request, env, origin, adminId);

@@ -16,6 +16,7 @@ import { latestHomeRound } from "./play-page-model.js";
 import { EventScheduleFacts } from "../shared/event-schedule.js";
 import { EventFieldRoster } from "../shared/event-field-roster.js";
 import { AddToCalendarButton } from "../shared/add-to-calendar.js";
+import { WelcomeCard } from "./welcome-card.js";
 import { BagTagPanel } from "./bag-tag-panel.js";
 import { calendarEventFromClub, calendarEventFromPdga } from "../shared/event-calendar.js";
 
@@ -265,6 +266,7 @@ export function MemberOverviewDashboard() {
   if (!token) return null;
 
   return h("div", { className: "react-overview-dashboard player-home", "data-react-overview-dashboard": "ready" }, [
+    h(WelcomeCard, { key: "welcome" }),
     h(HomeHero, { context, pdgaState, key: "hero" }),
     h("div", { className: "member-home-feature", key: "feature" }, [
       h("div", { className: "member-home-play", key: "play" }, [

@@ -21,6 +21,8 @@ export interface Member {
   /** Monotonic PIN-version. Bumped on every PIN change/reset so tokens minted earlier are rejected
    *  server-side (see authz.requireAuth). Absent = 0 for legacy records. */
   pinVer?: number;
+  /** Set when an admin approves a membership application; cleared once the one-time welcome card is seen. */
+  welcomePending?: boolean;
 }
 
 export type ProfilePatch = { pdgaNo?: string | null; udisc?: string | null; photo?: string | null };

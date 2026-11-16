@@ -4,6 +4,7 @@ import { allowedOrigin, corsHeaders, json, RequestBodyTooLargeError } from "./ht
 import {
   handleLogin,
   handleMe,
+  handleWelcomeSeen,
   handleMyLiveRounds,
   handleMyRatings,
   handleMyRegistrations,
@@ -21,6 +22,7 @@ import { handleMyTeeSigns, handleTeeSignUpload } from "./tee-sign-routes.js";
 import { handlePdgaStats } from "./pdga.js";
 import { handleClubFeed } from "./feeds.js";
 import { handleMembershipApply } from "./membership-apply.js";
+import { handleMembershipPublic } from "./membership-dues.js";
 import { clubApi } from "./club-api.js";
 import { D1KV } from "./d1kv.js";
 
@@ -88,6 +90,7 @@ export default {
       }
       if (pathname === "/login" && method === "POST") return await handleLogin(request, env, origin);
       if (pathname === "/me" && method === "GET") return await handleMe(request, env, origin);
+      if (pathname === "/me/welcome-seen" && method === "POST") return await handleWelcomeSeen(request, env, origin);
       if (pathname === "/my-results" && method === "GET") return await handleMyResults(request, env, origin);
       if (pathname === "/me/udisc-history" && (method === "GET" || method === "POST" || method === "DELETE")) {
         return await handleUdiscHistory(request, env, origin, method);
@@ -117,6 +120,10 @@ export default {
       if (pathname === "/pdga-stats" && method === "GET") return await handlePdgaStats(request, env, origin);
       if (pathname === "/club-feed" && method === "GET") return await handleClubFeed(env, origin);
       if (pathname === "/membership/apply" && method === "POST") return await handleMembershipApply(request, env, origin, ctx);
+      if (pathname.startsWith("/membership/")) {
+        const membership = await handleMembershipPublic(request, env, origin, method, pathname.split("/").filter(Boolean));
+        if (membership) return membership;
+      }
 
       const club = await clubApi(request, env, origin, pathname, method, ctx);
       if (club) return club;
