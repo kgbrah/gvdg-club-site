@@ -1301,24 +1301,68 @@
                 body[data-member-shell="members"] .member-app-header .logo-wordmark em { color: var(--primary); }
                 .member-app-header .logo .logo-image { width: 2.13rem; height: 2.13rem; flex-basis: 2.13rem; }
                 .member-app-header .logo-wordmark { min-width: 0; font-size: clamp(.73rem, 3.5vw, 1.23rem); }
-                .member-header-controls { flex-shrink: 0; gap: .22rem; }
+                body[data-member-shell="members"] .member-app-header .logo { gap: .32rem; }
+                body[data-member-shell="members"] .member-app-header .logo .logo-image {
+                    width: 1.85rem;
+                    height: 1.85rem;
+                    flex-basis: 1.85rem;
+                }
+                body[data-member-shell="members"] .member-app-header .logo-wordmark {
+                    font-size: clamp(.68rem, 3vw, 1.12rem);
+                    letter-spacing: .03em;
+                }
+                .member-header-controls { flex-shrink: 0; gap: .12rem; margin-left: auto; }
+                body[data-member-shell="members"] .member-app-header { padding-inline: .65rem; }
+                body[data-member-shell="members"] .member-app-header nav { gap: .28rem; }
                 .member-app-header .member-header-link {
                     min-height: 44px;
                     border: 0;
                     border-radius: .5rem;
                     color: var(--member-chrome-ink);
-                    font-size: .82rem;
-                    padding-inline: .52rem;
+                    font-size: .78rem;
+                    padding-inline: .32rem;
                     white-space: nowrap;
                 }
+                .member-app-header .member-header-icon {
+                    position: relative;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 40px;
+                    height: 40px;
+                    min-width: 40px;
+                    padding: 0;
+                    border: 0;
+                    border-radius: .5rem;
+                    background: transparent;
+                    color: var(--member-chrome-ink);
+                    cursor: pointer;
+                }
+                .member-app-header .member-header-icon:hover,
                 .member-app-header .member-header-link:hover { background: var(--member-chrome-hover); }
+                .member-app-header .member-header-icon:focus-visible,
                 .member-app-header .member-header-link:focus-visible { outline: 2px solid var(--member-chrome-focus); outline-offset: -2px; }
+                .member-header-badge {
+                    position: absolute;
+                    top: .12rem;
+                    right: .02rem;
+                    display: inline-grid;
+                    place-items: center;
+                    min-width: 1.02rem;
+                    height: 1.02rem;
+                    padding: 0 .2rem;
+                    border-radius: 999px;
+                    background: var(--primary);
+                    color: #1a120c;
+                    font: 750 .58rem/1 Archivo, system-ui, sans-serif;
+                    font-variant-numeric: tabular-nums;
+                }
                 body[data-member-shell="members"] .member-app-header .theme-toggle {
                     display: inline-flex;
-                    width: 44px;
-                    height: 44px;
-                    min-width: 44px;
-                    flex: 0 0 44px;
+                    width: 40px;
+                    height: 40px;
+                    min-width: 40px;
+                    flex: 0 0 40px;
                     padding: 0;
                     border: 0;
                     border-radius: .5rem;
@@ -1926,6 +1970,6 @@
 
     <div id="membersReactDialogsApp"></div>
     <div id="crottsReactApp"></div>
-    <script type="module" src="members-app/members-app.js?v=193"></script>
+    <script type="module" src="members-app/members-app.js?v=194"></script>
 </body>
 </html>
