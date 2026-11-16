@@ -623,14 +623,12 @@
 [data-public-polish="guide"] .signature-grid article { border-radius: var(--site-radius); border-color: var(--site-line); border-top-color: var(--site-action); }
 [data-public-polish="guide"] .signature-grid :is(h3, a) { color: var(--site-link); }
 [data-public-polish="guide"] .signature-grid a { min-height: 44px; }
-[data-public-polish="guide"] :is(.signature-section, .depth-section, .comparison-section, .walkthrough-section) { padding-block: clamp(34px, 6vw, 72px); }
-[data-public-polish="guide"] .table-shell { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-[data-public-polish="guide"] .comparison-table { min-width: 720px; }
-[data-public-polish="guide"] .preview-stats strong,
-[data-public-polish="guide"] .comparison-table { font-variant-numeric: tabular-nums; }
-[data-public-polish="guide"] .comparison-table thead th:nth-child(2) { background: var(--site-action); }
-[data-public-polish="guide"] .comparison-table thead th { background: var(--site-ink); }
-[data-public-polish="guide"] :is(.metric-note, .app-faq) summary { min-height: 44px; padding-block: 10px; }
+[data-public-polish="guide"] :is(.signature-section, .depth-section, .theme-gallery, .club-features, .walkthrough-section) { padding-block: clamp(34px, 6vw, 72px); }
+[data-public-polish="guide"] .preview-stats strong { font-variant-numeric: tabular-nums; }
+[data-public-polish="guide"] :is(.theme-shot h3, .club-feature-list h3, .section-intro h2) { overflow-wrap: normal; word-break: normal; hyphens: none; }
+[data-public-polish="guide"] .theme-shot img { max-width: 100%; height: auto; }
+[data-public-polish="guide"] .theme-gallery-actions a { min-height: 44px; display: inline-flex; align-items: center; gap: 6px; }
+[data-public-polish="guide"] .app-faq summary { min-height: 44px; padding-block: 10px; }
 [data-public-polish="guide"] .app-faq details { padding-block: 8px; }
 [data-public-polish="guide"] .app-faq p { margin: 0 0 10px; }
 
