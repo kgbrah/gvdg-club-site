@@ -38,6 +38,9 @@ export interface BagChallengeRow {
   defender_score: number;
   status: string;
   created_at: string;
+  league_id?: number | null;
+  closed_note?: string | null;
+  closed_at?: string | null;
 }
 
 export async function activeSeries(db: D1Like): Promise<BagSeriesRow | null> {
@@ -149,7 +152,7 @@ export async function openChallengeBetween(
   challengerId: string,
 ): Promise<BagChallengeRow | null> {
   return db.prepare(
-    "SELECT * FROM bag_tag_challenges WHERE series_id = ? AND challenger_id = ? AND status = 'pending' ORDER BY id DESC LIMIT 1",
+    "SELECT * FROM bag_tag_challenges WHERE series_id = ? AND league_id IS NULL AND challenger_id = ? AND status = 'pending' ORDER BY id DESC LIMIT 1",
   ).bind(seriesId, challengerId).first<BagChallengeRow>();
 }
 
@@ -165,13 +168,15 @@ export async function createChallenge(
     defenderTag: number;
     challengerScore: number;
     defenderScore: number;
+    /** Set for an imported league ladder; seriesId is 0 then. */
+    leagueId?: number | null;
   },
 ): Promise<BagChallengeRow | null> {
   return db.prepare(
     `INSERT INTO bag_tag_challenges (
       series_id, challenger_id, challenger_name, defender_id, defender_name,
-      challenger_tag, defender_tag, challenger_score, defender_score
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
+      challenger_tag, defender_tag, challenger_score, defender_score, league_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
   ).bind(
     input.seriesId,
     input.challengerId,
@@ -182,6 +187,7 @@ export async function createChallenge(
     input.defenderTag,
     input.challengerScore,
     input.defenderScore,
+    input.leagueId ?? null,
   ).first<BagChallengeRow>();
 }
 
@@ -190,10 +196,15 @@ export async function getChallenge(db: D1Like, id: number): Promise<BagChallenge
 }
 
 /** One confirm wins. A second click finds the row already closed. */
-export async function claimChallenge(db: D1Like, id: number, status: "settled" | "declined"): Promise<boolean> {
+export async function claimChallenge(
+  db: D1Like,
+  id: number,
+  status: "settled" | "declined" | "cancelled",
+  note: string | null = null,
+): Promise<boolean> {
   const row = await db.prepare(
-    "UPDATE bag_tag_challenges SET status = ? WHERE id = ? AND status = 'pending' RETURNING id",
-  ).bind(status, id).first<{ id: number }>();
+    "UPDATE bag_tag_challenges SET status = ?, closed_note = ?, closed_at = datetime('now') WHERE id = ? AND status = 'pending' RETURNING id",
+  ).bind(status, note, id).first<{ id: number }>();
   return row != null;
 }
 
@@ -208,13 +219,13 @@ export async function pendingChallenges(db: D1Like, seriesId: number, memberId?:
   if (memberId) {
     const rows = await db.prepare(
       `SELECT * FROM bag_tag_challenges
-       WHERE series_id = ? AND status = 'pending' AND (challenger_id = ? OR defender_id = ?)
+       WHERE series_id = ? AND league_id IS NULL AND status = 'pending' AND (challenger_id = ? OR defender_id = ?)
        ORDER BY id DESC`,
     ).bind(seriesId, memberId, memberId).all<BagChallengeRow>();
     return rows.results;
   }
   const rows = await db.prepare(
-    "SELECT * FROM bag_tag_challenges WHERE series_id = ? AND status = 'pending' ORDER BY id DESC",
+    "SELECT * FROM bag_tag_challenges WHERE series_id = ? AND league_id IS NULL AND status = 'pending' ORDER BY id DESC",
   ).bind(seriesId).all<BagChallengeRow>();
   return rows.results;
 }

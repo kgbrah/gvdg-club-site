@@ -6,6 +6,8 @@ import { kvRateLimited } from "./kv-rate-limit.js";
 import { getMember } from "./roster.js";
 import { settleBagTags, settleSummary, type TagPlayer } from "./bag-tags.js";
 import * as tags from "./db-bag-tags.js";
+import * as leagueDb from "./db-bag-tag-leagues.js";
+import { ensureLeagueLadder, playerKey, relinkLeague } from "./bag-tag-leagues.js";
 import { notifyAdmins } from "./admin-push.js";
 
 function scoreOf(value: unknown): number | null {
@@ -53,6 +55,149 @@ function publicChallenge(row: tags.BagChallengeRow) {
     status: row.status,
     createdAt: row.created_at,
   };
+}
+
+function publicLeagueChallenge(row: tags.BagChallengeRow) {
+  return {
+    ...publicChallenge(row),
+    leagueId: row.league_id ?? null,
+    closedNote: row.closed_note ?? null,
+    closedAt: row.closed_at ?? null,
+  };
+}
+
+/** One imported league's ladder as the app sees it right now. */
+async function leagueBoard(env: Env, leagueId: number, viewerId: string | null) {
+  const name = await leagueDb.leagueName(env.DB, leagueId);
+  if (!name) return null;
+  if (!await ensureLeagueLadder(env, leagueId)) return null;
+  const [ladder, moves] = await Promise.all([
+    leagueDb.listLadder(env.DB, leagueId),
+    leagueDb.listLeagueMoves(env.DB, leagueId),
+  ]);
+  const mineRow = viewerId ? ladder.find((row) => row.member_id === viewerId) ?? null : null;
+  return {
+    league: { id: leagueId, name },
+    holders: ladder.map((row) => ({
+      tagNumber: row.tag_number,
+      name: row.player_name,
+      heldSince: row.held_since,
+      linked: row.member_id != null,
+      ...(row.member_id ? { memberId: row.member_id } : {}),
+    })),
+    moves: moves.map((row) => ({
+      id: row.id,
+      kind: row.kind,
+      summary: row.summary,
+      createdAt: row.created_at,
+      appOnly: row.superseded === 1,
+    })),
+    mine: mineRow ? { memberId: mineRow.member_id, name: mineRow.player_name, tagNumber: mineRow.tag_number } : null,
+  };
+}
+
+/** The ladders a member stands on, each with their open and recently closed challenges. */
+async function memberLeagueBoards(env: Env, memberId: string) {
+  const out = [];
+  for (const leagueId of await leagueDb.tagLeagueIds(env.DB)) {
+    const current = await leagueBoard(env, leagueId, memberId);
+    if (!current || !current.mine) continue;
+    const [pending, closed] = await Promise.all([
+      leagueDb.pendingLeagueChallenges(env.DB, leagueId, memberId),
+      leagueDb.recentClosedLeagueChallenges(env.DB, leagueId, memberId),
+    ]);
+    out.push({
+      ...current,
+      challenges: pending.map(publicLeagueChallenge),
+      closed: closed.map(publicLeagueChallenge),
+    });
+  }
+  return out;
+}
+
+async function adminLeagueBoards(env: Env) {
+  const out = [];
+  for (const leagueId of await leagueDb.tagLeagueIds(env.DB)) {
+    const current = await leagueBoard(env, leagueId, null);
+    if (!current) continue;
+    const [pending, closed] = await Promise.all([
+      leagueDb.pendingLeagueChallenges(env.DB, leagueId),
+      leagueDb.recentClosedLeagueChallenges(env.DB, leagueId),
+    ]);
+    out.push({
+      ...current,
+      challenges: pending.map(publicLeagueChallenge),
+      closed: closed.map(publicLeagueChallenge),
+      unlinked: current.holders.filter((holder) => !holder.linked).map((holder) => holder.name),
+    });
+  }
+  return out;
+}
+
+async function leagueTagsStillMatch(env: Env, challenge: tags.BagChallengeRow): Promise<boolean> {
+  const leagueId = challenge.league_id;
+  if (leagueId == null) return false;
+  const challenger = await leagueDb.ladderByMember(env.DB, leagueId, challenge.challenger_id);
+  const defender = await leagueDb.ladderByMember(env.DB, leagueId, challenge.defender_id);
+  return Boolean(challenger && defender
+    && challenger.tag_number === challenge.challenger_tag
+    && defender.tag_number === challenge.defender_tag);
+}
+
+/** Swap by score on the app ladder only. UDisc's next import overwrites this. */
+async function settleLeagueChallenge(
+  env: Env,
+  challenge: tags.BagChallengeRow,
+  actorId: string,
+): Promise<{ error: string; status: number } | { changes: number }> {
+  const leagueId = challenge.league_id;
+  if (leagueId == null) return { error: "not_found", status: 404 };
+  const challenger = await leagueDb.ladderByMember(env.DB, leagueId, challenge.challenger_id);
+  const defender = await leagueDb.ladderByMember(env.DB, leagueId, challenge.defender_id);
+  if (!challenger || !defender) return { error: "not_a_holder", status: 400 };
+  const settled = settleBagTags([
+    { memberId: challenge.challenger_id, name: challenger.player_name, tagNumber: challenger.tag_number, score: challenge.challenger_score },
+    { memberId: challenge.defender_id, name: defender.player_name, tagNumber: defender.tag_number, score: challenge.defender_score },
+  ]);
+  if (!settled.ok) return { error: settled.error, status: 400 };
+  const summary = settleSummary("challenge", settled.changes);
+  if (settled.changes.length) {
+    await leagueDb.replaceLadderTags(env.DB, leagueId, settled.assignments, { summary, actorId });
+  } else {
+    await leagueDb.recordLeagueMove(env.DB, { leagueId, summary, actorId });
+  }
+  return { changes: settled.changes.length };
+}
+
+async function createLeagueChallenge(
+  env: Env,
+  origin: string | null,
+  memberId: string,
+  input: { leagueId: number; defenderId: string; challengerScore: number; defenderScore: number },
+): Promise<Response> {
+  if (!await leagueDb.leagueName(env.DB, input.leagueId) || !await ensureLeagueLadder(env, input.leagueId)) {
+    return json({ error: "no_league" }, 404, origin);
+  }
+  if (await leagueDb.openLeagueChallenge(env.DB, input.leagueId, memberId)) {
+    return json({ error: "challenge_open" }, 409, origin);
+  }
+  const challenger = await leagueDb.ladderByMember(env.DB, input.leagueId, memberId);
+  const defender = await leagueDb.ladderByMember(env.DB, input.leagueId, input.defenderId);
+  if (!challenger || !defender) return json({ error: "not_a_holder" }, 400, origin);
+  if (challenger.tag_number <= defender.tag_number) return json({ error: "must_challenge_better_tag" }, 400, origin);
+  const created = await tags.createChallenge(env.DB, {
+    seriesId: 0,
+    leagueId: input.leagueId,
+    challengerId: memberId,
+    challengerName: challenger.player_name,
+    defenderId: input.defenderId,
+    defenderName: defender.player_name,
+    challengerTag: challenger.tag_number,
+    defenderTag: defender.tag_number,
+    challengerScore: input.challengerScore,
+    defenderScore: input.defenderScore,
+  });
+  return json({ challenge: created ? publicLeagueChallenge(created) : null }, 201, origin);
 }
 
 async function board(env: Env, includeIds: boolean) {
@@ -148,6 +293,7 @@ export async function handleBagTags(
       mine,
       request: waitingRow ? { createdAt: waitingRow.created_at } : null,
       challenges: pending.map(publicChallenge),
+      leagues: await memberLeagueBoards(env, member.memberId),
     }, 200, origin);
   }
 
@@ -189,6 +335,11 @@ export async function handleBagTags(
       return json({ error: "invalid_challenge" }, 400, origin);
     }
     if (defenderId === member.memberId) return json({ error: "invalid_challenge" }, 400, origin);
+    if (body.leagueId != null) {
+      const leagueId = asInt(body.leagueId);
+      if (!leagueId) return json({ error: "invalid_challenge" }, 400, origin);
+      return createLeagueChallenge(env, origin, member.memberId, { leagueId, defenderId, challengerScore, defenderScore });
+    }
     const series = await tags.activeSeries(env.DB);
     if (!series) return json({ error: "no_series" }, 404, origin);
     const open = await tags.openChallengeBetween(env.DB, series.id, member.memberId);
@@ -224,6 +375,20 @@ export async function handleBagTags(
     const challenge = await tags.getChallenge(env.DB, challengeId);
     if (!challenge || challenge.status !== "pending") return json({ error: "not_found" }, 404, origin);
     if (challenge.defender_id !== member.memberId) return json({ error: "forbidden" }, 403, origin);
+    if (challenge.league_id != null) {
+      if (seg[3] === "decline") {
+        if (!await tags.claimChallenge(env.DB, challenge.id, "declined")) return json({ error: "not_found" }, 404, origin);
+        return json({ ok: true }, 200, origin);
+      }
+      if (!await leagueTagsStillMatch(env, challenge)) {
+        await tags.claimChallenge(env.DB, challenge.id, "declined", "tags changed before it was confirmed");
+        return json({ error: "stale_tags" }, 409, origin);
+      }
+      if (!await tags.claimChallenge(env.DB, challenge.id, "settled")) return json({ error: "not_found" }, 404, origin);
+      const done = await settleLeagueChallenge(env, challenge, member.memberId);
+      if ("error" in done) return json({ error: done.error }, done.status, origin);
+      return json({ ok: true, changes: done.changes }, 200, origin);
+    }
     if (seg[3] === "decline") {
       const claimed = await tags.claimChallenge(env.DB, challenge.id, "declined");
       if (!claimed) return json({ error: "not_found" }, 404, origin);
@@ -265,6 +430,7 @@ export async function handleAdminBagTags(
       ...current,
       challenges: pending.map(publicChallenge),
       requests: requests.map(publicRequest),
+      leagues: await adminLeagueBoards(env),
     }, 200, origin);
   }
 
@@ -338,6 +504,8 @@ export async function handleAdminBagTags(
   if (method === "POST" && challengeId && seg.length === 5 && seg[4] === "confirm") {
     const challenge = await tags.getChallenge(env.DB, challengeId);
     if (!challenge || challenge.status !== "pending") return json({ error: "not_found" }, 404, origin);
+    // League challenges are answered by the two members only. An admin can cancel one.
+    if (challenge.league_id != null) return json({ error: "league_challenge" }, 409, origin);
     if (!await tagsStillMatch(env, challenge)) {
       await tags.claimChallenge(env.DB, challenge.id, "declined");
       return json({ error: "stale_tags" }, 409, origin);
@@ -350,6 +518,39 @@ export async function handleAdminBagTags(
     ], "challenge", adminId);
     if ("error" in settled) return json({ error: settled.error }, settled.status, origin);
     return json({ ok: true, changes: settled.changes }, 200, origin);
+  }
+
+  if (method === "POST" && challengeId && seg.length === 5 && seg[4] === "cancel") {
+    const challenge = await tags.getChallenge(env.DB, challengeId);
+    if (!challenge || challenge.status !== "pending") return json({ error: "not_found" }, 404, origin);
+    if (!await tags.claimChallenge(env.DB, challenge.id, "cancelled", "cancelled by an admin")) {
+      return json({ error: "not_found" }, 404, origin);
+    }
+    return json({ ok: true }, 200, origin);
+  }
+
+  const linkLeagueId = seg[2] === "leagues" ? asInt(seg[3]) : null;
+  if (method === "POST" && linkLeagueId && seg.length === 5 && seg[4] === "link") {
+    const playerName = asStr(body.playerName, 120);
+    const memberId = body.memberId == null || body.memberId === "" ? null : asStr(body.memberId, 80);
+    if (!playerName || (body.memberId != null && body.memberId !== "" && !memberId)) {
+      return json({ error: "invalid_link" }, 400, origin);
+    }
+    if (!await ensureLeagueLadder(env, linkLeagueId)) return json({ error: "no_league" }, 404, origin);
+    const ladder = await leagueDb.listLadder(env.DB, linkLeagueId);
+    const key = playerKey(playerName);
+    const onLadder = ladder.find((row) => playerKey(row.player_name) === key);
+    if (!onLadder) return json({ error: "not_a_holder" }, 404, origin);
+    if (memberId) {
+      if (!await getMember(env.ROSTER, memberId)) return json({ error: "member_not_found" }, 404, origin);
+      const links = await leagueDb.listLinks(env.DB, linkLeagueId);
+      if (links.some((link) => link.member_id === memberId && link.player_key !== key)) {
+        return json({ error: "member_already_linked" }, 409, origin);
+      }
+    }
+    await leagueDb.setLink(env.DB, { leagueId: linkLeagueId, playerKey: key, playerName: onLadder.player_name, memberId, actorId: adminId });
+    await relinkLeague(env, linkLeagueId);
+    return json({ ok: true }, 200, origin);
   }
 
   return null;

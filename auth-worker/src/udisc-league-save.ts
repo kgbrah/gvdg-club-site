@@ -2,6 +2,7 @@ import type { Env } from "./env.js";
 import * as db from "./db.js";
 import type { UdiscImportCandidate } from "./imports/udisc-events.js";
 import type { UdiscPastEvent, UdiscStandings } from "./imports/udisc-standings.js";
+import { resetLeagueLadderFromUdisc } from "./bag-tag-leagues.js";
 
 const MAX_EVENTS = 80;
 const MAX_RESULTS = 80;
@@ -45,6 +46,8 @@ export async function saveUdiscLeague(
       results += outcome;
     }
   }
+  // UDisc wins: a new tag order replaces the app's ladder and closes open challenges.
+  if (input.standings?.mode === "tags") await resetLeagueLadderFromUdisc(env, leagueId);
   return { league_id: leagueId, events, results, skipped, standings: input.standings?.standings || [] };
 }
 
