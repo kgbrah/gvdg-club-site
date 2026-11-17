@@ -19,26 +19,34 @@ const CATALOG_CORS = {
   Vary: "Accept-Encoding",
 } as const;
 
+/** A good catalog is reused for this long before D1 is read again (admin course/map writes drop it sooner). */
+const CATALOG_FRESH_MS = 60_000;
+const CATALOG_STAMP = "X-Gvdg-Catalog-At";
+
 async function cachedCourseCatalogJson(
   request: Request,
   origin: string | null,
   load: () => Promise<{ payload: unknown; cacheable: boolean }>,
 ): Promise<Response> {
-  const loaded = await load();
   const cache = typeof caches === "undefined" ? null : await caches.open(COURSE_CATALOG_CACHE_NAME);
   const cacheKey = cache ? courseCatalogCacheKey(request) : null;
+  // Serve a recent good copy without touching D1: the full catalog is three bulk reads (~1-3s), and reading
+  // it on every request is what pushed those reads toward their timeout and into the fallback.
+  const cached = cache && cacheKey ? await cache.match(cacheKey) : undefined;
+  const cachedAt = Number(cached?.headers.get(CATALOG_STAMP));
+  if (cached && Number.isFinite(cachedAt) && cachedAt > 0 && Date.now() - cachedAt < CATALOG_FRESH_MS) return cached;
+  const loaded = await load();
   if (loaded.cacheable) {
     const response = json(loaded.payload, 200, origin, {
       ...CATALOG_CORS,
       "Cache-Control": "private, no-store",
+      [CATALOG_STAMP]: String(Date.now()),
     });
     if (cache && cacheKey) await cache.put(cacheKey, response.clone());
     return response;
   }
-  if (cache && cacheKey) {
-    const cached = await cache.match(cacheKey);
-    if (cached) return cached;
-  }
+  // D1 is degraded: a previous good catalog (even an older one) beats the built-in fallback.
+  if (cached) return cached;
   return json(loaded.payload, 200, origin, { ...CATALOG_CORS, "Cache-Control": "no-store" });
 }
 
