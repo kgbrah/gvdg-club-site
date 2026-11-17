@@ -88,7 +88,16 @@ async function inspect(page, label) {
       .filter((node, _, all) => !all.some((other) => other !== node && node.contains(other)))
       .slice(0, 4).map((node) => node.tagName.toLowerCase() + (node.id ? "#" + node.id : "") + "." + String(node.className).split(" ")[0]
         + "@" + Math.round(node.getBoundingClientRect().right)) : [];
-    return { overflow, clipped, wide };
+    // Content spilling out of a non-clipping box widens the page without moving any element's edge
+    // (e.g. a long unbreakable word). Report those boxes too.
+    const spill = overflow > 1 ? [...document.body.querySelectorAll("*")].filter((node) => {
+      const box = node.getBoundingClientRect();
+      return box.width > 0 && node.scrollWidth > node.clientWidth + 1 && getComputedStyle(node).overflowX === "visible"
+        && box.left + node.scrollWidth > width + 0.5;
+    }).filter((node, _, all) => !all.some((other) => other !== node && node.contains(other)))
+      .slice(0, 4).map((node) => "spill:" + node.tagName.toLowerCase() + "." + String(node.className).split(" ")[0]
+        + " '" + (node.textContent || "").trim().slice(0, 40) + "' " + node.scrollWidth + ">" + node.clientWidth) : [];
+    return { overflow, clipped, wide: wide.concat(spill) };
   });
 }
 
