@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
-  baselineProvenance, clubCalendarDay, clubPlaces, compareLayoutGeometry, discoverableEvent, evaluatePdgaBaselines, matchPdgaLayout,
-  median, ourLayoutHoles, parsePdgaEvent, parsePdgaRound, parseRatingDetailEvents, pdgaBaselineFor, pdgaEventComplete, pdgaRoundTasks,
+  baselineProvenance, clubCalendarDay, clubPlaces, compareLayoutGeometry, discoverableEvent, evaluatePdgaBaselines, impliedRatingsSsa, matchPdgaLayout,
+  median, ourLayoutHoles, parsePdgaEvent, publishedRatingsSsa, parsePdgaRound, parseRatingDetailEvents, pdgaBaselineFor, pdgaEventComplete, pdgaRoundTasks,
   type BaselineRound, type OurCourse, type PdgaHole, type ValidationPdgaRound,
 } from "../src/pdga-baselines.js";
 import { pointsPerThrow, roundRatingForScore } from "../src/rating-engine.js";
@@ -37,6 +37,11 @@ describe("PDGA live-results parsers", () => {
     expect(pdgaEventComplete(event, "2026-07-12T00:00:00Z")).toBe(true);
     expect(pdgaRoundTasks(event)).toHaveLength(20);
     expect(parsePdgaEvent({ data: [] }, 104547)).toBeNull();
+    // A multi-day event without published round dates: every round takes the last possible day.
+    const multiDay = fixture("event-104547.json");
+    Object.assign(multiDay.data, { StartDate: "2025-10-24", EndDate: "2025-10-26",
+      RoundsList: { 1: { Number: 1, Date: "2025-10-24", ShowDate: false }, 2: { Number: 2, Date: "2025-10-25", ShowDate: true } } });
+    expect(parsePdgaEvent(multiDay, 104547)!.roundDates).toEqual({ 1: "2025-10-26", 2: "2025-10-25" });
     expect(parsePdgaEvent(fixture("event-104547.json"), 999)).toBeNull();
   });
 
@@ -97,6 +102,9 @@ describe("discovery filter", () => {
     expect(discoverableEvent({ ...base, startDate: "2027-01-01" }, places, now)).toBe(false);
     expect(discoverableEvent({ ...base, startDate: "2026-01-01", state: "SC" }, places, now)).toBe(false);
     expect(discoverableEvent({ ...base, startDate: "2026-01-01", city: "greenwood" }, places, now)).toBe(false);
+    // Short town names need an exact match: Arden is not Ayden.
+    expect(discoverableEvent({ ...base, startDate: "2026-01-01", city: "arden" }, places, now)).toBe(false);
+    expect(discoverableEvent({ ...base, startDate: "2026-01-01", city: "ayden" }, places, now)).toBe(true);
   });
 });
 
@@ -168,9 +176,14 @@ describe("layout matching", () => {
     expect(matchPdgaLayout(renamed, "NC", [ecu], "greenivlle")).toMatchObject({ quality: "exact", layoutId: 1 });
     expect(matchPdgaLayout(renamed, "NC", [ecu], "ayden")).toMatchObject({ quality: "none", candidates: [] });
     expect(matchPdgaLayout(renamed, "NC", [ecu])).toMatchObject({ quality: "none" });
-    // A named match elsewhere in the state wins over the town fallback.
-    expect(matchPdgaLayout(pdga, "NC", [ecu, { ...course([{ ...layout, id: 2 }]), id: 2, location: "Ayden, NC" }], "greenville"))
-      .toMatchObject({ quality: "exact", layoutId: 2, reason: null });
+    // Town courses stay candidates beside a named one; geometry picks, and identical layouts stay ambiguous.
+    const named = { ...course([{ ...layout, id: 2 }]), id: 2, location: "Ayden, NC" };
+    const shorter = { ...ecu, layouts: [{ ...layout, holes: ours([250, 250, 250, 250, 250, 250, 250, 250, 250]) }] };
+    expect(matchPdgaLayout(pdga, "NC", [shorter, named], "greenville")).toMatchObject({ quality: "exact", layoutId: 2, reason: null });
+    expect(matchPdgaLayout(pdga, "NC", [ecu, named], "greenville")).toMatchObject({ quality: "ambiguous", layoutId: null });
+    // Institution words do not make a name match.
+    expect(matchPdgaLayout(renamed, "NC", [{ ...course([layout], "NC Wesleyan University", "Rocky Mount, NC") }], "greenville"))
+      .toMatchObject({ quality: "none", candidates: [] });
   });
 
   it("treats a par-estimated distance as unmeasured", () => {
@@ -224,6 +237,21 @@ describe("chronological PDGA baselines", () => {
   });
 });
 
+describe("SSA implied by PDGA's published ratings", () => {
+  it("recovers the SSA behind published ratings and keeps SSARdN when they agree", () => {
+    const pairs = [50, 52, 54, 56, 58].map((score) => [score, roundRatingForScore(score, 52.8, pointsPerThrow(52.8))] as const);
+    expect(impliedRatingsSsa(pairs)).toBeCloseTo(52.8, 1);
+    expect(impliedRatingsSsa(pairs.slice(0, 2))).toBeNull();
+    // PDGA rated two rounds of one event from a shared SSA: record it when SSARdN is clearly off.
+    expect(publishedRatingsSsa(53.424, pairs)).toBeCloseTo(52.8, 1);
+    expect(publishedRatingsSsa(52.81, pairs)).toBeNull();
+    expect(publishedRatingsSsa(null, pairs)).toBeCloseTo(52.8, 1);
+    // The real Ayden round: published ratings match SSARd1 = 49.565.
+    const round = parsePdgaRound(fixture("round-104547-MA2-1.json"), 1);
+    expect(publishedRatingsSsa(49.565, round.pairs.get(761497)!)).toBeNull();
+  });
+});
+
 describe("PDGA validation maths", () => {
   const layoutHoles = holes([300, 310, 320, 330, 340, 350, 360, 370, 380]);
   const vround = (tournId: number, roundDate: string, ssa: number, pairs: [number, number][], layoutId = 1): ValidationPdgaRound => ({
@@ -248,6 +276,16 @@ describe("PDGA validation maths", () => {
     });
     expect(report.biasRating).toBeCloseTo((r2a + r2b + r3) / 3, 1);
     expect(report.maeRating).toBeCloseTo((Math.abs(r2a) + Math.abs(r2b) + Math.abs(r3)) / 3, 1);
+  });
+
+  it("predicts only from earlier events and checks the formula against the published per-round SSA", () => {
+    const shared = 52.8;
+    const report = evaluatePdgaBaselines([
+      { ...vround(1, "2025-01-01", shared, [[50, rate(50, shared)]]), officialSsa: 53.4 },
+      { ...vround(1, "2025-01-02", shared, [[50, rate(50, shared)]]), roundNumber: 2, officialSsa: 52.2 },
+    ]);
+    expect(report).toMatchObject({ predictedRounds: 0, roundsWithoutPriorBaseline: 2, formulaPairs: 2 });
+    expect(report.formulaMaxAbsRating).toBeGreaterThan(4);
   });
 
   it("checks the engine's score-to-rating formula against PDGA's published ratings for a real round", () => {

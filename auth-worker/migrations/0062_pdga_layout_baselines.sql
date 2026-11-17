@@ -34,7 +34,9 @@ CREATE TABLE pdga_discovery_state (
   pass_completed_at TEXT
 );
 
--- One row per PDGA round on one PDGA layout. official_ssa is PDGA's SSA for that round and layout.
+-- One row per PDGA round on one PDGA layout. official_ssa is the live API's SSARdN for that round and
+-- layout; ratings_ssa is the SSA PDGA's published round ratings imply (PDGA rates rounds of one event
+-- on one layout from a shared SSA, so the two can differ). Baselines use ratings_ssa when known.
 CREATE TABLE pdga_rated_rounds (
   tourn_id        INTEGER NOT NULL,
   round_number    INTEGER NOT NULL CHECK (round_number BETWEEN 1 AND 10),
@@ -52,6 +54,7 @@ CREATE TABLE pdga_rated_rounds (
   total_length_ft INTEGER,
   holes_json      TEXT NOT NULL,
   official_ssa    REAL,
+  ratings_ssa     REAL,
   ratings_status  TEXT NOT NULL CHECK (ratings_status IN ('official', 'unconfirmed')),
   rated_players   INTEGER NOT NULL DEFAULT 0,
   fetched_at      TEXT NOT NULL,

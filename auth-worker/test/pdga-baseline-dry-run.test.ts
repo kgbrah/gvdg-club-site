@@ -4,6 +4,7 @@ import type { Env } from "../src/env.js";
 import { haversineMiles } from "../src/distance.js";
 import { enqueuePdgaEvent, runPdgaBaselineTick } from "../src/pdga-baseline-ingest.js";
 import { pdgaBaselineOverview, pdgaCourseBaselines, pdgaValidationReport } from "../src/pdga-baseline-store.js";
+import { pointsPerThrow, roundRatingForScore } from "../src/rating-engine.js";
 import { pdgaTestDb } from "./pdga-test-db.js";
 
 // Dry run against REAL public data, never the live D1: an in-memory database gets our public course
@@ -39,15 +40,21 @@ it.skipIf(!env.GVDG_PDGA_DRY_RUN)("dry-runs PDGA layout baselines on real data",
   for (const course of nearby) {
     const listed = course.layouts?.length ?? 0;
     let layouts: { id: number; name: string; holes: string }[] = [];
-    for (let attempt = 0; attempt < 3 && layouts.length < listed; attempt += 1) {
+    // The catalog can also come back degraded (no layouts) while its D1 read fails: retry empties.
+    for (let attempt = 0; attempt < 4 && (layouts.length < listed || !layouts.length); attempt += 1) {
       if (attempt) await new Promise((resolve) => setTimeout(resolve, 3_000));
       layouts = (await get(API + "/courses/" + course.id + "/layouts")).layouts as typeof layouts;
     }
+    expect(layouts.length, course.name + " layouts").toBeGreaterThanOrEqual(listed);
+    expect(layouts.every((layout) => (layout as { course_id?: number }).course_id === course.id), course.name + " layout owner").toBe(true);
     for (const layout of layouts) sqlite.prepare("INSERT INTO course_layouts (id, course_id, name, holes) VALUES (?, ?, ?, ?)")
       .run(layout.id, course.id, layout.name, typeof layout.holes === "string" ? layout.holes : JSON.stringify(layout.holes));
   }
 
   // pdga.com answers 429 to bursts. Pace requests, wait out a 429, and cache bodies so a rerun is free.
+  const withLayouts = sqlite.prepare("SELECT COUNT(DISTINCT course_id) AS count FROM course_layouts").get() as { count: number };
+  expect(withLayouts.count, "nearby courses with layouts").toBeGreaterThanOrEqual(Math.ceil(nearby.length * 0.8));
+
   let requests = 0;
   let cached = 0;
   const cacheDir = env.GVDG_PDGA_DRY_RUN_CACHE;
@@ -94,7 +101,23 @@ it.skipIf(!env.GVDG_PDGA_DRY_RUN)("dry-runs PDGA layout baselines on real data",
     .filter((row) => row.review_status === "auto" && row.course_id != null).map((row) => row.course_id!))];
   const perCourse = [];
   for (const courseId of matchedCourses) perCourse.push(await pdgaCourseBaselines(db, courseId, now));
+  // Per round: how well the engine's formula reproduces PDGA's published ratings from that round's own SSA.
+  const formulaByRound = (sqlite.prepare(`SELECT r.tourn_id, r.round_number, r.pdga_layout_id, r.official_ssa, s.division, s.pairs_json
+      FROM pdga_rated_rounds r JOIN pdga_round_scores s ON s.tourn_id = r.tourn_id AND s.round_number = r.round_number
+        AND s.pdga_layout_id = r.pdga_layout_id WHERE r.official_ssa IS NOT NULL AND s.rated_count > 0`).all() as Record<string, unknown>[])
+    .map((row) => {
+      const ssa = Number(row.official_ssa);
+      const errors = (JSON.parse(String(row.pairs_json)) as [number, number][])
+        .map(([score, rating]) => roundRatingForScore(score, ssa, pointsPerThrow(ssa)) - rating);
+      return { tournId: row.tourn_id, round: row.round_number, layout: row.pdga_layout_id, division: row.division, ssa,
+        pairs: errors.length, meanError: errors.reduce((sum, error) => sum + error, 0) / errors.length, maxAbs: Math.max(...errors.map(Math.abs)) };
+    });
+  const loadedLayouts = sqlite.prepare(`SELECT c.id AS course_id, c.name AS course, c.location, l.id, l.name, json_array_length(l.holes) AS holes,
+      (SELECT SUM(json_extract(h.value, '$.par')) FROM json_each(l.holes) h) AS par
+    FROM course_layouts l JOIN courses c ON c.id = l.course_id ORDER BY c.id, l.id`).all();
   const report = {
+    loadedLayouts,
+    formulaByRound,
     requests, cachedResponses: cached, queue, rounds, matches, perCourse, overview: await pdgaBaselineOverview(db), validation: await pdgaValidationReport(db),
     courses: courses.length, nearbyCourses: nearby.length,
   };

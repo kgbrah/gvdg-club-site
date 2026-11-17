@@ -135,11 +135,16 @@ export function parsePdgaEvent(json: unknown, tournId: number): PdgaEventSummary
   const startDate = isoDay(event.StartDate);
   if (!startDate || String(event.TournamentId ?? tournId) !== String(tournId)) return null;
   const place = cityState(String(event.LocationShort ?? ""));
+  const endDate = isoDay(event.EndDate);
   const roundDates: Record<string, string> = {};
   for (const [key, raw] of Object.entries(record(event.RoundsList))) {
-    const day = isoDay(record(raw).Date);
-    const n = int(record(raw).Number) ?? int(key);
-    if (day && n != null && n >= 1 && n <= PDGA_MAX_ROUND) roundDates[String(n)] = day;
+    const row = record(raw);
+    const day = isoDay(row.Date);
+    const n = int(row.Number) ?? int(key);
+    if (!day || n == null || n < 1 || n > PDGA_MAX_ROUND) continue;
+    // Without ShowDate PDGA does not know the day a round was played. The event's last day is the
+    // latest it could have been, which keeps the no-look-ahead rule safe.
+    roundDates[String(n)] = row.ShowDate === true || !endDate || endDate < day ? day : endDate;
   }
   const divisions = (Array.isArray(event.Divisions) ? event.Divisions : []).flatMap((raw) => {
     const row = record(raw);
@@ -151,7 +156,7 @@ export function parsePdgaEvent(json: unknown, tournId: number): PdgaEventSummary
     tournId,
     name: text(event.Name) ?? text(event.SimpleName) ?? "PDGA event " + tournId,
     startDate,
-    endDate: isoDay(event.EndDate),
+    endDate,
     city: place?.city ?? (rawCity ? normalizePlaceText(rawCity) : null),
     state: place?.state ?? null,
     tier: text(event.Tier, 12),
@@ -252,6 +257,13 @@ function editDistanceWithin1(a: string, b: string): boolean {
   return false;
 }
 
+// One typo is tolerated only in longer names: "greenivlle" is Greenville, but "arden" is not Ayden.
+const TYPO_MIN_LETTERS = 7;
+
+function sameTown(a: string, b: string): boolean {
+  return a === b || (a.length >= TYPO_MIN_LETTERS && b.length >= TYPO_MIN_LETTERS && editDistanceWithin1(a, b));
+}
+
 export type ClubPlaces = ReadonlyMap<string, ReadonlySet<string>>;
 
 /** State -> normalized city names, from our courses' "City, ST" locations. */
@@ -279,8 +291,7 @@ export function discoverableEvent(event: DiscoveredPdgaEvent, places: ClubPlaces
   if (!cities) return false;
   const city = event.city ?? "";
   if (!/[a-z]/.test(city)) return true;
-  if (cities.has(city)) return true;
-  return city.length >= 5 && [...cities].some((candidate) => candidate.length >= 5 && editDistanceWithin1(city, candidate));
+  return [...cities].some((candidate) => sameTown(city, candidate));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -381,36 +392,43 @@ export type LayoutMatch = {
   candidates: MatchCandidate[];
 };
 
+// Institution words say nothing about which course it is ("East Carolina University" is not
+// "NC Wesleyan University").
+const PLACE_WORDS = new Set(["university", "college", "school", "church", "community", "center", "centre", "complex", "recreation",
+  "rec", "county", "city", "state", "high", "middle", "elementary", "memorial", "regional", "public", "north", "south", "east", "west"]);
+
+function distinctive(value: string): Set<string> {
+  return new Set([...courseNameTokens(value)].filter((token) => !PLACE_WORDS.has(token)));
+}
+
 function nameShare(pdgaCourse: string, ours: string): number {
-  const want = courseNameTokens(pdgaCourse);
-  const have = courseNameTokens(ours);
+  const want = distinctive(pdgaCourse);
+  const have = distinctive(ours);
   if (!want.size || !have.size) return 0;
   let shared = 0;
   for (const token of want) if (have.has(token)) shared += 1;
   return shared ? Math.max(shared / want.size, shared / have.size) : 0;
 }
 
-function sameTown(a: string, b: string): boolean {
-  return a === b || (a.length >= 5 && b.length >= 5 && editDistanceWithin1(a, b));
-}
-
 /**
- * Courses that could be this PDGA course: same state as the event (when known) and a course-name
- * token match. When no name matches (PDGA calls ECU North Rec "East Carolina University"), courses in
- * the event's own town are candidates instead, and hole-by-hole geometry has to decide.
+ * Courses that could be this PDGA course: in the event's state (when known), either sharing a
+ * distinctive course-name word or in the event's own town (one typo tolerated). PDGA's course name
+ * can differ completely from ours ("East Carolina University" is our ECU North Rec), so town courses
+ * are always candidates and hole-by-hole geometry has to decide.
  */
 export function candidateCourses(pdgaCourseName: string, eventState: string | null, courses: readonly OurCourse[], eventCity: string | null = null) {
-  const inState = courses.filter((course) => {
+  const town = eventCity && eventState ? normalizePlaceText(eventCity) : null;
+  const byName = new Set<number>();
+  const picked = courses.filter((course) => {
     const place = cityState(String(course.location ?? ""));
-    return !eventState || !place || place.state === eventState;
+    if (eventState && place && place.state !== eventState) return false;
+    if (nameShare(pdgaCourseName, course.name) >= MATCH_RULES.nameShare) {
+      byName.add(course.id);
+      return true;
+    }
+    return town != null && place != null && place.state === eventState && sameTown(place.city, town);
   });
-  const named = inState.filter((course) => nameShare(pdgaCourseName, course.name) >= MATCH_RULES.nameShare);
-  if (named.length || !eventCity || !eventState) return { courses: named, by: "name" as const };
-  const town = normalizePlaceText(eventCity);
-  return { courses: inState.filter((course) => {
-    const place = cityState(String(course.location ?? ""));
-    return place != null && place.state === eventState && sameTown(place.city, town);
-  }), by: "town" as const };
+  return { courses: picked, byName };
 }
 
 /**
@@ -421,12 +439,12 @@ export function candidateCourses(pdgaCourseName: string, eventState: string | nu
 export function matchPdgaLayout(
   layout: Pick<PdgaLayout, "courseName" | "holes">, eventState: string | null, courses: readonly OurCourse[], eventCity: string | null = null,
 ): LayoutMatch {
-  const { courses: named, by } = candidateCourses(layout.courseName, eventState, courses, eventCity);
+  const { courses: named, byName } = candidateCourses(layout.courseName, eventState, courses, eventCity);
   if (!named.length) {
     return { quality: "none", courseId: null, layoutId: null, candidates: [],
-      reason: "No club course named like \"" + layout.courseName + "\"" + (eventState ? " in " + eventState : "") };
+      reason: "No club course named like \"" + layout.courseName + "\"" + (eventState ? " in " + eventState : "") +
+        (eventCity ? " or in " + eventCity : "") };
   }
-  const byTown = by === "town" ? "Matched by town and hole geometry; PDGA names the course \"" + layout.courseName + "\"" : null;
   const candidates: MatchCandidate[] = [];
   for (const course of named) {
     for (const ours of course.layouts) {
@@ -462,6 +480,7 @@ export function matchPdgaLayout(
     return { quality: "ambiguous", courseId: null, layoutId: null, candidates,
       reason: best.layoutName + " and " + runner.layoutName + " are equally close" };
   }
+  const byTown = byName.has(best.courseId) ? null : "Matched by town and hole geometry; PDGA names the course \"" + layout.courseName + "\"";
   return { quality: best.grade, courseId: best.courseId, layoutId: best.layoutId, candidates, reason: byTown };
 }
 
@@ -478,6 +497,39 @@ export function ourLayoutHoles(raw: unknown): OurHole[] | null {
     distanceFt: hole.distance_source === "par_estimate" ? null : num(hole.distance_ft),
   })).sort((a, b) => a.hole - b.hole);
   return holes.every((hole, index) => hole.hole === index + 1 && hole.par >= 1) ? holes : null;
+}
+
+/** The SSA at which `score` earns `rating` (the engine's formula, solved by bisection). */
+function ssaForRating(score: number, rating: number): number {
+  let low = 20;
+  let high = 90; // points per throw stays positive (and the formula increasing) below ~95
+  for (let i = 0; i < 60; i += 1) {
+    const middle = (low + high) / 2;
+    if (1000 + (middle - score) * pointsPerThrow(middle) < rating) low = middle;
+    else high = middle;
+  }
+  return (low + high) / 2;
+}
+
+/**
+ * The SSA that PDGA's published round ratings imply (median over players). PDGA rates every round of
+ * an event on one layout from a shared SSA, so this can differ from the live per-round SSARdN.
+ */
+export function impliedRatingsSsa(pairs: readonly ScorePair[], minimum = 3): number | null {
+  if (pairs.length < minimum) return null;
+  const ssa = median(pairs.map(([score, rating]) => ssaForRating(score, rating)));
+  return ssa == null ? null : Math.round(ssa * 1000) / 1000;
+}
+
+/**
+ * The SSA to record beside SSARdN: the ratings-implied SSA, but only when the published ratings
+ * clearly did not use SSARdN (more than 0.1 strokes apart, about one rating point). Integer ratings
+ * imply an SSA only to a few hundredths of a stroke, so a closer value keeps SSARdN.
+ */
+export function publishedRatingsSsa(officialSsa: number | null, pairs: readonly ScorePair[]): number | null {
+  const implied = impliedRatingsSsa(pairs);
+  if (implied == null) return null;
+  return officialSsa == null || Math.abs(implied - officialSsa) > 0.1 ? implied : null;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -572,7 +624,8 @@ export function baselineProvenance(baseline: Pick<PdgaBaseline, "rounds" | "firs
 // ---------------------------------------------------------------------------------------------
 // Validation against PDGA's own round ratings (ground truth)
 
-export type ValidationPdgaRound = BaselineRound & { layoutId: number; pairs: readonly ScorePair[] };
+/** `ssa` is the round's effective SSA (ratings-implied when known); `officialSsa` is the live SSARdN. */
+export type ValidationPdgaRound = BaselineRound & { layoutId: number; officialSsa?: number | null; pairs: readonly ScorePair[] };
 export type ClubBaselineSample = { layoutId: number; playedAt: string; ssa: number };
 
 type ErrorStats = { count: number; mae: number | null; bias: number | null; maxAbs: number | null };
@@ -586,9 +639,9 @@ function stats(errors: readonly number[], digits = 1): ErrorStats {
 
 /**
  * Walk forward through matched PDGA rounds. Predict each round's player ratings from the baseline
- * built only from EARLIER PDGA rounds on the same layout, and compare with PDGA's published ratings.
- * The formula check rates each pair with that round's own official SSA, isolating the engine's
- * score-to-rating formula from the baseline. Club layout baselines are compared where both exist.
+ * built only from PDGA rounds of EARLIER events (earlier days) on the same layout, and compare with
+ * PDGA's published ratings. The formula check rates each pair with that round's published SSARdN,
+ * isolating the engine's score-to-rating formula. Club layout baselines are compared where both exist.
  */
 export function evaluatePdgaBaselines(rounds: readonly ValidationPdgaRound[], clubBaselines: readonly ClubBaselineSample[] = []) {
   const byLayout = new Map<number, ValidationPdgaRound[]>();
@@ -608,10 +661,13 @@ export function evaluatePdgaBaselines(rounds: readonly ValidationPdgaRound[], cl
     const layoutErrors: number[] = [];
     let layoutPredicted = 0;
     for (const round of list) {
+      const published = round.officialSsa ?? round.ssa!;
       for (const [score, rating] of round.pairs) {
-        formulaErrors.push(roundRatingForScore(score, round.ssa!, pointsPerThrow(round.ssa!)) - rating);
+        formulaErrors.push(roundRatingForScore(score, published, pointsPerThrow(published)) - rating);
       }
-      const baseline = pdgaBaselineFor(list, round.holes.map((hole) => ({ hole: hole.hole, par: hole.par, distanceFt: hole.lengthFt })), round.roundDate);
+      // Earlier events only: a same-event round from the day before would flatter the prediction.
+      const earlier = list.filter((entry) => entry.tournId !== round.tournId);
+      const baseline = pdgaBaselineFor(earlier, round.holes.map((hole) => ({ hole: hole.hole, par: hole.par, distanceFt: hole.lengthFt })), round.roundDate);
       if (!baseline) {
         noPriorRound += 1;
         continue;

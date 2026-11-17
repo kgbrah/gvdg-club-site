@@ -115,7 +115,8 @@ function ReviewItem({ item, token, onChanged }) {
     h("p", { className: "al-note", key: "quality" }, QUALITY[item.quality] + (item.reason ? ". " + item.reason + "." : ".")),
     options.length ? h("label", { key: "choice" }, "Our layout", h("select", { "aria-label": "Our layout for " + summary, value: choice, disabled: busy,
       onChange: (event) => setChoice(event.target.value) }, options.map((option) => h("option", { key: option.layoutId, value: String(option.layoutId) },
-      option.courseName + " · " + option.layoutName + " (" + (QUALITY[option.grade] || option.grade).toLowerCase() + ")"))))
+      option.layoutName + " · " + option.parMatches + "/" + option.holes + " pars · " + option.lengthMatches + "/" + option.holes +
+        " lengths · " + option.courseName))))
       : h("label", { key: "choice" }, "Our layout ID", h("input", { "aria-label": "Our layout ID for " + summary, inputMode: "numeric",
         value: choice, disabled: busy, onChange: (event) => setChoice(event.target.value.replace(/\D/g, "")) })),
     h("div", { className: "course-operator-actions", key: "actions" }, [
@@ -144,10 +145,10 @@ function Validation({ token, revision }) {
       ["SSA error", data.maeSsaStrokes + " strokes"],
     ] }) : null,
     data ? h("p", { className: "al-note", key: "method" }, [
-      "Each PDGA round is predicted only from earlier PDGA rounds on the same layout, then compared with the ratings PDGA published.",
+      "Each PDGA round is predicted only from PDGA rounds of earlier events on the same layout, then compared with the ratings PDGA published.",
       data.status === "small-sample" ? "Small sample: treat these numbers as early evidence." : "",
-      data.formulaPairs ? "Formula check: from PDGA's own SSA the engine reproduces " + count(data.formulaPairs, "published rating", "published ratings") +
-        " within " + data.formulaMaeRating + " pts on average (largest gap " + data.formulaMaxAbsRating + ")." : "",
+      data.formulaPairs ? "Formula check: from each round's published PDGA SSA the engine reproduces " + count(data.formulaPairs, "published rating", "published ratings") +
+        " within " + data.formulaMaeRating + " pts on average (largest gap " + data.formulaMaxAbsRating + "; PDGA rates an event's rounds on one layout from a shared SSA)." : "",
       data.clubComparisons ? "Club layout baselines vs PDGA: " + signed(data.clubMinusPdgaSsaMean) + " strokes on average over " +
         count(data.clubComparisons, "comparison", "comparisons") + "." : "",
     ].filter(Boolean).join(" ")) : null,

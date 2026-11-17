@@ -11,7 +11,7 @@ import {
   clubPlaces, discoverableEvent, parsePdgaEvent, parsePdgaRound, parseRatingDetailEvents, pdgaEventComplete, pdgaRoundTasks,
   PDGA_LIVE_API, PDGA_MEMBER_API, type PdgaEventSummary,
 } from "./pdga-baselines.js";
-import { matchPdgaLayouts } from "./pdga-baseline-store.js";
+import { matchPdgaLayouts, refreshRatingsSsa } from "./pdga-baseline-store.js";
 import { getMember } from "./roster.js";
 
 const UA = "Mozilla/5.0 (compatible; GVDGClubBot/1.0; +https://gvdgclub.com)";
@@ -245,6 +245,7 @@ async function ingestEvent(db: D1Like, doFetch: typeof fetch, row: QueueRow, now
   await db.prepare(`UPDATE pdga_ingest_queue SET status = 'done', pending_json = '[]', attempts = 0, last_error = NULL,
       updated_at = ?, ingested_at = ? WHERE tourn_id = ?`).bind(now, now, row.tourn_id).run();
   summary.eventsCompleted += 1;
+  await refreshRatingsSsa(db, row.tourn_id);
   const matched = await matchPdgaLayouts(db, { tournId: row.tourn_id }, now);
   summary.layoutsMatched += matched.matched;
   summary.layoutsPending += matched.pending;
