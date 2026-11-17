@@ -176,6 +176,7 @@ body :is(#scoreRoot, .overlay) summary { min-height: 44px; padding-block: .55rem
   padding-inline: .95rem;
   font-size: 1.04rem;
   background: linear-gradient(90deg, var(--member-round-bg), var(--member-round-scrim), var(--member-round-edge)), var(--member-round-bg) url("img/bg/forest-bg.png") center 64% / cover;
+  background-image: linear-gradient(90deg, var(--member-round-bg), var(--member-round-scrim), var(--member-round-edge)), image-set(url("img/bg/forest-bg.webp") type("image/webp"), url("img/bg/forest-bg.png") type("image/png"));
   color: var(--member-round-ink);
 }
 #app > .stack > .card:has(#joinRoundCode) > label { margin-top: .55rem; }

@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v297";
+const CACHE = "gvdg-club-v298";
 // Member app screens past Home are content-hashed chunks. They live in their own cache, which keeps the
 // chunks of this version and the one before it, so a page that was open across an update can still open
 // its screens (online or offline) after their files are gone from the server.
@@ -32,7 +32,8 @@ const ASSETS = [
   "home-app/home-app.js",
   "public-app/public-app.js",
   "tee-sign-preview-app/tee-sign-preview-app.js",
-  "img/logo.png",
+  "img/logo-mark-234.png",
+  "img/logo-small.png",
   "img/icons/app-icon-192.png",
   "img/icons/app-icon-512.png",
   "img/icons/maskable-icon-512.png",
@@ -231,10 +232,16 @@ self.addEventListener("fetch", (event) => {
           }
           return res;
         })
-        .catch(() => (req.destination === "image" ? caches.match("img/logo.png") : Response.error()));
+        .catch(() => (req.destination === "image" ? offlineImage(url) : Response.error()));
     })
   );
 });
+
+// An image missing offline shows the club logo. The header mark's 1x/2x file falls back to its precached
+// 3x file, which draws the same; anything else gets the small full logo.
+function offlineImage(url) {
+  return caches.match(url.pathname.includes("/img/logo-mark-") ? "img/logo-mark-234.png" : "img/logo-small.png");
+}
 
 function adminNotificationUrl(raw) {
   if (typeof raw !== "string" || !raw.startsWith("/admin.html") || raw.startsWith("//") || raw.includes("\\") || raw.includes("://")) {
