@@ -145,7 +145,9 @@ async function serveFixture(path, query, request, ref, reply) {
   else if (path === "/shop/wallet") reply({ balance_cents: empty ? 0 : 3250,
     transactions: empty ? [] : [{ id: 1, amount_cents: 3250, source: "event_payout", created_at: now }] });
   else if (path === "/registration/open" || path === "/events") reply({ events: empty ? [] : [event, alternatives] });
-  else if (path === "/my-registrations") reply({ registrations: empty ? [] : [{ event_id: 52, division: "MA2", paid_entry: false }] });
+  else if (path === "/my-registrations") reply({ registrations: empty ? [] : [{ event_id: 52, division: "MA2", paid_entry: false },
+    { event_id: 61, event_name: "Fall Finale Doubles", event_status: "final", event_date: "2026-09-13", course_name: "Rocky Ford",
+      division: "MA2", paid_entry: 1, checked_in: 1 }] });
   else if (path === "/courses") reply({ courses: empty ? [] : [course] });
   else if (path === "/courses/7/layouts") reply({ layouts: empty ? [] : [layout] });
   else if (path === "/course-traffic") reply({ courses: [] });
@@ -274,6 +276,14 @@ async function verifyDestinations(width, mode) {
       if (item.key === "overview") await view.page.locator("#myDashboard [data-react-live-scoring='ready']").waitFor();
       await view.page.getByRole("heading", { name: item.label, level: 1, exact: true }).waitFor();
       if (readiness[item.key]) await view.page.locator(readiness[item.key]).first().waitFor({ state: "attached" });
+      if (item.key === "events") {
+        const mine = view.page.locator("section[aria-label='My events']");
+        await mine.waitFor();
+        assert.equal(await mine.getByText("Fall Finale Doubles").count(), 0, "finished events leave My events");
+      }
+      if (item.key === "results") {
+        await view.page.locator("section[aria-label='Your completed events']").getByText("Fall Finale Doubles").waitFor();
+      }
       await view.screen(item.key + "-" + width + "-" + mode);
     }
     assert.deepEqual(view.errors, []);

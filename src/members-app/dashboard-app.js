@@ -15,7 +15,7 @@ import { LeagueSchedule } from "./club-leagues.js";
 import { useSessionToken } from "./session-token.js";
 import { currentDashboardRoute } from "./dashboard-router.js";
 import { MemberPlayPage, UdiscHistory } from "./play-page.js";
-import { MemberRegistrationPanel, RegistrationProvider } from "./registration-panel.js";
+import { MemberCompletedEvents, MemberRegistrationPanel, RegistrationProvider } from "./registration-panel.js";
 import { MemberBagPage, MemberPracticePage } from "./practice-panels.js";
 import { usePracticeWorkspace } from "./practice-workspace.js";
 import { MemberSeasonPage } from "./season-page.js";
@@ -69,7 +69,7 @@ export function MemberDashboardApp() {
       h(LeagueSchedule, { key: "current" }),
       h(DoublesLeaguePanel, { key: "doubles" }),
     ]) : null,
-    tab === "results" ? h(MemberSeasonPage, { key: "results", resultsOnly: true }) : null,
+    tab === "results" ? h("div", { className: "member-subpage member-results-page", key: "results" }, [h(MemberCompletedEvents, { key: "completed" }), h(MemberSeasonPage, { key: "season", resultsOnly: true })]) : null,
     tab === "community" && token ? h(MemberCommunityPage, { token, key: "community" }) : null,
     tab === "course-discovery" && token ? h(MemberCourseDiscovery, { token, courseId: route.courseId, key: "course-discovery" }) : null,
     tab === "practice" && token ? h(MemberPracticePage, { workspace: practice, key: "practice" }) : null,
