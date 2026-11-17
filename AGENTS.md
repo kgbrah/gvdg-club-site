@@ -63,6 +63,19 @@ curl -s https://gvdgclub.com/version.json           # {commit, branch, deployedA
 CLOUDFLARE_ACCOUNT_ID=<private-account-id> wrangler pages deployment list --project-name gvdg-club-site
 ```
 
+## After a deploy: the live QA drive
+
+Every successful "Deploy to staging (gvdgclub.com)" run triggers **Live QA drive** (`.github/workflows/live-qa-drive.yml`).
+It signs in as the QA admin (GitHub secrets only) and visits every member and admin destination on the live
+site at 390 dark/light, 320 dark + large text and 1280 light, failing on console/page errors, failed requests,
+horizontal overflow or clipped labels. It only navigates. Check it before calling a release done:
+
+```bash
+gh run list -R kgbrah/gvdg-club-site --workflow "Live QA drive (read-only, gvdgclub.com)" --limit 1
+gh run download <run-id> -R kgbrah/gvdg-club-site -n live-drive    # summary.json + screenshots
+gh workflow run live-qa-drive.yml -R kgbrah/gvdg-club-site --ref main -f only="admin:courses"   # on demand
+```
+
 ## Branch hygiene
 
 - One integration branch: **`main`**. Rebase feature branches onto it; open PRs; merge back promptly.
