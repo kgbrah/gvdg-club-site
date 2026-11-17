@@ -6,6 +6,7 @@ import { EventFieldRoster } from "../shared/event-field-roster.js";
 import { AddToCalendarButton } from "../shared/add-to-calendar.js";
 import { calendarEventFromClub } from "../shared/event-calendar.js";
 import { request } from "./api.js";
+import { selectDashboardTab } from "./dashboard-router.js";
 import { dollars, formatEventDay } from "./format.js";
 import { memberAlert, memberConfirm } from "./member-dialogs.js";
 import { PayPalButtons, WalletPayButton } from "./registration-payments.js";
@@ -203,6 +204,37 @@ export function EventRegistrationCard({ event, registration, token, paymentsConf
   ]);
 }
 
+function isFinishedRegistration(row, openById) {
+  const event = openById.get(row.event_id) || eventFromRegistration(row);
+  return event.status === "final";
+}
+
+const COMPLETED_PREVIEW = 5;
+
+/** The member's finished (final) registered events, newest first; shown on the Event results tab. */
+export function CompletedEventSection({ events, registrations, token, paymentsConfig, onReload }) {
+  const [showAll, setShowAll] = React.useState(false);
+  const openById = new Map(events.map((event) => [event.id, event]));
+  const finished = sortRegistrations(registrations.filter((row) => isFinishedRegistration(row, openById)));
+  if (!finished.length) return null;
+  const shown = showAll ? finished : finished.slice(0, COMPLETED_PREVIEW);
+  return h("section", { className: "member-event-section member-completed-events", "aria-label": "Your completed events" }, [
+    h("h2", { className: "register-subhead", key: "title" }, "Your completed events"),
+    h("div", { className: "member-event-list", key: "events" }, shown.map((row) => h(EventRegistrationCard, {
+      event: openById.get(row.event_id) || eventFromRegistration(row),
+      registration: row,
+      token,
+      paymentsConfig,
+      onReload,
+      key: `done-${row.event_id}`,
+    }))),
+    finished.length > COMPLETED_PREVIEW ? h("button", {
+      type: "button", className: "dashboard-action", key: "more", "aria-expanded": showAll,
+      onClick: () => setShowAll((value) => !value),
+    }, showAll ? "Show fewer" : `Show all ${finished.length}`) : null,
+  ]);
+}
+
 function Section({ title, children }) {
   return h("section", { className: "member-event-section", "aria-label": title }, [
     h("h2", { className: "register-subhead", key: "title" }, title),
@@ -218,8 +250,11 @@ export function EventRegistrationSections({ events, registrations, token, paymen
   const scheduledToJoin = openToJoin.filter((event) => event.status !== "live");
   const sections = [];
 
-  if (registrations.length) {
-    sections.push(h(Section, { title: "My events", key: "mine" }, sortRegistrations(registrations).map((row) => h(EventRegistrationCard, {
+  // Finished (final) events live on the Event results tab so upcoming ones stay at the top here.
+  const upcoming = registrations.filter((row) => !isFinishedRegistration(row, openById));
+  const finishedCount = registrations.length - upcoming.length;
+  if (upcoming.length) {
+    sections.push(h(Section, { title: "My events", key: "mine" }, sortRegistrations(upcoming).map((row) => h(EventRegistrationCard, {
       event: openById.get(row.event_id) || eventFromRegistration(row),
       registration: row,
       token,
@@ -227,6 +262,15 @@ export function EventRegistrationSections({ events, registrations, token, paymen
       onReload,
       key: `registered-${row.event_id}`,
     }))));
+  } else if (finishedCount) {
+    sections.push(h("section", { className: "member-event-section", "aria-label": "My events", key: "mine" }, [
+      h("h2", { className: "register-subhead", key: "title" }, "My events"),
+      h("p", { className: "dash-note", key: "note" }, [
+        "No upcoming events. Your finished events are in ",
+        h("button", { type: "button", className: "board-link", key: "link", onClick: () => selectDashboardTab("results") }, "Event results"),
+        ".",
+      ]),
+    ]));
   }
   if (liveToJoin.length) {
     sections.push(h(Section, { title: "Live now", key: "live" }, liveToJoin.map((event) => h(EventRegistrationCard, { event, token, paymentsConfig, onReload, key: `live-${event.id}` }))));

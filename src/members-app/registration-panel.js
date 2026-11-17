@@ -4,7 +4,7 @@ import { MoreLink } from "./more-page.js";
 import { requestJson } from "./api.js";
 import { useMemberContext } from "./member-context.js";
 import { CasualRoundsSection } from "./registration-casual.js";
-import { EventRegistrationSections } from "./registration-events.js";
+import { CompletedEventSection, EventRegistrationSections } from "./registration-events.js";
 import { PdgaEventsSection } from "./pdga-events-panel.js";
 import { useSessionToken } from "./session-token.js";
 
@@ -105,4 +105,17 @@ export function MemberRegistrationPanel({ eventId } = {}) {
       }),
     ]) : h(PdgaEventsSection, { key: "pdga" }),
   ]);
+}
+
+/** Event results tab: the member's finished registrations, above the club results list. */
+export function MemberCompletedEvents() {
+  const { token, state, reload } = useRegistrationData();
+  if (!token || state.status === "error") return null;
+  return h(CompletedEventSection, {
+    events: state.events,
+    registrations: state.registrations,
+    token,
+    paymentsConfig: state.paymentsConfig,
+    onReload: reload,
+  });
 }
