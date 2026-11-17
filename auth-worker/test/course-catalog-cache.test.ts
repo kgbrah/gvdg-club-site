@@ -17,7 +17,10 @@ function installCache() {
   const deleted: string[] = [];
   const defaultCache = {
     match: async (request: Request) => store.get(request.url)?.clone(),
+    // Like Cloudflare's Cache API: a response marked private/no-store (or without a lifetime) is not stored.
     put: async (request: Request, response: Response) => {
+      const control = response.headers.get("Cache-Control") || "";
+      if (/private|no-store|no-cache/i.test(control) || !/max-age=\d+/.test(control)) return;
       store.set(request.url, response.clone());
     },
   };
@@ -94,6 +97,10 @@ describe("public course catalog cache", () => {
     expect(afterFirst).toBe(3);
     expect(courses.calls()).toBe(afterFirst);
     expect(second.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    // Browsers never hold the catalog, even when the edge served it from cache.
+    expect(first.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(second.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(second.headers.get("X-Gvdg-Catalog-At")).toBe(first.headers.get("X-Gvdg-Catalog-At"));
     expect((await first.json() as { courses: unknown[] }).courses).toHaveLength(2);
     expect((await second.json() as { courses: unknown[] }).courses).toHaveLength(2);
   });
