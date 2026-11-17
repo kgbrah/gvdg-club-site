@@ -3,6 +3,9 @@ import type { D1Like } from "./db-types.js";
 import { aggregatePlayerRating, roundRatingForScoreWithWeather, MIN_OVERALL_ROUNDS, type RatingMethod, type RatingRound as EngineRound, type RatingStream } from "./rating-engine.js";
 import { CURRENT_RESULT_FIELDS, STORED_EVIDENCE_FIELDS, matchesStoredRatingEvidence, singlesStrokeEvidence } from "./rating-source.js";
 import { getSourceRatingBaseline, type LayoutRatingBaseline } from "./rating-store.js";
+import { pdgaBaselineForPlayed, playedHolesFromShape } from "./pdga-baseline-store.js";
+import type { PdgaBaseline } from "./pdga-baselines.js";
+import { readArchivedRatingHoles, ratingGeometrySnapshot } from "./rating-layout.js";
 
 export type RatingKind = "competitive" | "casual";
 export type RatingSource = "stored" | "unrated";
@@ -24,6 +27,9 @@ export interface RatingRound {
   readonly anchor_count: number;
   readonly propagator_count: number;
   readonly baseline_event_id: number | null;
+  /** PDGA rated rounds behind the layout baseline (the method 'pdga' basis, or a comparison). */
+  readonly pdga_baseline_rounds: number | null;
+  readonly pdga_baseline_ssa: number | null;
   readonly layout_revision: string | null;
   readonly unrated_reason: string | null;
   readonly match_result: string | null;
@@ -80,7 +86,8 @@ function ratingForRound(row: Record<string, unknown>): RatingValue {
 function displayRatingMethod(row: Record<string, unknown>, rating: RatingValue): RatingMethod | "archived" {
   if (rating.rating == null) return "unrated";
   if (intOrNull(row.source_result_id) == null) return "archived";
-  if (row.rating_method === "stable" || row.rating_method === "provisional" || row.rating_method === "layout") return row.rating_method;
+  if (row.rating_method === "stable" || row.rating_method === "provisional" || row.rating_method === "layout" ||
+    row.rating_method === "pdga") return row.rating_method;
   return "archived";
 }
 
@@ -117,6 +124,8 @@ function ratingRound(kind: RatingKind, row: Record<string, unknown>): RatingRoun
     anchor_count: intOrNull(row.anchor_count) ?? 0,
     propagator_count: intOrNull(row.propagator_count) ?? 0,
     baseline_event_id: intOrNull(row.baseline_event_id),
+    pdga_baseline_rounds: rating.rating == null ? null : intOrNull(row.pdga_baseline_rounds),
+    pdga_baseline_ssa: rating.rating == null ? null : numberOrNull(row.pdga_baseline_ssa),
     layout_revision: stringOrNull(row.layout_revision),
     unrated_reason: rating.rating != null ? null : !singlesStrokeEvidence(row, "competition") ? "not-singles-stroke" :
       (intOrNull(row.place) ?? 0) <= 0 || (intOrNull(row.total) ?? 0) <= 0 ? "incomplete-result" :
@@ -147,7 +156,7 @@ export function summarizeRatingRows(
 }
 
 export const RATING_EVIDENCE_FIELDS = `${STORED_EVIDENCE_FIELDS}, rr.rating_method, rr.anchor_count, rr.propagator_count,
-  rr.baseline_event_id, rr.unrated_reason, rr.round_date, rr.round_rating, rr.wind_gust_mph`;
+  rr.baseline_event_id, rr.unrated_reason, rr.round_date, rr.round_rating, rr.wind_gust_mph, rr.pdga_baseline_ssa, rr.pdga_baseline_rounds`;
 const JOINS = {
   competition: `JOIN events e ON e.id = res.event_id LEFT JOIN event_config ec ON ec.event_id = e.id`,
   casual: `JOIN casual_rounds cround ON cround.id = res.casual_round_id`,
@@ -156,10 +165,31 @@ const JOINS = {
 type RatingRow = Record<string, unknown>;
 type ValidRating = (row: RatingRow, stream: RatingStream) => Promise<boolean>;
 
+/** A PDGA-based rating must still match the baseline the current PDGA evidence gives that round. */
+async function validPdgaRating(row: RatingRow, pdgaBaselines: Map<string, Promise<PdgaBaseline | null>>, db: D1Like): Promise<boolean> {
+  const holes = readArchivedRatingHoles(row.scorecard, true);
+  const layoutId = holes?.[0]?.layoutId ?? null;
+  const roundDate = stringOrNull(row.round_date);
+  const total = intOrNull(row.total);
+  if (!holes || layoutId == null || !roundDate || total == null) return false;
+  const shape = ratingGeometrySnapshot(holes);
+  const key = layoutId + ":" + roundDate.slice(0, 10) + ":" + shape;
+  const retrieved = pdgaBaselines.get(key) ?? pdgaBaselineForPlayed(db, layoutId, playedHolesFromShape(shape), roundDate);
+  pdgaBaselines.set(key, retrieved);
+  const baseline = await retrieved;
+  if (!baseline || baseline.ssa !== numberOrNull(row.pdga_baseline_ssa) || baseline.rounds !== intOrNull(row.pdga_baseline_rounds)) return false;
+  const predicted = roundRatingForScoreWithWeather({
+    score: total, ssa: baseline.ssa, ppt: baseline.ppt, weather: { windGustMph: numberOrNull(row.wind_gust_mph) },
+  });
+  return predicted.roundRating === row.round_rating;
+}
+
 export function makeRatingValidator(db: D1Like): ValidRating {
   const baselines = new Map<string, Promise<LayoutRatingBaseline | null>>();
+  const pdgaBaselines = new Map<string, Promise<PdgaBaseline | null>>();
   return async (row, stream) => {
     if (!await matchesStoredRatingEvidence(row, stream)) return false;
+    if (row.rating_method === "pdga" && row.round_rating != null) return validPdgaRating(row, pdgaBaselines, db);
     // A casual estimate must still agree with its source event's current valid calibration.
     if (row.rating_method !== "layout" || row.round_rating == null) return true;
     const revision = stringOrNull(row.layout_revision);
@@ -228,7 +258,8 @@ async function ratingDisplayRows(
   const { results } = await db.prepare(sql).bind(...binds).all<RatingRow>();
   return Promise.all(results.map(async (row) => {
     if (row.source_result_id == null || await valid(row, stream)) return row;
-    return { ...row, rating: null, anchor_count: 0, propagator_count: 0, baseline_event_id: null, unrated_reason: "rating-source-changed" };
+    return { ...row, rating: null, anchor_count: 0, propagator_count: 0, baseline_event_id: null, pdga_baseline_rounds: null,
+      pdga_baseline_ssa: null, unrated_reason: "rating-source-changed" };
   }));
 }
 

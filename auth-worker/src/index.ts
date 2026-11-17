@@ -31,6 +31,8 @@ export { LiveEventDO } from "./live.js";
 
 import { runRatingsRecompute } from "./ratings-recompute.js";
 import { isPdgaEventCron, refreshClubPdgaEvents } from "./pdga-events.js";
+import { handlePdgaBaselines, isPdgaBaselineRoute } from "./pdga-baseline-routes.js";
+import { runPdgaBaselineTick } from "./pdga-baseline-ingest.js";
 import { isUdiscLayoutCron, runUdiscLayoutImportTick } from "./udisc-layout-import.js";
 import { handleMemberPush } from "./member-push.js";
 import { handleMemberMessages } from "./member-messages.js";
@@ -88,6 +90,7 @@ export default {
       if (pathname === "/admin/course-health" || pathname.startsWith("/admin/course-health/")) {
         return await handleCourseHealth(request, env, origin);
       }
+      if (isPdgaBaselineRoute(pathname)) return await handlePdgaBaselines(request, env, origin);
       if (pathname === "/me/course-favorites" || /^\/me\/course-favorites\/\d+$/.test(pathname)) {
         return await handleCourseFavorites(request, env, origin);
       }
@@ -144,7 +147,8 @@ export default {
     }
   },
   // Daily ratings recompute (08:17 UTC), the 15-minute UDisc layout importer,
-  // an hourly PDGA event refresh, and a Sunday 3pm Eastern UDisc league refresh.
+  // an hourly PDGA event refresh (plus the PDGA layout-baseline ingest tick), and a Sunday 3pm
+  // Eastern UDisc league refresh.
   // Cron only — never reachable from the public fetch path.
   async scheduled(controller: ScheduledController, rawEnv: RawEnv, ctx: ExecutionContext): Promise<void> {
     const env = withKvFallback(rawEnv);
@@ -159,6 +163,13 @@ export default {
           if (isPdgaEventCron(controller.cron)) {
             const result = await refreshClubPdgaEvents(env);
             console.log(JSON.stringify({ message: "pdga_events_refresh", cron: controller.cron, ...result }));
+            // PDGA layout baselines: a few bounded pdga.com JSON reads per hour, isolated from the rest.
+            try {
+              const baselines = await runPdgaBaselineTick(env);
+              console.log(JSON.stringify({ message: "pdga_baseline_tick", cron: controller.cron, ...baselines }));
+            } catch (error) {
+              console.error(JSON.stringify({ message: "pdga_baseline_tick_failed", error: error instanceof Error ? error.stack : String(error) }));
+            }
             const leagues = await refreshImportedUdiscLeagues(env, new Date(controller.scheduledTime));
             if (!leagues.skipped) console.log(JSON.stringify({ message: "udisc_league_refresh", cron: controller.cron, ...leagues }));
             return;

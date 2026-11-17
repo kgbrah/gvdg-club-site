@@ -8,7 +8,8 @@ async function validateListedResultRatings(db: D1Like, stream: RatingStream, row
   return Promise.all(rows.map(async (row) => {
     const { source_result_id, source_fingerprint, rating_total, rating_to_par, layout_revision, rating_method, anchor_count,
       propagator_count, baseline_event_id, unrated_reason, round_date, wind_gust_mph, event_status, starts_at,
-      format, play_format, scoring_config, started_at, layout_holes, field_revision, ...result } = row;
+      format, play_format, scoring_config, started_at, layout_holes, field_revision, pdga_baseline_ssa, pdga_baseline_rounds,
+      ...result } = row;
     if (!singlesStrokeEvidence(row, "competition") || (source_result_id != null && !await validate(row, stream))) {
       result.round_rating = null;
       if (stream === "competition") result.rating = null;

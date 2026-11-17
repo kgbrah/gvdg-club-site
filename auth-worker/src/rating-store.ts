@@ -38,6 +38,9 @@ export type RoundRatingInput = {
   baselineEventId: number | null;
   ratingMethod: RatingMethod;
   unratedReason: string | null;
+  /** The PDGA layout baseline available for this round: the one used ('pdga') or a comparison. */
+  pdgaBaselineSsa: number | null;
+  pdgaBaselineRounds: number | null;
 };
 
 export type RatingBaselineInput = LayoutRatingBaseline & {
@@ -138,8 +141,8 @@ function roundRatingStatement(db: D1Like, row: RoundRatingInput): D1StatementLik
        member_id, player_name, stream, event_id, casual_round_code, course_id, layout_id,
        round_date, total, to_par, round_rating, ssa, ppt, wind_gust_mph, weather_adjustment,
        propagator_count, rating_method, source_result_id, layout_revision, baseline_event_id,
-       anchor_count, unrated_reason, source_fingerprint
-     ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+       anchor_count, unrated_reason, source_fingerprint, pdga_baseline_ssa, pdga_baseline_rounds
+     ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
        WHERE EXISTS (SELECT 1 FROM ${results} WHERE id = ? AND member_id = ? AND total = ? AND to_par = ? AND scorecard = ?)
        ON CONFLICT DO UPDATE SET
          player_name = excluded.player_name, stream = excluded.stream, course_id = excluded.course_id,
@@ -150,13 +153,15 @@ function roundRatingStatement(db: D1Like, row: RoundRatingInput): D1StatementLik
          rating_method = excluded.rating_method, source_result_id = excluded.source_result_id,
          layout_revision = excluded.layout_revision, baseline_event_id = excluded.baseline_event_id,
          anchor_count = excluded.anchor_count, unrated_reason = excluded.unrated_reason,
-         source_fingerprint = excluded.source_fingerprint
+         source_fingerprint = excluded.source_fingerprint, pdga_baseline_ssa = excluded.pdga_baseline_ssa,
+         pdga_baseline_rounds = excluded.pdga_baseline_rounds
        WHERE excluded.round_rating IS NOT NULL OR round_ratings.round_rating IS NULL OR round_ratings.source_result_id IS NOT NULL`,
   ).bind(
     row.memberId, row.playerName, row.stream, row.eventId, row.casualRoundCode, row.courseId, row.layoutId,
     row.roundDate, row.total, row.toPar, row.roundRating, row.ssa, row.ppt, row.windGustMph,
     row.weatherAdjustment, row.propagatorCount, row.ratingMethod, row.sourceResultId, row.layoutRevision,
-    row.baselineEventId, row.anchorCount, row.unratedReason, row.sourceFingerprint, row.sourceResultId, row.memberId, row.total, row.toPar, row.sourceScorecard,
+    row.baselineEventId, row.anchorCount, row.unratedReason, row.sourceFingerprint, row.pdgaBaselineSsa, row.pdgaBaselineRounds,
+    row.sourceResultId, row.memberId, row.total, row.toPar, row.sourceScorecard,
   );
 }
 

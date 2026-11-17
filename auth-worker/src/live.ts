@@ -21,7 +21,7 @@ import { replacePlayerHoleMarks } from "./db-hole-shot-marks.js";
 import { shotRoundKey } from "./hole-shot-marks.js";
 import { hasShotLedgerEdit, readShotLedgers, saveShotLedger } from "./shot-ledgers.js";
 import { updateLivePairs } from "./live-pairs.js";
-import { getLayoutRatingBaseline } from "./rating-store.js";
+import { getLiveRatingBaseline } from "./pdga-baseline-store.js";
 import { checkLiveRecovery, liveRecoveryId, matchesLiveRecoveryScope, recordLiveRecovery } from "./live-recovery.js";
 import { mineData, publicSnapshot } from "./live-snapshot.js";
 import { attestationForCard, canEnterScorecard, cardKey, findPlayer, invalidScoreTargetsResponse, isCardLocked, issuesForCard, resolvedHoles, scoreTargetForBody, scorecardIssues, scoringState, targetAnchor } from "./live-state.js";
@@ -783,7 +783,7 @@ export class LiveEventDO {
       this.ratingBaseline = null;
       return;
     }
-    void getLayoutRatingBaseline(this.env.DB, layoutId, resolvedHoles(this.meta), this.meta?.startedAt).then((row) => {
+    void getLiveRatingBaseline(this.env.DB, layoutId, resolvedHoles(this.meta), this.meta?.startedAt).then((row) => {
       if (token !== this.ratingBaselineToken) return;
       const next = row ? { ssa: row.ssa, ppt: row.ppt } : null;
       const changed = next?.ssa !== this.ratingBaseline?.ssa || next?.ppt !== this.ratingBaseline?.ppt;
