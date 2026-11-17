@@ -1141,3 +1141,6 @@ body:has(.stats-jump), #members:has(.stats-jump) { overflow-x: clip; }
   #members .member-inbox-toolbar .player-btn { width: 100%; }
 }
 
+
+/* Event results: league names sit one level under the "Completed league rounds" heading. */
+#members .member-completed-league-rounds h3.register-subhead { font-size: .88rem; font-weight: 700; color: var(--text-muted); margin-block: .6rem .35rem; }

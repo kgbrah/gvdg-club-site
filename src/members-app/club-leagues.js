@@ -156,7 +156,7 @@ function ScheduleEvent({ event }) {
   ]);
 }
 
-export function LeagueSchedule() {
+function useLeagueScheduleRows() {
   const [rows, setRows] = React.useState(null);
   React.useEffect(() => {
     let active = true;
@@ -171,15 +171,60 @@ export function LeagueSchedule() {
       active = false;
     };
   }, []);
+  return rows;
+}
+
+const isFinal = (event) => event && event.status === "final";
+const leagueTitle = (league) => [league.name, league.season].filter(Boolean).join(" · ");
+
+/** League schedule tab: upcoming and live rounds only; finished rounds live on the Event results tab. */
+export function LeagueSchedule() {
+  const rows = useLeagueScheduleRows();
   if (rows == null) return h("p", { className: "dash-note" }, "Loading league schedule…");
   const leagues = scheduleLeagues(rows);
   if (!leagues.length) {
     return h("p", { className: "dash-note", "data-react-league-schedule": "empty" }, "No current leagues.");
   }
-  return h("section", { className: "member-events-sections", "data-react-league-schedule": "ready" }, leagues.map((league) =>
-    h("section", { className: "member-list", key: league.id, "aria-label": league.name }, [
-      h("h2", { className: "register-subhead", key: "title" }, [league.name, league.season].filter(Boolean).join(" · ")),
-      h("div", { className: "member-list-rows", key: "events" }, league.events.map((event) =>
-        h(ScheduleEvent, { event, key: event.id }))),
-    ])));
+  return h("section", { className: "member-events-sections", "data-react-league-schedule": "ready" }, leagues.map((league) => {
+    const upcoming = league.events.filter((event) => !isFinal(event));
+    return h("section", { className: "member-list", key: league.id, "aria-label": league.name }, [
+      h("h2", { className: "register-subhead", key: "title" }, leagueTitle(league)),
+      upcoming.length
+        ? h("div", { className: "member-list-rows", key: "events" }, upcoming.map((event) => h(ScheduleEvent, { event, key: event.id })))
+        : h("p", { className: "dash-note", key: "done" }, [
+          "No upcoming rounds. Finished rounds are in ",
+          h("button", { type: "button", className: "board-link", key: "link", onClick: () => selectDashboardTab("results") }, "Event results"),
+          ".",
+        ]),
+    ]);
+  }));
+}
+
+const COMPLETED_PREVIEW = 5;
+
+function CompletedLeague({ league }) {
+  const [showAll, setShowAll] = React.useState(false);
+  const done = league.events.filter(isFinal).slice().sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  if (!done.length) return null;
+  const shown = showAll ? done : done.slice(0, COMPLETED_PREVIEW);
+  return h("section", { className: "member-list", "aria-label": `${league.name} completed rounds` }, [
+    h("h3", { className: "register-subhead", key: "title" }, leagueTitle(league)),
+    h("div", { className: "member-list-rows", key: "events" }, shown.map((event) => h(ScheduleEvent, { event, key: event.id }))),
+    done.length > COMPLETED_PREVIEW ? h("button", {
+      type: "button", className: "dashboard-action", key: "more", "aria-expanded": showAll,
+      onClick: () => setShowAll((value) => !value),
+    }, showAll ? "Show fewer" : `Show all ${done.length}`) : null,
+  ]);
+}
+
+/** Event results tab: each current league's finished rounds, newest first. */
+export function CompletedLeagueRounds() {
+  const rows = useLeagueScheduleRows();
+  if (!rows) return null;
+  const leagues = scheduleLeagues(rows).filter((league) => league.events.some(isFinal));
+  if (!leagues.length) return null;
+  return h("section", { className: "member-event-section member-completed-league-rounds", "aria-label": "Completed league rounds" }, [
+    h("h2", { className: "register-subhead", key: "title" }, "Completed league rounds"),
+    ...leagues.map((league) => h(CompletedLeague, { league, key: league.id })),
+  ]);
 }
