@@ -47,6 +47,7 @@ import { handleCommunityRoute } from "./community-routes.js";
 import { handleOfflineRoundRoute } from "./offline-round-routes.js";
 import { handlePhoneActivityRoute } from "./phone-activity-routes.js";
 import { handleMemberArchiveRoute } from "./member-archive-routes.js";
+import { handleMarket } from "./market-routes.js";
 import { sendMembershipRenewalReminders } from "./membership-renewal.js";
 
 /**
@@ -135,6 +136,9 @@ export default {
         const membership = await handleMembershipPublic(request, env, origin, method, pathname.split("/").filter(Boolean));
         if (membership) return membership;
       }
+
+      const market = await handleMarket(request, env, origin, pathname, method, ctx);
+      if (market) return market;
 
       const club = await clubApi(request, env, origin, pathname, method, ctx);
       if (club) return club;
