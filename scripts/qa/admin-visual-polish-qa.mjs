@@ -214,11 +214,18 @@ function contextFor(item) {
   return {};
 }
 
+// After every navigation the app moves focus to the new heading one animation frame later (for screen
+// readers). Let that land before typing, or it can steal focus between a fill and its Enter.
+async function focusSettled(page) {
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+}
+
 async function route(page, key) {
   const item = ADMIN_DESTINATIONS.find((entry) => entry.key === key);
   const hash = appHref("admin", key, contextFor(item));
   await page.evaluate((value) => { location.hash = value; }, hash);
   await page.getByRole("heading", { name: item.label, level: 1, exact: true }).waitFor();
+  await focusSettled(page);
   const pane = page.locator("#apane-" + (item.pane || key));
   await (key === "check-in" ? page : pane).locator(probes[key]).first().waitFor();
   return pane;
@@ -378,6 +385,7 @@ async function verifyRoutes(variant) {
     await nav.getByRole("button", { name: "Tools", exact: true }).click();
     const tools = page.locator("#apane-more");
     await tools.getByText("Light or dark mode").waitFor();
+    await focusSettled(page);
     const finder = page.getByRole("searchbox", { name: "Find a tool" });
     await finder.fill("course health");
     await finder.press("Enter");
