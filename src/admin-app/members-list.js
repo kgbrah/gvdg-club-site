@@ -322,7 +322,9 @@ function ApplicationRow({ row, duesOnline }) {
       ])
       : paid
         ? null
-        : h("button", { className: "admin-btn secondary", key: "mark", onClick: () => setMarking(true), type: "button" }, "Mark paid (cash/other)"),
+        : h("button", { className: "admin-btn secondary", key: "mark", onClick: () => setMarking(true), type: "button" },
+          // <wbr> lets "(cash/other)" break after the slash on a narrow phone; the accessible name is unchanged.
+          ["Mark paid (cash/", h("wbr", { key: "break" }), "other)"]),
     h("button", {
       className: "admin-btn",
       key: "approve",

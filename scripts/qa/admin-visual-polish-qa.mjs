@@ -81,7 +81,8 @@ const warnings = [];
 function fixture(path, method, query, authorization, body) {
   if (path === "/me") return { sub: "m_taylor", name: people[0].name, pdgaNo: "123456", isAdmin: authorization === "Bearer " + token };
   if (path === "/events") return { events: fixtureMode === "empty" ? [] : events };
-  if (path === "/courses") return { courses: [course] };
+  // A real long live name: course pickers size to their longest option and overflowed phones (live drive, 2026-11-17).
+  if (path === "/courses") return { courses: [course, { id: 8, name: "All-Terrain Disc Golf Course at Carolina Adventure World", location: "Winnsboro, SC", udisc_course_id: "24" }] };
   if (/^\/events\/\d+$/.test(path)) return { event: events.find((event) => path.endsWith("/" + event.id)) };
   if (path.endsWith("/live")) return { status: path.includes("/40/") ? "final" : "live", holes, players: eventPlayers, standings, conflicts: [], missing: [], courseName: course.name, rev: 1 };
   if (path.endsWith("/registration")) return { config: { play_format: "singles", entry_fee_cents: 2500, registration_open: true, divisions: ["MA1", "MA2"] } };
@@ -213,11 +214,18 @@ function contextFor(item) {
   return {};
 }
 
+// After every navigation the app moves focus to the new heading one animation frame later (for screen
+// readers). Let that land before typing, or it can steal focus between a fill and its Enter.
+async function focusSettled(page) {
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+}
+
 async function route(page, key) {
   const item = ADMIN_DESTINATIONS.find((entry) => entry.key === key);
   const hash = appHref("admin", key, contextFor(item));
   await page.evaluate((value) => { location.hash = value; }, hash);
   await page.getByRole("heading", { name: item.label, level: 1, exact: true }).waitFor();
+  await focusSettled(page);
   const pane = page.locator("#apane-" + (item.pane || key));
   await (key === "check-in" ? page : pane).locator(probes[key]).first().waitFor();
   return pane;
@@ -230,6 +238,15 @@ async function fit(page, label) {
     focused: document.activeElement?.tagName,
   }));
   assert.ok(over.page <= over.width + 1, label + " overflows viewport: " + JSON.stringify(over));
+  // No label may be cut off or spill out of its button (a spill widens the page on real data).
+  const labels = await page.evaluate(() => [...document.querySelectorAll("button, a, [role=button], summary")].filter((node) => {
+    const box = node.getBoundingClientRect();
+    if (box.width <= 2 || box.height <= 2 || node.closest("[hidden], [aria-hidden='true'], [inert]")) return false;
+    if (node.scrollWidth <= node.clientWidth + 1) return false;
+    const style = getComputedStyle(node);
+    return !(style.overflowX !== "visible" && style.textOverflow === "ellipsis" && !/flex|grid/.test(style.display));
+  }).map((node) => (node.textContent || "").trim().replace(/\s+/g, " ").slice(0, 40) + " (" + node.scrollWidth + ">" + node.clientWidth + ")"));
+  assert.deepEqual(labels, [], label + " has clipped or spilling labels");
 }
 
 async function shot(page, name) {
@@ -377,6 +394,7 @@ async function verifyRoutes(variant) {
     await nav.getByRole("button", { name: "Tools", exact: true }).click();
     const tools = page.locator("#apane-more");
     await tools.getByText("Light or dark mode").waitFor();
+    await focusSettled(page);
     const finder = page.getByRole("searchbox", { name: "Find a tool" });
     await finder.fill("course health");
     await finder.press("Enter");
