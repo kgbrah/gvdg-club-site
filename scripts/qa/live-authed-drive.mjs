@@ -5,7 +5,7 @@
 //
 // Run in CI (secrets): GVDG_STAGING_QA_TOKEN, or GVDG_STAGING_QA_IDENTIFIER + GVDG_STAGING_QA_PIN.
 // Optional: GVDG_SITE_URL (default https://gvdgclub.com), GVDG_API_URL (default https://auth.gvdgclub.com),
-// GVDG_LIVE_DRIVE_OUT (default ./live-drive), CHROMIUM_PATH.
+// GVDG_LIVE_DRIVE_OUT (default ./live-drive), GVDG_LIVE_DRIVE_ONLY ("admin:courses,member:events"), CHROMIUM_PATH.
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { chromium } from "playwright";
@@ -82,8 +82,12 @@ async function inspect(page, label) {
       if (style.overflowX === "visible" || node.scrollWidth <= node.clientWidth + 1) return false;
       return !(style.textOverflow === "ellipsis" && !/flex|grid/.test(style.display));
     }).map((node) => (node.textContent || "").trim().replace(/\s+/g, " ").slice(0, 40) + " (" + node.scrollWidth + ">" + node.clientWidth + ")");
-    const wide = overflow > 1 ? [...document.body.querySelectorAll("*")].filter((node) => node.getBoundingClientRect().right > width + 1)
-      .slice(0, 4).map((node) => node.tagName.toLowerCase() + "." + String(node.className).split(" ")[0]) : [];
+    // Deepest offenders first: those are the element actually sticking out, not its ancestors.
+    const wide = overflow > 1 ? [...document.body.querySelectorAll("*")]
+      .filter((node) => node.getBoundingClientRect().right > width + 0.5)
+      .filter((node, _, all) => !all.some((other) => other !== node && node.contains(other)))
+      .slice(0, 4).map((node) => node.tagName.toLowerCase() + (node.id ? "#" + node.id : "") + "." + String(node.className).split(" ")[0]
+        + "@" + Math.round(node.getBoundingClientRect().right)) : [];
     return { overflow, clipped, wide };
   });
 }
@@ -98,7 +102,8 @@ async function drive(role, file, items, variant) {
     } catch { /* storage blocked */ }
     if (large) document.addEventListener("DOMContentLoaded", () => { document.documentElement.style.fontSize = "130%"; });
   }, { value: token, mode: variant.mode, large: Boolean(variant.large) });
-  for (const item of items) {
+  const only = (process.env.GVDG_LIVE_DRIVE_ONLY || "").split(",").map((value) => value.trim()).filter(Boolean);
+  for (const item of items.filter((entry) => !only.length || only.includes(role + ":" + entry.key))) {
     const page = await context.newPage();
     const issues = [];
     page.on("console", (message) => { if (message.type() === "error") issues.push("console: " + message.text().slice(0, 200)); });
@@ -118,7 +123,12 @@ async function drive(role, file, items, variant) {
       await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
       await page.evaluate(() => document.fonts.ready);
       await page.waitForTimeout(600);
-      const layout = await inspect(page);
+      let layout = await inspect(page);
+      if (layout.overflow > 1) {
+        // Re-measure after a pause: separates an entrance animation from a real layout overflow.
+        await page.waitForTimeout(1500);
+        layout = await inspect(page);
+      }
       if (layout.overflow > 1) issues.push("h-overflow " + layout.overflow + "px " + layout.wide.join(" "));
       if (layout.clipped.length) issues.push("clipped: " + layout.clipped.join(" | "));
       await page.screenshot({ path: join(out, "shots", `${role}-${item.key}-${variant.name}.png`), animations: "disabled" });

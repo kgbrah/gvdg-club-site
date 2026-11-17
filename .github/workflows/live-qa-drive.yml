@@ -6,6 +6,11 @@ on:
   push:
     branches: ["qa/live-drive*"]
   workflow_dispatch:
+    inputs:
+      only:
+        description: 'Limit to destinations, e.g. "admin:courses,member:events" (blank = all)'
+        required: false
+        default: ""
 
 concurrency:
   group: live-qa-drive
@@ -29,6 +34,7 @@ jobs:
           GVDG_STAGING_QA_IDENTIFIER: ${{ secrets.GVDG_STAGING_QA_IDENTIFIER }}
           GVDG_STAGING_QA_PIN: ${{ secrets.GVDG_STAGING_QA_PIN }}
           GVDG_LIVE_DRIVE_OUT: live-drive
+          GVDG_LIVE_DRIVE_ONLY: ${{ inputs.only }}
         run: node scripts/qa/live-authed-drive.mjs
       - uses: actions/upload-artifact@v4
         if: always()
